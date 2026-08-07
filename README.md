@@ -41,6 +41,17 @@ npm run preview   # Production-Build lokal testen
 
 **Hinweis**: GPS-Funktionalität erfordert HTTPS oder localhost. Im Browser müssen Berechtigungen für Geolokalisierung gewährt werden.
 
+## Aufs Smartphone bringen (GitHub Pages)
+
+Trailscape lässt sich kostenlos über GitHub Pages bereitstellen und dann als PWA auf dem Smartphone installieren. Ein GitHub-Actions-Workflow baut und deployt die App automatisch bei jedem Push auf `main`.
+
+1. In den Repo-Settings unter **Pages** als Source **"GitHub Actions"** auswählen.
+2. Nach jedem Push auf `main` läuft der Workflow automatisch und veröffentlicht die aktuelle Version.
+3. Die App ist danach unter `https://<user>.github.io/trailscape/` erreichbar.
+4. Auf dem Handy im Browser öffnen und über **"Zum Startbildschirm hinzufügen"** als App installieren.
+5. Beim ersten Aufzeichnen die GPS-Berechtigung im Browser erlauben.
+6. Bei privaten Repos erfordert GitHub Pages einen Bezahlplan – alternativ das Repo auf public stellen.
+
 ## Selfhost-Sync
 
 Optional lassen sich Touren mit einem eigenen Server synchronisieren. Ein leichtgewichtiger Node.js-Server im Ordner `server/` (ohne externe Abhängigkeiten) speichert Touren JSON-basiert lokal. Authentifizierung erfolgt über Token, ein Docker-Image ist enthalten. Alle Details und Setup-Anweisungen findest du in `server/README.md`. In der App werden Touren bidirektional synchronisiert – ideal, wenn du Trailscape auf mehreren Geräten nutzen möchtest.
