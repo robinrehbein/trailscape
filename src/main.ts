@@ -751,12 +751,11 @@ function deleteGoalPlan(): void {
 /* ----------------------------------------------------------- Service Worker */
 
 function registerServiceWorker(): void {
-  const meta = import.meta as ImportMeta & { env?: { PROD?: boolean } };
-  if (!meta.env?.PROD || !("serviceWorker" in navigator)) {
+  if (!import.meta.env.PROD || !("serviceWorker" in navigator)) {
     return;
   }
 
-  navigator.serviceWorker.register("/sw.js").catch(() => {
+  navigator.serviceWorker.register(import.meta.env.BASE_URL + "sw.js").catch(() => {
     /* Registrierung ist optional – Fehler bewusst ignorieren. */
   });
 }

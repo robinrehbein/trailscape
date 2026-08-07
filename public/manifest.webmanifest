@@ -2,13 +2,13 @@
   "name": "Trailscape",
   "short_name": "Trailscape",
   "description": "Kostenlose, local-first Web-App für GPS-Aufzeichnung und Routenplanung von Gravel-Biking-Touren",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#f6f5f1",
   "theme_color": "#2d5a3d",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
