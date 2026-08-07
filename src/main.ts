@@ -31,15 +31,24 @@ import {
   WEEK_KIND_LABELS,
 } from "./training";
 import type { Goal, TrainingPlan } from "./training";
+import { RouteNavigator } from "./navigation";
+import { acquireWakeLock, releaseWakeLock } from "./wakelock";
 
 /* ------------------------------------------------------------------ DOM */
 
 const mapEl = document.getElementById("map")!;
-const mapPaneEl = document.getElementById("map-pane")!;
 const profilePanelEl = document.getElementById("profile-panel")!;
 const profileEl = document.getElementById("profile")!;
 const rideListEl = document.getElementById("ride-list")!;
 const rideListEmptyEl = document.getElementById("ride-list-empty")!;
+
+const tabbarEl = document.getElementById("tabbar")!;
+const viewEls: Record<ViewName, HTMLElement> = {
+  map: document.getElementById("view-map")!,
+  rides: document.getElementById("view-rides")!,
+  training: document.getElementById("view-training")!,
+  more: document.getElementById("view-more")!,
+};
 
 const statsPanelEl = document.getElementById("stats-panel")!;
 const statDistanceEl = document.getElementById("stat-distance")!;
@@ -49,11 +58,22 @@ const statAscentEl = document.getElementById("stat-ascent")!;
 
 const gpxInputEl = document.getElementById("gpx-input") as HTMLInputElement;
 const btnRecordEl = document.getElementById("btn-record") as HTMLButtonElement;
+const btnNavigateEl = document.getElementById("btn-navigate") as HTMLButtonElement;
 const btnExportEl = document.getElementById("btn-export") as HTMLButtonElement;
 const btnDeleteEl = document.getElementById("btn-delete") as HTMLButtonElement;
 
-const recordBannerEl = document.getElementById("record-banner")!;
-const recordInfoEl = document.getElementById("record-info")!;
+const liveBarEl = document.getElementById("live-bar")!;
+const liveSpeedEl = document.getElementById("live-speed")!;
+const liveDistanceEl = document.getElementById("live-distance")!;
+const liveDurationEl = document.getElementById("live-duration")!;
+const liveAscentEl = document.getElementById("live-ascent")!;
+const btnLivePauseEl = document.getElementById("btn-live-pause") as HTMLButtonElement;
+const btnLiveStopEl = document.getElementById("btn-live-stop") as HTMLButtonElement;
+
+const navBarEl = document.getElementById("nav-bar")!;
+const navRemainingEl = document.getElementById("nav-remaining")!;
+const navOffRouteEl = document.getElementById("nav-offroute")!;
+const btnNavStopEl = document.getElementById("btn-nav-stop") as HTMLButtonElement;
 
 const btnPlanEl = document.getElementById("btn-plan") as HTMLButtonElement;
 const planPanelEl = document.getElementById("plan-panel")!;
@@ -73,9 +93,6 @@ const syncTokenEl = document.getElementById("sync-token") as HTMLInputElement;
 const btnSyncEl = document.getElementById("btn-sync") as HTMLButtonElement;
 const syncStatusEl = document.getElementById("sync-status")!;
 
-const btnTrainingEl = document.getElementById("btn-training") as HTMLButtonElement;
-const btnTrainingCloseEl = document.getElementById("btn-training-close") as HTMLButtonElement;
-const trainingPanelEl = document.getElementById("training-panel")!;
 const fitnessCardEl = document.getElementById("fitness-card")!;
 const goalFormEl = document.getElementById("goal-form") as HTMLFormElement;
 const goalNameEl = document.getElementById("goal-name") as HTMLInputElement;
@@ -90,16 +107,26 @@ const planWeeksEl = document.getElementById("plan-weeks")!;
 
 /* ---------------------------------------------------------------- State */
 
+type ViewName = "map" | "rides" | "training" | "more";
+
 const recorder = new Recorder();
 let rides: Ride[] = [];
 let currentRideId: string | null = null;
+let activeView: ViewName = "map";
 
 let planner: Planner | null = null;
 let planning = false;
 let plannedRoute: PlannedRoute | null = null;
 
-const RECORD_LABEL = "● Aufzeichnen";
-const STOP_LABEL = "■ Stopp";
+let liveTimerId: number | null = null;
+
+let routeNavigator: RouteNavigator | null = null;
+let navWatchId: number | null = null;
+let navRideId: string | null = null;
+let navOffRoute = false;
+
+const RECORD_ICON = "●";
+const STOP_ICON = "■";
 const PLAN_LABEL = "Route planen";
 const PLAN_STOP_LABEL = "Planung beenden";
 const PLAN_INFO_DEFAULT =
@@ -144,6 +171,27 @@ function formatShortDate(timestamp: number): string {
   return `${dd}.${mm}.`;
 }
 
+/* ---------------------------------------------------------- Tab-Wechsel */
+
+function showView(view: ViewName): void {
+  activeView = view;
+
+  for (const name of Object.keys(viewEls) as ViewName[]) {
+    viewEls[name].hidden = name !== view;
+  }
+
+  for (const tab of Array.from(tabbarEl.querySelectorAll<HTMLElement>(".tab"))) {
+    tab.classList.toggle("active", tab.dataset.view === view);
+  }
+
+  if (view === "map") {
+    // Leaflet muss nach einem Layoutwechsel neu vermessen werden.
+    getMap()?.invalidateSize();
+  } else if (view === "training") {
+    void renderTraining();
+  }
+}
+
 /* ----------------------------------------------------------- Tourenliste */
 
 function markActiveRide(): void {
@@ -172,7 +220,9 @@ function renderRideList(): void {
 
     item.append(name, meta);
     item.addEventListener("click", () => {
-      void selectRide(ride.id);
+      void selectRide(ride.id).then(() => {
+        showView("map");
+      });
     });
 
     rideListEl.append(item);
@@ -212,7 +262,7 @@ function showProfileForPoints(points: TrackPoint[]): void {
   });
 
   profilePanelEl.hidden = !hasElevation;
-  mapPaneEl.classList.toggle("has-profile", hasElevation);
+  viewEls.map.classList.toggle("has-profile", hasElevation);
 }
 
 function showProfile(ride: Ride): void {
@@ -222,7 +272,7 @@ function showProfile(ride: Ride): void {
 function hideProfile(): void {
   clearProfile(profileEl);
   profilePanelEl.hidden = true;
-  mapPaneEl.classList.remove("has-profile");
+  viewEls.map.classList.remove("has-profile");
 }
 
 async function selectRide(id: string): Promise<void> {
@@ -266,6 +316,7 @@ async function handleGpxImport(): Promise<void> {
     await saveRide(ride);
     await refreshRideList();
     await selectRide(ride.id);
+    showView("map");
   } catch (error) {
     alert(errorMessage(error));
   } finally {
@@ -277,17 +328,56 @@ async function handleGpxImport(): Promise<void> {
 /* ---------------------------------------------------------- Aufzeichnung */
 
 function setRecordingUi(active: boolean): void {
-  btnRecordEl.textContent = active ? STOP_LABEL : RECORD_LABEL;
+  btnRecordEl.textContent = active ? STOP_ICON : RECORD_ICON;
   btnRecordEl.classList.toggle("recording", active);
-  recordBannerEl.hidden = !active;
+  btnRecordEl.setAttribute(
+    "aria-label",
+    active ? "Aufzeichnung beenden" : "Aufzeichnung starten"
+  );
+  liveBarEl.hidden = !active;
+
   if (!active) {
-    recordInfoEl.textContent = "Aufzeichnung läuft …";
+    liveBarEl.classList.remove("paused");
+    btnLivePauseEl.textContent = "Pause";
+    liveSpeedEl.textContent = "–";
+    liveDistanceEl.textContent = formatKm(0);
+    liveDurationEl.textContent = formatDuration(0);
+    liveAscentEl.textContent = "0";
+  }
+}
+
+function updateLiveClock(): void {
+  const startedAt = recorder.startedAt;
+  if (startedAt === null) {
+    return;
+  }
+
+  const elapsedMs = Date.now() - startedAt - recorder.pausedMs;
+  liveDurationEl.textContent = formatDuration(Math.max(0, elapsedMs) / 1000);
+
+  const speed = recorder.currentSpeedKmh;
+  liveSpeedEl.textContent = speed === null ? "–" : speed.toFixed(1);
+}
+
+function startLiveTimer(): void {
+  stopLiveTimer();
+  updateLiveClock();
+  liveTimerId = window.setInterval(updateLiveClock, 1000);
+}
+
+function stopLiveTimer(): void {
+  if (liveTimerId !== null) {
+    window.clearInterval(liveTimerId);
+    liveTimerId = null;
   }
 }
 
 function handleRecordedPoint(_point: TrackPoint, all: TrackPoint[]): void {
   updateLiveTrack(all);
-  recordInfoEl.textContent = `Aufzeichnung · ${formatKm(computeStats(all).distanceKm)} km`;
+
+  const stats = computeStats(all);
+  liveDistanceEl.textContent = formatKm(stats.distanceKm);
+  liveAscentEl.textContent = String(Math.round(stats.ascentM));
 }
 
 function startRecording(): void {
@@ -303,13 +393,38 @@ function startRecording(): void {
   hideStats();
   hideProfile();
   markActiveRide();
+
   setRecordingUi(true);
-  recordInfoEl.textContent = `Aufzeichnung · ${formatKm(0)} km`;
+  liveDistanceEl.textContent = formatKm(0);
+  liveAscentEl.textContent = "0";
+  startLiveTimer();
+  void acquireWakeLock();
+}
+
+function toggleLivePause(): void {
+  if (!recorder.isRecording) {
+    return;
+  }
+
+  if (recorder.isPaused) {
+    recorder.resume();
+  } else {
+    recorder.pause();
+  }
+
+  const paused = recorder.isPaused;
+  liveBarEl.classList.toggle("paused", paused);
+  btnLivePauseEl.textContent = paused ? "Weiter" : "Pause";
 }
 
 async function stopRecording(): Promise<void> {
   const points = recorder.stop();
+
+  stopLiveTimer();
   setRecordingUi(false);
+  if (navWatchId === null) {
+    void releaseWakeLock();
+  }
 
   if (points.length < 2) {
     alert("Zu wenige GPS-Punkte aufgezeichnet.");
@@ -332,6 +447,7 @@ async function stopRecording(): Promise<void> {
     await saveRide(ride);
     await refreshRideList();
     await selectRide(ride.id);
+    showView("map");
   } catch (error) {
     alert(errorMessage(error));
   }
@@ -346,6 +462,103 @@ function toggleRecording(): void {
     }
     startRecording();
   }
+}
+
+/* -------------------------------------------------------------- Navigation */
+
+function setNavigationUi(active: boolean): void {
+  navBarEl.hidden = !active;
+  btnPlanEl.hidden = active;
+
+  if (!active) {
+    navRemainingEl.textContent = "–";
+    navOffRouteEl.hidden = true;
+  }
+}
+
+function handleNavPosition(position: GeolocationPosition): void {
+  if (!routeNavigator) {
+    return;
+  }
+
+  const pos = { lat: position.coords.latitude, lon: position.coords.longitude };
+  showPositionMarker(pos);
+
+  const map = getMap();
+  if (map && activeView === "map") {
+    map.setView([pos.lat, pos.lon], map.getZoom());
+  }
+
+  const state = routeNavigator.update(pos);
+  navRemainingEl.textContent = state.remainingKm.toFixed(1);
+  navOffRouteEl.hidden = !state.offRoute;
+
+  if (state.offRoute && !navOffRoute) {
+    navigator.vibrate?.([200, 100, 200]);
+  }
+  navOffRoute = state.offRoute;
+}
+
+function stopNavigation(): void {
+  if (navWatchId !== null) {
+    navigator.geolocation.clearWatch(navWatchId);
+    navWatchId = null;
+  }
+
+  routeNavigator = null;
+  navRideId = null;
+  navOffRoute = false;
+
+  setNavigationUi(false);
+  hidePositionMarker();
+
+  if (!recorder.isRecording) {
+    void releaseWakeLock();
+  }
+}
+
+async function startNavigation(): Promise<void> {
+  if (!currentRideId) {
+    return;
+  }
+
+  if (navWatchId !== null) {
+    stopNavigation();
+  }
+
+  const ride = await getRide(currentRideId);
+  if (!ride) {
+    return;
+  }
+
+  if (!("geolocation" in navigator)) {
+    alert("Geolocation wird von diesem Gerät bzw. Browser nicht unterstützt.");
+    return;
+  }
+
+  try {
+    routeNavigator = new RouteNavigator(ride.points);
+  } catch (error) {
+    alert(errorMessage(error));
+    return;
+  }
+
+  navRideId = ride.id;
+  navOffRoute = false;
+
+  // Eigener Watch, unabhängig von einer eventuell laufenden Aufzeichnung.
+  navWatchId = navigator.geolocation.watchPosition(
+    handleNavPosition,
+    (error) => {
+      alert(error.message || "Fehler bei der Standortbestimmung.");
+      stopNavigation();
+    },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+  );
+
+  setNavigationUi(true);
+  navRemainingEl.textContent = routeNavigator.totalKm.toFixed(1);
+  void acquireWakeLock();
 }
 
 /* ------------------------------------------------------ Routenplanung */
@@ -533,6 +746,10 @@ async function deleteCurrentRide(): Promise<void> {
     return;
   }
 
+  if (navRideId === currentRideId) {
+    stopNavigation();
+  }
+
   await deleteRide(currentRideId);
   currentRideId = null;
   await refreshRideList();
@@ -542,12 +759,6 @@ async function deleteCurrentRide(): Promise<void> {
 }
 
 /* ---------------------------------------------------------------- Training */
-
-function togglePanelVisibility(el: HTMLElement): boolean {
-  const wasHidden = el.hidden;
-  el.hidden = !wasHidden;
-  return wasHidden;
-}
 
 function renderFitnessCard(assessment: FitnessAssessment): void {
   fitnessCardEl.replaceChildren();
@@ -679,13 +890,6 @@ async function renderTraining(): Promise<void> {
   } else {
     planSectionEl.hidden = true;
     btnGoalDeleteEl.hidden = true;
-  }
-}
-
-function toggleTrainingPanel(): void {
-  const wasHidden = togglePanelVisibility(trainingPanelEl);
-  if (wasHidden) {
-    void renderTraining();
   }
 }
 
@@ -845,13 +1049,39 @@ async function runSync(): Promise<void> {
 
 /* -------------------------------------------------------------- Bootstrap */
 
+function initTabs(): void {
+  for (const tab of Array.from(tabbarEl.querySelectorAll<HTMLElement>(".tab"))) {
+    tab.addEventListener("click", () => {
+      const view = tab.dataset.view as ViewName | undefined;
+      if (view && view in viewEls) {
+        showView(view);
+      }
+    });
+  }
+}
+
 function init(): void {
   initMap(mapEl);
+  initTabs();
+  showView("map");
 
   gpxInputEl.addEventListener("change", () => {
     void handleGpxImport();
   });
+
   btnRecordEl.addEventListener("click", toggleRecording);
+  btnLivePauseEl.addEventListener("click", toggleLivePause);
+  btnLiveStopEl.addEventListener("click", () => {
+    if (recorder.isRecording) {
+      void stopRecording();
+    }
+  });
+
+  btnNavigateEl.addEventListener("click", () => {
+    void startNavigation();
+  });
+  btnNavStopEl.addEventListener("click", stopNavigation);
+
   btnExportEl.addEventListener("click", () => {
     void exportCurrentRide();
   });
@@ -887,10 +1117,6 @@ function init(): void {
     void runSync();
   });
 
-  btnTrainingEl.addEventListener("click", toggleTrainingPanel);
-  btnTrainingCloseEl.addEventListener("click", () => {
-    trainingPanelEl.hidden = true;
-  });
   goalFormEl.addEventListener("submit", (event) => {
     void handleGoalSubmit(event);
   });

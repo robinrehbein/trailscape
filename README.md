@@ -8,7 +8,10 @@ Strava- und Komoot-Abos kosten Geld und erfordern Accounts. Trailscape ist koste
 
 ## Features (MVP)
 
-- **GPS-Aufzeichnung**: Touren direkt im Browser aufzeichnen (erfordert HTTPS oder localhost)
+- **GPS-Aufzeichnung**: Touren direkt im Browser aufzeichnen und speichern (erfordert HTTPS oder localhost)
+- **Live-Aufzeichnung**: Während der Fahrt Tempo, Distanz, Fahrzeit und Höhenmeter in großen Ziffern anzeigen; Pause/Weiter-Funktion; Display bleibt per Wake Lock an
+- **Routen-Navigation**: Navigation auf gespeicherten Touren starten mit GPS-Verfolgung, Anzeige der verbleibenden Kilometer und Warnung (mit Vibration) beim Verlassen der Route
+- **Mobile-first UI**: Bottom-Tab-Navigation (Karte, Touren, Training, Mehr), großer runder Aufnahme-Button auf der Karte, große Touch-Ziele – optimiert für einhändige Bedienung auf dem Rad
 - **GPX Import/Export**: Touren importieren und exportieren für Austausch oder Backup
 - **Statistiken**: Distanz, Dauer, Durchschnittsgeschwindigkeit, Höhenmeter
 - **Kartenansicht**: OpenStreetMap und OpenTopoMap (Kartenverfügbarkeit lokal gepuffert)
