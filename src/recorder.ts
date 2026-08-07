@@ -1,17 +1,62 @@
+import { haversineM } from "./stats";
 import type { TrackPoint } from "./types";
 
 const MAX_ACCURACY_M = 50;
+const MAX_SPEED_FALLBACK_INTERVAL_S = 10;
 
 export class Recorder {
   private watchId: number | null = null;
   private collectedPoints: TrackPoint[] = [];
+  private paused = false;
+  private pauseStartedAt: number | null = null;
+  private pausedMsAccum = 0;
+  private startedAtValue: number | null = null;
+  private lastKnownSpeedKmh: number | null = null;
 
   get isRecording(): boolean {
     return this.watchId !== null;
   }
 
+  get isPaused(): boolean {
+    return this.paused;
+  }
+
   get points(): TrackPoint[] {
     return this.collectedPoints.slice();
+  }
+
+  get startedAt(): number | null {
+    return this.startedAtValue;
+  }
+
+  get pausedMs(): number {
+    if (this.paused && this.pauseStartedAt !== null) {
+      return this.pausedMsAccum + (Date.now() - this.pauseStartedAt);
+    }
+    return this.pausedMsAccum;
+  }
+
+  get currentSpeedKmh(): number | null {
+    if (this.watchId === null) {
+      return null;
+    }
+
+    if (this.lastKnownSpeedKmh !== null) {
+      return this.lastKnownSpeedKmh;
+    }
+
+    const last = this.collectedPoints[this.collectedPoints.length - 1];
+    const prev = this.collectedPoints[this.collectedPoints.length - 2];
+
+    if (last && prev && last.time !== undefined && prev.time !== undefined) {
+      const dtS = (last.time - prev.time) / 1000;
+      if (dtS > 0 && dtS < MAX_SPEED_FALLBACK_INTERVAL_S) {
+        const distanceKm = haversineM(prev, last) / 1000;
+        return distanceKm / (dtS / 3600);
+      }
+    }
+
+    return null;
   }
 
   start(
@@ -27,6 +72,11 @@ export class Recorder {
     }
 
     this.collectedPoints = [];
+    this.paused = false;
+    this.pauseStartedAt = null;
+    this.pausedMsAccum = 0;
+    this.startedAtValue = Date.now();
+    this.lastKnownSpeedKmh = null;
 
     this.watchId = navigator.geolocation.watchPosition(
       (position) => this.handlePosition(position, onPoint),
@@ -39,12 +89,36 @@ export class Recorder {
     );
   }
 
+  pause(): void {
+    if (!this.isRecording || this.paused) {
+      return;
+    }
+    this.paused = true;
+    this.pauseStartedAt = Date.now();
+  }
+
+  resume(): void {
+    if (!this.paused) {
+      return;
+    }
+    if (this.pauseStartedAt !== null) {
+      this.pausedMsAccum += Date.now() - this.pauseStartedAt;
+    }
+    this.paused = false;
+    this.pauseStartedAt = null;
+  }
+
   stop(): TrackPoint[] {
     if (this.watchId !== null) {
       navigator.geolocation.clearWatch(this.watchId);
       this.watchId = null;
     }
-    return this.collectedPoints.slice();
+    const points = this.collectedPoints.slice();
+    this.startedAtValue = null;
+    this.paused = false;
+    this.pauseStartedAt = null;
+    this.lastKnownSpeedKmh = null;
+    return points;
   }
 
   private handlePosition(
@@ -53,7 +127,15 @@ export class Recorder {
   ): void {
     const { coords } = position;
 
+    if (coords.speed !== null && coords.speed >= 0) {
+      this.lastKnownSpeedKmh = coords.speed * 3.6;
+    }
+
     if (coords.accuracy > MAX_ACCURACY_M) {
+      return;
+    }
+
+    if (this.paused) {
       return;
     }
 

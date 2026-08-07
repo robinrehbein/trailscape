@@ -22,6 +22,8 @@ body {
   background: var(--bg);
 }
 
+/* ---------- App shell ---------- */
+
 #app {
   display: flex;
   flex-direction: column;
@@ -32,73 +34,385 @@ body {
 #topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.6rem 1rem;
+  padding: 0.5rem 1rem;
   background: var(--green);
   color: #fff;
 }
 
 #topbar h1 {
   margin: 0;
+  font-size: 1.1rem;
+}
+
+#content {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.view {
+  height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.view h2 {
+  margin: 0 0 1rem;
   font-size: 1.15rem;
 }
 
-#topbar-actions {
+.view-head {
   display: flex;
-  gap: 0.5rem;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
 }
+
+.view-head h2 {
+  margin: 0;
+}
+
+/* ---------- Buttons ---------- */
 
 .btn {
   display: inline-block;
-  padding: 0.45rem 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  padding: 0.6rem 1rem;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid #d5d2c8;
   border-radius: var(--radius);
-  background: transparent;
-  color: inherit;
+  background: var(--panel);
+  color: var(--text);
   font-size: 0.9rem;
   cursor: pointer;
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: #f0efe9;
 }
 
-.btn-primary {
-  background: #fff;
-  color: var(--green);
-  border-color: #fff;
-  font-weight: 600;
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
-.btn-primary:hover {
-  background: #e9efe9;
+.btn:disabled:hover {
+  background: var(--panel);
 }
 
-.btn-primary.recording {
+.btn-small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.btn-danger {
+  color: var(--danger);
+}
+
+.btn-danger-solid {
   background: var(--danger);
-  color: #fff;
+  color: #fff !important;
   border-color: var(--danger);
 }
 
-#content {
+/* ---------- Map view ---------- */
+
+#view-map {
+  padding: 0;
+  position: relative;
+  overflow: hidden;
   display: flex;
+  flex-direction: column;
+}
+
+#map {
+  position: relative;
   flex: 1;
   min-height: 0;
 }
 
-#sidebar {
-  width: 280px;
-  padding: 1rem;
+#profile-panel {
+  height: 110px;
+  flex: 0 0 auto;
   background: var(--panel);
-  border-right: 1px solid #e3e1d9;
-  overflow-y: auto;
+  border-top: 1px solid #e3e1d9;
+  padding: 0.4rem 0.6rem;
 }
 
-#sidebar h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
+#profile {
+  width: 100%;
+  height: 100%;
 }
+
+#profile svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-action {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1030;
+  background: var(--panel);
+  color: var(--text);
+  border-color: #d5d2c8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+#btn-plan.active {
+  background: var(--green);
+  color: #fff;
+  border-color: var(--green);
+  font-weight: 600;
+}
+
+#stats-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.8rem;
+  width: max-content;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.55rem 0.9rem;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  z-index: 1000;
+}
+
+#view-map.has-profile #stats-panel {
+  bottom: calc(110px + 5.5rem);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.2rem;
+}
+
+.stat-value {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#stats-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+#plan-panel {
+  position: absolute;
+  top: 3.4rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  width: auto;
+  z-index: 1000;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+#plan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#plan-profile {
+  padding: 0.2rem;
+  border: 1px solid #d5d2c8;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--panel);
+  color: var(--text);
+}
+
+#plan-info {
+  margin: 0.5rem 0;
+  font-size: 0.82rem;
+}
+
+#plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+#nav-bar {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  right: 0.75rem;
+  z-index: 1040;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  padding: 0.5rem 0.8rem;
+}
+
+#nav-remaining {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.nav-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-left: 0.3rem;
+}
+
+#nav-offroute {
+  display: inline-block;
+  margin-left: 0.6rem;
+  color: var(--danger);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* ---------- Record FAB ---------- */
+
+.fab {
+  position: absolute;
+  right: 1rem;
+  bottom: 1.25rem;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  background: var(--green);
+  color: #fff;
+  font-size: 1.6rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 1050;
+  cursor: pointer;
+}
+
+.fab.recording {
+  background: var(--danger);
+  animation: pulse 1.4s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ---------- Live recording bar ---------- */
+
+#live-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--panel);
+  border-top: 2px solid var(--danger);
+  padding: 0.6rem 0.9rem;
+  z-index: 1060;
+}
+
+#live-bar.paused {
+  border-top-color: #a16207;
+}
+
+#live-bar.paused .live-stat span {
+  opacity: 0.5;
+}
+
+.live-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  text-align: center;
+}
+
+.live-stat span {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-stat label {
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.live-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+
+.live-actions .btn {
+  flex: 1;
+  padding: 0.7rem;
+  font-size: 1rem;
+  border-color: #d5d2c8;
+  color: var(--text);
+}
+
+/* ---------- Tabbar ---------- */
+
+#tabbar {
+  display: flex;
+  background: var(--panel);
+  border-top: 1px solid #e3e1d9;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0.45rem 0 0.55rem;
+  border: none;
+  background: none;
+  font-size: 0.72rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tab-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.tab.active {
+  color: var(--green);
+  font-weight: 600;
+}
+
+/* ---------- Rides view ---------- */
 
 #ride-list {
   list-style: none;
@@ -107,7 +421,7 @@ body {
 }
 
 #ride-list li {
-  padding: 0.6rem 0.7rem;
+  padding: 0.8rem 0.9rem;
   margin-bottom: 0.4rem;
   border: 1px solid #e3e1d9;
   border-radius: var(--radius);
@@ -144,10 +458,17 @@ body {
   font-size: 0.85rem;
 }
 
-.sidebar-section {
+/* ---------- Settings (More) view ---------- */
+
+.settings-section {
   margin-top: 1.25rem;
   padding-top: 1rem;
   border-top: 1px solid #e3e1d9;
+}
+
+.settings-section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
 }
 
 .section-actions {
@@ -159,255 +480,201 @@ body {
 
 .text-input {
   width: 100%;
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem 0.6rem;
   margin-bottom: 0.4rem;
   border: 1px solid #d5d2c8;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   background: var(--panel);
   color: var(--text);
   box-sizing: border-box;
 }
 
-#map-pane {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+/* ---------- Training view ---------- */
+
+#view-training h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
 }
 
-#map {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-}
-
-#profile-panel {
-  height: 150px;
-  flex: 0 0 auto;
+#fitness-card {
   background: var(--panel);
-  border-top: 1px solid #e3e1d9;
-  padding: 0.4rem 0.6rem;
-}
-
-#profile {
-  width: 100%;
-  height: 100%;
-}
-
-#profile svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-#stats-panel {
-  position: absolute;
-  left: 50%;
-  bottom: 1rem;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  padding: 0.6rem 1rem;
-  background: var(--panel);
+  border: 1px solid #e3e1d9;
   border-radius: var(--radius);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-  z-index: 1000;
+  padding: 0.8rem 1rem;
 }
 
-.stat {
+.fitness-level {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.fitness-metrics {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 3.2rem;
-}
-
-.stat-value {
-  font-weight: 700;
-  font-size: 1.05rem;
-}
-
-.stat-label {
-  font-size: 0.7rem;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  font-size: 0.85rem;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-#map-pane.has-profile #stats-panel {
-  bottom: calc(150px + 1rem);
-}
-
-#stats-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.btn-small {
-  padding: 0.25rem 0.6rem;
-  font-size: 0.78rem;
-  border-color: #d5d2c8;
+.fitness-metrics strong {
   color: var(--text);
 }
 
-.btn-small:hover {
-  background: #f0efe9;
+#goal-form {
+  background: var(--panel);
+  border: 1px solid #e3e1d9;
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
 }
 
-.btn-danger {
+.form-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.form-row .text-input {
+  flex: 1;
+}
+
+#plan-weeks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.week {
+  background: var(--panel);
+  border: 1px solid #e3e1d9;
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.week.current {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+
+.week.past {
+  opacity: 0.75;
+}
+
+.week-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.week-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.week-kind {
+  font-size: 0.75rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #eef4ee;
+  color: var(--green);
+}
+
+.week-kind.erholung {
+  background: #eef2fa;
+  color: #2563eb;
+}
+
+.week-kind.taper {
+  background: #faf3e7;
+  color: #a16207;
+}
+
+.week-kind.zielwoche {
+  background: #fdeeec;
   color: var(--danger);
 }
 
-#record-banner {
-  position: absolute;
-  top: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.9rem;
-  background: var(--panel);
-  border-radius: var(--radius);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-  font-size: 0.9rem;
-  z-index: 1000;
-}
-
-#plan-panel {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  z-index: 1000;
-  width: 260px;
-  padding: 0.7rem 0.9rem;
-  background: var(--panel);
-  border-radius: var(--radius);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
-}
-
-#plan-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-#plan-profile {
-  padding: 0.2rem;
-  border: 1px solid #d5d2c8;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  background: var(--panel);
-  color: var(--text);
-}
-
-#plan-info {
+.week-progress {
+  height: 6px;
+  background: #e9e7df;
+  border-radius: 999px;
   margin: 0.5rem 0;
-  font-size: 0.82rem;
+  overflow: hidden;
 }
 
-#plan-actions {
+.week-progress span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  border-radius: 999px;
+}
+
+.week-progress-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.sessions {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.sessions li {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: 0.6rem;
+  font-size: 0.83rem;
+  padding: 0.25rem 0;
+  border-top: 1px dashed #e9e7df;
 }
 
-#btn-plan.active {
-  background: #fff;
-  color: var(--green);
+.session-day {
+  flex: 0 0 2rem;
   font-weight: 600;
+  color: var(--green);
 }
 
-.btn:disabled {
-  opacity: 0.45;
-  cursor: default;
+.session-km {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--muted);
 }
 
-.btn:disabled:hover {
-  background: transparent;
-}
+/* ---------- Desktop refinements ---------- */
 
-.rec-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--danger);
-  animation: pulse 1.2s infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.25;
-  }
-}
-
-#training-panel { position: absolute; inset: 0; z-index: 1100; background: var(--bg); overflow-y: auto; padding: 1rem 1.25rem 2rem; }
-#training-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
-#training-head h2 { margin: 0; font-size: 1.15rem; }
-#training-panel section { max-width: 640px; margin: 0 auto 1.25rem; }
-#training-panel h3 { margin: 0 0 0.5rem; font-size: 1rem; }
-#fitness-card { background: var(--panel); border: 1px solid #e3e1d9; border-radius: var(--radius); padding: 0.8rem 1rem; }
-.fitness-level { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--green); color: #fff; font-size: 0.82rem; font-weight: 600; margin-bottom: 0.4rem; }
-.fitness-metrics { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.85rem; color: var(--muted); }
-.fitness-metrics strong { color: var(--text); }
-#goal-form { background: var(--panel); border: 1px solid #e3e1d9; border-radius: var(--radius); padding: 0.8rem 1rem; }
-.form-row { display: flex; gap: 0.4rem; }
-.form-row .text-input { flex: 1; }
-#plan-weeks { list-style: none; margin: 0; padding: 0; }
-.week { background: var(--panel); border: 1px solid #e3e1d9; border-radius: var(--radius); padding: 0.7rem 0.9rem; margin-bottom: 0.5rem; }
-.week.current { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
-.week.past { opacity: 0.75; }
-.week-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
-.week-title { font-weight: 600; font-size: 0.92rem; }
-.week-kind { font-size: 0.75rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: #eef4ee; color: var(--green); }
-.week-kind.erholung { background: #eef2fa; color: #2563eb; }
-.week-kind.taper { background: #faf3e7; color: #a16207; }
-.week-kind.zielwoche { background: #fdeeec; color: var(--danger); }
-.week-progress { height: 6px; background: #e9e7df; border-radius: 999px; margin: 0.5rem 0; overflow: hidden; }
-.week-progress span { display: block; height: 100%; background: var(--green); border-radius: 999px; }
-.week-progress-label { font-size: 0.78rem; color: var(--muted); }
-.sessions { list-style: none; margin: 0.5rem 0 0; padding: 0; }
-.sessions li { display: flex; gap: 0.6rem; font-size: 0.83rem; padding: 0.25rem 0; border-top: 1px dashed #e9e7df; }
-.session-day { flex: 0 0 2rem; font-weight: 600; color: var(--green); }
-.session-km { margin-left: auto; white-space: nowrap; color: var(--muted); }
-
-@media (max-width: 700px) {
-  #content {
-    flex-direction: column-reverse;
+@media (min-width: 768px) {
+  .view {
+    padding: 1.5rem;
   }
 
-  #sidebar {
-    width: 100%;
-    max-height: 32vh;
-    border-right: none;
-    border-top: 1px solid #e3e1d9;
-  }
-
-  #stats-panel {
-    gap: 0.7rem;
-    padding: 0.5rem 0.7rem;
-    width: max-content;
-    max-width: calc(100% - 1rem);
+  #view-rides > *,
+  #view-training > *,
+  #view-more > * {
+    max-width: 640px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   #profile-panel {
-    height: 110px;
+    height: 150px;
   }
 
-  #map-pane.has-profile #stats-panel {
-    bottom: calc(110px + 1rem);
+  #view-map.has-profile #stats-panel {
+    bottom: calc(150px + 5.5rem);
   }
 
   #plan-panel {
-    left: 0.5rem;
-    right: 0.5rem;
-    top: 0.5rem;
-    width: auto;
+    top: 1rem;
+    left: 1rem;
+    right: auto;
+    width: 280px;
   }
-
-  #training-panel { padding: 0.75rem 0.75rem 1.5rem; }
 }
