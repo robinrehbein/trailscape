@@ -94,38 +94,32 @@ void main() {
   });
 
   group('brouterProfile', () {
-    test('bildet alle Kombinationen aus BikeType × WayPreference ab', () {
-      expect(brouterProfile(BikeType.gravel, WayPreference.gemischt), 'trekking');
-      expect(brouterProfile(BikeType.gravel, WayPreference.schotter), 'custom:gravel');
-      expect(brouterProfile(BikeType.gravel, WayPreference.asphalt), 'fastbike-lowtraffic');
-      expect(brouterProfile(BikeType.gravel, WayPreference.radwege), 'safety');
-      expect(brouterProfile(BikeType.gravel, WayPreference.kuerzester), 'shortest');
-      expect(brouterProfile(BikeType.rennrad, WayPreference.gemischt), 'fastbike');
-      expect(brouterProfile(BikeType.rennrad, WayPreference.schotter), 'custom:gravel');
-      expect(brouterProfile(BikeType.rennrad, WayPreference.asphalt), 'fastbike');
-      expect(brouterProfile(BikeType.rennrad, WayPreference.radwege), 'fastbike-lowtraffic');
-      expect(brouterProfile(BikeType.rennrad, WayPreference.kuerzester), 'shortest');
+    test('bildet jedes RouteProfile 1:1 auf seine Profil-ID ab', () {
+      expect(brouterProfile(RouteProfile.gravel), 'trekking');
+      expect(brouterProfile(RouteProfile.schotter), 'custom:gravel');
+      expect(brouterProfile(RouteProfile.asphalt), 'fastbike');
+      expect(brouterProfile(RouteProfile.radwege), 'safety');
+      expect(brouterProfile(RouteProfile.kuerzester), 'shortest');
     });
 
-    test('liefert für jede Kombination einen nicht-leeren Profilnamen', () {
-      for (final bike in BikeType.values) {
-        for (final way in WayPreference.values) {
-          expect(brouterProfile(bike, way), isNotEmpty);
-        }
+    test('liefert für jedes RouteProfile einen nicht-leeren Profilnamen', () {
+      for (final profile in RouteProfile.values) {
+        expect(brouterProfile(profile), isNotEmpty);
       }
     });
 
-    test('jede Weg-Präferenz hat ein Label', () {
-      for (final way in WayPreference.values) {
-        expect(wayPreferenceLabels[way], isNotNull);
+    test('jedes Routenprofil hat ein Label', () {
+      for (final profile in RouteProfile.values) {
+        expect(routeProfileLabels[profile], isNotNull);
       }
-      expect(wayPreferenceLabels[WayPreference.schotter], 'Schotter & Kieswege');
-      // Schotter steht direkt hinter "Gemischt" im Dropdown.
+      expect(routeProfileLabels[RouteProfile.schotter], 'Schotter & Kieswege');
+      // Gravel steht zuerst, Schotter direkt danach im Dropdown.
       expect(
-        wayPreferenceLabels.keys.toList(),
-        containsAllInOrder([WayPreference.gemischt, WayPreference.schotter]),
+        routeProfileLabels.keys.toList(),
+        containsAllInOrder([RouteProfile.gravel, RouteProfile.schotter]),
       );
-      expect(wayPreferenceLabels.keys.elementAt(1), WayPreference.schotter);
+      expect(routeProfileLabels.keys.first, RouteProfile.gravel);
+      expect(routeProfileLabels.keys.elementAt(1), RouteProfile.schotter);
     });
   });
 

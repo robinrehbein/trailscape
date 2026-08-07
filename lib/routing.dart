@@ -11,21 +11,18 @@ import 'package:http/http.dart' as http;
 import 'brouter_profiles.dart';
 import 'models.dart';
 
-enum BikeType { gravel, rennrad }
+/// Routenprofil zur Auswahl in der Planung.
+///
+/// Ersetzt die frühere 2x5-Matrix aus Fahrradtyp × Wegpräferenz durch eine
+/// einzige, direkte Auswahl mit 1:1-Mapping auf BRouter-Profil-IDs.
+enum RouteProfile { gravel, schotter, asphalt, radwege, kuerzester }
 
-enum WayPreference { gemischt, schotter, asphalt, radwege, kuerzester }
-
-const bikeTypeLabels = {
-  BikeType.gravel: 'Gravel',
-  BikeType.rennrad: 'Rennrad',
-};
-
-const wayPreferenceLabels = {
-  WayPreference.gemischt: 'Gemischt (Standard)',
-  WayPreference.schotter: 'Schotter & Kieswege',
-  WayPreference.asphalt: 'Asphalt & Straße',
-  WayPreference.radwege: 'Radwege & verkehrsarm',
-  WayPreference.kuerzester: 'Kürzester Weg',
+const routeProfileLabels = {
+  RouteProfile.gravel: 'Gravel (gemischt)',
+  RouteProfile.schotter: 'Schotter & Kieswege',
+  RouteProfile.asphalt: 'Rennrad / Asphalt',
+  RouteProfile.radwege: 'Radwege bevorzugt',
+  RouteProfile.kuerzester: 'Kürzeste Route',
 };
 
 /// Sentinel-Profilname für das eingebettete Gravel-Custom-Profil.
@@ -39,36 +36,19 @@ const String customGravelProfile = 'custom:gravel';
 /// des Custom-Profils scheitert.
 const String _fallbackProfile = 'trekking';
 
-/// Ermittelt den öffentlichen BRouter-Profilnamen für eine Kombination aus
-/// Fahrrad-Typ und Weg-Präferenz.
-String brouterProfile(BikeType bike, WayPreference way) {
-  switch (bike) {
-    case BikeType.gravel:
-      switch (way) {
-        case WayPreference.gemischt:
-          return 'trekking';
-        case WayPreference.schotter:
-          return customGravelProfile;
-        case WayPreference.asphalt:
-          return 'fastbike-lowtraffic';
-        case WayPreference.radwege:
-          return 'safety';
-        case WayPreference.kuerzester:
-          return 'shortest';
-      }
-    case BikeType.rennrad:
-      switch (way) {
-        case WayPreference.gemischt:
-          return 'fastbike';
-        case WayPreference.schotter:
-          return customGravelProfile;
-        case WayPreference.asphalt:
-          return 'fastbike';
-        case WayPreference.radwege:
-          return 'fastbike-lowtraffic';
-        case WayPreference.kuerzester:
-          return 'shortest';
-      }
+/// Ermittelt den öffentlichen BRouter-Profilnamen für ein [RouteProfile].
+String brouterProfile(RouteProfile profile) {
+  switch (profile) {
+    case RouteProfile.gravel:
+      return 'trekking';
+    case RouteProfile.schotter:
+      return customGravelProfile;
+    case RouteProfile.asphalt:
+      return 'fastbike';
+    case RouteProfile.radwege:
+      return 'safety';
+    case RouteProfile.kuerzester:
+      return 'shortest';
   }
 }
 

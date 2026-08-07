@@ -12,12 +12,52 @@ import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
 
+/// Sanftes Einblenden (Fade + Slide-up) für neu aufgebaute Listeneinträge.
+///
+/// Die ersten Einträge werden gestaffelt eingeblendet (~40 ms Versatz pro
+/// Item, gedeckelt auf 10 Items), danach startet die Animation ohne
+/// zusätzliche Verzögerung. Der Zustand bleibt pro Element erhalten, sodass
+/// die Animation nur beim ersten Aufbau eines Eintrags läuft.
+class _EntranceFade extends StatefulWidget {
+  const _EntranceFade({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_EntranceFade> createState() => _EntranceFadeState();
+}
+
+class _EntranceFadeState extends State<_EntranceFade> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final delay = Duration(milliseconds: 40 * widget.index.clamp(0, 10));
+    Future.delayed(delay, () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      offset: _visible ? Offset.zero : const Offset(0, 0.08),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        opacity: _visible ? 1 : 0,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class RidesScreen extends StatefulWidget {
-  const RidesScreen({
-    super.key,
-    required this.state,
-    required this.onShowMap,
-  });
+  const RidesScreen({super.key, required this.state, required this.onShowMap});
 
   final AppState state;
   final VoidCallback onShowMap;
@@ -80,9 +120,9 @@ class _RidesScreenState extends State<RidesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Import fehlgeschlagen: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import fehlgeschlagen: $e')));
       }
     } finally {
       if (mounted) setState(() => _importing = false);
@@ -120,13 +160,19 @@ class _RidesScreenState extends State<RidesScreen> {
         title: const Text('Meine Touren'),
         actions: [
           IconButton(
-            icon: _importing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.upload),
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInOutCubic,
+              child: _importing
+                  ? const SizedBox(
+                      key: ValueKey('importing'),
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload, key: ValueKey('upload')),
+            ),
             tooltip: 'GPX importieren',
             onPressed: _importing ? null : _import,
           ),
@@ -157,35 +203,44 @@ class _RidesScreenState extends State<RidesScreen> {
               final ride = rides[index];
               final selected = widget.state.selected?.id == ride.id;
 
-              return Dismissible(
-                key: ValueKey(ride.id),
-                direction: DismissDirection.endToStart,
-                background: Container(
-                  color: colorScheme.errorContainer,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Icon(
-                    Icons.delete,
-                    color: colorScheme.onErrorContainer,
+              return _EntranceFade(
+                index: index,
+                child: Dismissible(
+                  key: ValueKey(ride.id),
+                  direction: DismissDirection.endToStart,
+                  background: Container(
+                    color: colorScheme.errorContainer,
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Icon(
+                      Icons.delete,
+                      color: colorScheme.onErrorContainer,
+                    ),
                   ),
-                ),
-                confirmDismiss: (_) => _confirmDelete(context, ride),
-                onDismissed: (_) {
-                  widget.state.removeRide(ride.id);
-                },
-                child: ListTile(
-                  selected: selected,
-                  selectedTileColor: colorScheme.secondaryContainer,
-                  title: Text(ride.name),
-                  subtitle: Text(
-                    '${dateFormat.format(DateTime.fromMillisecondsSinceEpoch(ride.createdAt))} · '
-                    '${formatKm(ride.stats.distanceKm)} km · '
-                    '${formatDuration(ride.stats.durationS)}',
-                  ),
-                  onTap: () {
-                    widget.state.select(ride);
-                    widget.onShowMap();
+                  confirmDismiss: (_) => _confirmDelete(context, ride),
+                  onDismissed: (_) {
+                    widget.state.removeRide(ride.id);
                   },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    color: selected
+                        ? colorScheme.secondaryContainer
+                        : Colors.transparent,
+                    child: ListTile(
+                      selected: selected,
+                      title: Text(ride.name),
+                      subtitle: Text(
+                        '${dateFormat.format(DateTime.fromMillisecondsSinceEpoch(ride.createdAt))} · '
+                        '${formatKm(ride.stats.distanceKm)} km · '
+                        '${formatDuration(ride.stats.durationS)}',
+                      ),
+                      onTap: () {
+                        widget.state.select(ride);
+                        widget.onShowMap();
+                      },
+                    ),
+                  ),
                 ),
               );
             },

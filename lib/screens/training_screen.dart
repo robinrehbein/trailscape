@@ -10,6 +10,48 @@ import '../stats.dart';
 import '../state.dart';
 import '../training.dart';
 
+/// Sanftes Einblenden (Fade + Slide-up) für Karten beim ersten Aufbau.
+///
+/// Die ersten Karten werden gestaffelt eingeblendet (~40 ms Versatz pro
+/// Index, gedeckelt auf 10), der Zustand bleibt danach pro Element erhalten.
+class _EntranceFade extends StatefulWidget {
+  const _EntranceFade({required this.index, required this.child});
+
+  final int index;
+  final Widget child;
+
+  @override
+  State<_EntranceFade> createState() => _EntranceFadeState();
+}
+
+class _EntranceFadeState extends State<_EntranceFade> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final delay = Duration(milliseconds: 40 * widget.index.clamp(0, 10));
+    Future.delayed(delay, () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      offset: _visible ? Offset.zero : const Offset(0, 0.08),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        opacity: _visible ? 1 : 0,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 class TrainingScreen extends StatefulWidget {
   const TrainingScreen({super.key, required this.state});
 
@@ -149,9 +191,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Trainingsplan löschen'),
-        content: const Text(
-          'Soll der Trainingsplan wirklich gelöscht werden?',
-        ),
+        content: const Text('Soll der Trainingsplan wirklich gelöscht werden?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -187,18 +227,25 @@ class _TrainingScreenState extends State<TrainingScreen> {
     }
   }
 
-  Widget _metric(String value, String label) {
-    return RichText(
-      text: TextSpan(
-        style: DefaultTextStyle.of(context).style,
-        children: [
-          TextSpan(
-            text: value,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+  Widget _metric(double value, String label, String Function(double) format) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, _) {
+        return RichText(
+          text: TextSpan(
+            style: DefaultTextStyle.of(context).style,
+            children: [
+              TextSpan(
+                text: format(animatedValue),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              TextSpan(text: ' $label'),
+            ],
           ),
-          TextSpan(text: ' $label'),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -227,10 +274,14 @@ class _TrainingScreenState extends State<TrainingScreen> {
               spacing: 24,
               runSpacing: 8,
               children: [
-                _metric(formatKm(a.weeklyKm), 'km/Woche'),
-                _metric(a.weeklyHm.round().toString(), 'Hm/Woche'),
-                _metric(a.weeklyRides.toString(), 'Fahrten/Woche'),
-                _metric(formatKm(a.longestRideKm), 'km längste Tour'),
+                _metric(a.weeklyKm, 'km/Woche', formatKm),
+                _metric(a.weeklyHm, 'Hm/Woche', (v) => v.round().toString()),
+                _metric(
+                  a.weeklyRides,
+                  'Fahrten/Woche',
+                  (v) => v.toStringAsFixed(1),
+                ),
+                _metric(a.longestRideKm, 'km längste Tour', formatKm),
               ],
             ),
             if (a.rideCount == 0) ...[
@@ -356,102 +407,110 @@ class _TrainingScreenState extends State<TrainingScreen> {
     for (final week in plan.weeks) {
       final isCurrent = week.index == activeIndex;
       final isPastOrCurrent = week.index <= activeIndex;
-      final ridden = isPastOrCurrent
-          ? weekKm(week, widget.state.rides)
-          : 0.0;
+      final ridden = isPastOrCurrent ? weekKm(week, widget.state.rides) : 0.0;
       final progress = week.targetKm > 0
           ? (ridden / week.targetKm).clamp(0.0, 1.0)
           : 0.0;
       final kindColor = _weekKindColor(week.kind);
 
       widgets.add(
-        Card(
-          color: isCurrent
-              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Woche ${week.index + 1} · '
-                        '${shortDate.format(DateTime.fromMillisecondsSinceEpoch(week.start))}–'
-                        '${shortDate.format(DateTime.fromMillisecondsSinceEpoch(week.end))}',
-                        style: theme.textTheme.titleSmall,
-                      ),
-                    ),
-                    Chip(
-                      label: Text(
-                        weekKindLabels[week.kind]!,
-                        style: TextStyle(
-                          color: kindColor,
-                          fontWeight: FontWeight.bold,
+        _EntranceFade(
+          index: week.index,
+          child: Card(
+            color: isCurrent
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.5)
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Woche ${week.index + 1} · '
+                          '${shortDate.format(DateTime.fromMillisecondsSinceEpoch(week.start))}–'
+                          '${shortDate.format(DateTime.fromMillisecondsSinceEpoch(week.end))}',
+                          style: theme.textTheme.titleSmall,
                         ),
                       ),
-                      backgroundColor: kindColor.withValues(alpha: 0.15),
-                      side: BorderSide.none,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    minHeight: 6,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  isPastOrCurrent
-                      ? '${formatKm(ridden)} von ${week.targetKm} km'
-                      : 'Ziel: ${week.targetKm} km',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                for (final session in week.sessions)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 32,
-                          child: Text(
-                            session.day,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
+                      Chip(
+                        label: Text(
+                          weekKindLabels[week.kind]!,
+                          style: TextStyle(
+                            color: kindColor,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Expanded(
-                          child: RichText(
-                            text: TextSpan(
-                              style: DefaultTextStyle.of(context).style,
-                              children: [
-                                TextSpan(
-                                  text: session.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                        backgroundColor: kindColor.withValues(alpha: 0.15),
+                        side: BorderSide.none,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: progress),
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, animatedProgress, _) {
+                        return LinearProgressIndicator(
+                          value: animatedProgress,
+                          minHeight: 6,
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isPastOrCurrent
+                        ? '${formatKm(ridden)} von ${week.targetKm} km'
+                        : 'Ziel: ${week.targetKm} km',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 12),
+                  for (final session in week.sessions)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            child: Text(
+                              session.day,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: RichText(
+                              text: TextSpan(
+                                style: DefaultTextStyle.of(context).style,
+                                children: [
+                                  TextSpan(
+                                    text: session.title,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                                TextSpan(text: ' – ${session.description}'),
-                              ],
+                                  TextSpan(text: ' – ${session.description}'),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('${session.targetKm} km'),
-                      ],
+                          const SizedBox(width: 8),
+                          Text('${session.targetKm} km'),
+                        ],
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -476,9 +535,12 @@ class _TrainingScreenState extends State<TrainingScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildFitnessCard(context, assessment),
+                  _EntranceFade(
+                    index: 0,
+                    child: _buildFitnessCard(context, assessment),
+                  ),
                   const SizedBox(height: 16),
-                  _buildGoalCard(context),
+                  _EntranceFade(index: 1, child: _buildGoalCard(context)),
                   const SizedBox(height: 16),
                   if (_loadingPlan)
                     const Padding(
