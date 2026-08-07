@@ -214,9 +214,9 @@ void main() {
   });
 
   group('Kartenstile', () {
-    test('CyclOSM ist der erste Eintrag (Standard)', () {
-      expect(mapStyles.first.id, 'cyclosm');
-      expect(mapStyles.first.label, 'CyclOSM (Fahrrad)');
+    test('Voyager (Straßenkarte) ist der erste Eintrag (Standard)', () {
+      expect(mapStyles.first.id, 'voyager');
+      expect(mapStyles.first.label, 'Straßenkarte');
     });
 
     test('alle Stil-IDs sind eindeutig', () {
@@ -256,12 +256,20 @@ void main() {
         'MapServer/tile/14/5373/8802',
       );
     });
+
+    test('Voyager-Template ergibt die korrekte URL', () {
+      expect(
+        tileUrlFor(_styleById('voyager'), 14, 8802, 5373),
+        'https://a.basemaps.cartocdn.com/rastertiles/voyager/'
+        '14/8802/5373.png',
+      );
+    });
   });
 
   group('loadMapStyle / saveMapStyle', () {
-    test('ohne gespeicherten Wert gilt CyclOSM als Standard', () async {
+    test('ohne gespeicherten Wert gilt Voyager als Standard', () async {
       SharedPreferences.setMockInitialValues({});
-      expect((await loadMapStyle()).id, 'cyclosm');
+      expect((await loadMapStyle()).id, 'voyager');
     });
 
     test('liest einen gespeicherten Stil zurück', () async {
@@ -271,17 +279,23 @@ void main() {
       expect((await loadMapStyle()).id, 'opentopo');
     });
 
-    test('unbekannte id fällt auf CyclOSM zurück', () async {
+    test('unbekannte id fällt auf Voyager zurück', () async {
       SharedPreferences.setMockInitialValues({
         'trailscape.mapstyle': 'gibt-es-nicht',
       });
-      expect((await loadMapStyle()).id, 'cyclosm');
+      expect((await loadMapStyle()).id, 'voyager');
     });
 
     test('saveMapStyle wird von loadMapStyle gelesen', () async {
       SharedPreferences.setMockInitialValues({});
       await saveMapStyle('esri-sat');
       expect((await loadMapStyle()).id, 'esri-sat');
+    });
+
+    test('gespeichertes cyclosm bleibt beim Roundtrip erhalten', () async {
+      SharedPreferences.setMockInitialValues({});
+      await saveMapStyle('cyclosm');
+      expect((await loadMapStyle()).id, 'cyclosm');
     });
   });
 

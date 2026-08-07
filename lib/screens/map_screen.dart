@@ -951,11 +951,15 @@ class _MapScreenState extends State<MapScreen> {
                     RadioListTile<String>(
                       value: style.id,
                       title: Text(style.label),
-                      subtitle: style.id == 'cyclosm'
-                          ? const Text(
-                              'Radwege & Wegbeläge hervorgehoben',
-                            )
-                          : null,
+                      subtitle: switch (style.id) {
+                        'voyager' => const Text(
+                            'Klar und aufgeräumt (Standard)',
+                          ),
+                        'cyclosm' => const Text(
+                            'Radwege & Wegbeläge hervorgehoben',
+                          ),
+                        _ => null,
+                      },
                     ),
                 ],
               ),

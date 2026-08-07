@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:trailscape/brouter_profiles.dart';
 import 'package:trailscape/models.dart';
 import 'package:trailscape/routing.dart';
 import 'package:trailscape/sync_client.dart';
@@ -95,13 +96,52 @@ void main() {
   group('brouterProfile', () {
     test('bildet alle Kombinationen aus BikeType × WayPreference ab', () {
       expect(brouterProfile(BikeType.gravel, WayPreference.gemischt), 'trekking');
+      expect(brouterProfile(BikeType.gravel, WayPreference.schotter), 'custom:gravel');
       expect(brouterProfile(BikeType.gravel, WayPreference.asphalt), 'fastbike-lowtraffic');
       expect(brouterProfile(BikeType.gravel, WayPreference.radwege), 'safety');
       expect(brouterProfile(BikeType.gravel, WayPreference.kuerzester), 'shortest');
       expect(brouterProfile(BikeType.rennrad, WayPreference.gemischt), 'fastbike');
+      expect(brouterProfile(BikeType.rennrad, WayPreference.schotter), 'custom:gravel');
       expect(brouterProfile(BikeType.rennrad, WayPreference.asphalt), 'fastbike');
       expect(brouterProfile(BikeType.rennrad, WayPreference.radwege), 'fastbike-lowtraffic');
       expect(brouterProfile(BikeType.rennrad, WayPreference.kuerzester), 'shortest');
+    });
+
+    test('liefert für jede Kombination einen nicht-leeren Profilnamen', () {
+      for (final bike in BikeType.values) {
+        for (final way in WayPreference.values) {
+          expect(brouterProfile(bike, way), isNotEmpty);
+        }
+      }
+    });
+
+    test('jede Weg-Präferenz hat ein Label', () {
+      for (final way in WayPreference.values) {
+        expect(wayPreferenceLabels[way], isNotNull);
+      }
+      expect(wayPreferenceLabels[WayPreference.schotter], 'Schotter & Kieswege');
+      // Schotter steht direkt hinter "Gemischt" im Dropdown.
+      expect(
+        wayPreferenceLabels.keys.toList(),
+        containsAllInOrder([WayPreference.gemischt, WayPreference.schotter]),
+      );
+      expect(wayPreferenceLabels.keys.elementAt(1), WayPreference.schotter);
+    });
+  });
+
+  group('gravelProfileText', () {
+    test('schaltet prefer_unpaved_paths auf true', () {
+      final text = gravelProfileText();
+      expect(text, contains('assign prefer_unpaved_paths true'));
+      expect(text, isNot(contains('assign prefer_unpaved_paths false')));
+    });
+
+    test('lässt den Rest des Profils intakt', () {
+      final text = gravelProfileText();
+      expect(text.startsWith('#'), isTrue, reason: 'Header muss erhalten sein');
+      expect(text, contains('gravel.brf'));
+      expect(text, contains('---context:global'));
+      expect(text.length, gravelBrf.length - 1);
     });
   });
 
@@ -220,6 +260,181 @@ void main() {
           (e) => e.toString(),
           'message',
           contains('Routing-Server nicht erreichbar'),
+        )),
+      );
+    });
+  });
+
+  group('fetchRoute mit Custom-Gravel-Profil', () {
+    const waypoints = [
+      Waypoint(lat: 48.1, lon: 11.1),
+      Waypoint(lat: 48.2, lon: 11.2),
+    ];
+
+    setUp(resetCustomProfileCacheForTesting);
+    tearDown(resetCustomProfileCacheForTesting);
+
+    test('lädt das Profil hoch und routet mit der zurückgegebenen ID', () async {
+      final uploadBodies = <String>[];
+      final routedProfiles = <String>[];
+
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          expect(request.url.host, 'brouter.de');
+          uploadBodies.add(request.body);
+          return http.Response(
+            jsonEncode({'profileid': 'custom_1234', 'error': ''}),
+            200,
+          );
+        }
+        if (request.method == 'GET' && request.url.path == '/brouter') {
+          routedProfiles.add(request.url.queryParameters['profile']!);
+          return http.Response(_sampleGeoJson, 200);
+        }
+        fail('unerwarteter Request: ${request.method} ${request.url}');
+      });
+
+      final route = await fetchRoute(waypoints, 'custom:gravel', client: client);
+
+      expect(uploadBodies, hasLength(1));
+      expect(uploadBodies.single, contains('prefer_unpaved_paths'));
+      expect(uploadBodies.single, contains('assign prefer_unpaved_paths true'));
+      expect(routedProfiles, ['custom_1234']);
+      expect(route.points, hasLength(3));
+    });
+
+    test('zweiter Aufruf nutzt die gecachte profileid', () async {
+      var uploads = 0;
+      final routedProfiles = <String>[];
+
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          uploads++;
+          return http.Response(jsonEncode({'profileid': 'custom_abc'}), 200);
+        }
+        routedProfiles.add(request.url.queryParameters['profile']!);
+        return http.Response(_sampleGeoJson, 200);
+      });
+
+      await fetchRoute(waypoints, 'custom:gravel', client: client);
+      await fetchRoute(waypoints, 'custom:gravel', client: client);
+
+      expect(uploads, 1);
+      expect(routedProfiles, ['custom_abc', 'custom_abc']);
+    });
+
+    test('lädt nach Routing-Fehler neu hoch und wiederholt einmal', () async {
+      var uploads = 0;
+      final routedProfiles = <String>[];
+
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          uploads++;
+          return http.Response(
+            jsonEncode({'profileid': 'custom_v$uploads'}),
+            200,
+          );
+        }
+        final profile = request.url.queryParameters['profile']!;
+        routedProfiles.add(profile);
+        // Die erste (angeblich verworfene) ID schlägt fehl.
+        if (profile == 'custom_v1') {
+          return http.Response('profile not found', 500);
+        }
+        return http.Response(_sampleGeoJson, 200);
+      });
+
+      final route = await fetchRoute(waypoints, 'custom:gravel', client: client);
+
+      expect(uploads, 2);
+      expect(routedProfiles, ['custom_v1', 'custom_v2']);
+      expect(route.points, hasLength(3));
+
+      // Nach dem erfolgreichen Retry ist die neue ID gecacht.
+      await fetchRoute(waypoints, 'custom:gravel', client: client);
+      expect(uploads, 2);
+      expect(routedProfiles, ['custom_v1', 'custom_v2', 'custom_v2']);
+    });
+
+    test('fällt bei fehlgeschlagenem Upload auf trekking zurück', () async {
+      final routedProfiles = <String>[];
+
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          return http.Response('upload kaputt', 500);
+        }
+        routedProfiles.add(request.url.queryParameters['profile']!);
+        return http.Response(_sampleGeoJson, 200);
+      });
+
+      final route = await fetchRoute(waypoints, 'custom:gravel', client: client);
+
+      expect(routedProfiles, ['trekking']);
+      expect(route.points, hasLength(3));
+    });
+
+    test('fällt bei Fehler-Feld in der Upload-Antwort auf trekking zurück',
+        () async {
+      final routedProfiles = <String>[];
+
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          return http.Response(jsonEncode({'error': 'syntax error'}), 200);
+        }
+        routedProfiles.add(request.url.queryParameters['profile']!);
+        return http.Response(_sampleGeoJson, 200);
+      });
+
+      final route = await fetchRoute(waypoints, 'custom:gravel', client: client);
+
+      expect(routedProfiles, ['trekking']);
+      expect(route.points, hasLength(3));
+    });
+
+    test('fällt auf trekking zurück, wenn auch der Retry scheitert', () async {
+      var uploads = 0;
+      final routedProfiles = <String>[];
+
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          uploads++;
+          return http.Response(
+            jsonEncode({'profileid': 'custom_v$uploads'}),
+            200,
+          );
+        }
+        final profile = request.url.queryParameters['profile']!;
+        routedProfiles.add(profile);
+        if (profile.startsWith('custom_')) {
+          return http.Response('profile not found', 500);
+        }
+        return http.Response(_sampleGeoJson, 200);
+      });
+
+      final route = await fetchRoute(waypoints, 'custom:gravel', client: client);
+
+      expect(uploads, 2);
+      expect(routedProfiles, ['custom_v1', 'custom_v2', 'trekking']);
+      expect(route.points, hasLength(3));
+    });
+
+    test('wirft, wenn auch trekking fehlschlägt', () async {
+      final client = MockClient((request) async {
+        if (request.method == 'POST' && request.url.path == '/brouter/profile') {
+          return http.Response('nope', 500);
+        }
+        return http.Response('Server explodiert', 500);
+      });
+
+      expect(
+        () => fetchRoute(waypoints, 'custom:gravel', client: client),
+        throwsA(isA<Exception>().having(
+          (e) => e.toString(),
+          'message',
+          allOf(
+            contains('Route konnte nicht berechnet werden'),
+            contains('Server explodiert'),
+          ),
         )),
       );
     });

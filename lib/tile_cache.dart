@@ -59,6 +59,14 @@ class MapStyle {
 /// Alle auswählbaren Kartenstile. Der erste Eintrag ist der Standard.
 const List<MapStyle> mapStyles = [
   MapStyle(
+    id: 'voyager',
+    label: 'Straßenkarte',
+    urlTemplate:
+        'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+    maxZoom: 20,
+    attribution: '© OpenStreetMap-Mitwirkende © CARTO',
+  ),
+  MapStyle(
     id: 'cyclosm',
     label: 'CyclOSM (Fahrrad)',
     urlTemplate:
@@ -97,7 +105,7 @@ const String _mapStyleStorageKey = 'trailscape.mapstyle';
 MapStyle get _defaultMapStyle => mapStyles.first;
 
 /// Liest den gespeicherten Kartenstil. Unbekannte oder fehlende IDs fallen
-/// auf den Standard (CyclOSM) zurück.
+/// auf den Standard (Straßenkarte/Voyager) zurück.
 Future<MapStyle> loadMapStyle() async {
   final prefs = await SharedPreferences.getInstance();
   final id = prefs.getString(_mapStyleStorageKey);
