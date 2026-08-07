@@ -26,6 +26,24 @@
           <p id="ride-list-empty" class="muted">
             Noch keine Touren. Starte eine Aufzeichnung oder importiere eine GPX-Datei.
           </p>
+
+          <div class="sidebar-section">
+            <h2>Offline-Karten</h2>
+            <p id="offline-status" class="muted">–</p>
+            <div class="section-actions">
+              <button id="btn-offline-save" class="btn btn-small">Sichtbaren Ausschnitt speichern</button>
+              <button id="btn-offline-clear" class="btn btn-small btn-danger">Kacheln löschen</button>
+            </div>
+          </div>
+          <div class="sidebar-section">
+            <h2>Sync (Selfhost)</h2>
+            <input id="sync-url" class="text-input" type="url" placeholder="https://mein-server.example" autocomplete="off" />
+            <input id="sync-token" class="text-input" type="password" placeholder="Token" autocomplete="off" />
+            <div class="section-actions">
+              <button id="btn-sync" class="btn btn-small">Jetzt synchronisieren</button>
+            </div>
+            <p id="sync-status" class="muted"></p>
+          </div>
         </aside>
 
         <section id="map-pane">

@@ -18,6 +18,8 @@ import { Planner } from "./planner";
 import type { PlannerCallbacks } from "./planner";
 import type { PlannedRoute, RoutingProfile } from "./routing";
 import type { Ride, RideStats, TrackPoint } from "./types";
+import { getSyncConfig, setSyncConfig, syncRides } from "./sync";
+import { cachedTileCount, clearTileCache, downloadRegion } from "./offline";
 
 /* ------------------------------------------------------------------ DOM */
 
@@ -50,6 +52,15 @@ const btnPlanUndoEl = document.getElementById("btn-plan-undo") as HTMLButtonElem
 const btnPlanClearEl = document.getElementById("btn-plan-clear") as HTMLButtonElement;
 const btnPlanSaveEl = document.getElementById("btn-plan-save") as HTMLButtonElement;
 const btnPlanExportEl = document.getElementById("btn-plan-export") as HTMLButtonElement;
+
+const offlineStatusEl = document.getElementById("offline-status")!;
+const btnOfflineSaveEl = document.getElementById("btn-offline-save") as HTMLButtonElement;
+const btnOfflineClearEl = document.getElementById("btn-offline-clear") as HTMLButtonElement;
+
+const syncUrlEl = document.getElementById("sync-url") as HTMLInputElement;
+const syncTokenEl = document.getElementById("sync-token") as HTMLInputElement;
+const btnSyncEl = document.getElementById("btn-sync") as HTMLButtonElement;
+const syncStatusEl = document.getElementById("sync-status")!;
 
 /* ---------------------------------------------------------------- State */
 
@@ -502,6 +513,89 @@ function registerServiceWorker(): void {
   });
 }
 
+/* -------------------------------------------------------------------- Offline */
+
+async function refreshOfflineStatus(): Promise<void> {
+  const count = await cachedTileCount();
+  offlineStatusEl.textContent = `${count} Kacheln gespeichert`;
+}
+
+async function saveVisibleRegion(): Promise<void> {
+  const map = getMap();
+  if (!map) {
+    return;
+  }
+
+  const bounds = map.getBounds();
+  const region = {
+    north: bounds.getNorth(),
+    south: bounds.getSouth(),
+    east: bounds.getEast(),
+    west: bounds.getWest(),
+  };
+  const zoom = map.getZoom();
+  const minZoom = zoom;
+  const maxZoom = Math.min(zoom + 2, 17);
+
+  btnOfflineSaveEl.disabled = true;
+  try {
+    const result = await downloadRegion(region, minZoom, maxZoom, (p) => {
+      offlineStatusEl.textContent = `Lade Kacheln … ${p.done}/${p.total}`;
+    });
+    offlineStatusEl.textContent = `${result.downloaded} neu, ${result.skipped} vorhanden, ${result.failed} Fehler`;
+    setTimeout(() => {
+      void refreshOfflineStatus();
+    }, 2500);
+  } catch (error) {
+    offlineStatusEl.textContent = errorMessage(error);
+  } finally {
+    btnOfflineSaveEl.disabled = false;
+  }
+}
+
+async function clearOfflineTiles(): Promise<void> {
+  if (!confirm("Alle gespeicherten Kartenkacheln löschen?")) {
+    return;
+  }
+
+  await clearTileCache();
+  await refreshOfflineStatus();
+}
+
+/* ----------------------------------------------------------------- Sync */
+
+function loadSyncConfig(): void {
+  const config = getSyncConfig();
+  if (config) {
+    syncUrlEl.value = config.url;
+    syncTokenEl.value = config.token;
+  }
+}
+
+async function runSync(): Promise<void> {
+  const url = syncUrlEl.value.trim();
+  const token = syncTokenEl.value.trim();
+
+  if (!url || !token) {
+    syncStatusEl.textContent = "Bitte Server-URL und Token eintragen.";
+    return;
+  }
+
+  setSyncConfig({ url, token });
+  btnSyncEl.disabled = true;
+  syncStatusEl.textContent = "Synchronisiere …";
+
+  try {
+    const result = await syncRides();
+    syncStatusEl.textContent = `✓ ${result.pushed} hochgeladen, ${result.pulled} geladen, ${result.total} Touren`;
+    await refreshRideList();
+  } catch (error) {
+    syncStatusEl.textContent = errorMessage(error);
+  } finally {
+    btnSyncEl.disabled = false;
+  }
+}
+
 /* -------------------------------------------------------------- Bootstrap */
 
 function init(): void {
@@ -532,6 +626,19 @@ function init(): void {
     void savePlannedRoute();
   });
   btnPlanExportEl.addEventListener("click", exportPlannedRoute);
+
+  btnOfflineSaveEl.addEventListener("click", () => {
+    void saveVisibleRegion();
+  });
+  btnOfflineClearEl.addEventListener("click", () => {
+    void clearOfflineTiles();
+  });
+  void refreshOfflineStatus();
+
+  loadSyncConfig();
+  btnSyncEl.addEventListener("click", () => {
+    void runSync();
+  });
 
   registerServiceWorker();
 

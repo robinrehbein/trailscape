@@ -144,6 +144,31 @@ body {
   font-size: 0.85rem;
 }
 
+.sidebar-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e3e1d9;
+}
+
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.text-input {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid #d5d2c8;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--panel);
+  color: var(--text);
+  box-sizing: border-box;
+}
+
 #map-pane {
   position: relative;
   flex: 1;
