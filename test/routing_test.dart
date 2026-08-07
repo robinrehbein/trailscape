@@ -92,6 +92,19 @@ void main() {
     });
   });
 
+  group('brouterProfile', () {
+    test('bildet alle Kombinationen aus BikeType × WayPreference ab', () {
+      expect(brouterProfile(BikeType.gravel, WayPreference.gemischt), 'trekking');
+      expect(brouterProfile(BikeType.gravel, WayPreference.asphalt), 'fastbike-lowtraffic');
+      expect(brouterProfile(BikeType.gravel, WayPreference.radwege), 'safety');
+      expect(brouterProfile(BikeType.gravel, WayPreference.kuerzester), 'shortest');
+      expect(brouterProfile(BikeType.rennrad, WayPreference.gemischt), 'fastbike');
+      expect(brouterProfile(BikeType.rennrad, WayPreference.asphalt), 'fastbike');
+      expect(brouterProfile(BikeType.rennrad, WayPreference.radwege), 'fastbike-lowtraffic');
+      expect(brouterProfile(BikeType.rennrad, WayPreference.kuerzester), 'shortest');
+    });
+  });
+
   group('fetchRoute', () {
     test('wirft bei weniger als 2 Wegpunkten ohne Netzwerkaufruf', () async {
       final client = MockClient((request) async {
@@ -101,7 +114,7 @@ void main() {
       expect(
         () => fetchRoute(
           [const Waypoint(lat: 48.1, lon: 11.1)],
-          RoutingProfile.trekking,
+          'trekking',
           client: client,
         ),
         throwsA(isA<Exception>().having(
@@ -126,7 +139,7 @@ void main() {
 
       final route = await fetchRoute(
         waypoints,
-        RoutingProfile.fastbike,
+        'fastbike',
         client: client,
       );
 
@@ -153,7 +166,7 @@ void main() {
             const Waypoint(lat: 48.1, lon: 11.1),
             const Waypoint(lat: 48.2, lon: 11.2),
           ],
-          RoutingProfile.trekking,
+          'trekking',
           client: client,
         ),
         throwsA(isA<Exception>().having(
@@ -178,7 +191,7 @@ void main() {
             const Waypoint(lat: 48.1, lon: 11.1),
             const Waypoint(lat: 48.2, lon: 11.2),
           ],
-          RoutingProfile.shortest,
+          'shortest',
           client: client,
         ),
         throwsA(isA<Exception>().having(
@@ -200,7 +213,7 @@ void main() {
             const Waypoint(lat: 48.1, lon: 11.1),
             const Waypoint(lat: 48.2, lon: 11.2),
           ],
-          RoutingProfile.trekking,
+          'trekking',
           client: client,
         ),
         throwsA(isA<Exception>().having(

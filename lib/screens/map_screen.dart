@@ -17,6 +17,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:vibration/vibration.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../geocoding.dart';
 import '../gpx.dart';
 import '../models.dart';
 import '../navigation.dart';
@@ -35,8 +36,6 @@ const Color kRed = Color(0xFFB3382C);
 /// Farbe der Routenplanung.
 const Color kBlue = Color(0xFF2563EB);
 
-const String _osmUrlTemplate =
-    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const String _userAgent = 'io.github.robinrehbein.trailscape';
 
 const LatLng _germanyCenter = LatLng(51.0, 10.0);
@@ -50,11 +49,8 @@ const String _planHint =
     'Tippe auf die Karte, um Wegpunkte zu setzen. Tippe auf einen Wegpunkt, '
     'um ihn zu entfernen.';
 
-const Map<RoutingProfile, String> _profileLabels = {
-  RoutingProfile.trekking: 'Gravel/Trekking',
-  RoutingProfile.fastbike: 'Rennrad',
-  RoutingProfile.shortest: 'Kürzeste',
-};
+/// Maximale Höhe des Planungs-Panels als Anteil der Bildschirmhöhe.
+const double _planPanelMaxHeightFactor = 0.55;
 
 /// Kartenansicht mit Aufzeichnung, Planung und Navigation.
 class MapScreen extends StatefulWidget {
@@ -86,10 +82,18 @@ class _MapScreenState extends State<MapScreen> {
   bool _planning = false;
   final List<Waypoint> _waypoints = [];
   PlannedRoute? _plannedRoute;
-  RoutingProfile _profile = RoutingProfile.trekking;
+  BikeType _bike = BikeType.gravel;
+  WayPreference _way = WayPreference.gemischt;
   String? _planError;
   bool _planBusy = false;
   int _routeSeq = 0;
+
+  // ------------------------------------------------------------- Ortssuche
+  final TextEditingController _searchController = TextEditingController();
+  List<GeoResult> _searchResults = const [];
+  bool _searchBusy = false;
+  String? _searchError;
+  int _searchSeq = 0;
 
   // ------------------------------------------------------------- Navigation
   RouteNavigator? _navigator;
@@ -99,10 +103,16 @@ class _MapScreenState extends State<MapScreen> {
   bool _navOffRoute = false;
   LatLng? _navPosition;
 
+  /// Position aus dem Positions-Button (bleibt stehen, bis sie ersetzt wird).
+  LatLng? _myPosition;
+
   // ---------------------------------------------------------------- Offline
   bool _downloading = false;
   int _downloadDone = 0;
   int _downloadTotal = 0;
+
+  // ------------------------------------------------------------- Kartenstil
+  MapStyle _style = mapStyles.first;
 
   @override
   void initState() {
@@ -113,6 +123,18 @@ class _MapScreenState extends State<MapScreen> {
     _selectedId = selected?.id;
     if (selected != null && selected.points.isNotEmpty) {
       _pendingFit = selected.points.map(_toLatLng).toList();
+    }
+
+    unawaited(_loadStyle());
+  }
+
+  Future<void> _loadStyle() async {
+    try {
+      final style = await loadMapStyle();
+      if (!mounted || style.id == _style.id) return;
+      setState(() => _style = style);
+    } catch (_) {
+      // Ohne gespeicherte Einstellung bleibt der Standardstil aktiv.
     }
   }
 
@@ -136,6 +158,7 @@ class _MapScreenState extends State<MapScreen> {
       _recorder.stop();
     }
     unawaited(WakelockPlus.disable().catchError((_) {}));
+    _searchController.dispose();
     _mapController.dispose();
     super.dispose();
   }
@@ -392,6 +415,7 @@ class _MapScreenState extends State<MapScreen> {
       _planError = null;
       _planBusy = false;
       _routeSeq++;
+      _resetSearch();
     });
   }
 
@@ -403,7 +427,17 @@ class _MapScreenState extends State<MapScreen> {
       _planError = null;
       _planBusy = false;
       _routeSeq++;
+      _resetSearch();
     });
+  }
+
+  /// Setzt den Suchzustand zurück. Muss innerhalb von [setState] laufen.
+  void _resetSearch() {
+    _searchSeq++;
+    _searchResults = const [];
+    _searchBusy = false;
+    _searchError = null;
+    _searchController.clear();
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng point) {
@@ -456,7 +490,7 @@ class _MapScreenState extends State<MapScreen> {
 
     final waypoints = List<Waypoint>.unmodifiable(_waypoints);
     try {
-      final route = await fetchRoute(waypoints, _profile);
+      final route = await fetchRoute(waypoints, brouterProfile(_bike, _way));
       if (!mounted || seq != _routeSeq) return;
       setState(() {
         _plannedRoute = route;
@@ -474,9 +508,82 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _setProfile(RoutingProfile profile) {
-    if (profile == _profile) return;
-    setState(() => _profile = profile);
+  void _setBike(BikeType bike) {
+    if (bike == _bike) return;
+    setState(() => _bike = bike);
+    unawaited(_recomputeRoute());
+  }
+
+  void _setWay(WayPreference way) {
+    if (way == _way) return;
+    setState(() => _way = way);
+    unawaited(_recomputeRoute());
+  }
+
+  // ------------------------------------------------------------- Ortssuche
+
+  Future<void> _searchPlace() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+
+    final seq = ++_searchSeq;
+    setState(() {
+      _searchBusy = true;
+      _searchError = null;
+    });
+
+    try {
+      final results = await searchPlaces(query);
+      if (!mounted || seq != _searchSeq) return;
+      setState(() {
+        _searchResults = results.take(5).toList(growable: false);
+        _searchBusy = false;
+        _searchError = results.isEmpty ? 'Keine Treffer gefunden.' : null;
+      });
+    } catch (error) {
+      if (!mounted || seq != _searchSeq) return;
+      // Suchfeld bleibt erhalten, damit der Nutzer es erneut versuchen kann.
+      setState(() {
+        _searchResults = const [];
+        _searchBusy = false;
+        _searchError = _errorMessage(error);
+      });
+    }
+  }
+
+  /// Hängt ein Suchergebnis als letzten Wegpunkt (Ziel) an.
+  void _addSearchResult(GeoResult result) {
+    final target = LatLng(result.lat, result.lon);
+    setState(() {
+      _waypoints.add(Waypoint(lat: result.lat, lon: result.lon));
+      _resetSearch();
+    });
+    if (_mapReady) {
+      _mapController.move(
+        target,
+        math.max(_mapController.camera.zoom, _minRecordingZoom),
+      );
+    }
+    unawaited(_recomputeRoute());
+  }
+
+  /// Fügt die aktuelle Position als ersten Wegpunkt (Start) ein.
+  Future<void> _useMyPositionAsStart() async {
+    final position = await _currentPosition();
+    if (position == null || !mounted) return;
+
+    setState(() {
+      _waypoints.insert(
+        0,
+        Waypoint(lat: position.latitude, lon: position.longitude),
+      );
+    });
+    if (_mapReady) {
+      _mapController.move(
+        LatLng(position.latitude, position.longitude),
+        math.max(_mapController.camera.zoom, _minRecordingZoom),
+      );
+    }
     unawaited(_recomputeRoute());
   }
 
@@ -598,6 +705,39 @@ class _MapScreenState extends State<MapScreen> {
     } catch (error) {
       _snack(_errorMessage(error));
       return false;
+    }
+  }
+
+  /// Holt die aktuelle Position inklusive Berechtigungsprüfung.
+  /// Liefert `null`, wenn dies fehlschlägt (Meldung erfolgt als SnackBar).
+  Future<Position?> _currentPosition() async {
+    if (!await _ensureLocationPermission()) return null;
+    if (!mounted) return null;
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+        ),
+      );
+    } catch (error) {
+      _snack(_errorMessage(error));
+      return null;
+    }
+  }
+
+  /// Zentriert die Karte auf die aktuelle Position und zeigt einen Marker.
+  Future<void> _goToMyPosition() async {
+    final position = await _currentPosition();
+    if (position == null || !mounted) return;
+
+    final target = LatLng(position.latitude, position.longitude);
+    setState(() => _myPosition = target);
+
+    if (_mapReady) {
+      _mapController.move(
+        target,
+        math.max(_mapController.camera.zoom, _minRecordingZoom),
+      );
     }
   }
 
@@ -748,6 +888,7 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       final result = await TileCache.downloadRegion(
+        _style,
         bounds,
         minZoom,
         maxZoom,
@@ -774,6 +915,68 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // ---------------------------------------------------------- Kartenstil-UI
+
+  /// Öffnet die Stil-Auswahl und übernimmt die Wahl sofort.
+  Future<void> _showStyleSheet() async {
+    final chosen = await showModalBottomSheet<MapStyle>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+              child: Text(
+                'Kartenstil',
+                style: Theme.of(sheetContext)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            RadioGroup<String>(
+              groupValue: _style.id,
+              onChanged: (value) {
+                if (value == null) return;
+                Navigator.of(sheetContext).pop(
+                  mapStyles.firstWhere((style) => style.id == value),
+                );
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final style in mapStyles)
+                    RadioListTile<String>(
+                      value: style.id,
+                      title: Text(style.label),
+                      subtitle: style.id == 'cyclosm'
+                          ? const Text(
+                              'Radwege & Wegbeläge hervorgehoben',
+                            )
+                          : null,
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (chosen == null || !mounted) return;
+    if (chosen.id != _style.id) {
+      setState(() => _style = chosen);
+    }
+    try {
+      await saveMapStyle(chosen.id);
+    } catch (error) {
+      _snack(_errorMessage(error));
+    }
+  }
+
   // -------------------------------------------------------------------- Build
 
   @override
@@ -781,6 +984,7 @@ class _MapScreenState extends State<MapScreen> {
     final selected = widget.state.selected;
     final recording = _recorder.isRecording;
     final navigating = _navigator != null;
+    final positionDot = _navPosition ?? _myPosition;
 
     return Stack(
       fit: StackFit.expand,
@@ -804,10 +1008,14 @@ class _MapScreenState extends State<MapScreen> {
           ),
           children: [
             TileLayer(
-              urlTemplate: _osmUrlTemplate,
-              tileProvider: TileCache.provider(),
+              // Der eigene Provider baut die URL selbst aus dem Stil; der
+              // Parameter ist aber formal nötig und bleibt konsistent.
+              key: ValueKey(_style.id),
+              urlTemplate: _style.urlTemplate,
+              tileProvider: TileCache.provider(_style),
               userAgentPackageName: _userAgent,
-              maxZoom: 19,
+              maxNativeZoom: _style.maxZoom,
+              maxZoom: _style.maxZoom.toDouble(),
             ),
             if (selected != null && selected.points.length >= 2)
               PolylineLayer(
@@ -842,11 +1050,11 @@ class _MapScreenState extends State<MapScreen> {
               ),
             if (_planning && _waypoints.isNotEmpty)
               MarkerLayer(markers: _buildWaypointMarkers()),
-            if (_navPosition != null)
+            if (positionDot != null)
               MarkerLayer(
                 markers: [
                   Marker(
-                    point: _navPosition!,
+                    point: positionDot,
                     width: 22,
                     height: 22,
                     child: const _PositionDot(),
@@ -857,7 +1065,7 @@ class _MapScreenState extends State<MapScreen> {
               alignment: AttributionAlignment.bottomLeft,
               showFlutterMapAttribution: false,
               attributions: [
-                TextSourceAttribution('OpenStreetMap-Mitwirkende'),
+                TextSourceAttribution(_style.attribution),
               ],
             ),
           ],
@@ -889,8 +1097,20 @@ class _MapScreenState extends State<MapScreen> {
                   if (_planning) ...[
                     const SizedBox(height: 8),
                     _PlanPanel(
-                      profile: _profile,
-                      onProfileChanged: _setProfile,
+                      bike: _bike,
+                      way: _way,
+                      onBikeChanged: _setBike,
+                      onWayChanged: _setWay,
+                      searchController: _searchController,
+                      searchResults: _searchResults,
+                      searchBusy: _searchBusy,
+                      searchError: _searchError,
+                      onSearch: () => unawaited(_searchPlace()),
+                      onResultSelected: _addSearchResult,
+                      onUseMyPosition: () =>
+                          unawaited(_useMyPositionAsStart()),
+                      maxHeight: MediaQuery.sizeOf(context).height *
+                          _planPanelMaxHeightFactor,
                       waypointCount: _waypoints.length,
                       route: _plannedRoute,
                       busy: _planBusy,
@@ -934,15 +1154,25 @@ class _MapScreenState extends State<MapScreen> {
                 children: [
                   FloatingActionButton(
                     heroTag: 'trailscape-record-fab',
-                    backgroundColor: recording ? kRed : kGreen,
-                    foregroundColor: Colors.white,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    foregroundColor: recording ? kRed : kGreen,
                     tooltip: recording
                         ? 'Aufzeichnung beenden'
                         : 'Aufzeichnung starten',
                     onPressed: () => unawaited(_toggleRecording()),
                     child: Icon(
-                      recording ? Icons.stop_rounded : Icons.fiber_manual_record,
+                      recording ? Icons.stop : Icons.fiber_manual_record,
+                      color: recording ? kRed : kGreen,
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  FloatingActionButton(
+                    heroTag: 'trailscape-location-fab',
+                    backgroundColor: kGreen,
+                    foregroundColor: Colors.white,
+                    tooltip: 'Meine Position',
+                    onPressed: () => unawaited(_goToMyPosition()),
+                    child: const Icon(Icons.my_location, color: Colors.white),
                   ),
                   const SizedBox(height: 12),
                   if (recording)
@@ -993,6 +1223,18 @@ class _MapScreenState extends State<MapScreen> {
             activeColor: kBlue,
             onPressed: _togglePlanning,
           ),
+        const SizedBox(width: 8),
+        Material(
+          color: Theme.of(context).colorScheme.surface,
+          elevation: 2,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: IconButton(
+            tooltip: 'Kartenstil',
+            onPressed: () => unawaited(_showStyleSheet()),
+            icon: const Icon(Icons.layers),
+          ),
+        ),
         const SizedBox(width: 8),
         Material(
           color: Theme.of(context).colorScheme.surface,
@@ -1462,8 +1704,18 @@ class _NavBar extends StatelessWidget {
 /// Panel der Routenplanung.
 class _PlanPanel extends StatelessWidget {
   const _PlanPanel({
-    required this.profile,
-    required this.onProfileChanged,
+    required this.bike,
+    required this.way,
+    required this.onBikeChanged,
+    required this.onWayChanged,
+    required this.searchController,
+    required this.searchResults,
+    required this.searchBusy,
+    required this.searchError,
+    required this.onSearch,
+    required this.onResultSelected,
+    required this.onUseMyPosition,
+    required this.maxHeight,
     required this.waypointCount,
     required this.route,
     required this.busy,
@@ -1474,8 +1726,18 @@ class _PlanPanel extends StatelessWidget {
     required this.onShare,
   });
 
-  final RoutingProfile profile;
-  final ValueChanged<RoutingProfile> onProfileChanged;
+  final BikeType bike;
+  final WayPreference way;
+  final ValueChanged<BikeType> onBikeChanged;
+  final ValueChanged<WayPreference> onWayChanged;
+  final TextEditingController searchController;
+  final List<GeoResult> searchResults;
+  final bool searchBusy;
+  final String? searchError;
+  final VoidCallback onSearch;
+  final ValueChanged<GeoResult> onResultSelected;
+  final VoidCallback onUseMyPosition;
+  final double maxHeight;
   final int waypointCount;
   final PlannedRoute? route;
   final bool busy;
@@ -1508,82 +1770,183 @@ class _PlanPanel extends StatelessWidget {
     return Card(
       elevation: 4,
       margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.route_outlined, size: 18, color: kBlue),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<RoutingProfile>(
-                      isExpanded: true,
-                      value: profile,
-                      onChanged: (value) {
-                        if (value != null) onProfileChanged(value);
-                      },
-                      items: [
-                        for (final entry in _profileLabels.entries)
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: math.max(maxHeight, 160)),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ------------------------------------------------ Ziel-Suche
+              TextField(
+                controller: searchController,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => onSearch(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Ort, Stadt oder Straße suchen…',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.place_outlined, size: 20),
+                  suffixIcon: searchBusy
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                      ],
+                        )
+                      : IconButton(
+                          tooltip: 'Suchen',
+                          onPressed: onSearch,
+                          icon: const Icon(Icons.search),
+                        ),
+                ),
+              ),
+              if (searchError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    searchError!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: kRed,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                if (busy)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+              if (searchResults.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final result in searchResults.take(5))
+                        ListTile(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.location_on_outlined,
+                              size: 20, color: kBlue),
+                          title: Text(
+                            result.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          onTap: () => onResultSelected(result),
+                        ),
+                    ],
                   ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              errorText ?? _info,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: errorText != null
-                    ? kRed
-                    : theme.colorScheme.onSurfaceVariant,
-                fontWeight:
-                    errorText != null ? FontWeight.w600 : FontWeight.normal,
+                ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: onUseMyPosition,
+                  icon: const Icon(Icons.my_location, size: 18),
+                  label: const Text('Meine Position als Start'),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                TextButton.icon(
-                  onPressed: onUndo,
-                  icon: const Icon(Icons.undo, size: 18),
-                  label: const Text('Rückgängig'),
+              const Divider(height: 12),
+
+              // ------------------------------------------ Profil-Auswahl
+              Row(
+                children: [
+                  const Icon(Icons.directions_bike, size: 18, color: kBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<BikeType>(
+                        isExpanded: true,
+                        value: bike,
+                        onChanged: (value) {
+                          if (value != null) onBikeChanged(value);
+                        },
+                        items: [
+                          for (final entry in bikeTypeLabels.entries)
+                            DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (busy)
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                ],
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.route_outlined, size: 18, color: kBlue),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<WayPreference>(
+                        isExpanded: true,
+                        value: way,
+                        hint: const Text('Bevorzugter Weg'),
+                        onChanged: (value) {
+                          if (value != null) onWayChanged(value);
+                        },
+                        items: [
+                          for (final entry in wayPreferenceLabels.entries)
+                            DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                errorText ?? _info,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: errorText != null
+                      ? kRed
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight:
+                      errorText != null ? FontWeight.w600 : FontWeight.normal,
                 ),
-                TextButton.icon(
-                  onPressed: onClear,
-                  icon: const Icon(Icons.clear_all, size: 18),
-                  label: const Text('Leeren'),
-                ),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: kBlue),
-                  onPressed: onSave,
-                  icon: const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('Speichern'),
-                ),
-                TextButton.icon(
-                  onPressed: onShare,
-                  icon: const Icon(Icons.ios_share, size: 18),
-                  label: const Text('Teilen'),
-                ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: onUndo,
+                    icon: const Icon(Icons.undo, size: 18),
+                    label: const Text('Rückgängig'),
+                  ),
+                  TextButton.icon(
+                    onPressed: onClear,
+                    icon: const Icon(Icons.clear_all, size: 18),
+                    label: const Text('Leeren'),
+                  ),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: kBlue),
+                    onPressed: onSave,
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: const Text('Speichern'),
+                  ),
+                  TextButton.icon(
+                    onPressed: onShare,
+                    icon: const Icon(Icons.ios_share, size: 18),
+                    label: const Text('Teilen'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
