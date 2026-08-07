@@ -20,6 +20,17 @@ import type { PlannedRoute, RoutingProfile } from "./routing";
 import type { Ride, RideStats, TrackPoint } from "./types";
 import { getSyncConfig, setSyncConfig, syncRides } from "./sync";
 import { cachedTileCount, clearTileCache, downloadRegion } from "./offline";
+import { assessFitness, LEVEL_LABELS } from "./fitness";
+import type { FitnessAssessment } from "./fitness";
+import {
+  currentWeekIndex,
+  generatePlan,
+  loadPlan,
+  savePlan,
+  weekKm,
+  WEEK_KIND_LABELS,
+} from "./training";
+import type { Goal, TrainingPlan } from "./training";
 
 /* ------------------------------------------------------------------ DOM */
 
@@ -62,6 +73,21 @@ const syncTokenEl = document.getElementById("sync-token") as HTMLInputElement;
 const btnSyncEl = document.getElementById("btn-sync") as HTMLButtonElement;
 const syncStatusEl = document.getElementById("sync-status")!;
 
+const btnTrainingEl = document.getElementById("btn-training") as HTMLButtonElement;
+const btnTrainingCloseEl = document.getElementById("btn-training-close") as HTMLButtonElement;
+const trainingPanelEl = document.getElementById("training-panel")!;
+const fitnessCardEl = document.getElementById("fitness-card")!;
+const goalFormEl = document.getElementById("goal-form") as HTMLFormElement;
+const goalNameEl = document.getElementById("goal-name") as HTMLInputElement;
+const goalDistanceEl = document.getElementById("goal-distance") as HTMLInputElement;
+const goalAscentEl = document.getElementById("goal-ascent") as HTMLInputElement;
+const goalDateEl = document.getElementById("goal-date") as HTMLInputElement;
+const btnGoalDeleteEl = document.getElementById("btn-goal-delete") as HTMLButtonElement;
+const goalStatusEl = document.getElementById("goal-status")!;
+const planSectionEl = document.getElementById("plan-section")!;
+const planTitleEl = document.getElementById("plan-title")!;
+const planWeeksEl = document.getElementById("plan-weeks")!;
+
 /* ---------------------------------------------------------------- State */
 
 const recorder = new Recorder();
@@ -101,6 +127,21 @@ function safeFileName(name: string): string {
 function firstTimestamp(points: TrackPoint[]): number {
   const first = points[0] as TrackPoint | undefined;
   return first?.time ?? Date.now();
+}
+
+function toDateInputValue(timestamp: number): string {
+  const d = new Date(timestamp);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatShortDate(timestamp: number): string {
+  const d = new Date(timestamp);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}.${mm}.`;
 }
 
 /* ----------------------------------------------------------- Tourenliste */
@@ -500,6 +541,213 @@ async function deleteCurrentRide(): Promise<void> {
   hideProfile();
 }
 
+/* ---------------------------------------------------------------- Training */
+
+function togglePanelVisibility(el: HTMLElement): boolean {
+  const wasHidden = el.hidden;
+  el.hidden = !wasHidden;
+  return wasHidden;
+}
+
+function renderFitnessCard(assessment: FitnessAssessment): void {
+  fitnessCardEl.replaceChildren();
+
+  const levelEl = document.createElement("span");
+  levelEl.className = "fitness-level";
+  levelEl.textContent = LEVEL_LABELS[assessment.level];
+  fitnessCardEl.append(levelEl);
+
+  const metricsEl = document.createElement("div");
+  metricsEl.className = "fitness-metrics";
+
+  const metrics: Array<[string, string]> = [
+    [formatKm(assessment.weeklyKm), "km/Woche"],
+    [String(assessment.weeklyHm), "Hm/Woche"],
+    [String(assessment.weeklyRides), "Fahrten/Woche"],
+    [formatKm(assessment.longestRideKm), "km längste Tour"],
+  ];
+
+  for (const [value, label] of metrics) {
+    const entryEl = document.createElement("span");
+    const strongEl = document.createElement("strong");
+    strongEl.textContent = value;
+    entryEl.append(strongEl, document.createTextNode(` ${label}`));
+    metricsEl.append(entryEl);
+  }
+
+  fitnessCardEl.append(metricsEl);
+
+  if (assessment.rideCount === 0) {
+    const hintEl = document.createElement("p");
+    hintEl.className = "muted";
+    hintEl.textContent =
+      "Noch keine Touren der letzten 8 Wochen vorhanden – die Einstufung ist daher konservativ.";
+    fitnessCardEl.append(hintEl);
+  }
+}
+
+function renderPlanWeeks(plan: TrainingPlan, planRides: Ride[]): void {
+  planTitleEl.textContent = `${plan.goal.name} – ${plan.goal.distanceKm} km am ${formatDate(plan.goal.date)}`;
+
+  planWeeksEl.replaceChildren();
+  const activeIndex = currentWeekIndex(plan);
+
+  for (const week of plan.weeks) {
+    const li = document.createElement("li");
+    li.className = "week";
+    if (week.index === activeIndex) {
+      li.classList.add("current");
+    } else if (week.index < activeIndex) {
+      li.classList.add("past");
+    }
+
+    const headEl = document.createElement("div");
+    headEl.className = "week-head";
+
+    const titleEl = document.createElement("span");
+    titleEl.className = "week-title";
+    titleEl.textContent =
+      `Woche ${week.index + 1} · ${formatShortDate(week.start)}–${formatShortDate(week.end)}`;
+
+    const kindEl = document.createElement("span");
+    kindEl.className = `week-kind ${week.kind}`;
+    kindEl.textContent = WEEK_KIND_LABELS[week.kind];
+
+    headEl.append(titleEl, kindEl);
+    li.append(headEl);
+
+    const isPastOrCurrent = week.index <= activeIndex;
+    const ridden = isPastOrCurrent ? weekKm(week, planRides) : 0;
+    const pct = week.targetKm > 0 ? Math.min(100, (ridden / week.targetKm) * 100) : 0;
+
+    const progressEl = document.createElement("div");
+    progressEl.className = "week-progress";
+    const progressBarEl = document.createElement("span");
+    progressBarEl.style.width = `${pct}%`;
+    progressEl.append(progressBarEl);
+    li.append(progressEl);
+
+    const progressLabelEl = document.createElement("div");
+    progressLabelEl.className = "week-progress-label";
+    progressLabelEl.textContent = isPastOrCurrent
+      ? `${formatKm(ridden)} von ${week.targetKm} km`
+      : `Ziel: ${week.targetKm} km`;
+    li.append(progressLabelEl);
+
+    const sessionsEl = document.createElement("ul");
+    sessionsEl.className = "sessions";
+    for (const session of week.sessions) {
+      const sessionLi = document.createElement("li");
+
+      const dayEl = document.createElement("span");
+      dayEl.className = "session-day";
+      dayEl.textContent = session.day;
+
+      const bodyEl = document.createElement("span");
+      const strongEl = document.createElement("strong");
+      strongEl.textContent = session.title;
+      bodyEl.append(strongEl, document.createTextNode(` – ${session.description}`));
+
+      const kmEl = document.createElement("span");
+      kmEl.className = "session-km";
+      kmEl.textContent = `${session.targetKm} km`;
+
+      sessionLi.append(dayEl, bodyEl, kmEl);
+      sessionsEl.append(sessionLi);
+    }
+    li.append(sessionsEl);
+
+    planWeeksEl.append(li);
+  }
+
+  planSectionEl.hidden = false;
+}
+
+async function renderTraining(): Promise<void> {
+  const trainingRides = await listRides();
+  const assessment = assessFitness(trainingRides);
+  renderFitnessCard(assessment);
+
+  const plan = loadPlan();
+  if (plan) {
+    goalNameEl.value = plan.goal.name;
+    goalDistanceEl.value = String(plan.goal.distanceKm);
+    goalAscentEl.value = plan.goal.ascentM === null ? "" : String(plan.goal.ascentM);
+    goalDateEl.value = toDateInputValue(plan.goal.date);
+    btnGoalDeleteEl.hidden = false;
+    renderPlanWeeks(plan, trainingRides);
+  } else {
+    planSectionEl.hidden = true;
+    btnGoalDeleteEl.hidden = true;
+  }
+}
+
+function toggleTrainingPanel(): void {
+  const wasHidden = togglePanelVisibility(trainingPanelEl);
+  if (wasHidden) {
+    void renderTraining();
+  }
+}
+
+function readGoalForm(): Goal | null {
+  const name = goalNameEl.value.trim();
+  const distanceKm = Number(goalDistanceEl.value);
+  const ascentRaw = goalAscentEl.value.trim();
+  const dateValue = goalDateEl.value;
+
+  if (!name) {
+    goalStatusEl.textContent = "Bitte einen Namen für das Ziel angeben.";
+    return null;
+  }
+  if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+    goalStatusEl.textContent = "Bitte eine gültige Distanz angeben.";
+    return null;
+  }
+  if (!dateValue) {
+    goalStatusEl.textContent = "Bitte ein Zieldatum angeben.";
+    return null;
+  }
+
+  const ascentM = ascentRaw && Number.isFinite(Number(ascentRaw)) ? Number(ascentRaw) : null;
+  const date = new Date(`${dateValue}T12:00:00`).getTime();
+
+  return { name, distanceKm, ascentM, date };
+}
+
+async function handleGoalSubmit(event: Event): Promise<void> {
+  event.preventDefault();
+  goalStatusEl.textContent = "";
+
+  const goal = readGoalForm();
+  if (!goal) {
+    return;
+  }
+
+  const goalRides = await listRides();
+  const assessment = assessFitness(goalRides);
+
+  try {
+    const plan = generatePlan(goal, assessment);
+    savePlan(plan);
+    goalStatusEl.textContent = `Plan mit ${plan.weeks.length} Wochen erstellt.`;
+    btnGoalDeleteEl.hidden = false;
+    renderPlanWeeks(plan, goalRides);
+  } catch (error) {
+    goalStatusEl.textContent = errorMessage(error);
+  }
+}
+
+function deleteGoalPlan(): void {
+  if (!confirm("Trainingsplan wirklich löschen?")) {
+    return;
+  }
+
+  savePlan(null);
+  goalStatusEl.textContent = "";
+  planSectionEl.hidden = true;
+  btnGoalDeleteEl.hidden = true;
+}
+
 /* ----------------------------------------------------------- Service Worker */
 
 function registerServiceWorker(): void {
@@ -639,6 +887,15 @@ function init(): void {
   btnSyncEl.addEventListener("click", () => {
     void runSync();
   });
+
+  btnTrainingEl.addEventListener("click", toggleTrainingPanel);
+  btnTrainingCloseEl.addEventListener("click", () => {
+    trainingPanelEl.hidden = true;
+  });
+  goalFormEl.addEventListener("submit", (event) => {
+    void handleGoalSubmit(event);
+  });
+  btnGoalDeleteEl.addEventListener("click", deleteGoalPlan);
 
   registerServiceWorker();
 

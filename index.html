@@ -12,6 +12,7 @@
       <header id="topbar">
         <h1>🚵 Trailscape</h1>
         <div id="topbar-actions">
+          <button id="btn-training" class="btn">Training</button>
           <button id="btn-plan" class="btn">Route planen</button>
           <button id="btn-record" class="btn btn-primary">● Aufzeichnen</button>
           <label class="btn" for="gpx-input">GPX importieren</label>
@@ -79,6 +80,36 @@
               <button id="btn-plan-save" class="btn btn-small" disabled>Als Tour speichern</button>
               <button id="btn-plan-export" class="btn btn-small" disabled>GPX</button>
             </div>
+          </div>
+          <div id="training-panel" hidden>
+            <div id="training-head">
+              <h2>Training</h2>
+              <button id="btn-training-close" class="btn btn-small">Schließen</button>
+            </div>
+            <section>
+              <h3>Dein Fitnesslevel</h3>
+              <div id="fitness-card"></div>
+            </section>
+            <section>
+              <h3>Dein Ziel</h3>
+              <form id="goal-form">
+                <input id="goal-name" class="text-input" type="text" placeholder="z. B. Gravel-Marathon 2027" required />
+                <div class="form-row">
+                  <input id="goal-distance" class="text-input" type="number" min="20" max="1000" placeholder="Distanz (km)" required />
+                  <input id="goal-ascent" class="text-input" type="number" min="0" max="20000" placeholder="Höhenmeter (optional)" />
+                </div>
+                <input id="goal-date" class="text-input" type="date" required />
+                <div class="section-actions">
+                  <button type="submit" class="btn btn-small">Plan erstellen</button>
+                  <button type="button" id="btn-goal-delete" class="btn btn-small btn-danger" hidden>Plan löschen</button>
+                </div>
+                <p id="goal-status" class="muted"></p>
+              </form>
+            </section>
+            <section id="plan-section" hidden>
+              <h3 id="plan-title"></h3>
+              <ol id="plan-weeks"></ol>
+            </section>
           </div>
         </section>
       </main>

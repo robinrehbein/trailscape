@@ -18,6 +18,7 @@ Strava- und Komoot-Abos kosten Geld und erfordern Accounts. Trailscape ist koste
 - **Lokale Speicherung**: Alle Daten in IndexedDB – kein Server, keine Synchronisierung nötig
 - **Selfhost-Sync (optional)**: Touren in beide Richtungen mit eigenem Node.js-Server synchronisieren (Token-basiert, keine externen Abhängigkeiten)
 - **PWA-Installation**: Als App auf deinem Gerät installierbar, auch ohne App-Store
+- **Trainingsplan**: Automatische Fitnesslevel-Erkennung aus aufgezeichneten Touren und personalisierte Trainingspläne bis zu Events mit progressiver Steigerung, Erholungswochen sowie automatischem Fortschritts-Tracking
 
 ## Tech-Stack
 
