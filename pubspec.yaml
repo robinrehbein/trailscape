@@ -37,9 +37,9 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/icon/icon.png"
-  adaptive_icon_background: "#2D5A3D"
+  adaptive_icon_background: "#264F3A"
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
-  adaptive_icon_monochrome: "assets/icon/icon_foreground.png"
+  adaptive_icon_monochrome: "assets/icon/icon_monochrome.png"
   # Das Motiv liegt in icon_foreground.png bereits in der Safe-Zone
   # (zentrierter Kreis, ~66 % der Kantenlaenge) - kein zusaetzlicher Inset.
   adaptive_icon_foreground_inset: 0
