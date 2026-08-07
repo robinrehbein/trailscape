@@ -1,69 +1,57 @@
 # 🚵 Trailscape
 
-Kostenlose, local-first Web-App für GPS-Aufzeichnung und Routenplanung von Gravel-Biking-Touren – die Alternative zu Strava und Komoot.
+Kostenlose native Android-App für GPS-Aufzeichnung und Routenplanung – die Alternative zu Strava und Komoot. Gebaut mit Flutter.
 
 ## Warum?
 
-Strava- und Komoot-Abos kosten Geld und erfordern Accounts. Trailscape ist kostenlos, weil es vollständig lokal im Browser läuft: Keine Server, keine Konten, keine Cloud. Deine Daten bleiben auf deinem Gerät – offline und privat.
+Strava- und Komoot-Abos sind teuer und binden Daten in die Cloud. Trailscape ist kostenlos und **local-first**: Deine Daten bleiben auf deinem Gerät, vollständig offline. Ohne Accounts, ohne Cloud, ohne versteckte Kosten – nur du und deine Touren.
 
-## Features (MVP)
+## Features
 
-- **GPS-Aufzeichnung**: Touren direkt im Browser aufzeichnen und speichern (erfordert HTTPS oder localhost)
-- **Live-Aufzeichnung**: Während der Fahrt Tempo, Distanz, Fahrzeit und Höhenmeter in großen Ziffern anzeigen; Pause/Weiter-Funktion; Display bleibt per Wake Lock an
-- **Routen-Navigation**: Navigation auf gespeicherten Touren starten mit GPS-Verfolgung, Anzeige der verbleibenden Kilometer und Warnung (mit Vibration) beim Verlassen der Route
-- **Mobile-first UI**: Bottom-Tab-Navigation (Karte, Touren, Training, Mehr), großer runder Aufnahme-Button auf der Karte, große Touch-Ziele – optimiert für einhändige Bedienung auf dem Rad
-- **GPX Import/Export**: Touren importieren und exportieren für Austausch oder Backup
-- **Statistiken**: Distanz, Dauer, Durchschnittsgeschwindigkeit, Höhenmeter
-- **Kartenansicht**: OpenStreetMap und OpenTopoMap (Kartenverfügbarkeit lokal gepuffert)
-- **Offline-Karten**: Sichtbare Kartenausschnitte lokal speichern und offline nutzen (Service Worker liefert Kacheln aus dem Cache)
-- **Interaktives Höhenprofil**: Mit Karten-Verknüpfung (Hover im Profil zeigt die Position auf der Karte)
-- **Routenplanung**: Interaktiv auf der Karte planen (Klick für Wegpunkte, Drag zum Verschieben, Rechtsklick zum Löschen). Mehrere Routing-Profile (Gravel/Trekking, Rennrad, Kürzeste) über BRouter. Live-Anzeige von Distanz und Höhenmetern mit Profil. Benötigt Internetverbindung, der Rest der App funktioniert offline.
-- **Lokale Speicherung**: Alle Daten in IndexedDB – kein Server, keine Synchronisierung nötig
-- **Selfhost-Sync (optional)**: Touren in beide Richtungen mit eigenem Node.js-Server synchronisieren (Token-basiert, keine externen Abhängigkeiten)
-- **PWA-Installation**: Als App auf deinem Gerät installierbar, auch ohne App-Store
-- **Trainingsplan**: Automatische Fitnesslevel-Erkennung aus aufgezeichneten Touren und personalisierte Trainingspläne bis zu Events mit progressiver Steigerung, Erholungswochen sowie automatischem Fortschritts-Tracking
+- **GPS-Aufzeichnung mit Hintergrund-Tracking**: Touren aufzeichnen, die im Hintergrund weiterlaufen, auch bei gesperrtem Display (Foreground-Service)
+- **Live-Anzeige**: Während der Fahrt Tempo, Distanz, Fahrzeit und Höhenmeter in großer Schrift anzeigen; Pause/Weiter-Funktion
+- **GPX-Import/Export**: Touren importieren und exportieren für Austausch oder Backup
+- **Statistiken**: Distanz, Dauer, Durchschnittsgeschwindigkeit, Höhenmeter für jede Tour
+- **Routenplanung**: Interaktive Routenplanung auf der Karte mit mehreren Routing-Profilen (Gravel/Trekking, Rennrad, Kürzeste) über BRouter
+- **Routen-Navigation**: Navigation auf gespeicherten Touren mit GPS-Verfolgung, Anzeige der verbleibenden Kilometer und Vibrations-Warnung beim Verlassen der Route
+- **Offline-Karten**: Regionen lokal herunterladen (max. 250 Kacheln pro Vorgang) und offline nutzen; automatischer Cache für weitere Regionen
+- **Trainingspläne**: Automatische Fitnesslevel-Erkennung aus aufgezeichneten Touren und personalisierte Trainingspläne mit progressiver Steigerung, Erholungswochen und Fortschritts-Tracking
+- **Lokale Speicherung**: Alle Daten lokal auf dem Gerät – keine Synchronisierung nötig
+- **Selfhost-Sync (optional)**: Touren bidirektional mit eigenem Server synchronisieren (Details siehe unten)
 
 ## Tech-Stack
 
-- **Vite**: Build-Tool und Dev-Server (schnell, kostenlos)
-- **TypeScript**: Typsicherheit ohne externe Dependencies (kostenlos)
-- **Leaflet**: Leichte Karten-Bibliothek (kostenlos, quelloffen)
-- **OpenStreetMap-Tiles**: Kostenlose Kartendaten (quelloffen)
-- **BRouter**: Kostenloser Routing-Dienst für Wegberechnung (quelloffen)
-- **IndexedDB**: Browser-API für lokale Speicherung (kostenlos, keine Datenbank-Server)
-- **PWA**: Web-Standards (kostenlos, keine App-Store-Gebühren)
+- **Flutter/Dart**: Native Android-Performance, kostenlos und quelloffen
+- **flutter_map + OpenStreetMap**: Leichte Karten-Bibliothek mit kostenlosen, quelloffenen Kartendaten
+- **geolocator**: Zuverlässiges GPS ohne externe Abhängigkeiten, kostenlos
+- **BRouter**: Kostenloser Routing-Dienst für Wegberechnung, quelloffen
+
+## Installation (Android)
+
+Die APK wird bei jedem Push auf `main` automatisch von GitHub Actions gebaut und an das GitHub-Release `latest` angehängt.
+
+1. Gehe zur [Releases-Seite](../../releases) dieses Repositories
+2. Lade die neueste APK-Datei unter dem Release `latest` herunter
+3. Öffne die APK auf deinem Android-Gerät
+4. Bestätige die Installation (evtl. musst du unter Einstellungen > Sicherheit > "Unbekannte Quellen" die Installation erlauben)
+5. Beim ersten Start erlaube die erforderlichen Berechtigungen:
+   - **Standort**: Wähle "Immer erlauben" für Hintergrund-Tracking (notwendig für GPS-Aufzeichnung)
+   - **Benachrichtigungen**: Erlaube Benachrichtigungen für Aufzeichnungsstatus
 
 ## Entwicklung
 
 ```bash
-npm install       # Dependencies installieren
-npm run dev       # Dev-Server starten (localhost:5173)
-npm run build     # Für Production bauen
-npm run preview   # Production-Build lokal testen
+flutter pub get          # Dependencies installieren
+flutter test             # Tests ausführen
+flutter run              # Debug-Version auf Gerät/Emulator starten
+flutter build apk --release  # Release-APK bauen
 ```
 
-**Hinweis**: GPS-Funktionalität erfordert HTTPS oder localhost. Im Browser müssen Berechtigungen für Geolokalisierung gewährt werden.
-
-## Aufs Smartphone bringen (GitHub Pages)
-
-Trailscape lässt sich kostenlos über GitHub Pages bereitstellen und dann als PWA auf dem Smartphone installieren. Ein GitHub-Actions-Workflow baut und deployt die App automatisch bei jedem Push auf `main`.
-
-1. In den Repo-Settings unter **Pages** als Source **"GitHub Actions"** auswählen.
-2. Nach jedem Push auf `main` läuft der Workflow automatisch und veröffentlicht die aktuelle Version.
-3. Die App ist danach unter `https://<user>.github.io/trailscape/` erreichbar.
-4. Auf dem Handy im Browser öffnen und über **"Zum Startbildschirm hinzufügen"** als App installieren.
-5. Beim ersten Aufzeichnen die GPS-Berechtigung im Browser erlauben.
-6. Bei privaten Repos erfordert GitHub Pages einen Bezahlplan – alternativ das Repo auf public stellen.
+Voraussetzung: Flutter ≥ 3.x installiert und ein Android-SDK konfiguriert.
 
 ## Selfhost-Sync
 
-Optional lassen sich Touren mit einem eigenen Server synchronisieren. Ein leichtgewichtiger Node.js-Server im Ordner `server/` (ohne externe Abhängigkeiten) speichert Touren JSON-basiert lokal. Authentifizierung erfolgt über Token, ein Docker-Image ist enthalten. Alle Details und Setup-Anweisungen findest du in `server/README.md`. In der App werden Touren bidirektional synchronisiert – ideal, wenn du Trailscape auf mehreren Geräten nutzen möchtest.
-
-## Roadmap
-
-- **v0.2**: Automatische Pausenerkennung, Foto-Anhänge zu Touren
-- **v0.3**: Eigenes Gravel-Routing-Profil (OSM-Surface-Daten stärker gewichten)
-- **v0.4**: Touren teilen (öffentliche Links)
+Optional können Touren mit einem selbst gehosteten Server synchronisiert werden. Ein leichtgewichtiger Node.js-Server (eine Datei, keine externen Abhängigkeiten) speichert Touren JSON-basiert lokal. Authentifizierung erfolgt über Token, ein Docker-Image ist enthalten. Alle Details und Setup-Anweisungen findest du in [`server/README.md`](server/README.md).
 
 ## Lizenz
 
