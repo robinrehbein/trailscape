@@ -2,6 +2,7 @@ import "./style.css";
 
 import {
   clearTrack,
+  getMap,
   hidePositionMarker,
   initMap,
   showPositionMarker,
@@ -13,6 +14,9 @@ import { clearProfile, renderProfile } from "./profile";
 import { computeStats, formatDuration, formatKm } from "./stats";
 import { deleteRide, getRide, listRides, saveRide } from "./storage";
 import { Recorder } from "./recorder";
+import { Planner } from "./planner";
+import type { PlannerCallbacks } from "./planner";
+import type { PlannedRoute, RoutingProfile } from "./routing";
 import type { Ride, RideStats, TrackPoint } from "./types";
 
 /* ------------------------------------------------------------------ DOM */
@@ -38,14 +42,31 @@ const btnDeleteEl = document.getElementById("btn-delete") as HTMLButtonElement;
 const recordBannerEl = document.getElementById("record-banner")!;
 const recordInfoEl = document.getElementById("record-info")!;
 
+const btnPlanEl = document.getElementById("btn-plan") as HTMLButtonElement;
+const planPanelEl = document.getElementById("plan-panel")!;
+const planInfoEl = document.getElementById("plan-info")!;
+const planProfileEl = document.getElementById("plan-profile") as HTMLSelectElement;
+const btnPlanUndoEl = document.getElementById("btn-plan-undo") as HTMLButtonElement;
+const btnPlanClearEl = document.getElementById("btn-plan-clear") as HTMLButtonElement;
+const btnPlanSaveEl = document.getElementById("btn-plan-save") as HTMLButtonElement;
+const btnPlanExportEl = document.getElementById("btn-plan-export") as HTMLButtonElement;
+
 /* ---------------------------------------------------------------- State */
 
 const recorder = new Recorder();
 let rides: Ride[] = [];
 let currentRideId: string | null = null;
 
+let planner: Planner | null = null;
+let planning = false;
+let plannedRoute: PlannedRoute | null = null;
+
 const RECORD_LABEL = "● Aufzeichnen";
 const STOP_LABEL = "■ Stopp";
+const PLAN_LABEL = "Route planen";
+const PLAN_STOP_LABEL = "Planung beenden";
+const PLAN_INFO_DEFAULT =
+  "Klicke auf die Karte, um Wegpunkte zu setzen. Ziehen verschiebt, Rechtsklick entfernt.";
 
 /* -------------------------------------------------------------- Helpers */
 
@@ -129,17 +150,21 @@ function hideStats(): void {
   statsPanelEl.hidden = true;
 }
 
-function showProfile(ride: Ride): void {
-  const hasElevation = renderProfile(profileEl, ride.points, (index: number | null) => {
+function showProfileForPoints(points: TrackPoint[]): void {
+  const hasElevation = renderProfile(profileEl, points, (index: number | null) => {
     if (index === null) {
       hidePositionMarker();
     } else {
-      showPositionMarker(ride.points[index]!);
+      showPositionMarker(points[index]!);
     }
   });
 
   profilePanelEl.hidden = !hasElevation;
   mapPaneEl.classList.toggle("has-profile", hasElevation);
+}
+
+function showProfile(ride: Ride): void {
+  showProfileForPoints(ride.points);
 }
 
 function hideProfile(): void {
@@ -264,7 +289,154 @@ function toggleRecording(): void {
   if (recorder.isRecording) {
     void stopRecording();
   } else {
+    if (planning) {
+      exitPlanning();
+    }
     startRecording();
+  }
+}
+
+/* ------------------------------------------------------ Routenplanung */
+
+function setPlanInfo(text: string, isError = false): void {
+  planInfoEl.textContent = text;
+  planInfoEl.style.color = isError ? "var(--danger)" : "";
+}
+
+function plannerCallbacks(): PlannerCallbacks {
+  return {
+    onRouteChanged(route: PlannedRoute | null, waypointCount: number): void {
+      plannedRoute = route;
+      btnPlanSaveEl.disabled = !route;
+      btnPlanExportEl.disabled = !route;
+
+      if (route) {
+        setPlanInfo(
+          `${formatKm(route.distanceKm)} km · ${Math.round(route.ascentM)} Hm ↑ · ${waypointCount} Wegpunkte`
+        );
+        showProfileForPoints(route.points);
+      } else {
+        if (waypointCount > 0) {
+          const suffix = waypointCount === 1 ? "Wegpunkt" : "Wegpunkte";
+          setPlanInfo(`${waypointCount} ${suffix} – setze mindestens 2.`);
+        } else {
+          setPlanInfo(PLAN_INFO_DEFAULT);
+        }
+        hideProfile();
+      }
+    },
+    onBusy(busy: boolean): void {
+      if (busy) {
+        planInfoEl.textContent = `${planInfoEl.textContent} · berechne…`;
+      }
+    },
+    onError(message: string): void {
+      setPlanInfo(message, true);
+    },
+  };
+}
+
+function setPlanningUi(active: boolean): void {
+  planning = active;
+  planPanelEl.hidden = !active;
+  btnPlanEl.classList.toggle("active", active);
+  btnPlanEl.textContent = active ? PLAN_STOP_LABEL : PLAN_LABEL;
+}
+
+function exitPlanning(): void {
+  if (planner) {
+    planner.clear();
+    planner.disable();
+  }
+  setPlanningUi(false);
+  plannedRoute = null;
+  hideProfile();
+}
+
+function enterPlanning(): void {
+  if (recorder.isRecording) {
+    alert("Beende zuerst die Aufzeichnung.");
+    return;
+  }
+
+  currentRideId = null;
+  clearTrack();
+  hideStats();
+  hideProfile();
+  markActiveRide();
+
+  if (!planner) {
+    const map = getMap();
+    if (!map) {
+      return;
+    }
+    planner = new Planner(map, plannerCallbacks());
+  }
+
+  planner.enable();
+  setPlanInfo(PLAN_INFO_DEFAULT);
+  setPlanningUi(true);
+}
+
+function togglePlanning(): void {
+  if (planning) {
+    exitPlanning();
+  } else {
+    enterPlanning();
+  }
+}
+
+async function savePlannedRoute(): Promise<void> {
+  if (!plannedRoute) {
+    return;
+  }
+
+  const suggestion = `Route ${formatDate(Date.now())}`;
+  const answer = prompt("Name der Route", suggestion);
+  const name = answer && answer.trim() ? answer.trim() : suggestion;
+
+  const stats = computeStats(plannedRoute.points);
+  stats.distanceKm = plannedRoute.distanceKm;
+  stats.ascentM = plannedRoute.ascentM;
+
+  const ride: Ride = {
+    id: crypto.randomUUID(),
+    name,
+    createdAt: Date.now(),
+    points: plannedRoute.points,
+    stats,
+  };
+
+  try {
+    await saveRide(ride);
+    await refreshRideList();
+    exitPlanning();
+    await selectRide(ride.id);
+  } catch (error) {
+    alert(errorMessage(error));
+  }
+}
+
+function exportPlannedRoute(): void {
+  if (!plannedRoute) {
+    return;
+  }
+
+  try {
+    const xml = buildGpx("trailscape-route", plannedRoute.points);
+    const blob = new Blob([xml], { type: "application/gpx+xml" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "trailscape-route.gpx";
+    document.body.append(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    alert(errorMessage(error));
   }
 }
 
@@ -345,6 +517,21 @@ function init(): void {
   btnDeleteEl.addEventListener("click", () => {
     void deleteCurrentRide();
   });
+
+  btnPlanEl.addEventListener("click", togglePlanning);
+  planProfileEl.addEventListener("change", () => {
+    planner?.setProfile(planProfileEl.value as RoutingProfile);
+  });
+  btnPlanUndoEl.addEventListener("click", () => {
+    planner?.undo();
+  });
+  btnPlanClearEl.addEventListener("click", () => {
+    planner?.clear();
+  });
+  btnPlanSaveEl.addEventListener("click", () => {
+    void savePlannedRoute();
+  });
+  btnPlanExportEl.addEventListener("click", exportPlannedRoute);
 
   registerServiceWorker();
 

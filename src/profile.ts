@@ -17,8 +17,7 @@ const PAD_BOTTOM = 20;
 const PAD_LEFT = 46;
 
 const MAX_DRAW_POINTS = 1000;
-const GRID_INTERVALS = 3;
-const MAX_GRID_LINES = 5;
+const MAX_GRID_LINES = 4;
 const NICE_STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
 
 const LABEL_FONT_SIZE = 10;
@@ -108,16 +107,7 @@ function downsample(samples: Sample[]): Sample[] {
   return out;
 }
 
-function niceStep(range: number, intervals: number): number {
-  const raw = range / intervals;
-  for (const step of NICE_STEPS) {
-    if (step >= raw) {
-      return step;
-    }
-  }
-  return NICE_STEPS[NICE_STEPS.length - 1];
-}
-
+/** Wertebereich auf runde Schritte erweitern, höchstens MAX_GRID_LINES Linien. */
 function eleRange(samples: Sample[]): { min: number; max: number; step: number } {
   let min = Infinity;
   let max = -Infinity;
@@ -131,27 +121,23 @@ function eleRange(samples: Sample[]): { min: number; max: number; step: number }
     }
   }
 
-  const spread = Math.max(max - min, 1);
-  const padding = spread * 0.1;
-  let step = niceStep(spread + 2 * padding, GRID_INTERVALS);
-  let low = Math.floor((min - padding) / step) * step;
-  let high = Math.ceil((max + padding) / step) * step;
+  const padding = Math.max(max - min, 1) * 0.1;
+  const lowest = min - padding;
+  const highest = max + padding;
 
-  while ((high - low) / step + 1 > MAX_GRID_LINES) {
-    const next = NICE_STEPS[NICE_STEPS.indexOf(step) + 1];
-    if (next === undefined) {
+  let step = NICE_STEPS[NICE_STEPS.length - 1];
+  for (const candidate of NICE_STEPS) {
+    const lines = Math.ceil(highest / candidate) - Math.floor(lowest / candidate) + 1;
+    if (lines <= MAX_GRID_LINES) {
+      step = candidate;
       break;
     }
-    step = next;
-    low = Math.floor((min - padding) / step) * step;
-    high = Math.ceil((max + padding) / step) * step;
   }
 
-  if (high <= low) {
-    high = low + step;
-  }
+  const low = Math.floor(lowest / step) * step;
+  const high = Math.ceil(highest / step) * step;
 
-  return { min: low, max: high, step };
+  return { min: low, max: high <= low ? low + step : high, step };
 }
 
 /** Index des Samples, dessen `pos` am nächsten an `pos` liegt (binäre Suche). */

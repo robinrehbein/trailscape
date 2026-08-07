@@ -252,6 +252,60 @@ body {
   z-index: 1000;
 }
 
+#plan-panel {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 1000;
+  width: 260px;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+#plan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+#plan-profile {
+  padding: 0.2rem;
+  border: 1px solid #d5d2c8;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--panel);
+  color: var(--text);
+}
+
+#plan-info {
+  margin: 0.5rem 0;
+  font-size: 0.82rem;
+}
+
+#plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+#btn-plan.active {
+  background: #fff;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.btn:disabled:hover {
+  background: transparent;
+}
+
 .rec-dot {
   width: 10px;
   height: 10px;
@@ -291,5 +345,12 @@ body {
 
   #map-pane.has-profile #stats-panel {
     bottom: calc(110px + 1rem);
+  }
+
+  #plan-panel {
+    left: 0.5rem;
+    right: 0.5rem;
+    top: 0.5rem;
+    width: auto;
   }
 }

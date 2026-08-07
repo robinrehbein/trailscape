@@ -148,3 +148,8 @@ export function hidePositionMarker(): void {
     map.removeLayer(positionMarker);
   }
 }
+
+/** Gibt die interne Leaflet-Map-Instanz zurück oder null, falls initMap noch nicht lief. */
+export function getMap(): L.Map | null {
+  return map;
+}

@@ -12,6 +12,7 @@
       <header id="topbar">
         <h1>🚵 Trailscape</h1>
         <div id="topbar-actions">
+          <button id="btn-plan" class="btn">Route planen</button>
           <button id="btn-record" class="btn btn-primary">● Aufzeichnen</button>
           <label class="btn" for="gpx-input">GPX importieren</label>
           <input type="file" id="gpx-input" accept=".gpx,application/gpx+xml" hidden />
@@ -43,6 +44,23 @@
           <div id="record-banner" hidden>
             <span class="rec-dot"></span>
             <span id="record-info">Aufzeichnung läuft …</span>
+          </div>
+          <div id="plan-panel" hidden>
+            <div id="plan-head">
+              <strong>Routenplanung</strong>
+              <select id="plan-profile">
+                <option value="trekking" selected>Gravel / Trekking</option>
+                <option value="fastbike">Rennrad</option>
+                <option value="shortest">Kürzeste</option>
+              </select>
+            </div>
+            <p id="plan-info" class="muted">Klicke auf die Karte, um Wegpunkte zu setzen. Ziehen verschiebt, Rechtsklick entfernt.</p>
+            <div id="plan-actions">
+              <button id="btn-plan-undo" class="btn btn-small">Rückgängig</button>
+              <button id="btn-plan-clear" class="btn btn-small">Leeren</button>
+              <button id="btn-plan-save" class="btn btn-small" disabled>Als Tour speichern</button>
+              <button id="btn-plan-export" class="btn btn-small" disabled>GPX</button>
+            </div>
           </div>
         </section>
       </main>
