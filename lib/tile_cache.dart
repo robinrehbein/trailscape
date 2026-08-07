@@ -1,7 +1,9 @@
 /// Offline-Kachel-Cache für die Kartenanzeige.
 ///
-/// Kacheln werden als PNG-Dateien unter `<AppDocuments>/tiles/<z>/<x>/<y>.png`
-/// abgelegt. [TileCache.provider] liefert einen [TileProvider] für
+/// Kacheln werden als PNG-Dateien unter
+/// `<AppDocuments>/tiles/<stil-id>/<z>/<x>/<y>.png` abgelegt — jeder
+/// Kartenstil ([MapStyle]) bekommt also ein eigenes Unterverzeichnis.
+/// [TileCache.provider] liefert einen [TileProvider] für
 /// [TileLayer.tileProvider], der Kacheln zunächst aus dem Datei-Cache liest
 /// und nur bei einem Cache-Miss per HTTP nachlädt (Write-through: das
 /// Ergebnis landet danach im Cache). [TileCache.downloadRegion] lädt eine
@@ -21,12 +23,100 @@ import 'package:flutter/painting.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Obergrenze für einen Offline-Download, damit die Kachel-Server nicht
 /// überlastet werden.
 const int maxTilesPerDownload = 250;
 
-const String _tileUrlTemplate = 'https://tile.openstreetmap.org';
+/// Ein auswählbarer Kartenstil (Kachel-Quelle).
+class MapStyle {
+  const MapStyle({
+    required this.id,
+    required this.label,
+    required this.urlTemplate,
+    required this.maxZoom,
+    required this.attribution,
+  });
+
+  /// Stabiler Schlüssel für das Cache-Verzeichnis und shared_preferences.
+  final String id;
+
+  /// Anzeigename in der Stil-Auswahl.
+  final String label;
+
+  /// Kachel-URL mit den Platzhaltern `{z}`, `{x}` und `{y}` in beliebiger
+  /// Reihenfolge (Esri nutzt etwa `{z}/{y}/{x}`).
+  final String urlTemplate;
+
+  /// Höchste vom Anbieter unterstützte Zoomstufe.
+  final int maxZoom;
+
+  /// Attributionstext, der auf der Karte eingeblendet wird.
+  final String attribution;
+}
+
+/// Alle auswählbaren Kartenstile. Der erste Eintrag ist der Standard.
+const List<MapStyle> mapStyles = [
+  MapStyle(
+    id: 'cyclosm',
+    label: 'CyclOSM (Fahrrad)',
+    urlTemplate:
+        'https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
+    maxZoom: 19,
+    attribution: '© OpenStreetMap-Mitwirkende · Stil: CyclOSM',
+  ),
+  MapStyle(
+    id: 'osm',
+    label: 'OpenStreetMap',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    maxZoom: 19,
+    attribution: '© OpenStreetMap-Mitwirkende',
+  ),
+  MapStyle(
+    id: 'opentopo',
+    label: 'OpenTopoMap (Gelände)',
+    urlTemplate: 'https://a.tile.opentopomap.org/{z}/{x}/{y}.png',
+    maxZoom: 17,
+    attribution:
+        '© OpenStreetMap-Mitwirkende · SRTM · Stil: OpenTopoMap (CC-BY-SA)',
+  ),
+  MapStyle(
+    id: 'esri-sat',
+    label: 'Satellit (Esri)',
+    urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/'
+        'World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    maxZoom: 19,
+    attribution: 'Esri, Maxar, Earthstar Geographics',
+  ),
+];
+
+const String _mapStyleStorageKey = 'trailscape.mapstyle';
+
+/// Standard-Kartenstil, wenn nichts (Gültiges) gespeichert ist.
+MapStyle get _defaultMapStyle => mapStyles.first;
+
+/// Liest den gespeicherten Kartenstil. Unbekannte oder fehlende IDs fallen
+/// auf den Standard (CyclOSM) zurück.
+Future<MapStyle> loadMapStyle() async {
+  final prefs = await SharedPreferences.getInstance();
+  final id = prefs.getString(_mapStyleStorageKey);
+  if (id == null) {
+    return _defaultMapStyle;
+  }
+  for (final style in mapStyles) {
+    if (style.id == id) {
+      return style;
+    }
+  }
+  return _defaultMapStyle;
+}
+
+/// Speichert die gewählte Kartenstil-ID.
+Future<void> saveMapStyle(String id) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_mapStyleStorageKey, id);
+}
 
 /// Höflichkeits-User-Agent gemäß der OSM-Tile-Nutzungsrichtlinie.
 const String _userAgent =
@@ -119,7 +209,16 @@ List<int> _normalizeZoomRange(int minZoom, int maxZoom) {
   return zooms;
 }
 
-String _tileUrl(int z, int x, int y) => '$_tileUrlTemplate/$z/$x/$y.png';
+/// Baut die Kachel-URL aus [MapStyle.urlTemplate] durch Ersetzen der
+/// Platzhalter `{z}`, `{x}` und `{y}`. Die Reihenfolge im Template ist
+/// beliebig (Esri nutzt `{z}/{y}/{x}`).
+///
+/// Sichtbar für Tests.
+@visibleForTesting
+String tileUrlFor(MapStyle style, int z, int x, int y) => style.urlTemplate
+    .replaceAll('{z}', '$z')
+    .replaceAll('{x}', '$x')
+    .replaceAll('{y}', '$y');
 
 typedef _TileKey = ({int z, int x, int y});
 
@@ -155,18 +254,18 @@ class TileCache {
     return Directory('${base.path}/tiles');
   }
 
-  static Future<File> _tileFile(int z, int x, int y) async {
+  static Future<File> _tileFile(MapStyle style, int z, int x, int y) async {
     final tiles = await _tilesDir();
-    return File('${tiles.path}/$z/$x/$y.png');
+    return File('${tiles.path}/${style.id}/$z/$x/$y.png');
   }
 
-  /// [TileProvider] für `TileLayer(tileProvider: TileCache.provider())`:
+  /// [TileProvider] für `TileLayer(tileProvider: TileCache.provider(style))`:
   /// liefert Kacheln aus dem Datei-Cache, sonst per Netz mit Write-through in
-  /// den Cache.
-  static TileProvider provider() => _CachingTileProvider();
+  /// den Cache. Jeder Stil hat sein eigenes Cache-Unterverzeichnis.
+  static TileProvider provider(MapStyle style) => _CachingTileProvider(style);
 
-  /// Anzahl der aktuell offline vorgehaltenen Kacheln (`.png`-Dateien im
-  /// Kachel-Cache, rekursiv gezählt).
+  /// Anzahl der aktuell offline vorgehaltenen Kacheln über alle Stile
+  /// (`.png`-Dateien im Kachel-Cache, rekursiv gezählt).
   static Future<int> cachedTileCount() async {
     final tiles = await _tilesDir();
     if (!await tiles.exists()) {
@@ -226,20 +325,24 @@ class TileCache {
     return tiles;
   }
 
-  /// Lädt alle Kacheln einer Region herunter und legt sie im Datei-Cache ab
-  /// (write-through). Bereits vorhandene Dateien werden übersprungen
-  /// (`skipped`), Netzfehler zählen als `failed`, ohne den Download
-  /// abzubrechen.
+  /// Lädt alle Kacheln einer Region für [style] herunter und legt sie im
+  /// Datei-Cache des Stils ab (write-through). Bereits vorhandene Dateien
+  /// werden übersprungen (`skipped`), Netzfehler zählen als `failed`, ohne
+  /// den Download abzubrechen.
+  ///
+  /// [maxZoom] wird zusätzlich auf [MapStyle.maxZoom] gekappt.
   ///
   /// Wirft eine [Exception], falls die Region mehr als
   /// [maxTilesPerDownload] Kacheln umfasst.
   static Future<({int downloaded, int skipped, int failed})> downloadRegion(
+    MapStyle style,
     LatLngBounds bounds,
     int minZoom,
     int maxZoom,
     void Function(int done, int total) onProgress,
   ) async {
-    final estimate = estimateTileCount(bounds, minZoom, maxZoom);
+    final effectiveMaxZoom = min(maxZoom, style.maxZoom);
+    final estimate = estimateTileCount(bounds, minZoom, effectiveMaxZoom);
     if (estimate > maxTilesPerDownload) {
       throw Exception(
         'Zu großer Bereich: $estimate Kacheln (Limit $maxTilesPerDownload). '
@@ -247,7 +350,7 @@ class TileCache {
       );
     }
 
-    final tiles = _collectTiles(bounds, minZoom, maxZoom);
+    final tiles = _collectTiles(bounds, minZoom, effectiveMaxZoom);
     final total = tiles.length;
 
     var nextIndex = 0;
@@ -268,11 +371,11 @@ class TileCache {
 
           final tile = tiles[index];
           try {
-            final file = await _tileFile(tile.z, tile.x, tile.y);
+            final file = await _tileFile(style, tile.z, tile.x, tile.y);
             if (await file.exists()) {
               skipped += 1;
             } else {
-              final url = _tileUrl(tile.z, tile.x, tile.y);
+              final url = tileUrlFor(style, tile.z, tile.x, tile.y);
               final response = await client.get(
                 Uri.parse(url),
                 headers: const {'User-Agent': _userAgent},
@@ -306,11 +409,14 @@ class TileCache {
 /// [TileProvider], der Kacheln zunächst aus dem lokalen Datei-Cache liefert
 /// und bei einem Cache-Miss per HTTP nachlädt (Write-through).
 class _CachingTileProvider extends TileProvider {
-  _CachingTileProvider();
+  _CachingTileProvider(this.style);
+
+  final MapStyle style;
 
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
     return _CachedTileImageProvider(
+      style: style,
       z: coordinates.z,
       x: coordinates.x,
       y: coordinates.y,
@@ -326,16 +432,18 @@ class _CachingTileProvider extends TileProvider {
 class _CachedTileImageProvider
     extends ImageProvider<_CachedTileImageProvider> {
   const _CachedTileImageProvider({
+    required this.style,
     required this.z,
     required this.x,
     required this.y,
   });
 
+  final MapStyle style;
   final int z;
   final int x;
   final int y;
 
-  String get _url => _tileUrl(z, x, y);
+  String get _url => tileUrlFor(style, z, x, y);
 
   @override
   Future<_CachedTileImageProvider> obtainKey(
@@ -360,7 +468,7 @@ class _CachedTileImageProvider
     ImageDecoderCallback decode,
   ) async {
     try {
-      final file = await TileCache._tileFile(key.z, key.x, key.y);
+      final file = await TileCache._tileFile(key.style, key.z, key.x, key.y);
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
         return decode(await ui.ImmutableBuffer.fromUint8List(bytes));

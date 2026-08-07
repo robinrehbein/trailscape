@@ -10,11 +10,50 @@ import 'package:http/http.dart' as http;
 
 import 'models.dart';
 
-const Map<RoutingProfile, String> _profileNames = {
-  RoutingProfile.trekking: 'trekking',
-  RoutingProfile.fastbike: 'fastbike',
-  RoutingProfile.shortest: 'shortest',
+enum BikeType { gravel, rennrad }
+
+enum WayPreference { gemischt, asphalt, radwege, kuerzester }
+
+const bikeTypeLabels = {
+  BikeType.gravel: 'Gravel',
+  BikeType.rennrad: 'Rennrad',
 };
+
+const wayPreferenceLabels = {
+  WayPreference.gemischt: 'Gemischt (Standard)',
+  WayPreference.asphalt: 'Asphalt & Straße',
+  WayPreference.radwege: 'Radwege & verkehrsarm',
+  WayPreference.kuerzester: 'Kürzester Weg',
+};
+
+/// Ermittelt den öffentlichen BRouter-Profilnamen für eine Kombination aus
+/// Fahrrad-Typ und Weg-Präferenz.
+String brouterProfile(BikeType bike, WayPreference way) {
+  switch (bike) {
+    case BikeType.gravel:
+      switch (way) {
+        case WayPreference.gemischt:
+          return 'trekking';
+        case WayPreference.asphalt:
+          return 'fastbike-lowtraffic';
+        case WayPreference.radwege:
+          return 'safety';
+        case WayPreference.kuerzester:
+          return 'shortest';
+      }
+    case BikeType.rennrad:
+      switch (way) {
+        case WayPreference.gemischt:
+          return 'fastbike';
+        case WayPreference.asphalt:
+          return 'fastbike';
+        case WayPreference.radwege:
+          return 'fastbike-lowtraffic';
+        case WayPreference.kuerzester:
+          return 'shortest';
+      }
+  }
+}
 
 double _parseNumericProperty(dynamic value) {
   if (value is num && value.isFinite) {
@@ -35,7 +74,7 @@ double _parseNumericProperty(dynamic value) {
 /// eigener [http.Client] erzeugt und wieder geschlossen.
 Future<PlannedRoute> fetchRoute(
   List<Waypoint> waypoints,
-  RoutingProfile profile, {
+  String profileId, {
   http.Client? client,
 }) async {
   if (waypoints.length < 2) {
@@ -45,9 +84,8 @@ Future<PlannedRoute> fetchRoute(
   final lonlats = waypoints
       .map((wp) => '${wp.lon.toStringAsFixed(6)},${wp.lat.toStringAsFixed(6)}')
       .join('|');
-  final profileName = _profileNames[profile]!;
   final url = Uri.parse(
-    'https://brouter.de/brouter?lonlats=$lonlats&profile=$profileName&alternativeidx=0&format=geojson',
+    'https://brouter.de/brouter?lonlats=$lonlats&profile=$profileId&alternativeidx=0&format=geojson',
   );
 
   final ownClient = client == null;

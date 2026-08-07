@@ -290,8 +290,6 @@ class PlannedRoute {
   final double ascentM;
 }
 
-enum RoutingProfile { trekking, fastbike, shortest }
-
 class NavState {
   const NavState({
     required this.nearestIndex,

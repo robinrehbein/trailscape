@@ -12,7 +12,7 @@ Strava- und Komoot-Abos sind teuer und binden Daten in die Cloud. Trailscape ist
 - **Live-Anzeige**: Während der Fahrt Tempo, Distanz, Fahrzeit und Höhenmeter in großer Schrift anzeigen; Pause/Weiter-Funktion
 - **GPX-Import/Export**: Touren importieren und exportieren für Austausch oder Backup
 - **Statistiken**: Distanz, Dauer, Durchschnittsgeschwindigkeit, Höhenmeter für jede Tour
-- **Routenplanung**: Interaktive Routenplanung auf der Karte mit mehreren Routing-Profilen (Gravel/Trekking, Rennrad, Kürzeste) über BRouter
+- **Routenplanung**: Zielsuche nach Ort, Stadt oder Straße (Nominatim), Möglichkeit, aktuelle Position als Start zu nutzen, Dropdowns für Fahrrad-Typ (Gravel, Rennrad) und bevorzugten Weg (Gemischt, Asphalt & Straße, Radwege & verkehrsarm, Kürzester Weg) mit automatischer Profil-Auswahl für BRouter-Routenberechnung
 - **Routen-Navigation**: Navigation auf gespeicherten Touren mit GPS-Verfolgung, Anzeige der verbleibenden Kilometer und Vibrations-Warnung beim Verlassen der Route
 - **Offline-Karten**: Regionen lokal herunterladen (max. 250 Kacheln pro Vorgang) und offline nutzen; automatischer Cache für weitere Regionen
 - **Trainingspläne**: Automatische Fitnesslevel-Erkennung aus aufgezeichneten Touren und personalisierte Trainingspläne mit progressiver Steigerung, Erholungswochen und Fortschritts-Tracking
@@ -25,6 +25,7 @@ Strava- und Komoot-Abos sind teuer und binden Daten in die Cloud. Trailscape ist
 - **flutter_map + OpenStreetMap**: Leichte Karten-Bibliothek mit kostenlosen, quelloffenen Kartendaten
 - **geolocator**: Zuverlässiges GPS ohne externe Abhängigkeiten, kostenlos
 - **BRouter**: Kostenloser Routing-Dienst für Wegberechnung, quelloffen
+- **Nominatim (OpenStreetMap)**: Kostenlose Ortssuche für die Zielsuche in der Routenplanung
 
 ## Installation (Android)
 
