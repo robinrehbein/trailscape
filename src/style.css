@@ -1,0 +1,261 @@
+:root {
+  --green: #2d5a3d;
+  --green-light: #3e7a54;
+  --bg: #f6f5f1;
+  --panel: #ffffff;
+  --text: #22301f;
+  --muted: #7a8577;
+  --danger: #b3382c;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--green);
+  color: #fff;
+}
+
+#topbar h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+#topbar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-primary {
+  background: #fff;
+  color: var(--green);
+  border-color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #e9efe9;
+}
+
+.btn-primary.recording {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+#content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+#sidebar {
+  width: 280px;
+  padding: 1rem;
+  background: var(--panel);
+  border-right: 1px solid #e3e1d9;
+  overflow-y: auto;
+}
+
+#sidebar h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+#ride-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+#ride-list li {
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.4rem;
+  border: 1px solid #e3e1d9;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+#ride-list li:hover {
+  border-color: var(--green-light);
+}
+
+#ride-list li.active {
+  border-color: var(--green);
+  background: #eef4ee;
+}
+
+#ride-list .ride-name {
+  display: block;
+  font-weight: 600;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ride-list .ride-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#map-pane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+#map {
+  position: absolute;
+  inset: 0;
+}
+
+#stats-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 0.6rem 1rem;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  z-index: 1000;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 3.2rem;
+}
+
+.stat-value {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#stats-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.btn-small {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  border-color: #d5d2c8;
+  color: var(--text);
+}
+
+.btn-small:hover {
+  background: #f0efe9;
+}
+
+.btn-danger {
+  color: var(--danger);
+}
+
+#record-banner {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  background: var(--panel);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+  font-size: 0.9rem;
+  z-index: 1000;
+}
+
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (max-width: 700px) {
+  #content {
+    flex-direction: column-reverse;
+  }
+
+  #sidebar {
+    width: 100%;
+    max-height: 32vh;
+    border-right: none;
+    border-top: 1px solid #e3e1d9;
+  }
+
+  #stats-panel {
+    gap: 0.7rem;
+    padding: 0.5rem 0.7rem;
+    width: max-content;
+    max-width: calc(100% - 1rem);
+  }
+}

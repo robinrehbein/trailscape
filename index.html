@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#2d5a3d" />
+    <title>Trailscape – Gravel-Touren aufzeichnen &amp; planen</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <h1>🚵 Trailscape</h1>
+        <div id="topbar-actions">
+          <button id="btn-record" class="btn btn-primary">● Aufzeichnen</button>
+          <label class="btn" for="gpx-input">GPX importieren</label>
+          <input type="file" id="gpx-input" accept=".gpx,application/gpx+xml" hidden />
+        </div>
+      </header>
+
+      <main id="content">
+        <aside id="sidebar">
+          <h2>Meine Touren</h2>
+          <ul id="ride-list"></ul>
+          <p id="ride-list-empty" class="muted">
+            Noch keine Touren. Starte eine Aufzeichnung oder importiere eine GPX-Datei.
+          </p>
+        </aside>
+
+        <section id="map-pane">
+          <div id="map"></div>
+          <div id="stats-panel" hidden>
+            <div class="stat"><span class="stat-value" id="stat-distance">–</span><span class="stat-label">km</span></div>
+            <div class="stat"><span class="stat-value" id="stat-duration">–</span><span class="stat-label">Dauer</span></div>
+            <div class="stat"><span class="stat-value" id="stat-speed">–</span><span class="stat-label">km/h Ø</span></div>
+            <div class="stat"><span class="stat-value" id="stat-ascent">–</span><span class="stat-label">Hm ↑</span></div>
+            <div id="stats-actions">
+              <button id="btn-export" class="btn btn-small">GPX exportieren</button>
+              <button id="btn-delete" class="btn btn-small btn-danger">Löschen</button>
+            </div>
+          </div>
+          <div id="record-banner" hidden>
+            <span class="rec-dot"></span>
+            <span id="record-info">Aufzeichnung läuft …</span>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
