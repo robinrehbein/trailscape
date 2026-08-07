@@ -45,47 +45,70 @@ class HomeShell extends StatefulWidget {
   State<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
+class _HomeShellState extends State<HomeShell>
+    with SingleTickerProviderStateMixin {
   final AppState _state = AppState();
   int _tabIndex = 0;
+
+  late final AnimationController _tabFadeController;
+  late final Animation<double> _tabFade;
 
   @override
   void initState() {
     super.initState();
     _state.loadRides();
+    _tabFadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: 1,
+    );
+    _tabFade = CurvedAnimation(
+      parent: _tabFadeController,
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
   void dispose() {
     _state.dispose();
+    _tabFadeController.dispose();
     super.dispose();
   }
 
   void _showMap() {
+    _switchTab(0);
+  }
+
+  void _switchTab(int index) {
+    if (index == _tabIndex) return;
     setState(() {
-      _tabIndex = 0;
+      _tabIndex = index;
     });
+    // Kurzer Fade beim Tab-Wechsel; der Zustand der Screens bleibt dank
+    // IndexedStack erhalten (insbesondere die Karte wird nicht neu gebaut).
+    _tabFadeController
+      ..value = 0
+      ..forward();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _tabIndex,
-        children: [
-          MapScreen(state: _state),
-          RidesScreen(state: _state, onShowMap: _showMap),
-          TrainingScreen(state: _state),
-          const MoreScreen(),
-        ],
+      body: FadeTransition(
+        opacity: _tabFade,
+        child: IndexedStack(
+          index: _tabIndex,
+          children: [
+            MapScreen(state: _state),
+            RidesScreen(state: _state, onShowMap: _showMap),
+            TrainingScreen(state: _state),
+            const MoreScreen(),
+          ],
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _tabIndex = index;
-          });
-        },
+        onDestinationSelected: _switchTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.map), label: 'Karte'),
           NavigationDestination(icon: Icon(Icons.route), label: 'Touren'),

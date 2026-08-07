@@ -82,8 +82,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _planning = false;
   final List<Waypoint> _waypoints = [];
   PlannedRoute? _plannedRoute;
-  BikeType _bike = BikeType.gravel;
-  WayPreference _way = WayPreference.gemischt;
+  RouteProfile _routeProfile = RouteProfile.gravel;
   String? _planError;
   bool _planBusy = false;
   int _routeSeq = 0;
@@ -490,7 +489,7 @@ class _MapScreenState extends State<MapScreen> {
 
     final waypoints = List<Waypoint>.unmodifiable(_waypoints);
     try {
-      final route = await fetchRoute(waypoints, brouterProfile(_bike, _way));
+      final route = await fetchRoute(waypoints, brouterProfile(_routeProfile));
       if (!mounted || seq != _routeSeq) return;
       setState(() {
         _plannedRoute = route;
@@ -508,15 +507,9 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _setBike(BikeType bike) {
-    if (bike == _bike) return;
-    setState(() => _bike = bike);
-    unawaited(_recomputeRoute());
-  }
-
-  void _setWay(WayPreference way) {
-    if (way == _way) return;
-    setState(() => _way = way);
+  void _setRouteProfile(RouteProfile profile) {
+    if (profile == _routeProfile) return;
+    setState(() => _routeProfile = profile);
     unawaited(_recomputeRoute());
   }
 
@@ -948,18 +941,28 @@ class _MapScreenState extends State<MapScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final style in mapStyles)
-                    RadioListTile<String>(
-                      value: style.id,
-                      title: Text(style.label),
-                      subtitle: switch (style.id) {
-                        'voyager' => const Text(
-                            'Klar und aufgeräumt (Standard)',
-                          ),
-                        'cyclosm' => const Text(
-                            'Radwege & Wegbeläge hervorgehoben',
-                          ),
-                        _ => null,
-                      },
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOutCubic,
+                      color: style.id == _style.id
+                          ? Theme.of(sheetContext)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.08)
+                          : Colors.transparent,
+                      child: RadioListTile<String>(
+                        value: style.id,
+                        title: Text(style.label),
+                        subtitle: switch (style.id) {
+                          'voyager' => const Text(
+                              'Klar und aufgeräumt (Standard)',
+                            ),
+                          'cyclosm' => const Text(
+                              'Radwege & Wegbeläge hervorgehoben',
+                            ),
+                          _ => null,
+                        },
+                      ),
                     ),
                 ],
               ),
@@ -982,6 +985,32 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // -------------------------------------------------------------------- Build
+
+  /// Blendet [child] sanft ein/aus (Fade + leichter Slide), statt hart
+  /// umzuschalten. [child] wird unabhängig von [visible] gebaut (billige,
+  /// zustandslose Panels), aber nur bei `visible == true` sichtbar animiert.
+  static Widget _slideFadeIn({
+    required bool visible,
+    required Widget child,
+    required Offset hiddenOffset,
+  }) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInOutCubic,
+      transitionBuilder: (transitionChild, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: hiddenOffset, end: Offset.zero)
+              .animate(animation),
+          child: transitionChild,
+        ),
+      ),
+      child: visible
+          ? KeyedSubtree(key: const ValueKey('visible'), child: child)
+          : const SizedBox.shrink(key: ValueKey('hidden')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1088,55 +1117,66 @@ class _MapScreenState extends State<MapScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   _buildTopButtons(navigating),
-                  if (navigating) ...[
-                    const SizedBox(height: 8),
-                    _NavBar(
-                      remainingKm: _navState?.remainingKm ??
-                          _navigator?.totalKm ??
-                          0,
-                      offRoute: _navOffRoute,
-                      onStop: _stopNavigation,
+                  _slideFadeIn(
+                    visible: navigating,
+                    hiddenOffset: const Offset(0, -0.15),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _NavBar(
+                        remainingKm: _navState?.remainingKm ??
+                            _navigator?.totalKm ??
+                            0,
+                        offRoute: _navOffRoute,
+                        onStop: _stopNavigation,
+                      ),
                     ),
-                  ],
-                  if (_planning) ...[
-                    const SizedBox(height: 8),
-                    _PlanPanel(
-                      bike: _bike,
-                      way: _way,
-                      onBikeChanged: _setBike,
-                      onWayChanged: _setWay,
-                      searchController: _searchController,
-                      searchResults: _searchResults,
-                      searchBusy: _searchBusy,
-                      searchError: _searchError,
-                      onSearch: () => unawaited(_searchPlace()),
-                      onResultSelected: _addSearchResult,
-                      onUseMyPosition: () =>
-                          unawaited(_useMyPositionAsStart()),
-                      maxHeight: MediaQuery.sizeOf(context).height *
-                          _planPanelMaxHeightFactor,
-                      waypointCount: _waypoints.length,
-                      route: _plannedRoute,
-                      busy: _planBusy,
-                      error: _planError,
-                      onUndo: _waypoints.isEmpty ? null : _undoWaypoint,
-                      onClear: _waypoints.isEmpty ? null : _clearWaypoints,
-                      onSave: _plannedRoute == null ? null : _savePlannedRoute,
-                      onShare: _plannedRoute == null
-                          ? null
-                          : () => _shareGpx(
-                                'trailscape-route',
-                                _plannedRoute!.points,
-                              ),
+                  ),
+                  _slideFadeIn(
+                    visible: _planning,
+                    hiddenOffset: const Offset(0, -0.15),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _PlanPanel(
+                        routeProfile: _routeProfile,
+                        onRouteProfileChanged: _setRouteProfile,
+                        searchController: _searchController,
+                        searchResults: _searchResults,
+                        searchBusy: _searchBusy,
+                        searchError: _searchError,
+                        onSearch: () => unawaited(_searchPlace()),
+                        onResultSelected: _addSearchResult,
+                        onUseMyPosition: () =>
+                            unawaited(_useMyPositionAsStart()),
+                        maxHeight: MediaQuery.sizeOf(context).height *
+                            _planPanelMaxHeightFactor,
+                        waypointCount: _waypoints.length,
+                        route: _plannedRoute,
+                        busy: _planBusy,
+                        error: _planError,
+                        onUndo: _waypoints.isEmpty ? null : _undoWaypoint,
+                        onClear: _waypoints.isEmpty ? null : _clearWaypoints,
+                        onSave:
+                            _plannedRoute == null ? null : _savePlannedRoute,
+                        onShare: _plannedRoute == null
+                            ? null
+                            : () => _shareGpx(
+                                  'trailscape-route',
+                                  _plannedRoute!.points,
+                                ),
+                      ),
                     ),
-                  ],
-                  if (_downloading) ...[
-                    const SizedBox(height: 8),
-                    _DownloadProgress(
-                      done: _downloadDone,
-                      total: _downloadTotal,
+                  ),
+                  _slideFadeIn(
+                    visible: _downloading,
+                    hiddenOffset: const Offset(0, -0.15),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _DownloadProgress(
+                        done: _downloadDone,
+                        total: _downloadTotal,
+                      ),
                     ),
-                  ],
+                  ),
                 ],
               ),
             ),
@@ -1156,48 +1196,108 @@ class _MapScreenState extends State<MapScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  FloatingActionButton(
-                    heroTag: 'trailscape-record-fab',
-                    backgroundColor: Theme.of(context).colorScheme.surface,
-                    foregroundColor: recording ? kRed : kGreen,
-                    tooltip: recording
-                        ? 'Aufzeichnung beenden'
-                        : 'Aufzeichnung starten',
-                    onPressed: () => unawaited(_toggleRecording()),
-                    child: Icon(
-                      recording ? Icons.stop : Icons.fiber_manual_record,
-                      color: recording ? kRed : kGreen,
+                  _PressScale(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOutCubic,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: recording
+                            ? [
+                                BoxShadow(
+                                  color: kRed.withValues(alpha: 0.35),
+                                  blurRadius: 16,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : const [],
+                      ),
+                      child: FloatingActionButton(
+                        heroTag: 'trailscape-record-fab',
+                        backgroundColor:
+                            Theme.of(context).colorScheme.surface,
+                        tooltip: recording
+                            ? 'Aufzeichnung beenden'
+                            : 'Aufzeichnung starten',
+                        onPressed: () => unawaited(_toggleRecording()),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInOutCubic,
+                          transitionBuilder: (transitionChild, animation) =>
+                              ScaleTransition(
+                            scale: animation,
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: transitionChild,
+                            ),
+                          ),
+                          child: Icon(
+                            recording ? Icons.stop : Icons.fiber_manual_record,
+                            key: ValueKey(recording),
+                            color: recording ? kRed : kGreen,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  FloatingActionButton(
-                    heroTag: 'trailscape-location-fab',
-                    backgroundColor: kGreen,
-                    foregroundColor: Colors.white,
-                    tooltip: 'Meine Position',
-                    onPressed: () => unawaited(_goToMyPosition()),
-                    child: const Icon(Icons.my_location, color: Colors.white),
+                  _PressScale(
+                    child: FloatingActionButton(
+                      heroTag: 'trailscape-location-fab',
+                      backgroundColor: kGreen,
+                      foregroundColor: Colors.white,
+                      tooltip: 'Meine Position',
+                      onPressed: () => unawaited(_goToMyPosition()),
+                      child:
+                          const Icon(Icons.my_location, color: Colors.white),
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  if (recording)
-                    _LiveBar(
-                      speedKmh: _recorder.currentSpeedKmh,
-                      stats: _liveStats,
-                      elapsedS: _elapsedSeconds(),
-                      paused: _recorder.isPaused,
-                      onTogglePause: _toggleRecordingPause,
-                      onStop: () => unawaited(_stopRecording()),
-                    )
-                  else if (selected != null)
-                    _StatsCard(
-                      ride: selected,
-                      navigating: _navRideId == selected.id,
-                      onNavigate: () => unawaited(_startNavigation()),
-                      onShare: () =>
-                          unawaited(_shareGpx(selected.name, selected.points)),
-                      onDelete: () => unawaited(_deleteSelected()),
-                      onClose: () => widget.state.select(null),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInOutCubic,
+                    transitionBuilder: (transitionChild, animation) =>
+                        FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.15),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: transitionChild,
+                      ),
                     ),
+                    child: recording
+                        ? KeyedSubtree(
+                            key: const ValueKey('live-bar'),
+                            child: _LiveBar(
+                              speedKmh: _recorder.currentSpeedKmh,
+                              stats: _liveStats,
+                              elapsedS: _elapsedSeconds(),
+                              paused: _recorder.isPaused,
+                              onTogglePause: _toggleRecordingPause,
+                              onStop: () => unawaited(_stopRecording()),
+                            ),
+                          )
+                        : selected != null
+                            ? KeyedSubtree(
+                                key: ValueKey('stats-${selected.id}'),
+                                child: _StatsCard(
+                                  ride: selected,
+                                  navigating: _navRideId == selected.id,
+                                  onNavigate: () =>
+                                      unawaited(_startNavigation()),
+                                  onShare: () => unawaited(
+                                    _shareGpx(selected.name, selected.points),
+                                  ),
+                                  onDelete: () => unawaited(_deleteSelected()),
+                                  onClose: () => widget.state.select(null),
+                                ),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('empty')),
+                  ),
                 ],
               ),
             ),
@@ -1279,6 +1379,44 @@ class _MapScreenState extends State<MapScreen> {
 }
 
 // ---------------------------------------------------------------- Teil-Widgets
+
+/// Skaliert [child] beim Antippen leicht herunter (dezentes Press-Feedback).
+///
+/// Nutzt [Listener] statt [GestureDetector], damit die eigentliche
+/// Tap-Erkennung des Kindes (z. B. eines [FloatingActionButton]) unberührt
+/// bleibt.
+class _PressScale extends StatefulWidget {
+  const _PressScale({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _pressed = false;
+
+  void _setPressed(bool value) {
+    if (_pressed == value) return;
+    setState(() => _pressed = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => _setPressed(true),
+      onPointerUp: (_) => _setPressed(false),
+      onPointerCancel: (_) => _setPressed(false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.92 : 1,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
+      ),
+    );
+  }
+}
 
 class _MapButton extends StatelessWidget {
   const _MapButton({
@@ -1384,20 +1522,39 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final valueStyle = (big
+            ? theme.textTheme.headlineSmall
+            : theme.textTheme.titleMedium)
+        ?.copyWith(
+      fontWeight: FontWeight.w700,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: (big
-                  ? theme.textTheme.headlineSmall
-                  : theme.textTheme.titleMedium)
-              ?.copyWith(
-            fontWeight: FontWeight.w700,
-            fontFeatures: const [FontFeature.tabularFigures()],
+        ClipRect(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInOutCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.3),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: valueStyle,
+            ),
           ),
         ),
         Text(
@@ -1559,8 +1716,10 @@ class _LiveBar extends StatelessWidget {
     return Card(
       elevation: 4,
       margin: EdgeInsets.zero,
-      child: Opacity(
+      child: AnimatedOpacity(
         opacity: paused ? 0.55 : 1,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOutCubic,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Column(
@@ -1571,12 +1730,21 @@ class _LiveBar extends StatelessWidget {
                 children: [
                   const Icon(Icons.fiber_manual_record, size: 12, color: kRed),
                   const SizedBox(width: 6),
-                  Text(
-                    paused ? 'Pausiert' : 'Aufzeichnung läuft',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: kRed,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInOutCubic,
+                    transitionBuilder: (child, animation) =>
+                        FadeTransition(opacity: animation, child: child),
+                    child: Text(
+                      paused ? 'Pausiert' : 'Aufzeichnung läuft',
+                      key: ValueKey(paused),
+                      style:
+                          Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: kRed,
+                                fontWeight: FontWeight.w700,
+                              ),
+                    ),
                   ),
                 ],
               ),
@@ -1708,10 +1876,8 @@ class _NavBar extends StatelessWidget {
 /// Panel der Routenplanung.
 class _PlanPanel extends StatelessWidget {
   const _PlanPanel({
-    required this.bike,
-    required this.way,
-    required this.onBikeChanged,
-    required this.onWayChanged,
+    required this.routeProfile,
+    required this.onRouteProfileChanged,
     required this.searchController,
     required this.searchResults,
     required this.searchBusy,
@@ -1730,10 +1896,8 @@ class _PlanPanel extends StatelessWidget {
     required this.onShare,
   });
 
-  final BikeType bike;
-  final WayPreference way;
-  final ValueChanged<BikeType> onBikeChanged;
-  final ValueChanged<WayPreference> onWayChanged;
+  final RouteProfile routeProfile;
+  final ValueChanged<RouteProfile> onRouteProfileChanged;
   final TextEditingController searchController;
   final List<GeoResult> searchResults;
   final bool searchBusy;
@@ -1819,30 +1983,54 @@ class _PlanPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (searchResults.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final result in searchResults.take(5))
-                        ListTile(
-                          dense: true,
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.location_on_outlined,
-                              size: 20, color: kBlue),
-                          title: Text(
-                            result.displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                          onTap: () => onResultSelected(result),
-                        ),
-                    ],
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInOutCubic,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, -0.06),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
                   ),
                 ),
+                child: searchResults.isEmpty
+                    ? const SizedBox.shrink(key: ValueKey('no-results'))
+                    : Padding(
+                        key: ValueKey(
+                          searchResults
+                              .map((r) => '${r.lat},${r.lon}')
+                              .join('|'),
+                        ),
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final result in searchResults.take(5))
+                              ListTile(
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 20,
+                                  color: kBlue,
+                                ),
+                                title: Text(
+                                  result.displayName,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                                onTap: () => onResultSelected(result),
+                              ),
+                          ],
+                        ),
+                      ),
+              ),
               const SizedBox(height: 4),
               Align(
                 alignment: Alignment.centerLeft,
@@ -1857,18 +2045,19 @@ class _PlanPanel extends StatelessWidget {
               // ------------------------------------------ Profil-Auswahl
               Row(
                 children: [
-                  const Icon(Icons.directions_bike, size: 18, color: kBlue),
+                  const Icon(Icons.route_outlined, size: 18, color: kBlue),
                   const SizedBox(width: 8),
                   Expanded(
                     child: DropdownButtonHideUnderline(
-                      child: DropdownButton<BikeType>(
+                      child: DropdownButton<RouteProfile>(
                         isExpanded: true,
-                        value: bike,
+                        value: routeProfile,
+                        hint: const Text('Routenprofil'),
                         onChanged: (value) {
-                          if (value != null) onBikeChanged(value);
+                          if (value != null) onRouteProfileChanged(value);
                         },
                         items: [
-                          for (final entry in bikeTypeLabels.entries)
+                          for (final entry in routeProfileLabels.entries)
                             DropdownMenuItem(
                               value: entry.key,
                               child: Text(entry.value),
@@ -1883,31 +2072,6 @@ class _PlanPanel extends StatelessWidget {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                ],
-              ),
-              Row(
-                children: [
-                  const Icon(Icons.route_outlined, size: 18, color: kBlue),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<WayPreference>(
-                        isExpanded: true,
-                        value: way,
-                        hint: const Text('Bevorzugter Weg'),
-                        onChanged: (value) {
-                          if (value != null) onWayChanged(value);
-                        },
-                        items: [
-                          for (final entry in wayPreferenceLabels.entries)
-                            DropdownMenuItem(
-                              value: entry.key,
-                              child: Text(entry.value),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 4),
