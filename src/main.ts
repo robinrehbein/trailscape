@@ -1,7 +1,15 @@
 import "./style.css";
 
-import { clearTrack, initMap, showTrack, updateLiveTrack } from "./map";
+import {
+  clearTrack,
+  hidePositionMarker,
+  initMap,
+  showPositionMarker,
+  showTrack,
+  updateLiveTrack,
+} from "./map";
 import { buildGpx, parseGpx } from "./gpx";
+import { clearProfile, renderProfile } from "./profile";
 import { computeStats, formatDuration, formatKm } from "./stats";
 import { deleteRide, getRide, listRides, saveRide } from "./storage";
 import { Recorder } from "./recorder";
@@ -10,6 +18,9 @@ import type { Ride, RideStats, TrackPoint } from "./types";
 /* ------------------------------------------------------------------ DOM */
 
 const mapEl = document.getElementById("map")!;
+const mapPaneEl = document.getElementById("map-pane")!;
+const profilePanelEl = document.getElementById("profile-panel")!;
+const profileEl = document.getElementById("profile")!;
 const rideListEl = document.getElementById("ride-list")!;
 const rideListEmptyEl = document.getElementById("ride-list-empty")!;
 
@@ -118,6 +129,25 @@ function hideStats(): void {
   statsPanelEl.hidden = true;
 }
 
+function showProfile(ride: Ride): void {
+  const hasElevation = renderProfile(profileEl, ride.points, (index: number | null) => {
+    if (index === null) {
+      hidePositionMarker();
+    } else {
+      showPositionMarker(ride.points[index]!);
+    }
+  });
+
+  profilePanelEl.hidden = !hasElevation;
+  mapPaneEl.classList.toggle("has-profile", hasElevation);
+}
+
+function hideProfile(): void {
+  clearProfile(profileEl);
+  profilePanelEl.hidden = true;
+  mapPaneEl.classList.remove("has-profile");
+}
+
 async function selectRide(id: string): Promise<void> {
   const ride = await getRide(id);
   if (!ride) {
@@ -128,6 +158,7 @@ async function selectRide(id: string): Promise<void> {
   currentRideId = ride.id;
   showTrack(ride.points);
   showStats(ride.stats);
+  showProfile(ride);
   markActiveRide();
 }
 
@@ -193,6 +224,7 @@ function startRecording(): void {
   currentRideId = null;
   clearTrack();
   hideStats();
+  hideProfile();
   markActiveRide();
   setRecordingUi(true);
   recordInfoEl.textContent = `Aufzeichnung · ${formatKm(0)} km`;
@@ -282,6 +314,7 @@ async function deleteCurrentRide(): Promise<void> {
   await refreshRideList();
   clearTrack();
   hideStats();
+  hideProfile();
 }
 
 /* ----------------------------------------------------------- Service Worker */

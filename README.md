@@ -12,6 +12,7 @@ Strava- und Komoot-Abos kosten Geld und erfordern Accounts. Trailscape ist koste
 - **GPX Import/Export**: Touren importieren und exportieren für Austausch oder Backup
 - **Statistiken**: Distanz, Dauer, Durchschnittsgeschwindigkeit, Höhenmeter
 - **Kartenansicht**: OpenStreetMap und OpenTopoMap (Kartenverfügbarkeit lokal gepuffert)
+- **Interaktives Höhenprofil**: Mit Karten-Verknüpfung (Hover im Profil zeigt die Position auf der Karte)
 - **Lokale Speicherung**: Alle Daten in IndexedDB – kein Server, keine Synchronisierung nötig
 - **PWA-Installation**: Als App auf deinem Gerät installierbar, auch ohne App-Store
 
@@ -37,7 +38,7 @@ npm run preview   # Production-Build lokal testen
 
 ## Roadmap
 
-- **v0.2**: Höhenprofil-Diagramm, automatische Pausenerkennung, Foto-Anhänge zu Touren
+- **v0.2**: Automatische Pausenerkennung, Foto-Anhänge zu Touren
 - **v0.3**: Routenplanung mit Gravel-Fokus (BRouter/OSRM-Integration, OSM-Surface-Daten)
 - **v0.4**: Optionale Self-Hosted-Synchronisierung, Touren teilen (Link/QR)
 - **v1.0**: Offline-Kartenpakete für Regionen ohne Internetverbindung

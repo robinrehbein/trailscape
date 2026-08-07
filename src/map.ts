@@ -12,6 +12,7 @@ let map: L.Map | null = null;
 let trackLayer: L.Polyline | null = null;
 let liveLayer: L.Polyline | null = null;
 let liveCentered = false;
+let positionMarker: L.CircleMarker | null = null;
 
 function toLatLngs(points: TrackPoint[]): L.LatLngExpression[] {
   return points.map((point) => [point.lat, point.lon] as L.LatLngExpression);
@@ -117,4 +118,33 @@ export function clearTrack(): void {
   trackLayer = removeLayer(trackLayer);
   liveLayer = removeLayer(liveLayer);
   liveCentered = false;
+  hidePositionMarker();
+}
+
+/** Zeigt einen einzelnen Positions-Marker an der gegebenen Position an. */
+export function showPositionMarker(point: TrackPoint): void {
+  if (!map) {
+    return;
+  }
+
+  const latLng: L.LatLngExpression = [point.lat, point.lon];
+
+  if (positionMarker) {
+    positionMarker.setLatLng(latLng);
+  } else {
+    positionMarker = L.circleMarker(latLng, {
+      radius: 6,
+      color: "#ffffff",
+      weight: 2,
+      fillColor: "#b3382c",
+      fillOpacity: 1,
+    }).addTo(map);
+  }
+}
+
+/** Entfernt den Positions-Marker von der Karte. */
+export function hidePositionMarker(): void {
+  if (positionMarker && map) {
+    map.removeLayer(positionMarker);
+  }
 }
