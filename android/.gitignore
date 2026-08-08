@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Bewusst eingecheckt: fester Sideload-Signierschlüssel, damit per
+# GitHub Release verteilte APKs als Update installierbar bleiben.
+!app/release-keystore.jks
