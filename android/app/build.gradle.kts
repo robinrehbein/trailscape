@@ -15,21 +15,29 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "io.github.robinrehbein.trailscape"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
+        // In CI pro Build hochzählen, damit Android neue APKs als Update erkennt.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        create("release") {
+            // Eingecheckter Schlüssel: Die App wird ausschließlich als Sideload
+            // über GitHub Releases verteilt; ohne stabile Signatur lehnt Android
+            // jede Update-Installation ab.
+            storeFile = file("release-keystore.jks")
+            storePassword = "trailscape"
+            keyAlias = "trailscape"
+            keyPassword = "trailscape"
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
