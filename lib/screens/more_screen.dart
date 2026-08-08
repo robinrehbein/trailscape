@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -565,6 +566,21 @@ class _MoreScreenState extends State<MoreScreen> {
         '${report.duplicatesSkipped == 1 ? 'Duplikat' : 'Duplikate'}',
         style: hint,
       ),
+      if (report.debugLines.isNotEmpty)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              textStyle: theme.textTheme.bodySmall,
+              foregroundColor: theme.colorScheme.onSurfaceVariant,
+            ),
+            onPressed: () => _showSyncDebug(context, report.debugLines),
+            child: const Text('Diagnose-Details'),
+          ),
+        ),
       if (report.workoutsFound == 0) ...[
         const SizedBox(height: 8),
         _notice(
@@ -576,6 +592,50 @@ class _MoreScreenState extends State<MoreScreen> {
         ),
       ],
     ];
+  }
+
+  /// Zeigt die technischen Notizen des letzten Import-Laufs.
+  Future<void> _showSyncDebug(BuildContext context, List<String> lines) async {
+    final text = lines.join('\n');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final theme = Theme.of(dialogContext);
+        return AlertDialog(
+          title: const Text('Diagnose-Details'),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: SelectableText(
+                text,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: text));
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Diagnose kopiert.')),
+                );
+              },
+              child: const Text('Kopieren'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Schließen'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _notice(

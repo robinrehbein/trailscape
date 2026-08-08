@@ -52,6 +52,16 @@ class _FakeGateway implements HealthGateway {
   }
 
   @override
+  HealthWorkoutReadDiagnostics? get lastWorkoutDiagnostics => null;
+
+  @override
+  Future<List<HealthSessionInfo>> readExerciseSessionsNative({
+    required DateTime from,
+    required DateTime to,
+  }) async =>
+      const [];
+
+  @override
   Future<Map<String, List<HealthRoutePoint>>> readRoutes({
     required DateTime from,
     required DateTime to,
