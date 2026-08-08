@@ -23,16 +23,19 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // Bewusst mit `.beta`-Suffix: Die native App muss sich parallel zur
-        // bestehenden Flutter-App (io.github.robinrehbein.trailscape)
-        // installieren lassen, solange der Rewrite laeuft.
-        applicationId = "io.github.robinrehbein.trailscape.beta"
+        // Die Kennung der ausgelieferten App. Waehrend des Rewrites trug der
+        // native Build hier ein `.beta`-Suffix, damit er sich neben der alten
+        // App installieren liess; dieser Parallelbetrieb ist beendet, die
+        // native App IST jetzt Trailscape. Weil der Signierschluessel der
+        // alten Pipeline nicht uebernommen wurde, ist der Umstieg von 1.x eine
+        // einmalige Neuinstallation (siehe README, Abschnitt "Umstieg").
+        applicationId = "io.github.robinrehbein.trailscape"
         minSdk = 26
         targetSdk = 36
         // Offset 2000, damit der Zaehler sicher ueber allen bisher von der
         // Flutter-Pipeline vergebenen versionCodes liegt.
         versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1) + 2000
-        versionName = "2.0.0-alpha"
+        versionName = "2.0.0"
     }
 
     signingConfigs {
@@ -48,7 +51,17 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 in der Voll-Optimierung: entfernt ungenutzten Code (vor allem
+            // die grossen Bibliotheken MapLibre, Health Connect und
+            // play-services, von denen die App jeweils nur einen Ausschnitt
+            // benutzt) und danach die Ressourcen, auf die kein Code mehr
+            // zeigt. Die noetigen Ausnahmen stehen in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = if (releaseKeystore != null) {
                 signingConfigs.getByName("release")
             } else {
@@ -80,8 +93,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    // Nur der Kern-Satz an Icons: material-icons-extended zieht mehrere tausend
-    // Vektoren ins APK, und Minifizierung ist in dieser Phase noch aus.
+    // Nur der Kern-Satz an Icons. material-icons-extended zoege mehrere tausend
+    // Vektoren herein, von denen R8 wegen der `Icons.Filled.X`-Zugriffsmuster
+    // nur schwer etwas entfernen kann — der Kern-Satz deckt alles ab, was die
+    // Screens benutzen.
     implementation("androidx.compose.material:material-icons-core")
 
     implementation("androidx.core:core-ktx:1.17.0")
@@ -95,10 +110,9 @@ dependencies {
 
     // Kartendarstellung (Vektor-/Rasterkacheln, OpenGL). Bewusst die 11.x-Reihe:
     // Sie ist die letzte Serie mit der etablierten `org.maplibre.android.*`-API,
-    // auf der die gesamte oeffentliche Dokumentation und die bestehenden
-    // Flutter-Kartenintegrationen beruhen — 12.x/13.x bringen Umbauten an
-    // Style-/Annotation-APIs, die dem Rewrite in dieser Phase nur Risiko ohne
-    // Nutzen brachten. 11.13.5 ist die neueste stabile 11er-Version und loest
+    // auf der die gesamte oeffentliche Dokumentation beruht — 12.x/13.x bringen
+    // Umbauten an Style-/Annotation-APIs, die nur Risiko ohne Nutzen brachten.
+    // 11.13.5 ist die neueste stabile 11er-Version und loest
     // gegen AGP 9.0.1 / compileSdk 36 konfliktfrei auf.
     implementation("org.maplibre.gl:android-sdk:11.13.5")
 
@@ -121,12 +135,11 @@ dependencies {
     // (ein Call pro HttpClient.execute) nicht noetig.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    // Health Connect: bewusst die stabile 1.1.0-Reihe, NICHT die 1.2.0-alpha,
-    // die das bestehende Flutter-Projekt (android/app/build.gradle.kts)
-    // einsetzt. Dort ist die Alpha-Version nur wegen einer Versionskopplung
-    // mit dem `health`-Flutter-Plugin noetig; die native App hat diese
-    // Fesselung nicht und soll nicht unnoetig auf Vorab-APIs sitzen. 1.1.0
-    // ist gegen compileSdk 36 / AGP 9.0.1 konfliktfrei aufloesbar.
+    // Health Connect: bewusst die stabile 1.1.0-Reihe, nicht die 1.2.0-alpha.
+    // Version 1.x der App war nur deshalb an die Alpha gebunden, weil das
+    // damals benutzte Plugin es so verlangte — diese Fesselung gibt es nicht
+    // mehr, und Produktivcode soll nicht auf Vorab-APIs sitzen. 1.1.0 loest
+    // gegen compileSdk 36 / AGP 9.0.1 konfliktfrei auf.
     implementation("androidx.health.connect:connect-client:1.1.0")
 
     // Fused Location Provider fuer den Aufzeichnungs-Service (record/).

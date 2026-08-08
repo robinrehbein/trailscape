@@ -1,58 +1,184 @@
 # 🚵 Trailscape
 
-Kostenlose native Android-App für GPS-Aufzeichnung und Routenplanung – die Alternative zu Strava und Komoot. Gebaut mit Flutter.
+Kostenlose, native Android-App für GPS-Aufzeichnung, Routenplanung und
+Trainingssteuerung auf dem Gravel- und Rennrad — die Alternative zu Strava und
+Komoot. Kotlin, Jetpack Compose, kein Abo, kein Account.
 
 ## Warum?
 
-Strava- und Komoot-Abos sind teuer und binden Daten in die Cloud. Trailscape ist kostenlos und **local-first**: Deine Daten bleiben auf deinem Gerät, vollständig offline. Ohne Accounts, ohne Cloud, ohne versteckte Kosten – nur du und deine Touren.
+Strava- und Komoot-Abos sind teuer und binden die eigenen Daten in fremde
+Clouds. Trailscape ist kostenlos und **local-first**: Touren, Trainingsprofil
+und Auswertung liegen ausschließlich auf dem Gerät. Kein Account, keine
+Registrierung, keine Telemetrie. Wer trotzdem synchronisieren will, stellt
+seinen eigenen Server dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 ## Features
 
-- **GPS-Aufzeichnung mit Hintergrund-Tracking**: Touren aufzeichnen, die im Hintergrund weiterlaufen, auch bei gesperrtem Display (Foreground-Service)
-- **Live-Anzeige**: Während der Fahrt Tempo, Distanz, Fahrzeit und Höhenmeter in großer Schrift anzeigen; Pause/Weiter-Funktion
-- **GPX-Import/Export**: Touren importieren und exportieren für Austausch oder Backup
-- **Statistiken**: Distanz, Dauer, Durchschnittsgeschwindigkeit, Höhenmeter für jede Tour
-- **Routenplanung**: Zielsuche nach Ort, Stadt oder Straße (Nominatim), Möglichkeit, aktuelle Position als Start zu nutzen, Dropdowns für Fahrrad-Typ (Gravel, Rennrad) und bevorzugten Weg (Gemischt, Asphalt & Straße, Radwege & verkehrsarm, Kürzester Weg) mit automatischer Profil-Auswahl für BRouter-Routenberechnung
-- **Routen-Navigation**: Navigation auf gespeicherten Touren mit GPS-Verfolgung, Anzeige der verbleibenden Kilometer und Vibrations-Warnung beim Verlassen der Route
-- **Offline-Karten**: Regionen lokal herunterladen (max. 250 Kacheln pro Vorgang) und offline nutzen; automatischer Cache für weitere Regionen
-- **Trainingspläne**: Automatische Fitnesslevel-Erkennung aus aufgezeichneten Touren und personalisierte Trainingspläne mit progressiver Steigerung, Erholungswochen und Fortschritts-Tracking
-- **Lokale Speicherung**: Alle Daten lokal auf dem Gerät – keine Synchronisierung nötig
-- **Selfhost-Sync (optional)**: Touren bidirektional mit eigenem Server synchronisieren (Details siehe unten)
+**Aufzeichnen**
+- GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
+  nach dem Wegwischen der App aus den Recents weiter
+- Live-Anzeige von Tempo, Distanz, Fahrzeit und Höhenmetern; Pause/Weiter und
+  Beenden auch direkt aus der Benachrichtigung
+- Absturzsicherung: Jeder Punkt geht sofort in ein Journal
+  (`<filesDir>/recording/active.jsonl`). Bricht der Prozess ab, bietet die App
+  beim nächsten Start die Wiederherstellung der Tour an
 
-## Tech-Stack
+**Touren**
+- Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
+- Umbenennen, Löschen, als GPX teilen, GPX importieren (z. B. aus Komoot oder
+  Strava)
+- Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
+  wieder importieren
 
-- **Flutter/Dart**: Native Android-Performance, kostenlos und quelloffen
-- **flutter_map + OpenStreetMap**: Leichte Karten-Bibliothek mit kostenlosen, quelloffenen Kartendaten
-- **geolocator**: Zuverlässiges GPS ohne externe Abhängigkeiten, kostenlos
-- **BRouter**: Kostenloser Routing-Dienst für Wegberechnung, quelloffen
-- **Nominatim (OpenStreetMap)**: Kostenlose Ortssuche für die Zielsuche in der Routenplanung
+**Karte & Planung**
+- MapLibre-Karte mit fünf Kachelstilen zur Auswahl (Straßenkarte, CyclOSM,
+  OpenStreetMap, OpenTopoMap, Satellit) — umschaltbar auf der Karte und im
+  Mehr-Tab, ohne API-Schlüssel
+- Routenplanung mit Zielsuche über Nominatim, Fahrradtyp (Gravel, Rennrad) und
+  Wegpräferenz (Gemischt, Asphalt, Radwege, kürzester Weg) — daraus wählt die
+  App das passende BRouter-Profil
+- Höhenprofil der geplanten Route
+- Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
+  Vibrationswarnung beim Verlassen des Wegs
+- Offline-Karten: Regionen über MapLibres Offline-Manager herunterladen
+  (max. 250 Kacheln pro Vorgang) und im Mehr-Tab verwalten
 
-## Installation (Android)
+**Training**
+- Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
+- Trainingsplan mit progressiver Steigerung, Erholungswochen und
+  Fortschrittsverfolgung
+- Performance-Management-Chart (Fitness, Ermüdung, Form) über die Trainingslast
+- Tagesempfehlung („Readiness") aus Ruhepuls, HRV (rMSSD) und Schlaf
 
-Die APK wird bei jedem Push auf `main` automatisch von GitHub Actions gebaut und an das GitHub-Release `latest` angehängt.
+**Gesundheitsdaten**
+- Anbindung an Health Connect (dorthin spiegelt Samsung Health die
+  Watch-Daten): Import von Trainingseinheiten samt Route, Herzfrequenz,
+  Ruhepuls, HRV, Schlaf, VO₂max
+- Ausschließlich lesend — Trailscape schreibt nichts nach Health Connect zurück
 
-1. Gehe zur [Releases-Seite](../../releases) dieses Repositories
-2. Lade die neueste APK-Datei unter dem Release `latest` herunter
-3. Öffne die APK auf deinem Android-Gerät
-4. Bestätige die Installation (evtl. musst du unter Einstellungen > Sicherheit > "Unbekannte Quellen" die Installation erlauben)
-5. Beim ersten Start erlaube die erforderlichen Berechtigungen:
-   - **Standort**: Wähle "Immer erlauben" für Hintergrund-Tracking (notwendig für GPS-Aufzeichnung)
-   - **Benachrichtigungen**: Erlaube Benachrichtigungen für Aufzeichnungsstatus
+**Selfhost-Sync (optional)**
+- Bidirektionale Synchronisierung der Touren mit einem eigenen Server
 
-## Entwicklung
+## Architektur
 
-```bash
-flutter pub get          # Dependencies installieren
-flutter test             # Tests ausführen
-flutter run              # Debug-Version auf Gerät/Emulator starten
-flutter build apk --release  # Release-APK bauen
+Ein Gradle-Projekt mit zwei Modulen:
+
+| Modul | Was | Warum getrennt |
+|---|---|---|
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 461 Unit-Tests hängen hier |
+| `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
+
+Weitere Bausteine:
+
+- **HTTP** — `:core` definiert nur das schmale Interface
+  `de.trailscape.core.HttpClient`; `:app` implementiert es mit OkHttp
+  (`data/OkHttpClientAdapter.kt`). So bleibt `:core` frei von Netzwerk-Stacks.
+- **JSON** — von Hand über `kotlinx.serialization`s `JsonObject`-Baukasten
+  (`core/.../JsonSupport.kt`), bewusst ohne `@Serializable`-Codegen: Das
+  Dateiformat muss byteweise zu dem passen, das Version 1.x geschrieben hat,
+  inklusive der Unterscheidung „fehlender Schlüssel" vs. „explizites `null`".
+- **Speicherung** — eine JSON-Datei pro Tour unter `<filesDir>/rides/`,
+  Einstellungen und Trainingsprofil in den SharedPreferences.
+- **Zustand** — ein ViewModel im Activity-Scope (`ui/AppViewModel.kt`), das
+  alle vier Tabs teilen; der Aufzeichnungszustand kommt aus dem
+  `RecordingRepository` direkt vom Service.
+- `server/` enthält den optionalen Sync-Server, `tool/` das Skript zum
+  Erzeugen des App-Icons aus einer Quellgrafik.
+
+## Bauen
+
+Voraussetzungen: **JDK 21** und ein **Android SDK** mit API 36 (compileSdk 36,
+minSdk 26). Der Pfad zum SDK gehört in `local.properties`:
+
+```properties
+sdk.dir=/pfad/zum/android-sdk
 ```
 
-Voraussetzung: Flutter ≥ 3.x installiert und ein Android-SDK konfiguriert.
+```bash
+./gradlew :app:assembleRelease   # Release-APK -> app/build/outputs/apk/release/
+./gradlew :app:assembleDebug     # Debug-APK
+./gradlew :app:installDebug      # auf ein angeschlossenes Gerät
+```
+
+Der Release-Build läuft durch R8 (`minifyEnabled` + `shrinkResources`); die
+Regeln stehen in [`app/proguard-rules.pro`](app/proguard-rules.pro), die
+Rückübersetzungstabelle landet unter
+`app/build/outputs/mapping/release/mapping.txt`.
+
+**Signierung:** Der Release-Schlüssel liegt nicht im Repository. Ohne die
+Umgebungsvariablen `RELEASE_KEYSTORE_PATH` und `RELEASE_KEYSTORE_PASSWORD`
+fällt der Build bewusst auf den Debug-Schlüssel zurück und bleibt grün — ein so
+gebautes APK lässt sich aber nicht als Update über die verteilte Installation
+legen. In der CI kommt der Schlüssel aus dem Secret
+`RELEASE_KEYSTORE_BASE64`.
+
+## Testen
+
+```bash
+./gradlew :core:test              # 461 Tests des Domänenmodells
+./gradlew :app:testDebugUnitTest  # 32 Tests der plattformfreien :app-Teile
+```
+
+Was die CI vor jedem Release ausführt:
+
+```bash
+./gradlew clean :core:test :app:testDebugUnitTest :app:assembleRelease
+```
+
+`:app` hat bewusst kein Robolectric — getestet wird dort nur, was ohne
+Android-Framework auskommt (Aufzeichnungs-Journal, GPX-Import,
+Share-Dateinamen, Trainingsauswertung). Alles Rechnende liegt ohnehin in
+`:core`.
+
+## Installation und Updates
+
+Jeder Push auf `main` baut die App und hängt sie an das GitHub-Release
+`latest`:
+
+**<https://github.com/robinrehbein/trailscape/releases/download/latest/trailscape.apk>**
+
+1. APK auf dem Android-Gerät herunterladen und öffnen
+2. Installation aus unbekannten Quellen für den Browser erlauben
+3. Beim ersten Start die Berechtigungen erteilen:
+   - **Standort** — „Immer erlauben" für die Aufzeichnung im Hintergrund
+   - **Benachrichtigungen** — für die Aufzeichnungs-Anzeige
+   - **Health Connect** — optional, nur für die Gesundheitsdaten
+
+Ein Update ist derselbe Weg: APK laden, öffnen, drüber installieren.
+
+## Umstieg von Version 1.x
+
+Version 2.0.0 ist die neu geschriebene native App. Sie trägt dieselbe
+Paketkennung wie Version 1.x (`io.github.robinrehbein.trailscape`), aber einen
+**neuen Signierschlüssel** — Android verweigert deshalb die Installation über
+die alte Version. Einmalig ist eine Neuinstallation nötig:
+
+1. In der alten App: **Mehr → Daten & Backup → Backup exportieren**, Datei
+   sicher ablegen (Drive, Mail, Dateien-App)
+2. Alte App deinstallieren
+3. `trailscape.apk` aus dem `latest`-Release installieren
+4. **Mehr → Daten & Backup → Backup importieren**, die Datei auswählen
+
+Damit sind alle Touren und das Trainingsprofil übernommen. Nicht im Backup
+enthalten sind heruntergeladene Offline-Karten — die lädt man neu.
+
+Ab Version 2.0.0 sind Updates wieder normale Installationen über die
+bestehende App; der Schlüssel bleibt jetzt stabil.
 
 ## Selfhost-Sync
 
-Optional können Touren mit einem selbst gehosteten Server synchronisiert werden. Ein leichtgewichtiger Node.js-Server (eine Datei, keine externen Abhängigkeiten) speichert Touren JSON-basiert lokal. Authentifizierung erfolgt über Token, ein Docker-Image ist enthalten. Alle Details und Setup-Anweisungen findest du in [`server/README.md`](server/README.md).
+Optional lassen sich Touren mit einem selbst gehosteten Server abgleichen. Ein
+leichtgewichtiger Node.js-Server (eine Datei, keine externen Abhängigkeiten)
+legt sie JSON-basiert im Dateisystem ab, authentifiziert wird per Token, ein
+Docker-Image liegt bei. Setup: [`server/README.md`](server/README.md).
+Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
+
+## Datenschutz
+
+Alles bleibt lokal. Die App spricht nur mit Diensten, die für eine konkrete
+Aktion nötig sind: Kachelserver für die Karte, BRouter für die
+Routenberechnung, Nominatim für die Zielsuche und — wenn eingerichtet — dem
+eigenen Sync-Server. Kein Analytics, kein Crash-Reporting, keine Werbung.
 
 ## Lizenz
 
