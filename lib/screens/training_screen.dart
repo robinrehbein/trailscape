@@ -825,6 +825,19 @@ class _TrainingScreenState extends State<TrainingScreen> {
     final target = insights.weeklyTarget;
     final reference = insights.fourWeekMeanWeeklyLoad;
 
+    final weeklyHours = insights.profile.weeklyHours;
+
+    // Zielwert in Fahrzeit übersetzen, damit das Zeitbudget sichtbar wird.
+    String? budgetText;
+    if (target != null && !deload.recommended) {
+      final hours = formatHours(target.estimatedHours);
+      budgetText = weeklyHours != null && weeklyHours > 0
+          ? 'Zielwert entspricht ≈ $hours h Fahrzeit bei deinem Budget von '
+              '${formatHours(weeklyHours)} h pro Woche.'
+          : 'Zielwert entspricht ≈ $hours h Fahrzeit. Trage im Mehr-Tab dein '
+              'Zeitbudget ein, dann rechnen wir es mit ein.';
+    }
+
     String? deloadRange;
     if (deload.recommended && reference != null && reference > 0) {
       final low = reference * (1 - deload.volumeReductionHigh);
@@ -863,8 +876,25 @@ class _TrainingScreenState extends State<TrainingScreen> {
                     'Zielwert',
                     color: kGreen,
                   ),
+                if (target != null && !deload.recommended)
+                  _figure(
+                    context,
+                    '${formatHours(target.estimatedHours)} h',
+                    weeklyHours != null && weeklyHours > 0
+                        ? 'Fahrzeit (Budget ${formatHours(weeklyHours)} h)'
+                        : 'Fahrzeit (geschätzt)',
+                  ),
               ],
             ),
+            if (budgetText != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                budgetText,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             _notice(
               context,
@@ -914,10 +944,11 @@ class _TrainingScreenState extends State<TrainingScreen> {
     );
   }
 
-  /// Karte „Vitalwerte": Ruhepuls- und Schlafampel plus VO2max-Band.
+  /// Karte „Vitalwerte": HRV-, Ruhepuls- und Schlafampel plus VO2max-Band.
   Widget _buildVitalsCard(BuildContext context, TrainingInsights insights) {
     final theme = Theme.of(context);
     final unknown = theme.colorScheme.onSurfaceVariant;
+    final hrv = insights.hrv;
     final rhr = insights.restingHr;
     final sleep = insights.sleep;
     final vo2 = insights.vo2max;
@@ -929,6 +960,21 @@ class _TrainingScreenState extends State<TrainingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Vitalwerte', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            // HRV steht oben: sie ist das stärkste Einzelsignal des
+            // Erholungswerts, sobald genug Tage vorliegen.
+            _signalRow(
+              context,
+              icon: Icons.monitor_heart_outlined,
+              color: recoveryFlagColor(hrv.flag, unknown),
+              headline: hrv.available && hrv.currentRmssd != null
+                  ? 'HRV ${hrv.currentRmssd!.round()} ms · '
+                      '${recoveryFlagLabels[hrv.flag]!}'
+                  : 'HRV',
+              detail: hrv.available
+                  ? '${hrv.message} ${_hrvTrendText(hrv)}'
+                  : (hrv.unavailableReason ?? 'Keine Aussage möglich.'),
+            ),
             const SizedBox(height: 12),
             _signalRow(
               context,
@@ -979,6 +1025,19 @@ class _TrainingScreenState extends State<TrainingScreen> {
         ),
       ),
     );
+  }
+
+  /// Tendenz der HRV gegenüber der eigenen Baseline, in Prozent.
+  static String _hrvTrendText(HrvAssessment hrv) {
+    final deviation = hrv.deviationPercent;
+    final baseline = hrv.baselineRmssd;
+    if (deviation == null || baseline == null) {
+      return '';
+    }
+    final rounded = deviation.round();
+    final sign = rounded > 0 ? '+' : (rounded < 0 ? '−' : '±');
+    return 'Tendenz: $sign${rounded.abs()} % gegenüber deinem Normalwert '
+        '(${baseline.round()} ms).';
   }
 
   Widget _signalRow(

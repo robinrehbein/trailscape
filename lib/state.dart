@@ -50,8 +50,10 @@ class TrainingInsights {
     required this.calibration,
     required this.fitness,
     required this.restingHr,
+    required this.hrv,
     required this.sleep,
     required this.readiness,
+    required this.readinessLast7,
     required this.recommendation,
     required this.deload,
     required this.weeklyTarget,
@@ -69,8 +71,13 @@ class TrainingInsights {
   final LoadCalibration calibration;
   final FitnessSeries fitness;
   final RestingHrAssessment restingHr;
+  final HrvAssessment hrv;
   final SleepAssessment sleep;
   final Readiness readiness;
+
+  /// Rückwirkend berechnete Readiness der letzten sieben Tage (nur Tage mit
+  /// Gesamtscore) — Grundlage des Deload-Triggers.
+  final List<double> readinessLast7;
   final DailyRecommendation recommendation;
   final DeloadRecommendation deload;
 
@@ -378,13 +385,22 @@ class AppState extends ChangeNotifier {
       until: now,
     );
 
-    final restingHr = assessRestingHeartRate(
-      vitals?.restingHeartRate.series ?? const <DailyValue>[],
+    final restingHrSeries =
+        vitals?.restingHeartRate.series ?? const <DailyValue>[];
+    final sleepSeries = vitals?.sleepHours.series ?? const <DailyValue>[];
+    final hrvSeries =
+        vitals?.heartRateVariability.series ?? const <DailyValue>[];
+
+    final restingHr = assessRestingHeartRate(restingHrSeries, today: now);
+    // Reihenfolge ist verbindlich: HRV- und Schlafampel kennen die
+    // Ruhepuls-Ampel (Sättigungsfall bzw. rote Schlafstufe).
+    final hrv = assessHrv(
+      hrvSeries,
       today: now,
+      restingHrFlag: restingHr.flag,
     );
-    // Reihenfolge ist verbindlich: die Schlafampel kennt die Ruhepuls-Ampel.
     final sleep = assessSleep(
-      vitals?.sleepHours.series ?? const <DailyValue>[],
+      sleepSeries,
       today: now,
       restingHrFlag: restingHr.flag,
     );
@@ -393,6 +409,7 @@ class AppState extends ChangeNotifier {
     final readiness = computeReadiness(
       restingHr: restingHr,
       sleep: sleep,
+      hrv: hrv,
       tsb: tsb,
       trainingHistoryDays: fitness.historyDays,
     );
@@ -403,10 +420,20 @@ class AppState extends ChangeNotifier {
     final fourWeekMean =
         coveredDays > 0 ? _sumLastDays(fitness, 28) * 7 / coveredDays : null;
 
-    // readinessLast7 bleibt leer: Readiness-Werte vergangener Tage werden
-    // (noch) nicht persistiert, der Trigger kann also nicht greifen.
+    // Readiness wird nicht persistiert, sondern aus den vorliegenden
+    // Vitalserien rückwirkend nachgerechnet — damit greift der Deload-Trigger
+    // „Readiness < 40 an ≥ 3 von 7 Tagen" ohne zusätzlichen Speicher.
+    final readinessLast7 = availableReadinessScores(computeReadinessSeries(
+      restingHrSeries: restingHrSeries,
+      sleepSeries: sleepSeries,
+      hrvSeries: hrvSeries,
+      fitness: fitness,
+      today: now,
+    ));
+
     final deload = assessDeload(
       fitness,
+      readinessLast7: readinessLast7,
       weeklyLoad: fitness.points.isEmpty ? null : weeklyLoad,
       fourWeekMeanWeeklyLoad: fourWeekMean,
     );
@@ -418,6 +445,7 @@ class AppState extends ChangeNotifier {
             ctl: latest.ctl,
             targetRamp: defaultTargetRampPerWeek,
             recentWeeklyMean: fourWeekMean,
+            weeklyHours: profile.weeklyHours,
           );
 
     return TrainingInsights(
@@ -426,8 +454,10 @@ class AppState extends ChangeNotifier {
       calibration: calibration,
       fitness: fitness,
       restingHr: restingHr,
+      hrv: hrv,
       sleep: sleep,
       readiness: readiness,
+      readinessLast7: readinessLast7,
       recommendation: recommendation,
       deload: deload,
       weeklyTarget: weeklyTarget,

@@ -8,6 +8,12 @@ import 'package:xml/xml.dart';
 
 import 'models.dart';
 
+/// Namespace der Garmin-TrackPointExtension, in der die Herzfrequenz je
+/// Trackpunkt transportiert wird (`gpxtpx:hr`) — de-facto-Standard, den auch
+/// Komoot, Strava & Co. beim GPX-Export verwenden.
+const String _garminTrackPointExtensionNs =
+    'http://www.garmin.com/xmlschemas/TrackPointExtension/v1';
+
 /// Liest den unqualifizierten (lokalen) Tag-Namen eines Elements.
 String _localName(XmlElement el) => el.name.local;
 
@@ -17,6 +23,20 @@ String? _findChildText(XmlElement parent, String tagName) {
   for (final child in parent.childElements) {
     if (_localName(child) == tagName) {
       return child.innerText;
+    }
+  }
+  return null;
+}
+
+/// Sucht den Text des ersten Nachfahren-Elements mit gegebenem
+/// (unqualifiziertem) Tag-Namen — anders als [_findChildText] auch beliebig
+/// tief verschachtelt, wie es `gpxtpx:hr` innerhalb von
+/// `<extensions><gpxtpx:TrackPointExtension>` ist.
+String? _findDescendantText(XmlElement parent, String tagName) {
+  for (final el in parent.descendantElements) {
+    if (_localName(el) == tagName) {
+      final text = el.innerText.trim();
+      if (text.isNotEmpty) return text;
     }
   }
   return null;
@@ -42,6 +62,15 @@ double? _parseEleM(String? raw) {
   return value;
 }
 
+int? _parseHrBpm(String? raw) {
+  if (raw == null) return null;
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  final value = double.tryParse(trimmed);
+  if (value == null || !value.isFinite) return null;
+  return value.round();
+}
+
 TrackPoint _parsePoint(XmlElement el) {
   final latRaw = el.getAttribute('lat');
   final lonRaw = el.getAttribute('lon');
@@ -57,6 +86,7 @@ TrackPoint _parsePoint(XmlElement el) {
     lon: lon,
     ele: _parseEleM(_findChildText(el, 'ele')),
     time: _parseTimeToMs(_findChildText(el, 'time')),
+    hr: _parseHrBpm(_findDescendantText(el, 'hr')),
   );
 }
 
@@ -114,7 +144,17 @@ String? _findName(XmlDocument doc) {
 }
 
 /// Erzeugt eine valide GPX-1.1-Datei mit einem einzelnen Track/Segment.
-String buildGpx(String name, List<TrackPoint> points) {
+///
+/// Trägt ein Trackpunkt eine Herzfrequenz ([TrackPoint.hr]), wird sie als
+/// Garmin-TrackPointExtension (`gpxtpx:hr`) mitgeschrieben — das Format, das
+/// auch Komoot, Strava und die meisten Sportuhren beim GPX-Export nutzen und
+/// das beim erneuten Einlesen (siehe [parseGpx]) wieder erkannt wird.
+///
+/// [time] wird — falls angegeben — zusätzlich als `<metadata><time>`
+/// geschrieben (z. B. der Aufnahmezeitpunkt einer Tour).
+String buildGpx(String name, List<TrackPoint> points, {DateTime? time}) {
+  final hasHr = points.any((p) => p.hr != null);
+
   final builder = XmlBuilder();
   builder.processing('xml', 'version="1.0" encoding="UTF-8"');
   builder.element(
@@ -123,8 +163,21 @@ String buildGpx(String name, List<TrackPoint> points) {
       'version': '1.1',
       'creator': 'Trailscape',
       'xmlns': 'http://www.topografix.com/GPX/1/1',
+      if (hasHr) 'xmlns:gpxtpx': _garminTrackPointExtensionNs,
     },
     nest: () {
+      builder.element(
+        'metadata',
+        nest: () {
+          builder.element('name', nest: name);
+          if (time != null) {
+            builder.element(
+              'time',
+              nest: time.toUtc().toIso8601String(),
+            );
+          }
+        },
+      );
       builder.element(
         'trk',
         nest: () {
@@ -149,6 +202,22 @@ String buildGpx(String name, List<TrackPoint> points) {
                         isUtc: true,
                       ).toIso8601String();
                       builder.element('time', nest: iso);
+                    }
+                    if (point.hr != null) {
+                      builder.element(
+                        'extensions',
+                        nest: () {
+                          builder.element(
+                            'gpxtpx:TrackPointExtension',
+                            nest: () {
+                              builder.element(
+                                'gpxtpx:hr',
+                                nest: '${point.hr}',
+                              );
+                            },
+                          );
+                        },
+                      );
                     }
                   },
                 );

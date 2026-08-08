@@ -175,6 +175,19 @@ void main() {
       expect(p.weightKg, 80);
       expect(p.hrMax, 190);
     });
+
+    test('Wochen-Zeitbudget: optional, JSON abwärtskompatibel', () {
+      expect(refProfile.weeklyHours, isNull);
+      // Altes Profil ohne das Feld bleibt gültig.
+      expect(TrainingProfile.fromJson(const {'ageYears': 35}).weeklyHours,
+          isNull);
+      expect(refProfile.toJson().containsKey('weeklyHours'), isFalse);
+
+      final withBudget = refProfile.copyWith(weeklyHours: 6.5);
+      final json = jsonDecode(jsonEncode(withBudget.toJson()))
+          as Map<String, dynamic>;
+      expect(TrainingProfile.fromJson(json).weeklyHours, 6.5);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -1011,10 +1024,59 @@ void main() {
         ctl: 50,
         targetRamp: 5,
         recentWeeklyMean: 300,
-        availableHours: 4,
+        weeklyHours: 4,
       );
-      expect(both.weeklyLoad, closeTo(300, 1e-9));
+      // 4 h × 58 Last/h = 232 — schärfer als der 130-%-Deckel (390).
+      expect(both.weeklyLoad, closeTo(232, 1e-9));
       expect(both.caps.length, 2);
+      expect(both.caps.last, contains('Zeitbudget'));
+      expect(both.caps.last, contains('4 h'));
+    });
+
+    test('Zeitbudget deckelt auf weeklyHours × 58 Last/h', () {
+      final target = weeklyLoadTarget(
+        ctl: 50,
+        targetRamp: 5,
+        weeklyHours: 6,
+      );
+      expect(target.weeklyLoad, closeTo(6 * weeklyLoadPerHour, 1e-9));
+      expect(target.weeklyHours, 6);
+      expect(target.estimatedHours, closeTo(6, 1e-9));
+      expect(target.dailyLoad, closeTo(6 * weeklyLoadPerHour / 7, 1e-9));
+    });
+
+    test('großzügiges Zeitbudget greift nicht ein', () {
+      final target = weeklyLoadTarget(
+        ctl: 50,
+        targetRamp: 5,
+        weeklyHours: 20,
+      );
+      expect(target.weeklyLoad, closeTo(577.9858862084113, 1e-6));
+      expect(target.caps, isEmpty);
+      expect(target.estimatedHours, closeTo(577.9858862084113 / 58, 1e-6));
+    });
+
+    test('ohne Zeitbudget bleibt der Zielwert unverändert', () {
+      final target = weeklyLoadTarget(ctl: 50, targetRamp: 5);
+      expect(target.weeklyHours, isNull);
+      expect(target.caps, isEmpty);
+    });
+
+    test('unplausibles Zeitbudget (0 oder negativ) wird ignoriert', () {
+      expect(
+        weeklyLoadTarget(ctl: 50, targetRamp: 5, weeklyHours: 0).caps,
+        isEmpty,
+      );
+      expect(
+        weeklyLoadTarget(ctl: 50, targetRamp: 5, weeklyHours: -3).caps,
+        isEmpty,
+      );
+    });
+
+    test('Stundenformat deutsch: ganze Zahl ohne Komma', () {
+      expect(formatHours(5), '5');
+      expect(formatHours(4.5), '4,5');
+      expect(formatHours(4.47), '4,5');
     });
 
     test('negative Zielrampe erzeugt keine negative Last', () {
@@ -1147,6 +1209,133 @@ void main() {
       );
       expect(a.available, isTrue);
       expect(a.baseline, closeTo(50, 1e-9));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('HRV-Bewertung', () {
+    test('leere Serie wirft nicht und meldet den Grund', () {
+      final h = assessHrv(const []);
+      expect(h.available, isFalse);
+      expect(h.flag, RecoveryFlag.unbekannt);
+      expect(h.status, HrvStatus.unbekannt);
+      expect(h.unavailableReason, contains('Noch keine HRV-Werte'));
+      expect(h.currentRmssd, isNull);
+    });
+
+    test('unter 14 Tagen Historie: Aufbauhinweis mit Restzahl', () {
+      final h = assessHrv(daily(List<double>.filled(10, 50)));
+      expect(h.available, isFalse);
+      expect(h.historyDays, 10);
+      expect(h.unavailableReason, contains('Braucht noch 4 Tage HRV-Daten'));
+    });
+
+    test('genau 14 Tage reichen für die volle Wertung', () {
+      final h = assessHrv(daily(List<double>.filled(14, 50)));
+      expect(h.available, isTrue);
+      expect(h.historyDays, 14);
+      expect(h.recentDays, 7);
+    });
+
+    test('stabile Serie liegt im Band; σ hat einen Boden', () {
+      final h = assessHrv(daily(List<double>.filled(28, 50)));
+      expect(h.available, isTrue);
+      expect(h.status, HrvStatus.imBand);
+      expect(h.flag, RecoveryFlag.gruen);
+      expect(h.z, closeTo(0, 1e-9));
+      expect(h.sigmaLn, hrvMinSigmaLn);
+      expect(h.currentRmssd, closeTo(50, 1e-9));
+      expect(h.baselineRmssd, closeTo(50, 1e-9));
+      expect(h.bandLowRmssd! < 50, isTrue);
+      expect(h.bandHighRmssd! > 50, isTrue);
+      expect(h.message, contains('Normalband'));
+    });
+
+    test('Einbruch unter das Band: niedrig und mindestens orange', () {
+      final h = assessHrv(daily([
+        ...List<double>.filled(21, 50),
+        ...List<double>.filled(7, 35),
+      ]));
+      expect(h.available, isTrue);
+      expect(h.status, HrvStatus.niedrig);
+      expect(h.flag, RecoveryFlag.orange);
+      expect(h.z!, lessThan(-hrvBandFactor));
+      expect(h.deviationPercent!, lessThan(-10));
+      expect(h.message, contains('unter deinem Normalband'));
+      // Nüchterne Sprache: keine Diagnose.
+      expect(h.message.toLowerCase(), isNot(contains('übertrain')));
+    });
+
+    test('leichter Rückgang bleibt bei gelb', () {
+      final h = assessHrv(daily([
+        ...List<double>.filled(21, 50),
+        ...List<double>.filled(7, 46),
+      ]));
+      expect(h.status, HrvStatus.niedrig);
+      expect(h.flag, RecoveryFlag.gelb);
+      expect(h.message, contains('knapp unter'));
+    });
+
+    test('über dem Band ist ohne Ruhepuls-Auffälligkeit ein gutes Zeichen', () {
+      final h = assessHrv(daily([
+        ...List<double>.filled(21, 50),
+        ...List<double>.filled(7, 62),
+      ]));
+      expect(h.status, HrvStatus.ueberBand);
+      expect(h.flag, RecoveryFlag.gruen);
+      expect(h.z!, greaterThan(hrvBandFactor));
+      expect(h.message, contains('gut erholt'));
+    });
+
+    test('über dem Band bei erhöhtem Ruhepuls: Sättigung als Warnzeichen', () {
+      final h = assessHrv(
+        daily([
+          ...List<double>.filled(21, 50),
+          ...List<double>.filled(7, 62),
+        ]),
+        restingHrFlag: RecoveryFlag.gelb,
+      );
+      expect(h.status, HrvStatus.saettigung);
+      expect(h.flag, RecoveryFlag.orange);
+      expect(h.message, contains('Ruhepuls'));
+      expect(h.message, contains('beobachte'));
+    });
+
+    test('ohne aktuelle Messungen im Rollfenster keine Aussage', () {
+      final h = assessHrv(
+        daily(List<double>.filled(20, 50), end: DateTime(2026, 7, 25)),
+        today: DateTime(2026, 8, 8),
+      );
+      expect(h.available, isFalse);
+      expect(h.historyDays, greaterThanOrEqualTo(hrvMinBaselineDays));
+      expect(h.unavailableReason, contains('letzten sieben Tagen'));
+    });
+
+    test('unplausible Werte fallen raus', () {
+      final h = assessHrv(daily(List<double>.filled(28, 900)));
+      expect(h.available, isFalse);
+      expect(h.historyDays, 0);
+
+      final mixed = assessHrv(daily([
+        ...List<double>.filled(21, 50),
+        // Aussetzer der Uhr: 0 ms und ein absurd hoher Wert.
+        0,
+        900,
+        50,
+        50,
+        50,
+        50,
+        50,
+      ]));
+      expect(mixed.available, isTrue);
+      expect(mixed.historyDays, 26);
+      expect(mixed.recentDays, 5);
+      expect(mixed.status, HrvStatus.imBand);
+    });
+
+    test('nur Tage der letzten 28 zählen zur Baseline', () {
+      final h = assessHrv(daily(List<double>.filled(60, 50)));
+      expect(h.historyDays, hrvBaselineDays);
     });
   });
 
@@ -1441,6 +1630,177 @@ void main() {
       expect(classifyReadiness(39.9), ReadinessBand.ruhe);
     });
 
+    HrvAssessment hrvWith({
+      required double z,
+      required HrvStatus status,
+      required RecoveryFlag flag,
+    }) =>
+        HrvAssessment(
+          available: true,
+          unavailableReason: null,
+          baselineLn: math.log(50),
+          sigmaLn: 0.12,
+          currentLn: math.log(50) + z * 0.12,
+          lastRmssd: 50,
+          z: z,
+          status: status,
+          flag: flag,
+          historyDays: 28,
+          recentDays: 7,
+          message: 'hrv',
+        );
+
+    test('mit HRV gilt die Gewichtung 40/25/20/15', () {
+      final r = computeReadiness(
+        restingHr: goodRhr,
+        sleep: goodSleep,
+        hrv: hrvWith(
+          z: -2.0,
+          status: HrvStatus.niedrig,
+          flag: RecoveryFlag.orange,
+        ),
+        tsb: 0,
+        trainingHistoryDays: 40,
+      );
+      expect(r.usesHrv, isTrue);
+      // (2,0 − 0,75) × 50 = 62,5 Strafpunkte, davon 40 %.
+      expect(r.penaltyHrv, closeTo(62.5, 1e-9));
+      expect(r.score, closeTo(75, 1e-9));
+      expect(r.confidence, Confidence.high);
+      expect(r.detail, contains('HRV, Ruhepuls'));
+      expect(r.detail, isNot(contains('ohne HRV')));
+    });
+
+    test('HRV im Band kostet nichts, Ruhepuls wirkt nur noch mit 25 %', () {
+      const rhr = RestingHrAssessment(
+        available: true,
+        unavailableReason: null,
+        baseline: 50,
+        sigma: 1.5,
+        current: 53,
+        deltaBpm: 3,
+        z: 2.0,
+        flag: RecoveryFlag.gelb,
+        baselineDays: 40,
+        streakDays: 2,
+        message: 'x',
+      );
+      final withHrv = computeReadiness(
+        restingHr: rhr,
+        sleep: goodSleep,
+        hrv: hrvWith(
+          z: 0,
+          status: HrvStatus.imBand,
+          flag: RecoveryFlag.gruen,
+        ),
+        tsb: 0,
+        trainingHistoryDays: 40,
+      );
+      // 27 von 45 möglichen Ruhepuls-Strafpunkten, gewichtet mit 25 %.
+      expect(withHrv.penaltyHrv, 0);
+      expect(withHrv.score, closeTo(85, 1e-9));
+
+      final withoutHrv = computeReadiness(
+        restingHr: rhr,
+        sleep: goodSleep,
+        tsb: 0,
+        trainingHistoryDays: 40,
+      );
+      expect(withoutHrv.usesHrv, isFalse);
+      expect(withoutHrv.score, closeTo(73, 1e-9));
+      expect(withoutHrv.confidence, Confidence.medium);
+    });
+
+    test('parasympathische Sättigung kostet den halben HRV-Strafterm', () {
+      final r = computeReadiness(
+        restingHr: goodRhr,
+        sleep: goodSleep,
+        hrv: hrvWith(
+          z: 1.4,
+          status: HrvStatus.saettigung,
+          flag: RecoveryFlag.orange,
+        ),
+        tsb: 0,
+        trainingHistoryDays: 40,
+      );
+      expect(r.penaltyHrv, 50);
+      expect(r.score, closeTo(80, 1e-9));
+    });
+
+    test('alle vier Signale am Anschlag ergeben 0', () {
+      const rhr = RestingHrAssessment(
+        available: true,
+        unavailableReason: null,
+        baseline: 50,
+        sigma: 1.5,
+        current: 70,
+        deltaBpm: 20,
+        z: 20,
+        flag: RecoveryFlag.rot,
+        baselineDays: 40,
+        streakDays: 5,
+        message: 'x',
+      );
+      const sleep = SleepAssessment(
+        available: true,
+        unavailableReason: null,
+        baselineH: 7,
+        sigmaH: 0.5,
+        lastNightH: 3,
+        deviationH: -4,
+        z: -8,
+        debt7dH: -20,
+        flag: RecoveryFlag.rot,
+        validNights: 28,
+        shortSleeper: false,
+        message: 'x',
+      );
+      final r = computeReadiness(
+        restingHr: rhr,
+        sleep: sleep,
+        hrv: hrvWith(
+          z: -10,
+          status: HrvStatus.niedrig,
+          flag: RecoveryFlag.rot,
+        ),
+        tsb: -200,
+        trainingHistoryDays: 40,
+      );
+      expect(r.penaltyHrv, 100);
+      expect(r.score, 0);
+      expect(r.band, ReadinessBand.ruhe);
+    });
+
+    test('HRV allein öffnet kein Gate: Ruhepuls fehlt weiterhin', () {
+      final r = computeReadiness(
+        restingHr: RestingHrAssessment.unavailable('x', 3),
+        sleep: goodSleep,
+        hrv: hrvWith(
+          z: 0,
+          status: HrvStatus.imBand,
+          flag: RecoveryFlag.gruen,
+        ),
+        trainingHistoryDays: 40,
+      );
+      expect(r.available, isFalse);
+      expect(r.unavailableReason, contains('Ruhepuls'));
+    });
+
+    test('nicht berechenbare HRV fällt auf die Formel ohne HRV zurück', () {
+      final r = computeReadiness(
+        restingHr: goodRhr,
+        sleep: goodSleep,
+        hrv: HrvAssessment.unavailable('Braucht noch 6 Tage HRV-Daten.', 8),
+        tsb: 0,
+        trainingHistoryDays: 40,
+      );
+      expect(r.usesHrv, isFalse);
+      expect(r.penaltyHrv, 0);
+      expect(r.score, closeTo(100, 1e-9));
+      expect(r.detail, contains('ohne HRV'));
+      expect(r.hrv.unavailableReason, contains('Braucht noch 6 Tage'));
+    });
+
     test('End-to-End über echte Serien: Kurzschläfer bleibt bei 100', () {
       final rhr = assessRestingHeartRate(daily(List<double>.filled(60, 50)));
       final sleep = assessSleep(daily(List<double>.filled(28, 5.8)));
@@ -1463,6 +1823,7 @@ void main() {
       required double score,
       RecoveryFlag rhrFlag = RecoveryFlag.gruen,
       RecoveryFlag sleepFlag = RecoveryFlag.gruen,
+      RecoveryFlag? hrvFlag,
       double? tsb,
     }) {
       final rhr = RestingHrAssessment(
@@ -1492,6 +1853,24 @@ void main() {
         shortSleeper: false,
         message: 'schlaf',
       );
+      final hrv = hrvFlag == null
+          ? const HrvAssessment.missing()
+          : HrvAssessment(
+              available: true,
+              unavailableReason: null,
+              baselineLn: math.log(50),
+              sigmaLn: 0.12,
+              currentLn: math.log(50),
+              lastRmssd: 50,
+              z: hrvFlag == RecoveryFlag.gruen ? 0.0 : -2.0,
+              status: hrvFlag == RecoveryFlag.gruen
+                  ? HrvStatus.imBand
+                  : HrvStatus.niedrig,
+              flag: hrvFlag,
+              historyDays: 28,
+              recentDays: 7,
+              message: 'hrv',
+            );
       return Readiness(
         available: true,
         unavailableReason: null,
@@ -1502,6 +1881,8 @@ void main() {
         penaltyLoad: 0,
         restingHr: rhr,
         sleep: sleep,
+        hrv: hrv,
+        usesHrv: hrvFlag != null,
         tsb: tsb,
         confidence: Confidence.medium,
         headline: '',
@@ -1564,6 +1945,145 @@ void main() {
         ),
       );
       expect(r.kind, DailyRecommendationKind.grundlage);
+    });
+
+    test('rote HRV → Ruhetag, auch bei gutem Score', () {
+      final r = recommendToday(
+        readiness: readinessWith(score: 90, hrvFlag: RecoveryFlag.rot),
+        tsb: 0,
+      );
+      expect(r.kind, DailyRecommendationKind.ruhetag);
+      expect(r.reasons.first, 'hrv');
+    });
+
+    test('orange HRV → locker Z2', () {
+      final r = recommendToday(
+        readiness: readinessWith(score: 85, hrvFlag: RecoveryFlag.orange),
+        tsb: 0,
+      );
+      expect(r.kind, DailyRecommendationKind.lockerZ2);
+    });
+
+    test('gelbe HRV vertagt die harte Einheit', () {
+      final r = recommendToday(
+        readiness: readinessWith(score: 85, hrvFlag: RecoveryFlag.gelb),
+        tsb: -10,
+      );
+      expect(r.kind, DailyRecommendationKind.grundlage);
+
+      final green = recommendToday(
+        readiness: readinessWith(score: 85, hrvFlag: RecoveryFlag.gruen),
+        tsb: -10,
+      );
+      expect(green.kind, DailyRecommendationKind.harteEinheit);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  group('Readiness-Reihe (rückwirkend)', () {
+    final today = DateTime(2026, 8, 8);
+    final fitness = computeFitnessSeries(
+      constantLoads(40, 60, end: today),
+      until: today,
+    );
+
+    test('liefert sieben aufsteigende Tage bis heute', () {
+      final series = computeReadinessSeries(
+        restingHrSeries: daily(List<double>.filled(60, 50), end: today),
+        sleepSeries: daily(List<double>.filled(40, 7), end: today),
+        fitness: fitness,
+        today: today,
+      );
+      expect(series.length, 7);
+      expect(series.first.day, DateTime(2026, 8, 2));
+      expect(series.last.day, today);
+      expect(series.every((p) => p.readiness.available), isTrue);
+      expect(availableReadinessScores(series).length, 7);
+      expect(series.last.readiness.score, closeTo(100, 1e-9));
+    });
+
+    test('jeder Tag sieht nur die bis dahin vorhandenen Daten', () {
+      // Ruhepuls und Schlaf kippen erst in den letzten Tagen.
+      final series = computeReadinessSeries(
+        restingHrSeries: daily(
+          [...List<double>.filled(56, 50), 62, 62, 62, 62],
+          end: today,
+        ),
+        sleepSeries: daily(
+          [...List<double>.filled(36, 7), 2.5, 2.5, 2.5, 2.5],
+          end: today,
+        ),
+        fitness: fitness,
+        today: today,
+      );
+      final scores = availableReadinessScores(series);
+      expect(scores.length, 7);
+      // Die frühen Tage der Woche sind unauffällig, die späten brechen ein.
+      expect(scores.first, closeTo(100, 1e-9));
+      expect(scores.where((s) => s < 40).length, greaterThanOrEqualTo(3));
+    });
+
+    test('schließt den Deload-Trigger „3 von 7 Tagen"', () {
+      final series = computeReadinessSeries(
+        restingHrSeries: daily(
+          [...List<double>.filled(56, 50), 62, 62, 62, 62],
+          end: today,
+        ),
+        sleepSeries: daily(
+          [...List<double>.filled(36, 7), 2.5, 2.5, 2.5, 2.5],
+          end: today,
+        ),
+        fitness: fitness,
+        today: today,
+      );
+      final deload = assessDeload(
+        fitness,
+        readinessLast7: availableReadinessScores(series),
+      );
+      expect(deload.recommended, isTrue);
+      expect(deload.triggers.single, contains('Erholung'));
+    });
+
+    test('HRV geht in die Reihe ein und senkt die Scores', () {
+      final restingHr = daily(List<double>.filled(60, 50), end: today);
+      final sleep = daily(List<double>.filled(40, 7), end: today);
+      final hrv = daily(
+        [...List<double>.filled(21, 50), ...List<double>.filled(7, 33)],
+        end: today,
+      );
+      final withHrv = computeReadinessSeries(
+        restingHrSeries: restingHr,
+        sleepSeries: sleep,
+        hrvSeries: hrv,
+        fitness: fitness,
+        today: today,
+      );
+      expect(withHrv.last.readiness.usesHrv, isTrue);
+      expect(withHrv.last.readiness.score, lessThan(100));
+
+      final withoutHrv = computeReadinessSeries(
+        restingHrSeries: restingHr,
+        sleepSeries: sleep,
+        fitness: fitness,
+        today: today,
+      );
+      expect(withoutHrv.last.readiness.usesHrv, isFalse);
+      expect(withoutHrv.last.readiness.score, closeTo(100, 1e-9));
+    });
+
+    test('ohne Daten entstehen Tage ohne Gesamtscore, nichts wirft', () {
+      final series = computeReadinessSeries(today: today);
+      expect(series.length, 7);
+      expect(series.every((p) => !p.readiness.available), isTrue);
+      expect(availableReadinessScores(series), isEmpty);
+      expect(assessDeload(
+        const FitnessSeries.empty(),
+        readinessLast7: availableReadinessScores(series),
+      ).recommended, isFalse);
+    });
+
+    test('days ≤ 0 liefert eine leere Reihe', () {
+      expect(computeReadinessSeries(today: today, days: 0), isEmpty);
     });
   });
 

@@ -101,6 +101,56 @@ const double alphaMax = 1.6;
 /// Default-Faktor der sRPE-Kalibrierung (§3.4).
 const double defaultRpeFactor = 1 / 6;
 
+/// HRV (rMSSD): Baselinefenster in Tagen und Breite des Normalbands als
+/// Vielfaches der Streuung von `ln(rMSSD)` (Plews & Laursen / HRV4Training).
+const int hrvBaselineDays = 28;
+const int hrvRollingDays = 7;
+const double hrvBandFactor = 0.75;
+
+/// Mindestzahl an HRV-Tagen im Baselinefenster für eine volle Wertung.
+const int hrvMinBaselineDays = 14;
+
+/// Mindestzahl an Messungen im 7-Tage-Rollfenster.
+const int hrvMinRecentDays = 3;
+
+/// Untergrenze der Streuung von `ln(rMSSD)`. Ohne sie würde eine zufällig sehr
+/// ruhige Woche jede Alltagsschwankung zum Ausreißer machen (≈ ±3,8 % Band).
+const double hrvMinSigmaLn = 0.05;
+
+/// Plausibilitätsfenster einzelner rMSSD-Tageswerte in ms.
+const double hrvMinMs = 5;
+const double hrvMaxMs = 300;
+
+/// Gewichte des Readiness-Scores, **sobald HRV vorliegt** (§5.3/§5.4).
+///
+/// Begründung der Reihenfolge: rMSSD misst den parasympathischen Zustand
+/// direkt und ist das Signal, das Garmin, Polar und Whoop am höchsten
+/// gewichten; der Ruhepuls beschreibt dieselbe Achse, reagiert aber träger und
+/// gröber; Schlaf ist ein *Einflussfaktor* auf Erholung, keine Messung davon;
+/// TSB ist ein Modellwert aus geschätzten Lasten und trägt entsprechend am
+/// wenigsten. Ohne HRV bleibt die alte Formel aus §5.4 unverändert bestehen.
+const double readinessWeightHrv = 0.40;
+const double readinessWeightRhr = 0.25;
+const double readinessWeightSleep = 0.20;
+const double readinessWeightLoad = 0.15;
+
+/// Obergrenzen der Einzel-Strafterme aus §5.4 — Normierungsanker, wenn die
+/// Strafterme gewichtet zusammengeführt werden.
+const double maxPenaltyRhr = 45;
+const double maxPenaltySleep = 45;
+const double maxPenaltyLoad = 30;
+
+/// Umrechnung Wochenstunden → Wochenlast (§6.3, Sicherheitsdeckel).
+///
+/// Hergeleitet aus der eigenen Lastnormierung (`load = Dauer_h × IF² × 100`,
+/// §3.3) und der pyramidalen Zielverteilung für Fahrer mit wenig Zeit
+/// (75 : 15 : 10, §6.3): LIT ≈ IF 0,70 → 49 Last/h, MIT ≈ IF 0,85 → 72 Last/h,
+/// HIT ≈ IF 1,00 → 100 Last/h. Gewichtet ergibt das
+/// `0,75 × 49 + 0,15 × 72 + 0,10 × 100 ≈ 58` Last pro tatsächlich gefahrener
+/// Stunde. Das Dokument nennt 75 Last/h — das ist das obere GA2-Mittel und
+/// damit die optimistische Obergrenze, keine realistische Wochenmischung.
+const double weeklyLoadPerHour = 58;
+
 /// Unsicherheitsband der VO2max-Schätzung (§7.3). Für die Uth-Formel nennt das
 /// Dokument ±15 %; für die Regression (Methode B) setzen wir ±10 % an — enger,
 /// weil individuell gemessene Submaximalpunkte eingehen, aber weiterhin als
@@ -284,6 +334,7 @@ class TrainingProfile {
     this.crr = defaultCrr,
     this.driveEfficiency = defaultDriveEfficiency,
     this.eftpOverrideW,
+    this.weeklyHours,
   });
 
   final int ageYears;
@@ -310,6 +361,10 @@ class TrainingProfile {
 
   /// Geschätzte FTP in Watt; ohne Angabe [defaultEftpWPerKg] × Gewicht.
   final double? eftpOverrideW;
+
+  /// Zeitbudget fürs Training in Stunden pro Woche; `null` = kein Budget
+  /// hinterlegt (dann deckelt nur die Lasthistorie, §6.3).
+  final double? weeklyHours;
 
   /// HFmax nach Tanaka: `208 − 0,7 × Alter` (§1.1). SEE ≈ ±10 bpm.
   double get tanakaHrMax => 208 - 0.7 * ageYears;
@@ -388,6 +443,7 @@ class TrainingProfile {
     double? crr,
     double? driveEfficiency,
     double? eftpOverrideW,
+    double? weeklyHours,
   }) =>
       TrainingProfile(
         ageYears: ageYears ?? this.ageYears,
@@ -401,6 +457,7 @@ class TrainingProfile {
         crr: crr ?? this.crr,
         driveEfficiency: driveEfficiency ?? this.driveEfficiency,
         eftpOverrideW: eftpOverrideW ?? this.eftpOverrideW,
+        weeklyHours: weeklyHours ?? this.weeklyHours,
       );
 
   Map<String, dynamic> toJson() => {
@@ -415,6 +472,7 @@ class TrainingProfile {
         'crr': crr,
         'driveEfficiency': driveEfficiency,
         if (eftpOverrideW != null) 'eftpOverrideW': eftpOverrideW,
+        if (weeklyHours != null) 'weeklyHours': weeklyHours,
       };
 
   factory TrainingProfile.fromJson(Map<String, dynamic> json) {
@@ -443,6 +501,8 @@ class TrainingProfile {
       crr: optional('crr') ?? defaultCrr,
       driveEfficiency: optional('driveEfficiency') ?? defaultDriveEfficiency,
       eftpOverrideW: optional('eftpOverrideW'),
+      // Fehlt in älteren Profilen — dann gilt „kein Zeitbudget hinterlegt".
+      weeklyHours: optional('weeklyHours'),
     );
   }
 }
@@ -1975,6 +2035,7 @@ class WeeklyLoadTarget {
     required this.dailyLoad,
     required this.weeklyLoad,
     required this.caps,
+    this.weeklyHours,
   });
 
   final double targetRamp;
@@ -1983,13 +2044,25 @@ class WeeklyLoadTarget {
 
   /// Welche Sicherheitsdeckel gegriffen haben (deutschsprachig).
   final List<String> caps;
+
+  /// Hinterlegtes Zeitbudget in Stunden pro Woche, falls vorhanden.
+  final double? weeklyHours;
+
+  /// Fahrzeit, die dieser Zielwert bei gemischter Woche ungefähr bedeutet
+  /// ([weeklyLoadPerHour]).
+  double get estimatedHours => weeklyLoad / weeklyLoadPerHour;
 }
 
+/// Empfohlene Wochenlast für eine Zielrampe (§6.3).
+///
+/// [weeklyHours] ist das Zeitbudget aus dem Profil: Mehr als
+/// `weeklyHours × weeklyLoadPerHour` ist in der Woche schlicht nicht fahrbar,
+/// deshalb deckelt es das Ziel zusätzlich zum 130-%-Deckel.
 WeeklyLoadTarget weeklyLoadTarget({
   required double ctl,
   required double targetRamp,
   double? recentWeeklyMean,
-  double? availableHours,
+  double? weeklyHours,
 }) {
   final daily = math.max(ctl + targetRamp / ctlWeeklyResponse, 0.0);
   var weekly = 7 * daily;
@@ -2002,11 +2075,14 @@ WeeklyLoadTarget weeklyLoadTarget({
       caps.add('Begrenzt auf 130 % deiner letzten vier Wochen.');
     }
   }
-  if (availableHours != null && availableHours > 0) {
-    final cap = availableHours * 75;
+  if (weeklyHours != null && weeklyHours > 0) {
+    final cap = weeklyHours * weeklyLoadPerHour;
     if (weekly > cap) {
       weekly = cap;
-      caps.add('Begrenzt auf deine verfügbare Zeit.');
+      caps.add(
+        'Begrenzt auf dein Zeitbudget von ${formatHours(weeklyHours)} h '
+        'pro Woche.',
+      );
     }
   }
 
@@ -2015,7 +2091,18 @@ WeeklyLoadTarget weeklyLoadTarget({
     dailyLoad: weekly / 7,
     weeklyLoad: weekly,
     caps: caps,
+    weeklyHours: weeklyHours,
   );
+}
+
+/// Stundenangabe im deutschen Format: ganze Zahlen ohne Nachkommastelle,
+/// sonst eine Stelle mit Komma („4,5").
+String formatHours(double hours) {
+  final rounded = (hours * 10).round() / 10;
+  if (rounded == rounded.roundToDouble()) {
+    return rounded.round().toString();
+  }
+  return rounded.toStringAsFixed(1).replaceAll('.', ',');
 }
 
 /// Ziel-Intensitätsverteilung LIT : MIT : HIT in Prozent (§6.3).
@@ -2234,6 +2321,277 @@ RestingHrAssessment assessRestingHeartRate(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Herzratenvariabilität (rMSSD)
+// ---------------------------------------------------------------------------
+
+/// Lage der HRV gegenüber dem persönlichen Normalband.
+enum HrvStatus {
+  unbekannt,
+
+  /// Unter dem Band — typisch für Belastung, Stress, Schlafmangel, Infekt.
+  niedrig,
+
+  /// Innerhalb des Bands.
+  imBand,
+
+  /// Über dem Band, Ruhepuls unauffällig — gutes Zeichen.
+  ueberBand,
+
+  /// Über dem Band **bei gleichzeitig erhöhtem Ruhepuls**: mögliche
+  /// parasympathische Sättigung, kein Freibrief für harte Reize.
+  saettigung,
+}
+
+const Map<HrvStatus, String> hrvStatusLabels = {
+  HrvStatus.unbekannt: 'keine Aussage',
+  HrvStatus.niedrig: 'unter deinem Normalband',
+  HrvStatus.imBand: 'im Normalband',
+  HrvStatus.ueberBand: 'über deinem Normalband',
+  HrvStatus.saettigung: 'über dem Band bei erhöhtem Ruhepuls',
+};
+
+/// Bewertung der nächtlichen HRV (rMSSD) gegen die persönliche Baseline.
+///
+/// Methodik nach Plews & Laursen bzw. HRV4Training: Einzelwerte sind
+/// rechtsschief verteilt, deshalb wird `ln(rMSSD)` verwendet; verglichen wird
+/// nicht der Tageswert, sondern das [hrvRollingDays]-Tage-Rollmittel gegen ein
+/// [hrvBaselineDays]-Tage-Mittel plus Normalband
+/// `Baseline ± hrvBandFactor × SD`.
+class HrvAssessment {
+  const HrvAssessment({
+    required this.available,
+    required this.unavailableReason,
+    required this.baselineLn,
+    required this.sigmaLn,
+    required this.currentLn,
+    required this.lastRmssd,
+    required this.z,
+    required this.status,
+    required this.flag,
+    required this.historyDays,
+    required this.recentDays,
+    required this.message,
+  });
+
+  /// Zustand „gar keine HRV übergeben" — Defaultwert von [computeReadiness].
+  const HrvAssessment.missing()
+      : available = false,
+        unavailableReason = 'Noch keine HRV-Werte vorhanden.',
+        baselineLn = null,
+        sigmaLn = null,
+        currentLn = null,
+        lastRmssd = null,
+        z = null,
+        status = HrvStatus.unbekannt,
+        flag = RecoveryFlag.unbekannt,
+        historyDays = 0,
+        recentDays = 0,
+        message = 'Noch keine HRV-Werte vorhanden.';
+
+  factory HrvAssessment.unavailable(String reason, int historyDays) =>
+      HrvAssessment(
+        available: false,
+        unavailableReason: reason,
+        baselineLn: null,
+        sigmaLn: null,
+        currentLn: null,
+        lastRmssd: null,
+        z: null,
+        status: HrvStatus.unbekannt,
+        flag: RecoveryFlag.unbekannt,
+        historyDays: historyDays,
+        recentDays: 0,
+        message: reason,
+      );
+
+  final bool available;
+  final String? unavailableReason;
+
+  /// Mittelwert von `ln(rMSSD)` über [hrvBaselineDays] Tage.
+  final double? baselineLn;
+
+  /// Streuung derselben Tage, mindestens [hrvMinSigmaLn].
+  final double? sigmaLn;
+
+  /// [hrvRollingDays]-Tage-Rollmittel von `ln(rMSSD)`.
+  final double? currentLn;
+
+  /// Jüngster Tageswert in ms — nur zur Anzeige, nie zur Bewertung.
+  final double? lastRmssd;
+
+  /// `(currentLn − baselineLn) / sigmaLn`; das Normalband endet bei
+  /// ±[hrvBandFactor].
+  final double? z;
+  final HrvStatus status;
+  final RecoveryFlag flag;
+
+  /// Gültige Tage im Baselinefenster (Gate: ≥ [hrvMinBaselineDays]).
+  final int historyDays;
+
+  /// Gültige Tage im Rollfenster (Gate: ≥ [hrvMinRecentDays]).
+  final int recentDays;
+  final String message;
+
+  /// Rollmittel in ms (geometrisches Mittel der letzten Tage).
+  double? get currentRmssd => currentLn == null ? null : math.exp(currentLn!);
+
+  /// Baseline in ms.
+  double? get baselineRmssd => baselineLn == null ? null : math.exp(baselineLn!);
+
+  /// Untere Bandgrenze in ms.
+  double? get bandLowRmssd => baselineLn == null
+      ? null
+      : math.exp(baselineLn! - hrvBandFactor * sigmaLn!);
+
+  /// Obere Bandgrenze in ms.
+  double? get bandHighRmssd => baselineLn == null
+      ? null
+      : math.exp(baselineLn! + hrvBandFactor * sigmaLn!);
+
+  /// Abweichung des Rollmittels von der Baseline in Prozent.
+  double? get deviationPercent => currentLn == null || baselineLn == null
+      ? null
+      : (math.exp(currentLn! - baselineLn!) - 1) * 100;
+}
+
+double _mean(Iterable<double> values) {
+  var sum = 0.0;
+  var n = 0;
+  for (final v in values) {
+    sum += v;
+    n++;
+  }
+  return n == 0 ? double.nan : sum / n;
+}
+
+/// Stichproben-Standardabweichung (n − 1), 0 bei weniger als zwei Werten.
+double _stdDev(List<double> values) {
+  if (values.length < 2) {
+    return 0;
+  }
+  final m = _mean(values);
+  var sum = 0.0;
+  for (final v in values) {
+    sum += (v - m) * (v - m);
+  }
+  return math.sqrt(sum / (values.length - 1));
+}
+
+/// Bewertet die HRV-Tagesserie (rMSSD in ms) gegen die eigene Baseline.
+///
+/// [restingHrFlag] wird nur für den Sättigungsfall gebraucht: Ein Wert **über**
+/// dem Band ist für sich genommen ein gutes Zeichen — zusammen mit einem
+/// erhöhten Ruhepuls ist er aber ein bekanntes Muster bei starker Ermüdung
+/// (parasympathische Sättigung) und wird dann als Warnzeichen geführt.
+HrvAssessment assessHrv(
+  List<DailyValue> series, {
+  DateTime? today,
+  RecoveryFlag restingHrFlag = RecoveryFlag.unbekannt,
+}) {
+  final values = _normalizeDaily(series, min: hrvMinMs, max: hrvMaxMs);
+  if (values.isEmpty) {
+    return HrvAssessment.unavailable('Noch keine HRV-Werte vorhanden.', 0);
+  }
+  final ref = _atMidnight(today ?? values.last.day);
+
+  final window = values.where((v) {
+    final diff = _dayDifference(ref, v.day);
+    return diff >= 0 && diff < hrvBaselineDays;
+  }).toList();
+
+  if (window.length < hrvMinBaselineDays) {
+    final missing = hrvMinBaselineDays - window.length;
+    return HrvAssessment.unavailable(
+      'Braucht noch $missing ${missing == 1 ? 'Tag' : 'Tage'} HRV-Daten '
+      '(${window.length} von $hrvMinBaselineDays).',
+      window.length,
+    );
+  }
+
+  final baselineLn = _mean(window.map((v) => math.log(v.value)));
+  final sigmaLn = math.max(
+    _stdDev(window.map((v) => math.log(v.value)).toList()),
+    hrvMinSigmaLn,
+  );
+
+  final recent = window
+      .where((v) => _dayDifference(ref, v.day) < hrvRollingDays)
+      .toList();
+  if (recent.length < hrvMinRecentDays) {
+    return HrvAssessment.unavailable(
+      'Zu wenige HRV-Messungen in den letzten sieben Tagen '
+      '(${recent.length} von $hrvMinRecentDays).',
+      window.length,
+    );
+  }
+
+  final currentLn = _mean(recent.map((v) => math.log(v.value)));
+  final z = (currentLn - baselineLn) / sigmaLn;
+
+  final HrvStatus status;
+  var flag = RecoveryFlag.gruen;
+  if (z <= -hrvBandFactor) {
+    status = HrvStatus.niedrig;
+    flag = RecoveryFlag.gelb;
+    if (z <= -1.5) {
+      flag = RecoveryFlag.orange;
+    }
+    if (z <= -2.5) {
+      flag = RecoveryFlag.rot;
+    }
+  } else if (z >= hrvBandFactor) {
+    if (_atLeast(restingHrFlag, RecoveryFlag.gelb)) {
+      status = HrvStatus.saettigung;
+      flag = RecoveryFlag.orange;
+    } else {
+      status = HrvStatus.ueberBand;
+    }
+  } else {
+    status = HrvStatus.imBand;
+  }
+
+  final current = math.exp(currentLn).round();
+  final low = math.exp(baselineLn - hrvBandFactor * sigmaLn).round();
+  final high = math.exp(baselineLn + hrvBandFactor * sigmaLn).round();
+
+  final message = switch (status) {
+    HrvStatus.niedrig => flag == RecoveryFlag.gelb
+        ? 'Deine HRV liegt mit $current ms knapp unter deinem Normalband '
+            '($low–$high ms). Das kann an Training, Schlaf, Stress, Alkohol '
+            'oder einem beginnenden Infekt liegen.'
+        : 'Deine HRV liegt mit $current ms deutlich unter deinem Normalband '
+            '($low–$high ms). Das kann an Training, Schlaf, Stress, Alkohol '
+            'oder einem Infekt liegen.',
+    HrvStatus.imBand =>
+      'Deine HRV liegt mit $current ms in deinem Normalband ($low–$high ms).',
+    HrvStatus.ueberBand =>
+      'Deine HRV liegt mit $current ms über deinem Normalband '
+          '($low–$high ms) — dein Nervensystem wirkt gut erholt.',
+    HrvStatus.saettigung =>
+      'Deine HRV liegt mit $current ms über deinem Normalband '
+          '($low–$high ms), gleichzeitig ist dein Ruhepuls erhöht. Diese '
+          'Kombination kommt auch bei starker Ermüdung vor — beobachte die '
+          'nächsten Tage, bevor du hart trainierst.',
+    HrvStatus.unbekannt => 'Keine Aussage möglich.',
+  };
+
+  return HrvAssessment(
+    available: true,
+    unavailableReason: null,
+    baselineLn: baselineLn,
+    sigmaLn: sigmaLn,
+    currentLn: currentLn,
+    lastRmssd: window.last.value,
+    z: z,
+    status: status,
+    flag: flag,
+    historyDays: window.length,
+    recentDays: recent.length,
+    message: message,
+  );
+}
+
 /// Bewertung der Schlafserie gegen die persönliche Baseline (§5.2).
 class SleepAssessment {
   const SleepAssessment({
@@ -2435,6 +2793,9 @@ class Readiness {
     required this.confidence,
     required this.headline,
     required this.detail,
+    this.hrv = const HrvAssessment.missing(),
+    this.penaltyHrv = 0,
+    this.usesHrv = false,
   });
 
   final bool available;
@@ -2443,29 +2804,44 @@ class Readiness {
   /// 0…100. Nur bei [available] aussagekräftig.
   final double score;
   final ReadinessBand band;
+
+  /// Strafterme nach §5.4 — unverändert die Rohwerte, auch wenn sie für den
+  /// Score gewichtet zusammengeführt werden.
   final double penaltyRhr;
   final double penaltySleep;
   final double penaltyLoad;
+
+  /// HRV-Strafterm auf der Skala 0…100 (nur gesetzt, wenn [usesHrv]).
+  final double penaltyHrv;
   final RestingHrAssessment restingHr;
   final SleepAssessment sleep;
+  final HrvAssessment hrv;
   final double? tsb;
+
+  /// Ob HRV in den Score eingeflossen ist (dann gilt die Gewichtung aus
+  /// [readinessWeightHrv] & Co., sonst die reine Summenformel aus §5.4).
+  final bool usesHrv;
   final Confidence confidence;
   final String headline;
   final String detail;
 }
 
-/// Berechnet den Readiness-Score aus Ruhepuls, Schlaf und Form (§5.4).
+/// Berechnet den Readiness-Score aus HRV, Ruhepuls, Schlaf und Form (§5.4).
 ///
 /// Der Score erscheint nur, wenn alle drei Confidence-Gates halten: ≥ 21
-/// Ruhepuls-Werte, ≥ 14 Schlafnächte, ≥ 28 Tage Trainingshistorie.
+/// Ruhepuls-Werte, ≥ 14 Schlafnächte, ≥ 28 Tage Trainingshistorie. HRV ist
+/// **optional**: liegt sie vor, wird sie zum stärksten Einzelsignal
+/// ([readinessWeightHrv]); fehlt sie, bleibt die Summenformel aus §5.4
+/// unverändert.
 Readiness computeReadiness({
   required RestingHrAssessment restingHr,
   required SleepAssessment sleep,
+  HrvAssessment hrv = const HrvAssessment.missing(),
   double? tsb,
   int trainingHistoryDays = 0,
 }) {
   final penaltyRhr = restingHr.available && restingHr.z != null
-      ? _clamp((restingHr.z! - 0.5) * 18, 0, 45)
+      ? _clamp((restingHr.z! - 0.5) * 18, 0, maxPenaltyRhr)
       : 0.0;
 
   var penaltySleep = 0.0;
@@ -2478,9 +2854,33 @@ Readiness computeReadiness({
     }
   }
 
-  final penaltyLoad = tsb != null ? _clamp((-tsb - 20) * 1.2, 0, 30) : 0.0;
+  final penaltyLoad =
+      tsb != null ? _clamp((-tsb - 20) * 1.2, 0, maxPenaltyLoad) : 0.0;
 
-  final score = _clamp(100 - penaltyRhr - penaltySleep - penaltyLoad, 0, 100);
+  // HRV-Strafterm auf der Skala 0…100: greift ab dem unteren Bandrand
+  // (z = −0,75) und ist bei z ≈ −2,75 voll ausgereizt. Die parasympathische
+  // Sättigung kostet die Hälfte — sie ist ein Warnzeichen, aber ein deutlich
+  // unsichereres als ein echter Einbruch.
+  final usesHrv = hrv.available && hrv.z != null;
+  var penaltyHrv = 0.0;
+  if (usesHrv) {
+    penaltyHrv = _clamp((-hrv.z! - hrvBandFactor) * 50, 0, 100);
+    if (hrv.status == HrvStatus.saettigung) {
+      penaltyHrv = math.max(penaltyHrv, 50);
+    }
+  }
+
+  final double score;
+  if (usesHrv) {
+    // Alle Strafterme auf 0…100 normieren und gewichtet zusammenführen.
+    final weighted = readinessWeightHrv * penaltyHrv +
+        readinessWeightRhr * (penaltyRhr / maxPenaltyRhr * 100) +
+        readinessWeightSleep * (penaltySleep / maxPenaltySleep * 100) +
+        readinessWeightLoad * (penaltyLoad / maxPenaltyLoad * 100);
+    score = _clamp(100 - weighted, 0, 100);
+  } else {
+    score = _clamp(100 - penaltyRhr - penaltySleep - penaltyLoad, 0, 100);
+  }
   final band = classifyReadiness(score);
 
   final missing = <String>[];
@@ -2506,20 +2906,120 @@ Readiness computeReadiness({
     penaltyRhr: penaltyRhr,
     penaltySleep: penaltySleep,
     penaltyLoad: penaltyLoad,
+    penaltyHrv: penaltyHrv,
     restingHr: restingHr,
     sleep: sleep,
+    hrv: hrv,
     tsb: tsb,
-    confidence: available ? Confidence.medium : Confidence.none,
+    usesHrv: usesHrv,
+    // Mit HRV steht ein direkt gemessenes Signal des vegetativen Zustands im
+    // Score — das trägt weiter als Ruhepuls und Schlaf allein.
+    confidence: available
+        ? (usesHrv ? Confidence.high : Confidence.medium)
+        : Confidence.none,
     headline: available
         ? 'Erholung: ${score.round()} — ${readinessBandLabels[band]}'
         : 'Erholung noch nicht berechenbar',
     detail: available
-        ? 'Basierend auf Ruhepuls, Schlaf und Trainingslast (ohne HRV) — '
-            'ein Trendindikator, keine Messung.'
+        ? (usesHrv
+            ? 'Basierend auf HRV, Ruhepuls, Schlaf und Trainingslast — '
+                'ein Trendindikator, keine Messung.'
+            : 'Basierend auf Ruhepuls, Schlaf und Trainingslast (ohne HRV) — '
+                'ein Trendindikator, keine Messung.')
         : 'Sobald genug Tage vorliegen, fassen wir Ruhepuls, Schlaf und '
             'Trainingslast zu einem Wert zusammen.',
   );
 }
+
+/// Ein Tag der rückwirkend berechneten Readiness-Reihe.
+class ReadinessPoint {
+  const ReadinessPoint({required this.day, required this.readiness});
+
+  final DateTime day;
+  final Readiness readiness;
+}
+
+List<DailyValue> _upTo(List<DailyValue> series, DateTime day) {
+  final ref = _atMidnight(day);
+  return series
+      .where((v) => !_atMidnight(v.day).isAfter(ref))
+      .toList(growable: false);
+}
+
+/// Berechnet die Readiness der letzten [days] Tage rückwirkend.
+///
+/// Für jeden Tag zählt nur, was **bis dahin** vorlag: Vitalserien werden auf
+/// den jeweiligen Stichtag beschnitten, TSB und Historienlänge kommen aus dem
+/// passenden Punkt der Fitness-Kurve. Damit lässt sich der Deload-Trigger
+/// „Readiness < 40 an ≥ 3 von 7 Tagen" (§6.2) ohne Persistenz auswerten.
+///
+/// Die Liste ist aufsteigend nach Datum und enthält auch Tage ohne
+/// Gesamtscore (dann `readiness.available == false`).
+List<ReadinessPoint> computeReadinessSeries({
+  List<DailyValue> restingHrSeries = const [],
+  List<DailyValue> sleepSeries = const [],
+  List<DailyValue> hrvSeries = const [],
+  FitnessSeries fitness = const FitnessSeries.empty(),
+  DateTime? today,
+  int days = 7,
+}) {
+  if (days <= 0) {
+    return const [];
+  }
+  final ref = _atMidnight(today ?? DateTime.now());
+  final points = <ReadinessPoint>[];
+
+  for (var offset = days - 1; offset >= 0; offset--) {
+    final day = _addDays(ref, -offset);
+
+    // Stand der Fitness-Kurve an diesem Tag (letzter Punkt bis einschließlich
+    // Stichtag) plus die bis dahin abgedeckten Historientage.
+    FitnessPoint? point;
+    var historyDays = 0;
+    for (final p in fitness.points) {
+      if (p.day.isAfter(day)) {
+        break;
+      }
+      point = p;
+      historyDays++;
+    }
+
+    final restingHr = assessRestingHeartRate(
+      _upTo(restingHrSeries, day),
+      today: day,
+    );
+    final hrv = assessHrv(
+      _upTo(hrvSeries, day),
+      today: day,
+      restingHrFlag: restingHr.flag,
+    );
+    final sleep = assessSleep(
+      _upTo(sleepSeries, day),
+      today: day,
+      restingHrFlag: restingHr.flag,
+    );
+
+    points.add(ReadinessPoint(
+      day: day,
+      readiness: computeReadiness(
+        restingHr: restingHr,
+        sleep: sleep,
+        hrv: hrv,
+        tsb: point?.tsb,
+        trainingHistoryDays: historyDays,
+      ),
+    ));
+  }
+
+  return points;
+}
+
+/// Die Scores der Tage, an denen ein Gesamtwert berechenbar war — genau das,
+/// was [assessDeload] als `readinessLast7` erwartet.
+List<double> availableReadinessScores(Iterable<ReadinessPoint> points) => [
+      for (final p in points)
+        if (p.readiness.available) p.readiness.score,
+    ];
 
 // ---------------------------------------------------------------------------
 // 6. Empfehlungen (§6.2/§6.3)
@@ -2559,7 +3059,13 @@ DailyRecommendation recommendToday({
 }) {
   final rhr = readiness.restingHr.flag;
   final sleep = readiness.sleep.flag;
+  final hrv = readiness.hrv.available
+      ? readiness.hrv.flag
+      : RecoveryFlag.unbekannt;
   final reasons = <String>[];
+  if (readiness.hrv.available) {
+    reasons.add(readiness.hrv.message);
+  }
   if (readiness.restingHr.available) {
     reasons.add(readiness.restingHr.message);
   }
@@ -2573,7 +3079,12 @@ DailyRecommendation recommendToday({
   // Ohne Gesamtscore steuern nur die vorhandenen Einzelsignale.
   final score = readiness.available ? readiness.score : null;
 
-  if ((score != null && score < 40) || rhr == RecoveryFlag.rot) {
+  // Die Ampeln greifen zusätzlich zum Score: Ein einzelnes, klar auffälliges
+  // Signal soll auch dann durchschlagen, wenn die Gewichtung es im
+  // Gesamtwert abfedert.
+  if ((score != null && score < 40) ||
+      rhr == RecoveryFlag.rot ||
+      hrv == RecoveryFlag.rot) {
     return DailyRecommendation(
       kind: DailyRecommendationKind.ruhetag,
       title: 'Heute besser Ruhetag',
@@ -2581,7 +3092,9 @@ DailyRecommendation recommendToday({
       reasons: reasons,
     );
   }
-  if ((score != null && score < 60) || sleep == RecoveryFlag.orange) {
+  if ((score != null && score < 60) ||
+      sleep == RecoveryFlag.orange ||
+      hrv == RecoveryFlag.orange) {
     return DailyRecommendation(
       kind: DailyRecommendationKind.lockerZ2,
       title: 'Locker in Z2, 60–90 min',
@@ -2602,7 +3115,9 @@ DailyRecommendation recommendToday({
       score >= 80 &&
       tsb != null &&
       tsb > -20 &&
-      hitBudgetLeft) {
+      hitBudgetLeft &&
+      // Eine HRV unter dem Normalband reicht, um den harten Reiz zu vertagen.
+      !_atLeast(hrv, RecoveryFlag.gelb)) {
     return DailyRecommendation(
       kind: DailyRecommendationKind.harteEinheit,
       title: 'Harte Einheit möglich (Z4/Z5)',
