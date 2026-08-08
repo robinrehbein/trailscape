@@ -117,8 +117,25 @@ dependencies {
     // ist gegen compileSdk 36 / AGP 9.0.1 konfliktfrei aufloesbar.
     implementation("androidx.health.connect:connect-client:1.1.0")
 
-    // Fused Location Provider fuer den kommenden Recording-Service.
+    // Fused Location Provider fuer den Aufzeichnungs-Service (record/).
     implementation("com.google.android.gms:play-services-location:21.4.0")
+    // play-services-location zieht transitiv androidx.fragment 1.1.0 herein;
+    // ohne diese Anhebung schlaegt lintVitalRelease an (InvalidFragmentVersionForActivityResult).
+    implementation("androidx.fragment:fragment:1.8.6")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Nur Test-Klassenpfad, kein Bestandteil des APK. `:app` hat bewusst KEIN
+    // Robolectric: getestet werden hier ausschliesslich Klassen ohne
+    // Android-Imports — derzeit `record/RecordingJournal.kt`, das
+    // Absturzsicherungs-Journal der Aufzeichnung. Version identisch zum
+    // Kotlin-Plugin im Root-Build, damit kein zweiter Kotlin-Stack entsteht.
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.3.20")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+}
+
+// Gleiche Test-Engine wie in `:core` (siehe core/build.gradle.kts).
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }

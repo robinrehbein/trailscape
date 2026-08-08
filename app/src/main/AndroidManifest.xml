@@ -83,12 +83,17 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Platzhalter fuer den kommenden Aufzeichnungs-Service (GPS-Tracking
-             im Vordergrund); wird vom Recording-Service-Strang ausgebaut. -->
+        <!-- Aufzeichnungs-Service (GPS-Tracking im Vordergrund). Gestarteter
+             Service, kein gebundener: Die Aufzeichnung ueberlebt damit sowohl
+             das Schliessen der Activity als auch das Wegwischen der App aus
+             den Recents. `stopWithTask="false"` ist zwar der Standardwert,
+             steht hier aber ausdruecklich, weil genau davon abhaengt, ob eine
+             laufende Tour beim Aufraeumen der Recents abbricht. -->
         <service
             android:name=".record.RecordingService"
             android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location"
+            android:stopWithTask="false" />
     </application>
 
     <queries>

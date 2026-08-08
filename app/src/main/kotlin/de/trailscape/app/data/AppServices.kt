@@ -1,6 +1,9 @@
 package de.trailscape.app.data
 
 import android.content.Context
+import de.trailscape.app.health.HealthConnectGateway
+import de.trailscape.core.HealthGateway
+import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HealthSyncStore
 import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
@@ -26,11 +29,8 @@ import kotlinx.coroutines.SupervisorJob
  * Verwendung durch ViewModels (Phase 4): `AppServices.rideStorage`,
  * `AppServices.httpClient`, `AppServices.keyValueStore`,
  * `AppServices.healthSyncStore`, `AppServices.trainingPlanStore`,
- * `AppServices.appScope`. Ein `HealthGateway` (`:core`-Interface, siehe
- * `HealthSyncLogic.kt`) ist hier bewusst NICHT verdrahtet — das ist Aufgabe
- * des Health-Connect-Gateway-Strangs, der eine konkrete Implementierung
- * gegen `androidx.health.connect:connect-client` beisteuert und dann hier
- * ergaenzt.
+ * `AppServices.healthGateway`, `AppServices.healthSyncService`,
+ * `AppServices.appScope`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -74,4 +74,35 @@ object AppServices {
 
     /** Implementierung von `:core`s [HttpClient] (BRouter-Routing, Geocoding, Selfhost-Sync). */
     val httpClient: HttpClient by lazy { OkHttpClientAdapter() }
+
+    /**
+     * Implementierung von `:core`s [HealthGateway] gegen
+     * `androidx.health.connect:connect-client` (siehe
+     * [de.trailscape.app.health.HealthConnectGateway]).
+     *
+     * Alle Methoden blockieren den aufrufenden Thread — Zugriffe gehoeren auf
+     * [appScope] bzw. einen anderen `Dispatchers.IO`-Kontext, nie auf den
+     * Main-Thread.
+     */
+    val healthGateway: HealthGateway by lazy { HealthConnectGateway(appContext) }
+
+    /**
+     * Der Import-/Vitaldaten-Dienst aus `:core`.
+     *
+     * Bekommt bewusst nur [healthGateway] und [healthSyncStore]: Die Touren
+     * gibt der Aufrufer bei jedem Lauf selbst herein
+     * (`importWithReport(existing = ...)`) und speichert das Ergebnis auch
+     * selbst — `HealthSyncService` kennt weder [RideStorage] noch das
+     * Dateisystem. Der uebliche Ablauf in Phase 4 ist deshalb:
+     * `rideStorage.listRides()` → `healthSyncService.importWithReport(...)` →
+     * die Touren aus `imported` und `mergedRides` ueber [rideStorage]
+     * zurueckschreiben.
+     *
+     * Der dritte Konstruktorparameter (`now`) bleibt auf seiner Vorgabe
+     * `LocalDateTime.now()`; er existiert nur, damit die `:core`-Tests die Uhr
+     * festhalten koennen.
+     */
+    val healthSyncService: HealthSyncService by lazy {
+        HealthSyncService(gateway = healthGateway, store = healthSyncStore)
+    }
 }
