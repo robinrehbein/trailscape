@@ -56,7 +56,7 @@ class _HomeShellState extends State<HomeShell>
   @override
   void initState() {
     super.initState();
-    _state.loadRides();
+    _bootstrap();
     _tabFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -73,6 +73,15 @@ class _HomeShellState extends State<HomeShell>
     _state.dispose();
     _tabFadeController.dispose();
     super.dispose();
+  }
+
+  /// Lädt die gespeicherten Touren und stößt danach einmalig den stillen
+  /// Health-Connect-Hintergrund-Sync an (siehe [AppState.autoSyncHealth]).
+  /// Blockiert den App-Start nicht: `initState` wartet nicht auf diese
+  /// Future, die UI baut sich sofort mit den (noch leeren) Touren auf.
+  Future<void> _bootstrap() async {
+    await _state.loadRides();
+    await _state.autoSyncHealth();
   }
 
   void _showMap() {
@@ -102,7 +111,7 @@ class _HomeShellState extends State<HomeShell>
             MapScreen(state: _state),
             RidesScreen(state: _state, onShowMap: _showMap),
             TrainingScreen(state: _state),
-            const MoreScreen(),
+            MoreScreen(state: _state),
           ],
         ),
       ),

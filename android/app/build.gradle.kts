@@ -16,7 +16,10 @@ android {
 
     defaultConfig {
         applicationId = "io.github.robinrehbein.trailscape"
-        minSdk = flutter.minSdkVersion
+        // Das health-Plugin (Google Health Connect) setzt minSdkVersion 26
+        // voraus; ohne diese Anhebung schlaegt der Manifest-Merge fehl.
+        // Ansonsten wuerde weiterhin flutter.minSdkVersion (24) gelten.
+        minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion
         // In CI pro Build hochzählen, damit Android neue APKs als Update erkennt.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: flutter.versionCode

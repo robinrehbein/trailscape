@@ -235,6 +235,16 @@ class _RidesScreenState extends State<RidesScreen> {
                         '${formatKm(ride.stats.distanceKm)} km · '
                         '${formatDuration(ride.stats.durationS)}',
                       ),
+                      trailing: ride.id.startsWith('hc-')
+                          ? Tooltip(
+                              message: 'Aus Samsung Health importiert',
+                              child: Icon(
+                                Icons.watch,
+                                size: 20,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            )
+                          : null,
                       onTap: () {
                         widget.state.select(ride);
                         widget.onShowMap();

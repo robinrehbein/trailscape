@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../fitness.dart';
+import '../health_sync.dart';
 import '../models.dart';
 import '../stats.dart';
 import '../state.dart';
 import '../training.dart';
+import 'map_screen.dart' show kGreen;
 
 /// Sanftes Einblenden (Fade + Slide-up) für Karten beim ersten Aufbau.
 ///
@@ -389,6 +391,136 @@ class _TrainingScreenState extends State<TrainingScreen> {
     );
   }
 
+  /// Kennzahl mit Count-up-Animation und optionalem Trendpfeil.
+  ///
+  /// [improvementIsNegative] steuert, welche Richtung als Verbesserung gilt
+  /// (z. B. sinkender Ruhepuls = gut, steigender Schlaf = gut).
+  Widget _vitalMetric({
+    required double value,
+    required String label,
+    required double? delta,
+    required bool improvementIsNegative,
+    required String Function(double) format,
+  }) {
+    Color? trendColor;
+    IconData? trendIcon;
+    if (delta != null && delta != 0) {
+      final improved = improvementIsNegative ? delta < 0 : delta > 0;
+      trendColor = improved ? kGreen : Colors.orange.shade800;
+      trendIcon = delta > 0 ? Icons.arrow_upward : Icons.arrow_downward;
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: value),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, animatedValue, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RichText(
+              text: TextSpan(
+                style: DefaultTextStyle.of(context).style,
+                children: [
+                  TextSpan(
+                    text: format(animatedValue),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(text: ' $label'),
+                ],
+              ),
+            ),
+            if (trendIcon != null) ...[
+              const SizedBox(width: 4),
+              Icon(trendIcon, size: 16, color: trendColor),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildVitalsCard(BuildContext context, VitalsSummary vitals) {
+    final theme = Theme.of(context);
+    final hr = vitals.restingHeartRate;
+    final sleep = vitals.sleepHours;
+
+    int? currentTargetKm;
+    final plan = _plan;
+    if (plan != null) {
+      final activeIndex = currentWeekIndex(plan);
+      if (activeIndex >= 0 && activeIndex < plan.weeks.length) {
+        currentTargetKm = plan.weeks[activeIndex].targetKm;
+      }
+    }
+    final advice = buildRecoveryAdvice(vitals, currentTargetKm: currentTargetKm);
+    final adviceColor = advice.reduceIntensity ? Colors.orange.shade800 : kGreen;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Vitalwerte', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 24,
+              runSpacing: 8,
+              children: [
+                if (hr.hasData && hr.latest != null)
+                  _vitalMetric(
+                    value: hr.latest!,
+                    label:
+                        'Ruhepuls (bpm)${hr.lastWeekAvg != null ? ' · ø ${hr.lastWeekAvg!.toStringAsFixed(0)}' : ''}',
+                    delta: hr.hasTrend ? hr.delta : null,
+                    improvementIsNegative: true,
+                    format: (v) => v.round().toString(),
+                  ),
+                if (sleep.hasData && sleep.lastWeekAvg != null)
+                  _vitalMetric(
+                    value: sleep.lastWeekAvg!,
+                    label: 'h Schlaf/Nacht (ø 7 Tage)',
+                    delta: sleep.hasTrend ? sleep.delta : null,
+                    improvementIsNegative: false,
+                    format: (v) => v.toStringAsFixed(1),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: adviceColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    advice.reduceIntensity
+                        ? Icons.battery_alert
+                        : Icons.check_circle_outline,
+                    color: adviceColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      advice.adjustedTargetKm != null
+                          ? '${advice.message} Angepasstes Wochenziel: '
+                              '${advice.adjustedTargetKm} km.'
+                          : advice.message,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   List<Widget> _buildPlanWeeks(BuildContext context, TrainingPlan plan) {
     final theme = Theme.of(context);
     final activeIndex = currentWeekIndex(plan);
@@ -541,6 +673,14 @@ class _TrainingScreenState extends State<TrainingScreen> {
                   ),
                   const SizedBox(height: 16),
                   _EntranceFade(index: 1, child: _buildGoalCard(context)),
+                  if (widget.state.vitals != null &&
+                      !widget.state.vitals!.isEmpty) ...[
+                    const SizedBox(height: 16),
+                    _EntranceFade(
+                      index: 2,
+                      child: _buildVitalsCard(context, widget.state.vitals!),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   if (_loadingPlan)
                     const Padding(

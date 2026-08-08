@@ -5,7 +5,13 @@
 library;
 
 class TrackPoint {
-  const TrackPoint({required this.lat, required this.lon, this.ele, this.time});
+  const TrackPoint({
+    required this.lat,
+    required this.lon,
+    this.ele,
+    this.time,
+    this.hr,
+  });
 
   final double lat;
   final double lon;
@@ -16,11 +22,18 @@ class TrackPoint {
   /// Zeitstempel in ms seit Epoch.
   final int? time;
 
+  /// Herzfrequenz in Schlägen pro Minute, falls bekannt (z. B. aus einer
+  /// über Health Connect importierten Watch-Aufzeichnung). Optional und wird
+  /// nur serialisiert, wenn gesetzt — bestehende Tour-Dateien und der
+  /// Sync-Server bleiben damit unverändert kompatibel.
+  final int? hr;
+
   Map<String, dynamic> toJson() => {
         'lat': lat,
         'lon': lon,
         if (ele != null) 'ele': ele,
         if (time != null) 'time': time,
+        if (hr != null) 'hr': hr,
       };
 
   factory TrackPoint.fromJson(Map<String, dynamic> json) => TrackPoint(
@@ -28,6 +41,7 @@ class TrackPoint {
         lon: (json['lon'] as num).toDouble(),
         ele: (json['ele'] as num?)?.toDouble(),
         time: (json['time'] as num?)?.toInt(),
+        hr: (json['hr'] as num?)?.toInt(),
       );
 }
 
@@ -39,6 +53,8 @@ class RideStats {
     this.avgSpeedKmh,
     required this.ascentM,
     required this.descentM,
+    this.avgHrBpm,
+    this.maxHrBpm,
   });
 
   final double distanceKm;
@@ -48,6 +64,12 @@ class RideStats {
   final double ascentM;
   final double descentM;
 
+  /// Durchschnittliche Herzfrequenz in bpm, falls bekannt.
+  final int? avgHrBpm;
+
+  /// Maximale Herzfrequenz in bpm, falls bekannt.
+  final int? maxHrBpm;
+
   Map<String, dynamic> toJson() => {
         'distanceKm': distanceKm,
         'durationS': durationS,
@@ -55,6 +77,10 @@ class RideStats {
         'avgSpeedKmh': avgSpeedKmh,
         'ascentM': ascentM,
         'descentM': descentM,
+        // Nur schreiben, wenn vorhanden: so bleibt das JSON für Touren ohne
+        // Herzfrequenz identisch zum bisherigen Format (Sync-Server, Web-App).
+        if (avgHrBpm != null) 'avgHrBpm': avgHrBpm,
+        if (maxHrBpm != null) 'maxHrBpm': maxHrBpm,
       };
 
   factory RideStats.fromJson(Map<String, dynamic> json) => RideStats(
@@ -64,6 +90,8 @@ class RideStats {
         avgSpeedKmh: (json['avgSpeedKmh'] as num?)?.toDouble(),
         ascentM: (json['ascentM'] as num?)?.toDouble() ?? 0,
         descentM: (json['descentM'] as num?)?.toDouble() ?? 0,
+        avgHrBpm: (json['avgHrBpm'] as num?)?.toInt(),
+        maxHrBpm: (json['maxHrBpm'] as num?)?.toInt(),
       );
 }
 

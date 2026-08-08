@@ -1,11 +1,16 @@
-/// "Mehr"-Tab: Offline-Karten-Verwaltung, Selfhost-Sync und Info.
+/// "Mehr"-Tab: Offline-Karten-Verwaltung, Selfhost-Sync, Health Connect und
+/// Info.
 library;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../health_sync.dart';
+import '../state.dart';
 import '../storage.dart';
 import '../sync_client.dart';
 import '../tile_cache.dart';
+import 'map_screen.dart' show kGreen;
 
 /// Sanftes Einblenden (Fade + Slide-up) für Karten beim ersten Aufbau.
 ///
@@ -50,7 +55,9 @@ class _EntranceFadeState extends State<_EntranceFade> {
 }
 
 class MoreScreen extends StatefulWidget {
-  const MoreScreen({super.key});
+  const MoreScreen({super.key, required this.state});
+
+  final AppState state;
 
   @override
   State<MoreScreen> createState() => _MoreScreenState();
@@ -64,11 +71,16 @@ class _MoreScreenState extends State<MoreScreen> {
   String? _syncStatus;
   bool _syncing = false;
 
+  HealthConnection? _healthConnection;
+  DateTime? _healthLastSyncAt;
+  bool _healthBusy = false;
+
   @override
   void initState() {
     super.initState();
     _tileCountFuture = TileCache.cachedTileCount();
     _loadSyncConfig();
+    _loadHealthStatus();
   }
 
   @override
@@ -150,6 +162,163 @@ class _MoreScreenState extends State<MoreScreen> {
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
+  }
+
+  Future<void> _loadHealthStatus() async {
+    final connection = await widget.state.healthSync.checkAvailability();
+    final lastSync = await widget.state.healthSync.lastImportAt();
+    if (!mounted) return;
+    setState(() {
+      _healthConnection = connection;
+      _healthLastSyncAt = lastSync;
+    });
+  }
+
+  Future<void> _connectHealth() async {
+    setState(() => _healthBusy = true);
+    try {
+      await widget.state.healthSync.requestPermissions();
+    } finally {
+      if (mounted) setState(() => _healthBusy = false);
+    }
+    await _loadHealthStatus();
+  }
+
+  Future<void> _installHealthConnect() async {
+    final gateway = widget.state.healthSync.gateway;
+    if (gateway is! HealthPluginGateway) {
+      return;
+    }
+    setState(() => _healthBusy = true);
+    try {
+      await gateway.installHealthConnect();
+    } finally {
+      if (mounted) setState(() => _healthBusy = false);
+    }
+    await _loadHealthStatus();
+  }
+
+  Future<void> _syncHealth({required bool reimportAll}) async {
+    setState(() => _healthBusy = true);
+    try {
+      final count = await widget.state.syncHealthNow(reimportAll: reimportAll);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            count > 0
+                ? '$count ${count == 1 ? 'Tour' : 'Touren'} importiert'
+                : 'Keine neuen Touren',
+          ),
+        ),
+      );
+    } on HealthSyncException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _healthBusy = false);
+    }
+    await _loadHealthStatus();
+  }
+
+  Widget _buildHealthCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final connection = _healthConnection;
+    final dateFormat = DateFormat('dd.MM.yyyy, HH:mm', 'de_DE');
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Samsung Health', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            if (connection == null)
+              const Text('Prüfe Verbindung …')
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    connection.isReady
+                        ? Icons.check_circle
+                        : Icons.info_outline,
+                    size: 20,
+                    color: connection.isReady
+                        ? kGreen
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(connection.message)),
+                ],
+              ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                if (connection?.availability ==
+                    HealthAvailability.nichtInstalliert)
+                  FilledButton(
+                    onPressed: _healthBusy ? null : _installHealthConnect,
+                    child: const Text('Health Connect installieren'),
+                  )
+                else if (connection?.needsPermissions ?? false)
+                  FilledButton(
+                    onPressed: _healthBusy ? null : _connectHealth,
+                    child: const Text('Verbinden'),
+                  )
+                else if (connection?.isReady ?? false) ...[
+                  FilledButton(
+                    onPressed: _healthBusy
+                        ? null
+                        : () => _syncHealth(reimportAll: false),
+                    child: _healthBusy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Jetzt synchronisieren'),
+                  ),
+                  OutlinedButton(
+                    onPressed: _healthBusy
+                        ? null
+                        : () => _syncHealth(reimportAll: true),
+                    child: const Text('Alles neu importieren'),
+                  ),
+                ],
+              ],
+            ),
+            if (_healthLastSyncAt != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Letzter Sync: ${dateFormat.format(_healthLastSyncAt!)}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'Damit auch die aufgezeichnete Route mit importiert wird, '
+              'erlaube in Health Connect unter „App-Berechtigungen → '
+              'Trailscape → Trainingsrouten" den dauerhaften Zugriff. Ohne '
+              'diese Freigabe werden Distanz, Dauer und Herzfrequenz trotzdem '
+              'übernommen.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -270,8 +439,10 @@ class _MoreScreenState extends State<MoreScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              _EntranceFade(index: 2, child: _buildHealthCard(context)),
+              const SizedBox(height: 16),
               _EntranceFade(
-                index: 2,
+                index: 3,
                 child: Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
