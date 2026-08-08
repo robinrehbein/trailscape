@@ -11,6 +11,16 @@ import '../gpx.dart';
 import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
+import '../training_load.dart';
+
+/// Kurzes Quellen-Label der Trainingslast für die Tourenliste.
+const Map<LoadSource, String> rideLoadSourceShortLabels = {
+  LoadSource.herzfrequenz: 'Puls',
+  LoadSource.physik: 'Leistung',
+  LoadSource.rpe: 'Empfinden',
+  LoadSource.heuristik: 'geschätzt',
+  LoadSource.keine: '',
+};
 
 /// Sanftes Einblenden (Fade + Slide-up) für neu aufgebaute Listeneinträge.
 ///
@@ -202,6 +212,11 @@ class _RidesScreenState extends State<RidesScreen> {
             itemBuilder: (context, index) {
               final ride = rides[index];
               final selected = widget.state.selected?.id == ride.id;
+              final load = widget.state.rideLoad(ride.id);
+              final loadText = load != null && load.available
+                  ? 'Last ${load.load.round()} · '
+                      '${rideLoadSourceShortLabels[load.source]!}'
+                  : null;
 
               return _EntranceFade(
                 index: index,
@@ -230,10 +245,23 @@ class _RidesScreenState extends State<RidesScreen> {
                     child: ListTile(
                       selected: selected,
                       title: Text(ride.name),
-                      subtitle: Text(
-                        '${dateFormat.format(DateTime.fromMillisecondsSinceEpoch(ride.createdAt))} · '
-                        '${formatKm(ride.stats.distanceKm)} km · '
-                        '${formatDuration(ride.stats.durationS)}',
+                      isThreeLine: loadText != null,
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${dateFormat.format(DateTime.fromMillisecondsSinceEpoch(ride.createdAt))} · '
+                            '${formatKm(ride.stats.distanceKm)} km · '
+                            '${formatDuration(ride.stats.durationS)}',
+                          ),
+                          if (loadText != null)
+                            Text(
+                              loadText,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colorScheme.primary),
+                            ),
+                        ],
                       ),
                       trailing: ride.id.startsWith('hc-')
                           ? Tooltip(

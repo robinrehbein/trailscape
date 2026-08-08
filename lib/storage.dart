@@ -82,6 +82,11 @@ Future<Ride?> getRide(String id) async {
 /// geschrieben, die anschließend auf den endgültigen Dateinamen umbenannt
 /// wird. Dadurch bleibt bei einem Absturz während des Schreibens niemals
 /// eine halb geschriebene Tour-Datei zurück.
+///
+/// Der Dateiname ergibt sich allein aus [Ride.id] — die Funktion ist damit
+/// zugleich das Update: eine bereits gespeicherte Tour mit derselben ID wird
+/// vollständig ersetzt (z. B. wenn der Health-Import sie nachträglich um
+/// Herzfrequenzdaten anreichert).
 Future<void> saveRide(Ride ride) async {
   final dir = await _ridesDir();
   final file = _rideFile(dir, ride.id);
@@ -90,6 +95,14 @@ Future<void> saveRide(Ride ride) async {
   final json = jsonEncode(ride.toJson());
   await tmpFile.writeAsString(json, flush: true);
   await tmpFile.rename(file.path);
+}
+
+/// Speichert bzw. aktualisiert mehrere Touren nacheinander (siehe [saveRide]).
+/// Bestehende Touren mit gleicher ID werden dabei überschrieben.
+Future<void> saveRides(Iterable<Ride> rides) async {
+  for (final ride in rides) {
+    await saveRide(ride);
+  }
 }
 
 /// Löscht eine Tour. Existiert sie nicht, passiert nichts.

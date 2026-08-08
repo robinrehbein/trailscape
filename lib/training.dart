@@ -11,7 +11,6 @@ import 'dart:math' as math;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'health_sync.dart';
 import 'models.dart';
 
 const String _storageKey = 'trailscape.plan';
@@ -409,95 +408,4 @@ double weekKm(TrainingWeek week, List<Ride> rides) {
     }
   }
   return _round1(total);
-}
-
-// ---------------------------------------------------------------------------
-// Erholungs-Empfehlung anhand der Vitaldaten (Zusatzschicht auf dem Plan)
-// ---------------------------------------------------------------------------
-
-/// Ab welcher relativen Ruhepuls-Erhöhung gegenüber der Vorwoche eine
-/// Erholungswoche empfohlen wird.
-const double recoveryHeartRateThresholdPercent = 5.0;
-
-/// Unterhalb welcher durchschnittlichen Schlafdauer (Stunden/Nacht der
-/// letzten 7 Tage) eine Erholungswoche empfohlen wird.
-const double recoverySleepThresholdHours = 6.0;
-
-/// Faktor, um den das Wochenziel bei einer Erholungsempfehlung reduziert
-/// wird.
-const double recoveryTargetFactor = 0.7;
-
-/// Empfehlung zur kurzfristigen Trainingsanpassung anhand der zuletzt
-/// gelesenen Vitaldaten. Ergänzt den generierten Plan, ersetzt ihn aber
-/// nicht: [generatePlan] und die bestehenden Wochenziele bleiben unverändert.
-class RecoveryAdvice {
-  const RecoveryAdvice({
-    required this.reduceIntensity,
-    required this.message,
-    this.adjustedTargetKm,
-  });
-
-  /// Ob eine Erholungswoche empfohlen wird.
-  final bool reduceIntensity;
-
-  /// Für die UI geeigneter deutscher Hinweistext.
-  final String message;
-
-  /// Auf [recoveryTargetFactor] reduziertes Wochenziel, gerundet auf 5 km
-  /// (mindestens 5 km). `null`, wenn kein aktuelles Wochenziel übergeben
-  /// wurde oder keine Reduktion empfohlen wird.
-  final int? adjustedTargetKm;
-}
-
-/// Leitet aus [vitals] eine Trainingsempfehlung ab.
-///
-/// Eine Erholungswoche wird empfohlen, wenn
-///
-///  * der Ruhepuls-7-Tage-Schnitt mindestens [recoveryHeartRateThresholdPercent]
-///    % über der Vorwoche liegt (nur bewertbar, wenn beide Wochen Daten
-///    haben — [VitalsTrend.hasTrend]), **oder**
-///  * der Schlaf-7-Tage-Schnitt unter [recoverySleepThresholdHours] Stunden
-///    liegt.
-///
-/// Fehlen beide Datengrundlagen, gilt das nicht als Warnsignal — es wird die
-/// normale Empfehlung zurückgegeben (kein Advice, keine Reduktion).
-///
-/// [currentTargetKm] ist das Ziel der aktuellen Planwoche; wird eine
-/// Erholungswoche empfohlen, liefert [RecoveryAdvice.adjustedTargetKm] das um
-/// [recoveryTargetFactor] reduzierte, auf 5 km gerundete Ziel.
-RecoveryAdvice buildRecoveryAdvice(
-  VitalsSummary vitals, {
-  int? currentTargetKm,
-}) {
-  final hr = vitals.restingHeartRate;
-  final sleep = vitals.sleepHours;
-
-  final heartRateElevated = hr.hasTrend &&
-      hr.deltaPercent != null &&
-      hr.deltaPercent! >= recoveryHeartRateThresholdPercent;
-
-  final sleepLow =
-      sleep.lastWeekAvg != null && sleep.lastWeekAvg! < recoverySleepThresholdHours;
-
-  if (!heartRateElevated && !sleepLow) {
-    return const RecoveryAdvice(
-      reduceIntensity: false,
-      message:
-          'Deine Vitalwerte sehen unauffällig aus – bleib beim geplanten Training.',
-    );
-  }
-
-  final reasons = [
-    if (heartRateElevated) 'erhöhter Ruhepuls',
-    if (sleepLow) 'wenig Schlaf',
-  ].join(' und ');
-
-  final adjustedTargetKm =
-      currentTargetKm == null ? null : _round5(currentTargetKm * recoveryTargetFactor);
-
-  return RecoveryAdvice(
-    reduceIntensity: true,
-    message: 'Erholungswoche: Intensität reduzieren ($reasons).',
-    adjustedTargetKm: adjustedTargetKm,
-  );
 }

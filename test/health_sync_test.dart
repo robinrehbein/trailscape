@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trailscape/health_sync.dart';
@@ -145,6 +146,8 @@ Ride _ride({
   required DateTime start,
   required Duration duration,
   double distanceKm = 20,
+  int? avgHrBpm,
+  int? maxHrBpm,
 }) =>
     Ride(
       id: id,
@@ -156,8 +159,59 @@ Ride _ride({
         durationS: duration.inSeconds,
         ascentM: 0,
         descentM: 0,
+        avgHrBpm: avgHrBpm,
+        maxHrBpm: maxHrBpm,
       ),
     );
+
+/// Bestehende Tour mit Trackpunkten (wie vom Handy aufgezeichnet).
+Ride _rideWithPoints({
+  required String id,
+  required DateTime start,
+  int pointCount = 3,
+  Duration step = const Duration(minutes: 10),
+  int? avgHrBpm,
+  int? pointHr,
+}) =>
+    Ride(
+      id: id,
+      name: 'Handy-Tour',
+      createdAt: start.millisecondsSinceEpoch,
+      points: [
+        for (var i = 0; i < pointCount; i++)
+          TrackPoint(
+            lat: 48 + i * 0.001,
+            lon: 11,
+            ele: 500 + i * 5,
+            time: start.add(step * i).millisecondsSinceEpoch,
+            hr: pointHr,
+          ),
+      ],
+      stats: RideStats(
+        distanceKm: 30,
+        durationS: (step * (pointCount - 1)).inSeconds,
+        movingTimeS: 1500,
+        avgSpeedKmh: 25,
+        ascentM: 120,
+        descentM: 110,
+        avgHrBpm: avgHrBpm,
+      ),
+    );
+
+/// Gateway, das VO2max an eine echte [HealthPluginGateway] (mit gemocktem
+/// Platform-Channel) weiterreicht — alles andere bleibt Attrappe.
+class ChannelVo2MaxGateway extends FakeHealthGateway {
+  ChannelVo2MaxGateway(this.inner);
+
+  final HealthPluginGateway inner;
+
+  @override
+  Future<List<HealthNumericSample>> readVo2Max({
+    required DateTime from,
+    required DateTime to,
+  }) =>
+      inner.readVo2Max(from: from, to: to);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -1046,6 +1100,628 @@ void main() {
       expect(vitals.days, 7);
       expect(vitals.from, _at(2026, 8, 4));
       expect(vitals.to, now);
+    });
+  });
+
+  group('healthSyncInitialWindow', () {
+    test('umfasst 30 Tage (Health Connect gibt ohne Historien-Freigabe nicht '
+        'mehr her)', () {
+      expect(healthSyncInitialWindow, const Duration(days: 30));
+    });
+
+    test('ohne Zeitstempel wird genau 30 Tage zurückgeschaut', () async {
+      final gateway = FakeHealthGateway();
+      final now = _at(2026, 8, 10, 12);
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      await service.importWithReport(existing: const []);
+
+      expect(gateway.lastWorkoutFrom, _at(2026, 7, 11, 12));
+      expect(gateway.lastWorkoutTo, now);
+    });
+  });
+
+  group('rideHasHeartRate', () {
+    test('erkennt Kennzahlen und Trackpunkt-Werte', () {
+      final start = _at(2026, 8, 1, 10);
+      expect(
+        rideHasHeartRate(_rideWithPoints(id: 'ohne', start: start)),
+        isFalse,
+      );
+      expect(
+        rideHasHeartRate(
+          _rideWithPoints(id: 'avg', start: start, avgHrBpm: 140),
+        ),
+        isTrue,
+      );
+      expect(
+        rideHasHeartRate(
+          _rideWithPoints(id: 'punkte', start: start, pointHr: 132),
+        ),
+        isTrue,
+      );
+      expect(
+        rideHasHeartRate(
+          _ride(
+            id: 'max',
+            start: start,
+            duration: const Duration(hours: 1),
+            maxHrBpm: 180,
+          ),
+        ),
+        isTrue,
+      );
+    });
+  });
+
+  group('mergeHeartRateIntoRide', () {
+    final start = _at(2026, 8, 1, 10);
+
+    test('ordnet die zeitlich nächste Messung innerhalb ±60 s zu', () {
+      final ride = _rideWithPoints(id: 'lokal', start: start);
+      final merged = mergeHeartRateIntoRide(ride, [
+        // 30 s nach dem ersten Punkt -> zugeordnet.
+        HealthHeartRateSample(
+          time: start.add(const Duration(seconds: 30)),
+          bpm: 120,
+        ),
+        // 70 s nach dem zweiten Punkt -> außerhalb der Toleranz.
+        HealthHeartRateSample(
+          time: start.add(const Duration(minutes: 11, seconds: 10)),
+          bpm: 200,
+        ),
+        // Exakt auf dem dritten Punkt.
+        HealthHeartRateSample(
+          time: start.add(const Duration(minutes: 20)),
+          bpm: 180,
+        ),
+      ]);
+
+      expect(merged, isNotNull);
+      expect(merged!.points.map((p) => p.hr).toList(), [120, null, 180]);
+      expect(merged.stats.avgHrBpm, 150);
+      expect(merged.stats.maxHrBpm, 180);
+    });
+
+    test('nimmt bei zwei Messungen die näher liegende', () {
+      final ride = _rideWithPoints(id: 'lokal', start: start, pointCount: 1);
+      final merged = mergeHeartRateIntoRide(ride, [
+        HealthHeartRateSample(
+          time: start.subtract(const Duration(seconds: 50)),
+          bpm: 100,
+        ),
+        HealthHeartRateSample(
+          time: start.add(const Duration(seconds: 5)),
+          bpm: 155,
+        ),
+      ]);
+
+      expect(merged!.points.single.hr, 155);
+      expect(merged.stats.avgHrBpm, 155);
+    });
+
+    test('behält ID, Name, Zeitpunkt, Punkte und Kennzahlen', () {
+      final ride = _rideWithPoints(id: 'lokal', start: start);
+      final merged = mergeHeartRateIntoRide(ride, [
+        HealthHeartRateSample(time: start, bpm: 130),
+      ])!;
+
+      expect(merged.id, ride.id);
+      expect(merged.name, ride.name);
+      expect(merged.createdAt, ride.createdAt);
+      expect(merged.points, hasLength(ride.points.length));
+      expect(merged.points.first.lat, ride.points.first.lat);
+      expect(merged.points.first.lon, ride.points.first.lon);
+      expect(merged.points.first.ele, ride.points.first.ele);
+      expect(merged.points.last.time, ride.points.last.time);
+      expect(merged.stats.distanceKm, ride.stats.distanceKm);
+      expect(merged.stats.ascentM, ride.stats.ascentM);
+      expect(merged.stats.descentM, ride.stats.descentM);
+      expect(merged.stats.durationS, ride.stats.durationS);
+      expect(merged.stats.movingTimeS, ride.stats.movingTimeS);
+      expect(merged.stats.avgSpeedKmh, ride.stats.avgSpeedKmh);
+    });
+
+    test('ohne Messwerte passiert nichts', () {
+      expect(
+        mergeHeartRateIntoRide(_rideWithPoints(id: 'lokal', start: start), []),
+        isNull,
+      );
+    });
+
+    test('ohne Trackpunkte passiert nichts', () {
+      expect(
+        mergeHeartRateIntoRide(
+          _ride(id: 'lokal', start: start, duration: const Duration(hours: 1)),
+          [HealthHeartRateSample(time: start, bpm: 130)],
+        ),
+        isNull,
+      );
+    });
+
+    test('liegt alles außerhalb der Toleranz, bleibt die Tour unangetastet',
+        () {
+      final merged = mergeHeartRateIntoRide(
+        _rideWithPoints(id: 'lokal', start: start),
+        [
+          HealthHeartRateSample(
+            time: start.subtract(const Duration(hours: 3)),
+            bpm: 130,
+          ),
+        ],
+      );
+      expect(merged, isNull);
+    });
+
+    test('viele Punkte und Messungen laufen in einem Durchlauf', () {
+      final ride = _rideWithPoints(
+        id: 'lang',
+        start: start,
+        pointCount: 500,
+        step: const Duration(seconds: 10),
+      );
+      final samples = [
+        for (var i = 0; i < 2000; i++)
+          HealthHeartRateSample(
+            time: start.add(Duration(milliseconds: i * 2500)),
+            bpm: 100 + (i % 60).toDouble(),
+          ),
+      ];
+
+      final merged = mergeHeartRateIntoRide(ride, samples)!;
+      expect(merged.points.where((p) => p.hr != null), hasLength(500));
+      expect(merged.stats.maxHrBpm, isNotNull);
+    });
+  });
+
+  group('importWithReport', () {
+    test('zählt gefundene, importierte, zusammengeführte und doppelte '
+        'Sessions', () async {
+      final tag1 = _at(2026, 8, 1, 10);
+      final tag2 = _at(2026, 8, 2, 10);
+      final tag3 = _at(2026, 8, 3, 10);
+      final tag4 = _at(2026, 8, 4, 10);
+      final tag5 = _at(2026, 8, 5, 10);
+
+      final gateway = FakeHealthGateway(
+        workouts: [
+          _cycling(id: 'mit-route', start: tag1, end: tag1.add(const Duration(hours: 1))),
+          _cycling(id: 'ohne-route', start: tag2, end: tag2.add(const Duration(hours: 1))),
+          _cycling(id: 'bekannt', start: tag3, end: tag3.add(const Duration(hours: 1))),
+          _cycling(id: 'hf-schon-da', start: tag4, end: tag4.add(const Duration(hours: 1))),
+          _cycling(
+            id: 'merge',
+            start: tag5,
+            end: tag5.add(const Duration(minutes: 25)),
+          ),
+          HealthWorkout(
+            id: 'lauf',
+            start: tag1.add(const Duration(days: 6)),
+            end: tag1.add(const Duration(days: 6, hours: 1)),
+            kind: HealthActivityKind.sonstiges,
+            distanceM: 10000,
+          ),
+        ],
+        routes: {
+          'mit-route': [
+            HealthRoutePoint(lat: 48, lon: 11, time: tag1),
+            HealthRoutePoint(
+              lat: 48.01,
+              lon: 11,
+              time: tag1.add(const Duration(minutes: 30)),
+            ),
+          ],
+        },
+        heartRate: [
+          HealthHeartRateSample(time: tag5, bpm: 120),
+          HealthHeartRateSample(
+            time: tag5.add(const Duration(minutes: 10)),
+            bpm: 160,
+          ),
+          HealthHeartRateSample(
+            time: tag5.add(const Duration(minutes: 20)),
+            bpm: 180,
+          ),
+        ],
+      );
+
+      final now = _at(2026, 8, 10, 12);
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(
+        existing: [
+          _ride(id: 'hc-bekannt', start: _at(2026, 7, 1), duration: const Duration(hours: 1)),
+          _ride(
+            id: 'mit-hf',
+            start: tag4,
+            duration: const Duration(hours: 1),
+            avgHrBpm: 142,
+          ),
+          _rideWithPoints(id: 'ohne-hf', start: tag5),
+        ],
+      );
+
+      expect(report.from, now.subtract(const Duration(days: 30)));
+      expect(report.to, now);
+      // Nur Rad-Sessions zählen, das Laufen nicht.
+      expect(report.workoutsFound, 5);
+      expect(report.imported.map((r) => r.id).toList(),
+          ['hc-mit-route', 'hc-ohne-route']);
+      expect(report.mergedRides.map((r) => r.id).toList(), ['ohne-hf']);
+      // 'bekannt' (gleiche ID) und 'hf-schon-da' (Tour hat bereits HF).
+      expect(report.duplicatesSkipped, 2);
+      // Outdoor-Tour ohne Trackpunkte.
+      expect(report.routesMissing, 1);
+      expect(report.changedCount, 3);
+      expect(report.isEmpty, isFalse);
+    });
+
+    test('Indoor-Touren ohne Route zählen nicht als fehlende Route', () async {
+      final start = _at(2026, 8, 1, 18);
+      final gateway = FakeHealthGateway(
+        workouts: [
+          _cycling(
+            id: 'rolle',
+            start: start,
+            end: start.add(const Duration(minutes: 45)),
+            kind: HealthActivityKind.radfahrenIndoor,
+          ),
+        ],
+      );
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 10),
+      );
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.imported, hasLength(1));
+      expect(report.routesMissing, 0);
+    });
+
+    test('ohne Sessions bleibt der Bericht leer und schreibt den Zeitstempel '
+        'fort', () async {
+      final now = _at(2026, 8, 10, 12);
+      final service = HealthSyncService(
+        gateway: FakeHealthGateway(),
+        now: () => now,
+      );
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.workoutsFound, 0);
+      expect(report.imported, isEmpty);
+      expect(report.mergedRides, isEmpty);
+      expect(report.duplicatesSkipped, 0);
+      expect(report.routesMissing, 0);
+      expect(report.isEmpty, isTrue);
+      expect(await service.lastImportAt(), now);
+    });
+
+    test('importNewRides bleibt ein dünner Wrapper über importWithReport',
+        () async {
+      final start = _at(2026, 8, 1, 10);
+      final gateway = FakeHealthGateway(
+        workouts: [
+          _cycling(
+            id: 'neu',
+            start: start,
+            end: start.add(const Duration(hours: 1)),
+          ),
+        ],
+      );
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 10),
+      );
+
+      final rides = await service.importNewRides(existing: const []);
+      expect(rides.map((r) => r.id).toList(), ['hc-neu']);
+    });
+  });
+
+  group('HF-Merge beim Import', () {
+    final start = _at(2026, 8, 1, 10);
+
+    FakeHealthGateway gatewayWith({
+      List<HealthHeartRateSample> heartRate = const [],
+    }) =>
+        FakeHealthGateway(
+          workouts: [
+            _cycling(
+              id: 'watch',
+              start: start,
+              end: start.add(const Duration(minutes: 25)),
+            ),
+          ],
+          heartRate: heartRate,
+        );
+
+    test('reichert eine überlappende Tour ohne HF an, statt sie zu verwerfen',
+        () async {
+      final gateway = gatewayWith(
+        heartRate: [
+          HealthHeartRateSample(
+            time: start.add(const Duration(seconds: 20)),
+            bpm: 120,
+          ),
+          HealthHeartRateSample(
+            time: start.add(const Duration(minutes: 10)),
+            bpm: 150,
+          ),
+          HealthHeartRateSample(
+            time: start.add(const Duration(minutes: 20)),
+            bpm: 180,
+          ),
+        ],
+      );
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 10),
+      );
+
+      final bestehend = _rideWithPoints(id: 'lokal', start: start);
+      final report = await service.importWithReport(existing: [bestehend]);
+
+      expect(report.imported, isEmpty);
+      expect(report.duplicatesSkipped, 0);
+      expect(report.mergedRides, hasLength(1));
+
+      final merged = report.mergedRides.single;
+      expect(merged.id, 'lokal');
+      expect(merged.points, hasLength(bestehend.points.length));
+      expect(merged.points.map((p) => p.hr).toList(), [120, 150, 180]);
+      expect(merged.stats.avgHrBpm, 150);
+      expect(merged.stats.maxHrBpm, 180);
+      expect(merged.stats.distanceKm, bestehend.stats.distanceKm);
+      // Die HF wird nur für das Session-Fenster gelesen.
+      expect(gateway.heartRateWindows.single.from, start);
+      expect(gateway.heartRateWindows.single.to,
+          start.add(const Duration(minutes: 25)));
+    });
+
+    test('eine Tour mit vorhandener HF wird nicht angefasst', () async {
+      final gateway = gatewayWith(
+        heartRate: [HealthHeartRateSample(time: start, bpm: 120)],
+      );
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 10),
+      );
+
+      final report = await service.importWithReport(
+        existing: [_rideWithPoints(id: 'lokal', start: start, avgHrBpm: 138)],
+      );
+
+      expect(report.mergedRides, isEmpty);
+      expect(report.imported, isEmpty);
+      expect(report.duplicatesSkipped, 1);
+      // Ohne Merge-Kandidat wird die HF gar nicht erst gelesen.
+      expect(gateway.heartRateWindows, isEmpty);
+    });
+
+    test('auch Trackpunkt-HF schützt die bestehende Tour', () async {
+      final service = HealthSyncService(
+        gateway: gatewayWith(
+          heartRate: [HealthHeartRateSample(time: start, bpm: 120)],
+        ),
+        now: () => _at(2026, 8, 10),
+      );
+
+      final report = await service.importWithReport(
+        existing: [_rideWithPoints(id: 'lokal', start: start, pointHr: 131)],
+      );
+
+      expect(report.mergedRides, isEmpty);
+      expect(report.duplicatesSkipped, 1);
+    });
+
+    test('ohne HF-Samples bleibt die Session ein Duplikat', () async {
+      final service = HealthSyncService(
+        gateway: gatewayWith(),
+        now: () => _at(2026, 8, 10),
+      );
+
+      final report = await service.importWithReport(
+        existing: [_rideWithPoints(id: 'lokal', start: start)],
+      );
+
+      expect(report.mergedRides, isEmpty);
+      expect(report.imported, isEmpty);
+      expect(report.duplicatesSkipped, 1);
+    });
+
+    test('ein Fehler beim HF-Lesen macht die Session zum Duplikat', () async {
+      final gateway = gatewayWith(
+        heartRate: [HealthHeartRateSample(time: start, bpm: 120)],
+      )..failHeartRate = true;
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 10),
+      );
+
+      final report = await service.importWithReport(
+        existing: [_rideWithPoints(id: 'lokal', start: start)],
+      );
+
+      expect(report.mergedRides, isEmpty);
+      expect(report.duplicatesSkipped, 1);
+    });
+
+    test('dieselbe Tour wird höchstens einmal je Lauf angereichert', () async {
+      final gateway = FakeHealthGateway(
+        workouts: [
+          _cycling(
+            id: 'watch-a',
+            start: start,
+            end: start.add(const Duration(minutes: 25)),
+          ),
+          // Nahezu identische Session einer zweiten Quell-App.
+          _cycling(
+            id: 'watch-b',
+            start: start.add(const Duration(minutes: 1)),
+            end: start.add(const Duration(minutes: 25)),
+          ),
+        ],
+        heartRate: [
+          HealthHeartRateSample(time: start, bpm: 120),
+          HealthHeartRateSample(
+            time: start.add(const Duration(minutes: 20)),
+            bpm: 160,
+          ),
+        ],
+      );
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 10),
+      );
+
+      final report = await service.importWithReport(
+        existing: [_rideWithPoints(id: 'lokal', start: start)],
+      );
+
+      expect(report.mergedRides, hasLength(1));
+      expect(report.duplicatesSkipped, 1);
+    });
+
+    test('importNewRides liefert Merges nicht mit zurück', () async {
+      final service = HealthSyncService(
+        gateway: gatewayWith(
+          heartRate: [
+            HealthHeartRateSample(time: start, bpm: 120),
+            HealthHeartRateSample(
+              time: start.add(const Duration(minutes: 20)),
+              bpm: 160,
+            ),
+          ],
+        ),
+        now: () => _at(2026, 8, 10),
+      );
+
+      final rides = await service.importNewRides(
+        existing: [_rideWithPoints(id: 'lokal', start: start)],
+      );
+      expect(rides, isEmpty);
+    });
+  });
+
+  group('VO2max über den Platform-Channel', () {
+    const channel = MethodChannel('trailscape/health_extra.test');
+    final calls = <MethodCall>[];
+    late TestDefaultBinaryMessengerBinding binding;
+
+    void mock(Future<Object?> Function(MethodCall call) handler) {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+          (call) async {
+        calls.add(call);
+        return handler(call);
+      });
+    }
+
+    setUp(() {
+      binding = TestDefaultBinaryMessengerBinding.instance;
+      calls.clear();
+    });
+
+    tearDown(() {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+    });
+
+    test('liest VO2max über den Channel statt UnsupportedError zu werfen',
+        () async {
+      mock((call) async => [
+            {'timeMs': _at(2026, 8, 8).millisecondsSinceEpoch, 'vo2': 48.26},
+            {'timeMs': _at(2026, 8, 1).millisecondsSinceEpoch, 'vo2': 47.5},
+          ]);
+
+      final gateway = HealthPluginGateway(extraChannel: channel);
+      final from = _at(2026, 8, 1);
+      final to = _at(2026, 8, 10);
+      final samples = await gateway.readVo2Max(from: from, to: to);
+
+      expect(calls.single.method, 'readVo2Max');
+      expect(calls.single.arguments, {
+        'startMs': from.millisecondsSinceEpoch,
+        'endMs': to.millisecondsSinceEpoch,
+      });
+      // Aufsteigend sortiert.
+      expect(samples.map((s) => s.value).toList(), [47.5, 48.26]);
+      expect(samples.first.time, _at(2026, 8, 1));
+    });
+
+    test('leere oder unbrauchbare Antworten ergeben keine Messwerte', () async {
+      mock((call) async => null);
+      final leer = await HealthPluginGateway(extraChannel: channel)
+          .readVo2Max(from: _at(2026, 8, 1), to: _at(2026, 8, 10));
+      expect(leer, isEmpty);
+
+      mock((call) async => [
+            {'timeMs': 'kaputt', 'vo2': 48.0},
+            {'vo2': 48.0},
+            'unsinn',
+            {'timeMs': _at(2026, 8, 5).millisecondsSinceEpoch, 'vo2': 44},
+          ]);
+      final gefiltert = await HealthPluginGateway(extraChannel: channel)
+          .readVo2Max(from: _at(2026, 8, 1), to: _at(2026, 8, 10));
+      expect(gefiltert, hasLength(1));
+      expect(gefiltert.single.value, 44.0);
+    });
+
+    test('ein Channel-Fehler schlägt bis zum Aufrufer durch', () async {
+      mock((call) async => throw PlatformException(code: 'unavailable'));
+
+      expect(
+        () => HealthPluginGateway(extraChannel: channel)
+            .readVo2Max(from: _at(2026, 8, 1), to: _at(2026, 8, 10)),
+        throwsA(isA<PlatformException>()),
+      );
+    });
+
+    test('readVitals übernimmt die Channel-Werte', () async {
+      mock((call) async => [
+            {'timeMs': _at(2026, 8, 8).millisecondsSinceEpoch, 'vo2': 48.26},
+          ]);
+
+      final service = HealthSyncService(
+        gateway: ChannelVo2MaxGateway(
+          HealthPluginGateway(extraChannel: channel),
+        ),
+        now: () => _at(2026, 8, 10, 12),
+      );
+
+      final vitals = await service.readVitals();
+      expect(vitals.vo2max, 48.3);
+      expect(vitals.vo2maxAt, _at(2026, 8, 8));
+      expect(vitals.unavailable, isNot(contains(VitalsDataKind.vo2max)));
+    });
+
+    test('wirft der Channel, bleibt VO2max in unavailable', () async {
+      mock((call) async =>
+          throw PlatformException(code: 'permission_denied', message: 'nope'));
+
+      final service = HealthSyncService(
+        gateway: ChannelVo2MaxGateway(
+          HealthPluginGateway(extraChannel: channel),
+        ),
+        now: () => _at(2026, 8, 10, 12),
+      );
+
+      final vitals = await service.readVitals();
+      expect(vitals.vo2max, isNull);
+      expect(vitals.unavailable, contains(VitalsDataKind.vo2max));
+    });
+
+    test('ein fehlender Channel (alte Installation) meldet nur VO2max ab',
+        () async {
+      // Kein Mock registriert -> MissingPluginException.
+      final service = HealthSyncService(
+        gateway: ChannelVo2MaxGateway(
+          HealthPluginGateway(extraChannel: channel),
+        ),
+        now: () => _at(2026, 8, 10, 12),
+      );
+
+      final vitals = await service.readVitals();
+      expect(vitals.unavailable, contains(VitalsDataKind.vo2max));
+      expect(vitals.unavailable, isNot(contains(VitalsDataKind.ruhepuls)));
     });
   });
 }

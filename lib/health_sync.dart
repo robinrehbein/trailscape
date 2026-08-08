@@ -15,9 +15,13 @@
 /// Bekannte Grenzen der Plattform (Stand `health` 13.3.x):
 ///
 ///  * **VO2max** wird vom Paket gar nicht angeboten (kein `HealthDataType`
-///    dafür, weder für Health Connect noch für HealthKit). [VitalsSummary]
-///    hält das Feld trotzdem vor; [HealthPluginGateway.readVo2Max] liefert
-///    stets eine leere Liste und meldet den Datentyp als nicht verfügbar.
+///    dafür, weder für Health Connect noch für HealthKit). Health Connect
+///    selbst kennt den Datentyp (`Vo2MaxRecord`) sehr wohl — Trailscape liest
+///    ihn deshalb über einen eigenen, schmalen Platform-Channel
+///    ([healthExtraChannelName], Kotlin-Seite `HealthExtraChannel`).
+///    Schlägt der Channel fehl (alte Installation, Health Connect fehlt,
+///    Berechtigung verweigert), landet VO2max in
+///    [VitalsSummary.unavailable]; die übrigen Vitaldaten bleiben gültig.
 ///  * **GPS-Routen** liefert Health Connect nur, solange die App im
 ///    Vordergrund läuft, und für fremde Apps (z. B. Samsung Health) nur, wenn
 ///    die Nutzerin in der Health-Connect-App unter
@@ -29,6 +33,7 @@ library;
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/services.dart';
 import 'package:health/health.dart' as hc;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,11 +44,22 @@ import 'stats.dart';
 const String healthSyncStorageKey = 'trailscape.healthsync';
 
 /// Wie weit zurück importiert wird, wenn noch nie synchronisiert wurde.
-const Duration healthSyncInitialWindow = Duration(days: 90);
+///
+/// Bewusst 30 Tage: Ohne die zusätzliche Historien-Freigabe
+/// (`READ_HEALTH_DATA_HISTORY`, siehe
+/// [HealthPluginGateway.requestHistoryAccess]) gibt Health Connect
+/// grundsätzlich nur Daten der letzten 30 Tage ab Zustimmung heraus. Ein
+/// größeres Fenster erzeugt daher nur unnötige Abfragen und weckt in der UI
+/// falsche Erwartungen.
+const Duration healthSyncInitialWindow = Duration(days: 30);
 
 /// Ab welchem zeitlichen Überlappungsanteil eine Health-Connect-Session als
 /// bereits vorhandene Tour gilt und übersprungen wird (strikt größer).
 const double healthSyncOverlapThreshold = 0.5;
+
+/// Maximaler zeitlicher Abstand, in dem eine Herzfrequenz-Messung beim
+/// Anreichern einer bestehenden Tour noch einem Trackpunkt zugeordnet wird.
+const Duration healthSyncHrMergeTolerance = Duration(seconds: 60);
 
 // ---------------------------------------------------------------------------
 // Datentypen der Abstraktionsschicht
@@ -245,11 +261,64 @@ abstract class HealthGateway {
 
   /// VO2max-Messungen im Zeitraum. Health Connect kennt den Datentyp, das
   /// `health`-Paket bietet ihn aber nicht an — die produktive Implementierung
-  /// wirft daher [UnsupportedError].
+  /// liest ihn deshalb über einen eigenen Platform-Channel und wirft, wenn
+  /// dieser nicht antwortet.
   Future<List<HealthNumericSample>> readVo2Max({
     required DateTime from,
     required DateTime to,
   });
+}
+
+/// Ergebnis eines Import-Laufs — für Diagnose und UI-Rückmeldung.
+///
+/// Wird von [HealthSyncService.importWithReport] geliefert. Weder [imported]
+/// noch [mergedRides] sind gespeichert; das übernimmt der Aufrufer.
+class HealthSyncReport {
+  const HealthSyncReport({
+    required this.from,
+    required this.to,
+    required this.workoutsFound,
+    required this.imported,
+    required this.mergedRides,
+    required this.duplicatesSkipped,
+    required this.routesMissing,
+  });
+
+  /// Leerer Bericht (kein Fenster betrachtet).
+  const HealthSyncReport.empty(this.from, this.to)
+      : workoutsFound = 0,
+        imported = const [],
+        mergedRides = const [],
+        duplicatesSkipped = 0,
+        routesMissing = 0;
+
+  /// Betrachteter Zeitraum.
+  final DateTime from;
+  final DateTime to;
+
+  /// Anzahl der im Fenster gefundenen **Rad**-Sessions (vor jeder Filterung).
+  final int workoutsFound;
+
+  /// Neu angelegte Touren.
+  final List<Ride> imported;
+
+  /// Bestehende Touren, die um Herzfrequenzdaten aus einer überlappenden
+  /// Watch-Session ergänzt wurden (gleiche ID wie das Original).
+  final List<Ride> mergedRides;
+
+  /// Sessions, die als Duplikat verworfen wurden (gleiche ID oder
+  /// überlappende Tour, die bereits Herzfrequenzdaten hat).
+  final int duplicatesSkipped;
+
+  /// Importierte Outdoor-Touren, für die Health Connect keine Route
+  /// herausgerückt hat (Trackpunkte fehlen).
+  final int routesMissing;
+
+  /// Wie viele Touren der Aufrufer speichern muss.
+  int get changedCount => imported.length + mergedRides.length;
+
+  /// Ob der Lauf nichts verändert hat.
+  bool get isEmpty => changedCount == 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -434,22 +503,41 @@ class HealthSyncService {
 
   /// Importiert neue Rad-Workouts als [Ride]s.
   ///
+  /// Dünner Wrapper um [importWithReport] — liefert nur die neu angelegten
+  /// Touren. Bestehende Touren, die dabei um Herzfrequenzdaten ergänzt wurden
+  /// ([HealthSyncReport.mergedRides]), sieht diese Signatur nicht; wer sie
+  /// speichern will, ruft [importWithReport] direkt auf.
+  Future<List<Ride>> importNewRides({
+    DateTime? since,
+    required List<Ride> existing,
+  }) async {
+    final report = await importWithReport(since: since, existing: existing);
+    return report.imported;
+  }
+
+  /// Importiert neue Rad-Workouts und liefert zusätzlich eine Diagnose.
+  ///
   /// [since] begrenzt den betrachteten Zeitraum; ohne Angabe wird der
   /// gespeicherte Zeitstempel des letzten Imports benutzt, andernfalls
   /// [healthSyncInitialWindow].
   ///
   /// [existing] sind die bereits gespeicherten Touren. Eine Session wird
-  /// übersprungen, wenn ihre ID schon vorkommt oder sie sich zu mehr als
-  /// [healthSyncOverlapThreshold] zeitlich mit einer bestehenden Tour
-  /// überschneidet.
+  ///
+  ///  * übersprungen, wenn ihre ID schon vorkommt;
+  ///  * als **Merge** behandelt, wenn sie sich zu mehr als
+  ///    [healthSyncOverlapThreshold] mit einer bestehenden Tour überschneidet
+  ///    und diese Tour noch **keine** Herzfrequenzdaten hat — dann wird die
+  ///    bestehende Tour aus den Watch-Messwerten angereichert und landet
+  ///    (mit unveränderter ID) in [HealthSyncReport.mergedRides];
+  ///  * sonst als Duplikat verworfen ([HealthSyncReport.duplicatesSkipped]).
   ///
   /// Die zurückgegebenen Touren sind **noch nicht gespeichert** — das
-  /// übernimmt die UI über `AppState.addRide`. Nach einem erfolgreichen
-  /// Durchlauf wird der Import-Zeitstempel auf „jetzt“ gesetzt.
+  /// übernimmt die UI. Nach einem erfolgreichen Durchlauf wird der
+  /// Import-Zeitstempel auf „jetzt“ gesetzt.
   ///
   /// Wirft [HealthSyncException], wenn Health Connect nicht verfügbar ist
   /// oder die Berechtigungen fehlen.
-  Future<List<Ride>> importNewRides({
+  Future<HealthSyncReport> importWithReport({
     DateTime? since,
     required List<Ride> existing,
   }) async {
@@ -475,59 +563,110 @@ class HealthSyncService {
     final cycling = workouts.where((w) => w.isCycling).toList()
       ..sort((a, b) => a.start.compareTo(b.start));
 
+    // Zeitraum plus (falls bekannt) die dahinterstehende Tour. Innerhalb
+    // dieses Laufs importierte Sessions kommen ohne Tour dazu, damit zwei
+    // nahezu identische Sessions nicht doppelt landen.
+    final ranges = <({DateTime start, DateTime end, Ride? ride})>[];
+    for (final ride in existing) {
+      final range = rideTimeRange(ride);
+      ranges.add((start: range.start, end: range.end, ride: ride));
+    }
+    final knownIds = existing.map((r) => r.id).toSet();
+    final mergeTargets = <String>{};
+
     final candidates = <HealthWorkout>[];
-    final existingRanges = existing.map(rideTimeRange).toList();
-    final existingIds = existing.map((r) => r.id).toSet();
+    final mergeCandidates = <({HealthWorkout workout, Ride ride})>[];
+    var duplicates = 0;
 
     for (final workout in cycling) {
-      if (existingIds.contains(healthRideId(workout.id))) {
+      if (knownIds.contains(healthRideId(workout.id))) {
+        duplicates++;
         continue;
       }
-      if (_overlapsExisting(workout, existingRanges)) {
+
+      final overlap = _findOverlap(workout, ranges);
+      if (overlap == null) {
+        candidates.add(workout);
+        ranges.add((start: workout.start, end: workout.end, ride: null));
+        knownIds.add(healthRideId(workout.id));
         continue;
       }
-      candidates.add(workout);
-      // Innerhalb eines Laufs importierte Touren zaehlen ebenfalls als
-      // bestehend, damit zwei nahezu identische Sessions nicht doppelt landen.
-      existingRanges.add((start: workout.start, end: workout.end));
-      existingIds.add(healthRideId(workout.id));
+
+      final ride = overlap.ride;
+      // Nur bestehende Touren ohne Herzfrequenz werden angereichert, und jede
+      // höchstens einmal je Lauf.
+      if (ride == null || rideHasHeartRate(ride) || !mergeTargets.add(ride.id)) {
+        duplicates++;
+        continue;
+      }
+      mergeCandidates.add((workout: workout, ride: ride));
     }
 
-    if (candidates.isEmpty) {
-      await setLastImportAt(to);
-      return const [];
-    }
+    final imported = <Ride>[];
+    var routesMissing = 0;
 
-    final windowStart = candidates.first.start;
-    final windowEnd = candidates
-        .map((w) => w.end)
-        .reduce((a, b) => a.isAfter(b) ? a : b);
+    if (candidates.isNotEmpty) {
+      final windowStart = candidates.first.start;
+      final windowEnd =
+          candidates.map((w) => w.end).reduce((a, b) => a.isAfter(b) ? a : b);
 
-    // Routen sind pro Session wenige Datensätze — eine Abfrage über das ganze
-    // Fenster reicht. Die Herzfrequenz wird dagegen je Workout gelesen: über
-    // 90 Tage kämen sonst leicht sechsstellige Messreihen zusammen.
-    final routes = await _readOptional(
-      () => gateway.readRoutes(from: windowStart, to: windowEnd),
-      const <String, List<HealthRoutePoint>>{},
-    );
-
-    final rides = <Ride>[];
-    for (final workout in candidates) {
-      final heartRate = await _readOptional(
-        () => gateway.readHeartRate(from: workout.start, to: workout.end),
-        const <HealthHeartRateSample>[],
+      // Routen sind pro Session wenige Datensätze — eine Abfrage über das
+      // ganze Fenster reicht. Die Herzfrequenz wird dagegen je Workout
+      // gelesen: über 30 Tage kämen sonst leicht sechsstellige Messreihen
+      // zusammen.
+      final routes = await _readOptional(
+        () => gateway.readRoutes(from: windowStart, to: windowEnd),
+        const <String, List<HealthRoutePoint>>{},
       );
-      rides.add(
-        buildRideFromWorkout(
+
+      for (final workout in candidates) {
+        final heartRate = await _readOptional(
+          () => gateway.readHeartRate(from: workout.start, to: workout.end),
+          const <HealthHeartRateSample>[],
+        );
+        final ride = buildRideFromWorkout(
           workout,
           route: routes[workout.id] ?? const [],
           heartRate: heartRate,
+        );
+        imported.add(ride);
+        if (workout.kind == HealthActivityKind.radfahren &&
+            ride.points.isEmpty) {
+          routesMissing++;
+        }
+      }
+    }
+
+    final merged = <Ride>[];
+    for (final entry in mergeCandidates) {
+      final heartRate = await _readOptional(
+        () => gateway.readHeartRate(
+          from: entry.workout.start,
+          to: entry.workout.end,
         ),
+        const <HealthHeartRateSample>[],
       );
+      final enriched = mergeHeartRateIntoRide(entry.ride, heartRate);
+      if (enriched == null) {
+        // Ohne verwertbare Messwerte bleibt es beim bisherigen Verhalten:
+        // Die Session ist ein Duplikat der bestehenden Tour.
+        duplicates++;
+        continue;
+      }
+      merged.add(enriched);
     }
 
     await setLastImportAt(to);
-    return rides;
+
+    return HealthSyncReport(
+      from: from,
+      to: to,
+      workoutsFound: cycling.length,
+      imported: List<Ride>.unmodifiable(imported),
+      mergedRides: List<Ride>.unmodifiable(merged),
+      duplicatesSkipped: duplicates,
+      routesMissing: routesMissing,
+    );
   }
 
   /// Liest Ruhepuls, Schlaf und (falls verfügbar) VO2max der letzten [days]
@@ -591,9 +730,11 @@ class HealthSyncService {
     );
   }
 
-  bool _overlapsExisting(
+  /// Erster Zeitraum, mit dem sich [workout] zu mehr als
+  /// [healthSyncOverlapThreshold] überschneidet.
+  ({DateTime start, DateTime end, Ride? ride})? _findOverlap(
     HealthWorkout workout,
-    List<({DateTime start, DateTime end})> ranges,
+    List<({DateTime start, DateTime end, Ride? ride})> ranges,
   ) {
     for (final range in ranges) {
       final ratio = overlapRatio(
@@ -603,10 +744,10 @@ class HealthSyncService {
         bEnd: range.end,
       );
       if (ratio > healthSyncOverlapThreshold) {
-        return true;
+        return range;
       }
     }
-    return false;
+    return null;
   }
 
   Future<T> _readOptional<T>(
@@ -771,6 +912,108 @@ Ride buildRideFromWorkout(
   );
 }
 
+/// Ob eine Tour bereits Herzfrequenzdaten mitbringt.
+///
+/// Geprüft werden sowohl die Kennzahlen ([RideStats.avgHrBpm],
+/// [RideStats.maxHrBpm]) als auch die Trackpunkte ([TrackPoint.hr]).
+bool rideHasHeartRate(Ride ride) =>
+    ride.stats.avgHrBpm != null ||
+    ride.stats.maxHrBpm != null ||
+    ride.points.any((p) => p.hr != null);
+
+/// Reichert eine bestehende Tour mit den Herzfrequenzen einer überlappenden
+/// Watch-Session an.
+///
+/// Jedem Trackpunkt wird die zeitlich nächstgelegene Messung zugeordnet,
+/// sofern sie höchstens [tolerance] entfernt liegt. Beide Listen sind
+/// zeitlich sortiert — der Abgleich läuft daher als Zwei-Zeiger-Durchlauf in
+/// O(n + m); die Trackpunkte werden dabei **nicht** umsortiert, ihre Reihenfolge
+/// ist die Streckenreihenfolge.
+///
+/// Liefert eine Kopie mit unveränderter [Ride.id] (Name, Zeitpunkt, Distanz und
+/// Höhenmeter bleiben ebenfalls, nur `avgHrBpm`/`maxHrBpm` kommen hinzu), oder
+/// `null`, wenn sich keine einzige Messung zuordnen ließ — dann bleibt die Tour
+/// unangetastet.
+Ride? mergeHeartRateIntoRide(
+  Ride ride,
+  List<HealthHeartRateSample> samples, {
+  Duration tolerance = healthSyncHrMergeTolerance,
+}) {
+  if (samples.isEmpty || ride.points.isEmpty) {
+    return null;
+  }
+
+  final sorted = List<HealthHeartRateSample>.from(samples)
+    ..sort((a, b) => a.time.compareTo(b.time));
+  final toleranceMs = tolerance.inMilliseconds;
+
+  final points = <TrackPoint>[];
+  var cursor = 0;
+  var sum = 0.0;
+  var count = 0;
+  var peak = 0;
+
+  for (final point in ride.points) {
+    final time = point.time;
+    if (time == null) {
+      points.add(point);
+      continue;
+    }
+
+    // Der Zeiger wandert nur vorwärts, solange die nächste Messung nicht
+    // weiter entfernt ist als die aktuelle.
+    while (cursor + 1 < sorted.length &&
+        (sorted[cursor + 1].time.millisecondsSinceEpoch - time).abs() <=
+            (sorted[cursor].time.millisecondsSinceEpoch - time).abs()) {
+      cursor++;
+    }
+
+    final best = sorted[cursor];
+    final delta = (best.time.millisecondsSinceEpoch - time).abs();
+    if (delta > toleranceMs) {
+      points.add(point);
+      continue;
+    }
+
+    final bpm = best.bpm.round();
+    sum += best.bpm;
+    count++;
+    if (bpm > peak) {
+      peak = bpm;
+    }
+    points.add(
+      TrackPoint(
+        lat: point.lat,
+        lon: point.lon,
+        ele: point.ele,
+        time: point.time,
+        hr: bpm,
+      ),
+    );
+  }
+
+  if (count == 0) {
+    return null;
+  }
+
+  return Ride(
+    id: ride.id,
+    name: ride.name,
+    createdAt: ride.createdAt,
+    points: List<TrackPoint>.unmodifiable(points),
+    stats: RideStats(
+      distanceKm: ride.stats.distanceKm,
+      durationS: ride.stats.durationS,
+      movingTimeS: ride.stats.movingTimeS,
+      avgSpeedKmh: ride.stats.avgSpeedKmh,
+      ascentM: ride.stats.ascentM,
+      descentM: ride.stats.descentM,
+      avgHrBpm: (sum / count).round(),
+      maxHrBpm: peak,
+    ),
+  );
+}
+
 /// Name einer importierten Tour, im Stil der App: „Tour 08.08.2026 (Watch)“.
 String healthRideName(HealthWorkout workout) {
   final d = workout.start;
@@ -881,6 +1124,22 @@ double? _average(List<double> values) {
 ///
 /// `WORKOUT_ROUTE` zieht im Plugin automatisch `WORKOUT` nach; beide sind hier
 /// dennoch explizit gelistet, damit die Rechteprüfung eindeutig bleibt.
+/// Name des Platform-Channels für Health-Connect-Datentypen, die das
+/// `health`-Paket nicht abdeckt. Gegenstück ist `HealthExtraChannel` in
+/// `android/app/src/main/kotlin/.../HealthExtraChannel.kt`.
+const String healthExtraChannelName = 'trailscape/health_extra';
+
+/// Methodenname: liest `Vo2MaxRecord`s (Argumente `startMs`, `endMs`; Ergebnis
+/// ist eine Liste aus `{timeMs: int, vo2: double}`).
+const String healthExtraReadVo2MaxMethod = 'readVo2Max';
+
+/// Methodenname: fragt die VO2max-Leseberechtigung an (Ergebnis `bool`).
+const String healthExtraRequestVo2MaxPermissionMethod =
+    'requestVo2MaxPermission';
+
+/// Produktiver Channel zum nativen VO2max-Zusatz.
+const MethodChannel healthExtraChannel = MethodChannel(healthExtraChannelName);
+
 const List<hc.HealthDataType> healthReadTypes = [
   hc.HealthDataType.WORKOUT,
   hc.HealthDataType.WORKOUT_ROUTE,
@@ -894,9 +1153,15 @@ const List<hc.HealthDataType> healthReadTypes = [
 /// [HealthGateway] auf Basis des pub.dev-Pakets `health` (Google Health
 /// Connect). Wird nur auf dem Gerät benutzt.
 class HealthPluginGateway implements HealthGateway {
-  HealthPluginGateway({hc.Health? health}) : _health = health ?? hc.Health();
+  HealthPluginGateway({hc.Health? health, MethodChannel? extraChannel})
+      : _health = health ?? hc.Health(),
+        _extra = extraChannel ?? healthExtraChannel;
 
   final hc.Health _health;
+
+  /// Nativer Zusatzkanal für VO2max. In Tests injizierbar.
+  final MethodChannel _extra;
+
   bool _configured = false;
 
   Future<hc.Health> _plugin() async {
@@ -927,10 +1192,24 @@ class HealthPluginGateway implements HealthGateway {
     return await plugin.hasPermissions(healthReadTypes) ?? false;
   }
 
+  /// Fragt die Leserechte an.
+  ///
+  /// VO2max hängt nicht am `health`-Paket, sondern am nativen Zusatzkanal und
+  /// wird deshalb in einem zweiten Schritt angefragt. Ein Fehlschlag dort
+  /// (Channel nicht registriert, Health Connect fehlt, Ablehnung nur für
+  /// VO2max) darf die übrigen — womöglich erteilten — Rechte nicht entwerten;
+  /// er wird daher verschluckt.
   @override
   Future<bool> requestPermissions() async {
     final plugin = await _plugin();
-    return plugin.requestAuthorization(healthReadTypes);
+    final granted = await plugin.requestAuthorization(healthReadTypes);
+    try {
+      await _extra
+          .invokeMethod<bool>(healthExtraRequestVo2MaxPermissionMethod);
+    } catch (_) {
+      // VO2max bleibt dann schlicht in VitalsSummary.unavailable.
+    }
+    return granted;
   }
 
   /// Öffnet den Play-Store-Eintrag von Health Connect. Nur sinnvoll, wenn
@@ -1058,14 +1337,48 @@ class HealthPluginGateway implements HealthGateway {
 
   /// VO2max wird vom Paket `health` nicht angeboten (kein passender
   /// [hc.HealthDataType]), obwohl Health Connect einen `Vo2MaxRecord` kennt.
+  /// Gelesen wird deshalb über den nativen Zusatzkanal
+  /// ([healthExtraChannelName]).
+  ///
+  /// Wirft, wenn der Channel nicht antwortet (z. B. auf einer alten
+  /// Installation ohne die native Erweiterung) oder Health Connect den Zugriff
+  /// verweigert — [HealthSyncService.readVitals] fängt das ab und meldet
+  /// VO2max als nicht verfügbar.
   @override
   Future<List<HealthNumericSample>> readVo2Max({
     required DateTime from,
     required DateTime to,
   }) async {
-    throw UnsupportedError(
-      'VO2max wird vom health-Paket nicht unterstützt (kein HealthDataType).',
+    final raw = await _extra.invokeListMethod<Object?>(
+      healthExtraReadVo2MaxMethod,
+      <String, Object?>{
+        'startMs': from.millisecondsSinceEpoch,
+        'endMs': to.millisecondsSinceEpoch,
+      },
     );
+    if (raw == null) {
+      return const [];
+    }
+
+    final samples = <HealthNumericSample>[];
+    for (final entry in raw) {
+      if (entry is! Map) {
+        continue;
+      }
+      final timeMs = entry['timeMs'];
+      final value = entry['vo2'];
+      if (timeMs is! num || value is! num) {
+        continue;
+      }
+      samples.add(
+        HealthNumericSample(
+          time: DateTime.fromMillisecondsSinceEpoch(timeMs.toInt()),
+          value: value.toDouble(),
+        ),
+      );
+    }
+    samples.sort((a, b) => a.time.compareTo(b.time));
+    return samples;
   }
 
   Future<List<HealthNumericSample>> _numeric(

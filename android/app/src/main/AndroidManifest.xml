@@ -18,6 +18,10 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+    <!-- VO2max liest Trailscape ueber einen eigenen Platform-Channel direkt
+         via androidx Health Connect (Vo2MaxRecord); das health-Plugin kennt
+         den Datentyp nicht. -->
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX"/>
     <!-- Ohne diese Berechtigung liefert Health Connect nur Daten der letzten
          30 Tage ab Zustimmung. -->
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY"/>

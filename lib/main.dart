@@ -75,11 +75,13 @@ class _HomeShellState extends State<HomeShell>
     super.dispose();
   }
 
-  /// Lädt die gespeicherten Touren und stößt danach einmalig den stillen
+  /// Lädt Trainingsprofil und gespeicherte Touren und stößt danach einmalig
+  /// den stillen
   /// Health-Connect-Hintergrund-Sync an (siehe [AppState.autoSyncHealth]).
   /// Blockiert den App-Start nicht: `initState` wartet nicht auf diese
   /// Future, die UI baut sich sofort mit den (noch leeren) Touren auf.
   Future<void> _bootstrap() async {
+    await _state.loadProfile();
     await _state.loadRides();
     await _state.autoSyncHealth();
   }
