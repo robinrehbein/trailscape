@@ -3,18 +3,12 @@ name: Native Build
 # Baut das native Android-Projekt (Kotlin + Compose) im Repo-Root. Laeuft
 # bewusst nur bei Aenderungen an dessen Dateien, damit reine Flutter-Commits
 # die Pipeline nicht doppelt beschaeftigen.
+# Nur push-Trigger (kein pull_request): Push-Läufe erscheinen über die
+# Commit-SHA trotzdem als Checks am PR, und der doppelte Lauf pro Push auf
+# den Entwicklungs-Branch entfällt. Fork-PRs gibt es in diesem Solo-Repo nicht.
 on:
   push:
-    branches: [main]
-    paths:
-      - "app/**"
-      - "core/**"
-      - "settings.gradle.kts"
-      - "build.gradle.kts"
-      - "gradle/**"
-      - "gradle.properties"
-      - ".github/workflows/native-build.yml"
-  pull_request:
+    branches: [main, "claude/**"]
     paths:
       - "app/**"
       - "core/**"
@@ -71,3 +65,28 @@ jobs:
           name: trailscape-native-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+
+  # Stellt die APK unter einem stabilen Link bereit, analog zum
+  # "latest"-Release der Flutter-App:
+  # https://github.com/<repo>/releases/download/beta/trailscape-beta.apk
+  beta-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: trailscape-native-apk
+
+      - name: Beta-Release aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mv app-release.apk trailscape-beta.apk
+          if ! gh release view beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create beta --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "Trailscape β (nativer Rewrite)" \
+              --notes "Automatisch aktualisierter Build der nativen Kotlin/Compose-App. Parallel zur bestehenden Trailscape-App installierbar."
+          fi
+          gh release upload beta trailscape-beta.apk --clobber --repo "$GITHUB_REPOSITORY"
