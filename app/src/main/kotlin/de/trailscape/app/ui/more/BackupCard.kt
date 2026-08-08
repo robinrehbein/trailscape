@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
+import de.trailscape.app.ui.isDuplicateRide
 import de.trailscape.core.FormatException
 import de.trailscape.core.Ride
 import de.trailscape.core.TrainingProfile
@@ -128,8 +130,11 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                     ?: "Importierte Tour"
                 val ride = withContext(Dispatchers.Default) { rideFromGpx(xml, fallbackName = fallbackName) }
 
-                if (rides.any { it.id == ride.id }) {
-                    appViewModel.showMessage("Diese Tour ist bereits vorhanden.")
+                // Inhaltsbasiert statt ueber die ID: `rideFromGpx` vergibt
+                // beim Import jedes Mal eine neue ID (`:core`, Export.kt), ein
+                // ID-Vergleich konnte deshalb nie anschlagen.
+                if (isDuplicateRide(rides, ride)) {
+                    appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
                 } else {
                     appViewModel.addRide(ride)
                     appViewModel.showMessage("„${ride.name}\" importiert")

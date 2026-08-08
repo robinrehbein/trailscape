@@ -176,17 +176,6 @@ class RecordingService : Service() {
     private fun startRecording() {
         if (active) return
 
-        // Ein noch herumliegendes Journal gehoert zu einer frueheren Tour und
-        // wird abgeschlossen, bevor eine neue beginnt — sonst wuerde
-        // `journal.begin()` es kommentarlos ueberschreiben.
-        //
-        // `force`, weil das Lebenszeichen hier nichts mehr aussagt: Wir SIND
-        // der Dienst, und `active == false` heisst, dass niemand aufzeichnet.
-        // Ohne das Erzwingen ginge eine Tour verloren, die vor weniger als 30 s
-        // abgestuerzt ist und die der Nutzer sofort mit einer neuen Aufnahme
-        // ueberholt.
-        recoverIfNeeded(this, rideStorage, force = true)
-
         val now = System.currentTimeMillis()
         val id = RecordingJournal.newRideId(now)
 
@@ -198,7 +187,23 @@ class RecordingService : Service() {
         lastNotificationMs = 0L
 
         try {
-            journal.begin(id, now)
+            // Abschluss des alten und Anlegen des neuen Journals unter einer
+            // Sperre: dazwischen darf keine parallele Wiederherstellung das
+            // frische Journal beanspruchen.
+            RecordingJournal.withClaimLock {
+                // Ein noch herumliegendes Journal gehoert zu einer frueheren
+                // Tour und wird abgeschlossen, bevor eine neue beginnt — sonst
+                // wuerde `journal.begin()` es kommentarlos ueberschreiben.
+                //
+                // `force`, weil das Lebenszeichen hier nichts mehr aussagt: Wir
+                // SIND der Dienst, und `active == false` heisst, dass niemand
+                // aufzeichnet. Ohne das Erzwingen ginge eine Tour verloren, die
+                // vor weniger als 30 s abgestuerzt ist und die der Nutzer
+                // sofort mit einer neuen Aufnahme ueberholt.
+                recoverIfNeeded(this, rideStorage, force = true)
+                journal.begin(id, now)
+                journal.touchHeartbeat(now)
+            }
         } catch (e: Exception) {
             failAndStop(getString(R.string.recording_error_journal))
             return
@@ -221,7 +226,28 @@ class RecordingService : Service() {
     private fun continueFromJournal() {
         if (active) return
 
-        val snapshot = journal.read()
+        // Lesen, zum Weiterschreiben oeffnen und das Lebenszeichen setzen
+        // gehoeren in EINEN Sperrabschnitt: Sonst kann die Wiederherstellung
+        // (anderer Thread, eigene Journal-Instanz) das Journal genau dazwischen
+        // beanspruchen und dieselbe Fahrt ein zweites Mal als Tour speichern,
+        // waehrend dieser Dienst in eine neue, kopfzeilenlose Datei
+        // weiterschreibt.
+        val snapshot = try {
+            RecordingJournal.withClaimLock {
+                val read = journal.read()
+                if (read != null) {
+                    journal.reopenForAppend()
+                    // Ab jetzt gilt das Journal als lebendig — die
+                    // Wiederherstellung laesst es in Ruhe.
+                    journal.touchHeartbeat(System.currentTimeMillis())
+                }
+                read
+            }
+        } catch (e: Exception) {
+            failAndStop(getString(R.string.recording_error_journal))
+            return
+        }
+
         if (snapshot == null) {
             // Nichts fortzusetzen: Der Dienst wurde ohne laufende Aufzeichnung
             // neu gestartet (oder die Recovery hat das Journal bereits
@@ -237,13 +263,6 @@ class RecordingService : Service() {
         filter.paused = snapshot.pausedSinceMs != null
         distanceM = computeStats(snapshot.points).distanceKm * 1000
         lastNotificationMs = 0L
-
-        try {
-            journal.reopenForAppend()
-        } catch (e: Exception) {
-            failAndStop(getString(R.string.recording_error_journal))
-            return
-        }
 
         if (!requestUpdates()) return
 
@@ -711,30 +730,38 @@ class RecordingService : Service() {
             val dir = RecordingJournal.directory(appContext.filesDir)
             if (!dir.isDirectory) return emptyList()
 
-            val recovered = mutableListOf<Ride>()
+            // Der ganze Ablauf laeuft unter der prozessweiten Journal-Sperre:
+            // Ein Dienst, der gerade eine Aufzeichnung fortsetzt oder eine neue
+            // beginnt, haelt dieselbe Sperre (siehe RecordingJournal.claimLock)
+            // — Lebenszeichen-Pruefung und Inbesitznahme koennen dadurch nicht
+            // mehr mit seinem `read()`/`reopenForAppend()` verschraenken.
+            return RecordingJournal.withClaimLock {
+                val recovered = mutableListOf<Ride>()
 
-            // 1. Journale, die ein frueherer Anlauf bereits beansprucht hat
-            //    (Absturz genau waehrend der Wiederherstellung).
-            for (file in RecordingJournal.pendingClaimed(dir)) {
-                finalizeClaimed(appContext, rideStorage, file)?.let { recovered.add(it) }
+                // 1. Journale, die ein frueherer Anlauf bereits beansprucht hat
+                //    (Absturz genau waehrend der Wiederherstellung).
+                for (file in RecordingJournal.pendingClaimed(dir)) {
+                    finalizeClaimed(appContext, rideStorage, file)?.let { recovered.add(it) }
+                }
+
+                // 2. Das aktive Journal — nur wenn niemand mehr daran schreibt.
+                val journal = RecordingJournal(dir)
+                if (!journal.exists()) return@withClaimLock recovered
+                if (!force && RecordingRepository.isRecording.value) return@withClaimLock recovered
+
+                val now = System.currentTimeMillis()
+                val heartbeatAge = journal.heartbeatAgeMs(now)
+                if (!force && heartbeatAge != null && heartbeatAge < HEARTBEAT_STALE_MS) {
+                    return@withClaimLock recovered
+                }
+
+                val claimed = RecordingJournal.claimStale(dir, now)
+                    ?: return@withClaimLock recovered
+                File(dir, RecordingJournal.LOCK_FILE_NAME).delete()
+                finalizeClaimed(appContext, rideStorage, claimed)?.let { recovered.add(it) }
+
+                recovered
             }
-
-            // 2. Das aktive Journal — nur wenn niemand mehr daran schreibt.
-            val journal = RecordingJournal(dir)
-            if (!journal.exists()) return recovered
-            if (!force && RecordingRepository.isRecording.value) return recovered
-
-            val now = System.currentTimeMillis()
-            val heartbeatAge = journal.heartbeatAgeMs(now)
-            if (!force && heartbeatAge != null && heartbeatAge < HEARTBEAT_STALE_MS) {
-                return recovered
-            }
-
-            val claimed = RecordingJournal.claimStale(dir, now) ?: return recovered
-            File(dir, RecordingJournal.LOCK_FILE_NAME).delete()
-            finalizeClaimed(appContext, rideStorage, claimed)?.let { recovered.add(it) }
-
-            return recovered
         }
 
         private fun finalizeClaimed(context: Context, rideStorage: RideStorage, file: File): Ride? {

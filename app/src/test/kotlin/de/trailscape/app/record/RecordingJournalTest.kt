@@ -254,6 +254,63 @@ class RecordingJournalTest {
     }
 
     @Test
+    fun `withClaimLock serialisiert konkurrierende Zugriffe`() {
+        val order = mutableListOf<String>()
+        val first = Thread {
+            RecordingJournal.withClaimLock {
+                Thread.sleep(100)
+                synchronized(order) { order.add("wiederherstellung") }
+            }
+        }
+
+        first.start()
+        // Sicherstellen, dass der andere Thread die Sperre wirklich haelt.
+        Thread.sleep(20)
+        RecordingJournal.withClaimLock {
+            synchronized(order) { order.add("dienst") }
+        }
+        first.join()
+
+        assertEquals(listOf("wiederherstellung", "dienst"), order)
+    }
+
+    @Test
+    fun `claimStale kann nicht zwischen read und reopenForAppend dazwischenfunken`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendPoint(point(52.0, 1_005L))
+        j.close()
+
+        // Stellt die Wiederherstellung nach: ein anderer Thread will dasselbe
+        // Journal beanspruchen, waehrend der Dienst es fortsetzt.
+        var claimed: File? = null
+        val recovery = Thread {
+            RecordingJournal.withClaimLock {
+                claimed = RecordingJournal.claimStale(dir, 55_555L)
+            }
+        }
+
+        val service = journal()
+        val snapshot = RecordingJournal.withClaimLock {
+            val read = service.read()
+            recovery.start()
+            // Der andere Thread muss draussen bleiben, bis dieser Abschnitt
+            // fertig ist — vorher darf das Journal nicht umbenannt sein.
+            Thread.sleep(100)
+            assertNull(claimed)
+            assertTrue(activeFile().isFile)
+            service.reopenForAppend()
+            service.touchHeartbeat(2_000L)
+            read
+        }
+        recovery.join()
+        service.close()
+
+        assertEquals("id-1", assertNotNull(snapshot).id)
+        assertEquals(1, snapshot.points.size)
+    }
+
+    @Test
     fun `claimStale ignoriert ein leeres Journal`() {
         dir.mkdirs()
         activeFile().writeText("")

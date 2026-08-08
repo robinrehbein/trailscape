@@ -28,14 +28,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import org.maplibre.android.MapLibre
 import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.offline.OfflineRegion
@@ -52,25 +52,29 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * ist also eine bewusste Neuentwicklung, kein Port.
  *
  * Zustaendigkeitsgrenze: Der **Download** neuer Regionen gehoert dem
- * Karten-Screen (`ui/map/`, Parallel-Agent) — diese Karte listet nur
- * bestehende Regionen, zeigt ihre Groesse und loescht sie (einzeln oder
- * alle). Es wird bewusst NICHT auf eine `ui/map/OfflineRegions.kt` verwiesen,
- * falls der Karten-Agent so etwas anlegt — das koennte parallel entstehen und
- * ist beim Bauen dieser Datei nicht garantiert vorhanden; hier wird direkt
- * gegen `org.maplibre.android.offline.*` programmiert.
+ * Karten-Screen (`ui/map/OfflineRegions.kt`) — diese Karte listet nur
+ * bestehende Regionen, zeigt Stil, Datum und Groesse und loescht sie (einzeln
+ * oder alle). Die Metadaten liest sie mit
+ * [de.trailscape.app.ui.map.readOfflineRegionInfo], also mit genau dem Leser,
+ * der zum Schreiber der Download-Seite gehoert — ein eigener, halb passender
+ * JSON-Decoder an dieser Stelle hat frueher Stil und Zeitpunkt schlicht
+ * verworfen.
+ *
+ * @param onMessage Kanal fuer kurze Rueckmeldungen (Loeschfehler); im Mehr-Tab
+ *   `AppViewModel::showMessage`, damit die Snackbar dieselbe ist wie ueberall.
  */
 @Composable
-fun OfflineMapsCard(modifier: Modifier = Modifier) {
+fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
     var loading by remember { mutableStateOf(true) }
-    var regions by remember { mutableStateOf<List<OfflineRegionInfo>>(emptyList()) }
+    var regions by remember { mutableStateOf<List<OfflineRegionRow>>(emptyList()) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var reloadToken by remember { mutableIntStateOf(0) }
     var busyRegionId by remember { mutableStateOf<Long?>(null) }
     var deleteAllBusy by remember { mutableStateOf(false) }
     var confirmDeleteAll by remember { mutableStateOf(false) }
-    var confirmDeleteRegion by remember { mutableStateOf<OfflineRegionInfo?>(null) }
+    var confirmDeleteRegion by remember { mutableStateOf<OfflineRegionRow?>(null) }
 
     LaunchedEffect(reloadToken) {
         loading = true
@@ -108,7 +112,7 @@ fun OfflineMapsCard(modifier: Modifier = Modifier) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = info.name, style = MaterialTheme.typography.bodyLarge)
                                 Text(
-                                    text = formatOfflineRegionSize(info.sizeBytes),
+                                    text = info.details,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = hintColor,
                                 )
@@ -150,7 +154,11 @@ fun OfflineMapsCard(modifier: Modifier = Modifier) {
                         busyRegionId = target.id
                         deleteOfflineRegionAsync(target.region) { success ->
                             busyRegionId = null
-                            if (success) reloadToken++
+                            if (success) {
+                                reloadToken++
+                            } else {
+                                onMessage(DELETE_FAILED_MESSAGE)
+                            }
                         }
                     },
                 ) { Text("Löschen") }
@@ -171,9 +179,18 @@ fun OfflineMapsCard(modifier: Modifier = Modifier) {
                     onClick = {
                         confirmDeleteAll = false
                         deleteAllBusy = true
-                        deleteAllOfflineRegionsAsync(regions.map { it.region }) {
+                        deleteAllOfflineRegionsAsync(regions.map { it.region }) { failed ->
                             deleteAllBusy = false
                             reloadToken++
+                            if (failed > 0) {
+                                onMessage(
+                                    if (failed == 1) {
+                                        DELETE_FAILED_MESSAGE
+                                    } else {
+                                        "$failed Offline-Karten konnten nicht gelöscht werden."
+                                    },
+                                )
+                            }
                         }
                     },
                 ) { Text("Löschen") }
@@ -186,12 +203,19 @@ fun OfflineMapsCard(modifier: Modifier = Modifier) {
 }
 
 /** Eine gelistete MapLibre-Offline-Region mit den fuer die UI aufbereiteten Feldern. */
-private data class OfflineRegionInfo(
+private data class OfflineRegionRow(
     val id: Long,
     val name: String,
-    val sizeBytes: Long?,
+    /** Untertitel: Kartenstil · Datum · Groesse, soweit bekannt. */
+    val details: String,
     val region: OfflineRegion,
 )
+
+/** Meldung, wenn MapLibre das Loeschen einer Region ablehnt. */
+private const val DELETE_FAILED_MESSAGE = "Die Offline-Karte konnte nicht gelöscht werden."
+
+private val regionDateFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
 
 private fun formatOfflineRegionSize(bytes: Long?): String {
     if (bytes == null || bytes <= 0L) return "Größe unbekannt"
@@ -209,7 +233,7 @@ private fun formatOfflineRegionSize(bytes: Long?): String {
  * hier vorsorglich aufgerufen, falls der Karten-Screen (der die Kartenansicht
  * selbst initialisiert) noch nicht sichtbar war.
  */
-private suspend fun listOfflineRegionsWithStatus(context: Context): List<OfflineRegionInfo> {
+private suspend fun listOfflineRegionsWithStatus(context: Context): List<OfflineRegionRow> {
     val appContext = context.applicationContext
     MapLibre.getInstance(appContext)
     val manager = OfflineManager.getInstance(appContext)
@@ -228,10 +252,17 @@ private suspend fun listOfflineRegionsWithStatus(context: Context): List<Offline
 
     return rawRegions.map { region ->
         val status = runCatching { offlineRegionStatus(region) }.getOrNull()
-        OfflineRegionInfo(
+        val info = readOfflineRegionInfo(region.metadata)
+        OfflineRegionRow(
             id = region.id,
-            name = describeOfflineRegion(region),
-            sizeBytes = status?.completedResourceSize,
+            name = info?.name?.takeIf { it.isNotBlank() } ?: fallbackRegionName(region),
+            details = buildList {
+                mapStyles.firstOrNull { it.id == info?.styleId }?.let { add(it.label) }
+                info?.createdAtMs
+                    ?.takeIf { it > 0L }
+                    ?.let { add(regionDateFormatter.format(localOfEpochMs(it))) }
+                add(formatOfflineRegionSize(status?.completedResourceSize))
+            }.joinToString(" · "),
             region = region,
         )
     }
@@ -265,32 +296,43 @@ private fun deleteOfflineRegionAsync(region: OfflineRegion, onDone: (success: Bo
     })
 }
 
-private fun deleteAllOfflineRegionsAsync(regions: List<OfflineRegion>, onDone: () -> Unit) {
+/**
+ * Loescht alle uebergebenen Regionen und meldet ueber [onDone], wie viele
+ * davon fehlgeschlagen sind.
+ */
+private fun deleteAllOfflineRegionsAsync(
+    regions: List<OfflineRegion>,
+    onDone: (failed: Int) -> Unit,
+) {
     if (regions.isEmpty()) {
-        onDone()
+        onDone(0)
         return
     }
     var remaining = regions.size
-    val finishOne = {
+    var failed = 0
+    val finishOne = { success: Boolean ->
+        if (!success) failed++
         remaining--
-        if (remaining <= 0) onDone()
+        if (remaining <= 0) onDone(failed)
     }
     regions.forEach { region ->
         region.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
-            override fun onDelete() = finishOne()
-            override fun onError(error: String) = finishOne()
+            override fun onDelete() {
+                finishOne(true)
+            }
+
+            override fun onError(error: String) {
+                finishOne(false)
+            }
         })
     }
 }
 
 /**
- * Anzeigename einer Region: zuerst aus den Metadaten (falls sie — Konvention
- * vieler MapLibre-/Mapbox-Apps — ein JSON-Objekt mit einem `name`-Feld
- * enthalten), sonst ein Fallback aus Kartenstil und laufender Nummer.
+ * Anzeigename einer Region, deren Metadaten nicht von dieser App stammen (oder
+ * unlesbar sind): Kartenstil aus der Style-URL plus laufende Nummer.
  */
-private fun describeOfflineRegion(region: OfflineRegion): String {
-    decodeOfflineRegionName(region.metadata)?.let { return it }
-
+private fun fallbackRegionName(region: OfflineRegion): String {
     val definition = region.definition
     if (definition is OfflineTilePyramidRegionDefinition) {
         val styleUrl = definition.styleURL
@@ -298,19 +340,4 @@ private fun describeOfflineRegion(region: OfflineRegion): String {
         return "${styleLabel ?: "Kartenausschnitt"} #${region.id}"
     }
     return "Region #${region.id}"
-}
-
-private fun decodeOfflineRegionName(metadata: ByteArray?): String? {
-    if (metadata == null || metadata.isEmpty()) return null
-    return try {
-        val json = Json.parseToJsonElement(metadata.toString(Charsets.UTF_8))
-        if (json !is JsonObject) return null
-        listOf("name", "FIELD_REGION_NAME", "regionName")
-            .firstNotNullOfOrNull { key ->
-                (json[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-            }
-            ?.takeIf { it.isNotBlank() }
-    } catch (e: Exception) {
-        null
-    }
 }

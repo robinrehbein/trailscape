@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.record.RecordingRepository
 import de.trailscape.core.HealthConnection
+import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HttpClient
@@ -18,10 +20,13 @@ import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsSummary
 import de.trailscape.core.getSyncConfig
+import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
 import de.trailscape.core.savePlan
 import de.trailscape.core.syncRides
+import java.time.Instant
 import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,6 +38,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -316,7 +322,12 @@ class AppViewModel(
                 val connection = refreshHealthConnection()
                 if (!connection.isReady) return@runCatching
                 val report = withContext(io) { healthSync.importWithReport(existing = _rides.value) }
-                applyReport(report)
+                // Ein fehlgeschlagenes Speichern ist der eine Fehler, den auch
+                // der stille Sync melden muss: Die Nutzerin sieht sonst nie,
+                // dass Touren fehlen (der Zeitstempel ist zwar
+                // zurueckgerollt, der naechste Versuch kann aber genauso
+                // scheitern — etwa bei vollem Speicher).
+                if (!applyReport(report)) showMessage(HEALTH_SAVE_FAILED_MESSAGE)
                 _vitals.value = withContext(io) { healthSync.readVitals(days = VITALS_WINDOW_DAYS) }
             }
         }
@@ -331,17 +342,23 @@ class AppViewModel(
      * geeigneten Meldung — anders als [autoSyncHealth] wird der Fehler hier
      * bewusst nicht verschluckt.
      *
-     * @param reimportAll loescht zuerst den gespeicherten Import-Zeitstempel,
-     *   der naechste Import betrachtet dann wieder das volle 30-Tage-Fenster.
+     * @param reimportAll betrachtet wieder das volle 30-Tage-Fenster. Der
+     *   gespeicherte Zeitstempel wird dafuer **nicht** geloescht (das
+     *   Importfenster kommt ueber `since`): Wirft der Import — etwa weil
+     *   Health Connect zwischenzeitlich die Berechtigung entzogen hat —,
+     *   bleibt der bisherige Stand erhalten, statt den naechsten normalen
+     *   Sync unnoetig 30 Tage scannen zu lassen.
      */
     suspend fun syncHealthNow(reimportAll: Boolean = false): Int {
         val report = withContext(io) {
-            if (reimportAll) {
-                healthSync.setLastImportAt(null)
-            }
-            healthSync.importWithReport(existing = _rides.value)
+            healthSync.importWithReport(
+                existing = _rides.value,
+                since = if (reimportAll) fullHealthWindowStart() else null,
+            )
         }
-        applyReport(report)
+        if (!applyReport(report)) {
+            throw HealthSyncException(HEALTH_SAVE_FAILED_MESSAGE)
+        }
         _vitals.value = withContext(io) { healthSync.readVitals(days = VITALS_WINDOW_DAYS) }
         refreshHealthConnection()
         return report.imported.size
@@ -351,16 +368,49 @@ class AppViewModel(
      * Merkt sich den Bericht und persistiert alles, was er veraendert hat:
      * neue Touren **und** bestehende Touren, die um Watch-Herzfrequenz
      * angereichert wurden (gleiche ID, `saveRide` ueberschreibt sie).
+     *
+     * `importWithReport` hat den Import-Zeitstempel bereits auf das Ende des
+     * betrachteten Fensters gesetzt, bevor diese Methode ueberhaupt laeuft.
+     * Scheitert das Speichern (voller Datentraeger, IO-Fehler), waeren die
+     * Workouts damit endgueltig verloren: Sie lagen im gerade abgehakten
+     * Fenster und tauchen nie wieder auf. Deshalb wird der Zeitstempel dann
+     * auf den Fensteranfang ([HealthSyncReport.from]) zurueckgerollt — der
+     * naechste Sync betrachtet exakt denselben Zeitraum erneut.
+     *
+     * @return `false`, wenn das Speichern fehlgeschlagen ist (Zeitstempel
+     *   wurde zurueckgerollt). Der Aufrufer meldet das der Nutzerin.
      */
-    private suspend fun applyReport(report: HealthSyncReport) {
+    private suspend fun applyReport(report: HealthSyncReport): Boolean {
         _lastSyncReport.value = report
-        if (report.isEmpty) return
-        withContext(io) {
-            rideStorage.saveRides(report.imported)
-            rideStorage.saveRides(report.mergedRides)
+        if (report.isEmpty) return true
+
+        val saved = withContext(io) {
+            runCatching {
+                rideStorage.saveRides(report.imported)
+                rideStorage.saveRides(report.mergedRides)
+            }
         }
+        if (saved.isFailure) {
+            withContext(io) { runCatching { healthSync.setLastImportAt(report.from) } }
+            // Die Liste trotzdem neu laden: Vielleicht ist ein Teil der Touren
+            // vor dem Fehler schon auf der Platte gelandet.
+            reloadRides()
+            return false
+        }
+
         reloadRides()
+        return true
     }
+
+    /**
+     * Beginn des vollen Importfensters („Alles neu importieren"): jetzt minus
+     * [healthSyncInitialWindowMs], gerechnet auf der absoluten Zeitachse —
+     * dieselbe Rechnung, die `:core` ohne gesetzten Zeitstempel anstellt.
+     */
+    private fun fullHealthWindowStart(): LocalDateTime = LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(System.currentTimeMillis() - healthSyncInitialWindowMs),
+        ZoneId.systemDefault(),
+    )
 
     // -------------------------------------------------------------------------
     // Abgeleitete Trainingsauswertung
@@ -478,6 +528,21 @@ class AppViewModel(
     // -------------------------------------------------------------------------
 
     init {
+        // Fertig gespeicherte Touren quittiert das ViewModel, nicht ein
+        // einzelner Screen: Gestoppt wird auch ueber die Notification-Aktion,
+        // und die Wiederherstellung eines verwaisten Journals meldet ihre Tour
+        // beim App-Start. Beides muss die Tourenliste aktualisieren, egal
+        // welcher Tab gerade sichtbar ist. Die Snackbar laeuft ueber
+        // [messages] — den Kanal sammelt ohnehin jeder Screen ein.
+        viewModelScope.launch {
+            RecordingRepository.lastFinishedRideId.filterNotNull().collect { rideId ->
+                reloadRides()
+                select(rideId)
+                RecordingRepository.clearFinishedRide()
+                showMessage("Tour gespeichert.")
+            }
+        }
+
         viewModelScope.launch {
             // Alles, was von der Platte kommt, in EINEM IO-Sprung — danach
             // steht der Zustand vollstaendig, bevor der erste Sync laeuft.
@@ -508,3 +573,13 @@ class AppViewModel(
         val syncConfig: SyncConfig?,
     )
 }
+
+/**
+ * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert
+ * werden konnten. Der Import-Zeitstempel ist dann bereits zurueckgerollt
+ * (siehe `AppViewModel.applyReport`), der naechste Sync holt dieselben
+ * Workouts also erneut.
+ */
+private const val HEALTH_SAVE_FAILED_MESSAGE: String =
+    "Die importierten Touren konnten nicht gespeichert werden. " +
+        "Beim nächsten Sync wird es erneut versucht."

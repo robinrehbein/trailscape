@@ -133,6 +133,12 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                                     // verklemmen, weil es auf den Berechtigungsdialog
                                     // wartet.
                                     appViewModel.requestHealthPermissions()
+                                } catch (e: HealthSyncException) {
+                                    // Der Berechtigungsweg wirft bei jedem
+                                    // Problem des Anbieters (SecurityException,
+                                    // RemoteException, abgebrochener Dialog) —
+                                    // ungefangen waere das ein Absturz.
+                                    appViewModel.showMessage(e.message)
                                 } finally {
                                     busy = false
                                 }

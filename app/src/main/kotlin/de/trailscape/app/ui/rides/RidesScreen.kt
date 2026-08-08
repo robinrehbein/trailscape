@@ -63,7 +63,10 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
+import de.trailscape.app.ui.isDuplicateRide
 import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
 import de.trailscape.core.formatDuration
@@ -93,9 +96,6 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
 
 private val dateFormatter: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
-
-/** Unterverzeichnis im Cache, aus dem der FileProvider GPX-Dateien ausliefert. */
-private const val SHARE_DIR_NAME = "geteilte-touren"
 
 /**
  * Tourenliste — Port von `lib/screens/rides_screen.dart`.
@@ -148,8 +148,15 @@ fun RidesScreen(appViewModel: AppViewModel) {
         scope.launch {
             try {
                 val ride = withContext(Dispatchers.IO) { readGpx(context, uri) }
-                appViewModel.addRide(ride)
-                appViewModel.requestTab(AppTab.MAP)
+                // Inhaltsbasiert pruefen: `rideFromGpx` vergibt bei jedem
+                // Import eine frische ID, ein ID-Vergleich ginge also immer
+                // ins Leere (siehe ui/RideImport.kt).
+                if (isDuplicateRide(rides, ride)) {
+                    snackbarHostState.showSnackbar(DUPLICATE_RIDE_MESSAGE)
+                } else {
+                    appViewModel.addRide(ride)
+                    appViewModel.requestTab(AppTab.MAP)
+                }
             } catch (e: Exception) {
                 snackbarHostState.showSnackbar(
                     e.message?.takeIf { it.isNotBlank() } ?: "Import fehlgeschlagen.",
@@ -470,16 +477,15 @@ private fun displayName(context: Context, uri: Uri): String? =
  * Teilt eine Tour als GPX-Datei ueber das System-Share-Sheet (z. B. fuer
  * Komoot, Strava oder eine andere Trainings-App).
  *
- * Die Datei landet unter `<cacheDir>/[SHARE_DIR_NAME]` — genau der Pfad, den
- * `res/xml/file_paths.xml` fuer den FileProvider freigibt. Alte Exporte
- * werden vorher aufgeraeumt, damit der Cache nicht mitwaechst.
+ * Die Datei landet unter `<cacheDir>/geteilte-touren` — genau der Pfad, den
+ * `res/xml/file_paths.xml` fuer den FileProvider freigibt. Dabei werden **alte**
+ * Exporte aufgeraeumt (siehe `ui/ShareFiles.kt`), damit der Cache nicht
+ * mitwaechst; frische bleiben liegen, weil die Empfaenger-App sie erst nach
+ * dem Chooser liest.
  */
 private suspend fun shareGpx(context: Context, ride: Ride) {
     val uri = withContext(Dispatchers.IO) {
-        val dir = File(context.cacheDir, SHARE_DIR_NAME)
-        dir.mkdirs()
-        dir.listFiles()?.forEach { it.delete() }
-
+        val dir = prepareShareDirectory(context.cacheDir)
         val file = File(dir, "${safeFileName(ride.name)}.gpx")
         file.writeText(rideToGpx(ride), Charsets.UTF_8)
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)

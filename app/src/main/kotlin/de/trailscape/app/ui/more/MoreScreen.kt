@@ -88,7 +88,7 @@ fun MoreScreen(appViewModel: AppViewModel) {
                 item { HealthCard(appViewModel) }
                 item { BackupCard(appViewModel) }
                 item { SyncCard(appViewModel) }
-                item { OfflineMapsCard() }
+                item { OfflineMapsCard(onMessage = appViewModel::showMessage) }
                 item { AboutCard() }
             }
         }

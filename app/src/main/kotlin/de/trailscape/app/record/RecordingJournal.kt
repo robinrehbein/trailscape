@@ -224,6 +224,31 @@ internal class RecordingJournal(private val dir: File) {
         fun directory(filesDir: File): File = File(filesDir, "recording")
 
         /**
+         * Prozessweite Sperre um das Beanspruchen bzw. Fortsetzen eines
+         * Journals.
+         *
+         * `synchronized(this)` in den Instanzmethoden reicht dafuer nicht: Die
+         * Wiederherstellung
+         * ([de.trailscape.app.record.RecordingService.recoverIfNeeded], gerufen
+         * aus `TrailscapeApplication` auf einem IO-Thread) und der Dienst, der
+         * eine Aufzeichnung fortsetzt (`continueFromJournal` auf dem
+         * Aufzeichnungs-Thread), arbeiten mit **verschiedenen**
+         * [RecordingJournal]-Instanzen auf derselben Datei. Ohne diese
+         * gemeinsame Sperre konnte [claimStale] genau zwischen `read()` und
+         * `reopenForAppend()` zuschlagen: Der Dienst schrieb danach in ein
+         * frisch angelegtes, kopfzeilenloses `active.jsonl` weiter, waehrend
+         * die Wiederherstellung dieselben Punkte schon zu einer Tour machte —
+         * aus einer Fahrt wurden zwei.
+         */
+        private val claimLock = Any()
+
+        /**
+         * Fuehrt [block] unter der prozessweiten Journal-Sperre aus (siehe
+         * [claimLock]). Reentrant, wie `synchronized` allgemein.
+         */
+        fun <T> withClaimLock(block: () -> T): T = synchronized(claimLock, block)
+
+        /**
          * Nimmt ein verwaistes Journal in Beschlag: benennt `active.jsonl` in
          * `recovering-<zeitstempel>.jsonl` um und liefert die neue Datei.
          *

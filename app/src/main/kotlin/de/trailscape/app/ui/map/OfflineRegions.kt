@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.map
 
 import android.content.Context
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.MapStyle
 import java.io.File
 import kotlin.coroutines.resume
@@ -12,7 +13,14 @@ import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.tan
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -137,6 +145,10 @@ fun offlineZoomRange(cameraZoom: Double, style: MapStyle): IntRange {
  * (`Style.Builder().fromJson(...)`) nimmt es nicht an. Die Datei liegt im
  * app-privaten Speicher und wird bei jedem Aufruf neu geschrieben, damit
  * Aenderungen am Stil-Katalog sofort greifen.
+ *
+ * Schreibt auf den Datentraeger und blockiert deshalb: **nicht** aus dem
+ * Main-Thread aufrufen (siehe [downloadOfflineRegion], das den Aufruf auf
+ * [Dispatchers.IO] auslagert).
  */
 fun mapStyleFileUri(context: Context, style: MapStyle): String {
     val dir = File(context.filesDir, STYLE_DIR_NAME)
@@ -198,7 +210,11 @@ suspend fun downloadOfflineRegion(
     onProgress: (OfflineDownloadProgress) -> Unit,
 ): OfflineDownloadProgress {
     val appContext = context.applicationContext
-    val styleUri = runCatching { mapStyleFileUri(appContext, style) }.getOrElse {
+    // Die Style-JSON landet als Datei auf dem Flash — das gehoert nicht auf
+    // den Main-Thread, aus dem diese Funktion gerufen wird.
+    val styleUri = withContext(Dispatchers.IO) {
+        runCatching { mapStyleFileUri(appContext, style) }
+    }.getOrElse {
         throw IllegalStateException("Der Kartenstil konnte nicht abgelegt werden.")
     }
 
@@ -297,3 +313,93 @@ private object NoopDeleteCallback : OfflineRegion.OfflineRegionDeleteCallback {
     override fun onDelete() = Unit
     override fun onError(error: String) = Unit
 }
+
+// ------------------------------------------------- Download ausserhalb des Screens
+
+/** Fortschritt des laufenden Ausschnitt-Downloads fuer die Oberflaeche. */
+data class OfflineDownloadState(
+    val running: Boolean = false,
+    val completedTiles: Long = 0L,
+    val totalTiles: Long = 0L,
+)
+
+/**
+ * Haelt den laufenden Ausschnitt-Download **ausserhalb** der Komposition.
+ *
+ * Der Grund: Ein `rememberCoroutineScope()` des Karten-Screens stirbt, sobald
+ * der `NavHost` den Screen beim Tab-Wechsel entsorgt. Die Coroutine wird dann
+ * abgebrochen, und [downloadOfflineRegion] loescht die halbfertige Region in
+ * seinem `invokeOnCancellation` — der Download war umsonst, ohne dass die
+ * Nutzerin je etwas davon erfaehrt. Hier laeuft er stattdessen in
+ * [AppServices.appScope] (bewusst auf [Dispatchers.Main], weil der
+ * `OfflineManager` seine Rueckmeldungen ueber den Main-Looper liefert) und der
+ * Fortschritt kommt als [StateFlow] zurueck. Ein Tab-Wechsel unterbricht damit
+ * nichts mehr; die Abschlussmeldung geht ueber [onMessage] in den geteilten
+ * Meldungskanal des [de.trailscape.app.ui.AppViewModel], den immer der gerade
+ * sichtbare Screen als Snackbar zeigt.
+ */
+object OfflineDownloadController {
+
+    private val _state = MutableStateFlow(OfflineDownloadState())
+
+    /** Fortschritt des laufenden Downloads; `running == false`, wenn keiner laeuft. */
+    val state: StateFlow<OfflineDownloadState> = _state.asStateFlow()
+
+    /**
+     * Startet einen Download, sofern nicht schon einer laeuft (dann passiert
+     * nichts). Alle Meldungen — Erfolg wie Fehler — gehen an [onMessage].
+     */
+    fun start(
+        context: Context,
+        style: MapStyle,
+        bounds: LatLngBounds,
+        minZoom: Int,
+        maxZoom: Int,
+        name: String,
+        estimatedTiles: Int,
+        onMessage: (String) -> Unit,
+    ) {
+        if (_state.value.running) return
+        _state.value = OfflineDownloadState(
+            running = true,
+            completedTiles = 0L,
+            totalTiles = estimatedTiles.toLong().coerceAtLeast(0L),
+        )
+        val appContext = context.applicationContext
+
+        AppServices.appScope.launch(Dispatchers.Main) {
+            try {
+                val result = downloadOfflineRegion(
+                    context = appContext,
+                    style = style,
+                    bounds = bounds,
+                    minZoom = minZoom,
+                    maxZoom = maxZoom,
+                    name = name,
+                ) { progress ->
+                    _state.value = OfflineDownloadState(
+                        running = true,
+                        completedTiles = progress.completedTiles,
+                        totalTiles = if (progress.requiredResources > 0) {
+                            progress.requiredResources
+                        } else {
+                            _state.value.totalTiles
+                        },
+                    )
+                }
+                onMessage(
+                    "Ausschnitt gespeichert: ${result.completedTiles} Kacheln " +
+                        "(${formatMegabytes(result.completedBytes)} MB).",
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onMessage(e.message?.takeIf(String::isNotBlank) ?: "Download fehlgeschlagen.")
+            } finally {
+                _state.value = OfflineDownloadState()
+            }
+        }
+    }
+}
+
+private fun formatMegabytes(bytes: Long): String = formatOneDecimal(bytes / 1024.0 / 1024.0)
