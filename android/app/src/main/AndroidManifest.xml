@@ -21,6 +21,10 @@
     <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY"/>
     <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
     <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+    <!-- Das health-Plugin liest beim Anreichern jeder Trainings-Session auch
+         StepsRecord. Ohne diese Freigabe wirft Health Connect dabei und das
+         Plugin liefert still eine leere Workout-Liste. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <!-- VO2max liest Trailscape ueber einen eigenen Platform-Channel direkt
          via androidx Health Connect (Vo2MaxRecord); das health-Plugin kennt
          den Datentyp nicht. -->

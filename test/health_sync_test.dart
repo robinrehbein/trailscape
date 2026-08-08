@@ -26,6 +26,9 @@ class FakeHealthGateway implements HealthGateway {
     this.failSleep = false,
     this.failVo2max = true,
     this.failHrv = false,
+    this.nativeSessions = const [],
+    this.failNativeSessions = false,
+    this.workoutDiagnostics,
   });
 
   HealthAvailability availabilityValue;
@@ -48,10 +51,31 @@ class FakeHealthGateway implements HealthGateway {
   bool failVo2max;
   bool failHrv;
 
+  List<HealthSessionInfo> nativeSessions;
+  bool failNativeSessions;
+  HealthWorkoutReadDiagnostics? workoutDiagnostics;
+
   int requestCount = 0;
+  int nativeSessionCalls = 0;
   DateTime? lastWorkoutFrom;
   DateTime? lastWorkoutTo;
   final List<({DateTime from, DateTime to})> heartRateWindows = [];
+
+  @override
+  HealthWorkoutReadDiagnostics? get lastWorkoutDiagnostics =>
+      workoutDiagnostics;
+
+  @override
+  Future<List<HealthSessionInfo>> readExerciseSessionsNative({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    nativeSessionCalls++;
+    if (failNativeSessions) {
+      throw MissingPluginException('kein Channel');
+    }
+    return nativeSessions;
+  }
 
   @override
   Future<HealthAvailability> availability() async => availabilityValue;
@@ -212,6 +236,27 @@ Ride _rideWithPoints({
         descentM: 110,
         avgHrBpm: avgHrBpm,
       ),
+    );
+
+HealthSessionInfo _session({
+  String uid = 's1',
+  required DateTime start,
+  Duration duration = const Duration(minutes: 60),
+  String typeName = 'EXERCISE_TYPE_BIKING',
+  int typeCode = 8,
+  String? title,
+  String? source = 'com.sec.android.app.shealth',
+  bool hasRoute = false,
+}) =>
+    HealthSessionInfo(
+      uid: uid,
+      start: start,
+      end: start.add(duration),
+      typeCode: typeCode,
+      typeName: typeName,
+      title: title,
+      source: source,
+      hasRoute: hasRoute,
     );
 
 /// Gateway, das VO2max an eine echte [HealthPluginGateway] (mit gemocktem
@@ -1859,6 +1904,314 @@ void main() {
       final vitals = await service.readVitals();
       expect(vitals.unavailable, contains(VitalsDataKind.vo2max));
       expect(vitals.unavailable, isNot(contains(VitalsDataKind.ruhepuls)));
+    });
+  });
+
+  group('mapNativeSessionKind', () {
+    final start = _at(2026, 8, 8, 9);
+
+    test('BIKING und BIKING_STATIONARY werden direkt zugeordnet', () {
+      expect(
+        mapNativeSessionKind(_session(start: start)),
+        HealthActivityKind.radfahren,
+      );
+      expect(
+        mapNativeSessionKind(
+          _session(
+            start: start,
+            typeName: 'EXERCISE_TYPE_BIKING_STATIONARY',
+            typeCode: 9,
+          ),
+        ),
+        HealthActivityKind.radfahrenIndoor,
+      );
+    });
+
+    test('Titel-Heuristik erkennt Rad-Titel bei fremdem Typ', () {
+      for (final title in [
+        'Fahrrad',
+        'Radtour am Abend',
+        'Gravel Ride',
+        'MTB-Runde',
+        'Cycling',
+        'E-Bike',
+      ]) {
+        expect(
+          mapNativeSessionKind(
+            _session(
+              start: start,
+              typeName: 'EXERCISE_TYPE_OTHER_WORKOUT',
+              typeCode: 0,
+              title: title,
+            ),
+          ),
+          HealthActivityKind.radfahren,
+          reason: title,
+        );
+      }
+    });
+
+    test('andere Titel bleiben unberücksichtigt', () {
+      for (final title in ['Laufen', 'Schwimmen', 'Krafttraining', 'Wandern']) {
+        expect(
+          mapNativeSessionKind(
+            _session(
+              start: start,
+              typeName: 'EXERCISE_TYPE_OTHER_WORKOUT',
+              typeCode: 0,
+              title: title,
+            ),
+          ),
+          isNull,
+          reason: title,
+        );
+      }
+      expect(
+        mapNativeSessionKind(
+          _session(
+            start: start,
+            typeName: 'EXERCISE_TYPE_RUNNING',
+            typeCode: 56,
+          ),
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('Nativer Fallback beim Import', () {
+    final start = _at(2026, 8, 8, 9);
+    final now = _at(2026, 8, 8, 20);
+
+    test('greift, wenn das Plugin keine Rad-Session liefert', () async {
+      final gateway = FakeHealthGateway(
+        nativeSessions: [_session(uid: 'abc', start: start)],
+      );
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(existing: const []);
+
+      expect(gateway.nativeSessionCalls, 1);
+      expect(report.workoutsFound, 1);
+      expect(report.imported, hasLength(1));
+      expect(report.imported.single.id, healthRideId('abc'));
+      expect(
+        report.debugLines.any((l) => l.startsWith('Fallback: aktiv')),
+        isTrue,
+      );
+    });
+
+    test('nutzt die uid für Route und Duplikatserkennung', () async {
+      final gateway = FakeHealthGateway(
+        nativeSessions: [_session(uid: 'abc', start: start, hasRoute: true)],
+        routes: {
+          'abc': [
+            HealthRoutePoint(lat: 48, lon: 11, time: start, ele: 500),
+            HealthRoutePoint(
+              lat: 48.01,
+              lon: 11.01,
+              time: start.add(const Duration(minutes: 30)),
+              ele: 520,
+            ),
+          ],
+        },
+      );
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.imported.single.points, hasLength(2));
+      expect(report.routesMissing, 0);
+
+      // Zweiter Lauf: die abgeleitete ID ist bereits bekannt.
+      final zweiter = await service.importWithReport(
+        since: start.subtract(const Duration(days: 1)),
+        existing: report.imported,
+      );
+      expect(zweiter.imported, isEmpty);
+      expect(zweiter.duplicatesSkipped, 1);
+    });
+
+    test('Indoor-Sessions landen als Indoor-Tour', () async {
+      final gateway = FakeHealthGateway(
+        nativeSessions: [
+          _session(
+            start: start,
+            typeName: 'EXERCISE_TYPE_BIKING_STATIONARY',
+            typeCode: 9,
+          ),
+        ],
+      );
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.imported.single.name, contains('(Indoor)'));
+      // Ohne Route fehlt nur draußen etwas.
+      expect(report.routesMissing, 0);
+    });
+
+    test('Sessions ohne Rad-Bezug lösen keinen Import aus', () async {
+      final gateway = FakeHealthGateway(
+        nativeSessions: [
+          _session(
+            start: start,
+            typeName: 'EXERCISE_TYPE_RUNNING',
+            typeCode: 56,
+            title: 'Morgenlauf',
+          ),
+        ],
+      );
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.workoutsFound, 0);
+      expect(report.imported, isEmpty);
+      expect(
+        report.debugLines.any((l) => l == 'Fallback: nicht verwendet'),
+        isTrue,
+      );
+    });
+
+    test('ein Fehler des nativen Wegs bleibt folgenlos', () async {
+      final gateway = FakeHealthGateway(failNativeSessions: true);
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.workoutsFound, 0);
+      expect(report.imported, isEmpty);
+      expect(
+        report.debugLines.any((l) => l.startsWith('Nativ: nicht verfügbar')),
+        isTrue,
+      );
+    });
+
+    test('liefert das Plugin Rad-Sessions, wird nativ gar nicht gelesen',
+        () async {
+      final gateway = FakeHealthGateway(
+        workouts: [
+          _cycling(start: start, end: start.add(const Duration(hours: 1))),
+        ],
+        nativeSessions: [_session(uid: 'nativ', start: start)],
+      );
+      final service = HealthSyncService(gateway: gateway, now: () => now);
+
+      final report = await service.importWithReport(existing: const []);
+      expect(gateway.nativeSessionCalls, 0);
+      expect(report.imported.single.id, healthRideId('w1'));
+      expect(
+        report.debugLines.any((l) => l == 'Fallback: nicht verwendet'),
+        isTrue,
+      );
+    });
+  });
+
+  group('debugLines', () {
+    test('nennen Rohpunkte und Werttypen des Plugins', () async {
+      final gateway = FakeHealthGateway(
+        workoutDiagnostics: const HealthWorkoutReadDiagnostics(
+          rawPointCount: 3,
+          valueTypeCounts: {'NumericHealthValue': 3},
+          activityTypeCounts: {},
+        ),
+      );
+      final service = HealthSyncService(
+        gateway: gateway,
+        now: () => _at(2026, 8, 8, 20),
+      );
+
+      final report = await service.importWithReport(existing: const []);
+      expect(
+        report.debugLines.any(
+          (l) => l.contains('3 Rohpunkt(e)') &&
+              l.contains('NumericHealthValue×3'),
+        ),
+        isTrue,
+      );
+      expect(report.debugLines.first, startsWith('Zeitraum:'));
+    });
+
+    test('ohne Rohdiagnose bleibt die Zeile trotzdem sprechend', () async {
+      final service = HealthSyncService(
+        gateway: FakeHealthGateway(),
+        now: () => _at(2026, 8, 8, 20),
+      );
+
+      final report = await service.importWithReport(existing: const []);
+      expect(report.debugLines, contains('Plugin: keine Rohdiagnose erhoben'));
+      expect(report.debugLines, contains('Plugin: 0 Rad-Session(s)'));
+    });
+  });
+
+  group('readExerciseSessionsNative über den Platform-Channel', () {
+    const channel = MethodChannel('trailscape/health_extra.sessions.test');
+    final calls = <MethodCall>[];
+    late TestDefaultBinaryMessengerBinding binding;
+
+    void mock(Future<Object?> Function(MethodCall call) handler) {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel,
+          (call) async {
+        calls.add(call);
+        return handler(call);
+      });
+    }
+
+    setUp(() {
+      binding = TestDefaultBinaryMessengerBinding.instance;
+      calls.clear();
+    });
+
+    tearDown(() {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+    });
+
+    test('übersetzt die Maps der Kotlin-Seite', () async {
+      final start = _at(2026, 8, 8, 9);
+      mock((call) async => [
+            {
+              'uid': 'abc',
+              'startMs': start.millisecondsSinceEpoch,
+              'endMs': start.add(const Duration(hours: 1)).millisecondsSinceEpoch,
+              'exerciseType': 8,
+              'exerciseTypeName': 'EXERCISE_TYPE_BIKING',
+              'title': 'Radtour',
+              'source': 'com.sec.android.app.shealth',
+              'hasRoute': true,
+            },
+            // Unbrauchbar (keine uid) — wird verworfen.
+            {'startMs': 1, 'endMs': 2},
+            'unsinn',
+          ]);
+
+      final gateway = HealthPluginGateway(extraChannel: channel);
+      final sessions = await gateway.readExerciseSessionsNative(
+        from: _at(2026, 8, 1),
+        to: _at(2026, 8, 10),
+      );
+
+      expect(calls.single.method, 'readExerciseSessions');
+      expect(calls.single.arguments, {
+        'startMs': _at(2026, 8, 1).millisecondsSinceEpoch,
+        'endMs': _at(2026, 8, 10).millisecondsSinceEpoch,
+      });
+      expect(sessions, hasLength(1));
+      final session = sessions.single;
+      expect(session.uid, 'abc');
+      expect(session.typeCode, 8);
+      expect(session.typeName, 'EXERCISE_TYPE_BIKING');
+      expect(session.title, 'Radtour');
+      expect(session.hasRoute, isTrue);
+      expect(mapNativeSessionKind(session), HealthActivityKind.radfahren);
+    });
+
+    test('ein fehlender Channel wirft (und wird oben abgefangen)', () async {
+      // Kein Mock registriert -> MissingPluginException.
+      expect(
+        () => HealthPluginGateway(extraChannel: channel)
+            .readExerciseSessionsNative(
+          from: _at(2026, 8, 1),
+          to: _at(2026, 8, 10),
+        ),
+        throwsA(isA<MissingPluginException>()),
+      );
     });
   });
 }

@@ -26,6 +26,12 @@
 ///    (`HEART_RATE_VARIABILITY_RMSSD` → Health Connects
 ///    `HeartRateVariabilityRmssdRecord`) — sie läuft daher über den normalen
 ///    Plugin-Weg, nur die Berechtigung ist optional ([healthOptionalReadTypes]).
+///  * **Trainings** liest das Paket zwar, reichert sie aber intern mit
+///    Distanz-, Kalorien- und Schritt-Datensätzen an und fängt jeden Fehler
+///    dabei ab — Ergebnis ist dann eine leere Liste ohne Meldung. Trailscape
+///    fragt deshalb `STEPS` mit an ([healthOptionalReadTypes]) und hält als
+///    Rückfallebene einen nativen Session-Reader bereit
+///    ([HealthGateway.readExerciseSessionsNative]).
 ///  * **GPS-Routen** liefert Health Connect nur, solange die App im
 ///    Vordergrund läuft, und für fremde Apps (z. B. Samsung Health) nur, wenn
 ///    die Nutzerin in der Health-Connect-App unter
@@ -179,6 +185,85 @@ class HealthWorkout {
   Duration get duration => end.difference(start);
 }
 
+/// Eine Trainings-Session, wie sie der native Reader
+/// (`HealthExtraChannel.readExerciseSessions`) roh aus Health Connect liefert.
+///
+/// Absichtlich unangereichert: nur die Felder des `ExerciseSessionRecord`
+/// selbst, ohne Distanz-, Kalorien- oder Schrittdaten.
+class HealthSessionInfo {
+  const HealthSessionInfo({
+    required this.uid,
+    required this.start,
+    required this.end,
+    required this.typeCode,
+    required this.typeName,
+    this.title,
+    this.source,
+    this.hasRoute = false,
+  });
+
+  /// `metadata.id` des Datensatzes — dieselbe ID, die das `health`-Paket als
+  /// `uuid` bzw. `workoutUuid` meldet.
+  final String uid;
+  final DateTime start;
+  final DateTime end;
+
+  /// Rohe androidx-Konstante (`ExerciseSessionRecord.EXERCISE_TYPE_*`).
+  final int typeCode;
+
+  /// Name der Konstante, z. B. `EXERCISE_TYPE_BIKING`, sonst `TYPE_<int>`.
+  final String typeName;
+
+  /// Titel der Session, sofern die Quell-App einen setzt.
+  final String? title;
+
+  /// Paketname der Quell-App.
+  final String? source;
+
+  /// Ob Health Connect die GPS-Route ohne weitere Zustimmung herausrückt.
+  final bool hasRoute;
+}
+
+/// Rohdiagnose eines [HealthGateway.readWorkouts]-Aufrufs.
+///
+/// Beantwortet die Frage, ob das `health`-Paket überhaupt Datenpunkte geliefert
+/// hat und ob deren `value` der erwartete `WorkoutHealthValue` war.
+class HealthWorkoutReadDiagnostics {
+  const HealthWorkoutReadDiagnostics({
+    required this.rawPointCount,
+    required this.valueTypeCounts,
+    required this.activityTypeCounts,
+  });
+
+  const HealthWorkoutReadDiagnostics.empty()
+      : rawPointCount = 0,
+        valueTypeCounts = const {},
+        activityTypeCounts = const {};
+
+  /// Wie viele Datenpunkte das Plugin zurückgegeben hat.
+  final int rawPointCount;
+
+  /// Laufzeittyp von `HealthDataPoint.value` → Anzahl.
+  final Map<String, int> valueTypeCounts;
+
+  /// Aktivitätstyp des Plugins → Anzahl (nur für Workout-Punkte).
+  final Map<String, int> activityTypeCounts;
+
+  /// Kompakte deutsche Zusammenfassung für [HealthSyncReport.debugLines].
+  String describe() {
+    final types = valueTypeCounts.isEmpty
+        ? 'keine'
+        : valueTypeCounts.entries.map((e) => '${e.key}×${e.value}').join(', ');
+    final kinds = activityTypeCounts.isEmpty
+        ? 'keine'
+        : activityTypeCounts.entries
+            .map((e) => '${e.key}×${e.value}')
+            .join(', ');
+    return 'Plugin: $rawPointCount Rohpunkt(e); Werttypen: $types; '
+        'Aktivitätstypen: $kinds';
+  }
+}
+
 /// Ein einzelner GPS-Punkt einer Trainingsroute.
 class HealthRoutePoint {
   const HealthRoutePoint({
@@ -237,6 +322,22 @@ abstract class HealthGateway {
     required DateTime from,
     required DateTime to,
   });
+
+  /// Rohdiagnose des letzten [readWorkouts]-Aufrufs, `null` wenn die
+  /// Implementierung keine erhebt.
+  HealthWorkoutReadDiagnostics? get lastWorkoutDiagnostics => null;
+
+  /// Trainings-Sessions über den nativen Reader, am `health`-Paket vorbei.
+  ///
+  /// Rückfallebene für den Fall, dass das Plugin gar nichts oder nichts
+  /// Verwertbares liefert. Wirft, wenn der Kanal fehlt (alte Installation) oder
+  /// Health Connect den Zugriff verweigert; die Vorgabe meldet „nicht
+  /// unterstützt“.
+  Future<List<HealthSessionInfo>> readExerciseSessionsNative({
+    required DateTime from,
+    required DateTime to,
+  }) async =>
+      throw UnsupportedError('Kein nativer Session-Reader verfügbar.');
 
   /// GPS-Routen im Zeitraum, nach Workout-ID ([HealthWorkout.id]) gruppiert.
   /// Workouts ohne (freigegebene) Route fehlen in der Map.
@@ -297,6 +398,7 @@ class HealthSyncReport {
     required this.mergedRides,
     required this.duplicatesSkipped,
     required this.routesMissing,
+    this.debugLines = const [],
   });
 
   /// Leerer Bericht (kein Fenster betrachtet).
@@ -305,7 +407,8 @@ class HealthSyncReport {
         imported = const [],
         mergedRides = const [],
         duplicatesSkipped = 0,
-        routesMissing = 0;
+        routesMissing = 0,
+        debugLines = const [];
 
   /// Betrachteter Zeitraum.
   final DateTime from;
@@ -328,6 +431,11 @@ class HealthSyncReport {
   /// Importierte Outdoor-Touren, für die Health Connect keine Route
   /// herausgerückt hat (Trackpunkte fehlen).
   final int routesMissing;
+
+  /// Technische Notizen des Laufs (deutsch, kompakt) für die Fehlersuche auf
+  /// dem Gerät: was das Plugin roh geliefert hat, welche Sessions daraus
+  /// wurden, was der native Reader sah und ob die Rückfallebene griff.
+  final List<String> debugLines;
 
   /// Wie viele Touren der Aufrufer speichern muss.
   int get changedCount => imported.length + mergedRides.length;
@@ -574,6 +682,10 @@ class HealthSyncService {
         await lastImportAt() ??
         to.subtract(healthSyncInitialWindow);
 
+    final debug = <String>[
+      'Zeitraum: ${_debugTime(from)} – ${_debugTime(to)}',
+    ];
+
     final List<HealthWorkout> workouts;
     try {
       workouts = await gateway.readWorkouts(from: from, to: to);
@@ -583,8 +695,32 @@ class HealthSyncService {
       );
     }
 
-    final cycling = workouts.where((w) => w.isCycling).toList()
+    final diagnostics = gateway.lastWorkoutDiagnostics;
+    debug.add(diagnostics?.describe() ?? 'Plugin: keine Rohdiagnose erhoben');
+    debug.add('Plugin: ${workouts.length} Session(s) gemappt');
+    for (final workout in workouts.take(_debugSessionLimit)) {
+      debug.add(
+        '  · ${workout.kind.name} ${_debugTime(workout.start)}'
+        '–${_debugTime(workout.end)} · ${workout.sourceName ?? 'ohne Quelle'}',
+      );
+    }
+
+    var cycling = workouts.where((w) => w.isCycling).toList()
       ..sort((a, b) => a.start.compareTo(b.start));
+    debug.add('Plugin: ${cycling.length} Rad-Session(s)');
+
+    var fallbackUsed = false;
+    if (cycling.isEmpty) {
+      final fallback = await _readNativeSessions(from: from, to: to, log: debug);
+      if (fallback.isNotEmpty) {
+        fallbackUsed = true;
+        cycling = fallback;
+      }
+    }
+    debug.add(fallbackUsed
+        ? 'Fallback: aktiv, ${cycling.length} Rad-Session(s) aus dem nativen '
+            'Reader'
+        : 'Fallback: nicht verwendet');
 
     // Zeitraum plus (falls bekannt) die dahinterstehende Tour. Innerhalb
     // dieses Laufs importierte Sessions kommen ohne Tour dazu, damit zwei
@@ -681,6 +817,11 @@ class HealthSyncService {
 
     await setLastImportAt(to);
 
+    debug.add(
+      'Ergebnis: ${imported.length} importiert, ${merged.length} angereichert, '
+      '$duplicates Duplikat(e), $routesMissing ohne Route',
+    );
+
     return HealthSyncReport(
       from: from,
       to: to,
@@ -689,7 +830,58 @@ class HealthSyncService {
       mergedRides: List<Ride>.unmodifiable(merged),
       duplicatesSkipped: duplicates,
       routesMissing: routesMissing,
+      debugLines: List<String>.unmodifiable(debug),
     );
+  }
+
+  /// Liest die Sessions über den nativen Reader und filtert die Rad-Sessions
+  /// heraus. Schlägt der Weg fehl (fehlender Kanal, verweigerter Zugriff),
+  /// bleibt es beim Plugin-Ergebnis — der Fehler landet nur in [log].
+  Future<List<HealthWorkout>> _readNativeSessions({
+    required DateTime from,
+    required DateTime to,
+    required List<String> log,
+  }) async {
+    final List<HealthSessionInfo> sessions;
+    try {
+      sessions = await gateway.readExerciseSessionsNative(from: from, to: to);
+    } catch (error) {
+      log.add('Nativ: nicht verfügbar ($error)');
+      return const [];
+    }
+
+    log.add('Nativ: ${sessions.length} Session(s)');
+    for (final session in sessions.take(_debugSessionLimit)) {
+      log.add(
+        '  · ${session.typeName} (${session.typeCode}) '
+        '${_debugTime(session.start)}–${_debugTime(session.end)} · '
+        '${session.title ?? 'ohne Titel'} · '
+        '${session.source ?? 'ohne Quelle'} · '
+        'Route ${session.hasRoute ? 'ja' : 'nein'}',
+      );
+    }
+
+    final cycling = <HealthWorkout>[];
+    for (final session in sessions) {
+      final kind = mapNativeSessionKind(session);
+      if (kind == null) {
+        continue;
+      }
+      // Distanz und Energie bleiben leer: sie stecken in eigenen Datensätzen,
+      // die der native Reader bewusst nicht mitliest. buildRideFromWorkout
+      // rechnet die Distanz dann aus der Route.
+      cycling.add(
+        HealthWorkout(
+          id: session.uid,
+          start: session.start,
+          end: session.end,
+          kind: kind,
+          sourceName: session.source,
+        ),
+      );
+    }
+    cycling.sort((a, b) => a.start.compareTo(b.start));
+    return cycling;
   }
 
   /// Liest Ruhepuls, Schlaf, HRV und (falls verfügbar) VO2max der letzten
@@ -796,6 +988,43 @@ class HealthSyncService {
 // ---------------------------------------------------------------------------
 // Ableitungen (frei testbar, ohne Plugin)
 // ---------------------------------------------------------------------------
+
+/// Wie viele Sessions je Quelle in [HealthSyncReport.debugLines] einzeln
+/// aufgeführt werden.
+const int _debugSessionLimit = 12;
+
+/// Titel, die auf ein Rad-Workout hindeuten, wenn der Aktivitätstyp nichts
+/// hergibt (Samsung Health schreibt manche Sessions als „anderes Training“ mit
+/// sprechendem Titel).
+final RegExp healthCyclingTitlePattern =
+    RegExp(r'(rad|fahrrad|bike|cycl|mtb|gravel)', caseSensitive: false);
+
+/// Rad-Art einer nativ gelesenen Session, `null` wenn es kein Rad-Workout ist.
+///
+/// Maßgeblich ist der Name der androidx-Konstante (die Kotlin-Seite bildet die
+/// Zahl darauf ab); zusätzlich greift die Titel-Heuristik
+/// [healthCyclingTitlePattern].
+HealthActivityKind? mapNativeSessionKind(HealthSessionInfo session) {
+  switch (session.typeName) {
+    case 'EXERCISE_TYPE_BIKING':
+      return HealthActivityKind.radfahren;
+    case 'EXERCISE_TYPE_BIKING_STATIONARY':
+      return HealthActivityKind.radfahrenIndoor;
+  }
+
+  final title = session.title;
+  if (title != null && healthCyclingTitlePattern.hasMatch(title)) {
+    return HealthActivityKind.radfahren;
+  }
+  return null;
+}
+
+/// Kompakter Zeitstempel für die Diagnosezeilen: „08.08. 14:30“.
+String _debugTime(DateTime value) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${two(value.day)}.${two(value.month)}. '
+      '${two(value.hour)}:${two(value.minute)}';
+}
 
 /// Ride-ID für ein Health-Connect-Workout. Aus der Datensatz-ID abgeleitet,
 /// damit ein zweiter Import dieselbe Tour erkennt. Nicht dateisystemtaugliche
@@ -1202,6 +1431,10 @@ const String healthExtraReadVo2MaxMethod = 'readVo2Max';
 const String healthExtraRequestVo2MaxPermissionMethod =
     'requestVo2MaxPermission';
 
+/// Methodenname: liest rohe `ExerciseSessionRecord`s (Argumente `startMs`,
+/// `endMs`; Ergebnis ist eine Liste aus Maps, siehe [HealthSessionInfo]).
+const String healthExtraReadExerciseSessionsMethod = 'readExerciseSessions';
+
 /// Produktiver Channel zum nativen VO2max-Zusatz.
 const MethodChannel healthExtraChannel = MethodChannel(healthExtraChannelName);
 
@@ -1223,8 +1456,18 @@ const List<hc.HealthDataType> healthReadTypes = [
 /// HRV-Freigabe die gesamte Health-Connect-Verbindung als „nicht verbunden"
 /// erscheinen lassen. Fehlt sie, landet HRV in [VitalsSummary.unavailable] —
 /// dasselbe Muster wie bei VO2max.
+/// `STEPS` steht hier aus einem anderen Grund: Das `health`-Paket reichert
+/// jede gelesene Trainings-Session intern mit Distanz-, Kalorien- **und
+/// Schritt**-Datensätzen an. Fehlt die Schritt-Berechtigung, wirft Health
+/// Connect beim internen `StepsRecord`-Zugriff — das Plugin fängt das ab und
+/// liefert eine **leere** Workout-Liste ohne jede Fehlermeldung. Genau so sah
+/// der Feldbefund „0 Workouts gefunden“ aus. Optional bleibt der Typ trotzdem:
+/// Wer die Freigabe verweigert, soll nicht als „nicht verbunden“ gelten — für
+/// den Fall gibt es den nativen Reader
+/// ([HealthGateway.readExerciseSessionsNative]).
 const List<hc.HealthDataType> healthOptionalReadTypes = [
   hc.HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
+  hc.HealthDataType.STEPS,
 ];
 
 /// [HealthGateway] auf Basis des pub.dev-Pakets `health` (Google Health
@@ -1319,6 +1562,12 @@ class HealthPluginGateway implements HealthGateway {
   }
 
   @override
+  HealthWorkoutReadDiagnostics? get lastWorkoutDiagnostics =>
+      _lastWorkoutDiagnostics;
+
+  HealthWorkoutReadDiagnostics? _lastWorkoutDiagnostics;
+
+  @override
   Future<List<HealthWorkout>> readWorkouts({
     required DateTime from,
     required DateTime to,
@@ -1330,12 +1579,23 @@ class HealthPluginGateway implements HealthGateway {
       endTime: to,
     );
 
+    // Rohdiagnose: Das Plugin verschluckt Fehler beim Anreichern der Sessions
+    // (Distanz, Kalorien, Schritte) und liefert dann eine leere Liste. Ohne
+    // diese Zählung ist auf dem Gerät nicht zu unterscheiden, ob es keine
+    // Trainings gibt oder ob die Abfrage gescheitert ist.
+    final valueTypes = <String, int>{};
+    final activityTypes = <String, int>{};
+
     final workouts = <HealthWorkout>[];
     for (final point in points) {
       final value = point.value;
+      final typeName = value.runtimeType.toString();
+      valueTypes[typeName] = (valueTypes[typeName] ?? 0) + 1;
       if (value is! hc.WorkoutHealthValue) {
         continue;
       }
+      final activity = value.workoutActivityType.name;
+      activityTypes[activity] = (activityTypes[activity] ?? 0) + 1;
       workouts.add(
         HealthWorkout(
           id: point.uuid,
@@ -1349,7 +1609,65 @@ class HealthPluginGateway implements HealthGateway {
         ),
       );
     }
+
+    _lastWorkoutDiagnostics = HealthWorkoutReadDiagnostics(
+      rawPointCount: points.length,
+      valueTypeCounts: Map<String, int>.unmodifiable(valueTypes),
+      activityTypeCounts: Map<String, int>.unmodifiable(activityTypes),
+    );
     return workouts;
+  }
+
+  /// Liest die rohen Trainings-Sessions über den nativen Zusatzkanal.
+  ///
+  /// Wirft bei fehlendem Kanal (alte Installation) oder verweigertem Zugriff;
+  /// [HealthSyncService.importWithReport] behandelt das als „kein Fallback“.
+  @override
+  Future<List<HealthSessionInfo>> readExerciseSessionsNative({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final raw = await _extra.invokeListMethod<Object?>(
+      healthExtraReadExerciseSessionsMethod,
+      <String, Object?>{
+        'startMs': from.millisecondsSinceEpoch,
+        'endMs': to.millisecondsSinceEpoch,
+      },
+    );
+    if (raw == null) {
+      return const [];
+    }
+
+    final sessions = <HealthSessionInfo>[];
+    for (final entry in raw) {
+      if (entry is! Map) {
+        continue;
+      }
+      final uid = entry['uid'];
+      final startMs = entry['startMs'];
+      final endMs = entry['endMs'];
+      if (uid is! String || startMs is! num || endMs is! num) {
+        continue;
+      }
+      final typeCode = entry['exerciseType'];
+      final typeName = entry['exerciseTypeName'];
+      final title = entry['title'];
+      final source = entry['source'];
+      sessions.add(
+        HealthSessionInfo(
+          uid: uid,
+          start: DateTime.fromMillisecondsSinceEpoch(startMs.toInt()),
+          end: DateTime.fromMillisecondsSinceEpoch(endMs.toInt()),
+          typeCode: typeCode is num ? typeCode.toInt() : -1,
+          typeName: typeName is String ? typeName : 'unbekannt',
+          title: title is String ? title : null,
+          source: source is String ? source : null,
+          hasRoute: entry['hasRoute'] == true,
+        ),
+      );
+    }
+    sessions.sort((a, b) => a.start.compareTo(b.start));
+    return sessions;
   }
 
   @override

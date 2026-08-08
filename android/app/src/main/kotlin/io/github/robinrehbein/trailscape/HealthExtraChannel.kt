@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ExerciseRouteResult
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -37,14 +39,23 @@ interface Vo2MaxPermissionRequester {
  * Schmaler Platform-Channel fuer Health-Connect-Datentypen, die das
  * Flutter-Paket `health` nicht abdeckt.
  *
- * Aktuell nur VO2max (`Vo2MaxRecord`): Health Connect kennt den Datensatz,
- * das Plugin bietet keinen passenden `HealthDataType` an.
+ * Zwei Faelle:
+ *
+ *  * VO2max (`Vo2MaxRecord`): Health Connect kennt den Datensatz, das Plugin
+ *    bietet keinen passenden `HealthDataType` an.
+ *  * Trainings (`ExerciseSessionRecord`): das Plugin liest sie zwar, reichert
+ *    sie aber intern mit Distanz-, Kalorien- und **Schritt**-Datensaetzen an
+ *    und verschluckt jeden Fehler dabei als leeres Ergebnis. Der Reader hier
+ *    liest die reinen Sessions und dient als Rueckfallebene und Diagnose.
  *
  * Methoden (siehe `lib/health_sync.dart`):
  *
  *  * `readVo2Max(startMs: Long, endMs: Long)` -> `List<Map<String, Any>>` mit
  *    `timeMs` (Long) und `vo2` (Double).
  *  * `requestVo2MaxPermission()` -> `Boolean`.
+ *  * `readExerciseSessions(startMs: Long, endMs: Long)` ->
+ *    `List<Map<String, Any?>>` mit `uid`, `startMs`, `endMs`, `exerciseType`,
+ *    `exerciseTypeName`, `title`, `source` und `hasRoute`.
  *
  * Fehler werden als Channel-Error gemeldet (`unavailable`,
  * `permission_denied`, `read_failed`, `bad_args`) — die Dart-Seite behandelt
@@ -108,6 +119,20 @@ class HealthExtraChannel(
                 readVo2Max(startMs, endMs, result)
             }
 
+            "readExerciseSessions" -> {
+                val startMs = (call.argument<Any>("startMs") as? Number)?.toLong()
+                val endMs = (call.argument<Any>("endMs") as? Number)?.toLong()
+                if (startMs == null || endMs == null) {
+                    result.error(
+                        "bad_args",
+                        "startMs und endMs sind Pflichtangaben.",
+                        null,
+                    )
+                    return
+                }
+                readExerciseSessions(startMs, endMs, result)
+            }
+
             "requestVo2MaxPermission" -> requestVo2MaxPermission(result)
 
             else -> result.notImplemented()
@@ -166,6 +191,95 @@ class HealthExtraChannel(
                 )
             }
         }
+    }
+
+    /**
+     * Liest die reinen `ExerciseSessionRecord`s im Zeitfenster.
+     *
+     * Bewusst ohne jede Anreicherung: Distanz, Kalorien und Schritte liegen in
+     * eigenen Datensaetzen, deren Abfrage eigene Berechtigungen braucht — genau
+     * daran scheitert der Plugin-Weg still.
+     */
+    private fun readExerciseSessions(
+        startMs: Long,
+        endMs: Long,
+        result: MethodChannel.Result,
+    ) {
+        scope.launch {
+            val client = client()
+            if (client == null) {
+                fail(result, "unavailable", "Health Connect ist nicht verfuegbar.")
+                return@launch
+            }
+
+            try {
+                val sessions = ArrayList<Map<String, Any?>>()
+                val filter = TimeRangeFilter.between(
+                    Instant.ofEpochMilli(startMs),
+                    Instant.ofEpochMilli(endMs),
+                )
+
+                // Wie bei readVo2Max: seitenweise lesen, sonst fehlen aeltere
+                // Sessions.
+                var pageToken: String? = null
+                do {
+                    val response = client.readRecords(
+                        ReadRecordsRequest(
+                            recordType = ExerciseSessionRecord::class,
+                            timeRangeFilter = filter,
+                            pageToken = pageToken,
+                        )
+                    )
+                    for (record in response.records) {
+                        sessions.add(
+                            mapOf<String, Any?>(
+                                "uid" to record.metadata.id,
+                                "startMs" to record.startTime.toEpochMilli(),
+                                "endMs" to record.endTime.toEpochMilli(),
+                                "exerciseType" to record.exerciseType,
+                                "exerciseTypeName" to
+                                    exerciseTypeName(record.exerciseType),
+                                "title" to record.title,
+                                "source" to record.metadata.dataOrigin.packageName,
+                                "hasRoute" to
+                                    (record.exerciseRouteResult is ExerciseRouteResult.Data),
+                            )
+                        )
+                    }
+                    pageToken = response.pageToken
+                } while (pageToken != null)
+
+                succeed(result, sessions)
+            } catch (error: SecurityException) {
+                fail(
+                    result,
+                    "permission_denied",
+                    "Keine Leseberechtigung fuer Trainings: ${error.message}",
+                )
+            } catch (error: Throwable) {
+                fail(
+                    result,
+                    "read_failed",
+                    "Trainings konnten nicht gelesen werden: ${error.message}",
+                )
+            }
+        }
+    }
+
+    /**
+     * Name der androidx-Konstante zu [type], damit die Dart-Seite nicht auf
+     * rohe Zahlen angewiesen ist. Unbekannte Typen kommen als `TYPE_<int>`.
+     */
+    private fun exerciseTypeName(type: Int): String = when (type) {
+        ExerciseSessionRecord.EXERCISE_TYPE_BIKING -> "EXERCISE_TYPE_BIKING"
+        ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY ->
+            "EXERCISE_TYPE_BIKING_STATIONARY"
+        ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT ->
+            "EXERCISE_TYPE_OTHER_WORKOUT"
+        ExerciseSessionRecord.EXERCISE_TYPE_RUNNING -> "EXERCISE_TYPE_RUNNING"
+        ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> "EXERCISE_TYPE_WALKING"
+        ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> "EXERCISE_TYPE_HIKING"
+        else -> "TYPE_$type"
     }
 
     private fun requestVo2MaxPermission(result: MethodChannel.Result) {
