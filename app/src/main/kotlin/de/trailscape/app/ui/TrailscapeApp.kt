@@ -45,19 +45,18 @@ import de.trailscape.app.ui.training.TrainingScreen
  * MoreScreen(appViewModel)
  * ```
  *
- * ## Wem welche Datei gehoert
+ * ## Was wo liegt
  *
- * | Datei | Eigentuemer | Status |
- * |---|---|---|
- * | `ui/TrailscapeApp.kt` (diese Datei) | Fundament | fertig, nicht anfassen |
- * | `ui/AppViewModel.kt` | Fundament | fertig — API ist der Vertrag aller Screens |
- * | `ui/TrainingInsights.kt` | Fundament | fertig — reine Rechenschicht ueber `:core` |
- * | `ui/MapStyles.kt` | Fundament | fertig — Katalog der Kartenstile |
- * | `ui/components/PlaceholderScreen.kt` | Fundament | Uebergangsbaustein |
- * | `ui/rides/RidesScreen.kt` | Touren | fertig |
- * | `ui/map/MapScreen.kt` | Karten-Agent | Platzhalter, wird komplett ersetzt |
- * | `ui/training/TrainingScreen.kt` | Trainings-Agent | Platzhalter, wird komplett ersetzt |
- * | `ui/more/MoreScreen.kt` | Mehr-Agent | Platzhalter, wird komplett ersetzt |
+ * | Datei | Rolle |
+ * |---|---|
+ * | `ui/TrailscapeApp.kt` (diese Datei) | Fundament: Navigationsleiste und `NavHost` |
+ * | `ui/AppViewModel.kt` | Fundament: die API ist der Vertrag aller Screens |
+ * | `ui/TrainingInsights.kt` | Fundament: reine Rechenschicht ueber `:core` |
+ * | `ui/MapStyles.kt` | Fundament: Katalog der Kartenstile |
+ * | `ui/map/MapScreen.kt` | Karte, Planung, Navigation, Offline-Download |
+ * | `ui/rides/RidesScreen.kt` | Tourenliste |
+ * | `ui/training/TrainingScreen.kt` | Trainingsplan und Auswertung |
+ * | `ui/more/MoreScreen.kt` | Einstellungen, Health, Backup, Sync |
  *
  * Neue Hilfs-Composables eines Screens gehoeren in **dessen** Paket
  * (`ui/map/…`, `ui/training/…`, `ui/more/…`) oder — wenn wirklich geteilt —

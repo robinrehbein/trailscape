@@ -1,60 +1,24 @@
-node_modules
-dist
+# Betriebssystem- und Editor-Reste
 .DS_Store
-*.local
-.vite
-# Miscellaneous
-*.class
 *.log
-*.pyc
 *.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
 
-# IntelliJ related
+# IntelliJ / Android Studio
 *.iml
 *.ipr
 *.iws
 .idea/
+captures/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# Natives Android-Projekt (Kotlin/Compose) im Repo-Root.
-# Bewusst nur Build-/Werkzeugverzeichnisse: Der Flutter-Code in lib/ und die
-# Flutter-Gradle-Dateien in android/ bleiben unberuehrt versioniert.
+# Gradle- und Kotlin-Werkzeugverzeichnisse
 .gradle/
 .kotlin/
 **/build/
+# Enthaelt den lokalen SDK-Pfad und gehoert damit auf keinen anderen Rechner.
 local.properties
-# Im CI aus einem Secret dekodierter Signierschluessel.
+
+# Signierschluessel. Wird im CI aus dem Secret RELEASE_KEYSTORE_BASE64
+# dekodiert und liegt niemals im Repository.
 /keystore.jks
+*.jks
+*.keystore

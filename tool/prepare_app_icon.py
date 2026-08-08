@@ -2,8 +2,11 @@
 """Prepare Trailscape's app icon assets from a single supplied source image.
 
 Given a square source artwork consisting of a circular motif centered on a
-flat background color, this script produces the three PNGs consumed by
-flutter_launcher_icons:
+flat background color, this script produces the three 1024x1024 master PNGs
+under assets/icon/. They are the source of truth for the launcher icon; the
+per-density files in app/src/main/res/ (mipmap-*/ic_launcher.png and
+drawable-*/ic_launcher_foreground.png, ic_launcher_monochrome.png) are scaled
+down from them:
 
   * assets/icon/icon.png             - 1024x1024 RGB, full source image
                                         (used for the legacy/round launcher
@@ -19,7 +22,8 @@ flutter_launcher_icons:
                                         (monochrome) icons.
 
 It also prints the measured background color so it can be copied into
-pubspec.yaml's `adaptive_icon_background`.
+app/src/main/res/values/colors.xml as `ic_launcher_background`, the background
+layer of the adaptive icon (res/mipmap-anydpi-v26/ic_launcher.xml).
 
 Usage:
     python3 tool/prepare_app_icon.py <source.png>

@@ -13,21 +13,18 @@
 
     <!-- Health Connect (Samsung Health spiegelt die Watch-Daten dorthin).
          Es werden ausschliesslich Lese-Rechte angefragt; Trailscape schreibt
-         nichts nach Health Connect zurueck. Anders als die Flutter-App (die
-         das `health`-Plugin nutzt) kommt hier KEIN READ_STEPS mehr vor: das
-         war dort nur noetig, weil das Plugin beim Anreichern jeder Session
-         intern auch StepsRecord abfragt — der native Reader ueber
-         connect-client liest ausschliesslich die Datentypen, die er
-         tatsaechlich braucht. -->
+         nichts nach Health Connect zurueck. Kein READ_STEPS: Der Reader ueber
+         connect-client fragt ausschliesslich die Datentypen ab, die er
+         tatsaechlich auswertet. (Version 1.x brauchte das Recht noch, weil das
+         damals benutzte Plugin beim Anreichern jeder Session intern auch
+         StepsRecord abfragte.) -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <!-- Offizieller Berechtigungsname ist PLURAL (READ_EXERCISE_ROUTES), auch
          wenn die einzelne Route android.permission.health.WRITE_EXERCISE_ROUTE
          (Singular, fuers Schreiben) gegenuebersteht — siehe
          HealthPermission.PERMISSION_READ_EXERCISE_ROUTES in der
-         connect-client-Bibliothek. Die bestehende Flutter-Manifest-Datei
-         (android/app/src/main/AndroidManifest.xml) deklariert hier
-         faelschlich die singuläre Form; fuer die native App wird die
-         korrekte, offiziell dokumentierte Form verwendet. Der Zugriff selbst
+         connect-client-Bibliothek. Version 1.x deklarierte hier faelschlich
+         die singulaere Form. Der Zugriff selbst
          laeuft ohnehin nicht ueber den regulaeren Permission-Request-Flow,
          sondern ueber den eigenen ACTION_REQUEST_EXERCISE_ROUTE-Dialog pro
          Route (readRoute-API) — die uses-permission ist trotzdem
@@ -43,8 +40,18 @@
     <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
     <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
 
+    <!-- Backup bewusst EINGESCHALTET: Trailscape haelt alle Daten lokal
+         (Touren als JSON unter <filesDir>/rides, Profil in den
+         SharedPreferences) und hat keine Cloud, aus der sich nach einem
+         Geraetewechsel etwas nachladen liesse. Ohne Auto Backup waeren die
+         Touren beim Geraetewechsel weg — es sei denn, jemand denkt an den
+         manuellen Backup-Export. Was NICHT mitgesichert wird, steht in den
+         beiden Regeldateien: res/xml/backup_rules.xml (API 23-30) und
+         res/xml/data_extraction_rules.xml (ab API 31). -->
     <application
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:name=".TrailscapeApplication"
@@ -87,11 +94,10 @@
              fuer „Als GPX teilen" in der Tourenliste; ab Android 7 duerfen
              file://-Uris nicht mehr weitergereicht werden.
 
-             Die Authority traegt bewusst das ${applicationId}-Praefix: Die
-             native App laeuft parallel zur bestehenden Flutter-App, und zwei
-             Provider mit derselben Authority liessen sich nicht gleichzeitig
-             installieren. Freigegeben ist nur ein Unterverzeichnis des Caches,
-             siehe res/xml/file_paths.xml. -->
+             Die Authority traegt das ${applicationId}-Praefix, damit sie
+             eindeutig zu dieser App gehoert — zwei installierte Apps mit
+             derselben Authority schliessen einander aus. Freigegeben ist nur
+             ein Unterverzeichnis des Caches, siehe res/xml/file_paths.xml. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

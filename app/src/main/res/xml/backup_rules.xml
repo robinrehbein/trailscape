@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Regeln fuer Androids Auto Backup (API 23-30, `android:fullBackupContent`).
+    Ab API 31 gilt stattdessen res/xml/data_extraction_rules.xml — beide Dateien
+    muessen inhaltlich zusammenpassen.
+
+    Ohne <include> sichert Android per Voreinstellung alles: SharedPreferences
+    und <filesDir> — also die Touren unter `rides/` und das Trainingsprofil.
+    Genau das ist gewollt. `getCacheDir()`, `getCodeCacheDir()` und
+    `getNoBackupFilesDir()` nimmt Android ohnehin nie mit, sie brauchen hier
+    keinen Eintrag. Ausgenommen wird nur, was auf einem anderen Geraet falsch
+    oder zu gross waere:
+
+    * `recording/` — das Journal einer LAUFENDEN Aufzeichnung inklusive
+      Lock-Datei. Wird es auf einem zweiten Geraet eingespielt, meldet die App
+      dort eine abgebrochene Tour und stellt fremde GPS-Punkte wieder her.
+      Fertige Touren liegen zu diesem Zeitpunkt laengst unter `rides/`.
+    * `mbgl-offline.db*` — die MapLibre-Kachel-Datenbank (Offline-Regionen und
+      Ambient-Cache). Reiner Downloadinhalt, jederzeit neu beschaffbar, aber
+      leicht mehrere hundert MB gross; Auto Backup deckelt eine App bei 25 MB
+      und liesse das Backup sonst komplett scheitern. Die WAL-/SHM-Dateien
+      stehen einzeln da, weil `path` nur ganze Pfadnamen trifft.
+-->
+<full-backup-content>
+    <exclude domain="file" path="recording" />
+    <exclude domain="file" path="mbgl-offline.db" />
+    <exclude domain="file" path="mbgl-offline.db-wal" />
+    <exclude domain="file" path="mbgl-offline.db-shm" />
+</full-backup-content>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Trailscape β</string>
+    <string name="app_name">Trailscape</string>
     <string name="recording_notification_channel_name">Aufzeichnung</string>
     <string name="recording_notification_title">Trailscape zeichnet auf</string>
 </resources>

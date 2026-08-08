@@ -1,10 +1,4 @@
-// Root-Build des nativen Android-Projekts (Kotlin + Jetpack Compose).
-//
-// Liegt bewusst parallel zum bestehenden Flutter-Projekt: Das Verzeichnis
-// `android/` bringt ein eigenes settings.gradle.kts mit und wird hier NICHT
-// eingebunden. Gradle sucht nur dann aufwaerts nach einer Settings-Datei,
-// wenn im Startverzeichnis keine liegt — der Flutter-Build bleibt also
-// unberuehrt.
+// Root-Build des Android-Projekts (Kotlin + Jetpack Compose).
 pluginManagement {
     repositories {
         google()
