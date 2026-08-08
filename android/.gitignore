@@ -15,3 +15,4 @@ key.properties
 # Bewusst eingecheckt: fester Sideload-Signierschlüssel, damit per
 # GitHub Release verteilte APKs als Update installierbar bleiben.
 !app/release-keystore.jks
+/.kotlin/

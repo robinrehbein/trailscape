@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Nur die Huelle bis Compose uebernimmt: Die eigentlichen Farben kommen
+         aus TrailscapeTheme. Bewusst ein Plattform-Theme, damit das Modul ohne
+         com.google.android.material auskommt. -->
+    <style name="Theme.Trailscape" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

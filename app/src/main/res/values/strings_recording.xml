@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Aufzeichnungs-Vordergrunddienstes.
+
+    Bewusst eine eigene Datei statt eines Anbaus an strings.xml: Android fuehrt
+    alle values/*.xml zusammen, und so bleiben die Aufzeichnungstexte als
+    Einheit lesbar. `recording_notification_title` und
+    `recording_notification_channel_name` stehen weiterhin in strings.xml und
+    duerfen hier NICHT erneut definiert werden.
+-->
+<resources>
+    <string name="recording_notification_paused_title">Trailscape pausiert</string>
+    <string name="recording_notification_waiting">Warte auf GPS-Signal …</string>
+    <!-- %1$s = Distanz in km (eine Nachkommastelle), %2$s = Dauer H:MM:SS -->
+    <string name="recording_notification_progress">%1$s km · %2$s</string>
+
+    <string name="recording_action_pause">Pause</string>
+    <string name="recording_action_resume">Fortsetzen</string>
+    <string name="recording_action_stop">Beenden</string>
+
+    <string name="recording_error_channel_name">Aufzeichnung: Probleme</string>
+    <string name="recording_error_title">Aufzeichnung nicht möglich</string>
+    <string name="recording_error_permission">Trailscape darf nicht auf den Standort zugreifen. Bitte erlaube den Zugriff in den App-Einstellungen und starte die Aufzeichnung erneut.</string>
+    <string name="recording_error_start_failed">Die Standortaufzeichnung konnte nicht gestartet werden.</string>
+    <string name="recording_error_journal">Die Aufzeichnung konnte nicht auf den Speicher geschrieben werden.</string>
+    <string name="recording_error_save_failed">Die Tour konnte nicht gespeichert werden. Sie bleibt gesichert und wird beim nächsten App-Start erneut gespeichert.</string>
+    <string name="recording_error_too_few_points">Zu wenige GPS-Punkte.</string>
+
+    <!-- %1$s = Datum im Format TT.MM.JJJJ -->
+    <string name="recording_ride_name">Tour %1$s</string>
+    <string name="recording_ride_name_recovered">Tour %1$s (wiederhergestellt)</string>
+</resources>

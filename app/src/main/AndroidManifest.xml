@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- ACTIVITY_RECOGNITION bewusst NICHT deklariert: Trailscape zaehlt keine
+         Schritte und erkennt keine Aktivitaeten selbst — das Aufzeichnen
+         beruht ausschliesslich auf GPS-Standortpunkten. -->
+
+    <!-- Health Connect (Samsung Health spiegelt die Watch-Daten dorthin).
+         Es werden ausschliesslich Lese-Rechte angefragt; Trailscape schreibt
+         nichts nach Health Connect zurueck. Anders als die Flutter-App (die
+         das `health`-Plugin nutzt) kommt hier KEIN READ_STEPS mehr vor: das
+         war dort nur noetig, weil das Plugin beim Anreichern jeder Session
+         intern auch StepsRecord abfragt — der native Reader ueber
+         connect-client liest ausschliesslich die Datentypen, die er
+         tatsaechlich braucht. -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <!-- Offizieller Berechtigungsname ist PLURAL (READ_EXERCISE_ROUTES), auch
+         wenn die einzelne Route android.permission.health.WRITE_EXERCISE_ROUTE
+         (Singular, fuers Schreiben) gegenuebersteht — siehe
+         HealthPermission.PERMISSION_READ_EXERCISE_ROUTES in der
+         connect-client-Bibliothek. Die bestehende Flutter-Manifest-Datei
+         (android/app/src/main/AndroidManifest.xml) deklariert hier
+         faelschlich die singuläre Form; fuer die native App wird die
+         korrekte, offiziell dokumentierte Form verwendet. Der Zugriff selbst
+         laeuft ohnehin nicht ueber den regulaeren Permission-Request-Flow,
+         sondern ueber den eigenen ACTION_REQUEST_EXERCISE_ROUTE-Dialog pro
+         Route (readRoute-API) — die uses-permission ist trotzdem
+         erforderlich, damit Health Connect den Zugriff ueberhaupt erlaubt. -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTES" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <!-- HRV (rMSSD) als staerkstes Erholungssignal; optional, die App
+         funktioniert auch ohne diese Freigabe. -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:name=".TrailscapeApplication"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Trailscape">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Trailscape"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Health Connect ruft diesen Intent auf, um die Begruendung
+                 fuer die angefragten Gesundheitsdaten anzuzeigen. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Von Health Connect ab Android 14 verlangt: Einstiegspunkt, ueber
+             den die Datenschutzerklaerung bzw. die Nutzungsbegruendung
+             erreichbar ist. Zeigt auf die MainActivity. -->
+        <activity-alias
+            android:name=".ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Ausliefern eigener Dateien an andere Apps (Share-Sheet). Gebraucht
+             fuer „Als GPX teilen" in der Tourenliste; ab Android 7 duerfen
+             file://-Uris nicht mehr weitergereicht werden.
+
+             Die Authority traegt bewusst das ${applicationId}-Praefix: Die
+             native App laeuft parallel zur bestehenden Flutter-App, und zwei
+             Provider mit derselben Authority liessen sich nicht gleichzeitig
+             installieren. Freigegeben ist nur ein Unterverzeichnis des Caches,
+             siehe res/xml/file_paths.xml. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Aufzeichnungs-Service (GPS-Tracking im Vordergrund). Gestarteter
+             Service, kein gebundener: Die Aufzeichnung ueberlebt damit sowohl
+             das Schliessen der Activity als auch das Wegwischen der App aus
+             den Recents. `stopWithTask="false"` ist zwar der Standardwert,
+             steht hier aber ausdruecklich, weil genau davon abhaengt, ob eine
+             laufende Tour beim Aufraeumen der Recents abbricht. -->
+        <service
+            android:name=".record.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="location"
+            android:stopWithTask="false" />
+    </application>
+
+    <queries>
+        <!-- Pruefen, ob die Health-Connect-App installiert ist. -->
+        <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+        </intent>
+    </queries>
+
+</manifest>
