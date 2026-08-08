@@ -83,6 +83,25 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Ausliefern eigener Dateien an andere Apps (Share-Sheet). Gebraucht
+             fuer „Als GPX teilen" in der Tourenliste; ab Android 7 duerfen
+             file://-Uris nicht mehr weitergereicht werden.
+
+             Die Authority traegt bewusst das ${applicationId}-Praefix: Die
+             native App laeuft parallel zur bestehenden Flutter-App, und zwei
+             Provider mit derselben Authority liessen sich nicht gleichzeitig
+             installieren. Freigegeben ist nur ein Unterverzeichnis des Caches,
+             siehe res/xml/file_paths.xml. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- Aufzeichnungs-Service (GPS-Tracking im Vordergrund). Gestarteter
              Service, kein gebundener: Die Aufzeichnung ueberlebt damit sowohl
              das Schliessen der Activity als auch das Wegwischen der App aus

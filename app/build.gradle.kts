@@ -88,7 +88,19 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    // collectAsStateWithLifecycle() — die Screens lesen die StateFlows des
+    // AppViewModel lebenszyklusbewusst, damit im Hintergrund nichts sammelt.
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.navigation:navigation-compose:2.9.8")
+
+    // Kartendarstellung (Vektor-/Rasterkacheln, OpenGL). Bewusst die 11.x-Reihe:
+    // Sie ist die letzte Serie mit der etablierten `org.maplibre.android.*`-API,
+    // auf der die gesamte oeffentliche Dokumentation und die bestehenden
+    // Flutter-Kartenintegrationen beruhen — 12.x/13.x bringen Umbauten an
+    // Style-/Annotation-APIs, die dem Rewrite in dieser Phase nur Risiko ohne
+    // Nutzen brachten. 11.13.5 ist die neueste stabile 11er-Version und loest
+    // gegen AGP 9.0.1 / compileSdk 36 konfliktfrei auf.
+    implementation("org.maplibre.gl:android-sdk:11.13.5")
 
     // :core deklariert kotlinx-serialization-json nur als `implementation`
     // (bewusst, siehe core/build.gradle.kts-Kommentar), es ist also nicht
