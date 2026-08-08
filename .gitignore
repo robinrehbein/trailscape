@@ -48,3 +48,13 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Natives Android-Projekt (Kotlin/Compose) im Repo-Root.
+# Bewusst nur Build-/Werkzeugverzeichnisse: Der Flutter-Code in lib/ und die
+# Flutter-Gradle-Dateien in android/ bleiben unberuehrt versioniert.
+.gradle/
+.kotlin/
+**/build/
+local.properties
+# Im CI aus einem Secret dekodierter Signierschluessel.
+/keystore.jks
