@@ -1,7 +1,5 @@
 package de.trailscape.core
 
-import kotlin.math.floor
-
 /**
  * Fitness-Einschaetzung aus den zuletzt aufgezeichneten Fahrten.
  *
@@ -13,14 +11,6 @@ import kotlin.math.floor
 private const val WINDOW_WEEKS = 8
 
 private const val WINDOW_MS = WINDOW_WEEKS * 7L * 24L * 60L * 60L * 1000L
-
-/**
- * Rundet wie Darts `double.round()`: zur naechsten ganzen Zahl, bei genau .5
- * vom Nullpunkt weg. Kotlins `kotlin.math.round` rundet .5 stattdessen Richtung
- * positiv unendlich — fuer negative Werte waere das ein anderes Ergebnis.
- */
-private fun dartRound(value: Double): Double =
-    if (value < 0) -floor(-value + 0.5) else floor(value + 0.5)
 
 private fun round1(value: Double): Double = dartRound(value * 10) / 10
 

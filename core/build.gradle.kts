@@ -2,6 +2,7 @@
 // damit es schnell und ohne Emulator testbar bleibt.
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {
@@ -16,6 +17,13 @@ java {
 }
 
 dependencies {
+    // Nur das JsonElement/JsonObject-Baukastenmodell (kein @Serializable):
+    // Dart schreibt manche Felder nur bei Nicht-Null (z. B. TrackPoint.hr),
+    // andere immer inkl. expliziter `null` (z. B. RideStats.durationS) — das
+    // laesst sich mit automatisch generierten Serializer-Defaults nicht sauber
+    // abbilden, mit manuellem JsonObject-Aufbau pro Feld schon.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
     testImplementation(kotlin("test"))
 }
 
