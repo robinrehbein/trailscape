@@ -90,5 +90,35 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.navigation:navigation-compose:2.9.8")
 
+    // :core deklariert kotlinx-serialization-json nur als `implementation`
+    // (bewusst, siehe core/build.gradle.kts-Kommentar), es ist also nicht
+    // transitiv fuer :app sichtbar. RideStorage.kt braucht aber Json/JsonObject
+    // direkt (zum Parsen bzw. Serialisieren von Ride.toJson()/fromJson()) —
+    // deshalb hier explizit in derselben Version wie in :core, ohne das
+    // `:core`-Build-Skript anzufassen.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+
+    // Dispatchers.IO/Main fuer die kommenden ViewModels und den
+    // Recording-Service; `:core` selbst bleibt bewusst frei von Coroutines.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
+
+    // Implementierung von de.trailscape.core.HttpClient (siehe
+    // data/OkHttpClientAdapter.kt). Bewusst die letzte 4.x-Version, nicht die
+    // aktuellere 5.x-Reihe: 5.x aendert u. a. die Default-Dispatcher-/
+    // Coroutine-Integration und ist fuer die schmale synchrone Nutzung hier
+    // (ein Call pro HttpClient.execute) nicht noetig.
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Health Connect: bewusst die stabile 1.1.0-Reihe, NICHT die 1.2.0-alpha,
+    // die das bestehende Flutter-Projekt (android/app/build.gradle.kts)
+    // einsetzt. Dort ist die Alpha-Version nur wegen einer Versionskopplung
+    // mit dem `health`-Flutter-Plugin noetig; die native App hat diese
+    // Fesselung nicht und soll nicht unnoetig auf Vorab-APIs sitzen. 1.1.0
+    // ist gegen compileSdk 36 / AGP 9.0.1 konfliktfrei aufloesbar.
+    implementation("androidx.health.connect:connect-client:1.1.0")
+
+    // Fused Location Provider fuer den kommenden Recording-Service.
+    implementation("com.google.android.gms:play-services-location:21.4.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
