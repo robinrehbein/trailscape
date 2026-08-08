@@ -7,6 +7,25 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+    <!-- Health Connect (Samsung Health spiegelt die Watch-Daten dorthin).
+         Es werden ausschließlich Lese-Rechte angefragt; Trailscape schreibt
+         nichts nach Health Connect zurück. -->
+    <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
+    <uses-permission android:name="android.permission.health.READ_EXERCISE_ROUTE"/>
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE"/>
+    <uses-permission android:name="android.permission.health.READ_SLEEP"/>
+    <uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED"/>
+    <!-- VO2max liest Trailscape ueber einen eigenen Platform-Channel direkt
+         via androidx Health Connect (Vo2MaxRecord); das health-Plugin kennt
+         den Datentyp nicht. -->
+    <uses-permission android:name="android.permission.health.READ_VO2_MAX"/>
+    <!-- Ohne diese Berechtigung liefert Health Connect nur Daten der letzten
+         30 Tage ab Zustimmung. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY"/>
+
     <application
         android:label="Trailscape"
         android:name="${applicationName}"
@@ -32,7 +51,28 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Health Connect ruft diesen Intent auf, um die Begründung für
+                 die angefragten Gesundheitsdaten anzuzeigen. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
+            </intent-filter>
         </activity>
+
+        <!-- Von Health Connect ab Android 14 verlangt: Einstiegspunkt, über den
+             die Datenschutzerklärung bzw. die Nutzungsbegründung erreichbar
+             ist. Zeigt auf die MainActivity. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".MainActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE"/>
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS"/>
+            </intent-filter>
+        </activity-alias>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -48,6 +88,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Prüfen, ob die Health-Connect-App installiert ist. -->
+        <package android:name="com.google.android.apps.healthdata"/>
+        <intent>
+            <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"/>
         </intent>
     </queries>
 </manifest>
