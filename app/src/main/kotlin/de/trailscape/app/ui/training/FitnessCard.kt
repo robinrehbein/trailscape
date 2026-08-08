@@ -1,0 +1,78 @@
+package de.trailscape.app.ui.training
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import de.trailscape.core.FitnessAssessment
+import de.trailscape.core.formatKm
+import de.trailscape.core.levelLabels
+import kotlin.math.roundToInt
+
+/**
+ * Karte „Dein Fitnesslevel": Einstufung (Einsteiger/Fortgeschritten/
+ * Ambitioniert) aus den Fahrten der letzten 8 Wochen.
+ *
+ * Port von `_buildFitnessCard` (`lib/screens/training_screen.dart`).
+ */
+@Composable
+fun FitnessCard(assessment: FitnessAssessment) {
+    val theme = MaterialTheme.colorScheme
+
+    Card {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Dein Fitnesslevel", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = levelLabels.getValue(assessment.level),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(FlutterMaterialGreen)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            FlowRow(
+                modifier = Modifier.padding(end = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                InlineMetric(formatKm(assessment.weeklyKm), "km/Woche")
+                InlineMetric(assessment.weeklyHm.roundToInt().toString(), "Hm/Woche")
+                InlineMetric(germanFixed(assessment.weeklyRides, 1), "Fahrten/Woche")
+                InlineMetric(formatKm(assessment.longestRideKm), "km längste Tour")
+            }
+
+            if (assessment.rideCount == 0) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Noch keine Touren der letzten 8 Wochen vorhanden – die " +
+                        "Einstufung ist daher konservativ.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = theme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Entspricht Flutters `Colors.green` (Standardton 500) — Chip-Hintergrund im Original. */
+private val FlutterMaterialGreen = Color(0xFF4CAF50)
