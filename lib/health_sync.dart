@@ -6,7 +6,7 @@
 ///
 ///  * Rad-Workouts (ExerciseSession) inklusive GPS-Route und Herzfrequenz und
 ///    bildet sie auf das bestehende [Ride]-Modell ab, und
-///  * Vitaldaten (Ruhepuls, Schlaf) als Tagesserien mit Wochentrend.
+///  * Vitaldaten (Ruhepuls, Schlaf, HRV) als Tagesserien mit Wochentrend.
 ///
 /// Alle Plugin-Aufrufe laufen über die Abstraktion [HealthGateway], damit die
 /// Ableitungs- und Aggregationslogik ohne Gerät testbar bleibt. Die
@@ -22,6 +22,10 @@
 ///    Schlägt der Channel fehl (alte Installation, Health Connect fehlt,
 ///    Berechtigung verweigert), landet VO2max in
 ///    [VitalsSummary.unavailable]; die übrigen Vitaldaten bleiben gültig.
+///  * **HRV (rMSSD)** kennt das Paket dagegen sehr wohl
+///    (`HEART_RATE_VARIABILITY_RMSSD` → Health Connects
+///    `HeartRateVariabilityRmssdRecord`) — sie läuft daher über den normalen
+///    Plugin-Weg, nur die Berechtigung ist optional ([healthOptionalReadTypes]).
 ///  * **GPS-Routen** liefert Health Connect nur, solange die App im
 ///    Vordergrund läuft, und für fremde Apps (z. B. Samsung Health) nur, wenn
 ///    die Nutzerin in der Health-Connect-App unter
@@ -267,6 +271,17 @@ abstract class HealthGateway {
     required DateTime from,
     required DateTime to,
   });
+
+  /// Herzratenvariabilität (rMSSD) im Zeitraum, Werte in Millisekunden.
+  ///
+  /// Anders als VO2max deckt das `health`-Paket den Typ auf Android ab
+  /// (`HEART_RATE_VARIABILITY_RMSSD` → `HeartRateVariabilityRmssdRecord`), es
+  /// braucht also keinen eigenen Channel. Die Galaxy Watch schreibt die Werte
+  /// im Schlaf; tagsüber kommen meist keine dazu.
+  Future<List<HealthNumericSample>> readHrv({
+    required DateTime from,
+    required DateTime to,
+  });
 }
 
 /// Ergebnis eines Import-Laufs — für Diagnose und UI-Rückmeldung.
@@ -389,7 +404,7 @@ class VitalsTrend {
 }
 
 /// Datentypen, die beim Lesen der Vitaldaten fehlschlagen können.
-enum VitalsDataKind { ruhepuls, schlaf, vo2max }
+enum VitalsDataKind { ruhepuls, schlaf, vo2max, hrv }
 
 /// Ergebnis von [HealthSyncService.readVitals].
 class VitalsSummary {
@@ -399,6 +414,7 @@ class VitalsSummary {
     required this.to,
     required this.restingHeartRate,
     required this.sleepHours,
+    this.heartRateVariability = const VitalsTrend.empty(),
     this.vo2max,
     this.vo2maxAt,
     this.unavailable = const {},
@@ -415,6 +431,10 @@ class VitalsSummary {
   /// Schlafdauer in Stunden je Tag (dem Aufwachtag zugeordnet).
   final VitalsTrend sleepHours;
 
+  /// Herzratenvariabilität (rMSSD) in ms je Tag — ein repräsentativer Wert je
+  /// Kalendertag, siehe [dailyHrvValues].
+  final VitalsTrend heartRateVariability;
+
   /// Zuletzt gemessener VO2max-Wert, falls die Plattform ihn liefert.
   final double? vo2max;
 
@@ -427,7 +447,10 @@ class VitalsSummary {
 
   /// Ob überhaupt Daten vorliegen.
   bool get isEmpty =>
-      !restingHeartRate.hasData && !sleepHours.hasData && vo2max == null;
+      !restingHeartRate.hasData &&
+      !sleepHours.hasData &&
+      !heartRateVariability.hasData &&
+      vo2max == null;
 }
 
 // ---------------------------------------------------------------------------
@@ -669,8 +692,8 @@ class HealthSyncService {
     );
   }
 
-  /// Liest Ruhepuls, Schlaf und (falls verfügbar) VO2max der letzten [days]
-  /// Tage und verdichtet sie zu Tagesserien mit 7-Tage-Trend.
+  /// Liest Ruhepuls, Schlaf, HRV und (falls verfügbar) VO2max der letzten
+  /// [days] Tage und verdichtet sie zu Tagesserien mit 7-Tage-Trend.
   ///
   /// Wirft nicht: Fällt ein einzelner Datentyp aus (fehlende Berechtigung,
   /// Plattform-Grenze), landet er in [VitalsSummary.unavailable]; die übrigen
@@ -696,6 +719,11 @@ class HealthSyncService {
       () => gateway.readVo2Max(from: from, to: to),
       const [],
       onError: () => unavailable.add(VitalsDataKind.vo2max),
+    );
+    final hrv = await _readOptional<List<HealthNumericSample>>(
+      () => gateway.readHrv(from: from, to: to),
+      const [],
+      onError: () => unavailable.add(VitalsDataKind.hrv),
     );
 
     final restingSeries = _dailyAverages(
@@ -724,6 +752,7 @@ class HealthSyncService {
       to: to,
       restingHeartRate: _buildTrend(restingSeries, to),
       sleepHours: _buildTrend(sleepSeries, to),
+      heartRateVariability: _buildTrend(dailyHrvValues(hrv), to),
       vo2max: latestVo2 == null ? null : _round1(latestVo2.value),
       vo2maxAt: latestVo2?.time,
       unavailable: unavailable,
@@ -1046,6 +1075,42 @@ int? _nearestHr(List<HealthHeartRateSample> samples, DateTime time) {
   return best?.bpm.round();
 }
 
+/// Verdichtet HRV-Messungen (rMSSD in ms) zu einem Wert je Kalendertag.
+///
+/// Maßgeblich sind die Messungen zwischen 0:00 und 12:00 Uhr lokaler Zeit:
+/// Die Galaxy Watch schreibt rMSSD im Schlaf, und nur nächtliche bzw.
+/// morgendliche Werte sind untereinander vergleichbar (tagsüber verzerren
+/// Belastung, Kaffee und Stress den Wert stark). Gibt es an einem Tag keine
+/// Messung in diesem Fenster, gilt ersatzweise das Tagesmittel.
+List<DailyValue> dailyHrvValues(Iterable<HealthNumericSample> samples) {
+  final morningSums = <DateTime, double>{};
+  final morningCounts = <DateTime, int>{};
+  final daySums = <DateTime, double>{};
+  final dayCounts = <DateTime, int>{};
+
+  for (final sample in samples) {
+    if (!sample.value.isFinite || sample.value <= 0) {
+      continue;
+    }
+    final day = _startOfDay(sample.time);
+    daySums[day] = (daySums[day] ?? 0) + sample.value;
+    dayCounts[day] = (dayCounts[day] ?? 0) + 1;
+    if (sample.time.hour < 12) {
+      morningSums[day] = (morningSums[day] ?? 0) + sample.value;
+      morningCounts[day] = (morningCounts[day] ?? 0) + 1;
+    }
+  }
+
+  final byDay = <DateTime, double>{};
+  for (final day in daySums.keys) {
+    final morning = morningCounts[day];
+    byDay[day] = morning != null && morning > 0
+        ? morningSums[day]! / morning
+        : daySums[day]! / dayCounts[day]!;
+  }
+  return _sortedDaily(byDay);
+}
+
 DateTime _startOfDay(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
@@ -1150,6 +1215,18 @@ const List<hc.HealthDataType> healthReadTypes = [
   hc.HealthDataType.TOTAL_CALORIES_BURNED,
 ];
 
+/// Zusätzlich angefragte, aber **nicht zwingende** Datentypen.
+///
+/// Die HRV (rMSSD) ist das stärkste Erholungssignal, aber nicht jede Uhr
+/// schreibt sie und nicht jede Nutzerin gibt sie frei. Sie steht deshalb
+/// bewusst nicht in [healthReadTypes]: Sonst würde eine fehlende
+/// HRV-Freigabe die gesamte Health-Connect-Verbindung als „nicht verbunden"
+/// erscheinen lassen. Fehlt sie, landet HRV in [VitalsSummary.unavailable] —
+/// dasselbe Muster wie bei VO2max.
+const List<hc.HealthDataType> healthOptionalReadTypes = [
+  hc.HealthDataType.HEART_RATE_VARIABILITY_RMSSD,
+];
+
 /// [HealthGateway] auf Basis des pub.dev-Pakets `health` (Google Health
 /// Connect). Wird nur auf dem Gerät benutzt.
 class HealthPluginGateway implements HealthGateway {
@@ -1194,6 +1271,11 @@ class HealthPluginGateway implements HealthGateway {
 
   /// Fragt die Leserechte an.
   ///
+  /// Pflicht- und Zusatztypen ([healthOptionalReadTypes], u. a. HRV) gehen in
+  /// **einem** Dialog raus. Lehnt die Nutzerin nur einen Zusatztyp ab, meldet
+  /// das Plugin `false`, obwohl alles Nötige erteilt ist — deshalb wird in dem
+  /// Fall noch einmal gezielt der Pflichtsatz geprüft.
+  ///
   /// VO2max hängt nicht am `health`-Paket, sondern am nativen Zusatzkanal und
   /// wird deshalb in einem zweiten Schritt angefragt. Ein Fehlschlag dort
   /// (Channel nicht registriert, Health Connect fehlt, Ablehnung nur für
@@ -1202,14 +1284,19 @@ class HealthPluginGateway implements HealthGateway {
   @override
   Future<bool> requestPermissions() async {
     final plugin = await _plugin();
-    final granted = await plugin.requestAuthorization(healthReadTypes);
+    final granted = await plugin.requestAuthorization(
+      const [...healthReadTypes, ...healthOptionalReadTypes],
+    );
     try {
       await _extra
           .invokeMethod<bool>(healthExtraRequestVo2MaxPermissionMethod);
     } catch (_) {
       // VO2max bleibt dann schlicht in VitalsSummary.unavailable.
     }
-    return granted;
+    if (granted) {
+      return true;
+    }
+    return await plugin.hasPermissions(healthReadTypes) ?? false;
   }
 
   /// Öffnet den Play-Store-Eintrag von Health Connect. Nur sinnvoll, wenn
@@ -1380,6 +1467,17 @@ class HealthPluginGateway implements HealthGateway {
     samples.sort((a, b) => a.time.compareTo(b.time));
     return samples;
   }
+
+  /// rMSSD in ms. Der Typ ist im `health`-Paket für Android vorhanden
+  /// (`HEART_RATE_VARIABILITY_RMSSD`), ein eigener Channel ist nicht nötig.
+  /// Ohne erteilte Berechtigung wirft bzw. leert Health Connect die Abfrage —
+  /// [HealthSyncService.readVitals] fängt beides ab.
+  @override
+  Future<List<HealthNumericSample>> readHrv({
+    required DateTime from,
+    required DateTime to,
+  }) =>
+      _numeric(hc.HealthDataType.HEART_RATE_VARIABILITY_RMSSD, from, to);
 
   Future<List<HealthNumericSample>> _numeric(
     hc.HealthDataType type,

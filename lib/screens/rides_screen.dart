@@ -1,13 +1,16 @@
-/// Tourenliste: GPX-Import, Auswahl und Löschen gespeicherter Touren.
+/// Tourenliste: GPX-Import/-Export, Auswahl und Löschen gespeicherter Touren.
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
-import '../gpx.dart';
+import '../export.dart';
 import '../models.dart';
 import '../state.dart';
 import '../stats.dart';
@@ -100,25 +103,8 @@ class _RidesScreenState extends State<RidesScreen> {
       }
 
       final xml = utf8.decode(bytes, allowMalformed: true);
-      final parsed = parseGpx(xml);
-      final points = parsed.points;
-      final stats = computeStats(points);
-
       final fallbackName = file.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
-      final parsedName = parsed.name?.trim();
-      final name = (parsedName != null && parsedName.isNotEmpty)
-          ? parsedName
-          : fallbackName;
-      final createdAt =
-          points.first.time ?? DateTime.now().millisecondsSinceEpoch;
-
-      final ride = Ride(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        name: name,
-        createdAt: createdAt,
-        points: points,
-        stats: stats,
-      );
+      final ride = rideFromGpx(xml, fallbackName: fallbackName);
 
       await widget.state.addRide(ride);
       widget.onShowMap();
@@ -136,6 +122,30 @@ class _RidesScreenState extends State<RidesScreen> {
       }
     } finally {
       if (mounted) setState(() => _importing = false);
+    }
+  }
+
+  /// Teilt eine Tour als GPX-Datei über das System-Share-Sheet (z. B. für
+  /// Komoot, Strava oder eine andere Trainings-App).
+  Future<void> _shareGpx(BuildContext context, Ride ride) async {
+    try {
+      final xml = rideToGpx(ride);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${safeFileName(ride.name)}.gpx');
+      await file.writeAsString(xml);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'application/gpx+xml')],
+          subject: ride.name,
+          title: ride.name,
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Teilen fehlgeschlagen: $e')));
+      }
     }
   }
 
@@ -263,16 +273,38 @@ class _RidesScreenState extends State<RidesScreen> {
                             ),
                         ],
                       ),
-                      trailing: ride.id.startsWith('hc-')
-                          ? Tooltip(
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (ride.id.startsWith('hc-'))
+                            Tooltip(
                               message: 'Aus Samsung Health importiert',
                               child: Icon(
                                 Icons.watch,
                                 size: 20,
                                 color: colorScheme.onSurfaceVariant,
                               ),
-                            )
-                          : null,
+                            ),
+                          PopupMenuButton<String>(
+                            tooltip: 'Weitere Aktionen',
+                            onSelected: (value) {
+                              if (value == 'share_gpx') {
+                                _shareGpx(context, ride);
+                              }
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'share_gpx',
+                                child: ListTile(
+                                  leading: Icon(Icons.ios_share),
+                                  title: Text('Als GPX teilen'),
+                                  contentPadding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                       onTap: () {
                         widget.state.select(ride);
                         widget.onShowMap();

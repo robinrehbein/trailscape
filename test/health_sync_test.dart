@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:health/health.dart' as hc;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:trailscape/health_sync.dart';
 import 'package:trailscape/models.dart';
@@ -17,12 +18,14 @@ class FakeHealthGateway implements HealthGateway {
     this.restingHeartRate = const [],
     this.sleep = const [],
     this.vo2max = const [],
+    this.hrv = const [],
     this.failWorkouts = false,
     this.failRoutes = false,
     this.failHeartRate = false,
     this.failRestingHeartRate = false,
     this.failSleep = false,
     this.failVo2max = true,
+    this.failHrv = false,
   });
 
   HealthAvailability availabilityValue;
@@ -35,6 +38,7 @@ class FakeHealthGateway implements HealthGateway {
   List<HealthNumericSample> restingHeartRate;
   List<HealthSleepSession> sleep;
   List<HealthNumericSample> vo2max;
+  List<HealthNumericSample> hrv;
 
   bool failWorkouts;
   bool failRoutes;
@@ -42,6 +46,7 @@ class FakeHealthGateway implements HealthGateway {
   bool failRestingHeartRate;
   bool failSleep;
   bool failVo2max;
+  bool failHrv;
 
   int requestCount = 0;
   DateTime? lastWorkoutFrom;
@@ -118,6 +123,17 @@ class FakeHealthGateway implements HealthGateway {
       throw UnsupportedError('VO2max nicht unterstützt');
     }
     return vo2max;
+  }
+
+  @override
+  Future<List<HealthNumericSample>> readHrv({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    if (failHrv) {
+      throw StateError('hrv kaputt');
+    }
+    return hrv;
   }
 }
 
@@ -1100,6 +1116,127 @@ void main() {
       expect(vitals.days, 7);
       expect(vitals.from, _at(2026, 8, 4));
       expect(vitals.to, now);
+    });
+
+    test('liest HRV als Tagesserie mit Wochentrend', () async {
+      final gateway = FakeHealthGateway(
+        hrv: [
+          // Vorwoche
+          HealthNumericSample(time: _at(2026, 7, 29, 3), value: 60),
+          HealthNumericSample(time: _at(2026, 7, 31, 3), value: 50),
+          // Letzte Woche
+          HealthNumericSample(time: _at(2026, 8, 5, 2), value: 44),
+          HealthNumericSample(time: _at(2026, 8, 9, 4), value: 40),
+        ],
+      );
+
+      final hrv = (await serviceWith(gateway).readVitals()).heartRateVariability;
+      expect(hrv.hasData, isTrue);
+      expect(hrv.series, hasLength(4));
+      expect(hrv.latest, 40);
+      expect(hrv.lastWeekAvg, 42);
+      expect(hrv.previousWeekAvg, 55);
+      expect(hrv.delta, -13);
+    });
+
+    test('ein HRV-Ausfall lässt Ruhepuls und Schlaf unberührt', () async {
+      final gateway = FakeHealthGateway(
+        restingHeartRate: [
+          HealthNumericSample(time: _at(2026, 8, 9, 6), value: 57),
+        ],
+        failHrv: true,
+      );
+
+      final vitals = await serviceWith(gateway).readVitals();
+      expect(vitals.restingHeartRate.hasData, isTrue);
+      expect(vitals.heartRateVariability.hasData, isFalse);
+      expect(vitals.unavailable, contains(VitalsDataKind.hrv));
+      expect(vitals.unavailable, isNot(contains(VitalsDataKind.ruhepuls)));
+    });
+
+    test('ohne HRV bleibt die Reihe leer, ohne Fehlermeldung', () async {
+      final vitals = await serviceWith(FakeHealthGateway()).readVitals();
+      expect(vitals.heartRateVariability.hasData, isFalse);
+      expect(vitals.unavailable, isNot(contains(VitalsDataKind.hrv)));
+    });
+  });
+
+  group('dailyHrvValues', () {
+    test('mittelt die Messungen zwischen 0:00 und 12:00 Uhr', () {
+      final series = dailyHrvValues([
+        HealthNumericSample(time: _at(2026, 8, 5, 2), value: 40),
+        HealthNumericSample(time: _at(2026, 8, 5, 5), value: 50),
+        // Nachmittagswert zählt nicht, solange es Nachtwerte gibt.
+        HealthNumericSample(time: _at(2026, 8, 5, 18), value: 20),
+      ]);
+      expect(series, hasLength(1));
+      expect(series.single.day, _at(2026, 8, 5));
+      expect(series.single.value, 45);
+    });
+
+    test('11:59 zählt noch zum Morgenfenster, 12:00 nicht mehr', () {
+      final series = dailyHrvValues([
+        HealthNumericSample(time: _at(2026, 8, 5, 11, 59), value: 42),
+        HealthNumericSample(time: _at(2026, 8, 5, 12), value: 20),
+      ]);
+      expect(series.single.value, 42);
+    });
+
+    test('ohne Morgenwerte gilt das Tagesmittel', () {
+      final series = dailyHrvValues([
+        HealthNumericSample(time: _at(2026, 8, 5, 14), value: 30),
+        HealthNumericSample(time: _at(2026, 8, 5, 20), value: 40),
+      ]);
+      expect(series.single.value, 35);
+    });
+
+    test('trennt Kalendertage und sortiert aufsteigend', () {
+      final series = dailyHrvValues([
+        HealthNumericSample(time: _at(2026, 8, 6, 3), value: 38),
+        HealthNumericSample(time: _at(2026, 8, 4, 3), value: 52),
+        HealthNumericSample(time: _at(2026, 8, 5, 3), value: 45),
+      ]);
+      expect(series.map((v) => v.day).toList(), [
+        _at(2026, 8, 4),
+        _at(2026, 8, 5),
+        _at(2026, 8, 6),
+      ]);
+      expect(series.map((v) => v.value).toList(), [52, 45, 38]);
+    });
+
+    test('unbrauchbare Messwerte fallen raus', () {
+      final series = dailyHrvValues([
+        HealthNumericSample(time: _at(2026, 8, 5, 3), value: 0),
+        HealthNumericSample(time: _at(2026, 8, 5, 4), value: -5),
+        HealthNumericSample(time: _at(2026, 8, 5, 5), value: double.nan),
+        HealthNumericSample(time: _at(2026, 8, 6, 3), value: 40),
+      ]);
+      expect(series, hasLength(1));
+      expect(series.single.day, _at(2026, 8, 6));
+    });
+
+    test('leere Eingabe ergibt eine leere Reihe', () {
+      expect(dailyHrvValues(const []), isEmpty);
+    });
+  });
+
+  group('angefragte Datentypen', () {
+    test('HRV ist optional und blockiert die Verbindung nicht', () {
+      expect(
+        healthOptionalReadTypes,
+        contains(hc.HealthDataType.HEART_RATE_VARIABILITY_RMSSD),
+      );
+      expect(
+        healthReadTypes,
+        isNot(contains(hc.HealthDataType.HEART_RATE_VARIABILITY_RMSSD)),
+      );
+    });
+
+    test('HRV wird auf Android vom Paket unterstützt', () {
+      expect(
+        hc.dataTypeKeysAndroid,
+        contains(hc.HealthDataType.HEART_RATE_VARIABILITY_RMSSD),
+      );
     });
   });
 

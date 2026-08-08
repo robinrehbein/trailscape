@@ -18,6 +18,8 @@ class _FakeGateway implements HealthGateway {
     this.workouts = const [],
     this.failWorkouts = false,
     this.heartRate = const [],
+    this.restingHeartRate = const [],
+    this.hrv = const [],
   });
 
   HealthAvailability availabilityValue;
@@ -25,6 +27,8 @@ class _FakeGateway implements HealthGateway {
   List<HealthWorkout> workouts;
   bool failWorkouts;
   List<HealthHeartRateSample> heartRate;
+  List<HealthNumericSample> restingHeartRate;
+  List<HealthNumericSample> hrv;
 
   @override
   Future<HealthAvailability> availability() async => availabilityValue;
@@ -66,7 +70,7 @@ class _FakeGateway implements HealthGateway {
     required DateTime from,
     required DateTime to,
   }) async =>
-      const [];
+      restingHeartRate;
 
   @override
   Future<List<HealthSleepSession>> readSleepSessions({
@@ -81,6 +85,13 @@ class _FakeGateway implements HealthGateway {
     required DateTime to,
   }) async =>
       const [];
+
+  @override
+  Future<List<HealthNumericSample>> readHrv({
+    required DateTime from,
+    required DateTime to,
+  }) async =>
+      hrv;
 }
 
 DateTime _at(int year, int month, int day, [int hour = 0]) =>
@@ -528,10 +539,60 @@ void main() {
       expect(insights.readiness.unavailableReason, isNotNull);
       expect(insights.restingHr.available, isFalse);
       expect(insights.sleep.available, isFalse);
+      expect(insights.hrv.available, isFalse);
+      expect(insights.readinessLast7, isEmpty);
       expect(insights.deload.recommended, isFalse);
       expect(insights.weeklyTarget, isNull);
       expect(insights.calibration.alpha, 1.0);
       expect(state.rideLoad('gibtsnicht'), isNull);
+    });
+
+    test('HRV aus Health Connect landet in der Auswertung', () async {
+      final now = DateTime.now();
+      DateTime dayAgo(int days) =>
+          DateTime(now.year, now.month, now.day - days, 3);
+
+      final state = AppState(
+        healthSync: HealthSyncService(
+          gateway: _FakeGateway(
+            restingHeartRate: [
+              for (var i = 0; i < 60; i++)
+                HealthNumericSample(time: dayAgo(59 - i), value: 50),
+            ],
+            hrv: [
+              for (var i = 0; i < 21; i++)
+                HealthNumericSample(time: dayAgo(27 - i), value: 50),
+              // Die letzten sieben Nächte brechen ein.
+              for (var i = 0; i < 7; i++)
+                HealthNumericSample(time: dayAgo(6 - i), value: 35),
+            ],
+          ),
+        ),
+      );
+      await state.loadRides();
+      await state.autoSyncHealth();
+
+      final hrv = state.insights.hrv;
+      expect(hrv.available, isTrue);
+      expect(hrv.status, HrvStatus.niedrig);
+      expect(hrv.currentRmssd, closeTo(35, 0.5));
+      expect(state.insights.restingHr.available, isTrue);
+      // Ohne Schlafhistorie bleibt der Gesamtscore gesperrt, das Einzelsignal
+      // ist trotzdem da.
+      expect(state.insights.readiness.available, isFalse);
+      expect(state.insights.readiness.hrv.available, isTrue);
+    });
+
+    test('Zeitbudget deckelt das Wochenziel', () async {
+      final state = AppState();
+      await state.addRide(_heuristicRide('a', DateTime.now()));
+      await state.setProfile(
+        const TrainingProfile(ageYears: 40, weeklyHours: 3),
+      );
+
+      final target = state.insights.weeklyTarget!;
+      expect(target.weeklyHours, 3);
+      expect(target.weeklyLoad, lessThanOrEqualTo(3 * weeklyLoadPerHour));
     });
   });
 }

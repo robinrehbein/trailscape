@@ -3,10 +3,15 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../export.dart';
 import '../health_sync.dart';
 import '../state.dart';
 import '../storage.dart';
@@ -78,9 +83,13 @@ class _MoreScreenState extends State<MoreScreen> {
   DateTime? _healthLastSyncAt;
   bool _healthBusy = false;
 
+  /// Sperrt die Backup-/Import-Buttons, während ein Export/Import läuft.
+  bool _backupBusy = false;
+
   final _ageController = TextEditingController();
   final _weightController = TextEditingController();
   final _setupMassController = TextEditingController();
+  final _weeklyHoursController = TextEditingController();
   final _hrMaxController = TextEditingController();
   final _lthrController = TextEditingController();
   final _restingHrController = TextEditingController();
@@ -110,6 +119,7 @@ class _MoreScreenState extends State<MoreScreen> {
     _ageController.dispose();
     _weightController.dispose();
     _setupMassController.dispose();
+    _weeklyHoursController.dispose();
     _hrMaxController.dispose();
     _lthrController.dispose();
     _restingHrController.dispose();
@@ -134,6 +144,9 @@ class _MoreScreenState extends State<MoreScreen> {
     _ageController.text = profile.ageYears.toString();
     _weightController.text = _formatNumber(profile.weightKg);
     _setupMassController.text = _formatNumber(profile.setupMassKg);
+    _weeklyHoursController.text = profile.weeklyHours != null
+        ? _formatNumber(profile.weeklyHours!)
+        : '';
     _hrMaxController.text = profile.hrMaxOverride != null
         ? _formatNumber(profile.hrMaxOverride!)
         : '';
@@ -310,6 +323,12 @@ class _MoreScreenState extends State<MoreScreen> {
           'Das Gewicht von Rad und Gepäck sollte unter 60 kg liegen.');
       return;
     }
+    final weeklyHours = _parseNumber(_weeklyHoursController.text);
+    if (weeklyHours != null && (weeklyHours <= 0 || weeklyHours > 40)) {
+      setState(() => _profileStatus =
+          'Bitte eine Wochenzeit zwischen 1 und 40 Stunden angeben.');
+      return;
+    }
 
     final profile = TrainingProfile(
       ageYears: age,
@@ -323,6 +342,7 @@ class _MoreScreenState extends State<MoreScreen> {
       crr: widget.state.profile.crr,
       driveEfficiency: widget.state.profile.driveEfficiency,
       eftpOverrideW: widget.state.profile.eftpOverrideW,
+      weeklyHours: weeklyHours,
     );
 
     await widget.state.setProfile(profile);
@@ -415,6 +435,22 @@ class _MoreScreenState extends State<MoreScreen> {
             Text('Ohne Angabe rechnen wir mit '
                 '${_formatNumber(defaultSetupMassKg)} kg für Rad und Gepäck.',
                 style: hint),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _weeklyHoursController,
+              decoration: const InputDecoration(
+                labelText: 'Zeit pro Woche (Stunden, optional)',
+              ),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Mit deinem Zeitbudget deckeln wir das Wochenziel auf das, was '
+              'sich in dieser Zeit realistisch fahren lässt.',
+              style: hint,
+            ),
             const SizedBox(height: 8),
             InkWell(
               onTap: () => setState(
@@ -561,6 +597,204 @@ class _MoreScreenState extends State<MoreScreen> {
           const SizedBox(width: 8),
           Expanded(child: Text(text)),
         ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Daten & Backup
+  // ---------------------------------------------------------------------
+
+  /// Exportiert alle Touren und das Trainingsprofil als eine JSON-Datei über
+  /// das System-Share-Sheet (z. B. Speichern in Google Drive, Versenden per
+  /// Mail o. ä.) — das eigentliche Backup.
+  Future<void> _exportBackup() async {
+    setState(() => _backupBusy = true);
+    try {
+      final json = buildBackupJson(widget.state.rides, widget.state.profile);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${backupFileName(DateTime.now())}');
+      await file.writeAsString(json);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'application/json')],
+          subject: 'Trailscape-Backup',
+          title: 'Trailscape-Backup',
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export fehlgeschlagen: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  /// Importiert eine zuvor exportierte Backup-Datei. Touren, deren ID schon
+  /// vorhanden ist, werden übersprungen; ein enthaltenes Profil überschreibt
+  /// das aktuelle.
+  Future<void> _importBackup() async {
+    setState(() => _backupBusy = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      final bytes = result.files.single.bytes;
+      if (bytes == null) {
+        throw const FormatException('Die Datei konnte nicht gelesen werden.');
+      }
+
+      final raw = utf8.decode(bytes, allowMalformed: true);
+      final data = parseBackupJson(raw);
+
+      final existingIds = widget.state.rides.map((r) => r.id).toSet();
+      final newRides =
+          data.rides.where((r) => !existingIds.contains(r.id)).toList();
+      final skipped = data.rides.length - newRides.length;
+
+      await widget.state.addRides(newRides);
+      if (data.profile != null) {
+        await widget.state.setProfile(data.profile!);
+      }
+
+      if (!mounted) return;
+      final rideWord = newRides.length == 1 ? 'Tour' : 'Touren';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${newRides.length} $rideWord importiert'
+            '${skipped > 0 ? ', $skipped übersprungen' : ''}'
+            '${data.profile != null ? ' · Profil übernommen' : ''}',
+          ),
+        ),
+      );
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import fehlgeschlagen: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  /// Importiert eine einzelne GPX-Datei (z. B. Export aus Komoot oder
+  /// Strava) als neue Tour.
+  Future<void> _importGpxFile() async {
+    setState(() => _backupBusy = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['gpx'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+      final file = result.files.single;
+      final bytes = file.bytes;
+      if (bytes == null) {
+        throw const FormatException('Die Datei konnte nicht gelesen werden.');
+      }
+
+      final xml = utf8.decode(bytes, allowMalformed: true);
+      final fallbackName = file.name.replaceFirst(RegExp(r'\.[^.]+$'), '');
+      final ride = rideFromGpx(xml, fallbackName: fallbackName);
+
+      if (widget.state.rides.any((r) => r.id == ride.id)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Diese Tour ist bereits vorhanden.')),
+        );
+        return;
+      }
+
+      await widget.state.addRide(ride);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('„${ride.name}" importiert')));
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Import fehlgeschlagen: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _backupBusy = false);
+    }
+  }
+
+  Widget _buildDataBackupCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final hint = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Daten & Backup', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            Text(
+              'Sichere alle Touren und dein Trainingsprofil in einer Datei — '
+              'zum Übertragen auf ein neues Gerät oder als Backup vor einer '
+              'Neuinstallation. Einzelne GPX-Dateien (z. B. aus Komoot oder '
+              'Strava) lassen sich ebenfalls importieren.',
+              style: hint,
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _backupBusy ? null : _exportBackup,
+                  icon: const Icon(Icons.save_alt),
+                  label: const Text('Backup exportieren'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _backupBusy ? null : _importBackup,
+                  icon: const Icon(Icons.restore),
+                  label: const Text('Backup importieren'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _backupBusy ? null : _importGpxFile,
+                  icon: const Icon(Icons.route),
+                  label: const Text('GPX importieren'),
+                ),
+              ],
+            ),
+            if (_backupBusy) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -807,8 +1041,10 @@ class _MoreScreenState extends State<MoreScreen> {
               const SizedBox(height: 16),
               _EntranceFade(index: 3, child: _buildHealthCard(context)),
               const SizedBox(height: 16),
+              _EntranceFade(index: 4, child: _buildDataBackupCard(context)),
+              const SizedBox(height: 16),
               _EntranceFade(
-                index: 4,
+                index: 5,
                 child: Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
