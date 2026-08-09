@@ -127,42 +127,51 @@ fun PlanWeekCard(
             )
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Kopfzeile (Tag, Titel, Distanz, Planungs-Knopf) und darunter die
+            // Beschreibung in voller Breite. Titel und Beschreibung duerfen
+            // NICHT in einer Zeile stehen: die Beschreibung bekaeme nur die
+            // Restbreite neben Distanz und Knopf und braeche pro Wort um.
             for (session in week.sessions) {
                 Row(
                     modifier = Modifier.padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                 ) {
                     WeekdayLabel(session.day)
                     Column(modifier = Modifier.weight(1f)) {
-                        Row {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Text(
                                 text = session.title,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = " – ${session.description}",
+                                text = "${session.targetKm} km",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
+                            if (isCurrent && onPlanRoute != null) {
+                                IconButton(
+                                    onClick = { onPlanRoute(session) },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Place,
+                                        contentDescription = "Passende Route für „${session.title}“ planen",
+                                        tint = theme.primary,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
                         }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${session.targetKm} km",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (isCurrent && onPlanRoute != null) {
-                        IconButton(
-                            onClick = { onPlanRoute(session) },
-                            modifier = Modifier.size(32.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.Place,
-                                contentDescription = "Passende Route für „${session.title}“ planen",
-                                tint = theme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                        Text(
+                            text = session.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = theme.onSurfaceVariant,
+                        )
                     }
                 }
             }
