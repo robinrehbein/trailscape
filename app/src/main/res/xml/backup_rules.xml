@@ -20,9 +20,16 @@
       leicht mehrere hundert MB gross; Auto Backup deckelt eine App bei 25 MB
       und liesse das Backup sonst komplett scheitern. Die WAL-/SHM-Dateien
       stehen einzeln da, weil `path` nur ganze Pfadnamen trifft.
+    * `crash/` — der lokale Absturzbericht. Er ist eine Momentaufnahme GENAU
+      DIESES Geraets (Stacktrace, Speicherstand, Modell) und auf einem anderen
+      wertlos; vor allem aber verspricht die Datenschutzerklaerung
+      (`PRIVACY.md`), dass Absturzberichte das Geraet nur verlassen, wenn der
+      Nutzer sie selbst verschickt — ueber Auto Backup taeten sie es sonst
+      stillschweigend.
 -->
 <full-backup-content>
     <exclude domain="file" path="recording" />
+    <exclude domain="file" path="crash" />
     <exclude domain="file" path="mbgl-offline.db" />
     <exclude domain="file" path="mbgl-offline.db-wal" />
     <exclude domain="file" path="mbgl-offline.db-shm" />

@@ -116,7 +116,7 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 
 ```bash
 ./gradlew :core:test              # 461 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # 32 Tests der plattformfreien :app-Teile
+./gradlew :app:testDebugUnitTest  # 46 Tests der plattformfreien :app-Teile
 ```
 
 Was die CI vor jedem Release ausführt:
@@ -127,8 +127,8 @@ Was die CI vor jedem Release ausführt:
 
 `:app` hat bewusst kein Robolectric — getestet wird dort nur, was ohne
 Android-Framework auskommt (Aufzeichnungs-Journal, GPX-Import,
-Share-Dateinamen, Trainingsauswertung). Alles Rechnende liegt ohnehin in
-`:core`.
+Share-Dateinamen, Trainingsauswertung, Berichtsformat der Fehlermeldung).
+Alles Rechnende liegt ohnehin in `:core`.
 
 ## Installation und Updates
 
@@ -178,8 +178,55 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 Alles bleibt lokal. Die App spricht nur mit Diensten, die für eine konkrete
 Aktion nötig sind: Kachelserver für die Karte, BRouter für die
 Routenberechnung, Nominatim für die Zielsuche und — wenn eingerichtet — dem
-eigenen Sync-Server. Kein Analytics, kein Crash-Reporting, keine Werbung.
+eigenen Sync-Server. Kein Analytics, keine Telemetrie, keine Werbung, kein
+Konto.
+
+Was genau wann an wen geht, steht ausführlich und nachprüfbar in
+[`PRIVACY.md`](PRIVACY.md) — in der App erreichbar über **Mehr → Über →
+Datenschutz**.
+
+## Fehler melden
+
+Trailscape hat kein Crashlytics und kein Sentry — ohne eine Meldung erfährt
+niemand von einem Problem. Stattdessen zwei Wege, beide freiwillig und beide
+mit vorheriger Ansicht des kompletten Berichts:
+
+- **Absturz**: Stürzt die App ab, landet ein rein technischer Bericht
+  (Stacktrace, App-/Android-Version, Gerät, Speicherstand) in
+  `<filesDir>/crash/last-crash.txt` — und sonst nirgends. Beim nächsten Start
+  fragt die App einmal nach: ansehen, auf GitHub melden, teilen oder
+  verwerfen.
+- **Problem melden**: **Mehr → Über → Problem melden** öffnet denselben Dialog
+  ohne Absturz, wahlweise mit der Diagnose des letzten Health-Syncs als
+  Anhang.
+
+„Auf GitHub melden" öffnet nur ein vorbefülltes
+[Issue-Formular](https://github.com/robinrehbein/trailscape/issues/new) im
+Browser; abgeschickt wird es dort von dir. Wer kein GitHub-Konto hat, nimmt
+„Teilen". Die App selbst sendet nichts.
 
 ## Lizenz
 
-MIT
+Copyright © 2026 Robin Rehbein
+
+Trailscape ist freie Software: Du darfst sie unter den Bedingungen der **GNU
+General Public License, Version 3** oder (nach deiner Wahl) einer späteren
+Version weitergeben und verändern. Der vollständige Lizenztext liegt in
+[`LICENSE`](LICENSE).
+
+Copyleft statt einer freizügigen Lizenz, weil es hier um Datenhoheit geht: Die
+GPL verhindert, dass jemand Trailscape als Closed-Source-Fork mit Tracking und
+Abo weiterverkauft, und sie ist die üblichste Lizenz für eine spätere Aufnahme
+bei F-Droid.
+
+Die Lizenzen der verwendeten Bibliotheken und Datenquellen (MapLibre,
+AndroidX/Compose, Kotlin, OkHttp, Google Play services, OpenStreetMap, CARTO,
+CyclOSM, OpenTopoMap, Esri, BRouter, Nominatim) stehen in der App unter
+**Mehr → Über → Open-Source-Lizenzen** und im Quelltext in
+[`app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt`](app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt).
+
+> **Hinweis zur Kombination mit Google Play services:** `play-services-location`
+> ist proprietär und steht unter Googles SDK-Lizenz. Für eine Weitergabe durch
+> Dritte unter der GPL wäre entweder eine Ausnahmeklausel dafür nötig oder ein
+> Umstieg auf Androids `LocationManager` — siehe
+> [Issue-Tracker](https://github.com/robinrehbein/trailscape/issues).

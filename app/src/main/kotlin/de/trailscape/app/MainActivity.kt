@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import de.trailscape.app.feedback.CrashReportPrompt
 import de.trailscape.app.health.HealthPermissionRequester
 import de.trailscape.app.ui.TrailscapeApp
 import de.trailscape.app.ui.theme.TrailscapeTheme
@@ -33,6 +34,13 @@ class MainActivity : ComponentActivity() {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     TrailscapeApp()
+                    // Liegt neben der Navigationshuelle, nicht darin: Der
+                    // Absturz-Dialog gehoert der Activity (siehe
+                    // Zustaendigkeits-KDoc in ui/TrailscapeApp.kt). Ein
+                    // AlertDialog zeichnet in ein eigenes Fenster und belegt
+                    // im Layout keinen Platz; ohne liegengebliebenen Bericht
+                    // gibt dieses Composable gar nichts aus.
+                    CrashReportPrompt()
                 }
             }
         }
