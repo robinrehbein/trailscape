@@ -119,6 +119,14 @@ import kotlinx.coroutines.withContext
  *  * **Suche jederzeit**, nicht nur im Planungsmodus (siehe `PlanningPanel.kt`).
  *  * **Hoehenprofil** fuer die ausgewaehlte Tour und die geplante Route — das
  *    hatte der Karten-Screen in Flutter noch nicht.
+ *  * **Rundkurs aus der Trainingsempfehlung.** Der Trainings-Tab schickt ueber
+ *    [AppViewModel.pendingRouteTarget] ein Ziel her; dieser Screen oeffnet
+ *    dafuer das Panel aus `RouteGenerationPanel.kt`, laesst im
+ *    [RouteGenerationController] suchen und legt den uebernommenen Vorschlag in
+ *    **denselben** `plannedRoute`-Zustand, den die Planung von Hand fuellt —
+ *    Hoehenprofil, Speichern, Teilen und Navigation funktionieren damit ohne
+ *    einen zweiten Weg. Das Flutter-Original kannte weder Generator noch
+ *    Uebergabe zwischen den Tabs.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,6 +153,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     // OfflineDownloadController) — hier wird nur sein Fortschritt gelesen.
     val downloadState by OfflineDownloadController.state.collectAsStateWithLifecycle()
 
+    // Ebenso die Rundkurs-Suche: Sie dauert 20–40 s und ueberlebt deshalb den
+    // Tab-Wechsel (siehe RouteGenerationController).
+    val generation by RouteGenerationController.state.collectAsStateWithLifecycle()
+    val pendingRouteTarget by appViewModel.pendingRouteTarget.collectAsStateWithLifecycle()
+
     // ---------------------------------------------------- Zustand des Screens
     var locationGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     var planning by rememberSaveable { mutableStateOf(false) }
@@ -153,6 +166,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     var routeProfile by rememberSaveable { mutableStateOf(RouteProfile.GRAVEL) }
     var planBusy by remember { mutableStateOf(false) }
     var planError by remember { mutableStateOf<String?>(null) }
+
+    // Ob [plannedRoute] aus dem Rundkurs-Generator stammt statt aus gesetzten
+    // Wegpunkten. Der Generator bringt eine fertige Route ohne Wegpunkte mit —
+    // ohne dieses Flag wuerde der Planungs-Effekt unten sie beim naechsten Lauf
+    // (leere Wegpunktliste) sofort wieder auf `null` setzen. Sobald wieder von
+    // Hand geplant wird, faellt es zurueck auf `false`.
+    var routeFromGenerator by remember { mutableStateOf(false) }
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -194,7 +214,13 @@ fun MapScreen(appViewModel: AppViewModel) {
         val action = pendingAction
         pendingAction = null
         if (action == null) return@rememberLauncherForActivityResult
-        if (locationGranted) {
+        if (locationGranted || action == PendingAction.GENERATE_ROUTES) {
+            // Die Rundkurs-Suche braucht die Freigabe nicht zwingend: Ohne sie
+            // startet die Runde eben in der Kartenmitte. Sie hier trotzdem
+            // anzufragen ist der einzige Weg, spaeter doch den echten Standort
+            // zu bekommen — abgelehnt zu werden darf die Suche aber nicht
+            // blockieren, sonst haengt die Nutzerin bei dauerhaft verweigerter
+            // Freigabe fest.
             grantedAction = action
         } else {
             pendingNavigateRideId = null
@@ -292,7 +318,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ---------------------------------------------------------- Routenplanung
-    LaunchedEffect(waypoints, routeProfile) {
+    LaunchedEffect(waypoints, routeProfile, routeFromGenerator) {
+        if (routeFromGenerator) {
+            // Die Route kommt fertig aus dem Rundkurs-Generator; sie hat keine
+            // Wegpunkte, aus denen sich etwas nachrechnen liesse.
+            planBusy = false
+            planError = null
+            return@LaunchedEffect
+        }
         if (waypoints.size < 2) {
             plannedRoute = null
             planError = null
@@ -402,6 +435,34 @@ fun MapScreen(appViewModel: AppViewModel) {
         planBusy = false
         searchMarker = null
         hoverPoint = null
+        routeFromGenerator = false
+    }
+
+    /** Verwirft den Vorschlag samt Panel und raeumt die Vorschau von der Karte. */
+    fun discardGeneratedRoute() {
+        RouteGenerationController.close()
+        routeFromGenerator = false
+        plannedRoute = null
+    }
+
+    /**
+     * Uebernimmt den gewaehlten Vorschlag als **die** geplante Route — also in
+     * genau den Zustand, den auch die Planung von Hand erzeugt. Damit greifen
+     * Hoehenprofil, Teilen, Speichern und „Navigieren" sofort, ohne dass es
+     * dafuer einen zweiten Weg gaebe.
+     */
+    fun applyGeneratedRoute() {
+        val candidate = generation.selected ?: return
+        RouteGenerationController.close()
+        appViewModel.select(null)
+        waypoints = emptyList()
+        planError = null
+        planBusy = false
+        routeFromGenerator = true
+        plannedRoute = candidate.route
+        planning = true
+        controller.fitToPoints(candidate.route.points)
+        appViewModel.showMessage("Runde übernommen – du kannst sie speichern oder navigieren.")
     }
 
     // Jede Aktion mit Standortbedarf gibt es zweimal: `run…` ist der Rumpf,
@@ -416,6 +477,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             return
         }
         if (planning) exitPlanning()
+        discardGeneratedRoute()
         appViewModel.select(null)
         RecordingRepository.start(context)
     }
@@ -466,6 +528,9 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     fun onMapTap(lat: Double, lon: Double) {
         if (!planning) return
+        // Wer selbst Wegpunkte setzt, plant wieder von Hand — die generierte
+        // Runde ist ab dann nicht mehr die Grundlage (siehe Planungs-Effekt).
+        routeFromGenerator = false
         val hit = waypoints.indexOfFirst { waypoint ->
             controller.isWithinScreenDistance(
                 TrackPoint(lat = waypoint.lat, lon = waypoint.lon),
@@ -543,6 +608,39 @@ fun MapScreen(appViewModel: AppViewModel) {
         )
     }
 
+    /**
+     * Startet die Rundkurs-Suche. Startpunkt ist die aktuelle Position; ohne
+     * Fix (oder ohne Freigabe) die Kartenmitte — das Panel weist darauf hin.
+     * Die Suche selbst laeuft im [RouteGenerationController] und ueberlebt
+     * damit den Tab-Wechsel.
+     */
+    fun runGenerateRoutes() {
+        locationGranted = hasLocationPermission(context)
+        scope.launch {
+            val position = currentLocation(context)
+            val start = if (position != null) {
+                TrackPoint(lat = position.latitude, lon = position.longitude)
+            } else {
+                controller.rememberCamera()?.let { TrackPoint(lat = it.lat, lon = it.lon) }
+            }
+            if (start == null) {
+                appViewModel.showMessage(
+                    "Kein Startpunkt: Position unbekannt und die Karte ist noch nicht bereit.",
+                )
+                return@launch
+            }
+            RouteGenerationController.start(
+                start = start,
+                fromMapCenter = position == null,
+                onMessage = appViewModel::showMessage,
+            )
+        }
+    }
+
+    fun generateRoutes() {
+        withPermissions(PendingAction.GENERATE_ROUTES) { runGenerateRoutes() }
+    }
+
     fun runNavigateRide(ride: Ride) {
         pendingNavigateRideId = null
         locationGranted = true
@@ -585,12 +683,51 @@ fun MapScreen(appViewModel: AppViewModel) {
             PendingAction.LOCATE -> runGoToMyPosition()
             PendingAction.PLAN_START -> runUseMyPositionAsStart()
             PendingAction.NAVIGATE_ROUTE -> runNavigatePlannedRoute()
+            PendingAction.GENERATE_ROUTES -> runGenerateRoutes()
             PendingAction.NAVIGATE_RIDE -> {
                 val rideId = pendingNavigateRideId
                 pendingNavigateRideId = null
                 rides.firstOrNull { it.id == rideId }?.let { runNavigateRide(it) }
             }
         }
+    }
+
+    // ------------------------------------- Trainingsempfehlung → Routenziel
+    // Das Ziel wartet als StateFlow im AppViewModel, bis dieser Screen nach dem
+    // Tab-Wechsel wirklich in der Komposition ist (siehe dessen KDoc).
+    LaunchedEffect(pendingRouteTarget) {
+        val target = pendingRouteTarget ?: return@LaunchedEffect
+        appViewModel.consumeRouteTarget()
+        if (planning) exitPlanning()
+        appViewModel.select(null)
+        RouteGenerationController.open(target)
+    }
+
+    // Der ausgewaehlte Vorschlag ist die Vorschau auf der Karte: Er landet in
+    // demselben `plannedRoute`, das auch die Planung von Hand fuellt — also in
+    // der blauen, gestrichelten Routenebene aus `MapViewHost.kt`.
+    // Schluessel bewusst nur aus billigen Werten: `candidates` traegt komplette
+    // Punktlisten, ein Vergleich davon liefe bei jeder Rekomposition mit.
+    // (Ziel, Seed, Zahl der Vorschlaege, Auswahl) benennt den Vorschlag genauso
+    // eindeutig.
+    LaunchedEffect(
+        generation.target,
+        generation.seed,
+        generation.candidates.size,
+        generation.selectedIndex,
+    ) {
+        if (generation.target == null) return@LaunchedEffect
+        val candidate = generation.selected
+        if (candidate == null) {
+            if (routeFromGenerator) {
+                routeFromGenerator = false
+                plannedRoute = null
+            }
+            return@LaunchedEffect
+        }
+        routeFromGenerator = true
+        plannedRoute = candidate.route
+        controller.fitToPoints(candidate.route.points)
     }
 
     // ------------------------------------------------------------------ Aufbau
@@ -640,6 +777,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 } else if (isRecording) {
                                     appViewModel.showMessage("Beende zuerst die Aufzeichnung.")
                                 } else {
+                                    // Von Hand planen loest den Generator ab —
+                                    // zwei Panels uebereinander helfen niemandem.
+                                    discardGeneratedRoute()
                                     appViewModel.select(null)
                                     planning = true
                                     waypoints = emptyList()
@@ -695,6 +835,21 @@ fun MapScreen(appViewModel: AppViewModel) {
                     )
                 }
 
+                if (generation.target != null) {
+                    RouteGenerationPanel(
+                        state = generation,
+                        maxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
+                        onStart = ::generateRoutes,
+                        onCancel = RouteGenerationController::cancel,
+                        onSelect = RouteGenerationController::select,
+                        onNextSuggestions = {
+                            RouteGenerationController.nextSuggestions(appViewModel::showMessage)
+                        },
+                        onApply = ::applyGeneratedRoute,
+                        onDiscard = ::discardGeneratedRoute,
+                    )
+                }
+
                 if (planning) {
                     PlanningCard(
                         profile = routeProfile,
@@ -704,9 +859,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                         busy = planBusy,
                         error = planError,
                         maxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
+                        generated = routeFromGenerator,
                         onUseMyPosition = ::useMyPositionAsStart,
-                        onUndo = { waypoints = waypoints.dropLast(1) },
+                        onUndo = {
+                            routeFromGenerator = false
+                            waypoints = waypoints.dropLast(1)
+                        },
                         onClear = {
+                            routeFromGenerator = false
                             waypoints = emptyList()
                             plannedRoute = null
                             planError = null
@@ -837,7 +997,14 @@ fun MapScreen(appViewModel: AppViewModel) {
  * des System-Dialogs (`NAVIGATE_RIDE` merkt sich die Tour zusaetzlich ueber
  * ihre ID). Enum-Werte sind `Serializable` und damit bundle-faehig.
  */
-private enum class PendingAction { RECORD, LOCATE, PLAN_START, NAVIGATE_RIDE, NAVIGATE_ROUTE }
+private enum class PendingAction {
+    RECORD,
+    LOCATE,
+    PLAN_START,
+    NAVIGATE_RIDE,
+    NAVIGATE_ROUTE,
+    GENERATE_ROUTES,
+}
 
 /** Was gerade navigiert wird — eine gespeicherte Tour oder die geplante Route. */
 private data class NavigationTarget(
