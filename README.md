@@ -41,7 +41,8 @@ seinen eigenen Server dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
 - Offline-Karten: Regionen über MapLibres Offline-Manager herunterladen
-  (max. 250 Kacheln pro Vorgang) und im Mehr-Tab verwalten
+  (max. 250 Kacheln pro Vorgang, der sichtbare Ausschnitt darf höchstens
+  150 km Kantenlänge haben) und im Mehr-Tab verwalten
 
 **Training**
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren

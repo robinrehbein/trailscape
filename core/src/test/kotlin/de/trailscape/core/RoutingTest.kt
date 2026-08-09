@@ -176,7 +176,10 @@ class RoutingTest {
                 client,
             )
         }
-        assertEquals("Route konnte nicht berechnet werden: Server explodiert", e.message)
+        // Unbekannte Servertexte werden nicht mehr roh durchgereicht, sondern in
+        // eine deutsche Meldung eingebettet — der Originaltext bleibt in
+        // Klammern erhalten, damit Bugreports diagnostizierbar bleiben.
+        assertEquals("Route konnte nicht berechnet werden. (Servermeldung: Server explodiert)", e.message)
     }
 
     @Test
@@ -379,7 +382,373 @@ class RoutingTest {
         }
 
         val e = assertFailsWith<Exception> { fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client) }
-        assertEquals("Route konnte nicht berechnet werden: Server explodiert", e.message)
+        assertEquals("Route konnte nicht berechnet werden. (Servermeldung: Server explodiert)", e.message)
+    }
+
+    // -----------------------------------------------------------------------
+    // Watchdog: Retry und deutsche Meldung
+    // -----------------------------------------------------------------------
+
+    /** Der Text, mit dem brouter.de eine per Lastabwurf gekillte Anfrage quittiert. */
+    private val watchdogBody = "operation killed by thread-priority-watchdog after 1 seconds"
+
+    private val shortWaypoints = listOf(
+        Waypoint(lat = 48.1372, lon = 11.5756),
+        Waypoint(lat = 48.3705, lon = 10.8978),
+    )
+
+    @Test
+    fun `wiederholt nach Watchdog-Abbruch genau einmal und liefert dann die Route`() {
+        var calls = 0
+        val pauses = mutableListOf<Long>()
+        val client = HttpClient {
+            calls += 1
+            if (calls == 1) HttpResponse(400, watchdogBody) else HttpResponse(200, SAMPLE_GEO_JSON)
+        }
+
+        val route = fetchRoute(shortWaypoints, "trekking", client, sleeper = { pauses.add(it) })
+
+        assertEquals(2, calls)
+        assertEquals(listOf(watchdogRetryPauseMs), pauses)
+        assertEquals(3, route.points.size)
+    }
+
+    @Test
+    fun `gibt nach dem zweiten Watchdog-Abbruch mit deutscher Meldung auf`() {
+        var calls = 0
+        val client = HttpClient {
+            calls += 1
+            HttpResponse(400, watchdogBody)
+        }
+
+        val e = assertFailsWith<Exception> {
+            fetchRoute(shortWaypoints, "trekking", client, sleeper = {})
+        }
+
+        // Genau ein Retry — danach sauber scheitern, statt den Server weiter zu belasten.
+        assertEquals(2, calls)
+        assertEquals(errorServerOverloaded, e.message)
+        assertTrue(e.message!!.contains("näheren Wegpunkten"))
+        // Der rohe Servertext taucht nicht mehr im UI auf.
+        assertTrue(!e.message!!.contains("watchdog"))
+    }
+
+    @Test
+    fun `behandelt den Server-Timeout wie den Watchdog`() {
+        var calls = 0
+        val client = HttpClient {
+            calls += 1
+            HttpResponse(400, "operation timeout after 60 seconds")
+        }
+
+        val e = assertFailsWith<Exception> {
+            fetchRoute(shortWaypoints, "trekking", client, sleeper = {})
+        }
+
+        assertEquals(2, calls)
+        assertEquals(errorServerOverloaded, e.message)
+    }
+
+    @Test
+    fun `wiederholt bei anderen Serverfehlern nicht`() {
+        var calls = 0
+        val client = HttpClient {
+            calls += 1
+            HttpResponse(400, "position not mapped in existing datafile")
+        }
+
+        val e = assertFailsWith<Exception> {
+            fetchRoute(shortWaypoints, "trekking", client, sleeper = {})
+        }
+
+        assertEquals(1, calls)
+        assertEquals(
+            "Route konnte nicht berechnet werden. (Servermeldung: position not mapped in existing datafile)",
+            e.message,
+        )
+    }
+
+    @Test
+    fun `kuerzt sehr lange Servertexte in der Meldung`() {
+        val long = "x".repeat(500)
+        val message = routingErrorMessage(long)
+
+        assertTrue(message.startsWith("Route konnte nicht berechnet werden. (Servermeldung: "))
+        assertTrue(message.endsWith("…)"))
+        assertTrue(message.length < 300, "zu lang: ${message.length}")
+    }
+
+    @Test
+    fun `leerer Servertext ergibt die generische Meldung ohne Klammern`() {
+        assertEquals(errorRouteFailed, routingErrorMessage("   \n "))
+    }
+
+    @Test
+    fun `Watchdog beim Custom-Profil laedt nicht sinnlos neu hoch`() {
+        var uploads = 0
+        var routeCalls = 0
+        val client = HttpClient { request ->
+            if (request.method == HttpMethod.POST) {
+                uploads += 1
+                HttpResponse(200, """{"profileid":"custom_x"}""")
+            } else {
+                routeCalls += 1
+                HttpResponse(400, watchdogBody)
+            }
+        }
+
+        val e = assertFailsWith<Exception> {
+            fetchRoute(shortWaypoints, CUSTOM_GRAVEL_PROFILE, client, sleeper = {})
+        }
+
+        assertEquals(errorServerOverloaded, e.message)
+        assertEquals(1, uploads)
+        // Ein Versuch plus ein Retry — kein zweiter Upload, kein trekking-Fallback.
+        assertEquals(2, routeCalls)
+    }
+
+    // -----------------------------------------------------------------------
+    // Leg-Splitting
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `kurze Route ergibt genau eine Server-Anfrage`() {
+        val counter = CountingBrouter()
+
+        fetchRoute(shortWaypoints, "trekking", counter, sleeper = {})
+
+        assertEquals(1, counter.routeRequests)
+        assertEquals(listOf(shortWaypoints), planRouteLegs(shortWaypoints))
+    }
+
+    @Test
+    fun `mehrere nahe Wegpunkte bleiben eine einzige Anfrage mit Via-Punkten`() {
+        val counter = CountingBrouter()
+        val waypoints = listOf(
+            Waypoint(lat = 48.1372, lon = 11.5756),
+            Waypoint(lat = 48.2500, lon = 11.4000),
+            Waypoint(lat = 48.3705, lon = 10.8978),
+        )
+
+        fetchRoute(waypoints, "trekking", counter, sleeper = {})
+
+        assertEquals(1, counter.routeRequests)
+        assertEquals(3, counter.legWaypoints.single().size)
+    }
+
+    @Test
+    fun `weit auseinanderliegende Wegpunkte werden in kurze Einzel-Legs zerlegt`() {
+        val counter = CountingBrouter()
+
+        // Hamburg -> Muenchen: rund 610 km Luftlinie.
+        val legs = planRouteLegs(listOf(HAMBURG, MUENCHEN))
+
+        assertEquals(5, legs.size)
+        for (leg in legs) {
+            // Jede Anfrage hat genau zwei Punkte — ein Request mit vielen
+            // Via-Punkten liefe weiterhin am Stueck in einem Server-Thread.
+            assertEquals(2, leg.size)
+            val km = airDistanceM(leg[0], leg[1]) / 1000
+            assertTrue(km <= maxLegAirDistanceKm, "Teil-Leg ist $km km lang")
+        }
+
+        fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", counter, sleeper = {})
+        assertEquals(5, counter.routeRequests)
+    }
+
+    @Test
+    fun `Zwischenpunkte liegen auf der Geodaete zwischen Start und Ziel`() {
+        val chain = splitLegOnGeodesic(HAMBURG, MUENCHEN)
+
+        assertEquals(6, chain.size)
+        assertEquals(HAMBURG, chain.first())
+        assertEquals(MUENCHEN, chain.last())
+
+        val direct = airDistanceM(HAMBURG, MUENCHEN)
+        var along = 0.0
+        for (i in 1 until chain.size) {
+            along += airDistanceM(chain[i - 1], chain[i])
+        }
+        // Auf dem Grosskreis ist die Summe der Teilstuecke die Gesamtstrecke.
+        assertEquals(direct, along, direct * 1e-6)
+    }
+
+    @Test
+    fun `unterhalb der Schwelle gibt es keine Zwischenpunkte`() {
+        val chain = splitLegOnGeodesic(shortWaypoints[0], shortWaypoints[1])
+        assertEquals(2, chain.size)
+
+        // Auch knapp unterhalb der Schwelle: 149 km bleiben ungeteilt, 151 km nicht.
+        val a = Waypoint(lat = 48.0, lon = 11.0)
+        assertEquals(2, splitLegOnGeodesic(a, geodesicPointAtKm(a, 149.0)).size)
+        assertEquals(3, splitLegOnGeodesic(a, geodesicPointAtKm(a, 151.0)).size)
+    }
+
+    @Test
+    fun `identische Wegpunkte erzeugen keine Zwischenpunkte`() {
+        val p = Waypoint(lat = 48.0, lon = 11.0)
+        assertEquals(listOf(p, p), splitLegOnGeodesic(p, p))
+    }
+
+    // -----------------------------------------------------------------------
+    // Zusammensetzen der Teilrouten
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `summiert Distanz und Hoehenmeter und entdoppelt die Nahtstellen`() {
+        val a = PlannedRoute(
+            points = listOf(
+                TrackPoint(lat = 48.0, lon = 11.0),
+                TrackPoint(lat = 48.5, lon = 11.5),
+            ),
+            distanceKm = 10.0,
+            ascentM = 100.0,
+        )
+        val b = PlannedRoute(
+            points = listOf(
+                // Nahtstelle: identisch mit dem letzten Punkt von a.
+                TrackPoint(lat = 48.5, lon = 11.5),
+                TrackPoint(lat = 49.0, lon = 12.0),
+            ),
+            distanceKm = 20.0,
+            ascentM = 250.0,
+        )
+
+        val merged = concatRouteLegs(listOf(a, b))
+
+        assertEquals(30.0, merged.distanceKm, EPS)
+        assertEquals(350.0, merged.ascentM, EPS)
+        assertEquals(3, merged.points.size)
+        assertEquals(48.0, merged.points[0].lat, EPS)
+        assertEquals(48.5, merged.points[1].lat, EPS)
+        assertEquals(49.0, merged.points[2].lat, EPS)
+    }
+
+    @Test
+    fun `behaelt Punkte, wenn die Nahtstelle nicht zusammenfaellt`() {
+        val a = PlannedRoute(listOf(TrackPoint(lat = 48.0, lon = 11.0)), 1.0, 1.0)
+        val b = PlannedRoute(listOf(TrackPoint(lat = 48.1, lon = 11.0)), 1.0, 1.0)
+
+        assertEquals(2, concatRouteLegs(listOf(a, b)).points.size)
+    }
+
+    @Test
+    fun `setzt eine zerlegte Route lueckenlos und ohne Doppelpunkte zusammen`() {
+        // Jeder Teil-Request meldet 100 km und 50 Hm und liefert seine beiden
+        // Wegpunkte als Geometrie zurueck — wie der echte Server, der an den
+        // Nahtstellen denselben Punkt zweimal liefern wuerde.
+        val client = CountingBrouter(distanceM = 100_000.0, ascentM = 50.0)
+
+        val route = fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", client, sleeper = {})
+
+        assertEquals(5, client.routeRequests)
+        assertEquals(500.0, route.distanceKm, EPS)
+        assertEquals(250.0, route.ascentM, EPS)
+        // 5 Legs a 2 Punkte, 4 Nahtstellen entdoppelt.
+        assertEquals(6, route.points.size)
+        for (i in 1 until route.points.size) {
+            assertTrue(
+                haversineM(route.points[i - 1], route.points[i]) > 1.0,
+                "doppelter Punkt an Index $i",
+            )
+        }
+        assertEquals(HAMBURG.lat, route.points.first().lat, 1e-5)
+        assertEquals(MUENCHEN.lat, route.points.last().lat, 1e-5)
+    }
+
+    @Test
+    fun `pausiert zwischen den Teil-Anfragen, davor nicht`() {
+        val pauses = mutableListOf<Long>()
+        val client = CountingBrouter()
+
+        fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", client, sleeper = { pauses.add(it) })
+
+        assertEquals(5, client.routeRequests)
+        assertEquals(List(4) { legRequestPauseMs }, pauses)
+    }
+
+    @Test
+    fun `meldet den Fortschritt ueber die Legs`() {
+        val progress = mutableListOf<Pair<Int, Int>>()
+
+        fetchRoute(
+            listOf(HAMBURG, MUENCHEN),
+            "trekking",
+            CountingBrouter(),
+            sleeper = {},
+            onProgress = { done, total -> progress.add(done to total) },
+        )
+
+        assertEquals(listOf(0 to 5, 1 to 5, 2 to 5, 3 to 5, 4 to 5, 5 to 5), progress)
+    }
+
+    @Test
+    fun `das Custom-Profil wird fuer alle Legs nur einmal hochgeladen`() {
+        val client = CountingBrouter()
+
+        fetchRoute(listOf(HAMBURG, MUENCHEN), CUSTOM_GRAVEL_PROFILE, client, sleeper = {})
+
+        assertEquals(1, client.profileUploads)
+        assertEquals(5, client.routeRequests)
+    }
+}
+
+/** Hamburg — rund 610 km Luftlinie von [MUENCHEN] entfernt. */
+private val HAMBURG = Waypoint(lat = 53.5511, lon = 9.9937)
+
+/** Muenchen. */
+private val MUENCHEN = Waypoint(lat = 48.1372, lon = 11.5756)
+
+/** Punkt [km] noerdlich von [from] — nur fuer Schwellwert-Tests. */
+private fun geodesicPointAtKm(from: Waypoint, km: Double): Waypoint =
+    Waypoint(lat = from.lat + km / 111.19492664455873, lon = from.lon)
+
+/**
+ * Fake-Server, der Routing-Anfragen zaehlt, ihre Wegpunkte mitschreibt und
+ * eine synthetische GeoJSON-Antwort mit genau diesen Wegpunkten als Geometrie
+ * liefert — damit lassen sich Nahtstellen und Summen pruefen.
+ */
+private class CountingBrouter(
+    val distanceM: Double = 1000.0,
+    val ascentM: Double = 10.0,
+) : HttpClient {
+    var routeRequests = 0
+    var profileUploads = 0
+    val legWaypoints = mutableListOf<List<Waypoint>>()
+
+    override fun execute(request: HttpRequest): HttpResponse {
+        if (request.method == HttpMethod.POST) {
+            profileUploads += 1
+            return HttpResponse(200, """{"profileid":"fake-gravel"}""")
+        }
+        routeRequests += 1
+
+        val raw = request.url.substringAfter("lonlats=").substringBefore("&")
+        val points = raw.split("|").map { pair ->
+            val parts = pair.split(",")
+            Waypoint(lat = parts[1].toDouble(), lon = parts[0].toDouble())
+        }
+        legWaypoints.add(points)
+
+        val coords = points.joinToString(",") { "[${it.lon},${it.lat},500.0]" }
+        return HttpResponse(
+            200,
+            """
+            {
+              "type": "FeatureCollection",
+              "features": [
+                {
+                  "type": "Feature",
+                  "properties": {
+                    "track-length": "${distanceM.toInt()}",
+                    "filtered ascend": "${ascentM.toInt()}"
+                  },
+                  "geometry": { "type": "LineString", "coordinates": [$coords] }
+                }
+              ]
+            }
+            """,
+        )
     }
 }
 

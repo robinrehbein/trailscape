@@ -322,7 +322,9 @@ fun generateRoutes(
 
             val waypoints = loopWaypoints(start, radiusM, bearing, viaCount, clockwise)
             val route = try {
-                fetchRoute(waypoints, profileId, client)
+                // sleeper durchreichen: bei einem Watchdog-Retry in fetchRoute
+                // soll in Tests ebenfalls nicht real gewartet werden.
+                fetchRoute(waypoints, profileId, client, sleeper)
             } catch (_: Exception) {
                 // Kandidat aufgeben, spaetere Kandidaten bekommen ihre Chance.
                 break

@@ -167,6 +167,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     var planBusy by remember { mutableStateOf(false) }
     var planError by remember { mutableStateOf<String?>(null) }
 
+    // Fortschritt bei weit auseinanderliegenden Wegpunkten: `fetchRoute` zerlegt
+    // solche Routen in mehrere Server-Anfragen (siehe `Routing.kt`), was spuerbar
+    // dauert. Bei nur einem Teilstueck bleibt die Anzeige leer.
+    var planProgress by remember { mutableStateOf<String?>(null) }
+
     // Ob [plannedRoute] aus dem Rundkurs-Generator stammt statt aus gesetzten
     // Wegpunkten. Der Generator bringt eine fertige Route ohne Wegpunkte mit —
     // ohne dieses Flag wuerde der Planungs-Effekt unten sie beim naechsten Lauf
@@ -324,18 +329,31 @@ fun MapScreen(appViewModel: AppViewModel) {
             // Wegpunkte, aus denen sich etwas nachrechnen liesse.
             planBusy = false
             planError = null
+            planProgress = null
             return@LaunchedEffect
         }
         if (waypoints.size < 2) {
             plannedRoute = null
             planError = null
             planBusy = false
+            planProgress = null
             return@LaunchedEffect
         }
         planBusy = true
         planError = null
+        planProgress = null
         val result = withContext(Dispatchers.IO) {
-            runCatching { fetchRoute(waypoints, brouterProfile(routeProfile), AppServices.httpClient) }
+            runCatching {
+                fetchRoute(
+                    waypoints = waypoints,
+                    profileId = brouterProfile(routeProfile),
+                    client = AppServices.httpClient,
+                    onProgress = { done, total ->
+                        // Nur melden, wenn wirklich zerlegt wurde.
+                        planProgress = if (total > 1) "Teilstrecke $done von $total …" else null
+                    },
+                )
+            }
         }
         result
             .onSuccess {
@@ -349,6 +367,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                     ?: "Route konnte nicht berechnet werden."
             }
         planBusy = false
+        planProgress = null
     }
 
     // --------------------------------------------------------------- Ortssuche
@@ -579,33 +598,23 @@ fun MapScreen(appViewModel: AppViewModel) {
             appViewModel.showMessage("Karte ist noch nicht bereit.")
             return
         }
-        val zoomRange = offlineZoomRange(zoom, mapStyle)
-        val estimate = estimateTileCount(bounds, zoomRange.first, zoomRange.last)
-        if (estimate <= 0) {
-            appViewModel.showMessage("Dieser Ausschnitt lässt sich nicht speichern.")
-            return
-        }
-        if (estimate > MAX_TILES_PER_DOWNLOAD) {
-            appViewModel.showMessage(
-                "Bereich zu groß: ca. $estimate Kacheln (max. $MAX_TILES_PER_DOWNLOAD). " +
-                    "Zoome näher heran.",
+        // Alle Grenzen (sinnvolle Groesse, Kachelzahl, Zoombereich) steckt
+        // `planOfflineDownload` — reine Rechnung, in OfflineTileMath.kt
+        // getestet.
+        when (val plan = planOfflineDownload(bounds, zoom, mapStyle)) {
+            is OfflineDownloadPlan.Rejected -> appViewModel.showMessage(plan.message)
+            // Bewusst nicht in `scope` (der stirbt beim Tab-Wechsel mitsamt
+            // dem halbfertigen Download), sondern im App-Scope; die
+            // Abschlussmeldung kommt ueber den geteilten Meldungskanal zurueck.
+            is OfflineDownloadPlan.Ready -> OfflineDownloadController.start(
+                context = context,
+                style = mapStyle,
+                bounds = bounds,
+                plan = plan,
+                name = "${mapStyle.label} · ${formatToday()}",
+                onMessage = appViewModel::showMessage,
             )
-            return
         }
-
-        // Bewusst nicht in `scope` (der stirbt beim Tab-Wechsel mitsamt dem
-        // halbfertigen Download), sondern im App-Scope; die Abschlussmeldung
-        // kommt ueber den geteilten Meldungskanal zurueck.
-        OfflineDownloadController.start(
-            context = context,
-            style = mapStyle,
-            bounds = bounds,
-            minZoom = zoomRange.first,
-            maxZoom = zoomRange.last,
-            name = "${mapStyle.label} · ${formatToday()}",
-            estimatedTiles = estimate,
-            onMessage = appViewModel::showMessage,
-        )
     }
 
     /**
@@ -859,6 +868,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         busy = planBusy,
                         error = planError,
                         maxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
+                        progress = planProgress,
                         generated = routeFromGenerator,
                         onUseMyPosition = ::useMyPositionAsStart,
                         onUndo = {

@@ -7,27 +7,18 @@ import de.trailscape.app.ui.formatOneDecimalDe
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.ln
 import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.tan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.offline.OfflineRegion
@@ -44,7 +35,41 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * Loeschen, Groesse) baut der Mehr-Screen; er darf diese Datei benutzen
  * (siehe [readOfflineRegionInfo]), muss sie aber nicht: `OfflineManager` ist
  * ein prozessweites Singleton, jede eigene Verwaltung findet dieselben
- * Regionen.
+ * Regionen. Die reine Rechnung (Kachelzahl, Grenzen, Style-Adresse,
+ * Metadaten) steht nebenan in `OfflineTileMath.kt` (siehe
+ * [planOfflineDownload]) und ist dort als JVM-Test geprueft.
+ *
+ * ## Wie der Rasterstil zur Region kommt — und warum das mal haengen blieb
+ * [OfflineTilePyramidRegionDefinition] verlangt eine Style-**URL**; unsere
+ * Stile entstehen aber zur Laufzeit als JSON ([MapStyle.toRasterStyleJson]).
+ * Der erste Anlauf legte die JSON als Datei ab und uebergab eine
+ * `file://`-Adresse. Das kann nicht funktionieren, und zwar still:
+ *
+ *  * Der Download laeuft im Kern ueber die `DatabaseFileSource`, und die kennt
+ *    als Nachschub ausschliesslich die **Netz**-Quelle
+ *    (`FileSourceManager::getFileSource(FileSourceType::Network, …)`,
+ *    `platform/default/src/mbgl/storage/database_file_source.cpp`). Die
+ *    `file://`/`asset://`-Aufloesung des `MainResourceLoader`, die beim
+ *    *Anzeigen* der Karte greift, ist an dieser Stelle gar nicht beteiligt.
+ *  * Die Android-Netzquelle reicht alles ausser `local://` an OkHttp weiter.
+ *    Dort scheitert `HttpUrl.parse("file://…")` — und
+ *    `HttpRequestImpl.executeRequest` **kehrt ohne jeden Rueckruf zurueck**
+ *    (nur eine Logzeile „Unable to parse resourceUrl"). Kein Ergebnis, kein
+ *    Fehler, kein Wiederholungsversuch.
+ *
+ * Der Kern wartete also ewig auf die eine Style-Ressource: `requiredResource
+ * Count = 1`, `completedResourceCount = 0` — die Anzeige „Lade Kacheln … 0/1",
+ * die nie weiterlief.
+ *
+ * Jetzt wird die JSON **vorher** unter ihrer Wunschadresse
+ * ([offlineStyleUrl]) in MapLibres eigenen Ressourcen-Cache gelegt
+ * ([OfflineManager.putResourceWithUrl] — genau dafuer gedacht). Der Download
+ * schaut fuer jede Ressource zuerst in dieser Datenbank nach
+ * (`OfflineDownload::ensureResource` → `OfflineDatabase::getRegionResource`,
+ * Schluessel ist schlicht die URL) und findet den Stil dort, ohne je ins Netz
+ * zu gehen. Beide Aufrufe laufen ueber denselben Aktor-Thread der
+ * `DatabaseFileSource`, die Reihenfolge „erst ablegen, dann Region anlegen"
+ * ist damit eingehalten.
  *
  * ## Unterschied zum Flutter-Original
  * `lib/tile_cache.dart` lud die Kacheln mit einem eigenen HTTP-Client in ein
@@ -52,141 +77,53 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * zu. Nativ uebernimmt das der MapLibre-Kern: `OfflineManager` schreibt in
  * dieselbe SQLite-Datenbank, aus der auch die laufende Karte liest — die
  * heruntergeladenen Kacheln erscheinen also ohne weiteres Zutun offline.
- * Uebernommen sind die *Grenzen* des Originals: dieselbe Zoom-Spanne
- * (`z … z+2`, gedeckelt) und dieselbe Obergrenze von
- * [MAX_TILES_PER_DOWNLOAD] Kacheln pro Download.
+ * Ein eigener Kachel-Download *in diese Datenbank* waere kein Ersatz: Kacheln
+ * liegen dort in einer eigenen Tabelle mit dem Schluessel
+ * (Vorlage, x, y, z) — [OfflineManager.putResourceWithUrl] schreibt aber in
+ * die URL-Tabelle (`Resource::Kind::Unknown`), wo die Kartenanzeige
+ * (`Resource::Kind::Tile`) nie nachsieht. Fuer den *Stil* passt der Weg, fuer
+ * *Kacheln* nicht.
  */
-
-/** Wie in `lib/tile_cache.dart`: mehr als so viele Kacheln laedt die App nicht am Stueck. */
-const val MAX_TILES_PER_DOWNLOAD: Int = 250
-
-/** Obergrenze der Zoomstufe eines Downloads (Original: `math.min(minZoom + 2, 17)`). */
-const val MAX_OFFLINE_ZOOM: Int = 17
-
-/** Wie viele Zoomstufen ueber der aktuellen mitgeladen werden. */
-const val OFFLINE_ZOOM_SPAN: Int = 2
-
-/** Grenzwert der Mercator-Projektion (wie `_maxLatitude` in Dart). */
-private const val MAX_LATITUDE = 85.05112878
 
 /** Fortschritt eines laufenden Downloads. */
 data class OfflineDownloadProgress(
     val completedTiles: Long,
-    val requiredResources: Long,
+    /**
+     * Vom Kern erwartete Kachelzahl — **nur** gesetzt, wenn MapLibre sie
+     * bereits genau kennt (`isRequiredResourceCountPrecise`). Vorher meldet
+     * der Kern `1` (der Stil selbst), und genau diese `1` machte aus dem
+     * Fortschrittsbalken die beruehmte Anzeige „0/1".
+     */
+    val requiredTiles: Long,
     val completedBytes: Long,
 )
 
-/** Beschreibung einer gespeicherten Region (aus den Metadaten). */
-data class OfflineRegionInfo(
-    val name: String,
-    val styleId: String,
-    val createdAtMs: Long,
+/** Verzeichnis der frueheren `file://`-Stildateien; wird nur noch aufgeraeumt. */
+private const val LEGACY_STYLE_DIR_NAME = "map-styles"
+
+/**
+ * Wie lange der abgelegte Stil im Ressourcen-Cache als frisch gilt. Grosszuegig,
+ * weil ihn nur der Download liest — und der prueft das Ablaufdatum ohnehin
+ * nicht.
+ */
+private const val STYLE_CACHE_TTL_S = 365L * 24 * 60 * 60
+
+/**
+ * Bruecke von MapLibres [LatLngBounds] in die reine Rechnung: entscheidet, ob
+ * und wie der sichtbare Ausschnitt geladen wird (siehe [planOfflineDownload]).
+ */
+fun planOfflineDownload(
+    bounds: LatLngBounds,
+    cameraZoom: Double,
+    style: MapStyle,
+): OfflineDownloadPlan = planOfflineDownload(
+    north = bounds.latitudeNorth,
+    south = bounds.latitudeSouth,
+    east = bounds.longitudeEast,
+    west = bounds.longitudeWest,
+    cameraZoom = cameraZoom,
+    style = style,
 )
-
-// -------------------------------------------------------------------- Mathe
-
-private fun tileCountAtZoom(zoom: Int): Int = 1 shl zoom.coerceIn(0, 30)
-
-private fun lonToTileX(lon: Double, zoom: Int): Int {
-    val n = tileCountAtZoom(zoom)
-    val x = floor((lon.coerceIn(-180.0, 180.0) + 180.0) / 360.0 * n).toInt()
-    return x.coerceIn(0, n - 1)
-}
-
-private fun latToTileY(lat: Double, zoom: Int): Int {
-    val n = tileCountAtZoom(zoom)
-    val rad = lat.coerceIn(-MAX_LATITUDE, MAX_LATITUDE) * (PI / 180)
-    val y = floor((1 - ln(tan(rad) + 1 / cos(rad)) / PI) / 2 * n).toInt()
-    return y.coerceIn(0, n - 1)
-}
-
-/**
- * Zaehlt die Kacheln einer Region ueber alle Zoomstufen — reine Rechnung ohne
- * IO, 1:1 wie `TileCache.estimateTileCount` in Dart. Grundlage der
- * Groessenwarnung, bevor ueberhaupt ein Download beginnt.
- */
-fun estimateTileCount(bounds: LatLngBounds, minZoom: Int, maxZoom: Int): Int {
-    if (bounds.longitudeEast < bounds.longitudeWest ||
-        bounds.latitudeNorth < bounds.latitudeSouth
-    ) {
-        return 0
-    }
-
-    var total = 0
-    for (zoom in max(0, minZoom)..maxZoom) {
-        val xMin = lonToTileX(bounds.longitudeWest, zoom)
-        val xMax = lonToTileX(bounds.longitudeEast, zoom)
-        val yMin = latToTileY(bounds.latitudeNorth, zoom)
-        val yMax = latToTileY(bounds.latitudeSouth, zoom)
-        total += (xMax - xMin + 1) * (yMax - yMin + 1)
-    }
-    return total
-}
-
-/**
- * Die Zoom-Spanne, die zur aktuellen Kamerazoomstufe heruntergeladen wird:
- * `z … z+2`, begrenzt durch [MAX_OFFLINE_ZOOM] und die hoechste vom Anbieter
- * unterstuetzte Stufe.
- */
-fun offlineZoomRange(cameraZoom: Double, style: MapStyle): IntRange {
-    val minZoom = max(0, Math.round(cameraZoom).toInt())
-    val maxZoom = min(minZoom + OFFLINE_ZOOM_SPAN, min(MAX_OFFLINE_ZOOM, style.maxZoom))
-    return minZoom..max(minZoom, maxZoom)
-}
-
-// ------------------------------------------------------------------- Style
-
-/**
- * Legt die Style-JSON des Rasterstils als Datei ab und liefert ihre
- * `file://`-Adresse.
- *
- * Der Grund: [OfflineTilePyramidRegionDefinition] verlangt eine Style-**URL**
- * (der Kern laedt den Stil selbst, um die Kachelquellen zu kennen) — eine
- * JSON-Zeichenkette wie beim Anzeigen der Karte
- * (`Style.Builder().fromJson(...)`) nimmt es nicht an. Die Datei liegt im
- * app-privaten Speicher und wird bei jedem Aufruf neu geschrieben, damit
- * Aenderungen am Stil-Katalog sofort greifen.
- *
- * Schreibt auf den Datentraeger und blockiert deshalb: **nicht** aus dem
- * Main-Thread aufrufen (siehe [downloadOfflineRegion], das den Aufruf auf
- * [Dispatchers.IO] auslagert).
- */
-fun mapStyleFileUri(context: Context, style: MapStyle): String {
-    val dir = File(context.filesDir, STYLE_DIR_NAME)
-    dir.mkdirs()
-    val file = File(dir, "${style.id}.json")
-    file.writeText(style.toRasterStyleJson(), Charsets.UTF_8)
-    return "file://${file.absolutePath}"
-}
-
-private const val STYLE_DIR_NAME = "map-styles"
-
-// ---------------------------------------------------------------- Metadaten
-
-/** Baut die Metadaten einer Region (Name, Stil, Zeitpunkt) als UTF-8-JSON. */
-fun offlineRegionMetadata(name: String, styleId: String, createdAtMs: Long): ByteArray =
-    buildJsonObject {
-        put("name", name)
-        put("styleId", styleId)
-        put("createdAt", createdAtMs)
-    }.toString().toByteArray(Charsets.UTF_8)
-
-/**
- * Liest die von [offlineRegionMetadata] geschriebenen Angaben zurueck.
- * Liefert `null`, wenn die Region von einer anderen Stelle angelegt wurde.
- */
-fun readOfflineRegionInfo(metadata: ByteArray?): OfflineRegionInfo? {
-    val raw = metadata ?: return null
-    return runCatching {
-        val json = Json.parseToJsonElement(raw.toString(Charsets.UTF_8)) as? JsonObject
-            ?: return null
-        OfflineRegionInfo(
-            name = json["name"]?.jsonPrimitive?.contentOrNull ?: return null,
-            styleId = json["styleId"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-            createdAtMs = json["createdAt"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L,
-        )
-    }.getOrNull()
-}
 
 // ----------------------------------------------------------------- Download
 
@@ -194,10 +131,15 @@ fun readOfflineRegionInfo(metadata: ByteArray?): OfflineRegionInfo? {
  * Laedt den sichtbaren Ausschnitt fuer [style] herunter.
  *
  * Muss aus dem Main-Thread heraus aufgerufen werden: Der [OfflineManager]
- * liefert seine Rueckmeldungen ueber den Main-Looper. Die Funktion
- * suspendiert, bis der Download fertig ist, und meldet zwischendurch ueber
- * [onProgress]. Bricht die aufrufende Coroutine ab (Screen verlassen), wird
- * der Download gestoppt und die halbfertige Region wieder geloescht.
+ * liefert seine Rueckmeldungen ueber den Main-Looper, und die Aufsicht gegen
+ * haengende Downloads laeuft im selben (Einzel-)Thread — deshalb braucht der
+ * gemeinsame Zustand hier keine Synchronisierung. Die Funktion suspendiert,
+ * bis der Download fertig ist, und meldet zwischendurch ueber [onProgress].
+ * Bricht die aufrufende Coroutine ab (Screen verlassen), wird der Download
+ * gestoppt und die halbfertige Region wieder geloescht.
+ *
+ * [minZoom]/[maxZoom] sind **Kamerazoomstufen** der Regionsdefinition; welche
+ * Kachelstufen daraus werden, steht in [offlineTileZoomRange].
  *
  * @throws IllegalStateException mit einer fuer die UI geeigneten Meldung.
  */
@@ -209,36 +151,76 @@ suspend fun downloadOfflineRegion(
     maxZoom: Int,
     name: String,
     onProgress: (OfflineDownloadProgress) -> Unit,
-): OfflineDownloadProgress {
+): OfflineDownloadProgress = coroutineScope {
     val appContext = context.applicationContext
-    // Die Style-JSON landet als Datei auf dem Flash — das gehoert nicht auf
-    // den Main-Thread, aus dem diese Funktion gerufen wird.
-    val styleUri = withContext(Dispatchers.IO) {
-        runCatching { mapStyleFileUri(appContext, style) }
+    val manager = OfflineManager.getInstance(appContext)
+    val styleUrl = offlineStyleUrl(style)
+
+    // Aus der Zeit der `file://`-Adressen koennen noch Stildateien im
+    // app-privaten Speicher liegen; die braucht niemand mehr.
+    withContext(Dispatchers.IO) {
+        runCatching { File(appContext.filesDir, LEGACY_STYLE_DIR_NAME).deleteRecursively() }
+    }
+
+    val nowS = System.currentTimeMillis() / 1000
+    runCatching {
+        manager.putResourceWithUrl(
+            styleUrl,
+            style.toRasterStyleJson().toByteArray(Charsets.UTF_8),
+            nowS,
+            nowS + STYLE_CACHE_TTL_S,
+            "",
+            false,
+        )
     }.getOrElse {
         throw IllegalStateException("Der Kartenstil konnte nicht abgelegt werden.")
     }
 
     val definition = OfflineTilePyramidRegionDefinition(
-        styleUri,
+        styleUrl,
         bounds,
         minZoom.toDouble(),
         maxZoom.toDouble(),
         appContext.resources.displayMetrics.density,
     )
     val metadata = offlineRegionMetadata(name, style.id, System.currentTimeMillis())
+    val watchdogScope = this
 
-    return suspendCancellableCoroutine { continuation ->
-        val manager = OfflineManager.getInstance(appContext)
+    suspendCancellableCoroutine { continuation ->
         var region: OfflineRegion? = null
         var settled = false
+        var watchdog: Job? = null
+        var lastProgressAt = System.currentTimeMillis()
+        var lastCompletedResources = -1L
+        var lastError: String? = null
 
         fun finish(action: () -> Unit) {
             if (settled) return
             settled = true
+            watchdog?.cancel()
             region?.setObserver(null)
             region?.setDownloadState(OfflineRegion.STATE_INACTIVE)
             action()
+        }
+
+        /** Abbruch mit Meldung; die halbfertige Region ist wertlos und fliegt raus. */
+        fun fail(message: String) {
+            val halfDone = region
+            finish {
+                halfDone?.delete(NoopDeleteCallback)
+                continuation.resumeWithException(IllegalStateException(message))
+            }
+        }
+
+        // Zuerst die Aufsicht, dann der Auftrag: So faellt auch ein
+        // `createOfflineRegion` auf, das ueberhaupt nie zurueckruft.
+        watchdog = watchdogScope.launch {
+            while (true) {
+                delay(STALL_CHECK_INTERVAL_MS)
+                if (System.currentTimeMillis() - lastProgressAt < STALL_TIMEOUT_MS) continue
+                fail(stalledMessage(lastError))
+                return@launch
+            }
         }
 
         manager.createOfflineRegion(
@@ -255,9 +237,19 @@ suspend fun downloadOfflineRegion(
                     offlineRegion.setObserver(
                         object : OfflineRegion.OfflineRegionObserver {
                             override fun onStatusChanged(status: OfflineRegionStatus) {
+                                if (status.completedResourceCount > lastCompletedResources) {
+                                    lastCompletedResources = status.completedResourceCount
+                                    lastProgressAt = System.currentTimeMillis()
+                                }
                                 val progress = OfflineDownloadProgress(
                                     completedTiles = status.completedTileCount,
-                                    requiredResources = status.requiredResourceCount,
+                                    // Der Stil selbst zaehlt als Ressource mit,
+                                    // ist aber keine Kachel.
+                                    requiredTiles = if (status.isRequiredResourceCountPrecise) {
+                                        max(0L, status.requiredResourceCount - 1L)
+                                    } else {
+                                        0L
+                                    },
                                     completedBytes = status.completedResourceSize,
                                 )
                                 onProgress(progress)
@@ -266,24 +258,23 @@ suspend fun downloadOfflineRegion(
                                 }
                             }
 
+                            /**
+                             * Einzelne Fehler beenden den Download **nicht**: Der
+                             * Kern ueberspringt fehlende Kacheln (404) von sich aus
+                             * und wiederholt Verbindungsfehler mit wachsendem
+                             * Abstand. Erst wenn danach gar nichts mehr vorangeht,
+                             * greift die Aufsicht — und nimmt die zuletzt gemeldete
+                             * Ursache in ihre Meldung auf.
+                             */
                             override fun onError(error: OfflineRegionError) {
-                                finish {
-                                    continuation.resumeWithException(
-                                        IllegalStateException(
-                                            "Download fehlgeschlagen: ${error.message}",
-                                        ),
-                                    )
-                                }
+                                lastError = describeOfflineError(error)
                             }
 
                             override fun mapboxTileCountLimitExceeded(limit: Long) {
-                                finish {
-                                    continuation.resumeWithException(
-                                        IllegalStateException(
-                                            "Zu viele Kacheln (Grenze: $limit).",
-                                        ),
-                                    )
-                                }
+                                fail(
+                                    "Zu viele Kacheln: MapLibre lädt höchstens $limit Stück. " +
+                                        "Zoome näher heran.",
+                                )
                             }
                         },
                     )
@@ -302,12 +293,25 @@ suspend fun downloadOfflineRegion(
 
         continuation.invokeOnCancellation {
             settled = true
+            watchdog.cancel()
             region?.setObserver(null)
             region?.setDownloadState(OfflineRegion.STATE_INACTIVE)
             // Halbfertige Regionen sind wertlos und wuerden nur Platz belegen.
             region?.delete(NoopDeleteCallback)
         }
     }
+}
+
+/** Uebersetzt einen [OfflineRegionError] in einen deutschen Halbsatz. */
+internal fun describeOfflineError(error: OfflineRegionError): String {
+    val reason = when (error.reason) {
+        OfflineRegionError.REASON_NOT_FOUND -> "Kachel nicht gefunden"
+        OfflineRegionError.REASON_SERVER -> "Serverfehler"
+        OfflineRegionError.REASON_CONNECTION -> "keine Verbindung"
+        else -> "Fehler"
+    }
+    val detail = error.message.takeIf { it.isNotBlank() }
+    return if (detail == null) reason else "$reason: $detail"
 }
 
 private object NoopDeleteCallback : OfflineRegion.OfflineRegionDeleteCallback {
@@ -347,26 +351,28 @@ object OfflineDownloadController {
     val state: StateFlow<OfflineDownloadState> = _state.asStateFlow()
 
     /**
-     * Startet einen Download, sofern nicht schon einer laeuft (dann passiert
-     * nichts). Alle Meldungen — Erfolg wie Fehler — gehen an [onMessage].
+     * Startet einen Download nach dem geprueften [plan], sofern nicht schon
+     * einer laeuft (dann passiert nichts). Alle Meldungen — Beginn, Erfolg,
+     * Fehler — gehen an [onMessage].
      */
     fun start(
         context: Context,
         style: MapStyle,
         bounds: LatLngBounds,
-        minZoom: Int,
-        maxZoom: Int,
+        plan: OfflineDownloadPlan.Ready,
         name: String,
-        estimatedTiles: Int,
         onMessage: (String) -> Unit,
     ) {
         if (_state.value.running) return
         _state.value = OfflineDownloadState(
             running = true,
             completedTiles = 0L,
-            totalTiles = estimatedTiles.toLong().coerceAtLeast(0L),
+            totalTiles = plan.tileCount.toLong().coerceAtLeast(0L),
         )
         val appContext = context.applicationContext
+        // Der Fortschrittsbalken zeigt nur Zahlen; welcher Ausschnitt in
+        // welcher Aufloesung entsteht, sagt diese eine Meldung.
+        onMessage("Lade Kartenausschnitt: ca. ${plan.tileCount} Kacheln, ${plan.zoomLabel}.")
 
         AppServices.appScope.launch(Dispatchers.Main) {
             try {
@@ -374,15 +380,18 @@ object OfflineDownloadController {
                     context = appContext,
                     style = style,
                     bounds = bounds,
-                    minZoom = minZoom,
-                    maxZoom = maxZoom,
+                    minZoom = plan.minZoom,
+                    maxZoom = plan.maxZoom,
                     name = name,
                 ) { progress ->
                     _state.value = OfflineDownloadState(
                         running = true,
                         completedTiles = progress.completedTiles,
-                        totalTiles = if (progress.requiredResources > 0) {
-                            progress.requiredResources
+                        // Die Schaetzung bleibt stehen, bis MapLibre die
+                        // Kachelzahl wirklich kennt — sonst spraenge der
+                        // Balken auf die „1" des Stils zurueck.
+                        totalTiles = if (progress.requiredTiles > 0) {
+                            progress.requiredTiles
                         } else {
                             _state.value.totalTiles
                         },
