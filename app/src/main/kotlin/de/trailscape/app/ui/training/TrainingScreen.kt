@@ -33,6 +33,8 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.assessFitness
+import de.trailscape.core.routeTargetForSession
+import de.trailscape.core.routeTargetForToday
 
 /**
  * Trainings-Tab: Tagesempfehlung, Form-Kurve (CTL/ATL/TSB), Vitalwerte,
@@ -79,6 +81,19 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val assessment = remember(rides) { assessFitness(rides) }
 
+    // Routenziel der Tagesempfehlung: `null` an einem Ruhetag — dann gibt es
+    // auch keinen Knopf (siehe `:core`, `routeTargetForToday`). Das Wochenziel
+    // geht mit hinein, weil die Empfehlung „Grundlage" woertlich auf das
+    // Restbudget der Woche verweist.
+    val todayTarget = remember(insights, rides) {
+        routeTargetForToday(
+            recommendation = insights.recommendation,
+            profile = insights.profile,
+            recentRides = rides,
+            weeklyTarget = insights.weeklyTarget,
+        )
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -122,7 +137,14 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     }
                 }
 
-                item(key = "today") { ReadinessCard(insights) }
+                item(key = "today") {
+                    ReadinessCard(
+                        insights = insights,
+                        onPlanRoute = todayTarget?.let { target ->
+                            { appViewModel.requestRouteGeneration(target) }
+                        },
+                    )
+                }
                 item(key = "form") { FormCard(insights) }
                 item(key = "week") {
                     WeekCard(insights, onOpenMore = { appViewModel.requestTab(AppTab.MORE) })
@@ -140,7 +162,20 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 plan?.let { currentPlan ->
                     item(key = "plan-header") { PlanHeader(currentPlan) }
                     items(items = currentPlan.weeks, key = { "plan-week-${it.index}" }) { week ->
-                        PlanWeekCard(week = week, plan = currentPlan, rides = rides)
+                        PlanWeekCard(
+                            week = week,
+                            plan = currentPlan,
+                            rides = rides,
+                            onPlanRoute = { session ->
+                                appViewModel.requestRouteGeneration(
+                                    routeTargetForSession(
+                                        session = session,
+                                        profile = insights.profile,
+                                        recentRides = rides,
+                                    ),
+                                )
+                            },
+                        )
                     }
                 }
             }

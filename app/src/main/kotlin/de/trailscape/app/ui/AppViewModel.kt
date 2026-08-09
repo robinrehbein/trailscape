@@ -13,6 +13,7 @@ import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
+import de.trailscape.core.RouteTarget
 import de.trailscape.core.SyncConfig
 import de.trailscape.core.SyncResult
 import de.trailscape.core.TrainingPlan
@@ -86,8 +87,8 @@ enum class AppTab { MAP, RIDES, TRAINING, MORE }
  *    unkalibrierten Tourlasten bleibt erhalten (siehe [baseLoadCache]), die
  *    Invalidierung passiert aber nicht mehr von Hand.
  *  * Zusaetzlich zum Original: [renameRide], [mapStyle], [plan],
- *    [syncConfig], [tabRequest] und [messages] — in Flutter lagen diese
- *    Zustaende verstreut in den einzelnen Screens.
+ *    [syncConfig], [tabRequest], [pendingRouteTarget] und [messages] — in
+ *    Flutter lagen diese Zustaende verstreut in den einzelnen Screens.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
@@ -183,6 +184,39 @@ class AppViewModel(
 
     fun consumeTabRequest() {
         _tabRequest.value = null
+    }
+
+    // -------------------------------------------------------------------------
+    // Trainingsempfehlung → Routenziel
+    // -------------------------------------------------------------------------
+
+    private val _pendingRouteTarget = MutableStateFlow<RouteTarget?>(null)
+
+    /**
+     * Das Routenziel, das der Karten-Tab als Naechstes anbieten soll — genau
+     * dasselbe Muster wie [tabRequest]: Der Trainings-Tab legt es hin, der
+     * Karten-Tab holt es ab und quittiert mit [consumeRouteTarget].
+     *
+     * Bewusst ein [StateFlow] und kein Ereigniskanal: Zwischen dem Tippen im
+     * Trainings-Tab und dem Zeitpunkt, an dem der Karten-Screen ueberhaupt in
+     * der Komposition ist, liegt der Tab-Wechsel. Ein einmaliges Ereignis
+     * waere bis dahin verpufft; der gehaltene Wert wartet.
+     */
+    val pendingRouteTarget: StateFlow<RouteTarget?> = _pendingRouteTarget.asStateFlow()
+
+    /**
+     * Uebergibt ein aus einer Einheit oder der Tagesempfehlung abgeleitetes
+     * Ziel an den Karten-Tab und wechselt dorthin
+     * (`:core`: `routeTargetForSession` / `routeTargetForToday`).
+     */
+    fun requestRouteGeneration(target: RouteTarget) {
+        _pendingRouteTarget.value = target
+        requestTab(AppTab.MAP)
+    }
+
+    /** Quittiert das abgeholte Ziel (ruft der Karten-Screen). */
+    fun consumeRouteTarget() {
+        _pendingRouteTarget.value = null
     }
 
     // -------------------------------------------------------------------------

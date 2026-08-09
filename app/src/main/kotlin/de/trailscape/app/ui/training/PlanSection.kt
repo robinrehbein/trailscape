@@ -8,15 +8,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +33,7 @@ import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Ride
 import de.trailscape.core.TrainingPlan
+import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
 import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.weekKindLabels
@@ -50,8 +57,19 @@ fun PlanHeader(plan: TrainingPlan) {
     )
 }
 
+/**
+ * @param onPlanRoute sucht zu einer Einheit eine passende Runde (siehe
+ *   `ui/map/RouteGenerationPanel.kt`). Der Knopf steht bewusst nur an den
+ *   Einheiten der **laufenden** Woche: Fuer eine Einheit in vier Wochen ist
+ *   eine heute berechnete Runde wertlos, und die Zeile bliebe ueberladen.
+ */
 @Composable
-fun PlanWeekCard(week: TrainingWeek, plan: TrainingPlan, rides: List<Ride>) {
+fun PlanWeekCard(
+    week: TrainingWeek,
+    plan: TrainingPlan,
+    rides: List<Ride>,
+    onPlanRoute: ((TrainingSession) -> Unit)? = null,
+) {
     val theme = MaterialTheme.colorScheme
     val activeIndex = currentWeekIndex(plan)
     val isCurrent = week.index == activeIndex
@@ -110,7 +128,10 @@ fun PlanWeekCard(week: TrainingWeek, plan: TrainingPlan, rides: List<Ride>) {
             Spacer(modifier = Modifier.height(12.dp))
 
             for (session in week.sessions) {
-                Row(modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     WeekdayLabel(session.day)
                     Column(modifier = Modifier.weight(1f)) {
                         Row {
@@ -130,6 +151,19 @@ fun PlanWeekCard(week: TrainingWeek, plan: TrainingPlan, rides: List<Ride>) {
                         text = "${session.targetKm} km",
                         style = MaterialTheme.typography.bodyMedium,
                     )
+                    if (isCurrent && onPlanRoute != null) {
+                        IconButton(
+                            onClick = { onPlanRoute(session) },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                Icons.Filled.Place,
+                                contentDescription = "Passende Route für „${session.title}“ planen",
+                                tint = theme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -5,10 +5,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,9 +32,13 @@ import kotlin.math.roundToInt
  * Port von `_buildTodayCard` (`lib/screens/training_screen.dart`). Bewusst
  * ohne `TweenAnimationBuilder`-Aequivalent: der Score wird statisch gezeigt
  * (siehe KDoc von [de.trailscape.app.ui.training.TrainingScreen]).
+ *
+ * @param onPlanRoute laesst zur Empfehlung eine passende Runde suchen (siehe
+ *   `ui/map/RouteGenerationPanel.kt`). `null` an einem Ruhetag: `:core` liefert
+ *   dafuer kein Routenziel, und eine Ausfahrt ist dann das falsche Angebot.
  */
 @Composable
-fun ReadinessCard(insights: TrainingInsights) {
+fun ReadinessCard(insights: TrainingInsights, onPlanRoute: (() -> Unit)? = null) {
     val theme = MaterialTheme.colorScheme
     val readiness = insights.readiness
     val recommendation = insights.recommendation
@@ -107,6 +115,19 @@ fun ReadinessCard(insights: TrainingInsights) {
                     color = theme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+
+            if (onPlanRoute != null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                FilledTonalButton(onClick = onPlanRoute) {
+                    Icon(
+                        Icons.Filled.Place,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Passende Route planen")
+                }
             }
         }
     }

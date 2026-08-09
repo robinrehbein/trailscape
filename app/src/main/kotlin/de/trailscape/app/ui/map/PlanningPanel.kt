@@ -171,6 +171,12 @@ internal fun PlanningCard(
     busy: Boolean,
     error: String?,
     maxHeight: Dp,
+    /**
+     * Ob [route] aus dem Rundkurs-Generator stammt (siehe
+     * `RouteGenerationPanel.kt`). Dann gibt es keine Wegpunkte, die sich
+     * zaehlen liessen — die Zeile nennt stattdessen die Herkunft.
+     */
+    generated: Boolean = false,
     onUseMyPosition: () -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
@@ -181,6 +187,10 @@ internal fun PlanningCard(
     modifier: Modifier = Modifier,
 ) {
     val info = when {
+        route != null && generated ->
+            "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑ · " +
+                "vorgeschlagene Runde"
+
         route != null ->
             "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑ · " +
                 "$waypointCount Wegpunkte"
