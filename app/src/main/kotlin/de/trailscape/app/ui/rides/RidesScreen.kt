@@ -3,7 +3,6 @@ package de.trailscape.app.ui.rides
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -64,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
+import de.trailscape.app.ui.importActivityFile
 import de.trailscape.app.ui.isDuplicateRide
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.prepareShareDirectory
@@ -71,7 +71,6 @@ import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
 import de.trailscape.core.formatDuration
 import de.trailscape.core.formatKm
-import de.trailscape.core.rideFromGpx
 import de.trailscape.core.rideToGpx
 import de.trailscape.core.safeFileName
 import java.io.File
@@ -113,8 +112,14 @@ private val dateFormatter: DateTimeFormatter =
  *  * **Kein gestaffeltes Einblenden** (`_EntranceFade`): `LazyColumn`
  *    recycelt Eintraege, eine „nur beim ersten Aufbau"-Animation waere dort
  *    nicht dasselbe und wuerde beim Zurueckscrollen erneut laufen.
- *  * **Import ueber das Storage Access Framework** statt `file_picker`, und
- *    die Datei wird gestreamt statt komplett in den Speicher geladen.
+ *  * **Import ueber das Storage Access Framework** statt `file_picker`.
+ *    Akzeptiert neben GPX auch FIT (je auch `.gz`) — die Dateitypenerkennung
+ *    teilt sich der Knopf mit der „Aktivitaet importieren"-Schaltflaeche der
+ *    Backup-Karte (`ui/ActivityFileImport.kt`, kein Dart-Vorbild). Fuer den
+ *    Massenimport eines ganzen Strava-/Garmin-Exports als ZIP-Archiv siehe
+ *    „Mehr → Daten & Backup" (`ui/more/BackupCard.kt`) — dieser Screen bleibt
+ *    bewusst beim Einzelimport, ein Fortschritts-/Ergebnisdialog fuer einen
+ *    Archiv-Import waere hier fehl am Platz.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,10 +141,11 @@ fun RidesScreen(appViewModel: AppViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
 
-    // GPX-Auswahl ueber das Storage Access Framework. Bewusst `*/*`: Der
-    // MIME-Typ einer .gpx-Datei ist je nach Anbieter application/gpx+xml,
-    // application/xml, text/xml oder application/octet-stream — ein enger
-    // Filter blendet die Datei bei manchen Dateimanagern schlicht aus.
+    // Aktivitaets-Auswahl (GPX oder FIT) ueber das Storage Access Framework.
+    // Bewusst `*/*`: Der MIME-Typ einer .gpx-/.fit-Datei ist je nach Anbieter
+    // application/gpx+xml, application/xml, text/xml, application/octet-stream
+    // oder gar nichts — ein enger Filter blendet die Datei bei manchen
+    // Dateimanagern schlicht aus.
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -147,10 +153,10 @@ fun RidesScreen(appViewModel: AppViewModel) {
         importing = true
         scope.launch {
             try {
-                val ride = withContext(Dispatchers.IO) { readGpx(context, uri) }
-                // Inhaltsbasiert pruefen: `rideFromGpx` vergibt bei jedem
-                // Import eine frische ID, ein ID-Vergleich ginge also immer
-                // ins Leere (siehe ui/RideImport.kt).
+                val ride = importActivityFile(context, uri)
+                // Inhaltsbasiert pruefen: `rideFromGpx`/`rideFromFit` vergeben
+                // bei jedem Import eine frische ID, ein ID-Vergleich ginge also
+                // immer ins Leere (siehe ui/RideImport.kt).
                 if (isDuplicateRide(rides, ride)) {
                     snackbarHostState.showSnackbar(DUPLICATE_RIDE_MESSAGE)
                 } else {
@@ -192,7 +198,7 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                     }
                 },
-                text = { Text("GPX importieren") },
+                text = { Text("Aktivität importieren") },
             )
         },
     ) { innerPadding ->
@@ -213,12 +219,21 @@ fun RidesScreen(appViewModel: AppViewModel) {
                     .padding(24.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "Noch keine Touren vorhanden.\n" +
-                        "Importiere eine GPX-Datei über die Schaltfläche unten rechts.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Noch keine Touren vorhanden.\n" +
+                            "Importiere eine GPX- oder FIT-Datei über die Schaltfläche unten rechts.",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                    Text(
+                        text = "\nStrava-/Garmin-Export als ZIP importierbar unter " +
+                            "Mehr → Daten & Backup.",
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             else -> LazyColumn(
@@ -447,31 +462,6 @@ private fun RideFact(label: String, value: String) {
         Text(text = value, style = MaterialTheme.typography.bodyMedium)
     }
 }
-
-/**
- * Liest die ausgewaehlte GPX-Datei und baut daraus eine Tour. Laeuft auf
- * [Dispatchers.IO]; wirft mit einer fuer die UI geeigneten Meldung.
- */
-private fun readGpx(context: Context, uri: Uri): Ride {
-    val xml = context.contentResolver.openInputStream(uri)?.use { stream ->
-        stream.readBytes().toString(Charsets.UTF_8)
-    } ?: throw IllegalStateException("Die Datei konnte nicht gelesen werden.")
-
-    val fallbackName = displayName(context, uri)
-        ?.substringBeforeLast('.')
-        ?.takeIf { it.isNotBlank() }
-        ?: "Importierte Tour"
-
-    return rideFromGpx(xml, fallbackName = fallbackName)
-}
-
-/** Anzeigename eines `content://`-Dokuments, falls der Anbieter ihn liefert. */
-private fun displayName(context: Context, uri: Uri): String? =
-    context.contentResolver
-        .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-        ?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
-        }
 
 /**
  * Teilt eine Tour als GPX-Datei ueber das System-Share-Sheet (z. B. fuer
