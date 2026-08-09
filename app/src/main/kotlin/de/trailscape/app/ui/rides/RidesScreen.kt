@@ -3,7 +3,6 @@ package de.trailscape.app.ui.rides
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -14,10 +13,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +39,7 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -56,7 +59,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -64,19 +66,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
+import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.formatDate
+import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.importActivityFile
 import de.trailscape.app.ui.isDuplicateRide
-import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
 import de.trailscape.core.formatDuration
-import de.trailscape.core.formatKm
-import de.trailscape.core.rideFromGpx
 import de.trailscape.core.rideToGpx
 import de.trailscape.core.safeFileName
 import java.io.File
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -94,9 +99,6 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
     LoadSource.KEINE to "",
 )
 
-private val dateFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
-
 /**
  * Tourenliste — Port von `lib/screens/rides_screen.dart`.
  *
@@ -113,8 +115,20 @@ private val dateFormatter: DateTimeFormatter =
  *  * **Kein gestaffeltes Einblenden** (`_EntranceFade`): `LazyColumn`
  *    recycelt Eintraege, eine „nur beim ersten Aufbau"-Animation waere dort
  *    nicht dasselbe und wuerde beim Zurueckscrollen erneut laufen.
- *  * **Import ueber das Storage Access Framework** statt `file_picker`, und
- *    die Datei wird gestreamt statt komplett in den Speicher geladen.
+ *  * **Import ueber das Storage Access Framework** statt `file_picker`.
+ *    Akzeptiert neben GPX auch FIT (je auch `.gz`) — die Dateitypenerkennung
+ *    teilt sich der Knopf mit der „Tour importieren"-Schaltflaeche der
+ *    Backup-Karte (`ui/ActivityFileImport.kt`, kein Dart-Vorbild). Fuer den
+ *    Massenimport eines ganzen Strava-/Garmin-Exports als ZIP-Archiv siehe
+ *    „Mehr → Daten & Backup" (`ui/more/BackupCard.kt`) — dieser Screen bleibt
+ *    bewusst beim Einzelimport, ein Fortschritts-/Ergebnisdialog fuer einen
+ *    Archiv-Import waere hier fehl am Platz.
+ *
+ * ## Leerzustand
+ * [RidesEmptyState] statt der bisherigen zwei zentrierten Textzeilen: gleicher
+ * Aufbau wie im Trainings-Tab (`ui/components/EmptyState.kt`), mit allen drei
+ * Wegen, auf denen eine Tour hier landen kann — aufzeichnen, Einzeldatei,
+ * Archiv.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,10 +150,11 @@ fun RidesScreen(appViewModel: AppViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
 
-    // GPX-Auswahl ueber das Storage Access Framework. Bewusst `*/*`: Der
-    // MIME-Typ einer .gpx-Datei ist je nach Anbieter application/gpx+xml,
-    // application/xml, text/xml oder application/octet-stream — ein enger
-    // Filter blendet die Datei bei manchen Dateimanagern schlicht aus.
+    // Aktivitaets-Auswahl (GPX oder FIT) ueber das Storage Access Framework.
+    // Bewusst `*/*`: Der MIME-Typ einer .gpx-/.fit-Datei ist je nach Anbieter
+    // application/gpx+xml, application/xml, text/xml, application/octet-stream
+    // oder gar nichts — ein enger Filter blendet die Datei bei manchen
+    // Dateimanagern schlicht aus.
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -147,18 +162,18 @@ fun RidesScreen(appViewModel: AppViewModel) {
         importing = true
         scope.launch {
             try {
-                val ride = withContext(Dispatchers.IO) { readGpx(context, uri) }
-                // Inhaltsbasiert pruefen: `rideFromGpx` vergibt bei jedem
-                // Import eine frische ID, ein ID-Vergleich ginge also immer
-                // ins Leere (siehe ui/RideImport.kt).
+                val ride = importActivityFile(context, uri)
+                // Inhaltsbasiert pruefen: `rideFromGpx`/`rideFromFit` vergeben
+                // bei jedem Import eine frische ID, ein ID-Vergleich ginge also
+                // immer ins Leere (siehe ui/RideImport.kt).
                 if (isDuplicateRide(rides, ride)) {
-                    snackbarHostState.showSnackbar(DUPLICATE_RIDE_MESSAGE)
+                    appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
                 } else {
                     appViewModel.addRide(ride)
                     appViewModel.requestTab(AppTab.MAP)
                 }
             } catch (e: Exception) {
-                snackbarHostState.showSnackbar(
+                appViewModel.showMessage(
                     e.message?.takeIf { it.isNotBlank() } ?: "Import fehlgeschlagen.",
                 )
             } finally {
@@ -174,7 +189,7 @@ fun RidesScreen(appViewModel: AppViewModel) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text("Meine Touren") },
+                title = { Text("Touren") },
                 windowInsets = WindowInsets(0, 0, 0, 0),
             )
         },
@@ -192,74 +207,86 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         Icon(Icons.Filled.Add, contentDescription = null)
                     }
                 },
-                text = { Text("GPX importieren") },
+                text = { Text("Tour importieren") },
             )
         },
     ) { innerPadding ->
-        when {
-            loading && rides.isEmpty() -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator()
-            }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            when {
+                loading && rides.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
 
-            rides.isEmpty() -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(24.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Noch keine Touren vorhanden.\n" +
-                        "Importiere eine GPX-Datei über die Schaltfläche unten rechts.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 12.dp,
-                    end = 12.dp,
-                    top = innerPadding.calculateTopPadding() + 8.dp,
-                    // Platz, damit der schwebende Knopf die letzte Karte nicht verdeckt.
-                    bottom = innerPadding.calculateBottomPadding() + 96.dp,
-                ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items = rides, key = { it.id }) { ride ->
-                    val load = insights.rideLoads[ride.id]
-                    val loadText = if (load != null && load.available) {
-                        "Last ${load.load.roundToInt()} · ${loadSourceShortLabels[load.source].orEmpty()}"
-                    } else {
-                        null
-                    }
-
-                    RideCard(
-                        ride = ride,
-                        loadText = loadText,
-                        selected = ride.id == selectedId,
-                        onClick = {
-                            appViewModel.select(ride.id)
-                            appViewModel.requestTab(AppTab.MAP)
-                        },
-                        onRename = { renameTarget = ride },
-                        onShare = {
-                            scope.launch {
-                                try {
-                                    shareGpx(context, ride)
-                                } catch (e: Exception) {
-                                    snackbarHostState.showSnackbar("Teilen fehlgeschlagen: ${e.message}")
-                                }
-                            }
-                        },
-                        onDelete = { deleteTarget = ride },
+                // Gleiche Breitendeckelung und dasselbe 16-dp-Raster wie im
+                // Trainings- und Mehr-Tab; vorher stand die Liste hier ohne
+                // Deckelung mit 12-dp-Rand und 8-dp-Abstand.
+                rides.isEmpty() -> Box(
+                    modifier = Modifier
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth()
+                        .padding(ScreenPadding),
+                ) {
+                    RidesEmptyState(
+                        onRecord = { appViewModel.requestTab(AppTab.MAP) },
+                        onImportFile = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
+                        onOpenBackup = { appViewModel.requestTab(AppTab.MORE) },
                     )
+                }
+
+                else -> LazyColumn(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(
+                        start = ScreenPadding,
+                        end = ScreenPadding,
+                        top = ScreenPadding,
+                        // Platz, damit der schwebende Knopf die letzte Karte nicht verdeckt.
+                        bottom = ScreenPadding + 80.dp,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(CardGap),
+                ) {
+                    items(items = rides, key = { it.id }) { ride ->
+                        val load = insights.rideLoads[ride.id]
+                        val loadText = if (load != null && load.available) {
+                            "Last ${load.load.roundToInt()} · " +
+                                loadSourceShortLabels[load.source].orEmpty()
+                        } else {
+                            null
+                        }
+
+                        RideCard(
+                            ride = ride,
+                            loadText = loadText,
+                            selected = ride.id == selectedId,
+                            onClick = {
+                                appViewModel.select(ride.id)
+                                appViewModel.requestTab(AppTab.MAP)
+                            },
+                            onRename = { renameTarget = ride },
+                            onShare = {
+                                scope.launch {
+                                    try {
+                                        shareGpx(context, ride)
+                                    } catch (e: Exception) {
+                                        appViewModel.showMessage(
+                                            "Teilen fehlgeschlagen: ${e.message}",
+                                        )
+                                    }
+                                }
+                            },
+                            onDelete = { deleteTarget = ride },
+                        )
+                    }
                 }
             }
         }
@@ -287,7 +314,7 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         appViewModel.removeRide(ride.id)
                         deleteTarget = null
                     },
-                ) { Text("Löschen") }
+                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) { Text("Abbrechen") }
@@ -347,7 +374,17 @@ private fun RideCard(
             containerColor = if (selected) colors.secondaryContainer else colors.surfaceContainerLow,
         ),
     ) {
-        Column(modifier = Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp)) {
+        // 16 dp ringsum wie in jeder anderen Karte der App; rechts bleibt es
+        // bei 4 dp, weil der IconButton daneben seinen eigenen Beruehrungsrand
+        // von 12 dp mitbringt und die Karte sonst rechts zu luftig wirkt.
+        Column(
+            modifier = Modifier.padding(
+                start = CardPadding,
+                end = 4.dp,
+                top = CardPadding,
+                bottom = CardPadding,
+            ),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -357,7 +394,7 @@ private fun RideCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = dateFormatter.format(localOfEpochMs(ride.createdAt)),
+                        text = formatDate(ride.createdAt),
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.onSurfaceVariant,
                     )
@@ -403,7 +440,7 @@ private fun RideCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                RideFact("Distanz", "${formatKm(ride.stats.distanceKm)} km")
+                RideFact("Distanz", "${formatKmDe(ride.stats.distanceKm)} km")
                 RideFact("Dauer", formatDuration(ride.stats.durationS))
                 RideFact("Höhenmeter", "${ride.stats.ascentM.roundToInt()} hm")
                 ride.stats.avgHrBpm?.let { RideFact("Ø Puls", "$it bpm") }
@@ -435,6 +472,34 @@ private fun RideCard(
     }
 }
 
+/**
+ * Was der Touren-Tab kann, solange nichts gespeichert ist.
+ *
+ * Vorher standen hier zwei mittig zentrierte Textzeilen ohne Aktion; jetzt
+ * derselbe Aufbau wie im Trainings-Tab (siehe `ui/components/EmptyState.kt`)
+ * samt der drei Wege, auf denen eine Tour hier landen kann.
+ */
+@Composable
+private fun RidesEmptyState(
+    onRecord: () -> Unit,
+    onImportFile: () -> Unit,
+    onOpenBackup: () -> Unit,
+) {
+    EmptyState(
+        title = "Noch keine Touren",
+        body = "Hier sammeln sich alle Touren — aufgezeichnete wie importierte — mit " +
+            "Distanz, Dauer, Höhenmetern, Ø-Puls und der berechneten Trainingslast. " +
+            "Ein Tipp auf eine Tour öffnet sie auf der Karte.",
+        hint = "Ein ganzer Strava- oder Garmin-Export lässt sich als ZIP-Archiv auf " +
+            "einmal einlesen — unter Mehr → Daten & Backup.",
+        actions = {
+            Button(onClick = onRecord) { Text("Tour aufzeichnen") }
+            OutlinedButton(onClick = onImportFile) { Text("GPX-/FIT-Datei öffnen") }
+            OutlinedButton(onClick = onOpenBackup) { Text("Archiv importieren") }
+        },
+    )
+}
+
 /** Eine Kennzahl der Tour: kleines Label, darunter der Wert. */
 @Composable
 private fun RideFact(label: String, value: String) {
@@ -447,31 +512,6 @@ private fun RideFact(label: String, value: String) {
         Text(text = value, style = MaterialTheme.typography.bodyMedium)
     }
 }
-
-/**
- * Liest die ausgewaehlte GPX-Datei und baut daraus eine Tour. Laeuft auf
- * [Dispatchers.IO]; wirft mit einer fuer die UI geeigneten Meldung.
- */
-private fun readGpx(context: Context, uri: Uri): Ride {
-    val xml = context.contentResolver.openInputStream(uri)?.use { stream ->
-        stream.readBytes().toString(Charsets.UTF_8)
-    } ?: throw IllegalStateException("Die Datei konnte nicht gelesen werden.")
-
-    val fallbackName = displayName(context, uri)
-        ?.substringBeforeLast('.')
-        ?.takeIf { it.isNotBlank() }
-        ?: "Importierte Tour"
-
-    return rideFromGpx(xml, fallbackName = fallbackName)
-}
-
-/** Anzeigename eines `content://`-Dokuments, falls der Anbieter ihn liefert. */
-private fun displayName(context: Context, uri: Uri): String? =
-    context.contentResolver
-        .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-        ?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
-        }
 
 /**
  * Teilt eine Tour als GPX-Datei ueber das System-Share-Sheet (z. B. fuer

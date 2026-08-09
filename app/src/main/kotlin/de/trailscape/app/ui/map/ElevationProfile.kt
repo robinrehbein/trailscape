@@ -25,8 +25,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.formatKmDe
 import de.trailscape.core.TrackPoint
-import de.trailscape.core.formatKm
 import de.trailscape.core.haversineM
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -84,6 +84,9 @@ internal fun ElevationProfile(
 
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // Der Ring um den Ablesepunkt liegt auf der Kartenflaeche, nicht auf den
+    // Kacheln — vorher hart `Color.White`, im Dunkelmodus ein greller Fleck.
+    val markerRingColor = MaterialTheme.colorScheme.surface
 
     Column(modifier = modifier) {
         Row(
@@ -97,7 +100,7 @@ internal fun ElevationProfile(
             )
             Text(
                 text = if (hovered != null) {
-                    "${formatKm(hovered.distanceKm)} km · ${hovered.eleM.roundToInt()} m"
+                    "${formatKmDe(hovered.distanceKm)} km · ${hovered.eleM.roundToInt()} m"
                 } else {
                     "${minEle.roundToInt()}–${maxEle.roundToInt()} m"
                 },
@@ -167,7 +170,7 @@ internal fun ElevationProfile(
                 val x = xOf(hoverIndex)
                 val y = yOf(hovered.eleM)
                 drawLine(lineColor, Offset(x, 0f), Offset(x, height), strokeWidth = 1.5f)
-                drawCircle(Color.White, radius = 5.5f, center = Offset(x, y))
+                drawCircle(markerRingColor, radius = 5.5f, center = Offset(x, y))
                 drawCircle(lineColor, radius = 4f, center = Offset(x, y))
             }
         }
@@ -178,7 +181,7 @@ internal fun ElevationProfile(
         ) {
             Text("0 km", style = MaterialTheme.typography.labelSmall, color = labelColor)
             Text(
-                text = "${formatKm(totalKm)} km",
+                text = "${formatKmDe(totalKm)} km",
                 style = MaterialTheme.typography.labelSmall,
                 color = labelColor,
             )

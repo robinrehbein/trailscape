@@ -13,12 +13,14 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="recording" />
+        <exclude domain="file" path="crash" />
         <exclude domain="file" path="mbgl-offline.db" />
         <exclude domain="file" path="mbgl-offline.db-wal" />
         <exclude domain="file" path="mbgl-offline.db-shm" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="recording" />
+        <exclude domain="file" path="crash" />
         <exclude domain="file" path="mbgl-offline.db" />
         <exclude domain="file" path="mbgl-offline.db-wal" />
         <exclude domain="file" path="mbgl-offline.db-shm" />

@@ -27,6 +27,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
+import de.trailscape.app.ui.onboarding.OnboardingScreen
 import de.trailscape.app.ui.rides.RidesScreen
 import de.trailscape.app.ui.training.TrainingScreen
 
@@ -72,6 +73,13 @@ import de.trailscape.app.ui.training.TrainingScreen
  *    `viewModel()` im Activity-Scope erzeugt und als Parameter
  *    durchgereicht wird. Screens erzeugen **kein** eigenes ViewModel.
  *
+ * ## Erststart
+ * Beim allerersten Start liegt vor den vier Tabs die Einfuehrung
+ * (`ui/onboarding/OnboardingScreen.kt`). Ob sie faellig ist, entscheidet
+ * [AppViewModel.onboardingVisible] — der Zustand kommt aus den
+ * SharedPreferences, nicht aus dieser Datei. Solange sie laeuft, gibt es keine
+ * Navigationsleiste: Die Einfuehrung ist kein Tab, sondern ein Zustand davor.
+ *
  * ## Tab-Wechsel aus einem Screen heraus
  * Statt eines `onShowMap`-Callbacks (so machte es die Flutter-App) ruft ein
  * Screen `appViewModel.requestTab(AppTab.MAP)`; die Huelle beobachtet
@@ -112,6 +120,12 @@ fun TrailscapeApp() {
         val target = TopLevelDestination.entries.first { it.tab == requested }
         navController.navigateToTab(target.route)
         appViewModel.consumeTabRequest()
+    }
+
+    val onboardingVisible by appViewModel.onboardingVisible.collectAsStateWithLifecycle()
+    if (onboardingVisible) {
+        OnboardingScreen(appViewModel)
+        return
     }
 
     Scaffold(

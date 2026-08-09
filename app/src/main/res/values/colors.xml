@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#264F3A</color>
+
+    <!--
+        Fensterhintergrund, bevor Compose zeichnet. Bewusst exakt `LightSurface`
+        aus `ui/theme/Color.kt` (#F6FBF4) statt reinem Weiss: Sonst blitzt beim
+        Kaltstart eine andere Flaeche auf als die, die eine Zehntelsekunde
+        spaeter dasteht. Das dunkle Gegenstueck steht in values-night/.
+    -->
+    <color name="window_background">#F6FBF4</color>
 </resources>

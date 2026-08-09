@@ -38,7 +38,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -46,21 +45,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.formatDateTime
+import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.healthSyncInitialWindowMs
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private val lastSyncFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm", Locale.GERMANY)
-
-/** `Colors.orange.shade800` aus dem Dart-Original — bewusst kein Theme-Farbton. */
-private val routesMissingColor = Color(0xFFEF6C00)
 
 private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
 
@@ -96,9 +90,13 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
     MoreSectionCard(title = "Samsung Health", modifier = modifier) {
         val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+        // Dieselbe Warnfarbe wie die Ampeln des Trainings-Tabs; vorher lag hier
+        // eine private Kopie von `Colors.orange.shade800`, die im Dunkelmodus
+        // nicht mit aufgehellt wurde.
+        val warningColor = LocalSignalColors.current.warning
 
         when (val current = connection) {
-            null -> Text("Prüfe Verbindung …")
+            null -> Text("Prüfe Verbindung …", style = MaterialTheme.typography.bodyMedium)
             else -> Row(verticalAlignment = Alignment.Top) {
                 Icon(
                     imageVector = if (current.isReady) Icons.Filled.CheckCircle else Icons.Filled.Info,
@@ -107,7 +105,11 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(text = current.message, modifier = Modifier.weight(1f))
+                Text(
+                    text = current.message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -212,7 +214,7 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         lastSyncAt?.let { at ->
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Letzter Sync: ${lastSyncFormatter.format(at)}",
+                text = "Letzter Sync: ${formatDateTime(at)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = hintColor,
             )
@@ -252,7 +254,7 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         if (routesMissing > 0) {
             NoticeBox(
                 icon = Icons.Filled.LocationOn,
-                color = routesMissingColor,
+                color = warningColor,
                 text = "Für $routesMissing " +
                     "${if (routesMissing == 1) "importierte Tour" else "importierte Touren"} hat " +
                     "Health Connect keine Route geliefert. Erlaube unter " +

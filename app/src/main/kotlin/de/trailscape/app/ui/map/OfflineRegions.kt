@@ -3,6 +3,7 @@ package de.trailscape.app.ui.map
 import android.content.Context
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.formatOneDecimalDe
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -402,4 +403,4 @@ object OfflineDownloadController {
     }
 }
 
-private fun formatMegabytes(bytes: Long): String = formatOneDecimal(bytes / 1024.0 / 1024.0)
+private fun formatMegabytes(bytes: Long): String = formatOneDecimalDe(bytes / 1024.0 / 1024.0)

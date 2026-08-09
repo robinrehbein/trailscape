@@ -1,7 +1,9 @@
 package de.trailscape.app.ui.training
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
-import de.trailscape.app.ui.theme.TrailscapeSeed
+import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RecoveryFlag
 import de.trailscape.core.WeekKind
@@ -11,58 +13,62 @@ import de.trailscape.core.WeekKind
  * `lib/screens/training_screen.dart` (`readinessBandColor`,
  * `recoveryFlagColor`, `_weekKindColor`).
  *
- * [TrailscapeGreen] ist bewusst [TrailscapeSeed] aus dem gemeinsamen
- * `ui/theme/Color.kt` (Fundament, nicht Teil der Parallel-Agenten) statt einer
- * eigenen Kopie: Darts `kGreen` in `lib/screens/map_screen.dart` ist exakt
- * derselbe Farbwert (`0xFF2D5A3D`) wie die App-Saatfarbe. Ein direkter Import
- * aus `ui/map/MapScreen.kt` waere ein Wettlauf mit dem Karten-Agenten, der
- * diese Datei parallel komplett ersetzt.
+ * ## Was sich gegenueber der ersten Fassung geaendert hat
+ * Die Farbwerte selbst liegen nicht mehr hier, sondern zentral in
+ * `ui/theme/SignalColors.kt` — zusammen mit den Duplikaten, die vorher in
+ * `TrainingCommon.kt`, `FitnessCard.kt` und `ui/more/HealthCard.kt` noch einmal
+ * als `Color(0xFF…)` standen. Dadurch sind alle Zugriffe hier `@Composable`:
+ * Sie lesen die Palette, die [de.trailscape.app.ui.theme.TrailscapeTheme] je
+ * nach Hell-/Dunkelmodus stellt. Das war noetig, weil das Markengruen #2D5A3D
+ * als Textfarbe auf der dunklen Flaeche unlesbar war (Kontrast ≈ 1,7:1).
  */
-val TrailscapeGreen: Color = TrailscapeSeed
 
-/** Entspricht Flutters `Colors.green` (Standardton 500). */
-private val FlutterGreen = Color(0xFF4CAF50)
+/** Gruen der Ampel — hell das Markengruen, dunkel dessen aufgehellte Fassung. */
+val trainingGood: Color
+    @Composable @ReadOnlyComposable get() = LocalSignalColors.current.good
 
-/** Entspricht Flutters `Colors.blue` (Standardton 500). */
-private val FlutterBlue = Color(0xFF2196F3)
+/** Gelb/Bernstein der Ampel. */
+val trainingCaution: Color
+    @Composable @ReadOnlyComposable get() = LocalSignalColors.current.caution
 
-/** Entspricht Flutters `Colors.red` (Standardton 500). */
-private val FlutterRed = Color(0xFFF44336)
+/** Orange der Ampel (Deload-Hinweis, Belastungssprung, Taper-Wochen). */
+val trainingWarning: Color
+    @Composable @ReadOnlyComposable get() = LocalSignalColors.current.warning
 
-/**
- * Entspricht Flutters `Colors.amber.shade800`. Oeffentlich, da mehrere Karten
- * (Deload-Hinweis, Belastungssprung, Taper-Wochen) dieselbe Ampelfarbe
- * brauchen wie [readinessBandColor]/[recoveryFlagColor].
- */
-val TrainingAmber800: Color = Color(0xFFFF8F00)
-
-/** Entspricht Flutters `Colors.orange.shade800`. Oeffentlich, siehe [TrainingAmber800]. */
-val TrainingOrange800: Color = Color(0xFFEF6C00)
-
-/** Entspricht Flutters `Colors.red.shade700`. Oeffentlich, siehe [TrainingAmber800]. */
-val TrainingRed700: Color = Color(0xFFD32F2F)
+/** Rot der Ampel (Ruhetag). */
+val trainingDanger: Color
+    @Composable @ReadOnlyComposable get() = LocalSignalColors.current.danger
 
 /** Farbe eines Readiness-Bands (§5.4): grün → gelb → orange → rot. */
+@Composable
+@ReadOnlyComposable
 fun readinessBandColor(band: ReadinessBand): Color = when (band) {
-    ReadinessBand.HART -> TrailscapeGreen
-    ReadinessBand.NORMAL -> TrainingAmber800
-    ReadinessBand.LOCKER -> TrainingOrange800
-    ReadinessBand.RUHE -> TrainingRed700
+    ReadinessBand.HART -> trainingGood
+    ReadinessBand.NORMAL -> trainingCaution
+    ReadinessBand.LOCKER -> trainingWarning
+    ReadinessBand.RUHE -> trainingDanger
 }
 
 /** Ampelfarbe eines Erholungssignals (Ruhepuls, HRV, Schlaf). */
+@Composable
+@ReadOnlyComposable
 fun recoveryFlagColor(flag: RecoveryFlag, unknown: Color): Color = when (flag) {
     RecoveryFlag.UNBEKANNT -> unknown
-    RecoveryFlag.GRUEN -> TrailscapeGreen
-    RecoveryFlag.GELB -> TrainingAmber800
-    RecoveryFlag.ORANGE -> TrainingOrange800
-    RecoveryFlag.ROT -> TrainingRed700
+    RecoveryFlag.GRUEN -> trainingGood
+    RecoveryFlag.GELB -> trainingCaution
+    RecoveryFlag.ORANGE -> trainingWarning
+    RecoveryFlag.ROT -> trainingDanger
 }
 
 /** Farbe eines Wochentyps im Trainingsplan (Dart: `_weekKindColor`). */
-fun weekKindColor(kind: WeekKind): Color = when (kind) {
-    WeekKind.AUFBAU -> FlutterGreen
-    WeekKind.ERHOLUNG -> FlutterBlue
-    WeekKind.TAPER -> TrainingAmber800
-    WeekKind.ZIELWOCHE -> FlutterRed
+@Composable
+@ReadOnlyComposable
+fun weekKindColor(kind: WeekKind): Color {
+    val signals = LocalSignalColors.current
+    return when (kind) {
+        WeekKind.AUFBAU -> signals.accentGreen
+        WeekKind.ERHOLUNG -> signals.accentBlue
+        WeekKind.TAPER -> signals.caution
+        WeekKind.ZIELWOCHE -> signals.accentRed
+    }
 }

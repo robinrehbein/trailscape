@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 private val LightColors = lightColorScheme(
     primary = LightPrimary,
@@ -69,14 +70,23 @@ private val DarkColors = darkColorScheme(
  * Markenfarbe zeigen wie die bisherige Flutter-App
  * (`ColorScheme.fromSeed(0xFF2D5A3D)`). Die Schemata sind statisch hinterlegt,
  * damit keine zusaetzliche Bibliothek fuer die HCT-Berechnung noetig ist.
+ *
+ * Neben dem Material-Schema stellt das Theme die **Ampelfarben**
+ * ([SignalColors]) bereit: alles, was nicht aus `colorScheme` kommen kann
+ * (Readiness-Ampel, Wochentypen, Warnhinweise), aber trotzdem hell und dunkel
+ * unterschiedlich aussehen muss. Siehe `theme/SignalColors.kt`.
  */
 @Composable
 fun TrailscapeTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content,
-    )
+    CompositionLocalProvider(
+        LocalSignalColors provides if (darkTheme) DarkSignalColors else LightSignalColors,
+    ) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            content = content,
+        )
+    }
 }

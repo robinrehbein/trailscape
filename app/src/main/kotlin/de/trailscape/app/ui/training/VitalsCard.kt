@@ -12,7 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.TrainingInsights
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.core.confidenceLabels
 import de.trailscape.core.recoveryFlagLabels
 import de.trailscape.core.shortSleeperHint
@@ -35,7 +37,7 @@ fun VitalsCard(insights: TrainingInsights) {
     val vo2 = insights.vo2max
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Text("Vitalwerte", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 

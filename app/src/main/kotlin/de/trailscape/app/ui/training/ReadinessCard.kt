@@ -16,7 +16,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.TrainingInsights
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.core.readinessBandLabels
 import kotlin.math.roundToInt
 
@@ -36,7 +38,7 @@ fun ReadinessCard(insights: TrainingInsights) {
     val missingDays = insights.fitness.daysUntilDisplayReady
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Text("Heute", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 

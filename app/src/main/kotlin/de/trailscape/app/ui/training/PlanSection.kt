@@ -21,19 +21,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.formatDate
+import de.trailscape.app.ui.formatDateShort
+import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Ride
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingWeek
 import de.trailscape.core.currentWeekIndex
-import de.trailscape.core.formatKm
 import de.trailscape.core.weekKindLabels
 import de.trailscape.core.weekKm
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
-private val shortDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.", Locale.GERMANY)
-private val longDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
 
 /**
  * Titelzeile plus eine Karte je Trainingswoche.
@@ -47,8 +44,8 @@ private val longDateFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("
 @Composable
 fun PlanHeader(plan: TrainingPlan) {
     Text(
-        text = "${plan.goal.name} – ${formatKm(plan.goal.distanceKm)} km am " +
-            longDateFormatter.format(localOfEpochMs(plan.goal.date)),
+        text = "${plan.goal.name} – ${formatKmDe(plan.goal.distanceKm)} km am " +
+            formatDate(plan.goal.date),
         style = MaterialTheme.typography.titleMedium,
     )
 }
@@ -70,15 +67,14 @@ fun PlanWeekCard(week: TrainingWeek, plan: TrainingPlan, rides: List<Ride>) {
             CardDefaults.cardColors()
         },
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
                     text = "Woche ${week.index + 1} · " +
-                        "${shortDateFormatter.format(localOfEpochMs(week.start))}–" +
-                        shortDateFormatter.format(localOfEpochMs(week.end)),
+                        "${formatDateShort(week.start)}–${formatDateShort(week.end)}",
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
@@ -105,7 +101,7 @@ fun PlanWeekCard(week: TrainingWeek, plan: TrainingPlan, rides: List<Ride>) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = if (isPastOrCurrent) {
-                    "${formatKm(ridden)} von ${week.targetKm} km"
+                    "${formatKmDe(ridden)} von ${week.targetKm} km"
                 } else {
                     "Ziel: ${week.targetKm} km"
                 },
@@ -118,12 +114,22 @@ fun PlanWeekCard(week: TrainingWeek, plan: TrainingPlan, rides: List<Ride>) {
                     WeekdayLabel(session.day)
                     Column(modifier = Modifier.weight(1f)) {
                         Row {
-                            Text(text = session.title, fontWeight = FontWeight.Bold)
-                            Text(text = " – ${session.description}")
+                            Text(
+                                text = session.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = " – ${session.description}",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "${session.targetKm} km")
+                    Text(
+                        text = "${session.targetKm} km",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
             }
         }

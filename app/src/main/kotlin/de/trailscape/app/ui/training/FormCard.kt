@@ -16,7 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.TrainingInsights
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.core.LoadRatioBand
 import de.trailscape.core.classifyLoadRatio
 import de.trailscape.core.classifyRampRate
@@ -40,7 +42,7 @@ fun FormCard(insights: TrainingInsights) {
     val latest = series.latest
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Text("Form", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -72,8 +74,8 @@ fun FormCard(insights: TrainingInsights) {
                 PmcSparkline(
                     ctl = window.map { it.ctl },
                     atl = window.map { it.atl },
-                    ctlColor = TrailscapeGreen,
-                    atlColor = TrainingOrange800,
+                    ctlColor = trainingGood,
+                    atlColor = trainingWarning,
                     gridColor = theme.outlineVariant,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -95,8 +97,8 @@ fun FormCard(insights: TrainingInsights) {
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                FigureText(latest.ctl.roundToInt().toString(), "Fitness (CTL)", color = TrailscapeGreen)
-                FigureText(latest.atl.roundToInt().toString(), "Ermüdung (ATL)", color = TrainingOrange800)
+                FigureText(latest.ctl.roundToInt().toString(), "Fitness (CTL)", color = trainingGood)
+                FigureText(latest.atl.roundToInt().toString(), "Ermüdung (ATL)", color = trainingWarning)
                 FigureText(formatSigned(latest.tsb), "Form (TSB)")
             }
 
@@ -121,7 +123,7 @@ fun FormCard(insights: TrainingInsights) {
                 Spacer(modifier = Modifier.height(12.dp))
                 NoticeBox(
                     icon = Icons.Filled.Warning,
-                    color = TrainingOrange800,
+                    color = trainingWarning,
                     text = "Belastungssprung: dein Verhältnis von akuter zu " +
                         "gewohnter Belastung liegt bei " +
                         "${germanFixed(latest.loadRatio!!, 2)} " +

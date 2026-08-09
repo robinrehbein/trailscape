@@ -47,11 +47,13 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.GeoResult
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.TrackPoint
-import de.trailscape.core.formatKm
 import de.trailscape.core.routeProfileLabels
 import kotlin.math.roundToInt
 
@@ -180,7 +182,7 @@ internal fun PlanningCard(
 ) {
     val info = when {
         route != null ->
-            "${formatKm(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑ · " +
+            "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑ · " +
                 "$waypointCount Wegpunkte"
 
         waypointCount == 1 -> "1 Wegpunkt – setze mindestens 2."
@@ -193,7 +195,10 @@ internal fun PlanningCard(
             modifier = Modifier
                 .heightIn(max = maxHeight)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp, 12.dp, 16.dp, 12.dp),
+                .padding(
+                    horizontal = CardPadding,
+                    vertical = OverlayCardPaddingVertical,
+                ),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RouteProfileDropdown(

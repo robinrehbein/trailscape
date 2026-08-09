@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -28,10 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -99,9 +99,17 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
         Spacer(modifier = Modifier.height(12.dp))
 
         when {
-            loading -> Text("Lade …")
-            errorText != null -> Text(errorText ?: "")
-            regions.isEmpty() -> Text("Keine Offline-Karten gespeichert.")
+            loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
+            errorText != null -> Text(
+                text = errorText ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+
+            regions.isEmpty() -> Text(
+                text = "Keine Offline-Karten gespeichert.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
             else -> {
                 Column {
                     regions.forEachIndexed { index, info ->
@@ -137,6 +145,9 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
                 OutlinedButton(
                     onClick = { confirmDeleteAll = true },
                     enabled = !deleteAllBusy,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
                 ) { Text("Alle löschen") }
             }
         }
@@ -161,7 +172,7 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
                             }
                         }
                     },
-                ) { Text("Löschen") }
+                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { confirmDeleteRegion = null }) { Text("Abbrechen") }
@@ -193,7 +204,7 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
                             }
                         }
                     },
-                ) { Text("Löschen") }
+                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { confirmDeleteAll = false }) { Text("Abbrechen") }
@@ -213,9 +224,6 @@ private data class OfflineRegionRow(
 
 /** Meldung, wenn MapLibre das Loeschen einer Region ablehnt. */
 private const val DELETE_FAILED_MESSAGE = "Die Offline-Karte konnte nicht gelöscht werden."
-
-private val regionDateFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
 
 private fun formatOfflineRegionSize(bytes: Long?): String {
     if (bytes == null || bytes <= 0L) return "Größe unbekannt"
@@ -260,7 +268,7 @@ private suspend fun listOfflineRegionsWithStatus(context: Context): List<Offline
                 mapStyles.firstOrNull { it.id == info?.styleId }?.let { add(it.label) }
                 info?.createdAtMs
                     ?.takeIf { it > 0L }
-                    ?.let { add(regionDateFormatter.format(localOfEpochMs(it))) }
+                    ?.let { add(formatDate(it)) }
                 add(formatOfflineRegionSize(status?.completedResourceSize))
             }.joinToString(" · "),
             region = region,

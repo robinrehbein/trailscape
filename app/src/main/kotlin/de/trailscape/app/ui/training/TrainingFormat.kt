@@ -1,8 +1,7 @@
 package de.trailscape.app.ui.training
 
+import de.trailscape.app.ui.formatDecimalDe
 import de.trailscape.core.HrvAssessment
-import java.math.BigDecimal
-import java.math.RoundingMode
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -31,13 +30,14 @@ fun formatSigned(value: Double): String {
 }
 
 /**
- * Deutsch formatierte Nachkommazahl (Punkt → Komma), kaufmaennisch gerundet —
- * Aequivalent zu Darts `value.toStringAsFixed(digits).replaceAll('.', ',')`.
+ * Deutsch formatierte Nachkommazahl (Punkt → Komma), kaufmaennisch gerundet.
+ *
+ * Nur noch ein Name fuer [formatDecimalDe] — dieselbe Formatierung brauchen
+ * inzwischen auch Karten- und Touren-Tab, deshalb liegt die Rechnung in
+ * `ui/UiFormat.kt`. Der alte Name bleibt, weil ihn die Trainingskarten an
+ * einem Dutzend Stellen benutzen.
  */
-fun germanFixed(value: Double, digits: Int): String {
-    val text = BigDecimal(value).setScale(digits, RoundingMode.HALF_UP).toPlainString()
-    return text.replace('.', ',')
-}
+fun germanFixed(value: Double, digits: Int): String = formatDecimalDe(value, digits)
 
 /** Tendenz der HRV gegenueber der eigenen Baseline, in Prozent. */
 fun hrvTrendText(hrv: HrvAssessment): String {

@@ -97,6 +97,18 @@ val mapStyles: List<MapStyle> = listOf(
     ),
 )
 
+/**
+ * Erklaerender Halbsatz zu den beiden Stilen, bei denen der Name allein nicht
+ * reicht. Lag vorher als private Funktion im Karten-Screen und war deshalb nur
+ * im Bottom-Sheet dort zu sehen — die Auswahl im Mehr-Tab zeigte dieselbe
+ * Liste ohne jede Erlaeuterung.
+ */
+fun mapStyleSubtitle(id: String): String? = when (id) {
+    "voyager" -> "Klar und aufgeräumt (Standard)"
+    "cyclosm" -> "Radwege & Wegbeläge hervorgehoben"
+    else -> null
+}
+
 /** Standard-Kartenstil, wenn nichts (Gueltiges) gespeichert ist. */
 val defaultMapStyle: MapStyle get() = mapStyles.first()
 

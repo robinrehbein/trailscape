@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -23,10 +25,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.assessFitness
 
 /**
@@ -38,6 +43,15 @@ import de.trailscape.core.assessFitness
  * [AppViewModel.insights] ([de.trailscape.app.ui.TrainingInsights]); dieser
  * Screen ist reine Darstellung plus das Zielformular (Persistenz laeuft ueber
  * [AppViewModel.plan]/[AppViewModel.setPlan]).
+ *
+ * ## Leerzustand
+ * Ohne eine einzige Tour sagte dieser Tab bisher in jeder Karte einzeln „noch
+ * keine Daten" — und erklaerte nirgends, *warum* und *wie lange* das so bleibt.
+ * Deshalb steht bei leerer Tourenliste [TrainingEmptyState] ganz oben: drei
+ * Saetze zum Modell (Fitness und Erholung brauchen ~2 Wochen Historie) und die
+ * beiden kuerzesten Wege zu echten Daten. Die uebrigen Karten bleiben darunter
+ * stehen — Vitalwerte koennen naemlich auch ganz ohne Touren schon aus Health
+ * Connect kommen, und das Zielformular funktioniert ebenfalls sofort.
  *
  * ## Bewusste Abweichungen vom Dart-Original
  *  * **Keine `_EntranceFade`-Animation.** Das Original blendet die ersten
@@ -94,11 +108,20 @@ fun TrainingScreen(appViewModel: AppViewModel) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .widthIn(max = 640.dp)
+                    .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(ScreenPadding),
+                verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
+                if (rides.isEmpty()) {
+                    item(key = "empty") {
+                        TrainingEmptyState(
+                            onRecord = { appViewModel.requestTab(AppTab.MAP) },
+                            onImport = { appViewModel.requestTab(AppTab.MORE) },
+                        )
+                    }
+                }
+
                 item(key = "today") { ReadinessCard(insights) }
                 item(key = "form") { FormCard(insights) }
                 item(key = "week") {
@@ -123,4 +146,31 @@ fun TrainingScreen(appViewModel: AppViewModel) {
             }
         }
     }
+}
+
+/**
+ * Was der Trainings-Tab kann, solange er noch keine Tour kennt.
+ *
+ * Der Text nennt bewusst die Groessenordnung („rund zwei Wochen"): Das
+ * CTL/ATL-Modell braucht Historie, und wer das nicht weiss, haelt einen leeren
+ * Trainings-Tab am zweiten Tag fuer einen Fehler. Die Zahl deckt sich mit
+ * `FitnessSeries.daysUntilDisplayReady` aus `:core`, das die einzelnen Karten
+ * danach tagesgenau herunterzaehlen.
+ */
+@Composable
+private fun TrainingEmptyState(onRecord: () -> Unit, onImport: () -> Unit) {
+    EmptyState(
+        title = "Hier entsteht dein Trainingsbild",
+        body = "Trailscape rechnet aus jeder Tour eine Trainingslast und daraus deine " +
+            "Fitness (CTL), deine Ermüdung (ATL) und die Form dazwischen. Belastbar wird " +
+            "das erst mit rund zwei Wochen Historie — Erholungswerte wie HRV und Ruhepuls " +
+            "brauchen zusätzlich eine Uhr, die nach Health Connect schreibt. " +
+            "Am schnellsten bist du da, wenn du deine bisherigen Touren mitbringst.",
+        hint = "Bis dahin bleiben die Karten unten leer oder zeigen an, wie viele Tage " +
+            "noch fehlen. Dein Ziel kannst du trotzdem schon eintragen.",
+        actions = {
+            Button(onClick = onRecord) { Text("Tour aufzeichnen") }
+            OutlinedButton(onClick = onImport) { Text("Alte Touren importieren") }
+        },
+    )
 }

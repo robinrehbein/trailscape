@@ -5,13 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,40 +16,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.LocalSignalColors
 
 /**
  * Kleine, ueberall im Trainings-Tab wiederverwendete Bausteine — Port von
- * `_notice`, `_figure` und `_signalRow` aus `lib/screens/training_screen.dart`.
+ * `_figure` und `_signalRow` aus `lib/screens/training_screen.dart`.
+ *
+ * Der frueher hier ebenfalls definierte Hinweisblock (`_notice`) steht jetzt
+ * als gemeinsame Fassung in `ui/components/NoticeBox.kt` — es gab ihn vorher
+ * zweimal, hier und im Mehr-Paket.
  */
-
-/** Farbig hinterlegter Hinweisblock (Ampel, Empfehlung, Warnung). */
-@Composable
-fun NoticeBox(
-    icon: ImageVector,
-    color: Color,
-    text: String,
-    title: String? = null,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.12f))
-            .padding(12.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-        Column(modifier = Modifier.padding(start = 8.dp)) {
-            if (title != null) {
-                Text(text = title, style = MaterialTheme.typography.titleSmall, color = color)
-            }
-            Text(text = text, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
 
 /** Beschriftete Kennzahl (Zahl fett, Beschriftung darunter). */
 @Composable
@@ -113,13 +88,21 @@ fun SignalRow(color: Color, headline: String, detail: String) {
     }
 }
 
-/** Kleine, feste Spalte fuer den Wochentag-Kuerzel einer Trainingseinheit. */
+/**
+ * Kleine, feste Spalte fuer den Wochentag-Kuerzel einer Trainingseinheit.
+ *
+ * Farbe und Schriftrolle kommen aus dem Theme: vorher stand hier ein
+ * `Color(0xFF4CAF50)`-Literal (das dritte Exemplar desselben Werts in der App)
+ * und gar keine Typografie-Angabe, wodurch das Kuerzel in `bodyLarge` neben
+ * `bodyMedium`-Text stand.
+ */
 @Composable
 fun RowScope.WeekdayLabel(day: String) {
     Text(
         text = day,
+        style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.Bold,
-        color = Color(0xFF4CAF50),
+        color = LocalSignalColors.current.accentGreen,
         modifier = Modifier
             .width(32.dp)
             .align(Alignment.Top),
