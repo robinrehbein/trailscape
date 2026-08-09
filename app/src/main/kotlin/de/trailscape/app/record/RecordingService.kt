@@ -28,13 +28,13 @@ import com.google.android.gms.location.Priority
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.ui.formatKmDe
 import de.trailscape.core.LocationSample
 import de.trailscape.core.PointFilter
 import de.trailscape.core.PointFilterResult
 import de.trailscape.core.Ride
 import de.trailscape.core.computeStats
 import de.trailscape.core.formatDuration
-import de.trailscape.core.formatKm
 import de.trailscape.core.haversineM
 import java.io.File
 import java.text.SimpleDateFormat
@@ -500,7 +500,7 @@ class RecordingService : Service() {
         } else {
             getString(
                 R.string.recording_notification_progress,
-                formatKm(distanceM / 1000),
+                formatKmDe(distanceM / 1000),
                 formatDuration((elapsedMs(System.currentTimeMillis()) / 1000).toInt()),
             )
         }

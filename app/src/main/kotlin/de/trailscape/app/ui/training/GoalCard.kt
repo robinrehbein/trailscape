@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -29,12 +30,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.formatDate
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Goal
 import de.trailscape.core.Ride
 import de.trailscape.core.TrainingPlan
@@ -46,8 +48,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /**
  * Karte „Dein Ziel": Zielformular (Name, Distanz, optional Höhenmeter,
@@ -69,7 +69,6 @@ fun GoalCard(
     onSetPlan: (TrainingPlan?) -> Unit,
 ) {
     val theme = MaterialTheme.colorScheme
-    val dateFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY) }
 
     var name by rememberSaveable { mutableStateOf("") }
     var distanceText by rememberSaveable { mutableStateOf("") }
@@ -132,7 +131,7 @@ fun GoalCard(
     }
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Text("Dein Ziel", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -168,7 +167,7 @@ fun GoalCard(
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = goalDate?.let { dateFormatter.format(it) } ?: "Datum wählen",
+                    value = goalDate?.let { formatDate(it) } ?: "Datum wählen",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Zieldatum") },
@@ -188,6 +187,7 @@ fun GoalCard(
             status?.let { message ->
                 Text(
                     text = message,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = if (statusIsError) theme.error else theme.primary,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -199,7 +199,13 @@ fun GoalCard(
             ) {
                 Button(onClick = ::createPlan) { Text("Plan erstellen") }
                 if (plan != null) {
-                    OutlinedButton(onClick = { showDeleteConfirm = true }) { Text("Plan löschen") }
+                    // Loeschen ist die zerstoerende Aktion dieser Karte und
+                    // traegt deshalb — wie jeder Loeschweg der App — die
+                    // Fehlerfarbe des Themes.
+                    OutlinedButton(
+                        onClick = { showDeleteConfirm = true },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = theme.error),
+                    ) { Text("Plan löschen") }
                 }
             }
         }
@@ -247,7 +253,7 @@ fun GoalCard(
                     onSetPlan(null)
                     status = null
                     showDeleteConfirm = false
-                }) { Text("Löschen") }
+                }) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) { Text("Abbrechen") }

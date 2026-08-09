@@ -22,3 +22,11 @@ internal val RecordRed = Color(0xFFB3382C)
 
 /** Routenplanung. */
 internal val RouteBlue = Color(0xFF2563EB)
+
+/**
+ * Der im Hoehenprofil abgelesene Punkt. Stand vorher als
+ * `Color(0xFFF2A03D)`-Literal mitten in `MapScreen.kt`; gehoert aus demselben
+ * Grund wie die drei Farben oben hierher — er liegt auf den Kacheln und muss
+ * sich in beiden Modi gleich vom Untergrund abheben.
+ */
+internal val HoverAmber = Color(0xFFF2A03D)

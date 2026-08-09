@@ -15,11 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.FitnessAssessment
-import de.trailscape.core.formatKm
 import de.trailscape.core.levelLabels
 import kotlin.math.roundToInt
 
@@ -32,20 +33,27 @@ import kotlin.math.roundToInt
 @Composable
 fun FitnessCard(assessment: FitnessAssessment) {
     val theme = MaterialTheme.colorScheme
+    val levelColor = LocalSignalColors.current.accentGreen
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Text("Dein Fitnesslevel", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Derselbe Chip-Aufbau wie die Wochentyp-Marke im Trainingsplan
+            // (`PlanWeekCard`): getoente Flaeche, Text in der Vollfarbe. Vorher
+            // war es weisser Text auf vollflaechigem Gruen — im Dunkelmodus mit
+            // dem aufgehellten Gruenton nicht mehr lesbar, und der einzige Chip
+            // der App, der so aussah.
             Text(
                 text = levelLabels.getValue(assessment.level),
-                color = Color.White,
+                style = MaterialTheme.typography.titleSmall,
+                color = levelColor,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .wrapContentWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FlutterMaterialGreen)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(levelColor.copy(alpha = 0.15f))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             )
             Spacer(modifier = Modifier.height(12.dp))
@@ -55,10 +63,10 @@ fun FitnessCard(assessment: FitnessAssessment) {
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                InlineMetric(formatKm(assessment.weeklyKm), "km/Woche")
+                InlineMetric(formatKmDe(assessment.weeklyKm), "km/Woche")
                 InlineMetric(assessment.weeklyHm.roundToInt().toString(), "Hm/Woche")
-                InlineMetric(germanFixed(assessment.weeklyRides, 1), "Fahrten/Woche")
-                InlineMetric(formatKm(assessment.longestRideKm), "km längste Tour")
+                InlineMetric(germanFixed(assessment.weeklyRides, 1), "Touren/Woche")
+                InlineMetric(formatKmDe(assessment.longestRideKm), "km längste Tour")
             }
 
             if (assessment.rideCount == 0) {
@@ -73,6 +81,3 @@ fun FitnessCard(assessment: FitnessAssessment) {
         }
     }
 }
-
-/** Entspricht Flutters `Colors.green` (Standardton 500) — Chip-Hintergrund im Original. */
-private val FlutterMaterialGreen = Color(0xFF4CAF50)

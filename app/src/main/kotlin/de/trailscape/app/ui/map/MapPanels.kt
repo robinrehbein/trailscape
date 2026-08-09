@@ -41,10 +41,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.formatOneDecimalDe
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
+import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.core.Ride
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.formatDuration
-import de.trailscape.core.formatKm
 import kotlin.math.roundToInt
 
 /**
@@ -112,7 +116,12 @@ internal fun LiveRecordingCard(
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-        Column(modifier = Modifier.padding(16.dp, 12.dp, 16.dp, 12.dp)) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = CardPadding,
+                vertical = OverlayCardPaddingVertical,
+            ),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RecordDot(color = RecordRed, size = 12.dp)
                 Spacer(Modifier.width(6.dp))
@@ -134,13 +143,13 @@ internal fun LiveRecordingCard(
                 Metric(
                     modifier = Modifier.weight(1f),
                     big = true,
-                    value = speedKmh?.let { formatOneDecimal(it) } ?: "–",
+                    value = speedKmh?.let { formatOneDecimalDe(it) } ?: "–",
                     label = "km/h",
                 )
                 Metric(
                     modifier = Modifier.weight(1f),
                     big = true,
-                    value = formatKm(distanceKm),
+                    value = formatKmDe(distanceKm),
                     label = "km",
                 )
                 Metric(
@@ -167,7 +176,7 @@ internal fun LiveRecordingCard(
                     Spacer(Modifier.width(6.dp))
                     Text(if (paused) "Weiter" else "Pause")
                 }
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(OverlayGap))
                 DangerButton(
                     text = "Beenden",
                     onClick = onStop,
@@ -199,7 +208,17 @@ internal fun RideCard(
 ) {
     val stats = ride.stats
     Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-        Column(modifier = Modifier.padding(16.dp, 12.dp, 8.dp, 12.dp)) {
+        // Rechts 8 dp statt 16 dp: der Schliessen-IconButton bringt seinen
+        // eigenen Beruehrungsrand mit — dasselbe Zugestaendnis wie in der
+        // Tourenkarte des Touren-Tabs.
+        Column(
+            modifier = Modifier.padding(
+                start = CardPadding,
+                top = OverlayCardPaddingVertical,
+                end = 8.dp,
+                bottom = OverlayCardPaddingVertical,
+            ),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = ride.name,
@@ -216,7 +235,7 @@ internal fun RideCard(
             Row(modifier = Modifier.padding(end = 8.dp)) {
                 Metric(
                     modifier = Modifier.weight(1f),
-                    value = formatKm(stats.distanceKm),
+                    value = formatKmDe(stats.distanceKm),
                     label = "km",
                 )
                 Metric(
@@ -226,7 +245,7 @@ internal fun RideCard(
                 )
                 Metric(
                     modifier = Modifier.weight(1f),
-                    value = stats.avgSpeedKmh?.let { formatOneDecimal(it) } ?: "–",
+                    value = stats.avgSpeedKmh?.let { formatOneDecimalDe(it) } ?: "–",
                     label = "Ø km/h",
                 )
                 Metric(
@@ -278,12 +297,17 @@ internal fun NavigationCard(
 ) {
     Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
         Row(
-            modifier = Modifier.padding(16.dp, 12.dp, 8.dp, 12.dp),
+            modifier = Modifier.padding(
+                start = CardPadding,
+                top = OverlayCardPaddingVertical,
+                end = 8.dp,
+                bottom = OverlayCardPaddingVertical,
+            ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${formatKm(remainingKm)} km übrig",
+                    text = "${formatKmDe(remainingKm)} km übrig",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = GravelGreen,
@@ -292,7 +316,7 @@ internal fun NavigationCard(
                     text = if (doneKm == null) {
                         label
                     } else {
-                        "$label · ${formatKm(doneKm)} km geschafft"
+                        "$label · ${formatKmDe(doneKm)} km geschafft"
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -321,7 +345,12 @@ internal fun DownloadProgressCard(
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-        Column(modifier = Modifier.padding(16.dp, 12.dp, 16.dp, 12.dp)) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = CardPadding,
+                vertical = OverlayCardPaddingVertical,
+            ),
+        ) {
             Text(
                 text = "Lade Kacheln … $done/$total",
                 style = MaterialTheme.typography.bodySmall,
@@ -549,8 +578,3 @@ internal fun DangerButton(
     }
 }
 
-/** Eine Zahl mit einer Nachkommastelle, unabhaengig vom Gebietsschema. */
-internal fun formatOneDecimal(value: Double): String =
-    java.math.BigDecimal.valueOf(value)
-        .setScale(1, java.math.RoundingMode.HALF_UP)
-        .toPlainString()

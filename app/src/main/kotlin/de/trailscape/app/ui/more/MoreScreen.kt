@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,17 +21,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.ScreenPadding
 
 /**
  * „Mehr"-Tab — Port von `lib/screens/more_screen.dart`.
  *
- * Sieben Themenkarten untereinander (wie im Original): Profil, Kartenstil,
- * Samsung Health, Daten & Backup, Sync (Selfhost), Offline-Karten und Über.
- * Jede Karte ist eine eigene, in sich geschlossene Datei in diesem Paket —
- * siehe deren KDoc fuer Details und (falls vorhanden) bewusste Abweichungen
- * vom Dart-Original.
+ * Sieben Themenkarten untereinander: Profil, Daten & Backup, Samsung Health,
+ * Kartenstil, Offline-Karten, Sync (Selfhost) und Über. Jede Karte ist eine
+ * eigene, in sich geschlossene Datei in diesem Paket — siehe deren KDoc fuer
+ * Details und (falls vorhanden) bewusste Abweichungen vom Dart-Original.
+ *
+ * Die **Reihenfolge** ist auf den Erstnutzer hin sortiert (Begruendung im
+ * Rumpf), nicht mehr die des Dart-Originals.
  *
  * ## Bewusste Abweichungen vom Original
  *  * **Kartenstil-Auswahl** (neu, kein Dart-Vorbild): Der native Kartenstil-
@@ -79,16 +85,26 @@ fun MoreScreen(appViewModel: AppViewModel) {
             contentAlignment = Alignment.TopCenter,
         ) {
             LazyColumn(
-                modifier = Modifier.widthIn(max = 640.dp),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = ContentMaxWidth)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(ScreenPadding),
+                verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
+                // Reihenfolge fuer den Erstnutzer: erst das Profil (ohne Alter
+                // und Gewicht rechnet nichts richtig), dann die beiden Wege,
+                // auf denen Daten hereinkommen — der Import und Health
+                // Connect. Danach erst die Einstellungen, die man auch spaeter
+                // noch entdecken kann. Vorher stand „Kartenstil" auf Platz
+                // zwei und „Daten & Backup" hinter Health Connect, obwohl die
+                // Leerzustaende aller Tabs auf den Import verweisen.
                 item { ProfileCard(appViewModel) }
-                item { MapStyleCard(appViewModel) }
-                item { HealthCard(appViewModel) }
                 item { BackupCard(appViewModel) }
-                item { SyncCard(appViewModel) }
+                item { HealthCard(appViewModel) }
+                item { MapStyleCard(appViewModel) }
                 item { OfflineMapsCard(onMessage = appViewModel::showMessage) }
+                item { SyncCard(appViewModel) }
                 item { AboutCard(appViewModel) }
             }
         }

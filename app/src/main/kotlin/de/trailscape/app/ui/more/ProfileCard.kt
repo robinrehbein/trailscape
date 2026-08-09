@@ -204,7 +204,11 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(12.dp))
         statusText?.let { status ->
-            Text(text = status, color = MaterialTheme.colorScheme.primary)
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
             Spacer(modifier = Modifier.height(8.dp))
         }
 

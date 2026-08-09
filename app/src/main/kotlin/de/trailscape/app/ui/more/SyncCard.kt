@@ -131,7 +131,7 @@ fun SyncCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
         statusText?.let { status ->
             Spacer(modifier = Modifier.height(12.dp))
-            Text(status)
+            Text(text = status, style = MaterialTheme.typography.bodyMedium)
         }
 
         Spacer(modifier = Modifier.height(12.dp))

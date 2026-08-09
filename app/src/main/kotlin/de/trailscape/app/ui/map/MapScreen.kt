@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -44,11 +45,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,8 +55,14 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.formatToday
+import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.OverlayGap
+import de.trailscape.app.ui.theme.OverlayScreenPadding
 import de.trailscape.core.GeoResult
 import de.trailscape.core.NavState
 import de.trailscape.core.PlannedRoute
@@ -73,10 +78,6 @@ import de.trailscape.core.fetchRoute
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import java.io.File
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -427,7 +428,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         locationGranted = true
         scope.launch {
             if (!isLocationEnabled(context)) {
-                snackbarHostState.showSnackbar("Standortdienste sind deaktiviert.")
+                appViewModel.showMessage("Standortdienste sind deaktiviert.")
                 return@launch
             }
             // Erst ein frischer Fix (wie `_goToMyPosition` in Dart), sonst
@@ -435,7 +436,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             val position = currentLocation(context)?.let { it.latitude to it.longitude }
                 ?: controller.lastKnownLocation()
             if (position == null) {
-                snackbarHostState.showSnackbar("Position konnte nicht ermittelt werden.")
+                appViewModel.showMessage("Position konnte nicht ermittelt werden.")
                 return@launch
             }
             controller.moveTo(position.first, position.second, MIN_RECORDING_ZOOM)
@@ -451,7 +452,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         scope.launch {
             val position = currentLocation(context)
             if (position == null) {
-                snackbarHostState.showSnackbar("Position konnte nicht ermittelt werden.")
+                appViewModel.showMessage("Position konnte nicht ermittelt werden.")
                 return@launch
             }
             waypoints = listOf(Waypoint(position.latitude, position.longitude)) + waypoints
@@ -498,7 +499,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         scope.launch {
             runCatching { shareGpxFile(context, name, points) }
                 .onFailure {
-                    snackbarHostState.showSnackbar(
+                    appViewModel.showMessage(
                         "Teilen fehlgeschlagen: ${it.message ?: "unbekannter Fehler"}",
                     )
                 }
@@ -617,9 +618,10 @@ fun MapScreen(appViewModel: AppViewModel) {
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(OverlayScreenPadding),
+                verticalArrangement = Arrangement.spacedBy(OverlayGap),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -646,7 +648,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 }
                             },
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(OverlayGap))
                     }
                     MapCircleButton(
                         icon = Icons.Filled.Search,
@@ -654,13 +656,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                         active = searchOpen,
                         onClick = { searchOpen = !searchOpen },
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
                         icon = Icons.AutoMirrored.Filled.List,
                         contentDescription = "Kartenstil",
                         onClick = { showStyleSheet = true },
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
                         icon = Icons.Filled.KeyboardArrowDown,
                         contentDescription = "Kartenausschnitt herunterladen",
@@ -730,8 +732,9 @@ fun MapScreen(appViewModel: AppViewModel) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(OverlayScreenPadding),
                 horizontalAlignment = Alignment.End,
             ) {
                 RecordButton(
@@ -816,7 +819,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         appViewModel.removeRide(ride.id)
                     },
                 ) {
-                    Text("Löschen", color = RecordRed)
+                    Text("Löschen", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -873,7 +876,7 @@ private fun buildMapMarkers(
         }
     }
     searchMarker?.let { add(MapMarker(it.lat, it.lon, RouteBlue.toArgb(), radius = 9f)) }
-    hoverPoint?.let { add(MapMarker(it.lat, it.lon, Color(0xFFF2A03D).toArgb(), radius = 8f)) }
+    hoverPoint?.let { add(MapMarker(it.lat, it.lon, HoverAmber.toArgb(), radius = 8f)) }
 }
 
 /**
@@ -902,12 +905,16 @@ private fun MapStyleSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.padding(bottom = 16.dp)) {
+        Column(modifier = Modifier.padding(bottom = CardPadding)) {
             Text(
                 text = "Kartenstil",
-                modifier = Modifier.padding(20.dp, 4.dp, 20.dp, 8.dp),
+                modifier = Modifier.padding(
+                    start = CardPadding,
+                    end = CardPadding,
+                    top = 4.dp,
+                    bottom = 8.dp,
+                ),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
             )
             mapStyles.forEach { style ->
                 Row(
@@ -917,14 +924,14 @@ private fun MapStyleSheet(
                             selected = style.id == current.id,
                             onClick = { onSelect(style) },
                         )
-                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                        .padding(horizontal = CardPadding, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(selected = style.id == current.id, onClick = { onSelect(style) })
                     Spacer(Modifier.width(8.dp))
                     Column {
                         Text(style.label, style = MaterialTheme.typography.bodyLarge)
-                        styleSubtitle(style.id)?.let {
+                        mapStyleSubtitle(style.id)?.let {
                             Text(
                                 text = it,
                                 style = MaterialTheme.typography.bodySmall,
@@ -936,13 +943,6 @@ private fun MapStyleSheet(
             }
         }
     }
-}
-
-/** Die beiden Untertitel, die auch die Flutter-App zeigte. */
-private fun styleSubtitle(id: String): String? = when (id) {
-    "voyager" -> "Klar und aufgeräumt (Standard)"
-    "cyclosm" -> "Radwege & Wegbeläge hervorgehoben"
-    else -> null
 }
 
 /** Namensabfrage (`_askName` im Original). */
@@ -964,6 +964,7 @@ private fun NameDialog(
                 onValueChange = { text = it },
                 singleLine = true,
                 label = { Text("Name") },
+                modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = {
@@ -1007,12 +1008,6 @@ private fun newRideId(): String {
     val suffix = Random.nextInt(0x1000000).toString(36)
     return "${System.currentTimeMillis()}-$suffix"
 }
-
-private val dateFormatter: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
-
-private fun formatToday(): String =
-    dateFormatter.format(Instant.now().atZone(ZoneId.systemDefault()).toLocalDate())
 
 /** Trefferradius fuer das Tippen auf einen Wegpunkt (Bildschirmpixel). */
 private const val WAYPOINT_TOUCH_RADIUS_PX = 28f

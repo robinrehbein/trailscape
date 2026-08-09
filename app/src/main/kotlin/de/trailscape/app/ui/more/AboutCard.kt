@@ -51,6 +51,8 @@ private const val LICENSE_URL = "$REPOSITORY_URL/blob/main/LICENSE"
  *    Flutter-Original zeigt beides nicht an). Die Version kommt ueber den
  *    [android.content.pm.PackageManager] statt ueber `BuildConfig`, weil
  *    `:app` das `buildConfig`-Feature nicht aktiviert.
+ *  * **Einführung erneut ansehen** — startet die Erststart-Einfuehrung
+ *    (`ui/onboarding/OnboardingScreen.kt`) noch einmal.
  *  * **Datenschutz** — oeffnet `PRIVACY.md` im Repository.
  *  * **Problem melden** — der einzige Meldeweg dieser App (siehe
  *    `feedback/ProblemReportDialog.kt`). Es gibt keine Telemetrie, die von
@@ -82,6 +84,7 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             text = "Trailscape ist kostenlos und local-first: deine Touren bleiben auf " +
                 "deinem Gerät, ein Sync-Server ist optional. Kartendaten © " +
                 "OpenStreetMap-Mitwirkende, Routing über BRouter.",
+            style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
@@ -92,6 +95,13 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(4.dp))
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Die Erststart-Einfuehrung ist sonst unwiederbringlich weg, sobald
+            // sie einmal weggeklickt wurde — und sie ist die einzige Stelle,
+            // die den Ueberblick ueber alle vier Tabs am Stueck gibt.
+            TextButton(
+                onClick = { appViewModel.showOnboardingAgain() },
+                contentPadding = PaddingValues(0.dp),
+            ) { Text("Einführung erneut ansehen") }
             TextButton(
                 onClick = { uriHandler.openUri(REPOSITORY_URL) },
                 contentPadding = PaddingValues(0.dp),

@@ -17,7 +17,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.TrainingInsights
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.core.formatHours
 import kotlin.math.roundToInt
 
@@ -64,7 +66,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
     }
 
     Card {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(CardPadding)) {
             Text("Diese Woche", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -78,7 +80,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
                     FigureText(reference.roundToInt().toString(), "ø Woche (4 Wochen)")
                 }
                 if (target != null && !deload.recommended) {
-                    FigureText(target.weeklyLoad.roundToInt().toString(), "Zielwert", color = TrailscapeGreen)
+                    FigureText(target.weeklyLoad.roundToInt().toString(), "Zielwert", color = trainingGood)
                     FigureText(
                         "${formatHours(target.estimatedHours)} h",
                         if (weeklyHours != null && weeklyHours > 0) {
@@ -107,7 +109,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
             Spacer(modifier = Modifier.height(12.dp))
             NoticeBox(
                 icon = if (deload.recommended) Icons.Filled.Warning else Icons.Filled.CheckCircle,
-                color = if (deload.recommended) TrainingOrange800 else TrailscapeGreen,
+                color = if (deload.recommended) trainingWarning else trainingGood,
                 title = deload.title,
                 text = if (deloadRange != null) "${deload.detail} Richtwert: $deloadRange." else deload.detail,
             )

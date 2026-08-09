@@ -126,6 +126,44 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Erststart-Einfuehrung
+    // -------------------------------------------------------------------------
+
+    private val _onboardingVisible = MutableStateFlow(false)
+
+    /**
+     * Ob die Einfuehrung (`ui/onboarding/OnboardingScreen.kt`) statt der
+     * Haupt-App gezeigt wird.
+     *
+     * Startet bewusst mit `false` und wird erst `true`, nachdem der
+     * init-Block gelesen hat, dass [ONBOARDING_STORAGE_KEY] fehlt. Andersherum
+     * — mit `true` als Startwert — waere bei jedem App-Start ein kurzes
+     * Aufblitzen der Einfuehrung zu sehen, auch fuer Nutzer, die sie laengst
+     * abgeschlossen haben.
+     */
+    val onboardingVisible: StateFlow<Boolean> = _onboardingVisible.asStateFlow()
+
+    /**
+     * Beendet die Einfuehrung und merkt sich das dauerhaft — egal ob sie
+     * durchgeklickt oder uebersprungen wurde. Danach startet die App direkt in
+     * die Karte; erneut aufrufbar ist sie ueber [showOnboardingAgain]
+     * („Mehr → Über → Einführung erneut ansehen").
+     */
+    fun completeOnboarding() {
+        _onboardingVisible.value = false
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching { keyValueStore.setString(ONBOARDING_STORAGE_KEY, "1") }
+            }
+        }
+    }
+
+    /** Zeigt die Einfuehrung noch einmal (Mehr → Über). */
+    fun showOnboardingAgain() {
+        _onboardingVisible.value = true
+    }
+
+    // -------------------------------------------------------------------------
     // Tab-Wechsel aus einem Screen heraus
     // -------------------------------------------------------------------------
 
@@ -554,12 +592,19 @@ class AppViewModel(
                         runCatching { keyValueStore.getString(MAP_STYLE_STORAGE_KEY) }.getOrNull(),
                     ),
                     syncConfig = runCatching { getSyncConfig(keyValueStore) }.getOrNull(),
+                    onboardingSeen = runCatching {
+                        keyValueStore.getString(ONBOARDING_STORAGE_KEY) != null
+                    }.getOrDefault(true),
                 )
             }
             _profile.value = restored.profile
             _plan.value = restored.plan
             _mapStyle.value = restored.mapStyle
             _syncConfig.value = restored.syncConfig
+            // Erst hier, nicht als Startwert: siehe KDoc von [onboardingVisible].
+            // Bei einem Lesefehler gilt die Einfuehrung als gesehen — lieber
+            // einmal zu wenig zeigen als bei jedem Start erneut.
+            _onboardingVisible.value = !restored.onboardingSeen
 
             reloadRides()
             autoSyncHealth()
@@ -571,8 +616,21 @@ class AppViewModel(
         val plan: TrainingPlan?,
         val mapStyle: MapStyle,
         val syncConfig: SyncConfig?,
+        val onboardingSeen: Boolean,
     )
 }
+
+/**
+ * Schluessel im [KeyValueStore], unter dem steht, dass die Erststart-Einfuehrung
+ * durch ist.
+ *
+ * Im selben `trailscape.*`-Namensraum wie alle uebrigen Schluessel (siehe
+ * `data/PrefsStores.kt`). Das `.v1` am Ende ist Absicht: Wird die Einfuehrung
+ * spaeter einmal grundlegend anders, laesst sie sich durch einen neuen
+ * Schluessel gezielt noch einmal zeigen, ohne den alten Wert loeschen zu
+ * muessen.
+ */
+const val ONBOARDING_STORAGE_KEY: String = "trailscape.onboarding.v1"
 
 /**
  * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert

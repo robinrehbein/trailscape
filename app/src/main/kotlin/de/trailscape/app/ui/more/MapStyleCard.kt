@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 
 /**
@@ -56,7 +57,19 @@ fun MapStyleCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 ) {
                     RadioButton(selected = isSelected, onClick = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = style.label, style = MaterialTheme.typography.bodyLarge)
+                    Column {
+                        Text(text = style.label, style = MaterialTheme.typography.bodyLarge)
+                        // Dieselben Erlaeuterungen wie im Bottom-Sheet des
+                        // Karten-Tabs: Es ist dieselbe Liste, sie soll auch
+                        // dasselbe erzaehlen.
+                        mapStyleSubtitle(style.id)?.let { subtitle ->
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = hintColor,
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -62,7 +62,7 @@ import kotlinx.coroutines.withContext
  * geht ueber [ActivityResultContracts.CreateDocument] (Nutzerin waehlt den
  * Speicherort direkt, kein Zwischenschritt ueber ein Share-Sheet noetig),
  * Import ueber [ActivityResultContracts.OpenDocument]. Der Einzelimport
- * („Aktivitaet importieren") teilt seine Dateitypenerkennung mit dem
+ * („Tour importieren") teilt seine Dateitypenerkennung mit dem
  * Import-Knopf in `ui/rides/RidesScreen.kt` (siehe `ui/ActivityFileImport.kt`).
  *
  * ## Archiv-Import
@@ -260,7 +260,7 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             OutlinedButton(
                 onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
                 enabled = !busy,
-            ) { Text("Aktivität importieren (GPX/FIT)") }
+            ) { Text("Tour importieren (GPX/FIT)") }
             OutlinedButton(
                 onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
                 enabled = !busy && !archiveBusy,
@@ -269,7 +269,11 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
         if (busy) {
             Spacer(modifier = Modifier.height(12.dp))
-            LinearProgressIndicator(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp),
+            )
         }
     }
 

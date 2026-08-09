@@ -4,6 +4,6 @@
          aus TrailscapeTheme. Bewusst ein Plattform-Theme, damit das Modul ohne
          com.google.android.material auskommt. -->
     <style name="Theme.Trailscape" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">@color/window_background</item>
     </style>
 </resources>
