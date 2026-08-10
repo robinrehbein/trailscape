@@ -478,6 +478,14 @@ internal fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/** Kleiner Punkt — dient der Live-Leiste als „Aufzeichnung läuft"-Indikator. */
+@Composable
+private fun RecordDot(color: Color, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        drawCircle(color = color)
+    }
+}
+
 /**
  * Play-Dreieck fuer „Aufzeichnung starten". Leicht nach rechts versetzt,
  * weil ein mittig gesetztes Dreieck optisch links haengt.
