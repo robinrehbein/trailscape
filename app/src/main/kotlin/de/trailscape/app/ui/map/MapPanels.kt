@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -431,10 +432,11 @@ internal fun MapCircleButton(
 }
 
 /**
- * Der grosse Aufnahmeknopf. Zeichnet Punkt bzw. Quadrat selbst — die
+ * Der grosse Aufnahmeknopf. Zeichnet Dreieck bzw. Quadrat selbst — die
  * schlanke `material-icons-core`-Auswahl im Projekt kennt weder
- * `fiber_manual_record` noch `stop` (siehe `app/build.gradle.kts`: das
+ * `play_arrow` noch `stop` (siehe `app/build.gradle.kts`: das
  * vollstaendige Icon-Paket bringt mehrere tausend Vektoren mit).
+ * Gleiche Groesse wie [LocateButton], damit die Knopfspalte ruhig wirkt.
  */
 @Composable
 internal fun RecordButton(
@@ -453,18 +455,18 @@ internal fun RecordButton(
             if (recording) {
                 StopGlyph(color = RecordRed, size = 18.dp)
             } else {
-                RecordDot(color = GravelGreen, size = 22.dp)
+                PlayGlyph(color = GravelGreen, size = 22.dp)
             }
         }
     }
 }
 
-/** Runder Knopf „Meine Position". */
+/** Runder Knopf „Meine Position", gleiche Groesse wie [RecordButton]. */
 @Composable
 internal fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = modifier.size(48.dp),
+        modifier = modifier.size(56.dp),
         shape = CircleShape,
         color = GravelGreen,
         contentColor = Color.White,
@@ -476,10 +478,31 @@ internal fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+/** Kleiner Punkt — dient der Live-Leiste als „Aufzeichnung läuft"-Indikator. */
 @Composable
 private fun RecordDot(color: Color, size: Dp) {
     Canvas(modifier = Modifier.size(size)) {
         drawCircle(color = color)
+    }
+}
+
+/**
+ * Play-Dreieck fuer „Aufzeichnung starten". Leicht nach rechts versetzt,
+ * weil ein mittig gesetztes Dreieck optisch links haengt.
+ */
+@Composable
+private fun PlayGlyph(color: Color, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val offsetX = w * 0.12f
+        val path = Path().apply {
+            moveTo(offsetX, 0f)
+            lineTo(offsetX, h)
+            lineTo(w, h / 2f)
+            close()
+        }
+        drawPath(path = path, color = color)
     }
 }
 
