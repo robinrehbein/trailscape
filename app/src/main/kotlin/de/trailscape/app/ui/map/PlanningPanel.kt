@@ -172,6 +172,12 @@ internal fun PlanningCard(
     error: String?,
     maxHeight: Dp,
     /**
+     * Fortschrittstext, wenn die Route wegen weit auseinanderliegender
+     * Wegpunkte in mehreren Server-Anfragen berechnet wird (siehe
+     * `Routing.kt`). `null`, solange es bei einer Anfrage bleibt.
+     */
+    progress: String? = null,
+    /**
      * Ob [route] aus dem Rundkurs-Generator stammt (siehe
      * `RouteGenerationPanel.kt`). Dann gibt es keine Wegpunkte, die sich
      * zaehlen liessen — die Zeile nennt stattdessen die Herkunft.
@@ -187,6 +193,8 @@ internal fun PlanningCard(
     modifier: Modifier = Modifier,
 ) {
     val info = when {
+        busy && progress != null -> progress
+
         route != null && generated ->
             "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑ · " +
                 "vorgeschlagene Runde"

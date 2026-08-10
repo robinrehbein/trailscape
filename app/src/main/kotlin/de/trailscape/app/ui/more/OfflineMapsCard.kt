@@ -270,6 +270,14 @@ private suspend fun listOfflineRegionsWithStatus(context: Context): List<Offline
                     ?.takeIf { it > 0L }
                     ?.let { add(formatDate(it)) }
                 add(formatOfflineRegionSize(status?.completedResourceSize))
+                // Eine Region ohne eine einzige Kachel ist der Rest eines
+                // abgebrochenen Downloads (frueher blieb so etwas nach dem
+                // haengenden „0/1"-Balken liegen). MapLibre selbst meldet sie
+                // als „vollstaendig", weil es fuer gespeicherte Regionen die
+                // Sollzahl gleich der Istzahl setzt — also sagen wir es hier.
+                if (status != null && status.completedTileCount <= 0L) {
+                    add("unvollständig – bitte löschen")
+                }
             }.joinToString(" · "),
             region = region,
         )
@@ -339,6 +347,12 @@ private fun deleteAllOfflineRegionsAsync(
 /**
  * Anzeigename einer Region, deren Metadaten nicht von dieser App stammen (oder
  * unlesbar sind): Kartenstil aus der Style-URL plus laufende Nummer.
+ *
+ * Die Style-URL traegt die Stilkennung im Pfad — sowohl die heutige Adresse
+ * aus [de.trailscape.app.ui.map.offlineStyleUrl]
+ * (`https://offline-style.trailscape.invalid/voyager.json`) als auch die
+ * `file://`-Adresse aelterer Regionen (`…/map-styles/voyager.json`). Das
+ * schlichte `contains` erkennt deshalb beide.
  */
 private fun fallbackRegionName(region: OfflineRegion): String {
     val definition = region.definition
