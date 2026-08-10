@@ -69,11 +69,18 @@ jobs:
           path: app/build/outputs/mapping/release/
           if-no-files-found: error
 
-  # Veroeffentlicht die APK unter einem stabilen Link:
-  # https://github.com/<repo>/releases/download/latest/trailscape.apk
-  # Das ist der Update-Kanal, der schon zu Flutter-Zeiten galt — das Release
-  # `latest` wird bei jedem main-Push ueberschrieben. Branch-Pushes bauen und
-  # testen zwar, veroeffentlichen aber nichts.
+  # Veroeffentlicht bei jedem main-Push ZWEI Releases mit derselben APK:
+  #
+  #  * `latest` — der stabile Link
+  #    https://github.com/<repo>/releases/download/latest/trailscape.apk,
+  #    wird ueberschrieben. Der Update-Kanal, der schon zu Flutter-Zeiten galt.
+  #  * `v2.0.<GITHUB_RUN_NUMBER>` — unveraenderlich, mit Changelog aus den
+  #    Commit-Betreffs seit dem letzten solchen Tag. Ohne diese Tags koennte
+  #    die App nicht feststellen, ob es etwas Neueres gibt: `latest` traegt
+  #    keine Versionsnummer, und ein blosser Dateivergleich ist nicht
+  #    moeglich.
+  #
+  # Branch-Pushes bauen und testen zwar, veroeffentlichen aber nichts.
   release:
     needs: build
     if: github.ref == 'refs/heads/main'
@@ -81,16 +88,87 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Volle Historie inklusive Tags: Die Release-Notes des versionierten
+      # Releases sind der `git log` seit dem letzten `v2.0.*`-Tag. Ohne
+      # `fetch-depth: 0` kennt der Klon weder die alten Tags noch genug
+      # Historie dafuer.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/download-artifact@v4
         with:
           name: trailscape-apk
+
+      # Das unveraenderliche Gegenstueck zum `latest`-Alias: ein Release pro
+      # main-Push, getaggt mit derselben Lauf-Nummer, die im versionCode und
+      # im versionName der APK steckt (siehe app/build.gradle.kts). Erst
+      # dadurch laesst sich ueberhaupt sagen, welche Version installiert ist
+      # und ob es eine neuere gibt — der In-App-Update-Check
+      # (app/src/main/kotlin/de/trailscape/app/update/) liest genau diese
+      # Tags ueber die GitHub-API.
+      - name: Versioniertes Release mit Changelog anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mv app-release.apk trailscape.apk
+
+          tag="v2.0.${GITHUB_RUN_NUMBER}"
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag existiert bereits (Wiederholungslauf) — bleibt unveraendert."
+            exit 0
+          fi
+
+          # Das zuletzt veroeffentlichte Versions-Tag. `-v:refname` sortiert
+          # numerisch, sonst stuende v2.0.9 hinter v2.0.10. Der Alias-Tag
+          # `latest` passt auf das Muster nicht und stoert deshalb nicht.
+          last_tag="$(git tag --list 'v2.0.*' --sort=-v:refname | head -n 1)"
+
+          if [ -n "$last_tag" ]; then
+            heading="Änderungen seit ${last_tag}:"
+            changelog="$(git log --format='- %s' "${last_tag}..HEAD")"
+            : "${changelog:=- Keine neuen Commits — unveränderter Stand, neu gebaut.}"
+          else
+            # Erster Lauf dieser Serie: Es gibt kein Vorgaenger-Tag, also die
+            # letzten Betreffzeilen als Anhaltspunkt.
+            heading="Die letzten Änderungen:"
+            changelog="$(git log --format='- %s' -n 10)"
+          fi
+
+          notes="$(cat <<EOF
+          ${heading}
+
+          ${changelog}
+
+          **Installation:** \`trailscape.apk\` herunterladen und auf dem
+          Android-Gerät öffnen (Installation aus unbekannten Quellen erlauben).
+          Das Update legt sich über die bestehende Installation, die Touren
+          bleiben erhalten.
+          EOF
+          )"
+
+          # `--latest=false`: Die „Latest"-Markierung gehoert dem Alias-Release
+          # `latest` — dessen Seite ist der stabile Download-Link, auf den die
+          # App und das README verweisen. Dieses Release hier ist das Archiv
+          # mit dem Changelog.
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Trailscape $tag" \
+            --notes "$notes" \
+            --latest=false \
+            trailscape.apk
 
       - name: latest-Release aktualisieren
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          mv app-release.apk trailscape.apk
+          # Der vorige Schritt hat die APK schon umbenannt; bei einem
+          # Wiederholungslauf, der dort vorzeitig aussteigt, ebenfalls.
+          [ -f trailscape.apk ] || mv app-release.apk trailscape.apk
 
           # Den Tag `latest` auf den gerade gebauten Commit ziehen, damit das
           # Release nicht dauerhaft auf einen alten Stand zeigt.
@@ -100,12 +178,19 @@ jobs:
                  -f ref="refs/tags/latest" -f sha="$GITHUB_SHA" >/dev/null
 
           notes=$(cat <<'EOF'
-          Automatisch gebaute APK vom aktuellen Stand auf `main`.
+          Automatisch gebaute APK vom aktuellen Stand auf `main`. Dieses
+          Release wird bei jedem Push überschrieben und ist damit immer die
+          neueste Version.
 
           **Installation:** `trailscape.apk` herunterladen und auf dem
           Android-Gerät öffnen (Installation aus unbekannten Quellen erlauben).
 
-          > **Einmalig beim Umstieg von Version 1.x:** Version 2.0.0 ist die
+          **Was ist neu?** Jeder Stand liegt zusätzlich als unveränderliches
+          Release `v2.0.<Nummer>` mit Changelog auf der
+          [Releases-Seite](https://github.com/robinrehbein/trailscape/releases).
+          Dieselbe Nummer zeigt die App unter *Mehr → Über*.
+
+          > **Einmalig beim Umstieg von Version 1.x:** Version 2.x ist die
           > neu geschriebene native App und trägt einen neuen Signierschlüssel.
           > Sie lässt sich deshalb nicht als Update über die alte Installation
           > legen. Reihenfolge: in der alten App unter *Mehr → Daten & Backup →

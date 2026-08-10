@@ -42,8 +42,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
+import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
@@ -84,8 +87,10 @@ import de.trailscape.core.safeFileName
 import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Kurzes Quellen-Label der Trainingslast fuer die Tourenliste
@@ -129,6 +134,31 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * Aufbau wie im Trainings-Tab (`ui/components/EmptyState.kt`), mit allen drei
  * Wegen, auf denen eine Tour hier landen kann — aufzeichnen, Einzeldatei,
  * Archiv.
+ *
+ * ## Loeschen mit „Rückgängig"
+ * Der Bestaetigungsdialog entfernt die Tour sofort aus der Liste
+ * ([AppViewModel.deleteRideWithUndo]), loescht die Datei aber erst nach
+ * [UNDO_DELETE_GRACE_MS], solange in der Zwischenzeit keine weitere Loeschung
+ * dazwischenkommt. Waehrenddessen zeigt dieser Screen eine eigene Snackbar
+ * „Tour gelöscht" mit Aktion „Rückgängig" — bewusst **nicht** ueber den
+ * geteilten [AppViewModel.messages]-Kanal, der nur einfache, aktionslose
+ * Text-Snackbars kennt und von jedem Screen gleichermassen mitgelesen wird
+ * (ein Undo waere dort inhaerent verschickt an einen Ort, an dem er nicht
+ * hingehoert). Der Kanal bleibt dadurch additiv unveraendert; nur
+ * [AppViewModel] bekommt mit [AppViewModel.deleteRideWithUndo] und
+ * [AppViewModel.undoDeleteRide] zwei neue Methoden.
+ *
+ * Die Snackbar laeuft ueber `withTimeoutOrNull(UNDO_DELETE_GRACE_MS)`: Tippt
+ * niemand auf „Rückgängig", verschwindet sie nach Ablauf der Frist von
+ * selbst — zeitgleich mit dem im ViewModel laufenden Loesch-Timer. Eine
+ * zweite Loeschung waehrend einer noch offenen Snackbar bricht deren
+ * Anzeige-Coroutine ab (die alte Snackbar verschwindet sofort) und zeigt eine
+ * frische fuer die neue Tour; im ViewModel schliesst dieselbe Aktion die
+ * vorige Loeschung sofort endgueltig ab.
+ *
+ * Stirbt der Prozess waehrend der Frist, bleibt die Datei einfach liegen —
+ * die Tour taucht beim naechsten Start ganz normal wieder auf. Akzeptierter
+ * Kompromiss, siehe KDoc von [AppViewModel.deleteRideWithUndo].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,6 +175,12 @@ fun RidesScreen(appViewModel: AppViewModel) {
     var importing by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Ride?>(null) }
     var deleteTarget by remember { mutableStateOf<Ride?>(null) }
+
+    // Anzeige-Coroutine der aktuellen Undo-Snackbar (siehe Klassen-KDoc oben).
+    // Ueberschreibt sich selbst bei jeder neuen Loeschung — `Job.cancel()` auf
+    // die vorige laesst deren Snackbar sofort verschwinden, statt sie
+    // hinter der neuen einzureihen.
+    var undoSnackbarJob by remember { mutableStateOf<Job?>(null) }
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -311,8 +347,21 @@ fun RidesScreen(appViewModel: AppViewModel) {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        appViewModel.removeRide(ride.id)
                         deleteTarget = null
+                        undoSnackbarJob?.cancel()
+                        appViewModel.deleteRideWithUndo(ride.id)
+                        undoSnackbarJob = scope.launch {
+                            val result = withTimeoutOrNull(UNDO_DELETE_GRACE_MS) {
+                                snackbarHostState.showSnackbar(
+                                    message = "Tour gelöscht",
+                                    actionLabel = "Rückgängig",
+                                    duration = SnackbarDuration.Indefinite,
+                                )
+                            }
+                            if (result == SnackbarResult.ActionPerformed) {
+                                appViewModel.undoDeleteRide()
+                            }
+                        }
                     },
                 ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
             },

@@ -1,7 +1,10 @@
 package de.trailscape.app.data
 
 import android.content.Context
+import androidx.core.content.pm.PackageInfoCompat
 import de.trailscape.app.health.HealthConnectGateway
+import de.trailscape.app.update.UpdateChecker
+import de.trailscape.app.update.runNumberFromVersionCode
 import de.trailscape.core.HealthGateway
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HealthSyncStore
@@ -30,7 +33,7 @@ import kotlinx.coroutines.SupervisorJob
  * `AppServices.httpClient`, `AppServices.keyValueStore`,
  * `AppServices.healthSyncStore`, `AppServices.trainingPlanStore`,
  * `AppServices.healthGateway`, `AppServices.healthSyncService`,
- * `AppServices.appScope`.
+ * `AppServices.updateChecker`, `AppServices.appScope`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -74,6 +77,36 @@ object AppServices {
 
     /** Implementierung von `:core`s [HttpClient] (BRouter-Routing, Geocoding, Selfhost-Sync). */
     val httpClient: HttpClient by lazy { OkHttpClientAdapter() }
+
+    /**
+     * Die Lauf-Nummer der installierten APK — `versionCode` minus dem in
+     * `app/build.gradle.kts` gesetzten Offset (siehe
+     * [de.trailscape.app.update.runNumberFromVersionCode]).
+     *
+     * `null`, wenn der PackageManager nichts hergibt oder der Code aus einer
+     * fremden Pipeline stammt; der Update-Check laesst es dann bleiben, statt
+     * gegen eine geratene Zahl zu vergleichen.
+     */
+    val installedRunNumber: Int? by lazy {
+        runCatching {
+            val info = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+            // PackageInfoCompat statt `versionCode`: Letzteres ist seit API 28
+            // zugunsten von `longVersionCode` veraltet, minSdk ist 26.
+            runNumberFromVersionCode(PackageInfoCompat.getLongVersionCode(info))
+        }.getOrNull()
+    }
+
+    /**
+     * Der Update-Kanal (siehe [UpdateChecker]). Benutzt denselben
+     * [httpClient] und [keyValueStore] wie der Rest der App.
+     */
+    val updateChecker: UpdateChecker by lazy {
+        UpdateChecker(
+            httpClient = httpClient,
+            store = keyValueStore,
+            installedRunNumber = { installedRunNumber },
+        )
+    }
 
     /**
      * Implementierung von `:core`s [HealthGateway] gegen

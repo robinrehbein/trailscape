@@ -18,9 +18,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
@@ -36,6 +38,9 @@ import de.trailscape.app.ui.theme.ScreenPadding
  *
  * Die **Reihenfolge** ist auf den Erstnutzer hin sortiert (Begruendung im
  * Rumpf), nicht mehr die des Dart-Originals.
+ *
+ * Darueber liegt — nur wenn es etwas zu melden gibt — die Update-Karte
+ * (`UpdateCard.kt`).
  *
  * ## Bewusste Abweichungen vom Original
  *  * **Kartenstil-Auswahl** (neu, kein Dart-Vorbild): Der native Kartenstil-
@@ -57,6 +62,7 @@ import de.trailscape.app.ui.theme.ScreenPadding
 @Composable
 fun MoreScreen(appViewModel: AppViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val updateVersion by appViewModel.updateAvailable.collectAsStateWithLifecycle()
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -99,6 +105,18 @@ fun MoreScreen(appViewModel: AppViewModel) {
                 // noch entdecken kann. Vorher stand „Kartenstil" auf Platz
                 // zwei und „Daten & Backup" hinter Health Connect, obwohl die
                 // Leerzustaende aller Tabs auf den Import verweisen.
+                // Ganz oben und nur, wenn es wirklich etwas Neues gibt: Die
+                // App aktualisiert sich nicht von selbst (Sideload), der
+                // Hinweis ist also die einzige Nachricht darueber — und
+                // verschwindet dauerhaft, sobald er weggewischt wird.
+                updateVersion?.let { version ->
+                    item {
+                        UpdateNoticeCard(
+                            versionName = version,
+                            onDismiss = appViewModel::dismissUpdateNotice,
+                        )
+                    }
+                }
                 item { ProfileCard(appViewModel) }
                 item { BackupCard(appViewModel) }
                 item { HealthCard(appViewModel) }

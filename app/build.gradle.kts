@@ -34,8 +34,22 @@ android {
         targetSdk = 36
         // Offset 2000, damit der Zaehler sicher ueber allen bisher von der
         // Flutter-Pipeline vergebenen versionCodes liegt.
-        versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1) + 2000
-        versionName = "2.0.0"
+        //
+        // Dieselbe Lauf-Nummer steckt im Namen: Die CI legt zu jedem
+        // main-Push ein Release `v2.0.<GITHUB_RUN_NUMBER>` an (siehe
+        // .github/workflows/build.yml), und der In-App-Update-Check rechnet
+        // aus dem versionCode die Lauf-Nummer zurueck
+        // (`update/UpdateLogic.kt`, Offset unten gespiegelt als
+        // VERSION_CODE_OFFSET). Anzeige, Tag und Code muessen deshalb
+        // zusammenpassen — ein fest verdrahtetes "2.0.0" wuerde in der App
+        // eine andere Version zeigen als das Release, aus dem sie stammt.
+        //
+        // Lokale Builds haben keine Lauf-Nummer und heissen darum
+        // "2.0.0-dev": unverwechselbar und, weil die Nummer daraus nicht als
+        // Tag existiert, ohne Anspruch auf einen Platz im Update-Kanal.
+        val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = (runNumber ?: 1) + 2000
+        versionName = if (runNumber != null) "2.0.$runNumber" else "2.0.0-dev"
     }
 
     signingConfigs {

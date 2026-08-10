@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.update.UpdateCheckResult
+import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.HealthConnection
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthSyncReport
@@ -31,6 +33,8 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -102,6 +106,8 @@ class AppViewModel(
      */
     val healthSync: HealthSyncService = AppServices.healthSyncService,
     private val httpClient: HttpClient = AppServices.httpClient,
+    /** Der Update-Kanal (siehe [UpdateChecker]); versorgt [updateAvailable]. */
+    private val updateChecker: UpdateChecker = AppServices.updateChecker,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     private val computation: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
@@ -286,11 +292,84 @@ class AppViewModel(
     /**
      * Loescht eine Tour und laedt die Liste neu. Die Auswahl loest sich
      * dadurch von selbst auf (siehe [selectedRide]).
+     *
+     * Sofortige, endgueltige Loeschung ohne Rueckgaengig-Moeglichkeit — benutzt
+     * vom Karten-Screen (Loeschen der gerade offenen Tour). Der Touren-Tab
+     * benutzt stattdessen [deleteRideWithUndo].
      */
     fun removeRide(id: String) {
         viewModelScope.launch {
             withContext(io) { rideStorage.deleteRide(id) }
             reloadRides()
+        }
+    }
+
+    /** Eine per [deleteRideWithUndo] optimistisch entfernte, aber noch nicht endgueltig geloeschte Tour. */
+    private data class PendingRideDeletion(val ride: Ride, val job: Job)
+
+    /**
+     * Ausstehende Loeschung, die [deleteRideWithUndo] zuletzt angestossen hat —
+     * `null`, wenn gerade keine laeuft. Es gibt bewusst nie mehr als eine
+     * gleichzeitig: Eine neue Loeschung schliesst die vorige sofort endgueltig
+     * ab (siehe [deleteRideWithUndo]).
+     */
+    private var pendingDeletion: PendingRideDeletion? = null
+
+    /**
+     * Entfernt eine Tour **optimistisch** aus [rides] — sie verschwindet
+     * sofort aus der Liste — loescht sie aber erst nach [UNDO_DELETE_GRACE_MS]
+     * wirklich von der Platte (`rideStorage.deleteRide`). Der Touren-Tab zeigt
+     * in dieser Frist eine Snackbar „Tour gelöscht" mit Aktion „Rückgängig"
+     * (siehe `RidesScreen.kt`); tippt niemand darauf, laeuft der hier
+     * gestartete Timer ab und die Datei ist weg.
+     *
+     * Folgt eine weitere Loeschung — derselben oder einer anderen Tour —,
+     * bevor die Frist um ist, wird die vorige sofort endgueltig abgeschlossen
+     * (ihre Datei geloescht): Es soll nie zwei gleichzeitig „schwebende"
+     * Loeschungen geben, deren Snackbars sich gegenseitig verdraengen wuerden.
+     *
+     * ACHTUNG Prozess-Tod waehrend der Frist: Der Timer laeuft im
+     * `viewModelScope` und damit nur, solange der Prozess lebt. Stirbt er
+     * vorher, wurde die Datei nie geloescht — die Tour ist einfach noch da und
+     * taucht beim naechsten Start ganz normal wieder in der Liste auf. Das ist
+     * bewusst so belassen (kein Datenverlust) statt ueber einen persistenten
+     * „geloescht, aber…"-Zustand nachzuhalten.
+     */
+    fun deleteRideWithUndo(id: String) {
+        val ride = _rides.value.firstOrNull { it.id == id } ?: return
+        finalizePendingDeletion()
+        _rides.value = _rides.value.filterNot { it.id == id }
+        val job = viewModelScope.launch {
+            delay(UNDO_DELETE_GRACE_MS)
+            withContext(io) { rideStorage.deleteRide(id) }
+            pendingDeletion = null
+        }
+        pendingDeletion = PendingRideDeletion(ride, job)
+    }
+
+    /**
+     * Macht die zuletzt per [deleteRideWithUndo] entfernte Tour rueckgaengig
+     * (Aktion der Snackbar). Ohne ausstehende Loeschung — etwa weil die Frist
+     * schon abgelaufen ist — passiert nichts.
+     *
+     * Fuegt die Tour wieder ein und sortiert die Liste neu ein statt sie
+     * anzuhaengen: [rides] ist immer nach Datum sortiert, das muss nach dem
+     * Undo weiter gelten.
+     */
+    fun undoDeleteRide() {
+        val pending = pendingDeletion ?: return
+        pendingDeletion = null
+        pending.job.cancel()
+        _rides.value = (_rides.value + pending.ride).sortedByDescending { it.createdAt }
+    }
+
+    /** Schliesst eine noch laufende Loeschung sofort endgueltig ab (siehe [deleteRideWithUndo]). */
+    private fun finalizePendingDeletion() {
+        val pending = pendingDeletion ?: return
+        pendingDeletion = null
+        pending.job.cancel()
+        viewModelScope.launch {
+            withContext(io) { rideStorage.deleteRide(pending.ride.id) }
         }
     }
 
@@ -596,6 +675,70 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Update-Hinweis
+    // -------------------------------------------------------------------------
+
+    private val _updateAvailable = MutableStateFlow<String?>(null)
+
+    /**
+     * Der `versionName` einer verfuegbaren neueren Version (z. B. `"2.0.123"`),
+     * sonst `null`.
+     *
+     * Der Mehr-Tab zeigt daraufhin eine schliessbare Hinweis-Karte. Wurde die
+     * Karte fuer genau diese Version schon weggewischt, bleibt der Wert
+     * `null` — siehe [de.trailscape.app.update.UpdateChecker.dismiss].
+     */
+    val updateAvailable: StateFlow<String?> = _updateAvailable.asStateFlow()
+
+    /**
+     * Blendet die Update-Karte aus und merkt sich das fuer diese Version.
+     * Eine spaetere, hoehere Version meldet sich wieder.
+     */
+    fun dismissUpdateNotice() {
+        val versionName = _updateAvailable.value ?: return
+        _updateAvailable.value = null
+        viewModelScope.launch {
+            withContext(io) { updateChecker.dismiss(versionName) }
+        }
+    }
+
+    /**
+     * Manuelle Pruefung („Mehr → Über → Nach Updates suchen"). Liefert das
+     * Ergebnis fuer die Anzeige zurueck und aktualisiert nebenbei
+     * [updateAvailable].
+     *
+     * Ein [UpdateCheckResult.Failed] laesst einen bereits bekannten Hinweis
+     * stehen: Dass GitHub gerade nicht erreichbar ist, sagt nichts darueber
+     * aus, ob das Update noch existiert.
+     */
+    suspend fun checkForUpdateNow(): UpdateCheckResult {
+        val result = withContext(io) { updateChecker.checkNow() }
+        when (result) {
+            is UpdateCheckResult.Available -> _updateAvailable.value = result.versionName
+            UpdateCheckResult.UpToDate -> _updateAvailable.value = null
+            else -> Unit
+        }
+        return result
+    }
+
+    /**
+     * Der stille Update-Check beim App-Start: gedrosselt auf hoechstens einen
+     * Netzzugriff pro Tag, komplett auf [io], Fehler ohne jede Meldung —
+     * offline zu sein ist bei einer Fahrrad-App der Normalfall.
+     */
+    private fun checkForUpdateInBackground() {
+        viewModelScope.launch {
+            val startup = withContext(io) {
+                runCatching { updateChecker.startupCheck() }.getOrNull()
+            } ?: return@launch
+            startup.noticeVersion?.let { _updateAvailable.value = it }
+            startup.announceVersion?.let {
+                showMessage("Version $it ist verfügbar — im Mehr-Tab herunterladen.")
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Start
     // -------------------------------------------------------------------------
 
@@ -643,6 +786,10 @@ class AppViewModel(
             reloadRides()
             autoSyncHealth()
         }
+
+        // Feuern und vergessen, ganz am Ende: Der Update-Check haelt nichts
+        // auf und braucht nichts von dem, was oben von der Platte kommt.
+        checkForUpdateInBackground()
     }
 
     private data class Restored(
@@ -665,6 +812,13 @@ class AppViewModel(
  * muessen.
  */
 const val ONBOARDING_STORAGE_KEY: String = "trailscape.onboarding.v1"
+
+/**
+ * Wartezeit, bevor eine per [AppViewModel.deleteRideWithUndo] entfernte Tour
+ * endgueltig von der Platte verschwindet. `RidesScreen` legt die Anzeigedauer
+ * seiner Undo-Snackbar auf denselben Wert, damit beide synchron ablaufen.
+ */
+const val UNDO_DELETE_GRACE_MS: Long = 5_000L
 
 /**
  * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert
