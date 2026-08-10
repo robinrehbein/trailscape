@@ -107,11 +107,15 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    // Nur der Kern-Satz an Icons. material-icons-extended zoege mehrere tausend
-    // Vektoren herein, von denen R8 wegen der `Icons.Filled.X`-Zugriffsmuster
-    // nur schwer etwas entfernen kann — der Kern-Satz deckt alles ab, was die
-    // Screens benutzen.
-    implementation("androidx.compose.material:material-icons-core")
+    // Voller Icon-Satz statt nur material-icons-core: Die Kern-Auswahl deckte
+    // Symbole wie "Route", "MyLocation" oder "DownloadForOffline" nicht ab,
+    // was zu zweckentfremdeten bzw. selbst auf Canvas gezeichneten Icons
+    // fuehrte. Seit Phase 6 ist R8 in der Voll-Optimierung aktiv (siehe
+    // `isMinifyEnabled` oben) und entfernt aus dem Vektor-Berg alles, was
+    // keine `Icons.Filled.X`-Referenz im Code erreicht — der Zuwachs im
+    // fertigen APK bleibt dadurch im niedrigen dreistelligen KB-Bereich,
+    // waehrend die Screens durchgehend passende Symbole bekommen.
+    implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.13.0")

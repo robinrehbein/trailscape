@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -856,13 +856,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                     )
                     Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
-                        icon = Icons.AutoMirrored.Filled.List,
+                        icon = Icons.Filled.Layers,
                         contentDescription = "Kartenstil",
                         onClick = { showStyleSheet = true },
                     )
                     Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
-                        icon = Icons.Filled.KeyboardArrowDown,
+                        icon = Icons.Filled.DownloadForOffline,
                         contentDescription = "Kartenausschnitt herunterladen",
                         enabled = !downloadState.running,
                         onClick = ::startDownload,

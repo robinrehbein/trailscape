@@ -60,12 +60,14 @@ fun InlineMetric(value: String, label: String) {
  * Zeile eines Erholungssignals: Ampelpunkt statt Icon.
  *
  * Bewusst anders als das Dart-Original (dort ein themenspezifisches Icon je
- * Signal, z. B. `Icons.monitor_heart_outlined`): `:app` bindet nur
- * `material-icons-core` ein (kein `material-icons-extended`), das Original
- * benutzt aber ausschliesslich Outline-Icons, die dort nicht enthalten sind.
- * Ein farbiger Ampelpunkt transportiert dieselbe Information (Grün/Gelb/
- * Orange/Rot) ohne zusaetzliche Abhaengigkeit und passt zur Ampel-Metapher
- * des Readiness-Systems (§5).
+ * Signal, z. B. `Icons.monitor_heart_outlined`) — und bewusst unveraendert
+ * seit `material-icons-extended` eingebunden ist: Ein farbiger Ampelpunkt
+ * transportiert dieselbe Information (Grün/Gelb/Orange/Rot) ohne den Umweg
+ * über ein Icon je Signal und passt zur Ampel-Metapher des
+ * Readiness-Systems (§5). Diese Zeile bleibt deshalb Gestaltung, nicht
+ * Verlegenheitsloesung — anders als die zweckentfremdeten bzw. selbst
+ * gezeichneten Icons, die mit dem vollen Icon-Satz durch echte Symbole
+ * ersetzt wurden.
  */
 @Composable
 fun SignalRow(color: Color, headline: String, detail: String) {
