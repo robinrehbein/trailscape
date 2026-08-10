@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -121,7 +121,7 @@ fun ReadinessCard(insights: TrainingInsights, onPlanRoute: (() -> Unit)? = null)
                 Spacer(modifier = Modifier.height(12.dp))
                 FilledTonalButton(onClick = onPlanRoute) {
                     Icon(
-                        Icons.Filled.Place,
+                        Icons.Filled.Route,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                     )

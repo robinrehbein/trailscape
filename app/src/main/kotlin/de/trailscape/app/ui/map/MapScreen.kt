@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -78,6 +78,7 @@ import de.trailscape.core.fetchRoute
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import java.io.File
+import kotlin.math.abs
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -127,6 +128,12 @@ import kotlinx.coroutines.withContext
  *    Hoehenprofil, Speichern, Teilen und Navigation funktionieren damit ohne
  *    einen zweiten Weg. Das Flutter-Original kannte weder Generator noch
  *    Uebergabe zwischen den Tabs.
+ *  * **Automatischer Erst-Zoom auf die Position** statt des dauerhaften
+ *    Deutschland-Defaults: Liegt beim Start (oder unmittelbar nach einer
+ *    erteilten Freigabe) eine Standortfreigabe vor und hat die Nutzerin die
+ *    Karte noch nicht selbst bewegt, zoomt sie einmalig sanft auf die
+ *    aktuelle Position (Zoom ~13) — kein Dart-Vorbild. Details siehe der
+ *    Effekt bei `autoLocationZoomDone` weiter unten.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -290,6 +297,48 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Der Ablesepunkt des Hoehenprofils gehoert zu genau einer Tour bzw. Route.
     LaunchedEffect(selectedRide?.id, isRecording) {
         hoverPoint = null
+    }
+
+    // -------------------------------------------------- Automatischer Erst-Zoom
+    // Startet die Karte am Deutschland-Default (siehe `GERMANY_LAT/LON/ZOOM` in
+    // MapViewHost.kt) UND liegt eine Standortfreigabe vor — egal ob von Anfang
+    // an erteilt oder soeben ueber einen der Berechtigungsdialoge oben —, zoomt
+    // das genau einmal sanft auf die aktuelle Position (Zoom ~13). Greift
+    // NICHT ein, wenn die Kamera schon von der Default-Position abweicht (der
+    // Nutzer hat selbst gescrollt/gezoomt, ggf. schon vor einer Drehung — siehe
+    // `savedLat/Lon/Zoom` in MapViewHost.kt, die das ueber Config-Aenderungen
+    // hinweg merken) oder gerade eine Tour ausgewaehlt, eine Route geplant/
+    // generiert, aufgezeichnet oder navigiert wird — sonst wuerde der Zoom in
+    // eine bestehende Ansicht graetschen.
+    //
+    // `autoLocationZoomDone` ist `rememberSaveable`: Ohne dieses Flag wuerde
+    // eine Drehung waehrend/nach dem Zoom (derselbe `mapReady`/`locationGranted`
+    // -Zustand) den Effekt erneut auslösen und die Karte ein zweites Mal
+    // verschieben, obwohl der Nutzer inzwischen vielleicht selbst navigiert hat.
+    var autoLocationZoomDone by rememberSaveable { mutableStateOf(false) }
+    val mapReady = controller.isReady
+
+    LaunchedEffect(mapReady, locationGranted) {
+        if (autoLocationZoomDone || !mapReady || !locationGranted) return@LaunchedEffect
+        if (planning || isRecording || selectedRide != null ||
+            navTarget != null || generation.target != null
+        ) {
+            return@LaunchedEffect
+        }
+        val camera = controller.rememberCamera()
+        val atDefault = camera != null &&
+            abs(camera.lat - GERMANY_LAT) < DEFAULT_CAMERA_POSITION_EPSILON &&
+            abs(camera.lon - GERMANY_LON) < DEFAULT_CAMERA_POSITION_EPSILON &&
+            abs(camera.zoom - GERMANY_ZOOM) < DEFAULT_CAMERA_ZOOM_EPSILON
+        if (!atDefault) {
+            // Kamera weicht schon vom Default ab: Der Nutzer war hier schon
+            // selbst am Werk — endgueltig verzichten, kein spaeterer Versuch.
+            autoLocationZoomDone = true
+            return@LaunchedEffect
+        }
+        val position = currentLocation(context) ?: return@LaunchedEffect
+        autoLocationZoomDone = true
+        controller.moveTo(position.latitude, position.longitude, minZoom = AUTO_LOCATION_ZOOM)
     }
 
     LaunchedEffect(controller, livePoints.size) {
@@ -807,13 +856,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                     )
                     Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
-                        icon = Icons.AutoMirrored.Filled.List,
+                        icon = Icons.Filled.Layers,
                         contentDescription = "Kartenstil",
                         onClick = { showStyleSheet = true },
                     )
                     Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
-                        icon = Icons.Filled.KeyboardArrowDown,
+                        icon = Icons.Filled.DownloadForOffline,
                         contentDescription = "Kartenausschnitt herunterladen",
                         enabled = !downloadState.running,
                         onClick = ::startDownload,
@@ -1194,3 +1243,16 @@ private const val PLAN_PANEL_MAX_HEIGHT_FACTOR = 0.55f
 
 private const val MIN_SEARCH_LENGTH = 3
 private const val SEARCH_DEBOUNCE_MS = 450L
+
+/** Zoomstufe des einmaligen automatischen Erst-Zooms auf die Position. */
+private const val AUTO_LOCATION_ZOOM = 13.0
+
+/**
+ * Toleranz (Grad), innerhalb derer die Kamera noch als „am Deutschland-
+ * Default" gilt — 0.0 waere zu knapp: MapLibre rundet die Kamera beim
+ * Wiederherstellen aus `rememberSaveable` nicht immer bitgenau.
+ */
+private const val DEFAULT_CAMERA_POSITION_EPSILON = 0.01
+
+/** Toleranz der Zoomstufe fuer denselben Vergleich. */
+private const val DEFAULT_CAMERA_ZOOM_EPSILON = 0.05

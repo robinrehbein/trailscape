@@ -117,7 +117,7 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 
 ```bash
 ./gradlew :core:test              # 461 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # 46 Tests der plattformfreien :app-Teile
+./gradlew :app:testDebugUnitTest  # Tests der plattformfreien :app-Teile
 ```
 
 Was die CI vor jedem Release ausführt:
@@ -128,7 +128,8 @@ Was die CI vor jedem Release ausführt:
 
 `:app` hat bewusst kein Robolectric — getestet wird dort nur, was ohne
 Android-Framework auskommt (Aufzeichnungs-Journal, GPX-Import,
-Share-Dateinamen, Trainingsauswertung, Berichtsformat der Fehlermeldung).
+Share-Dateinamen, Trainingsauswertung, Berichtsformat der Fehlermeldung,
+Update-Prüfung).
 Alles Rechnende liegt ohnehin in `:core`.
 
 ## Installation und Updates
@@ -147,9 +148,22 @@ Jeder Push auf `main` baut die App und hängt sie an das GitHub-Release
 
 Ein Update ist derselbe Weg: APK laden, öffnen, drüber installieren.
 
+**Versionen und Changelog.** Zusätzlich zum `latest`-Alias legt jeder
+main-Build ein unveränderliches Release `v2.0.<Lauf-Nummer>` an, dessen Notizen
+die Commit-Betreffs seit dem vorigen solchen Release auflisten — die Übersicht
+steht auf der [Releases-Seite](https://github.com/robinrehbein/trailscape/releases).
+Dieselbe Nummer trägt die installierte App unter **Mehr → Über**.
+
+**Update-Hinweis in der App.** Die App fragt höchstens einmal am Tag still im
+Hintergrund die veröffentlichten Releases ab. Gibt es eine neuere Nummer als
+die eigene, erscheint einmalig eine Snackbar und im Mehr-Tab eine schließbare
+Karte mit dem Knopf „Herunterladen"; unter **Mehr → Über → Nach Updates
+suchen** lässt sich die Prüfung jederzeit von Hand auslösen. Ohne Netz passiert
+schlicht nichts — die Prüfung meldet nie einen Fehler und blockiert nie.
+
 ## Umstieg von Version 1.x
 
-Version 2.0.0 ist die neu geschriebene native App. Sie trägt dieselbe
+Version 2.x ist die neu geschriebene native App. Sie trägt dieselbe
 Paketkennung wie Version 1.x (`io.github.robinrehbein.trailscape`), aber einen
 **neuen Signierschlüssel** — Android verweigert deshalb die Installation über
 die alte Version. Einmalig ist eine Neuinstallation nötig:
@@ -163,7 +177,7 @@ die alte Version. Einmalig ist eine Neuinstallation nötig:
 Damit sind alle Touren und das Trainingsprofil übernommen. Nicht im Backup
 enthalten sind heruntergeladene Offline-Karten — die lädt man neu.
 
-Ab Version 2.0.0 sind Updates wieder normale Installationen über die
+Ab Version 2.x sind Updates wieder normale Installationen über die
 bestehende App; der Schlüssel bleibt jetzt stabil.
 
 ## Selfhost-Sync

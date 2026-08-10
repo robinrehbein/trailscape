@@ -16,8 +16,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
@@ -32,11 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -172,7 +171,12 @@ internal fun LiveRecordingCard(
                     if (paused) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     } else {
-                        PauseGlyph(color = MaterialTheme.colorScheme.primary)
+                        Icon(
+                            Icons.Filled.Pause,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                     Spacer(Modifier.width(6.dp))
                     Text(if (paused) "Weiter" else "Pause")
@@ -183,7 +187,12 @@ internal fun LiveRecordingCard(
                     onClick = onStop,
                     modifier = Modifier.weight(1f),
                 ) {
-                    StopGlyph(color = Color.White)
+                    Icon(
+                        Icons.Filled.Stop,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
             }
         }
@@ -432,11 +441,11 @@ internal fun MapCircleButton(
 }
 
 /**
- * Der grosse Aufnahmeknopf. Zeichnet Dreieck bzw. Quadrat selbst — die
- * schlanke `material-icons-core`-Auswahl im Projekt kennt weder
- * `play_arrow` noch `stop` (siehe `app/build.gradle.kts`: das
- * vollstaendige Icon-Paket bringt mehrere tausend Vektoren mit).
- * Gleiche Groesse wie [LocateButton], damit die Knopfspalte ruhig wirkt.
+ * Der grosse Aufnahmeknopf: gruener Kreis (Start) bzw. rotes Quadrat (Stopp)
+ * ueber der Flaeche des Knopfs. Seit `material-icons-extended` eingebunden
+ * ist, kommen Start- und Stopp-Symbol als echte Vektor-Icons statt als
+ * selbst gezeichnete Formen — Groesse (56-dp-Knopf) und Farben (GravelGreen/
+ * RecordRed auf `MaterialTheme.colorScheme.surface`) bleiben unveraendert.
  */
 @Composable
 internal fun RecordButton(
@@ -453,9 +462,19 @@ internal fun RecordButton(
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (recording) {
-                StopGlyph(color = RecordRed, size = 18.dp)
+                Icon(
+                    Icons.Filled.Stop,
+                    contentDescription = "Aufzeichnung beenden",
+                    tint = RecordRed,
+                    modifier = Modifier.size(28.dp),
+                )
             } else {
-                PlayGlyph(color = GravelGreen, size = 22.dp)
+                Icon(
+                    Icons.Filled.PlayArrow,
+                    contentDescription = "Aufzeichnung starten",
+                    tint = GravelGreen,
+                    modifier = Modifier.size(32.dp),
+                )
             }
         }
     }
@@ -473,7 +492,7 @@ internal fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         shadowElevation = 4.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            CrosshairGlyph(color = Color.White)
+            Icon(Icons.Filled.MyLocation, contentDescription = "Meine Position", tint = Color.White)
         }
     }
 }
@@ -485,64 +504,6 @@ private fun RecordDot(color: Color, size: Dp) {
         drawCircle(color = color)
     }
 }
-
-/**
- * Play-Dreieck fuer „Aufzeichnung starten". Leicht nach rechts versetzt,
- * weil ein mittig gesetztes Dreieck optisch links haengt.
- */
-@Composable
-private fun PlayGlyph(color: Color, size: Dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val w = this.size.width
-        val h = this.size.height
-        val offsetX = w * 0.12f
-        val path = Path().apply {
-            moveTo(offsetX, 0f)
-            lineTo(offsetX, h)
-            lineTo(w, h / 2f)
-            close()
-        }
-        drawPath(path = path, color = color)
-    }
-}
-
-@Composable
-private fun StopGlyph(color: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        drawRect(color = color, size = this.size)
-    }
-}
-
-@Composable
-private fun PauseGlyph(color: Color, size: Dp = 14.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val barWidth = this.size.width / 3f
-        drawRect(color = color, size = Size(barWidth, this.size.height))
-        drawRect(
-            color = color,
-            topLeft = Offset(this.size.width - barWidth, 0f),
-            size = Size(barWidth, this.size.height),
-        )
-    }
-}
-
-/** Fadenkreuz fuer „Meine Position" — `Icons.Filled.MyLocation` fehlt im Kernpaket. */
-@Composable
-private fun CrosshairGlyph(color: Color, size: Dp = 24.dp) {
-    Canvas(modifier = Modifier.size(size)) {
-        val center = Offset(this.size.width / 2f, this.size.height / 2f)
-        val radius = this.size.minDimension / 4f
-        drawCircle(color = color, radius = radius, center = center, style = CrosshairStroke)
-        drawCircle(color = color, radius = radius / 3f, center = center)
-        val arm = this.size.minDimension / 2f
-        drawLine(color, Offset(center.x, 0f), Offset(center.x, center.y - radius), strokeWidth = 4f)
-        drawLine(color, Offset(center.x, center.y + radius), Offset(center.x, arm * 2), strokeWidth = 4f)
-        drawLine(color, Offset(0f, center.y), Offset(center.x - radius, center.y), strokeWidth = 4f)
-        drawLine(color, Offset(center.x + radius, center.y), Offset(arm * 2, center.y), strokeWidth = 4f)
-    }
-}
-
-private val CrosshairStroke = Stroke(width = 4f)
 
 /** Ausgefuellter Knopf in Gravel-Gruen. */
 @Composable

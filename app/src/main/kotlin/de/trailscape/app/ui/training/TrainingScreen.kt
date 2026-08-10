@@ -64,8 +64,8 @@ import de.trailscape.core.routeTargetForToday
  *  * **Kein `TweenAnimationBuilder`-Aequivalent** fuer Readiness-Score und die
  *    CTL/ATL/TSB-Kennzahlen — sie werden statisch gezeigt.
  *  * **Ampelpunkt statt Icon** bei den Vitalwerte-Zeilen (siehe KDoc von
- *    [SignalRow]): `:app` bindet nur `material-icons-core` ein, das Original
- *    benutzt dort ausschliesslich nicht enthaltene Outline-Icons.
+ *    [SignalRow]) — bewusste Gestaltung passend zur Ampel-Metapher des
+ *    Readiness-Systems, unabhaengig vom verfuegbaren Icon-Satz.
  *  * **Zeitbudget-Hinweis antippbar.** Siehe KDoc von [WeekCard].
  *
  * Alle deutschen Texte, Zahlenformate (`formatKm`/`formatHours` aus `:core`)

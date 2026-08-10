@@ -12,11 +12,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderZip
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -85,10 +93,10 @@ import kotlinx.coroutines.withContext
  * Bedarf muesste [de.trailscape.core.importArchive] dafuer erst eine
  * Abbruchpruefung bekommen (`:core`, ausserhalb dieses Auftrags).
  *
- * Keine Icons auf den Aktions-Buttons (anders als im Dart-Original): `:app`
- * bindet bewusst nur `material-icons-core` ein (siehe `build.gradle.kts`),
- * und dessen kleiner Symbolsatz enthaelt weder ein Save- noch ein
- * Routen-Symbol.
+ * Die Aktions-Buttons tragen inzwischen Icons (anders als vorher: `:app` band
+ * damals nur `material-icons-core` ein, dessen kleiner Symbolsatz weder ein
+ * Save- noch ein Routen-Symbol enthielt). Seit `material-icons-extended`
+ * eingebunden ist, stehen beide zur Verfuegung.
  */
 @Composable
 fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
@@ -252,19 +260,51 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             Button(
                 onClick = { exportLauncher.launch(backupFileName(LocalDate.now())) },
                 enabled = !busy,
-            ) { Text("Backup exportieren") }
+            ) {
+                Icon(
+                    Icons.Filled.Save,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Backup exportieren")
+            }
             OutlinedButton(
                 onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
                 enabled = !busy,
-            ) { Text("Backup importieren") }
+            ) {
+                Icon(
+                    Icons.Filled.Upload,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Backup importieren")
+            }
             OutlinedButton(
                 onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
                 enabled = !busy,
-            ) { Text("Tour importieren (GPX/FIT)") }
+            ) {
+                Icon(
+                    Icons.Filled.Route,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Tour importieren (GPX/FIT)")
+            }
             OutlinedButton(
                 onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
                 enabled = !busy && !archiveBusy,
-            ) { Text("Archiv importieren (ZIP)") }
+            ) {
+                Icon(
+                    Icons.Filled.FolderZip,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize),
+                )
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text("Archiv importieren (ZIP)")
+            }
         }
 
         if (busy) {

@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.feedback.ISSUE_REPOSITORY_URL
 import de.trailscape.app.feedback.ProblemReportDialog
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.update.RELEASE_PAGE_URL
+import de.trailscape.app.update.UpdateCheckResult
+import kotlinx.coroutines.launch
 
 private const val REPOSITORY_URL = ISSUE_REPOSITORY_URL
 
@@ -43,6 +47,12 @@ private const val PRIVACY_URL = "$REPOSITORY_URL/blob/main/PRIVACY.md"
 private const val LICENSE_URL = "$REPOSITORY_URL/blob/main/LICENSE"
 
 /**
+ * Zwischenstand der manuellen Update-Pruefung. Dient zugleich als Sperre
+ * gegen Doppelklicks — eine zweite laufende Abfrage braucht niemand.
+ */
+private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
+
+/**
  * „Über"-Karte — Port des Fliesstexts aus der letzten Karte in
  * `lib/screens/more_screen.dart`, seither um alles erweitert, was eine App
  * fuer fremde Nutzer vertrauenswuerdig macht:
@@ -54,6 +64,11 @@ private const val LICENSE_URL = "$REPOSITORY_URL/blob/main/LICENSE"
  *  * **Einführung erneut ansehen** — startet die Erststart-Einfuehrung
  *    (`ui/onboarding/OnboardingScreen.kt`) noch einmal.
  *  * **Datenschutz** — oeffnet `PRIVACY.md` im Repository.
+ *  * **Nach Updates suchen** — die manuelle Fassung des stillen
+ *    Start-Checks (`update/UpdateChecker.kt`), mit sichtbarer Antwort. Ohne
+ *    sie gaebe es keinen Weg, die Frage „habe ich die neueste Version?"
+ *    aktiv zu stellen: Die App kommt per Sideload, kein Store aktualisiert
+ *    sie.
  *  * **Problem melden** — der einzige Meldeweg dieser App (siehe
  *    `feedback/ProblemReportDialog.kt`). Es gibt keine Telemetrie, die von
  *    selbst berichtet; ohne diesen Knopf erfaehrt niemand von einem Fehler.
@@ -69,6 +84,8 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val syncReport by appViewModel.lastSyncReport.collectAsStateWithLifecycle()
+    val updateVersion by appViewModel.updateAvailable.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     val versionName = remember {
         runCatching {
@@ -78,6 +95,7 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
     var showProblemDialog by remember { mutableStateOf(false) }
     var licensesExpanded by remember { mutableStateOf(false) }
+    var updateStatus by remember { mutableStateOf<String?>(null) }
 
     MoreSectionCard(title = "Über", modifier = modifier) {
         Text(
@@ -114,6 +132,39 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 onClick = { showProblemDialog = true },
                 contentPadding = PaddingValues(0.dp),
             ) { Text("Problem melden") }
+            // Der automatische Check laeuft still und hoechstens einmal am Tag
+            // (siehe UpdateChecker). Dieser Knopf ist der Weg, es *jetzt* zu
+            // wissen — samt sichtbarer Antwort, auch wenn sie „alles aktuell"
+            // lautet: Eine Pruefung ohne Rueckmeldung fuehlt sich kaputt an.
+            TextButton(
+                onClick = {
+                    if (updateStatus == UPDATE_CHECK_RUNNING) return@TextButton
+                    scope.launch {
+                        updateStatus = UPDATE_CHECK_RUNNING
+                        updateStatus = when (val result = appViewModel.checkForUpdateNow()) {
+                            is UpdateCheckResult.Available ->
+                                "Version ${result.versionName} ist verfügbar."
+                            UpdateCheckResult.UpToDate -> "Du bist aktuell."
+                            else -> "Prüfung nicht möglich — bist du gerade offline?"
+                        }
+                    }
+                },
+                contentPadding = PaddingValues(0.dp),
+            ) { Text("Nach Updates suchen") }
+        }
+
+        updateStatus?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (updateVersion != null) {
+                TextButton(
+                    onClick = { uriHandler.openUri(RELEASE_PAGE_URL) },
+                    contentPadding = PaddingValues(0.dp),
+                ) { Text("Herunterladen") }
+            }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))

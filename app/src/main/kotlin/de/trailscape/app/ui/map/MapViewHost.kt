@@ -144,14 +144,35 @@ internal fun MapViewHost(
         factory = {
             mapView.getMapAsync { map ->
                 map.uiSettings.apply {
-                    // Attribution ist Pflicht (OSM/CARTO/Esri) — sie bleibt an,
-                    // nur dezent unten links wie im Flutter-Original. Das
-                    // MapLibre-Logo daneben ist rechtlich nicht noetig und
-                    // wuerde die untere Leiste unnoetig fuellen.
+                    // Attribution ist Pflicht (OSM/CARTO/Esri) — sie bleibt an.
+                    // Das MapLibre-Logo daneben ist rechtlich nicht noetig und
+                    // wuerde die Ecke unnoetig fuellen.
                     isLogoEnabled = false
                     isAttributionEnabled = true
-                    attributionGravity = Gravity.BOTTOM or Gravity.START
-                    setAttributionMargins(12, 0, 0, 12)
+                    // Oben links statt (wie urspruenglich, dem Flutter-Original
+                    // folgend) unten links: Dort verschwand das Attributions-
+                    // Icon regelmaessig unter der Live-Leiste bzw. der
+                    // Tour-Statistikkarte (`LiveRecordingCard`/`RideCard` in
+                    // `MapPanels.kt`) — beide sitzen `fillMaxWidth()` am
+                    // unteren Rand von `MapScreen.kt` und decken damit
+                    // zuverlaessig auch die linke Ecke ab, sobald aufgezeichnet
+                    // oder eine Tour ausgewaehlt wird. Unten rechts liegen
+                    // zusaetzlich die runden Aufnahme-/Standort-Knoepfe, oben
+                    // rechts sitzen Kompass und die drei Kartenknoepfe
+                    // (Suche/Stil/Download) samt der Panels, die darunter
+                    // aufklappen (Suche, Rundkurs-Generator, Planung, Download-
+                    // Fortschritt — alle ebenfalls `fillMaxWidth()`). Oben links
+                    // bleibt dagegen in jedem erreichbaren Bildschirmzustand
+                    // frei: Die oberste Zeile in `MapScreen.kt` ordnet ihre
+                    // Knoepfe mit `horizontalArrangement = Arrangement.End` an
+                    // (die linke Haelfte bleibt dort leer), und jedes Panel
+                    // darunter haengt strikt UNTER dieser Zeile im Compose-
+                    // `Column` — nie auf ihrer Hoehe. Diese feste Ecke ist damit
+                    // einfacher und robuster als ein dynamisches Ausweichen
+                    // (Panelhoehen laufend in Pixel-Margins umrechnen), ohne
+                    // dass der Info-Knopf je verdeckt waere.
+                    attributionGravity = Gravity.TOP or Gravity.START
+                    setAttributionMargins(12, 12, 0, 0)
                     isCompassEnabled = true
                     compassGravity = Gravity.TOP or Gravity.END
                     setCompassMargins(0, 220, 16, 0)

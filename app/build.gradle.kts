@@ -34,8 +34,22 @@ android {
         targetSdk = 36
         // Offset 2000, damit der Zaehler sicher ueber allen bisher von der
         // Flutter-Pipeline vergebenen versionCodes liegt.
-        versionCode = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1) + 2000
-        versionName = "2.0.0"
+        //
+        // Dieselbe Lauf-Nummer steckt im Namen: Die CI legt zu jedem
+        // main-Push ein Release `v2.0.<GITHUB_RUN_NUMBER>` an (siehe
+        // .github/workflows/build.yml), und der In-App-Update-Check rechnet
+        // aus dem versionCode die Lauf-Nummer zurueck
+        // (`update/UpdateLogic.kt`, Offset unten gespiegelt als
+        // VERSION_CODE_OFFSET). Anzeige, Tag und Code muessen deshalb
+        // zusammenpassen — ein fest verdrahtetes "2.0.0" wuerde in der App
+        // eine andere Version zeigen als das Release, aus dem sie stammt.
+        //
+        // Lokale Builds haben keine Lauf-Nummer und heissen darum
+        // "2.0.0-dev": unverwechselbar und, weil die Nummer daraus nicht als
+        // Tag existiert, ohne Anspruch auf einen Platz im Update-Kanal.
+        val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = (runNumber ?: 1) + 2000
+        versionName = if (runNumber != null) "2.0.$runNumber" else "2.0.0-dev"
     }
 
     signingConfigs {
@@ -93,11 +107,15 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    // Nur der Kern-Satz an Icons. material-icons-extended zoege mehrere tausend
-    // Vektoren herein, von denen R8 wegen der `Icons.Filled.X`-Zugriffsmuster
-    // nur schwer etwas entfernen kann — der Kern-Satz deckt alles ab, was die
-    // Screens benutzen.
-    implementation("androidx.compose.material:material-icons-core")
+    // Voller Icon-Satz statt nur material-icons-core: Die Kern-Auswahl deckte
+    // Symbole wie "Route", "MyLocation" oder "DownloadForOffline" nicht ab,
+    // was zu zweckentfremdeten bzw. selbst auf Canvas gezeichneten Icons
+    // fuehrte. Seit Phase 6 ist R8 in der Voll-Optimierung aktiv (siehe
+    // `isMinifyEnabled` oben) und entfernt aus dem Vektor-Berg alles, was
+    // keine `Icons.Filled.X`-Referenz im Code erreicht — der Zuwachs im
+    // fertigen APK bleibt dadurch im niedrigen dreistelligen KB-Bereich,
+    // waehrend die Screens durchgehend passende Symbole bekommen.
+    implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.activity:activity-compose:1.13.0")
