@@ -19,3 +19,8 @@ rootProject.name = "trailscape"
 
 include(":core")
 include(":app")
+// Erkundungs-Prototyp fuer Wear OS. Bewusst ein eigenstaendiges APK und kein
+// Bestandteil der Telefon-App: Der Spike soll Hardwarefragen beantworten
+// (welche DataTypes kann die Uhr, wie gut ist das GPS, was kostet es Akku)
+// und danach entweder in ein echtes Modul wachsen oder ersatzlos verschwinden.
+include(":wear")

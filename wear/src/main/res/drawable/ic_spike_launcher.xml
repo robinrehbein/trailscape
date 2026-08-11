@@ -1,0 +1,15 @@
+<!-- Absichtlich karg: ein Spike braucht ein Symbol, damit Launcher und
+     Ongoing Activity etwas anzuzeigen haben, aber keine Gestaltung. Ein
+     Vektor statt der ueblichen mipmap-Pyramide spart fuenf Binaerdateien. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M24,2L24,2A22,22 0,0 1,46 24L46,24A22,22 0,0 1,24 46L24,46A22,22 0,0 1,2 24L2,24A22,22 0,0 1,24 2z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14,32L21,18L27,27L34,14L36,15L27,33L21,24L16,33z" />
+</vector>

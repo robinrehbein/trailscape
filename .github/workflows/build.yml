@@ -52,7 +52,17 @@ jobs:
         # :app:testDebugUnitTest deckt die plattformfreien Teile von :app ab
         # (Aufzeichnungs-Journal); AGP legt Unit-Test-Tasks nur fuer die
         # Debug-Variante an, ein `:app:test` gaebe es sonst nicht.
-        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:assembleRelease
+        #
+        # :wear:assembleRelease baut zusaetzlich den Wear-OS-Spike (Modul
+        # `:wear`, siehe docs/wear-spike.md) mit. Er laeuft im selben
+        # Gradle-Aufruf wie :app, bekommt also dieselben
+        # RELEASE_KEYSTORE_PATH/RELEASE_KEYSTORE_PASSWORD-Umgebungsvariablen
+        # zu sehen wie oben fuer :app — vorausgesetzt, wear/build.gradle.kts
+        # liest sie genauso aus wie app/build.gradle.kts. Die
+        # Signierkonfiguration selbst ist in AGP nicht modulueber-
+        # greifend,
+        # jedes Android-Modul braucht seinen eigenen signingConfigs-Block.
+        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:assembleRelease :wear:assembleRelease
 
       - uses: actions/upload-artifact@v4
         with:
@@ -69,6 +79,18 @@ jobs:
           path: app/build/outputs/mapping/release/
           if-no-files-found: error
 
+      # Wear-OS-Spike (siehe docs/wear-spike.md): eigenes, klar unterscheidbares
+      # Artefakt statt ein Release-Asset. Der Spike kommt ausschliesslich per
+      # ADB auf ein Entwicklergeraet (adb install) und ist nicht fuer normale
+      # Nutzer installierbar — auf der Releases-Seite (`latest`, `v2.0.x`)
+      # wuerde eine Wear-APK also nur verwirren. Deshalb bewusst NUR hier als
+      # Actions-Artefakt und NICHT im release-Job unten mit hochgeladen.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trailscape-wear-apk
+          path: wear/build/outputs/apk/release/wear-release.apk
+          if-no-files-found: error
+
   # Veroeffentlicht bei jedem main-Push ZWEI Releases mit derselben APK:
   #
   #  * `latest` — der stabile Link
@@ -81,6 +103,13 @@ jobs:
   #    moeglich.
   #
   # Branch-Pushes bauen und testen zwar, veroeffentlichen aber nichts.
+  #
+  # Absichtlich OHNE das Wear-Artefakt `trailscape-wear-apk`: Der Wear-OS-
+  # Spike (Modul :wear, siehe docs/wear-spike.md) wird nur per `adb install`
+  # auf ein Entwicklergeraet gebracht. Als Release-Asset waere er fuer
+  # normale Nutzer nicht installierbar und wuerde auf der Releases-Seite nur
+  # verwirren — dieser Job laedt darum weiterhin ausschliesslich
+  # `trailscape-apk` herunter.
   release:
     needs: build
     if: github.ref == 'refs/heads/main'
