@@ -1,16 +1,29 @@
 # 🚵 Trailscape
 
-Kostenlose, native Android-App für GPS-Aufzeichnung, Routenplanung und
-Trainingssteuerung auf dem Gravel- und Rennrad — die Alternative zu Strava und
-Komoot. Kotlin, Jetpack Compose, kein Abo, kein Account.
+**Trailscape sagt dir, was du heute fahren solltest — und baut dir die Runde
+dazu.** Native Android-App für Gravel- und Rennrad mit GPS-Aufzeichnung,
+Routenplanung und Trainingssteuerung. Kotlin, Jetpack Compose, kein Abo, kein
+Account.
 
 ## Warum?
 
-Strava- und Komoot-Abos sind teuer und binden die eigenen Daten in fremde
-Clouds. Trailscape ist kostenlos und **local-first**: Touren, Trainingsprofil
-und Auswertung liegen ausschließlich auf dem Gerät. Kein Account, keine
-Registrierung, keine Telemetrie. Wer trotzdem synchronisieren will, stellt
-seinen eigenen Server dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
+Trainingswerkzeuge sind fast alle auf Rennrad und Wettkampf ausgerichtet,
+Gravel-Werkzeuge fast alle auf Entdecken und Abenteuer. Wer auf Schotter
+strukturiert trainieren will, betreibt heute drei Apps nebeneinander: eine
+fürs Planen, eine fürs Aufzeichnen, eine für die Auswertung.
+
+Trailscape schließt die Kette. Ruhepuls, HRV und Schlaf deiner Uhr ergeben
+eine Tagesbereitschaft, der Trainingsplan sagt, was heute ansteht, die App
+generiert dazu eine passende Rundstrecke vor der Haustür, und die gefahrene
+Tour fließt zurück in die Belastungsrechnung. Komoot plant großartige Routen
+und weiß nichts über dein Training; Strava kennt deine Form, generiert dazu
+aber keine Route; Garmin hat beides, verbindet es aber nicht und verlangt
+eigene Hardware.
+
+Dazu **local-first**: Touren, Trainingsprofil und Auswertung liegen
+ausschließlich auf dem Gerät. Kein Konto, keine Registrierung, keine
+Telemetrie. Wer trotzdem synchronisieren will, stellt seinen eigenen Server
+dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 ## Features
 
