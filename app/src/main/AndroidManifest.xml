@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Fuer den Download der Routing-Kacheln (routing/SegmentDownloadWorker):
+         Ab Android 14 braucht ein Vordergrunddienst je Typ eine eigene
+         Berechtigung. „dataSync" ist der zutreffende Typ — es werden Nutzdaten
+         aus dem Netz geholt, bis zu 240 MB am Stueck, und das darf nicht nach
+         den zehn Minuten abbrechen, die WorkManager einer gewoehnlichen
+         Arbeit zugesteht. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- ACTIVITY_RECOGNITION bewusst NICHT deklariert: Trailscape zaehlt keine
          Schritte und erkennt keine Aktivitaeten selbst — das Aufzeichnen
@@ -119,6 +127,18 @@
             android:exported="false"
             android:foregroundServiceType="location"
             android:stopWithTask="false" />
+
+        <!-- Kein eigener Dienst, sondern eine Ergaenzung an dem, den
+             WorkManager selbst mitbringt: Ab Android 14 muss der Typ eines
+             Vordergrunddienstes im Manifest stehen, und WorkManagers eigene
+             Deklaration nennt keinen. Ohne diese Zeile wirft
+             `setForeground()` im SegmentDownloadWorker eine
+             MissingForegroundServiceTypeException. `tools:node="merge"`
+             ergaenzt das vorhandene Element, statt ein zweites anzulegen. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 
     <queries>

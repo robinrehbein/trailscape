@@ -30,10 +30,12 @@ import kotlin.math.roundToLong
  * veraenderlich, Fehler kommen als `IllegalArgumentException` mit englischem
  * Freitext, und beim Fork fuer c:geo mussten Klassen bereits umbenannt
  * werden. Wanderte das quer durch die App, muesste bei jedem Engine-Update
- * an vielen Stellen nachgezogen werden. Diese Datei ist deshalb die **einzige**
- * Stelle im Projekt, die `btools.*` ueberhaupt sieht (`:core` bindet `:brouter`
- * als `implementation` ein, nicht als `api`) — der Schaden eines
- * Upstream-Umbaus bleibt lokal.
+ * an vielen Stellen nachgezogen werden. `btools.*` ist deshalb ausserhalb von
+ * `:core` ueberhaupt nicht sichtbar (`:core` bindet `:brouter` als
+ * `implementation` ein, nicht als `api`), und innerhalb von `:core` beruehren
+ * es genau zwei Dateien: diese hier fuer das Routing und `SegmentDelta.kt`
+ * fuer den Umgang mit dem Kachelformat. Der Schaden eines Upstream-Umbaus
+ * bleibt damit lokal.
  *
  * ## Warum liegt das in `:core` und nicht in einem eigenen `:routing`-Modul?
  *
@@ -120,12 +122,6 @@ private const val MAX_ENGINE_TEXT_CHARS = 200
  */
 private const val NODE_CACHE_MB = 64
 
-/**
- * Rasterweite der BRouter-Kacheln in Grad. Fest im Dateiformat verankert
- * (`NodesCache.fileForSegment`), keine Einstellung.
- */
-private const val SEGMENT_GRID_DEG = 5
-
 // ---------------------------------------------------------------------------
 // Koordinaten-Kodierung
 // ---------------------------------------------------------------------------
@@ -147,11 +143,12 @@ internal fun encodeLat(lat: Double): Int = ((lat + 90.0) * 1_000_000.0).roundToL
  * Der Dateiname der Kachel, in der [lat]/[lon] liegt — z. B. `E10_N50.rd5`.
  *
  * BRouter benennt Kacheln nach ihrer **Suedwestecke** in einem 5°×5°-Raster
- * und legt sie flach in das Segmentverzeichnis. Nachgebildet aus
- * `NodesCache.fileForSegment`; oeffentlich, weil die spaetere
- * Kachelverwaltung genau diese Zuordnung braucht (welche Kachel muss fuer
- * eine geplante Route da sein?) und weil sie sich so ohne Kacheldatei testen
- * laesst.
+ * ([segmentGridDeg]) und legt sie flach in das Segmentverzeichnis.
+ * Nachgebildet aus `NodesCache.fileForSegment`; oeffentlich, weil die
+ * Kachelverwaltung genau diese Zuordnung braucht (welche Kachel muss fuer eine
+ * geplante Route da sein?) und weil sie sich so ohne Kacheldatei testen
+ * laesst. Die Gegenrichtung — vom Namen zurueck zur Flaeche — steht in
+ * `RoutingSegments.kt` ([parseSegmentTile]).
  */
 fun segmentFileName(lat: Double, lon: Double): String {
     // Wie in BRouter: erst in die immer positive Mikrograd-Darstellung, dann
@@ -160,8 +157,8 @@ fun segmentFileName(lat: Double, lon: Double): String {
     // lich des Aequators in die richtige Richtung geht.
     val lonDegree = floor(lon + 180.0).toInt()
     val latDegree = floor(lat + 90.0).toInt()
-    val lonSw = lonDegree - 180 - lonDegree.mod(SEGMENT_GRID_DEG)
-    val latSw = latDegree - 90 - latDegree.mod(SEGMENT_GRID_DEG)
+    val lonSw = lonDegree - 180 - lonDegree.mod(segmentGridDeg)
+    val latSw = latDegree - 90 - latDegree.mod(segmentGridDeg)
     val lonPart = if (lonSw < 0) "W${-lonSw}" else "E$lonSw"
     val latPart = if (latSw < 0) "S${-latSw}" else "N$latSw"
     return "${lonPart}_$latPart.rd5"
