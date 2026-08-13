@@ -3,6 +3,7 @@ package de.trailscape.app.data
 import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
 import de.trailscape.app.health.HealthConnectGateway
+import de.trailscape.app.reminder.ReminderStore
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.app.update.runNumberFromVersionCode
 import de.trailscape.core.HealthGateway
@@ -33,7 +34,8 @@ import kotlinx.coroutines.SupervisorJob
  * `AppServices.httpClient`, `AppServices.keyValueStore`,
  * `AppServices.healthSyncStore`, `AppServices.trainingPlanStore`,
  * `AppServices.healthGateway`, `AppServices.healthSyncService`,
- * `AppServices.updateChecker`, `AppServices.appScope`.
+ * `AppServices.updateChecker`, `AppServices.reminderStore`,
+ * `AppServices.appScope`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -74,6 +76,14 @@ object AppServices {
 
     /** Implementierung von `:core`s [TrainingPlanStore]. */
     val trainingPlanStore: TrainingPlanStore by lazy { PrefsTrainingPlanStore(prefs) }
+
+    /**
+     * Einstellungen und Meldestand der lokalen Erinnerungen (siehe
+     * [de.trailscape.app.reminder.ReminderScheduler]). Liegt auf demselben
+     * [keyValueStore] wie Profil und Kartenstil — die Erinnerungen bringen
+     * keinen eigenen Speicher mit.
+     */
+    val reminderStore: ReminderStore by lazy { ReminderStore(keyValueStore) }
 
     /** Implementierung von `:core`s [HttpClient] (BRouter-Routing, Geocoding, Selfhost-Sync). */
     val httpClient: HttpClient by lazy { OkHttpClientAdapter() }

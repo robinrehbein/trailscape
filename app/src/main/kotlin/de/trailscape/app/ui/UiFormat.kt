@@ -5,6 +5,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -43,6 +44,19 @@ val dateTimeFormat: DateTimeFormatter =
  */
 val weekdayDateFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMANY)
+
+/**
+ * Uhrzeit ohne Datum, z. B. `07:00` — fuer die eingestellten Weckzeiten der
+ * Erinnerungen (`ui/more/ReminderCard.kt`). 24-Stunden-Form wie im uebrigen
+ * Deutsch der App, unabhaengig von der Geraeteeinstellung: Die Zahl steht
+ * neben deutschem Fliesstext und soll nicht mal mit, mal ohne „AM/PM"
+ * auftauchen.
+ */
+val timeFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("HH:mm", Locale.GERMANY)
+
+/** Formatiert eine Uhrzeit als `HH:mm`. */
+fun formatTime(time: LocalTime): String = timeFormat.format(time)
 
 /** Formatiert einen Epoch-Millisekunden-Zeitstempel als `dd.MM.yyyy`. */
 fun formatDate(epochMs: Long): String = dateFormatFull.format(localOfEpochMs(epochMs))

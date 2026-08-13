@@ -126,6 +126,17 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.navigation:navigation-compose:2.9.8")
 
+    // Geplante Hintergrundarbeit fuer die lokalen Erinnerungen
+    // (`reminder/ReminderScheduler.kt`) — bis dahin hatte die App gar keine.
+    // WorkManager statt `AlarmManager`: Es ueberlebt Neustart und
+    // Prozess-Tod von sich aus (eigene Datenbank plus BOOT_COMPLETED-Empfaenger
+    // in der Bibliothek) und braucht keine Berechtigung fuer exakte Alarme —
+    // die Erinnerungen duerfen ein paar Minuten spaeter kommen. Die
+    // `-ktx`-Variante wegen `PeriodicWorkRequestBuilder<T>()` und
+    // `CoroutineWorker`. 2.11.2 ist die neueste stabile Version (2.12.x steht
+    // erst im RC) und loest gegen AGP 9.0.1 / compileSdk 36 konfliktfrei auf.
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+
     // Kartendarstellung (Vektor-/Rasterkacheln, OpenGL). Bewusst die 11.x-Reihe:
     // Sie ist die letzte Serie mit der etablierten `org.maplibre.android.*`-API,
     // auf der die gesamte oeffentliche Dokumentation beruht — 12.x/13.x bringen

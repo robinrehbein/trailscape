@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.reminder.ReminderStore
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.HealthConnection
@@ -13,6 +14,7 @@ import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
+import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RouteTarget
@@ -104,6 +106,8 @@ class AppViewModel(
     private val rideStorage: RideStorage = AppServices.rideStorage,
     private val keyValueStore: KeyValueStore = AppServices.keyValueStore,
     private val trainingPlanStore: TrainingPlanStore = AppServices.trainingPlanStore,
+    /** Einstellungen der lokalen Erinnerungen (siehe [reminderSettings]). */
+    private val reminderStore: ReminderStore = AppServices.reminderStore,
     /**
      * Zugriff auf Health Connect. Der Mehr-Screen benutzt ihn fuer Status,
      * Verbindungsaufbau und manuellen Sync direkt — genau wie in Dart
@@ -651,6 +655,37 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Erinnerungen
+    // -------------------------------------------------------------------------
+
+    private val _reminderSettings = MutableStateFlow(ReminderSettings())
+
+    /**
+     * Einstellungen der lokalen Erinnerungen — drei Schalter und zwei
+     * Uhrzeiten, ab Werk alle aus (siehe [ReminderSettings]). Gelesen wird der
+     * Wert von der Karte im Mehr-Tab; der Hintergrundlauf liest ihn
+     * unabhaengig davon direkt aus dem Speicher, weil er ohne ViewModel laeuft.
+     */
+    val reminderSettings: StateFlow<ReminderSettings> = _reminderSettings.asStateFlow()
+
+    /**
+     * Uebernimmt geaenderte Erinnerungs-Einstellungen und speichert sie.
+     *
+     * Den **Zeitplan** stellt diese Methode bewusst nicht um: Dafuer braucht
+     * es einen `Context` (WorkManager), den das ViewModel nicht hat und nicht
+     * haben soll. Die Karte im Mehr-Tab ruft direkt im Anschluss
+     * `ReminderScheduler.reschedule(context, settings)` mit **demselben**
+     * Wert auf — dadurch haengt die Neuplanung nicht davon ab, ob dieses
+     * Speichern schon durch ist.
+     */
+    fun setReminderSettings(settings: ReminderSettings) {
+        _reminderSettings.value = settings
+        viewModelScope.launch {
+            withContext(io) { runCatching { reminderStore.writeSettings(settings) } }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Kartenstil
     // -------------------------------------------------------------------------
 
@@ -806,12 +841,14 @@ class AppViewModel(
                     onboardingSeen = runCatching {
                         keyValueStore.getString(ONBOARDING_STORAGE_KEY) != null
                     }.getOrDefault(true),
+                    reminderSettings = reminderStore.readSettings(),
                 )
             }
             _profile.value = restored.profile
             _plan.value = restored.plan
             _mapStyle.value = restored.mapStyle
             _syncConfig.value = restored.syncConfig
+            _reminderSettings.value = restored.reminderSettings
             // Erst hier, nicht als Startwert: siehe KDoc von [onboardingVisible].
             // Bei einem Lesefehler gilt die Einfuehrung als gesehen — lieber
             // einmal zu wenig zeigen als bei jedem Start erneut.
@@ -832,6 +869,7 @@ class AppViewModel(
         val mapStyle: MapStyle,
         val syncConfig: SyncConfig?,
         val onboardingSeen: Boolean,
+        val reminderSettings: ReminderSettings,
     )
 }
 

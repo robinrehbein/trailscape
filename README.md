@@ -71,6 +71,17 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Performance-Management-Chart (Fitness, Ermüdung, Form) über die Trainingslast
 - Tagesempfehlung („Readiness") aus Ruhepuls, HRV (rMSSD) und Schlaf
 
+**Erinnerungen** (optional, standardmäßig alle aus)
+- **Tageseinheit** morgens zur eingestellten Uhrzeit (Vorgabe 7:00): was heute
+  ansteht — an Ruhetagen der Hinweis darauf, ohne Trainingsplan gar nichts
+- **Wochenrückblick** sonntagabends (Vorgabe 18:00): gefahrene gegen geplante
+  Kilometer der laufenden Woche
+- **Anstupser** nach fünf Tagen ohne Aufzeichnung, höchstens einmal pro Woche
+- Jeder Anlass einzeln abschaltbar unter **Mehr → Erinnerungen**. Ein einziger
+  täglicher Hintergrundlauf (WorkManager) entscheidet beim Auslösen, was fällig
+  ist; die Meldungen entstehen vollständig auf dem Gerät — kein Push-Server,
+  kein Konto, kein Netzzugriff. Antippen öffnet den „Heute"-Tab
+
 **Gesundheitsdaten**
 - Anbindung an Health Connect (dorthin spiegelt Samsung Health die
   Watch-Daten): Import von Trainingseinheiten samt Route, Herzfrequenz,
@@ -86,7 +97,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 601 Unit-Tests hängen hier |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 642 Unit-Tests hängen hier |
 | `:app` | Android: Compose/Material-3-Oberfläche (fünf Tabs — Heute, Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
@@ -136,7 +147,7 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 601 Tests des Domänenmodells
+./gradlew :core:test              # 642 Tests des Domänenmodells
 ./gradlew :app:testDebugUnitTest  # Tests der plattformfreien :app-Teile
 ```
 
@@ -163,7 +174,8 @@ Jeder Push auf `main` baut die App und hängt sie an das GitHub-Release
 2. Installation aus unbekannten Quellen für den Browser erlauben
 3. Beim ersten Start die Berechtigungen erteilen:
    - **Standort** — „Immer erlauben" für die Aufzeichnung im Hintergrund
-   - **Benachrichtigungen** — für die Aufzeichnungs-Anzeige
+   - **Benachrichtigungen** — für die Aufzeichnungs-Anzeige und, falls
+     eingeschaltet, für die Erinnerungen
    - **Health Connect** — optional, nur für die Gesundheitsdaten
 
 Ein Update ist derselbe Weg: APK laden, öffnen, drüber installieren.
