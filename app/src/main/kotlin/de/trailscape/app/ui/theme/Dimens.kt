@@ -3,7 +3,7 @@ package de.trailscape.app.ui.theme
 import androidx.compose.ui.unit.dp
 
 /**
- * Das Raster, an das sich alle vier Tabs halten.
+ * Das Raster, an das sich alle Tabs halten.
  *
  * Vorher hatte jeder Screen sein eigenes Mass: der Touren-Tab 12 dp Rand und
  * 8 dp Abstand, Training und Mehr 16 dp/16 dp, die Karten-Panels teils

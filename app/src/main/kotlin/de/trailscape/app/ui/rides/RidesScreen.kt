@@ -249,6 +249,19 @@ fun RidesScreen(appViewModel: AppViewModel) {
         }
     }
 
+    // Von der Startseite angetippte Tour direkt aufschlagen, statt den Nutzer
+    // dieselbe Tour in der Liste noch einmal suchen zu lassen. Erst quittieren,
+    // wenn die Tour wirklich vorliegt — beim Kaltstart ist die Liste im ersten
+    // Durchlauf noch leer.
+    val requestedDetail by appViewModel.pendingRideDetail.collectAsStateWithLifecycle()
+    LaunchedEffect(requestedDetail, rides) {
+        val wanted = requestedDetail ?: return@LaunchedEffect
+        if (rides.any { it.id == wanted }) {
+            detailRideId = wanted
+            appViewModel.consumeRideDetailRequest()
+        }
+    }
+
     // Teilen liegt als lokale Funktion vor, damit Liste und Detailansicht
     // nachweislich denselben Weg nehmen (siehe [shareGpx] am Dateiende).
     fun share(ride: Ride) {

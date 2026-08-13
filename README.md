@@ -27,6 +27,11 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 ## Features
 
+**Heute** (Startseite)
+- Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
+  dafür eine passende Rundstrecke generiert
+- Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
+
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
   nach dem Wegwischen der App aus den Recents weiter
@@ -38,6 +43,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 **Touren**
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
+- Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
+  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben
 - Umbenennen, Löschen, als GPX teilen, GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
@@ -79,8 +86,8 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 461 Unit-Tests hängen hier |
-| `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 586 Unit-Tests hängen hier |
+| `:app` | Android: Compose/Material-3-Oberfläche (fünf Tabs — Heute, Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
 
@@ -94,7 +101,7 @@ Weitere Bausteine:
 - **Speicherung** — eine JSON-Datei pro Tour unter `<filesDir>/rides/`,
   Einstellungen und Trainingsprofil in den SharedPreferences.
 - **Zustand** — ein ViewModel im Activity-Scope (`ui/AppViewModel.kt`), das
-  alle vier Tabs teilen; der Aufzeichnungszustand kommt aus dem
+  alle Tabs teilen; der Aufzeichnungszustand kommt aus dem
   `RecordingRepository` direkt vom Service.
 - `server/` enthält den optionalen Sync-Server, `tool/` das Skript zum
   Erzeugen des App-Icons aus einer Quellgrafik.
@@ -129,7 +136,7 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 461 Tests des Domänenmodells
+./gradlew :core:test              # 586 Tests des Domänenmodells
 ./gradlew :app:testDebugUnitTest  # Tests der plattformfreien :app-Teile
 ```
 

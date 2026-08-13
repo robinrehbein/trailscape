@@ -439,6 +439,36 @@ fun currentWeekIndex(plan: TrainingPlan, now: Long? = null): Int {
     return weeks.size - 1
 }
 
+/**
+ * Die fuer **heute** geplanten Einheiten — leer, wenn heute ein Ruhetag ist.
+ *
+ * Ergaenzung fuer die Startseite „Heute" (`ui/today/TodayScreen.kt`), die genau
+ * eine Frage beantworten muss: „Was steht heute an?". Die Zuordnung
+ * Zeitpunkt → Wochentagskuerzel liegt bewusst hier und nicht in der
+ * Oberflaeche: [TrainingSession.day] traegt die Kuerzel „Mo"…„So", die
+ * [generatePlan] aus derselben privaten Tabelle erzeugt. Ein zweites,
+ * handgeschriebenes Kuerzel-Mapping im UI wuerde beim naechsten Sprachwechsel
+ * oder Umbenennen lautlos auseinanderlaufen.
+ *
+ * Ausserhalb der Planlaufzeit ist die Liste leer: Vor Planbeginn liefert
+ * [currentWeekIndex] `-1`, nach Planende klemmt es auf die letzte Woche — deren
+ * Einheiten liegen dann aber in der Vergangenheit und sind kein Tagesprogramm
+ * mehr. Beides wird hier abgefangen.
+ */
+fun sessionsForDay(plan: TrainingPlan, now: Long? = null): List<TrainingSession> {
+    val nowMs = now ?: System.currentTimeMillis()
+    val index = currentWeekIndex(plan, nowMs)
+    if (index < 0) {
+        return emptyList()
+    }
+    val week = plan.weeks.getOrNull(index) ?: return emptyList()
+    if (nowMs < week.start || nowMs >= week.end) {
+        return emptyList()
+    }
+    val day = weekdays[weekdayIndex(nowMs)]
+    return week.sessions.filter { it.day == day }
+}
+
 /** Summiert die tatsaechlich gefahrenen Kilometer im Zeitraum [start, end). */
 fun weekKm(week: TrainingWeek, rides: List<Ride>): Double {
     var total = 0.0

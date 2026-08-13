@@ -142,7 +142,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
 
     // Ohne `contentWindowInsets`-Angabe: Die Einfuehrung laeuft ausserhalb der
     // Navigationshuelle, hier soll das Scaffold die System-Insets also mit
-    // seiner Vorgabe selbst aufloesen (in den vier Tabs macht das die Huelle).
+    // seiner Vorgabe selbst aufloesen (in den Tabs macht das die Huelle).
     Scaffold { innerPadding ->
         Box(
             modifier = Modifier
