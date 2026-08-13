@@ -91,3 +91,32 @@ fun formatKmDe(km: Double): String = formatKm(km).replace('.', ',')
 
 /** Eine Zahl mit einer Nachkommastelle, deutsch — z. B. Geschwindigkeit in km/h. */
 fun formatOneDecimalDe(value: Double): String = formatDecimalDe(value, 1)
+
+/**
+ * Eine Dateigroesse in der groessten passenden Einheit, deutsch —
+ * `119,4 MB`, `1,3 GB`, `640 KB`.
+ *
+ * Stand frueher als `formatOfflineRegionSize` privat in `OfflineMapsCard.kt`.
+ * Seit die Offline-Routingdaten (`OfflineRoutingCard.kt`) ebenfalls Groessen
+ * anzeigen, gaebe es sonst zwei Formatierer fuer dieselbe Frage — und zwei
+ * Gelegenheiten, dass die App an einer Stelle „119.4 MB" und an der anderen
+ * „119,4 MB" schreibt.
+ *
+ * **1024er-Schritte** wie bisher (also MiB/GiB, benannt als MB/GB): Das ist
+ * die Rechnung, mit der auch Android in seinen Speichereinstellungen arbeitet,
+ * und die Zahl soll neben der des Systems nicht abweichen.
+ *
+ * `null` oder Werte `<= 0` ergeben „Größe unbekannt" — die ehrliche Auskunft
+ * dort, wo eine Groesse nicht zu ermitteln war.
+ */
+fun formatBytes(bytes: Long?): String {
+    if (bytes == null || bytes <= 0L) return "Größe unbekannt"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1 -> String.format(Locale.GERMANY, "%.1f GB", gb)
+        mb >= 1 -> String.format(Locale.GERMANY, "%.1f MB", mb)
+        else -> String.format(Locale.GERMANY, "%.0f KB", kb)
+    }
+}

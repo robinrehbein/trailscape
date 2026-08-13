@@ -18,6 +18,87 @@ val releaseKeystore = releaseKeystorePath
     ?.let { rootProject.file(it) }
     ?.takeIf { it.isFile }
 
+// ---------------------------------------------------------------------------
+// BRouter-Beipack: Merkmalstabelle und Routing-Profile fuer die Berechnung auf
+// dem Geraet
+// ---------------------------------------------------------------------------
+//
+// Beides kommt aus dem auf v1.7.10 gepinnten Submodul `third_party/brouter`
+// und wird beim Bauen in die Assets kopiert — dieselbe Haltung wie im Modul
+// `:brouter`, dessen `sourceSets` direkt in das Submodul zeigen: **eine**
+// Wahrheit, der Upstream-Commit.
+//
+// Vorher lag `lookups.dat` als eingecheckte Kopie unter `src/main/assets/`.
+// Sie war zwar byte-identisch, aber niemand haette es gemerkt, wenn ein
+// Submodul-Update sie veraendert haette — und eine Merkmalstabelle, die nicht
+// zur Engine passt, ist genau die Sorte Fehler, die erst auf dem Geraet
+// auffliegt. Jetzt kann sie per Konstruktion nicht auseinanderlaufen.
+//
+// Welche Profile gebraucht werden, entscheidet `:core`
+// (`offlineBrouterProfile`); ein `:core`-Test prueft, dass jeder dort genannte
+// Name im Submodul wirklich existiert. **Wer dort einen Fahrmodus ergaenzt,
+// traegt den Dateinamen auch hier ein** — vergisst er es, faellt dieser Modus
+// still auf den Server zurueck, statt den Bau zu brechen (siehe das
+// `runCatching` in `routing/OfflineFirstPlanner.kt`).
+//
+// `gravel.brf` steht bewusst NICHT in dieser Liste: Es liegt seit der
+// Server-Zeit als `GRAVEL_BRF` in `:core` (von dort wird es auch auf
+// brouter.de hochgeladen) und wird von `data/OfflineRoutingFiles.kt` aus
+// dieser einen Konstante herausgeschrieben.
+val brouterProfilesDir = rootProject.file("third_party/brouter/misc/profiles2")
+val brouterAssetNames = listOf("lookups.dat", "trekking.brf", "fastbike.brf", "shortest.brf")
+
+// Ein Klon ohne `--recurse-submodules` haette hier nichts. Die App liesse sich
+// dann bauen und braeche erst beim ersten Offline-Routing ab — genau wie in
+// `:brouter` deshalb frueh und mit dem noetigen Befehl abbrechen.
+require(brouterAssetNames.all { File(brouterProfilesDir, it).isFile }) {
+    "Das BRouter-Submodul fehlt oder ist unvollstaendig. Einmalig nachholen mit:\n" +
+        "    git submodule update --init third_party/brouter"
+}
+
+/**
+ * Kopiert das Beipack in ein Unterverzeichnis `brouter/` der Assets.
+ *
+ * Eine eigene Task-Klasse statt eines schlichten `Copy`, weil AGP 9 generierte
+ * Quellverzeichnisse nur noch ueber die Variant-API annimmt
+ * (`addGeneratedSourceDirectory`) — und die verlangt eine Task mit einer
+ * `DirectoryProperty` als Ausgabe. Der Gewinn: Die Abhaengigkeit zum
+ * Zusammenfuehren der Assets traegt Gradle selbst ein, statt dass sie per
+ * `dependsOn` auf einen geratenen Task-Namen haengt.
+ */
+abstract class StageBrouterAssets : DefaultTask() {
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val sourceFiles: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun stage() {
+        val target = outputDir.get().dir("brouter").asFile
+        target.deleteRecursively()
+        target.mkdirs()
+        sourceFiles.forEach { file -> file.copyTo(File(target, file.name), overwrite = true) }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        // Je Variante eine eigene Task: `addGeneratedSourceDirectory` nimmt
+        // eine Task-Ausgabe genau einmal entgegen.
+        val stage = tasks.register<StageBrouterAssets>(
+            "stage${variant.name.replaceFirstChar { it.uppercase() }}BrouterAssets",
+        ) {
+            description =
+                "Kopiert lookups.dat und die Offline-Routing-Profile aus dem BRouter-Submodul."
+            sourceFiles.from(brouterAssetNames.map { File(brouterProfilesDir, it) })
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(stage, StageBrouterAssets::outputDir)
+    }
+}
+
 android {
     namespace = "de.trailscape.app"
     compileSdk = 36

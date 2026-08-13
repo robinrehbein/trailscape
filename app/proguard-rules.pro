@@ -42,11 +42,9 @@
 # `de.trailscape.core.routeOffline` und darf, was nicht gebraucht wird,
 # entfernen.
 #
-# Solange `:app` `routeOffline` noch gar nicht aufruft (die Kachelverwaltung
-# und die Oberflaeche dazu fehlen noch), entfernt R8 die Engine folgerichtig
-# fast vollstaendig — das APK waechst dann nur um die beiden Assets. Gemessen:
-# mit einem vollen `-keep class btools.** { *; }` waeren es rund 121 KB.
-# Sobald es einen echten Aufrufer gibt, holt R8 sich das von selbst.
+# Seit der Planungs-Screen ueber `de.trailscape.core.routeOfflineFirst` einen
+# echten Aufrufer hat, zieht R8 die Rechenkette der Engine von selbst ins APK;
+# die drei Regeln unten sind der Teil, den es nicht sehen kann.
 -keep class btools.router.StdModel { <init>(); }
 -keep class btools.router.KinematicModel { <init>(); }
 -keep class btools.router.KinematicNoCostModel { <init>(); }

@@ -62,10 +62,13 @@ import kotlin.math.roundToLong
  * (App-Speicher, SD-Karte, Testverzeichnis), weiss nur der Aufrufer.
  *
  * Auch kein Aufteilen langer Strecken in Teilanfragen wie in [planRouteLegs]:
- * Das ist ausschliesslich ein Gegenmittel gegen den Watchdog des geteilten
- * Servers. Lokal gibt es keinen Watchdog; eine lange Strecke darf einfach
- * lange rechnen (gemessen auf dem Entwicklungsrechner, einkernig: 23 km in
- * rund 1,6 s, 88 km in rund 4,4 s, Spitzenverbrauch im Heap unter 60 MB).
+ * [routeOffline] ist der **eine** Engine-Aufruf und nimmt die Wegpunkte, die
+ * es bekommt (gemessen auf dem Entwicklungsrechner, einkernig: 23 km in rund
+ * 1,6 s, 88 km in rund 4,4 s, Spitzenverbrauch im Heap unter 60 MB). Ob eine
+ * lange Strecke in Etappen zerlegt wird, entscheidet die Ebene darueber —
+ * [routeOfflineLegs] in `OfflineFirstRouting.kt`, und zwar **genauso wie der
+ * Serverweg**, damit dieselben Wegpunkte offline und online dieselbe Strecke
+ * ergeben (Begruendung dort).
  */
 
 /**

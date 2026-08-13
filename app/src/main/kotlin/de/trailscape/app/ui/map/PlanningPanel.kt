@@ -172,9 +172,12 @@ internal fun PlanningCard(
     error: String?,
     maxHeight: Dp,
     /**
-     * Fortschrittstext, wenn die Route wegen weit auseinanderliegender
-     * Wegpunkte in mehreren Server-Anfragen berechnet wird (siehe
-     * `Routing.kt`). `null`, solange es bei einer Anfrage bleibt.
+     * Rueckmeldung waehrend der Berechnung — entweder weil die Route in
+     * mehrere Etappen zerlegt wurde (siehe `Routing.kt`) oder weil **auf dem
+     * Geraet** gerechnet wird, was spuerbar dauert (siehe
+     * `planProgressText` in `MapScreen.kt`). `null`, wenn es nichts zu sagen
+     * gibt: eine kurze Route ueber den Server ist schneller da als der Text
+     * gelesen waere.
      */
     progress: String? = null,
     /**

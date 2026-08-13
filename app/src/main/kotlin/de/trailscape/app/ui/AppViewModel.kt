@@ -1,11 +1,16 @@
 package de.trailscape.app.ui
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderStore
+import de.trailscape.app.routing.SegmentDownloads
+import de.trailscape.app.routing.SegmentOffer
+import de.trailscape.app.routing.SegmentSettings
+import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.HealthConnection
@@ -108,6 +113,11 @@ class AppViewModel(
     private val trainingPlanStore: TrainingPlanStore = AppServices.trainingPlanStore,
     /** Einstellungen der lokalen Erinnerungen (siehe [reminderSettings]). */
     private val reminderStore: ReminderStore = AppServices.reminderStore,
+    /**
+     * „Nur über WLAN laden?" fuer die Offline-Routingdaten (siehe
+     * [segmentUnmeteredOnly]).
+     */
+    private val segmentSettings: SegmentSettings = AppServices.segmentSettings,
     /**
      * Zugriff auf Health Connect. Der Mehr-Screen benutzt ihn fuer Status,
      * Verbindungsaufbau und manuellen Sync direkt — genau wie in Dart
@@ -705,6 +715,120 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Offline-Routingdaten (Kacheln)
+    // -------------------------------------------------------------------------
+
+    private val _segmentUnmeteredOnly = MutableStateFlow(true)
+
+    /**
+     * „Kacheln nur über WLAN laden?" — die eine Einstellung der
+     * Kachelverwaltung (siehe
+     * [de.trailscape.app.routing.SegmentSettings]). Vorgabe ist die schonende
+     * Antwort `true`.
+     */
+    val segmentUnmeteredOnly: StateFlow<Boolean> = _segmentUnmeteredOnly.asStateFlow()
+
+    /** Setzt die WLAN-Einstellung und merkt sie sich. */
+    fun setSegmentUnmeteredOnly(value: Boolean) {
+        _segmentUnmeteredOnly.value = value
+        viewModelScope.launch {
+            withContext(io) { runCatching { segmentSettings.unmeteredOnly = value } }
+        }
+    }
+
+    private val _segmentOffer = MutableStateFlow<SegmentOffer?>(null)
+
+    /**
+     * Das offene Download-Angebot fuer Kacheln, die einer geplanten Route
+     * fehlen — `null`, wenn gerade keins ansteht.
+     *
+     * ## Warum das ein Angebot ist und keine Fehlermeldung
+     * Die Planung laeuft in diesem Fall ueber den Server ganz normal weiter
+     * (siehe `de.trailscape.core.routeOfflineFirst`). Der Nutzer hat also
+     * kein Problem, das er loesen muesste — er hat die **Gelegenheit**, das
+     * naechste Mal schneller und ohne Netz zu routen. Deshalb ein Dialog mit
+     * Namen und Groesse und nicht die rote Zeile der Planung, und deshalb
+     * blockiert er nichts.
+     */
+    val segmentOffer: StateFlow<SegmentOffer?> = _segmentOffer.asStateFlow()
+
+    /**
+     * Kachelmengen, fuer die in dieser Sitzung schon einmal gefragt wurde.
+     *
+     * Ohne das Gedaechtnis kaeme der Dialog bei **jedem** gesetzten Wegpunkt
+     * wieder — die Planung rechnet nach jeder Aenderung neu. Wer einmal „Nicht
+     * jetzt" gesagt hat, wird fuer dieselbe Gegend nicht noch einmal gefragt;
+     * beim naechsten App-Start schon, denn dann kann die Antwort anders
+     * ausfallen (anderes Netz, anderer Plan).
+     */
+    private val askedSegmentOffers = mutableSetOf<Set<String>>()
+
+    /**
+     * Bietet die fehlenden Kacheln [fileNames] zum Laden an — mit Namen und
+     * echter Groesse (`HEAD`, siehe
+     * [de.trailscape.app.routing.describeSegmentOffer]).
+     *
+     * Still, wenn die Liste leer ist, dieselbe Gegend schon abgelehnt wurde,
+     * gerade ein anderes Angebot offen steht oder der Server keine Groesse
+     * liefert: Ein Angebot ohne Preisschild waere schlechter als keins.
+     */
+    fun offerMissingSegments(fileNames: List<String>) {
+        if (fileNames.isEmpty()) return
+        val key = fileNames.toSet()
+        if (key in askedSegmentOffers || _segmentOffer.value != null) return
+        askedSegmentOffers.add(key)
+        viewModelScope.launch {
+            _segmentOffer.value = runCatching { describeSegmentOffer(fileNames) }.getOrNull()
+        }
+    }
+
+    /** Schliesst das Angebot, ohne zu laden. */
+    fun dismissSegmentOffer() {
+        _segmentOffer.value = null
+    }
+
+    /**
+     * Nimmt das offene Angebot an und reiht die Kacheln in den
+     * Hintergrund-Download ein.
+     *
+     * [context] kommt von der Aufrufstelle, weil der Rest dieses ViewModels
+     * ohne Android-Context auskommt und das so bleiben soll — nur WorkManager
+     * braucht einen.
+     */
+    fun acceptSegmentOffer(context: Context) {
+        val offer = _segmentOffer.value ?: return
+        _segmentOffer.value = null
+        downloadSegments(context, offer.fileNames)
+    }
+
+    /**
+     * Reiht Kacheln in den Hintergrund-Download ein — der eine Weg dorthin,
+     * egal ob er vom Angebot der Planung oder aus der Verwaltung im Mehr-Tab
+     * kommt. Nur so gilt die WLAN-Einstellung ueberall gleich und die
+     * Rueckmeldung lautet ueberall gleich.
+     */
+    fun downloadSegments(context: Context, fileNames: List<String>) {
+        if (fileNames.isEmpty()) return
+        viewModelScope.launch {
+            val started = withContext(io) {
+                SegmentDownloads.enqueue(
+                    context = context,
+                    fileNames = fileNames,
+                    unmeteredOnly = _segmentUnmeteredOnly.value,
+                )
+            }
+            showMessage(
+                when {
+                    !started -> "Die Kartendaten konnten nicht eingereiht werden."
+                    _segmentUnmeteredOnly.value ->
+                        "Kartendaten werden geladen, sobald WLAN da ist."
+                    else -> "Kartendaten werden geladen."
+                },
+            )
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Selfhost-Sync
     // -------------------------------------------------------------------------
 
@@ -842,6 +966,8 @@ class AppViewModel(
                         keyValueStore.getString(ONBOARDING_STORAGE_KEY) != null
                     }.getOrDefault(true),
                     reminderSettings = reminderStore.readSettings(),
+                    segmentUnmeteredOnly = runCatching { segmentSettings.unmeteredOnly }
+                        .getOrDefault(true),
                 )
             }
             _profile.value = restored.profile
@@ -849,6 +975,7 @@ class AppViewModel(
             _mapStyle.value = restored.mapStyle
             _syncConfig.value = restored.syncConfig
             _reminderSettings.value = restored.reminderSettings
+            _segmentUnmeteredOnly.value = restored.segmentUnmeteredOnly
             // Erst hier, nicht als Startwert: siehe KDoc von [onboardingVisible].
             // Bei einem Lesefehler gilt die Einfuehrung als gesehen — lieber
             // einmal zu wenig zeigen als bei jedem Start erneut.
@@ -870,6 +997,7 @@ class AppViewModel(
         val syncConfig: SyncConfig?,
         val onboardingSeen: Boolean,
         val reminderSettings: ReminderSettings,
+        val segmentUnmeteredOnly: Boolean,
     )
 }
 

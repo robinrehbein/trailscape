@@ -31,8 +31,9 @@ import de.trailscape.app.ui.theme.ScreenPadding
 /**
  * „Mehr"-Tab — Port von `lib/screens/more_screen.dart`.
  *
- * Acht Themenkarten untereinander: Profil, Daten & Backup, Samsung Health,
- * Erinnerungen, Kartenstil, Offline-Karten, Sync (Selfhost) und Über. Jede
+ * Neun Themenkarten untereinander: Profil, Daten & Backup, Samsung Health,
+ * Erinnerungen, Kartenstil, Offline-Karten, Karten für Offline-Routing,
+ * Sync (Selfhost) und Über. Jede
  * Karte ist eine eigene, in sich geschlossene Datei in diesem Paket — siehe
  * deren KDoc fuer Details und (falls vorhanden) bewusste Abweichungen vom
  * Dart-Original.
@@ -133,6 +134,11 @@ fun MoreScreen(appViewModel: AppViewModel) {
                 item { ReminderCard(appViewModel) }
                 item { MapStyleCard(appViewModel) }
                 item { OfflineMapsCard(onMessage = appViewModel::showMessage) }
+                // Direkt hinter den Offline-Karten: Beide speichern „Karten",
+                // meinen aber Verschiedenes (Bild gegen Wegedaten). Nebeneinander
+                // ist der Unterschied eine Frage von zwei Zeilen Text; getrennt
+                // waere er ein Missverstaendnis (siehe OfflineRoutingCard.kt).
+                item { OfflineRoutingCard(appViewModel) }
                 item { SyncCard(appViewModel) }
                 item { AboutCard(appViewModel) }
             }

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -57,6 +58,8 @@ import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
+import de.trailscape.app.routing.planRouteOfflineFirst
+import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.CardPadding
@@ -69,12 +72,11 @@ import de.trailscape.core.PlannedRoute
 import de.trailscape.core.Ride
 import de.trailscape.core.RouteNavigator
 import de.trailscape.core.RouteProfile
+import de.trailscape.core.RoutingSource
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
-import de.trailscape.core.brouterProfile
 import de.trailscape.core.buildGpx
 import de.trailscape.core.computeStats
-import de.trailscape.core.fetchRoute
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import java.io.File
@@ -170,6 +172,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     val generation by RouteGenerationController.state.collectAsStateWithLifecycle()
     val pendingRouteTarget by appViewModel.pendingRouteTarget.collectAsStateWithLifecycle()
 
+    // Das offene Download-Angebot fuer fehlende Routing-Kacheln (siehe
+    // AppViewModel.segmentOffer). Liegt dort und nicht hier, damit es einen
+    // Tab-Wechsel uebersteht und nicht bei jedem Wegpunkt neu entsteht.
+    val segmentOffer by appViewModel.segmentOffer.collectAsStateWithLifecycle()
+
     // ---------------------------------------------------- Zustand des Screens
     var locationGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     var planning by rememberSaveable { mutableStateOf(false) }
@@ -179,10 +186,18 @@ fun MapScreen(appViewModel: AppViewModel) {
     var planBusy by remember { mutableStateOf(false) }
     var planError by remember { mutableStateOf<String?>(null) }
 
-    // Fortschritt bei weit auseinanderliegenden Wegpunkten: `fetchRoute` zerlegt
-    // solche Routen in mehrere Server-Anfragen (siehe `Routing.kt`), was spuerbar
-    // dauert. Bei nur einem Teilstueck bleibt die Anzeige leer.
+    // Rueckmeldung waehrend der Berechnung. Zwei Gruende, warum sie noetig ist:
+    // Weit auseinanderliegende Wegpunkte werden in mehrere Etappen zerlegt
+    // (siehe `Routing.kt`), und die Berechnung **auf dem Geraet** dauert
+    // spuerbar (Sekunden bis Minuten). Bei einer kurzen Route ueber den Server
+    // bleibt die Anzeige wie bisher leer.
     var planProgress by remember { mutableStateOf<String?>(null) }
+
+    // Woher die gerade laufende Berechnung kommt — `null`, solange keine
+    // laeuft. Steht getrennt vom Fortschrittstext, weil die Quelle **vor** dem
+    // ersten Fortschrittsruf feststeht und sich nach einem lokalen Fehlschlag
+    // noch aendern kann.
+    var planSource by remember { mutableStateOf<RoutingSource?>(null) }
 
     // Ob [plannedRoute] aus dem Rundkurs-Generator stammt statt aus gesetzten
     // Wegpunkten. Der Generator bringt eine fertige Route ohne Wegpunkte mit —
@@ -408,23 +423,35 @@ fun MapScreen(appViewModel: AppViewModel) {
         planBusy = true
         planError = null
         planProgress = null
-        val result = withContext(Dispatchers.IO) {
-            runCatching {
-                fetchRoute(
-                    waypoints = waypoints,
-                    profileId = brouterProfile(routeProfile),
-                    client = AppServices.httpClient,
-                    onProgress = { done, total ->
-                        // Nur melden, wenn wirklich zerlegt wurde.
-                        planProgress = if (total > 1) "Teilstrecke $done von $total …" else null
-                    },
-                )
-            }
+
+        // Entprellen, bevor ueberhaupt gerechnet wird. Wer drei Wegpunkte
+        // hintereinander setzt, loest sonst drei Berechnungen aus — und die
+        // lokale ist blockierend und **nicht abbrechbar** (siehe
+        // `routing/OfflineFirstPlanner.kt`), die zweite wuerde also hinter der
+        // ersten in der Engine-Sperre warten. Diese kurze Pause bricht mit der
+        // Coroutine ab und verhindert das zuverlaessig; fuer den Serverweg ist
+        // sie ein willkommener Nebeneffekt weniger Anfragen.
+        delay(PLAN_DEBOUNCE_MS)
+
+        val result = runCatching {
+            planRouteOfflineFirst(
+                context = context,
+                waypoints = waypoints,
+                profile = routeProfile,
+                onSource = { source -> planSource = source },
+                onProgress = { done, total ->
+                    planProgress = planProgressText(planSource, done, total)
+                },
+            )
         }
         result
-            .onSuccess {
-                plannedRoute = it
+            .onSuccess { outcome ->
+                plannedRoute = outcome.route
                 planError = null
+                // Kein Fehler, sondern eine Gelegenheit: Die Route ist da (ueber
+                // den Server), koennte beim naechsten Mal aber lokal und
+                // schneller entstehen. Das Angebot blockiert nichts.
+                appViewModel.offerMissingSegments(outcome.missingSegmentFiles)
             }
             .onFailure {
                 // Wegpunkte bleiben stehen, damit es sich erneut versuchen laesst.
@@ -434,6 +461,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             }
         planBusy = false
         planProgress = null
+        planSource = null
     }
 
     // --------------------------------------------------------------- Ortssuche
@@ -1079,6 +1107,32 @@ fun MapScreen(appViewModel: AppViewModel) {
         )
     }
 
+    // Fehlende Kartendaten: ein Angebot, keine Fehlermeldung. Die Route liegt
+    // in diesem Moment schon vor (ueber den Server berechnet) — hier geht es
+    // nur darum, ob das naechste Mal ohne Netz und schneller gehen soll.
+    segmentOffer?.let { offer ->
+        AlertDialog(
+            onDismissRequest = appViewModel::dismissSegmentOffer,
+            icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
+            title = { Text("Karten für Offline-Routing") },
+            text = {
+                Text(
+                    "Für diese Gegend fehlen die Kartendaten: ${offer.title}, " +
+                        "${formatBytes(offer.totalBytes)}. Danach berechnet die App Routen " +
+                        "hier ohne Netz — meist schneller als über den Server.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { appViewModel.acceptSegmentOffer(context) }) {
+                    Text("Jetzt laden")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = appViewModel::dismissSegmentOffer) { Text("Nicht jetzt") }
+            },
+        )
+    }
+
     deleteDialogRide?.let { ride ->
         AlertDialog(
             onDismissRequest = { deleteDialogRide = null },
@@ -1287,6 +1341,33 @@ private suspend fun shareGpxFile(context: Context, name: String, points: List<Tr
 private fun newRideId(): String {
     val suffix = Random.nextInt(0x1000000).toString(36)
     return "${System.currentTimeMillis()}-$suffix"
+}
+
+/**
+ * Wartezeit, bevor eine Aenderung an den Wegpunkten wirklich gerechnet wird.
+ *
+ * Kurz genug, um nicht als Verzoegerung aufzufallen, lang genug, damit zwei
+ * schnell hintereinander gesetzte Wegpunkte nur **eine** Berechnung ausloesen.
+ * Das ist beim Offline-Routing kein Komfort, sondern noetig: Die lokale
+ * Rechnung blockiert ihren Thread und laesst sich nicht abbrechen.
+ */
+private const val PLAN_DEBOUNCE_MS = 250L
+
+/**
+ * Der Fortschrittstext der Planung — oder `null`, wenn es nichts zu sagen gibt.
+ *
+ * Beim Serverweg bleibt es wie bisher still, solange die Route in einem Stueck
+ * berechnet wird; die Wartezeit ist kurz und die Meldung waere Laerm. Wird
+ * dagegen **auf dem Geraet** gerechnet, sagt die App das immer: Es dauert
+ * spuerbar laenger, und ohne Rueckmeldung saehe es nach einer haengenden App
+ * aus statt nach einer arbeitenden.
+ */
+private fun planProgressText(source: RoutingSource?, done: Int, total: Int): String? = when {
+    source == RoutingSource.OFFLINE && total > 1 ->
+        "Auf dem Gerät: Teilstrecke ${(done + 1).coerceAtMost(total)} von $total …"
+    source == RoutingSource.OFFLINE -> "Berechne auf dem Gerät …"
+    total > 1 -> "Teilstrecke $done von $total …"
+    else -> null
 }
 
 /** Trefferradius fuer das Tippen auf einen Wegpunkt (Bildschirmpixel). */
