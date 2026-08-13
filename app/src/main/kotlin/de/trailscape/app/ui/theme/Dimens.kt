@@ -40,3 +40,20 @@ val OverlayScreenPadding = 12.dp
 
 /** Abstand zwischen zwei schwebenden Bedienflaechen (Karten-Tab). */
 val OverlayGap = 8.dp
+
+/**
+ * Hoehe der beiden Bedienflaechen im Fahrmodus (Pause/Weiter und Beenden).
+ *
+ * Deutlich ueber der Material-Untergrenze von 48 dp und ueber den 40 dp der
+ * uebrigen Knoepfe der App: Getroffen wird hier mit Handschuh, aus der Bewegung
+ * und ohne hinzusehen. Wer diese Zahl senkt, macht den Modus wertlos — sie ist
+ * sein eigentlicher Zweck.
+ */
+val RideModeActionHeight = 88.dp
+
+/**
+ * Hoehe des Rueckwegs zur Karte im Fahrmodus. Kleiner als
+ * [RideModeActionHeight], weil er im Fahren nicht gebraucht wird — aber
+ * immer noch weit ueber einem Symbolknopf, damit er im Stand sicher trifft.
+ */
+val RideModeExitHeight = 56.dp
