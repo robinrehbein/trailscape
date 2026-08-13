@@ -3,6 +3,7 @@ package de.trailscape.app.ui.rides
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -108,9 +109,23 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * Tourenliste — Port von `lib/screens/rides_screen.dart`.
  *
  * Kann: alle gespeicherten Touren anzeigen (Name, Datum, Distanz, Dauer,
- * Hoehenmeter, Ø-Puls, Trainingslast), eine Tour auswaehlen (und damit auf der
- * Karte oeffnen), umbenennen, loeschen und als GPX teilen sowie eine
- * GPX-Datei importieren.
+ * Hoehenmeter, Ø-Puls, Trainingslast), eine Tour oeffnen, umbenennen, loeschen
+ * und als GPX teilen sowie eine GPX-Datei importieren.
+ *
+ * ## Detailansicht statt Sprung auf die Karte
+ * Ein Tipp auf eine Tour oeffnet [RideDetailScreen] — Karte, vollstaendige
+ * Kennzahlen, Hoehen-/Tempo-/Pulsverlauf und Auswertung. Vorher sprang derselbe
+ * Tipp unmittelbar in den Karten-Tab; dieser Weg ist nicht verschwunden, er
+ * liegt jetzt eine Ebene tiefer in der Detailansicht („Auf der Karte öffnen").
+ *
+ * Die Detailansicht ist bewusst **kein** eigenes Navigationsziel, sondern ein
+ * Zustand dieses Screens: Die angetippte Tour-ID steht in einem
+ * `rememberSaveable`, ein [BackHandler] fuehrt zurueck zur Liste. So bleibt
+ * `ui/TrailscapeApp.kt` (gemeinsames Fundament aller Screens) unberuehrt, und
+ * die `LazyColumn` behaelt beim Zurueckgehen ihren Scrollzustand. Umbenennen,
+ * Teilen und Loeschen sind fuer Liste und Detail **dieselben** Aufrufe — die
+ * beiden Dialoge und die Undo-Snackbar liegen deshalb hier, ausserhalb der
+ * Fallunterscheidung.
  *
  * Bewusst anders als das Flutter-Original:
  *  * **Karten statt `ListTile` + `Dismissible`.** Das Wischen zum Loeschen war
@@ -176,6 +191,14 @@ fun RidesScreen(appViewModel: AppViewModel) {
     var renameTarget by remember { mutableStateOf<Ride?>(null) }
     var deleteTarget by remember { mutableStateOf<Ride?>(null) }
 
+    // Die in der Detailansicht geoeffnete Tour. Bewusst die ID und nicht das
+    // [Ride]: Nach einem Umbenennen oder einem HF-Merge aus Health Connect
+    // liefert [AppViewModel.rides] ein neues Objekt — ueber die ID zeigt die
+    // Ansicht immer auf den aktuellen Stand. `rememberSaveable`, damit sie ein
+    // Drehen des Geraets ueberlebt.
+    var detailRideId by rememberSaveable { mutableStateOf<String?>(null) }
+    val detailRide = rides.firstOrNull { it.id == detailRideId }
+
     // Anzeige-Coroutine der aktuellen Undo-Snackbar (siehe Klassen-KDoc oben).
     // Ueberschreibt sich selbst bei jeder neuen Loeschung — `Job.cancel()` auf
     // die vorige laesst deren Snackbar sofort verschwinden, statt sie
@@ -218,110 +241,133 @@ fun RidesScreen(appViewModel: AppViewModel) {
         }
     }
 
-    Scaffold(
-        // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
-        // aufgeloest und als Padding an den NavHost gegeben — hier duerfen sie
-        // kein zweites Mal aufschlagen.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = { Text("Touren") },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
-                icon = {
-                    if (importing) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    } else {
-                        Icon(Icons.Filled.Add, contentDescription = null)
-                    }
-                },
-                text = { Text("Tour importieren") },
-            )
-        },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            when {
-                loading && rides.isEmpty() -> Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    CircularProgressIndicator()
-                }
+    // Verschwindet die geoeffnete Tour aus der Liste, ohne dass hier geloescht
+    // wurde (etwa durch einen Sync), schliesst sich die Detailansicht selbst.
+    LaunchedEffect(rides) {
+        if (detailRideId != null && rides.none { it.id == detailRideId }) {
+            detailRideId = null
+        }
+    }
 
-                // Gleiche Breitendeckelung und dasselbe 16-dp-Raster wie im
-                // Trainings- und Mehr-Tab; vorher stand die Liste hier ohne
-                // Deckelung mit 12-dp-Rand und 8-dp-Abstand.
-                rides.isEmpty() -> Box(
-                    modifier = Modifier
-                        .widthIn(max = ContentMaxWidth)
-                        .fillMaxWidth()
-                        .padding(ScreenPadding),
-                ) {
-                    RidesEmptyState(
-                        onRecord = { appViewModel.requestTab(AppTab.MAP) },
-                        onImportFile = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
-                        onOpenBackup = { appViewModel.requestTab(AppTab.MORE) },
-                    )
-                }
+    // Teilen liegt als lokale Funktion vor, damit Liste und Detailansicht
+    // nachweislich denselben Weg nehmen (siehe [shareGpx] am Dateiende).
+    fun share(ride: Ride) {
+        scope.launch {
+            try {
+                shareGpx(context, ride)
+            } catch (e: Exception) {
+                appViewModel.showMessage("Teilen fehlgeschlagen: ${e.message}")
+            }
+        }
+    }
 
-                else -> LazyColumn(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .widthIn(max = ContentMaxWidth)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(
-                        start = ScreenPadding,
-                        end = ScreenPadding,
-                        top = ScreenPadding,
-                        // Platz, damit der schwebende Knopf die letzte Karte nicht verdeckt.
-                        bottom = ScreenPadding + 80.dp,
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(CardGap),
-                ) {
-                    items(items = rides, key = { it.id }) { ride ->
-                        val load = insights.rideLoads[ride.id]
-                        val loadText = if (load != null && load.available) {
-                            "Last ${load.load.roundToInt()} · " +
-                                loadSourceShortLabels[load.source].orEmpty()
+    if (detailRide != null) {
+        // Die Systemzurueckgeste fuehrt aus dem Detail zurueck in die Liste,
+        // nicht aus dem Tab heraus.
+        BackHandler { detailRideId = null }
+
+        RideDetailScreen(
+            ride = detailRide,
+            appViewModel = appViewModel,
+            snackbarHostState = snackbarHostState,
+            onBack = { detailRideId = null },
+            onRename = { renameTarget = detailRide },
+            onShare = { share(detailRide) },
+            onDelete = { deleteTarget = detailRide },
+        )
+    } else {
+        Scaffold(
+            // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
+            // aufgeloest und als Padding an den NavHost gegeben — hier duerfen sie
+            // kein zweites Mal aufschlagen.
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                TopAppBar(
+                    title = { Text("Touren") },
+                    windowInsets = WindowInsets(0, 0, 0, 0),
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    onClick = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
+                    icon = {
+                        if (importing) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp),
+                            )
                         } else {
-                            null
+                            Icon(Icons.Filled.Add, contentDescription = null)
                         }
+                    },
+                    text = { Text("Tour importieren") },
+                )
+            },
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                when {
+                    loading && rides.isEmpty() -> Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
 
-                        RideCard(
-                            ride = ride,
-                            loadText = loadText,
-                            selected = ride.id == selectedId,
-                            onClick = {
-                                appViewModel.select(ride.id)
-                                appViewModel.requestTab(AppTab.MAP)
-                            },
-                            onRename = { renameTarget = ride },
-                            onShare = {
-                                scope.launch {
-                                    try {
-                                        shareGpx(context, ride)
-                                    } catch (e: Exception) {
-                                        appViewModel.showMessage(
-                                            "Teilen fehlgeschlagen: ${e.message}",
-                                        )
-                                    }
-                                }
-                            },
-                            onDelete = { deleteTarget = ride },
+                    // Gleiche Breitendeckelung und dasselbe 16-dp-Raster wie im
+                    // Trainings- und Mehr-Tab; vorher stand die Liste hier ohne
+                    // Deckelung mit 12-dp-Rand und 8-dp-Abstand.
+                    rides.isEmpty() -> Box(
+                        modifier = Modifier
+                            .widthIn(max = ContentMaxWidth)
+                            .fillMaxWidth()
+                            .padding(ScreenPadding),
+                    ) {
+                        RidesEmptyState(
+                            onRecord = { appViewModel.requestTab(AppTab.MAP) },
+                            onImportFile = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
+                            onOpenBackup = { appViewModel.requestTab(AppTab.MORE) },
                         )
+                    }
+
+                    else -> LazyColumn(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .widthIn(max = ContentMaxWidth)
+                            .fillMaxWidth(),
+                        contentPadding = PaddingValues(
+                            start = ScreenPadding,
+                            end = ScreenPadding,
+                            top = ScreenPadding,
+                            // Platz, damit der schwebende Knopf die letzte Karte nicht verdeckt.
+                            bottom = ScreenPadding + 80.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(CardGap),
+                    ) {
+                        items(items = rides, key = { it.id }) { ride ->
+                            val load = insights.rideLoads[ride.id]
+                            val loadText = if (load != null && load.available) {
+                                "Last ${load.load.roundToInt()} · " +
+                                    loadSourceShortLabels[load.source].orEmpty()
+                            } else {
+                                null
+                            }
+
+                            RideCard(
+                                ride = ride,
+                                loadText = loadText,
+                                selected = ride.id == selectedId,
+                                onClick = { detailRideId = ride.id },
+                                onRename = { renameTarget = ride },
+                                onShare = { share(ride) },
+                                onDelete = { deleteTarget = ride },
+                            )
+                        }
                     }
                 }
             }
@@ -348,6 +394,11 @@ fun RidesScreen(appViewModel: AppViewModel) {
                 TextButton(
                     onClick = {
                         deleteTarget = null
+                        // Die Detailansicht der geloeschten Tour muss zu sein,
+                        // bevor die Undo-Snackbar erscheint — und sie darf sich
+                        // bei „Rückgängig" auch nicht wieder oeffnen, deshalb
+                        // hier ausdruecklich und nicht nur abgeleitet.
+                        if (detailRideId == ride.id) detailRideId = null
                         undoSnackbarJob?.cancel()
                         appViewModel.deleteRideWithUndo(ride.id)
                         undoSnackbarJob = scope.launch {
@@ -538,7 +589,8 @@ private fun RidesEmptyState(
         title = "Noch keine Touren",
         body = "Hier sammeln sich alle Touren — aufgezeichnete wie importierte — mit " +
             "Distanz, Dauer, Höhenmetern, Ø-Puls und der berechneten Trainingslast. " +
-            "Ein Tipp auf eine Tour öffnet sie auf der Karte.",
+            "Ein Tipp auf eine Tour zeigt sie im Detail — mit Karte, Höhenprofil " +
+            "und Verläufen.",
         hint = "Ein ganzer Strava- oder Garmin-Export lässt sich als ZIP-Archiv auf " +
             "einmal einlesen — unter Mehr → Daten & Backup.",
         actions = {

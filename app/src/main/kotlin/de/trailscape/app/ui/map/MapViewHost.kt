@@ -77,6 +77,7 @@ internal fun MapViewHost(
     locationEnabled: Boolean,
     onMapTap: (Double, Double) -> Unit,
     modifier: Modifier = Modifier,
+    gesturesEnabled: Boolean = true,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -184,6 +185,7 @@ internal fun MapViewHost(
                     // beim Zwei-Finger-Zoom.
                     isTiltGesturesEnabled = false
                 }
+                setzeGesten(map, gesturesEnabled)
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(savedLat, savedLon))
                     .zoom(savedZoom)
@@ -206,6 +208,36 @@ internal fun MapViewHost(
 
     LaunchedEffect(controller, locationEnabled) {
         controller.setLocationEnabled(context, locationEnabled)
+    }
+
+    // Auch nachtraeglich anwenden: Die `factory` laeuft nur einmal und haelt
+    // damit den Wert vom ersten Aufbau fest.
+    LaunchedEffect(mapView, gesturesEnabled) {
+        mapView.getMapAsync { setzeGesten(it, gesturesEnabled) }
+    }
+}
+
+/**
+ * Schaltet die Kartengesten an der Karte selbst ab, statt sie mit einem
+ * unsichtbaren Beruehrungsfaenger zu ueberdecken.
+ *
+ * Gebraucht wird das in der Tourendetailansicht: Dort sitzt eine Karte fester
+ * Hoehe in einer scrollbaren Seite und wuerde jeden senkrechten Wisch als
+ * Kartenverschiebung schlucken. Ein daruebergelegter Faenger wuerde
+ * funktionieren, verliesse sich aber darauf, wie Compose unverbrauchte
+ * Beruehrungen an eine eingebettete Android-View weiterreicht — eine feine
+ * Regel, die sich mit einer Bibliotheksversion aendern kann. Der Schalter in
+ * MapLibre ist dagegen eindeutig.
+ *
+ * Neigen bleibt unabhaengig davon immer aus (siehe `isTiltGesturesEnabled`).
+ */
+private fun setzeGesten(map: MapLibreMap, erlaubt: Boolean) {
+    map.uiSettings.apply {
+        isScrollGesturesEnabled = erlaubt
+        isZoomGesturesEnabled = erlaubt
+        isRotateGesturesEnabled = erlaubt
+        isDoubleTapGesturesEnabled = erlaubt
+        isQuickZoomGesturesEnabled = erlaubt
     }
 }
 
