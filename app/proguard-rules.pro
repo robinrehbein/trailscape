@@ -25,3 +25,28 @@
 # Build-Workflow als Artefakt sichert.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# BRouters Wegemodelle werden per Reflexion geladen.
+#
+# Ein Routing-Profil (`*.brf`) darf mit `---model:btools.router.KinematicModel`
+# vorgeben, welches Kostenmodell die Engine benutzt;
+# `RoutingContext.setModel` holt die Klasse dann ueber `Class.forName`. Fuer
+# R8 sieht diese Klasse damit unbenutzt aus — sie wuerde entfernt, und die
+# Engine braeche zur Laufzeit mit "Cannot create path-model" ab. Das
+# mitgelieferte Gravel-Profil kommt zwar mit der Voreinstellung `StdModel`
+# aus, aber die Profile sind Daten und koennen sich aendern, ohne dass
+# jemandem einfaellt, hier nachzuziehen.
+#
+# Bewusst nur die drei Modellklassen und nicht `btools.**`: alles Uebrige
+# erreicht R8 ueber die gewoehnliche Aufrufkette ab
+# `de.trailscape.core.routeOffline` und darf, was nicht gebraucht wird,
+# entfernen.
+#
+# Solange `:app` `routeOffline` noch gar nicht aufruft (die Kachelverwaltung
+# und die Oberflaeche dazu fehlen noch), entfernt R8 die Engine folgerichtig
+# fast vollstaendig — das APK waechst dann nur um die beiden Assets. Gemessen:
+# mit einem vollen `-keep class btools.** { *; }` waeren es rund 121 KB.
+# Sobald es einen echten Aufrufer gibt, holt R8 sich das von selbst.
+-keep class btools.router.StdModel { <init>(); }
+-keep class btools.router.KinematicModel { <init>(); }
+-keep class btools.router.KinematicNoCostModel { <init>(); }

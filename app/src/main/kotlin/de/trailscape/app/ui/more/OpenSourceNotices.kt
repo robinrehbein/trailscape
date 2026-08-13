@@ -14,6 +14,15 @@ package de.trailscape.app.ui.more
  * Die Angaben sind gegen die jeweiligen Projekt-Repositories geprueft (Stand:
  * August 2026). Die Kachel-Attributionen stammen aus dem Stil-Katalog
  * (`ui/MapStyles.kt`) und muessen zu dem passen, was die Karte einblendet.
+ *
+ * ## Copyright-Vermerke
+ *
+ * Bei Lizenzen, die den Copyright-Vermerk ausdruecklich verlangen (MIT, BSD),
+ * steht er hier direkt im [LicenseNotice.license]-Text — der wird angezeigt,
+ * ein zusaetzliches Feld waere es nicht. Der vollstaendige Lizenztext von
+ * BRouter liegt ausserdem unveraendert als Datei im APK
+ * (`assets/licenses/brouter-MIT.txt`), womit die MIT-Auflage erfuellt ist,
+ * ihn „in allen Kopien der Software" mitzuliefern.
  */
 
 /** Ein Eintrag der Lizenzliste: Komponente, Lizenz, Herkunft. */
@@ -48,6 +57,16 @@ val libraryNotices: List<LicenseNotice> = listOf(
         name = "OkHttp (Square)",
         license = "Apache 2.0",
         url = "https://github.com/square/okhttp",
+    ),
+    // Die Routing-Engine steckt seit dem Offline-Routing im APK selbst (Modul
+    // `:brouter`, gebaut aus dem Submodul `third_party/brouter` auf Tag
+    // v1.7.10). MIT verlangt Lizenztext UND Copyright-Vermerk in jeder Kopie
+    // — beides ist hier: der Vermerk im angezeigten Text, der volle
+    // Lizenztext als `assets/licenses/brouter-MIT.txt`.
+    LicenseNotice(
+        name = "BRouter-Routing-Engine (im Gerät rechnend)",
+        license = "MIT — Copyright (c) 2019 BRouter contributors",
+        url = "https://github.com/abrensch/brouter",
     ),
 )
 
@@ -91,6 +110,15 @@ val dataNotices: List<LicenseNotice> = listOf(
         name = "Routing: BRouter (Dienst brouter.de)",
         license = "MIT",
         url = "https://github.com/abrensch/brouter",
+    ),
+    // Die Routing-Kacheln (*.rd5), die die Engine auf dem Gerät liest, sind
+    // aus OpenStreetMap abgeleitete Daten und stehen damit unter derselben
+    // ODbL wie die Kartenkacheln — eigener Eintrag, weil sie aus einer
+    // anderen Quelle kommen als die Darstellungskacheln darüber.
+    LicenseNotice(
+        name = "Offline-Routingdaten (BRouter-Segmente): © OpenStreetMap-Mitwirkende",
+        license = "ODbL 1.0",
+        url = "https://www.openstreetmap.org/copyright",
     ),
     LicenseNotice(
         name = "Ortssuche: Nominatim (OpenStreetMap Foundation)",
