@@ -66,8 +66,8 @@ android {
     buildTypes {
         release {
             // R8 in der Voll-Optimierung: entfernt ungenutzten Code (vor allem
-            // die grossen Bibliotheken MapLibre, Health Connect und
-            // play-services, von denen die App jeweils nur einen Ausschnitt
+            // die grossen Bibliotheken MapLibre und Health Connect, von denen
+            // die App jeweils nur einen Ausschnitt
             // benutzt) und danach die Ressourcen, auf die kein Code mehr
             // zeigt. Die noetigen Ausnahmen stehen in proguard-rules.pro.
             isMinifyEnabled = true
@@ -160,11 +160,23 @@ dependencies {
     // gegen compileSdk 36 / AGP 9.0.1 konfliktfrei auf.
     implementation("androidx.health.connect:connect-client:1.1.0")
 
-    // Fused Location Provider fuer den Aufzeichnungs-Service (record/).
-    implementation("com.google.android.gms:play-services-location:21.4.0")
-    // play-services-location zieht transitiv androidx.fragment 1.1.0 herein;
-    // ohne diese Anhebung schlaegt lintVitalRelease an (InvalidFragmentVersionForActivityResult).
-    implementation("androidx.fragment:fragment:1.8.6")
+    // Kein Standortdienst als Abhaengigkeit: Aufzeichnung (record/) und
+    // Karten-Screen (ui/map/) sitzen direkt auf Androids
+    // `android.location.LocationManager`. Bis dahin hing hier
+    // `com.google.android.gms:play-services-location`, das proprietaer ist und
+    // unter Googles SDK-Lizenz steht — in einer Anwendung unter GPL-3.0 ein
+    // echter Lizenzkonflikt. Der Ausbau kostet keine Bibliothek als Ersatz;
+    // was er kostet, steht als Begruendung an
+    // `RecordingService.requestUpdates`. MapLibre bringt seinen eigenen
+    // Standortpunkt schon immer ohne Google-Dienste durch (siehe
+    // `MapController.setLocationEnabled`).
+    //
+    // Die frueher noetige Anhebung auf androidx.fragment 1.8.6 ist damit
+    // ebenfalls weg: Sie stand nur da, weil play-services-base transitiv
+    // fragment 1.1.0 hereinzog und lintVitalRelease daran mit
+    // InvalidFragmentVersionForActivityResult anschlug. Die kleinste jetzt
+    // noch im Klassenpfad landende Version kommt von MapLibre (1.8.2) und
+    // liegt weit ueber der Schwelle dieser Regel.
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

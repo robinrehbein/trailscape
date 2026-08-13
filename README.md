@@ -86,7 +86,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 586 Unit-Tests hängen hier |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 601 Unit-Tests hängen hier |
 | `:app` | Android: Compose/Material-3-Oberfläche (fünf Tabs — Heute, Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
@@ -136,7 +136,7 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 586 Tests des Domänenmodells
+./gradlew :core:test              # 601 Tests des Domänenmodells
 ./gradlew :app:testDebugUnitTest  # Tests der plattformfreien :app-Teile
 ```
 
@@ -255,13 +255,16 @@ Abo weiterverkauft, und sie ist die üblichste Lizenz für eine spätere Aufnahm
 bei F-Droid.
 
 Die Lizenzen der verwendeten Bibliotheken und Datenquellen (MapLibre,
-AndroidX/Compose, Kotlin, OkHttp, Google Play services, OpenStreetMap, CARTO,
-CyclOSM, OpenTopoMap, Esri, BRouter, Nominatim) stehen in der App unter
+AndroidX/Compose, Kotlin, OkHttp, OpenStreetMap, CARTO, CyclOSM, OpenTopoMap,
+Esri, BRouter, Nominatim) stehen in der App unter
 **Mehr → Über → Open-Source-Lizenzen** und im Quelltext in
 [`app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt`](app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt).
 
-> **Hinweis zur Kombination mit Google Play services:** `play-services-location`
-> ist proprietär und steht unter Googles SDK-Lizenz. Für eine Weitergabe durch
-> Dritte unter der GPL wäre entweder eine Ausnahmeklausel dafür nötig oder ein
-> Umstieg auf Androids `LocationManager` — siehe
-> [Issue-Tracker](https://github.com/robinrehbein/trailscape/issues).
+**Keine proprietären Abhängigkeiten.** Trailscape kam früher mit
+`com.google.android.gms:play-services-location` — proprietär, unter Googles
+SDK-Lizenz und damit im Konflikt mit der GPL, unter der die App steht. Diese
+Abhängigkeit ist entfernt: Aufzeichnung und Karten-Screen sitzen jetzt direkt
+auf Androids eigenem `android.location.LocationManager`, MapLibres
+Standortpunkt tat das ohnehin schon. Im Release-Klassenpfad landet kein
+`com.google.android.gms`-Artefakt mehr; alles, was die App mitbringt, steht
+unter einer freien Lizenz.

@@ -529,6 +529,27 @@ internal class MapController {
     /**
      * Schaltet den Standortpunkt an oder aus. Ohne Berechtigung passiert
      * nichts — die Karte bleibt benutzbar, nur ohne eigenen Punkt.
+     *
+     * ## Woher der Standortpunkt seine Positionen bezieht
+     * Ueber `useDefaultLocationEngine(true)` weiter unten, und diese
+     * Voreinstellung ist nachgeprueft: In MapLibre 11.13.5 gibt
+     * `LocationEngineDefault.getDefaultLocationEngine(context)`
+     * bedingungslos eine `MapLibreFusedLocationEngineImpl` zurueck — es gibt
+     * dort keine Abfrage, ob Google Play services vorhanden sind, und im
+     * ganzen Artefakt keine einzige `com.google.android.gms`-Referenz. Jene
+     * Engine sitzt ihrerseits direkt auf [android.location.LocationManager]
+     * auf. Das ist der Unterschied zu Mapbox, von dem diese API abstammt:
+     * Dort waehlte `LocationEngineProvider.getBestLocationEngine()` zur
+     * Laufzeit den gebuendelten Google-Dienst, sobald er im Klassenpfad lag —
+     * MapLibre hat genau diese Weiche beim Fork entfernt.
+     *
+     * Fuer den Ausbau von `play-services-location` heisst das: Hier war
+     * nichts zu tun, und es geht dadurch auch nichts verloren. Anders als der
+     * Aufzeichnungsdienst mischt diese Engine allerdings `network` mit
+     * hinzu — fuer einen Standortpunkt auf der Karte ist das richtig (er soll
+     * auch in Gebaeuden ungefaehr stimmen), fuer eine Tour waere es das nicht.
+     * Der Punkt auf der Karte und die aufgezeichnete Spur duerfen deshalb
+     * sichtbar auseinanderliegen; die Spur ist die genauere von beiden.
      */
     fun setLocationEnabled(context: Context, enabled: Boolean) {
         locationWanted = enabled

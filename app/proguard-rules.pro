@@ -9,7 +9,7 @@
 #    keine @Serializable-Klasse, keinen generierten Serializer und damit auch
 #    keine Reflexion, die R8 uebersehen koennte. Die bekannten
 #    -keep-Regeln fuer @Serializable-Typen waeren hier reine Zierde.
-#  * MapLibre, OkHttp, Health Connect, play-services, AndroidX/Compose: alle
+#  * MapLibre, OkHttp, Health Connect, AndroidX/Compose: alle
 #    liefern ihre notwendigen Regeln als consumer-rules in der AAR/JAR mit,
 #    AGP bindet sie automatisch ein. Insbesondere haelt MapLibre selbst alles,
 #    was ueber JNI angesprochen wird, am Leben.

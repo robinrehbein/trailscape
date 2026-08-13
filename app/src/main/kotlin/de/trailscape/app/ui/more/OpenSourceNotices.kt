@@ -49,11 +49,6 @@ val libraryNotices: List<LicenseNotice> = listOf(
         license = "Apache 2.0",
         url = "https://github.com/square/okhttp",
     ),
-    LicenseNotice(
-        name = "Google Play services (Fused Location Provider)",
-        license = "proprietär — Android Software Development Kit License Agreement (Google)",
-        url = "https://developers.google.com/android/guides/opensource",
-    ),
 )
 
 /**
