@@ -115,7 +115,7 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // Die Erststart-Einfuehrung ist sonst unwiederbringlich weg, sobald
             // sie einmal weggeklickt wurde — und sie ist die einzige Stelle,
-            // die den Ueberblick ueber alle vier Tabs am Stueck gibt.
+            // die den Ueberblick ueber alle Tabs am Stueck gibt.
             TextButton(
                 onClick = { appViewModel.showOnboardingAgain() },
                 contentPadding = PaddingValues(0.dp),

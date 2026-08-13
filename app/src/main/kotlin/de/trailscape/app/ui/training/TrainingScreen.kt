@@ -34,17 +34,32 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.assessFitness
 import de.trailscape.core.routeTargetForSession
-import de.trailscape.core.routeTargetForToday
 
 /**
- * Trainings-Tab: Tagesempfehlung, Form-Kurve (CTL/ATL/TSB), Vitalwerte,
- * Wochenziel, Zielformular und Trainingsplan.
+ * Trainings-Tab: Form-Kurve (CTL/ATL/TSB), Vitalwerte, Wochenziel,
+ * Zielformular und Trainingsplan.
  *
  * Port von `lib/screens/training_screen.dart` (1.281 Zeilen). Die komplette
  * sportwissenschaftliche Auswertung liegt bereits fertig in
  * [AppViewModel.insights] ([de.trailscape.app.ui.TrainingInsights]); dieser
  * Screen ist reine Darstellung plus das Zielformular (Persistenz laeuft ueber
  * [AppViewModel.plan]/[AppViewModel.setPlan]).
+ *
+ * ## Die Tagesempfehlung ist umgezogen — vollstaendig
+ * Die Karte „Heute" (Readiness-Score, Empfehlung, Knopf „Passende Route
+ * planen") stand hier ganz oben und ist ersatzlos entfallen; sie ist jetzt die
+ * Startseite (`ui/today/TodayScreen.kt`). Bewusst **nicht** in reduzierter Form
+ * stehen geblieben: Zwei Orte, an denen derselbe Score und dieselbe Empfehlung
+ * stehen, waeren genau die Redundanz, wegen der bisher niemand wusste, wo die
+ * Tagesauskunft eigentlich zu Hause ist — und die Version hier war die, die
+ * kaum jemand gefunden hat. Die dazugehoerige Datei `ReadinessCard.kt` ist
+ * deshalb geloescht statt verwaist zurueckgelassen; ihre Ampelfarbe
+ * ([readinessBandColor], `TrainingColors.kt`) benutzt die Startseite weiter.
+ *
+ * Was hier bleibt, ist die Analyse dahinter: Die Einzelsignale, aus denen sich
+ * die Bereitschaft zusammensetzt, stehen unveraendert in [VitalsCard] — dort
+ * mit Messwert, Ampel und Begruendung, also genau in der Tiefe, fuer die man
+ * diesen Tab oeffnet.
  *
  * ## Leerzustand
  * Ohne eine einzige Tour sagte dieser Tab bisher in jeder Karte einzeln „noch
@@ -80,19 +95,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val assessment = remember(rides) { assessFitness(rides) }
-
-    // Routenziel der Tagesempfehlung: `null` an einem Ruhetag — dann gibt es
-    // auch keinen Knopf (siehe `:core`, `routeTargetForToday`). Das Wochenziel
-    // geht mit hinein, weil die Empfehlung „Grundlage" woertlich auf das
-    // Restbudget der Woche verweist.
-    val todayTarget = remember(insights, rides) {
-        routeTargetForToday(
-            recommendation = insights.recommendation,
-            profile = insights.profile,
-            recentRides = rides,
-            weeklyTarget = insights.weeklyTarget,
-        )
-    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
@@ -137,14 +139,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     }
                 }
 
-                item(key = "today") {
-                    ReadinessCard(
-                        insights = insights,
-                        onPlanRoute = todayTarget?.let { target ->
-                            { appViewModel.requestRouteGeneration(target) }
-                        },
-                    )
-                }
                 item(key = "form") { FormCard(insights) }
                 item(key = "week") {
                     WeekCard(insights, onOpenMore = { appViewModel.requestTab(AppTab.MORE) })

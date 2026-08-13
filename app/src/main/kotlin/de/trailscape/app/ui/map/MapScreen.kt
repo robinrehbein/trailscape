@@ -91,6 +91,11 @@ import kotlinx.coroutines.withContext
 /**
  * # Karte — Aufzeichnung, Planung, Navigation und Offline-Ausschnitte
  *
+ * Zur laufenden Aufzeichnung gehoert neben der Live-Leiste der **Fahrmodus**
+ * (`RideModeScreen.kt`): dieselben Werte, aber gross genug fuer den Blick aus
+ * einem Meter. Er haelt hier nur ein `Boolean` (`rideMode`) — Zustand,
+ * Kommandos und Navigationswerte bleiben die dieses Screens.
+ *
  * Port von `lib/screens/map_screen.dart` (2154 Zeilen) auf Compose und
  * MapLibre. Der Screen selbst haelt nur den *Bildschirmzustand* (Planungsmodus,
  * Wegpunkte, Suchtext, Navigationsziel, Downloadfortschritt); alles, was
@@ -200,6 +205,11 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     var liveAscentM by remember { mutableStateOf(0.0) }
     var hoverPoint by remember { mutableStateOf<TrackPoint?>(null) }
+
+    // Ob der Fahrmodus (`RideModeScreen.kt`) ueber der Karte liegt. Bewusst
+    // `rememberSaveable`: Eine Drehung am Lenker darf nicht dazu fuehren, dass
+    // die Fahrerin ploetzlich wieder die kleine Live-Leiste vor sich hat.
+    var rideMode by rememberSaveable { mutableStateOf(false) }
 
     var showStyleSheet by remember { mutableStateOf(false) }
     var saveRouteDialog by remember { mutableStateOf(false) }
@@ -350,6 +360,13 @@ fun MapScreen(appViewModel: AppViewModel) {
             minZoom = if (livePoints.size == 1) MIN_RECORDING_ZOOM else null,
             animate = false,
         )
+    }
+
+    // Der Fahrmodus ist nur eine andere Ansicht auf dieselbe Aufzeichnung —
+    // endet sie (auch ueber die Notification oder den Aufnahmeknopf), gibt es
+    // nichts mehr anzuzeigen, und er schliesst sich mit ihr.
+    LaunchedEffect(isRecording) {
+        if (!isRecording) rideMode = false
     }
 
     LaunchedEffect(livePoints.size) {
@@ -807,6 +824,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                 locationEnabled = locationGranted,
                 onMapTap = ::onMapTap,
                 modifier = Modifier.fillMaxSize(),
+                // Im Fahrmodus liegt die Karte vollstaendig verdeckt dahinter.
+                // Sie dann weiterzeichnen zu lassen waere ausgerechnet in dem
+                // Modus teuer, der fuer mehrstuendige Touren gedacht ist — und
+                // der ohnehin schon den Bildschirm anlaesst.
+                renderingActive = !rideMode,
             )
 
             // ------------------------------------------------------------ oben
@@ -975,6 +997,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         paused = isPaused,
                         onTogglePause = { RecordingRepository.togglePause() },
                         onStop = { RecordingRepository.stop() },
+                        onOpenRideMode = { rideMode = true },
                     )
 
                     ride != null -> RideCard(
@@ -1023,6 +1046,37 @@ fun MapScreen(appViewModel: AppViewModel) {
                 },
             )
         }
+    }
+
+    // ---------------------------------------------------------- Fahrmodus
+    // Liegt als eigenes Fenster ueber allem (siehe `RideModeScreen.kt`) und
+    // bekommt ausschliesslich fertige Werte: dieselben Aufzeichnungs-Flows wie
+    // die Live-Leiste und den Navigationszustand, den der Effekt oben aus dem
+    // `RouteNavigator` (`:core`) mitschreibt. Gerechnet wird dort nichts.
+    if (rideMode && isRecording) {
+        RideModeScreen(
+            speedKmh = speedKmh,
+            distanceKm = recordedKm,
+            elapsedS = (elapsedMs / 1000).toInt(),
+            ascentM = liveAscentM,
+            paused = isPaused,
+            navigation = navTarget?.let { target ->
+                RideModeNavigation(
+                    label = target.label,
+                    remainingKm = navState?.remainingKm ?: navTotalKm,
+                    offRoute = navState?.offRoute == true,
+                )
+            },
+            onTogglePause = { RecordingRepository.togglePause() },
+            onStop = {
+                // Zurueck auf die Karte: Nach dem Stopp waehlt das AppViewModel
+                // die gespeicherte Tour aus und meldet sie — das gehoert auf
+                // die Karte, nicht hinter eine leere Fahranzeige.
+                rideMode = false
+                RecordingRepository.stop()
+            },
+            onClose = { rideMode = false },
+        )
     }
 
     deleteDialogRide?.let { ride ->

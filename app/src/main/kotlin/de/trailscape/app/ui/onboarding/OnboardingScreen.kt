@@ -142,7 +142,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
 
     // Ohne `contentWindowInsets`-Angabe: Die Einfuehrung laeuft ausserhalb der
     // Navigationshuelle, hier soll das Scaffold die System-Insets also mit
-    // seiner Vorgabe selbst aufloesen (in den vier Tabs macht das die Huelle).
+    // seiner Vorgabe selbst aufloesen (in den Tabs macht das die Huelle).
     Scaffold { innerPadding ->
         Box(
             modifier = Modifier
@@ -268,12 +268,19 @@ private enum class OnboardingPage(
         eyebrow = "Willkommen",
         title = "Trailscape",
         paragraphs = listOf(
-            "Drei Dinge kann diese App: Touren aufzeichnen, Routen auf Schotter und " +
-                "Nebenwegen planen und aus deinen Fahrten ein Trainingsbild rechnen — " +
-                "Fitness, Ermüdung und eine Tagesempfehlung.",
-            "Unten führen vier Tabs dorthin: Karte (aufzeichnen und planen), Touren " +
-                "(alles Gefahrene), Training (die Auswertung) und Mehr (Profil, Import, " +
-                "Einstellungen).",
+            // Bewusst die Schleife statt einer Merkmalsliste: Aufzeichnen,
+            // Planen und Auswerten kann jede Konkurrenz einzeln auch. Was
+            // sonst niemand verbindet, ist der Weg von der Tagesempfehlung
+            // zur passenden Runde — und wenn der ersten Seite das nicht
+            // gelingt, findet der Nutzer die Funktion nie.
+            "Trailscape sagt dir, was du heute fahren solltest — und baut dir die Runde " +
+                "dazu. Aus deinen Fahrten entsteht ein Trainingsbild, daraus die " +
+                "Empfehlung für heute, und daraus auf Wunsch eine passende Rundstrecke " +
+                "über Schotter und Nebenwege, die wieder zu Hause endet. Wer eine Uhr " +
+                "trägt, bekommt Ruhepuls, HRV und Schlaf zusätzlich in die Rechnung.",
+            "Unten führen fünf Tabs dorthin: Heute (die Empfehlung), Karte (aufzeichnen " +
+                "und planen), Touren (alles Gefahrene), Training (Plan und Auswertung) " +
+                "und Mehr (Profil, Import, Einstellungen).",
             "Alles liegt auf deinem Gerät. Kein Konto, keine Anmeldung, keine Telemetrie. " +
                 "Ein eigener Sync-Server ist möglich, aber freiwillig.",
         ),

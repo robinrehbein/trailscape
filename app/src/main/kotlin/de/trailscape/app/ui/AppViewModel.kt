@@ -52,8 +52,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
-/** Die vier Hauptbereiche als navigierbarer Wert (siehe [AppViewModel.requestTab]). */
-enum class AppTab { MAP, RIDES, TRAINING, MORE }
+/**
+ * Die fuenf Hauptbereiche als navigierbarer Wert (siehe [AppViewModel.requestTab]).
+ *
+ * Reihenfolge wie in der Navigationsleiste (`ui/TrailscapeApp.kt`): [HOME] ist
+ * die Startseite „Heute" und damit der erste Tab.
+ */
+enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
 
 /**
  * Zentraler, geteilter App-Zustand — Kotlin-Port von `AppState` aus
@@ -223,6 +228,35 @@ class AppViewModel(
     /** Quittiert das abgeholte Ziel (ruft der Karten-Screen). */
     fun consumeRouteTarget() {
         _pendingRouteTarget.value = null
+    }
+
+    // -------------------------------------------------------------------------
+    // Startseite → Tourendetail
+    // -------------------------------------------------------------------------
+
+    private val _pendingRideDetail = MutableStateFlow<String?>(null)
+
+    /**
+     * Die Tour, deren Detailansicht der Touren-Tab als Naechstes oeffnen soll.
+     * Dasselbe Muster wie [pendingRouteTarget], aus demselben Grund: Zwischen
+     * dem Tippen auf der Startseite und dem Erscheinen des Touren-Screens liegt
+     * ein Tab-Wechsel, den ein einmaliges Ereignis nicht ueberleben wuerde.
+     *
+     * Ohne diesen Weg landete „Letzte Tour" nur in der Liste — der Nutzer haette
+     * die Tour, die er gerade angetippt hat, dort ein zweites Mal suchen und
+     * antippen muessen.
+     */
+    val pendingRideDetail: StateFlow<String?> = _pendingRideDetail.asStateFlow()
+
+    /** Oeffnet die Detailansicht einer Tour und wechselt in den Touren-Tab. */
+    fun requestRideDetail(rideId: String) {
+        _pendingRideDetail.value = rideId
+        requestTab(AppTab.RIDES)
+    }
+
+    /** Quittiert die abgeholte Tour (ruft der Touren-Screen). */
+    fun consumeRideDetailRequest() {
+        _pendingRideDetail.value = null
     }
 
     // -------------------------------------------------------------------------

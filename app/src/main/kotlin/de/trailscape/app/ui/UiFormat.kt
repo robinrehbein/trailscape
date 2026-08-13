@@ -36,6 +36,14 @@ val dateFormatShort: DateTimeFormatter =
 val dateTimeFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("dd.MM.yyyy, HH:mm", Locale.GERMANY)
 
+/**
+ * Wochentag und Datum ausgeschrieben, z. B. `Donnerstag, 14. März` — das
+ * einzige Format der App, das den Wochentag ausschreibt. Es steht im Kopf der
+ * Startseite, wo eine Ziffernfolge zu behoerdlich klaenge.
+ */
+val weekdayDateFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMANY)
+
 /** Formatiert einen Epoch-Millisekunden-Zeitstempel als `dd.MM.yyyy`. */
 fun formatDate(epochMs: Long): String = dateFormatFull.format(localOfEpochMs(epochMs))
 

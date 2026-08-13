@@ -77,6 +77,8 @@ internal fun MapViewHost(
     locationEnabled: Boolean,
     onMapTap: (Double, Double) -> Unit,
     modifier: Modifier = Modifier,
+    gesturesEnabled: Boolean = true,
+    renderingActive: Boolean = true,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -96,32 +98,48 @@ internal fun MapViewHost(
         MapView(context).apply { onCreate(null) }
     }
 
-    DisposableEffect(lifecycleOwner, mapView) {
-        var started = false
-        var resumed = false
+    // Der Zaehlstand der bereits abgesetzten Lebenszyklus-Rufe liegt bewusst
+    // ausserhalb des DisposableEffect: Sowohl der Lebenszyklus der Activity als
+    // auch [renderingActive] steuern dieselbe Zustandsmaschine. Haenge man
+    // stattdessen `renderingActive` an die Schluessel des Effekts, liefe bei
+    // jedem Umschalten `onDispose` — und das zerstoert die MapView.
+    val mapLifecycle = remember(mapView) { MapViewLifecycle() }
+    val currentRendering by rememberUpdatedState(renderingActive)
 
-        fun sync(target: Lifecycle.State) {
-            if (mapView.isDestroyed) return
-            if (target.isAtLeast(Lifecycle.State.STARTED) && !started) {
-                mapView.onStart()
-                started = true
-            }
-            if (target.isAtLeast(Lifecycle.State.RESUMED) && !resumed) {
-                mapView.onResume()
-                resumed = true
-            }
-            if (!target.isAtLeast(Lifecycle.State.RESUMED) && resumed) {
-                mapView.onPause()
-                resumed = false
-            }
-            if (!target.isAtLeast(Lifecycle.State.STARTED) && started) {
-                mapView.onStop()
-                started = false
-            }
+    fun sync(target: Lifecycle.State) {
+        if (mapView.isDestroyed) return
+        if (target.isAtLeast(Lifecycle.State.STARTED) && !mapLifecycle.started) {
+            mapView.onStart()
+            mapLifecycle.started = true
         }
+        if (target.isAtLeast(Lifecycle.State.RESUMED) && !mapLifecycle.resumed) {
+            mapView.onResume()
+            mapLifecycle.resumed = true
+        }
+        if (!target.isAtLeast(Lifecycle.State.RESUMED) && mapLifecycle.resumed) {
+            mapView.onPause()
+            mapLifecycle.resumed = false
+        }
+        if (!target.isAtLeast(Lifecycle.State.STARTED) && mapLifecycle.started) {
+            mapView.onStop()
+            mapLifecycle.started = false
+        }
+    }
 
-        val observer = LifecycleEventObserver { source, _ -> sync(source.lifecycle.currentState) }
-        sync(lifecycleOwner.lifecycle.currentState)
+    /**
+     * Deckelt den Lebenszyklus auf STARTED, solange nichts von der Karte zu
+     * sehen ist. Aus Sicht der MapView ist das genau der Zustand „sichtbar,
+     * aber nicht im Vordergrund" — sie stellt das Zeichnen ein, behaelt aber
+     * Stil, Quellen und Kameraposition.
+     */
+    fun effective(state: Lifecycle.State): Lifecycle.State =
+        if (currentRendering) state else minOf(state, Lifecycle.State.STARTED)
+
+    DisposableEffect(lifecycleOwner, mapView) {
+        val observer = LifecycleEventObserver { source, _ ->
+            sync(effective(source.lifecycle.currentState))
+        }
+        sync(effective(lifecycleOwner.lifecycle.currentState))
         lifecycleOwner.lifecycle.addObserver(observer)
 
         onDispose {
@@ -184,6 +202,7 @@ internal fun MapViewHost(
                     // beim Zwei-Finger-Zoom.
                     isTiltGesturesEnabled = false
                 }
+                setzeGesten(map, gesturesEnabled)
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(savedLat, savedLon))
                     .zoom(savedZoom)
@@ -206,6 +225,50 @@ internal fun MapViewHost(
 
     LaunchedEffect(controller, locationEnabled) {
         controller.setLocationEnabled(context, locationEnabled)
+    }
+
+    // Auch nachtraeglich anwenden: Die `factory` laeuft nur einmal und haelt
+    // damit den Wert vom ersten Aufbau fest.
+    LaunchedEffect(mapView, gesturesEnabled) {
+        mapView.getMapAsync { setzeGesten(it, gesturesEnabled) }
+    }
+
+    LaunchedEffect(renderingActive) {
+        sync(effective(lifecycleOwner.lifecycle.currentState))
+    }
+}
+
+/**
+ * Welche Lebenszyklus-Rufe die MapView schon bekommen hat. MapLibre verlangt
+ * sie paarweise und in der richtigen Reihenfolge; ein doppeltes `onPause` oder
+ * ein `onResume` ohne vorheriges `onStart` quittiert es mit Abstuerzen.
+ */
+private class MapViewLifecycle {
+    var started = false
+    var resumed = false
+}
+
+/**
+ * Schaltet die Kartengesten an der Karte selbst ab, statt sie mit einem
+ * unsichtbaren Beruehrungsfaenger zu ueberdecken.
+ *
+ * Gebraucht wird das in der Tourendetailansicht: Dort sitzt eine Karte fester
+ * Hoehe in einer scrollbaren Seite und wuerde jeden senkrechten Wisch als
+ * Kartenverschiebung schlucken. Ein daruebergelegter Faenger wuerde
+ * funktionieren, verliesse sich aber darauf, wie Compose unverbrauchte
+ * Beruehrungen an eine eingebettete Android-View weiterreicht — eine feine
+ * Regel, die sich mit einer Bibliotheksversion aendern kann. Der Schalter in
+ * MapLibre ist dagegen eindeutig.
+ *
+ * Neigen bleibt unabhaengig davon immer aus (siehe `isTiltGesturesEnabled`).
+ */
+private fun setzeGesten(map: MapLibreMap, erlaubt: Boolean) {
+    map.uiSettings.apply {
+        isScrollGesturesEnabled = erlaubt
+        isZoomGesturesEnabled = erlaubt
+        isRotateGesturesEnabled = erlaubt
+        isDoubleTapGesturesEnabled = erlaubt
+        isQuickZoomGesturesEnabled = erlaubt
     }
 }
 

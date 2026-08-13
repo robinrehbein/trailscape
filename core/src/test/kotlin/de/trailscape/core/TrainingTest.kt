@@ -385,6 +385,54 @@ class TrainingTest {
     }
 
     // -----------------------------------------------------------------------
+    // group('sessionsForDay') — Grundlage der Startseite „Heute"
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `sessionsForDay - liefert die Einheit des laufenden Wochentags`() {
+        // Fortgeschritten, Aufbauwoche: Di GA1, Do Intervalle, Sa Lange Tour.
+        val tuesday = sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(1))
+        assertEquals(1, tuesday.size)
+        assertEquals("GA1", tuesday.first().title)
+        assertEquals("Di", tuesday.first().day)
+
+        val saturday = sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(5))
+        assertEquals(listOf("Lange Tour"), saturday.map { it.title })
+    }
+
+    @Test
+    fun `sessionsForDay - an einem Ruhetag leer`() {
+        // Montag und Freitag tragen im Fortgeschrittenen-Raster keine Einheit.
+        assertTrue(sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(0)).isEmpty())
+        assertTrue(sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(4)).isEmpty())
+    }
+
+    @Test
+    fun `sessionsForDay - beruecksichtigt die Art der laufenden Woche`() {
+        // Woche 3 ist Erholung (Di + Sa), also steht donnerstags nichts an.
+        assertEquals(WeekKind.ERHOLUNG, twelveWeekPlan.weeks[3].kind)
+        assertEquals(
+            listOf("Lockere Ausfahrt"),
+            sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(3 * 7 + 1)).map { it.title },
+        )
+        assertTrue(sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(3 * 7 + 3)).isEmpty())
+    }
+
+    @Test
+    fun `sessionsForDay - ausserhalb der Planlaufzeit leer`() {
+        // Vor Planbeginn …
+        assertTrue(sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(-6)).isEmpty())
+        // … und nach Planende, wo currentWeekIndex auf die letzte Woche klemmt.
+        assertTrue(sessionsForDay(twelveWeekPlan, now = twelveWeekPlan.weeks.last().end).isEmpty())
+        assertTrue(
+            sessionsForDay(
+                twelveWeekPlan,
+                now = twelveWeekPlan.weeks.last().end + 30L * 86400000,
+            ).isEmpty(),
+        )
+    }
+
+    // -----------------------------------------------------------------------
     // group('weekKm')
     // -----------------------------------------------------------------------
 

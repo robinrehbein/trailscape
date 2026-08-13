@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -102,6 +103,15 @@ internal fun Metric(
  * Die Werte kommen unveraendert aus dem
  * [de.trailscape.app.record.RecordingRepository]; nur die Hoehenmeter rechnet
  * der Screen selbst aus den bisherigen Punkten.
+ *
+ * ## Einstieg in den Fahrmodus
+ * Der Knopf „Fahrmodus" bekommt eine eigene Zeile ueber Pause/Beenden statt
+ * eines Platzes in einer der bestehenden Zeilen. Die Kopfzeile ist auf einem
+ * 360-dp-Geraet mit Zustandstext und Punktzahl bereits voll, und ein dritter
+ * Knopf in der unteren Zeile haette alle drei auf ein Drittel der Breite
+ * gedrueckt — ausgerechnet „Beenden" waere damit schmaler und schwerer zu
+ * treffen geworden. Die Leiste bleibt, was sie ist; der Fahrmodus
+ * (`RideModeScreen.kt`) ist ein Angebot daneben, kein Ersatz.
  */
 @Composable
 internal fun LiveRecordingCard(
@@ -113,6 +123,7 @@ internal fun LiveRecordingCard(
     paused: Boolean,
     onTogglePause: () -> Unit,
     onStop: () -> Unit,
+    onOpenRideMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
@@ -165,6 +176,20 @@ internal fun LiveRecordingCard(
                     label = "Hm ↑",
                 )
             }
+            Spacer(Modifier.height(8.dp))
+            PrimaryButton(
+                text = "Fahrmodus",
+                onClick = onOpenRideMode,
+                modifier = Modifier.fillMaxWidth(),
+                leading = {
+                    Icon(
+                        Icons.Filled.Fullscreen,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+            )
             Spacer(Modifier.height(8.dp))
             Row {
                 OutlinedButton(onClick = onTogglePause, modifier = Modifier.weight(1f)) {
@@ -505,13 +530,20 @@ private fun RecordDot(color: Color, size: Dp) {
     }
 }
 
-/** Ausgefuellter Knopf in Gravel-Gruen. */
+/**
+ * Ausgefuellter Knopf in Gravel-Gruen, mit optionalem Symbol davor.
+ *
+ * Das Symbol ist dieselbe Zutat wie in [DangerButton] — beide Knoepfe stehen in
+ * derselben Karte nebeneinander und sollen sich nicht darin unterscheiden, ob
+ * ein Symbol moeglich ist.
+ */
 @Composable
 internal fun PrimaryButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    leading: @Composable (() -> Unit)? = null,
 ) {
     Surface(
         onClick = onClick,
@@ -521,10 +553,17 @@ internal fun PrimaryButton(
         color = if (enabled) GravelGreen else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (leading != null) {
+                leading()
+                Spacer(Modifier.width(6.dp))
+            }
             Text(
                 text = text,
-                modifier = Modifier.padding(horizontal = 16.dp),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelLarge,

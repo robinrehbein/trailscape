@@ -1,18 +1,36 @@
 # 🚵 Trailscape
 
-Kostenlose, native Android-App für GPS-Aufzeichnung, Routenplanung und
-Trainingssteuerung auf dem Gravel- und Rennrad — die Alternative zu Strava und
-Komoot. Kotlin, Jetpack Compose, kein Abo, kein Account.
+**Trailscape sagt dir, was du heute fahren solltest — und baut dir die Runde
+dazu.** Native Android-App für Gravel- und Rennrad mit GPS-Aufzeichnung,
+Routenplanung und Trainingssteuerung. Kotlin, Jetpack Compose, kein Abo, kein
+Account.
 
 ## Warum?
 
-Strava- und Komoot-Abos sind teuer und binden die eigenen Daten in fremde
-Clouds. Trailscape ist kostenlos und **local-first**: Touren, Trainingsprofil
-und Auswertung liegen ausschließlich auf dem Gerät. Kein Account, keine
-Registrierung, keine Telemetrie. Wer trotzdem synchronisieren will, stellt
-seinen eigenen Server dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
+Trainingswerkzeuge sind fast alle auf Rennrad und Wettkampf ausgerichtet,
+Gravel-Werkzeuge fast alle auf Entdecken und Abenteuer. Wer auf Schotter
+strukturiert trainieren will, betreibt heute drei Apps nebeneinander: eine
+fürs Planen, eine fürs Aufzeichnen, eine für die Auswertung.
+
+Trailscape schließt die Kette. Ruhepuls, HRV und Schlaf deiner Uhr ergeben
+eine Tagesbereitschaft, der Trainingsplan sagt, was heute ansteht, die App
+generiert dazu eine passende Rundstrecke vor der Haustür, und die gefahrene
+Tour fließt zurück in die Belastungsrechnung. Komoot plant großartige Routen
+und weiß nichts über dein Training; Strava kennt deine Form, generiert dazu
+aber keine Route; Garmin hat beides, verbindet es aber nicht und verlangt
+eigene Hardware.
+
+Dazu **local-first**: Touren, Trainingsprofil und Auswertung liegen
+ausschließlich auf dem Gerät. Kein Konto, keine Registrierung, keine
+Telemetrie. Wer trotzdem synchronisieren will, stellt seinen eigenen Server
+dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 ## Features
+
+**Heute** (Startseite)
+- Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
+  dafür eine passende Rundstrecke generiert
+- Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
 
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
@@ -25,6 +43,8 @@ seinen eigenen Server dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 **Touren**
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
+- Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
+  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben
 - Umbenennen, Löschen, als GPX teilen, GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
@@ -66,8 +86,8 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 461 Unit-Tests hängen hier |
-| `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 586 Unit-Tests hängen hier |
+| `:app` | Android: Compose/Material-3-Oberfläche (fünf Tabs — Heute, Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
 
@@ -81,7 +101,7 @@ Weitere Bausteine:
 - **Speicherung** — eine JSON-Datei pro Tour unter `<filesDir>/rides/`,
   Einstellungen und Trainingsprofil in den SharedPreferences.
 - **Zustand** — ein ViewModel im Activity-Scope (`ui/AppViewModel.kt`), das
-  alle vier Tabs teilen; der Aufzeichnungszustand kommt aus dem
+  alle Tabs teilen; der Aufzeichnungszustand kommt aus dem
   `RecordingRepository` direkt vom Service.
 - `server/` enthält den optionalen Sync-Server, `tool/` das Skript zum
   Erzeugen des App-Icons aus einer Quellgrafik.
@@ -116,7 +136,7 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 461 Tests des Domänenmodells
+./gradlew :core:test              # 586 Tests des Domänenmodells
 ./gradlew :app:testDebugUnitTest  # Tests der plattformfreien :app-Teile
 ```
 
