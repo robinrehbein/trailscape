@@ -20,6 +20,16 @@
       leicht mehrere hundert MB gross; Auto Backup deckelt eine App bei 25 MB
       und liesse das Backup sonst komplett scheitern. Die WAL-/SHM-Dateien
       stehen einzeln da, weil `path` nur ganze Pfadnamen trifft.
+    * `segments/` — die Routing-Kacheln der Offline-Routenberechnung
+      (`.rd5`). Dieselbe Begruendung wie bei der Kachel-Datenbank, nur
+      deutlicher: EINE Kachel ist 119-240 MB gross. Ohne diese Ausnahme
+      reisst schon die erste geladene Kachel die 25-MB-Grenze und laesst das
+      Backup KOMPLETT scheitern — samt `rides/` und Trainingsprofil, also
+      genau der Daten, die es retten soll. Reiner Downloadinhalt, jederzeit
+      neu beschaffbar.
+    * `brouter/` — Profil und Nachschlagetabelle der Routing-Engine. Klein,
+      aber ueberfluessig: Beide werden beim Start aus den App-Assets neu
+      ausgepackt.
     * `crash/` — der lokale Absturzbericht. Er ist eine Momentaufnahme GENAU
       DIESES Geraets (Stacktrace, Speicherstand, Modell) und auf einem anderen
       wertlos; vor allem aber verspricht die Datenschutzerklaerung
@@ -33,4 +43,6 @@
     <exclude domain="file" path="mbgl-offline.db" />
     <exclude domain="file" path="mbgl-offline.db-wal" />
     <exclude domain="file" path="mbgl-offline.db-shm" />
+    <exclude domain="file" path="segments" />
+    <exclude domain="file" path="brouter" />
 </full-backup-content>
