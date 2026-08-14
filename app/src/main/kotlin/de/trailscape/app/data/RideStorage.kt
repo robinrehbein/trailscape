@@ -2,6 +2,7 @@ package de.trailscape.app.data
 
 import de.trailscape.core.Ride
 import java.io.File
+import java.io.FileOutputStream
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
@@ -87,6 +88,23 @@ class RideStorage(private val ridesDir: File) {
      * zugleich das Update: eine bereits gespeicherte Tour mit derselben ID
      * wird vollstaendig ersetzt (z. B. wenn der Health-Import sie
      * nachtraeglich um Herzfrequenzdaten anreichert).
+     *
+     * ## Warum `fd.sync()` und nicht nur `writeText`
+     * Diese Methode steht am Ende der Absturzsicherung: Unmittelbar nachdem sie
+     * zurueckkehrt, verwirft der Aufzeichnungsdienst das Journal — die einzige
+     * andere Kopie der Fahrt. `writeText` + `renameTo` geben die Bytes aber nur
+     * an den Seitencache des Kernels ab; ein leerer Akku oder ein
+     * Kernel-Absturz in den Sekunden danach hinterlaesst eine leere oder halbe
+     * Datei, waehrend das Journal bereits geloescht ist. Das Journal betreibt
+     * fuer genau dieses Versprechen `flush()` + `FileDescriptor.sync()` bei
+     * *jedem* Punkt (siehe
+     * [de.trailscape.app.record.RecordingJournal]); die Datei, die es ersetzt,
+     * muss dieselbe Zusage geben, sonst ist die ganze Kette nur so stark wie
+     * ihr letztes Glied.
+     *
+     * Der Preis ist ein erzwungener Flash-Schreibvorgang je gespeicherter Tour
+     * — bei einer Handvoll Touren pro Woche und einem Massenimport, der ohnehin
+     * IO-gebunden ist, nicht messbar.
      */
     fun saveRide(ride: Ride) {
         val dir = ensureDir()
@@ -94,13 +112,34 @@ class RideStorage(private val ridesDir: File) {
         val tmpFile = File(dir, "${file.name}.tmp")
 
         val json = ride.toJson().toString()
-        tmpFile.writeText(json, Charsets.UTF_8)
+        writeAndSync(tmpFile, json)
         if (!tmpFile.renameTo(file)) {
             // Fallback fuer Dateisysteme/Umstaende, in denen rename fehlschlaegt
             // (z. B. Ziel liegt auf einem anderen Mount). Kopieren+Loeschen ist
             // nicht atomar, aber besser als eine verlorene Aufzeichnung.
-            file.writeText(json, Charsets.UTF_8)
+            writeAndSync(file, json)
             tmpFile.delete()
+        }
+    }
+
+    /**
+     * Schreibt [text] nach [target] und erzwingt die Bytes auf den
+     * Datentraeger. Siehe die Begruendung an [saveRide].
+     *
+     * `sync()` selbst darf scheitern (manche Dateisysteme lehnen es ab); dann
+     * bleibt es beim Verhalten von `writeText`, statt das Speichern der Tour an
+     * einer Nebensaechlichkeit scheitern zu lassen. Ein Fehler beim *Schreiben*
+     * wird dagegen weitergereicht — der Aufrufer haelt dann das Journal fest.
+     */
+    private fun writeAndSync(target: File, text: String) {
+        FileOutputStream(target).use { out ->
+            out.write(text.toByteArray(Charsets.UTF_8))
+            out.flush()
+            try {
+                out.fd.sync()
+            } catch (e: Exception) {
+                // Kein Grund, die Tour zu verlieren.
+            }
         }
     }
 

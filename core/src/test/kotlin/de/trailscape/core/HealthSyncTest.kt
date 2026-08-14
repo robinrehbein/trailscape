@@ -672,8 +672,79 @@ class HealthSyncTest {
         val now = at(2026, 8, 10, 12)
         serviceOf(gateway, now, store).importNewRides(existing = emptyList())
 
-        assertEquals(letzterImport, gateway.lastWorkoutFrom)
+        // Um den Puffer zurueckgesetzt, damit spaet gespiegelte Watch-Daten
+        // noch ins Fenster fallen (siehe healthImportWindowStart).
+        assertEquals(letzterImport.plusMs(-healthSyncImportBackfillMs), gateway.lastWorkoutFrom)
         assertEquals(now, gateway.lastWorkoutTo)
+    }
+
+    /**
+     * Der Fall aus dem Feld: Samsung Health spiegelt die Daten der Uhr erst
+     * Stunden nach der Fahrt nach Health Connect. Gefiltert wird nach der
+     * *Startzeit* des Workouts — ohne Ueberlappung lag die Session fuer immer
+     * hinter dem Fensteranfang und wurde nie gefunden.
+     */
+    @Test
+    fun `importNewRides - findet eine spaet gespiegelte Session vom Vortag`() {
+        val tourStart = at(2026, 8, 9, 10)
+        val letzterImport = at(2026, 8, 9, 12, 30)
+        val store = InMemoryHealthSyncStore(dartEpochMs(letzterImport))
+        val gateway = FakeHealthGateway(
+            workouts = listOf(
+                cycling(id = "spaet", start = tourStart, end = tourStart.plusMs(hours(2))),
+            ),
+        )
+
+        val rides = serviceOf(gateway, at(2026, 8, 9, 14), store)
+            .importNewRides(existing = emptyList())
+
+        assertEquals(1, rides.size)
+        assertEquals(healthRideId("spaet"), rides.first().id)
+    }
+
+    @Test
+    fun `importNewRides - der Puffer fuehrt nicht zu Doppelimporten`() {
+        val tourStart = at(2026, 8, 9, 10)
+        val gateway = FakeHealthGateway(
+            workouts = listOf(
+                cycling(id = "spaet", start = tourStart, end = tourStart.plusMs(hours(2))),
+            ),
+        )
+        val store = InMemoryHealthSyncStore()
+        val service = serviceOf(gateway, at(2026, 8, 9, 14), store)
+
+        val ersteRunde = service.importNewRides(existing = emptyList())
+        assertEquals(1, ersteRunde.size)
+
+        // Zweiter Lauf: Dieselbe Session liegt wegen des Puffers erneut im
+        // Fenster — die ID-Pruefung faengt sie ab.
+        val bericht = serviceOf(gateway, at(2026, 8, 9, 15), store)
+            .importWithReport(existing = ersteRunde)
+
+        assertTrue(bericht.imported.isEmpty())
+        assertTrue(bericht.mergedRides.isEmpty())
+        assertEquals(1, bericht.duplicatesSkipped)
+    }
+
+    @Test
+    fun `healthImportWindowStart - since sticht Zeitstempel und Puffer`() {
+        val since = at(2026, 8, 1)
+        val letzterImport = at(2026, 8, 5)
+
+        assertEquals(
+            since,
+            healthImportWindowStart(since = since, lastImportAt = letzterImport, to = at(2026, 8, 10)),
+        )
+    }
+
+    @Test
+    fun `healthImportWindowStart - ohne Zeitstempel bleibt es beim 30-Tage-Fenster`() {
+        val now = at(2026, 8, 10)
+
+        assertEquals(
+            now.plusMs(-healthSyncInitialWindowMs),
+            healthImportWindowStart(since = null, lastImportAt = null, to = now),
+        )
     }
 
     @Test

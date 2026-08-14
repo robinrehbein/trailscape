@@ -48,9 +48,25 @@ internal val LOCATION_PERMISSIONS = arrayOf(
 
 /** Ob (mindestens grob) auf den Standort zugegriffen werden darf. */
 internal fun hasLocationPermission(context: Context): Boolean =
-    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
-        PackageManager.PERMISSION_GRANTED ||
+    hasFineLocationPermission(context) ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
+
+/**
+ * Ob der **genaue** Standort erlaubt ist.
+ *
+ * Fuer die Karte reicht „Ungefaehr" (die Kartenmitte grob richtig zu setzen
+ * ist besser als gar nichts), fuer die *Aufzeichnung* nicht: Sie haengt am
+ * [LocationManager.GPS_PROVIDER], und der verlangt
+ * `ACCESS_FINE_LOCATION` — sonst wirft `requestLocationUpdates` eine
+ * `SecurityException`. Ohne diese Trennung galt die Freigabe als erteilt,
+ * der Berechtigungsdialog ging nie wieder auf, und jede Aufzeichnung brach
+ * sofort mit „Trailscape darf nicht auf den Standort zugreifen" ab. Seit
+ * Android 12 genuegt dafuer ein Fehlgriff im Dialog: „Ungefaehr" steht dort
+ * als gleichwertiger Knopf neben „Genau".
+ */
+internal fun hasFineLocationPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
 /**
@@ -65,13 +81,24 @@ internal fun hasNotificationPermission(context: Context): Boolean =
 /**
  * Die Berechtigungen, die fuer die naechste Aktion noch fehlen.
  *
- * @param forRecording nimmt ab Android 13 zusaetzlich `POST_NOTIFICATIONS`
- *   auf — ohne sie laeuft der Vordergrunddienst zwar, seine Notification
- *   bliebe aber unsichtbar.
+ * @param forRecording verlangt den **genauen** Standort statt „mindestens
+ *   grob" (siehe [hasFineLocationPermission]) und nimmt ab Android 13
+ *   zusaetzlich `POST_NOTIFICATIONS` auf — ohne sie laeuft der
+ *   Vordergrunddienst zwar, seine Notification bliebe aber unsichtbar.
+ *
+ * Angefragt werden weiterhin beide Standort-Berechtigungen zusammen: Das
+ * System laesst `ACCESS_FINE_LOCATION` nicht allein anfragen, wenn
+ * `ACCESS_COARSE_LOCATION` im Manifest steht, und zeigt bei bereits erteiltem
+ * „Ungefaehr" den Dialog zum Heraufstufen auf „Genau".
  */
 internal fun missingPermissions(context: Context, forRecording: Boolean): Array<String> {
     val missing = mutableListOf<String>()
-    if (!hasLocationPermission(context)) {
+    val standortDa = if (forRecording) {
+        hasFineLocationPermission(context)
+    } else {
+        hasLocationPermission(context)
+    }
+    if (!standortDa) {
         missing += LOCATION_PERMISSIONS
     }
     if (forRecording && !hasNotificationPermission(context)) {

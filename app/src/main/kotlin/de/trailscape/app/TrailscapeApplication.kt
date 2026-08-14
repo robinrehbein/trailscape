@@ -24,6 +24,9 @@ class TrailscapeApplication : Application() {
         CrashReporter.install(this)
         AppServices.init(this)
         AppServices.appScope.launch {
+            // Wartet von sich aus kurz ab, ob gerade ein Aufzeichnungsdienst
+            // hochfaehrt — der hat Vorrang, denn nur er weiss, ob er eine
+            // laufende Fahrt fortsetzen will. Siehe `RecoveryGate`.
             RecordingService.recoverIfNeeded(this@TrailscapeApplication, AppServices.rideStorage)
         }
         AppServices.appScope.launch {

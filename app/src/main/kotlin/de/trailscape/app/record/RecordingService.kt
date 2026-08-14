@@ -63,6 +63,24 @@ import java.util.concurrent.Executor
  *    finalisiert [recoverIfNeeded] das verwaiste Journal zu einer Tour mit
  *    dem Namenszusatz „(wiederhergestellt)".
  *
+ * Zwischen der zweiten und der dritten Stufe steht eine Rangordnung: **Der
+ * Dienst gewinnt.** Beim `START_STICKY`-Neustart laufen die Wiederherstellung
+ * (aus `TrailscapeApplication`) und das `ACTION_CONTINUE` gleichzeitig an, und
+ * nur der Dienst weiss, ob er fortsetzen will. Die Wiederherstellung wartet
+ * deshalb auf seine Entscheidung ([RecoveryGate]), und findet er hinterher
+ * nichts mehr zum Fortsetzen, meldet er das laut, statt sich stillschweigend
+ * zu beenden.
+ *
+ * ## Warum kein WakeLock
+ * Der Dienst haelt bewusst keinen `PARTIAL_WAKE_LOCK`. Ein Wecker ueber drei
+ * Stunden Fahrt kostet spuerbar Akku, und er wird fuer die Daten nicht
+ * gebraucht: Jede GNSS-Meldung weckt das Geraet ohnehin auf, und genau dann
+ * (und nur dann) gibt es etwas zu schreiben. Steht das Rad, kommen keine
+ * Meldungen — und es geht auch nichts verloren. Was im Suspend stehen bleibt,
+ * ist der sekuendliche [ticker] und mit ihm die Frische des Lebenszeichens;
+ * dass daraus kein Datenverlust mehr folgt, ist der Zweck der Rangordnung oben
+ * und der konservativen Auswertung in [beurteileJournal].
+ *
  * Die Entscheidung, ob ein Punkt aufgenommen wird, faellt ausschliesslich in
  * [PointFilter] (`:core`, plattformfrei und dort getestet). Dieser Service
  * holt aus [Location] nur die Rohwerte heraus; was ein *fehlender* Rohwert
@@ -121,6 +139,46 @@ class RecordingService : Service() {
     private var updatesRequested = false
 
     /**
+     * Wanduhr-Zeitpunkt des zuletzt *angenommenen* Punktes — der Wachhund ueber
+     * den Standort-Strom (siehe [ticker]). `0`, solange noch keiner kam; dann
+     * gilt der Beginn der Aufzeichnung als Bezugspunkt.
+     */
+    @Volatile
+    private var lastAcceptedAtMs = 0L
+
+    /**
+     * Wanduhr-Zeitpunkt, seit dem der Standort-Strom fuer diese Aufzeichnung
+     * abonniert ist. Bezugspunkt des Wachhunds, solange noch kein Punkt
+     * angekommen ist.
+     */
+    @Volatile
+    private var stromSeitMs = 0L
+
+    /**
+     * Wann der Wachhund die Anmeldung zuletzt erneuert hat. Bremse gegen ein
+     * An- und Abmelden im Sekundentakt; bewusst getrennt von [stromSeitMs],
+     * damit die Anzeige „Kein GPS-Signal seit N min" durch ein erneutes
+     * Abonnieren nicht wieder bei null anfaengt.
+     */
+    private var letzterResubscribeMs = 0L
+
+    /**
+     * Ob seit Beginn dieser Aufzeichnung mindestens ein Schreibvorgang ins
+     * Journal fehlgeschlagen ist (typischerweise voller Speicher). Ab dann ist
+     * die Datei nicht mehr die vollstaendige Wahrheit, und der Abschluss muss
+     * die RAM-Punkte hinzunehmen (siehe [vereinigePunkte]).
+     */
+    @Volatile
+    private var journalSchreibfehler = false
+
+    /**
+     * Ob der Fehlschlag bereits gemeldet wurde. Ein volles Dateisystem
+     * scheitert bei *jedem* Punkt; ohne diese Bremse haette der Nutzer im
+     * Sekundentakt dieselbe Meldung.
+     */
+    private var schreibfehlerGemeldet = false
+
+    /**
      * [LocationListenerCompat] und nicht das nackte
      * `android.location.LocationListener`: Dessen drei Zusatzmethoden sind
      * erst ab API 30 `default`. Ein Kotlin-Objekt, das nur
@@ -175,32 +233,43 @@ class RecordingService : Service() {
     override fun onCreate() {
         super.onCreate()
         RecordingRepository.attach(this)
-        journal = RecordingJournal(RecordingJournal.directory(filesDir))
+        journal = RecordingJournal(RecordingJournal.directory(filesDir), AndroidHeartbeatClock)
         recordingThread = HandlerThread("trailscape-recording").apply { start() }
         handler = Handler(recordingThread.looper)
         ensureNotificationChannels()
 
-        // Verwaiste Journale aufraeumen, BEVOR ein Kommando verarbeitet wird.
-        // Der Heartbeat-Schutz in [recoverIfNeeded] sorgt dafuer, dass ein
-        // gerade vom System neu gestarteter Service sich nicht selbst das
-        // eigene, noch frische Journal wegschnappt.
-        handler.post { recoverIfNeeded(this, rideStorage) }
+        // Hier stand frueher ein `handler.post { recoverIfNeeded(...) }`, um
+        // verwaiste Journale aufzuraeumen, bevor ein Kommando verarbeitet wird.
+        // Das war genau verkehrt herum: Was in `onCreate` gepostet wird, laeuft
+        // zwangslaeufig VOR dem `ACTION_CONTINUE` aus `onStartCommand` — die
+        // Wiederherstellung schloss also die gerade laufende Fahrt als Tour ab,
+        // und der Dienst fand nichts mehr zum Fortsetzen. Der Dienst muss
+        // gewinnen; das Aufraeumen passiert deshalb erst NACH dem ersten
+        // Kommando (siehe [handleCommand]), und die Wiederherstellung beim
+        // App-Start wartet auf seine Entscheidung (siehe [RecoveryGate]).
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // START_STICKY liefert beim Neustart durch das System `null` — genau
         // der Fall, in dem aus dem Journal weiter aufgezeichnet werden muss.
+        val systemNeustart = intent == null
         val action = intent?.action ?: ACTION_CONTINUE
 
         if (!enterForeground()) {
             // Der Dienst darf nicht im Vordergrund laufen (fehlende
             // Standortberechtigung ab Android 14). Aufraeumen passiert wie
             // alles andere auf dem Aufzeichnungs-Thread.
-            handler.post { failAndStop(getString(R.string.recording_error_permission)) }
+            handler.post {
+                failAndStop(getString(R.string.recording_error_permission))
+                // Auch das ist eine Entscheidung: Eine wartende
+                // Wiederherstellung braucht auf diesen Dienst nicht laenger zu
+                // warten (siehe [RecoveryGate]).
+                recoveryGate.freigeben()
+            }
             return START_NOT_STICKY
         }
 
-        handler.post { handleCommand(action) }
+        handler.post { handleCommand(action, systemNeustart) }
         return START_STICKY
     }
 
@@ -214,15 +283,37 @@ class RecordingService : Service() {
 
     // ------------------------------------------------------------ Kommandos
 
-    private fun handleCommand(action: String) {
-        when (action) {
-            ACTION_START -> startRecording()
-            ACTION_PAUSE -> setPaused(true)
-            ACTION_RESUME -> setPaused(false)
-            ACTION_TOGGLE_PAUSE -> setPaused(pauseStartedAtMs == null)
-            ACTION_STOP -> finishAndStop()
-            ACTION_CONTINUE -> continueFromJournal()
-            else -> Unit
+    /**
+     * @param systemNeustart ob dieses Kommando aus einem
+     *   `START_STICKY`-Neustart stammt (Intent war `null`). Nur dann ist ein
+     *   fehlendes Journal ein *Verlust* und keine Belanglosigkeit — das System
+     *   startet einen Dienst nur neu, wenn er lief.
+     */
+    private fun handleCommand(action: String, systemNeustart: Boolean = false) {
+        try {
+            when (action) {
+                ACTION_START -> startRecording()
+                ACTION_PAUSE -> setPaused(true)
+                ACTION_RESUME -> setPaused(false)
+                ACTION_TOGGLE_PAUSE -> setPaused(pauseStartedAtMs == null)
+                ACTION_STOP -> finishAndStop()
+                ACTION_CONTINUE -> continueFromJournal(systemNeustart)
+                else -> Unit
+            }
+        } finally {
+            // Der Dienst hat entschieden — eine wartende Wiederherstellung darf
+            // jetzt los (siehe [RecoveryGate]). Im `finally`, damit auch eine
+            // Ausnahme die Wiederherstellung nicht bis zum Ablauf der
+            // Gnadenfrist blockiert.
+            recoveryGate.freigeben()
+        }
+
+        if (action == ACTION_CONTINUE) {
+            // Das Aufraeumen liegengebliebener Journale, das frueher in
+            // `onCreate` stand — jetzt aber nachweislich NACH der Entscheidung
+            // des Dienstes. `warten = false`, weil dieser Dienst der ist, auf
+            // den zu warten waere.
+            handler.post { recoverIfNeeded(this, rideStorage, force = false, warten = false) }
         }
     }
 
@@ -238,6 +329,11 @@ class RecordingService : Service() {
         pauseStartedAtMs = null
         distanceM = 0.0
         lastNotificationMs = 0L
+        lastAcceptedAtMs = 0L
+        stromSeitMs = now
+        letzterResubscribeMs = now
+        journalSchreibfehler = false
+        schreibfehlerGemeldet = false
 
         try {
             // Abschluss des alten und Anlegen des neuen Journals unter einer
@@ -253,9 +349,9 @@ class RecordingService : Service() {
                 // aufzeichnet. Ohne das Erzwingen ginge eine Tour verloren, die
                 // vor weniger als 30 s abgestuerzt ist und die der Nutzer
                 // sofort mit einer neuen Aufnahme ueberholt.
-                recoverIfNeeded(this, rideStorage, force = true)
+                recoverIfNeeded(this, rideStorage, force = true, warten = false)
                 journal.begin(id, now)
-                journal.touchHeartbeat(now)
+                meldeLebenszeichen(journal.touchHeartbeat(now))
             }
         } catch (e: Exception) {
             failAndStop(getString(R.string.recording_error_journal))
@@ -265,7 +361,7 @@ class RecordingService : Service() {
         if (!requestUpdates(neueAufzeichnung = true)) return
 
         active = true
-        journal.touchHeartbeat(now)
+        meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
         updateNotification(now, force = true)
         handler.removeCallbacks(ticker)
@@ -275,8 +371,11 @@ class RecordingService : Service() {
     /**
      * Setzt eine Aufzeichnung fort, deren Service das System beendet und per
      * `START_STICKY` neu gestartet hat.
+     *
+     * @param systemNeustart siehe [handleCommand]. Steuert, ob ein leeres
+     *   Journal als Verlust gemeldet wird.
      */
-    private fun continueFromJournal() {
+    private fun continueFromJournal(systemNeustart: Boolean = false) {
         if (active) return
 
         // Lesen, zum Weiterschreiben oeffnen und das Lebenszeichen setzen
@@ -292,7 +391,7 @@ class RecordingService : Service() {
                     journal.reopenForAppend()
                     // Ab jetzt gilt das Journal als lebendig — die
                     // Wiederherstellung laesst es in Ruhe.
-                    journal.touchHeartbeat(System.currentTimeMillis())
+                    meldeLebenszeichen(journal.touchHeartbeat(System.currentTimeMillis()))
                 }
                 read
             }
@@ -302,9 +401,18 @@ class RecordingService : Service() {
         }
 
         if (snapshot == null) {
-            // Nichts fortzusetzen: Der Dienst wurde ohne laufende Aufzeichnung
-            // neu gestartet (oder die Recovery hat das Journal bereits
-            // abgeschlossen).
+            // Nichts fortzusetzen. Bei einem `START_STICKY`-Neustart ist das
+            // kein Normalfall, sondern ein Verlust: Das System startet einen
+            // Dienst nur neu, wenn er lief — es gab also eine Aufzeichnung, und
+            // jetzt ist ihr Journal weg (von der Wiederherstellung abgeschlossen
+            // oder beim Absturz beschaedigt). Frueher endete der Dienst hier
+            // ohne jede Meldung, und der Nutzer fuhr zwei Stunden weiter, ohne
+            // zu ahnen, dass nichts mehr aufgezeichnet wird.
+            if (systemNeustart) {
+                val message = getString(R.string.recording_error_continue_lost)
+                RecordingRepository.publishError(message)
+                notifyError(message)
+            }
             stopSelfSafely()
             return
         }
@@ -316,12 +424,17 @@ class RecordingService : Service() {
         filter.paused = snapshot.pausedSinceMs != null
         distanceM = computeStats(snapshot.points).distanceKm * 1000
         lastNotificationMs = 0L
+        lastAcceptedAtMs = 0L
+        journalSchreibfehler = false
+        schreibfehlerGemeldet = false
 
         if (!requestUpdates(neueAufzeichnung = false)) return
 
         active = true
         val now = System.currentTimeMillis()
-        journal.touchHeartbeat(now)
+        stromSeitMs = now
+        letzterResubscribeMs = now
+        meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.publishStarted(
             startedAtMs = snapshot.startedAtMs,
             points = snapshot.points,
@@ -338,15 +451,21 @@ class RecordingService : Service() {
         if (paused == currentlyPaused) return
 
         val now = System.currentTimeMillis()
+        // Der Pausenvermerk darf die Aufzeichnung nicht abbrechen: Seit
+        // [RecordingJournal.writeLine] bei geschlossenem Stream wirft (statt die
+        // Zeile still zu verlieren), koennte eine Ausnahme hier den
+        // Aufzeichnungs-Thread und damit den ganzen Prozess reissen. Der
+        // Pausenzustand im RAM stimmt auch ohne den Vermerk; nur das
+        // Pausenkonto einer *wiederhergestellten* Tour waere dann unvollstaendig.
         if (paused) {
             pauseStartedAtMs = now
             filter.paused = true
-            journal.appendPause(now)
+            journalSchreiben { journal.appendPause(now) }
         } else {
             pauseStartedAtMs?.let { pausedMsAccum += now - it }
             pauseStartedAtMs = null
             filter.paused = false
-            journal.appendResume(now)
+            journalSchreiben { journal.appendResume(now) }
         }
 
         RecordingRepository.publishPaused(paused)
@@ -355,15 +474,19 @@ class RecordingService : Service() {
 
     /**
      * Beendet die Aufzeichnung: Journal → Punkte → [computeStats] → [Ride] →
-     * `RideStorage`. Die Punkte kommen bewusst aus der Datei und nicht aus dem
-     * RAM — die Datei ist die Wahrheit.
+     * `RideStorage`. Die Punkte kommen aus der Datei — sie ist die Wahrheit,
+     * solange sie sich schreiben liess.
+     *
+     * Nur wenn das *nicht* der Fall war (voller Speicher, siehe
+     * [journalSchreibfehler]), kommen die Punkte aus dem RAM dazu; siehe
+     * [vereinigePunkte] fuer die Begruendung.
      */
     private fun finishAndStop() {
         stopUpdates()
         handler.removeCallbacks(ticker)
         active = false
 
-        val snapshot = journal.read()
+        val snapshot = journal.read()?.let { mitRamPunkten(it) }
         journal.close()
         // Ab hier zeichnet niemand mehr auf: Bleibt das Journal wegen eines
         // Speicherfehlers liegen, soll es sofort als verwaist gelten.
@@ -539,12 +662,18 @@ class RecordingService : Service() {
         )
     }
 
+    /**
+     * Meldet die Standortaktualisierungen ab. Zwei Aufrufer: das Ende der
+     * Aufzeichnung und der Wachhund, der nach langer Stille neu abonniert
+     * ([pruefeStandortStrom]).
+     */
     private fun stopUpdates() {
         if (!updatesRequested) return
         try {
             locationManager?.removeUpdates(locationListener)
         } catch (e: Exception) {
-            // Nichts zu tun: der Dienst ist ohnehin gleich weg.
+            // Nichts zu tun: Entweder ist der Dienst gleich weg, oder es folgt
+            // ohnehin gleich eine frische Anmeldung.
         }
         updatesRequested = false
     }
@@ -571,12 +700,9 @@ class RecordingService : Service() {
         when (val result = filter.offer(sample)) {
             is PointFilterResult.Accepted -> {
                 val point = result.point
+                lastAcceptedAtMs = System.currentTimeMillis()
                 // Zuerst auf den Datentraeger, dann in den RAM.
-                try {
-                    journal.appendPoint(point)
-                } catch (e: Exception) {
-                    RecordingRepository.publishError(getString(R.string.recording_error_journal))
-                }
+                journalSchreiben { journal.appendPoint(point) }
                 if (previous != null) {
                     distanceM += haversineM(previous, point)
                 }
@@ -588,11 +714,84 @@ class RecordingService : Service() {
         }
     }
 
+    /**
+     * Aufgezeichnet wird nur mit **genauem** Standort.
+     *
+     * Frueher genuegte hier `ACCESS_COARSE_LOCATION` allein — das war eine
+     * Luege gegenueber dem Rest der Methode: `requestLocationUpdates` auf dem
+     * [LocationManager.GPS_PROVIDER] verlangt zwingend
+     * `ACCESS_FINE_LOCATION` und wirft sonst eine [SecurityException]. Der
+     * Dienst kam also bis in den Vordergrund, brach dann ab, und weil
+     * `missingPermissions` die Freigabe fuer erteilt hielt, ging der
+     * Berechtigungsdialog nie wieder auf. Seit Android 12 sitzt „Ungefaehr"
+     * direkt neben „Genau" — ein Fehlgriff genuegte, und die App war
+     * dauerhaft kaputt.
+     *
+     * Die Kartenanzeige kommt weiterhin mit „Ungefaehr" aus; die Trennung
+     * steht in `ui/map/LocationAccess.kt`.
+     */
     private fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
+
+    // ---------------------------------------------------------- Journal-Hilfen
+
+    /**
+     * Fuehrt einen Schreibvorgang ins Journal aus und macht einen Fehlschlag
+     * *laut*.
+     *
+     * Frueher landete ein Schreibfehler nur im [RecordingRepository] —
+     * sichtbar allein als Snackbar in einer geoeffneten App. Wer mit dem
+     * Telefon in der Lenkertasche faehrt, sieht davon nichts: Die Anzeige
+     * zaehlt munter weiter (die Punkte liegen ja im RAM), und beim Abschluss
+     * ist alles ab dem ersten Fehler weg. Deshalb zusaetzlich eine
+     * Fehler-Notification — und ein Merker, damit der Abschluss die RAM-Punkte
+     * hinzunimmt.
+     */
+    private inline fun journalSchreiben(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            journalSchreibfehler = true
+            val message = getString(R.string.recording_error_journal_write)
+            RecordingRepository.publishError(message)
+            if (!schreibfehlerGemeldet) {
+                schreibfehlerGemeldet = true
+                notifyError(message)
+            }
+        }
+    }
+
+    /**
+     * Meldet ein fehlgeschlagenes Lebenszeichen. Es ist keine Kuer: Ohne
+     * Lebenszeichen kann eine parallele Wiederherstellung das Journal
+     * beanspruchen, waehrend dieser Dienst weiterschreibt. Die Auswertung ist
+     * inzwischen zwar konservativ (siehe [beurteileJournal]), aber der Nutzer
+     * soll trotzdem erfahren, dass der Speicher klemmt.
+     */
+    private fun meldeLebenszeichen(erfolgreich: Boolean) {
+        if (erfolgreich || schreibfehlerGemeldet) return
+        schreibfehlerGemeldet = true
+        val message = getString(R.string.recording_error_journal_write)
+        RecordingRepository.publishError(message)
+        notifyError(message)
+    }
+
+    /**
+     * Ergaenzt den aus der Datei gelesenen Schnappschuss um die Punkte, die nur
+     * im RAM stehen — der Rettungsanker fuer den Fall, dass das Journal
+     * zwischendurch nicht schreibbar war (siehe [vereinigePunkte]).
+     *
+     * Der RAM-Stand kommt aus dem [RecordingRepository]: Er ist derselbe
+     * Punkteverlauf, den die Karte zeichnet, und er ist genau dann laenger als
+     * die Datei, wenn ein `appendPoint` gescheitert ist.
+     */
+    private fun mitRamPunkten(snapshot: RecordingJournal.Snapshot): RecordingJournal.Snapshot {
+        if (!journalSchreibfehler) return snapshot
+        val vereint = vereinigePunkte(snapshot.points, RecordingRepository.points.value)
+        if (vereint.size == snapshot.points.size) return snapshot
+        return snapshot.copy(points = vereint)
+    }
 
     // ----------------------------------------------------------------- Takt
 
@@ -607,9 +806,59 @@ class RecordingService : Service() {
             if (!active) return
             val now = System.currentTimeMillis()
             RecordingRepository.publishTick(elapsedMs(now), filter.currentSpeedKmh)
+            pruefeStandortStrom(now)
             updateNotification(now, force = false)
             handler.postDelayed(this, TICK_INTERVAL_MS)
         }
+    }
+
+    /**
+     * Wachhund ueber den Standort-Strom.
+     *
+     * Ein stillgelegter Strom sieht von aussen aus wie eine Aufzeichnung: Die
+     * Notification zaehlt die Zeit weiter, die Distanz steht still, und
+     * niemand erfaehrt, dass seit zwanzig Minuten kein Punkt mehr ankommt. Die
+     * Ursachen sind vielfaeltig und alle unsichtbar — der Energiesparer eines
+     * Herstellers meldet den Listener ab, das GNSS findet unter Baeumen keinen
+     * Fix, oder alle Meldungen scheitern am Genauigkeitsfilter (ueber 50 m,
+     * siehe [PointFilter]).
+     *
+     * Deshalb zwei Stufen:
+     *
+     *  1. Nach [GPS_SILENT_WARN_MS] steht „Kein GPS-Signal seit N min" in der
+     *     Notification. Bewusst nur dort und nicht als Fehler-Notification: Ein
+     *     Signalabriss ist waehrend einer Fahrt normal (Tunnel, Unterfuehrung,
+     *     dichter Wald) und darf nicht bei jedem Mal Alarm schlagen.
+     *  2. Nach [GPS_RESUBSCRIBE_MS] wird die Anmeldung einmal erneuert. Das ist
+     *     das einzige Mittel gegen einen Listener, den ein OEM-Energiesparer
+     *     im Hintergrund abgeraeumt hat — und es ist billig: `removeUpdates` +
+     *     `requestLocationUpdates` kosten nichts, solange sie nicht im
+     *     Sekundentakt passieren. Kommt trotzdem nichts, ist es kein
+     *     Softwarefehler, sondern der Himmel.
+     *
+     * Waehrend einer Pause schweigt der Wachhund: Dass dann keine Punkte
+     * kommen, ist der Zweck der Pause.
+     */
+    private fun pruefeStandortStrom(nowMs: Long) {
+        val stilleMs = gpsStilleMs(nowMs) ?: return
+        if (stilleMs < GPS_RESUBSCRIBE_MS) return
+        if (nowMs - letzterResubscribeMs < GPS_RESUBSCRIBE_MS) return
+
+        letzterResubscribeMs = nowMs
+        stopUpdates()
+        requestUpdates(neueAufzeichnung = false)
+    }
+
+    /**
+     * Dauer der GPS-Stille in ms, oder `null`, wenn sie noch unterhalb der
+     * Meldeschwelle liegt bzw. gerade pausiert wird.
+     */
+    private fun gpsStilleMs(nowMs: Long): Long? {
+        if (!active || pauseStartedAtMs != null) return null
+        val bezug = maxOf(lastAcceptedAtMs, stromSeitMs)
+        if (bezug <= 0L) return null
+        val stilleMs = nowMs - bezug
+        return if (stilleMs >= GPS_SILENT_WARN_MS) stilleMs else null
     }
 
     private fun elapsedMs(nowMs: Long): Long {
@@ -637,7 +886,7 @@ class RecordingService : Service() {
     private fun updateNotification(nowMs: Long, force: Boolean) {
         if (!force && nowMs - lastNotificationMs < NOTIFICATION_INTERVAL_MS) return
         lastNotificationMs = nowMs
-        journal.touchHeartbeat(nowMs)
+        if (active) meldeLebenszeichen(journal.touchHeartbeat(nowMs))
         try {
             getSystemService(NotificationManager::class.java)
                 ?.notify(NOTIFICATION_ID, buildNotification())
@@ -651,13 +900,23 @@ class RecordingService : Service() {
         val title = getString(
             if (paused) R.string.recording_notification_paused_title else R.string.recording_notification_title,
         )
-        val text = if (!active || filter.acceptedCount == 0) {
-            getString(R.string.recording_notification_waiting)
-        } else {
-            getString(
+        val jetzt = System.currentTimeMillis()
+        val stilleMs = gpsStilleMs(jetzt)
+        val text = when {
+            // Die Stille geht vor: Sie ist die einzige Information, die der
+            // Fahrerin sagt, dass gerade nichts mehr aufgezeichnet wird.
+            stilleMs != null -> getString(
+                R.string.recording_notification_no_gps,
+                (stilleMs / 60_000L).toInt(),
+            )
+
+            !active || filter.acceptedCount == 0 ->
+                getString(R.string.recording_notification_waiting)
+
+            else -> getString(
                 R.string.recording_notification_progress,
                 formatKmDe(distanceM / 1000),
-                formatDuration((elapsedMs(System.currentTimeMillis()) / 1000).toInt()),
+                formatDuration((elapsedMs(jetzt) / 1000).toInt()),
             )
         }
 
@@ -749,7 +1008,7 @@ class RecordingService : Service() {
             active = false
             stopUpdates()
             handler.removeCallbacks(ticker)
-            val snapshot = journal.read()
+            val snapshot = journal.read()?.let { mitRamPunkten(it) }
             journal.close()
             journal.clearHeartbeat()
             val ride = snapshot?.let { buildRide(this, it, recovered = true) }
@@ -832,6 +1091,21 @@ class RecordingService : Service() {
         private const val NOTIFICATION_INTERVAL_MS = 5_000L
 
         /**
+         * Ab dieser Stille im Standort-Strom steht „Kein GPS-Signal seit N min"
+         * in der Notification (siehe [pruefeStandortStrom]). Drei Minuten sind
+         * lang genug, um Tunnel, Unterfuehrungen und dichten Wald zu
+         * ueberstehen, und kurz genug, um eine kaputte Aufzeichnung noch
+         * waehrend der Fahrt zu bemerken.
+         */
+        private const val GPS_SILENT_WARN_MS = 3 * 60_000L
+
+        /**
+         * Ab dieser Stille wird die Anmeldung beim [LocationManager] einmal
+         * erneuert — und danach fruehestens wieder nach derselben Zeit.
+         */
+        private const val GPS_RESUBSCRIBE_MS = 5 * 60_000L
+
+        /**
          * Ab diesem Alter gilt das Lebenszeichen eines Journals als erloschen
          * und die Aufzeichnung als verwaist. Grosszuegig gewaehlt gegenueber
          * dem 5-Sekunden-Takt des Heartbeats, damit ein kurz haengender oder
@@ -841,16 +1115,36 @@ class RecordingService : Service() {
         private const val HEARTBEAT_STALE_MS = 30_000L
 
         /**
+         * Wie lange die Wiederherstellung am Prozessanfang auf die Entscheidung
+         * eines startenden Dienstes wartet. Begruendung und Abwaegung stehen an
+         * [RecoveryGate].
+         *
+         * Die Instanz entsteht mit dem Laden dieser Klasse — praktisch also mit
+         * dem Prozessstart, denn `TrailscapeApplication.onCreate` beruehrt
+         * [recoverIfNeeded] als eine der ersten Handlungen.
+         */
+        private const val RECOVERY_GRACE_MS = 5_000L
+
+        private val recoveryGate = RecoveryGate(RECOVERY_GRACE_MS)
+
+        /**
          * Schliesst ein verwaistes Journal zu einer Tour ab, falls es eines
          * gibt — die Absturzsicherung der Aufzeichnung.
          *
          * Abgeschlossen wird nur, wenn *keine* Aufzeichnung laeuft. Erkannt
-         * wird das an zwei Dingen: am [RecordingRepository]-Zustand (gleicher
-         * Prozess) und am Lebenszeichen neben dem Journal (anderer bzw. neu
-         * gestarteter Prozess — der Service schreibt es alle paar Sekunden
-         * fort). Ein Journal, dessen Lebenszeichen juenger als 30 s ist,
-         * gehoert einem lebenden Service und wird in Ruhe gelassen; dieser
-         * setzt die Aufzeichnung selbst fort.
+         * wird das an drei Dingen:
+         *
+         *  1. **Der Dienst gewinnt.** Faehrt gerade ein Dienst hoch (der
+         *     typische `START_STICKY`-Neustart mitten in der Fahrt), wartet
+         *     diese Funktion auf seine Entscheidung — nur er weiss, ob er
+         *     fortsetzen will. Siehe [RecoveryGate].
+         *  2. **Der [RecordingRepository]-Zustand** deckt den gleichen Prozess
+         *     ab: Laeuft hier eine Aufzeichnung, wird nichts angefasst.
+         *  3. **Das Lebenszeichen** neben dem Journal deckt den Fall eines
+         *     inzwischen gestorbenen Prozesses ab. Seine Auswertung ist
+         *     bewusst konservativ: Ein fehlendes oder unlesbares Lebenszeichen
+         *     heisst „unbekannt", nicht „tot" — dann entscheidet die
+         *     Aenderungszeit von `active.jsonl`. Siehe [beurteileJournal].
          *
          * Das Journal wird vor dem Auswerten umbenannt
          * (`recovering-<zeitstempel>.jsonl`) und erst nach erfolgreichem
@@ -866,9 +1160,9 @@ class RecordingService : Service() {
          *     RecordingService.recoverIfNeeded(this@TrailscapeApplication, AppServices.rideStorage)
          * }
          * ```
-         * Der Service ruft die Funktion zusaetzlich selbst in `onCreate` und
-         * vor jedem Start einer neuen Aufzeichnung auf; mehrfache Aufrufe sind
-         * unschaedlich.
+         * Der Service ruft die Funktion zusaetzlich selbst auf — nach dem
+         * ersten Kommando und vor jedem Start einer neuen Aufzeichnung;
+         * mehrfache Aufrufe sind unschaedlich.
          *
          * @param force ueberspringt die Lebenszeichen-Pruefung. Nur fuer den
          *   Dienst selbst gedacht, der sicher weiss, dass gerade nichts
@@ -881,10 +1175,27 @@ class RecordingService : Service() {
             context: Context,
             rideStorage: RideStorage,
             force: Boolean = false,
+        ): List<Ride> = recoverIfNeeded(context, rideStorage, force, warten = !force)
+
+        /**
+         * @param warten ob auf die Entscheidung eines gerade startenden
+         *   Dienstes gewartet werden soll. Der Dienst selbst ruft mit `false`
+         *   — er wuerde sonst auf sich selbst warten.
+         */
+        private fun recoverIfNeeded(
+            context: Context,
+            rideStorage: RideStorage,
+            force: Boolean,
+            warten: Boolean,
         ): List<Ride> {
             val appContext = context.applicationContext
             val dir = RecordingJournal.directory(appContext.filesDir)
             if (!dir.isDirectory) return emptyList()
+
+            // Vor der Sperre, nicht in ihr: Der Dienst, auf dessen Entscheidung
+            // hier gewartet wird, braucht dieselbe Sperre, um ueberhaupt
+            // entscheiden zu koennen.
+            if (warten) recoveryGate.warteAufDienst()
 
             // Der ganze Ablauf laeuft unter der prozessweiten Journal-Sperre:
             // Ein Dienst, der gerade eine Aufzeichnung fortsetzt oder eine neue
@@ -901,17 +1212,23 @@ class RecordingService : Service() {
                 }
 
                 // 2. Das aktive Journal — nur wenn niemand mehr daran schreibt.
-                val journal = RecordingJournal(dir)
+                val journal = RecordingJournal(dir, AndroidHeartbeatClock)
                 if (!journal.exists()) return@withClaimLock recovered
                 if (!force && RecordingRepository.isRecording.value) return@withClaimLock recovered
 
-                val now = System.currentTimeMillis()
-                val heartbeatAge = journal.heartbeatAgeMs(now)
-                if (!force && heartbeatAge != null && heartbeatAge < HEARTBEAT_STALE_MS) {
-                    return@withClaimLock recovered
+                val jetzt = AndroidHeartbeatClock.stempel()
+                val urteil = if (force) {
+                    JournalUrteil.WIEDERHERSTELLEN
+                } else {
+                    beurteileJournal(
+                        alter = bewerteLebenszeichen(journal.lebenszeichen(), jetzt),
+                        journalAlterMs = journal.journalAlterMs(jetzt.wallClockMs),
+                        verfallsalterMs = HEARTBEAT_STALE_MS,
+                    )
                 }
+                if (urteil == JournalUrteil.VERSCHONEN) return@withClaimLock recovered
 
-                val claimed = RecordingJournal.claimStale(dir, now)
+                val claimed = RecordingJournal.claimStale(dir, jetzt.wallClockMs)
                     ?: return@withClaimLock recovered
                 File(dir, RecordingJournal.LOCK_FILE_NAME).delete()
                 finalizeClaimed(appContext, rideStorage, claimed)?.let { recovered.add(it) }
@@ -960,6 +1277,10 @@ class RecordingService : Service() {
          *  * Das Datum im Namen ist der Beginn der Tour, nicht der Zeitpunkt
          *    des Speicherns. Bei einer wiederhergestellten Tour kann das
          *    Speichern Tage spaeter passieren.
+         *
+         * Dazu kommt die Pausenkorrektur ([ohnePausenzeit]): Die Pausenzeit
+         * steht nur im Journal, und ohne sie zeigte die fertige Tour eine
+         * andere Dauer als die Notification waehrend der Fahrt.
          */
         private fun buildRide(
             context: Context,
@@ -981,7 +1302,7 @@ class RecordingService : Service() {
                 id = snapshot.id,
                 name = name,
                 createdAt = createdAt,
-                stats = computeStats(points),
+                stats = ohnePausenzeit(computeStats(points), snapshot.pausedMs),
                 points = points,
             )
         }

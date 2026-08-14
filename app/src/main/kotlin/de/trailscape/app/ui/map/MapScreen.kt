@@ -251,6 +251,18 @@ fun MapScreen(appViewModel: AppViewModel) {
         val action = pendingAction
         pendingAction = null
         if (action == null) return@rememberLauncherForActivityResult
+        if (action == PendingAction.RECORD && !hasFineLocationPermission(context)) {
+            // „Ungefaehr" statt „Genau": Die Karte kaeme damit zurecht, die
+            // Aufzeichnung nicht — sie haengt am GPS-Provider, der
+            // ACCESS_FINE_LOCATION verlangt. Ohne diese Meldung liefe der
+            // Dienst los und braeche wortlos wieder ab.
+            pendingNavigateRideId = null
+            appViewModel.showMessage(
+                "Zum Aufzeichnen wird der genaue Standort gebraucht. " +
+                    "Bitte waehle in der Abfrage „Genau“ statt „Ungefähr“.",
+            )
+            return@rememberLauncherForActivityResult
+        }
         if (locationGranted || action == PendingAction.GENERATE_ROUTES) {
             // Die Rundkurs-Suche braucht die Freigabe nicht zwingend: Ohne sie
             // startet die Runde eben in der Kartenmitte. Sie hier trotzdem

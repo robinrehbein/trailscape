@@ -42,6 +42,17 @@ const val healthSyncStorageKey: String = "trailscape.healthsync"
 const val healthSyncInitialWindowMs: Long = 30L * 24 * 60 * 60 * 1000
 
 /**
+ * Wie weit der Beginn des Importfensters hinter den Zeitpunkt des letzten
+ * Imports zurueckgesetzt wird: 4 Tage in Millisekunden.
+ *
+ * Begruendung und Sicherheitsbetrachtung stehen an [healthImportWindowStart].
+ * Vier Tage decken das lange Wochenende ab, an dem die Uhr nicht mit dem
+ * Telefon spricht, und bleiben deutlich unter dem 30-Tage-Fenster, das Health
+ * Connect ohne Historien-Freigabe ueberhaupt hergibt.
+ */
+const val healthSyncImportBackfillMs: Long = 4L * 24 * 60 * 60 * 1000
+
+/**
  * Ab welchem zeitlichen Ueberlappungsanteil eine Health-Connect-Session als
  * bereits vorhandene Tour gilt und uebersprungen wird (strikt groesser).
  */
@@ -583,7 +594,35 @@ private fun averageOrNull(values: List<Double>): Double? {
 }
 
 /**
- * Startpunkt des Importfensters: `since ?? lastImportAt ?? to - 30 Tage`.
+ * Startpunkt des Importfensters:
+ * `since ?? (lastImportAt - Puffer) ?? to - 30 Tage`.
+ *
+ * ## Warum der Puffer
+ * Gefiltert wird nach der **Startzeit** eines Workouts, und Samsung Health
+ * spiegelt die Daten einer Uhr erst Stunden nach der Fahrt nach Health
+ * Connect. Ohne Ueberlappung fiel eine solche Session fuer immer durchs
+ * Raster: Tour von 10 bis 12 Uhr, App-Sync um 12:30 → `lastImportAt = 12:30`;
+ * die Uhr spiegelt um 14 Uhr, das naechste Fenster beginnt aber bei 12:30 und
+ * die Session startete um 10 Uhr. Sie wurde nie gefunden — weder importiert
+ * noch zum Anreichern der aufgezeichneten Tour um die Herzfrequenz benutzt.
+ *
+ * [healthSyncImportBackfillMs] Tage decken jede realistische Verzoegerung ab
+ * (Uhr tagelang nicht in Reichweite des Telefons, Health Connect im
+ * Energiesparmodus).
+ *
+ * ## Warum das gefahrlos ist
+ * Der Puffer laesst dieselben Sessions mehrfach *betrachten*, nicht mehrfach
+ * importieren. Zwei Schranken greifen davor, beide in `importWithReport`:
+ *
+ *  * Die Ride-ID einer importierten Session ist aus der Datensatz-ID
+ *    abgeleitet ([healthRideId]); eine erneut gesehene Session ist damit
+ *    namentlich ein Duplikat und wird uebersprungen.
+ *  * Sessions ohne bekannte ID (nativer Reader, andere Quelle) fallen ueber
+ *    die Ueberlappungssuche (`findOverlap`, mehr als
+ *    [healthSyncOverlapThreshold] gemeinsame Zeit) auf die bestehende Tour;
+ *    die wird nur dann angefasst, wenn sie noch **keine** Herzfrequenz hat.
+ *
+ * Der Preis ist also nur eine etwas groessere Abfrage an Health Connect.
  *
  * Als reine Funktion herausgezogen, damit die Fensterlogik ohne
  * [HealthSyncStore] pruefbar bleibt.
@@ -592,7 +631,11 @@ fun healthImportWindowStart(
     since: LocalDateTime?,
     lastImportAt: LocalDateTime?,
     to: LocalDateTime,
-): LocalDateTime = since ?: lastImportAt ?: dartPlusMillis(to, -healthSyncInitialWindowMs)
+): LocalDateTime {
+    if (since != null) return since
+    if (lastImportAt != null) return dartPlusMillis(lastImportAt, -healthSyncImportBackfillMs)
+    return dartPlusMillis(to, -healthSyncInitialWindowMs)
+}
 
 // ---------------------------------------------------------------------------
 // Service
