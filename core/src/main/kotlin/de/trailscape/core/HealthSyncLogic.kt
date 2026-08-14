@@ -494,42 +494,44 @@ private fun nearestHr(samples: List<HealthHeartRateSample>, time: LocalDateTime)
 /**
  * Verdichtet HRV-Messungen (rMSSD in ms) zu einem Wert je Kalendertag.
  *
- * Massgeblich sind die Messungen zwischen 0:00 und 12:00 Uhr lokaler Zeit:
- * Die Galaxy Watch schreibt rMSSD im Schlaf, und nur naechtliche bzw.
- * morgendliche Werte sind untereinander vergleichbar (tagsueber verzerren
- * Belastung, Kaffee und Stress den Wert stark). Gibt es an einem Tag keine
- * Messung in diesem Fenster, gilt ersatzweise das Tagesmittel.
+ * Massgeblich sind ausschliesslich die Messungen zwischen 0:00 und 12:00 Uhr
+ * lokaler Zeit: Die Galaxy Watch schreibt rMSSD im Schlaf, und nur naechtliche
+ * bzw. morgendliche Werte sind untereinander vergleichbar. Tages-rMSSD liegt
+ * durch Belastung, Kaffee, Stress und Koerperhaltung **systematisch** niedriger
+ * — frueher galt an Tagen ohne Morgenwert ersatzweise das Tagesmittel, und
+ * jeder solche Tag erschien der Baseline-Rechnung als HRV-Einbruch. Ein
+ * fehlender Morgenwert ist deshalb ein fehlender Tag: Die Gates in [assessHrv]
+ * (≥ 14 Tage Baseline, ≥ 3 Tage im Rollfenster) sind genau dafuer da, mit
+ * Luecken umzugehen — ein verzerrter Wert ist schlechter als gar keiner.
  */
 fun dailyHrvValues(samples: Iterable<HealthNumericSample>): List<DailyValue> {
     val morningSums = linkedMapOf<LocalDateTime, Double>()
     val morningCounts = linkedMapOf<LocalDateTime, Int>()
-    val daySums = linkedMapOf<LocalDateTime, Double>()
-    val dayCounts = linkedMapOf<LocalDateTime, Int>()
 
     for (sample in samples) {
         if (!sample.value.isFinite() || sample.value <= 0) {
             continue
         }
-        val day = atMidnight(sample.time)
-        daySums[day] = (daySums[day] ?: 0.0) + sample.value
-        dayCounts[day] = (dayCounts[day] ?: 0) + 1
-        if (sample.time.hour < 12) {
-            morningSums[day] = (morningSums[day] ?: 0.0) + sample.value
-            morningCounts[day] = (morningCounts[day] ?: 0) + 1
+        if (sample.time.hour >= hrvMorningWindowEndHour) {
+            continue
         }
+        val day = atMidnight(sample.time)
+        morningSums[day] = (morningSums[day] ?: 0.0) + sample.value
+        morningCounts[day] = (morningCounts[day] ?: 0) + 1
     }
 
     val byDay = linkedMapOf<LocalDateTime, Double>()
-    for (day in daySums.keys) {
-        val morning = morningCounts[day]
-        byDay[day] = if (morning != null && morning > 0) {
-            morningSums[day]!! / morning
-        } else {
-            daySums[day]!! / dayCounts[day]!!
-        }
+    for ((day, sum) in morningSums) {
+        byDay[day] = sum / morningCounts[day]!!
     }
     return sortedDaily(byDay)
 }
+
+/**
+ * Ende des Zeitfensters, in dem eine rMSSD-Messung als „naechtlich" gilt
+ * (exklusiv, lokale Stunde).
+ */
+const val hrvMorningWindowEndHour: Int = 12
 
 private data class DayEntry(val day: LocalDateTime, val value: Double)
 

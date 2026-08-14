@@ -10,6 +10,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.theme.CardPadding
@@ -26,9 +27,24 @@ import kotlin.math.roundToInt
  * Port von `_buildVitalsCard` (`lib/screens/training_screen.dart`). HRV steht
  * oben — sie ist das staerkste Einzelsignal des Erholungswerts, sobald genug
  * Tage vorliegen.
+ *
+ * ## Messwert und Bewertung sind zweierlei
+ * In der Ueberschrift steht der **zuletzt gemessene Tageswert**
+ * (`HrvAssessment.lastRmssd`, `RestingHrAssessment.last`) — das ist die Zahl,
+ * die jemand erwartet, der „HRV 48 ms" liest. Bewertet wird dagegen mit dem
+ * 7-Tage-Rollmittel bzw. dem 3-Tage-Median; die stehen im Begruendungstext.
+ * Frueher stand das Mittel oben und war als Messwert beschriftet.
+ *
+ * [showShortSleeperHint] setzt die Regel „hoechstens einmal im Monat" aus
+ * `:core` (`shouldShowShortSleeperHint`) durch — sie war definiert, getestet
+ * und nie aufgerufen. [onShortSleeperHintShown] quittiert die Anzeige.
  */
 @Composable
-fun VitalsCard(insights: TrainingInsights) {
+fun VitalsCard(
+    insights: TrainingInsights,
+    showShortSleeperHint: Boolean = true,
+    onShortSleeperHintShown: () -> Unit = {},
+) {
     val theme = MaterialTheme.colorScheme
     val unknown = theme.onSurfaceVariant
     val hrv = insights.hrv
@@ -43,8 +59,9 @@ fun VitalsCard(insights: TrainingInsights) {
 
             SignalRow(
                 color = recoveryFlagColor(hrv.flag, unknown),
-                headline = if (hrv.available && hrv.currentRmssd != null) {
-                    "HRV ${hrv.currentRmssd!!.roundToInt()} ms · ${recoveryFlagLabels.getValue(hrv.flag)}"
+                headline = if (hrv.lastRmssd != null) {
+                    "HRV ${hrv.lastRmssd!!.roundToInt()} ms" +
+                        if (hrv.available) " · ${recoveryFlagLabels.getValue(hrv.flag)}" else ""
                 } else {
                     "HRV"
                 },
@@ -58,8 +75,9 @@ fun VitalsCard(insights: TrainingInsights) {
 
             SignalRow(
                 color = recoveryFlagColor(rhr.flag, unknown),
-                headline = if (rhr.available && rhr.current != null) {
-                    "Ruhepuls ${rhr.current!!.roundToInt()} bpm · ${recoveryFlagLabels.getValue(rhr.flag)}"
+                headline = if (rhr.last != null) {
+                    "Ruhepuls ${rhr.last!!.roundToInt()} bpm" +
+                        if (rhr.available) " · ${recoveryFlagLabels.getValue(rhr.flag)}" else ""
                 } else {
                     "Ruhepuls"
                 },
@@ -81,9 +99,10 @@ fun VitalsCard(insights: TrainingInsights) {
                 },
             )
 
-            if (sleep.available && sleep.shortSleeper) {
+            if (sleep.available && sleep.shortSleeper && showShortSleeperHint) {
                 Spacer(modifier = Modifier.height(12.dp))
                 NoticeBox(icon = Icons.Filled.Info, color = unknown, text = shortSleeperHint)
+                LaunchedEffect(Unit) { onShortSleeperHintShown() }
             }
 
             if (vo2.available) {

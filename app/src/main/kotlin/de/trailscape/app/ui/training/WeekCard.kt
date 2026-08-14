@@ -48,12 +48,18 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
     var budgetClickable = false
     if (target != null && !deload.recommended) {
         val hours = formatHours(target.estimatedHours)
+        // Die Umrechnung Last → Stunden unterstellt eine gemischte Woche
+        // (≈ 58 Last je Fahrstunde, siehe `weeklyLoadPerHour` in :core) und
+        // haengt ausserdem an derselben geschaetzten Schwellenleistung wie die
+        // Lastwerte selbst. Beides gehoert in den Satz, sonst liest sich die
+        // Zahl wie eine Planvorgabe.
         if (weeklyHours != null && weeklyHours > 0) {
-            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei deinem Budget von " +
-                "${formatHours(weeklyHours)} h pro Woche."
+            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche und " +
+                "deinem Budget von ${formatHours(weeklyHours)} h pro Woche. Fährst du " +
+                "härter, brauchst du weniger Zeit für denselben Zielwert."
         } else {
-            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit. Trage im Mehr-Tab dein " +
-                "Zeitbudget ein, dann rechnen wir es mit ein."
+            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche. Trage " +
+                "im Mehr-Tab dein Zeitbudget ein, dann rechnen wir es mit ein."
             budgetClickable = true
         }
     }

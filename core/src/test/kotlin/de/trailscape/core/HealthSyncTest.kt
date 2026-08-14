@@ -1067,14 +1067,32 @@ class HealthSyncTest {
     }
 
     @Test
-    fun `dailyHrvValues - ohne Morgenwerte gilt das Tagesmittel`() {
+    fun `dailyHrvValues - ohne Morgenwerte faellt der Tag ganz weg`() {
+        // Tages-rMSSD liegt systematisch unter dem naechtlichen Wert (Belastung,
+        // Kaffee, Koerperhaltung). Als Ersatz eingesetzt erschiene jeder solche
+        // Tag der Baseline als HRV-Einbruch — ein fehlender Tag ist ehrlicher.
         val series = dailyHrvValues(
             listOf(
                 HealthNumericSample(time = at(2026, 8, 5, 14), value = 30.0),
                 HealthNumericSample(time = at(2026, 8, 5, 20), value = 40.0),
             ),
         )
-        assertEquals(35.0, series.single().value)
+        assertTrue(series.isEmpty())
+    }
+
+    @Test
+    fun `dailyHrvValues - Nachmittagswerte kippen einen Tag mit Morgenwert nicht`() {
+        val series = dailyHrvValues(
+            listOf(
+                HealthNumericSample(time = at(2026, 8, 5, 4), value = 60.0),
+                HealthNumericSample(time = at(2026, 8, 5, 17), value = 20.0),
+                // Tag ohne Nachtmessung faellt weg, statt den Schnitt zu senken.
+                HealthNumericSample(time = at(2026, 8, 6, 17), value = 22.0),
+            ),
+        )
+        assertEquals(1, series.size)
+        assertEquals(at(2026, 8, 5), series.single().day)
+        assertEquals(60.0, series.single().value)
     }
 
     @Test

@@ -56,6 +56,25 @@ fun FormCard(insights: TrainingInsights) {
                 return@Card
             }
 
+            // Die Lastskala ist die stille Voraussetzung jeder Zahl auf dieser
+            // Karte. Wer nicht weiss, dass CTL/ATL/TSB relativ zu einer
+            // geschaetzten FTP stehen, haelt sie fuer Messwerte — und einen
+            // Sprung nach einer FTP-Aenderung fuer einen Fehler.
+            NoticeBox(
+                icon = Icons.Filled.Info,
+                color = theme.onSurfaceVariant,
+                text = insights.loadScaleNote,
+            )
+            insights.calibration.note?.let { note ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = theme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
             val tsbBand = classifyTsb(latest.tsb)
             val ramp = latest.rampRate7d
             val rampBand = ramp?.let { classifyRampRate(it) }

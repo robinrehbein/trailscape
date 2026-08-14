@@ -95,6 +95,11 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val assessment = remember(rides) { assessFitness(rides) }
+    // Der Kurzschlaefer-Hinweis ist ein Gesundheitshinweis, kein Statuswert:
+    // `:core` deckelt ihn auf einmal pro Monat (`shouldShowShortSleeperHint`),
+    // die Entscheidung faellt beim App-Start im ViewModel.
+    val showShortSleeperHint by appViewModel.shortSleeperHintVisible
+        .collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
@@ -143,7 +148,13 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 item(key = "week") {
                     WeekCard(insights, onOpenMore = { appViewModel.requestTab(AppTab.MORE) })
                 }
-                item(key = "vitals") { VitalsCard(insights) }
+                item(key = "vitals") {
+                    VitalsCard(
+                        insights = insights,
+                        showShortSleeperHint = showShortSleeperHint,
+                        onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
+                    )
+                }
                 item(key = "fitness") { FitnessCard(assessment) }
                 item(key = "goal") {
                     GoalCard(

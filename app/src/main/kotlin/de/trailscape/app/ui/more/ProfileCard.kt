@@ -34,7 +34,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.core.Sex
 import de.trailscape.core.TrainingProfile
+import de.trailscape.core.defaultEftpWPerKg
 import de.trailscape.core.defaultSetupMassKg
+import de.trailscape.core.maxEftpW
+import de.trailscape.core.minEftpW
 import kotlin.math.round
 
 /**
@@ -61,6 +64,7 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     var hrMaxText by remember { mutableStateOf("") }
     var lthrText by remember { mutableStateOf("") }
     var restingHrText by remember { mutableStateOf("") }
+    var ftpText by remember { mutableStateOf("") }
     var sex by remember { mutableStateOf(Sex.UNBEKANNT) }
     var advancedOpen by rememberSaveable { mutableStateOf(false) }
     var statusText by remember { mutableStateOf<String?>(null) }
@@ -77,6 +81,7 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         hrMaxText = profile.hrMaxOverride?.let { formatProfileNumber(it) } ?: ""
         lthrText = profile.lthrOverride?.let { formatProfileNumber(it) } ?: ""
         restingHrText = profile.restingHrOverride?.let { formatProfileNumber(it) } ?: ""
+        ftpText = profile.eftpOverrideW?.let { formatProfileNumber(it) } ?: ""
         sex = profile.sex
     }
 
@@ -200,6 +205,34 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = hintColor,
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = ftpText,
+                onValueChange = { ftpText = it },
+                label = { Text("Schwellenleistung FTP (Watt, optional)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten " +
+                    "kannst. Sie ist der Massstab für jede Trainingslast: An ihr hängen " +
+                    "Fitness (CTL), Ermüdung (ATL), Form (TSB) und dein Wochenziel — " +
+                    "änderst du sie, verschieben sich auch alle bisherigen Werte.\n\n" +
+                    "Ohne Eintrag schätzen wir: zuerst aus deinem besten " +
+                    "20-Minuten-Abschnitt (× 0,95), dann aus dem Abgleich mit deiner " +
+                    "gemessenen Herzfrequenz, notfalls grob mit " +
+                    "${formatProfileNumber(defaultEftpWPerKg)} W/kg — für ambitionierte " +
+                    "Fahrer:innen deutlich zu niedrig. Ein eigener Wert ist deshalb die " +
+                    "wirksamste Einzelangabe in diesem Formular. Für eine belastbare Zahl " +
+                    "fährst du nach gutem Aufwärmen 20 Minuten am Anschlag und trägst " +
+                    "95 % deiner Durchschnittsleistung ein; ohne Leistungsmesser bleibt " +
+                    "es auch hier ein Schätzwert.",
+                style = MaterialTheme.typography.bodySmall,
+                color = hintColor,
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -224,6 +257,7 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                     hrMaxText = hrMaxText,
                     lthrText = lthrText,
                     restingHrText = restingHrText,
+                    ftpText = ftpText,
                     onSave = appViewModel::setProfile,
                 )
             },
@@ -294,6 +328,7 @@ private fun saveProfile(
     hrMaxText: String,
     lthrText: String,
     restingHrText: String,
+    ftpText: String,
     onSave: (TrainingProfile) -> Unit,
 ): String {
     val age = ageText.trim().toIntOrNull()
@@ -312,6 +347,13 @@ private fun saveProfile(
     if (weeklyHours != null && (weeklyHours <= 0 || weeklyHours > 40)) {
         return "Bitte eine Wochenzeit zwischen 1 und 40 Stunden angeben."
     }
+    // Dieselben Grenzen wie im Rechenkern (`minEftpW`/`maxEftpW`): Ein Wert
+    // ausserhalb wuerde dort ohnehin geklemmt — dann sagen wir es lieber hier.
+    val ftp = parseProfileNumber(ftpText)
+    if (ftp != null && (ftp < minEftpW || ftp > maxEftpW)) {
+        return "Bitte eine FTP zwischen ${formatProfileNumber(minEftpW)} und " +
+            "${formatProfileNumber(maxEftpW)} Watt angeben."
+    }
 
     onSave(
         TrainingProfile(
@@ -325,7 +367,7 @@ private fun saveProfile(
             cda = current.cda,
             crr = current.crr,
             driveEfficiency = current.driveEfficiency,
-            eftpOverrideW = current.eftpOverrideW,
+            eftpOverrideW = ftp,
             weeklyHours = weeklyHours,
         ),
     )

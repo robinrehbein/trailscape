@@ -37,8 +37,16 @@ data class RestingHrAssessment(
     val baseline: Double?,
     /** `1.4826 × MAD` derselben Tage. */
     val sigma: Double?,
-    /** Median der letzten 3 Tage. */
+    /** Median der letzten 3 Tage — die Groesse, gegen die bewertet wird. */
     val current: Double?,
+    /**
+     * Juengster gemessener Tageswert in bpm — **nur zur Anzeige**.
+     *
+     * [current] ist ein 3-Tage-Median und damit eine Ableitung; wer „Ruhepuls
+     * 52 bpm" liest, erwartet aber die Messung von heute Nacht. Dasselbe
+     * Prinzip wie [HrvAssessment.lastRmssd].
+     */
+    val last: Double?,
     val deltaBpm: Double?,
     val z: Double?,
     val flag: RecoveryFlag,
@@ -49,13 +57,18 @@ data class RestingHrAssessment(
     val message: String,
 ) {
     companion object {
-        fun unavailable(reason: String, baselineDays: Int): RestingHrAssessment =
+        fun unavailable(
+            reason: String,
+            baselineDays: Int,
+            last: Double? = null,
+        ): RestingHrAssessment =
             RestingHrAssessment(
                 available = false,
                 unavailableReason = reason,
                 baseline = null,
                 sigma = null,
                 current = null,
+                last = last,
                 deltaBpm = null,
                 z = null,
                 flag = RecoveryFlag.UNBEKANNT,
@@ -103,6 +116,7 @@ fun assessRestingHeartRate(
         )
     }
     val ref = atMidnight(today ?: values.last().day)
+    val lastValue = values.lastOrNull { dayDifference(ref, it.day) >= 0 }?.value
 
     val baselineValues = values
         .filter {
@@ -115,6 +129,7 @@ fun assessRestingHeartRate(
         return RestingHrAssessment.unavailable(
             "Ruhepuls-Baseline wird aufgebaut (${baselineValues.size} von 21 Tagen).",
             baselineValues.size,
+            last = lastValue,
         )
     }
 
@@ -126,6 +141,7 @@ fun assessRestingHeartRate(
         return RestingHrAssessment.unavailable(
             "Kein aktueller Ruhepuls-Wert (letzte 3 Tage).",
             baselineValues.size,
+            last = lastValue,
         )
     }
     val current = median(recent.map { it.value })!!
@@ -201,6 +217,7 @@ fun assessRestingHeartRate(
         baseline = baseline,
         sigma = sigma,
         current = current,
+        last = lastValue,
         deltaBpm = delta,
         z = z,
         flag = flag,
@@ -250,11 +267,24 @@ val hrvStatusLabels: Map<HrvStatus, String> = mapOf(
  * nicht der Tageswert, sondern das [hrvRollingDays]-Tage-Rollmittel gegen ein
  * [hrvBaselineDays]-Tage-Mittel plus Normalband
  * `Baseline ± hrvBandFactor × SD`.
+ *
+ * Zwei Groessen, die nicht verwechselt werden duerfen:
+ *
+ *  * [z] misst die Abweichung in **Tageswert**-Streuungen. Das ist die Skala,
+ *    auf der das Normalband gezeichnet wird (Plews' „smallest worthwhile
+ *    change") und auf der eine Abweichung physiologisch eingeordnet wird.
+ *  * [zMean] misst dieselbe Abweichung in **Standardfehlern des Rollmittels**
+ *    (`σ/√n`). Das ist die Skala, auf der sich sagen laesst, ob die Abweichung
+ *    ueberhaupt gesichert ist — bei drei getragenen Naechten eben viel weniger
+ *    als bei sieben.
  */
 data class HrvAssessment(
     val available: Boolean,
     val unavailableReason: String?,
-    /** Mittelwert von `ln(rMSSD)` ueber [hrvBaselineDays] Tage. */
+    /**
+     * Mittelwert von `ln(rMSSD)` im Baselinefenster (Tage [hrvRollingDays] …
+     * [hrvBaselineDays]−1, also **ohne** das Rollfenster).
+     */
     val baselineLn: Double?,
     /** Streuung derselben Tage, mindestens [hrvMinSigmaLn]. */
     val sigmaLn: Double?,
@@ -263,10 +293,15 @@ data class HrvAssessment(
     /** Juengster Tageswert in ms — nur zur Anzeige, nie zur Bewertung. */
     val lastRmssd: Double?,
     /**
-     * `(currentLn − baselineLn) / sigmaLn`; das Normalband endet bei
-     * ±[hrvBandFactor].
+     * `(currentLn − baselineLn) / sigmaLn` auf Tageswert-Skala; das Normalband
+     * endet bei ±[hrvBandFactor].
      */
     val z: Double?,
+    /**
+     * Dieselbe Abweichung, normiert auf den Standardfehler des Rollmittels
+     * (`sigmaLn / √recentDays`) — die Sicherheitsachse der Eskalation.
+     */
+    val zMean: Double?,
     val status: HrvStatus,
     val flag: RecoveryFlag,
     /** Gueltige Tage im Baselinefenster (Gate: ≥ [hrvMinBaselineDays]). */
@@ -307,6 +342,7 @@ data class HrvAssessment(
             currentLn = null,
             lastRmssd = null,
             z = null,
+            zMean = null,
             status = HrvStatus.UNBEKANNT,
             flag = RecoveryFlag.UNBEKANNT,
             historyDays = 0,
@@ -314,14 +350,21 @@ data class HrvAssessment(
             message = "Noch keine HRV-Werte vorhanden.",
         )
 
-        fun unavailable(reason: String, historyDays: Int): HrvAssessment = HrvAssessment(
+        fun unavailable(
+            reason: String,
+            historyDays: Int,
+            lastRmssd: Double? = null,
+        ): HrvAssessment = HrvAssessment(
             available = false,
             unavailableReason = reason,
             baselineLn = null,
             sigmaLn = null,
             currentLn = null,
-            lastRmssd = null,
+            // Auch ohne Bewertung darf der zuletzt gemessene Wert angezeigt
+            // werden — er ist eine Messung, keine Ableitung.
+            lastRmssd = lastRmssd,
             z = null,
+            zMean = null,
             status = HrvStatus.UNBEKANNT,
             flag = RecoveryFlag.UNBEKANNT,
             historyDays = historyDays,
@@ -361,6 +404,21 @@ private fun stdDev(values: List<Double>): Double {
  * dem Band ist fuer sich genommen ein gutes Zeichen — zusammen mit einem
  * erhoehten Ruhepuls ist er aber ein bekanntes Muster bei starker Ermuedung
  * (parasympathische Saettigung) und wird dann als Warnzeichen gefuehrt.
+ *
+ * ## Baseline und Rollfenster ueberlappen nicht
+ * Die Baseline bildet sich aus den Tagen [hrvRollingDays] …
+ * [hrvBaselineDays]−1, das Rollmittel aus den Tagen 0 … [hrvRollingDays]−1.
+ * Frueher war die Baseline „letzte 28 Tage" und enthielt das Rollfenster: Ein
+ * anhaltender Einbruch zog seine eigene Referenz mit und blaehte zugleich die
+ * Streuung auf, sodass [RecoveryFlag.ROT] praktisch unerreichbar war. Der
+ * getrennte Zuschnitt ist Voraussetzung dafuer, dass die Schwellen ueberhaupt
+ * bedeuten, was sie sagen.
+ *
+ * ## Zwei Achsen fuer die Eskalation
+ * GELB entscheidet das Normalband auf Tagesskala (Plews & Laursen, SWC).
+ * ORANGE und ROT verlangen zusaetzlich, dass die Abweichung auch als Mittel
+ * abgesichert ist ([hrvOrangeMeanZ] / [hrvRedMeanZ] auf der SEM-Skala) — sonst
+ * koennten drei verrauschte Naechte einen Ruhetag ausloesen.
  */
 fun assessHrv(
     series: List<DailyValue>,
@@ -373,17 +431,25 @@ fun assessHrv(
     }
     val ref = atMidnight(today ?: values.last().day)
 
+    // Juengster Wert bis einschliesslich heute — nur fuer die Anzeige.
+    val lastValue = values.lastOrNull { dayDifference(ref, it.day) >= 0 }?.value
+
+    val recent = values.filter {
+        val diff = dayDifference(ref, it.day)
+        diff >= 0 && diff < hrvRollingDays
+    }
     val window = values.filter {
         val diff = dayDifference(ref, it.day)
-        diff >= 0 && diff < hrvBaselineDays
+        diff >= hrvRollingDays && diff < hrvBaselineDays
     }
 
     if (window.size < hrvMinBaselineDays) {
         val missing = hrvMinBaselineDays - window.size
         return HrvAssessment.unavailable(
             "Braucht noch $missing ${if (missing == 1) "Tag" else "Tage"} HRV-Daten " +
-                "(${window.size} von $hrvMinBaselineDays).",
+                "(${window.size} von $hrvMinBaselineDays im Vergleichszeitraum).",
             window.size,
+            lastRmssd = lastValue,
         )
     }
 
@@ -393,27 +459,30 @@ fun assessHrv(
         hrvMinSigmaLn,
     )
 
-    val recent = window.filter { dayDifference(ref, it.day) < hrvRollingDays }
     if (recent.size < hrvMinRecentDays) {
         return HrvAssessment.unavailable(
             "Zu wenige HRV-Messungen in den letzten sieben Tagen " +
                 "(${recent.size} von $hrvMinRecentDays).",
             window.size,
+            lastRmssd = lastValue,
         )
     }
 
     val currentLn = mean(recent.map { ln(it.value) })
     val z = (currentLn - baselineLn) / sigmaLn
+    // Standardfehler des Rollmittels: n Messungen mitteln die Tagesstreuung
+    // um den Faktor √n herunter.
+    val zMean = (currentLn - baselineLn) / (sigmaLn / sqrt(recent.size.toDouble()))
 
     val status: HrvStatus
     var flag = RecoveryFlag.GRUEN
     if (z <= -hrvBandFactor) {
         status = HrvStatus.NIEDRIG
         flag = RecoveryFlag.GELB
-        if (z <= -1.5) {
+        if (z <= hrvOrangeDailyZ && zMean <= hrvOrangeMeanZ) {
             flag = RecoveryFlag.ORANGE
         }
-        if (z <= -2.5) {
+        if (z <= hrvRedDailyZ && zMean <= hrvRedMeanZ) {
             flag = RecoveryFlag.ROT
         }
     } else if (z >= hrvBandFactor) {
@@ -433,24 +502,25 @@ fun assessHrv(
 
     val message = when (status) {
         HrvStatus.NIEDRIG -> if (flag == RecoveryFlag.GELB) {
-            "Deine HRV liegt mit $current ms knapp unter deinem Normalband " +
-                "($low–$high ms). Das kann an Training, Schlaf, Stress, Alkohol " +
-                "oder einem beginnenden Infekt liegen."
+            "Deine HRV liegt im 7-Tage-Mittel mit $current ms knapp unter deinem " +
+                "Normalband ($low–$high ms). Das kann an Training, Schlaf, Stress, " +
+                "Alkohol oder einem beginnenden Infekt liegen."
         } else {
-            "Deine HRV liegt mit $current ms deutlich unter deinem Normalband " +
-                "($low–$high ms). Das kann an Training, Schlaf, Stress, Alkohol " +
-                "oder einem Infekt liegen."
+            "Deine HRV liegt im 7-Tage-Mittel mit $current ms deutlich unter deinem " +
+                "Normalband ($low–$high ms). Das kann an Training, Schlaf, Stress, " +
+                "Alkohol oder einem Infekt liegen."
         }
 
         HrvStatus.IM_BAND ->
-            "Deine HRV liegt mit $current ms in deinem Normalband ($low–$high ms)."
+            "Deine HRV liegt im 7-Tage-Mittel mit $current ms in deinem Normalband " +
+                "($low–$high ms)."
 
         HrvStatus.UEBER_BAND ->
-            "Deine HRV liegt mit $current ms über deinem Normalband " +
+            "Deine HRV liegt im 7-Tage-Mittel mit $current ms über deinem Normalband " +
                 "($low–$high ms) — dein Nervensystem wirkt gut erholt."
 
         HrvStatus.SAETTIGUNG ->
-            "Deine HRV liegt mit $current ms über deinem Normalband " +
+            "Deine HRV liegt im 7-Tage-Mittel mit $current ms über deinem Normalband " +
                 "($low–$high ms), gleichzeitig ist dein Ruhepuls erhöht. Diese " +
                 "Kombination kommt auch bei starker Ermüdung vor — beobachte die " +
                 "nächsten Tage, bevor du hart trainierst."
@@ -464,8 +534,9 @@ fun assessHrv(
         baselineLn = baselineLn,
         sigmaLn = sigmaLn,
         currentLn = currentLn,
-        lastRmssd = window.last().value,
+        lastRmssd = lastValue,
         z = z,
+        zMean = zMean,
         status = status,
         flag = flag,
         historyDays = window.size,
@@ -648,7 +719,7 @@ data class Readiness(
     val band: ReadinessBand,
     /**
      * Strafterme nach §5.4 — unveraendert die Rohwerte, auch wenn sie fuer den
-     * Score gewichtet zusammengefuehrt werden.
+     * Score normiert und gewichtet zusammengefuehrt werden.
      */
     val penaltyRhr: Double,
     val penaltySleep: Double,
@@ -663,20 +734,42 @@ data class Readiness(
     /** HRV-Strafterm auf der Skala 0…100 (nur gesetzt, wenn [usesHrv]). */
     val penaltyHrv: Double = 0.0,
     /**
-     * Ob HRV in den Score eingeflossen ist (dann gilt die Gewichtung aus
-     * [readinessWeightHrv] & Co., sonst die reine Summenformel aus §5.4).
+     * Ob HRV in den Score eingeflossen ist. Aendert **nicht** mehr die Formel,
+     * sondern nur, ob [readinessWeightHrv] verteilt wurde — und damit die
+     * [confidence].
      */
     val usesHrv: Boolean = false,
+    /**
+     * Anteil des Gesamtgewichts, der von tatsaechlich vorhandenen Signalen
+     * abgedeckt ist (1,0 = alle vier). Macht sichtbar, auf wie viel der Score
+     * ueberhaupt beruht.
+     */
+    val signalCoverage: Double = 0.0,
 )
 
 /**
  * Berechnet den Readiness-Score aus HRV, Ruhepuls, Schlaf und Form (§5.4).
  *
  * Der Score erscheint nur, wenn alle drei Confidence-Gates halten: ≥ 21
- * Ruhepuls-Werte, ≥ 14 Schlafnaechte, ≥ 28 Tage Trainingshistorie. HRV ist
- * **optional**: liegt sie vor, wird sie zum staerksten Einzelsignal
- * ([readinessWeightHrv]); fehlt sie, bleibt die Summenformel aus §5.4
- * unveraendert.
+ * Ruhepuls-Werte, ≥ 14 Schlafnaechte, ≥ 28 Tage Trainingshistorie.
+ *
+ * ## Eine Formel, egal welche Signale da sind
+ * Jeder Strafterm wird auf 0…100 normiert und mit seinem Gewicht
+ * ([readinessWeightHrv] & Co.) verrechnet; **fehlende Signale bekommen kein
+ * Gewicht, und die restlichen Gewichte werden auf ihre Summe renormiert**.
+ * Ein fehlendes Signal verhaelt sich damit wie „so gut oder schlecht wie der
+ * Durchschnitt der vorhandenen" — die neutralste verfuegbare Annahme.
+ *
+ * Frueher gab es zwei Formeln: gewichtetes Mittel mit HRV, Summe der
+ * Strafterme ohne. Bei identischer Physiologie ergaben dieselben Strafterme
+ * 55 gegen 77 Punkte, und weil `usesHrv` allein daran haengt, ob die Uhr
+ * genug Naechte getragen wurde, sprang der Score ueber die Baender
+ * (40/60/80) hin und her. Der Unterschied lag nicht im Koerper, sondern im
+ * Handgelenk.
+ *
+ * Fehlende Signale senken jetzt die [Readiness.confidence] und
+ * [Readiness.signalCoverage], **nicht** den Score — Unwissen darf weder
+ * bestrafen noch belohnen.
  */
 fun computeReadiness(
     restingHr: RestingHrAssessment,
@@ -686,7 +779,8 @@ fun computeReadiness(
     trainingHistoryDays: Int = 0,
 ): Readiness {
     val restingHrZ = restingHr.z
-    val penaltyRhr = if (restingHr.available && restingHrZ != null) {
+    val usesRhr = restingHr.available && restingHrZ != null
+    val penaltyRhr = if (usesRhr) {
         clamp((restingHrZ - 0.5) * 18, 0.0, maxPenaltyRhr)
     } else {
         0.0
@@ -718,21 +812,35 @@ fun computeReadiness(
     val usesHrv = hrv.available && hrvZ != null
     var penaltyHrv = 0.0
     if (usesHrv) {
-        penaltyHrv = clamp((-hrvZ!! - hrvBandFactor) * 50, 0.0, 100.0)
+        penaltyHrv = clamp((-hrvZ - hrvBandFactor) * 50, 0.0, 100.0)
         if (hrv.status == HrvStatus.SAETTIGUNG) {
             penaltyHrv = max(penaltyHrv, 50.0)
         }
     }
 
-    val score: Double = if (usesHrv) {
-        // Alle Strafterme auf 0…100 normieren und gewichtet zusammenfuehren.
-        val weighted = readinessWeightHrv * penaltyHrv +
-            readinessWeightRhr * (penaltyRhr / maxPenaltyRhr * 100) +
-            readinessWeightSleep * (penaltySleep / maxPenaltySleep * 100) +
-            readinessWeightLoad * (penaltyLoad / maxPenaltyLoad * 100)
-        clamp(100 - weighted, 0.0, 100.0)
+    // Ein Eintrag je Signal: (Gewicht, Strafterm auf 0…100), nur wenn das
+    // Signal wirklich vorliegt.
+    val parts = mutableListOf<Pair<Double, Double>>()
+    if (usesHrv) {
+        parts.add(readinessWeightHrv to penaltyHrv)
+    }
+    if (usesRhr) {
+        parts.add(readinessWeightRhr to (penaltyRhr / maxPenaltyRhr * 100))
+    }
+    if (sleep.available) {
+        parts.add(readinessWeightSleep to (penaltySleep / maxPenaltySleep * 100))
+    }
+    if (tsb != null) {
+        parts.add(readinessWeightLoad to (penaltyLoad / maxPenaltyLoad * 100))
+    }
+
+    val coverage = parts.sumOf { it.first }
+    val score = if (coverage <= 0) {
+        // Kein einziges Signal: Es gibt nichts zu bestrafen. Der Gate unten
+        // sorgt dafuer, dass dieser Wert nie als Aussage erscheint.
+        100.0
     } else {
-        clamp(100 - penaltyRhr - penaltySleep - penaltyLoad, 0.0, 100.0)
+        clamp(100 - parts.sumOf { it.first * it.second } / coverage, 0.0, 100.0)
     }
     val band = classifyReadiness(score)
 
@@ -747,6 +855,16 @@ fun computeReadiness(
         missing.add("Trainingshistorie")
     }
     val available = missing.isEmpty()
+
+    // Vollstaendigkeit statt Formelwechsel: Wer alle vier Signale liefert,
+    // bekommt den belastbarsten Score; wem HRV fehlt, dem sagen wir es an der
+    // Confidence — nicht an einem stillschweigend anderen Rechenweg.
+    val confidence = when {
+        !available -> Confidence.NONE
+        coverage >= 0.99 -> Confidence.HIGH
+        coverage >= 0.55 -> Confidence.MEDIUM
+        else -> Confidence.LOW
+    }
 
     return Readiness(
         available = available,
@@ -767,13 +885,8 @@ fun computeReadiness(
         hrv = hrv,
         tsb = tsb,
         usesHrv = usesHrv,
-        // Mit HRV steht ein direkt gemessenes Signal des vegetativen Zustands im
-        // Score — das traegt weiter als Ruhepuls und Schlaf allein.
-        confidence = if (available) {
-            if (usesHrv) Confidence.HIGH else Confidence.MEDIUM
-        } else {
-            Confidence.NONE
-        },
+        signalCoverage = coverage,
+        confidence = confidence,
         headline = if (available) {
             "Erholung: ${dartRound(score).toInt()} — ${readinessBandLabels[band]}"
         } else {
@@ -785,7 +898,8 @@ fun computeReadiness(
                     "ein Trendindikator, keine Messung."
             } else {
                 "Basierend auf Ruhepuls, Schlaf und Trainingslast (ohne HRV) — " +
-                    "ein Trendindikator, keine Messung."
+                    "ein Trendindikator, keine Messung. Ohne HRV fehlt das " +
+                    "direkteste Signal; der Wert ist deshalb unsicherer."
             }
         } else {
             "Sobald genug Tage vorliegen, fassen wir Ruhepuls, Schlaf und " +
