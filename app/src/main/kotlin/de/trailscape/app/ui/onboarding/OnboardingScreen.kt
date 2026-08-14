@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,9 +80,11 @@ import kotlinx.coroutines.launch
  *
  * ## Bedienung
  * Wischen oder „Weiter"; „Überspringen" oben rechts beendet die Einfuehrung
- * sofort. Auf der Profilseite speichert „Weiter" die Eingabe mit — leere
- * Felder sind erlaubt und werden stillschweigend uebergangen, fehlerhafte
- * Eingaben melden sich unter dem Feld und halten die Seite fest.
+ * sofort. Die Systemzurueckgeste blaettert eine Seite zurueck (siehe
+ * `BackHandler` im Rumpf) — vorher war der einzige Weg nach vorn. Auf der
+ * Profilseite speichert „Weiter" die Eingabe mit — leere Felder sind erlaubt
+ * und werden stillschweigend uebergangen, fehlerhafte Eingaben melden sich
+ * unter dem Feld und halten die Seite fest.
  */
 @Composable
 fun OnboardingScreen(appViewModel: AppViewModel) {
@@ -91,10 +95,25 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
     // Nachbarseiten nicht dauerhaft in der Komposition, ein `remember` in der
     // Seite selbst waere nach zwei Wischern weg.
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
+    val profileConfirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
     var ageText by rememberSaveable { mutableStateOf("") }
     var weightText by rememberSaveable { mutableStateOf("") }
     var sex by rememberSaveable { mutableStateOf(Sex.UNBEKANNT) }
     var profileError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // „Mehr → Über → Einführung erneut ansehen" zeigt dieselben Seiten noch
+    // einmal — bisher mit leeren Profilfeldern, als haette der Nutzer nie etwas
+    // eingetragen. Wer bereits gespeichert hat, sieht jetzt seine Werte und
+    // kann sie bestaetigen oder aendern. Beim allerersten Start bleiben die
+    // Felder leer, denn dort steht nur `defaultTrainingProfile` dahinter —
+    // fremde Zahlen, die nicht wie eine eigene Eingabe aussehen duerfen (siehe
+    // AppViewModel.profileConfirmed).
+    LaunchedEffect(profileConfirmed) {
+        if (!profileConfirmed) return@LaunchedEffect
+        if (ageText.isEmpty()) ageText = profile.ageYears.toString()
+        if (weightText.isEmpty()) weightText = profile.weightKg.toInt().toString()
+        if (sex == Sex.UNBEKANNT) sex = profile.sex
+    }
 
     /**
      * Uebernimmt die Profileingabe. Liefert `false`, wenn ein *gefuellter*
@@ -129,6 +148,18 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
         applyProfile()
         appViewModel.completeOnboarding()
     }
+
+    fun goBack() {
+        if (pagerState.currentPage <= 0) return
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+    }
+
+    // Die Systemzurueckgeste fuehrte bisher aus der Einfuehrung heraus in den
+    // Hintergrund — die einzige Richtung war vorwaerts. Jetzt blaettert sie eine
+    // Seite zurueck; auf der ersten Seite schluckt sie der Handler bewusst, denn
+    // ein versehentliches Wischen soll nicht die App schliessen, bevor
+    // irgendetwas eingerichtet ist. Beenden geht ueber „Überspringen".
+    BackHandler { goBack() }
 
     fun goForward() {
         val page = OnboardingPage.entries[pagerState.currentPage]
@@ -224,19 +255,19 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                         .padding(horizontal = ScreenPadding, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Drei Punkte fuer drei Schritte — nicht vier fuer vier
+                    // Seiten. Die Willkommensseite ist kein Schritt (sie traegt
+                    // auch keine Nummer), vier Punkte gegen „Schritt 1 von 3"
+                    // waren aber genau der Widerspruch, den man beim ersten Blick
+                    // sieht. Auf Seite 0 ist `current` damit -1: drei Punkte,
+                    // keiner aktiv — es geht gleich los.
                     PageDots(
-                        count = OnboardingPage.entries.size,
-                        current = pagerState.currentPage,
+                        count = OnboardingPage.entries.size - 1,
+                        current = pagerState.currentPage - 1,
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     if (pagerState.currentPage > 0) {
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                }
-                            },
-                        ) { Text("Zurück") }
+                        TextButton(onClick = ::goBack) { Text("Zurück") }
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Button(onClick = ::goForward) {
@@ -278,9 +309,13 @@ private enum class OnboardingPage(
                 "Empfehlung für heute, und daraus auf Wunsch eine passende Rundstrecke " +
                 "über Schotter und Nebenwege, die wieder zu Hause endet. Wer eine Uhr " +
                 "trägt, bekommt Ruhepuls, HRV und Schlaf zusätzlich in die Rechnung.",
-            "Unten führen fünf Tabs dorthin: Heute (die Empfehlung), Karte (aufzeichnen " +
-                "und planen), Touren (alles Gefahrene), Training (Plan und Auswertung) " +
-                "und Mehr (Profil, Import, Einstellungen).",
+            // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
+            // — „unten" zeigte also auf nichts. Der Satz sagt jetzt, dass sie
+            // gleich kommt.
+            "Sobald die Einführung durch ist, führen unten fünf Tabs dorthin: Heute (die " +
+                "Empfehlung), Karte (aufzeichnen und planen), Touren (alles Gefahrene), " +
+                "Training (Plan und Auswertung) und Mehr (Profil, Import, " +
+                "Einstellungen).",
             "Alles liegt auf deinem Gerät. Kein Konto, keine Anmeldung, keine Telemetrie. " +
                 "Ein eigener Sync-Server ist möglich, aber freiwillig.",
         ),
@@ -317,10 +352,10 @@ private enum class OnboardingPage(
         paragraphs = listOf(
             "Wenn deine Uhr nach Health Connect schreibt (Samsung Health, Garmin, " +
                 "Fitbit und andere), holt Trailscape von dort Ruhepuls, HRV und Schlaf — " +
-                "und rechnet daraus die Tagesempfehlung im Trainings-Tab.",
+                "und rechnet daraus die Tagesempfehlung im Tab „Heute“.",
             "Ohne diese Werte funktioniert die App vollständig; die Empfehlung stützt " +
                 "sich dann allein auf deine Trainingslast.",
-            "Verbinden geht auch später jederzeit unter Mehr → Samsung Health.",
+            "Verbinden geht auch später jederzeit unter Mehr → Health Connect.",
         ),
     ),
 }
@@ -426,7 +461,7 @@ private fun HealthConnectStep(appViewModel: AppViewModel) {
                         "Verbunden. Trailscape holt deine Werte ab jetzt automatisch."
                     } else {
                         "Keine Freigabe erteilt — du kannst das später unter " +
-                            "Mehr → Samsung Health nachholen."
+                            "Mehr → Health Connect nachholen."
                     }
                 } catch (e: HealthSyncException) {
                     status = e.message
@@ -457,7 +492,13 @@ private fun HealthConnectStep(appViewModel: AppViewModel) {
     }
 }
 
-/** Fortschrittspunkte statt einer Zahl — dieselbe Sprache wie jeder Pager. */
+/**
+ * Fortschrittspunkte statt einer Zahl — dieselbe Sprache wie jeder Pager.
+ *
+ * [current] darf ausserhalb von `0 until count` liegen; dann ist kein Punkt
+ * aktiv. Genau das braucht die Willkommensseite, die kein Schritt ist (siehe
+ * Aufrufstelle).
+ */
 @Composable
 private fun PageDots(count: Int, current: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {

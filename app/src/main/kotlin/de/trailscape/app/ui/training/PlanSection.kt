@@ -154,10 +154,13 @@ fun PlanWeekCard(
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             if (isCurrent && onPlanRoute != null) {
-                                IconButton(
-                                    onClick = { onPlanRoute(session) },
-                                    modifier = Modifier.size(32.dp),
-                                ) {
+                                // Ohne Groessenangabe: `IconButton` bringt die
+                                // 48-dp-Mindestflaeche von Material selbst mit.
+                                // `Modifier.size(32.dp)` unterlief sie — bei
+                                // einem Knopf, der in einer eng gesetzten
+                                // Einheitenzeile neben zwei Textspalten sitzt
+                                // und deshalb erst recht getroffen werden will.
+                                IconButton(onClick = { onPlanRoute(session) }) {
                                     Icon(
                                         Icons.Filled.Route,
                                         contentDescription = "Passende Route für „${session.title}“ planen",

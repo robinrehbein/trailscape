@@ -59,8 +59,17 @@ import kotlinx.coroutines.withContext
 private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
 
 /**
- * Samsung-Health-/Health-Connect-Karte — Port von `_buildHealthCard()` aus
+ * Health-Connect-Karte — Port von `_buildHealthCard()` aus
  * `lib/screens/more_screen.dart`.
+ *
+ * ## Warum sie nicht mehr „Samsung Health" heisst
+ * Die App spricht ausschliesslich mit **Health Connect**, der
+ * Android-Datendrehscheibe — nicht mit einem einzelnen Hersteller. Samsung
+ * Health ist nur eine von vielen Quellen, die dort hineinschreiben; Garmin
+ * Connect, Fitbit, Polar Flow und Google Fit tun dasselbe. Der alte Titel liess
+ * jede Nutzerin ohne Samsung-Uhr an dieser Karte vorbeiscrollen, obwohl genau
+ * sie gemeint war. Aus demselben Grund nennt der Text unten Samsung Health nur
+ * noch als Beispiel unter mehreren.
  *
  * Abweichung vom Original: statt `HealthPluginGateway.installHealthConnect()`
  * (das es auf Android nativ nicht mehr gibt, siehe `HealthTypes.kt`-KDoc)
@@ -88,7 +97,7 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         refreshLastSyncAt()
     }
 
-    MoreSectionCard(title = "Samsung Health", modifier = modifier) {
+    MoreSectionCard(title = "Health Connect", modifier = modifier) {
         val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
         // Dieselbe Warnfarbe wie die Ampeln des Trainings-Tabs; vorher lag hier
         // eine private Kopie von `Colors.orange.shade800`, die im Dunkelmodus
@@ -181,7 +190,12 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                                 color = MaterialTheme.colorScheme.onPrimary,
                             )
                         } else {
-                            Text("Jetzt synchronisieren")
+                            // Nicht „Jetzt synchronisieren": So heisst auch der
+                            // Knopf der Sync-Karte weiter unten, der etwas
+                            // voellig anderes tut (Abgleich mit dem eigenen
+                            // Server). Hier werden Workouts und Vitalwerte aus
+                            // Health Connect **geholt** — in eine Richtung.
+                            Text("Neue Touren holen")
                         }
                     }
                     OutlinedButton(
@@ -243,8 +257,9 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 NoticeBox(
                     icon = Icons.Filled.Info,
                     color = hintColor,
-                    text = "Keine Workouts im Zeitraum — prüfe in Samsung Health, ob die " +
-                        "Health-Connect-Synchronisierung aktiv ist.",
+                    text = "Keine Workouts im Zeitraum — prüfe in der App deiner Uhr " +
+                        "(Samsung Health, Garmin Connect, Fitbit …), ob sie ihre " +
+                        "Trainings nach Health Connect schreibt.",
                 )
             }
         }
@@ -255,17 +270,22 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             NoticeBox(
                 icon = Icons.Filled.LocationOn,
                 color = warningColor,
+                // „in Health Connect" gehoert in BEIDE Zweige: Ohne die Angabe
+                // sucht der Nutzer die Einstellung in Trailscape — und findet
+                // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
+                // ausserdem ganz, der Pfad lief ungebremst in den naechsten
+                // Satzteil.
                 text = "Für $routesMissing " +
                     "${if (routesMissing == 1) "importierte Tour" else "importierte Touren"} hat " +
-                    "Health Connect keine Route geliefert. Erlaube unter " +
-                    "„App-Berechtigungen → Trailscape → Trainingsrouten" +
-                    " den dauerhaften Zugriff, damit die aufgezeichnete Strecke mitkommt.",
+                    "Health Connect keine Route geliefert. Erlaube in Health Connect unter " +
+                    "„App-Berechtigungen → Trailscape → Trainingsrouten“ den dauerhaften " +
+                    "Zugriff, damit die aufgezeichnete Strecke mitkommt.",
             )
         } else {
             Text(
                 text = "Damit auch die aufgezeichnete Route mit importiert wird, erlaube in " +
-                    "Health Connect unter „App-Berechtigungen → Trailscape → Trainingsrouten" +
-                    "\" den dauerhaften Zugriff. Ohne diese Freigabe werden Distanz, Dauer und " +
+                    "Health Connect unter „App-Berechtigungen → Trailscape → Trainingsrouten“ " +
+                    "den dauerhaften Zugriff. Ohne diese Freigabe werden Distanz, Dauer und " +
                     "Herzfrequenz trotzdem übernommen.",
                 style = MaterialTheme.typography.bodySmall,
                 color = hintColor,
@@ -273,7 +293,7 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "„Alles neu importieren\" betrachtet wieder die letzten " +
+            text = "„Alles neu importieren“ betrachtet wieder die letzten " +
                 "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage.",
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,

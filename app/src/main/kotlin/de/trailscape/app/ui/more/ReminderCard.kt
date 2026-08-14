@@ -1,5 +1,9 @@
 package de.trailscape.app.ui.more
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +15,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -56,6 +61,14 @@ import java.time.LocalTime
  * Gewinn. Die Uhrzeit bleibt deshalb auch dann bedienbar, wenn nur der
  * Anstupser eingeschaltet ist.
  *
+ * ## Die Berechtigung wird hier angefragt
+ * Ab Android 13 braucht jede Benachrichtigung `POST_NOTIFICATIONS`. Bisher
+ * fragte nur der Start einer Aufzeichnung danach (`ui/map`) — wer nie
+ * aufzeichnete, konnte die Erinnerungen einschalten und bekam nie eine. Der
+ * Hinweis samt Knopf unten holt die Freigabe deshalb dort, wo sie gebraucht
+ * wird; das Muster stammt aus [OfflineRoutingCard], die es fuer die Ortung
+ * ebenso macht.
+ *
  * ## Speichern und Umplanen in einem Schritt
  * Jede Aenderung geht sofort an [AppViewModel.setReminderSettings] (Speichern)
  * **und** an [ReminderScheduler.reschedule] (naechster Termin) — mit demselben
@@ -71,6 +84,23 @@ fun ReminderCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
     // Welche der beiden Uhrzeiten gerade im Dialog steht; `null` = kein Dialog.
     var editing by remember { mutableStateOf<ReminderTime?>(null) }
+
+    // Eigener Zustand statt eines direkten Aufrufs im Rumpf: Die Antwort des
+    // Systemdialogs loest von sich aus keine Recomposition aus — ohne diesen
+    // Wert bliebe der Hinweis auch nach dem Erlauben stehen.
+    var permissionGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        permissionGranted = granted || hasNotificationPermission(context)
+        if (!granted) {
+            appViewModel.showMessage(
+                "Ohne diese Freigabe bleiben die Erinnerungen still. Erteilen lässt sie " +
+                    "sich jederzeit unter „Einstellungen → Apps → Trailscape → " +
+                    "Benachrichtigungen“.",
+            )
+        }
+    }
 
     fun apply(next: ReminderSettings) {
         appViewModel.setReminderSettings(next)
@@ -125,20 +155,34 @@ fun ReminderCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             onCheckedChange = { apply(settings.copy(nudgeEnabled = it)) },
         )
 
-        // Die Berechtigung wird nur an einer Stelle angefragt — beim Start
-        // einer Aufzeichnung (siehe ui/map). Hier steht deshalb nur der
-        // Hinweis, kein zweiter Anfrageknopf; ohne Berechtigung bleiben die
-        // Erinnerungen still.
-        if (settings.anyEnabled && !hasNotificationPermission(context)) {
+        // Ein Schalter, der sich einschalten laesst und danach nichts tut, ist
+        // eine Falle — und die Benachrichtigungs-Berechtigung war die einzige
+        // der App, die nirgends dort angefragt wurde, wo man sie braucht (sie
+        // kam nur nebenbei beim Start einer Aufzeichnung). Deshalb steht hier
+        // derselbe Anfrageknopf wie in `OfflineRoutingCard` bei der Ortung:
+        // erklaeren, was fehlt, und es an Ort und Stelle erledigen.
+        if (settings.anyEnabled && !permissionGranted) {
             Spacer(modifier = Modifier.height(12.dp))
             NoticeBox(
                 icon = Icons.Filled.Info,
                 color = LocalSignalColors.current.warning,
                 text = "Trailscape darf keine Benachrichtigungen anzeigen — die Erinnerungen " +
-                    "bleiben deshalb still. Die Berechtigung wird beim Start einer " +
-                    "Aufzeichnung abgefragt und lässt sich in den Android-Einstellungen " +
-                    "unter „Apps → Trailscape → Benachrichtigungen\" jederzeit erteilen.",
+                    "bleiben deshalb still. Erlaube sie hier; nachträglich geht es auch " +
+                    "in den Android-Einstellungen unter " +
+                    "„Apps → Trailscape → Benachrichtigungen“.",
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    // Ab Android 13 gibt es die Laufzeit-Berechtigung; darunter
+                    // sind Benachrichtigungen ohne Nachfrage erlaubt und der
+                    // Zweig hier wird nie erreicht (siehe
+                    // `hasNotificationPermission`).
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
+            ) { Text("Benachrichtigungen erlauben") }
         }
     }
 

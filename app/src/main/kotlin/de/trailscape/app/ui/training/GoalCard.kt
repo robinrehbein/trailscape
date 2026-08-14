@@ -167,10 +167,16 @@ fun GoalCard(
 
             Box(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
-                    value = goalDate?.let { formatDate(it) } ?: "Datum wählen",
+                    value = goalDate?.let { formatDate(it) } ?: "",
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Zieldatum") },
+                    // „Datum wählen" ist eine Aufforderung, kein Wert — als
+                    // `value` sah sie aus wie ein bereits gesetztes Datum und
+                    // haette bei einer Bildschirmvorlesung als Inhalt des Felds
+                    // gegolten. Als `placeholder` verschwindet sie, sobald ein
+                    // echtes Datum darin steht.
+                    placeholder = { Text("Datum wählen") },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 // Ueberlagerung statt `enabled = false`: das Feld soll normal

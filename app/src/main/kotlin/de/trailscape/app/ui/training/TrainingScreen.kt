@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.training
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
@@ -28,9 +31,13 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.assessFitness
 import de.trailscape.core.routeTargetForSession
@@ -66,9 +73,23 @@ import de.trailscape.core.routeTargetForSession
  * keine Daten" — und erklaerte nirgends, *warum* und *wie lange* das so bleibt.
  * Deshalb steht bei leerer Tourenliste [TrainingEmptyState] ganz oben: drei
  * Saetze zum Modell (Fitness und Erholung brauchen ~2 Wochen Historie) und die
- * beiden kuerzesten Wege zu echten Daten. Die uebrigen Karten bleiben darunter
- * stehen — Vitalwerte koennen naemlich auch ganz ohne Touren schon aus Health
- * Connect kommen, und das Zielformular funktioniert ebenfalls sofort.
+ * beiden kuerzesten Wege zu echten Daten.
+ *
+ * Zwei Karten fehlen in diesem Zustand ganz: [WeekCard] und [FitnessCard].
+ * Beide *behaupteten* ohne Datengrundlage etwas — die eine „Kein Deload nötig —
+ * Deine Belastung sieht aktuell tragfähig aus" (eine Entwarnung auf null
+ * Datenpunkten), die andere stufte den Nutzer am ersten Tag als „Einsteiger"
+ * ein. Der Leerzustand darueber sagt bereits, dass beides Historie braucht;
+ * eine erfundene Auskunft daneben macht ihn unglaubwuerdig. Die uebrigen Karten
+ * bleiben stehen — Vitalwerte koennen naemlich auch ganz ohne Touren schon aus
+ * Health Connect kommen, und das Zielformular funktioniert ebenfalls sofort.
+ *
+ * ## Zwei Hinweise am Rand
+ *  * **Ganz oben**, solange [AppViewModel.profileConfirmed] aus ist: dass alle
+ *    Zahlen dieses Tabs auf Standardwerten beruhen (siehe
+ *    [UnconfirmedProfileNotice]).
+ *  * **Ganz unten**, immer und eingeklappt: das Glossar der Fachbegriffe
+ *    ([GlossaryCard]).
  *
  * ## Bewusste Abweichungen vom Dart-Original
  *  * **Keine `_EntranceFade`-Animation.** Das Original blendet die ersten
@@ -95,6 +116,10 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val assessment = remember(rides) { assessFitness(rides) }
+    // Ob Alter und Gewicht vom Nutzer stammen — sonst rechnet dieser ganze Tab
+    // mit den Annahmen aus `defaultTrainingProfile` (siehe
+    // AppViewModel.profileConfirmed).
+    val profileConfirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
     // Der Kurzschlaefer-Hinweis ist ein Gesundheitshinweis, kein Statuswert:
     // `:core` deckelt ihn auf einmal pro Monat (`shouldShowShortSleeperHint`),
     // die Entscheidung faellt beim App-Start im ViewModel.
@@ -139,14 +164,47 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     item(key = "empty") {
                         TrainingEmptyState(
                             onRecord = { appViewModel.requestTab(AppTab.MAP) },
-                            onImport = { appViewModel.requestTab(AppTab.MORE) },
+                            // Nicht mehr nur „irgendwohin in den Mehr-Tab":
+                            // Das Sprungziel scrollt zur Karte „Daten & Backup",
+                            // in der die Import-Knoepfe wirklich stehen (siehe
+                            // AppViewModel.pendingMoreSection).
+                            onImport = { appViewModel.requestMoreSection(MoreSection.BACKUP) },
+                        )
+                    }
+                }
+
+                // Solange das Profil nicht bestaetigt ist, stehen unter allen
+                // Zahlen dieses Tabs Annahmen (Alter 40, 75 kg). Einmal gesagt,
+                // ganz oben — nicht in jeder Karte einzeln.
+                if (!profileConfirmed) {
+                    item(key = "profil-hinweis") {
+                        UnconfirmedProfileNotice(
+                            onOpenProfile = {
+                                appViewModel.requestMoreSection(MoreSection.PROFILE)
+                            },
                         )
                     }
                 }
 
                 item(key = "form") { FormCard(insights) }
-                item(key = "week") {
-                    WeekCard(insights, onOpenMore = { appViewModel.requestTab(AppTab.MORE) })
+                // Ohne eine einzige Tour haetten beide Karten nichts zu sagen —
+                // sie sagten es aber trotzdem, und zwar falsch: „Kein Deload
+                // nötig — Deine Belastung sieht aktuell tragfähig aus" ist eine
+                // Entwarnung auf null Datenpunkten, und „Einsteiger" eine
+                // Einstufung ohne Grundlage. Der Leerzustand ganz oben erklaert
+                // bereits, dass beides Historie braucht.
+                if (rides.isNotEmpty()) {
+                    item(key = "week") {
+                        WeekCard(
+                            insights,
+                            // Der Zeitbudget-Hinweis meint das Feld „Zeit pro
+                            // Woche" im Profil — also dorthin, nicht an den
+                            // Anfang der Kartenliste.
+                            onOpenMore = {
+                                appViewModel.requestMoreSection(MoreSection.PROFILE)
+                            },
+                        )
+                    }
                 }
                 item(key = "vitals") {
                     VitalsCard(
@@ -155,7 +213,9 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                         onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
                     )
                 }
-                item(key = "fitness") { FitnessCard(assessment) }
+                if (rides.isNotEmpty()) {
+                    item(key = "fitness") { FitnessCard(assessment) }
+                }
                 item(key = "goal") {
                     GoalCard(
                         plan = plan,
@@ -183,9 +243,37 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                         )
                     }
                 }
+
+                // Ganz unten und eingeklappt: Das Glossar ist Nachschlagewerk,
+                // kein Inhalt — es soll gefunden werden koennen, ohne den Weg
+                // zu den Zahlen zu verstellen (siehe GlossaryCard.kt).
+                item(key = "glossar") { GlossaryCard() }
             }
         }
     }
+}
+
+/**
+ * Der einmalige Hinweis, dass die Zahlen dieses Tabs auf Standardwerten
+ * beruhen.
+ *
+ * Antippbar, weil ein Hinweis ohne Weg zur Loesung nur aergert: Der Tipp
+ * springt in die Profilkarte des Mehr-Tabs — genau dorthin, wo Alter und
+ * Gewicht hingehoeren.
+ */
+@Composable
+private fun UnconfirmedProfileNotice(onOpenProfile: () -> Unit) {
+    NoticeBox(
+        icon = Icons.Filled.Info,
+        color = LocalSignalColors.current.caution,
+        title = "Noch nicht eingetragen",
+        text = "Alter und Gewicht fehlen — wir rechnen bis dahin mit Standardwerten " +
+            "(${defaultTrainingProfile.ageYears} Jahre, " +
+            "${defaultTrainingProfile.weightKg.toInt()} kg). Trainingslast, HFmax, " +
+            "Schwelle und geschätzte Leistung auf dieser Seite sind deshalb grobe " +
+            "Schätzungen. Tippe hier, um sie einzutragen.",
+        modifier = Modifier.clickable(onClick = onOpenProfile),
+    )
 }
 
 /**

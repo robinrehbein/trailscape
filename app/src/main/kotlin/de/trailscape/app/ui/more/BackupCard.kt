@@ -46,6 +46,7 @@ import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
 import de.trailscape.app.ui.importActivityFile
 import de.trailscape.app.ui.isDuplicateRide
+import de.trailscape.app.ui.withCause
 import de.trailscape.core.BulkImportResult
 import de.trailscape.core.FormatException
 import de.trailscape.core.Ride
@@ -123,7 +124,15 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 writeBackupFile(context, uri, rides, appViewModel.profile.value)
                 appViewModel.showMessage("Backup exportiert.")
             } catch (e: Exception) {
-                appViewModel.showMessage("Export fehlgeschlagen: ${e.message}")
+                // Deutscher Satz zuerst, technische Ursache nur in Klammern —
+                // siehe ui/ErrorText.kt.
+                appViewModel.showMessage(
+                    withCause(
+                        "Das Backup konnte nicht geschrieben werden. Wähle einen anderen " +
+                            "Speicherort oder gib Speicherplatz frei.",
+                        e,
+                    ),
+                )
             } finally {
                 busy = false
             }
@@ -156,7 +165,14 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             } catch (e: FormatException) {
                 appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
             } catch (e: Exception) {
-                appViewModel.showMessage("Import fehlgeschlagen: ${e.message}")
+                appViewModel.showMessage(
+                    withCause(
+                        "Die Backup-Datei konnte nicht gelesen werden. Wähle die " +
+                            "JSON-Datei aus, die Trailscape unter „Backup exportieren“ " +
+                            "angelegt hat.",
+                        e,
+                    ),
+                )
             } finally {
                 busy = false
             }
@@ -186,12 +202,18 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                     appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
                 } else {
                     appViewModel.addRide(ride)
-                    appViewModel.showMessage("„${ride.name}\" importiert")
+                    appViewModel.showMessage("„${ride.name}“ importiert")
                 }
             } catch (e: FormatException) {
                 appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
             } catch (e: Exception) {
-                appViewModel.showMessage("Import fehlgeschlagen: ${e.message}")
+                appViewModel.showMessage(
+                    withCause(
+                        "Die Datei konnte nicht importiert werden. Trailscape liest " +
+                            "GPX- und FIT-Dateien, auch als .gz gepackt.",
+                        e,
+                    ),
+                )
             } finally {
                 busy = false
             }
@@ -234,7 +256,14 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             } catch (e: FormatException) {
                 appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
             } catch (e: Exception) {
-                appViewModel.showMessage("Import fehlgeschlagen: ${e.message}")
+                appViewModel.showMessage(
+                    withCause(
+                        "Das Archiv konnte nicht gelesen werden. Erwartet wird eine " +
+                            "ZIP-Datei mit GPX- oder FIT-Dateien darin, etwa der " +
+                            "Strava- oder Garmin-Export.",
+                        e,
+                    ),
+                )
             } finally {
                 archiveBusy = false
             }

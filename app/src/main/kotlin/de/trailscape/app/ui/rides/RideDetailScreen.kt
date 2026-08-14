@@ -397,10 +397,16 @@ private fun RideFactsCard(ride: Ride) {
         }
         if (ride.id.startsWith("hc-")) {
             Spacer(Modifier.height(12.dp))
+            // „aus Health Connect", nicht „aus Samsung Health": Das `hc-`-
+            // Praefix vergibt der Health-Connect-Import (`:core`,
+            // HealthSyncLogic.kt) — unabhaengig davon, welche App die Daten
+            // dort hineingeschrieben hat. Samsung Health ist nur eine von
+            // vielen Quellen; wer eine Garmin traegt, hielt den Chip fuer einen
+            // Fehler.
             SuggestionChip(
                 onClick = {},
                 enabled = false,
-                label = { Text("aus Samsung Health") },
+                label = { Text("aus Health Connect") },
             )
         }
     }

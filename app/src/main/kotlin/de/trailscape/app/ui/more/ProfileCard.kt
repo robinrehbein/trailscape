@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.core.Sex
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.defaultEftpWPerKg
@@ -50,11 +51,22 @@ import kotlin.math.round
  * die Signatur wirklich geaendert hat, damit eigene Tastatureingaben nicht
  * durch einen Rebuild ueberschrieben werden (Aequivalent zu `_adoptProfile`
  * im Original).
+ *
+ * ## Leere Felder statt fremder Zahlen
+ * Solange [AppViewModel.profileConfirmed] aus ist, bleiben Alter, Gewicht und
+ * „Rad + Gepäck" **leer**; die Standardwerte stehen nur als Platzhalter darin
+ * und darunter als Satz. Vorher waren die Felder mit Alter 40 und 75 kg
+ * vorbelegt — den Werten aus [de.trailscape.app.ui.defaultTrainingProfile] —
+ * und sahen damit aus wie eine eigene, bereits getaetigte Eingabe. Wer die
+ * Einfuehrung uebersprungen hatte, hatte keinen Anlass, sie zu korrigieren, und
+ * bekam Trainingslast, HFmax und Schwelle aus den Massen eines fremden Koerpers
+ * als „deine Werte" ausgegeben.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
+    val confirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     var ageText by remember { mutableStateOf("") }
@@ -70,13 +82,15 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     var statusText by remember { mutableStateOf<String?>(null) }
     var appliedSignature by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(profile) {
+    LaunchedEffect(profile, confirmed) {
         val signature = profile.toJson().toString()
         if (signature == appliedSignature) return@LaunchedEffect
         appliedSignature = signature
-        ageText = profile.ageYears.toString()
-        weightText = formatProfileNumber(profile.weightKg)
-        setupMassText = formatProfileNumber(profile.setupMassKg)
+        // Die drei Pflicht-/Standardfelder bleiben leer, solange nichts
+        // bestaetigt ist — siehe KDoc der Karte.
+        ageText = if (confirmed) profile.ageYears.toString() else ""
+        weightText = if (confirmed) formatProfileNumber(profile.weightKg) else ""
+        setupMassText = if (confirmed) formatProfileNumber(profile.setupMassKg) else ""
         weeklyHoursText = profile.weeklyHours?.let { formatProfileNumber(it) } ?: ""
         hrMaxText = profile.hrMaxOverride?.let { formatProfileNumber(it) } ?: ""
         lthrText = profile.lthrOverride?.let { formatProfileNumber(it) } ?: ""
@@ -99,6 +113,10 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 value = ageText,
                 onValueChange = { ageText = it },
                 label = { Text("Alter") },
+                // Der Platzhalter nennt genau die Zahl, mit der bis zur
+                // Eingabe gerechnet wird — sichtbar als Vorschlag (grau, im
+                // leeren Feld) statt als scheinbar eigene Angabe.
+                placeholder = { Text(defaultTrainingProfile.ageYears.toString()) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
@@ -113,6 +131,7 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 value = weightText,
                 onValueChange = { weightText = it },
                 label = { Text("Gewicht (kg)") },
+                placeholder = { Text(formatProfileNumber(defaultTrainingProfile.weightKg)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
@@ -122,12 +141,25 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 value = setupMassText,
                 onValueChange = { setupMassText = it },
                 label = { Text("Rad + Gepäck (kg)") },
+                placeholder = { Text(formatProfileNumber(defaultSetupMassKg)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
+        if (!confirmed) {
+            Text(
+                text = "Noch nicht eingetragen — wir rechnen bis dahin mit Standardwerten " +
+                    "(${defaultTrainingProfile.ageYears} Jahre, " +
+                    "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg). " +
+                    "Trainingslast, HFmax, Schwelle und geschätzte Leistung sind deshalb " +
+                    "nur grobe Schätzungen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = hintColor,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
         Text(
             text = "Ohne Angabe rechnen wir mit ${formatProfileNumber(defaultSetupMassKg)} kg " +
                 "für Rad und Gepäck.",

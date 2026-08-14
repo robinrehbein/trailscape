@@ -72,6 +72,26 @@ import kotlinx.serialization.json.JsonObject
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
 
 /**
+ * Eine einzelne Karte des Mehr-Tabs als Sprungziel (siehe
+ * [AppViewModel.requestMoreSection]).
+ *
+ * Bewusst nur die Karten, auf die von aussen verwiesen wird — nicht alle neun.
+ * Ein Aufzaehlungswert ohne Verweis waere ein Versprechen ohne Einloeser; die
+ * Zuordnung Wert → Karte steht an genau einer Stelle
+ * (`ui/more/MoreScreen.kt`, `moreSectionOrder`).
+ */
+enum class MoreSection {
+    /** „Profil" — Alter, Gewicht, Zeitbudget, HFmax/FTP. */
+    PROFILE,
+
+    /** „Daten & Backup" — Einzel-, Archiv- und Backup-Import. */
+    BACKUP,
+
+    /** „Health Connect" — Uhr verbinden, Vitalwerte holen. */
+    HEALTH,
+}
+
+/**
  * Zentraler, geteilter App-Zustand — Kotlin-Port von `AppState` aus
  * `lib/state.dart`.
  *
@@ -278,6 +298,49 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Leerzustand → passende Karte im Mehr-Tab
+    // -------------------------------------------------------------------------
+
+    private val _pendingMoreSection = MutableStateFlow<MoreSection?>(null)
+
+    /**
+     * Die Karte, zu der der Mehr-Tab als Naechstes scrollen soll — dasselbe
+     * Muster wie [pendingRideDetail], aus demselben Grund: Zwischen dem Tippen
+     * im Leerzustand und dem Erscheinen des Mehr-Screens liegt ein Tab-Wechsel,
+     * den ein einmaliges Ereignis nicht ueberleben wuerde.
+     *
+     * ## Warum ueberhaupt
+     * Vier Leerzustaende („Touren importieren") riefen bis hierher nur
+     * `requestTab(AppTab.MORE)`. Der Nutzer landete damit **oben** in einer
+     * Liste aus neun Karten und sah zuerst das Profilformular; die Import-
+     * Knoepfe liegen in der zweiten Karte und dort noch einmal tiefer. Genau
+     * dieser Handgriff ist aber der, den die Einfuehrung selbst als „Schritt 1
+     * von 3" fuehrt.
+     *
+     * ## Warum kein direkter Dateiwaehler
+     * Der Launcher aus `ui/ActivityFileImport.kt` haette sich auch an jedem
+     * Leerzustand aufhaengen lassen. Dagegen sprechen zwei Dinge: Es gibt
+     * **vier** Importwege (Einzeldatei, ZIP-Archiv, Backup, Health Connect),
+     * und welcher der richtige ist, weiss nur der Nutzer — ein direkt
+     * geoeffneter Dateiwaehler entscheidet das fuer ihn und verschweigt die
+     * anderen drei. Ausserdem lernt er dabei nicht, wo der Import wohnt, und
+     * sucht ihn beim naechsten Mal erneut. Das Sprungziel zeigt ihm die Karte
+     * mit allen Wegen — einmal — und er findet sie danach selbst wieder.
+     */
+    val pendingMoreSection: StateFlow<MoreSection?> = _pendingMoreSection.asStateFlow()
+
+    /** Wechselt in den Mehr-Tab und scrollt dort zur Karte [section]. */
+    fun requestMoreSection(section: MoreSection) {
+        _pendingMoreSection.value = section
+        requestTab(AppTab.MORE)
+    }
+
+    /** Quittiert das abgeholte Sprungziel (ruft der Mehr-Screen). */
+    fun consumeMoreSectionRequest() {
+        _pendingMoreSection.value = null
+    }
+
+    // -------------------------------------------------------------------------
     // Touren
     // -------------------------------------------------------------------------
 
@@ -455,16 +518,51 @@ class AppViewModel(
     /** Vom Nutzer gepflegtes Trainingsprofil (Alter, Gewicht, Overrides). */
     val profile: StateFlow<TrainingProfile> = _profile.asStateFlow()
 
+    private val _profileConfirmed = MutableStateFlow(false)
+
+    /**
+     * Ob die Werte in [profile] wirklich **von der Nutzerin** stammen.
+     *
+     * ## Das Problem, das dieses Kennzeichen loest
+     * [defaultTrainingProfile] traegt Alter 40 und Gewicht 75 kg. Wer die
+     * Einfuehrung ueberspringt — ausdruecklich erlaubt —, bekommt Trainingslast,
+     * HFmax, Schwelle und geschaetzte Leistung aus den Massen eines fremden
+     * Koerpers, ohne dass irgendwo staende, dass das Schaetzwerte sind.
+     * Verschaerfend fuellte das Profilformular seine Felder mit genau diesen
+     * Zahlen vor: Sie sahen aus wie eine eigene Eingabe. Ohne dieses Kennzeichen
+     * kann die App „nicht gesetzt" und „auf Standard gesetzt" nicht
+     * unterscheiden — beides ist derselbe [TrainingProfile].
+     *
+     * ## Wer es setzt
+     * Jeder Weg, auf dem ein Profil bewusst uebernommen wird, laeuft ueber
+     * [setProfile]: „Profil speichern" im Mehr-Tab, die Profilseite der
+     * Einfuehrung und der Backup-Import (ein wiederhergestelltes Profil ist
+     * ebenso das eigene). Ueberspringt die Einfuehrung, ruft niemand
+     * [setProfile] — und das Kennzeichen bleibt aus.
+     *
+     * Zurueckgenommen wird es nie: Einmal eingetragen bleibt eingetragen, auch
+     * wenn spaeter zufaellig wieder 40/75 dasteht.
+     */
+    val profileConfirmed: StateFlow<Boolean> = _profileConfirmed.asStateFlow()
+
     /**
      * Uebernimmt ein neues Profil und speichert es. Die abgeleiteten Werte in
      * [insights] rechnen sich daraufhin selbst neu.
+     *
+     * Setzt zugleich [profileConfirmed] — siehe dort, warum das genau hier und
+     * nicht an den einzelnen Aufrufstellen passiert.
      */
     fun setProfile(profile: TrainingProfile) {
         _profile.value = profile
+        val wasConfirmed = _profileConfirmed.value
+        _profileConfirmed.value = true
         viewModelScope.launch {
             withContext(io) {
                 runCatching {
                     keyValueStore.setString(PROFILE_STORAGE_KEY, profile.toJson().toString())
+                }
+                if (!wasConfirmed) {
+                    runCatching { keyValueStore.setString(PROFILE_CONFIRMED_STORAGE_KEY, "1") }
                 }
             }
         }
@@ -475,6 +573,19 @@ class AppViewModel(
         val parsed = Json.parseToJsonElement(raw) as? JsonObject ?: return defaultTrainingProfile
         TrainingProfile.fromJson(parsed)
     }.getOrDefault(defaultTrainingProfile)
+
+    /**
+     * Liest das Bestaetigungs-Kennzeichen.
+     *
+     * Der zweite Zweig ist die Nachruestung fuer Bestandsnutzer: Wer laengst
+     * ein Profil gespeichert hat, soll nicht ploetzlich leere Felder und einen
+     * „noch nicht eingetragen"-Hinweis sehen, nur weil der Schluessel neu ist.
+     * Ein vorhandener Profileintrag gilt deshalb als Bestaetigung.
+     */
+    private fun readProfileConfirmed(): Boolean = runCatching {
+        keyValueStore.getString(PROFILE_CONFIRMED_STORAGE_KEY) != null ||
+            keyValueStore.getString(PROFILE_STORAGE_KEY) != null
+    }.getOrDefault(false)
 
     // -------------------------------------------------------------------------
     // Kurzschlaefer-Hinweis
@@ -912,7 +1023,14 @@ class AppViewModel(
             }
             showMessage(
                 when {
-                    !started -> "Die Kartendaten konnten nicht eingereiht werden."
+                    // Kein Entwicklerdeutsch („nicht eingereiht") und kein
+                    // Rueckschluss, den nur wir ziehen koennen: WorkManager
+                    // lehnt praktisch nur bei fehlendem Speicher oder
+                    // eingeschraeteter App ab — beides loest ein neuer Versuch
+                    // nach dem Nachsehen.
+                    !started ->
+                        "Der Download der Kartendaten ließ sich nicht starten. " +
+                            "Prüfe, ob genug Speicher frei ist, und versuche es erneut."
                     _segmentUnmeteredOnly.value ->
                         "Kartendaten werden geladen, sobald WLAN da ist."
                     else -> "Kartendaten werden geladen."
@@ -1050,6 +1168,7 @@ class AppViewModel(
             val restored = withContext(io) {
                 Restored(
                     profile = readProfile(),
+                    profileConfirmed = readProfileConfirmed(),
                     plan = loadPlan(trainingPlanStore),
                     mapStyle = mapStyleById(
                         runCatching { keyValueStore.getString(MAP_STYLE_STORAGE_KEY) }.getOrNull(),
@@ -1066,6 +1185,7 @@ class AppViewModel(
                 )
             }
             _profile.value = restored.profile
+            _profileConfirmed.value = restored.profileConfirmed
             _plan.value = restored.plan
             _mapStyle.value = restored.mapStyle
             _syncConfig.value = restored.syncConfig
@@ -1101,6 +1221,7 @@ class AppViewModel(
 
     private data class Restored(
         val profile: TrainingProfile,
+        val profileConfirmed: Boolean,
         val plan: TrainingPlan?,
         val mapStyle: MapStyle,
         val syncConfig: SyncConfig?,

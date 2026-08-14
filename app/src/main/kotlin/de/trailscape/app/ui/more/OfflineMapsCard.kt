@@ -33,6 +33,7 @@ import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
+import de.trailscape.app.ui.withCause
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -82,7 +83,14 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
         try {
             regions = listOfflineRegionsWithStatus(context)
         } catch (e: Exception) {
-            errorText = e.message ?: "Offline-Karten konnten nicht geladen werden."
+            // Vorher gewann die englische MapLibre-Meldung; der deutsche Satz
+            // kam nur zum Vorschein, wenn sie leer war (siehe ui/ErrorText.kt).
+            errorText = withCause(
+                "Die gespeicherten Offline-Karten ließen sich nicht auflisten. " +
+                    "Starte die App neu; bleibt es dabei, hilft ein Blick in die Karte, " +
+                    "die den Kartenspeicher selbst öffnet.",
+                e,
+            )
         } finally {
             loading = false
         }
@@ -198,7 +206,9 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
                                     if (failed == 1) {
                                         DELETE_FAILED_MESSAGE
                                     } else {
-                                        "$failed Offline-Karten konnten nicht gelöscht werden."
+                                        "$failed Offline-Karten konnten nicht gelöscht " +
+                                            "werden. Läuft gerade ein Download, warte ihn " +
+                                            "ab und versuche es dann erneut."
                                     },
                                 )
                             }
@@ -222,8 +232,15 @@ private data class OfflineRegionRow(
     val region: OfflineRegion,
 )
 
-/** Meldung, wenn MapLibre das Loeschen einer Region ablehnt. */
-private const val DELETE_FAILED_MESSAGE = "Die Offline-Karte konnte nicht gelöscht werden."
+/**
+ * Meldung, wenn MapLibre das Loeschen einer Region ablehnt.
+ *
+ * Mit Handlungsanweisung: Der haeufigste Grund ist ein Download, der zu genau
+ * dieser Region noch laeuft — dann geht es nach dessen Ende von selbst.
+ */
+private const val DELETE_FAILED_MESSAGE =
+    "Die Offline-Karte konnte nicht gelöscht werden. Läuft gerade ein Download " +
+        "für diesen Ausschnitt, warte ihn ab und versuche es dann erneut."
 
 /**
  * Laedt alle gespeicherten Offline-Regionen samt Downloadstatus (fuer die

@@ -24,8 +24,17 @@ import kotlinx.coroutines.withContext
  * Zuordnung fuer Archiv-Eintraege bereits mitbringt.
  */
 
-/** Deutsche Rueckfallmeldung, falls eine geworfene Exception keinen Text traegt. */
-const val UNREADABLE_FILE_MESSAGE = "Die Datei konnte nicht gelesen werden."
+/**
+ * Deutsche Rueckfallmeldung, falls eine geworfene Exception keinen Text traegt.
+ *
+ * Mit Handlungsanweisung: „Die Datei konnte nicht gelesen werden." allein sagt
+ * der Nutzerin nur, dass etwas nicht ging — nicht, was sie als Naechstes tun
+ * kann. Der haeufigste Grund ist eine Datei, die der Anbieter (Cloud-Speicher,
+ * Mailanhang) gar nicht lokal vorhaelt.
+ */
+const val UNREADABLE_FILE_MESSAGE =
+    "Die Datei konnte nicht gelesen werden. Liegt sie in einer Cloud, lade sie " +
+        "erst auf das Gerät herunter und wähle sie dann erneut aus."
 
 /**
  * Liest die per SAF gewaehlte Datei komplett und baut daraus eine Tour.
