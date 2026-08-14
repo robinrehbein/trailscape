@@ -31,8 +31,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -49,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,13 +69,17 @@ import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.app.ui.theme.OverlayScreenPadding
+import de.trailscape.core.AscentPreference
 import de.trailscape.core.GeoResult
 import de.trailscape.core.NavState
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.Ride
 import de.trailscape.core.RouteNavigator
 import de.trailscape.core.RouteProfile
+import de.trailscape.core.RouteTarget
+import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.RoutingSource
+import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
 import de.trailscape.core.buildGpx
@@ -80,6 +87,7 @@ import de.trailscape.core.computeStats
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import java.io.File
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
@@ -135,6 +143,20 @@ import kotlinx.coroutines.withContext
  *    Hoehenprofil, Speichern, Teilen und Navigation funktionieren damit ohne
  *    einen zweiten Weg. Das Flutter-Original kannte weder Generator noch
  *    Uebergabe zwischen den Tabs.
+ *  * **Rundkurs auch ohne Trainingsziel.** Im Planungsblatt steht bei null
+ *    Wegpunkten „Runde ab hier" mit drei Distanzen und einem Feld fuer die
+ *    eigene Zahl (siehe [startRoundTrip] und `PlanningPanel.kt`). Vorher war
+ *    der Generator ausschliesslich ueber den Heute- oder Trainings-Tab
+ *    erreichbar — an einem Ruhetag also gar nicht.
+ *  * **Die Planung liegt unten und hat zwei Stufen** (`PlanningSheet` in
+ *    `PlanningPanel.kt`): eingeklappt eine Zeile, aufgeklappt der volle
+ *    Inhalt. Vorher stapelten sich alle Panels oben und liessen auf einem
+ *    360×800-dp-Geraet einen Kartenstreifen von rund 80 dp uebrig —
+ *    ausgerechnet dort, wo Wegpunkte hingetippt werden.
+ *  * **Wegpunkte, Route und Navigationsziel ueberleben** Tabwechsel und
+ *    Drehung (siehe `PlanningStateSavers.kt`), und die **Aufzeichnung loescht
+ *    die geplante Route nicht mehr** — planen, „Navigieren", losfahren ist die
+ *    vorgesehene Reihenfolge und darf die blaue Linie nicht mitnehmen.
  *  * **Automatischer Erst-Zoom auf die Position** statt des dauerhaften
  *    Deutschland-Defaults: Liegt beim Start (oder unmittelbar nach einer
  *    erteilten Freigabe) eine Standortfreigabe vor und hat die Nutzerin die
@@ -149,6 +171,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val controller = remember { MapController() }
+
+    // Trefferradius fuer das Tippen auf einen Wegpunkt. Er stand vorher als
+    // feste Pixelzahl im Code und war damit auf einem dichten Display nur halb
+    // so gross wie auf einem groben — ausgerechnet dort, wo mit dem Daumen
+    // getroffen wird. In dp gerechnet ist er ueberall gleich gross und haelt
+    // die 48 dp der Material-Empfehlung ein (siehe
+    // [WAYPOINT_TOUCH_RADIUS_DP]).
+    val waypointTouchRadiusPx = with(LocalDensity.current) { WAYPOINT_TOUCH_RADIUS_DP.toPx() }
 
     // ------------------------------------------------------ geteilter Zustand
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
@@ -180,11 +210,41 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ---------------------------------------------------- Zustand des Screens
     var locationGranted by remember { mutableStateOf(hasLocationPermission(context)) }
     var planning by rememberSaveable { mutableStateOf(false) }
-    var waypoints by remember { mutableStateOf<List<Waypoint>>(emptyList()) }
-    var plannedRoute by remember { mutableStateOf<PlannedRoute?>(null) }
+
+    // Wegpunkte und berechnete Route liegen in `rememberSaveable`, nicht in
+    // `remember`: Der `NavHost` entsorgt diesen Screen beim Tabwechsel, und
+    // eine Drehung am Lenker baut ihn ohnehin neu auf. Bis hierher gingen dabei
+    // ausgerechnet die Wegpunkte verloren — lautlos, waehrend Planungsmodus,
+    // Profil und sogar die Kameraposition sorgfaeltig gerettet wurden. Wie die
+    // Umrechnung aussieht und warum sie eine Obergrenze hat, steht in
+    // `PlanningStateSavers.kt`.
+    var waypoints by rememberSaveable(stateSaver = WaypointListSaver) {
+        mutableStateOf<List<Waypoint>>(emptyList())
+    }
+    var plannedRoute by rememberSaveable(stateSaver = PlannedRouteSaver) {
+        mutableStateOf<PlannedRoute?>(null)
+    }
+
+    // Wofuer [plannedRoute] berechnet wurde (Wegpunkte + Profil). Nach einer
+    // Drehung stehen Wegpunkte und Route wieder da; ohne dieses Kennzeichen
+    // wuerde der Planungs-Effekt weiter unten sie sofort neu berechnen — eine
+    // ueberfluessige Server- bzw. Geraeterechnung, die im Funkloch sogar mit
+    // einem Fehler enden wuerde, obwohl die Route laengst vorliegt.
+    var plannedFor by rememberSaveable { mutableStateOf<String?>(null) }
+
     var routeProfile by rememberSaveable { mutableStateOf(RouteProfile.GRAVEL) }
     var planBusy by remember { mutableStateOf(false) }
     var planError by remember { mutableStateOf<String?>(null) }
+
+    // Ob das Planungsblatt aufgeklappt ist (siehe `PlanningSheet`). Es startet
+    // offen — dort stehen der Rundkurs-Einstieg und die Anleitung — und geht
+    // beim ersten selbst gesetzten Wegpunkt zu: Wer auf die Karte tippt, will
+    // die Karte sehen.
+    var planSheetExpanded by rememberSaveable { mutableStateOf(true) }
+
+    // Ob gerade auf einen GPS-Fix gewartet wird (bis zu zehn Sekunden, siehe
+    // `CURRENT_LOCATION_TIMEOUT_MS` in `LocationAccess.kt`).
+    var locating by remember { mutableStateOf(false) }
 
     // Rueckmeldung waehrend der Berechnung. Zwei Gruende, warum sie noetig ist:
     // Weit auseinanderliegende Wegpunkte werden in mehrere Etappen zerlegt
@@ -204,7 +264,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ohne dieses Flag wuerde der Planungs-Effekt unten sie beim naechsten Lauf
     // (leere Wegpunktliste) sofort wieder auf `null` setzen. Sobald wieder von
     // Hand geplant wird, faellt es zurueck auf `false`.
-    var routeFromGenerator by remember { mutableStateOf(false) }
+    var routeFromGenerator by rememberSaveable { mutableStateOf(false) }
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -216,7 +276,23 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     var navTarget by remember { mutableStateOf<NavigationTarget?>(null) }
     var navState by remember { mutableStateOf<NavState?>(null) }
-    var navTotalKm by remember { mutableStateOf(0.0) }
+    var navTotalKm by rememberSaveable { mutableStateOf(0.0) }
+
+    // Das Navigationsziel in bundle-faehiger Kurzform: die Kennung der Tour
+    // (oder `null` fuer die geplante Route) und die Beschriftung. Die
+    // Punktliste bleibt bewusst draussen — eine mehrstuendige Aufzeichnung
+    // haette zehntausende Punkte, und ein Bundle dieser Groesse beendet die
+    // App beim Drehen. Zusammengesetzt wird das Ziel gleich wieder aus den
+    // geladenen Touren bzw. aus der geretteten Route (siehe Effekt unten).
+    var navRideId by rememberSaveable { mutableStateOf<String?>(null) }
+    var navLabel by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Ob die Karte der eigenen Position folgen soll. Bis hierher tat sie das
+    // immer und ohne Schalter: Wer beim Navigieren vorausschauen wollte, war
+    // spaetestens beim naechsten GPS-Punkt wieder zurueckgezogen. Jetzt schaltet
+    // das eigene Verschieben der Karte das Folgen ab und der Positions-Knopf es
+    // wieder ein.
+    var followMe by rememberSaveable { mutableStateOf(true) }
 
     var liveAscentM by remember { mutableStateOf(0.0) }
     var hoverPoint by remember { mutableStateOf<TrackPoint?>(null) }
@@ -378,8 +454,11 @@ fun MapScreen(appViewModel: AppViewModel) {
         controller.moveTo(position.latitude, position.longitude, minZoom = AUTO_LOCATION_ZOOM)
     }
 
-    LaunchedEffect(controller, livePoints.size) {
+    LaunchedEffect(controller, livePoints.size, followMe) {
         controller.setLiveTrack(livePoints)
+        // Wer die Karte selbst verschoben hat, will sie dort haben — auch
+        // waehrend der Aufzeichnung. Der Positions-Knopf holt sie zurueck.
+        if (!followMe) return@LaunchedEffect
         val last = livePoints.lastOrNull() ?: return@LaunchedEffect
         controller.moveTo(
             lat = last.lat,
@@ -427,8 +506,18 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         if (waypoints.size < 2) {
             plannedRoute = null
+            plannedFor = null
             planError = null
             planBusy = false
+            planProgress = null
+            return@LaunchedEffect
+        }
+        val inputs = planningInputsKey(waypoints, routeProfile)
+        if (plannedRoute != null && plannedFor == inputs) {
+            // Nach Tabwechsel oder Drehung laeuft dieser Effekt erneut, obwohl
+            // sich nichts geaendert hat — die vorhandene Route ist die Antwort.
+            planBusy = false
+            planError = null
             planProgress = null
             return@LaunchedEffect
         }
@@ -459,6 +548,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         result
             .onSuccess { outcome ->
                 plannedRoute = outcome.route
+                plannedFor = inputs
                 planError = null
                 // Kein Fehler, sondern eine Gelegenheit: Die Route ist da (ueber
                 // den Server), koennte beim naechsten Mal aber lokal und
@@ -468,6 +558,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             .onFailure {
                 // Wegpunkte bleiben stehen, damit es sich erneut versuchen laesst.
                 plannedRoute = null
+                plannedFor = null
                 planError = it.message?.takeIf(String::isNotBlank)
                     ?: "Route konnte nicht berechnet werden."
             }
@@ -528,7 +619,10 @@ fun MapScreen(appViewModel: AppViewModel) {
         positions.collect { (lat, lon) ->
             val state = navigator.update(lat, lon)
             navState = state
-            controller.moveTo(lat, lon, minZoom = null, animate = false)
+            // `followMe` wird hier bei jedem Punkt frisch gelesen (kein
+            // Effekt-Schluessel): Der Navigator soll beim Umschalten
+            // weiterlaufen, nur die Kamera haelt sich zurueck.
+            if (followMe) controller.moveTo(lat, lon, minZoom = null, animate = false)
             if (state.offRoute && !wasOffRoute) {
                 appViewModel.showMessage("Achtung: Du bist abseits der Route.")
             }
@@ -542,7 +636,29 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (rides.none { it.id == rideId }) {
             navTarget = null
             navState = null
+            navRideId = null
+            navLabel = null
         }
+    }
+
+    // Navigation nach Tabwechsel/Drehung wieder aufnehmen: Gerettet wurden nur
+    // Kennung und Beschriftung (siehe oben), die Punkte kommen aus den
+    // geladenen Touren bzw. aus der geretteten geplanten Route. Bis dahin zeigt
+    // die Leiste die gespeicherte Gesamtstrecke; den Rest rechnet der
+    // `RouteNavigator` beim naechsten GPS-Punkt neu.
+    // Schluessel bewusst billig: `plannedRoute` traegt eine komplette
+    // Punktliste, die Zahl der Punkte benennt den Wechsel genauso.
+    LaunchedEffect(rides, plannedRoute?.points?.size, navLabel) {
+        if (navTarget != null) return@LaunchedEffect
+        val label = navLabel ?: return@LaunchedEffect
+        val rideId = navRideId
+        val points = if (rideId != null) {
+            rides.firstOrNull { it.id == rideId }?.points
+        } else {
+            plannedRoute?.points
+        }
+        if (points == null || points.size < 2) return@LaunchedEffect
+        navTarget = NavigationTarget(rideId, label, points)
     }
 
     // -------------------------------------------------------------- Aktionen
@@ -550,17 +666,67 @@ fun MapScreen(appViewModel: AppViewModel) {
         navTarget = null
         navState = null
         navTotalKm = 0.0
+        navRideId = null
+        navLabel = null
     }
 
+    /**
+     * Beendet die Planung und wirft alles weg — Wegpunkte, Route, Suchtreffer.
+     *
+     * Der Rueckweg dazu steht in [exitPlanningWithUndo]; direkt aufgerufen
+     * wird diese Fassung nur dort, wo ohnehin gleich etwas anderes an ihre
+     * Stelle tritt.
+     */
     fun exitPlanning() {
         planning = false
         waypoints = emptyList()
         plannedRoute = null
+        plannedFor = null
         planError = null
         planBusy = false
         searchMarker = null
         hoverPoint = null
         routeFromGenerator = false
+        planSheetExpanded = true
+    }
+
+    /**
+     * Stellt eine weggeworfene Planung wieder her — das Gegenstueck zu
+     * [exitPlanning] und zum „Leeren"-Knopf.
+     */
+    fun restorePlanning(snapshot: PlanningSnapshot) {
+        planning = true
+        waypoints = snapshot.waypoints
+        plannedRoute = snapshot.route
+        plannedFor = snapshot.plannedFor
+        routeFromGenerator = snapshot.fromGenerator
+        planError = null
+    }
+
+    /**
+     * Wirft die Planung weg, aber nicht endgueltig: Eine Meldung mit
+     * „Rückgängig" holt sie zurueck.
+     *
+     * Die Pille „Planung beenden" sitzt direkt neben der Lupe, und „Leeren"
+     * steht mitten zwischen den uebrigen Knoepfen — beide vernichteten bis
+     * hierher eine halbe Stunde Arbeit mit einem Fehlgriff und ohne jede
+     * Nachfrage. Ein Bestaetigungsdialog waere der schlechtere Tausch: Er
+     * kostet **jedes** Mal einen Tipp, waehrend die Meldung nur im seltenen
+     * Fehlerfall etwas verlangt. Der Touren-Tab loest das Loeschen laengst
+     * genauso.
+     */
+    fun exitPlanningWithUndo(message: String) {
+        val snapshot = PlanningSnapshot(waypoints, plannedRoute, plannedFor, routeFromGenerator)
+        exitPlanning()
+        if (snapshot.isEmpty) return
+        scope.launch {
+            val answer = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Rückgängig",
+                duration = SnackbarDuration.Long,
+            )
+            if (answer == SnackbarResult.ActionPerformed) restorePlanning(snapshot)
+        }
     }
 
     /** Verwirft den Vorschlag samt Panel und raeumt die Vorschau von der Karte. */
@@ -568,6 +734,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         RouteGenerationController.close()
         routeFromGenerator = false
         plannedRoute = null
+        plannedFor = null
     }
 
     /**
@@ -581,11 +748,13 @@ fun MapScreen(appViewModel: AppViewModel) {
         RouteGenerationController.close()
         appViewModel.select(null)
         waypoints = emptyList()
+        plannedFor = null
         planError = null
         planBusy = false
         routeFromGenerator = true
         plannedRoute = candidate.route
         planning = true
+        planSheetExpanded = true
         controller.fitToPoints(candidate.route.points)
         appViewModel.showMessage("Runde übernommen – du kannst sie speichern oder navigieren.")
     }
@@ -596,13 +765,35 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ruft ausschliesslich die `run…`-Fassung auf — sonst wuerde er bei einer
     // abgelehnten Nebenberechtigung (POST_NOTIFICATIONS ab Android 13) sofort
     // den naechsten Systemdialog ausloesen und sich im Kreis drehen.
+    /**
+     * Startet die Aufzeichnung, **ohne** die geplante Route wegzuwerfen.
+     *
+     * Genau die vorgesehene Reihenfolge (planen → „Navigieren" → Aufnahme
+     * starten) loeschte bis hierher `plannedRoute` und damit die blaue Linie
+     * auf der Karte, waehrend die Navigationsleiste unbeirrt Kilometer zu einer
+     * Route herunterzaehlte, die niemand mehr sah. Der Planungs*modus* geht
+     * zu — die Bedienflaechen der Planung haben neben der Live-Leiste nichts
+     * verloren —, die **Route** bleibt liegen.
+     *
+     * Ein noch offenes Generator-Panel wird geschlossen; sein Vorschlag zaehlt
+     * nur dann als „die Route", wenn er vorher uebernommen wurde (dann ist der
+     * Planungsmodus an, siehe [applyGeneratedRoute]).
+     */
     fun runRecording() {
         if (!isLocationEnabled(context)) {
             appViewModel.showMessage("Standortdienste sind deaktiviert.")
             return
         }
-        if (planning) exitPlanning()
-        discardGeneratedRoute()
+        val keepRoute = planning
+        RouteGenerationController.close()
+        if (!keepRoute) {
+            routeFromGenerator = false
+            plannedRoute = null
+            plannedFor = null
+        }
+        planning = false
+        searchMarker = null
+        hoverPoint = null
         appViewModel.select(null)
         RecordingRepository.start(context)
     }
@@ -613,6 +804,9 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     fun runGoToMyPosition() {
         locationGranted = true
+        // Der Positions-Knopf ist zugleich der Weg zurueck zu „Karte folgt
+        // mir" (siehe [LocateButton]).
+        followMe = true
         scope.launch {
             if (!isLocationEnabled(context)) {
                 appViewModel.showMessage("Standortdienste sind deaktiviert.")
@@ -637,7 +831,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     fun runUseMyPositionAsStart() {
         locationGranted = true
         scope.launch {
-            val position = currentLocation(context)
+            // Bis zu zehn Sekunden Warten auf den Fix — bisher ohne jede
+            // Anzeige (siehe `locating`).
+            locating = true
+            val position = try {
+                currentLocation(context)
+            } finally {
+                locating = false
+            }
             if (position == null) {
                 appViewModel.showMessage("Position konnte nicht ermittelt werden.")
                 return@launch
@@ -653,30 +854,57 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     fun onMapTap(lat: Double, lon: Double) {
         if (!planning) return
-        // Wer selbst Wegpunkte setzt, plant wieder von Hand — die generierte
-        // Runde ist ab dann nicht mehr die Grundlage (siehe Planungs-Effekt).
-        routeFromGenerator = false
+        if (routeFromGenerator) {
+            // Ein einziger Fehltipp machte aus der uebernommenen 48-km-Runde
+            // einen einzelnen Wegpunkt — unwiederbringlich, „Letzten entfernen"
+            // holt sie nicht zurueck. Die Runde bleibt deshalb stehen, bis die
+            // Nutzerin das eigene Planen ausdruecklich bestaetigt; der Tipp
+            // selbst ist dann der erste Wegpunkt und geht nicht verloren.
+            scope.launch {
+                val answer = snackbarHostState.showSnackbar(
+                    message = "Die übernommene Runde bleibt stehen.",
+                    actionLabel = "Selbst planen",
+                    duration = SnackbarDuration.Long,
+                )
+                if (answer == SnackbarResult.ActionPerformed) {
+                    routeFromGenerator = false
+                    plannedRoute = null
+                    plannedFor = null
+                    waypoints = listOf(Waypoint(lat, lon))
+                    planSheetExpanded = false
+                }
+            }
+            return
+        }
         val hit = waypoints.indexOfFirst { waypoint ->
             controller.isWithinScreenDistance(
                 TrackPoint(lat = waypoint.lat, lon = waypoint.lon),
                 lat,
                 lon,
-                WAYPOINT_TOUCH_RADIUS_PX,
+                waypointTouchRadiusPx,
             )
         }
         waypoints = if (hit >= 0) {
             waypoints.filterIndexed { index, _ -> index != hit }
         } else {
+            // Wer auf die Karte tippt, arbeitet mit der Karte: Das Blatt geht
+            // beim ersten Wegpunkt zu und gibt sie frei.
+            if (waypoints.isEmpty()) planSheetExpanded = false
             waypoints + Waypoint(lat, lon)
         }
     }
 
     fun onSearchResult(result: GeoResult) {
-        searchMarker = Waypoint(result.lat, result.lon)
         searchResults = emptyList()
         searchOpen = false
         if (planning) {
+            // Im Planungsmodus wird der Treffer zum Zielwegpunkt und traegt
+            // dessen roten Marker — ein zweiter, blauer Suchmarker laege exakt
+            // darauf und sagte nichts Zusaetzliches.
+            searchMarker = null
             waypoints = waypoints + Waypoint(result.lat, result.lon)
+        } else {
+            searchMarker = Waypoint(result.lat, result.lon)
         }
         controller.moveTo(result.lat, result.lon, MIN_RECORDING_ZOOM)
     }
@@ -732,7 +960,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     fun runGenerateRoutes() {
         locationGranted = hasLocationPermission(context)
         scope.launch {
-            val position = currentLocation(context)
+            locating = true
+            val position = try {
+                currentLocation(context)
+            } finally {
+                locating = false
+            }
             val start = if (position != null) {
                 TrackPoint(lat = position.latitude, lon = position.longitude)
             } else {
@@ -756,10 +989,51 @@ fun MapScreen(appViewModel: AppViewModel) {
         withPermissions(PendingAction.GENERATE_ROUTES) { runGenerateRoutes() }
     }
 
+    /**
+     * „Runde ab hier über X km" — der Einstieg von der Karte aus.
+     *
+     * Bis hierher gab es ihn nicht: Das Rundkurs-Panel erschien einzig ueber
+     * ein Ziel aus dem Heute- oder Trainings-Tab (`pendingRouteTarget`), an
+     * einem Ruhetag also gar nicht, und eine eigene Distanz liess sich nirgends
+     * eingeben — obwohl das der haeufigste Wunsch ueberhaupt ist und die
+     * gesamte Rechenmaschinerie bereitstand.
+     *
+     * Gebaut wird daraus dasselbe [RouteTarget], das auch das Training
+     * schickt; die uebrigen Felder sind bewusst neutral gesetzt:
+     * [AscentPreference.MODERAT] als Mitte zwischen flach und bergig (die
+     * Nutzerin hat nur eine Distanz genannt, kein Profil),
+     * [SessionIntensity.GRUNDLAGE] als haeufigster Fall und keine Dauer —
+     * geschaetzte Stunden gehoeren zu einem Trainingsziel, nicht zu einer
+     * frei gewaehlten Runde.
+     *
+     * Den Startpunkt bestimmt [runGenerateRoutes] wie gehabt: eigene Position,
+     * ersatzweise die Kartenmitte (darauf weist das Panel dann ausdruecklich
+     * hin, und „Neu suchen" nimmt ihn spaeter noch einmal auf).
+     */
+    fun startRoundTrip(distanceKm: Double) {
+        RouteGenerationController.open(
+            RouteTarget(
+                distanceKm = distanceKm,
+                ascentPreference = AscentPreference.MODERAT,
+                durationH = null,
+                speedKmh = 0.0,
+                intensity = SessionIntensity.GRUNDLAGE,
+                label = SELF_PLANNED_ROUTE_LABEL,
+                source = RouteTargetSource.TAGESEMPFEHLUNG,
+            ),
+        )
+        // Das Blatt zu: Waehrend der Suche gehoert der Platz dem
+        // Rundkurs-Panel und der Karte.
+        planSheetExpanded = false
+        generateRoutes()
+    }
+
     fun runNavigateRide(ride: Ride) {
         pendingNavigateRideId = null
         locationGranted = true
         navState = null
+        navRideId = ride.id
+        navLabel = ride.name
         navTarget = NavigationTarget(ride.id, ride.name, ride.points)
     }
 
@@ -778,7 +1052,9 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (route.points.size < 2) return
         locationGranted = true
         navState = null
-        navTarget = NavigationTarget(null, "Geplante Route", route.points)
+        navRideId = null
+        navLabel = PLANNED_ROUTE_LABEL
+        navTarget = NavigationTarget(null, PLANNED_ROUTE_LABEL, route.points)
     }
 
     fun navigatePlannedRoute() {
@@ -863,6 +1139,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 style = mapStyle,
                 locationEnabled = locationGranted,
                 onMapTap = ::onMapTap,
+                onUserPan = { followMe = false },
                 modifier = Modifier.fillMaxSize(),
                 // Im Fahrmodus liegt die Karte vollstaendig verdeckt dahinter.
                 // Sie dann weiterzeichnen zu lassen waere ausgerechnet in dem
@@ -893,17 +1170,23 @@ fun MapScreen(appViewModel: AppViewModel) {
                             activeColor = RouteBlue,
                             onClick = {
                                 if (planning) {
-                                    exitPlanning()
+                                    exitPlanningWithUndo("Planung beendet.")
                                 } else if (isRecording) {
                                     appViewModel.showMessage("Beende zuerst die Aufzeichnung.")
                                 } else {
-                                    // Von Hand planen loest den Generator ab —
-                                    // zwei Panels uebereinander helfen niemandem.
-                                    discardGeneratedRoute()
+                                    // Ein noch nicht uebernommener Vorschlag
+                                    // weicht: Wer „Route planen" drueckt, will
+                                    // selbst planen, und zwei Panels
+                                    // uebereinander helfen niemandem.
+                                    if (generation.target != null) discardGeneratedRoute()
+                                    // Eine Route, die schon steht, bleibt
+                                    // dagegen liegen — sie ueberlebt seit
+                                    // Kurzem den Start der Aufzeichnung (siehe
+                                    // [runRecording]), und genau sie ist der
+                                    // Grund, die Planung wieder zu oeffnen.
                                     appViewModel.select(null)
                                     planning = true
-                                    waypoints = emptyList()
-                                    plannedRoute = null
+                                    planSheetExpanded = true
                                     planError = null
                                 }
                             },
@@ -939,8 +1222,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                         error = searchError,
                         results = searchResults,
                         planning = planning,
+                        hasMarker = searchMarker != null,
                         onSearchNow = { searchTrigger++ },
                         onSelect = ::onSearchResult,
+                        onClearMarker = { searchMarker = null },
                         onClose = { searchOpen = false },
                     )
                 }
@@ -959,6 +1244,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                     RouteGenerationPanel(
                         state = generation,
                         maxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
+                        locating = locating,
                         onStart = ::generateRoutes,
                         onCancel = RouteGenerationController::cancel,
                         onSelect = RouteGenerationController::select,
@@ -967,37 +1253,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                         },
                         onApply = ::applyGeneratedRoute,
                         onDiscard = ::discardGeneratedRoute,
-                    )
-                }
-
-                if (planning) {
-                    PlanningCard(
-                        profile = routeProfile,
-                        onProfileChange = { routeProfile = it },
-                        waypointCount = waypoints.size,
-                        route = plannedRoute,
-                        busy = planBusy,
-                        error = planError,
-                        maxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
-                        progress = planProgress,
-                        generated = routeFromGenerator,
-                        onUseMyPosition = ::useMyPositionAsStart,
-                        onUndo = {
-                            routeFromGenerator = false
-                            waypoints = waypoints.dropLast(1)
-                        },
-                        onClear = {
-                            routeFromGenerator = false
-                            waypoints = emptyList()
-                            plannedRoute = null
-                            planError = null
-                        },
-                        onSave = { saveRouteDialog = true },
-                        onShare = {
-                            plannedRoute?.let { shareRoute("trailscape-route", it.points) }
-                        },
-                        onNavigate = ::navigatePlannedRoute,
-                        onHoverPoint = { hoverPoint = it },
                     )
                 }
 
@@ -1010,6 +1265,11 @@ fun MapScreen(appViewModel: AppViewModel) {
             }
 
             // ----------------------------------------------------------- unten
+            // Hier stapelt sich alles, was den Blick auf die Karte am wenigsten
+            // verstellt: die beiden runden Knoepfe, darunter die Live-Leiste
+            // bzw. die Tour-Karte und ganz unten das Planungsblatt. Dass die
+            // Planung hier und nicht mehr oben liegt, ist der Kern der
+            // Umstellung — die Knoepfe stehen jetzt *ueber* ihr statt auf ihr.
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -1023,7 +1283,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                     onClick = { if (isRecording) RecordingRepository.stop() else startRecording() },
                 )
                 Spacer(Modifier.height(12.dp))
-                LocateButton(onClick = ::goToMyPosition)
+                LocateButton(onClick = ::goToMyPosition, following = followMe)
                 Spacer(Modifier.height(12.dp))
 
                 val ride = selectedRide
@@ -1050,6 +1310,66 @@ fun MapScreen(appViewModel: AppViewModel) {
                             hoverPoint = null
                             appViewModel.select(null)
                         },
+                        onHoverPoint = { hoverPoint = it },
+                    )
+                }
+
+                if (planning) {
+                    Spacer(Modifier.height(OverlayGap))
+                    PlanningSheet(
+                        expanded = planSheetExpanded,
+                        onExpandedChange = { planSheetExpanded = it },
+                        profile = routeProfile,
+                        onProfileChange = { routeProfile = it },
+                        waypointCount = waypoints.size,
+                        route = plannedRoute,
+                        busy = planBusy,
+                        error = planError,
+                        maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
+                        progress = planProgress,
+                        generated = routeFromGenerator,
+                        locating = locating,
+                        onRoundTrip = ::startRoundTrip,
+                        onUseMyPosition = ::useMyPositionAsStart,
+                        onUndo = {
+                            routeFromGenerator = false
+                            waypoints = waypoints.dropLast(1)
+                        },
+                        onClear = {
+                            // Wie „Planung beenden": Der Fehlgriff darf nicht
+                            // das Ende der Arbeit sein (siehe
+                            // [exitPlanningWithUndo]) — nur bleibt der
+                            // Planungsmodus hier an.
+                            val snapshot = PlanningSnapshot(
+                                waypoints = waypoints,
+                                route = plannedRoute,
+                                plannedFor = plannedFor,
+                                fromGenerator = routeFromGenerator,
+                            )
+                            routeFromGenerator = false
+                            waypoints = emptyList()
+                            plannedRoute = null
+                            plannedFor = null
+                            planError = null
+                            planSheetExpanded = true
+                            if (!snapshot.isEmpty) {
+                                scope.launch {
+                                    val answer = snackbarHostState.showSnackbar(
+                                        message = "Planung geleert.",
+                                        actionLabel = "Rückgängig",
+                                        duration = SnackbarDuration.Long,
+                                    )
+                                    if (answer == SnackbarResult.ActionPerformed) {
+                                        restorePlanning(snapshot)
+                                    }
+                                }
+                            }
+                        },
+                        onSave = { saveRouteDialog = true },
+                        onShare = {
+                            plannedRoute?.let { shareRoute("trailscape-route", it.points) }
+                        },
+                        onNavigate = ::navigatePlannedRoute,
                         onHoverPoint = { hoverPoint = it },
                     )
                 }
@@ -1382,11 +1702,59 @@ private fun planProgressText(source: RoutingSource?, done: Int, total: Int): Str
     else -> null
 }
 
-/** Trefferradius fuer das Tippen auf einen Wegpunkt (Bildschirmpixel). */
-private const val WAYPOINT_TOUCH_RADIUS_PX = 28f
+/**
+ * Trefferradius fuer das Tippen auf einen Wegpunkt.
+ *
+ * In **dp**, nicht in Pixeln: Als feste Pixelzahl (frueher 28) schrumpfte das
+ * Ziel mit jeder Displaydichte — auf einem 3x-Geraet blieben davon rund 9 dp,
+ * ein Drittel dessen, was Material fuer eine Beruehrungsflaeche verlangt. 24 dp
+ * Radius sind die geforderten 48 dp im Durchmesser.
+ */
+private val WAYPOINT_TOUCH_RADIUS_DP = 24.dp
 
-/** Maximale Hoehe des Planungs-Panels (Dart: `_planPanelMaxHeightFactor`). */
+/** Maximale Hoehe des Rundkurs-Panels (Dart: `_planPanelMaxHeightFactor`). */
 private const val PLAN_PANEL_MAX_HEIGHT_FACTOR = 0.55f
+
+/**
+ * Maximale Hoehe des **aufgeklappten** Planungsblatts.
+ *
+ * Knapper als [PLAN_PANEL_MAX_HEIGHT_FACTOR], weil ueber dem Blatt noch die
+ * beiden runden Knoepfe (zusammen rund 120 dp) im selben Stapel stehen. Fuer
+ * die Sicht auf die Karte ist ohnehin die eingeklappte Stufe zustaendig — sie
+ * misst eine Zeile.
+ */
+private const val PLAN_SHEET_MAX_HEIGHT_FACTOR = 0.45f
+
+/** Beschriftung der Navigation entlang der geplanten Route. */
+private const val PLANNED_ROUTE_LABEL = "Geplante Route"
+
+/**
+ * Ein Stand der Planung, wie ihn „Rückgängig" wieder herstellt.
+ *
+ * Bewusst nur die vier Werte, die zusammen die Arbeit ausmachen — der
+ * Suchtreffer-Marker und der Ablesepunkt des Hoehenprofils sind Beiwerk und
+ * kommen nicht zurueck.
+ */
+private data class PlanningSnapshot(
+    val waypoints: List<Waypoint>,
+    val route: PlannedRoute?,
+    val plannedFor: String?,
+    val fromGenerator: Boolean,
+) {
+    /** Ob es gar nichts zu retten gab — dann bleibt die Meldung aus. */
+    val isEmpty: Boolean get() = waypoints.isEmpty() && route == null
+}
+
+/**
+ * Kennzeichnet, wofuer eine Route berechnet wurde: Profil und Wegpunkte.
+ *
+ * Fuenf Nachkommastellen sind rund ein Meter — genauer setzt niemand einen
+ * Wegpunkt, und die Zeichenkette bleibt kurz genug fuer das Bundle.
+ */
+private fun planningInputsKey(waypoints: List<Waypoint>, profile: RouteProfile): String =
+    waypoints.joinToString(separator = ";", prefix = "${profile.name}|") { waypoint ->
+        String.format(Locale.ROOT, "%.5f,%.5f", waypoint.lat, waypoint.lon)
+    }
 
 private const val MIN_SEARCH_LENGTH = 3
 private const val SEARCH_DEBOUNCE_MS = 450L
