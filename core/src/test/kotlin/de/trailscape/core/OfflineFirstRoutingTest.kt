@@ -305,6 +305,69 @@ class OfflineFirstRoutingTest {
     }
 
     // -----------------------------------------------------------------------
+    // Wenn beide Wege scheitern
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `scheitert auch der Server, gewinnt die lokale Ursache`() {
+        // Vorher: Der `catch` benutzte von der Offline-Ausnahme nur
+        // `missingSegmentFile` und verwarf Text und Ursache. Im Funkloch las der
+        // Nutzer dann „Routing-Server nicht erreichbar. Bist du online?",
+        // obwohl das eigentliche Problem eine beschaedigte Kachel war.
+        val offline = OfflineFirstRoutingTestSetup(installed = setOf(tile))
+        val error = runCatching {
+            routeOfflineFirst(
+                waypoints = listOf(dresden, pirna),
+                serverProfileId = "trekking",
+                client = OfflineClient,
+                setup = offline,
+                sleeper = {},
+            )
+        }.exceptionOrNull()
+
+        val failure = assertNotNull(error)
+        val message = assertNotNull(failure.message)
+        // Die lokale Ursache steht vorn und nennt die Kachel …
+        assertTrue(message.contains(tile), "Meldung war: $message")
+        assertTrue(message.indexOf(tile) < message.indexOf("Routing-Server"), message)
+        // … der Serverfehler folgt als zweiter Satz …
+        assertTrue(message.contains("ebenfalls nicht erreichbar"), message)
+        // … und die urspruengliche Ausnahme bleibt fuer Fehlerberichte erhalten.
+        assertTrue(failure.cause is OfflineRoutingException)
+        assertEquals(tile, (failure as OfflineRoutingException).missingSegmentFile)
+    }
+
+    @Test
+    fun `ohne lokalen Versuch bleibt die Servermeldung unveraendert`() {
+        val error = runCatching {
+            routeOfflineFirst(
+                waypoints = listOf(dresden, pirna),
+                serverProfileId = "trekking",
+                client = OfflineClient,
+                setup = null,
+                sleeper = {},
+            )
+        }.exceptionOrNull()
+
+        val failure = assertNotNull(error)
+        assertEquals("Routing-Server nicht erreichbar. Bist du online?", failure.message)
+    }
+
+    /** Setup mit echtem Profil, aber leerem Kachelverzeichnis. */
+    private fun OfflineFirstRoutingTestSetup(installed: Set<String>): OfflineRoutingSetup =
+        OfflineRoutingSetup(
+            segmentDir = createTempDir("leer"),
+            profileFile = writeProfileDir(),
+            installedSegmentFiles = installed,
+        )
+
+    /** Ein HttpClient im Funkloch. */
+    private object OfflineClient : HttpClient {
+        override fun execute(request: HttpRequest): HttpResponse =
+            throw java.io.IOException("kein Netz")
+    }
+
+    // -----------------------------------------------------------------------
     // Hilfen
     // -----------------------------------------------------------------------
 

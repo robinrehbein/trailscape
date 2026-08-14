@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -238,6 +240,19 @@ internal fun RideDetailScreen(
                             appViewModel.select(ride.id)
                             appViewModel.requestTab(AppTab.MAP)
                         },
+                    )
+                }
+
+                // Eine gespeicherte Planung sieht hier aus wie eine Tour, hat
+                // aber weder Trainingslast noch Auswertung — ohne diesen Satz
+                // waere das ein Fehler statt einer Auskunft (siehe `:core`:
+                // `Ride.planned`).
+                if (ride.planned) {
+                    NoticeBox(
+                        icon = Icons.Filled.Route,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "Das ist eine gespeicherte Planung, keine gefahrene Tour. Sie " +
+                            "zählt deshalb nicht für Wochenfortschritt, Fitness und Form.",
                     )
                 }
 

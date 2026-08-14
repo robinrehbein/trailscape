@@ -368,10 +368,12 @@ private fun weeklyReviewNotice(
  *
  * Gezaehlt werden Kalendertage zwischen der juengsten Tour und heute, nicht
  * 24-Stunden-Bloecke: „seit fuenf Tagen" soll dasselbe heissen wie im
- * Kalender.
+ * Kalender. Eine gespeicherte **Planung** ([Ride.planned]) beendet die Pause
+ * nicht — sie ist keine Fahrt, und der Anstupser darf nicht verstummen, weil
+ * jemand eine Route abgelegt hat.
  */
 private fun nudgeNotice(today: LocalDate, rides: List<Ride>): ReminderNotice? {
-    val lastRideOn = rides.maxOfOrNull { it.createdAt }
+    val lastRideOn = riddenRides(rides).maxOfOrNull { it.createdAt }
         ?.let { dartLocalOf(it).toLocalDate() }
         ?: return null
 

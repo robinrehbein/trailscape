@@ -39,6 +39,35 @@ internal fun JsonObject.requiredString(key: String): String {
     return prim.content
 }
 
+/**
+ * Optionaler String — fehlender Schluessel, JSON-`null` oder ein nicht-String
+ * ergeben `null`.
+ *
+ * Bewusst tolerant statt [requiredString]: Die Felder, die darueber gelesen
+ * werden, sind **nachtraeglich** ergaenzt worden (z. B.
+ * [TrainingSession.intensity]). Eine aeltere Datei kennt sie nicht, und das ist
+ * kein Fehler, sondern der Normalfall beim Lesen alter Plaene.
+ */
+internal fun JsonObject.optionalString(key: String): String? =
+    primitiveOrNull(key)?.takeIf { it.isString }?.content
+
+/**
+ * Optionaler Wahrheitswert — `null`, wenn der Schluessel fehlt.
+ *
+ * Akzeptiert sowohl `true`/`false` als auch die Strings `"true"`/`"false"`,
+ * weil Dart je nach Codierweg beides erzeugen kann. Alles andere ergibt `null`
+ * und ueberlaesst dem Aufrufer den Default — genau die Semantik, die ein
+ * nachtraeglich ergaenztes Feld braucht (siehe [Ride.planned]).
+ */
+internal fun JsonObject.optionalBoolean(key: String): Boolean? =
+    primitiveOrNull(key)?.content?.lowercase()?.let {
+        when (it) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
+    }
+
 internal fun JsonObject.requiredDouble(key: String): Double =
     primitiveOrNull(key)?.content?.toDoubleOrNull() ?: missing(key)
 

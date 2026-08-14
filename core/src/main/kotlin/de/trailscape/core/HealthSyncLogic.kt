@@ -458,6 +458,9 @@ fun mergeHeartRateIntoRide(
             avgHrBpm = dartRound(sum / count).toInt(),
             maxHrBpm = peak,
         ),
+        // Der Merge baut die Tour neu auf; ohne diese Zeile wuerde er einer
+        // gespeicherten Planung ihr Kennzeichen abnehmen (siehe [Ride.planned]).
+        planned = ride.planned,
     )
 }
 

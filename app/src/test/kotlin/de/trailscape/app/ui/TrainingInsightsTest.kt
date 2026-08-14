@@ -120,6 +120,24 @@ class TrainingInsightsTest {
     }
 
     @Test
+    fun `eine gespeicherte Planung erzeugt keine Trainingslast`() {
+        // „Als Tour speichern" auf der Karte legt eine Ride an, ohne dass
+        // jemand gefahren ist. Sie darf weder eine Last noch eine Fitnesskurve
+        // erzeugen — sonst schoebe eine reine Planungsaktion das gesamte
+        // Trainingsbild inklusive Tagesempfehlung.
+        val gefahren = ride("a", now.minusDays(3))
+        val geplant = ride("p", now.minusDays(1)).copy(planned = true)
+
+        val mitPlanung = computeInsights(listOf(gefahren, geplant), null, profile, now)
+        val ohnePlanung = computeInsights(listOf(gefahren), null, profile, now)
+
+        assertEquals(setOf("a"), mitPlanung.rideLoads.keys)
+        assertEquals(ohnePlanung.weeklyLoad, mitPlanung.weeklyLoad)
+        assertEquals(ohnePlanung.fitness.latest?.ctl, mitPlanung.fitness.latest?.ctl)
+        assertEquals(ohnePlanung.recommendation.kind, mitPlanung.recommendation.kind)
+    }
+
+    @Test
     fun `unveraenderte Touren werden aus dem Cache bedient`() {
         val ride = ride("a", now.minusDays(2))
         val cache = mutableMapOf<String, RideLoad>()

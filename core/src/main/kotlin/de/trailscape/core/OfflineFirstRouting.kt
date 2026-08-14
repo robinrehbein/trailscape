@@ -294,6 +294,10 @@ fun routeOfflineFirst(
     var missing = choice.missingSegmentFiles
     var reason = choice.fallbackReason
 
+    // Die Ursache des lokalen Fehlschlags — gemerkt, nicht verworfen (siehe
+    // unten, wo der Server ebenfalls scheitert).
+    var offlineFailure: Exception? = null
+
     if (choice.source == RoutingSource.OFFLINE && setup != null) {
         onSource?.invoke(RoutingSource.OFFLINE)
         try {
@@ -312,6 +316,7 @@ fun routeOfflineFirst(
             // entlang der Luftlinie nicht getroffen hat (siehe
             // [requiredSegmentFiles]). Der Name aus der Engine ist die
             // verlaessliche Auskunft — er kommt deshalb ins Angebot.
+            offlineFailure = e
             missing = listOfNotNull((e as? OfflineRoutingException)?.missingSegmentFile)
             reason = if (missing.isEmpty()) {
                 ServerFallbackReason.OFFLINE_FAILED
@@ -322,12 +327,31 @@ fun routeOfflineFirst(
     }
 
     onSource?.invoke(RoutingSource.SERVER)
-    val route = fetchRoute(
-        waypoints = waypoints,
-        profileId = serverProfileId,
-        client = client,
-        sleeper = sleeper,
-        onProgress = onProgress,
-    )
+    val route = try {
+        fetchRoute(
+            waypoints = waypoints,
+            profileId = serverProfileId,
+            client = client,
+            sleeper = sleeper,
+            onProgress = onProgress,
+        )
+    } catch (serverFailure: Exception) {
+        // Beide Wege sind gescheitert. Frueher gewann hier kommentarlos die
+        // Servermeldung — der Nutzer las „Routing-Server nicht erreichbar. Bist
+        // du online?", obwohl das eigentliche Problem eine beschaedigte Kachel
+        // war, die er loeschen und neu laden koennte. Die lokale Ursache ist die
+        // konkretere Auskunft und steht deshalb vorn; die Servermeldung folgt
+        // als zweiter Satz, und die urspruengliche Ausnahme bleibt als [cause]
+        // fuer Fehlerberichte erhalten.
+        throw offlineFailure?.let { offline ->
+            OfflineRoutingException(
+                message = "${offline.message} " +
+                    "Der Routing-Server war anschließend ebenfalls nicht erreichbar " +
+                    "(${serverFailure.message}).",
+                missingSegmentFile = (offline as? OfflineRoutingException)?.missingSegmentFile,
+                cause = offline,
+            )
+        } ?: serverFailure
+    }
     return RoutingResult(route, RoutingSource.SERVER, reason, missing)
 }

@@ -26,15 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
+import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.weekdayDateFormat
+import de.trailscape.core.assessPlanFeasibility
 import de.trailscape.core.currentWeekIndex
-import de.trailscape.core.routeTargetForSession
-import de.trailscape.core.routeTargetForToday
+import de.trailscape.core.decideTodayRoute
 import de.trailscape.core.sessionsForDay
 import de.trailscape.core.weekKm
 import java.time.LocalDateTime
@@ -53,21 +54,26 @@ import java.time.LocalDateTime
  * Kein einziger Wert wird hier gerechnet. Bereitschaft, Empfehlung und
  * Wochenziel kommen fertig aus [AppViewModel.insights]
  * ([de.trailscape.app.ui.TrainingInsights]), das Tagesprogramm aus
- * [sessionsForDay] und der Wochenfortschritt aus [weekKm]/[currentWeekIndex] —
- * alles `:core`. Der Screen entscheidet nur, *welche* Karte etwas zu sagen hat.
+ * [sessionsForDay], die Verrechnung von Tagesform und Planeinheit aus
+ * [decideTodayRoute], das Urteil ueber den Plan aus [assessPlanFeasibility] und
+ * der Wochenfortschritt aus [weekKm]/[currentWeekIndex] — alles `:core`. Der
+ * Screen entscheidet nur, *welche* Karte etwas zu sagen hat.
  *
  * ## Reihenfolge und Sichtbarkeit
  * Jede Karte erscheint nur, wenn sie eine Aussage traegt:
  *  1. **Kopf** — Begruessung, Wochentag, Datum. Immer.
  *  2. **Tagesempfehlung** — immer: Auch ohne jede Historie liefert `:core` eine
  *     Empfehlung (dann „Grundlageneinheit") und daraus ein Routenziel.
- *  3. **Aufzeichnung** — nur, wenn schon Touren existieren. Beim Erststart
+ *  3. **Traegt der Plan?** — nur, wenn die laengste geplante Fahrt die
+ *     Zieldistanz deutlich verfehlt. Sie steht bewusst weit oben: Ein Plan, der
+ *     das Ziel nicht einholt, ist die wichtigste Auskunft der Seite.
+ *  4. **Aufzeichnung** — nur, wenn schon Touren existieren. Beim Erststart
  *     traegt der Leerzustand ganz unten denselben Knopf; zweimal „Tour
  *     aufzeichnen" auf einem Bildschirm waere genau die Doppelung, die diese
  *     Seite abschaffen soll.
- *  4. **Diese Woche** — nur mit laufendem Plan; ohne Plan steht an dieser
+ *  5. **Diese Woche** — nur mit laufendem Plan; ohne Plan steht an dieser
  *     Stelle die Einladung, ein Ziel festzulegen.
- *  5. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
+ *  6. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
  *
  * ## Kein `TopAppBar`
  * Anders als Touren, Training und Mehr traegt dieser Screen keine Titelleiste:
@@ -92,28 +98,28 @@ fun TodayScreen(appViewModel: AppViewModel) {
     // Auskunft und der Trainings-Tab zeigt weiterhin alle.
     val todaySession = remember(plan) { plan?.let { sessionsForDay(it).firstOrNull() } }
 
-    // Routenziel des prominenten Knopfes. Die Tagesempfehlung entscheidet, OB
-    // gefahren wird (an einem Ruhetag liefert `:core` bewusst kein Ziel — dann
-    // gibt es auch keinen Knopf), die Planeinheit entscheidet WIE WEIT: Steht
-    // heute eine konkrete Einheit an, ist deren Kilometervorgabe die genauere
-    // Ansage als die aus der Empfehlungsdauer abgeleitete Distanz.
-    val todayTarget = remember(insights, rides, todaySession) {
-        val fromRecommendation = routeTargetForToday(
+    // Die Tagesentscheidung selbst liegt in `:core` ([decideTodayRoute]) und
+    // nicht mehr hier. Sie stand frueher als `when`-Block in dieser Datei — die
+    // zentrale Verkettung der App, mitten in Compose-Code und damit ohne einen
+    // einzigen Test. Dort wirkte die Bereitschaft ausserdem binaer: entweder
+    // Ruhetag oder volle Plandistanz. Jetzt daempft die Tagesform Distanz,
+    // Hoehenprofil und Intensitaet, liefert den erklaerenden Satz gleich mit —
+    // und dieser Screen entscheidet weiterhin nur, welche Karte etwas zu sagen
+    // hat.
+    val todayRoute = remember(insights, rides, todaySession) {
+        decideTodayRoute(
             recommendation = insights.recommendation,
+            session = todaySession,
             profile = insights.profile,
             recentRides = rides,
             weeklyTarget = insights.weeklyTarget,
         )
-        when {
-            fromRecommendation == null -> null
-            todaySession == null -> fromRecommendation
-            else -> routeTargetForSession(
-                session = todaySession,
-                profile = insights.profile,
-                recentRides = rides,
-            )
-        }
     }
+
+    // Traegt der Plan sein eigenes Ziel? Die Antwort steht hier und nicht nur
+    // beim Anlegen: Wer den Plan vor acht Wochen erstellt hat, liest die
+    // Warnung sonst nie wieder.
+    val feasibility = remember(plan) { plan?.let { assessPlanFeasibility(it) } }
 
     // Laufende Planwoche; `null` vor Planbeginn und ohne Plan.
     val currentWeek = remember(plan) {
@@ -158,13 +164,19 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 item(key = "empfehlung") {
                     TodayRecommendationCard(
                         insights = insights,
-                        session = todaySession,
+                        todayRoute = todayRoute,
                         showHealthHint = !insights.readiness.available && !hasHealthData,
-                        onPlanRoute = todayTarget?.let { target ->
+                        onPlanRoute = todayRoute.target?.let { target ->
                             { appViewModel.requestRouteGeneration(target) }
                         },
-                        onOpenHealth = { appViewModel.requestTab(AppTab.MORE) },
+                        onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
                     )
+                }
+
+                // Nur, wenn der Plan sein Ziel nicht traegt — sonst waere es
+                // eine Karte, die jeden Tag dasselbe Unauffaellige sagt.
+                feasibility?.takeIf { !it.feasible }?.let { verdict ->
+                    item(key = "plan-tragfaehigkeit") { PlanFeasibilityCard(verdict) }
                 }
 
                 if (rides.isNotEmpty()) {
@@ -199,7 +211,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     item(key = "erste-tour") {
                         FirstRideState(
                             onRecord = { appViewModel.requestTab(AppTab.MAP) },
-                            onImport = { appViewModel.requestTab(AppTab.MORE) },
+                            onImport = { appViewModel.requestMoreSection(MoreSection.BACKUP) },
                         )
                     }
                 }

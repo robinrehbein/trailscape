@@ -42,6 +42,7 @@ import de.trailscape.core.maxLoad
 import de.trailscape.core.median
 import de.trailscape.core.recommendToday
 import de.trailscape.core.resolveEftp
+import de.trailscape.core.riddenRides
 import de.trailscape.core.weeklyLoadTarget
 import java.time.Instant
 import java.time.LocalDateTime
@@ -64,7 +65,26 @@ import kotlin.math.min
 /** SharedPreferences-Schluessel des Trainingsprofils (wie in Dart). */
 const val PROFILE_STORAGE_KEY: String = "trailscape.profile"
 
-/** Profil, solange die Nutzerin noch nichts eingetragen hat. */
+/**
+ * Schluessel, unter dem steht, dass das Profil **von der Nutzerin** stammt und
+ * nicht aus [defaultTrainingProfile] — siehe
+ * [de.trailscape.app.ui.AppViewModel.profileConfirmed] fuer das Warum.
+ *
+ * Ein eigener Schluessel statt eines Felds im Profil-JSON: Das JSON ist zugleich
+ * das Austauschformat des Backups (`:core`, `buildBackupJson`), und ein
+ * UI-Kennzeichen hat darin nichts verloren.
+ */
+const val PROFILE_CONFIRMED_STORAGE_KEY: String = "trailscape.profile.confirmed.v1"
+
+/**
+ * Profil, solange die Nutzerin noch nichts eingetragen hat.
+ *
+ * ACHTUNG: Alter 40 und Gewicht 75 kg sind **Annahmen**, keine Messwerte. Alles,
+ * was daran haengt — Trainingslast, HFmax, Schwelle, geschaetzte Leistung —, ist
+ * damit ebenfalls nur eine Annahme. Ob die Werte bestaetigt sind, sagt
+ * [de.trailscape.app.ui.AppViewModel.profileConfirmed]; die Oberflaeche muss den
+ * Unterschied sichtbar machen, statt fremde Zahlen als „deine Werte" auszugeben.
+ */
 val defaultTrainingProfile: TrainingProfile = TrainingProfile(ageYears = 40)
 
 /**
@@ -328,7 +348,13 @@ fun computeInsights(
     val effective = effectiveProfile(profile, vitals)
     val restingHrSeries = vitals?.restingHeartRate?.series ?: emptyList()
 
-    val ordered = rides.sortedBy { it.createdAt }
+    // Gespeicherte **Planungen** sind keine Trainingsreize: „Als Tour
+    // speichern" auf der Karte legt eine Tour an, ohne dass jemand gefahren
+    // ist. Sie hier hereinzulassen hiesse, Fitness, Ermuedung, Form, FTP und
+    // damit die gesamte Tagesempfehlung auf einer Fahrt aufzubauen, die es nie
+    // gab. Die Filterung steht ganz am Anfang, damit sie keiner der folgenden
+    // Durchgaenge umgehen kann (siehe `:core`: `riddenRides`).
+    val ordered = riddenRides(rides).sortedBy { it.createdAt }
 
     // Profil je Tour: zeitnaher Ruhepuls statt eines Medians ueber die ganze
     // Historie (der Ruhepuls steckt ueber die HF-Reserve in jedem TRIMP).

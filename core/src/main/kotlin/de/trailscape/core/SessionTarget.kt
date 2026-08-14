@@ -11,16 +11,15 @@ import kotlin.math.pow
  * Rundkurs-Generierung (`RouteGenerator.kt`): beide Seiten kennen einander
  * nicht, die gemeinsame Waehrung ist [RouteTarget].
  *
- * **Was das reale Modell hergibt.** [TrainingSession] hat *keine* Dauer- und
- * kein Intensitaetsfeld — es traegt `day`, `title`, `description` und
- * `targetKm` (siehe `Models.kt`). Die Kilometer der Einheit sind damit die
- * *autoritative* Groesse und werden 1:1 zur Zieldistanz; abgeleitet wird
- * stattdessen die **Dauer** (`km / Geschwindigkeit`), weil das UI sie anzeigen
- * will und weil die Tagesempfehlung genau andersherum funktioniert. Die
- * Intensitaet wird aus Titel und Beschreibungstext klassifiziert — den
- * Wortlaut erzeugt `Training.kt` deterministisch, die Schluesselwoerter unten
- * stammen also nicht aus freiem Nutzertext, sondern aus generierten Bausteinen
- * (siehe [classifySessionIntensity]).
+ * **Was das reale Modell hergibt.** [TrainingSession] traegt `day`, `title`,
+ * `description`, `targetKm` und — seit der Entkopplung von Text und Zahl —
+ * `intensity`, `durationMin` und `isEvent` (siehe `Models.kt`). Die Kilometer
+ * der Einheit bleiben die *autoritative* Groesse und werden 1:1 zur
+ * Zieldistanz; die **Dauer** ist die daraus abgeleitete Erklaergroesse fuer das
+ * UI (`km / Geschwindigkeit`), weil die Tagesempfehlung genau andersherum
+ * funktioniert. Die Intensitaet wird **nicht mehr** aus dem Text
+ * zurueckgewonnen — [sessionIntensityFromTitle] liest nur noch Plaene, die
+ * aelter sind als das Feld.
  *
  * [DailyRecommendation] aus `Readiness.kt` traegt umgekehrt *keine*
  * Kilometer, sondern nur eine Art ([DailyRecommendationKind]) plus Fliesstext
@@ -41,10 +40,27 @@ val ascentPreferenceLabels: Map<AscentPreference, String> = linkedMapOf(
 /**
  * Grobe Intensitaetsstufe einer Einheit.
  *
- * Bewusst nur drei Stufen: feiner laesst sich aus Titel/Beschreibung bzw. aus
- * [DailyRecommendationKind] nichts belastbar ableiten.
+ * Bewusst nur drei Stufen: feiner laesst sich aus dem Plan bzw. aus
+ * [DailyRecommendationKind] nichts belastbar ableiten. Die Reihenfolge der
+ * Konstanten ist bedeutsam — sie steigt mit der Haerte, sodass sich zwei Stufen
+ * ueber `ordinal` vergleichen lassen (siehe [decideTodayRoute], das die
+ * geplante Intensitaet auf die heute vertretbare herunterzieht).
  */
-enum class SessionIntensity { LOCKER, GRUNDLAGE, HART }
+enum class SessionIntensity(
+    /** Name im Plan-JSON; stabil unabhaengig vom Kotlin-Bezeichner. */
+    val jsonName: String,
+) {
+    LOCKER("locker"),
+    GRUNDLAGE("grundlage"),
+    HART("hart"),
+    ;
+
+    companion object {
+        /** `null` statt Ausnahme: ein unbekannter Wert soll den Plan nicht unlesbar machen. */
+        fun fromJsonNameOrNull(name: String): SessionIntensity? =
+            entries.firstOrNull { it.jsonName == name }
+    }
+}
 
 /** Deutsche Labels fuer [SessionIntensity]. */
 val sessionIntensityLabels: Map<SessionIntensity, String> = linkedMapOf(
@@ -60,6 +76,18 @@ enum class RouteTargetSource {
 
     /** Aus der Tagesempfehlung ohne Plan ([routeTargetForToday]). */
     TAGESEMPFEHLUNG,
+
+    /**
+     * Von der Nutzerin auf der Karte selbst eingegeben („Runde ab hier über
+     * 50 km").
+     *
+     * Fehlte bisher, und die Kartenoberflaeche behalf sich mit einem festen
+     * Label als Erkennungsmerkmal — ueber einer selbst eingetippten Distanz
+     * stand sonst „(Tagesempfehlung)", also die Behauptung, die App habe das
+     * empfohlen. Eine selbst gewaehlte Runde stammt aus keinem Trainingsziel,
+     * und genau das sagt dieser Wert.
+     */
+    SELBST_GEWAEHLT,
 }
 
 /**
@@ -111,7 +139,8 @@ const val minSpeedSampleKm: Double = 3.0
  * Median des Tourenschnitts der letzten [rideCount] Touren mit brauchbarem
  * `avgSpeedKmh`; `null`, wenn keine einzige Tour verwertbar ist.
  *
- * "Brauchbar" heisst: `avgSpeedKmh` gesetzt, endlich, zwischen
+ * "Brauchbar" heisst: **gefahren** (keine gespeicherte Planung, siehe
+ * [riddenRides]), `avgSpeedKmh` gesetzt, endlich, zwischen
  * [minPlausibleAvgSpeedKmh] und [maxPlausibleAvgSpeedKmh] und die Tour
  * mindestens [minSpeedSampleKm] lang. Median statt Mittelwert, weil eine
  * einzelne Renn- oder Schiebe-Tour den Schnitt sonst verzerrt.
@@ -120,7 +149,7 @@ fun typicalAvgSpeedKmh(recentRides: List<Ride>, rideCount: Int = speedHistoryRid
     if (rideCount <= 0) {
         return null
     }
-    val usable = recentRides
+    val usable = riddenRides(recentRides)
         .sortedByDescending { it.createdAt }
         .asSequence()
         .mapNotNull { ride ->
@@ -202,35 +231,66 @@ private val hartKeywords = listOf("intervall", "zielevent")
 private val climbKeywords = listOf("anstieg", "höhenmeter", "hoehenmeter")
 
 /**
- * Klassifiziert eine geplante Einheit in [SessionIntensity].
+ * Raet die Intensitaet aus dem Titel — **nur** fuer Plaene, die noch kein
+ * [TrainingSession.intensity] tragen.
  *
- * Grundlage sind die Titel, die `Training.kt` deterministisch erzeugt:
- * "Lockere Ausfahrt", "Ruhige Runde", "Regeneration locker", "Locker mit
- * Antritten", "Aktivierung locker" (→ [SessionIntensity.LOCKER]),
- * "Intervalle" und "Zielevent: …" (→ [SessionIntensity.HART]), "GA1",
- * "GA1 kompensatorisch" und "Lange Tour" (→ [SessionIntensity.GRUNDLAGE],
- * bzw. LOCKER wo "kompensatorisch"/"locker" im Titel steht).
+ * ## Warum das kein Klassifikator mehr ist, sondern ein Altlastenleser
+ * Bis hierher war das der einzige Weg, an die Intensitaet zu kommen: Titel
+ * kleinschreiben, Stichwoerter suchen. Damit hing die Routenwahl an einer
+ * Formulierung in `Training.kt` — eine Umbenennung von „Intervalle" in
+ * „Schwellenblock" haette lautlos eine Grundlageneinheit daraus gemacht.
+ * Seit [TrainingSession.intensity] ein Feld ist, wird hier nur noch geraten,
+ * wenn ein **gespeicherter Plan aus der Zeit davor** gelesen wird
+ * ([TrainingSession.fromJson]); neue Plaene kommen nie hier vorbei.
  *
- * Die Reihenfolge der Pruefungen ist bedeutsam: "Locker mit Antritten" traegt
- * Antritte, ist aber eine Taper-Lockereinheit — deshalb gewinnt "locker" vor
- * allem anderen. Unbekannte Titel landen auf [SessionIntensity.GRUNDLAGE],
- * dem mit Abstand haeufigsten und im Zweifel unschaedlichsten Fall.
+ * Die Regeln sind deshalb unveraendert die alten: „Lockere Ausfahrt",
+ * „Ruhige Runde", „Regeneration locker", „Locker mit Antritten",
+ * „Aktivierung locker" → [SessionIntensity.LOCKER]; „Intervalle" und
+ * „Zielevent: …" → [SessionIntensity.HART]; alles andere („GA1",
+ * „Lange Tour") → [SessionIntensity.GRUNDLAGE]. Die Reihenfolge bleibt
+ * bedeutsam: „Locker mit Antritten" traegt Antritte, ist aber eine
+ * Taper-Lockereinheit — „locker" gewinnt vor allem anderen.
  */
-fun classifySessionIntensity(session: TrainingSession): SessionIntensity {
-    val title = session.title.lowercase()
-    if (lockerKeywords.any { title.contains(it) }) {
+fun sessionIntensityFromTitle(title: String): SessionIntensity {
+    val lower = title.lowercase()
+    if (lockerKeywords.any { lower.contains(it) }) {
         return SessionIntensity.LOCKER
     }
-    if (hartKeywords.any { title.contains(it) }) {
+    if (hartKeywords.any { lower.contains(it) }) {
         return SessionIntensity.HART
     }
     return SessionIntensity.GRUNDLAGE
 }
 
 /**
+ * Die Intensitaet der Einheit — seit [TrainingSession.intensity] schlicht das
+ * Feld.
+ *
+ * Bleibt als Funktion bestehen, weil die Oberflaeche und die Routenableitung
+ * sie an mehreren Stellen abfragen und der Name dort die Absicht besser
+ * ausdrueckt als ein nackter Feldzugriff.
+ */
+fun classifySessionIntensity(session: TrainingSession): SessionIntensity = session.intensity
+
+/**
+ * Ob fuer diese Einheit ueberhaupt eine Runde generiert werden darf.
+ *
+ * `false` ausschliesslich fuer das Zielevent ([TrainingSession.isEvent]): Das
+ * Event hat eine eigene, ausgeschriebene Strecke. Eine 200-km-Schleife vor der
+ * Haustuer dafuer anzubieten ist kein Angebot, sondern ein Missverstaendnis —
+ * und wer am Zieltag auf den Knopf drueckt, bekommt eine Rechnung, die er nie
+ * fahren wird.
+ *
+ * Jede Oberflaeche mit einem „Passende Runde"-Knopf an einer Planeinheit muss
+ * das hier fragen — die Startseite „Heute" tut es ueber [decideTodayRoute],
+ * `ui/training/PlanSection.kt` beim Zeichnen der Wochenkarte.
+ */
+fun canGenerateRouteFor(session: TrainingSession): Boolean = !session.isEvent
+
+/**
  * Leitet die Hoehenpraeferenz aus der Einheit ab.
  *
- * 1. **Beschreibung schlaegt Titel.** Erwaehnt der Text bewusst Anstiege oder
+ * 1. **Beschreibung schlaegt alles.** Erwaehnt der Text bewusst Anstiege oder
  *    Hoehenmeter, ist das ein direkter Auftrag: `Training.kt` haengt genau
  *    dann den Klettersatz an ("Baue dabei bewusst Anstiege ein …"), wenn das
  *    Ziel ≥ 1000 Hm hat — und die Zielevent-Beschreibung nennt die Anstiege
@@ -246,7 +306,7 @@ fun ascentPreferenceForSession(session: TrainingSession): AscentPreference {
     if (climbKeywords.any { text.contains(it) }) {
         return AscentPreference.BERGIG
     }
-    return when (classifySessionIntensity(session)) {
+    return when (session.intensity) {
         SessionIntensity.HART -> AscentPreference.MODERAT
         SessionIntensity.GRUNDLAGE, SessionIntensity.LOCKER -> AscentPreference.FLACH
     }

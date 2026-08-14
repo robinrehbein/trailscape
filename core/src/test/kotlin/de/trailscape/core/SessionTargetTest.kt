@@ -38,8 +38,25 @@ class SessionTargetTest {
             ),
         )
 
-        fun session(title: String, description: String = "", targetKm: Int = 40): TrainingSession =
-            TrainingSession(day = "Di", title = title, description = description, targetKm = targetKm)
+        /**
+         * Einheit von Hand. [intensity] leitet sich standardmaessig aus dem
+         * Titel ab — genau wie beim Lesen eines Plans, der noch aelter ist als
+         * das Feld [TrainingSession.intensity].
+         */
+        fun session(
+            title: String,
+            description: String = "",
+            targetKm: Int = 40,
+            intensity: SessionIntensity = sessionIntensityFromTitle(title),
+            isEvent: Boolean = false,
+        ): TrainingSession = TrainingSession(
+            day = "Di",
+            title = title,
+            description = description,
+            targetKm = targetKm,
+            intensity = intensity,
+            isEvent = isEvent,
+        )
 
         fun recommendation(kind: DailyRecommendationKind): DailyRecommendation =
             DailyRecommendation(kind = kind, title = "Titel", detail = "Detail", reasons = emptyList())

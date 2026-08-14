@@ -355,16 +355,17 @@ internal fun targetLine(target: RouteTarget): String {
 
 /** „aus: GA1-Einheit (Trainingsplan)" */
 internal fun sourceLine(target: RouteTarget): String {
-    // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. `:core` kennt
-    // dafuer keinen Wert in [RouteTargetSource] (und ist hier tabu), deshalb
-    // erkennt die Beschriftung sie an ihrem festen Label — sonst stuende ueber
-    // einer von Hand eingegebenen Distanz „aus: … (Tagesempfehlung)".
-    if (target.label == SELF_PLANNED_ROUTE_LABEL) {
+    // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. Frueher fehlte
+    // `:core` dafuer ein Wert und die Beschriftung erkannte sie notduerftig an
+    // ihrem festen Label; seit es [RouteTargetSource.SELBST_GEWAEHLT] gibt,
+    // steht es an der Quelle statt am Text.
+    if (target.source == RouteTargetSource.SELBST_GEWAEHLT) {
         return "aus: deiner Eingabe auf der Karte"
     }
     val source = when (target.source) {
         RouteTargetSource.PLAN -> "Trainingsplan"
         RouteTargetSource.TAGESEMPFEHLUNG -> "Tagesempfehlung"
+        RouteTargetSource.SELBST_GEWAEHLT -> "eigene Eingabe"
     }
     return "aus: ${target.label} ($source)"
 }

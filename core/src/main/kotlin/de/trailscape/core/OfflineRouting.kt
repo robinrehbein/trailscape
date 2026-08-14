@@ -79,11 +79,16 @@ import kotlin.math.roundToLong
  * maschinenlesbar** mit (z. B. `E5_N50.rd5`). Nur so kann eine spaetere Stufe
  * aus dem Fehler einen konkreten Download anbieten, ohne die Meldung wieder
  * zerlegen zu muessen — Text ist fuer Menschen, dieses Feld fuer Code.
+ *
+ * [cause] traegt die urspruengliche Ausnahme, wenn diese hier aus einer anderen
+ * entstanden ist — gebraucht von [routeOfflineFirst], das die lokale Ursache
+ * weiterreicht, wenn danach auch der Server scheitert.
  */
 class OfflineRoutingException(
     message: String,
     val missingSegmentFile: String? = null,
-) : Exception(message)
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 /** Meldung, wenn das Profil (`*.brf`) nicht am erwarteten Ort liegt. */
 const val errorOfflineProfileMissing: String =

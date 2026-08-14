@@ -699,7 +699,7 @@ enum class ReadinessBand { HART, NORMAL, LOCKER, RUHE }
 val readinessBandLabels: Map<ReadinessBand, String> = mapOf(
     ReadinessBand.HART to "bereit für eine harte Einheit",
     ReadinessBand.NORMAL to "normales Training",
-    ReadinessBand.LOCKER to "locker / Z2",
+    ReadinessBand.LOCKER to "locker (Grundlagentempo)",
     ReadinessBand.RUHE to "Ruhe oder sehr locker",
 )
 
@@ -1063,7 +1063,7 @@ fun recommendToday(
     ) {
         return DailyRecommendation(
             kind = DailyRecommendationKind.LOCKER_Z2,
-            title = "Locker in Z2, 60–90 min",
+            title = "Locker im Grundlagentempo (Zone 2), 60–90 min",
             detail = "Keine Intervalle — halte die Intensität heute im " +
                 "Grundlagenbereich.",
             reasons = reasons,
@@ -1072,7 +1072,7 @@ fun recommendToday(
     if (tsb != null && tsb < -25) {
         return DailyRecommendation(
             kind = DailyRecommendationKind.RECOVERY,
-            title = "Regenerationsfahrt in Z1/Z2",
+            title = "Regenerationsfahrt, ganz ruhig (Zone 1–2)",
             detail = "Deine Ermüdung ist gerade hoch — kurz und locker fahren.",
             reasons = reasons,
         )
@@ -1095,7 +1095,7 @@ fun recommendToday(
     return DailyRecommendation(
         kind = DailyRecommendationKind.GRUNDLAGE,
         title = "Grundlageneinheit",
-        detail = "Fahre nach dem Restbudget deiner Woche, überwiegend Z2.",
+        detail = "Fahre nach dem Restbudget deiner Woche, überwiegend im Grundlagentempo (Zone 2 — Tempo, bei dem du dich noch unterhalten kannst).",
         reasons = reasons,
     )
 }

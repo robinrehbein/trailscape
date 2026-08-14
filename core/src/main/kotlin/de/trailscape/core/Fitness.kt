@@ -31,6 +31,11 @@ private fun determineLevel(
 /**
  * Bewertet die Form anhand der Fahrten der letzten 8 Wochen.
  *
+ * Gezaehlt wird nur, was auch gefahren wurde: Gespeicherte Planungen
+ * ([Ride.planned]) fallen ueber [riddenRides] heraus. Sie wuerden sonst
+ * Wochenumfang, laengste Fahrt und damit die Fitness-Stufe anheben — und aus
+ * der Stufe entsteht das Startvolumen des naechsten Trainingsplans.
+ *
  * [now] ist ein Zeitstempel in ms seit Epoch; ohne Angabe wird die aktuelle
  * Zeit verwendet.
  */
@@ -41,7 +46,7 @@ fun assessFitness(
     val nowMs = now ?: System.currentTimeMillis()
     val cutoff = nowMs - WINDOW_MS
 
-    val relevantRides = rides.filter { ride ->
+    val relevantRides = riddenRides(rides).filter { ride ->
         ride.createdAt >= cutoff &&
             ride.createdAt <= nowMs &&
             ride.stats.distanceKm > 0

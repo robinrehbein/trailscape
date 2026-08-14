@@ -1019,7 +1019,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                 speedKmh = 0.0,
                 intensity = SessionIntensity.GRUNDLAGE,
                 label = SELF_PLANNED_ROUTE_LABEL,
-                source = RouteTargetSource.TAGESEMPFEHLUNG,
+                // Seit `:core` dafuer einen eigenen Wert kennt: Ueber einer
+                // selbst eingetippten Distanz stand vorher „(Tagesempfehlung)".
+                source = RouteTargetSource.SELBST_GEWAEHLT,
             ),
         )
         // Das Blatt zu: Waehrend der Suche gehoert der Platz dem
@@ -1549,6 +1551,15 @@ private fun buildMapMarkers(
  * Baut aus einer geplanten Route eine speicherbare Tour — wie
  * `_savePlannedRoute` in Dart: Distanz und Hoehenmeter kommen vom
  * Routing-Server, alles Uebrige aus [computeStats].
+ *
+ * ## Warum [Ride.planned] hier gesetzt wird
+ * „Als Tour speichern" legte bis hierher eine ganz normale Tour an. Danach
+ * meldete die Startseite die **geplanten** Kilometer als gefahren, der
+ * Wochenfortschritt sprang und Fitness, Ermuedung und Form rechneten mit einer
+ * Fahrt, die niemand gemacht hat — ausgeloest durch eine reine
+ * Planungsaktion. Das Kennzeichen haelt die Planung aus allem heraus, was
+ * „gefahren" meint (siehe `:core`: `riddenRides`), laesst sie in Tourenliste,
+ * Export und Sync aber sichtbar.
  */
 private fun rideFromPlannedRoute(name: String, route: PlannedRoute): Ride {
     val base = computeStats(route.points)
@@ -1558,6 +1569,7 @@ private fun rideFromPlannedRoute(name: String, route: PlannedRoute): Ride {
         createdAt = System.currentTimeMillis(),
         stats = base.copy(distanceKm = route.distanceKm, ascentM = route.ascentM),
         points = route.points,
+        planned = true,
     )
 }
 

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -38,9 +39,13 @@ import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.training.readinessBandColor
+import de.trailscape.core.PlanFeasibility
 import de.trailscape.core.Ride
+import de.trailscape.core.RouteTarget
+import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
+import de.trailscape.core.ascentPreferenceLabels
 import de.trailscape.core.formatDuration
 import de.trailscape.core.readinessBandLabels
 import de.trailscape.core.weekKindLabels
@@ -60,8 +65,16 @@ import kotlin.math.roundToInt
  * Das Herzstueck: Bereitschaft, heutige Einheit und der Weg zur passenden
  * Runde.
  *
- * @param session die heute geplante Einheit, oder `null` (Ruhetag im Plan bzw.
- *   gar kein Plan).
+ * ## Die Karte darf sich nicht selbst widersprechen
+ * Frueher stand hier oben „Locker in Z2, 60–90 min" und direkt darunter
+ * „Heute im Plan · Lange Tour · 90 km", waehrend der Knopf 90 km **bergig**
+ * erzeugte. Drei Aussagen, drei Richtungen. Jetzt kommt alles aus derselben
+ * Entscheidung ([TodayRoute] aus `:core`): Wurde heruntergestuft, nennt die
+ * Karte beide Zahlen und den Grund, und der Knopf traegt genau die Distanz, die
+ * er auch erzeugt.
+ *
+ * @param todayRoute Ergebnis von [de.trailscape.core.decideTodayRoute] —
+ *   Routenziel, geplante Einheit und der erklaerende Satz in einem.
  * @param showHealthHint zeigt **einmal** — genau hier, nicht in jeder Karte —
  *   den Hinweis, dass eine Uhr mit Health-Connect-Anbindung die Bereitschaft
  *   freischaltet. Er erscheint nur, wenn ueberhaupt kein Erholungssignal
@@ -69,13 +82,13 @@ import kotlin.math.roundToInt
  *   keine Kaufberatung, sondern Geduld.
  * @param onPlanRoute loest die bestehende Routengenerierung aus
  *   (`AppViewModel.requestRouteGeneration`, danach uebernimmt der Karten-Tab).
- *   `null` an einem Ruhetag: `:core` liefert dann bewusst kein Routenziel, und
- *   ein Angebot zur Ausfahrt waere der falsche Rat.
+ *   `null` an einem Ruhetag und am Zieltag: `:core` liefert dann bewusst kein
+ *   Routenziel, und ein Angebot zur Ausfahrt waere der falsche Rat.
  */
 @Composable
 internal fun TodayRecommendationCard(
     insights: TrainingInsights,
-    session: TrainingSession?,
+    todayRoute: TodayRoute,
     showHealthHint: Boolean,
     onPlanRoute: (() -> Unit)?,
     onOpenHealth: () -> Unit,
@@ -84,6 +97,7 @@ internal fun TodayRecommendationCard(
     val readiness = insights.readiness
     val recommendation = insights.recommendation
     val color = if (readiness.available) readinessBandColor(readiness.band) else theme.primary
+    val session = todayRoute.session
 
     Card {
         Column(modifier = Modifier.padding(CardPadding)) {
@@ -127,6 +141,20 @@ internal fun TodayRecommendationCard(
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+            } else {
+                // Ohne Gesamtwert bleibt die Karte nicht stumm: `:core` sagt
+                // genau, WORAN es noch fehlt (Ruhepuls-Baseline, Schlaf,
+                // Trainingshistorie). Ohne diesen Satz sieht jemand, der seine
+                // Uhr gerade verbunden hat, wochenlang ueberhaupt nichts und
+                // haelt die Verbindung fuer kaputt.
+                readiness.unavailableReason?.let { grund ->
+                    Text(
+                        text = grund,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = theme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
 
             NoticeBox(
@@ -141,6 +169,18 @@ internal fun TodayRecommendationCard(
                 PlannedSessionBlock(session)
             }
 
+            // Der Satz zur Abweichung — er gehoert zwischen Plan und Knopf,
+            // weil er genau erklaert, warum der Knopf gleich eine andere Zahl
+            // traegt als die Zeile darueber.
+            todayRoute.note?.let { note ->
+                Spacer(modifier = Modifier.height(12.dp))
+                NoticeBox(
+                    icon = Icons.Filled.Route,
+                    color = color,
+                    text = note,
+                )
+            }
+
             if (onPlanRoute != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = onPlanRoute, modifier = Modifier.fillMaxWidth()) {
@@ -150,7 +190,15 @@ internal fun TodayRecommendationCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Passende Runde planen")
+                    // Die Beschriftung nennt, was der Knopf erzeugt. Ohne die
+                    // Zahl blieb offen, ob er die Plandistanz oder die
+                    // heruntergestufte nimmt — und er nahm bis vor Kurzem
+                    // wortlos die falsche.
+                    Text(
+                        text = todayRoute.target
+                            ?.let { "Passende Runde planen · ${routeButtonSuffix(it)}" }
+                            ?: "Passende Runde planen",
+                    )
                 }
             }
 
@@ -165,6 +213,44 @@ internal fun TodayRecommendationCard(
                     modifier = Modifier.clickable(onClick = onOpenHealth),
                 )
             }
+        }
+    }
+}
+
+/** „55 km flach" — was der Knopf gleich erzeugt. */
+private fun routeButtonSuffix(target: RouteTarget): String =
+    "${formatKmDe(target.distanceKm)} km " +
+        ascentPreferenceLabels.getValue(target.ascentPreference).lowercase()
+
+/**
+ * Warnung, wenn der Plan sein eigenes Ziel nicht traegt.
+ *
+ * Bis hierher gab es sie nicht: Ein Einsteiger mit dem Ziel „200 km in 12
+ * Wochen" bekam einen Plan, dessen laengste Fahrt 45 km war, las „Plan mit 12
+ * Wochen erstellt." und hielt ihn fuer tragfaehig. Der Text nennt deshalb drei
+ * Dinge, nicht nur das Problem: was der Plan hergibt, welches Ziel er truege
+ * und wie lange das gewuenschte braeuchte — der Rat ist die Haelfte der
+ * Auskunft.
+ */
+@Composable
+internal fun PlanFeasibilityCard(feasibility: PlanFeasibility) {
+    val theme = MaterialTheme.colorScheme
+    Card {
+        Column(modifier = Modifier.padding(CardPadding)) {
+            Text("Trägt dein Plan?", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(12.dp))
+            NoticeBox(
+                icon = Icons.Filled.Warning,
+                color = theme.error,
+                text = feasibility.message ?: "",
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Der Plan bleibt gültig – er bereitet dich nur auf eine kürzere Distanz " +
+                    "vor, als du eingetragen hast. Ein neues Ziel legst du im Trainings-Tab an.",
+                style = MaterialTheme.typography.bodySmall,
+                color = theme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -193,8 +279,14 @@ private fun PlannedSessionBlock(session: TrainingSession) {
                 modifier = Modifier.weight(1f),
             )
             Spacer(modifier = Modifier.width(8.dp))
+            // Dauer nur, wenn der Plan sie kennt: Plaene aus der Zeit vor
+            // `TrainingSession.durationMin` tragen keine, und eine hier
+            // hergeleitete Zahl waere eine zweite Wahrheit neben der, mit der
+            // die Einheit erzeugt wurde.
             Text(
-                text = "${session.targetKm} km",
+                text = session.durationMin
+                    ?.let { "${session.targetKm} km · ca. $it min" }
+                    ?: "${session.targetKm} km",
                 style = MaterialTheme.typography.titleSmall,
             )
         }

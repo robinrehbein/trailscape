@@ -35,6 +35,7 @@ import de.trailscape.core.Ride
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
+import de.trailscape.core.canGenerateRouteFor
 import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.weekKindLabels
 import de.trailscape.core.weekKm
@@ -153,7 +154,11 @@ fun PlanWeekCard(
                                 text = "${session.targetKm} km",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                            if (isCurrent && onPlanRoute != null) {
+                            // Am Zielevent gibt es nichts zu generieren — die
+                            // Strecke steht schon (siehe canGenerateRouteFor).
+                            if (isCurrent && onPlanRoute != null &&
+                                canGenerateRouteFor(session)
+                            ) {
                                 // Ohne Groessenangabe: `IconButton` bringt die
                                 // 48-dp-Mindestflaeche von Material selbst mit.
                                 // `Modifier.size(32.dp)` unterlief sie — bei

@@ -105,6 +105,28 @@ data class Ride(
     val createdAt: Long,
     val stats: RideStats,
     val points: List<TrackPoint> = emptyList(),
+    /**
+     * `true`, wenn dieser Eintrag eine **Planung** ist und niemand dafuer im
+     * Sattel sass — „Als Tour speichern" auf der Karte legt genau so einen
+     * Eintrag an.
+     *
+     * ## Warum das ein eigenes Feld sein muss
+     * Ohne Kennzeichen ist eine gespeicherte Planung von einer gefahrenen Tour
+     * nicht zu unterscheiden. Der Wochenfortschritt sprang dann durch eine
+     * reine Planungsaktion, und Fitness, Ermuedung und Form rechneten mit
+     * Kilometern, die es nie gegeben hat. Wo „gefahren" gemeint ist, filtert
+     * [riddenRides]; wo die Planung dazugehoert (Tourenliste, Export, Sync),
+     * bleibt sie sichtbar und wird beschriftet.
+     *
+     * ## Rueckwaertskompatibilitaet
+     * Das Feld wird **nur geschrieben, wenn es `true` ist** — dasselbe Muster
+     * wie [TrackPoint.hr] und [RideStats.avgHrBpm]. Fuer jede gefahrene Tour
+     * bleibt das JSON damit byteweise identisch zu bisher (Sync-Server,
+     * Web-App, bestehende Sicherungen), und alte Dateien ohne den Schluessel
+     * lesen sich als `false` — also als gefahren, was fuer alles, was vor
+     * dieser Aenderung entstanden ist, auch stimmt.
+     */
+    val planned: Boolean = false,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("id", id)
@@ -112,6 +134,11 @@ data class Ride(
         put("createdAt", createdAt)
         put("points", buildJsonArray { points.forEach { add(it.toJson()) } })
         put("stats", stats.toJson())
+        // Angehaengt und nur im Ausnahmefall: siehe [planned]. Die Reihenfolge
+        // der bestehenden Schluessel bleibt damit unangetastet.
+        if (planned) {
+            put("planned", true)
+        }
     }
 
     companion object {
@@ -123,9 +150,20 @@ data class Ride(
             // Entspricht Darts `json['stats'] is Map<String, dynamic> ? ... : const RideStats(...)`:
             // fehlt 'stats' oder ist es kein Objekt, wird lautlos auf leere Stats zurueckgefallen.
             stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) } ?: RideStats.empty,
+            planned = json.optionalBoolean("planned") ?: false,
         )
     }
 }
+
+/**
+ * Nur die tatsaechlich **gefahrenen** Touren — gespeicherte Planungen fallen
+ * heraus (siehe [Ride.planned]).
+ *
+ * Die eine Stelle, an der diese Unterscheidung ausbuchstabiert ist. Jede
+ * Auswertung, die „gefahren" meint, geht hierdurch; wer sie vergisst, zaehlt
+ * Kilometer, die nie gefahren wurden.
+ */
+fun riddenRides(rides: List<Ride>): List<Ride> = rides.filter { !it.planned }
 
 /** Fitness-Stufen wie in der Flutter-App und der Web-Referenz. */
 enum class FitnessLevel(
@@ -207,27 +245,84 @@ enum class WeekKind(
 /** Entspricht der Dart-Konstante `weekKindLabels`. */
 val weekKindLabels: Map<WeekKind, String> = WeekKind.entries.associateWith { it.label }
 
-/** Eine einzelne Trainingseinheit innerhalb einer [TrainingWeek]. */
+/**
+ * Eine einzelne Trainingseinheit innerhalb einer [TrainingWeek].
+ *
+ * ## Intensitaet und Dauer sind Felder, keine Textfunde
+ * Frueher las `classifySessionIntensity` die Intensitaet per Stichwortsuche aus
+ * [title] zurueck („intervall", „locker", …). Damit haing die Routenwahl an
+ * einer Formulierung: Wer „Intervalle" in „Schwellenblock" umbenannt haette,
+ * haette lautlos aus einer harten eine Grundlageneinheit gemacht — ohne dass
+ * ein Test etwas gemerkt haette. [intensity] und [durationMin] stehen deshalb
+ * am Datensatz; erzeugt werden sie zusammen mit dem Text an genau einer Stelle
+ * ([generatePlan]).
+ *
+ * ## Rueckwaertskompatibilitaet des Planformats
+ * Die drei neuen Schluessel werden **hinten angehaengt**; `day`, `title`,
+ * `description` und `targetKm` behalten Reihenfolge und Bedeutung. Beim Lesen
+ * eines Plans ohne die neuen Schluessel greifen Defaults, die genau das alte
+ * Verhalten nachbilden: [intensity] faellt auf die frueheren Titel-Stichwoerter
+ * zurueck ([sessionIntensityFromTitle]), [durationMin] bleibt `null` und
+ * [isEvent] erkennt das Zielevent an seinem festen Titelpraefix.
+ */
 data class TrainingSession(
     val day: String,
     val title: String,
     val description: String,
     val targetKm: Int,
+    /** Wie hart die Einheit gefahren werden soll — steuert Tempoannahme und Routenprofil. */
+    val intensity: SessionIntensity = SessionIntensity.GRUNDLAGE,
+    /**
+     * Vorgesehene Fahrzeit in Minuten bei planmaessigem Tempo; `null` bei
+     * Plaenen aus der Zeit vor diesem Feld.
+     *
+     * Sie ist die Groesse, an der [description] und [targetKm] zusammenhaengen:
+     * Der Text einer Intervalleinheit nennt Ein- und Ausfahren plus Belastungen,
+     * und genau deren Summe ist diese Zahl.
+     */
+    val durationMin: Int? = null,
+    /**
+     * Das Zielevent selbst — keine Trainingseinheit, sondern der Wettkampf.
+     *
+     * Fuer das Event darf **keine** Runde generiert werden: Es hat eine eigene
+     * Strecke, und eine 200-km-Schleife vor der Haustuer ist dafuer das falsche
+     * Angebot. Wer einen „Passende Runde"-Knopf anbietet, muss das hier fragen
+     * (siehe [canGenerateRouteFor]).
+     */
+    val isEvent: Boolean = false,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("day", day)
         put("title", title)
         put("description", description)
         put("targetKm", targetKm)
+        // Ab hier ausschliesslich angehaengte Felder (siehe Klassen-KDoc).
+        put("intensity", intensity.jsonName)
+        durationMin?.let { put("durationMin", it) }
+        if (isEvent) {
+            put("isEvent", true)
+        }
     }
 
     companion object {
-        fun fromJson(json: JsonObject): TrainingSession = TrainingSession(
-            day = json.requiredString("day"),
-            title = json.requiredString("title"),
-            description = json.requiredString("description"),
-            targetKm = json.requiredInt("targetKm"),
-        )
+        /** Titelpraefix des Zielevents aus [generatePlan] — Notnagel fuer alte Plaene. */
+        private const val EVENT_TITLE_PREFIX = "zielevent"
+
+        fun fromJson(json: JsonObject): TrainingSession {
+            val title = json.requiredString("title")
+            return TrainingSession(
+                day = json.requiredString("day"),
+                title = title,
+                description = json.requiredString("description"),
+                targetKm = json.requiredInt("targetKm"),
+                intensity = json.optionalString("intensity")
+                    ?.let { SessionIntensity.fromJsonNameOrNull(it) }
+                    ?: sessionIntensityFromTitle(title),
+                durationMin = json.optionalInt("durationMin"),
+                isEvent = json.optionalBoolean("isEvent")
+                    ?: title.lowercase().startsWith(EVENT_TITLE_PREFIX),
+            )
+        }
     }
 }
 
