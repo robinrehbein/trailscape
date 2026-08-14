@@ -12,34 +12,33 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.location.LocationManager
+import android.location.LocationRequest
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+import androidx.core.location.LocationListenerCompat
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.ui.formatKmDe
-import de.trailscape.core.LocationSample
 import de.trailscape.core.PointFilter
 import de.trailscape.core.PointFilterResult
 import de.trailscape.core.Ride
 import de.trailscape.core.computeStats
 import de.trailscape.core.formatDuration
 import de.trailscape.core.haversineM
+import de.trailscape.core.toLocationSample
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executor
 
 /**
  * Gestarteter Vordergrunddienst, der eine Tour aufzeichnet.
@@ -66,7 +65,9 @@ import java.util.Locale
  *
  * Die Entscheidung, ob ein Punkt aufgenommen wird, faellt ausschliesslich in
  * [PointFilter] (`:core`, plattformfrei und dort getestet). Dieser Service
- * mappt nur [Location] auf [LocationSample] und kuemmert sich um Android.
+ * holt aus [Location] nur die Rohwerte heraus; was ein *fehlender* Rohwert
+ * bedeutet, entscheidet [toLocationSample] (ebenfalls `:core`, ebenfalls dort
+ * getestet).
  *
  * Berechtigungen holt die Oberflaeche (Phase 4) ein; hier wird nur defensiv
  * geprueft und bei Fehlen sauber mit Fehler-Notification abgebrochen.
@@ -78,9 +79,18 @@ class RecordingService : Service() {
     private lateinit var handler: Handler
 
     private val rideStorage: RideStorage by lazy { resolveRideStorage(this) }
-    private val fusedClient: FusedLocationProviderClient by lazy {
-        LocationServices.getFusedLocationProviderClient(this)
+
+    private val locationManager: LocationManager? by lazy {
+        getSystemService(LocationManager::class.java)
     }
+
+    /**
+     * Zustellt-Ziel fuer die Standort-Callbacks ab API 31, wo
+     * `requestLocationUpdates` einen [Executor] statt eines `Looper`
+     * entgegennimmt. Postet auf denselben Handler wie alles andere — die
+     * Callbacks landen also weiterhin auf dem Aufzeichnungs-Thread.
+     */
+    private val recordingExecutor = Executor { command -> handler.post(command) }
 
     /**
      * Filter und Aufzeichnungszustand werden ausschliesslich auf
@@ -110,10 +120,53 @@ class RecordingService : Service() {
     private var lastNotificationMs = 0L
     private var updatesRequested = false
 
-    private val locationCallback = object : LocationCallback() {
-        override fun onLocationResult(result: LocationResult) {
-            // Laeuft bereits auf dem Aufzeichnungs-Thread (siehe requestUpdates).
-            result.locations.forEach { onLocation(it) }
+    /**
+     * [LocationListenerCompat] und nicht das nackte
+     * `android.location.LocationListener`: Dessen drei Zusatzmethoden sind
+     * erst ab API 30 `default`. Ein Kotlin-Objekt, das nur
+     * `onLocationChanged` ueberschreibt, uebersetzt gegen compileSdk 36
+     * anstandslos — und wuerde auf einem Geraet mit API 26 bis 29 mit einem
+     * `AbstractMethodError` abstuerzen, sobald das System
+     * `onStatusChanged` ruft. Die AndroidX-Variante bringt die
+     * Standardimplementierungen selbst mit und ist damit auf allen von der
+     * App unterstuetzten Versionen dieselbe Schnittstelle.
+     *
+     * Alle Rueckrufe laufen auf dem Aufzeichnungs-Thread (siehe
+     * [requestUpdates]).
+     */
+    private val locationListener = object : LocationListenerCompat {
+
+        override fun onLocationChanged(location: Location) {
+            onLocation(location)
+        }
+
+        /**
+         * Der Nutzer hat den Standort mitten in der Fahrt abgeschaltet.
+         *
+         * Bewusst KEIN [failAndStop]: Die Registrierung beim
+         * [LocationManager] bleibt bestehen, und sobald der Standort wieder
+         * an ist, fliessen die Punkte von selbst weiter. Die Aufzeichnung
+         * abzubrechen wuerde eine versehentliche Beruehrung der
+         * Schnelleinstellungen zu einem Tourabbruch machen. Gemeldet wird es
+         * trotzdem laut — sonst zeichnet die App still nichts mehr auf.
+         */
+        override fun onProviderDisabled(provider: String) {
+            if (!active) return
+            val message = getString(R.string.recording_error_location_off_during_ride)
+            RecordingRepository.publishError(message)
+            notifyError(message)
+        }
+
+        override fun onProviderEnabled(provider: String) {
+            if (!active) return
+            // Die Meldung von oben ist erledigt; sie soll weder in der
+            // Oberflaeche noch als Notification stehen bleiben.
+            RecordingRepository.clearError()
+            try {
+                getSystemService(NotificationManager::class.java)?.cancel(ERROR_NOTIFICATION_ID)
+            } catch (e: Exception) {
+                // Ohne POST_NOTIFICATIONS gab es ohnehin keine Notification.
+            }
         }
     }
 
@@ -209,7 +262,7 @@ class RecordingService : Service() {
             return
         }
 
-        if (!requestUpdates()) return
+        if (!requestUpdates(neueAufzeichnung = true)) return
 
         active = true
         journal.touchHeartbeat(now)
@@ -264,7 +317,7 @@ class RecordingService : Service() {
         distanceM = computeStats(snapshot.points).distanceKm * 1000
         lastNotificationMs = 0L
 
-        if (!requestUpdates()) return
+        if (!requestUpdates(neueAufzeichnung = false)) return
 
         active = true
         val now = System.currentTimeMillis()
@@ -350,15 +403,63 @@ class RecordingService : Service() {
 
     /**
      * Fordert Standortaktualisierungen an. Liefert `false`, wenn die
-     * Berechtigung fehlt oder der Provider den Auftrag ablehnt — der Service
-     * hat sich dann bereits mit einer Fehler-Notification beendet.
+     * Berechtigung fehlt, der Standort abgeschaltet ist oder der Provider den
+     * Auftrag ablehnt — der Service hat sich dann bereits mit einer
+     * Fehler-Notification beendet.
+     *
+     * ## Warum ausschliesslich [LocationManager.GPS_PROVIDER]
+     * Aufgezeichnet wird eine Radtour im Freien; genau dafuer ist GNSS die
+     * richtige und einzige gute Quelle. Die beiden naheliegenden Beimischungen
+     * bringen hier nichts und schaden eher:
+     *
+     *  * **`NETWORK_PROVIDER`** schaetzt die Position aus Funkzellen und
+     *    WLAN-Netzen. Im Feld liegt seine Genauigkeit typischerweise bei
+     *    hunderten Metern — solche Punkte wirft [PointFilter] ohnehin weg
+     *    (ueber 50 m). Gefaehrlich sind die *guten* Netzmeldungen in der
+     *    Stadt: Mit 20 bis 30 m Genauigkeit rutschen sie durch den Filter und
+     *    versetzen die Spur sprunghaft gegen die GPS-Punkte. Zwei Quellen
+     *    ohne Fusionsalgorithmus einfach in denselben Track zu schreiben ist
+     *    keine Verbesserung, sondern Rauschen — und der Genauigkeitsfilter
+     *    ist kein Fusionsalgorithmus. Obendrein braucht dieser Provider einen
+     *    Netz-Standortdienst, den ein Geraet ohne Google-Dienste gar nicht
+     *    unbedingt hat.
+     *  * **`FUSED_PROVIDER`** (ab API 31) waere eine solche Fusion — aber eine,
+     *    deren Verhalten vom jeweiligen Systemabbild abhaengt und die auf
+     *    manchen Geraeten gar nicht existiert. Ihr Gewinn liegt im Sparen von
+     *    Strom und im Zurechtfinden in Gebaeuden; draussen mit freier
+     *    Himmelssicht bringt sie gegenueber rohem GNSS keine besseren Punkte.
+     *    Ihn zusaetzlich zu abonnieren hiesse, dieselbe Position doppelt
+     *    einzusammeln, ohne zu wissen, welche der beiden die bessere ist.
+     *
+     * Der Preis dieser Entscheidung ist der erste Fix: Ohne die
+     * Anlaufhilfe eines gebuendelten Dienstes kann er nach einem Kaltstart
+     * eine halbe Minute und mehr dauern. Solange zeigt die Notification
+     * „Warte auf GPS-Signal …".
+     *
+     * ## Warum zwei Wege zur Anmeldung
+     * Ab API 31 nimmt der [LocationManager] ein
+     * [android.location.LocationRequest] und einen [Executor] entgegen;
+     * darunter gibt es nur die aeltere Signatur mit `minTimeMs`/`minDistanceM`
+     * und einem `Looper`. Die App unterstuetzt ab API 26, also werden beide
+     * Wege bedient statt einer erzwungen. Die inhaltlichen Vorgaben
+     * ([PointFilter.UPDATE_INTERVAL_MS], [PointFilter.MIN_UPDATE_DISTANCE_M])
+     * sind in beiden Faellen dieselben.
      *
      * `MissingPermission` ist unterdrueckt, weil die Berechtigung hier
      * ausdruecklich zur Laufzeit geprueft UND die [SecurityException]
      * zusaetzlich abgefangen wird (Phase 4 holt die Berechtigung im UI ein).
+     *
+     * @param neueAufzeichnung ob gerade eine *neue* Tour beginnt. Nur dann
+     *   fuehrt ein abgeschalteter Standort zum Abbruch: Der Nutzer steht in
+     *   diesem Moment mit dem Telefon in der Hand vor der App und kann den
+     *   Schalter umlegen. Beim Fortsetzen aus dem Journal (`START_STICKY`,
+     *   der Nutzer faehrt gerade) waere ein Abbruch das falsche Mittel — dort
+     *   wird nur gewarnt und trotzdem abonniert, denn die Anmeldung ueberlebt
+     *   einen abgeschalteten Provider und liefert wieder, sobald er zurueck
+     *   ist.
      */
     @SuppressLint("MissingPermission")
-    private fun requestUpdates(): Boolean {
+    private fun requestUpdates(neueAufzeichnung: Boolean): Boolean {
         if (updatesRequested) return true
 
         if (!hasLocationPermission()) {
@@ -366,16 +467,45 @@ class RecordingService : Service() {
             return false
         }
 
-        val request = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY,
-            PointFilter.UPDATE_INTERVAL_MS,
-        )
-            .setMinUpdateIntervalMillis(PointFilter.UPDATE_INTERVAL_MS)
-            .setMinUpdateDistanceMeters(PointFilter.MIN_UPDATE_DISTANCE_M)
-            .build()
+        val manager = locationManager
+        if (manager == null) {
+            failAndStop(getString(R.string.recording_error_start_failed))
+            return false
+        }
+
+        // Ist der Standort ueberhaupt an? Ohne diese Pruefung liefe der
+        // Vordergrunddienst mit Notification und Timer los und zeichnete
+        // stillschweigend nichts auf — der aergerlichste aller Fehler, weil er
+        // erst am Ende der Tour auffaellt. `isProviderEnabled` wirft, wenn es
+        // den Provider gar nicht gibt (Geraet ohne GNSS); das faellt hier
+        // ebenfalls unter „hier kommt nichts".
+        val gpsBereit = try {
+            manager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        } catch (e: Exception) {
+            false
+        }
+        if (!gpsBereit) {
+            if (neueAufzeichnung) {
+                failAndStop(getString(R.string.recording_error_location_disabled))
+                return false
+            }
+            val message = getString(R.string.recording_error_location_off_during_ride)
+            RecordingRepository.publishError(message)
+            notifyError(message)
+        }
 
         return try {
-            fusedClient.requestLocationUpdates(request, locationCallback, recordingThread.looper)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                requestUpdatesApi31(manager)
+            } else {
+                manager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    PointFilter.UPDATE_INTERVAL_MS,
+                    PointFilter.MIN_UPDATE_DISTANCE_M,
+                    locationListener,
+                    recordingThread.looper,
+                )
+            }
             updatesRequested = true
             true
         } catch (e: SecurityException) {
@@ -387,12 +517,34 @@ class RecordingService : Service() {
         }
     }
 
+    /**
+     * Der Weg ab API 31. Bewusst eine eigene Methode: So beruehrt die
+     * Klassenpruefung von ART das erst ab Android 12 vorhandene
+     * [android.location.LocationRequest] nur auf Geraeten, die diese Methode
+     * auch wirklich ausfuehren.
+     */
+    @SuppressLint("MissingPermission")
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun requestUpdatesApi31(manager: LocationManager) {
+        val request = LocationRequest.Builder(PointFilter.UPDATE_INTERVAL_MS)
+            .setQuality(LocationRequest.QUALITY_HIGH_ACCURACY)
+            .setMinUpdateIntervalMillis(PointFilter.UPDATE_INTERVAL_MS)
+            .setMinUpdateDistanceMeters(PointFilter.MIN_UPDATE_DISTANCE_M)
+            .build()
+        manager.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER,
+            request,
+            recordingExecutor,
+            locationListener,
+        )
+    }
+
     private fun stopUpdates() {
         if (!updatesRequested) return
         try {
-            fusedClient.removeLocationUpdates(locationCallback)
+            locationManager?.removeUpdates(locationListener)
         } catch (e: Exception) {
-            // Nichts zu tun: der Client ist ohnehin gleich weg.
+            // Nichts zu tun: der Dienst ist ohnehin gleich weg.
         }
         updatesRequested = false
     }
@@ -400,15 +552,19 @@ class RecordingService : Service() {
     private fun onLocation(location: Location) {
         if (!active) return
 
-        val sample = LocationSample(
+        // `null` heisst hier ausdruecklich „das Geraet hat den Wert nicht
+        // gemeldet". Was daraus wird, entscheidet `:core` (siehe
+        // [toLocationSample]) — bei rohem GNSS koennen `hasAltitude()`,
+        // `hasAccuracy()` und `hasSpeed()` durchaus `false` sein, anders als
+        // beim frueher benutzten gebuendelten Standortdienst.
+        val sample = toLocationSample(
             lat = location.latitude,
             lon = location.longitude,
-            // Wie `geolocator`/`Position.fromMap`: fehlende Werte kommen als
-            // 0.0 an, nicht als null — davon haengt das Filterverhalten ab.
-            altitudeM = if (location.hasAltitude()) location.altitude else 0.0,
-            accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else 0.0,
-            speedMps = if (location.hasSpeed()) location.speed.toDouble() else 0.0,
+            altitudeM = if (location.hasAltitude()) location.altitude else null,
+            accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else null,
+            speedMps = if (location.hasSpeed()) location.speed.toDouble() else null,
             timeMs = location.time,
+            fallbackTimeMs = System.currentTimeMillis(),
         )
 
         val previous = filter.lastPoint

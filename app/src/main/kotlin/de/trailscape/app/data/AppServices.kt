@@ -3,6 +3,12 @@ package de.trailscape.app.data
 import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
 import de.trailscape.app.health.HealthConnectGateway
+import de.trailscape.app.reminder.ReminderStore
+import de.trailscape.app.routing.SegmentDownloadWorker
+import de.trailscape.app.routing.SegmentDownloader
+import de.trailscape.app.routing.SegmentInventory
+import de.trailscape.app.routing.SegmentMetadataStore
+import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.app.update.runNumberFromVersionCode
 import de.trailscape.core.HealthGateway
@@ -33,7 +39,9 @@ import kotlinx.coroutines.SupervisorJob
  * `AppServices.httpClient`, `AppServices.keyValueStore`,
  * `AppServices.healthSyncStore`, `AppServices.trainingPlanStore`,
  * `AppServices.healthGateway`, `AppServices.healthSyncService`,
- * `AppServices.updateChecker`, `AppServices.appScope`.
+ * `AppServices.updateChecker`, `AppServices.reminderStore`,
+ * `AppServices.appScope`, `AppServices.segmentInventory`,
+ * `AppServices.segmentDownloader`, `AppServices.segmentSettings`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -75,8 +83,44 @@ object AppServices {
     /** Implementierung von `:core`s [TrainingPlanStore]. */
     val trainingPlanStore: TrainingPlanStore by lazy { PrefsTrainingPlanStore(prefs) }
 
+    /**
+     * Einstellungen und Meldestand der lokalen Erinnerungen (siehe
+     * [de.trailscape.app.reminder.ReminderScheduler]). Liegt auf demselben
+     * [keyValueStore] wie Profil und Kartenstil — die Erinnerungen bringen
+     * keinen eigenen Speicher mit.
+     */
+    val reminderStore: ReminderStore by lazy { ReminderStore(keyValueStore) }
+
     /** Implementierung von `:core`s [HttpClient] (BRouter-Routing, Geocoding, Selfhost-Sync). */
     val httpClient: HttpClient by lazy { OkHttpClientAdapter() }
+
+    /**
+     * Der Bestand an Offline-Routing-Kacheln unter `<filesDir>/segments`
+     * (siehe [OfflineRoutingFiles.segmentDir]).
+     *
+     * Die Metadaten je Kachel (`ETag`, `Last-Modified`, Zeitpunkt des
+     * Downloads) liegen auf demselben [keyValueStore] wie alles andere — die
+     * Kachelverwaltung bringt keinen eigenen Speicher mit.
+     */
+    val segmentInventory: SegmentInventory by lazy {
+        SegmentInventory(
+            dir = OfflineRoutingFiles.segmentDir(appContext),
+            metadata = SegmentMetadataStore(keyValueStore),
+        )
+    }
+
+    /**
+     * Holt und aktualisiert Kacheln (siehe [SegmentDownloader]).
+     *
+     * Bewusst ein eigener OkHttp-Client mit anderen Zeitgrenzen als
+     * [httpClient] — Begruendung im KDoc von `routing/SegmentDownloader.kt`.
+     * Aufrufe blockieren und gehoeren in den [SegmentDownloadWorker], nicht in
+     * ein ViewModel.
+     */
+    val segmentDownloader: SegmentDownloader by lazy { SegmentDownloader(segmentInventory) }
+
+    /** „Nur im WLAN laden?" — die eine Einstellung der Kachelverwaltung. */
+    val segmentSettings: SegmentSettings by lazy { SegmentSettings(keyValueStore) }
 
     /**
      * Die Lauf-Nummer der installierten APK — `versionCode` minus dem in

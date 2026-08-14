@@ -5,6 +5,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -44,6 +45,19 @@ val dateTimeFormat: DateTimeFormatter =
 val weekdayDateFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMANY)
 
+/**
+ * Uhrzeit ohne Datum, z. B. `07:00` — fuer die eingestellten Weckzeiten der
+ * Erinnerungen (`ui/more/ReminderCard.kt`). 24-Stunden-Form wie im uebrigen
+ * Deutsch der App, unabhaengig von der Geraeteeinstellung: Die Zahl steht
+ * neben deutschem Fliesstext und soll nicht mal mit, mal ohne „AM/PM"
+ * auftauchen.
+ */
+val timeFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("HH:mm", Locale.GERMANY)
+
+/** Formatiert eine Uhrzeit als `HH:mm`. */
+fun formatTime(time: LocalTime): String = timeFormat.format(time)
+
 /** Formatiert einen Epoch-Millisekunden-Zeitstempel als `dd.MM.yyyy`. */
 fun formatDate(epochMs: Long): String = dateFormatFull.format(localOfEpochMs(epochMs))
 
@@ -77,3 +91,32 @@ fun formatKmDe(km: Double): String = formatKm(km).replace('.', ',')
 
 /** Eine Zahl mit einer Nachkommastelle, deutsch — z. B. Geschwindigkeit in km/h. */
 fun formatOneDecimalDe(value: Double): String = formatDecimalDe(value, 1)
+
+/**
+ * Eine Dateigroesse in der groessten passenden Einheit, deutsch —
+ * `119,4 MB`, `1,3 GB`, `640 KB`.
+ *
+ * Stand frueher als `formatOfflineRegionSize` privat in `OfflineMapsCard.kt`.
+ * Seit die Offline-Routingdaten (`OfflineRoutingCard.kt`) ebenfalls Groessen
+ * anzeigen, gaebe es sonst zwei Formatierer fuer dieselbe Frage — und zwei
+ * Gelegenheiten, dass die App an einer Stelle „119.4 MB" und an der anderen
+ * „119,4 MB" schreibt.
+ *
+ * **1024er-Schritte** wie bisher (also MiB/GiB, benannt als MB/GB): Das ist
+ * die Rechnung, mit der auch Android in seinen Speichereinstellungen arbeitet,
+ * und die Zahl soll neben der des Systems nicht abweichen.
+ *
+ * `null` oder Werte `<= 0` ergeben „Größe unbekannt" — die ehrliche Auskunft
+ * dort, wo eine Groesse nicht zu ermitteln war.
+ */
+fun formatBytes(bytes: Long?): String {
+    if (bytes == null || bytes <= 0L) return "Größe unbekannt"
+    val kb = bytes / 1024.0
+    val mb = kb / 1024.0
+    val gb = mb / 1024.0
+    return when {
+        gb >= 1 -> String.format(Locale.GERMANY, "%.1f GB", gb)
+        mb >= 1 -> String.format(Locale.GERMANY, "%.1f MB", mb)
+        else -> String.format(Locale.GERMANY, "%.0f KB", kb)
+    }
+}

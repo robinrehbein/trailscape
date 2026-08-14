@@ -1,0 +1,9 @@
+# Die BRouter-Routing-Engine (MIT), fest auf den Tag v1.7.10 gepinnt.
+# Bewusst OHNE `branch =`: der Stand soll ausschliesslich ueber den im Index
+# gespeicherten Commit bestimmt sein, damit `git submodule update --remote`
+# nicht versehentlich auf einen unerprobten master-Stand zieht. Ein Update
+# ist dann ein bewusster Schritt (im Submodul auf den neuen Tag wechseln und
+# den geaenderten Gitlink committen).
+[submodule "third_party/brouter"]
+	path = third_party/brouter
+	url = https://github.com/abrensch/brouter.git

@@ -22,6 +22,8 @@
     <string name="recording_error_title">Aufzeichnung nicht möglich</string>
     <string name="recording_error_permission">Trailscape darf nicht auf den Standort zugreifen. Bitte erlaube den Zugriff in den App-Einstellungen und starte die Aufzeichnung erneut.</string>
     <string name="recording_error_start_failed">Die Standortaufzeichnung konnte nicht gestartet werden.</string>
+    <string name="recording_error_location_disabled">GPS ist ausgeschaltet. Bitte schalte den Standort ein (Schnelleinstellungen oder Einstellungen → Standort) und starte die Aufzeichnung erneut.</string>
+    <string name="recording_error_location_off_during_ride">GPS wurde ausgeschaltet — es kommen keine neuen Punkte mehr an. Die bisherige Tour bleibt gesichert; sobald du den Standort wieder einschaltest, zeichnet Trailscape von selbst weiter auf.</string>
     <string name="recording_error_journal">Die Aufzeichnung konnte nicht auf den Speicher geschrieben werden.</string>
     <string name="recording_error_save_failed">Die Tour konnte nicht gespeichert werden. Sie bleibt gesichert und wird beim nächsten App-Start erneut gespeichert.</string>
     <string name="recording_error_too_few_points">Zu wenige GPS-Punkte.</string>

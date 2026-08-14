@@ -314,6 +314,44 @@ fun brouterProfile(profile: RouteProfile): String = when (profile) {
 }
 
 /**
+ * Die Profildatei, mit der ein [RouteProfile] **auf dem Geraet** gerechnet
+ * wird — oder `null`, wenn dieser Fahrmodus offline nicht abgedeckt ist.
+ *
+ * ## Warum das Gegenstueck zu [brouterProfile] hier direkt daneben steht
+ * Die beiden Zuordnungen muessen zusammen gepflegt werden: Wer einen
+ * Fahrmodus ergaenzt oder umhaengt und nur eine der beiden anfasst, bekommt
+ * eine App, die online und offline **verschieden** routet, ohne dass es
+ * auffaellt. Nebeneinander ist das eine Frage („und offline?"), getrennt waere
+ * es ein Fund.
+ *
+ * ## Warum `RADWEGE` `null` ist
+ * `safety` ist ein Profil des Servers (brouter-web), nicht des Engine-Repos;
+ * unter `misc/profiles2/` des auf v1.7.10 gepinnten Submoduls gibt es keine
+ * `safety.brf`. Ein eigenhaendig nachgebautes „Radwege"-Profil waere eine
+ * zweite Wahrheit ueber ein Profil, das online anders aussieht — dieser
+ * Fahrmodus faellt deshalb sauber auf den Server zurueck (siehe
+ * [ServerFallbackReason.NO_LOCAL_PROFILE]) statt unbemerkt anders zu rechnen.
+ *
+ * ## Warum Dateinamen und keine Profilnamen
+ * Offline gibt es keinen Server, der Namen aufloest — BRouters
+ * `ProfileCache` bekommt einen **Pfad**. Der Name hier ist genau der Name der
+ * Datei im Submodul (`third_party/brouter/misc/profiles2/`), aus dem `:app`
+ * sie beim Bauen in die Assets uebernimmt.
+ */
+fun offlineBrouterProfile(profile: RouteProfile): String? = when (profile) {
+    // GRAVEL faehrt online auf dem oeffentlichen `trekking` — offline auf
+    // derselben Datei aus dem Submodul.
+    RouteProfile.GRAVEL -> "trekking.brf"
+    // SCHOTTER ist das eingebettete Custom-Profil [GRAVEL_BRF]; `:app`
+    // schreibt es aus genau dieser Konstante heraus, statt eine zweite Kopie
+    // mitzuliefern.
+    RouteProfile.SCHOTTER -> "gravel.brf"
+    RouteProfile.ASPHALT -> "fastbike.brf"
+    RouteProfile.RADWEGE -> null
+    RouteProfile.KUERZESTER -> "shortest.brf"
+}
+
+/**
  * Entspricht Darts `_parseNumericProperty`: liest eine GeoJSON-`properties`-
  * Zahl, egal ob sie als JSON-Zahl oder als String codiert ist. Alles andere
  * (fehlend, Bool, nicht-finite) faellt auf 0 zurueck.

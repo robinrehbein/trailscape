@@ -3,6 +3,8 @@ package de.trailscape.app.record
 import de.trailscape.core.TrackPoint
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -253,23 +255,55 @@ class RecordingJournalTest {
         assertEquals("recovering-55555.jsonl", pending[0].name)
     }
 
+    /**
+     * Bewusst ohne feste Wartezeiten: Eine fruehere Fassung verliess sich auf
+     * `Thread.sleep(20)` in der Hoffnung, der andere Thread habe die Sperre bis
+     * dahin uebernommen — unter Last stimmte das in etwa jedem dritten Lauf
+     * nicht, und der Test fiel grundlos um. Gewartet wird deshalb auf die
+     * Bedingungen selbst: eine Sperre, die nachweislich gehalten wird, und ein
+     * zweiter Thread, der nachweislich daran haengt.
+     */
     @Test
     fun `withClaimLock serialisiert konkurrierende Zugriffe`() {
         val order = mutableListOf<String>()
-        val first = Thread {
+        val haeltSperre = CountDownLatch(1)
+        val darfFreigeben = CountDownLatch(1)
+
+        val wiederherstellung = Thread {
             RecordingJournal.withClaimLock {
-                Thread.sleep(100)
+                haeltSperre.countDown()
+                darfFreigeben.await()
                 synchronized(order) { order.add("wiederherstellung") }
             }
         }
+        wiederherstellung.start()
+        assertTrue(
+            haeltSperre.await(5, TimeUnit.SECONDS),
+            "Der erste Thread hat die Sperre nicht uebernommen.",
+        )
 
-        first.start()
-        // Sicherstellen, dass der andere Thread die Sperre wirklich haelt.
-        Thread.sleep(20)
-        RecordingJournal.withClaimLock {
-            synchronized(order) { order.add("dienst") }
+        val dienst = Thread {
+            RecordingJournal.withClaimLock {
+                synchronized(order) { order.add("dienst") }
+            }
         }
-        first.join()
+        dienst.start()
+
+        // Erst weitermachen, wenn der zweite Thread wirklich an der Sperre
+        // wartet — sonst pruefte der Test am Ende gar keine Serialisierung,
+        // sondern nur die Reihenfolge zweier ohnehin getrennter Abschnitte.
+        val frist = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (dienst.state !in wartend && System.nanoTime() < frist) {
+            Thread.onSpinWait()
+        }
+        assertTrue(
+            dienst.state in wartend,
+            "Der zweite Zugriff haette an der Sperre warten muessen, war aber ${dienst.state}.",
+        )
+
+        darfFreigeben.countDown()
+        wiederherstellung.join()
+        dienst.join()
 
         assertEquals(listOf("wiederherstellung", "dienst"), order)
     }
@@ -334,3 +368,10 @@ class RecordingJournalTest {
         )
     }
 }
+
+/**
+ * Zustaende, in denen ein Thread an einer Sperre haengt. `synchronized` parkt
+ * ihn als BLOCKED; kaeme die Sperre irgendwann aus `java.util.concurrent`,
+ * waere es WAITING. Beides zaehlt hier als „wartet".
+ */
+private val wartend = setOf(Thread.State.BLOCKED, Thread.State.WAITING)

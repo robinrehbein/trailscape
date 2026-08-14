@@ -18,6 +18,87 @@ val releaseKeystore = releaseKeystorePath
     ?.let { rootProject.file(it) }
     ?.takeIf { it.isFile }
 
+// ---------------------------------------------------------------------------
+// BRouter-Beipack: Merkmalstabelle und Routing-Profile fuer die Berechnung auf
+// dem Geraet
+// ---------------------------------------------------------------------------
+//
+// Beides kommt aus dem auf v1.7.10 gepinnten Submodul `third_party/brouter`
+// und wird beim Bauen in die Assets kopiert — dieselbe Haltung wie im Modul
+// `:brouter`, dessen `sourceSets` direkt in das Submodul zeigen: **eine**
+// Wahrheit, der Upstream-Commit.
+//
+// Vorher lag `lookups.dat` als eingecheckte Kopie unter `src/main/assets/`.
+// Sie war zwar byte-identisch, aber niemand haette es gemerkt, wenn ein
+// Submodul-Update sie veraendert haette — und eine Merkmalstabelle, die nicht
+// zur Engine passt, ist genau die Sorte Fehler, die erst auf dem Geraet
+// auffliegt. Jetzt kann sie per Konstruktion nicht auseinanderlaufen.
+//
+// Welche Profile gebraucht werden, entscheidet `:core`
+// (`offlineBrouterProfile`); ein `:core`-Test prueft, dass jeder dort genannte
+// Name im Submodul wirklich existiert. **Wer dort einen Fahrmodus ergaenzt,
+// traegt den Dateinamen auch hier ein** — vergisst er es, faellt dieser Modus
+// still auf den Server zurueck, statt den Bau zu brechen (siehe das
+// `runCatching` in `routing/OfflineFirstPlanner.kt`).
+//
+// `gravel.brf` steht bewusst NICHT in dieser Liste: Es liegt seit der
+// Server-Zeit als `GRAVEL_BRF` in `:core` (von dort wird es auch auf
+// brouter.de hochgeladen) und wird von `data/OfflineRoutingFiles.kt` aus
+// dieser einen Konstante herausgeschrieben.
+val brouterProfilesDir = rootProject.file("third_party/brouter/misc/profiles2")
+val brouterAssetNames = listOf("lookups.dat", "trekking.brf", "fastbike.brf", "shortest.brf")
+
+// Ein Klon ohne `--recurse-submodules` haette hier nichts. Die App liesse sich
+// dann bauen und braeche erst beim ersten Offline-Routing ab — genau wie in
+// `:brouter` deshalb frueh und mit dem noetigen Befehl abbrechen.
+require(brouterAssetNames.all { File(brouterProfilesDir, it).isFile }) {
+    "Das BRouter-Submodul fehlt oder ist unvollstaendig. Einmalig nachholen mit:\n" +
+        "    git submodule update --init third_party/brouter"
+}
+
+/**
+ * Kopiert das Beipack in ein Unterverzeichnis `brouter/` der Assets.
+ *
+ * Eine eigene Task-Klasse statt eines schlichten `Copy`, weil AGP 9 generierte
+ * Quellverzeichnisse nur noch ueber die Variant-API annimmt
+ * (`addGeneratedSourceDirectory`) — und die verlangt eine Task mit einer
+ * `DirectoryProperty` als Ausgabe. Der Gewinn: Die Abhaengigkeit zum
+ * Zusammenfuehren der Assets traegt Gradle selbst ein, statt dass sie per
+ * `dependsOn` auf einen geratenen Task-Namen haengt.
+ */
+abstract class StageBrouterAssets : DefaultTask() {
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val sourceFiles: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun stage() {
+        val target = outputDir.get().dir("brouter").asFile
+        target.deleteRecursively()
+        target.mkdirs()
+        sourceFiles.forEach { file -> file.copyTo(File(target, file.name), overwrite = true) }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        // Je Variante eine eigene Task: `addGeneratedSourceDirectory` nimmt
+        // eine Task-Ausgabe genau einmal entgegen.
+        val stage = tasks.register<StageBrouterAssets>(
+            "stage${variant.name.replaceFirstChar { it.uppercase() }}BrouterAssets",
+        ) {
+            description =
+                "Kopiert lookups.dat und die Offline-Routing-Profile aus dem BRouter-Submodul."
+            sourceFiles.from(brouterAssetNames.map { File(brouterProfilesDir, it) })
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(stage, StageBrouterAssets::outputDir)
+    }
+}
+
 android {
     namespace = "de.trailscape.app"
     compileSdk = 36
@@ -66,8 +147,8 @@ android {
     buildTypes {
         release {
             // R8 in der Voll-Optimierung: entfernt ungenutzten Code (vor allem
-            // die grossen Bibliotheken MapLibre, Health Connect und
-            // play-services, von denen die App jeweils nur einen Ausschnitt
+            // die grossen Bibliotheken MapLibre und Health Connect, von denen
+            // die App jeweils nur einen Ausschnitt
             // benutzt) und danach die Ressourcen, auf die kein Code mehr
             // zeigt. Die noetigen Ausnahmen stehen in proguard-rules.pro.
             isMinifyEnabled = true
@@ -126,6 +207,17 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.navigation:navigation-compose:2.9.8")
 
+    // Geplante Hintergrundarbeit fuer die lokalen Erinnerungen
+    // (`reminder/ReminderScheduler.kt`) — bis dahin hatte die App gar keine.
+    // WorkManager statt `AlarmManager`: Es ueberlebt Neustart und
+    // Prozess-Tod von sich aus (eigene Datenbank plus BOOT_COMPLETED-Empfaenger
+    // in der Bibliothek) und braucht keine Berechtigung fuer exakte Alarme —
+    // die Erinnerungen duerfen ein paar Minuten spaeter kommen. Die
+    // `-ktx`-Variante wegen `PeriodicWorkRequestBuilder<T>()` und
+    // `CoroutineWorker`. 2.11.2 ist die neueste stabile Version (2.12.x steht
+    // erst im RC) und loest gegen AGP 9.0.1 / compileSdk 36 konfliktfrei auf.
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+
     // Kartendarstellung (Vektor-/Rasterkacheln, OpenGL). Bewusst die 11.x-Reihe:
     // Sie ist die letzte Serie mit der etablierten `org.maplibre.android.*`-API,
     // auf der die gesamte oeffentliche Dokumentation beruht — 12.x/13.x bringen
@@ -160,11 +252,23 @@ dependencies {
     // gegen compileSdk 36 / AGP 9.0.1 konfliktfrei auf.
     implementation("androidx.health.connect:connect-client:1.1.0")
 
-    // Fused Location Provider fuer den Aufzeichnungs-Service (record/).
-    implementation("com.google.android.gms:play-services-location:21.4.0")
-    // play-services-location zieht transitiv androidx.fragment 1.1.0 herein;
-    // ohne diese Anhebung schlaegt lintVitalRelease an (InvalidFragmentVersionForActivityResult).
-    implementation("androidx.fragment:fragment:1.8.6")
+    // Kein Standortdienst als Abhaengigkeit: Aufzeichnung (record/) und
+    // Karten-Screen (ui/map/) sitzen direkt auf Androids
+    // `android.location.LocationManager`. Bis dahin hing hier
+    // `com.google.android.gms:play-services-location`, das proprietaer ist und
+    // unter Googles SDK-Lizenz steht — in einer Anwendung unter GPL-3.0 ein
+    // echter Lizenzkonflikt. Der Ausbau kostet keine Bibliothek als Ersatz;
+    // was er kostet, steht als Begruendung an
+    // `RecordingService.requestUpdates`. MapLibre bringt seinen eigenen
+    // Standortpunkt schon immer ohne Google-Dienste durch (siehe
+    // `MapController.setLocationEnabled`).
+    //
+    // Die frueher noetige Anhebung auf androidx.fragment 1.8.6 ist damit
+    // ebenfalls weg: Sie stand nur da, weil play-services-base transitiv
+    // fragment 1.1.0 hereinzog und lintVitalRelease daran mit
+    // InvalidFragmentVersionForActivityResult anschlug. Die kleinste jetzt
+    // noch im Klassenpfad landende Version kommt von MapLibre (1.8.2) und
+    // liegt weit ueber der Schwelle dieser Regel.
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

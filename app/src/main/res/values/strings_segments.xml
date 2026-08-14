@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte rund um den Download der Routing-Kacheln (routing/).
+
+    Wie bei strings_recording.xml und strings_reminders.xml eine eigene Datei;
+    Android fuehrt alle values/*.xml zusammen. Hier stehen NUR die Texte der
+    Benachrichtigung des Hintergrundlaufs — die Bezeichnung einer Kachel
+    („Berlin, Dresden, Prag u. a. · 50°–55° N, 10°–15° O") entsteht in `:core`
+    (`RoutingSegments.kt`), damit sie ohne Android testbar ist.
+-->
+<resources>
+    <string name="segment_notification_channel_name">Kartendaten</string>
+    <string name="segment_notification_channel_description">Fortschritt beim Laden der Offline-Karten fürs Routing. Leise und nur, solange etwas lädt.</string>
+    <string name="segment_notification_title">Offline-Karte wird geladen</string>
+    <string name="segment_notification_start">Wird vorbereitet …</string>
+    <string name="segment_notification_cancel">Abbrechen</string>
+</resources>

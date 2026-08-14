@@ -37,13 +37,14 @@ class HealthPermissionRequester(activity: ComponentActivity) : DefaultLifecycleO
     // vor onStart — spaeter wuerfe registerForActivityResult eine
     // IllegalStateException.
     //
-    // InvalidFragmentVersionForActivityResult ist hier ein Fehlalarm: Lint
-    // sieht androidx.fragment:1.1.0 auf dem Klassenpfad (transitiv ueber
-    // play-services-location) und warnt, weil dessen FragmentActivity
-    // super.onRequestPermissionsResult() nicht aufruft. Trailscape benutzt
-    // aber gar keine Fragmente — die Activity hier ist eine reine
-    // ComponentActivity aus androidx.activity 1.13.0, und nur deren
-    // Registry wird angesprochen.
+    // InvalidFragmentVersionForActivityResult war ein Fehlalarm, solange eine
+    // alte androidx.fragment-Fassung transitiv im Klassenpfad lag. Seit der
+    // Umstellung auf den LocationManager ist sie weg, und die kleinste noch
+    // aufgeloeste Fassung liegt weit ueber der Warnschwelle. Die
+    // Unterdrueckung bleibt trotzdem stehen: Trailscape benutzt gar keine
+    // Fragmente — die Activity hier ist eine reine ComponentActivity aus
+    // androidx.activity, und nur deren Registry wird angesprochen. Ein
+    // kuenftiger transitiver Rueckfall soll hier keinen Baubruch ausloesen.
     @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val launcher: ActivityResultLauncher<Set<String>> =
         activity.registerForActivityResult(

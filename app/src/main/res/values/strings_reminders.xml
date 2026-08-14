@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Benachrichtigungskanals der lokalen Erinnerungen.
+
+    Wie bei strings_recording.xml eine eigene Datei; Android fuehrt alle
+    values/*.xml zusammen. Hier stehen NUR Kanalname und -beschreibung: Die
+    eigentlichen Meldungstexte entstehen in `:core`
+    (`de.trailscape.core.Reminders`), damit sie ohne Android testbar sind.
+-->
+<resources>
+    <string name="reminder_notification_channel_name">Erinnerungen</string>
+    <string name="reminder_notification_channel_description">Tageseinheit, Wochenrückschau und der Hinweis nach längerer Pause. Wird auf dem Gerät erzeugt — Trailscape hat keinen Push-Server.</string>
+</resources>

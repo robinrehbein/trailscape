@@ -9,7 +9,7 @@
 #    keine @Serializable-Klasse, keinen generierten Serializer und damit auch
 #    keine Reflexion, die R8 uebersehen koennte. Die bekannten
 #    -keep-Regeln fuer @Serializable-Typen waeren hier reine Zierde.
-#  * MapLibre, OkHttp, Health Connect, play-services, AndroidX/Compose: alle
+#  * MapLibre, OkHttp, Health Connect, AndroidX/Compose: alle
 #    liefern ihre notwendigen Regeln als consumer-rules in der AAR/JAR mit,
 #    AGP bindet sie automatisch ein. Insbesondere haelt MapLibre selbst alles,
 #    was ueber JNI angesprochen wird, am Leben.
@@ -25,3 +25,26 @@
 # Build-Workflow als Artefakt sichert.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# BRouters Wegemodelle werden per Reflexion geladen.
+#
+# Ein Routing-Profil (`*.brf`) darf mit `---model:btools.router.KinematicModel`
+# vorgeben, welches Kostenmodell die Engine benutzt;
+# `RoutingContext.setModel` holt die Klasse dann ueber `Class.forName`. Fuer
+# R8 sieht diese Klasse damit unbenutzt aus — sie wuerde entfernt, und die
+# Engine braeche zur Laufzeit mit "Cannot create path-model" ab. Das
+# mitgelieferte Gravel-Profil kommt zwar mit der Voreinstellung `StdModel`
+# aus, aber die Profile sind Daten und koennen sich aendern, ohne dass
+# jemandem einfaellt, hier nachzuziehen.
+#
+# Bewusst nur die drei Modellklassen und nicht `btools.**`: alles Uebrige
+# erreicht R8 ueber die gewoehnliche Aufrufkette ab
+# `de.trailscape.core.routeOffline` und darf, was nicht gebraucht wird,
+# entfernen.
+#
+# Seit der Planungs-Screen ueber `de.trailscape.core.routeOfflineFirst` einen
+# echten Aufrufer hat, zieht R8 die Rechenkette der Engine von selbst ins APK;
+# die drei Regeln unten sind der Teil, den es nicht sehen kann.
+-keep class btools.router.StdModel { <init>(); }
+-keep class btools.router.KinematicModel { <init>(); }
+-keep class btools.router.KinematicNoCostModel { <init>(); }

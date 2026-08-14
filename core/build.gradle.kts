@@ -17,6 +17,17 @@ java {
 }
 
 dependencies {
+    // Die BRouter-Routing-Engine fuer das Rechnen auf dem Geraet (siehe
+    // OfflineRouting.kt). Bewusst `implementation` und nicht `api`: Kein
+    // anderes Modul soll `btools.*` sehen — die Engine ist ausschliesslich
+    // hinter OfflineRouting.kt erreichbar. Ueber den Laufzeit-Klassenpfad
+    // landet sie trotzdem transitiv in `:app` und damit im APK, ohne dass
+    // dort etwas eingetragen werden muss.
+    //
+    // Die fuenf eingebundenen BRouter-Module sind reines Java ohne einen
+    // `android.*`-Import, `:core` bleibt dadurch android-frei.
+    implementation(project(":brouter"))
+
     // Nur das JsonElement/JsonObject-Baukastenmodell (kein @Serializable):
     // Dart schreibt manche Felder nur bei Nicht-Null (z. B. TrackPoint.hr),
     // andere immer inkl. expliziter `null` (z. B. RideStats.durationS) — das

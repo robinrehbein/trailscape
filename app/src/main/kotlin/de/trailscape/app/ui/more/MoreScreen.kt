@@ -31,10 +31,12 @@ import de.trailscape.app.ui.theme.ScreenPadding
 /**
  * „Mehr"-Tab — Port von `lib/screens/more_screen.dart`.
  *
- * Sieben Themenkarten untereinander: Profil, Daten & Backup, Samsung Health,
- * Kartenstil, Offline-Karten, Sync (Selfhost) und Über. Jede Karte ist eine
- * eigene, in sich geschlossene Datei in diesem Paket — siehe deren KDoc fuer
- * Details und (falls vorhanden) bewusste Abweichungen vom Dart-Original.
+ * Neun Themenkarten untereinander: Profil, Daten & Backup, Samsung Health,
+ * Erinnerungen, Kartenstil, Offline-Karten, Karten für Offline-Routing,
+ * Sync (Selfhost) und Über. Jede
+ * Karte ist eine eigene, in sich geschlossene Datei in diesem Paket — siehe
+ * deren KDoc fuer Details und (falls vorhanden) bewusste Abweichungen vom
+ * Dart-Original.
  *
  * Die **Reihenfolge** ist auf den Erstnutzer hin sortiert (Begruendung im
  * Rumpf), nicht mehr die des Dart-Originals.
@@ -52,6 +54,9 @@ import de.trailscape.app.ui.theme.ScreenPadding
  *    Offline-Regionen statt eines selbstgebauten Tile-Caches. Der Download
  *    neuer Regionen gehoert dem Karten-Screen; diese Karte verwaltet nur
  *    (Auflisten, Loeschen).
+ *  * **Erinnerungen** (neu, kein Dart-Vorbild): Die Flutter-App hatte
+ *    keinerlei geplante Hintergrundarbeit; siehe `ReminderCard.kt` und
+ *    `reminder/ReminderScheduler.kt`.
  *  * **Kein gestaffeltes Einblenden** (`_EntranceFade` im Original): rein
  *    kosmetisch, verzichtbar fuer die Kernfunktion — siehe Report des Agents.
  *  * **Kein Animations-Toggle fuer „Erweitert"** im Profil (`AnimatedSize`
@@ -120,8 +125,20 @@ fun MoreScreen(appViewModel: AppViewModel) {
                 item { ProfileCard(appViewModel) }
                 item { BackupCard(appViewModel) }
                 item { HealthCard(appViewModel) }
+                // Vor den beiden Darstellungs-Einstellungen: Die Erinnerungen
+                // entscheiden, ob die App von sich aus etwas sagt — das ist
+                // eine Verhaltensfrage und wiegt schwerer als die Wahl des
+                // Kartenhintergrunds. Sie stehen hinter Health Connect, weil
+                // die Tageseinheit ohne Plan und ohne Daten nichts zu melden
+                // haette.
+                item { ReminderCard(appViewModel) }
                 item { MapStyleCard(appViewModel) }
                 item { OfflineMapsCard(onMessage = appViewModel::showMessage) }
+                // Direkt hinter den Offline-Karten: Beide speichern „Karten",
+                // meinen aber Verschiedenes (Bild gegen Wegedaten). Nebeneinander
+                // ist der Unterschied eine Frage von zwei Zeilen Text; getrennt
+                // waere er ein Missverstaendnis (siehe OfflineRoutingCard.kt).
+                item { OfflineRoutingCard(appViewModel) }
                 item { SyncCard(appViewModel) }
                 item { AboutCard(appViewModel) }
             }

@@ -29,10 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
-import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -225,16 +225,6 @@ private data class OfflineRegionRow(
 /** Meldung, wenn MapLibre das Loeschen einer Region ablehnt. */
 private const val DELETE_FAILED_MESSAGE = "Die Offline-Karte konnte nicht gelöscht werden."
 
-private fun formatOfflineRegionSize(bytes: Long?): String {
-    if (bytes == null || bytes <= 0L) return "Größe unbekannt"
-    val mb = bytes / (1024.0 * 1024.0)
-    return if (mb >= 1) {
-        String.format(Locale.GERMANY, "%.1f MB", mb)
-    } else {
-        String.format(Locale.GERMANY, "%.0f KB", bytes / 1024.0)
-    }
-}
-
 /**
  * Laedt alle gespeicherten Offline-Regionen samt Downloadstatus (fuer die
  * Groessenanzeige). `MapLibre.getInstance(context)` ist idempotent und wird
@@ -269,7 +259,7 @@ private suspend fun listOfflineRegionsWithStatus(context: Context): List<Offline
                 info?.createdAtMs
                     ?.takeIf { it > 0L }
                     ?.let { add(formatDate(it)) }
-                add(formatOfflineRegionSize(status?.completedResourceSize))
+                add(formatBytes(status?.completedResourceSize))
                 // Eine Region ohne eine einzige Kachel ist der Rest eines
                 // abgebrochenen Downloads (frueher blieb so etwas nach dem
                 // haengenden „0/1"-Balken liegen). MapLibre selbst meldet sie

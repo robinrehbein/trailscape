@@ -20,7 +20,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # `submodules: true` ist Pflicht, nicht Bequemlichkeit: Das Modul
+      # `:brouter` hat keinen eigenen Quellcode, sondern uebersetzt direkt
+      # `third_party/brouter` (BRouter v1.7.10). Ohne das Submodul bricht
+      # schon die Konfiguration von :brouter ab.
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       # Die GitHub-Ubuntu-Runner bringen das Android SDK mit (ANDROID_HOME ist
       # gesetzt); ein local.properties wird deshalb nicht gebraucht und darf
