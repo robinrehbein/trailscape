@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +21,6 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -320,7 +320,11 @@ internal fun RecordPromptCard(onOpenMap: () -> Unit) {
         Column(modifier = Modifier.padding(CardPadding)) {
             Text("Aufzeichnung", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
-            FilledTonalButton(onClick = onOpenMap, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onOpenMap,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp),
+            ) {
                 Icon(
                     Icons.Filled.PlayArrow,
                     contentDescription = null,

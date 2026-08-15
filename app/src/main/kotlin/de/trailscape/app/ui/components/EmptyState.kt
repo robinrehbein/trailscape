@@ -28,7 +28,9 @@ import de.trailscape.app.ui.theme.CardPadding
  *  2. **Zwei bis drei Saetze** (`bodyMedium`, gedaempft) — wie es funktioniert
  *     und was es dafuer braucht. Keine Werbung, nur Bedienwissen.
  *  3. **Aktionen** — der kuerzeste Weg zu echten Daten, als Knoepfe. Der
- *     wichtigste zuerst und ausgefuellt, die uebrigen als `OutlinedButton`.
+ *     wichtigste zuerst und ausgefuellt (contained), die uebrigen als
+ *     flat (`TextButton`) oder helle Contained-Variante (`NeutralButton`) —
+ *     One UI kennt keine Outline-Knoepfe.
  *
  * Die Karte erbt das One-UI-Kartenbild aus dem Theme (Kartenfarbe und 26-dp-
  * Rundung, kein Rand, kein Schatten) wie jede andere Karte der App; ein

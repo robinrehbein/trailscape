@@ -1,6 +1,12 @@
 package de.trailscape.app.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
@@ -8,9 +14,11 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -150,32 +159,62 @@ fun TrailscapeApp() {
 
     Scaffold(
         bottomBar = {
-            // One-UI-leiste: kein eigener Ton, sondern flach auf dem
-            // Bildschirmhintergrund. Der transparente Container blendet die
-            // Tonal-Elevation der M3-Defaults aus — der Fenstergrund (Surface
-            // der Activity) scheint durch, windowInsets bleiben Default.
-            NavigationBar(containerColor = Color.Transparent) {
-                TopLevelDestination.entries.forEach { destination ->
-                    val selected = currentDestination?.hierarchy?.any {
-                        it.route == destination.route
-                    } == true
+            // One-UI-8.5/9-Dock: Die Navigation liegt nicht mehr als Kante an
+            // Kante unten, sondern schwebt als Pille mit weichem Schatten
+            // ueber dem Boden — dasselbe Muster wie Galaxy Store, Dialer und
+            // Gallery seit One UI 8.5. Der Schatten gehoert dazu: Schwebende
+            // Container tragen dort Drop-Shadow, nur eingelassene Listen sind
+            // flach. Inset-Padding laesst die Pille ueber der Gestenleiste
+            // schweben, ohne dass der Inhalt dahinter durchschimmert.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(32.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shadowElevation = 6.dp,
+                ) {
+                    NavigationBar(
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        windowInsets = WindowInsets(0, 0, 0, 0),
+                        tonalElevation = 0.dp,
+                    ) {
+                        TopLevelDestination.entries.forEach { destination ->
+                            val selected = currentDestination?.hierarchy?.any {
+                                it.route == destination.route
+                            } == true
 
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { navController.navigateToTab(destination.route) },
-                        icon = { Icon(destination.icon, contentDescription = null) },
-                        label = {
-                            // Einzeilig mit Ellipse: Mit fuenf Zielen wird der
-                            // Platz je Beschriftung eng, und ein umgebrochenes
-                            // Label wuerde die Leiste hoeher machen als alle
-                            // anderen Bildschirme sie erwarten.
-                            Text(
-                                text = destination.label,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+                            NavigationBarItem(
+                                selected = selected,
+                                onClick = { navController.navigateToTab(destination.route) },
+                                icon = { Icon(destination.icon, contentDescription = null) },
+                                modifier = Modifier,
+                                label = {
+                                    // Einzeilig mit Ellipse: Mit fuenf Zielen wird der
+                                    // Platz je Beschriftung eng, und ein umgebrochenes
+                                    // Label wuerde die Leiste hoeher machen als alle
+                                    // anderen Bildschirme sie erwarten.
+                                    Text(
+                                        text = destination.label,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                },
+                                colors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+                                    indicatorColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    selectedIconColor = MaterialTheme.colorScheme.onSurface,
+                                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
                             )
-                        },
-                    )
+                        }
+                    }
                 }
             }
         },

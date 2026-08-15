@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
@@ -36,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.formatDate
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Goal
 import de.trailscape.core.Ride
@@ -208,9 +207,9 @@ fun GoalCard(
                     // Loeschen ist die zerstoerende Aktion dieser Karte und
                     // traegt deshalb — wie jeder Loeschweg der App — die
                     // Fehlerfarbe des Themes.
-                    OutlinedButton(
+                    NeutralButton(
                         onClick = { showDeleteConfirm = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = theme.error),
+                        destructive = true,
                     ) { Text("Plan löschen") }
                 }
             }

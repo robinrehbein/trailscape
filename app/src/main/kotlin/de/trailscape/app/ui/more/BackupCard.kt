@@ -27,7 +27,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
 import de.trailscape.app.ui.importActivityFile
@@ -298,7 +298,7 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Backup exportieren")
             }
-            OutlinedButton(
+            NeutralButton(
                 onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
                 enabled = !busy,
             ) {
@@ -310,7 +310,7 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Backup importieren")
             }
-            OutlinedButton(
+            NeutralButton(
                 onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
                 enabled = !busy,
             ) {
@@ -322,7 +322,7 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                 Text("Tour importieren (GPX/FIT)")
             }
-            OutlinedButton(
+            NeutralButton(
                 onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
                 enabled = !busy && !archiveBusy,
             ) {

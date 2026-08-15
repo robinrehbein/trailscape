@@ -29,13 +29,13 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
@@ -100,7 +101,10 @@ internal fun SearchPanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
         Column(
             modifier = Modifier.padding(
                 horizontal = CardPadding,
@@ -262,7 +266,10 @@ internal fun PlanningSheet(
         locating = locating,
     )
 
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
         Column {
             // Kopfzeile: eingeklappt die ganze Planung in einer Zeile,
             // aufgeklappt der Griff, mit dem sie wieder zugeht. Die ganze
@@ -451,10 +458,10 @@ internal fun PlanningSheet(
 
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Nur EINE gefuellte Aktion je Blick (One-UI-Regel aus
-                    // theme/Color.kt): Navigieren ist der Weg nach vorn,
-                    // Speichern der Nebenausgang.
-                    OutlinedButton(
+                    // One UI kennt keine Outline-Knoepfe: Die Nebenaktion ist
+                    // eine gefuellte helle Flaeche (NeutralButton), nur die
+                    // Hauptaktion traegt die Farbe.
+                    NeutralButton(
                         onClick = onSave,
                         enabled = route != null,
                         modifier = Modifier.weight(1f),

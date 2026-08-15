@@ -26,12 +26,12 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.Fact
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
@@ -62,13 +63,16 @@ import kotlin.math.roundToInt
  *
  * Flaechen, Formen und **Tinte** erben das One-UI-Theme (`MaterialTheme`,
  * heller/dunkler Modus): Die Karten bringen Rundung (26 dp) und
- * `surfaceContainerLow` vom `Card`-Slot mit — flach, ohne Schatten, Trennung
- * durch Ton, nicht durch Elevation —, die Knopfformen die Pille von
+ * `surfaceContainerLow` vom `Card`-Slot mit, die Knopfformen die Pille von
  * `shapes.small`, Text und Symbole auf Kartenflaechen `primary`/`error` aus
- * dem Schema. Die drei festen Farben aus `MapColors.kt` liegen ausschliesslich
- * auf den Kacheln (Spuren, Markierungen) und als Fuellung aktivierter
- * Bedienelemente — nie als Text auf einer Theme-Flaeche, deren Kontrast im
- * Dunkelmodus niemand garantiert.
+ * dem Schema. Als **schwebende** Container ueber der Karte tragen sie seit
+ * dem One-UI-8.5/9-Look einen weichen Drop-Shadow — nur eingelassene Listen
+ * (Startseite, Mehr, Training) sind flach; das ist kein Widerspruch, sondern
+ * genau die Trennung, die One UI zwischen schwebenden und eingelassenen
+ * Flaechen macht. Die drei festen Farben aus `MapColors.kt` liegen
+ * ausschliesslich auf den Kacheln (Spuren, Markierungen) und als Fuellung
+ * aktivierter Bedienelemente — nie als Text auf einer Theme-Flaeche, deren
+ * Kontrast im Dunkelmodus niemand garantiert.
  *
  * Bewusst anders als das Flutter-Original: Dort war jedes Panel in
  * `AnimatedSwitcher`/`AnimatedContainer` verpackt und jeder Zahlenwechsel
@@ -117,7 +121,10 @@ internal fun LiveRecordingCard(
     onOpenRideMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
         Column(
             modifier = Modifier.padding(
                 horizontal = CardPadding,
@@ -181,14 +188,16 @@ internal fun LiveRecordingCard(
             )
             Spacer(Modifier.height(8.dp))
             Row {
-                OutlinedButton(onClick = onTogglePause, modifier = Modifier.weight(1f)) {
+                NeutralButton(
+                    onClick = onTogglePause,
+                    modifier = Modifier.weight(1f),
+                ) {
                     if (paused) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     } else {
                         Icon(
                             Icons.Filled.Pause,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp),
                         )
                     }
@@ -230,7 +239,10 @@ internal fun RideCard(
     modifier: Modifier = Modifier,
 ) {
     val stats = ride.stats
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
         // Rechts 8 dp statt [CardPadding]: der Schliessen-IconButton bringt
         // seinen eigenen Beruehrungsrand mit — dasselbe Zugestaendnis wie in
         // der Tourenkarte des Touren-Tabs.
@@ -317,7 +329,10 @@ internal fun NavigationCard(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
         Row(
             modifier = Modifier.padding(
                 start = CardPadding,
@@ -364,7 +379,10 @@ internal fun DownloadProgressCard(
     total: Long,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth()) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
         Column(
             modifier = Modifier.padding(
                 horizontal = CardPadding,
@@ -552,9 +570,9 @@ private fun RecordDot(color: Color, size: Dp) {
  *
  * Als echter Material-`Button` erbt er alles aus dem One-UI-Theme: die Pille
  * von `shapes.small`, `primary`/`onPrimary` als Farben und `labelLarge` fuer
- * die Beschriftung. Das Symbol ist dieselbe Zutat wie in [DangerButton] —
- * beide Knoepfe stehen in derselben Karte nebeneinander und sollen sich nicht
- * darin unterscheiden, ob ein Symbol moeglich ist.
+ * die Beschriftung. Die Hoehe folgt One UI statt Material: Contained-Knoepfe
+ * sind dort durchgaengig 48 dp hoch. Das Symbol ist dieselbe Zutat wie in
+ * [DangerButton] und [de.trailscape.app.ui.components.NeutralButton].
  */
 @Composable
 internal fun PrimaryButton(
@@ -566,9 +584,9 @@ internal fun PrimaryButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(40.dp),
+        modifier = modifier.height(48.dp),
         enabled = enabled,
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp),
     ) {
         Row(
             horizontalArrangement = Arrangement.Center,
@@ -602,8 +620,8 @@ internal fun DangerButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(40.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
+        modifier = modifier.height(48.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.error,
             contentColor = MaterialTheme.colorScheme.onError,
