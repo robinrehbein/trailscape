@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,8 +23,9 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,12 +38,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
@@ -57,8 +60,15 @@ import kotlin.math.roundToInt
  * Statistik-Karte der ausgewaehlten Tour, Navigationsleiste, Downloadanzeige
  * und die kleinen Knoepfe am oberen Rand.
  *
- * Alle Flaechen kommen aus `MaterialTheme` (heller/dunkler Modus), nur die drei
- * Kartenfarben sind fest (siehe `MapColors.kt`).
+ * Flaechen, Formen und **Tinte** erben das One-UI-Theme (`MaterialTheme`,
+ * heller/dunkler Modus): Die Karten bringen Rundung (26 dp) und
+ * `surfaceContainerLow` vom `Card`-Slot mit — flach, ohne Schatten, Trennung
+ * durch Ton, nicht durch Elevation —, die Knopfformen die Pille von
+ * `shapes.small`, Text und Symbole auf Kartenflaechen `primary`/`error` aus
+ * dem Schema. Die drei festen Farben aus `MapColors.kt` liegen ausschliesslich
+ * auf den Kacheln (Spuren, Markierungen) und als Fuellung aktivierter
+ * Bedienelemente — nie als Text auf einer Theme-Flaeche, deren Kontrast im
+ * Dunkelmodus niemand garantiert.
  *
  * Bewusst anders als das Flutter-Original: Dort war jedes Panel in
  * `AnimatedSwitcher`/`AnimatedContainer` verpackt und jeder Zahlenwechsel
@@ -67,7 +77,7 @@ import kotlin.math.roundToInt
  * sich im Sekundentakt hereinschiebt, ist auf dem Rad eher unruhig als schoen.
  */
 
-/** Ein grosser Wert mit Beschriftung (`_Metric` im Original). */
+/** Ein grosser Wert mit Beschriftung (`_Metric` im Original) — dieselbe Stat-Grammatik wie in jedem Tab ([Fact]). */
 @Composable
 internal fun Metric(
     value: String,
@@ -75,26 +85,7 @@ internal fun Metric(
     modifier: Modifier = Modifier,
     big: Boolean = false,
 ) {
-    Column(modifier = modifier) {
-        Text(
-            text = value,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = if (big) {
-                MaterialTheme.typography.headlineSmall
-            } else {
-                MaterialTheme.typography.titleMedium
-            },
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = label,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    Fact(label = label, value = value, modifier = modifier, compact = !big)
 }
 
 /**
@@ -126,7 +117,7 @@ internal fun LiveRecordingCard(
     onOpenRideMode: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(
                 horizontal = CardPadding,
@@ -134,13 +125,12 @@ internal fun LiveRecordingCard(
             ),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RecordDot(color = RecordRed, size = 12.dp)
+                RecordDot(color = MaterialTheme.colorScheme.error, size = 12.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = if (paused) "Pausiert" else "Aufzeichnung läuft",
                     style = MaterialTheme.typography.labelMedium,
-                    color = RecordRed,
-                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
@@ -185,7 +175,6 @@ internal fun LiveRecordingCard(
                     Icon(
                         Icons.Filled.Fullscreen,
                         contentDescription = null,
-                        tint = Color.White,
                         modifier = Modifier.size(18.dp),
                     )
                 },
@@ -215,7 +204,6 @@ internal fun LiveRecordingCard(
                     Icon(
                         Icons.Filled.Stop,
                         contentDescription = null,
-                        tint = Color.White,
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -242,10 +230,10 @@ internal fun RideCard(
     modifier: Modifier = Modifier,
 ) {
     val stats = ride.stats
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-        // Rechts 8 dp statt 16 dp: der Schliessen-IconButton bringt seinen
-        // eigenen Beruehrungsrand mit — dasselbe Zugestaendnis wie in der
-        // Tourenkarte des Touren-Tabs.
+    Card(modifier = modifier.fillMaxWidth()) {
+        // Rechts 8 dp statt [CardPadding]: der Schliessen-IconButton bringt
+        // seinen eigenen Beruehrungsrand mit — dasselbe Zugestaendnis wie in
+        // der Tourenkarte des Touren-Tabs.
         Column(
             modifier = Modifier.padding(
                 start = CardPadding,
@@ -261,7 +249,6 @@ internal fun RideCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
                 IconButton(onClick = onClose) {
                     Icon(Icons.Filled.Close, contentDescription = "Auswahl aufheben")
@@ -293,7 +280,7 @@ internal fun RideCard(
             ElevationProfile(
                 points = ride.points,
                 modifier = Modifier.padding(end = 8.dp),
-                lineColor = GravelGreen,
+                lineColor = MaterialTheme.colorScheme.primary,
                 onHover = onHoverPoint,
             )
             Spacer(Modifier.height(8.dp))
@@ -313,7 +300,7 @@ internal fun RideCard(
                 }
                 Spacer(Modifier.width(4.dp))
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Tour löschen", tint = RecordRed)
+                    Icon(Icons.Filled.Delete, contentDescription = "Tour löschen", tint = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -330,7 +317,7 @@ internal fun NavigationCard(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(
                 start = CardPadding,
@@ -344,8 +331,7 @@ internal fun NavigationCard(
                 Text(
                     text = "${formatKmDe(remainingKm)} km übrig",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = GravelGreen,
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
                     text = if (doneKm == null) {
@@ -360,10 +346,9 @@ internal fun NavigationCard(
                 )
                 if (offRoute) {
                     Text(
-                        text = "⚠️ Abseits der Route",
+                        text = "Abseits der Route",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = RecordRed,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }
@@ -379,7 +364,7 @@ internal fun DownloadProgressCard(
     total: Long,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(
                 horizontal = CardPadding,
@@ -394,13 +379,17 @@ internal fun DownloadProgressCard(
             if (total > 0) {
                 LinearProgressIndicator(
                     progress = { (done.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = GravelGreen,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(4.dp)),
                 )
             } else {
                 LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = GravelGreen,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(4.dp)),
                 )
             }
         }
@@ -409,7 +398,12 @@ internal fun DownloadProgressCard(
 
 // --------------------------------------------------------------- Bedienteile
 
-/** Pillenfoermiger Knopf mit Text (oben links: „Route planen"). */
+/**
+ * Pillenfoermiger Knopf mit Text (oben links: „Route planen"). Die Pille erbt
+ * ihre Form von `shapes.small`, die inaktive Flaeche ist die One-UI-Karte
+ * (`surfaceContainerLow`); nur der aktive Zustand faerbt sich mit der
+ * Kartenfarbe der Funktion.
+ */
 @Composable
 internal fun MapPillButton(
     label: String,
@@ -419,12 +413,12 @@ internal fun MapPillButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val background = if (active) activeColor else MaterialTheme.colorScheme.surface
+    val background = if (active) activeColor else MaterialTheme.colorScheme.surfaceContainerLow
     val foreground = if (active) Color.White else MaterialTheme.colorScheme.onSurface
     Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
+        shape = MaterialTheme.shapes.small,
         color = background,
         contentColor = foreground,
         shadowElevation = 2.dp,
@@ -435,7 +429,7 @@ internal fun MapPillButton(
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(text = label, fontWeight = FontWeight.SemiBold)
+            Text(text = label, style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -452,10 +446,10 @@ internal fun MapCircleButton(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier.size(44.dp),
+        modifier = modifier.size(48.dp),
         enabled = enabled,
         shape = CircleShape,
-        color = if (active) RouteBlue else MaterialTheme.colorScheme.surface,
+        color = if (active) RouteBlue else MaterialTheme.colorScheme.surfaceContainerLow,
         contentColor = if (active) Color.White else MaterialTheme.colorScheme.onSurface,
         shadowElevation = 2.dp,
     ) {
@@ -469,8 +463,9 @@ internal fun MapCircleButton(
  * Der grosse Aufnahmeknopf: gruener Kreis (Start) bzw. rotes Quadrat (Stopp)
  * ueber der Flaeche des Knopfs. Seit `material-icons-extended` eingebunden
  * ist, kommen Start- und Stopp-Symbol als echte Vektor-Icons statt als
- * selbst gezeichnete Formen — Groesse (56-dp-Knopf) und Farben (GravelGreen/
- * RecordRed auf `MaterialTheme.colorScheme.surface`) bleiben unveraendert.
+ * selbst gezeichnete Formen. Groesse bleibt der 56-dp-Knopf; die Farben
+ * kommen seit dem One-UI-Umzug aus dem Schema (`primary`/`error`) statt aus
+ * den Kachelfarben — auf der hellen wie dunklen Kartenflaeche geprueft.
  */
 @Composable
 internal fun RecordButton(
@@ -482,22 +477,22 @@ internal fun RecordButton(
         onClick = onClick,
         modifier = modifier.size(56.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = if (recording) 8.dp else 4.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shadowElevation = 2.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (recording) {
                 Icon(
                     Icons.Filled.Stop,
                     contentDescription = "Aufzeichnung beenden",
-                    tint = RecordRed,
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(28.dp),
                 )
             } else {
                 Icon(
                     Icons.Filled.PlayArrow,
                     contentDescription = "Aufzeichnung starten",
-                    tint = GravelGreen,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(32.dp),
                 )
             }
@@ -525,9 +520,9 @@ internal fun LocateButton(
         onClick = onClick,
         modifier = modifier.size(56.dp),
         shape = CircleShape,
-        color = if (following) GravelGreen else MaterialTheme.colorScheme.surface,
-        contentColor = if (following) Color.White else GravelGreen,
-        shadowElevation = 4.dp,
+        color = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerLow,
+        contentColor = if (following) Color.White else MaterialTheme.colorScheme.primary,
+        shadowElevation = 2.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
@@ -537,7 +532,7 @@ internal fun LocateButton(
                 } else {
                     "Meine Position – die Karte folgt dir nicht mehr"
                 },
-                tint = if (following) Color.White else GravelGreen,
+                tint = if (following) Color.White else MaterialTheme.colorScheme.primary,
             )
         }
     }
@@ -552,11 +547,14 @@ private fun RecordDot(color: Color, size: Dp) {
 }
 
 /**
- * Ausgefuellter Knopf in Gravel-Gruen, mit optionalem Symbol davor.
+ * Gefuellter Knopf fuer die Hauptaktion eines Panels, mit optionalem Symbol
+ * davor.
  *
- * Das Symbol ist dieselbe Zutat wie in [DangerButton] — beide Knoepfe stehen in
- * derselben Karte nebeneinander und sollen sich nicht darin unterscheiden, ob
- * ein Symbol moeglich ist.
+ * Als echter Material-`Button` erbt er alles aus dem One-UI-Theme: die Pille
+ * von `shapes.small`, `primary`/`onPrimary` als Farben und `labelLarge` fuer
+ * die Beschriftung. Das Symbol ist dieselbe Zutat wie in [DangerButton] —
+ * beide Knoepfe stehen in derselben Karte nebeneinander und sollen sich nicht
+ * darin unterscheiden, ob ein Symbol moeglich ist.
  */
 @Composable
 internal fun PrimaryButton(
@@ -566,16 +564,13 @@ internal fun PrimaryButton(
     enabled: Boolean = true,
     leading: @Composable (() -> Unit)? = null,
 ) {
-    Surface(
+    Button(
         onClick = onClick,
         modifier = modifier.height(40.dp),
         enabled = enabled,
-        shape = RoundedCornerShape(20.dp),
-        color = if (enabled) GravelGreen else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -593,7 +588,11 @@ internal fun PrimaryButton(
     }
 }
 
-/** Ausgefuellter Knopf in Warnrot mit optionalem Symbol davor. */
+/**
+ * Gefuellter Knopf in der semantischen Warnfarbe (`error`) mit optionalem
+ * Symbol davor — Form und Typografie erbt er wie [PrimaryButton] aus dem
+ * Theme.
+ */
 @Composable
 internal fun DangerButton(
     text: String,
@@ -601,15 +600,16 @@ internal fun DangerButton(
     modifier: Modifier = Modifier,
     leading: @Composable (() -> Unit)? = null,
 ) {
-    Surface(
+    Button(
         onClick = onClick,
         modifier = modifier.height(40.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = RecordRed,
-        contentColor = Color.White,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+        ),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -617,7 +617,12 @@ internal fun DangerButton(
                 leading()
                 Spacer(Modifier.width(6.dp))
             }
-            Text(text = text, style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }

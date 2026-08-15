@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,6 +30,11 @@ import androidx.compose.ui.unit.dp
  * Flaeche, optionaler Titel in der Signalfarbe, Text in `bodyMedium` und mit
  * `weight(1f)`, damit lange Hinweise umbrechen statt das Icon zu verdraengen.
  *
+ * One-UI-Fassung: flache tonale Flaeche der Signalfarbe (12 % Alpha, wie ein
+ * `error`/`secondary`-Container) ohne Schatten und ohne Rand; die Rundung
+ * erbt der Block aus dem Theme (`shapes.medium`, 26 dp) statt aus einer
+ * eigenen Zahl.
+ *
  * @param color die Signalfarbe. Kommt aus
  *   [de.trailscape.app.ui.theme.LocalSignalColors] oder dem `colorScheme` —
  *   nie als Literal.
@@ -45,7 +49,7 @@ fun NoticeBox(
 ) {
     Surface(
         color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(8.dp),
+        shape = MaterialTheme.shapes.medium,
         modifier = modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(12.dp)) {

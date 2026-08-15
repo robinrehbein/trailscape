@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
@@ -30,13 +29,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.TrainingInsights
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.training.readinessBandColor
 import de.trailscape.core.PlanFeasibility
@@ -59,6 +58,12 @@ import kotlin.math.roundToInt
  * `ui/UiFormat.kt` und `:core`; die Ampelfarbe der Bereitschaft teilt sich diese
  * Seite mit dem Trainings-Tab ([readinessBandColor]), damit derselbe Wert nicht
  * an zwei Stellen unterschiedlich eingefaerbt wird.
+ *
+ * One UI: Die Karten erben Rundung (26 dp) und Kartenfarbe (`surfaceContainerLow`,
+ * weiss bzw. fast schwarz) vom Theme — keine eigene Form, keine eigene Flaeche.
+ * Die grossen Zahlen (Bereitschaftswert, Wochenkilometer, Tourenkennzahlen)
+ * laufen in den fetten Headline-Slots des Schriftsystems; ein Gewicht wird
+ * nirgends dazugeschrieben.
  */
 
 /**
@@ -112,7 +117,6 @@ internal fun TodayRecommendationCard(
                     Text(
                         text = readiness.score.roundToInt().toString(),
                         style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
                         color = color,
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -378,7 +382,7 @@ internal fun WeekProgressCard(week: TrainingWeek, weekCount: Int, riddenKm: Doub
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "${formatKmDe(riddenKm)} von ${week.targetKm} km",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.headlineSmall,
             )
         }
     }
@@ -418,13 +422,6 @@ internal fun LastRideCard(ride: Ride, onOpenRides: () -> Unit) {
                         color = theme.onSurfaceVariant,
                     )
                 }
-                // Dekorativ: Die ganze Karte ist bedienbar und traegt ihren
-                // Namen als Beschriftung.
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = null,
-                    tint = theme.onSurfaceVariant,
-                )
             }
 
             FlowRow(
@@ -443,15 +440,8 @@ internal fun LastRideCard(ride: Ride, onOpenRides: () -> Unit) {
     }
 }
 
-/** Eine Kennzahl der Tour: kleines Label, darunter der Wert. */
+/** Eine Kennzahl der Tour — dieselbe Grammatik wie ueberall ([Fact]). */
 @Composable
 private fun RideFigure(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
-    }
+    Fact(label = label, value = value)
 }

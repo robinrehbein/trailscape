@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -149,7 +150,11 @@ fun TrailscapeApp() {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            // One-UI-leiste: kein eigener Ton, sondern flach auf dem
+            // Bildschirmhintergrund. Der transparente Container blendet die
+            // Tonal-Elevation der M3-Defaults aus — der Fenstergrund (Surface
+            // der Activity) scheint durch, windowInsets bleiben Default.
+            NavigationBar(containerColor = Color.Transparent) {
                 TopLevelDestination.entries.forEach { destination ->
                     val selected = currentDestination?.hierarchy?.any {
                         it.route == destination.route

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -43,7 +44,7 @@ fun MapStyleCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.height(12.dp))
 
         Column(modifier = Modifier.selectableGroup()) {
-            mapStyles.forEach { style ->
+            mapStyles.forEachIndexed { index, style ->
                 val isSelected = style.id == selected.id
                 Row(
                     modifier = Modifier
@@ -70,6 +71,9 @@ fun MapStyleCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                             )
                         }
                     }
+                }
+                if (index != mapStyles.lastIndex) {
+                    HorizontalDivider()
                 }
             }
         }

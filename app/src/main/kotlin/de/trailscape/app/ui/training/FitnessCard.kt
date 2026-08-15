@@ -1,23 +1,19 @@
 package de.trailscape.app.ui.training
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.FitnessAssessment
@@ -40,21 +36,12 @@ fun FitnessCard(assessment: FitnessAssessment) {
             Text("Dein Fitnesslevel", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Derselbe Chip-Aufbau wie die Wochentyp-Marke im Trainingsplan
-            // (`PlanWeekCard`): getoente Flaeche, Text in der Vollfarbe. Vorher
-            // war es weisser Text auf vollflaechigem Gruen — im Dunkelmodus mit
-            // dem aufgehellten Gruenton nicht mehr lesbar, und der einzige Chip
-            // der App, der so aussah.
-            Text(
+            // Derselbe Chip wie die Wochentyp-Marke im Trainingsplan:
+            // die getoente [TagPill] mit Text in der Vollfarbe.
+            TagPill(
                 text = levelLabels.getValue(assessment.level),
-                style = MaterialTheme.typography.titleSmall,
-                color = levelColor,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .wrapContentWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(levelColor.copy(alpha = 0.15f))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                containerColor = levelColor.copy(alpha = 0.15f),
+                contentColor = levelColor,
             )
             Spacer(modifier = Modifier.height(12.dp))
 

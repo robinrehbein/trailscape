@@ -296,7 +296,9 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
                             onUpdate = { offerDownload(listOf(segment.fileName), isUpdate = true) },
                             onDelete = { confirmDelete = segment },
                         )
-                        if (index != segments.lastIndex) HorizontalDivider()
+                        if (index != segments.lastIndex) {
+                            HorizontalDivider()
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))

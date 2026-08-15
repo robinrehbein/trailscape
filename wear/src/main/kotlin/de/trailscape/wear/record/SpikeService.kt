@@ -133,7 +133,16 @@ class SpikeService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 gehInDenVordergrund()
-                if (!laeuft) scope.launch { beginneVersuch() }
+                // Der Guard muss SYNCHRON gesetzt werden, bevor die Coroutine
+                // loslaeuft: Zwei schnelle START-Taps kamen sonst beide durch
+                // `!laeuft` (der Dispatch auf den IO-Thread dauert spuerbar
+                // laenger als ein Doppeltipp) und bereiteten die Uebung doppelt
+                // vor. Schlaegt die Vorbereitung fehl, setzt `scheitere()` den
+                // Guard zurueck — ein spaeterer START kann es erneut versuchen.
+                if (!laeuft) {
+                    laeuft = true
+                    scope.launch { beginneVersuch() }
+                }
             }
 
             ACTION_PAUSE -> scope.launch { pausiere() }
@@ -159,7 +168,8 @@ class SpikeService : Service() {
     // --- Ablauf --------------------------------------------------------------
 
     private suspend fun beginneVersuch() {
-        laeuft = true
+        // `laeuft` steht bereits: onStartCommand setzt den Guard synchron
+        // vor dem Start dieser Coroutine (Doppel-START-Schutz).
         SpikeStatus.zuruecksetzen()
         punkte.clear()
         hsDistanzM = 0.0

@@ -60,7 +60,7 @@ data class SignalColors(
 /**
  * Helle Fassung — dieselben Farbtoene wie die urspruenglichen Flutter-
  * Materialwerte, aber so weit abgedunkelt, dass sie auf [LightSurface]
- * (#F6FBF4) den WCAG-AA-Kontrast 4,5:1 fuer normalen Text erreichen.
+ * (#F4F4F6) den WCAG-AA-Kontrast 4,5:1 fuer normalen Text erreichen.
  *
  * ## Warum das noetig war
  * Der Dunkelmodus wurde beim Umzug hierher aufgehellt (siehe unten), die
@@ -77,8 +77,13 @@ data class SignalColors(
  * accentBlue    #2196F3 2,98:1    #1972B9 4,83:1
  * accentRed     #F44336 3,51:1    #CC382D 4,80:1
  * danger        #D32F2F 4,75:1    unveraendert
- * good          #2D5A3D 7,58:1    unveraendert
+ * good          #2D5A3D 7,58:1    #0D7A42 4,91:1
  * ```
+ *
+ * [good] folgt seit dem One-UI-Umzug der Markengrundfarbe [TrailscapeSeed]
+ * (frueher das erdige 1.x-Gruen): Auf dem neuen, neutralen Hintergrund
+ * (#F4F4F6) haelt auch der hellere Ton den AA-Kontrast — die alte 7,58:1
+ * bezogen sich auf das fruehere, gruenstichige Surface.
  *
  * ## Wie abgedunkelt wurde
  * Streng **tonwerterhaltend**: Die drei sRGB-Kanaele werden mit demselben

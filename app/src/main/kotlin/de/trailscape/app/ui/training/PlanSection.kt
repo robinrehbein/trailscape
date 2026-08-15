@@ -1,6 +1,5 @@
 package de.trailscape.app.ui.training
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Route
@@ -22,14 +20,14 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatDateShort
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Ride
 import de.trailscape.core.TrainingPlan
@@ -81,7 +79,9 @@ fun PlanWeekCard(
 
     Card(
         colors = if (isCurrent) {
-            CardDefaults.cardColors(containerColor = theme.primaryContainer.copy(alpha = 0.5f))
+            // Solide Tonflaeche statt halbtransparenter Kopie: Eine Flaeche,
+            // deren Erscheinung vom Untergrund abhaengt, ist keine Flaeche.
+            CardDefaults.cardColors(containerColor = theme.secondaryContainer)
         } else {
             CardDefaults.cardColors()
         },
@@ -97,15 +97,12 @@ fun PlanWeekCard(
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
+                // Wochentyp-Marke: dieselbe Pille wie der Fitnesslevel-Chip
+                // (`TagPill`) — getoente Flaeche, Text in der Vollfarbe.
+                TagPill(
                     text = weekKindLabels.getValue(week.kind),
-                    color = kindColor,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .wrapContentWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(kindColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    containerColor = kindColor.copy(alpha = 0.15f),
+                    contentColor = kindColor,
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
@@ -145,8 +142,7 @@ fun PlanWeekCard(
                         ) {
                             Text(
                                 text = session.title,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(modifier = Modifier.width(8.dp))

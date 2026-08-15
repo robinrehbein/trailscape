@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Map
@@ -104,6 +103,12 @@ import kotlin.math.roundToInt
  * ueber die Zurueck-Geste ([BackHandler]) — beides ohne jede Wirkung auf die
  * Aufzeichnung, die als Vordergrunddienst ohnehin unabhaengig von dieser
  * Ansicht weiterlaeuft.
+ *
+ * Die Formen sind One UI: Bedienflaechen und Status-Chip sind volle Pillen und
+ * erben sie von `MaterialTheme.shapes.small`, die Warnung ist ein 26-dp-Block
+ * (`shapes.medium`). Nur die Hoehe der Bedienflaechen ist bewusst hoeher
+ * gelegen (siehe [RideModeActionHeight]) — an der wird fuer keine Mode
+ * gedreht.
  *
  * ## Warum ein eigenes Fenster
  * Der Fahrmodus laeuft als [Dialog] ueber dem ganzen Fenster und nicht als
@@ -296,7 +301,7 @@ private fun RideModeHeader(paused: Boolean, onClose: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.small,
             color = if (paused) {
                 MaterialTheme.colorScheme.tertiaryContainer
             } else {
@@ -312,7 +317,6 @@ private fun RideModeHeader(paused: Boolean, onClose: () -> Unit) {
                 text = if (paused) "Pausiert" else "Aufzeichnung läuft",
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
             )
         }
         Spacer(Modifier.weight(1f))
@@ -321,7 +325,7 @@ private fun RideModeHeader(paused: Boolean, onClose: () -> Unit) {
             modifier = Modifier
                 .height(RideModeExitHeight)
                 .semantics { contentDescription = "Fahrmodus verlassen, zurück zur Karte" },
-            shape = RoundedCornerShape(16.dp),
+            shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         ) {
@@ -334,7 +338,6 @@ private fun RideModeHeader(paused: Boolean, onClose: () -> Unit) {
                 Text(
                     text = "Karte",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
             }
         }
@@ -399,12 +402,12 @@ private fun BigValue(
 private fun OffRouteWarning() {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Text(
-            text = "⚠️ Abseits der Route",
+            text = "Abseits der Route",
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             fontSize = SmallValueSize,
             lineHeight = SmallValueSize * 1.1f,
@@ -433,7 +436,6 @@ private fun StopConfirmation(onCancel: () -> Unit, onConfirm: () -> Unit) {
         Text(
             text = "Aufzeichnung wirklich beenden?",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(8.dp))
@@ -463,7 +465,9 @@ private fun StopConfirmation(onCancel: () -> Unit, onConfirm: () -> Unit) {
 
 /**
  * Daumengrosse Bedienflaeche: [RideModeActionHeight] hoch, ueber die halbe
- * Breite, Beschriftung und Symbol in Fahr-Groesse.
+ * Breite, Beschriftung und Symbol in Fahr-Groesse. Die Pille erbt sie vom
+ * Theme (`shapes.small`); die Hoehe bleibt die dokumentierte
+ * Sicherheitsentscheidung und wird von keiner Rundung aufgeweicht.
  */
 @Composable
 private fun RideModeAction(
@@ -480,7 +484,7 @@ private fun RideModeAction(
         modifier = modifier
             .height(RideModeActionHeight)
             .semantics { contentDescription = description },
-        shape = RoundedCornerShape(20.dp),
+        shape = MaterialTheme.shapes.small,
         color = container,
         contentColor = content,
     ) {
@@ -498,7 +502,6 @@ private fun RideModeAction(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
             )
         }
     }

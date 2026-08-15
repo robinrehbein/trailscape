@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -130,7 +131,10 @@ fun ReminderCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             onClick = { editing = ReminderTime.DAILY },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        // Haarlinie zwischen den drei Anlassen (One-UI-Einstellungsliste):
+        // Schalter und zugehoerige Uhrzeit bilden eine Gruppe und bleiben
+        // ungetrennt.
+        HorizontalDivider()
 
         ReminderSwitchRow(
             title = "Wochenrückblick",
@@ -145,7 +149,7 @@ fun ReminderCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             onClick = { editing = ReminderTime.WEEKLY },
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider()
 
         ReminderSwitchRow(
             title = "Anstupser",

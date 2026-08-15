@@ -47,10 +47,10 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,6 +72,8 @@ import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.Fact
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.importActivityFile
@@ -314,14 +317,25 @@ fun RidesScreen(appViewModel: AppViewModel) {
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 TopAppBar(
-                    title = { Text("Touren") },
+                    title = {
+                        // One-UI-Listentitel: gross und fett statt der
+                        // kleinen Material-Leiste.
+                        Text("Touren", style = MaterialTheme.typography.headlineMedium)
+                    },
                     windowInsets = WindowInsets(0, 0, 0, 0),
+                    // Flache One-UI-Kopfzeile: keine eigene Flaeche, der
+                    // Bildschirmhintergrund scheint durch.
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                    ),
                 )
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
                 ExtendedFloatingActionButton(
                     onClick = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                     icon = {
                         if (importing) {
                             CircularProgressIndicator(
@@ -350,9 +364,10 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         CircularProgressIndicator()
                     }
 
-                    // Gleiche Breitendeckelung und dasselbe 16-dp-Raster wie im
-                    // Trainings- und Mehr-Tab; vorher stand die Liste hier ohne
-                    // Deckelung mit 12-dp-Rand und 8-dp-Abstand.
+                    // Gleiche Breitendeckelung und dasselbe One-UI-Raster
+                    // (ScreenPadding/CardGap aus dem Theme) wie im Trainings-
+                    // und Mehr-Tab; vorher stand die Liste hier ohne Deckelung
+                    // mit 12-dp-Rand und 8-dp-Abstand.
                     rides.isEmpty() -> Box(
                         modifier = Modifier
                             .widthIn(max = ContentMaxWidth)
@@ -501,13 +516,17 @@ private fun RideCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        // Unselektiert erbt die Karte ihre Flaeche aus dem Theme (Default von
+        // Card, siehe theme/Color.kt); nur der Auswahlzustand hebt sie
+        // bewusst auf secondaryContainer.
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) colors.secondaryContainer else colors.surfaceContainerLow,
+            containerColor = if (selected) colors.secondaryContainer else Color.Unspecified,
         ),
     ) {
-        // 16 dp ringsum wie in jeder anderen Karte der App; rechts bleibt es
-        // bei 4 dp, weil der IconButton daneben seinen eigenen Beruehrungsrand
-        // von 12 dp mitbringt und die Karte sonst rechts zu luftig wirkt.
+        // CardPadding (20 dp) ringsum wie in jeder anderen Karte der App;
+        // rechts bleibt es bei 4 dp, weil der IconButton daneben seinen
+        // eigenen Beruehrungsrand von 12 dp mitbringt und die Karte sonst
+        // rechts zu luftig wirkt.
         Column(
             modifier = Modifier.padding(
                 start = CardPadding,
@@ -587,7 +606,7 @@ private fun RideCard(
                         Text(
                             text = loadText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = colors.primary,
+                            color = colors.onSurfaceVariant,
                         )
                     }
                     // Eine gespeicherte Planung sieht in dieser Liste sonst
@@ -597,18 +616,10 @@ private fun RideCard(
                     // Ohne Kennzeichnung waere ihr Fehlen in den Zahlen ein
                     // Fehler, mit Kennzeichnung ist es eine Auskunft.
                     if (ride.planned) {
-                        SuggestionChip(
-                            onClick = {},
-                            enabled = false,
-                            label = { Text("geplante Route") },
-                        )
+                        TagPill(text = "geplante Route")
                     }
                     if (ride.id.startsWith("hc-")) {
-                        SuggestionChip(
-                            onClick = {},
-                            enabled = false,
-                            label = { Text("aus Health Connect") },
-                        )
+                        TagPill(text = "aus Health Connect")
                     }
                 }
             }
@@ -645,17 +656,10 @@ private fun RidesEmptyState(
     )
 }
 
-/** Eine Kennzahl der Tour: kleines Label, darunter der Wert. */
+/** Eine Kennzahl der Tour — dieselbe Grammatik wie ueberall ([Fact]). */
 @Composable
 private fun RideFact(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyMedium)
-    }
+    Fact(label = label, value = value)
 }
 
 /**
