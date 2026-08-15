@@ -89,17 +89,18 @@ fun OneUiNavigationBar(
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            // Leicht durchscheinend: In One UI schimmert der Inhalt, der unter
-            // der Kapsel wegscrollt, durch sie hindurch. Samsung legt dafuer
-            // eine Weichzeichnung dahinter — die gibt es in Compose nicht ohne
-            // Fremdbibliothek, und stark durchsichtig ohne Unschaerfe wuerde
-            // Text im Hintergrund durch die Beschriftungen laufen lassen. 94 %
-            // deuten den Effekt an und bleiben lesbar.
-            color = colors.container.copy(alpha = 0.94f),
-            // Der Schatten traegt den Schwebe-Eindruck im Hellmodus; im
-            // Dunkelmodus ist er auf fast schwarzem Grund praktisch unsichtbar
-            // und stoert deshalb auch nicht.
-            shadowElevation = 6.dp,
+            // Deckend. One UI laesst den Inhalt hinter der Kapsel durchaus
+            // durchschimmern — aber immer mit einer Weichzeichnung dahinter,
+            // die Compose ohne Fremdbibliothek nicht hergibt. Ohne sie stand
+            // hier bei 94 % Deckkraft die naechste Karte lesbar *in* der
+            // Leiste; das sieht nach Fehler aus, nicht nach Glas.
+            color = colors.container,
+            // Der Schatten traegt den Schwebe-Eindruck im Hellmodus allein:
+            // Dort ist die Kapsel weiss wie die Karten, die unter ihr
+            // wegscrollen — ohne ihn verschwaemme ihre Kante genau in dem
+            // Moment, in dem eine Karte darunter steht. Im Dunkelmodus ist er
+            // auf fast schwarzem Grund unsichtbar; dort trennt die Helligkeit.
+            shadowElevation = 12.dp,
             // Volle Pille aus dem small-Slot des Themes — dieselbe Rundung wie
             // Knoepfe und Chips, damit die Leiste zur uebrigen App gehoert.
             shape = MaterialTheme.shapes.small,

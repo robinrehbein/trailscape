@@ -40,13 +40,15 @@ data class NavigationBarColors(
 )
 
 /**
- * Hell: weisse Kapsel wie die Karten, damit sie sich vom grauen
- * Bildschirmgrund (#F4F4F6) abhebt; der Pill ist ein heller Grauton, der auf
- * Weiss gerade sichtbar ist, ohne als Knopf zu wirken.
+ * Hell: ein heller Grauton — bewusst **nicht** das Weiss der Karten. Die Kapsel
+ * schwebt ueber der Liste, und in dem Moment, in dem eine weisse Karte unter
+ * ihr steht, waere eine weisse Kapsel nur noch am Schatten zu erkennen. Der
+ * Pill ist eine Stufe dunkler und traegt so die Auswahl, ohne wie ein Knopf zu
+ * wirken.
  */
 internal val LightNavigationBarColors = NavigationBarColors(
-    container = Color(0xFFFFFFFF),
-    indicator = Color(0xFFE8EAEE),
+    container = Color(0xFFECEEF2),
+    indicator = Color(0xFFDBDEE5),
     selectedContent = LightOnSurface,
     unselectedContent = LightOnSurfaceVariant,
 )
