@@ -85,6 +85,13 @@ import kotlinx.coroutines.launch
  * Profilseite speichert „Weiter" die Eingabe mit — leere Felder sind erlaubt
  * und werden stillschweigend uebergangen, fehlerhafte Eingaben melden sich
  * unter dem Feld und halten die Seite fest.
+ *
+ * ## One-UI-Anmutung
+ * Jede Seite eroeffnet eine grosse, fette Headline (headlineLarge, fett direkt
+ * aus dem Theme-Slot); die Absaetze darunter bleiben ruhig in bodyMedium auf
+ * onSurfaceVariant. Die Fortschrittspunkte unten faerben sich aktiv in der
+ * Primaerfarbe, inaktiv in outlineVariant — Knopfformen liefert das Theme als
+ * Pillen mit.
  */
 @Composable
 fun OnboardingScreen(appViewModel: AppViewModel) {
@@ -214,7 +221,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = page.title, style = MaterialTheme.typography.headlineSmall)
+                        Text(text = page.title, style = MaterialTheme.typography.headlineLarge)
                         Spacer(modifier = Modifier.height(16.dp))
                         page.paragraphs.forEach { paragraph ->
                             Text(

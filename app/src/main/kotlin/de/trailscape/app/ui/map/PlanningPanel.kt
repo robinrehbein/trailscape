@@ -29,14 +29,13 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,7 +47,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,8 +100,13 @@ internal fun SearchPanel(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = CardPadding,
+                vertical = OverlayCardPaddingVertical,
+            ),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = query,
@@ -136,9 +139,8 @@ internal fun SearchPanel(
                 Text(
                     text = error,
                     modifier = Modifier.padding(top = 6.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = RecordRed,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
 
@@ -166,7 +168,7 @@ internal fun SearchPanel(
                     Icon(
                         Icons.Filled.LocationOn,
                         contentDescription = null,
-                        tint = RouteBlue,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
                     )
                     Spacer(Modifier.width(8.dp))
@@ -260,7 +262,7 @@ internal fun PlanningSheet(
         locating = locating,
     )
 
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column {
             // Kopfzeile: eingeklappt die ganze Planung in einer Zeile,
             // aufgeklappt der Griff, mit dem sie wieder zugeht. Die ganze
@@ -287,9 +289,8 @@ internal fun PlanningSheet(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
                         color = if (error != null) {
-                            RecordRed
+                            MaterialTheme.colorScheme.error
                         } else {
                             MaterialTheme.colorScheme.onSurface
                         },
@@ -320,8 +321,6 @@ internal fun PlanningSheet(
             }
 
             if (!expanded) return@Column
-
-            HorizontalDivider()
 
             Column(
                 modifier = Modifier
@@ -399,12 +398,10 @@ internal fun PlanningSheet(
                     Spacer(Modifier.height(8.dp))
                     ElevationProfile(
                         points = route.points,
-                        lineColor = RouteBlue,
+                        lineColor = MaterialTheme.colorScheme.primary,
                         onHover = onHoverPoint,
                     )
                 }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -454,12 +451,14 @@ internal fun PlanningSheet(
 
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PrimaryButton(
-                        text = "Als Tour speichern",
+                    // Nur EINE gefuellte Aktion je Blick (One-UI-Regel aus
+                    // theme/Color.kt): Navigieren ist der Weg nach vorn,
+                    // Speichern der Nebenausgang.
+                    OutlinedButton(
                         onClick = onSave,
                         enabled = route != null,
                         modifier = Modifier.weight(1f),
-                    )
+                    ) { Text("Als Tour speichern") }
                     Spacer(Modifier.width(8.dp))
                     PrimaryButton(
                         text = "Navigieren",
@@ -512,7 +511,6 @@ private fun RoundTripEntry(
         Text(
             text = "Runde ab hier",
             style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
         )
         Text(
             text = "Trailscape sucht Rundkurse ab deiner Position – ohne Standortfreigabe " +
@@ -565,7 +563,7 @@ private fun RoundTripEntry(
                 text = "Zwischen ${minRouteTargetKm.roundToInt()} und " +
                     "${maxRouteTargetKm.roundToInt()} km.",
                 style = MaterialTheme.typography.bodySmall,
-                color = RecordRed,
+                color = MaterialTheme.colorScheme.error,
             )
         }
     }

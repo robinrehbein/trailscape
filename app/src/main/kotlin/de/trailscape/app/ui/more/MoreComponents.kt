@@ -24,8 +24,10 @@ import de.trailscape.app.ui.theme.CardPadding
  */
 
 /**
- * Eine Themenkarte wie im Original: `Card` mit 16dp-Innenabstand, Titel in
- * `titleMedium` und 12dp Abstand zum Inhalt.
+ * Eine Themenkarte im One-UI-Settings-Muster: `Card` ohne eigene Farbe (erbt
+ * die Kartenflaeche und die 26-dp-Rundung aus dem Theme), Titel in
+ * `titleMedium` (durch das Theme fett), [CardPadding] als Innenabstand und
+ * 12 dp Abstand zum Inhalt.
  */
 @Composable
 fun MoreSectionCard(

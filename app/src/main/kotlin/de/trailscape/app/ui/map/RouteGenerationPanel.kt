@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -21,7 +20,6 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +32,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -88,7 +85,7 @@ internal fun RouteGenerationPanel(
     val theme = MaterialTheme.colorScheme
     val signals = LocalSignalColors.current
 
-    Card(modifier = modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(4.dp)) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .heightIn(max = maxHeight)
@@ -105,7 +102,6 @@ internal fun RouteGenerationPanel(
                     text = "Passende Runde",
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
                 )
                 IconButton(onClick = onDiscard) {
                     Icon(Icons.Filled.Close, contentDescription = "Routenvorschlag verwerfen")
@@ -261,10 +257,9 @@ private fun SearchProgress(done: Int, total: Int, onCancel: () -> Unit) {
             LinearProgressIndicator(
                 progress = { (done.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
                 modifier = Modifier.fillMaxWidth(),
-                color = RouteBlue,
-            )
+                            )
         } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = RouteBlue)
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -282,8 +277,11 @@ private fun CandidateRow(
     Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = if (selected) theme.primaryContainer else theme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium,
+        // Unselektiert eine Container-Stufe ueber der Karte des Panels, damit
+        // die waehlbaren Reihen auf ihr sichtbar bleiben; ausgewaehlt heben
+        // sie sich im One-UI-Gruen der `primaryContainer` ab.
+        color = if (selected) theme.primaryContainer else theme.surfaceContainer,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -298,7 +296,6 @@ private fun CandidateRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
                 )
                 Text(
                     text = "${candidate.ascentPerKm.roundToInt()} Hm/km · " +
@@ -319,12 +316,12 @@ private fun CandidateRow(
     }
 }
 
-/** Himmelsrichtung des Rundkurses als runder Chip. */
+/** Himmelsrichtung des Rundkurses als runder Chip (Pille aus `shapes.small`). */
 @Composable
 private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
     Surface(
         modifier = Modifier.size(36.dp),
-        shape = RoundedCornerShape(18.dp),
+        shape = MaterialTheme.shapes.small,
         color = if (highlighted) RouteBlue else MaterialTheme.colorScheme.surfaceVariant,
         contentColor = if (highlighted) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
     ) {
@@ -332,7 +329,6 @@ private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
             Text(
                 text = compassLabel(bearingDeg),
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
             )
         }
     }

@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
 internal fun ElevationProfile(
     points: List<TrackPoint>,
     modifier: Modifier = Modifier,
-    lineColor: Color = GravelGreen,
+    lineColor: Color = MaterialTheme.colorScheme.primary,
     onHover: (TrackPoint?) -> Unit = {},
 ) {
     val samples = remember(points) { buildElevationSamples(points) }
@@ -84,9 +84,10 @@ internal fun ElevationProfile(
 
     val gridColor = MaterialTheme.colorScheme.outlineVariant
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-    // Der Ring um den Ablesepunkt liegt auf der Kartenflaeche, nicht auf den
-    // Kacheln — vorher hart `Color.White`, im Dunkelmodus ein greller Fleck.
-    val markerRingColor = MaterialTheme.colorScheme.surface
+    // Der Ring um den Ablesepunkt liegt auf der Karte des Panels, nicht auf den
+    // Kacheln — deshalb dieselbe Flaeche wie ihr Panel (`surfaceContainerLow`),
+    // damit er auch im Dunkelmodus nicht als greller Fleck wirkt.
+    val markerRingColor = MaterialTheme.colorScheme.surfaceContainerLow
 
     Column(modifier = modifier) {
         Row(

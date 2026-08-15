@@ -22,12 +22,14 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
@@ -137,8 +139,17 @@ fun TrainingScreen(appViewModel: AppViewModel) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text("Training") },
+                title = {
+                        // One-UI-Listentitel: gross und fett statt der
+                        // kleinen Material-Leiste.
+                        Text("Training", style = MaterialTheme.typography.headlineMedium)
+                    },
                 windowInsets = WindowInsets(0, 0, 0, 0),
+                // Flache One-UI-Kopfzeile: keine eigene Flaeche, der
+                // Bildschirmhintergrund scheint durch.
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                ),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },

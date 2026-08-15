@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -21,6 +20,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
@@ -131,8 +132,13 @@ fun MoreScreen(appViewModel: AppViewModel) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text("Mehr") },
+                title = {
+                        // One-UI-Listentitel: gross und fett statt der
+                        // kleinen Material-Leiste.
+                        Text("Mehr", style = MaterialTheme.typography.headlineMedium)
+                    },
                 windowInsets = WindowInsets(0, 0, 0, 0),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -224,7 +230,8 @@ private const val HIGHLIGHT_MS: Long = 1_800L
  * Ohne ihn endet der Sprung bei einer Liste gleich aussehender Karten — der
  * Nutzer sieht, dass sich etwas bewegt hat, aber nicht, worauf er schauen soll.
  * Bewusst nur ein Rahmen und keine Farbflaeche: Die Karte soll gefunden werden,
- * nicht wie ein Fehler aussehen.
+ * nicht wie ein Fehler aussehen. Der Rahmen nimmt den Kartenradius aus dem
+ * Theme (`MaterialTheme.shapes.medium`), damit er der Rundung der Karte folgt.
  */
 @Composable
 private fun highlight(highlighted: MoreSection?, section: MoreSection): Modifier {
@@ -236,6 +243,6 @@ private fun highlight(highlighted: MoreSection?, section: MoreSection): Modifier
     return Modifier.border(
         width = 2.dp,
         color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
-        shape = RoundedCornerShape(12.dp),
+        shape = MaterialTheme.shapes.medium,
     )
 }

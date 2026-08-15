@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,8 +30,9 @@ import de.trailscape.app.ui.theme.CardPadding
  *  3. **Aktionen** — der kuerzeste Weg zu echten Daten, als Knoepfe. Der
  *     wichtigste zuerst und ausgefuellt, die uebrigen als `OutlinedButton`.
  *
- * Die Karte traegt bewusst `surfaceContainerLow` wie jede andere Karte der App;
- * ein Leerzustand ist ein normaler Inhalt, kein Fehlerfall.
+ * Die Karte erbt das One-UI-Kartenbild aus dem Theme (Kartenfarbe und 26-dp-
+ * Rundung, kein Rand, kein Schatten) wie jede andere Karte der App; ein
+ * Leerzustand ist ein normaler Inhalt, kein Fehlerfall.
  */
 @Composable
 fun EmptyState(
@@ -42,12 +42,7 @@ fun EmptyState(
     hint: String? = null,
     actions: @Composable () -> Unit = {},
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
-    ) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
             Text(text = title, style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))

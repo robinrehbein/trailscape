@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.MoreSection
@@ -227,6 +230,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
  * nicht: Er soll die Seite eroeffnen, nicht selbst informieren. Ein einmal
  * gemerkter Zeitpunkt genuegt; wer die App ueber Mitternacht offen liegen
  * laesst, sieht das Datum beim naechsten Wechsel in diesen Tab aktualisiert.
+ *
+ * Das One-UI-Moment der Seite: Die Begruessung laeuft im groessten Slot
+ * unterhalb von Titelleisten (headlineLarge — 30 sp und fett direkt aus dem
+ * Theme-Slot), das Datum darunter mit einem kleinen Atemzug ruehig in
+ * bodyLarge und onSurfaceVariant.
  */
 @Composable
 private fun TodayHeader() {
@@ -234,11 +242,15 @@ private fun TodayHeader() {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = greetingFor(now.hour),
-            style = MaterialTheme.typography.headlineSmall,
+            // Eine Stufe unter der Erholungszahl der Empfehlungskarte: Der
+            // Kopf eroeffnet die Seite, aber die eine Zahl, fuer die es sie
+            // gibt, traegt den groessten Slot.
+            style = MaterialTheme.typography.headlineLarge,
         )
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = weekdayDateFormat.format(now),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }

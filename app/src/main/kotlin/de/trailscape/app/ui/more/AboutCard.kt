@@ -167,7 +167,10 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 4.dp),
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
 
         TextButton(
             onClick = { licensesExpanded = !licensesExpanded },

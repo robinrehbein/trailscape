@@ -16,8 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.theme.LocalSignalColors
 
 /**
@@ -29,29 +29,24 @@ import de.trailscape.app.ui.theme.LocalSignalColors
  * zweimal, hier und im Mehr-Paket.
  */
 
-/** Beschriftete Kennzahl (Zahl fett, Beschriftung darunter). */
+/**
+ * Beschriftete Kennzahl — dieselbe Grammatik wie in der ganzen App ([Fact]):
+ * Label ueber der Zahl, die Zahl gross und fett aus dem Slot. Eine Farbe ist
+ * optional (z. B. Ampelton der Zeile darunter).
+ */
 @Composable
 fun FigureText(value: String, label: String, color: Color? = null) {
-    Column {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = color ?: MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    Fact(label = label, value = value, valueColor = color ?: Color.Unspecified)
 }
 
-/** Beschriftete Kennzahl in Fliesstext (Zahl fett, Rest normal) — Dart: `_metric`. */
+/**
+ * Beschriftete Kennzahl in Fliesstext — Dart: `_metric`. Die Zahl traegt das
+ * Gewicht (700) aus dem titleSmall-Slot, das Label bleibt Fliesstext.
+ */
 @Composable
 fun InlineMetric(value: String, label: String) {
     Row {
-        Text(text = value, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+        Text(text = value, style = MaterialTheme.typography.titleSmall)
         Text(text = " $label", style = MaterialTheme.typography.bodyMedium)
     }
 }
@@ -80,7 +75,10 @@ fun SignalRow(color: Color, headline: String, detail: String) {
                 .background(color),
         )
         Column(modifier = Modifier.padding(start = 10.dp)) {
-            Text(text = headline, style = MaterialTheme.typography.titleSmall, color = color)
+            // Der Messwert ist die Hauptzahl der Zeile — deshalb derselbe
+            // fette headlineSmall-Slot wie bei [FigureText], nicht eine
+            // blosse Titelzeile.
+            Text(text = headline, style = MaterialTheme.typography.headlineSmall, color = color)
             Text(
                 text = detail,
                 style = MaterialTheme.typography.bodySmall,
@@ -102,8 +100,7 @@ fun SignalRow(color: Color, headline: String, detail: String) {
 fun RowScope.WeekdayLabel(day: String) {
     Text(
         text = day,
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.titleSmall,
         color = LocalSignalColors.current.accentGreen,
         modifier = Modifier
             .width(32.dp)

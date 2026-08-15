@@ -24,8 +24,15 @@ private val LightColors = lightColorScheme(
     onError = LightOnError,
     errorContainer = LightErrorContainer,
     onErrorContainer = LightOnErrorContainer,
+    background = LightBackground,
+    onBackground = LightOnBackground,
     surface = LightSurface,
     onSurface = LightOnSurface,
+    surfaceContainerLowest = LightSurfaceContainerLowest,
+    surfaceContainerLow = LightSurfaceContainerLow,
+    surfaceContainer = LightSurfaceContainer,
+    surfaceContainerHigh = LightSurfaceContainerHigh,
+    surfaceContainerHighest = LightSurfaceContainerHighest,
     surfaceVariant = LightSurfaceVariant,
     onSurfaceVariant = LightOnSurfaceVariant,
     outline = LightOutline,
@@ -52,8 +59,15 @@ private val DarkColors = darkColorScheme(
     onError = DarkOnError,
     errorContainer = DarkErrorContainer,
     onErrorContainer = DarkOnErrorContainer,
+    background = DarkBackground,
+    onBackground = DarkOnBackground,
     surface = DarkSurface,
     onSurface = DarkOnSurface,
+    surfaceContainerLowest = DarkSurfaceContainerLowest,
+    surfaceContainerLow = DarkSurfaceContainerLow,
+    surfaceContainer = DarkSurfaceContainer,
+    surfaceContainerHigh = DarkSurfaceContainerHigh,
+    surfaceContainerHighest = DarkSurfaceContainerHighest,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkOnSurfaceVariant,
     outline = DarkOutline,
@@ -64,12 +78,14 @@ private val DarkColors = darkColorScheme(
 )
 
 /**
- * App-Theme.
+ * App-Theme im Gewand von **One UI 9**.
  *
- * Dynamic Color ist bewusst AUS: Trailscape soll auf jedem Geraet dieselbe
- * Markenfarbe zeigen wie die bisherige Flutter-App
- * (`ColorScheme.fromSeed(0xFF2D5A3D)`). Die Schemata sind statisch hinterlegt,
- * damit keine zusaetzliche Bibliothek fuer die HCT-Berechnung noetig ist.
+ * Dynamic Color ist bewusst AUS: Trailscape zeigt auf jedem Geraet dieselbe
+ * Farbe. Die Schemata sind statisch hinterlegt — neutrale One-UI-Flaechen,
+ * ein leuchtendes Markengruen als Akzent — und werden zusammen mit dem
+ * One-UI-Schriftsystem ([TrailscapeTypography]) und den One-UI-Formen
+ * ([TrailscapeShapes]) global gestellt: Screens erben Rundungen, Gewichte
+ * und Flaechen und bringen selbst keine Zahlen mehr mit.
  *
  * Neben dem Material-Schema stellt das Theme die **Ampelfarben**
  * ([SignalColors]) bereit: alles, was nicht aus `colorScheme` kommen kann
@@ -86,6 +102,8 @@ fun TrailscapeTheme(
     ) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = TrailscapeTypography,
+            shapes = TrailscapeShapes,
             content = content,
         )
     }

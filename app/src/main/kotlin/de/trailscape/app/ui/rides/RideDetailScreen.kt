@@ -31,9 +31,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,7 +54,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -167,6 +170,11 @@ internal fun RideDetailScreen(
         topBar = {
             TopAppBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
+                // Flache One-UI-Kopfzeile: keine eigene Flaeche, der
+                // Bildschirmhintergrund scheint durch.
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                ),
                 title = {
                     Text(text = ride.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 },
@@ -290,7 +298,7 @@ internal fun RideDetailScreen(
                         RideCurveChart(
                             title = "Puls",
                             curve = heartRate,
-                            lineColor = LocalSignalColors.current.danger,
+                            lineColor = MaterialTheme.colorScheme.primary,
                             formatValue = { "${it.roundToInt()} bpm" },
                         )
                     }
@@ -418,11 +426,7 @@ private fun RideFactsCard(ride: Ride) {
             // dort hineingeschrieben hat. Samsung Health ist nur eine von
             // vielen Quellen; wer eine Garmin traegt, hielt den Chip fuer einen
             // Fehler.
-            SuggestionChip(
-                onClick = {},
-                enabled = false,
-                label = { Text("aus Health Connect") },
-            )
+            TagPill(text = "aus Health Connect")
         }
     }
 }
@@ -498,20 +502,17 @@ private fun DetailCard(content: @Composable () -> Unit) {
     }
 }
 
-/** Eine Kennzahl: kleines Label, darunter der Wert (wie in der Tourenliste). */
+/** Eine Kennzahl der Detailansicht — dieselbe Grammatik wie ueberall ([Fact]). */
 @Composable
 private fun DetailFact(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text = value, style = MaterialTheme.typography.titleMedium)
-    }
+    Fact(label = label, value = value)
 }
 
-/** Ein Eintrag der Analyse: Wert, kurze Erklaerung und wie belastbar er ist. */
+/**
+ * Ein Eintrag der Analyse: die Zahl gross und fett im One-UI-Mass
+ * (headlineSmall auf labelMedium), darunter kurze Erklaerung und wie
+ * belastbar er ist.
+ */
 @Composable
 private fun AnalysisEntry(
     label: String,
@@ -520,12 +521,7 @@ private fun AnalysisEntry(
     confidence: Confidence,
 ) {
     Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(text = value, style = MaterialTheme.typography.bodyLarge)
+        Fact(label = label, value = value)
         Text(
             text = explanation,
             style = MaterialTheme.typography.bodySmall,
