@@ -52,7 +52,7 @@ jobs:
             echo "Kein RELEASE_KEYSTORE_BASE64 hinterlegt — Build nutzt die Debug-Signierung."
           fi
 
-      - name: Tests und Release-APK
+      - name: Tests, Release-APKs und Release-AABs
         env:
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
         # :app:testDebugUnitTest deckt die plattformfreien Teile von :app ab
@@ -68,12 +68,38 @@ jobs:
         # Signierkonfiguration selbst ist in AGP nicht modulueber-
         # greifend,
         # jedes Android-Modul braucht seinen eigenen signingConfigs-Block.
-        run: ./gradlew --no-daemon :core:test :app:testDebugUnitTest :app:assembleRelease :wear:assembleRelease
+        #
+        # `bundleRelease` neben `assembleRelease`, fuer beide Module: Das
+        # Android App Bundle (.aab) ist das einzige Format, das Google Play
+        # annimmt — eine APK laesst sich dort seit August 2021 nicht mehr
+        # hochladen. Beide Formate entstehen aus DEMSELBEN R8-Lauf (AGP legt
+        # Kompilierung, Minifizierung und Mapping pro Variante an, nicht pro
+        # Ausgabeformat), APK und AAB eines Laufs tragen also denselben Code
+        # und dieselbe mapping.txt. Der Aufpreis ist reines Verpacken.
+        #
+        # Die AABs sind bewusst KEIN Ersatz fuer die APKs: Der Vertriebsweg
+        # dieses Projekts ist und bleibt der direkte APK-Download von der
+        # Releases-Seite. Ein .aab ist auf einem Geraet nicht installierbar,
+        # es ist ausschliesslich ein Upload-Artefakt fuer die Play Console.
+        run: >-
+          ./gradlew --no-daemon
+          :core:test :app:testDebugUnitTest
+          :app:assembleRelease :app:bundleRelease
+          :wear:assembleRelease :wear:bundleRelease
 
       - uses: actions/upload-artifact@v4
         with:
           name: trailscape-apk
           path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      # Das Play-Bundle der Telefon-App. Als eigenes Artefakt und nicht mit
+      # der APK zusammen, damit ein Download nicht ungefragt beides zieht —
+      # wer die APK will, will fast nie das Bundle und umgekehrt.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trailscape-aab
+          path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
       # Die R8-Mapping-Datei ist die einzige Moeglichkeit, spaeter gemeldete
@@ -97,6 +123,17 @@ jobs:
           path: wear/build/outputs/apk/release/wear-release.apk
           if-no-files-found: error
 
+      # Das Play-Bundle der Uhr-App. Anders als bei der Wear-APK oben spricht
+      # gegen ein Release-Asset hier NICHTS: Ein .aab ist fuer niemanden
+      # installierbar, es kann also auch niemanden zu einer Fehlinstallation
+      # verleiten. Es geht darum weiter unten mit auf das versionierte
+      # Release — siehe die Begruendung dort.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trailscape-wear-aab
+          path: wear/build/outputs/bundle/release/wear-release.aab
+          if-no-files-found: error
+
   # Veroeffentlicht bei jedem main-Push ZWEI Releases mit derselben APK:
   #
   #  * `latest` — der stabile Link
@@ -114,8 +151,32 @@ jobs:
   # Spike (Modul :wear, siehe docs/wear-spike.md) wird nur per `adb install`
   # auf ein Entwicklergeraet gebracht. Als Release-Asset waere er fuer
   # normale Nutzer nicht installierbar und wuerde auf der Releases-Seite nur
-  # verwirren — dieser Job laedt darum weiterhin ausschliesslich
-  # `trailscape-apk` herunter.
+  # verwirren.
+  #
+  # Die beiden Play-Bundles (.aab, Telefon und Uhr) haengen dagegen am
+  # VERSIONIERTEN Release — und nur dort, nicht an `latest`. Drei Gruende:
+  #
+  #  * Ein Play-Upload braucht genau das Bundle, das zu einem bestimmten
+  #    versionCode gehoert. Der steckt in der Lauf-Nummer, und die steckt im
+  #    Tag `v2.0.<Nummer>` — Tag und Bundle liegen so nachweislich beieinander.
+  #  * Actions-Artefakte werden nach 90 Tagen geloescht. Ein Bundle, dessen
+  #    versionCode bereits im Play-Store verbraucht ist, laesst sich danach
+  #    nicht mehr rekonstruieren: Ein neuer Build bekaeme eine neue
+  #    Lauf-Nummer und damit einen anderen versionCode.
+  #  * `latest` ist die Downloadseite fuer Menschen. Dort gehoert genau eine
+  #    Datei hin, die man antippen und installieren kann — die APK.
+  #
+  # WARNUNG fuer den Tag, an dem eines dieser Bundles wirklich hochgeladen
+  # wird: Google Play verlangt "Play App Signing", d. h. Play signiert die an
+  # die Geraete ausgelieferten APKs mit einem EIGENEN Schluessel und benutzt
+  # den Schluessel aus RELEASE_KEYSTORE_BASE64 nur noch als Upload-Schluessel.
+  # Damit sind Play-Installation und GitHub-APK zwei verschieden signierte
+  # Installationen desselben Paketnamens: Sie lassen sich nicht uebereinander
+  # aktualisieren, und ein Wechsel des Kanals bedeutet fuer jeden Nutzer
+  # deinstallieren, neu installieren, Backup einspielen — genau die Prozedur
+  # aus dem Umstieg von 1.x. Der einzige Weg, das zu vermeiden, ist, beim
+  # Anlegen der Play-App genau diesen Keystore als App-Signaturschluessel
+  # hochzuladen (nur EINMALIG bei der Erstanlage moeglich, danach nie wieder).
   release:
     needs: build
     if: github.ref == 'refs/heads/main'
@@ -135,6 +196,19 @@ jobs:
         with:
           name: trailscape-apk
 
+      # Beide Bundles in dasselbe Verzeichnis: Die Gradle-Dateinamen
+      # (app-release.aab, wear-release.aab) sind bereits eindeutig, und ein
+      # eigenes Verzeichnis haelt sie von der APK im Arbeitsverzeichnis
+      # getrennt.
+      - uses: actions/download-artifact@v4
+        with:
+          name: trailscape-aab
+          path: bundles
+      - uses: actions/download-artifact@v4
+        with:
+          name: trailscape-wear-aab
+          path: bundles
+
       # Das unveraenderliche Gegenstueck zum `latest`-Alias: ein Release pro
       # main-Push, getaggt mit derselben Lauf-Nummer, die im versionCode und
       # im versionName der APK steckt (siehe app/build.gradle.kts). Erst
@@ -148,6 +222,11 @@ jobs:
         run: |
           set -euo pipefail
           mv app-release.apk trailscape.apk
+          # Sprechende Namen statt der Gradle-Vorgaben: Auf der Releases-Seite
+          # steht "app-release.aab" ohne Zusammenhang da, und "app" gegen
+          # "wear" zu unterscheiden verlangt Vorwissen ueber die Modulnamen.
+          mv bundles/app-release.aab trailscape-phone.aab
+          mv bundles/wear-release.aab trailscape-wear.aab
 
           tag="v2.0.${GITHUB_RUN_NUMBER}"
 
@@ -181,6 +260,22 @@ jobs:
           Android-Gerät öffnen (Installation aus unbekannten Quellen erlauben).
           Das Update legt sich über die bestehende Installation, die Touren
           bleiben erhalten.
+
+          <details><summary>Wozu die beiden \`.aab\`-Dateien?</summary>
+
+          \`trailscape-phone.aab\` und \`trailscape-wear.aab\` sind Android App
+          Bundles — das Format, das ausschließlich die Google Play Console
+          annimmt. **Auf einem Gerät lassen sie sich nicht installieren.** Für
+          die Uhr ist weiterhin \`adb install\` der Weg; die Wear-APK liegt
+          dafür als Artefakt am jeweiligen [Actions-Lauf](https://github.com/${GITHUB_REPOSITORY}/actions).
+
+          Beide Bundles stammen aus demselben Build wie die APK oben und
+          tragen denselben Code. Ihre versionCodes unterscheiden sich
+          zwangsläufig (Telefon \`2xxx\`, Uhr \`1002xxx\`), weil Play pro
+          Paketname jeden versionCode nur einmal vergibt und sich beide
+          Module denselben Paketnamen teilen.
+
+          </details>
           EOF
           )"
 
@@ -194,7 +289,7 @@ jobs:
             --title "Trailscape $tag" \
             --notes "$notes" \
             --latest=false \
-            trailscape.apk
+            trailscape.apk trailscape-phone.aab trailscape-wear.aab
 
       - name: latest-Release aktualisieren
         env:
