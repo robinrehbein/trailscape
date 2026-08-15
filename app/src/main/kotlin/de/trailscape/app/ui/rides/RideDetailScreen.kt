@@ -27,7 +27,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -56,6 +55,7 @@ import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatDateTime
@@ -381,7 +381,7 @@ private fun RideMapCard(
                 )
             }
 
-            OutlinedButton(
+            NeutralButton(
                 onClick = onOpenOnMap,
                 modifier = Modifier
                     .fillMaxWidth()

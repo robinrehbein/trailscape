@@ -26,7 +26,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -46,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
@@ -198,7 +198,7 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                             Text("Neue Touren holen")
                         }
                     }
-                    OutlinedButton(
+                    NeutralButton(
                         onClick = {
                             scope.launch {
                                 busy = true

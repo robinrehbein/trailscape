@@ -28,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -55,6 +54,7 @@ import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentPhase
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.map.currentLocation
 import de.trailscape.app.ui.map.hasLocationPermission
@@ -329,7 +329,7 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            OutlinedButton(
+            NeutralButton(
                 enabled = !busy && running == null,
                 onClick = {
                     val missing = missingPermissions(context, forRecording = false)
@@ -346,7 +346,7 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
             }
 
             if (segments.isNotEmpty()) {
-                OutlinedButton(
+                NeutralButton(
                     enabled = !busy && running == null,
                     onClick = {
                         busy = true

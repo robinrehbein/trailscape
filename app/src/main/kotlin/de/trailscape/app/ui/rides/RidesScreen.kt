@@ -39,7 +39,6 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
@@ -651,8 +650,8 @@ private fun RidesEmptyState(
             "einmal einlesen — unter Mehr → Daten & Backup.",
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
-            OutlinedButton(onClick = onImportFile) { Text("GPX-/FIT-Datei öffnen") }
-            OutlinedButton(onClick = onOpenBackup) { Text("Archiv importieren") }
+            TextButton(onClick = onImportFile) { Text("GPX-/FIT-Datei öffnen") }
+            TextButton(onClick = onOpenBackup) { Text("Archiv importieren") }
         },
     )
 }
