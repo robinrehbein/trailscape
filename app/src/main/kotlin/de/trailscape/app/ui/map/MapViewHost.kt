@@ -79,10 +79,22 @@ internal fun MapViewHost(
     modifier: Modifier = Modifier,
     gesturesEnabled: Boolean = true,
     renderingActive: Boolean = true,
+    /**
+     * Die Nutzerin hat die Karte **selbst** verschoben oder gezoomt.
+     *
+     * Nur diese Meldung unterscheidet eine Handbewegung von den Kamerafahrten,
+     * die der Screen selbst ausloest (`moveTo`, `fitToPoints`) — MapLibre nennt
+     * den Ausloeser jeder Kamerabewegung, und alles ausser
+     * `REASON_API_GESTURE` kommt aus dem Programm. Der Screen schaltet daran
+     * „Karte folgt mir" ab, statt die Ansicht beim naechsten GPS-Punkt wieder
+     * wegzuziehen.
+     */
+    onUserPan: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentTap by rememberUpdatedState(onMapTap)
+    val currentPan by rememberUpdatedState(onUserPan)
 
     // Kameraposition ueber Konfigurationsaenderungen (Drehen) hinweg merken.
     // MapView.onSaveInstanceState/onCreate(Bundle) waere der View-Weg, in einem
@@ -210,6 +222,11 @@ internal fun MapViewHost(
                 map.addOnMapClickListener { latLng ->
                     currentTap(latLng.latitude, latLng.longitude)
                     true
+                }
+                map.addOnCameraMoveStartedListener { reason ->
+                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        currentPan()
+                    }
                 }
                 controller.attach(map)
             }

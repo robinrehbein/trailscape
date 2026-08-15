@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import kotlin.math.ln
+import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -19,6 +20,7 @@ class ReadinessTest {
         baseline = 50.0,
         sigma = 1.5,
         current = 50.0,
+        last = 50.0,
         deltaBpm = 0.0,
         z = 0.0,
         flag = RecoveryFlag.GRUEN,
@@ -51,6 +53,7 @@ class ReadinessTest {
             currentLn = ln(50.0) + z * 0.12,
             lastRmssd = 50.0,
             z = z,
+            zMean = z * sqrt(7.0),
             status = status,
             flag = flag,
             historyDays = 28,
@@ -83,6 +86,7 @@ class ReadinessTest {
             baseline = 50.0,
             sigma = 1.5,
             current = 53.0,
+            last = 53.0,
             deltaBpm = 3.0,
             z = 2.0,
             flag = RecoveryFlag.GELB,
@@ -113,8 +117,13 @@ class ReadinessTest {
         assertEquals(27.0, r.penaltyRhr, 1e-9) // (2,0 − 0,5) × 18
         assertEquals(33.0, r.penaltySleep, 1e-9) // 18 + 15 (gedeckelt)
         assertEquals(18.0, r.penaltyLoad, 1e-9) // (35 − 20) × 1,2
-        assertEquals(22.0, r.score, 1e-9)
+        // Normiert: 27/45 = 60, 33/45 = 73,3, 18/30 = 60 Punkte.
+        // Ohne HRV traegt nur 0,25 + 0,20 + 0,15 = 0,60 Gewicht, deshalb
+        // renormiert: (0,25×60 + 0,20×73,3 + 0,15×60) / 0,60 = 64,4.
+        assertEquals(100 - 38.6666666667 / 0.6, r.score, 1e-6)
         assertEquals(ReadinessBand.RUHE, r.band)
+        assertEquals(0.6, r.signalCoverage, 1e-9)
+        assertEquals(Confidence.MEDIUM, r.confidence)
     }
 
     @Test
@@ -125,6 +134,7 @@ class ReadinessTest {
             baseline = 50.0,
             sigma = 1.5,
             current = 70.0,
+            last = 70.0,
             deltaBpm = 20.0,
             z = 20.0,
             flag = RecoveryFlag.ROT,
@@ -140,7 +150,8 @@ class ReadinessTest {
         )
         assertEquals(45.0, r.penaltyRhr, 0.0)
         assertEquals(30.0, r.penaltyLoad, 0.0)
-        assertEquals(25.0, r.score, 1e-9)
+        // (0,25×100 + 0,20×0 + 0,15×100) / 0,60 = 66,7 Strafpunkte.
+        assertEquals(100 - 40.0 / 0.6, r.score, 1e-6)
     }
 
     @Test
@@ -217,6 +228,7 @@ class ReadinessTest {
             baseline = 50.0,
             sigma = 1.5,
             current = 53.0,
+            last = 53.0,
             deltaBpm = 3.0,
             z = 2.0,
             flag = RecoveryFlag.GELB,
@@ -242,8 +254,10 @@ class ReadinessTest {
             trainingHistoryDays = 40,
         )
         assertFalse(withoutHrv.usesHrv)
-        assertEquals(73.0, withoutHrv.score, 1e-9)
+        // Dieselbe Formel, nur ohne HRV-Gewicht: (0,25×60) / 0,60 = 25.
+        assertEquals(75.0, withoutHrv.score, 1e-9)
         assertEquals(Confidence.MEDIUM, withoutHrv.confidence)
+        assertEquals(0.6, withoutHrv.signalCoverage, 1e-9)
     }
 
     @Test
@@ -267,6 +281,7 @@ class ReadinessTest {
             baseline = 50.0,
             sigma = 1.5,
             current = 70.0,
+            last = 70.0,
             deltaBpm = 20.0,
             z = 20.0,
             flag = RecoveryFlag.ROT,
@@ -344,6 +359,118 @@ class ReadinessTest {
         assertTrue(r.sleep.shortSleeper)
     }
 
+    // --- Eine Formel, egal welche Signale vorliegen (H2) ---
+
+    /**
+     * Baut Ruhepuls und Schlaf so, dass genau die gewuenschten Strafterme
+     * herauskommen — damit laesst sich der mittlere Bereich abtasten, statt
+     * nur die Randpunkte 0 und 100.
+     */
+    private fun rhrWithPenalty(penalty: Double): RestingHrAssessment = goodRhr.copy(
+        z = penalty / 18 + 0.5,
+        current = 50.0 + penalty / 18,
+        deltaBpm = penalty / 18,
+    )
+
+    private fun sleepWithPenalty(penalty: Double): SleepAssessment = goodSleep.copy(
+        z = -(penalty / 12 + 0.5),
+        debt7dH = 0.0,
+    )
+
+    @Test
+    fun `mittlerer Bereich - Strafterme wirken anteilig, nicht als Summe`() {
+        val r = computeReadiness(
+            restingHr = rhrWithPenalty(20.0),
+            sleep = sleepWithPenalty(15.0),
+            tsb = -(10.0 / 1.2 + 20),
+            trainingHistoryDays = 40,
+        )
+        assertEquals(20.0, r.penaltyRhr, 1e-9)
+        assertEquals(15.0, r.penaltySleep, 1e-9)
+        assertEquals(10.0, r.penaltyLoad, 1e-9)
+        // Normiert 44,4 / 33,3 / 33,3; renormiert auf 0,60 Gewicht -> 38,0.
+        assertEquals(62.0, r.score, 0.1)
+        assertEquals(ReadinessBand.NORMAL, r.band)
+    }
+
+    @Test
+    fun `dieselben Signale springen nicht, wenn die HRV dazukommt oder wegfaellt`() {
+        // Kernpunkt von H2: Frueher schaltete `usesHrv` zwischen zwei Formeln
+        // um — dieselben Strafterme ergaben 55 gegen 77 Punkte, und die Uhr
+        // entschied, welche galt. Jetzt darf nur noch die HRV-Information
+        // selbst den Score bewegen.
+        val rhr = rhrWithPenalty(20.0)
+        val sleep = sleepWithPenalty(15.0)
+        val tsb = -(10.0 / 1.2 + 20)
+
+        val withoutHrv = computeReadiness(
+            restingHr = rhr,
+            sleep = sleep,
+            tsb = tsb,
+            trainingHistoryDays = 40,
+        )
+        // Eine HRV, die genauso „mittelmaessig" ist wie die uebrigen Signale
+        // (Strafterm auf dem Niveau des gewichteten Mittels), darf den Score
+        // gar nicht bewegen.
+        val neutralHrvPenalty = 100 - withoutHrv.score
+        val withNeutralHrv = computeReadiness(
+            restingHr = rhr,
+            sleep = sleep,
+            hrv = hrvWith(
+                z = -(neutralHrvPenalty / 50 + hrvBandFactor),
+                status = HrvStatus.NIEDRIG,
+                flag = RecoveryFlag.GELB,
+            ),
+            tsb = tsb,
+            trainingHistoryDays = 40,
+        )
+        assertEquals(withoutHrv.score, withNeutralHrv.score, 1e-6)
+        assertEquals(withoutHrv.band, withNeutralHrv.band)
+
+        // Der Unterschied liegt nur noch in der Verlaesslichkeit.
+        assertEquals(Confidence.MEDIUM, withoutHrv.confidence)
+        assertEquals(Confidence.HIGH, withNeutralHrv.confidence)
+        assertEquals(0.6, withoutHrv.signalCoverage, 1e-9)
+        assertEquals(1.0, withNeutralHrv.signalCoverage, 1e-9)
+    }
+
+    @Test
+    fun `fehlende Trainingslast verteilt ihr Gewicht auf die uebrigen Signale`() {
+        val rhr = rhrWithPenalty(45.0)
+        val sleep = sleepWithPenalty(0.0)
+
+        // Mit TSB (Strafterm 0) traegt die Last 0,15 Gewicht und zieht den
+        // Score nach oben; ohne TSB verteilt sich ihr Gewicht.
+        val withTsb = computeReadiness(
+            restingHr = rhr,
+            sleep = sleep,
+            tsb = 0.0,
+            trainingHistoryDays = 40,
+        )
+        val withoutTsb = computeReadiness(
+            restingHr = rhr,
+            sleep = sleep,
+            trainingHistoryDays = 40,
+        )
+        assertEquals(100 - 25.0 / 0.6, withTsb.score, 1e-6)
+        assertEquals(100 - 25.0 / 0.45, withoutTsb.score, 1e-6)
+        assertEquals(0.45, withoutTsb.signalCoverage, 1e-9)
+        assertEquals(Confidence.LOW, withoutTsb.confidence)
+    }
+
+    @Test
+    fun `Unwissen bestraft nicht und belohnt nicht`() {
+        // Ohne jedes Signal gibt es nichts abzuziehen — und weil das Gate
+        // greift, erscheint der Wert auch nirgends als Aussage.
+        val r = computeReadiness(
+            restingHr = RestingHrAssessment.unavailable("x", 0),
+            sleep = SleepAssessment.unavailable("y", 0),
+        )
+        assertFalse(r.available)
+        assertEquals(0.0, r.signalCoverage, 0.0)
+        assertEquals(Confidence.NONE, r.confidence)
+    }
+
     // --- group('Empfehlungen') ---
 
     private fun readinessWith(
@@ -359,6 +486,7 @@ class ReadinessTest {
             baseline = 50.0,
             sigma = 1.5,
             current = 50.0,
+            last = 50.0,
             deltaBpm = 0.0,
             z = 0.0,
             flag = rhrFlag,
@@ -391,6 +519,7 @@ class ReadinessTest {
                 currentLn = ln(50.0),
                 lastRmssd = 50.0,
                 z = if (hrvFlag == RecoveryFlag.GRUEN) 0.0 else -2.0,
+                zMean = if (hrvFlag == RecoveryFlag.GRUEN) 0.0 else -5.3,
                 status = if (hrvFlag == RecoveryFlag.GRUEN) {
                     HrvStatus.IM_BAND
                 } else {

@@ -82,27 +82,27 @@ val dataNotices: List<LicenseNotice> = listOf(
         url = "https://www.openstreetmap.org/copyright",
     ),
     LicenseNotice(
-        name = "Kacheln „Straßenkarte\": CARTO Voyager",
+        name = "Kacheln „Straßenkarte“: CARTO Voyager",
         license = "CC BY 3.0 (Stil), Daten ODbL",
         url = "https://carto.com/attributions",
     ),
     LicenseNotice(
-        name = "Kacheln „CyclOSM\"",
+        name = "Kacheln „CyclOSM“",
         license = "Kacheln CC BY-SA 2.0, Stil-Code BSD 3-Clause, Daten ODbL",
         url = "https://www.cyclosm.org/",
     ),
     LicenseNotice(
-        name = "Kacheln „OpenStreetMap\"",
+        name = "Kacheln „OpenStreetMap“",
         license = "Daten ODbL, Nutzung nach OSMF Tile Usage Policy",
         url = "https://operations.osmfoundation.org/policies/tiles/",
     ),
     LicenseNotice(
-        name = "Kacheln „OpenTopoMap\" (inkl. SRTM-Höhendaten)",
+        name = "Kacheln „OpenTopoMap“ (inkl. SRTM-Höhendaten)",
         license = "CC BY-SA 3.0 (Stil), Daten ODbL",
         url = "https://opentopomap.org/about",
     ),
     LicenseNotice(
-        name = "Kacheln „Satellit\": Esri World Imagery (Esri, Maxar, Earthstar Geographics)",
+        name = "Kacheln „Satellit“: Esri World Imagery (Esri, Maxar, Earthstar Geographics)",
         license = "proprietär — Esri Terms of Use",
         url = "https://www.esri.com/en-us/legal/terms/full-master-agreement",
     ),

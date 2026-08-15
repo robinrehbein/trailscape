@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -69,6 +70,12 @@ import kotlin.math.roundToInt
 internal fun RouteGenerationPanel(
     state: RouteGenerationState,
     maxHeight: Dp,
+    /**
+     * Ob gerade auf einen GPS-Fix gewartet wird — das geschieht **vor** dem
+     * ersten Server-Aufruf und dauert bis zu zehn Sekunden. Ohne diese Anzeige
+     * passierte nach dem Tipp auf „Routen suchen" sichtbar gar nichts.
+     */
+    locating: Boolean = false,
     onStart: () -> Unit,
     onCancel: () -> Unit,
     onSelect: (Int) -> Unit,
@@ -148,6 +155,21 @@ internal fun RouteGenerationPanel(
             }
 
             when {
+                locating -> Row(
+                    modifier = Modifier.padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Position wird ermittelt …",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+
                 state.running -> SearchProgress(
                     done = state.done,
                     total = state.total,
@@ -333,12 +355,27 @@ internal fun targetLine(target: RouteTarget): String {
 
 /** „aus: GA1-Einheit (Trainingsplan)" */
 internal fun sourceLine(target: RouteTarget): String {
+    // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. Frueher fehlte
+    // `:core` dafuer ein Wert und die Beschriftung erkannte sie notduerftig an
+    // ihrem festen Label; seit es [RouteTargetSource.SELBST_GEWAEHLT] gibt,
+    // steht es an der Quelle statt am Text.
+    if (target.source == RouteTargetSource.SELBST_GEWAEHLT) {
+        return "aus: deiner Eingabe auf der Karte"
+    }
     val source = when (target.source) {
         RouteTargetSource.PLAN -> "Trainingsplan"
         RouteTargetSource.TAGESEMPFEHLUNG -> "Tagesempfehlung"
+        RouteTargetSource.SELBST_GEWAEHLT -> "eigene Eingabe"
     }
     return "aus: ${target.label} ($source)"
 }
+
+/**
+ * Beschriftung eines Ziels, das die Nutzerin selbst auf der Karte eingegeben
+ * hat („Runde ab hier über 50 km"). Steht zugleich als Erkennungsmerkmal in
+ * [sourceLine].
+ */
+internal const val SELF_PLANNED_ROUTE_LABEL: String = "Selbst gewählte Distanz"
 
 /**
  * Abweichung vom Ziel mit Vorzeichen, z. B. `+3,4 %`.

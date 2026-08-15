@@ -28,12 +28,16 @@ import de.trailscape.core.SyncResult
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
+import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
+import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.savePlan
+import de.trailscape.core.shouldShowShortSleeperHint
 import de.trailscape.core.syncRides
+import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -66,6 +70,26 @@ import kotlinx.serialization.json.JsonObject
  * die Startseite „Heute" und damit der erste Tab.
  */
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
+
+/**
+ * Eine einzelne Karte des Mehr-Tabs als Sprungziel (siehe
+ * [AppViewModel.requestMoreSection]).
+ *
+ * Bewusst nur die Karten, auf die von aussen verwiesen wird — nicht alle neun.
+ * Ein Aufzaehlungswert ohne Verweis waere ein Versprechen ohne Einloeser; die
+ * Zuordnung Wert → Karte steht an genau einer Stelle
+ * (`ui/more/MoreScreen.kt`, `moreSectionOrder`).
+ */
+enum class MoreSection {
+    /** „Profil" — Alter, Gewicht, Zeitbudget, HFmax/FTP. */
+    PROFILE,
+
+    /** „Daten & Backup" — Einzel-, Archiv- und Backup-Import. */
+    BACKUP,
+
+    /** „Health Connect" — Uhr verbinden, Vitalwerte holen. */
+    HEALTH,
+}
 
 /**
  * Zentraler, geteilter App-Zustand — Kotlin-Port von `AppState` aus
@@ -274,6 +298,49 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Leerzustand → passende Karte im Mehr-Tab
+    // -------------------------------------------------------------------------
+
+    private val _pendingMoreSection = MutableStateFlow<MoreSection?>(null)
+
+    /**
+     * Die Karte, zu der der Mehr-Tab als Naechstes scrollen soll — dasselbe
+     * Muster wie [pendingRideDetail], aus demselben Grund: Zwischen dem Tippen
+     * im Leerzustand und dem Erscheinen des Mehr-Screens liegt ein Tab-Wechsel,
+     * den ein einmaliges Ereignis nicht ueberleben wuerde.
+     *
+     * ## Warum ueberhaupt
+     * Vier Leerzustaende („Touren importieren") riefen bis hierher nur
+     * `requestTab(AppTab.MORE)`. Der Nutzer landete damit **oben** in einer
+     * Liste aus neun Karten und sah zuerst das Profilformular; die Import-
+     * Knoepfe liegen in der zweiten Karte und dort noch einmal tiefer. Genau
+     * dieser Handgriff ist aber der, den die Einfuehrung selbst als „Schritt 1
+     * von 3" fuehrt.
+     *
+     * ## Warum kein direkter Dateiwaehler
+     * Der Launcher aus `ui/ActivityFileImport.kt` haette sich auch an jedem
+     * Leerzustand aufhaengen lassen. Dagegen sprechen zwei Dinge: Es gibt
+     * **vier** Importwege (Einzeldatei, ZIP-Archiv, Backup, Health Connect),
+     * und welcher der richtige ist, weiss nur der Nutzer — ein direkt
+     * geoeffneter Dateiwaehler entscheidet das fuer ihn und verschweigt die
+     * anderen drei. Ausserdem lernt er dabei nicht, wo der Import wohnt, und
+     * sucht ihn beim naechsten Mal erneut. Das Sprungziel zeigt ihm die Karte
+     * mit allen Wegen — einmal — und er findet sie danach selbst wieder.
+     */
+    val pendingMoreSection: StateFlow<MoreSection?> = _pendingMoreSection.asStateFlow()
+
+    /** Wechselt in den Mehr-Tab und scrollt dort zur Karte [section]. */
+    fun requestMoreSection(section: MoreSection) {
+        _pendingMoreSection.value = section
+        requestTab(AppTab.MORE)
+    }
+
+    /** Quittiert das abgeholte Sprungziel (ruft der Mehr-Screen). */
+    fun consumeMoreSectionRequest() {
+        _pendingMoreSection.value = null
+    }
+
+    // -------------------------------------------------------------------------
     // Touren
     // -------------------------------------------------------------------------
 
@@ -451,16 +518,51 @@ class AppViewModel(
     /** Vom Nutzer gepflegtes Trainingsprofil (Alter, Gewicht, Overrides). */
     val profile: StateFlow<TrainingProfile> = _profile.asStateFlow()
 
+    private val _profileConfirmed = MutableStateFlow(false)
+
+    /**
+     * Ob die Werte in [profile] wirklich **von der Nutzerin** stammen.
+     *
+     * ## Das Problem, das dieses Kennzeichen loest
+     * [defaultTrainingProfile] traegt Alter 40 und Gewicht 75 kg. Wer die
+     * Einfuehrung ueberspringt — ausdruecklich erlaubt —, bekommt Trainingslast,
+     * HFmax, Schwelle und geschaetzte Leistung aus den Massen eines fremden
+     * Koerpers, ohne dass irgendwo staende, dass das Schaetzwerte sind.
+     * Verschaerfend fuellte das Profilformular seine Felder mit genau diesen
+     * Zahlen vor: Sie sahen aus wie eine eigene Eingabe. Ohne dieses Kennzeichen
+     * kann die App „nicht gesetzt" und „auf Standard gesetzt" nicht
+     * unterscheiden — beides ist derselbe [TrainingProfile].
+     *
+     * ## Wer es setzt
+     * Jeder Weg, auf dem ein Profil bewusst uebernommen wird, laeuft ueber
+     * [setProfile]: „Profil speichern" im Mehr-Tab, die Profilseite der
+     * Einfuehrung und der Backup-Import (ein wiederhergestelltes Profil ist
+     * ebenso das eigene). Ueberspringt die Einfuehrung, ruft niemand
+     * [setProfile] — und das Kennzeichen bleibt aus.
+     *
+     * Zurueckgenommen wird es nie: Einmal eingetragen bleibt eingetragen, auch
+     * wenn spaeter zufaellig wieder 40/75 dasteht.
+     */
+    val profileConfirmed: StateFlow<Boolean> = _profileConfirmed.asStateFlow()
+
     /**
      * Uebernimmt ein neues Profil und speichert es. Die abgeleiteten Werte in
      * [insights] rechnen sich daraufhin selbst neu.
+     *
+     * Setzt zugleich [profileConfirmed] — siehe dort, warum das genau hier und
+     * nicht an den einzelnen Aufrufstellen passiert.
      */
     fun setProfile(profile: TrainingProfile) {
         _profile.value = profile
+        val wasConfirmed = _profileConfirmed.value
+        _profileConfirmed.value = true
         viewModelScope.launch {
             withContext(io) {
                 runCatching {
                     keyValueStore.setString(PROFILE_STORAGE_KEY, profile.toJson().toString())
+                }
+                if (!wasConfirmed) {
+                    runCatching { keyValueStore.setString(PROFILE_CONFIRMED_STORAGE_KEY, "1") }
                 }
             }
         }
@@ -472,14 +574,116 @@ class AppViewModel(
         TrainingProfile.fromJson(parsed)
     }.getOrDefault(defaultTrainingProfile)
 
+    /**
+     * Liest das Bestaetigungs-Kennzeichen.
+     *
+     * Der zweite Zweig ist die Nachruestung fuer Bestandsnutzer: Wer laengst
+     * ein Profil gespeichert hat, soll nicht ploetzlich leere Felder und einen
+     * „noch nicht eingetragen"-Hinweis sehen, nur weil der Schluessel neu ist.
+     * Ein vorhandener Profileintrag gilt deshalb als Bestaetigung.
+     */
+    private fun readProfileConfirmed(): Boolean = runCatching {
+        keyValueStore.getString(PROFILE_CONFIRMED_STORAGE_KEY) != null ||
+            keyValueStore.getString(PROFILE_STORAGE_KEY) != null
+    }.getOrDefault(false)
+
+    // -------------------------------------------------------------------------
+    // Kurzschlaefer-Hinweis
+    // -------------------------------------------------------------------------
+
+    private val _shortSleeperHintShownAt = MutableStateFlow<LocalDateTime?>(null)
+
+    /**
+     * Wann der Kurzschlaefer-Hinweis zuletzt gezeigt wurde; `null` = nie.
+     *
+     * `:core` bringt mit `shouldShowShortSleeperHint` bereits die Regel
+     * „hoechstens einmal im Monat" mit — sie war nur nie angeschlossen, der
+     * Hinweis stand bei jedem Blick auf die Vitalwerte da. Ein
+     * Gesundheitshinweis, den man taeglich liest, ist keiner mehr.
+     */
+    val shortSleeperHintShownAt: StateFlow<LocalDateTime?> = _shortSleeperHintShownAt.asStateFlow()
+
+    private val _shortSleeperHintVisible = MutableStateFlow(false)
+
+    /**
+     * Ob der Kurzschlaefer-Hinweis in **dieser** Sitzung gezeigt werden darf.
+     *
+     * Wird genau einmal beim Start entschieden (nachdem der gespeicherte
+     * Zeitpunkt gelesen ist) und danach nicht mehr angefasst — sonst wuerde der
+     * Hinweis vor den Augen der Nutzerin verschwinden, sobald die Karte ihn als
+     * gezeigt quittiert. Beim naechsten Start ist er dann fuer 30 Tage weg.
+     */
+    val shortSleeperHintVisible: StateFlow<Boolean> = _shortSleeperHintVisible.asStateFlow()
+
+    /** Quittiert den gezeigten Hinweis (ruft die Vitalwerte-Karte). */
+    fun markShortSleeperHintShown(now: LocalDateTime = LocalDateTime.now()) {
+        if (_shortSleeperHintShownAt.value == now) return
+        _shortSleeperHintShownAt.value = now
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    keyValueStore.setString(
+                        SHORT_SLEEPER_HINT_STORAGE_KEY,
+                        now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli().toString(),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun readShortSleeperHintShownAt(): LocalDateTime? = runCatching {
+        val raw = keyValueStore.getString(SHORT_SLEEPER_HINT_STORAGE_KEY) ?: return null
+        val ms = raw.toLongOrNull() ?: return null
+        LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault())
+    }.getOrNull()
+
     // -------------------------------------------------------------------------
     // Health Connect
     // -------------------------------------------------------------------------
 
     private val _vitals = MutableStateFlow<VitalsSummary?>(null)
 
-    /** Zuletzt gelesene Vitaldaten, `null` solange nie erfolgreich gelesen wurde. */
+    /**
+     * Vitaldaten aus der **lokalen Historie**, `null` solange nichts vorliegt.
+     *
+     * Nicht mehr direkt das Ergebnis des letzten Health-Connect-Lesens: Health
+     * Connect loescht nach 30 Tagen, die Baselines brauchen aber bis zu 60
+     * Tage Material (siehe [de.trailscape.core.VitalsHistory]). Gelesen wird
+     * deshalb nur noch die Luecke seit dem letzten Sync; der Rest kommt aus
+     * dem lokalen Speicher.
+     */
     val vitals: StateFlow<VitalsSummary?> = _vitals.asStateFlow()
+
+    /**
+     * Der lokal gehaltene Stand. Nur aus [syncVitals] heraus benutzt, das
+     * immer im selben Coroutine-Kontext laeuft — kein zusaetzlicher Schutz
+     * noetig.
+     */
+    private var vitalsHistory: VitalsHistory = VitalsHistory.EMPTY
+
+    /**
+     * Holt die fehlenden Tage aus Health Connect, legt sie auf die lokale
+     * Historie und schreibt beides zurueck.
+     *
+     * Bewusst **nicht** „immer 60 Tage neu lesen": Health Connect gibt nur
+     * her, was es noch hat (Standard-Aufbewahrung 30 Tage). Wer jeden Start
+     * das Fenster neu liest und das Ergebnis ersetzt, verliert alles
+     * Aeltere — und die Ruhepuls-Baseline (≥ 21 Werte aus den Tagen −8 … −60)
+     * kann dann dauerhaft unerreichbar bleiben.
+     */
+    private suspend fun syncVitals() {
+        val now = LocalDateTime.now()
+        val days = vitalsHistory.daysToFetch(now, VITALS_WINDOW_DAYS)
+        val fresh = withContext(io) { healthSync.readVitals(days = days) }
+        val merged = vitalsHistory.merge(fresh, now = now)
+        vitalsHistory = merged
+        _vitals.value = merged.toSummary(
+            now = now,
+            days = VITALS_HISTORY_WINDOW_DAYS,
+            unavailable = fresh.unavailable,
+        )
+        withContext(io) { runCatching { writeVitalsHistory(keyValueStore, merged) } }
+    }
 
     private val _lastSyncReport = MutableStateFlow<HealthSyncReport?>(null)
 
@@ -527,7 +731,7 @@ class AppViewModel(
                 // zurueckgerollt, der naechste Versuch kann aber genauso
                 // scheitern — etwa bei vollem Speicher).
                 if (!applyReport(report)) showMessage(HEALTH_SAVE_FAILED_MESSAGE)
-                _vitals.value = withContext(io) { healthSync.readVitals(days = VITALS_WINDOW_DAYS) }
+                syncVitals()
             }
         }
     }
@@ -558,7 +762,7 @@ class AppViewModel(
         if (!applyReport(report)) {
             throw HealthSyncException(HEALTH_SAVE_FAILED_MESSAGE)
         }
-        _vitals.value = withContext(io) { healthSync.readVitals(days = VITALS_WINDOW_DAYS) }
+        syncVitals()
         refreshHealthConnection()
         return report.imported.size
     }
@@ -819,7 +1023,14 @@ class AppViewModel(
             }
             showMessage(
                 when {
-                    !started -> "Die Kartendaten konnten nicht eingereiht werden."
+                    // Kein Entwicklerdeutsch („nicht eingereiht") und kein
+                    // Rueckschluss, den nur wir ziehen koennen: WorkManager
+                    // lehnt praktisch nur bei fehlendem Speicher oder
+                    // eingeschraeteter App ab — beides loest ein neuer Versuch
+                    // nach dem Nachsehen.
+                    !started ->
+                        "Der Download der Kartendaten ließ sich nicht starten. " +
+                            "Prüfe, ob genug Speicher frei ist, und versuche es erneut."
                     _segmentUnmeteredOnly.value ->
                         "Kartendaten werden geladen, sobald WLAN da ist."
                     else -> "Kartendaten werden geladen."
@@ -957,6 +1168,7 @@ class AppViewModel(
             val restored = withContext(io) {
                 Restored(
                     profile = readProfile(),
+                    profileConfirmed = readProfileConfirmed(),
                     plan = loadPlan(trainingPlanStore),
                     mapStyle = mapStyleById(
                         runCatching { keyValueStore.getString(MAP_STYLE_STORAGE_KEY) }.getOrNull(),
@@ -968,14 +1180,31 @@ class AppViewModel(
                     reminderSettings = reminderStore.readSettings(),
                     segmentUnmeteredOnly = runCatching { segmentSettings.unmeteredOnly }
                         .getOrDefault(true),
+                    vitalsHistory = readVitalsHistory(keyValueStore),
+                    shortSleeperHintShownAt = readShortSleeperHintShownAt(),
                 )
             }
             _profile.value = restored.profile
+            _profileConfirmed.value = restored.profileConfirmed
             _plan.value = restored.plan
             _mapStyle.value = restored.mapStyle
             _syncConfig.value = restored.syncConfig
             _reminderSettings.value = restored.reminderSettings
             _segmentUnmeteredOnly.value = restored.segmentUnmeteredOnly
+            _shortSleeperHintShownAt.value = restored.shortSleeperHintShownAt
+            _shortSleeperHintVisible.value = shouldShowShortSleeperHint(
+                restored.shortSleeperHintShownAt,
+                LocalDateTime.now(),
+            )
+            // Die gespeicherte Historie steht sofort zur Verfuegung — die
+            // Auswertung wartet nicht auf Health Connect.
+            vitalsHistory = restored.vitalsHistory
+            if (!restored.vitalsHistory.isEmpty) {
+                _vitals.value = restored.vitalsHistory.toSummary(
+                    now = LocalDateTime.now(),
+                    days = VITALS_HISTORY_WINDOW_DAYS,
+                )
+            }
             // Erst hier, nicht als Startwert: siehe KDoc von [onboardingVisible].
             // Bei einem Lesefehler gilt die Einfuehrung als gesehen — lieber
             // einmal zu wenig zeigen als bei jedem Start erneut.
@@ -992,12 +1221,15 @@ class AppViewModel(
 
     private data class Restored(
         val profile: TrainingProfile,
+        val profileConfirmed: Boolean,
         val plan: TrainingPlan?,
         val mapStyle: MapStyle,
         val syncConfig: SyncConfig?,
         val onboardingSeen: Boolean,
         val reminderSettings: ReminderSettings,
         val segmentUnmeteredOnly: Boolean,
+        val vitalsHistory: VitalsHistory,
+        val shortSleeperHintShownAt: LocalDateTime?,
     )
 }
 
@@ -1019,6 +1251,13 @@ const val ONBOARDING_STORAGE_KEY: String = "trailscape.onboarding.v1"
  * seiner Undo-Snackbar auf denselben Wert, damit beide synchron ablaufen.
  */
 const val UNDO_DELETE_GRACE_MS: Long = 5_000L
+
+/**
+ * Schluessel im [KeyValueStore] fuer den Zeitpunkt, an dem der
+ * Kurzschlaefer-Hinweis zuletzt gezeigt wurde (siehe
+ * [AppViewModel.shortSleeperHintShownAt]).
+ */
+const val SHORT_SLEEPER_HINT_STORAGE_KEY: String = "trailscape.hint.shortsleeper.v1"
 
 /**
  * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert

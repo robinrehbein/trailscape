@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.withCause
 import de.trailscape.core.SyncConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -110,7 +111,14 @@ fun SyncCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                         statusText = "${result.pushed} hochgeladen, ${result.pulled} geladen, " +
                             "${result.total} Touren"
                     } catch (e: Exception) {
-                        statusText = e.message ?: "Sync fehlgeschlagen."
+                        // Vorher gewann die technische Meldung („Failed to
+                        // connect to …"); der deutsche Satz kam nur zum
+                        // Vorschein, wenn die Ausnahme gar keinen Text trug.
+                        statusText = withCause(
+                            "Der Abgleich ist fehlgeschlagen. Prüfe Server-URL und Token " +
+                                "und ob der Server erreichbar ist.",
+                            e,
+                        )
                     } finally {
                         syncing = false
                     }
@@ -125,7 +133,11 @@ fun SyncCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             } else {
-                Text("Jetzt synchronisieren")
+                // Nicht „Jetzt synchronisieren": So hiess auch der Knopf der
+                // Health-Connect-Karte, der Touren aus Health Connect holt.
+                // Hier geht es in beide Richtungen und gegen einen eigenen
+                // Server — das sagt die Beschriftung jetzt.
+                Text("Mit Server abgleichen")
             }
         }
 

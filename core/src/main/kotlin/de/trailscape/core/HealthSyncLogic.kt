@@ -42,6 +42,17 @@ const val healthSyncStorageKey: String = "trailscape.healthsync"
 const val healthSyncInitialWindowMs: Long = 30L * 24 * 60 * 60 * 1000
 
 /**
+ * Wie weit der Beginn des Importfensters hinter den Zeitpunkt des letzten
+ * Imports zurueckgesetzt wird: 4 Tage in Millisekunden.
+ *
+ * Begruendung und Sicherheitsbetrachtung stehen an [healthImportWindowStart].
+ * Vier Tage decken das lange Wochenende ab, an dem die Uhr nicht mit dem
+ * Telefon spricht, und bleiben deutlich unter dem 30-Tage-Fenster, das Health
+ * Connect ohne Historien-Freigabe ueberhaupt hergibt.
+ */
+const val healthSyncImportBackfillMs: Long = 4L * 24 * 60 * 60 * 1000
+
+/**
  * Ab welchem zeitlichen Ueberlappungsanteil eine Health-Connect-Session als
  * bereits vorhandene Tour gilt und uebersprungen wird (strikt groesser).
  */
@@ -447,6 +458,9 @@ fun mergeHeartRateIntoRide(
             avgHrBpm = dartRound(sum / count).toInt(),
             maxHrBpm = peak,
         ),
+        // Der Merge baut die Tour neu auf; ohne diese Zeile wuerde er einer
+        // gespeicherten Planung ihr Kennzeichen abnehmen (siehe [Ride.planned]).
+        planned = ride.planned,
     )
 }
 
@@ -483,42 +497,44 @@ private fun nearestHr(samples: List<HealthHeartRateSample>, time: LocalDateTime)
 /**
  * Verdichtet HRV-Messungen (rMSSD in ms) zu einem Wert je Kalendertag.
  *
- * Massgeblich sind die Messungen zwischen 0:00 und 12:00 Uhr lokaler Zeit:
- * Die Galaxy Watch schreibt rMSSD im Schlaf, und nur naechtliche bzw.
- * morgendliche Werte sind untereinander vergleichbar (tagsueber verzerren
- * Belastung, Kaffee und Stress den Wert stark). Gibt es an einem Tag keine
- * Messung in diesem Fenster, gilt ersatzweise das Tagesmittel.
+ * Massgeblich sind ausschliesslich die Messungen zwischen 0:00 und 12:00 Uhr
+ * lokaler Zeit: Die Galaxy Watch schreibt rMSSD im Schlaf, und nur naechtliche
+ * bzw. morgendliche Werte sind untereinander vergleichbar. Tages-rMSSD liegt
+ * durch Belastung, Kaffee, Stress und Koerperhaltung **systematisch** niedriger
+ * — frueher galt an Tagen ohne Morgenwert ersatzweise das Tagesmittel, und
+ * jeder solche Tag erschien der Baseline-Rechnung als HRV-Einbruch. Ein
+ * fehlender Morgenwert ist deshalb ein fehlender Tag: Die Gates in [assessHrv]
+ * (≥ 14 Tage Baseline, ≥ 3 Tage im Rollfenster) sind genau dafuer da, mit
+ * Luecken umzugehen — ein verzerrter Wert ist schlechter als gar keiner.
  */
 fun dailyHrvValues(samples: Iterable<HealthNumericSample>): List<DailyValue> {
     val morningSums = linkedMapOf<LocalDateTime, Double>()
     val morningCounts = linkedMapOf<LocalDateTime, Int>()
-    val daySums = linkedMapOf<LocalDateTime, Double>()
-    val dayCounts = linkedMapOf<LocalDateTime, Int>()
 
     for (sample in samples) {
         if (!sample.value.isFinite() || sample.value <= 0) {
             continue
         }
-        val day = atMidnight(sample.time)
-        daySums[day] = (daySums[day] ?: 0.0) + sample.value
-        dayCounts[day] = (dayCounts[day] ?: 0) + 1
-        if (sample.time.hour < 12) {
-            morningSums[day] = (morningSums[day] ?: 0.0) + sample.value
-            morningCounts[day] = (morningCounts[day] ?: 0) + 1
+        if (sample.time.hour >= hrvMorningWindowEndHour) {
+            continue
         }
+        val day = atMidnight(sample.time)
+        morningSums[day] = (morningSums[day] ?: 0.0) + sample.value
+        morningCounts[day] = (morningCounts[day] ?: 0) + 1
     }
 
     val byDay = linkedMapOf<LocalDateTime, Double>()
-    for (day in daySums.keys) {
-        val morning = morningCounts[day]
-        byDay[day] = if (morning != null && morning > 0) {
-            morningSums[day]!! / morning
-        } else {
-            daySums[day]!! / dayCounts[day]!!
-        }
+    for ((day, sum) in morningSums) {
+        byDay[day] = sum / morningCounts[day]!!
     }
     return sortedDaily(byDay)
 }
+
+/**
+ * Ende des Zeitfensters, in dem eine rMSSD-Messung als „naechtlich" gilt
+ * (exklusiv, lokale Stunde).
+ */
+const val hrvMorningWindowEndHour: Int = 12
 
 private data class DayEntry(val day: LocalDateTime, val value: Double)
 
@@ -583,7 +599,35 @@ private fun averageOrNull(values: List<Double>): Double? {
 }
 
 /**
- * Startpunkt des Importfensters: `since ?? lastImportAt ?? to - 30 Tage`.
+ * Startpunkt des Importfensters:
+ * `since ?? (lastImportAt - Puffer) ?? to - 30 Tage`.
+ *
+ * ## Warum der Puffer
+ * Gefiltert wird nach der **Startzeit** eines Workouts, und Samsung Health
+ * spiegelt die Daten einer Uhr erst Stunden nach der Fahrt nach Health
+ * Connect. Ohne Ueberlappung fiel eine solche Session fuer immer durchs
+ * Raster: Tour von 10 bis 12 Uhr, App-Sync um 12:30 → `lastImportAt = 12:30`;
+ * die Uhr spiegelt um 14 Uhr, das naechste Fenster beginnt aber bei 12:30 und
+ * die Session startete um 10 Uhr. Sie wurde nie gefunden — weder importiert
+ * noch zum Anreichern der aufgezeichneten Tour um die Herzfrequenz benutzt.
+ *
+ * [healthSyncImportBackfillMs] Tage decken jede realistische Verzoegerung ab
+ * (Uhr tagelang nicht in Reichweite des Telefons, Health Connect im
+ * Energiesparmodus).
+ *
+ * ## Warum das gefahrlos ist
+ * Der Puffer laesst dieselben Sessions mehrfach *betrachten*, nicht mehrfach
+ * importieren. Zwei Schranken greifen davor, beide in `importWithReport`:
+ *
+ *  * Die Ride-ID einer importierten Session ist aus der Datensatz-ID
+ *    abgeleitet ([healthRideId]); eine erneut gesehene Session ist damit
+ *    namentlich ein Duplikat und wird uebersprungen.
+ *  * Sessions ohne bekannte ID (nativer Reader, andere Quelle) fallen ueber
+ *    die Ueberlappungssuche (`findOverlap`, mehr als
+ *    [healthSyncOverlapThreshold] gemeinsame Zeit) auf die bestehende Tour;
+ *    die wird nur dann angefasst, wenn sie noch **keine** Herzfrequenz hat.
+ *
+ * Der Preis ist also nur eine etwas groessere Abfrage an Health Connect.
  *
  * Als reine Funktion herausgezogen, damit die Fensterlogik ohne
  * [HealthSyncStore] pruefbar bleibt.
@@ -592,7 +636,11 @@ fun healthImportWindowStart(
     since: LocalDateTime?,
     lastImportAt: LocalDateTime?,
     to: LocalDateTime,
-): LocalDateTime = since ?: lastImportAt ?: dartPlusMillis(to, -healthSyncInitialWindowMs)
+): LocalDateTime {
+    if (since != null) return since
+    if (lastImportAt != null) return dartPlusMillis(lastImportAt, -healthSyncImportBackfillMs)
+    return dartPlusMillis(to, -healthSyncInitialWindowMs)
+}
 
 // ---------------------------------------------------------------------------
 // Service

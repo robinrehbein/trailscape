@@ -125,11 +125,20 @@ class RoutingTest {
         for (profile in RouteProfile.entries) {
             assertNotNull(routeProfileLabels[profile])
         }
-        assertEquals("Schotter & Kieswege", routeProfileLabels[RouteProfile.SCHOTTER])
-        // Gravel steht zuerst, Schotter direkt danach im Dropdown.
-        val keys = routeProfileLabels.keys.toList()
-        assertEquals(RouteProfile.GRAVEL, keys[0])
-        assertEquals(RouteProfile.SCHOTTER, keys[1])
+        // Die Beschriftung muss zum tatsaechlich benutzten BRouter-Profil
+        // passen: SCHOTTER faehrt das eingebettete Gravel-Custom-Profil und
+        // heisst deshalb „Gravel", GRAVEL faehrt `trekking` und heisst so.
+        assertTrue(routeProfileLabels.getValue(RouteProfile.SCHOTTER).startsWith("Gravel"))
+        assertEquals(CUSTOM_GRAVEL_PROFILE, brouterProfile(RouteProfile.SCHOTTER))
+        assertTrue(routeProfileLabels.getValue(RouteProfile.GRAVEL).startsWith("Trekking"))
+        assertEquals("trekking", brouterProfile(RouteProfile.GRAVEL))
+        // Kein anderer Modus darf „Gravel" fuer sich beanspruchen.
+        assertEquals(
+            listOf(RouteProfile.SCHOTTER),
+            routeProfileLabels.filterValues { it.contains("Gravel") }.keys.toList(),
+        )
+        // Das echte Gravel-Profil steht zuerst im Dropdown.
+        assertEquals(RouteProfile.SCHOTTER, routeProfileLabels.keys.first())
     }
 
     // --- fetchRoute ---

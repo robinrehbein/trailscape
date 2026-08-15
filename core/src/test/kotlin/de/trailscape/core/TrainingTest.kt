@@ -132,12 +132,23 @@ class TrainingTest {
     }
 
     @Test
-    fun `12 Wochen - lineare Progression von startKm zum Peak, auf 5 km gerundet`() {
-        // startKm = max(95, 70) = 95; peak = min(max(160*1.3, 95), 95*2.2) = 208
+    fun `12 Wochen - Progression von startKm zum Peak, gedeckelt auf plus 15 Prozent je Woche`() {
+        // startKm = max(95, 70) = 95; angestrebter Peak = 160 × 1,3 = 208.
+        // Die lineare Interpolation will schneller (95 → 111 → 127 → …), die
+        // Rampengrenze zieht sie auf hoechstens +15 % je Aufbauwoche zurueck.
         val builds = twelveWeekPlan.weeks
             .filter { it.kind == WeekKind.AUFBAU }
             .map { it.targetKm }
-        assertEquals(listOf(95, 110, 125, 145, 160, 175, 190, 210), builds)
+        assertEquals(listOf(95, 105, 120, 135, 155, 175, 190, 210), builds)
+
+        // Keine Aufbauwoche springt gegen die vorige um mehr als 15 %
+        // (Rundung auf 5 km eingerechnet).
+        for (i in 1 until builds.size) {
+            assertTrue(
+                builds[i] <= builds[i - 1] * 1.15,
+                "Sprung ${builds[i - 1]} → ${builds[i]} km ist zu gross",
+            )
+        }
 
         for (week in twelveWeekPlan.weeks) {
             assertTrue(
@@ -159,7 +170,7 @@ class TrainingTest {
                 "Erholungswoche ${week.index}",
             )
         }
-        assertEquals(75, twelveWeekPlan.weeks[3].targetKm) // 60 % von 125
+        assertEquals(70, twelveWeekPlan.weeks[3].targetKm) // 60 % von 120
         assertEquals(105, twelveWeekPlan.weeks[7].targetKm) // 60 % von 175
     }
 
@@ -267,18 +278,44 @@ class TrainingTest {
     }
 
     @Test
-    fun `3 Wochen - Einsteiger-Aufbau ab 60 km bekommt zusaetzlich Regeneration`() {
+    fun `3 Wochen - ein 90-km-Ziel treibt den Einsteiger nicht mehr auf 90 km in Woche 1`() {
         val big = generatePlan(
             goalAt(dayAfterFirstMonday(2 * 7 + 5), distanceKm = 90.0, ascentM = null),
             beginner,
             now = now,
         )
-        // peak = min(max(117, 40), 88) = 88 → round5 = 90
+        // Frueher: peak = min(max(117, 40), 88) = 88 → Woche 1 sprang auf 90 km,
+        // also +125 % gegenueber dem Basisvolumen von 40 km. Jetzt begrenzt die
+        // Rampe auf +15 %: 40 → 45.
+        assertEquals(45, big.weeks[0].targetKm)
         val sessions = big.weeks[0].sessions
-        assertEquals(90, big.weeks[0].targetKm)
+        assertEquals(2, sessions.size)
+        assertEquals(listOf("Di", "Sa"), sessions.map { it.day })
+        assertEquals(listOf(18, 27), sessions.map { it.targetKm })
+    }
+
+    @Test
+    fun `Einsteiger-Aufbau ab 60 km bekommt zusaetzlich Regeneration`() {
+        // Ab 60 km Wochenvolumen kommt die dritte Einheit dazu (0,3 / 0,5 / 0,2).
+        // Erreicht wird das Volumen erst nach mehreren Aufbauwochen — die
+        // Rampengrenze laesst es nicht mehr in Woche 1 zu.
+        val long = generatePlan(
+            goalAt(dayAfterFirstMonday(11 * 7 + 5), distanceKm = 200.0, ascentM = null),
+            beginner,
+            now = now,
+        )
+        val week = long.weeks.first { it.kind == WeekKind.AUFBAU && it.targetKm >= 60 }
+        val sessions = week.sessions
         assertEquals(3, sessions.size)
         assertEquals(listOf("Di", "Sa", "So"), sessions.map { it.day })
-        assertEquals(listOf(27, 45, 18), sessions.map { it.targetKm })
+        assertEquals(
+            listOf(
+                dartRound(week.targetKm * 0.3).toInt(),
+                dartRound(week.targetKm * 0.5).toInt(),
+                dartRound(week.targetKm * 0.2).toInt(),
+            ),
+            sessions.map { it.targetKm },
+        )
     }
 
     @Test

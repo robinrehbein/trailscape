@@ -80,7 +80,13 @@ fun UpdateNoticeCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
+                // Ohne Groessenangabe: `IconButton` bringt die 48-dp-Mindest-
+                // flaeche von Material selbst mit. Vorher stand hier
+                // `Modifier.size(24.dp)` und machte daraus ein Ziel, das die
+                // Haelfte des Mindestmasses unterschreitet — bei einem Knopf,
+                // dessen Fehlklick den Hinweis dauerhaft wegwischt. Das Symbol
+                // bleibt bei 18 dp, nur die Trefferflaeche waechst.
+                IconButton(onClick = onDismiss) {
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = "Hinweis ausblenden",

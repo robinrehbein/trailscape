@@ -505,19 +505,40 @@ internal fun RecordButton(
     }
 }
 
-/** Runder Knopf „Meine Position", gleiche Groesse wie [RecordButton]. */
+/**
+ * Runder Knopf „Meine Position", gleiche Groesse wie [RecordButton].
+ *
+ * Er ist zugleich die Anzeige und der Rueckweg fuer „Karte folgt mir": Solange
+ * die Karte der eigenen Position folgt, ist er gefuellt gruen; sobald die
+ * Nutzerin die Karte selbst verschoben hat (etwa um beim Navigieren
+ * vorauszuschauen), wird er blass — ein Tipp holt sie zurueck und schaltet das
+ * Folgen wieder ein. Vorher zog es die Karte spaetestens nach zwei Sekunden
+ * kommentarlos zurueck, und ein Schalter dafuer fehlte ganz.
+ */
 @Composable
-internal fun LocateButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun LocateButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    following: Boolean = true,
+) {
     Surface(
         onClick = onClick,
         modifier = modifier.size(56.dp),
         shape = CircleShape,
-        color = GravelGreen,
-        contentColor = Color.White,
+        color = if (following) GravelGreen else MaterialTheme.colorScheme.surface,
+        contentColor = if (following) Color.White else GravelGreen,
         shadowElevation = 4.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.MyLocation, contentDescription = "Meine Position", tint = Color.White)
+            Icon(
+                Icons.Filled.MyLocation,
+                contentDescription = if (following) {
+                    "Meine Position – die Karte folgt dir"
+                } else {
+                    "Meine Position – die Karte folgt dir nicht mehr"
+                },
+                tint = if (following) Color.White else GravelGreen,
+            )
         }
     }
 }

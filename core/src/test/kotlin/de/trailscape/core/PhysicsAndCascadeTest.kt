@@ -260,13 +260,98 @@ class PhysicsAndCascadeTest {
     }
 
     @Test
-    fun `alpha ausserhalb 0,6 bis 1,6 wird auf 1,0 geklemmt`() {
+    fun `alpha ausserhalb 0,4 bis 2,0 wird verworfen, meldet aber den Rohwert`() {
         val c = computeLoadCalibration(
-            List(6) { LoadCalibrationSample(loadHr = 200.0, loadPhysics = 100.0) },
+            List(6) { LoadCalibrationSample(loadHr = 250.0, loadPhysics = 100.0) },
         )
         assertEquals(1.0, c.alpha, 0.0)
         assertTrue(c.clamped)
+        assertFalse(c.usable)
         assertEquals(Confidence.LOW, c.confidence)
+        // Der Rohwert bleibt sichtbar — frueher verschwand der Fall lautlos.
+        assertEquals(2.5, c.rawAlpha!!, 1e-9)
+        assertTrue(c.note!!.contains("2,50"))
+    }
+
+    @Test
+    fun `das alte Fenster haette genau den Fall verworfen, der korrigiert werden muss`() {
+        // Eine um 25 % zu tief geschaetzte FTP erzeugt Faktor 1,8 zu hohe
+        // Physiklast, also α ≈ 0,56 — unter dem alten Minimum von 0,6.
+        val c = computeLoadCalibration(
+            List(8) { LoadCalibrationSample(loadHr = 56.0, loadPhysics = 100.0) },
+        )
+        assertFalse(c.clamped)
+        assertTrue(c.usable)
+        assertEquals(0.56, c.alpha, 1e-9)
+        assertTrue(c.alpha > alphaMin)
+    }
+
+    @Test
+    fun `alpha wird als FTP-Korrektur zurueckgespeist statt verworfen`() {
+        val profile = TrainingProfile(ageYears = 40, weightKg = 78.0)
+        // 2,4 W/kg × 78 kg = 187,2 W — die zu tiefe Ausgangsannahme.
+        assertEquals(187.2, profile.eftpW, 1e-9)
+
+        val calibration = computeLoadCalibration(
+            List(8) { LoadCalibrationSample(loadHr = 56.0, loadPhysics = 100.0) },
+        )
+        val eftp = resolveEftp(profile, emptyList(), calibration)
+        assertEquals(EftpSource.KALIBRIERT, eftp.source)
+        // FTP_korrigiert = FTP / √α = 187,2 / √0,56 ≈ 250 W ≈ 3,2 W/kg.
+        assertEquals(187.2 / kotlin.math.sqrt(0.56), eftp.watts, 1e-6)
+        assertEquals(3.2, eftp.perKg(78.0), 0.05)
+        assertEquals(0.56, eftp.alphaApplied!!, 1e-9)
+        assertEquals(Confidence.MEDIUM, eftp.confidence)
+
+        // Und die Korrektur ist ein Fixpunkt: Mit der neuen FTP faellt die
+        // Physiklast um genau den Faktor α, α_neu ist also 1,0.
+        val recomputed = computeLoadCalibration(
+            List(8) { LoadCalibrationSample(loadHr = 56.0, loadPhysics = 100.0 * 0.56) },
+        )
+        assertEquals(1.0, recomputed.alpha, 1e-9)
+    }
+
+    @Test
+    fun `eingetragene FTP wird nicht von alpha verbogen`() {
+        val profile = TrainingProfile(ageYears = 40, weightKg = 78.0, eftpOverrideW = 260.0)
+        val calibration = computeLoadCalibration(
+            List(8) { LoadCalibrationSample(loadHr = 56.0, loadPhysics = 100.0) },
+        )
+        val eftp = resolveEftp(profile, emptyList(), calibration)
+        assertEquals(EftpSource.EINGETRAGEN, eftp.source)
+        assertEquals(260.0, eftp.watts, 0.0)
+        assertNull(eftp.alphaApplied)
+        assertEquals(Confidence.HIGH, eftp.confidence)
+    }
+
+    @Test
+    fun `20-min-Mittel zaehlt nur als Untergrenze`() {
+        // Gemuetliche Stunde: das beste 20-min-Mittel liegt weit unter der
+        // Default-Annahme und darf sie deshalb nicht ersetzen.
+        val easy = buildPowerSeries(
+            buildRideSeries(track(pointCount = 3601, speedMs = 5.0, stepS = 1), refProfile),
+            refProfile,
+        )
+        val profile = TrainingProfile(ageYears = 40, weightKg = 78.0)
+        val eftp = resolveEftp(profile, listOf(easy))
+        assertEquals(EftpSource.GESCHAETZT, eftp.source)
+        assertEquals(profile.eftpW, eftp.watts, 1e-9)
+        assertNotNull(eftp.bestTwentyMinW)
+        assertTrue(eftp.bestTwentyMinW!! < profile.eftpW)
+    }
+
+    @Test
+    fun `kcal rechnet Kilojoule in Kilokalorien um`() {
+        // 200 W × 3600 s = 720 kJ mechanisch; / 0,24 / 4,184 ≈ 717 kcal.
+        assertEquals(717.0, estimateKcal(avgPowerW = 200.0, movingTimeS = 3600.0), 1.0)
+        // Der alte Fehler waere um Faktor 4,184 daneben gelegen.
+        assertEquals(
+            200.0 * 3600 / (1000 * 0.24) / 4.184,
+            estimateKcal(avgPowerW = 200.0, movingTimeS = 3600.0),
+            1e-9,
+        )
+        assertEquals(0.0, estimateKcal(avgPowerW = 0.0, movingTimeS = 3600.0), 0.0)
+        assertEquals(0.0, estimateKcal(avgPowerW = 200.0, movingTimeS = 0.0), 0.0)
     }
 
     @Test

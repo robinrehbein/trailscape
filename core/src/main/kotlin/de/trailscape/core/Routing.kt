@@ -33,13 +33,27 @@ import kotlin.math.sqrt
 enum class RouteProfile { GRAVEL, SCHOTTER, ASPHALT, RADWEGE, KUERZESTER }
 
 /**
- * Entspricht der Dart-Konstante `routeProfileLabels`. Reihenfolge ist
- * bedeutsam (z. B. fuer Dropdowns): Gravel steht zuerst, Schotter direkt
- * danach.
+ * Beschriftungen der Fahrmodi. Reihenfolge ist bedeutsam (z. B. fuer
+ * Dropdowns): Das echte Gravel-Profil steht zuerst.
+ *
+ * ## Warum die Beschriftungen nicht mehr so heissen wie frueher
+ * Sie logen. [RouteProfile.GRAVEL] hiess „Gravel (gemischt)", routet aber mit
+ * dem oeffentlichen Profil `trekking` (siehe [brouterProfile]) — also Asphalt
+ * und feste Wege gemischt. Das **echte** Gravel-Profil ist das eingebettete
+ * Custom-Profil und haengt an [RouteProfile.SCHOTTER], das ausgerechnet
+ * „Schotter & Kieswege" hiess. Ein Gravelfahrer waehlte also zuverlaessig das
+ * mit „Gravel" im Namen und bekam Trekking.
+ *
+ * Geaendert wurden bewusst **nur die Beschriftungen und ihre Reihenfolge**,
+ * nicht die Zuordnung: Ein Umhaengen der Enum-Werte auf andere BRouter-Profile
+ * wuerde bestehende Routen anders rechnen lassen, und dafuer gibt es keinen
+ * fachlichen Grund — die beiden Profile sind beide richtig, sie waren nur
+ * falsch angeschrieben. Der Modus mit dem echten Gravel-Profil steht jetzt
+ * zuerst, weil er der ist, den diese App verspricht.
  */
 val routeProfileLabels: Map<RouteProfile, String> = linkedMapOf(
-    RouteProfile.GRAVEL to "Gravel (gemischt)",
-    RouteProfile.SCHOTTER to "Schotter & Kieswege",
+    RouteProfile.SCHOTTER to "Gravel (Schotter & unbefestigt)",
+    RouteProfile.GRAVEL to "Trekking (Asphalt & feste Wege gemischt)",
     RouteProfile.ASPHALT to "Rennrad / Asphalt",
     RouteProfile.RADWEGE to "Radwege bevorzugt",
     RouteProfile.KUERZESTER to "Kürzeste Route",

@@ -129,7 +129,7 @@ fun ReportDialog(
                 onClick = {
                     val body = buildIssueBody(reportText, reportHeading)
                     if (!openIssueInBrowser(context, issueTitle, body)) {
-                        showFeedbackToast(context, "Kein Browser gefunden — bitte „Teilen\" benutzen.")
+                        showFeedbackToast(context, "Kein Browser gefunden — bitte „Teilen“ benutzen.")
                     }
                 },
             ) {

@@ -77,8 +77,29 @@ const val lthrMaxFactor: Double = 0.95
 const val minEftpW: Double = 100.0
 const val maxEftpW: Double = 400.0
 
-/** Default-eFTP in W/kg Fahrergewicht, wenn keine harte Tour vorliegt (§3.3). */
+/**
+ * Default-eFTP in W/kg Fahrergewicht, wenn keine harte Tour vorliegt (§3.3).
+ *
+ * Bewusst konservativ: Der Wert deckt Einsteiger und Wiedereinsteiger ab. Fuer
+ * einen ambitionierten Gravelfahrer (3,0–3,6 W/kg) ist er deutlich zu niedrig
+ * — und weil `eTSS ∝ IF² ∝ 1/FTP²` schlaegt ein um 25 % zu tiefer Wert mit
+ * Faktor 1,8 auf **jede** Tourlast durch. Deshalb ist dieser Default nur die
+ * letzte Instanz: Zuerst zieht ein eingetragener Wert
+ * ([TrainingProfile.eftpOverrideW]), dann die Messung aus den Touren
+ * ([estimateEftpW]), dann die Rueckrechnung aus der HF-Kalibrierung
+ * ([resolveEftp]).
+ */
 const val defaultEftpWPerKg: Double = 2.4
+
+/**
+ * Fenster fuer die eFTP-Schaetzung aus den Touren in Tagen (§3.3).
+ *
+ * 90 Tage sind der ueblichste Zeitraum fuer „aktuelle Form" (Coggan/WKO,
+ * intervals.icu) — lang genug, damit ueberhaupt eine harte Tour im Fenster
+ * liegt, kurz genug, dass ein halbes Jahr alter Formhoch nicht die heutige
+ * Lastskala bestimmt.
+ */
+const val eftpWindowDays: Int = 90
 
 /**
  * Mindestabdeckung der Bewegungszeit mit gueltiger Herzfrequenz, damit der
@@ -120,9 +141,21 @@ const val loadRatioBandHigh: Double = 1.5
  */
 const val minChronicWeeklyLoad: Double = 20.0
 
-/** Kalibrierungsfaktor HF↔Physik: gueltiges Fenster, sonst auf 1,0 (§3.3). */
-const val alphaMin: Double = 0.6
-const val alphaMax: Double = 1.6
+/**
+ * Kalibrierungsfaktor HF↔Physik: gueltiges Fenster, sonst wird α verworfen
+ * (§3.3).
+ *
+ * Das Fenster war urspruenglich 0,6…1,6 und damit **enger als der Fehler, den
+ * es korrigieren soll**: Eine um 25 % zu tief geschaetzte FTP erzeugt eine um
+ * Faktor 1,8 zu hohe Physiklast, also α ≈ 0,56 — die Korrektur wurde genau
+ * dann verworfen, wenn sie gebraucht wurde. 0,4…2,0 deckt den Bereich ab, den
+ * eine falsch geschaetzte FTP (±30 % → α zwischen 0,6 und 2,0) und ein
+ * unpassender CdA/Crr (±20 % → ±20 % Leistung) zusammen aufspannen. Ausserhalb
+ * davon stimmt etwas Grundsaetzliches nicht (Gewicht, Hoehendaten, Sensor) und
+ * eine Skalierung waere Kosmetik.
+ */
+const val alphaMin: Double = 0.4
+const val alphaMax: Double = 2.0
 
 /** Default-Faktor der sRPE-Kalibrierung (§3.4). */
 const val defaultRpeFactor: Double = 1.0 / 6
@@ -130,12 +163,62 @@ const val defaultRpeFactor: Double = 1.0 / 6
 /**
  * HRV (rMSSD): Baselinefenster in Tagen und Breite des Normalbands als
  * Vielfaches der Streuung von `ln(rMSSD)` (Plews & Laursen / HRV4Training).
+ *
+ * ## Warum 60 Tage und nicht 28
+ * Die Baseline war frueher „letzte 28 Tage" und enthielt damit das
+ * [hrvRollingDays]-Tage-Rollfenster, gegen das sie verglichen wird. Ein
+ * anhaltender Einbruch zog seine eigene Referenz mit nach unten **und** blaehte
+ * die Streuung auf — beides driftet den z-Wert gegen null, genau wenn etwas
+ * los ist. Plews & Laursen (2013) benutzen deshalb ein deutlich laengeres
+ * Referenzfenster; 60 Tage ist der Wert, mit dem auch HRV4Training arbeitet.
+ * Das Rollfenster selbst wird zusaetzlich aus der Baseline ausgeschlossen
+ * (siehe [assessHrv]), damit Zaehler und Nenner wirklich unabhaengig sind.
  */
-const val hrvBaselineDays: Int = 28
+const val hrvBaselineDays: Int = 60
 const val hrvRollingDays: Int = 7
 const val hrvBandFactor: Double = 0.75
 
-/** Mindestzahl an HRV-Tagen im Baselinefenster fuer eine volle Wertung. */
+/**
+ * Schwellen der HRV-Eskalation — zwei Achsen, beide muessen halten.
+ *
+ * ## Das Problem
+ * Verglichen wird ein **Mittel** aus n Tageswerten mit einer Baseline, die
+ * Streuung im Nenner war aber die der **Tageswerte**. Ein Mittel aus 7 Werten
+ * streut nur mit `σ/√7 ≈ 0,38 σ`; Schwellen von −1,5 bzw. −2,5 Tages-σ
+ * verlangen damit einen Einbruch, den ein Wochenmittel praktisch nie erreicht
+ * — [RecoveryFlag.ROT] aus HRV war toter Code.
+ *
+ * ## Die Loesung
+ *  * **Effektstaerke** ([hrvOrangeDailyZ] / [hrvRedDailyZ], Tagesskala): Wie
+ *    ungewoehnlich ist dieses Niveau ueberhaupt? Das ist die SWC-Logik von
+ *    Plews & Laursen und verhindert, dass ein physiologisch belangloser
+ *    Rueckgang eskaliert.
+ *  * **Sicherheit** ([hrvOrangeMeanZ] / [hrvRedMeanZ], SEM-Skala `σ/√n`): Ist
+ *    die Abweichung durch genug Naechte gedeckt?
+ *
+ * Bei sieben getragenen Naechten ist die SEM-Achse die bindende: ORANGE ab
+ * `3,0 / √7 = 1,13` Tages-σ (≈ −16 % rMSSD bei σ_ln = 0,15), ROT ab
+ * `5,0 / √7 = 1,89` Tages-σ (≈ −25 %). Bei nur drei Naechten zieht die
+ * SEM-Achse an: dann braucht ROT `5,0 / √3 = 2,89` Tages-σ (≈ −35 %) —
+ * genau die gewollte Zurueckhaltung, wenn die Uhr kaum getragen wurde.
+ *
+ * Eine **reine** SEM-Normierung waere ueberempfindlich (ORANGE schon bei −8 %),
+ * reine Tagesskala unempfindlich — deshalb die Kombination.
+ */
+const val hrvOrangeDailyZ: Double = -1.0
+const val hrvRedDailyZ: Double = -1.5
+const val hrvOrangeMeanZ: Double = -3.0
+const val hrvRedMeanZ: Double = -5.0
+
+/**
+ * Mindestzahl an HRV-Tagen im Baselinefenster fuer eine volle Wertung.
+ *
+ * Bezieht sich auf das Fenster **ohne** das Rollfenster (Tage
+ * [hrvRollingDays]…[hrvBaselineDays]−1). Mit einer Uhr, die nicht jede Nacht
+ * getragen wird, sind 14 verwertbare Naechte in knapp zwei Monaten eine
+ * realistische Huerde; kalendarisch braucht es damit mindestens 21 Tage
+ * Historie, bevor die HRV ueberhaupt bewertet wird.
+ */
 const val hrvMinBaselineDays: Int = 14
 
 /** Mindestzahl an Messungen im 7-Tage-Rollfenster. */
@@ -152,14 +235,20 @@ const val hrvMinMs: Double = 5.0
 const val hrvMaxMs: Double = 300.0
 
 /**
- * Gewichte des Readiness-Scores, **sobald HRV vorliegt** (§5.3/§5.4).
+ * Gewichte des Readiness-Scores (§5.3/§5.4).
  *
  * Begruendung der Reihenfolge: rMSSD misst den parasympathischen Zustand
  * direkt und ist das Signal, das Garmin, Polar und Whoop am hoechsten
  * gewichten; der Ruhepuls beschreibt dieselbe Achse, reagiert aber traeger und
  * groeber; Schlaf ist ein *Einflussfaktor* auf Erholung, keine Messung davon;
  * TSB ist ein Modellwert aus geschaetzten Lasten und traegt entsprechend am
- * wenigsten. Ohne HRV bleibt die alte Formel aus §5.4 unveraendert bestehen.
+ * wenigsten.
+ *
+ * Die Gewichte gelten **immer**. Fehlt ein Signal, wird sein Gewicht auf die
+ * uebrigen umgelegt (Renormierung in [computeReadiness]) — es gibt bewusst
+ * keine zweite Formel fuer „ohne HRV" mehr: Frueher schaltete allein die
+ * Trageform der Uhr zwischen gewichtetem Mittel und Summe der Strafterme um,
+ * und derselbe koerperliche Zustand ergab je nach Formel 55 oder 77 Punkte.
  */
 const val readinessWeightHrv: Double = 0.40
 const val readinessWeightRhr: Double = 0.25
@@ -409,7 +498,13 @@ data class TrainingProfile(
     val cda: Double = defaultCda,
     val crr: Double = defaultCrr,
     val driveEfficiency: Double = defaultDriveEfficiency,
-    /** Geschaetzte FTP in Watt; ohne Angabe [defaultEftpWPerKg] × Gewicht. */
+    /**
+     * Eingetragene FTP in Watt; ohne Angabe [defaultEftpWPerKg] × Gewicht.
+     *
+     * Der Wert bestimmt ueber `IF = NP / FTP` und `eTSS ∝ IF²` die **gesamte**
+     * Lastskala. Ein Fehler von 25 % verschiebt jede Tourlast um Faktor 1,8 —
+     * und mit ihr CTL, ATL, TSB, Rampenrate und Wochenziel.
+     */
     val eftpOverrideW: Double? = null,
     /**
      * Zeitbudget fuers Training in Stunden pro Woche; `null` = kein Budget
@@ -1364,7 +1459,7 @@ fun computePhysicsEstimate(
     val ifValue = if (ftp > 0) np / ftp else 0.0
     val hours = power.movingTimeS / 3600
     val eTss = min(hours * ifValue * ifValue * 100, maxLoad)
-    val kcal = avg * power.movingTimeS / (1000 * 0.24)
+    val kcal = estimateKcal(avgPowerW = avg, movingTimeS = power.movingTimeS)
 
     // Das Dokument stuft das Physikmodell grundsaetzlich als „medium" ein (§3.1).
     // Sehr kurze oder sehr stochastische Fahrten stufen wir zusaetzlich ab.
@@ -1387,6 +1482,33 @@ fun computePhysicsEstimate(
         kcal = kcal,
         confidence = confidence,
     )
+}
+
+/** Bruttowirkungsgrad Mensch → Pedal (§3.2). */
+const val grossEfficiency: Double = 0.24
+
+/** Umrechnung Kilojoule → Kilokalorien (thermochemische kcal). */
+const val kJPerKcal: Double = 4.184
+
+/**
+ * Energieumsatz einer Tour in kcal aus der geschaetzten Ø-Leistung.
+ *
+ * `kJ_mechanisch = P × t / 1000`, geteilt durch den Bruttowirkungsgrad
+ * ([grossEfficiency]) ergibt die aufgewendete Stoffwechselenergie in kJ, und
+ * die wird mit [kJPerKcal] in kcal umgerechnet.
+ *
+ * Die Division durch 4,184 fehlte frueher — das Ergebnis war um genau diesen
+ * Faktor zu hoch (bei ~1 kJ/kcal-Verwechslung ein klassischer Fehler; dass
+ * `1/0,24 ≈ 4,2` zufaellig fast derselben Zahl entspricht, hat ihn lange
+ * unsichtbar gemacht). Zur Kontrolle: 200 W ueber 1 h ergibt
+ * `720 kJ / 0,24 / 4,184 ≈ 717 kcal` — genau die Groessenordnung, die die
+ * Faustformel „≈ 1 kcal pro kJ Tretarbeit" liefert.
+ */
+fun estimateKcal(avgPowerW: Double, movingTimeS: Double): Double {
+    if (avgPowerW <= 0 || movingTimeS <= 0) {
+        return 0.0
+    }
+    return avgPowerW * movingTimeS / 1000 / grossEfficiency / kJPerKcal
 }
 
 /** Bestes nachlaufendes Leistungsmittel ueber [windowS] Sekunden. */
@@ -1412,12 +1534,21 @@ fun bestRollingMeanPowerW(series: PowerSeries, windowS: Double = 1200.0): Double
 }
 
 /**
- * eFTP aus den Leistungsreihen der letzten 90 Tage (§3.3).
+ * eFTP aus den Leistungsreihen der letzten [eftpWindowDays] Tage (§3.3).
  *
- * `0,95 × bestes 20-min-Mittel`, geklemmt auf 100…400 W. Ohne harte Tour
- * bleibt der Profil-Default (2,4 W/kg).
+ * `0,95 × bestes 20-min-Mittel` (Coggan), geklemmt auf 100…400 W. Ohne harte
+ * Tour bleibt der Profil-Default (2,4 W/kg).
+ *
+ * Achtung: Die Leistungsreihen sind selbst geschaetzt (GPS + Physikmodell,
+ * ±15–25 %). Der Wert ist damit eine Schaetzung **auf** einer Schaetzung und
+ * traegt nie mehr als [Confidence.MEDIUM] — siehe [resolveEftp], das genau das
+ * mitfuehrt.
  */
-fun estimateEftpW(recent: Iterable<PowerSeries>, profile: TrainingProfile): Double {
+fun estimateEftpW(recent: Iterable<PowerSeries>, profile: TrainingProfile): Double =
+    bestTwentyMinuteMeanW(recent)?.let { clamp(0.95 * it, minEftpW, maxEftpW) } ?: profile.eftpW
+
+/** Bestes 20-min-Leistungsmittel ueber mehrere Touren, `null` ohne Material. */
+fun bestTwentyMinuteMeanW(recent: Iterable<PowerSeries>): Double? {
     var best: Double? = null
     for (s in recent) {
         val v = bestRollingMeanPowerW(s)
@@ -1425,10 +1556,152 @@ fun estimateEftpW(recent: Iterable<PowerSeries>, profile: TrainingProfile): Doub
             best = v
         }
     }
-    if (best == null) {
-        return profile.eftpW
+    return best
+}
+
+/** Woher die benutzte FTP stammt — bestimmt Beschriftung und Confidence. */
+enum class EftpSource {
+    /** Von der Nutzerin eingetragen (Testwert oder eigener Schaetzwert). */
+    EINGETRAGEN,
+
+    /** `0,95 × bestes 20-min-Mittel` aus den geschaetzten Leistungsreihen. */
+    ZWANZIG_MINUTEN,
+
+    /** Aus dem Vergleich HF-Last ↔ Physiklast zurueckgerechnet (α). */
+    KALIBRIERT,
+
+    /** Nur der Profil-Default [defaultEftpWPerKg] × Gewicht. */
+    GESCHAETZT,
+}
+
+val eftpSourceLabels: Map<EftpSource, String> = mapOf(
+    EftpSource.EINGETRAGEN to "von dir eingetragen",
+    EftpSource.ZWANZIG_MINUTEN to "aus deinem besten 20-Minuten-Abschnitt geschätzt",
+    EftpSource.KALIBRIERT to "aus dem Vergleich mit deiner Herzfrequenz nachgeführt",
+    EftpSource.GESCHAETZT to "grob aus deinem Gewicht geschätzt",
+)
+
+/**
+ * Die FTP, mit der die Lastskala tatsaechlich rechnet — samt Herkunft.
+ *
+ * Existiert, damit im UI nie eine Zahl steht, deren Herkunft unklar ist: Die
+ * gesamte Lastskala (und damit CTL, ATL, TSB, Rampenrate, Wochenziel) haengt an
+ * diesem Wert, weil `eTSS = h × IF² × 100` mit `IF = NP / FTP` rechnet.
+ */
+data class EftpEstimate(
+    val watts: Double,
+    val source: EftpSource,
+    val confidence: Confidence,
+    /** Bestes 20-min-Mittel im Fenster, falls eines vorlag. */
+    val bestTwentyMinW: Double? = null,
+    /** Angewandter Kalibrierungsfaktor α, falls er gegriffen hat. */
+    val alphaApplied: Double? = null,
+) {
+    /** W/kg zum Fahrergewicht — die Zahl, an der man einen Unsinn sofort sieht. */
+    fun perKg(weightKg: Double): Double = if (weightKg > 0) watts / weightKg else 0.0
+
+    /** Kurzform fuer die Anzeige, immer mit Herkunft. */
+    val label: String
+        get() = "${dartRound(watts).toInt()} W (${eftpSourceLabels.getValue(source)})"
+
+    companion object {
+        /** Reiner Profilwert ohne jede Messung. */
+        fun fromProfile(profile: TrainingProfile): EftpEstimate = EftpEstimate(
+            watts = profile.eftpW,
+            source = if (profile.eftpOverrideW != null) {
+                EftpSource.EINGETRAGEN
+            } else {
+                EftpSource.GESCHAETZT
+            },
+            confidence = if (profile.eftpOverrideW != null) Confidence.HIGH else Confidence.LOW,
+        )
     }
-    return clamp(0.95 * best, minEftpW, maxEftpW)
+}
+
+/**
+ * Bestimmt die FTP fuer die Lastberechnung aus Profil, Touren und α (§3.3).
+ *
+ * Reihenfolge — von „gemessen" nach „geraten":
+ *
+ *  1. **Eingetragen.** Ein eigener Wert gewinnt immer und wird **nicht**
+ *     nachtraeglich verbogen: Wer einen Test gefahren ist, hat die bessere
+ *     Zahl als jedes Modell. α bleibt in dem Fall ein Faktor auf der Physiklast
+ *     (siehe [computeRideLoad]), damit die Aussage der Nutzerin unangetastet
+ *     bleibt.
+ *  2. **α-Rueckrechnung.** Liegen genug Touren vor, fuer die **beide** Lastpfade
+ *     tragen, ist `α = median(Last_HF / Last_Physik)` ein direktes Mass dafuer,
+ *     wie schief die FTP-Annahme liegt. Wegen `eTSS ∝ 1/FTP²` gilt
+ *     `FTP_korrigiert = FTP / √α`; danach ist α konstruktionsgemaess ≈ 1,0 und
+ *     beide Pfade liefern dieselbe Skala. Das ist die eigentliche
+ *     Selbstkorrektur des Systems — sie **ersetzt** die Schaetzung, statt nur
+ *     ihr Ergebnis zu skalieren, und ist der HF-verankerte und damit
+ *     belastbarste der drei Wege.
+ *  3. **20-min-Mittel.** `0,95 × bestes 20-min-Mittel` der letzten
+ *     [eftpWindowDays] Tage (Coggan) — aber nur als **Untergrenze**: Wer im
+ *     Fenster nur gerollt ist, hat damit nichts ueber seine Schwelle gesagt,
+ *     und der zu niedrige Wert wuerde ueber `eTSS ∝ 1/FTP²` jede Tourlast
+ *     aufblaehen. Dieselbe Logik wie bei intervals.icu: eFTP steigt durch
+ *     Belege, faellt nicht durch Ruhetage.
+ *  4. **Default.** [defaultEftpWPerKg] × Gewicht — grobe Schaetzung, klar als
+ *     solche beschriftet.
+ *
+ * **Wichtig fuer den Aufrufer:** [calibration] muss bei
+ * `FTP = profile.eftpW` gemessen worden sein — nur dann ist `profile.eftpW / √α`
+ * der richtige Fixpunkt. Genau so ruft [de.trailscape.app.ui.computeInsights]
+ * es auf (erst Durchgang mit dem Profilwert, dann Aufloesung, dann
+ * Neuberechnung).
+ */
+fun resolveEftp(
+    profile: TrainingProfile,
+    recent: Iterable<PowerSeries> = emptyList(),
+    calibration: LoadCalibration = LoadCalibration.NEUTRAL,
+): EftpEstimate {
+    val override = profile.eftpOverrideW
+    if (override != null) {
+        return EftpEstimate(
+            watts = clamp(override, minEftpW, maxEftpW),
+            source = EftpSource.EINGETRAGEN,
+            confidence = Confidence.HIGH,
+        )
+    }
+
+    val best = bestTwentyMinuteMeanW(recent)
+    val anchor = profile.eftpW
+
+    // α greift nur, wenn es aus genug Paaren stammt und im gueltigen Fenster
+    // lag; sonst ist es per Konstruktion 1,0 und aendert nichts.
+    val alpha = calibration.alpha
+    if (calibration.usable && alpha != 1.0) {
+        return EftpEstimate(
+            watts = clamp(anchor / sqrt(alpha), minEftpW, maxEftpW),
+            source = EftpSource.KALIBRIERT,
+            // Die Rueckrechnung stuetzt sich auf gemessene Herzfrequenz und ist
+            // damit belastbarer als der reine Physikpfad — mehr als „Schaetzung"
+            // ist sie aber nicht, sie erbt die Unsicherheit von TRIMP und LTHR.
+            confidence = Confidence.MEDIUM,
+            bestTwentyMinW = best,
+            alphaApplied = alpha,
+        )
+    }
+
+    // Genau hier haengt [estimateEftpW] in der App — die Funktion existierte
+    // bisher nur im Test, weil sie niemand aufgerufen hat.
+    val fromPower = estimateEftpW(recent, profile)
+    if (best != null && fromPower > anchor) {
+        return EftpEstimate(
+            watts = fromPower,
+            source = EftpSource.ZWANZIG_MINUTEN,
+            confidence = Confidence.MEDIUM,
+            bestTwentyMinW = best,
+        )
+    }
+
+    return EftpEstimate(
+        watts = anchor,
+        source = EftpSource.GESCHAETZT,
+        confidence = Confidence.LOW,
+        bestTwentyMinW = best,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1445,15 +1718,53 @@ data class LoadCalibrationSample(
 data class LoadCalibration(
     val alpha: Double,
     val sampleCount: Int,
-    /** Ob α ausserhalb `[0.6, 1.6]` lag und deshalb auf 1,0 gesetzt wurde. */
+    /**
+     * Ob α ausserhalb `[alphaMin, alphaMax]` lag und deshalb verworfen wurde
+     * (α = 1,0). Das ist **kein** stiller Zustand mehr: [note] sagt es, und die
+     * Confidence der betroffenen Tourlasten wird abgestuft.
+     */
     val clamped: Boolean,
     val confidence: Confidence,
+    /**
+     * Das ungefilterte Verhaeltnis, auch wenn es verworfen wurde — `null`,
+     * solange zu wenige Paare vorliegen. Nur so laesst sich der Nutzerin
+     * ueberhaupt sagen, *wie weit* die beiden Pfade auseinanderliegen.
+     */
+    val rawAlpha: Double? = null,
 ) {
+    /** Ob α tatsaechlich als Korrektur benutzt werden darf. */
+    val usable: Boolean get() = !clamped && alpha.isFinite() && alpha > 0
+
+    /**
+     * Deutschsprachiger Hinweis zur Kalibrierung — `null`, wenn es nichts zu
+     * sagen gibt (α ≈ 1,0 aus genug Paaren).
+     */
+    val note: String?
+        get() {
+            val raw = rawAlpha
+            if (clamped && raw != null) {
+                return "Deine Herzfrequenz und die Leistungsschätzung liegen um Faktor " +
+                    "${toStringAsFixed(raw, 2).replace('.', ',')} auseinander — zu weit " +
+                    "für eine sinnvolle Korrektur. Prüfe Gewicht, Rad-/Gepäckgewicht und " +
+                    "ob deine Touren ein Höhenprofil haben."
+            }
+            if (raw == null) {
+                return null
+            }
+            if (abs(raw - 1.0) < 0.05) {
+                return null
+            }
+            return "Aus $sampleCount Touren mit Puls und Höhenprofil ergibt sich ein " +
+                "Korrekturfaktor von ${toStringAsFixed(raw, 2).replace('.', ',')} zwischen " +
+                "Herzfrequenz- und Leistungsschätzung."
+        }
+
     fun toJson(): JsonObject = buildJsonObject {
         put("alpha", alpha)
         put("sampleCount", sampleCount)
         put("clamped", clamped)
         put("confidence", confidence.jsonName)
+        rawAlpha?.let { put("rawAlpha", it) }
     }
 
     companion object {
@@ -1475,6 +1786,8 @@ data class LoadCalibration(
                 clamped = (json.fieldOrNull("clamped") as? JsonPrimitive)?.booleanOrNull == true,
                 confidence = Confidence.entries.firstOrNull { it.jsonName == rawConfidence }
                     ?: Confidence.LOW,
+                // Fehlt in aelteren Dateien — dann gibt es eben keinen Rohwert.
+                rawAlpha = json.optionalDouble("rawAlpha"),
             )
         }
     }
@@ -1485,6 +1798,11 @@ data class LoadCalibration(
  *
  * Es zaehlen die juengsten [window] Paare (die Liste wird als chronologisch
  * aufsteigend erwartet). Unter [minSamples] Paaren bleibt α = 1,0.
+ *
+ * Ausserhalb von [alphaMin]…[alphaMax] wird α verworfen — aber der Rohwert
+ * bleibt in [LoadCalibration.rawAlpha] stehen, damit die Nutzerin ueber
+ * [LoadCalibration.note] erfaehrt, dass die beiden Pfade weit auseinander
+ * liegen. Frueher verschwand dieser Fall lautlos in einem α = 1,0.
  */
 fun computeLoadCalibration(
     samples: List<LoadCalibrationSample>,
@@ -1513,6 +1831,7 @@ fun computeLoadCalibration(
             sampleCount = recent.size,
             clamped = true,
             confidence = Confidence.LOW,
+            rawAlpha = ratio,
         )
     }
     return LoadCalibration(
@@ -1520,6 +1839,7 @@ fun computeLoadCalibration(
         sampleCount = recent.size,
         clamped = false,
         confidence = if (recent.size >= 10) Confidence.MEDIUM else Confidence.LOW,
+        rawAlpha = ratio,
     )
 }
 
@@ -1567,7 +1887,16 @@ fun heuristicLoad(
     return min(base * factor, maxLoad)
 }
 
-/** Bestimmt die Tourlast ueber die Fallback-Kaskade A → B → C → D (§3.1). */
+/**
+ * Bestimmt die Tourlast ueber die Fallback-Kaskade A → B → C → D (§3.1).
+ *
+ * ## α und [eftpW] sind Alternativen, keine Ergaenzung
+ * Beide korrigieren denselben Fehler. Wer [eftpW] bereits mit
+ * [resolveEftp] aus α zurueckgerechnet hat, muss hier
+ * [LoadCalibration.NEUTRAL] uebergeben — sonst wird zweimal korrigiert. Der
+ * α-Weg bleibt fuer den Fall, dass die Nutzerin eine eigene FTP eingetragen
+ * hat: Dann bleibt ihre Zahl unangetastet und der Rest wird skaliert.
+ */
 fun computeRideLoad(
     points: List<TrackPoint>,
     profile: TrainingProfile,

@@ -80,6 +80,7 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.withCause
 import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
 import de.trailscape.core.formatDuration
@@ -228,12 +229,23 @@ fun RidesScreen(appViewModel: AppViewModel) {
                 if (isDuplicateRide(rides, ride)) {
                     appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
                 } else {
+                    // Bleibt stehen statt in den Karten-Tab zu springen: Wer
+                    // hier importiert, will die Tour in **dieser** Liste sehen —
+                    // ganz besonders beim Import mehrerer Dateien hintereinander,
+                    // der sonst nach jeder Datei einen Rueckweg braucht. Die
+                    // Backup-Karte im Mehr-Tab macht es bereits so.
                     appViewModel.addRide(ride)
-                    appViewModel.requestTab(AppTab.MAP)
+                    appViewModel.showMessage("„${ride.name}“ importiert")
                 }
             } catch (e: Exception) {
+                // Deutscher Satz mit Handlungsanweisung zuerst, technische
+                // Ursache nur in Klammern (siehe ui/ErrorText.kt).
                 appViewModel.showMessage(
-                    e.message?.takeIf { it.isNotBlank() } ?: "Import fehlgeschlagen.",
+                    withCause(
+                        "Die Datei konnte nicht importiert werden. Trailscape liest " +
+                            "GPX- und FIT-Dateien, auch als .gz gepackt.",
+                        e,
+                    ),
                 )
             } finally {
                 importing = false
@@ -269,7 +281,13 @@ fun RidesScreen(appViewModel: AppViewModel) {
             try {
                 shareGpx(context, ride)
             } catch (e: Exception) {
-                appViewModel.showMessage("Teilen fehlgeschlagen: ${e.message}")
+                appViewModel.showMessage(
+                    withCause(
+                        "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
+                            "Speicher frei ist, und versuche es erneut.",
+                        e,
+                    ),
+                )
             }
         }
     }
@@ -559,7 +577,7 @@ private fun RideCard(
                 ride.stats.avgHrBpm?.let { RideFact("Ø Puls", "$it bpm") }
             }
 
-            if (loadText != null || ride.id.startsWith("hc-")) {
+            if (loadText != null || ride.id.startsWith("hc-") || ride.planned) {
                 Row(
                     modifier = Modifier.padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -572,11 +590,24 @@ private fun RideCard(
                             color = colors.primary,
                         )
                     }
+                    // Eine gespeicherte Planung sieht in dieser Liste sonst
+                    // genauso aus wie eine gefahrene Tour — sie zaehlt aber
+                    // weder fuer den Wochenfortschritt noch fuer die
+                    // Trainingsauswertung (siehe `:core`: `Ride.planned`).
+                    // Ohne Kennzeichnung waere ihr Fehlen in den Zahlen ein
+                    // Fehler, mit Kennzeichnung ist es eine Auskunft.
+                    if (ride.planned) {
+                        SuggestionChip(
+                            onClick = {},
+                            enabled = false,
+                            label = { Text("geplante Route") },
+                        )
+                    }
                     if (ride.id.startsWith("hc-")) {
                         SuggestionChip(
                             onClick = {},
                             enabled = false,
-                            label = { Text("aus Samsung Health") },
+                            label = { Text("aus Health Connect") },
                         )
                     }
                 }

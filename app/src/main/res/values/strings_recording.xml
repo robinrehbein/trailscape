@@ -13,6 +13,8 @@
     <string name="recording_notification_waiting">Warte auf GPS-Signal …</string>
     <!-- %1$s = Distanz in km (eine Nachkommastelle), %2$s = Dauer H:MM:SS -->
     <string name="recording_notification_progress">%1$s km · %2$s</string>
+    <!-- %1$d = Minuten ohne angenommenen GPS-Punkt -->
+    <string name="recording_notification_no_gps">Kein GPS-Signal seit %1$d min</string>
 
     <string name="recording_action_pause">Pause</string>
     <string name="recording_action_resume">Fortsetzen</string>
@@ -25,6 +27,8 @@
     <string name="recording_error_location_disabled">GPS ist ausgeschaltet. Bitte schalte den Standort ein (Schnelleinstellungen oder Einstellungen → Standort) und starte die Aufzeichnung erneut.</string>
     <string name="recording_error_location_off_during_ride">GPS wurde ausgeschaltet — es kommen keine neuen Punkte mehr an. Die bisherige Tour bleibt gesichert; sobald du den Standort wieder einschaltest, zeichnet Trailscape von selbst weiter auf.</string>
     <string name="recording_error_journal">Die Aufzeichnung konnte nicht auf den Speicher geschrieben werden.</string>
+    <string name="recording_error_journal_write">Die Tour kann nicht mehr auf den Speicher geschrieben werden — vermutlich ist er voll. Trailscape zeichnet vorerst nur noch im Arbeitsspeicher weiter auf; bitte schaffe Platz und beende die Aufzeichnung möglichst bald, sonst gehen Punkte verloren.</string>
+    <string name="recording_error_continue_lost">Die laufende Aufzeichnung konnte nach einem Neustart des Dienstes nicht fortgesetzt werden — es wird gerade NICHT aufgezeichnet. Die bis dahin gesammelten Punkte findest du als wiederhergestellte Tour in der Tourenliste. Bitte starte die Aufzeichnung neu.</string>
     <string name="recording_error_save_failed">Die Tour konnte nicht gespeichert werden. Sie bleibt gesichert und wird beim nächsten App-Start erneut gespeichert.</string>
     <string name="recording_error_too_few_points">Zu wenige GPS-Punkte.</string>
 

@@ -50,7 +50,7 @@ const val ISSUE_BODY_MAX_CHARS: Int = 6000
 /** Hinweis, der an einen gekuerzten Bericht angehaengt wird. */
 const val ISSUE_TRUNCATION_NOTICE: String =
     "\n\n[… gekürzt. Der vollständige Bericht passt nicht in einen GitHub-Link — " +
-        "bitte in der App auf „Teilen\" tippen und den kompletten Text hier einfügen.]"
+        "bitte in der App auf „Teilen“ tippen und den kompletten Text hier einfügen.]"
 
 /** Titel des Absturz-Issues. */
 const val CRASH_ISSUE_TITLE: String = "Absturz: "

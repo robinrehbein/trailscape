@@ -50,12 +50,23 @@ import kotlinx.serialization.json.put
  * [RecordingService.recoverIfNeeded] ein verwaistes Journal (App abgestuertzt,
  * Aufzeichnung liegt herrenlos herum) von einem, das ein gerade vom System
  * neu gestarteter Service in den naechsten Sekunden selbst fortsetzen wird.
+ * Das Format der Datei und die Auswertung stehen in [HeartbeatStamp] bzw.
+ * [bewerteLebenszeichen].
  *
  * Alle oeffentlichen Methoden sind synchronisiert: Der Service schreibt aus
  * seinem Aufzeichnungs-Thread, [claimStale]/[readAll] koennen aus einem
  * beliebigen anderen Thread kommen.
+ *
+ * @param uhr Zeitquelle des Lebenszeichens. Hereingereicht statt fest
+ *   verdrahtet, damit diese Klasse ohne einen einzigen Android-Import
+ *   auskommt — `SystemClock.elapsedRealtime()` lebt in `android.os` und waere
+ *   in einem reinen JVM-Test nicht zu haben. Die App reicht
+ *   [AndroidHeartbeatClock] herein.
  */
-internal class RecordingJournal(private val dir: File) {
+internal class RecordingJournal(
+    private val dir: File,
+    private val uhr: HeartbeatClock = WallClockHeartbeatClock,
+) {
 
     private val file = File(dir, ACTIVE_FILE_NAME)
     private val lockFile = File(dir, LOCK_FILE_NAME)
@@ -153,15 +164,31 @@ internal class RecordingJournal(private val dir: File) {
         lockFile.delete()
     }
 
-    /** Schreibt ein Lebenszeichen (siehe Klassendoc). */
-    fun touchHeartbeat(nowMs: Long) = synchronized(this) {
+    /**
+     * Schreibt ein Lebenszeichen (siehe Klassendoc).
+     *
+     * @return `false`, wenn das Schreiben fehlgeschlagen ist. Der Rueckgabewert
+     *   ist wichtig und darf nicht ignoriert werden: Frueher verschluckte diese
+     *   Methode jede Exception mit der Begruendung, ein fehlendes Lebenszeichen
+     *   koste hoechstens ein „(wiederhergestellt)" im Tournamen. Das stimmte
+     *   nicht — ein fehlendes Lebenszeichen liess die Wiederherstellung
+     *   `active.jsonl` umbenennen, waehrend dieser Dienst ueber seinen offenen
+     *   Dateideskriptor weiterschrieb. Der Dienst muss davon erfahren und es
+     *   melden; die Auswertung behandelt ein fehlendes Lebenszeichen seither
+     *   ausserdem als „unbekannt" statt als „tot" (siehe [beurteileJournal]).
+     */
+    fun touchHeartbeat(nowMs: Long = uhr.wallClockMs()): Boolean = synchronized(this) {
         try {
             dir.mkdirs()
-            lockFile.writeText(nowMs.toString(), Charsets.UTF_8)
+            val stempel = HeartbeatStamp(
+                wallClockMs = nowMs,
+                elapsedRealtimeMs = uhr.elapsedRealtimeMs(),
+                bootId = uhr.bootId(),
+            )
+            lockFile.writeText(stempel.serialisiere(), Charsets.UTF_8)
+            true
         } catch (e: Exception) {
-            // Der Heartbeat ist reine Kuer: schlaegt er fehl, wird das Journal
-            // schlimmstenfalls einmal zu frueh als verwaist eingestuft und die
-            // Tour als „(wiederhergestellt)" abgeschlossen. Nie ein Datenverlust.
+            false
         }
     }
 
@@ -177,19 +204,51 @@ internal class RecordingJournal(private val dir: File) {
         Unit
     }
 
-    /** Alter des letzten Lebenszeichens in ms, oder `null` wenn keines existiert. */
-    fun heartbeatAgeMs(nowMs: Long): Long? = synchronized(this) {
-        val raw = try {
+    /**
+     * Das gespeicherte Lebenszeichen, oder `null`, wenn es keines gibt bzw. es
+     * sich nicht lesen laesst. Die Bewertung uebernimmt
+     * [bewerteLebenszeichen] — hier wird nur gelesen.
+     */
+    fun lebenszeichen(): HeartbeatStamp? = synchronized(this) {
+        try {
             if (!lockFile.isFile) return null
-            lockFile.readText(Charsets.UTF_8).trim().toLongOrNull()
+            HeartbeatStamp.parse(lockFile.readText(Charsets.UTF_8))
         } catch (e: Exception) {
             null
-        } ?: return null
-        return nowMs - raw
+        }
     }
 
+    /**
+     * Alter der letzten Aenderung an `active.jsonl` in ms, oder `null`, wenn
+     * das Dateisystem nichts darueber sagt.
+     *
+     * Die zweite Quelle fuer [beurteileJournal], wenn das Lebenszeichen
+     * schweigt: Sie beantwortet die einzige Frage, auf die es ankommt — hat
+     * ueberhaupt noch jemand geschrieben? Bezugsgroesse ist zwangslaeufig die
+     * Wanduhr, denn mehr legt ein Dateisystem nicht ab.
+     */
+    fun journalAlterMs(nowWallMs: Long): Long? = synchronized(this) {
+        val geaendert = try {
+            file.lastModified()
+        } catch (e: Exception) {
+            0L
+        }
+        if (geaendert <= 0L) return null
+        return (nowWallMs - geaendert).coerceAtLeast(0L)
+    }
+
+    /**
+     * Schreibt eine Zeile und erzwingt sie auf den Datentraeger.
+     *
+     * Wirft bewusst, wenn kein Stream offen ist: Frueher stand hier
+     * `val out = stream ?: return` — jede Zeile ohne offenes Journal ging damit
+     * spurlos verloren, und der Aufrufer hielt sie fuer geschrieben. Genau
+     * dieser stille Verlust ist das, wogegen das Journal antritt.
+     */
     private fun writeLine(json: JsonObject) {
-        val out = stream ?: return
+        val out = stream ?: throw IllegalStateException(
+            "Journal ist nicht zum Schreiben geoeffnet (begin/reopenForAppend fehlt).",
+        )
         out.write((json.toString() + "\n").toByteArray(Charsets.UTF_8))
         out.flush()
         // Das eigentliche Haltbarkeitsversprechen: erst nach sync() hat der

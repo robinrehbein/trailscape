@@ -202,7 +202,13 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
             }
             busy = false
             results = hits.take(MAX_SEARCH_HITS)
-            if (hits.isEmpty()) appViewModel.showMessage("Keine Treffer gefunden.")
+            if (hits.isEmpty()) {
+                appViewModel.showMessage(
+                    "Kein Ort gefunden. Versuche es mit dem Ortsnamen allein, ohne " +
+                        "Straße und Postleitzahl — die Kacheln sind ohnehin " +
+                        "5° × 5° groß.",
+                )
+            }
         }
     }
 
@@ -228,7 +234,11 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
         if (hasLocationPermission(context)) {
             offerTileForMyLocation()
         } else {
-            appViewModel.showMessage("Standortfreigabe wurde abgelehnt.")
+            appViewModel.showMessage(
+                "Ohne Standortfreigabe wissen wir nicht, welche Kachel du brauchst. " +
+                    "Nimm die Ortssuche darunter — oder erteile die Freigabe unter " +
+                    "„Einstellungen → Apps → Trailscape → Berechtigungen“.",
+            )
         }
     }
 
@@ -508,7 +518,9 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
                             val ok = withContext(Dispatchers.IO) { inventory.delete(target) }
                             if (!ok) {
                                 appViewModel.showMessage(
-                                    "Die Routingdaten konnten nicht gelöscht werden.",
+                                    "Die Routingdaten konnten nicht gelöscht werden. " +
+                                        "Läuft gerade ein Download für diese Gegend, " +
+                                        "warte ihn ab und versuche es dann erneut.",
                                 )
                             }
                             reloadToken++

@@ -32,9 +32,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.core.Sex
 import de.trailscape.core.TrainingProfile
+import de.trailscape.core.defaultEftpWPerKg
 import de.trailscape.core.defaultSetupMassKg
+import de.trailscape.core.maxEftpW
+import de.trailscape.core.minEftpW
 import kotlin.math.round
 
 /**
@@ -47,11 +51,22 @@ import kotlin.math.round
  * die Signatur wirklich geaendert hat, damit eigene Tastatureingaben nicht
  * durch einen Rebuild ueberschrieben werden (Aequivalent zu `_adoptProfile`
  * im Original).
+ *
+ * ## Leere Felder statt fremder Zahlen
+ * Solange [AppViewModel.profileConfirmed] aus ist, bleiben Alter, Gewicht und
+ * „Rad + Gepäck" **leer**; die Standardwerte stehen nur als Platzhalter darin
+ * und darunter als Satz. Vorher waren die Felder mit Alter 40 und 75 kg
+ * vorbelegt — den Werten aus [de.trailscape.app.ui.defaultTrainingProfile] —
+ * und sahen damit aus wie eine eigene, bereits getaetigte Eingabe. Wer die
+ * Einfuehrung uebersprungen hatte, hatte keinen Anlass, sie zu korrigieren, und
+ * bekam Trainingslast, HFmax und Schwelle aus den Massen eines fremden Koerpers
+ * als „deine Werte" ausgegeben.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
+    val confirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     var ageText by remember { mutableStateOf("") }
@@ -61,22 +76,26 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     var hrMaxText by remember { mutableStateOf("") }
     var lthrText by remember { mutableStateOf("") }
     var restingHrText by remember { mutableStateOf("") }
+    var ftpText by remember { mutableStateOf("") }
     var sex by remember { mutableStateOf(Sex.UNBEKANNT) }
     var advancedOpen by rememberSaveable { mutableStateOf(false) }
     var statusText by remember { mutableStateOf<String?>(null) }
     var appliedSignature by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(profile) {
+    LaunchedEffect(profile, confirmed) {
         val signature = profile.toJson().toString()
         if (signature == appliedSignature) return@LaunchedEffect
         appliedSignature = signature
-        ageText = profile.ageYears.toString()
-        weightText = formatProfileNumber(profile.weightKg)
-        setupMassText = formatProfileNumber(profile.setupMassKg)
+        // Die drei Pflicht-/Standardfelder bleiben leer, solange nichts
+        // bestaetigt ist — siehe KDoc der Karte.
+        ageText = if (confirmed) profile.ageYears.toString() else ""
+        weightText = if (confirmed) formatProfileNumber(profile.weightKg) else ""
+        setupMassText = if (confirmed) formatProfileNumber(profile.setupMassKg) else ""
         weeklyHoursText = profile.weeklyHours?.let { formatProfileNumber(it) } ?: ""
         hrMaxText = profile.hrMaxOverride?.let { formatProfileNumber(it) } ?: ""
         lthrText = profile.lthrOverride?.let { formatProfileNumber(it) } ?: ""
         restingHrText = profile.restingHrOverride?.let { formatProfileNumber(it) } ?: ""
+        ftpText = profile.eftpOverrideW?.let { formatProfileNumber(it) } ?: ""
         sex = profile.sex
     }
 
@@ -94,6 +113,10 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 value = ageText,
                 onValueChange = { ageText = it },
                 label = { Text("Alter") },
+                // Der Platzhalter nennt genau die Zahl, mit der bis zur
+                // Eingabe gerechnet wird — sichtbar als Vorschlag (grau, im
+                // leeren Feld) statt als scheinbar eigene Angabe.
+                placeholder = { Text(defaultTrainingProfile.ageYears.toString()) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
@@ -108,6 +131,7 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 value = weightText,
                 onValueChange = { weightText = it },
                 label = { Text("Gewicht (kg)") },
+                placeholder = { Text(formatProfileNumber(defaultTrainingProfile.weightKg)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
@@ -117,12 +141,25 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 value = setupMassText,
                 onValueChange = { setupMassText = it },
                 label = { Text("Rad + Gepäck (kg)") },
+                placeholder = { Text(formatProfileNumber(defaultSetupMassKg)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
+        if (!confirmed) {
+            Text(
+                text = "Noch nicht eingetragen — wir rechnen bis dahin mit Standardwerten " +
+                    "(${defaultTrainingProfile.ageYears} Jahre, " +
+                    "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg). " +
+                    "Trainingslast, HFmax, Schwelle und geschätzte Leistung sind deshalb " +
+                    "nur grobe Schätzungen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = hintColor,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
         Text(
             text = "Ohne Angabe rechnen wir mit ${formatProfileNumber(defaultSetupMassKg)} kg " +
                 "für Rad und Gepäck.",
@@ -200,6 +237,34 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 color = hintColor,
             )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedTextField(
+                value = ftpText,
+                onValueChange = { ftpText = it },
+                label = { Text("Schwellenleistung FTP (Watt, optional)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten " +
+                    "kannst. Sie ist der Massstab für jede Trainingslast: An ihr hängen " +
+                    "Fitness (CTL), Ermüdung (ATL), Form (TSB) und dein Wochenziel — " +
+                    "änderst du sie, verschieben sich auch alle bisherigen Werte.\n\n" +
+                    "Ohne Eintrag schätzen wir: zuerst aus deinem besten " +
+                    "20-Minuten-Abschnitt (× 0,95), dann aus dem Abgleich mit deiner " +
+                    "gemessenen Herzfrequenz, notfalls grob mit " +
+                    "${formatProfileNumber(defaultEftpWPerKg)} W/kg — für ambitionierte " +
+                    "Fahrer:innen deutlich zu niedrig. Ein eigener Wert ist deshalb die " +
+                    "wirksamste Einzelangabe in diesem Formular. Für eine belastbare Zahl " +
+                    "fährst du nach gutem Aufwärmen 20 Minuten am Anschlag und trägst " +
+                    "95 % deiner Durchschnittsleistung ein; ohne Leistungsmesser bleibt " +
+                    "es auch hier ein Schätzwert.",
+                style = MaterialTheme.typography.bodySmall,
+                color = hintColor,
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -224,6 +289,7 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
                     hrMaxText = hrMaxText,
                     lthrText = lthrText,
                     restingHrText = restingHrText,
+                    ftpText = ftpText,
                     onSave = appViewModel::setProfile,
                 )
             },
@@ -294,6 +360,7 @@ private fun saveProfile(
     hrMaxText: String,
     lthrText: String,
     restingHrText: String,
+    ftpText: String,
     onSave: (TrainingProfile) -> Unit,
 ): String {
     val age = ageText.trim().toIntOrNull()
@@ -312,6 +379,13 @@ private fun saveProfile(
     if (weeklyHours != null && (weeklyHours <= 0 || weeklyHours > 40)) {
         return "Bitte eine Wochenzeit zwischen 1 und 40 Stunden angeben."
     }
+    // Dieselben Grenzen wie im Rechenkern (`minEftpW`/`maxEftpW`): Ein Wert
+    // ausserhalb wuerde dort ohnehin geklemmt — dann sagen wir es lieber hier.
+    val ftp = parseProfileNumber(ftpText)
+    if (ftp != null && (ftp < minEftpW || ftp > maxEftpW)) {
+        return "Bitte eine FTP zwischen ${formatProfileNumber(minEftpW)} und " +
+            "${formatProfileNumber(maxEftpW)} Watt angeben."
+    }
 
     onSave(
         TrainingProfile(
@@ -325,7 +399,7 @@ private fun saveProfile(
             cda = current.cda,
             crr = current.crr,
             driveEfficiency = current.driveEfficiency,
-            eftpOverrideW = current.eftpOverrideW,
+            eftpOverrideW = ftp,
             weeklyHours = weeklyHours,
         ),
     )

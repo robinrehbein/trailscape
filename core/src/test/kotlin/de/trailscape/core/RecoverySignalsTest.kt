@@ -159,19 +159,37 @@ class RecoverySignalsTest {
     }
 
     @Test
-    fun `unter 14 Tagen Historie kommt der Aufbauhinweis mit Restzahl`() {
+    fun `unter 14 Tagen im Vergleichszeitraum kommt der Aufbauhinweis mit Restzahl`() {
+        // 10 Tage Historie: Tage 0–6 sind das Rollfenster, nur 3 Tage liegen im
+        // Vergleichszeitraum (Tage 7…59).
         val h = assessHrv(daily(filled(10, 50.0)))
         assertFalse(h.available)
-        assertEquals(10, h.historyDays)
-        assertTrue(h.unavailableReason!!.contains("Braucht noch 4 Tage HRV-Daten"))
+        assertEquals(3, h.historyDays)
+        assertTrue(h.unavailableReason!!.contains("Braucht noch 11 Tage HRV-Daten"))
+        // Auch ohne Bewertung bleibt der Messwert anzeigbar.
+        assertEquals(50.0, h.lastRmssd!!, 1e-9)
     }
 
     @Test
-    fun `genau 14 Tage reichen fuer die volle Wertung`() {
-        val h = assessHrv(daily(filled(14, 50.0)))
+    fun `genau 21 Tage reichen fuer die volle Wertung`() {
+        // 7 Tage Rollfenster + 14 Tage Vergleichszeitraum ist das Minimum,
+        // seit sich die beiden Fenster nicht mehr ueberlappen.
+        val h = assessHrv(daily(filled(21, 50.0)))
         assertTrue(h.available)
         assertEquals(14, h.historyDays)
         assertEquals(7, h.recentDays)
+
+        assertFalse(assessHrv(daily(filled(20, 50.0))).available)
+    }
+
+    @Test
+    fun `das Rollfenster steckt nicht in seiner eigenen Baseline`() {
+        // Sieben Tage Einbruch: Die Baseline darf davon nichts sehen, sonst
+        // zoege der Einbruch seine eigene Referenz mit.
+        val h = assessHrv(daily(filled(30, 50.0) + filled(7, 30.0)))
+        assertEquals(50.0, h.baselineRmssd!!, 1e-6)
+        assertEquals(30.0, h.currentRmssd!!, 1e-6)
+        assertEquals(30, h.historyDays)
     }
 
     @Test
@@ -194,7 +212,7 @@ class RecoverySignalsTest {
         val h = assessHrv(daily(filled(21, 50.0) + filled(7, 35.0)))
         assertTrue(h.available)
         assertEquals(HrvStatus.NIEDRIG, h.status)
-        assertEquals(RecoveryFlag.ORANGE, h.flag)
+        assertTrue(atLeast(h.flag, RecoveryFlag.ORANGE))
         assertTrue(h.z!! < -hrvBandFactor)
         assertTrue(h.deviationPercent!! < -10)
         assertTrue(h.message.contains("unter deinem Normalband"))
@@ -203,11 +221,14 @@ class RecoverySignalsTest {
     }
 
     @Test
-    fun `leichter Rueckgang bleibt bei gelb`() {
+    fun `leichter Rueckgang auf rauschfreier Serie ist schon deutlich`() {
+        // Ohne Rauschen greift der Sigma-Boden (0,05): −8 % sind dort bereits
+        // 1,7 Tagesstreuungen. Auf einer realistisch streuenden Serie waere
+        // derselbe Rueckgang unauffaellig — siehe die Rauschtests unten.
         val h = assessHrv(daily(filled(21, 50.0) + filled(7, 46.0)))
         assertEquals(HrvStatus.NIEDRIG, h.status)
-        assertEquals(RecoveryFlag.GELB, h.flag)
-        assertTrue(h.message.contains("knapp unter"))
+        assertEquals(RecoveryFlag.ORANGE, h.flag)
+        assertTrue(h.message.contains("deutlich unter"))
     }
 
     @Test
@@ -256,15 +277,16 @@ class RecoverySignalsTest {
             ),
         )
         assertTrue(mixed.available)
-        assertEquals(26, mixed.historyDays)
+        assertEquals(21, mixed.historyDays)
         assertEquals(5, mixed.recentDays)
         assertEquals(HrvStatus.IM_BAND, mixed.status)
     }
 
     @Test
-    fun `nur Tage der letzten 28 zaehlen zur HRV-Baseline`() {
-        val h = assessHrv(daily(filled(60, 50.0)))
-        assertEquals(hrvBaselineDays, h.historyDays)
+    fun `nur die Tage 7 bis 59 zaehlen zur HRV-Baseline`() {
+        val h = assessHrv(daily(filled(90, 50.0)))
+        assertEquals(hrvBaselineDays - hrvRollingDays, h.historyDays)
+        assertEquals(hrvRollingDays, h.recentDays)
     }
 
     // --- group('Schlaf-Bewertung') ---

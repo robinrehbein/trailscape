@@ -129,6 +129,21 @@ class TrainingProfileTest {
         assertEquals(6.5, TrainingProfile.fromJson(json).weeklyHours!!, 0.0)
     }
 
+    @Test
+    fun `FTP ist optional und JSON-abwaertskompatibel`() {
+        // Gespeicherte Profile aus der Zeit vor dem FTP-Feld muessen weiter
+        // lesbar bleiben und auf den Default fallen.
+        val old = TrainingProfile.fromJson(obj("""{"ageYears":35,"weightKg":78}"""))
+        assertNull(old.eftpOverrideW)
+        assertEquals(2.4 * 78, old.eftpW, 1e-9)
+        assertFalse(refProfile.toJson().containsKey("eftpOverrideW"))
+
+        val entered = refProfile.copyWith(eftpOverrideW = 265.0)
+        val json = roundTrip(entered.toJson())
+        assertEquals(265.0, TrainingProfile.fromJson(json).eftpOverrideW!!, 0.0)
+        assertEquals(265.0, TrainingProfile.fromJson(json).eftpW, 0.0)
+    }
+
     // --- group('Zonenmodell') ---
 
     private val zones = refProfile.zones

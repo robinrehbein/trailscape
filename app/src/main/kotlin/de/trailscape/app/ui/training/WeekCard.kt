@@ -24,8 +24,15 @@ import de.trailscape.core.formatHours
 import kotlin.math.roundToInt
 
 /**
- * Karte „Diese Woche": Wochenlast, Zielwert (Last-Budget, Stunden) und
- * Deload-Empfehlung.
+ * Karte „Belastung dieser Woche": Wochenlast, Zielwert (Last-Budget, Stunden)
+ * und Deload-Empfehlung.
+ *
+ * ## Warum nicht mehr „Diese Woche"
+ * So hiess auch die Karte der Startseite (`ui/today/TodayCards.kt`) — und die
+ * zeigt etwas anderes: gefahrene gegen geplante **Kilometer** der Planwoche.
+ * Hier geht es um **Last** (7-Tage-Summe, Zielwert, Deload), also um eine ganz
+ * andere Zahl mit derselben Ueberschrift. Der Titel nennt jetzt, worum es geht;
+ * der der Startseite bleibt, weil dort die schlichtere Auskunft steht.
  *
  * Port von `_buildWeekCard` (`lib/screens/training_screen.dart`).
  *
@@ -48,12 +55,18 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
     var budgetClickable = false
     if (target != null && !deload.recommended) {
         val hours = formatHours(target.estimatedHours)
+        // Die Umrechnung Last → Stunden unterstellt eine gemischte Woche
+        // (≈ 58 Last je Fahrstunde, siehe `weeklyLoadPerHour` in :core) und
+        // haengt ausserdem an derselben geschaetzten Schwellenleistung wie die
+        // Lastwerte selbst. Beides gehoert in den Satz, sonst liest sich die
+        // Zahl wie eine Planvorgabe.
         if (weeklyHours != null && weeklyHours > 0) {
-            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei deinem Budget von " +
-                "${formatHours(weeklyHours)} h pro Woche."
+            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche und " +
+                "deinem Budget von ${formatHours(weeklyHours)} h pro Woche. Fährst du " +
+                "härter, brauchst du weniger Zeit für denselben Zielwert."
         } else {
-            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit. Trage im Mehr-Tab dein " +
-                "Zeitbudget ein, dann rechnen wir es mit ein."
+            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche. Trage " +
+                "im Mehr-Tab dein Zeitbudget ein, dann rechnen wir es mit ein."
             budgetClickable = true
         }
     }
@@ -67,7 +80,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
 
     Card {
         Column(modifier = Modifier.padding(CardPadding)) {
-            Text("Diese Woche", style = MaterialTheme.typography.titleMedium)
+            Text("Belastung dieser Woche", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
             FlowRow(

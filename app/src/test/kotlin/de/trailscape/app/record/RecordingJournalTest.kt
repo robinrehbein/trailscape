@@ -9,6 +9,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -40,6 +41,20 @@ class RecordingJournalTest {
 
     private fun point(lat: Double, timeMs: Long, ele: Double? = 100.0) =
         TrackPoint(lat = lat, lon = 13.0, ele = ele, time = timeMs)
+
+    /** „Jetzt" mit reiner Wanduhr — wie in Version 1.x. */
+    private fun stempel(wallMs: Long) = HeartbeatStamp(wallClockMs = wallMs)
+
+    /** Feste Zeitquelle; auf Android liefert diese Werte [AndroidHeartbeatClock]. */
+    private class TestUhr(
+        private val wall: Long,
+        private val elapsed: Long?,
+        private val boot: String?,
+    ) : HeartbeatClock {
+        override fun wallClockMs(): Long = wall
+        override fun elapsedRealtimeMs(): Long? = elapsed
+        override fun bootId(): String? = boot
+    }
 
     // --- Zeilenformat ---
 
@@ -214,10 +229,97 @@ class RecordingJournalTest {
     @Test
     fun `Lebenszeichen liefert sein Alter`() {
         val j = journal()
-        assertNull(j.heartbeatAgeMs(10_000L))
+        assertEquals(HeartbeatAge.Unbekannt, bewerteLebenszeichen(j.lebenszeichen(), stempel(10_000L)))
 
-        j.touchHeartbeat(10_000L)
-        assertEquals(2_000L, j.heartbeatAgeMs(12_000L))
+        assertTrue(j.touchHeartbeat(10_000L))
+        assertEquals(
+            HeartbeatAge.Bekannt(2_000L),
+            bewerteLebenszeichen(j.lebenszeichen(), stempel(12_000L)),
+        )
+    }
+
+    @Test
+    fun `das Lebenszeichen traegt die monotone Uhr und die Boot-Kennung mit`() {
+        val uhr = TestUhr(wall = 10_000L, elapsed = 500_000L, boot = "boot-a")
+        val j = RecordingJournal(dir, uhr)
+        assertTrue(j.touchHeartbeat())
+
+        val gelesen = assertNotNull(j.lebenszeichen())
+        assertEquals(10_000L, gelesen.wallClockMs)
+        assertEquals(500_000L, gelesen.elapsedRealtimeMs)
+        assertEquals("boot-a", gelesen.bootId)
+    }
+
+    /**
+     * Befund 2: Schlaegt das Schreiben fehl (hier nachgestellt, indem an der
+     * Stelle des Lebenszeichens ein Verzeichnis liegt), darf das nicht still
+     * bleiben — der Dienst muss davon erfahren und es melden koennen.
+     */
+    @Test
+    fun `ein fehlgeschlagenes Lebenszeichen wird gemeldet statt verschluckt`() {
+        dir.mkdirs()
+        assertTrue(File(dir, RecordingJournal.LOCK_FILE_NAME).mkdir())
+
+        assertFalse(journal().touchHeartbeat(10_000L))
+    }
+
+    @Test
+    fun `ein fehlendes Lebenszeichen heisst unbekannt und nicht tot`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendPoint(point(52.0, 1_005L))
+        j.close()
+        // Kein touchHeartbeat: genau der Zustand nach einem gescheiterten
+        // Schreibversuch.
+
+        assertEquals(HeartbeatAge.Unbekannt, bewerteLebenszeichen(j.lebenszeichen(), stempel(10_000L)))
+    }
+
+    @Test
+    fun `das Alter des Journals dient als zweite Quelle`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.close()
+
+        val geaendert = activeFile().lastModified()
+        assertTrue(geaendert > 0L)
+        assertEquals(5_000L, j.journalAlterMs(geaendert + 5_000L))
+        // Eine zurueckgestellte Uhr ergibt kein negatives Alter.
+        assertEquals(0L, j.journalAlterMs(geaendert - 5_000L))
+    }
+
+    @Test
+    fun `ohne Journal gibt es kein Journal-Alter`() {
+        assertNull(journal().journalAlterMs(10_000L))
+    }
+
+    // --- Schreiben ohne offenes Journal ---
+
+    /**
+     * Befund 3: `writeLine` begann frueher mit `val out = stream ?: return` und
+     * verlor damit jede Zeile ohne offenes Journal vollstaendig stumm — der
+     * Aufrufer hielt den Punkt fuer gesichert. Genau dagegen tritt diese Klasse
+     * an, also muss es scheitern und nicht schweigen.
+     */
+    @Test
+    fun `ohne offenes Journal wirft das Anhaengen statt still zu verlieren`() {
+        val j = journal()
+
+        assertFailsWith<IllegalStateException> { j.appendPoint(point(52.0, 1_000L)) }
+        assertFailsWith<IllegalStateException> { j.appendPause(1_000L) }
+        assertFailsWith<IllegalStateException> { j.appendResume(2_000L) }
+    }
+
+    @Test
+    fun `nach close wirft das Anhaengen ebenfalls`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendPoint(point(52.0, 1_005L))
+        j.close()
+
+        assertFailsWith<IllegalStateException> { j.appendPoint(point(52.1, 1_010L)) }
+        // Der bereits geschriebene Punkt bleibt unangetastet.
+        assertEquals(1, assertNotNull(journal().read()).points.size)
     }
 
     // --- Inbesitznahme durch die Wiederherstellung ---

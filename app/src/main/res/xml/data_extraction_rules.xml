@@ -17,6 +17,8 @@
         <exclude domain="file" path="mbgl-offline.db" />
         <exclude domain="file" path="mbgl-offline.db-wal" />
         <exclude domain="file" path="mbgl-offline.db-shm" />
+        <exclude domain="file" path="segments" />
+        <exclude domain="file" path="brouter" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="recording" />
@@ -24,5 +26,7 @@
         <exclude domain="file" path="mbgl-offline.db" />
         <exclude domain="file" path="mbgl-offline.db-wal" />
         <exclude domain="file" path="mbgl-offline.db-shm" />
+        <exclude domain="file" path="segments" />
+        <exclude domain="file" path="brouter" />
     </device-transfer>
 </data-extraction-rules>
