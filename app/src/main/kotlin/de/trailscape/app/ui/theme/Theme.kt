@@ -87,10 +87,13 @@ private val DarkColors = darkColorScheme(
  * ([TrailscapeShapes]) global gestellt: Screens erben Rundungen, Gewichte
  * und Flaechen und bringen selbst keine Zahlen mehr mit.
  *
- * Neben dem Material-Schema stellt das Theme die **Ampelfarben**
- * ([SignalColors]) bereit: alles, was nicht aus `colorScheme` kommen kann
- * (Readiness-Ampel, Wochentypen, Warnhinweise), aber trotzdem hell und dunkel
- * unterschiedlich aussehen muss. Siehe `theme/SignalColors.kt`.
+ * Neben dem Material-Schema stellt das Theme zwei eigene Farbhalter bereit —
+ * beide fuer Toene, die aus `colorScheme` nicht kommen koennen, aber trotzdem
+ * hell und dunkel unterschiedlich sein muessen:
+ *  * die **Ampelfarben** ([SignalColors], `theme/SignalColors.kt`) fuer
+ *    Readiness-Ampel, Wochentypen und Warnhinweise,
+ *  * die **Leistenfarben** ([NavigationBarColors],
+ *    `theme/NavigationColors.kt`) fuer die schwebende One-UI-Navigationskapsel.
  */
 @Composable
 fun TrailscapeTheme(
@@ -99,6 +102,8 @@ fun TrailscapeTheme(
 ) {
     CompositionLocalProvider(
         LocalSignalColors provides if (darkTheme) DarkSignalColors else LightSignalColors,
+        LocalNavigationBarColors provides
+            if (darkTheme) DarkNavigationBarColors else LightNavigationBarColors,
     ) {
         MaterialTheme(
             colorScheme = if (darkTheme) DarkColors else LightColors,

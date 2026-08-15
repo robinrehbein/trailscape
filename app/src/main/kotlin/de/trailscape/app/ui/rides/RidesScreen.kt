@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -49,8 +48,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,7 +71,11 @@ import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.Fact
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.OneUiLargeTopAppBar
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
+import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.importActivityFile
@@ -82,7 +84,6 @@ import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
-import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
@@ -310,29 +311,32 @@ fun RidesScreen(appViewModel: AppViewModel) {
             onDelete = { deleteTarget = detailRide },
         )
     } else {
+        val scrollBehavior = oneUiTopAppBarScrollBehavior()
+
         Scaffold(
             // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
             // aufgeloest und als Padding an den NavHost gegeben — hier duerfen sie
             // kein zweites Mal aufschlagen.
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                TopAppBar(
-                    title = {
-                        // One-UI-Listentitel: gross und fett statt der
-                        // kleinen Material-Leiste.
-                        Text("Touren", style = MaterialTheme.typography.headlineMedium)
-                    },
-                    windowInsets = WindowInsets(0, 0, 0, 0),
-                    // Flache One-UI-Kopfzeile: keine eigene Flaeche, der
-                    // Bildschirmhintergrund scheint durch.
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
+            topBar = { OneUiLargeTopAppBar("Touren", scrollBehavior) },
+            snackbarHost = {
+                // Ohne dieses Padding erschiene die Meldung hinter der
+                // schwebenden Navigationskapsel.
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier.padding(
+                        bottom = LocalFloatingNavigationBarSpace.current,
                     ),
                 )
             },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
                 ExtendedFloatingActionButton(
+                    // Der Knopf steht ueber der schwebenden Navigationskapsel
+                    // statt hinter ihr.
+                    modifier = Modifier.padding(
+                        bottom = LocalFloatingNavigationBarSpace.current,
+                    ),
                     onClick = { if (!importing) importLauncher.launch(arrayOf("*/*")) },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -365,14 +369,14 @@ fun RidesScreen(appViewModel: AppViewModel) {
                     }
 
                     // Gleiche Breitendeckelung und dasselbe One-UI-Raster
-                    // (ScreenPadding/CardGap aus dem Theme) wie im Trainings-
-                    // und Mehr-Tab; vorher stand die Liste hier ohne Deckelung
-                    // mit 12-dp-Rand und 8-dp-Abstand.
+                    // (screenContentPadding/CardGap) wie im Trainings- und
+                    // Mehr-Tab; vorher stand die Liste hier ohne Deckelung mit
+                    // 12-dp-Rand und 8-dp-Abstand.
                     rides.isEmpty() -> Box(
                         modifier = Modifier
                             .widthIn(max = ContentMaxWidth)
                             .fillMaxWidth()
-                            .padding(ScreenPadding),
+                            .padding(screenContentPadding()),
                     ) {
                         RidesEmptyState(
                             onRecord = { appViewModel.requestTab(AppTab.MAP) },
@@ -386,13 +390,10 @@ fun RidesScreen(appViewModel: AppViewModel) {
                             .fillMaxHeight()
                             .widthIn(max = ContentMaxWidth)
                             .fillMaxWidth(),
-                        contentPadding = PaddingValues(
-                            start = ScreenPadding,
-                            end = ScreenPadding,
-                            top = ScreenPadding,
-                            // Platz, damit der schwebende Knopf die letzte Karte nicht verdeckt.
-                            bottom = ScreenPadding + 80.dp,
-                        ),
+                        // Zusaetzlich zur Bodenfreiheit der Navigationskapsel
+                        // noch die Hoehe des Importknopfs, damit er die letzte
+                        // Karte nicht verdeckt.
+                        contentPadding = screenContentPadding(extraBottom = 80.dp),
                         verticalArrangement = Arrangement.spacedBy(CardGap),
                     ) {
                         items(items = rides, key = { it.id }) { ride ->

@@ -57,12 +57,13 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
-import de.trailscape.app.routing.planRouteOfflineFirst
-import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.CardPadding
@@ -1129,7 +1130,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     Scaffold(
         // Die Huelle (TrailscapeApp) hat die System-Insets schon aufgeloest.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            // Ueber der schwebenden Navigationskapsel, nicht dahinter.
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = LocalFloatingNavigationBarSpace.current),
+            )
+        },
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -1277,7 +1284,12 @@ fun MapScreen(appViewModel: AppViewModel) {
                     .align(Alignment.BottomCenter)
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
-                    .padding(OverlayScreenPadding),
+                    .padding(OverlayScreenPadding)
+                    // Die Navigationskapsel schwebt ueber der Karte (siehe
+                    // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
+                    // ihre Hoehe nach oben — sonst laege das Planungsblatt
+                    // teilweise hinter ihr.
+                    .padding(bottom = LocalFloatingNavigationBarSpace.current),
                 horizontalAlignment = Alignment.End,
             ) {
                 RecordButton(

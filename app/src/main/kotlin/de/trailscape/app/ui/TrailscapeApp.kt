@@ -1,24 +1,28 @@
 package de.trailscape.app.ui
 
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Today
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -28,6 +32,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.OneUiNavigationBar
+import de.trailscape.app.ui.components.OneUiNavigationBarDefaults
+import de.trailscape.app.ui.components.OneUiNavigationBarItem
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
@@ -64,6 +72,15 @@ import de.trailscape.app.ui.training.TrainingScreen
  * | `ui/rides/RidesScreen.kt` | Tourenliste |
  * | `ui/training/TrainingScreen.kt` | Trainingsplan und Auswertung |
  * | `ui/more/MoreScreen.kt` | Einstellungen, Health, Backup, Sync |
+ * | `ui/components/OneUiNavigationBar.kt` | Fundament: die schwebende Navigationskapsel |
+ *
+ * ## Die Leiste schwebt — was das fuer einen Screen bedeutet
+ * Die Navigationskapsel liegt im One-UI-Stil **ueber** dem Inhalt und belegt
+ * keine Layout-Hoehe. Jeder Bildschirm haelt seinen unteren Rand deshalb selbst
+ * frei: `screenContentPadding()` fuer Listen,
+ * `LocalFloatingNavigationBarSpace.current` fuer alles, was sonst unten steht
+ * (schwebende Knoepfe, Kartenpanels, `SnackbarHost`). Wer das vergisst, baut
+ * ein Bedienelement hinter die Kapsel.
  *
  * Neue Hilfs-Composables eines Screens gehoeren in **dessen** Paket
  * (`ui/map/…`, `ui/training/…`, `ui/more/…`) oder — wenn wirklich geteilt —
@@ -104,11 +121,11 @@ import de.trailscape.app.ui.training.TrainingScreen
  * Karte. `HOME` ist deshalb das erste Ziel und die `startDestination`.
  *
  * ## Fuenf Tabs sind das Maximum
- * Material 3 laesst in der `NavigationBar` bis zu fuenf Ziele zu; damit ist die
- * Leiste jetzt voll. Die Beschriftungen bleiben kurz (das laengste ist
- * „Training"), und jedes Label ist einzeilig mit Ellipse gesetzt — auf einem
- * 320-dp-Geraet bleiben je Ziel rund 64 dp, in denen nichts abgeschnitten
- * aussehen darf. Ein sechstes Ziel braeuchte ein anderes Muster.
+ * Fuenf Ziele fuellen die schwebende Kapsel
+ * (`ui/components/OneUiNavigationBar.kt`) aus. Die Beschriftungen bleiben kurz
+ * (das laengste ist „Training"), und jedes Label ist einzeilig mit Ellipse
+ * gesetzt — auf einem 320-dp-Geraet bleiben je Ziel rund 60 dp, in denen nichts
+ * abgeschnitten aussehen darf. Ein sechstes Ziel braeuchte ein anderes Muster.
  */
 private enum class TopLevelDestination(
     val tab: AppTab,
@@ -148,48 +165,57 @@ fun TrailscapeApp() {
         return
     }
 
-    Scaffold(
-        bottomBar = {
-            // One-UI-leiste: kein eigener Ton, sondern flach auf dem
-            // Bildschirmhintergrund. Der transparente Container blendet die
-            // Tonal-Elevation der M3-Defaults aus — der Fenstergrund (Surface
-            // der Activity) scheint durch, windowInsets bleiben Default.
-            NavigationBar(containerColor = Color.Transparent) {
-                TopLevelDestination.entries.forEach { destination ->
-                    val selected = currentDestination?.hierarchy?.any {
-                        it.route == destination.route
-                    } == true
+    // Bodenfreiheit, die jeder Bildschirm unten einplanen muss: die Kapsel samt
+    // ihrer Raender plus die Gestenleiste des Systems. Das Inset wird hier
+    // gelesen und NICHT verzehrt — die Kapsel selbst legt es sich noch einmal
+    // an, und die Bildschirme brauchen es als Zahl, nicht als Padding.
+    val systemBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val navigationBarSpace = OneUiNavigationBarDefaults.OverlaySpace + systemBottomInset
 
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { navController.navigateToTab(destination.route) },
-                        icon = { Icon(destination.icon, contentDescription = null) },
-                        label = {
-                            // Einzeilig mit Ellipse: Mit fuenf Zielen wird der
-                            // Platz je Beschriftung eng, und ein umgebrochenes
-                            // Label wuerde die Leiste hoeher machen als alle
-                            // anderen Bildschirme sie erwarten.
-                            Text(
-                                text = destination.label,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
+    Box(modifier = Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalFloatingNavigationBarSpace provides navigationBarSpace) {
+            NavHost(
+                navController = navController,
+                startDestination = TopLevelDestination.HOME.route,
+                // Oben und seitlich loest die Huelle die System-Insets auf (das
+                // taten vorher die `innerPadding` des `Scaffold`); unten
+                // ausdruecklich nicht — dort soll der Inhalt bis unter die
+                // Kapsel laufen. `imePadding` haelt Eingabefelder ueber der
+                // Tastatur, was zuvor am `contentWindowInsets` des Scaffold hing.
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(
+                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                        ),
                     )
-                }
+                    .imePadding(),
+            ) {
+                composable(TopLevelDestination.HOME.route) { TodayScreen(appViewModel) }
+                composable(TopLevelDestination.MAP.route) { MapScreen(appViewModel) }
+                composable(TopLevelDestination.TOURS.route) { RidesScreen(appViewModel) }
+                composable(TopLevelDestination.TRAINING.route) { TrainingScreen(appViewModel) }
+                composable(TopLevelDestination.MORE.route) { MoreScreen(appViewModel) }
             }
-        },
-    ) { innerPadding ->
-        NavHost(
-            navController = navController,
-            startDestination = TopLevelDestination.HOME.route,
-            modifier = Modifier.padding(innerPadding),
-        ) {
-            composable(TopLevelDestination.HOME.route) { TodayScreen(appViewModel) }
-            composable(TopLevelDestination.MAP.route) { MapScreen(appViewModel) }
-            composable(TopLevelDestination.TOURS.route) { RidesScreen(appViewModel) }
-            composable(TopLevelDestination.TRAINING.route) { TrainingScreen(appViewModel) }
-            composable(TopLevelDestination.MORE.route) { MoreScreen(appViewModel) }
+        }
+
+        // Die schwebende One-UI-Kapsel liegt ueber dem Inhalt (siehe
+        // `components/OneUiNavigationBar.kt`) — deshalb `Box` statt
+        // `Scaffold(bottomBar = …)`: Ein bottomBar-Slot wuerde ihr Hoehe im
+        // Layout zuweisen, und genau das soll sie nicht haben.
+        OneUiNavigationBar(modifier = Modifier.align(Alignment.BottomCenter)) {
+            TopLevelDestination.entries.forEach { destination ->
+                val selected = currentDestination?.hierarchy?.any {
+                    it.route == destination.route
+                } == true
+
+                OneUiNavigationBarItem(
+                    selected = selected,
+                    onClick = { navController.navigateToTab(destination.route) },
+                    icon = destination.icon,
+                    label = destination.label,
+                )
+            }
         }
     }
 }

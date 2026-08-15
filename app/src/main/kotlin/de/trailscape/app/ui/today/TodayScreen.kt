@@ -3,7 +3,6 @@ package de.trailscape.app.ui.today
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,12 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
-import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
-import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.weekdayDateFormat
 import de.trailscape.core.assessPlanFeasibility
 import de.trailscape.core.currentWeekIndex
@@ -146,7 +146,16 @@ fun TodayScreen(appViewModel: AppViewModel) {
         // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
         // aufgeloest und als Padding an den NavHost gegeben.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = {
+            // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
+            // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(
+                    bottom = LocalFloatingNavigationBarSpace.current,
+                ),
+            )
+        },
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -159,7 +168,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     .fillMaxHeight()
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(ScreenPadding),
+                contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
                 item(key = "kopf") { TodayHeader() }

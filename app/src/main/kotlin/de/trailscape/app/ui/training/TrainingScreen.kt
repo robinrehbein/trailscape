@@ -3,7 +3,6 @@ package de.trailscape.app.ui.training
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,32 +15,32 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.OneUiLargeTopAppBar
+import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
+import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.LocalSignalColors
-import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.assessFitness
 import de.trailscape.core.routeTargetForSession
 
@@ -134,26 +133,24 @@ fun TrainingScreen(appViewModel: AppViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
 
+    val scrollBehavior = oneUiTopAppBarScrollBehavior()
+
     Scaffold(
         // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
         // aufgeloest und als Padding an den NavHost gegeben.
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                        // One-UI-Listentitel: gross und fett statt der
-                        // kleinen Material-Leiste.
-                        Text("Training", style = MaterialTheme.typography.headlineMedium)
-                    },
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                // Flache One-UI-Kopfzeile: keine eigene Flaeche, der
-                // Bildschirmhintergrund scheint durch.
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
+        topBar = { OneUiLargeTopAppBar("Training", scrollBehavior) },
+        snackbarHost = {
+            // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
+            // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(
+                    bottom = LocalFloatingNavigationBarSpace.current,
                 ),
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -169,7 +166,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     .fillMaxHeight()
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(ScreenPadding),
+                contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
                 if (rides.isEmpty()) {

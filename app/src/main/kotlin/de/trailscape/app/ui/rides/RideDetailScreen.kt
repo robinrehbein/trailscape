@@ -57,6 +57,7 @@ import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -237,7 +238,10 @@ internal fun RideDetailScreen(
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(ScreenPadding),
+                    // Unten die Bodenfreiheit der schwebenden Navigationskapsel
+                    // (siehe screenContentPadding), sonst endet die letzte
+                    // Karte hinter ihr.
+                    .padding(screenContentPadding()),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
                 if (ride.points.isNotEmpty()) {
