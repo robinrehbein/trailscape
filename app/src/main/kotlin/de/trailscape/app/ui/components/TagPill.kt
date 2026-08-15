@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
