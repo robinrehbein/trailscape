@@ -128,9 +128,15 @@ sdk.dir=/pfad/zum/android-sdk
 
 ```bash
 ./gradlew :app:assembleRelease   # Release-APK -> app/build/outputs/apk/release/
+./gradlew :app:bundleRelease     # Play-Bundle -> app/build/outputs/bundle/release/
 ./gradlew :app:assembleDebug     # Debug-APK
 ./gradlew :app:installDebug      # auf ein angeschlossenes Gerät
 ```
+
+Dieselben beiden Aufgaben gibt es für den Wear-OS-Spike (`:wear:assembleRelease`,
+`:wear:bundleRelease`, siehe [docs/wear-spike.md](docs/wear-spike.md)). APK und
+Bundle einer Variante entstehen aus **demselben** R8-Lauf — sie tragen denselben
+Code und dieselbe `mapping.txt`, nur eine andere Verpackung.
 
 Der Release-Build läuft durch R8 (`minifyEnabled` + `shrinkResources`); die
 Regeln stehen in [`app/proguard-rules.pro`](app/proguard-rules.pro), die
@@ -147,14 +153,16 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 662 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # Tests der plattformfreien :app-Teile
+./gradlew :core:test              # 786 Tests des Domänenmodells
+./gradlew :app:testDebugUnitTest  # 147 Tests der plattformfreien :app-Teile
 ```
 
 Was die CI vor jedem Release ausführt:
 
 ```bash
-./gradlew clean :core:test :app:testDebugUnitTest :app:assembleRelease
+./gradlew :core:test :app:testDebugUnitTest \
+          :app:assembleRelease :app:bundleRelease \
+          :wear:assembleRelease :wear:bundleRelease
 ```
 
 `:app` hat bewusst kein Robolectric — getestet wird dort nur, was ohne
@@ -185,6 +193,22 @@ main-Build ein unveränderliches Release `v2.0.<Lauf-Nummer>` an, dessen Notizen
 die Commit-Betreffs seit dem vorigen solchen Release auflisten — die Übersicht
 steht auf der [Releases-Seite](https://github.com/robinrehbein/trailscape/releases).
 Dieselbe Nummer trägt die installierte App unter **Mehr → Über**.
+
+**Die `.aab`-Dateien am versionierten Release.** Neben der APK hängen dort
+`trailscape-phone.aab` und `trailscape-wear.aab` — Android App Bundles, das
+einzige Format, das die Google Play Console annimmt. Auf einem Gerät sind sie
+nicht installierbar; sie liegen dort, damit zu jeder veröffentlichten
+Lauf-Nummer dauerhaft das passende Upload-Artefakt greifbar ist (Actions-Artefakte
+verfallen nach 90 Tagen, ein verbrauchter versionCode lässt sich aber nicht
+neu bauen). Der Vertriebsweg dieses Projekts bleibt der direkte APK-Download.
+
+> **Vor dem ersten Play-Upload lesen:** Play signiert die ausgelieferten APKs
+> standardmäßig mit einem eigenen Schlüssel und degradiert den Projektschlüssel
+> zum bloßen Upload-Schlüssel. Play-Installation und GitHub-APK wären dann
+> unterschiedlich signiert und ließen sich nicht übereinander aktualisieren.
+> Wer das vermeiden will, muss **bei der Erstanlage der Play-App** genau diesen
+> Keystore als App-Signaturschlüssel hochladen — später ist das nicht mehr
+> möglich.
 
 **Update-Hinweis in der App.** Die App fragt höchstens einmal am Tag still im
 Hintergrund die veröffentlichten Releases ab. Gibt es eine neuere Nummer als
