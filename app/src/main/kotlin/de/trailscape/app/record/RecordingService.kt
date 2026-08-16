@@ -27,9 +27,15 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.wear.WearBridge
+import de.trailscape.core.AufzeichnungsZustand
+import de.trailscape.core.LocationFusion
 import de.trailscape.core.PointFilter
 import de.trailscape.core.PointFilterResult
+import de.trailscape.core.Quelle
 import de.trailscape.core.Ride
+import de.trailscape.core.SensorSample
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.computeStats
 import de.trailscape.core.formatDuration
 import de.trailscape.core.haversineM
@@ -120,6 +126,27 @@ class RecordingService : Service() {
      * der Notification ist folgenlos.
      */
     private val filter = PointFilter()
+
+    /**
+     * Fusion aus Telefon- und Uhr-Positionen (Handy-Bruecke, siehe
+     * `RecordingFusionLogic.kt`). Wie [filter] nur auf [recordingThread]
+     * angefasst — auch Uhr-Proben laufen dort ein, siehe [onWatchSample]. Je
+     * Aufzeichnung eine frische Instanz (siehe `startRecording`/
+     * `continueFromJournal`): `LocationFusion` hat keinen `reset()`, und ein
+     * neuer ENU-Ursprung fuer jede Fahrt ist ohnehin richtig.
+     */
+    private var fusion = LocationFusion()
+
+    /**
+     * Zuletzt aufgezeichneter Punkt ueber BEIDE Quellen hinweg — die
+     * Referenz fuer die Distanzberechnung in [recordFusedPoint]. Bewusst
+     * getrennt von `filter.lastPoint` (das nur Telefon-Punkte kennt): Ohne
+     * Uhr sind beide zu jedem Zeitpunkt identisch (siehe
+     * `RecordingFusionLogicTest`), erst ein von der Uhr aufgezeichneter Punkt
+     * laesst sie auseinanderlaufen.
+     */
+    @Volatile
+    private var lastRecordedPoint: TrackPoint? = null
 
     @Volatile
     private var active = false
@@ -233,6 +260,11 @@ class RecordingService : Service() {
     override fun onCreate() {
         super.onCreate()
         RecordingRepository.attach(this)
+        // So frueh wie moeglich: Eine Aufzeichnung soll den Kopplungsstatus
+        // der Uhr kennen, bevor der erste Punkt aufgezeichnet wird, nicht
+        // erst, wenn zufaellig eine Nachricht von ihr eintrifft (siehe
+        // WearBridge-Klassendoc). Idempotent, doppelt aufgerufen unschaedlich.
+        WearBridge.attach(this)
         journal = RecordingJournal(RecordingJournal.directory(filesDir), AndroidHeartbeatClock)
         recordingThread = HandlerThread("trailscape-recording").apply { start() }
         handler = Handler(recordingThread.looper)
@@ -276,6 +308,10 @@ class RecordingService : Service() {
     override fun onDestroy() {
         stopUpdates()
         handler.removeCallbacksAndMessages(null)
+        // Netz gegen einen Systemabbruch, der weder finishAndStop noch
+        // failAndStop durchlaeuft: Ein haengender Sink wuerde Uhr-Proben ins
+        // Leere schicken (die naechste Aufzeichnung registriert ohnehin neu).
+        RecordingRepository.detachWatchSampleSink()
         journal.close()
         recordingThread.quitSafely()
         super.onDestroy()
@@ -324,6 +360,8 @@ class RecordingService : Service() {
         val id = RecordingJournal.newRideId(now)
 
         filter.reset()
+        fusion = LocationFusion()
+        lastRecordedPoint = null
         startedAtMs = now
         pausedMsAccum = 0L
         pauseStartedAtMs = null
@@ -361,6 +399,7 @@ class RecordingService : Service() {
         if (!requestUpdates(neueAufzeichnung = true)) return
 
         active = true
+        registriereWatchSampleSink()
         meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
         updateNotification(now, force = true)
@@ -422,6 +461,8 @@ class RecordingService : Service() {
         pauseStartedAtMs = snapshot.pausedSinceMs
         filter.restore(snapshot.points)
         filter.paused = snapshot.pausedSinceMs != null
+        fusion = LocationFusion()
+        lastRecordedPoint = snapshot.points.lastOrNull()
         distanceM = computeStats(snapshot.points).distanceKm * 1000
         lastNotificationMs = 0L
         lastAcceptedAtMs = 0L
@@ -431,6 +472,7 @@ class RecordingService : Service() {
         if (!requestUpdates(neueAufzeichnung = false)) return
 
         active = true
+        registriereWatchSampleSink()
         val now = System.currentTimeMillis()
         stromSeitMs = now
         letzterResubscribeMs = now
@@ -485,6 +527,7 @@ class RecordingService : Service() {
         stopUpdates()
         handler.removeCallbacks(ticker)
         active = false
+        RecordingRepository.detachWatchSampleSink()
 
         val snapshot = journal.read()?.let { mitRamPunkten(it) }
         journal.close()
@@ -511,6 +554,7 @@ class RecordingService : Service() {
         }
 
         RecordingRepository.publishStopped(savedId)
+        sendeZustandAnUhr()
         stopSelfSafely()
     }
 
@@ -696,22 +740,98 @@ class RecordingService : Service() {
             fallbackTimeMs = System.currentTimeMillis(),
         )
 
-        val previous = filter.lastPoint
         when (val result = filter.offer(sample)) {
             is PointFilterResult.Accepted -> {
-                val point = result.point
+                val telefonPunkt = result.point
                 lastAcceptedAtMs = System.currentTimeMillis()
-                // Zuerst auf den Datentraeger, dann in den RAM.
-                journalSchreiben { journal.appendPoint(point) }
-                if (previous != null) {
-                    distanceM += haversineM(previous, point)
-                }
-                RecordingRepository.publishPoint(point, distanceM / 1000, filter.currentSpeedKmh)
-                updateNotification(System.currentTimeMillis(), force = false)
+                // Der PointFilter hat schon entschieden, dass dieser Punkt
+                // aufgezeichnet wird — die Fusion entscheidet nur noch MIT
+                // WELCHER Position (siehe waehlePunktZumAufzeichnen). Eine
+                // fehlende Genauigkeit (0.0, siehe toLocationSample) wird
+                // NICHT als „perfekt genau" an die Fusion gereicht, sonst
+                // wuerde ein einzelner ungenauer Fix ihren Kalman-Zustand
+                // kuenstlich festnageln.
+                val fused = fusion.fuege(
+                    quelle = Quelle.TELEFON,
+                    zeitMs = telefonPunkt.time ?: lastAcceptedAtMs,
+                    lat = telefonPunkt.lat,
+                    lon = telefonPunkt.lon,
+                    hoeheM = telefonPunkt.ele,
+                    genauigkeitM = sample.accuracyM.takeIf { it > 0.0 },
+                )
+                val point = waehlePunktZumAufzeichnen(fused, telefonPunkt, RecordingRepository.heartRateBpm.value)
+                    ?: telefonPunkt
+                recordFusedPoint(point)
             }
 
             is PointFilterResult.Rejected -> Unit
         }
+    }
+
+    /**
+     * Verarbeitet eine Positionsprobe der Uhr — angestossen ueber den Sink,
+     * den [registriereWatchSampleSink] beim [RecordingRepository] hinterlegt.
+     * Laeuft wie [onLocation] ausschliesslich auf [recordingThread].
+     *
+     * Anders als beim Telefon steht davor kein [PointFilter]: Der ist auf die
+     * Eigenheiten eines einzelnen `android.location.Location`-Stroms
+     * zugeschnitten (Duplikat-/Genauigkeitsfilter). Die Uhr bekommt
+     * stattdessen genau die Pruefungen, die [LocationFusion] selbst mitbringt
+     * (Ausreisser uber 100 m, Toleranzfenster fuer verspaetete Proben) — und
+     * zusaetzlich denselben Pausenschutz wie das Telefon.
+     */
+    private fun onWatchSample(sample: SensorSample) {
+        if (!active || filter.paused) return
+        val lat = sample.lat ?: return
+        val lon = sample.lon ?: return
+
+        val fused = fusion.fuege(
+            quelle = Quelle.UHR,
+            zeitMs = sample.zeitMs,
+            lat = lat,
+            lon = lon,
+            hoeheM = sample.hoeheM,
+            genauigkeitM = sample.genauigkeitM,
+        ) ?: return
+        // Eine zwischenzeitlich verarbeitete, aktuellere Telefon-Probe hat
+        // diese Uhr-Probe bereits ueberholt (siehe Toleranzfenster in
+        // LocationFusion) — dann gibt es nichts Neues aufzuzeichnen.
+        if (fused.zuletzt != Quelle.UHR) return
+
+        val point = waehlePunktZumAufzeichnen(fused, telefonPunkt = null, RecordingRepository.heartRateBpm.value)
+            ?: return
+        lastAcceptedAtMs = System.currentTimeMillis()
+        recordFusedPoint(point)
+    }
+
+    /**
+     * Schreibt einen aus [onLocation]/[onWatchSample] gewaehlten Punkt in die
+     * drei Ziele, die ein angenommener Punkt immer erreicht: Journal, laufende
+     * Distanz, [RecordingRepository]-Zustand. Siehe [lastRecordedPoint] fuer
+     * die quellenuebergreifende Distanzreferenz.
+     */
+    private fun recordFusedPoint(point: TrackPoint) {
+        // Zuerst auf den Datentraeger, dann in den RAM.
+        journalSchreiben { journal.appendPoint(point) }
+        lastRecordedPoint?.let { vorheriger -> distanceM += haversineM(vorheriger, point) }
+        lastRecordedPoint = point
+        RecordingRepository.publishPoint(point, distanceM / 1000, filter.currentSpeedKmh)
+        updateNotification(System.currentTimeMillis(), force = false)
+    }
+
+    /**
+     * Registriert [onWatchSample] beim [RecordingRepository] als Ziel fuer
+     * Uhr-Proben, solange diese Aufzeichnung laeuft. Gegenstueck:
+     * `RecordingRepository.detachWatchSampleSink()`, aufgerufen an jedem Ende
+     * der Aufzeichnung (siehe `finishAndStop`/`failAndStop`).
+     *
+     * `handler.post`, weil `RecordingRepository.offerWatchSample` von einem
+     * Play-Services-Thread aus aufgerufen wird
+     * ([de.trailscape.app.wear.WearListenerService]) und [fusion] wie
+     * [filter] nur auf [recordingThread] angefasst werden darf.
+     */
+    private fun registriereWatchSampleSink() {
+        RecordingRepository.attachWatchSampleSink { sample -> handler.post { onWatchSample(sample) } }
     }
 
     /**
@@ -893,6 +1013,26 @@ class RecordingService : Service() {
         } catch (e: Exception) {
             // Ohne POST_NOTIFICATIONS bleibt die Aufzeichnung trotzdem gueltig.
         }
+        // Trittbrett auf demselben Takt: Diese Methode ist bereits auf
+        // Zustandsaenderung (force=true) UND alle NOTIFICATION_INTERVAL_MS
+        // gedrosselt — exakt der Takt, den die Uhr laut Protokoll bekommen
+        // soll (siehe WearBridge-Klassendoc). Eine zweite, eigene Drosselung
+        // nur fuer die Uhr waere dieselbe Zahl ein zweites Mal.
+        sendeZustandAnUhr()
+    }
+
+    /** Baut den aktuellen Aufzeichnungszustand und schickt ihn an eine erreichbare Uhr. */
+    private fun sendeZustandAnUhr() {
+        WearBridge.sendZustand(
+            this,
+            AufzeichnungsZustand(
+                laeuft = active,
+                pausiert = pauseStartedAtMs != null,
+                dauerMs = elapsedMs(System.currentTimeMillis()),
+                distanzKm = distanceM / 1000,
+                hf = RecordingRepository.heartRateBpm.value,
+            ),
+        )
     }
 
     private fun buildNotification(): Notification {
@@ -1006,6 +1146,7 @@ class RecordingService : Service() {
 
         if (active || journal.exists()) {
             active = false
+            RecordingRepository.detachWatchSampleSink()
             stopUpdates()
             handler.removeCallbacks(ticker)
             val snapshot = journal.read()?.let { mitRamPunkten(it) }
@@ -1024,6 +1165,7 @@ class RecordingService : Service() {
         }
 
         RecordingRepository.publishStopped(null)
+        sendeZustandAnUhr()
         stopSelfSafely()
     }
 

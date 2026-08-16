@@ -128,6 +128,22 @@
             android:foregroundServiceType="location"
             android:stopWithTask="false" />
 
+        <!-- Handy-Bruecke: empfaengt Sensordaten und Befehle einer gekoppelten
+             Uhr ueber die Wear-OS-Datenschicht (Data Layer API). Google Play
+             Services erzeugt und bindet diese Instanz selbst — auch wenn
+             Trailscape gerade nicht laeuft —, sobald eine Nachricht unter
+             einem der in WearProtocol.kt deklarierten Pfade eintrifft. Der
+             Intent-Filter ist die von der Bibliothek dafuer vorgesehene
+             Registrierung, kein selbst erfundener; `exported="true"` ist
+             noetig, damit der (fremde) Play-Services-Prozess binden darf. -->
+        <service
+            android:name=".wear.WearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+            </intent-filter>
+        </service>
+
         <!-- Kein eigener Dienst, sondern eine Ergaenzung an dem, den
              WorkManager selbst mitbringt: Ab Android 14 muss der Typ eines
              Vordergrunddienstes im Manifest stehen, und WorkManagers eigene

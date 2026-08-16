@@ -1022,6 +1022,52 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Suchverlauf der Ortssuche (Karten-Tab)
+    // -------------------------------------------------------------------------
+
+    private val _placeSearchHistory = MutableStateFlow<List<PlaceSearchHistoryEntry>>(emptyList())
+
+    /**
+     * Die zuletzt ausgewaehlten Orte der Kartensuche, neuester zuerst — hoechstens
+     * [PLACE_SEARCH_HISTORY_LIMIT]. Zeigt sie an: `de.trailscape.app.ui.map.SearchSheet`
+     * unter „Zuletzt gesucht", solange das Suchfeld leer ist.
+     *
+     * Dasselbe Muster wie [mapStyle] direkt darueber: ein einzelner
+     * [KeyValueStore]-Schluessel, hier aber fuer eine kleine Liste statt eines
+     * einzelnen Werts. Ein eigener Eintrag pro Ort waere fuer fuenf Zeilen
+     * unnoetiger Aufwand — die Liste liegt deshalb wie schon der Wegpunktname
+     * in `PlanningStateSavers.kt` als ein einziger, mit Steuerzeichen
+     * zusammengesetzter String im Speicher (siehe [encodePlaceSearchHistory]).
+     */
+    val placeSearchHistory: StateFlow<List<PlaceSearchHistoryEntry>> =
+        _placeSearchHistory.asStateFlow()
+
+    /**
+     * Merkt sich [entry] als zuletzt gewaehlten Ort — vorne angefuegt, ein
+     * schon vorhandener Eintrag *desselben* Orts (Koordinaten) ruckt dabei nur
+     * nach vorn statt sich zu verdoppeln.
+     */
+    fun recordPlaceSearchHistory(entry: PlaceSearchHistoryEntry) {
+        val updated = (listOf(entry) + _placeSearchHistory.value.filterNot { it.sameLocationAs(entry) })
+            .take(PLACE_SEARCH_HISTORY_LIMIT)
+        _placeSearchHistory.value = updated
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    keyValueStore.setString(
+                        PLACE_SEARCH_HISTORY_STORAGE_KEY,
+                        encodePlaceSearchHistory(updated),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun readPlaceSearchHistory(): List<PlaceSearchHistoryEntry> = runCatching {
+        decodePlaceSearchHistory(keyValueStore.getString(PLACE_SEARCH_HISTORY_STORAGE_KEY))
+    }.getOrDefault(emptyList())
+
+    // -------------------------------------------------------------------------
     // Offline-Routingdaten (Kacheln)
     // -------------------------------------------------------------------------
 
@@ -1286,6 +1332,7 @@ class AppViewModel(
                     vitalsHistory = readVitalsHistory(keyValueStore),
                     shortSleeperHintShownAt = readShortSleeperHintShownAt(),
                     planFeasibilityAckKey = readPlanFeasibilityAckKey(),
+                    placeSearchHistory = readPlaceSearchHistory(),
                 )
             }
             _profile.value = restored.profile
@@ -1293,6 +1340,7 @@ class AppViewModel(
             _plan.value = restored.plan
             _planFeasibilityAckKey.value = restored.planFeasibilityAckKey
             _mapStyle.value = restored.mapStyle
+            _placeSearchHistory.value = restored.placeSearchHistory
             _syncConfig.value = restored.syncConfig
             _reminderSettings.value = restored.reminderSettings
             _segmentUnmeteredOnly.value = restored.segmentUnmeteredOnly
@@ -1336,6 +1384,7 @@ class AppViewModel(
         val vitalsHistory: VitalsHistory,
         val shortSleeperHintShownAt: LocalDateTime?,
         val planFeasibilityAckKey: String?,
+        val placeSearchHistory: List<PlaceSearchHistoryEntry>,
     )
 }
 
@@ -1385,6 +1434,67 @@ const val SHORT_SLEEPER_HINT_STORAGE_KEY: String = "trailscape.hint.shortsleeper
  * [AppViewModel.planFeasibilityAckKey] und [planFeasibilityIdentityKey]).
  */
 const val PLAN_FEASIBILITY_ACK_STORAGE_KEY: String = "trailscape.today.planfeasibility.ack.v1"
+
+/**
+ * Ein zuletzt gewaehlter Ort der Kartensuche (siehe [AppViewModel.placeSearchHistory]).
+ *
+ * Bewusst ein eigener, schlanker Typ statt `de.trailscape.app.ui.map.Place`:
+ * Das ViewModel liegt im geteilten `ui`-Paket und soll nicht von einem
+ * einzelnen Feature-Paket (`ui.map`) abhaengen, nur um drei Werte zu
+ * persistieren. Die Umrechnung zwischen beiden ist trivial und liegt beim
+ * Aufrufer (`MapScreen.kt`).
+ */
+data class PlaceSearchHistoryEntry(val displayName: String, val lat: Double, val lon: Double) {
+    /** Ob [other] denselben Ort meint — Grundlage fuer „nach vorn ruecken statt verdoppeln". */
+    fun sameLocationAs(other: PlaceSearchHistoryEntry): Boolean = lat == other.lat && lon == other.lon
+}
+
+/** Wie viele zuletzt gesuchte Orte [AppViewModel.recordPlaceSearchHistory] behaelt. */
+const val PLACE_SEARCH_HISTORY_LIMIT: Int = 5
+
+/**
+ * Schluessel im [KeyValueStore] fuer den Suchverlauf der Kartensuche (siehe
+ * [AppViewModel.placeSearchHistory]).
+ */
+const val PLACE_SEARCH_HISTORY_STORAGE_KEY: String = "trailscape.map.searchhistory.v1"
+
+/**
+ * Trennzeichen der zusammengesetzten Suchverlauf-Zeichenkette — dasselbe
+ * Steuerzeichen-Muster wie bei den geretteten Wegpunktnamen
+ * (`PlanningStateSavers.kt`, `WAYPOINT_NAME_SEPARATOR`/`WAYPOINT_NO_NAME_MARKER`),
+ * hier aber lokal und unabhaengig definiert: Beide Stellen loesen dasselbe
+ * Problem (Menschentext, der Steuerzeichen praktisch nie enthaelt, in einem
+ * einzelnen `String` fuer eine [KeyValueStore]-Zeile), teilen aber keinen
+ * gemeinsamen Datentyp, den ein gemeinsames Symbol rechtfertigen wuerde.
+ * [Char(31)] trennt die Felder eines Eintrags (Name/lat/lon), [Char(30)]
+ * trennt die Eintraege selbst.
+ */
+private val SEARCH_HISTORY_FIELD_SEPARATOR: Char = Char(31)
+private val SEARCH_HISTORY_ENTRY_SEPARATOR: Char = Char(30)
+
+/** Baut den Suchverlauf zu einer einzelnen, [KeyValueStore]-tauglichen Zeichenkette zusammen. */
+private fun encodePlaceSearchHistory(entries: List<PlaceSearchHistoryEntry>): String =
+    entries.joinToString(SEARCH_HISTORY_ENTRY_SEPARATOR.toString()) { entry ->
+        listOf(entry.displayName, entry.lat.toString(), entry.lon.toString())
+            .joinToString(SEARCH_HISTORY_FIELD_SEPARATOR.toString())
+    }
+
+/**
+ * Das Gegenstueck zu [encodePlaceSearchHistory]. Ein defekter oder fehlender
+ * Wert liefert eine leere Liste statt zu werfen — derselbe Umgang wie bei
+ * jedem anderen [KeyValueStore]-Lesen in diesem ViewModel (`runCatching` beim
+ * Aufrufer).
+ */
+private fun decodePlaceSearchHistory(raw: String?): List<PlaceSearchHistoryEntry> {
+    if (raw.isNullOrEmpty()) return emptyList()
+    return raw.split(SEARCH_HISTORY_ENTRY_SEPARATOR).mapNotNull { record ->
+        val fields = record.split(SEARCH_HISTORY_FIELD_SEPARATOR)
+        if (fields.size != 3) return@mapNotNull null
+        val lat = fields[1].toDoubleOrNull() ?: return@mapNotNull null
+        val lon = fields[2].toDoubleOrNull() ?: return@mapNotNull null
+        PlaceSearchHistoryEntry(displayName = fields[0], lat = lat, lon = lon)
+    }.take(PLACE_SEARCH_HISTORY_LIMIT)
+}
 
 /**
  * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert

@@ -10,8 +10,7 @@
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Anders als `:app` braucht der Spike ACTIVITY_RECOGNITION wirklich:
-         Health Services liefert bei ExerciseType.BIKING Schritte/Kadenz und
+    <!-- Health Services liefert bei ExerciseType.BIKING Schritte/Kadenz und
          verweigert ohne dieses Recht Teile der Uebung. -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
 
@@ -24,16 +23,24 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@drawable/ic_spike_launcher"
+        android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault">
 
-        <!-- Die Uhr-App laeuft ohne Telefon-Gegenstueck. Fuer den Spike ist das
-             sogar zwingend: Er soll messen, was die Uhr ALLEIN kann. -->
+        <!-- Die Uhr-App laeuft OHNE installierte Telefon-App weiterhin voll
+             standalone (eigenes GPS, eigene Herzfrequenz, eigene
+             Aufzeichnung) — die Data-Layer-Kopplung an `:app` ist eine
+             Ergaenzung, keine Voraussetzung. -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
+
+        <!-- Macht diese App fuer das Telefon per CapabilityClient auffindbar
+             (FAEHIGKEIT_UHR, siehe res/values/wear.xml und WearProtocol.kt). -->
+        <meta-data
+            android:name="com.google.android.wearable.capability"
+            android:resource="@array/android_wear_capabilities" />
 
         <activity
             android:name=".MainActivity"
@@ -50,14 +57,41 @@
         <!-- foregroundServiceType="health|location": Health Services haelt die
              Uebung nur so lange am Leben, wie ein Vordergrunddienst mit diesen
              beiden Typen laeuft. Ein zusaetzlicher WakeLock waere hier ein
-             Fehler und KEINE Absicherung — der Dienst allein genuegt, ein
-             WakeLock wuerde genau den Akkuvorteil zerstoeren, den dieser Spike
-             ausmessen soll (Frage 3). -->
+             Fehler und KEINE Absicherung — der Dienst allein genuegt (siehe
+             RecordingService-KDoc). -->
         <service
-            android:name=".record.SpikeService"
+            android:name=".record.RecordingService"
             android:exported="false"
             android:foregroundServiceType="health|location"
             android:stopWithTask="false" />
+
+        <!-- Empfaengt Steuerbefehle und den Anzeigezustand vom Telefon (siehe
+             CommandListenerService-KDoc). Im Manifest deklariert statt nur
+             zur Laufzeit registriert, damit das System diesen Dienst auch
+             dann startet, wenn gerade keine Activity offen ist — ein Befehl
+             vom Telefon darf nicht verlorengehen, nur weil niemand auf die
+             Uhr schaut. `exported="true"` ist fuer einen manifestgebundenen
+             WearableListenerService Pflicht, tatsaechlich erreichbar ist er
+             trotzdem nur ueber die Data-Layer-APIs von Play Services, nicht
+             fuer beliebige andere Apps auf dem Geraet. -->
+        <service
+            android:name=".comm.CommandListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/trailscape/befehl-an-uhr" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/trailscape/zustand" />
+            </intent-filter>
+        </service>
     </application>
 
     <queries>

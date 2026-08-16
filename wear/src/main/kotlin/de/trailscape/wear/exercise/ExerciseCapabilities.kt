@@ -7,30 +7,30 @@ import androidx.health.services.client.data.ExerciseType
 import androidx.health.services.client.getCapabilities
 
 /**
- * Frage 1 des Spikes: Was kann diese Uhr fuer [ExerciseType.BIKING] wirklich?
+ * Was kann diese konkrete Uhr fuer [ExerciseType.BIKING] wirklich?
  *
  * Google garantiert fuer Radfahren nur einen Kern —
  * `HEART_RATE_BPM, LOCATION, STEPS, DISTANCE, SPEED, PACE, ELEVATION_GAIN,
- * CALORIES`. Alles darueber hinaus ist geraeteabhaengig, und genau daran
- * haengt die eigentliche Frage: [DataType.ABSOLUTE_ELEVATION] (Hoehe ueber NN)
- * ist OPTIONAL. Ohne diesen Datentyp gaebe es im GPX kein Hoehenprofil, denn
- * `ELEVATION_GAIN` ist nur der Zuwachs seit dem letzten Punkt und laesst sich
- * nicht in absolute Hoehen zurueckrechnen.
+ * CALORIES`. Alles darueber hinaus ist geraeteabhaengig — allen voran
+ * [DataType.ABSOLUTE_ELEVATION] (Hoehe ueber NN), die auf der Galaxy Watch
+ * Ultra laut Mess-Spike (docs/wear-spike.md) vorhanden ist, aber nicht auf
+ * jeder Wear-OS-Uhr sein muss: `ELEVATION_GAIN` ist nur der Zuwachs seit dem
+ * letzten Punkt und laesst sich nicht in absolute Hoehen zurueckrechnen.
  *
  * Deshalb wird hier NIE eine Liste hart angefordert, sondern immer die
  * Wunschliste gegen die Geraetefaehigkeiten geschnitten. Health Services
  * beantwortet ein `startExercise` mit unbekanntem Datentyp mit einer
- * Ausnahme — der Spike wuerde also gar nicht erst starten, statt zu messen.
+ * Ausnahme — die Aufzeichnung wuerde also gar nicht erst starten.
  */
 
 /**
  * Alles, was fuer eine Radaufzeichnung interessant waere — unabhaengig davon,
- * ob die Uhr es liefert. Die Differenz zwischen dieser Liste und dem, was
- * [ermittleFaehigkeiten] zurueckgibt, IST das Messergebnis von Frage 1.
+ * ob die konkrete Uhr es liefert. [ermittleFaehigkeiten] schneidet diese
+ * Liste gegen die tatsaechlichen Geraetefaehigkeiten.
  *
  * Bewusst nur [DeltaDataType]s: Nur diese duerfen in eine [androidx.health.services.client.data.WarmUpConfig]
- * (siehe [ExerciseRecorder.vorbereiten]), und der Spike will jeden
- * angeforderten Typ auch vorwaermen koennen.
+ * (siehe [ExerciseRecorder.vorbereiten]) — jeder angeforderte Typ soll auch
+ * vorgewaermt werden koennen.
  */
 val WUNSCH_DATENTYPEN: Set<DeltaDataType<*, *>> = setOf(
     DataType.LOCATION,

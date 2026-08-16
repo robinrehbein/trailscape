@@ -1,5 +1,9 @@
-// Wear-OS-Spike: ein eigenstaendiges APK, das auf der Uhr aufzeichnet und
-// dabei protokolliert, was sich nur auf echter Hardware klaeren laesst.
+// Wear-OS-Begleit-App: ein eigenstaendiges APK, das auf der Uhr aufzeichnet
+// (Health Services) und ueber die Data-Layer-APIs mit `:app` spricht. Aus dem
+// Mess-Spike hervorgegangen, der auf echter Hardware klaeren sollte, was die
+// Galaxy Watch Ultra unter Wear OS 5 tatsaechlich liefert — siehe
+// docs/wear-spike.md fuer die urspruengliche Fragestellung und den
+// Geraetetest-Ablauf, der unveraendert gilt.
 //
 // Wie `:app` ohne `org.jetbrains.kotlin.android`: AGP 9 bringt die
 // Kotlin-Unterstuetzung (inkl. Compose-Compiler) selbst mit und lehnt das
@@ -77,19 +81,12 @@ android {
 
     buildTypes {
         release {
-            // BEWUSSTE, TEMPORAERE Abweichung von `:app`, das R8 in der
-            // Voll-Optimierung faehrt: Dieser Spike soll Fragen ueber die
-            // Uhr beantworten — welche DataTypes sie liefert, wie dicht die
-            // GPS-Punkte kommen, was das den Akku kostet. Waere R8 aktiv,
-            // koennte jede Ueberraschung auf dem Geraet auch eine
-            // weggeschrumpfte Klasse oder eine fehlende Keep-Regel sein, und
-            // jede Messung muesste erst gegen diese zweite Erklaerung
-            // verteidigt werden. Ein Spike, dessen Messergebnisse man
-            // anzweifeln muss, ist wertlos.
-            //
-            // Wenn aus `:wear` ein Produkt wird, ist das Einschalten von R8
-            // (samt eigener proguard-rules.pro fuer health-services-client)
-            // eine der ersten Aufgaben.
+            // Weiterhin NICHT verkleinert — das ist jetzt technische Schuld,
+            // kein bewusster Spike-Vorteil mehr: Health Services, Play
+            // Services Wearable und kotlinx-serialization brauchen eigene
+            // Keep-Regeln, und ohne Geraetetest gegen ein R8-minimiertes APK
+            // waere das reines Raten. Bleibt offen fuer die naechste
+            // Iteration, sobald wieder eine Watch Ultra zum Testen da ist.
             isMinifyEnabled = false
             isShrinkResources = false
             signingConfig = if (releaseKeystore != null) {
@@ -97,8 +94,8 @@ android {
             } else {
                 logger.warn(
                     "Trailscape (:wear): RELEASE_KEYSTORE_PATH/RELEASE_KEYSTORE_PASSWORD nicht " +
-                        "gesetzt — Spike-APK wird mit dem Debug-Schluessel signiert. Fuer den " +
-                        "Geraetetest reicht das; fuer eine spaetere Data-Layer-Kopplung mit " +
+                        "gesetzt — APK wird mit dem Debug-Schluessel signiert. Fuer den " +
+                        "Geraetetest reicht das; fuer die Data-Layer-Kopplung mit " +
                         ":app nicht, die verlangt denselben Schluessel in beiden Modulen.",
                 )
                 signingConfigs.getByName("debug")
@@ -154,6 +151,21 @@ dependencies {
     // `androidx.compose.material3`.
     implementation("androidx.wear.compose:compose-material3:1.6.2")
     implementation("androidx.wear.compose:compose-foundation:1.6.2")
+
+    // Symbole (Start/Pause/Beenden) sind reine `ImageVector`-Daten und damit
+    // plattformneutral — Wear Compose Material3 bringt kein eigenes Icon-Set
+    // mit. `-core` deckt nur die haeufigsten paar Dutzend Icons ab und
+    // enthaelt weder `Pause` noch `Stop`; `:app` steht vor demselben Grund
+    // schon auf `-extended`.
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // Data-Layer-APIs (MessageClient/CapabilityClient) fuer den Austausch mit
+    // dem Telefon — der eigentliche Grund, warum aus dem Spike eine
+    // Begleit-App wird. `kotlinx-coroutines-play-services` liefert die
+    // `Task<T>.await()`-Bruecke fuer `PhoneLink`, dieselbe Coroutines-Version
+    // wie `kotlinx-coroutines-android` oben.
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0")
 
     // Ongoing Activity: der Wear-Aufsatz auf die Vordergrund-Notification, der
     // die laufende Aufzeichnung auf dem Zifferblatt und im App-Starter sichtbar

@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardGap
@@ -102,6 +104,15 @@ import kotlin.math.roundToInt
  * Werte, nach denen man im Fahren wirklich handelt. Die Navigationslogik selbst
  * bleibt, wo sie ist: `RouteNavigator` in `:core`, ausgewertet in
  * `MapScreen.kt`. Hier wird nur angezeigt, was dort schon berechnet ist.
+ *
+ * Liefert eine gekoppelte Uhr live Werte (Handy-Bruecke, siehe
+ * `de.trailscape.app.record.RecordingRepository.heartRateBpm`/
+ * `.watchConnected`), kommt eine **Puls**-Kachel dazu — an einer FESTEN
+ * Stelle direkt nach Distanz/Fahrzeit, unabhaengig davon, ob zusaetzlich eine
+ * Navigation laeuft: Die Reihenfolge der uebrigen Kacheln soll sich weder
+ * beim Verbinden noch beim Trennen der Uhr veraendern, nur um die Puls-Kachel
+ * herum wachsen oder schrumpfen. Ohne Uhr erscheint gar nichts — eine leere
+ * oder veraltete Pulsanzeige waere eine Falschmeldung, kein Informationsverlust.
  *
  * ## Bedienung
  * Zwei Flaechen ueber je die halbe Breite, [RideModeActionHeight] hoch.
@@ -161,6 +172,18 @@ internal fun RideModeScreen(
     ) {
         KeepScreenOn()
 
+        // Direkt aus dem Repository statt als Parameter: Anders als
+        // speedKmh/distanceKm/... (aus der laufenden Navigation berechnet und
+        // vom Aufrufer durchgereicht) hat der Puls mit der Fahrt selbst
+        // nichts zu tun — er ist ein reiner Live-Wert der Handy-Bruecke
+        // (siehe `RecordingRepository.heartRateBpm`). `watchConnected` gilt
+        // als Bedingung dafuer, dass die Kachel ueberhaupt erscheint: eine
+        // veraltete Herzfrequenz von einer inzwischen getrennten Uhr waere
+        // ein stilles Falschanzeigen, kein leeres Feld (siehe Klassendoc).
+        val heartRateBpm by RecordingRepository.heartRateBpm.collectAsStateWithLifecycle()
+        val watchConnected by RecordingRepository.watchConnected.collectAsStateWithLifecycle()
+        val pulsBpm = heartRateBpm.takeIf { watchConnected }
+
         // Die Rueckfrage vor dem Beenden. Bewusst Zustand *dieses* Fensters und
         // nicht des Screens: Sie ist nur so lange interessant, wie der
         // Fahrmodus offen ist.
@@ -218,6 +241,15 @@ internal fun RideModeScreen(
                             label = "Fahrzeit",
                             size = SecondaryValueSize,
                             spoken = "Fahrzeit ${formatDuration(elapsedS)}",
+                        )
+                    }
+                    if (pulsBpm != null) {
+                        Spacer(Modifier.height(CardGap))
+                        BigValue(
+                            value = "$pulsBpm",
+                            label = "bpm · Puls",
+                            size = SecondaryValueSize,
+                            spoken = "Puls $pulsBpm Schläge pro Minute",
                         )
                     }
                     if (navigation != null) {

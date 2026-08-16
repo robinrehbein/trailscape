@@ -48,7 +48,39 @@ import de.trailscape.core.Waypoint
 /** Obergrenze geretteter Punkte je Route — siehe Datei-KDoc. */
 internal const val MAX_SAVEABLE_TRACK_POINTS: Int = 12_000
 
-/** Rettet die gesetzten Wegpunkte (lat/lon-Paare in einem Array). */
+/**
+ * Trennzeichen der geretteten Wegpunktnamen (siehe [WaypointListSaver]) — das
+ * ASCII-Steuerzeichen „Unit Separator" (Code 31), das in einem von Menschen
+ * eingegebenen oder von Nominatim gelieferten Ortsnamen praktisch nicht
+ * vorkommt. Ueber [Char] mit Zahlencode konstruiert statt als rohes Zeichen im
+ * Quelltext — ein unsichtbares Steuerzeichen waere im Editor unlesbar und
+ * liesse sich beim naechsten Bearbeiten leicht kaputt-kopieren; kein
+ * `const val`, weil der [Char]-Konstruktor kein konstanter Ausdruck ist.
+ */
+private val WAYPOINT_NAME_SEPARATOR: Char = Char(31)
+
+/**
+ * Ersatz fuer einen fehlenden Namen innerhalb der zusammengesetzten
+ * Namenszeichenkette (siehe [WaypointListSaver]) — ein zweites Steuerzeichen
+ * (Code 0, „Null"), damit sich „kein Name" von einem leeren, aber gesetzten
+ * Namen unterscheiden liesse (auch wenn Letzteres heute nirgends vorkommt).
+ */
+private val WAYPOINT_NO_NAME_MARKER: Char = Char(0)
+
+/**
+ * Rettet die gesetzten Wegpunkte: lat/lon-Paare in einem `DoubleArray` (siehe
+ * Datei-KDoc), die Namen zusammengesetzt in einem einzigen `String`.
+ *
+ * ## Warum die Namen nicht in einer eigenen Liste liegen
+ * Ein `DoubleArray` ist fuer lat/lon der richtige Bundle-sparsame Weg (siehe
+ * Datei-KDoc), fuer `String?` gibt es kein Pendant. Eine `List<String?>` waere
+ * ihrerseits ein weiterer Eintrag im `listSaver`-Ergebnis, dessen
+ * Bundle-Vertraeglichkeit sich nicht ebenso einfach garantieren liesse wie die
+ * eines einzelnen `String` — eines der wenigen Typen, die
+ * [androidx.compose.runtime.saveable.Saver] bedingungslos durchlaesst. Ein
+ * mit [WAYPOINT_NAME_SEPARATOR] zusammengesetzter `String` bleibt also genau
+ * bei diesem einen, sicheren Typ.
+ */
 internal val WaypointListSaver: Saver<List<Waypoint>, Any> = listSaver(
     save = { waypoints ->
         val values = DoubleArray(waypoints.size * 2)
@@ -56,12 +88,23 @@ internal val WaypointListSaver: Saver<List<Waypoint>, Any> = listSaver(
             values[index * 2] = waypoint.lat
             values[index * 2 + 1] = waypoint.lon
         }
-        listOf(values)
+        val names = waypoints.joinToString(separator = WAYPOINT_NAME_SEPARATOR.toString()) {
+            it.name ?: WAYPOINT_NO_NAME_MARKER.toString()
+        }
+        listOf(values, names)
     },
     restore = { saved ->
-        val values = saved.firstOrNull() ?: return@listSaver emptyList()
+        val values = saved.getOrNull(0) as? DoubleArray ?: return@listSaver emptyList()
+        // Vor dieser Aenderung gerettete Zustaende (nur ein Eintrag) liefern
+        // hier `null` — dann bleiben alle Wegpunkte schlicht namenlos statt
+        // die Wiederherstellung platzen zu lassen.
+        val names = (saved.getOrNull(1) as? String)?.split(WAYPOINT_NAME_SEPARATOR)
         List(values.size / 2) { index ->
-            Waypoint(lat = values[index * 2], lon = values[index * 2 + 1])
+            Waypoint(
+                lat = values[index * 2],
+                lon = values[index * 2 + 1],
+                name = names?.getOrNull(index)?.takeIf { it != WAYPOINT_NO_NAME_MARKER.toString() },
+            )
         }
     },
 )

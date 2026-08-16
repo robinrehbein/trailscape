@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Trailscape Spike</string>
-    <string name="notification_channel_name">Spike-Aufzeichnung</string>
-    <string name="notification_channel_description">Laeuft, solange der Wear-Spike aufzeichnet.</string>
+    <string name="app_name">Trailscape</string>
+    <string name="notification_channel_name">Aufzeichnung</string>
+    <string name="notification_channel_description">Laeuft, solange die Uhr eine Ausfahrt aufzeichnet.</string>
 </resources>
