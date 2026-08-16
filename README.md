@@ -296,11 +296,14 @@ Esri, BRouter, Nominatim) stehen in der App unter
 **Mehr → Über → Open-Source-Lizenzen** und im Quelltext in
 [`app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt`](app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt).
 
-**Keine proprietären Abhängigkeiten.** Trailscape kam früher mit
-`com.google.android.gms:play-services-location` — proprietär, unter Googles
-SDK-Lizenz und damit im Konflikt mit der GPL, unter der die App steht. Diese
-Abhängigkeit ist entfernt: Aufzeichnung und Karten-Screen sitzen jetzt direkt
-auf Androids eigenem `android.location.LocationManager`, MapLibres
-Standortpunkt tat das ohnehin schon. Im Release-Klassenpfad landet kein
-`com.google.android.gms`-Artefakt mehr; alles, was die App mitbringt, steht
-unter einer freien Lizenz.
+**Eine proprietäre Abhängigkeit — mit Absicht.** Trailscape kam früher mit
+`com.google.android.gms:play-services-location`; diese Abhängigkeit bleibt
+entfernt (Aufzeichnung und Karten-Screen sitzen direkt auf Androids eigenem
+`android.location.LocationManager`). Für die Anbindung der Wear-OS-Uhr
+(Live-Puls und GPS während der Fahrt) gibt es dagegen keinen freien Ersatz:
+Die Wear-OS-Datenschicht (`MessageClient`/`CapabilityClient`) existiert
+ausschließlich in `com.google.android.gms:play-services-wearable`. Diese eine
+Abhängigkeit ist deshalb bewusst an Bord — proprietär, unter Googles
+SDK-Lizenz. Wer die App ohne Uhr nutzt, berührt diesen Code nicht; alles
+Übrige steht weiterhin unter freien Lizenzen (siehe Open-Source-Lizenzen in
+der App).
