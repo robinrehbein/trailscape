@@ -289,13 +289,32 @@ private fun setzeGesten(map: MapLibreMap, erlaubt: Boolean) {
     }
 }
 
-/** Ein runder Marker auf der Karte (Wegpunkt, Start/Ziel, Suchtreffer). */
+/** Ein runder Marker auf der Karte (Wegpunkt, Start/Ziel, Ort). */
 internal data class MapMarker(
     val lat: Double,
     val lon: Double,
     /** ARGB-Farbe, wie sie [androidx.compose.ui.graphics.Color.toArgb] liefert. */
     val color: Int,
     val radius: Float = 7f,
+    /**
+     * `true`: gefuellter Punkt mit weissem Rand (Wegpunkte, Start/Ziel, der im
+     * Hoehenprofil abgelesene Punkt) — die bisherige Form. `false`: ein Ring
+     * mit Loch in der Markerfarbe selbst (ein ausgewaehlter Ort aus der Suche,
+     * siehe `PlaceCard.kt`) — die „Nadel"-Ersatzform.
+     *
+     * ## Warum ein Ring und kein echtes Nadel-Symbol
+     * Ein Symbol-Icon braucht in MapLibre eine eigene [org.maplibre.android.style.layers.SymbolLayer]
+     * mit im Stil registriertem Bild (`Style.addImage`), eigener Ankerlogik
+     * und eigener Skalierung je Displaydichte — Infrastruktur, die es fuer
+     * eine einzelne Ortsmarkierung noch nicht gibt und die sich mit der
+     * bestehenden [CircleLayer]-Pipeline (eine Quelle, ein Layer, Farbe und
+     * Groesse je Punktmerkmal) nicht teilen laesst. Die Ringform bleibt
+     * dagegen vollstaendig in dieser Pipeline: nur zwei weitere
+     * GeoJSON-Eigenschaften ([PROP_OPACITY], [PROP_STROKE_WIDTH]) auf
+     * demselben Layer, deutlich unterscheidbar von jedem gefuellten Punkt und
+     * ohne eine zweite Ebene oder ein weiteres Bild-Asset.
+     */
+    val filled: Boolean = true,
 )
 
 /** Kameraposition in der einfachsten Form, die der Screen braucht. */
@@ -409,12 +428,14 @@ internal class MapController {
         )
         loaded.addLayerIfAbsent(
             CircleLayer(LAYER_MARKERS, SOURCE_MARKERS).withProperties(
-                // Farbe und Groesse stehen an jedem Punkt selbst: ein Layer
-                // reicht fuer Wegpunkte, Start/Ziel und Suchtreffer.
+                // Farbe, Groesse, Fuellung und Randbreite stehen an jedem
+                // Punkt selbst: ein Layer reicht fuer Wegpunkte, Start/Ziel
+                // und einen ausgewaehlten Ort (siehe MapMarker.filled).
                 PropertyFactory.circleColor(Expression.get(PROP_COLOR)),
                 PropertyFactory.circleRadius(Expression.get(PROP_RADIUS)),
-                PropertyFactory.circleStrokeWidth(3f),
-                PropertyFactory.circleStrokeColor(MARKER_STROKE_COLOR),
+                PropertyFactory.circleOpacity(Expression.get(PROP_OPACITY)),
+                PropertyFactory.circleStrokeWidth(Expression.get(PROP_STROKE_WIDTH)),
+                PropertyFactory.circleStrokeColor(Expression.get(PROP_STROKE_COLOR)),
             ),
         )
 
@@ -641,13 +662,24 @@ private fun lineFeatureCollection(points: List<TrackPoint>): String {
 
 private fun markerFeatureCollection(markers: List<MapMarker>): String {
     if (markers.isEmpty()) return EMPTY_FEATURES
-    val builder = StringBuilder(markers.size * 96)
+    val builder = StringBuilder(markers.size * 128)
     builder.append("{\"type\":\"FeatureCollection\",\"features\":[")
     markers.forEachIndexed { index, marker ->
         if (index > 0) builder.append(',')
+        // Gefuellter Punkt: deckende Fuellung, duenner weisser Rand — die
+        // bisherige Form. Ring mit Loch (MapMarker.filled == false): keine
+        // Fuellung (opacity 0 legt die Kartenkachel darunter frei), dafuer ein
+        // breiterer Rand in der Markerfarbe selbst, sonst waere der Ring auf
+        // einer hellen Kachel unsichtbar (siehe MapMarker.filled-KDoc).
+        val opacity = if (marker.filled) 1f else 0f
+        val strokeWidth = if (marker.filled) FILLED_STROKE_WIDTH else RING_STROKE_WIDTH
+        val strokeColor = if (marker.filled) hexColor(MARKER_STROKE_COLOR) else hexColor(marker.color)
         builder.append("{\"type\":\"Feature\",\"properties\":{")
             .append('"').append(PROP_COLOR).append("\":\"").append(hexColor(marker.color))
             .append("\",\"").append(PROP_RADIUS).append("\":").append(number(marker.radius))
+            .append(",\"").append(PROP_OPACITY).append("\":").append(number(opacity))
+            .append(",\"").append(PROP_STROKE_WIDTH).append("\":").append(number(strokeWidth))
+            .append(",\"").append(PROP_STROKE_COLOR).append("\":\"").append(strokeColor).append('"')
             .append("},\"geometry\":{\"type\":\"Point\",\"coordinates\":[")
             .append(coordinate(marker.lon)).append(',').append(coordinate(marker.lat))
             .append("]}}")
@@ -681,7 +713,22 @@ private const val LAYER_MARKERS = "ts-marker-layer"
 private const val PROP_COLOR = "ts-color"
 private const val PROP_RADIUS = "ts-radius"
 
+/** Fuellungsdeckkraft — siehe [MapMarker.filled]: 1 gefuellt, 0 hohler Ring. */
+private const val PROP_OPACITY = "ts-opacity"
+private const val PROP_STROKE_WIDTH = "ts-strokeWidth"
+private const val PROP_STROKE_COLOR = "ts-strokeColor"
+
 private const val LINE_WIDTH = 5f
+
+/** Randbreite eines gefuellten Punkts — unveraendert die bisherige Zahl. */
+private const val FILLED_STROKE_WIDTH = 3f
+
+/**
+ * Randbreite eines Ort-Rings. Breiter als [FILLED_STROKE_WIDTH]: Der Rand
+ * traegt hier die ganze Zeichnung (die Fuellung ist transparent), er muss
+ * also allein schon als Form erkennbar sein.
+ */
+private const val RING_STROKE_WIDTH = 5f
 
 private val TRACK_COLOR = GravelGreen.toArgb()
 private val PLANNED_COLOR = RouteBlue.toArgb()

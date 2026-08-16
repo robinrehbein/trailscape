@@ -385,8 +385,15 @@ data class TrainingPlan(
 /**
  * Ein Wegpunkt fuer die Routenplanung. Rein In-Memory — im Original-Dart-Code
  * ohne `toJson`/`fromJson`, daher auch hier ohne Serialisierung.
+ *
+ * [name] ist optional und wird nur von Wegpunkten gefuellt, die von einem
+ * bekannten Ort stammen (z. B. einem Suchtreffer) — ein Kartentipp legt
+ * weiterhin einen namenlosen Wegpunkt an, es gibt dafuer schlicht keinen
+ * Namen. `null` bedeutet also nicht „noch nicht geladen", sondern „dieser
+ * Punkt hat keinen": die Zustandszeile der Planung darf ihn deshalb gefahrlos
+ * ignorieren, solange keine Oberflaeche ihn anzeigt.
  */
-data class Waypoint(val lat: Double, val lon: Double)
+data class Waypoint(val lat: Double, val lon: Double, val name: String? = null)
 
 /** Eine geplante Route. Rein In-Memory, siehe [Waypoint]. */
 data class PlannedRoute(

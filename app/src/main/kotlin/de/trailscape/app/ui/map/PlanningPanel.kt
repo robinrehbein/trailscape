@@ -1,7 +1,9 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -38,8 +41,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,7 +50,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,157 +68,24 @@ import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
-import de.trailscape.core.GeoResult
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.Waypoint
 import de.trailscape.core.maxRouteTargetKm
 import de.trailscape.core.minRouteTargetKm
 import de.trailscape.core.routeProfileLabels
 import kotlin.math.roundToInt
 
 /**
- * Ortssuche und Routenplanung.
+ * Routenplanung.
  *
- * ## Bewusst anders als im Flutter-Original
- * Dort steckte das Suchfeld **im** Planungs-Panel und war nur im Planungsmodus
- * erreichbar; ein Treffer wurde immer als Wegpunkt angehaengt. Hier ist die
- * Suche ein eigenes, jederzeit ueber die Lupe erreichbares Feld
- * ([SearchPanel]): Wer nur nachsehen will, wo ein Ort liegt, muss dafuer keine
- * Route planen. Im Planungsmodus verhaelt sich ein Treffer weiterhin wie im
- * Original (Ziel = neuer letzter Wegpunkt).
- *
- * Zusaetzlich sucht das Feld **von selbst** (kurze Wartezeit nach der letzten
- * Eingabe) statt erst auf Knopfdruck — der Knopf bleibt fuer die ungeduldige
- * Variante erhalten.
+ * Die Ortssuche stand hier frueher als eigenes `SearchPanel` (Karte im oberen
+ * Panelstapel); sie ist seit dem Umbau auf ein von unten hochfahrendes Blatt
+ * umgezogen (siehe `SearchSheet.kt`) und zeigt einen Treffer als Ort-Objekt
+ * ueber die Ortskarte (`PlaceCard.kt`) an, statt ihn mit einem Textknopf in
+ * der Trefferzeile sofort zu verarbeiten.
  */
-
-/** Ortssuche (Nominatim). Zeigt hoechstens fuenf Treffer, wie in Dart. */
-@Composable
-internal fun SearchPanel(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    busy: Boolean,
-    error: String?,
-    results: List<GeoResult>,
-    planning: Boolean,
-    /** Ob gerade eine Markierung eines Suchtreffers auf der Karte liegt. */
-    hasMarker: Boolean,
-    onSearchNow: () -> Unit,
-    onSelect: (GeoResult) -> Unit,
-    /** Nimmt die Markierung des letzten Treffers wieder von der Karte. */
-    onClearMarker: () -> Unit,
-    onClose: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = CardPadding,
-                vertical = OverlayCardPaddingVertical,
-            ),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    // Gefuellte Flaeche ohne Rahmen und ohne Unterstreichung —
-                    // dasselbe Gewand wie die Formularfelder der App (siehe
-                    // `components/OneUiTextField.kt`). Der gruene Rahmen des
-                    // Material-Feldes war der lauteste Strich auf der ganzen
-                    // Karte.
-                    shape = MaterialTheme.shapes.small,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                    placeholder = { Text("Ort, Stadt oder Straße suchen…") },
-                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                    trailingIcon = {
-                        when {
-                            busy -> CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(18.dp),
-                            )
-
-                            query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
-                                Icon(Icons.Filled.Clear, contentDescription = "Suche leeren")
-                            }
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { onSearchNow() }),
-                )
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Suche schließen")
-                }
-            }
-
-            if (error != null) {
-                Text(
-                    text = error,
-                    modifier = Modifier.padding(top = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            // Eine gesetzte Markierung blieb bisher bis zum naechsten Treffer
-            // auf der Karte liegen — ohne jeden Weg, sie loszuwerden.
-            if (hasMarker) {
-                TextButton(onClick = onClearMarker) {
-                    Icon(
-                        Icons.Filled.Clear,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("Markierung entfernen")
-                }
-            }
-
-            results.take(MAX_SEARCH_RESULTS).forEach { result ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Filled.LocationOn,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = result.displayName,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { onSelect(result) }) {
-                        // „Als Ziel" versprach mehr, als der Griff tut: Der
-                        // Treffer wird ans Ende der Wegpunktliste gehaengt
-                        // (siehe `onSearchResult` in MapScreen.kt). Er ist
-                        // damit der neue letzte Punkt — aber eben ein
-                        // Wegpunkt, dem weitere folgen duerfen.
-                        Text(if (planning) "Als Wegpunkt" else "Anzeigen")
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
  * Die Routenplanung als **unteres Blatt mit zwei Stufen**.
@@ -240,7 +114,7 @@ internal fun PlanningSheet(
     onExpandedChange: (Boolean) -> Unit,
     profile: RouteProfile,
     onProfileChange: (RouteProfile) -> Unit,
-    waypointCount: Int,
+    waypoints: List<Waypoint>,
     route: PlannedRoute?,
     busy: Boolean,
     error: String?,
@@ -268,6 +142,14 @@ internal fun PlanningSheet(
     /** Startet die Rundkurs-Suche ueber die gewaehlte Distanz in km. */
     onRoundTrip: (Double) -> Unit,
     onUseMyPosition: () -> Unit,
+    /** Entfernt den Wegpunkt am gegebenen Index — das X einer einzelnen Zeile der Liste. */
+    onRemoveWaypoint: (Int) -> Unit,
+    /**
+     * Oeffnet die Ortssuche im Ortswaehler-Modus (siehe `openPlaceSearch` in
+     * `MapScreen.kt`) und haengt den gewaehlten Ort als benannten Wegpunkt an
+     * — die leere, gestrichelt gerahmte Zeile am Ende der Liste.
+     */
+    onAddWaypointViaSearch: () -> Unit,
     onUndo: () -> Unit,
     onClear: () -> Unit,
     onSave: () -> Unit,
@@ -278,7 +160,7 @@ internal fun PlanningSheet(
 ) {
     val profileLabel = routeProfileLabels[profile] ?: "Route"
     val status = planningStatus(
-        waypointCount = waypointCount,
+        waypoints = waypoints,
         route = route,
         busy = busy,
         progress = progress,
@@ -386,8 +268,19 @@ internal fun PlanningSheet(
                 )
 
                 if (!generated) {
-                    // Bisher verschwand die Anleitung ab dem ersten Wegpunkt —
-                    // also genau dann, wenn es etwas zu entfernen gaebe.
+                    // Die generierte Runde hat keine Wegpunkte, die sich
+                    // auflisten liessen (siehe [generated] oben) — die Liste
+                    // gilt deshalb nur fuer selbst geplante Routen.
+                    Spacer(Modifier.height(8.dp))
+                    WaypointList(
+                        waypoints = waypoints,
+                        onRemove = onRemoveWaypoint,
+                        onAddViaSearch = onAddWaypointViaSearch,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    // Was die Liste selbst schon zeigt (Namen, Entfernen ueber
+                    // X) muss der Hinweis nicht mehr erklaeren — geblieben ist
+                    // nur, was ausschliesslich am Kartentipp haengt.
                     Text(
                         text = PLAN_HINT,
                         style = MaterialTheme.typography.bodySmall,
@@ -416,7 +309,7 @@ internal fun PlanningSheet(
                     )
                 }
 
-                if (waypointCount == 0 && route == null && !busy) {
+                if (waypoints.isEmpty() && route == null && !busy) {
                     Spacer(Modifier.height(8.dp))
                     RoundTripEntry(onStart = onRoundTrip)
                 }
@@ -443,7 +336,7 @@ internal fun PlanningSheet(
                         Spacer(Modifier.width(4.dp))
                         Text(if (locating) "Position wird geholt …" else "Position als Start")
                     }
-                    TextButton(onClick = onUndo, enabled = waypointCount > 0) {
+                    TextButton(onClick = onUndo, enabled = waypoints.isNotEmpty()) {
                         // „Rückgängig" mit einem Kreispfeil („Neu laden") war
                         // doppelt falsch: falsches Symbol und ein Versprechen,
                         // das die Aktion nicht haelt — sie nimmt den zuletzt
@@ -456,7 +349,7 @@ internal fun PlanningSheet(
                         Spacer(Modifier.width(4.dp))
                         Text("Letzten entfernen")
                     }
-                    TextButton(onClick = onClear, enabled = waypointCount > 0 || route != null) {
+                    TextButton(onClick = onClear, enabled = waypoints.isNotEmpty() || route != null) {
                         Icon(
                             Icons.Filled.Clear,
                             contentDescription = null,
@@ -497,6 +390,166 @@ internal fun PlanningSheet(
             }
         }
     }
+}
+
+/**
+ * Die Wegpunkte der Planung als benannte Liste — das Google-Maps-Muster fuer
+ * Wegbeschreibungen: je Zeile ein Buchstabe (A, B, C … die Reihenfolge), ein
+ * Farbpunkt (dieselbe Zuordnung wie die Kartenmarker, siehe `buildMapMarkers`
+ * in `MapScreen.kt`: gruen = Start, blau = Zwischenziele, rot = Ziel), der
+ * Ortsname und ein X zum Entfernen genau dieses einen Wegpunkts.
+ *
+ * ## Warum kein eigener „+ Zwischenziel"-Knopf
+ * Ein zusaetzlicher Knopf unter der Liste haette exakt dasselbe getan wie die
+ * leere Zeile an ihrem Ende — Ortssuche oeffnen, Auswahl anhaengen. Zwei
+ * Wege zum selben Ergebnis sind keine zwei Moeglichkeiten, nur zweimal dieselbe
+ * Frage; die leere Zeile allein deckt den Fall vollstaendig ab.
+ *
+ * ## Warum kein Drag-Umsortieren
+ * Bewusst ausserhalb dieses Schritts (siehe Aufgabenstellung) — eine Reihen-
+ * folge laesst sich bis dahin nur ueber Entfernen und erneutes Setzen aendern.
+ */
+@Composable
+private fun WaypointList(
+    waypoints: List<Waypoint>,
+    onRemove: (Int) -> Unit,
+    onAddViaSearch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        waypoints.forEachIndexed { index, waypoint ->
+            WaypointRow(
+                index = index,
+                label = waypoint.name ?: "Wegpunkt ${index + 1}",
+                color = waypointColor(index, waypoints.lastIndex),
+                onRemove = { onRemove(index) },
+            )
+        }
+        AddWaypointRow(onClick = onAddViaSearch)
+    }
+}
+
+/** Grün am Start, Rot am Ziel, Blau dazwischen — wie die Kartenmarker. */
+private fun waypointColor(index: Int, lastIndex: Int): Color = when (index) {
+    0 -> GravelGreen
+    lastIndex -> RecordRed
+    else -> RouteBlue
+}
+
+/** Eine einzelne Zeile der Wegpunktliste — mindestens 48 dp fuer den Daumen. */
+@Composable
+private fun WaypointRow(
+    index: Int,
+    label: String,
+    color: Color,
+    onRemove: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = waypointLetter(index),
+            style = MaterialTheme.typography.labelLarge,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(20.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color = color, shape = CircleShape),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        IconButton(onClick = onRemove) {
+            Icon(Icons.Filled.Close, contentDescription = "$label entfernen")
+        }
+    }
+}
+
+/**
+ * Die leere, gestrichelt gerahmte Zeile am Ende der Liste — der Einstieg in
+ * die Ortssuche im Ortswaehler-Modus (siehe `openPlaceSearch` in
+ * `MapScreen.kt`). Gestrichelt statt durchgezogen, damit sie sich auch ohne
+ * Text erkennbar von einer echten Wegpunktzeile abhebt („hier fehlt noch
+ * etwas", nicht „hier steht schon etwas").
+ */
+@Composable
+private fun AddWaypointRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(MaterialTheme.shapes.extraSmall)
+            .dashedBorder(color = MaterialTheme.colorScheme.outline)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.Search,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = "Ort suchen oder Karte antippen",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Buchstabenfolge der Wegpunkte — A, B, C … Z, AA, AB, … wie Tabellenspalten.
+ * 26 Buchstaben reichen fuer jede realistische Wegpunktzahl bei weitem; die
+ * Fortsetzung ist nur ein Sicherheitsnetz, kein erwarteter Fall.
+ */
+private fun waypointLetter(index: Int): String {
+    var n = index + 1
+    val letters = StringBuilder()
+    while (n > 0) {
+        val remainder = (n - 1) % 26
+        letters.insert(0, 'A' + remainder)
+        n = (n - 1) / 26
+    }
+    return letters.toString()
+}
+
+/**
+ * Gestrichelter Rahmen fuer [AddWaypointRow] — Compose kennt fuer `border()`
+ * keine gestrichelte Variante, deshalb hier von Hand ueber `drawBehind` und
+ * [PathEffect.dashPathEffect]. [cornerRadius] ist bewusst dieselbe 18-dp-Ecke
+ * wie `TrailscapeShapes.extraSmall` (`Shape.kt`, Slot fuer Menues und
+ * Textfelder — genau das ist diese Zeile, ein Ortsfeld als Zeile statt als
+ * `OutlinedTextField`), nicht aus dieser Form selbst gelesen: Eine
+ * `CornerBasedShape` laesst sich ohne bekannte Flaechengroesse nicht generisch
+ * in einen Zeichenradius uebersetzen.
+ */
+private fun Modifier.dashedBorder(
+    color: Color,
+    cornerRadius: Dp = 18.dp,
+    strokeWidth: Dp = 1.dp,
+): Modifier = drawBehind {
+    drawRoundRect(
+        color = color,
+        style = Stroke(
+            width = strokeWidth.toPx(),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f),
+        ),
+        cornerRadius = CornerRadius(cornerRadius.toPx()),
+    )
 }
 
 /**
@@ -598,7 +651,7 @@ private fun RoundTripEntry(
 
 /** Die Zustandszeile der Planung — eingeklappt wie aufgeklappt dieselbe. */
 private fun planningStatus(
-    waypointCount: Int,
+    waypoints: List<Waypoint>,
     route: PlannedRoute?,
     busy: Boolean,
     progress: String?,
@@ -612,12 +665,28 @@ private fun planningStatus(
             "vorgeschlagene Runde"
 
     route != null ->
-        "$waypointCount Wegpunkte · ${formatKmDe(route.distanceKm)} km · " +
+        "${planningRouteLabel(waypoints)} · ${formatKmDe(route.distanceKm)} km · " +
             "${route.ascentM.roundToInt()} Hm ↑"
 
-    waypointCount == 1 -> "1 Wegpunkt – setze mindestens 2."
-    waypointCount > 1 -> "$waypointCount Wegpunkte – berechne Route …"
+    waypoints.size == 1 -> "1 Wegpunkt – setze mindestens 2."
+    waypoints.size > 1 -> "${waypoints.size} Wegpunkte – berechne Route …"
     else -> "Noch keine Wegpunkte"
+}
+
+/**
+ * Der erste Teil der Zustandszeile, sobald eine Route steht: „Mein Standort →
+ * Herkules" statt „3 Wegpunkte", sofern Start oder Ziel einen Namen tragen
+ * (Suchtreffer oder eigene Position, siehe `Waypoint.name`) — sonst bleibt es
+ * bei der reinen Anzahl, denn zwei „Wegpunkt N"-Platzhalter waeren keine
+ * Verbesserung gegenueber der Zahl.
+ */
+private fun planningRouteLabel(waypoints: List<Waypoint>): String {
+    val start = waypoints.firstOrNull()
+    val end = waypoints.lastOrNull()
+    if (start?.name == null && end?.name == null) return "${waypoints.size} Wegpunkte"
+    val startLabel = start?.name ?: "Wegpunkt 1"
+    val endLabel = end?.name ?: "Wegpunkt ${waypoints.size}"
+    return "$startLabel → $endLabel"
 }
 
 @Composable
@@ -681,10 +750,15 @@ private fun routeProfileHint(profile: RouteProfile): String? = when (profile) {
     RouteProfile.KUERZESTER -> "Kürzeste Strecke, ohne Rücksicht auf den Belag"
 }
 
-/** Hinweistext der Planung — woertlich wie `_planHint` in Dart. */
+/**
+ * Hinweistext der Planung. Stand frueher woertlich wie `_planHint` in Dart und
+ * erklaerte Setzen **und** Entfernen eines Wegpunkts per Kartentipp — seit
+ * [WaypointList] zeigt die Liste selbst, wie ein Wegpunkt heisst und wie er
+ * (ueber das X) verschwindet, der Hinweis bleibt darum nur fuer das, was
+ * ausschliesslich am Kartentipp haengt.
+ */
 internal const val PLAN_HINT: String =
-    "Tippe auf die Karte, um Wegpunkte zu setzen. Tippe auf einen Wegpunkt, " +
-        "um ihn zu entfernen."
+    "Tippe auf die Karte, um einen Wegpunkt zu setzen oder zu entfernen."
 
 /** Wie viele Suchtreffer angezeigt werden (Dart: `results.take(5)`). */
 internal const val MAX_SEARCH_RESULTS: Int = 5

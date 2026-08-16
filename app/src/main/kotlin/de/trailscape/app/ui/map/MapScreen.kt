@@ -68,6 +68,7 @@ import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.PlaceSearchHistoryEntry
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.formatToday
@@ -95,6 +96,7 @@ import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
 import de.trailscape.core.buildGpx
 import de.trailscape.core.computeStats
+import de.trailscape.core.haversineM
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import java.io.File
@@ -129,6 +131,39 @@ import kotlinx.coroutines.withContext
  *  * die laufende Aufzeichnung im [RecordingRepository] (Vordergrunddienst),
  *  * die Karte selbst im [MapController] (siehe `MapViewHost.kt`).
  *
+ * ## Der Kartenmodus
+ * Ob ein Kartentipp einen Wegpunkt setzt, ob die Zurueck-Geste die Planung
+ * verlaesst, ob das Tourenblatt weichen muss — all das entschied bis vor
+ * Kurzem eine eigene Kombination aus `planning: Boolean` und
+ * `navTarget != null`, an jeder Stelle neu zusammengesetzt. [MapMode]
+ * (`MapMode.kt`) fasst das in einen einzigen `rememberSaveable`-Zustand
+ * (`mode`) mit genau drei Werten — [MapMode.ERKUNDEN], [MapMode.PLANEN],
+ * [MapMode.NAVIGIEREN] — und jede Sichtbarkeits- oder Verhaltensfrage im
+ * Screen fragt seither `mode` statt einer Flag-Kombination ab. Das
+ * ausformulierte Modell samt der einen bewussten Ausnahme (Navigation der
+ * eigenen geplanten Route bleibt in [MapMode.PLANEN], siehe [runNavigatePlannedRoute])
+ * steht im KDoc von `MapMode.kt`; hier nur, wo `mode` im Bildschirmablauf
+ * wechselt:
+ *
+ *  * **[MapMode.ERKUNDEN] → [MapMode.PLANEN]**: der Knopf „Route planen“,
+ *    [restorePlanning] (Rueckgaengig nach „Planung beenden"/„Leeren") und
+ *    [applyGeneratedRoute] (ein uebernommener Rundkurs-Vorschlag ist ab da
+ *    eine ganz normale geplante Route).
+ *  * **[MapMode.PLANEN] → [MapMode.ERKUNDEN]**: [exitPlanning] (und damit
+ *    [exitPlanningWithUndo]) sowie [runRecording], **sofern** noch geplant
+ *    wurde — steht `mode` schon auf [MapMode.NAVIGIEREN] (Aufnahme waehrend
+ *    einer Tour-Navigation), laesst [runRecording] ihn unangetastet.
+ *  * **[MapMode.ERKUNDEN] → [MapMode.NAVIGIEREN]**: [runNavigateRide]. Nur von
+ *    hier aus erreichbar, weil sich waehrend [MapMode.PLANEN] gar keine Tour
+ *    auswaehlen laesst (das Tourenblatt weicht dort ja bereits).
+ *  * **[MapMode.NAVIGIEREN] → [MapMode.ERKUNDEN]**: [stopNavigation] sowie der
+ *    Effekt, der die Navigation beendet, wenn die navigierte Tour geloescht
+ *    wird.
+ *
+ * `searchOpen` ist bewusst kein vierter Wert: Die Ortssuche bleibt in allen
+ * drei Modi erreichbar (siehe „Suche jederzeit" unten) und ist damit
+ * orthogonal zum Kartenmodus, nicht ein weiterer Zustand desselben Schalters.
+ *
  * ## Bewusste Unterschiede zum Flutter-Original
  *  * **Kein Namensdialog nach dem Stopp.** In Flutter lief die Aufzeichnung im
  *    UI-Prozess; der Screen baute die Tour selbst und fragte vorher nach einem
@@ -146,7 +181,11 @@ import kotlinx.coroutines.withContext
  *  * **Keine Vibration bei „abseits der Route"**: Dafuer fehlt die
  *    `VIBRATE`-Berechtigung im Manifest, das hier nicht angefasst wird. Die
  *    Warnung erscheint als Meldung und in der Navigationsleiste.
- *  * **Suche jederzeit**, nicht nur im Planungsmodus (siehe `PlanningPanel.kt`).
+ *  * **Suche jederzeit**, nicht nur im Planungsmodus — als von unten
+ *    hochfahrendes Blatt (siehe `SearchSheet.kt`) statt als Panel im oberen
+ *    Stapel; ein gewaehlter Treffer ist seither ein Ort-Objekt ([Place]) mit
+ *    eigener Karte (`PlaceCard.kt`), keine Sofortaktion mehr an der
+ *    Trefferzeile.
  *  * **Hoehenprofil** fuer die ausgewaehlte Tour und die geplante Route — das
  *    hatte der Karten-Screen in Flutter noch nicht.
  *  * **Rundkurs aus der Trainingsempfehlung.** Der Trainings-Tab schickt ueber
@@ -256,6 +295,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val selectedRide by appViewModel.selectedRide.collectAsStateWithLifecycle()
 
+    // Suchverlauf der Ortssuche (siehe AppViewModel „Suchverlauf"-Abschnitt) —
+    // dieselbe kurze Liste, die auch das Suchblatt unter „Zuletzt gesucht"
+    // zeigt.
+    val placeSearchHistory by appViewModel.placeSearchHistory.collectAsStateWithLifecycle()
+
     val isRecording by RecordingRepository.isRecording.collectAsStateWithLifecycle()
     val isPaused by RecordingRepository.isPaused.collectAsStateWithLifecycle()
     val elapsedMs by RecordingRepository.elapsedMs.collectAsStateWithLifecycle()
@@ -286,7 +330,15 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     // ---------------------------------------------------- Zustand des Screens
     var locationGranted by remember { mutableStateOf(hasLocationPermission(context)) }
-    var planning by rememberSaveable { mutableStateOf(false) }
+
+    // Der explizite Kartenmodus (siehe `MapMode.kt` fuer das ausformulierte
+    // Modell und die eine bewusste Ausnahme bei der Navigation der eigenen
+    // geplanten Route). Ersetzt das fruehere `planning: Boolean` — jede Stelle,
+    // die vorher `if (planning)` fragte, fragt jetzt `if (mode ==
+    // MapMode.PLANEN)`. `rememberSaveable`, aus demselben Grund wie vorher:
+    // Tabwechsel und Drehung duerfen eine begonnene Planung nicht stillschweigend
+    // beenden.
+    var mode by rememberSaveable { mutableStateOf(MapMode.ERKUNDEN) }
 
     // Wegpunkte und berechnete Route liegen in `rememberSaveable`, nicht in
     // `remember`: Der `NavHost` entsorgt diesen Screen beim Tabwechsel, und
@@ -345,11 +397,27 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var searchTrigger by remember { mutableStateOf(0) }
     var searchResults by remember { mutableStateOf<List<GeoResult>>(emptyList()) }
     var searchBusy by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
-    var searchMarker by remember { mutableStateOf<Waypoint?>(null) }
+
+    // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
+    // (siehe `PlaceCard.kt`). Ersetzt den fruehreren `searchMarker: Waypoint?`:
+    // Der Marker ist seither nur noch eine Ableitung davon (siehe
+    // `buildMapMarkers`), die Karte selbst zeigt die eigentliche Information.
+    // Bewusst `remember` und nicht `rememberSaveable`: genau wie beim
+    // fruehreren `searchMarker` ist ein gerade betrachteter Suchtreffer
+    // Beiwerk, das eine Drehung nicht ueberstehen muss (siehe
+    // `PlanningSnapshot.isEmpty`-Kommentar weiter unten, dieselbe Haltung).
+    var selectedPlace by remember { mutableStateOf<Place?>(null) }
+
+    // Ziel des „Ortswaehler"-Aufrufmodus (siehe `openPlaceSearch` weiter
+    // unten) — `null` heisst „normales Suchblatt, Auswahl zeigt die
+    // Ortskarte". Ausserhalb von `rememberSaveable`: Ein Lambda ueberlebt eine
+    // Bundle-Wiederherstellung ohnehin nicht, und der Aufrufmodus ist ein
+    // kurzlebiger Vorgang innerhalb einer Komposition (Blatt auf → Ort waehlen
+    // → Blatt zu), keiner, der eine Drehung ueberstehen muesste.
+    var searchPickerCallback by remember { mutableStateOf<((Place) -> Unit)?>(null) }
 
     var navTarget by remember { mutableStateOf<NavigationTarget?>(null) }
     var navState by remember { mutableStateOf<NavState?>(null) }
@@ -548,7 +616,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     LaunchedEffect(mapReady, locationGranted) {
         if (autoLocationZoomDone || !mapReady || !locationGranted) return@LaunchedEffect
-        if (planning || isRecording || selectedRide != null ||
+        if (mode == MapMode.PLANEN || isRecording || selectedRide != null ||
             navTarget != null || generation.target != null
         ) {
             return@LaunchedEffect
@@ -599,10 +667,10 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     val markers = buildMapMarkers(
-        planning = planning,
+        planning = mode == MapMode.PLANEN,
         waypoints = waypoints,
         ride = selectedRide,
-        searchMarker = searchMarker,
+        place = selectedPlace,
         hoverPoint = hoverPoint,
     )
     LaunchedEffect(controller, markers) {
@@ -683,7 +751,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // --------------------------------------------------------------- Ortssuche
-    LaunchedEffect(searchQuery, searchTrigger) {
+    LaunchedEffect(searchQuery) {
         val query = searchQuery.trim()
         if (query.length < MIN_SEARCH_LENGTH) {
             searchResults = emptyList()
@@ -746,6 +814,10 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // Wird die navigierte Tour geloescht, endet die Navigation (wie in Dart).
+    // Betrifft ausschliesslich eine Tour-Navigation (`rideId != null`) — die
+    // geplante Route kennt keine Loeschung von aussen, deshalb bricht diese
+    // Bedingung fuer sie sofort ab, und `mode` steht an dieser Stelle immer auf
+    // [MapMode.NAVIGIEREN] (siehe `MapMode.kt`, „die eine bewusste Ausnahme").
     LaunchedEffect(rides, navTarget?.rideId) {
         val rideId = navTarget?.rideId ?: return@LaunchedEffect
         if (rides.none { it.id == rideId }) {
@@ -753,6 +825,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             navState = null
             navRideId = null
             navLabel = null
+            mode = MapMode.ERKUNDEN
         }
     }
 
@@ -777,12 +850,22 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // -------------------------------------------------------------- Aktionen
+    /**
+     * Beendet die Navigation.
+     *
+     * `mode` faellt dabei nur aus [MapMode.NAVIGIEREN] zurueck auf
+     * [MapMode.ERKUNDEN] — stand er (Ausnahmefall Navigation der eigenen
+     * geplanten Route, siehe `MapMode.kt`) auf [MapMode.PLANEN], bleibt er
+     * dort: Die Planung selbst endet hier nicht, nur die Navigation entlang
+     * ihrer Route.
+     */
     fun stopNavigation() {
         navTarget = null
         navState = null
         navTotalKm = 0.0
         navRideId = null
         navLabel = null
+        if (mode == MapMode.NAVIGIEREN) mode = MapMode.ERKUNDEN
     }
 
     /**
@@ -793,13 +876,13 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Stelle tritt.
      */
     fun exitPlanning() {
-        planning = false
+        mode = MapMode.ERKUNDEN
         waypoints = emptyList()
         plannedRoute = null
         plannedFor = null
         planError = null
         planBusy = false
-        searchMarker = null
+        selectedPlace = null
         hoverPoint = null
         routeFromGenerator = false
         planSheetExpanded = true
@@ -810,7 +893,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      * [exitPlanning] und zum „Leeren"-Knopf.
      */
     fun restorePlanning(snapshot: PlanningSnapshot) {
-        planning = true
+        mode = MapMode.PLANEN
         waypoints = snapshot.waypoints
         plannedRoute = snapshot.route
         plannedFor = snapshot.plannedFor
@@ -868,7 +951,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         planBusy = false
         routeFromGenerator = true
         plannedRoute = candidate.route
-        planning = true
+        mode = MapMode.PLANEN
         planSheetExpanded = true
         controller.fitToPoints(candidate.route.points)
         appViewModel.showMessage("Runde übernommen – du kannst sie speichern oder navigieren.")
@@ -894,6 +977,12 @@ fun MapScreen(appViewModel: AppViewModel) {
      * nur dann als „die Route", wenn er vorher uebernommen wurde (dann ist der
      * Planungsmodus an, siehe [applyGeneratedRoute]).
      *
+     * `mode` geht dabei nur aus [MapMode.PLANEN] zurueck auf [MapMode.ERKUNDEN]
+     * — steht er auf [MapMode.NAVIGIEREN] (Aufnahme waehrend der Navigation
+     * einer gespeicherten Tour), bleibt er das: Die Navigation laeuft unbeirrt
+     * weiter, nur die Tourauswahl wird gleich darunter geloescht (siehe
+     * `appViewModel.select(null)`).
+     *
      * ## Warum hier `rideMode = true` gesetzt wird
      * Diese Funktion laeuft ausschliesslich, wenn eine Nutzeraktion in dieser
      * Sitzung die Aufzeichnung tatsaechlich in Gang setzt — ueber den gruenen
@@ -915,15 +1004,15 @@ fun MapScreen(appViewModel: AppViewModel) {
             appViewModel.showMessage("Standortdienste sind deaktiviert.")
             return
         }
-        val keepRoute = planning
+        val keepRoute = mode == MapMode.PLANEN
         RouteGenerationController.close()
         if (!keepRoute) {
             routeFromGenerator = false
             plannedRoute = null
             plannedFor = null
         }
-        planning = false
-        searchMarker = null
+        if (mode == MapMode.PLANEN) mode = MapMode.ERKUNDEN
+        selectedPlace = null
         hoverPoint = null
         appViewModel.select(null)
         rideMode = true
@@ -985,7 +1074,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     fun onMapTap(lat: Double, lon: Double) {
-        if (!planning) return
+        if (mode != MapMode.PLANEN) return
         if (routeFromGenerator) {
             // Ein einziger Fehltipp machte aus der uebernommenen 48-km-Runde
             // einen einzelnen Wegpunkt — unwiederbringlich, „Letzten entfernen"
@@ -1026,19 +1115,157 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
-    fun onSearchResult(result: GeoResult) {
+    /**
+     * Oeffnet das Suchblatt.
+     *
+     * ## Zwei Aufrufmodi
+     * Ohne [onPicked] (der Normalfall — die Lupe oben rechts) landet der
+     * gewaehlte Ort in [selectedPlace] und zeigt die Ortskarte ([PlaceCard]).
+     * Mit [onPicked] wird das Blatt zum reinen Ortswaehler: Die Auswahl geht
+     * ausschliesslich an [onPicked], [selectedPlace] bleibt unberuehrt und die
+     * Ortskarte erscheint nicht. Gedacht fuer Folge-Screens, die einen Ort an
+     * einer eigenen Stelle brauchen (z. B. eine einzelne Zeile einer
+     * Planungsliste) — sie rufen `openPlaceSearch { ort -> … }` auf und
+     * bekommen den gewaehlten Ort direkt zurueck, ohne je die Ortskarte zu
+     * sehen.
+     */
+    fun openPlaceSearch(onPicked: ((Place) -> Unit)? = null) {
+        searchPickerCallback = onPicked
+        searchQuery = ""
         searchResults = emptyList()
+        searchError = null
+        searchOpen = true
+    }
+
+    /** Schliesst das Suchblatt und raeumt einen offenen Ortswaehler-Aufruf ab. */
+    fun closeSearchSheet() {
         searchOpen = false
-        if (planning) {
-            // Im Planungsmodus wird der Treffer zum Zielwegpunkt und traegt
-            // dessen roten Marker — ein zweiter, blauer Suchmarker laege exakt
-            // darauf und sagte nichts Zusaetzliches.
-            searchMarker = null
-            waypoints = waypoints + Waypoint(result.lat, result.lon)
-        } else {
-            searchMarker = Waypoint(result.lat, result.lon)
+        searchPickerCallback = null
+    }
+
+    /**
+     * Waehlt [place] aus dem Suchblatt — ein Nominatim-Treffer oder ein
+     * Eintrag aus „Zuletzt gesucht" (beide sind zu diesem Zeitpunkt schon ein
+     * [Place], siehe `SearchSheet.kt`). Schliesst das Blatt und bedient je
+     * nach Aufrufmodus entweder den Ortswaehler-Callback oder die normale
+     * Ortskarte (siehe [openPlaceSearch]).
+     */
+    fun onPlaceChosen(place: Place) {
+        val picker = searchPickerCallback
+        closeSearchSheet()
+        appViewModel.recordPlaceSearchHistory(
+            PlaceSearchHistoryEntry(place.displayName, place.lat, place.lon),
+        )
+        if (picker != null) {
+            picker(place)
+            return
         }
-        controller.moveTo(result.lat, result.lon, MIN_RECORDING_ZOOM)
+        selectedPlace = place
+        controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
+    }
+
+    /**
+     * „Route hierher" auf der Ortskarte ([MapMode.ERKUNDEN]): wechselt in
+     * [MapMode.PLANEN] und setzt die Startwegpunkte — die eigene Position
+     * (falls gerade bekannt, siehe unten) und den gewaehlten Ort, beide
+     * benannt (siehe `Waypoint.name`, seit dem Umbau auf [MapMode] verfuegbar).
+     *
+     * Fragt bewusst **nicht** erst nach der Standortfreigabe: Wer einen Ort
+     * antippt, will eine Route zu ihm sehen, keinen Berechtigungsdialog. Ohne
+     * Freigabe (oder ohne Fix binnen der ueblichen Wartezeit, siehe
+     * [currentLocation]) bleibt der Ort schlicht der einzige Wegpunkt — „Position
+     * als Start" im aufgeklappten Planungsblatt fragt danach ausdruecklich,
+     * genau fuer diesen Fall.
+     */
+    fun runRouteToPlace(place: Place) {
+        if (generation.target != null) discardGeneratedRoute()
+        routeFromGenerator = false
+        plannedRoute = null
+        plannedFor = null
+        planError = null
+        selectedPlace = null
+        appViewModel.select(null)
+        mode = MapMode.PLANEN
+        planSheetExpanded = true
+        controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
+        scope.launch {
+            locating = true
+            val position = try {
+                currentLocation(context)
+            } finally {
+                locating = false
+            }
+            val start = position?.let {
+                Waypoint(it.latitude, it.longitude, name = MY_LOCATION_WAYPOINT_NAME)
+            }
+            waypoints = listOfNotNull(start) + Waypoint(place.lat, place.lon, name = place.displayName)
+        }
+    }
+
+    /**
+     * „Runde ab hier" auf der Ortskarte ([MapMode.ERKUNDEN]): reicht den Ort
+     * direkt als Startpunkt an den Rundkurs-Generator weiter — derselbe
+     * [RouteGenerationController], den auch [startRoundTrip] und die
+     * Trainingsempfehlung fuellen.
+     *
+     * Anders als [startRoundTrip] (Distanz-Chips im Planungsblatt) fragt diese
+     * Kachel nicht erst nach einer Distanz: Der Ort ist die einzige Angabe,
+     * die die Nutzerin hier macht, also gilt [PLACE_ROUND_TRIP_DEFAULT_KM] —
+     * dieselbe Zahl wie der erste, haeufigste Distanz-Chip. Der Startpunkt ist
+     * bereits bekannt (der angetippte Ort), deshalb entfaellt auch der sonst
+     * noetige GPS-Fix samt Standortfreigabe komplett — [RouteGenerationController.start]
+     * nimmt ihn direkt entgegen (siehe dessen KDoc: der Startpunkt ist ein
+     * expliziter Parameter, keine intern ermittelte Position).
+     */
+    fun runRoundTripFromPlace(place: Place) {
+        selectedPlace = null
+        controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
+        RouteGenerationController.open(
+            RouteTarget(
+                distanceKm = PLACE_ROUND_TRIP_DEFAULT_KM,
+                ascentPreference = AscentPreference.MODERAT,
+                durationH = null,
+                speedKmh = 0.0,
+                intensity = SessionIntensity.GRUNDLAGE,
+                label = SELF_PLANNED_ROUTE_LABEL,
+                source = RouteTargetSource.SELBST_GEWAEHLT,
+            ),
+        )
+        RouteGenerationController.start(
+            start = TrackPoint(lat = place.lat, lon = place.lon),
+            fromMapCenter = false,
+            onMessage = appViewModel::showMessage,
+        )
+    }
+
+    /**
+     * „Als Wegpunkt" auf der Ortskarte ([MapMode.PLANEN]): haengt den
+     * benannten Ort ans Ende der Wegpunktliste — dieselbe Stelle, an die auch
+     * ein Kartentipp einen namenlosen Wegpunkt haengt (siehe [onMapTap]),
+     * samt derselben Sonderregel fuer eine noch nicht bestaetigte
+     * uebernommene Runde.
+     */
+    fun addPlaceAsWaypoint(place: Place) {
+        selectedPlace = null
+        if (routeFromGenerator) {
+            scope.launch {
+                val answer = snackbarHostState.showSnackbar(
+                    message = "Die übernommene Runde bleibt stehen.",
+                    actionLabel = "Selbst planen",
+                    duration = SnackbarDuration.Long,
+                )
+                if (answer == SnackbarResult.ActionPerformed) {
+                    routeFromGenerator = false
+                    plannedRoute = null
+                    plannedFor = null
+                    waypoints = listOf(Waypoint(place.lat, place.lon, name = place.displayName))
+                    planSheetExpanded = false
+                }
+            }
+            return
+        }
+        waypoints = waypoints + Waypoint(place.lat, place.lon, name = place.displayName)
+        controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
     }
 
     fun shareRoute(name: String, points: List<TrackPoint>) {
@@ -1169,6 +1396,11 @@ fun MapScreen(appViewModel: AppViewModel) {
         navRideId = ride.id
         navLabel = ride.name
         navTarget = NavigationTarget(ride.id, ride.name, ride.points)
+        // Der Regelfall aus `MapMode.kt`: Navigation einer gespeicherten Tour
+        // ist ihr eigener, exklusiver Modus (nur aus [MapMode.ERKUNDEN]
+        // erreichbar — waehrend [MapMode.PLANEN] laesst sich keine Tour
+        // auswaehlen).
+        mode = MapMode.NAVIGIEREN
     }
 
     fun navigateRide(ride: Ride) {
@@ -1181,6 +1413,15 @@ fun MapScreen(appViewModel: AppViewModel) {
         withPermissions(PendingAction.NAVIGATE_RIDE) { runNavigateRide(ride) }
     }
 
+    /**
+     * Navigiert die geplante Route — **ohne** `mode` anzufassen.
+     *
+     * Die Ausnahme aus `MapMode.kt`: Ausgeloest wird das ausschliesslich vom
+     * „Navigieren"-Knopf im Planungsblatt, `mode` steht also bereits auf
+     * [MapMode.PLANEN] und bleibt es. Ein Wechsel nach [MapMode.NAVIGIEREN]
+     * wuerde [runRecording] das Signal nehmen, mit dem es entscheidet, ob die
+     * Route eine anschliessende Aufzeichnung ueberlebt.
+     */
     fun runNavigatePlannedRoute() {
         val route = plannedRoute ?: return
         if (route.points.size < 2) return
@@ -1250,7 +1491,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     LaunchedEffect(pendingRouteTarget) {
         val target = pendingRouteTarget ?: return@LaunchedEffect
         appViewModel.consumeRouteTarget()
-        if (planning) exitPlanning()
+        if (mode == MapMode.PLANEN) exitPlanning()
         appViewModel.select(null)
         RouteGenerationController.open(target)
     }
@@ -1346,7 +1587,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     // tourSheet`) bliebe der gespeicherte Zustand FULL und spraenge sofort
     // wieder auf, sobald der Vorrang-Zustand endet.
     val tourSheetPriorityActive =
-        isRecording || navTarget != null || planning || selectedRide != null || searchOpen
+        isRecording || navTarget != null || mode == MapMode.PLANEN ||
+            selectedRide != null || selectedPlace != null || searchOpen
     LaunchedEffect(tourSheetPriorityActive) {
         if (tourSheetPriorityActive && tourSheet == TourSheetState.FULL) {
             tourSheet = TourSheetState.PEEK
@@ -1359,7 +1601,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Verhalten der App. Die Tourendetailansicht braucht hier keinen Fall —
     // sie faengt die Geste bereits als eigenes Dialogfenster ab (siehe unten
     // und das Klassen-KDoc oben).
-    BackHandler(enabled = tourSheetState == TourSheetState.FULL || planning) {
+    BackHandler(enabled = tourSheetState == TourSheetState.FULL || mode == MapMode.PLANEN) {
         if (tourSheetState == TourSheetState.FULL) {
             tourSheet = TourSheetState.PEEK
         } else {
@@ -1415,13 +1657,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (navTarget == null) {
+                        val isPlanning = mode == MapMode.PLANEN
                         MapPillButton(
-                            label = if (planning) "Planung beenden" else "Route planen",
-                            icon = if (planning) Icons.Filled.Close else Icons.Filled.Place,
-                            active = planning,
+                            label = if (isPlanning) "Planung beenden" else "Route planen",
+                            icon = if (isPlanning) Icons.Filled.Close else Icons.Filled.Place,
+                            active = isPlanning,
                             activeColor = RouteBlue,
                             onClick = {
-                                if (planning) {
+                                if (isPlanning) {
                                     exitPlanningWithUndo("Planung beendet.")
                                 } else if (isRecording) {
                                     appViewModel.showMessage("Beende zuerst die Aufzeichnung.")
@@ -1437,7 +1680,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                     // [runRecording]), und genau sie ist der
                                     // Grund, die Planung wieder zu oeffnen.
                                     appViewModel.select(null)
-                                    planning = true
+                                    mode = MapMode.PLANEN
                                     planSheetExpanded = true
                                     planError = null
                                 }
@@ -1449,7 +1692,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         icon = Icons.Filled.Search,
                         contentDescription = "Ort suchen",
                         active = searchOpen,
-                        onClick = { searchOpen = !searchOpen },
+                        onClick = { if (searchOpen) closeSearchSheet() else openPlaceSearch() },
                     )
                     Spacer(Modifier.width(OverlayGap))
                     MapCircleButton(
@@ -1484,22 +1727,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                             startRecording()
                         },
                         onDismiss = { impreciseLocationNotice = false },
-                    )
-                }
-
-                if (searchOpen) {
-                    SearchPanel(
-                        query = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        busy = searchBusy,
-                        error = searchError,
-                        results = searchResults,
-                        planning = planning,
-                        hasMarker = searchMarker != null,
-                        onSearchNow = { searchTrigger++ },
-                        onSelect = ::onSearchResult,
-                        onClearMarker = { searchMarker = null },
-                        onClose = { searchOpen = false },
                     )
                 }
 
@@ -1573,6 +1800,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                     Spacer(Modifier.height(12.dp))
 
                     val ride = selectedRide
+                    val place = selectedPlace
                     when {
                         isRecording -> LiveRecordingCard(
                             speedKmh = speedKmh,
@@ -1598,16 +1826,34 @@ fun MapScreen(appViewModel: AppViewModel) {
                             },
                             onHoverPoint = { hoverPoint = it },
                         )
+
+                        place != null -> PlaceCard(
+                            place = place,
+                            mode = mode,
+                            // Synchron aus dem Standortpunkt der Karte gelesen
+                            // (siehe dessen KDoc): kein zweiter GPS-Abonnent
+                            // nur fuer diese eine Entfernungszahl.
+                            distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
+                                haversineM(
+                                    TrackPoint(lat = lat, lon = lon),
+                                    TrackPoint(lat = place.lat, lon = place.lon),
+                                ) / 1000.0
+                            },
+                            onRouteHere = { runRouteToPlace(place) },
+                            onRoundTripHere = { runRoundTripFromPlace(place) },
+                            onAddWaypoint = { addPlaceAsWaypoint(place) },
+                            onClose = { selectedPlace = null },
+                        )
                     }
 
-                    if (planning) {
+                    if (mode == MapMode.PLANEN) {
                         Spacer(Modifier.height(OverlayGap))
                         PlanningSheet(
                             expanded = planSheetExpanded,
                             onExpandedChange = { planSheetExpanded = it },
                             profile = routeProfile,
                             onProfileChange = { routeProfile = it },
-                            waypointCount = waypoints.size,
+                            waypoints = waypoints,
                             route = plannedRoute,
                             busy = planBusy,
                             error = planError,
@@ -1617,6 +1863,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                             locating = locating,
                             onRoundTrip = ::startRoundTrip,
                             onUseMyPosition = ::useMyPositionAsStart,
+                            onRemoveWaypoint = { index ->
+                                waypoints = waypoints.filterIndexed { i, _ -> i != index }
+                            },
+                            onAddWaypointViaSearch = { openPlaceSearch { place -> addPlaceAsWaypoint(place) } },
                             onUndo = {
                                 routeFromGenerator = false
                                 waypoints = waypoints.dropLast(1)
@@ -1696,6 +1946,19 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ----------------------------------------------------------------- Dialoge
+    if (searchOpen) {
+        SearchSheet(
+            query = searchQuery,
+            onQueryChange = { searchQuery = it },
+            busy = searchBusy,
+            error = searchError,
+            results = searchResults,
+            history = placeSearchHistory.map { Place(it.displayName, it.lat, it.lon) },
+            onSelect = ::onPlaceChosen,
+            onDismiss = ::closeSearchSheet,
+        )
+    }
+
     if (showStyleSheet) {
         MapStyleSheet(
             current = mapStyle,
@@ -1882,14 +2145,15 @@ private data class NavigationTarget(
 
 /**
  * Alle Marker der Karte in einer Liste: Wegpunkte (gruen = Start, rot = Ziel,
- * blau dazwischen), Start und Ende der ausgewaehlten Tour, der Suchtreffer und
- * der im Hoehenprofil abgelesene Punkt.
+ * blau dazwischen), Start und Ende der ausgewaehlten Tour, der ausgewaehlte
+ * Ort (als Ring statt als gefuellter Punkt, siehe `MapMarker.filled`) und der
+ * im Hoehenprofil abgelesene Punkt.
  */
 private fun buildMapMarkers(
     planning: Boolean,
     waypoints: List<Waypoint>,
     ride: Ride?,
-    searchMarker: Waypoint?,
+    place: Place?,
     hoverPoint: TrackPoint?,
 ): List<MapMarker> = buildList {
     if (ride != null && ride.points.size >= 2) {
@@ -1908,7 +2172,7 @@ private fun buildMapMarkers(
             add(MapMarker(waypoint.lat, waypoint.lon, color.toArgb(), radius = 8f))
         }
     }
-    searchMarker?.let { add(MapMarker(it.lat, it.lon, RouteBlue.toArgb(), radius = 9f)) }
+    place?.let { add(MapMarker(it.lat, it.lon, RouteBlue.toArgb(), radius = 10f, filled = false)) }
     hoverPoint?.let { add(MapMarker(it.lat, it.lon, HoverAmber.toArgb(), radius = 8f)) }
 }
 
@@ -2121,6 +2385,19 @@ private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"
+
+/** Wegpunktname der eigenen Position, gesetzt von [runRouteToPlace]. */
+private const val MY_LOCATION_WAYPOINT_NAME = "Mein Standort"
+
+/**
+ * Zieldistanz der Rundkurs-Suche aus der Ortskarte ([runRoundTripFromPlace]).
+ *
+ * Dieselbe Zahl wie der erste, haeufigste Chip in [RoundTripEntry]
+ * (`PlanningPanel.kt`) — die Kachel „Runde ab hier" auf der Ortskarte fragt
+ * (anders als das Planungsblatt) nicht erst nach einer eigenen Distanz, muss
+ * also selbst eine sinnvolle Vorgabe treffen.
+ */
+private const val PLACE_ROUND_TRIP_DEFAULT_KM = 30.0
 
 /**
  * Ein Stand der Planung, wie ihn „Rückgängig" wieder herstellt.

@@ -1,0 +1,230 @@
+package de.trailscape.app.ui.map
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.OneUiTextField
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.core.GeoResult
+
+/**
+ * # Das Suchblatt — Ortssuche als von unten hochfahrendes Blatt
+ *
+ * Ersetzt das fruehere `SearchPanel` (Karte im oberen Panelstapel,
+ * `PlanningPanel.kt`), das mit Trefferzeile UND Textknopf („Anzeigen"/„Als
+ * Wegpunkt") gleich zwei Aufgaben in einer Zeile vermischte. Seit diesem
+ * Umbau ist ein Treffer nur noch **auswaehlbar** — was mit der Auswahl
+ * passiert, entscheidet [PlaceCard] anhand des Kartenmodus (siehe deren
+ * KDoc), nicht mehr die Suchzeile selbst.
+ *
+ * ## Warum `ModalBottomSheet` und nicht die Bauart von `PlanningSheet`/`TourSheet`
+ * `PlanningSheet` und `TourSheet` sind Karten, die dauerhaft am unteren
+ * Bildschirmrand mitlaufen (kein Scrim, koexistieren mit der Karte) — dieses
+ * Blatt dagegen ist ein kurzer, modaler Vorgang mit eigener Tastatur, der beim
+ * Verlassen wieder ganz verschwindet. Genau dafuer hat diese Datei-Familie
+ * schon ein Vorbild: `MapStyleSheet` (unten in `MapScreen.kt`) ist bereits ein
+ * „von unten hochfahrendes Blatt" ueber `ModalBottomSheet` — mit Scrim,
+ * eigenem Fenster und dem in Material 3 eingebauten Griff ([BottomSheetDefaults]
+ * `DragHandle`, hier der geforderte „Grabber"). Dieses Blatt uebernimmt genau
+ * diese Mechanik und nur den *Inhalt* (Suchfeld, Trefferzeilen) von
+ * `PlanningSheet`/`TourSheet`.
+ *
+ * ## Autofokus
+ * Das Suchfeld bekommt den Fokus (und damit die Tastatur), sobald das Blatt
+ * steht — wer die Lupe antippt, will tippen, nicht erst noch das Feld selbst
+ * treffen.
+ *
+ * ## „Zuletzt gesucht" statt Treffer, wenn das Feld leer ist
+ * Dasselbe Muster wie Google Maps: Ein frisch geoeffnetes, leeres Suchfeld
+ * zeigt die zuletzt gewaehlten Orte statt einer leeren Flaeche — sobald
+ * getippt wird, weichen sie den echten Treffern. Die Historie selbst liegt im
+ * [de.trailscape.app.ui.AppViewModel] (siehe dessen „Suchverlauf"-Abschnitt);
+ * dieses Blatt zeigt nur, was es bekommt.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun SearchSheet(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    busy: Boolean,
+    error: String?,
+    results: List<GeoResult>,
+    history: List<Place>,
+    onSelect: (Place) -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val focusRequester = remember { FocusRequester() }
+    val maxHeight = LocalConfiguration.current.screenHeightDp.dp * SEARCH_SHEET_MAX_HEIGHT_FACTOR
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = maxHeight)
+                .padding(horizontal = CardPadding)
+                .padding(bottom = CardPadding),
+        ) {
+            OneUiTextField(
+                label = "Ort suchen",
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = "Ort, Stadt oder Straße",
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                trailingIcon = {
+                    when {
+                        busy -> CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp),
+                        )
+
+                        query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
+                            Icon(Icons.Filled.Clear, contentDescription = "Suche leeren")
+                        }
+                    }
+                },
+                fieldModifier = Modifier.focusRequester(focusRequester),
+            )
+
+            if (error != null) {
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(top = 6.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                when {
+                    results.isNotEmpty() -> results.forEach { result ->
+                        PlaceRow(
+                            displayName = result.displayName,
+                            onClick = { onSelect(result.toPlace()) },
+                        )
+                    }
+
+                    query.isBlank() && history.isNotEmpty() -> {
+                        Text(
+                            text = "Zuletzt gesucht",
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        history.forEach { place ->
+                            PlaceRow(
+                                displayName = place.displayName,
+                                icon = Icons.Filled.History,
+                                onClick = { onSelect(place) },
+                            )
+                        }
+                    }
+
+                    query.isBlank() -> Text(
+                        text = "Suche nach einem Ort, einer Stadt oder einer Adresse.",
+                        modifier = Modifier.padding(top = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+}
+
+/**
+ * Eine volle, antippbare Trefferzeile — mindestens 48 dp hoch, Chevron
+ * rechts, zweizeilig (Name + Gegend). Bewusst **kein** Textknopf mehr in der
+ * Zeile (siehe Datei-KDoc): Die ganze Zeile ist die Aktion.
+ */
+@Composable
+private fun PlaceRow(
+    displayName: String,
+    onClick: () -> Unit,
+    icon: ImageVector = Icons.Filled.LocationOn,
+) {
+    val (title, area) = placeTitleAndArea(displayName)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            if (area.isNotBlank()) {
+                Text(
+                    text = area,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** Anteil der Bildschirmhoehe, den das aufgeklappte Suchblatt hoechstens einnimmt. */
+private const val SEARCH_SHEET_MAX_HEIGHT_FACTOR = 0.7f

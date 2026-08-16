@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Meldet dem Play-Services-Datenschicht-Dienst, dass diese App die
+     Faehigkeit "trailscape_telefon" bereitstellt — der von der Bibliothek
+     erwartete Ort und Name (`res/values/wear.xml`,
+     `android_wear_capabilities`), keine selbst erfundene Konvention. Wird
+     automatisch beim Verbindungsaufbau ausgewertet, ohne dass dafuer eigener
+     Code noetig waere; siehe `de.trailscape.app.wear.WearBridge`, das ueber
+     denselben Namen nach einer erreichbaren Uhr sucht.
+
+     Der String-Wert MUSS exakt FAEHIGKEIT_TELEFON aus
+     `core/src/main/kotlin/de/trailscape/core/WearProtocol.kt` treffen — er
+     laesst sich aus einer XML-Ressource nicht auf die Kotlin-Konstante
+     verweisen, ist also von Hand synchron zu halten.
+-->
+<resources>
+    <string-array name="android_wear_capabilities">
+        <item>trailscape_telefon</item>
+    </string-array>
+</resources>

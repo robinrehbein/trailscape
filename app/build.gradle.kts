@@ -270,6 +270,16 @@ dependencies {
     // noch im Klassenpfad landende Version kommt von MapLibre (1.8.2) und
     // liegt weit ueber der Schwelle dieser Regel.
 
+    // Handy-Bruecke zur Uhr (Wear-OS-Datenschicht: MessageClient/CapabilityClient,
+    // siehe `wear/WearBridge.kt`). BEWUSSTE AUSNAHME vom Grundsatz oben "keine
+    // proprietaeren Abhaengigkeiten" (siehe README, Abschnitt "Lizenz"): Anders
+    // als beim Standort (LocationManager als freie Alternative) gibt es fuer den
+    // Nachrichtenaustausch zwischen einer Telefon- und einer Wear-OS-3+-App
+    // KEINEN Weg ohne Google Play Services — die Data-Layer-API ist der einzige
+    // Transport. Diese eine Abhaengigkeit gehoert vor dem naechsten Release in
+    // OpenSourceNotices.kt und die README-Lizenzuebersicht nachgetragen.
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Nur Test-Klassenpfad, kein Bestandteil des APK. `:app` hat bewusst KEIN

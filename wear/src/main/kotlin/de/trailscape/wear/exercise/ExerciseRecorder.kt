@@ -23,11 +23,10 @@ import kotlinx.coroutines.flow.callbackFlow
  * Duenner Mantel um den [ExerciseClient]: Lebenszyklus als suspend-Funktionen,
  * Rueckmeldungen als [Flow].
  *
- * Bewusst duenn — der Spike soll das Verhalten von Health Services messen,
- * nicht wegabstrahieren. Alles, was ankommt, wird unveraendert
- * durchgereicht; die Auswertung passiert eine Ebene hoeher im
- * [de.trailscape.wear.record.SpikeService], damit sie im Journal
- * nachvollziehbar bleibt.
+ * Bewusst duenn gehalten — eine Erbschaft aus dem Mess-Spike, der das
+ * unveraenderte Verhalten von Health Services beobachten wollte, statt es
+ * wegzuabstrahieren. Die Auswertung passiert eine Ebene hoeher im
+ * [de.trailscape.wear.record.RecordingService].
  */
 class ExerciseRecorder(private val client: ExerciseClient) {
 
@@ -52,7 +51,7 @@ class ExerciseRecorder(private val client: ExerciseClient) {
             val zustand: Availability,
         ) : Ereignis
 
-        /** Runden-Zusammenfassung; der Spike markiert keine Runden, aber es kostet nichts. */
+        /** Runden-Zusammenfassung; diese App markiert keine Runden, aber die Rueckmeldung mitzunehmen kostet nichts. */
         data class Runde(val zusammenfassung: ExerciseLapSummary) : Ereignis
     }
 
@@ -95,8 +94,7 @@ class ExerciseRecorder(private val client: ExerciseClient) {
      *
      * Ohne diesen Schritt fehlen die ersten 30–60 Sekunden: GPS braucht die
      * Zeit bis zum ersten Fix, der optische HF-Sensor bis zur stabilen
-     * Messung. Beides wuerde sonst in die Aufzeichnung fallen und Frage 2
-     * (Punktdichte, Luecken) mit einem Startartefakt verfaelschen.
+     * Messung. Beides wuerde sonst als Luecke in die Aufzeichnung fallen.
      */
     suspend fun vorbereiten(datentypen: Set<DeltaDataType<*, *>>) {
         client.prepareExercise(
@@ -121,9 +119,11 @@ class ExerciseRecorder(private val client: ExerciseClient) {
                 exerciseType = ExerciseType.BIKING,
                 dataTypes = datentypen,
                 isGpsEnabled = true,
-                // Auto-Pause bewusst aus: Sie wuerde die Punktfolge an
-                // Ampeln unterbrechen und damit ausgerechnet die Luecken
-                // erzeugen, die der Spike als GPS-Aussetzer vermessen will.
+                // Auto-Pause bewusst aus: Die Steuerung (Pause/Weiter) laeuft
+                // ueber [de.trailscape.wear.record.RecordingStatus] und soll
+                // von Health Services nicht unbemerkt uebersteuert werden —
+                // eine automatisch pausierte Uebung, von der die Anzeige
+                // nichts weiss, waere eine stille Inkonsistenz.
                 isAutoPauseAndResumeEnabled = false,
             ),
         )

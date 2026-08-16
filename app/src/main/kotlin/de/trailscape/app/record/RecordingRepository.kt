@@ -3,6 +3,7 @@ package de.trailscape.app.record
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import de.trailscape.core.SensorSample
 import de.trailscape.core.TrackPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +53,25 @@ object RecordingRepository {
     private val _speedKmh = MutableStateFlow<Double?>(null)
     private val _lastError = MutableStateFlow<String?>(null)
     private val _lastFinishedRideId = MutableStateFlow<String?>(null)
+    private val _heartRateBpm = MutableStateFlow<Int?>(null)
+    private val _watchConnected = MutableStateFlow(false)
+
+    /**
+     * Sammelstelle fuer Positionsproben einer gekoppelten Uhr, waehrend eine
+     * Aufzeichnung laeuft — gesetzt vom [RecordingService] bei Beginn, wieder
+     * geloescht beim Ende (siehe [attachWatchSampleSink]/[detachWatchSampleSink]).
+     *
+     * Warum hier und nicht direkt im Service: [de.trailscape.app.wear.WearListenerService]
+     * ist eine von Play Services erzeugte, kurzlebige Service-Instanz ohne
+     * Verweis auf den laufenden [RecordingService] — das Repository ist der
+     * einzige geteilte Anlaufpunkt zwischen beiden. Der eigentliche
+     * Kalman-Zustand (`LocationFusion`) bleibt bewusst im Service: Er ist
+     * nicht thread-sicher, und der Service verarbeitet ohnehin alles auf
+     * seinem eigenen Aufzeichnungs-Thread (siehe dessen Klassendoc). Diese
+     * Variable ist nur der Draht dorthin.
+     */
+    @Volatile
+    private var watchSampleSink: ((SensorSample) -> Unit)? = null
 
     /** Ob eine Aufzeichnung laeuft — unabhaengig davon, ob sie pausiert ist. */
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -102,6 +122,27 @@ object RecordingRepository {
      */
     val lastFinishedRideId: StateFlow<String?> = _lastFinishedRideId.asStateFlow()
 
+    /**
+     * Zuletzt von einer gekoppelten Uhr gemeldete Herzfrequenz in Schlaegen
+     * pro Minute, oder `null` ohne Uhr bzw. ohne HF-Sensor-Kontakt.
+     *
+     * Bewusst unabhaengig von [isRecording]: Ein Live-Pulswert ist auch
+     * ausserhalb einer Aufzeichnung ein plausibler Anzeigewert, und die Uhr
+     * schickt ihre Proben ohnehin nur, waehrend sie selbst gerade aufzeichnet.
+     * Wird NICHT automatisch geloescht, wenn [watchConnected] auf `false`
+     * faellt — wer einen „live"-Wert braucht (siehe `RideModeScreen`), prueft
+     * beide Flows gemeinsam.
+     */
+    val heartRateBpm: StateFlow<Int?> = _heartRateBpm.asStateFlow()
+
+    /**
+     * Ob gerade eine Uhr mit der Faehigkeit [de.trailscape.core.FAEHIGKEIT_UHR]
+     * erreichbar ist (siehe `de.trailscape.app.wear.WearBridge`). Kein Ersatz
+     * fuer eine echte Bluetooth-Statusabfrage — nur so genau, wie es die
+     * Capability-API der Data-Layer-Bibliothek hergibt.
+     */
+    val watchConnected: StateFlow<Boolean> = _watchConnected.asStateFlow()
+
     // ----------------------------------------------------------- Kommandos
 
     /**
@@ -141,6 +182,24 @@ object RecordingRepository {
     /** Quittiert eine verarbeitete Tour-ID. */
     fun clearFinishedRide() {
         _lastFinishedRideId.value = null
+    }
+
+    // -------------------------------------------------- Handy-Bruecke (Uhr)
+
+    /**
+     * Nimmt eine von der Uhr gemeldete Sensorprobe entgegen — aufgerufen von
+     * `de.trailscape.app.wear.WearListenerService` fuer jede Probe eines
+     * empfangenen [de.trailscape.core.SensorBatch].
+     *
+     * Die Herzfrequenz wird immer uebernommen (siehe [heartRateBpm]); eine
+     * mitgelieferte Position wird nur weitergereicht, wenn gerade eine
+     * Aufzeichnung laeuft und sie deshalb einen Sink registriert hat (siehe
+     * [attachWatchSampleSink]) — ohne laufende Aufzeichnung gibt es nichts,
+     * in das eine Position einfliessen koennte.
+     */
+    fun offerWatchSample(sample: SensorSample) {
+        sample.hf?.let { _heartRateBpm.value = it }
+        watchSampleSink?.invoke(sample)
     }
 
     private fun sendFromStoredContext(action: String) {
@@ -215,5 +274,24 @@ object RecordingRepository {
 
     internal fun publishFinishedRide(rideId: String) {
         _lastFinishedRideId.value = rideId
+    }
+
+    /**
+     * Registriert den Empfaenger fuer Uhr-Positionsproben fuer die Dauer einer
+     * Aufzeichnung (siehe [watchSampleSink]). Aufgerufen vom [RecordingService]
+     * bei `startRecording`/`continueFromJournal`.
+     */
+    internal fun attachWatchSampleSink(sink: (SensorSample) -> Unit) {
+        watchSampleSink = sink
+    }
+
+    /** Loest die Registrierung von [attachWatchSampleSink] wieder — Ende der Aufzeichnung. */
+    internal fun detachWatchSampleSink() {
+        watchSampleSink = null
+    }
+
+    /** Setzt, ob gerade eine Uhr erreichbar ist (siehe [watchConnected]). */
+    internal fun publishWatchConnected(connected: Boolean) {
+        _watchConnected.value = connected
     }
 }

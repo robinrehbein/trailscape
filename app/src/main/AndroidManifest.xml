@@ -128,6 +128,38 @@
             android:foregroundServiceType="location"
             android:stopWithTask="false" />
 
+        <!-- Handy-Bruecke: empfaengt Sensordaten und Befehle einer gekoppelten
+             Uhr ueber die Wear-OS-Datenschicht (Data Layer API). Google Play
+             Services erzeugt und bindet diese Instanz selbst — auch wenn
+             Trailscape gerade nicht laeuft —, sobald eine Nachricht unter
+             einem der in WearProtocol.kt deklarierten Pfade eintrifft. Der
+             Intent-Filter ist die von der Bibliothek dafuer vorgesehene
+             Registrierung, kein selbst erfundener; `exported="true"` ist
+             noetig, damit der (fremde) Play-Services-Prozess binden darf.
+             Bewusst je Pfad ein gefilterter MESSAGE_RECEIVED-Filter statt des
+             veralteten BIND_LISTENER (Lint-Fatal `WearableBindListener`):
+             BIND_LISTENER wuerde die App bei JEDEM Wear-Ereignis wecken,
+             die Pfadfilter nur bei den beiden eigenen (identisch zur
+             Gegenseite in wear/src/main/AndroidManifest.xml). -->
+        <service
+            android:name=".wear.WearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/trailscape/sensor" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/trailscape/befehl-an-telefon" />
+            </intent-filter>
+        </service>
+
         <!-- Kein eigener Dienst, sondern eine Ergaenzung an dem, den
              WorkManager selbst mitbringt: Ab Android 14 muss der Typ eines
              Vordergrunddienstes im Manifest stehen, und WorkManagers eigene

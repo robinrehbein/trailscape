@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Wearable-Capability-Deklaration: macht diese App fuer das Telefon per
+     `CapabilityClient.getCapability(FAEHIGKEIT_UHR, ...)` auffindbar, sobald
+     beide Geraete gekoppelt sind — ohne dass die Uhr dafuer selbst aktiv sein
+     muss (Google indiziert das aus dem installierten Manifest).
+
+     Der Eintrag ist der woertliche String-Wert von
+     `de.trailscape.core.FAEHIGKEIT_UHR` (WearProtocol.kt) — Ressourcendateien
+     koennen keine Kotlin-Konstante referenzieren, deshalb von Hand synchron
+     gehalten. Aendert sich der Name dort, muss er hier mitgeaendert werden.
+-->
+<resources>
+    <string-array name="android_wear_capabilities">
+        <item>trailscape_uhr</item>
+    </string-array>
+</resources>

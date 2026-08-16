@@ -58,6 +58,16 @@ val libraryNotices: List<LicenseNotice> = listOf(
         license = "Apache 2.0",
         url = "https://github.com/square/okhttp",
     ),
+    // Fuer die Uhr-Anbindung (Wear-OS-Datenschicht) gibt es keinen freien
+    // Ersatz — MessageClient/CapabilityClient stecken ausschliesslich in
+    // Play Services. Bewusste Entscheidung des Maintainers (PR #30): Die
+    // Live-Sensorik der Uhr wiegt schwerer als die fruehere Zusicherung,
+    // ohne proprietaere Abhaengigkeiten auszukommen.
+    LicenseNotice(
+        name = "Google Play Services (Wearable Data Layer)",
+        license = "proprietär — Android SDK Terms",
+        url = "https://developer.android.com/distribute/play-services",
+    ),
     // Die Routing-Engine steckt seit dem Offline-Routing im APK selbst (Modul
     // `:brouter`, gebaut aus dem Submodul `third_party/brouter` auf Tag
     // v1.7.10). MIT verlangt Lizenztext UND Copyright-Vermerk in jeder Kopie
