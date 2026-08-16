@@ -7,6 +7,7 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderStore
+import de.trailscape.app.routing.RoutingServerSettings
 import de.trailscape.app.routing.SegmentDownloads
 import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentSettings
@@ -142,6 +143,11 @@ class AppViewModel(
      * [segmentUnmeteredOnly]).
      */
     private val segmentSettings: SegmentSettings = AppServices.segmentSettings,
+    /**
+     * Eigene Server-URL fuer die Routenberechnung (siehe [routingServerUrl]);
+     * leer ist die Vorgabe.
+     */
+    private val routingServerSettings: RoutingServerSettings = AppServices.routingServerSettings,
     /**
      * Zugriff auf Health Connect. Der Mehr-Screen benutzt ihn fuer Status,
      * Verbindungsaufbau und manuellen Sync direkt — genau wie in Dart
@@ -1189,6 +1195,41 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Eigener Routing-Server (nur Routenberechnung)
+    // -------------------------------------------------------------------------
+
+    private val _routingServerUrl = MutableStateFlow("")
+
+    /**
+     * Basis-URL eines selbst betriebenen BRouter-Servers fuer die
+     * ROUTENBERECHNUNG — leer heisst „öffentlicher brouter.de" (siehe
+     * [RoutingServerSettings]).
+     *
+     * ## Warum das die Segment-Downloads (Kacheln) NICHT betrifft
+     * [downloadSegments] laedt weiterhin ausschliesslich von brouter.de: Dort
+     * liegen die offiziellen `*.rd5`-Kacheln, ein selbst betriebener
+     * Routing-Server bietet sie in aller Regel gar nicht an. Diese
+     * Einstellung entscheidet nur, wohin `de.trailscape.app.routing.planRouteOfflineFirst`
+     * eine Route zur Berechnung schickt, wenn lokal nicht geroutet werden
+     * kann.
+     */
+    val routingServerUrl: StateFlow<String> = _routingServerUrl.asStateFlow()
+
+    /**
+     * Setzt die eigene Server-URL und merkt sie sich; ein leerer Text setzt
+     * auf die Vorgabe (öffentlicher brouter.de) zurueck. Trailing-Slash wird
+     * NICHT hier entfernt, sondern erst beim Aufbau der Anfrage in `:core`
+     * (siehe `de.trailscape.core.fetchRoute`) — so bleibt exakt der Text
+     * sichtbar, den die Nutzerin eingegeben hat.
+     */
+    fun setRoutingServerUrl(value: String) {
+        _routingServerUrl.value = value.trim()
+        viewModelScope.launch {
+            withContext(io) { runCatching { routingServerSettings.url = value } }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Selfhost-Sync
     // -------------------------------------------------------------------------
 
@@ -1329,6 +1370,7 @@ class AppViewModel(
                     reminderSettings = reminderStore.readSettings(),
                     segmentUnmeteredOnly = runCatching { segmentSettings.unmeteredOnly }
                         .getOrDefault(true),
+                    routingServerUrl = runCatching { routingServerSettings.url }.getOrDefault(""),
                     vitalsHistory = readVitalsHistory(keyValueStore),
                     shortSleeperHintShownAt = readShortSleeperHintShownAt(),
                     planFeasibilityAckKey = readPlanFeasibilityAckKey(),
@@ -1344,6 +1386,7 @@ class AppViewModel(
             _syncConfig.value = restored.syncConfig
             _reminderSettings.value = restored.reminderSettings
             _segmentUnmeteredOnly.value = restored.segmentUnmeteredOnly
+            _routingServerUrl.value = restored.routingServerUrl
             _shortSleeperHintShownAt.value = restored.shortSleeperHintShownAt
             _shortSleeperHintVisible.value = shouldShowShortSleeperHint(
                 restored.shortSleeperHintShownAt,
@@ -1381,6 +1424,7 @@ class AppViewModel(
         val onboardingSeen: Boolean,
         val reminderSettings: ReminderSettings,
         val segmentUnmeteredOnly: Boolean,
+        val routingServerUrl: String,
         val vitalsHistory: VitalsHistory,
         val shortSleeperHintShownAt: LocalDateTime?,
         val planFeasibilityAckKey: String?,

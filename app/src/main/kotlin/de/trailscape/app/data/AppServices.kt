@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
 import de.trailscape.app.health.HealthConnectGateway
 import de.trailscape.app.reminder.ReminderStore
+import de.trailscape.app.routing.RoutingServerSettings
 import de.trailscape.app.routing.SegmentDownloadWorker
 import de.trailscape.app.routing.SegmentDownloader
 import de.trailscape.app.routing.SegmentInventory
@@ -41,7 +42,8 @@ import kotlinx.coroutines.SupervisorJob
  * `AppServices.healthGateway`, `AppServices.healthSyncService`,
  * `AppServices.updateChecker`, `AppServices.reminderStore`,
  * `AppServices.appScope`, `AppServices.segmentInventory`,
- * `AppServices.segmentDownloader`, `AppServices.segmentSettings`.
+ * `AppServices.segmentDownloader`, `AppServices.segmentSettings`,
+ * `AppServices.routingServerSettings`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -121,6 +123,13 @@ object AppServices {
 
     /** „Nur im WLAN laden?" — die eine Einstellung der Kachelverwaltung. */
     val segmentSettings: SegmentSettings by lazy { SegmentSettings(keyValueStore) }
+
+    /**
+     * Die eigene Server-URL fuer die Routenberechnung (siehe
+     * [RoutingServerSettings]) — leer ist die Vorgabe (oeffentlicher
+     * brouter.de). Betrifft NICHT [segmentDownloader]; Begruendung dort.
+     */
+    val routingServerSettings: RoutingServerSettings by lazy { RoutingServerSettings(keyValueStore) }
 
     /**
      * Die Lauf-Nummer der installierten APK — `versionCode` minus dem in

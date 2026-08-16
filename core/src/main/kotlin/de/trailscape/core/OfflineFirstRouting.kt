@@ -276,6 +276,10 @@ fun routeOfflineLegs(
  *   („Berechne auf dem Gerät …").
  * @param onProgress `(fertige Etappen, Etappen gesamt)` des gerade laufenden
  *   Wegs.
+ * @param serverBaseUrl Basis-URL des Servers fuer den Serverweg (siehe
+ *   [fetchRoute]). Vorgabe ist [defaultBrouterServerUrl]; betrifft NUR die
+ *   Berechnung, nicht die Segment-Downloads (Begruendung bei
+ *   [defaultBrouterServerUrl]).
  */
 fun routeOfflineFirst(
     waypoints: List<Waypoint>,
@@ -285,6 +289,7 @@ fun routeOfflineFirst(
     sleeper: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) },
     onSource: ((RoutingSource) -> Unit)? = null,
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
+    serverBaseUrl: String = defaultBrouterServerUrl,
 ): RoutingResult {
     if (waypoints.size < 2) {
         throw Exception("Mindestens zwei Wegpunkte nötig.")
@@ -334,6 +339,7 @@ fun routeOfflineFirst(
             client = client,
             sleeper = sleeper,
             onProgress = onProgress,
+            baseUrl = serverBaseUrl,
         )
     } catch (serverFailure: Exception) {
         // Beide Wege sind gescheitert. Frueher gewann hier kommentarlos die

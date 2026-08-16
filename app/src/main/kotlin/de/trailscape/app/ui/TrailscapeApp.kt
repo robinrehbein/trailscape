@@ -62,11 +62,12 @@ import de.trailscape.app.ui.training.TrainingScreen
  * Navigationsleiste war ausserdem mit fuenf Zielen bereits voll (siehe unten,
  * „Vier Tabs sind das Maximum" — vorher „Fuenf"): Ein Ziel, das man auch als
  * Aufsatz auf ein bestehendes bauen kann, verdient keinen eigenen Platz in
- * einer schon vollen Kapsel. Die Tourenliste liegt deshalb als Blatt
- * (`ui/map/TourSheet.kt`) ueber der Karte — genau derselbe Baustein wie das
- * Planungsblatt, nur mit anderem Inhalt. Der Baustein der Liste selbst
- * (`ui/rides/TourList.kt`, `TourListContent`) ist damit kein eigener Screen
- * mehr, sondern ein Zulieferer des Karten-Screens.
+ * einer schon vollen Kapsel. Die Tourenliste liegt deshalb als aufziehbarer
+ * Koerper im Erkunden-Blatt (`ui/map/ExploreSheet.kt`) ueber der Karte —
+ * genau derselbe wischbare Baustein wie das Planungsblatt, nur mit anderem
+ * Inhalt. Der Baustein der Liste selbst (`ui/rides/TourList.kt`,
+ * `TourListContent`) ist damit kein eigener Screen mehr, sondern ein
+ * Zulieferer des Karten-Screens.
  *
  * ## Was wo liegt
  *

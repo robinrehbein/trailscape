@@ -116,7 +116,7 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * Tourenliste als Inhalt eines Blatts — Nachfolger des fruehen eigenen
  * Touren-Tabs (`ui/rides/RidesScreen.kt`, entfallen). Karte und Touren sind zu
  * einer Seite zusammengelegt; die Liste liegt seither als Blatt ueber der Karte
- * (`ui/map/TourSheet.kt`, dort eingebaut).
+ * (`ui/map/ExploreSheet.kt`, dort eingebaut).
  *
  * Deshalb **kein** `Scaffold`, **keine** Titelleiste und **keine** eigene
  * Aufloesung der System-Insets: Dieses Composable zeichnet nur seinen Inhalt
@@ -256,7 +256,7 @@ fun TourListContent(
     }
 
     // Breite ja, Hoehe nein: Das Tourenblatt deckelt die Hoehe nur nach oben
-    // (`heightIn(max = …)` in `TourSheet.kt`). Wuerde hier `fillMaxSize`
+    // (`heightIn(max = …)` in `ExploreSheet.kt`). Wuerde hier `fillMaxSize`
     // stehen, nähme die Liste diese Obergrenze immer ein — ein Blatt, das
     // auch mit zwei Touren 80 % des Bildschirms verdeckt, davon vier Fuenftel
     // leer. So waechst das Blatt mit seinem Inhalt und scrollt erst, wenn es
