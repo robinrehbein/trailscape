@@ -13,9 +13,18 @@ import androidx.compose.ui.graphics.Color
  * echte Aktionen (ein gefuellter Knopf je Blick, alles andere ist neutral.
  *
  * ## Tonal-Slots (die eigentlichen Flaechen)
- * `surface*` ist der Bildschirm, `surfaceContainerLow` ist die Karte. Wer
- * eine Karte faerbt, nimmt `surfaceContainerLow` (Default von `Card`), nie
- * `surface` — sonst verschwindet sie auf dem Hintergrund.
+ * `surface` ist der Bildschirm, die **Karte** ist `surfaceContainerHighest` —
+ * denn genau diesen Slot benutzt das gefuellte `Card` von Material 3. Damit
+ * Karten und die schwebenden Panels des Karten-Tabs (`surfaceContainerLow`)
+ * dieselbe Flaeche haben, tragen beide Slots denselben Wert: hell Weiss,
+ * dunkel ein angehobenes Grau.
+ *
+ * Das bricht bewusst die Material-Ordnung „hoeher = dunkler im Hellmodus":
+ * One UI setzt **weisse** Karten auf einen grauen Grund, waehrend Material die
+ * Karte dunkler faerben wuerde als den Bildschirm. Die Zwischenstufen
+ * `surfaceContainer`/`surfaceContainerHigh` bleiben die getoenten Flaechen, die
+ * *auf* einer Karte liegen (Chips, ausgegraute Zeilen) — sie muessen sich
+ * deshalb von der Karte absetzen, nicht vom Bildschirm.
  *
  * ## Primaerfarbe als Textfarbe
  * Das Gruen ist eine Stufe dunkler als die Flaeechen-Variante, die man naiv
@@ -46,11 +55,15 @@ internal val LightBackground = Color(0xFFF4F4F6)
 internal val LightOnBackground = Color(0xFF1A1B1E)
 internal val LightSurface = Color(0xFFF4F4F6)
 internal val LightOnSurface = Color(0xFF1A1B1E)
-internal val LightSurfaceContainerLowest = Color(0xFFFBFBFD)
+internal val LightSurfaceContainerLowest = Color(0xFFFFFFFF)
+
+/** Flaeche der schwebenden Panels des Karten-Tabs — dieselbe wie die Karte. */
 internal val LightSurfaceContainerLow = Color(0xFFFFFFFF)
 internal val LightSurfaceContainer = Color(0xFFEFEFF2)
-internal val LightSurfaceContainerHigh = Color(0xFFEAEAEF)
-internal val LightSurfaceContainerHighest = Color(0xFFE4E4E9)
+internal val LightSurfaceContainerHigh = Color(0xFFE7E8EC)
+
+/** **Die Karte.** Material 3 nimmt diesen Slot fuer das gefuellte `Card`. */
+internal val LightSurfaceContainerHighest = Color(0xFFFFFFFF)
 internal val LightSurfaceVariant = Color(0xFFEDEDF0)
 internal val LightOnSurfaceVariant = Color(0xFF545B63)
 internal val LightOutline = Color(0xFF767C86)
@@ -81,10 +94,14 @@ internal val DarkOnBackground = Color(0xFFE3E3E7)
 internal val DarkSurface = Color(0xFF0A0A0C)
 internal val DarkOnSurface = Color(0xFFE3E3E7)
 internal val DarkSurfaceContainerLowest = Color(0xFF060607)
-internal val DarkSurfaceContainerLow = Color(0xFF17181B)
-internal val DarkSurfaceContainer = Color(0xFF1C1D21)
-internal val DarkSurfaceContainerHigh = Color(0xFF232429)
-internal val DarkSurfaceContainerHighest = Color(0xFF2A2B30)
+
+/** Flaeche der schwebenden Panels des Karten-Tabs — dieselbe wie die Karte. */
+internal val DarkSurfaceContainerLow = Color(0xFF1C1D21)
+internal val DarkSurfaceContainer = Color(0xFF26272C)
+internal val DarkSurfaceContainerHigh = Color(0xFF303138)
+
+/** **Die Karte.** Material 3 nimmt diesen Slot fuer das gefuellte `Card`. */
+internal val DarkSurfaceContainerHighest = Color(0xFF1C1D21)
 internal val DarkSurfaceVariant = Color(0xFF232429)
 internal val DarkOnSurfaceVariant = Color(0xFFBFC3C9)
 internal val DarkOutline = Color(0xFF8A8F98)
