@@ -45,7 +45,7 @@ import de.trailscape.core.assessFitness
 import de.trailscape.core.routeTargetForSession
 
 /**
- * Trainings-Tab: Form-Kurve (CTL/ATL/TSB), Vitalwerte, Wochenziel,
+ * Trainings-Tab: Form-Kurve (Fitness/Ermüdung/Form), Vitalwerte, Wochenziel,
  * Zielformular und Trainingsplan.
  *
  * Port von `lib/screens/training_screen.dart` (1.281 Zeilen). Die komplette
@@ -55,7 +55,7 @@ import de.trailscape.core.routeTargetForSession
  * [AppViewModel.plan]/[AppViewModel.setPlan]).
  *
  * ## Die Tagesempfehlung ist umgezogen — vollstaendig
- * Die Karte „Heute" (Readiness-Score, Empfehlung, Knopf „Passende Route
+ * Die Karte „Heute" (Readiness-Score, Empfehlung, Knopf „Passende Runde
  * planen") stand hier ganz oben und ist ersatzlos entfallen; sie ist jetzt die
  * Startseite (`ui/today/TodayScreen.kt`). Bewusst **nicht** in reduzierter Form
  * stehen geblieben: Zwei Orte, an denen derselbe Score und dieselbe Empfehlung
@@ -73,25 +73,33 @@ import de.trailscape.core.routeTargetForSession
  * ## Leerzustand
  * Ohne eine einzige Tour sagte dieser Tab bisher in jeder Karte einzeln „noch
  * keine Daten" — und erklaerte nirgends, *warum* und *wie lange* das so bleibt.
- * Deshalb steht bei leerer Tourenliste [TrainingEmptyState] ganz oben: drei
- * Saetze zum Modell (Fitness und Erholung brauchen ~2 Wochen Historie) und die
- * beiden kuerzesten Wege zu echten Daten.
+ * Deshalb steht bei leerer Tourenliste [TrainingEmptyState] ganz oben: zwei
+ * kurze Saetze, dass Fitness und Erholung ~2 Wochen Historie brauchen, und die
+ * beiden kuerzesten Wege zu echten Daten. Die Modellerklaerung (CTL/ATL)
+ * gehoert in die Kartentiefe, nicht in die Einstiegszeile.
  *
  * Zwei Karten fehlen in diesem Zustand ganz: [WeekCard] und [FitnessCard].
- * Beide *behaupteten* ohne Datengrundlage etwas — die eine „Kein Deload nötig —
- * Deine Belastung sieht aktuell tragfähig aus" (eine Entwarnung auf null
- * Datenpunkten), die andere stufte den Nutzer am ersten Tag als „Einsteiger"
- * ein. Der Leerzustand darueber sagt bereits, dass beides Historie braucht;
- * eine erfundene Auskunft daneben macht ihn unglaubwuerdig. Die uebrigen Karten
+ * Beide *behaupteten* ohne Datengrundlage etwas — die eine „Keine
+ * Entlastungswoche nötig — Deine Belastung sieht aktuell tragfähig aus" (eine
+ * Entwarnung auf null Datenpunkten), die andere stufte den Nutzer am ersten
+ * Tag als „Einsteiger" ein. Der Leerzustand darueber sagt bereits, dass beides
+ * Historie braucht; eine erfundene Auskunft daneben macht ihn unglaubwuerdig.
+ * Die uebrigen Karten
  * bleiben stehen — Vitalwerte koennen naemlich auch ganz ohne Touren schon aus
  * Health Connect kommen, und das Zielformular funktioniert ebenfalls sofort.
  *
- * ## Zwei Hinweise am Rand
- *  * **Ganz oben**, solange [AppViewModel.profileConfirmed] aus ist: dass alle
- *    Zahlen dieses Tabs auf Standardwerten beruhen (siehe
- *    [UnconfirmedProfileNotice]).
- *  * **Ganz unten**, immer und eingeklappt: das Glossar der Fachbegriffe
- *    ([GlossaryCard]).
+ * ## Ein Hinweis am Rand
+ * **Ganz oben**, solange [AppViewModel.profileConfirmed] aus ist: dass alle
+ * Zahlen dieses Tabs auf Standardwerten beruhen (siehe
+ * [UnconfirmedProfileNotice]). Einen zweiten Hinweis gab es hier frueher ganz
+ * unten — ein aufklappbares Glossar der Fachbegriffe (`GlossaryCard.kt`,
+ * inzwischen geloescht). Es ist gegenstandslos geworden: Die Karten sprechen
+ * die Begriffe jetzt selbst im Klartext (Fitness/Ermüdung/Form statt
+ * CTL/ATL/TSB, Entlastungswoche statt Deload), und die wenigen Begriffe mit
+ * echtem Erklaerungswert (VO2max) stehen als gedaempfter Untertext direkt an
+ * ihrer Kennzahl (siehe [VitalsCard]). Ein Nachschlagewerk fuer eine Sprache,
+ * die man gar nicht mehr uebersetzen muss, waere selbst wieder erklaerungs-
+ * beduerftig.
  *
  * ## Bewusste Abweichungen vom Dart-Original
  *  * **Keine `_EntranceFade`-Animation.** Das Original blendet die ersten
@@ -100,7 +108,7 @@ import de.trailscape.core.routeTargetForSession
  *    recycelte Items erneut einblenden. `ui/rides/RidesScreen.kt` verzichtet
  *    aus demselben Grund bereits darauf.
  *  * **Kein `TweenAnimationBuilder`-Aequivalent** fuer Readiness-Score und die
- *    CTL/ATL/TSB-Kennzahlen — sie werden statisch gezeigt.
+ *    Fitness/Ermüdung/Form-Kennzahlen — sie werden statisch gezeigt.
  *  * **Ampelpunkt statt Icon** bei den Vitalwerte-Zeilen (siehe KDoc von
  *    [SignalRow]) — bewusste Gestaltung passend zur Ampel-Metapher des
  *    Readiness-Systems, unabhaengig vom verfuegbaren Icon-Satz.
@@ -252,11 +260,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                         )
                     }
                 }
-
-                // Ganz unten und eingeklappt: Das Glossar ist Nachschlagewerk,
-                // kein Inhalt — es soll gefunden werden koennen, ohne den Weg
-                // zu den Zahlen zu verstellen (siehe GlossaryCard.kt).
-                item(key = "glossar") { GlossaryCard() }
             }
         }
     }
@@ -288,23 +291,22 @@ private fun UnconfirmedProfileNotice(onOpenProfile: () -> Unit) {
 /**
  * Was der Trainings-Tab kann, solange er noch keine Tour kennt.
  *
- * Der Text nennt bewusst die Groessenordnung („rund zwei Wochen"): Das
- * CTL/ATL-Modell braucht Historie, und wer das nicht weiss, haelt einen leeren
- * Trainings-Tab am zweiten Tag fuer einen Fehler. Die Zahl deckt sich mit
- * `FitnessSeries.daysUntilDisplayReady` aus `:core`, das die einzelnen Karten
- * danach tagesgenau herunterzaehlen.
+ * Textbudget: zwei kurze Saetze, dann die Knoepfe. Die Groessenordnung
+ * („rund zwei Wochen") bleibt die einzige Ausnahme vom Ein-Satz-Budget der
+ * uebrigen Leerzustaende, weil sie verhindert, dass ein leerer Trainings-Tab
+ * am zweiten Tag wie ein Fehler wirkt. Die CTL/ATL-Modellerklaerung entfaellt
+ * dagegen: Wer die Begriffe wissen will, findet sie in den Karten selbst
+ * ([VitalsCard], [FitnessCard]). Kein Hinweis mehr auf den Countdown — die
+ * Karten unten zaehlen ohnehin selbst herunter
+ * (`FitnessSeries.daysUntilDisplayReady` aus `:core`).
  */
 @Composable
 private fun TrainingEmptyState(onRecord: () -> Unit, onImport: () -> Unit) {
     EmptyState(
         title = "Hier entsteht dein Trainingsbild",
-        body = "Trailscape rechnet aus jeder Tour eine Trainingslast und daraus deine " +
-            "Fitness (CTL), deine Ermüdung (ATL) und die Form dazwischen. Belastbar wird " +
-            "das erst mit rund zwei Wochen Historie — Erholungswerte wie HRV und Ruhepuls " +
-            "brauchen zusätzlich eine Uhr, die nach Health Connect schreibt. " +
-            "Am schnellsten bist du da, wenn du deine bisherigen Touren mitbringst.",
-        hint = "Bis dahin bleiben die Karten unten leer oder zeigen an, wie viele Tage " +
-            "noch fehlen. Dein Ziel kannst du trotzdem schon eintragen.",
+        body = "Trailscape baut aus deinen Touren dein Trainingsbild auf. Belastbar wird " +
+            "es erst mit rund zwei Wochen Historie — am schnellsten bist du dort mit " +
+            "importierten Touren.",
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
             OutlinedButton(onClick = onImport) { Text("Alte Touren importieren") }

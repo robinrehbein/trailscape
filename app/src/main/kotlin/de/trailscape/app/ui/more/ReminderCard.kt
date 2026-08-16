@@ -67,8 +67,8 @@ import java.time.LocalTime
  * fragte nur der Start einer Aufzeichnung danach (`ui/map`) — wer nie
  * aufzeichnete, konnte die Erinnerungen einschalten und bekam nie eine. Der
  * Hinweis samt Knopf unten holt die Freigabe deshalb dort, wo sie gebraucht
- * wird; das Muster stammt aus [OfflineRoutingCard], die es fuer die Ortung
- * ebenso macht.
+ * wird; das Muster stammt aus [OfflineRoutingCardContent], die es fuer die
+ * Ortung ebenso macht.
  *
  * ## Speichern und Umplanen in einem Schritt
  * Jede Aenderung geht sofort an [AppViewModel.setReminderSettings] (Speichern)
@@ -76,9 +76,13 @@ import java.time.LocalTime
  * Wert, nicht ueber einen erneuten Lesevorgang. Es gibt keinen
  * „Speichern"-Knopf: Ein Schalter, der erst nach einer Bestaetigung gilt, ist
  * in einer Einstellungsliste eine Falle.
+ *
+ * Der Inhalt der Zeile „Erinnerungen" in der Gruppe „App" des Mehr-Tabs
+ * (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel
+ * und Aufklapp-Rahmen.
  */
 @Composable
-fun ReminderCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun ReminderCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
     val settings by appViewModel.reminderSettings.collectAsStateWithLifecycle()
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -108,86 +112,84 @@ fun ReminderCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         ReminderScheduler.reschedule(context, next)
     }
 
-    MoreSectionCard(title = "Erinnerungen", modifier = modifier) {
-        Text(
-            text = "Trailscape kann dich an die heutige Einheit, den Wochenabschluss und " +
-                "längere Pausen erinnern. Die Meldungen entstehen auf dem Gerät — es gibt " +
-                "keinen Push-Dienst und kein Konto dahinter.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
+    Text(
+        text = "Trailscape kann dich an die heutige Einheit, den Wochenabschluss und " +
+            "längere Pausen erinnern. Die Meldungen entstehen auf dem Gerät — es gibt " +
+            "keinen Push-Dienst und kein Konto dahinter.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+
+    ReminderSwitchRow(
+        title = "Tageseinheit",
+        subtitle = "Morgens, was heute ansteht. Nur mit Trainingsplan.",
+        checked = settings.dailySessionEnabled,
+        onCheckedChange = { apply(settings.copy(dailySessionEnabled = it)) },
+    )
+    ReminderTimeRow(
+        label = "Uhrzeit morgens",
+        time = settings.dailySessionTime,
+        enabled = settings.dailySessionEnabled || settings.nudgeEnabled,
+        onClick = { editing = ReminderTime.DAILY },
+    )
+
+    // Haarlinie zwischen den drei Anlassen (One-UI-Einstellungsliste):
+    // Schalter und zugehoerige Uhrzeit bilden eine Gruppe und bleiben
+    // ungetrennt.
+    HorizontalDivider()
+
+    ReminderSwitchRow(
+        title = "Wochenrückblick",
+        subtitle = "Sonntagabends: gefahrene gegen geplante Kilometer.",
+        checked = settings.weeklyReviewEnabled,
+        onCheckedChange = { apply(settings.copy(weeklyReviewEnabled = it)) },
+    )
+    ReminderTimeRow(
+        label = "Uhrzeit sonntags",
+        time = settings.weeklyReviewTime,
+        enabled = settings.weeklyReviewEnabled,
+        onClick = { editing = ReminderTime.WEEKLY },
+    )
+
+    HorizontalDivider()
+
+    ReminderSwitchRow(
+        title = "Anstupser",
+        subtitle = "Nach $reminderNudgeAfterDays Tagen ohne Aufzeichnung, höchstens " +
+            "einmal pro Woche. Nutzt die Uhrzeit morgens.",
+        checked = settings.nudgeEnabled,
+        onCheckedChange = { apply(settings.copy(nudgeEnabled = it)) },
+    )
+
+    // Ein Schalter, der sich einschalten laesst und danach nichts tut, ist
+    // eine Falle — und die Benachrichtigungs-Berechtigung war die einzige
+    // der App, die nirgends dort angefragt wurde, wo man sie braucht (sie
+    // kam nur nebenbei beim Start einer Aufzeichnung). Deshalb steht hier
+    // derselbe Anfrageknopf wie in `OfflineRoutingCard` bei der Ortung:
+    // erklaeren, was fehlt, und es an Ort und Stelle erledigen.
+    if (settings.anyEnabled && !permissionGranted) {
         Spacer(modifier = Modifier.height(12.dp))
-
-        ReminderSwitchRow(
-            title = "Tageseinheit",
-            subtitle = "Morgens, was heute ansteht. Nur mit Trainingsplan.",
-            checked = settings.dailySessionEnabled,
-            onCheckedChange = { apply(settings.copy(dailySessionEnabled = it)) },
+        NoticeBox(
+            icon = Icons.Filled.Info,
+            color = LocalSignalColors.current.warning,
+            text = "Trailscape darf keine Benachrichtigungen anzeigen — die Erinnerungen " +
+                "bleiben deshalb still. Erlaube sie hier; nachträglich geht es auch " +
+                "in den Android-Einstellungen unter " +
+                "„Apps → Trailscape → Benachrichtigungen“.",
         )
-        ReminderTimeRow(
-            label = "Uhrzeit morgens",
-            time = settings.dailySessionTime,
-            enabled = settings.dailySessionEnabled || settings.nudgeEnabled,
-            onClick = { editing = ReminderTime.DAILY },
-        )
-
-        // Haarlinie zwischen den drei Anlassen (One-UI-Einstellungsliste):
-        // Schalter und zugehoerige Uhrzeit bilden eine Gruppe und bleiben
-        // ungetrennt.
-        HorizontalDivider()
-
-        ReminderSwitchRow(
-            title = "Wochenrückblick",
-            subtitle = "Sonntagabends: gefahrene gegen geplante Kilometer.",
-            checked = settings.weeklyReviewEnabled,
-            onCheckedChange = { apply(settings.copy(weeklyReviewEnabled = it)) },
-        )
-        ReminderTimeRow(
-            label = "Uhrzeit sonntags",
-            time = settings.weeklyReviewTime,
-            enabled = settings.weeklyReviewEnabled,
-            onClick = { editing = ReminderTime.WEEKLY },
-        )
-
-        HorizontalDivider()
-
-        ReminderSwitchRow(
-            title = "Anstupser",
-            subtitle = "Nach $reminderNudgeAfterDays Tagen ohne Aufzeichnung, höchstens " +
-                "einmal pro Woche. Nutzt die Uhrzeit morgens.",
-            checked = settings.nudgeEnabled,
-            onCheckedChange = { apply(settings.copy(nudgeEnabled = it)) },
-        )
-
-        // Ein Schalter, der sich einschalten laesst und danach nichts tut, ist
-        // eine Falle — und die Benachrichtigungs-Berechtigung war die einzige
-        // der App, die nirgends dort angefragt wurde, wo man sie braucht (sie
-        // kam nur nebenbei beim Start einer Aufzeichnung). Deshalb steht hier
-        // derselbe Anfrageknopf wie in `OfflineRoutingCard` bei der Ortung:
-        // erklaeren, was fehlt, und es an Ort und Stelle erledigen.
-        if (settings.anyEnabled && !permissionGranted) {
-            Spacer(modifier = Modifier.height(12.dp))
-            NoticeBox(
-                icon = Icons.Filled.Info,
-                color = LocalSignalColors.current.warning,
-                text = "Trailscape darf keine Benachrichtigungen anzeigen — die Erinnerungen " +
-                    "bleiben deshalb still. Erlaube sie hier; nachträglich geht es auch " +
-                    "in den Android-Einstellungen unter " +
-                    "„Apps → Trailscape → Benachrichtigungen“.",
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                    // Ab Android 13 gibt es die Laufzeit-Berechtigung; darunter
-                    // sind Benachrichtigungen ohne Nachfrage erlaubt und der
-                    // Zweig hier wird nie erreicht (siehe
-                    // `hasNotificationPermission`).
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                },
-            ) { Text("Benachrichtigungen erlauben") }
-        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = {
+                // Ab Android 13 gibt es die Laufzeit-Berechtigung; darunter
+                // sind Benachrichtigungen ohne Nachfrage erlaubt und der
+                // Zweig hier wird nie erreicht (siehe
+                // `hasNotificationPermission`).
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            },
+        ) { Text("Benachrichtigungen erlauben") }
     }
 
     editing?.let { target ->

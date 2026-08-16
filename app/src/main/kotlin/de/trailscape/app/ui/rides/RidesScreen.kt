@@ -152,7 +152,9 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * [RidesEmptyState] statt der bisherigen zwei zentrierten Textzeilen: gleicher
  * Aufbau wie im Trainings-Tab (`ui/components/EmptyState.kt`), mit allen drei
  * Wegen, auf denen eine Tour hier landen kann — aufzeichnen, Einzeldatei,
- * Archiv.
+ * Archiv. Textbudget ein Satz; der Archiv-Weg steht dank des eigenen Knopfs
+ * „Archiv importieren" ohnehin schon als Aktion da, eine Hinweiszeile dazu
+ * waere doppelt.
  *
  * ## Loeschen mit „Rückgängig"
  * Der Bestaetigungsdialog entfernt die Tour sofort aus der Liste
@@ -178,6 +180,21 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * Stirbt der Prozess waehrend der Frist, bleibt die Datei einfach liegen —
  * die Tour taucht beim naechsten Start ganz normal wieder auf. Akzeptierter
  * Kompromiss, siehe KDoc von [AppViewModel.deleteRideWithUndo].
+ *
+ * ## Die Regel dahinter: Snackbar nur fuer Bestaetigungen
+ * Loeschen und Import ziehen dieselbe Grenze, nur in entgegengesetzte
+ * Richtungen. Eine Loeschung *ist bereits geschehen* — die Snackbar oben
+ * bestaetigt das, mit „Rückgängig" als kurzem Korrekturfenster, nicht als
+ * offene Entscheidung, und darf deshalb von selbst verschwinden. Ein
+ * fehlgeschlagener Import dagegen *ist nicht geschehen*: Es gibt nichts zu
+ * bestaetigen, nur eine Entscheidung zu treffen (andere Datei? aufgeben?) —
+ * eine verschwindende Meldung waere ein Fehler ohne Behandlung. Deshalb steht
+ * er als [AlertDialog] „Import fehlgeschlagen" (`importErrorMessage` oben)
+ * mit „Andere Datei wählen" und „Schließen", statt als Snackbar durch
+ * [AppViewModel.messages] zu laufen; die **Erfolgs**meldung „… importiert"
+ * bleibt eine Snackbar. Dieselbe Regel gilt seit derselben Durchsicht auch
+ * fuer verweigerte Standortfreigaben auf der Karte (siehe `ui/map/
+ * MapPanels.kt`: `LocationPermissionNotice`).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -194,6 +211,13 @@ fun RidesScreen(appViewModel: AppViewModel) {
     var importing by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<Ride?>(null) }
     var deleteTarget by remember { mutableStateOf<Ride?>(null) }
+
+    // Der fehlgeschlagene Import ist eine Entscheidung, keine Bestaetigung —
+    // deshalb ein stehender Zustand statt einer Snackbar (siehe Klassen-KDoc
+    // oben, Abschnitt „Die Regel dahinter"). Plain `remember` wie
+    // `renameTarget`/`deleteTarget`: Eine Drehung waehrend der kurzen
+    // Fehleranzeige ist derselbe akzeptierte Kompromiss wie dort.
+    var importErrorMessage by remember { mutableStateOf<String?>(null) }
 
     // Die in der Detailansicht geoeffnete Tour. Bewusst die ID und nicht das
     // [Ride]: Nach einem Umbenennen oder einem HF-Merge aus Health Connect
@@ -242,13 +266,15 @@ fun RidesScreen(appViewModel: AppViewModel) {
                 }
             } catch (e: Exception) {
                 // Deutscher Satz mit Handlungsanweisung zuerst, technische
-                // Ursache nur in Klammern (siehe ui/ErrorText.kt).
-                appViewModel.showMessage(
-                    withCause(
-                        "Die Datei konnte nicht importiert werden. Trailscape liest " +
-                            "GPX- und FIT-Dateien, auch als .gz gepackt.",
-                        e,
-                    ),
+                // Ursache nur in Klammern (siehe ui/ErrorText.kt) — aber als
+                // stehender Dialog, nicht als Snackbar: Der Import *ist nicht
+                // geschehen*, es gibt nichts zu bestaetigen, nur eine
+                // Entscheidung zu treffen (siehe Klassen-KDoc, „Die Regel
+                // dahinter").
+                importErrorMessage = withCause(
+                    "Die Datei konnte nicht importiert werden. Trailscape liest " +
+                        "GPX- und FIT-Dateien, auch als .gz gepackt.",
+                    e,
                 )
             } finally {
                 importing = false
@@ -427,6 +453,25 @@ fun RidesScreen(appViewModel: AppViewModel) {
             onConfirm = { newName ->
                 appViewModel.renameRide(ride.id, newName)
                 renameTarget = null
+            },
+        )
+    }
+
+    importErrorMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { importErrorMessage = null },
+            title = { Text("Import fehlgeschlagen") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        importErrorMessage = null
+                        importLauncher.launch(arrayOf("*/*"))
+                    },
+                ) { Text("Andere Datei wählen") }
+            },
+            dismissButton = {
+                TextButton(onClick = { importErrorMessage = null }) { Text("Schließen") }
             },
         )
     }
@@ -633,6 +678,10 @@ private fun RideCard(
  * Vorher standen hier zwei mittig zentrierte Textzeilen ohne Aktion; jetzt
  * derselbe Aufbau wie im Trainings-Tab (siehe `ui/components/EmptyState.kt`)
  * samt der drei Wege, auf denen eine Tour hier landen kann.
+ *
+ * Textbudget: ein Satz. Frueher stand hier zusaetzlich der Hinweis auf den
+ * ZIP-Massenimport — der ist jetzt ueberfluessig, weil „Archiv importieren"
+ * bereits als eigener Knopf da unten steht und selbst sagt, was er tut.
  */
 @Composable
 private fun RidesEmptyState(
@@ -643,11 +692,7 @@ private fun RidesEmptyState(
     EmptyState(
         title = "Noch keine Touren",
         body = "Hier sammeln sich alle Touren — aufgezeichnete wie importierte — mit " +
-            "Distanz, Dauer, Höhenmetern, Ø-Puls und der berechneten Trainingslast. " +
-            "Ein Tipp auf eine Tour zeigt sie im Detail — mit Karte, Höhenprofil " +
-            "und Verläufen.",
-        hint = "Ein ganzer Strava- oder Garmin-Export lässt sich als ZIP-Archiv auf " +
-            "einmal einlesen — unter Mehr → Daten & Backup.",
+            "Distanz, Höhenmetern und Trainingslast, ein Tipp öffnet die Details.",
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
             TextButton(onClick = onImportFile) { Text("GPX-/FIT-Datei öffnen") }

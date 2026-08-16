@@ -71,15 +71,15 @@ import kotlinx.coroutines.withContext
 /**
  * Verwaltung der **Routingdaten** fuer das Rechnen ohne Netz.
  *
- * ## Warum eine eigene Karte neben „Offline-Karten"
- * Beide Karten laden „Karten" herunter, und genau deshalb muessen sie
- * unterscheidbar bleiben: [OfflineMapsCard] speichert das **Kartenbild**
- * (MapLibre-Kacheln, damit man auf dem Berg etwas sieht), diese hier
- * speichert die **Wegedaten**, mit denen die App Routen berechnet
+ * ## Warum eine eigene Zeile neben „Offline-Karten"
+ * Beide Zeilen der Gruppe „Karte" laden „Karten" herunter, und genau deshalb
+ * muessen sie unterscheidbar bleiben: [OfflineMapsCardContent] speichert das
+ * **Kartenbild** (MapLibre-Kacheln, damit man auf dem Berg etwas sieht), diese
+ * hier speichert die **Wegedaten**, mit denen die App Routen berechnet
  * (BRouter-Kacheln). Wer das eine hat, hat das andere nicht — und wer glaubt,
  * es sei dasselbe, wundert sich, warum die Karte zu sehen ist, das Routing
  * aber trotzdem ins Netz will. Der Einleitungstext sagt den Unterschied
- * deshalb ausdruecklich, und die Reihenfolge im Tab stellt die beiden
+ * deshalb ausdruecklich, und die Reihenfolge in der Gruppe stellt die beiden
  * nebeneinander.
  *
  * ## Warum es hier keine Weltkarte mit Kachelraster gibt
@@ -107,9 +107,13 @@ import kotlinx.coroutines.withContext
  * gebaut; eine automatische Pruefung im Hintergrund waere eine Entscheidung
  * ueber fremdes Datenvolumen, die niemand getroffen hat. „Nach
  * Aktualisierungen suchen" ist deshalb ein Knopf.
+ *
+ * Der Inhalt der Zeile „Karten für Offline-Routing" in der Gruppe „Karte"
+ * des Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
+ * stellt Titel und Aufklapp-Rahmen.
  */
 @Composable
-fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val inventory = AppServices.segmentInventory
@@ -242,219 +246,217 @@ fun OfflineRoutingCard(appViewModel: AppViewModel, modifier: Modifier = Modifier
         }
     }
 
-    MoreSectionCard(title = "Karten für Offline-Routing", modifier = modifier) {
-        val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = "Mit diesen Daten berechnet die App Routen direkt auf dem Gerät — ohne " +
+            "Netz und meist schneller als über den Server. Das ist nicht das Kartenbild: " +
+            "Für die Ansicht offline sind die „Offline-Karten“ zuständig.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    // ------------------------------------------------------- laufender Lauf
+    val running = status?.takeIf { it.running && !it.finished }
+    if (running != null) {
+        SegmentProgressRow(
+            label = downloadLabel(running.fileName, running.phase),
+            detail = downloadDetail(running.bytesDone, running.bytesTotal, running.phase),
+            percent = running.percent,
+            index = running.index,
+            count = running.count,
+            onCancel = { SegmentDownloads.cancel(context) },
+        )
+        Spacer(Modifier.height(12.dp))
+    } else {
+        status?.error?.let { error ->
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+
+    // ------------------------------------------------------------- Bestand
+    when {
+        loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
+
+        segments.isEmpty() -> Text(
+            text = "Noch keine Routingdaten gespeichert. Routen werden bis dahin über " +
+                "den Server berechnet.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        else -> {
+            Column {
+                segments.forEachIndexed { index, segment ->
+                    SegmentRow(
+                        segment = segment,
+                        outdated = segment.fileName in outdated,
+                        enabled = !busy && running == null,
+                        onUpdate = { offerDownload(listOf(segment.fileName), isUpdate = true) },
+                        onDelete = { confirmDelete = segment },
+                    )
+                    if (index != segments.lastIndex) {
+                        HorizontalDivider()
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Zusammen ${formatBytes(totalBytes)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = hintColor,
+            )
+        }
+    }
+
+    // Angefangene Downloads belegen Platz, tauchen aber in keiner Liste auf.
+    // Wer sich fragt, wo die 54 MB geblieben sind, findet sie hier — samt
+    // dem Hinweis, dass der naechste Versuch dort aufsetzt.
+    partials.forEach { partial ->
+        Spacer(Modifier.height(8.dp))
         Text(
-            text = "Mit diesen Daten berechnet die App Routen direkt auf dem Gerät — ohne " +
-                "Netz und meist schneller als über den Server. Das ist nicht das Kartenbild: " +
-                "Für die Ansicht offline sind die „Offline-Karten“ zuständig.",
+            text = "Angefangen: ${partial.title} — ${formatBytes(partial.bytes)} geladen. " +
+                "Ein neuer Download setzt hier auf.",
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,
         )
-        Spacer(Modifier.height(12.dp))
+    }
 
-        // ------------------------------------------------------- laufender Lauf
-        val running = status?.takeIf { it.running && !it.finished }
-        if (running != null) {
-            SegmentProgressRow(
-                label = downloadLabel(running.fileName, running.phase),
-                detail = downloadDetail(running.bytesDone, running.bytesTotal, running.phase),
-                percent = running.percent,
-                index = running.index,
-                count = running.count,
-                onCancel = { SegmentDownloads.cancel(context) },
-            )
-            Spacer(Modifier.height(12.dp))
-        } else {
-            status?.error?.let { error ->
-                Text(
-                    text = error,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(12.dp))
-            }
-        }
-
-        // ------------------------------------------------------------- Bestand
-        when {
-            loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
-
-            segments.isEmpty() -> Text(
-                text = "Noch keine Routingdaten gespeichert. Routen werden bis dahin über " +
-                    "den Server berechnet.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            else -> {
-                Column {
-                    segments.forEachIndexed { index, segment ->
-                        SegmentRow(
-                            segment = segment,
-                            outdated = segment.fileName in outdated,
-                            enabled = !busy && running == null,
-                            onUpdate = { offerDownload(listOf(segment.fileName), isUpdate = true) },
-                            onDelete = { confirmDelete = segment },
-                        )
-                        if (index != segments.lastIndex) {
-                            HorizontalDivider()
-                        }
-                    }
+    // ------------------------------------------------------------ Aktionen
+    Spacer(Modifier.height(12.dp))
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        NeutralButton(
+            enabled = !busy && running == null,
+            onClick = {
+                val missing = missingPermissions(context, forRecording = false)
+                if (missing.isEmpty()) {
+                    offerTileForMyLocation()
+                } else {
+                    permissionLauncher.launch(missing)
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "Zusammen ${formatBytes(totalBytes)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = hintColor,
-                )
-            }
-        }
-
-        // Angefangene Downloads belegen Platz, tauchen aber in keiner Liste auf.
-        // Wer sich fragt, wo die 54 MB geblieben sind, findet sie hier — samt
-        // dem Hinweis, dass der naechste Versuch dort aufsetzt.
-        partials.forEach { partial ->
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Angefangen: ${partial.title} — ${formatBytes(partial.bytes)} geladen. " +
-                    "Ein neuer Download setzt hier auf.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-        }
-
-        // ------------------------------------------------------------ Aktionen
-        Spacer(Modifier.height(12.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            },
         ) {
+            Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Für meinen Standort")
+        }
+
+        if (segments.isNotEmpty()) {
             NeutralButton(
                 enabled = !busy && running == null,
                 onClick = {
-                    val missing = missingPermissions(context, forRecording = false)
-                    if (missing.isEmpty()) {
-                        offerTileForMyLocation()
-                    } else {
-                        permissionLauncher.launch(missing)
+                    busy = true
+                    scope.launch {
+                        outdated = withContext(Dispatchers.IO) {
+                            segments
+                                .map { it.fileName }
+                                .filter {
+                                    runCatching {
+                                        AppServices.segmentDownloader.hasUpdate(it)
+                                    }.getOrDefault(false)
+                                }
+                                .toSet()
+                        }
+                        updateCheckDone = true
+                        busy = false
                     }
                 },
             ) {
-                Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Für meinen Standort")
-            }
-
-            if (segments.isNotEmpty()) {
-                NeutralButton(
-                    enabled = !busy && running == null,
-                    onClick = {
-                        busy = true
-                        scope.launch {
-                            outdated = withContext(Dispatchers.IO) {
-                                segments
-                                    .map { it.fileName }
-                                    .filter {
-                                        runCatching {
-                                            AppServices.segmentDownloader.hasUpdate(it)
-                                        }.getOrDefault(false)
-                                    }
-                                    .toSet()
-                            }
-                            updateCheckDone = true
-                            busy = false
-                        }
-                    },
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Nach Aktualisierungen suchen")
-                }
+                Text("Nach Aktualisierungen suchen")
             }
         }
+    }
 
-        if (updateCheckDone && outdated.isEmpty() && segments.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
+    if (updateCheckDone && outdated.isEmpty() && segments.isNotEmpty()) {
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "Alles auf dem neuesten Stand.",
+            style = MaterialTheme.typography.bodySmall,
+            color = hintColor,
+        )
+    }
+
+    // -------------------------------------------------------- Ortssuche
+    Spacer(Modifier.height(12.dp))
+    OutlinedTextField(
+        value = query,
+        onValueChange = { query = it },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        enabled = !busy && running == null,
+        label = { Text("Gegend suchen") },
+        placeholder = { Text("Ort oder Region, z. B. Innsbruck") },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        // Der Knopf zusaetzlich zur Eingabetaste: Wer die Tastatur wegwischt,
+        // statt „Suchen" zu druecken, steht sonst vor einem Feld ohne Wirkung.
+        trailingIcon = {
+            IconButton(
+                onClick = { runSearch() },
+                enabled = !busy && query.trim().length >= MIN_QUERY_LENGTH,
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = "Suchen")
+            }
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+    )
+
+    results.forEach { hit ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                text = "Alles auf dem neuesten Stand.",
+                text = hit.displayName,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            TextButton(
+                enabled = !busy,
+                onClick = {
+                    results = emptyList()
+                    query = ""
+                    offerTileAt(hit.lat, hit.lon)
+                },
+            ) { Text("Auswählen") }
+        }
+    }
+
+    // ------------------------------------------------------- Einstellung
+    Spacer(Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Nur über WLAN laden", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = "Eine Kachel ist 120–240 MB. Ist der Schalter aus, lädt sie auch " +
+                    "über Mobilfunk.",
                 style = MaterialTheme.typography.bodySmall,
                 color = hintColor,
             )
         }
-
-        // -------------------------------------------------------- Ortssuche
-        Spacer(Modifier.height(12.dp))
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = !busy && running == null,
-            label = { Text("Gegend suchen") },
-            placeholder = { Text("Ort oder Region, z. B. Innsbruck") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            // Der Knopf zusaetzlich zur Eingabetaste: Wer die Tastatur wegwischt,
-            // statt „Suchen" zu druecken, steht sonst vor einem Feld ohne Wirkung.
-            trailingIcon = {
-                IconButton(
-                    onClick = { runSearch() },
-                    enabled = !busy && query.trim().length >= MIN_QUERY_LENGTH,
-                ) {
-                    Icon(Icons.Filled.Search, contentDescription = "Suchen")
-                }
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+        Switch(
+            checked = unmeteredOnly,
+            onCheckedChange = appViewModel::setSegmentUnmeteredOnly,
         )
+    }
 
-        results.forEach { hit ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = hit.displayName,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                TextButton(
-                    enabled = !busy,
-                    onClick = {
-                        results = emptyList()
-                        query = ""
-                        offerTileAt(hit.lat, hit.lon)
-                    },
-                ) { Text("Auswählen") }
-            }
-        }
-
-        // ------------------------------------------------------- Einstellung
+    if (busy) {
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Nur über WLAN laden", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = "Eine Kachel ist 120–240 MB. Ist der Schalter aus, lädt sie auch " +
-                        "über Mobilfunk.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = hintColor,
-                )
-            }
-            Switch(
-                checked = unmeteredOnly,
-                onCheckedChange = appViewModel::setSegmentUnmeteredOnly,
-            )
-        }
-
-        if (busy) {
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Einen Moment …", style = MaterialTheme.typography.bodySmall, color = hintColor)
-            }
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Einen Moment …", style = MaterialTheme.typography.bodySmall, color = hintColor)
         }
     }
 

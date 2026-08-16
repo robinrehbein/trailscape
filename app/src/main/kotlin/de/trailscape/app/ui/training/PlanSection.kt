@@ -164,7 +164,11 @@ fun PlanWeekCard(
                                 IconButton(onClick = { onPlanRoute(session) }) {
                                     Icon(
                                         Icons.Filled.Route,
-                                        contentDescription = "Passende Route für „${session.title}“ planen",
+                                        // "Runde", nicht "Route": Das Ergebnis ist ein generierter
+                                        // Rundkurs (siehe KDoc oben und `RouteGenerationPanel.kt`,
+                                        // das denselben Vorschlag ebenfalls "Runde" nennt) — Route
+                                        // meint in dieser App eine geplante Strecke von A nach B.
+                                        contentDescription = "Passende Runde für „${session.title}“ planen",
                                         tint = theme.primary,
                                         modifier = Modifier.size(20.dp),
                                     )

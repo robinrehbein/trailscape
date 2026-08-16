@@ -287,8 +287,8 @@ fun stalledMessage(lastError: String?): String {
  * Schluessel in MapLibres Ressourcen-Cache ab (`OfflineManager
  * .putResourceWithUrl`), und der Download findet sie dort. Die Kennung des
  * Stils steckt im Pfad, damit
- * [de.trailscape.app.ui.more.OfflineMapsCard] auch bei fehlenden Metadaten
- * noch erkennt, um welchen Stil es geht.
+ * [de.trailscape.app.ui.more.OfflineMapsCardContent] auch bei fehlenden
+ * Metadaten noch erkennt, um welchen Stil es geht.
  *
  * Die Wunsch-Domain endet bewusst auf `.invalid` (RFC 2606): Sollte der
  * Cache-Eintrag wider Erwarten fehlen, laeuft der Download nicht in einen

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -46,9 +47,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.core.Ride
@@ -58,8 +61,9 @@ import kotlin.math.roundToInt
 
 /**
  * Die Bedienflaechen, die auf der Karte liegen: Live-Leiste der Aufzeichnung,
- * Statistik-Karte der ausgewaehlten Tour, Navigationsleiste, Downloadanzeige
- * und die kleinen Knoepfe am oberen Rand.
+ * Statistik-Karte der ausgewaehlten Tour, Navigationsleiste, Downloadanzeige,
+ * der stehende Standort-Hinweis ([LocationPermissionNotice]) und die kleinen
+ * Knoepfe am oberen Rand.
  *
  * Flaechen, Formen und **Tinte** erben das One-UI-Theme (`MaterialTheme`,
  * heller/dunkler Modus): Die Karten bringen Rundung (26 dp) und
@@ -99,14 +103,30 @@ internal fun Metric(
  * [de.trailscape.app.record.RecordingRepository]; nur die Hoehenmeter rechnet
  * der Screen selbst aus den bisherigen Punkten.
  *
+ * ## Pause und Beenden: mindestens 48 dp
+ * [NeutralButton] und [DangerButton] sind wie jeder Contained-Knopf der App
+ * 48 dp hoch — dieselbe Material-Mindestflaeche, die die Karte selbst schon
+ * beim Tippen auf einen Wegpunkt einhaelt (siehe `WAYPOINT_TOUCH_RADIUS_DP`
+ * in `MapScreen.kt`). Kleiner darf hier nichts werden: Getroffen wird waehrend
+ * der Fahrt, nicht erst danach.
+ *
  * ## Einstieg in den Fahrmodus
  * Der Knopf „Fahrmodus" bekommt eine eigene Zeile ueber Pause/Beenden statt
  * eines Platzes in einer der bestehenden Zeilen. Die Kopfzeile ist auf einem
  * 360-dp-Geraet mit Zustandstext und Punktzahl bereits voll, und ein dritter
  * Knopf in der unteren Zeile haette alle drei auf ein Drittel der Breite
  * gedrueckt — ausgerechnet „Beenden" waere damit schmaler und schwerer zu
- * treffen geworden. Die Leiste bleibt, was sie ist; der Fahrmodus
- * (`RideModeScreen.kt`) ist ein Angebot daneben, kein Ersatz.
+ * treffen geworden.
+ *
+ * Startet die Aufzeichnung durch eine Nutzeraktion in dieser Sitzung, ist
+ * der Fahrmodus schon offen, bevor diese Leiste ueberhaupt zu sehen ist
+ * (siehe `runRecording()` in `MapScreen.kt`) — die Leiste ist dann der
+ * Rueckweg von dort, nicht der Einstieg. Der Knopf bleibt trotzdem: Er ist der
+ * einzige Weg zurueck in den Fahrmodus, wenn die Fahrerin ihn selbst
+ * verlassen hat (`onClose` in `RideModeScreen.kt`), oder wenn die
+ * Aufzeichnung schon lief, bevor dieser Screen ueberhaupt neu aufgebaut wurde
+ * — etwa nach einem Neustart der App bei laufendem Vordergrunddienst, wo
+ * kein `rideMode = true` je gesetzt wurde.
  */
 @Composable
 internal fun LiveRecordingCard(
@@ -409,6 +429,72 @@ internal fun DownloadProgressCard(
                         .height(6.dp)
                         .clip(RoundedCornerShape(4.dp)),
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Stehender Hinweis auf der Karte fuer eine Standort-Entscheidung, die eine
+ * Handlung braucht — verweigerte Freigabe oder „Ungefähr“ statt „Genau“ beim
+ * Aufzeichnen (siehe `MapScreen.kt`: `locationDeniedAction`,
+ * `impreciseLocationNotice`).
+ *
+ * Beide liefen bis hierher als 4-Sekunden-Snackbar durch
+ * [de.trailscape.app.ui.AppViewModel.messages] — und waren verschwunden,
+ * bevor irgendeine Entscheidung fiel: Die Ablehnung blieb Ablehnung, „Genau“
+ * blieb ungewaehlt, die Nutzerin sah eine Zeile, die schon wieder weg war,
+ * wenn sie reagieren wollte. Das ist genau die Regel, die der Touren-Tab beim
+ * Undo-Loeschen schon gefunden hat (siehe `RidesScreen.kt`): Snackbar nur fuer
+ * Bestaetigungen, alles mit Handlungsbedarf wird ein stehender Zustand an der
+ * Stelle des Geschehens mit der Aktion daneben — hier auf der Karte, wo die
+ * verweigerte Aktion ausgeloest wurde.
+ *
+ * Die `caution`-Signalfarbe (nicht `danger`): Eine verweigerte Freigabe ist
+ * kein Fehler der App, sondern eine noch offene Entscheidung der Nutzerin —
+ * „Erneut fragen" fragt einfach noch einmal.
+ *
+ * @param onRetry loest denselben `withPermissions`-Pfad mit der gemerkten
+ *   Absicht noch einmal aus. Liegt die Freigabe danach vor, raeumt der
+ *   Aufrufer den zugehoerigen Zustand ab und diese Karte verschwindet von
+ *   selbst — sie fragt selbst nie nach dem Berechtigungsstatus.
+ */
+@Composable
+internal fun LocationPermissionNotice(
+    text: String,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val signals = LocalSignalColors.current
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                start = CardPadding,
+                top = OverlayCardPaddingVertical,
+                end = 8.dp,
+                bottom = OverlayCardPaddingVertical,
+            ),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                NoticeBox(
+                    icon = Icons.Filled.Info,
+                    color = signals.caution,
+                    text = text,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, contentDescription = "Hinweis schließen")
+                }
+            }
+            TextButton(
+                onClick = onRetry,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text("Erneut fragen")
             }
         }
     }

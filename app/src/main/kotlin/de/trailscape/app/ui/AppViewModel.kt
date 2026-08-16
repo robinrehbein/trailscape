@@ -72,13 +72,13 @@ import kotlinx.serialization.json.JsonObject
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
 
 /**
- * Eine einzelne Karte des Mehr-Tabs als Sprungziel (siehe
+ * Eine einzelne Zeile des Mehr-Tabs als Sprungziel (siehe
  * [AppViewModel.requestMoreSection]).
  *
- * Bewusst nur die Karten, auf die von aussen verwiesen wird — nicht alle neun.
+ * Bewusst nur die Zeilen, auf die von aussen verwiesen wird — nicht alle acht.
  * Ein Aufzaehlungswert ohne Verweis waere ein Versprechen ohne Einloeser; die
- * Zuordnung Wert → Karte steht an genau einer Stelle
- * (`ui/more/MoreScreen.kt`, `moreSectionOrder`).
+ * Zuordnung Wert → Gruppe steht an genau einer Stelle
+ * (`ui/more/MoreScreen.kt`, `moreGroupIndex`).
  */
 enum class MoreSection {
     /** „Profil" — Alter, Gewicht, Zeitbudget, HFmax/FTP. */
@@ -266,6 +266,35 @@ class AppViewModel(
     /** Quittiert das abgeholte Ziel (ruft der Karten-Screen). */
     fun consumeRouteTarget() {
         _pendingRouteTarget.value = null
+    }
+
+    // -------------------------------------------------------------------------
+    // Startseite → Aufzeichnung starten
+    // -------------------------------------------------------------------------
+
+    private val _pendingRecordStart = MutableStateFlow(false)
+
+    /**
+     * Die Bitte an den Karten-Tab, die Aufzeichnung zu starten — dasselbe
+     * Muster wie [pendingRouteTarget]: Die Startseite legt die Bitte hin, der
+     * Karten-Screen holt sie mit [consumeRecordStart] ab und loest dort
+     * **denselben** Pfad aus wie der gruene Aufnahme-Knopf, samt der dort
+     * ohnehin noetigen Standort- und Benachrichtigungsabfrage. Ein zweiter,
+     * eigener Startpfad fuer die Startseite haette diese Berechtigungslogik
+     * verdoppeln oder umgehen muessen — beides schlechter als der eine Schritt
+     * (Tab-Wechsel), den der Nutzer jetzt noch sieht.
+     */
+    val pendingRecordStart: StateFlow<Boolean> = _pendingRecordStart.asStateFlow()
+
+    /** Bittet den Karten-Tab, die Aufzeichnung zu starten, und wechselt dorthin. */
+    fun requestRecording() {
+        _pendingRecordStart.value = true
+        requestTab(AppTab.MAP)
+    }
+
+    /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
+    fun consumeRecordStart() {
+        _pendingRecordStart.value = false
     }
 
     // -------------------------------------------------------------------------
@@ -869,6 +898,41 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Quittierung der Plan-Tragfaehigkeit ("Plan und Ziel passen nicht zusammen")
+    // -------------------------------------------------------------------------
+
+    private val _planFeasibilityAckKey = MutableStateFlow<String?>(null)
+
+    /**
+     * Der Plan-Schluessel ([planFeasibilityIdentityKey]), fuer den die
+     * Startseite den Hinweis „Plan und Ziel passen nicht zusammen" zuletzt mit
+     * „Verstanden" quittiert hat — `null`, wenn noch keiner quittiert ist.
+     *
+     * Dasselbe Muster wie [profileConfirmed]: ein reines Anzeige-Flag, das nur
+     * `de.trailscape.app.ui.today.TodayScreen` liest, um die Karte
+     * auszublenden. Der Schluessel selbst haengt NICHT an der Zeit, sondern an
+     * Zieldistanz, Zieldatum und Wochenzahl des Plans — legt jemand einen
+     * neuen oder veraenderten Plan an, ist das ein anderer Schluessel, die
+     * gestrige Quittierung passt nicht mehr, und die Karte erscheint
+     * automatisch wieder.
+     */
+    val planFeasibilityAckKey: StateFlow<String?> = _planFeasibilityAckKey.asStateFlow()
+
+    /** Quittiert die Karte fuer den Plan mit Schluessel [key] (Knopf „Verstanden"). */
+    fun acknowledgePlanFeasibility(key: String) {
+        _planFeasibilityAckKey.value = key
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching { keyValueStore.setString(PLAN_FEASIBILITY_ACK_STORAGE_KEY, key) }
+            }
+        }
+    }
+
+    private fun readPlanFeasibilityAckKey(): String? = runCatching {
+        keyValueStore.getString(PLAN_FEASIBILITY_ACK_STORAGE_KEY)
+    }.getOrNull()
+
+    // -------------------------------------------------------------------------
     // Erinnerungen
     // -------------------------------------------------------------------------
 
@@ -1182,11 +1246,13 @@ class AppViewModel(
                         .getOrDefault(true),
                     vitalsHistory = readVitalsHistory(keyValueStore),
                     shortSleeperHintShownAt = readShortSleeperHintShownAt(),
+                    planFeasibilityAckKey = readPlanFeasibilityAckKey(),
                 )
             }
             _profile.value = restored.profile
             _profileConfirmed.value = restored.profileConfirmed
             _plan.value = restored.plan
+            _planFeasibilityAckKey.value = restored.planFeasibilityAckKey
             _mapStyle.value = restored.mapStyle
             _syncConfig.value = restored.syncConfig
             _reminderSettings.value = restored.reminderSettings
@@ -1230,8 +1296,23 @@ class AppViewModel(
         val segmentUnmeteredOnly: Boolean,
         val vitalsHistory: VitalsHistory,
         val shortSleeperHintShownAt: LocalDateTime?,
+        val planFeasibilityAckKey: String?,
     )
 }
+
+/**
+ * Schluessel, der einen Trainingsplan fuer [AppViewModel.acknowledgePlanFeasibility]
+ * identifiziert: Zieldistanz, Zieldatum und Wochenzahl. Genau die drei Groessen,
+ * die [de.trailscape.core.assessPlanFeasibility] bewerten — aendert sich eine
+ * davon, ist der Plan fuer diese Pruefung ein anderer, und eine alte
+ * Quittierung darf ihn nicht mehr betreffen.
+ *
+ * Bewusst keine kryptografische Pruefsumme: Die drei Werte sind schon
+ * eindeutig genug fuer einen lokalen Vergleich, und ein simpler String bleibt
+ * beim Nachlesen in `SharedPreferences` verstaendlich.
+ */
+fun planFeasibilityIdentityKey(plan: TrainingPlan): String =
+    "${plan.goal.distanceKm}|${plan.goal.date}|${plan.weeks.size}"
 
 /**
  * Schluessel im [KeyValueStore], unter dem steht, dass die Erststart-Einfuehrung
@@ -1258,6 +1339,13 @@ const val UNDO_DELETE_GRACE_MS: Long = 5_000L
  * [AppViewModel.shortSleeperHintShownAt]).
  */
 const val SHORT_SLEEPER_HINT_STORAGE_KEY: String = "trailscape.hint.shortsleeper.v1"
+
+/**
+ * Schluessel im [KeyValueStore] fuer den zuletzt quittierten Plan-Schluessel
+ * der Karte „Plan und Ziel passen nicht zusammen" (siehe
+ * [AppViewModel.planFeasibilityAckKey] und [planFeasibilityIdentityKey]).
+ */
+const val PLAN_FEASIBILITY_ACK_STORAGE_KEY: String = "trailscape.today.planfeasibility.ack.v1"
 
 /**
  * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert

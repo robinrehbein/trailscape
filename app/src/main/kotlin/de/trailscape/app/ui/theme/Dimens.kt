@@ -42,10 +42,11 @@ val OverlayGap = 8.dp
 /**
  * Hoehe der beiden Bedienflaechen im Fahrmodus (Pause/Weiter und Beenden).
  *
- * Deutlich ueber der Material-Untergrenze von 48 dp und ueber den 40 dp der
- * uebrigen Knoepfe der App: Getroffen wird hier mit Handschuh, aus der Bewegung
- * und ohne hinzusehen. Wer diese Zahl senkt, macht den Modus wertlos — sie ist
- * sein eigentlicher Zweck.
+ * Deutlich ueber den 48 dp, die schon die Material-Untergrenze und damit auch
+ * die uebrigen Knoepfe der App sind: Getroffen wird hier mit Handschuh, aus
+ * der Bewegung und ohne hinzusehen — dafuer reicht die Mindestflaeche nicht.
+ * Wer diese Zahl senkt, macht den Modus wertlos — sie ist sein eigentlicher
+ * Zweck.
  */
 val RideModeActionHeight = 88.dp
 

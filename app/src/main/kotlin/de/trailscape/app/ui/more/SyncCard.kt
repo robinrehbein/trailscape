@@ -48,9 +48,13 @@ import kotlinx.coroutines.withContext
  * der eigentliche Sync. Der zusaetzliche `appViewModel.setSyncConfig(config)`-
  * Aufruf haelt nur den beobachtbaren [AppViewModel.syncConfig]-Zustand
  * konsistent (derselbe Wert wird doppelt, aber unschaedlich geschrieben).
+ *
+ * Der Inhalt der Zeile „Sync (Selfhost)" in der Gruppe „App" des Mehr-Tabs
+ * (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel
+ * und Aufklapp-Rahmen.
  */
 @Composable
-fun SyncCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun SyncCardContent(appViewModel: AppViewModel) {
     val scope = rememberCoroutineScope()
     val syncConfig by appViewModel.syncConfig.collectAsStateWithLifecycle()
 
@@ -67,91 +71,89 @@ fun SyncCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         tokenText = syncConfig?.token ?: tokenText
     }
 
-    MoreSectionCard(title = "Sync (Selfhost)", modifier = modifier) {
-        OutlinedTextField(
-            value = urlText,
-            onValueChange = { urlText = it },
-            label = { Text("Server-URL") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = tokenText,
-            onValueChange = { tokenText = it },
-            label = { Text("Token") },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    OutlinedTextField(
+        value = urlText,
+        onValueChange = { urlText = it },
+        label = { Text("Server-URL") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    OutlinedTextField(
+        value = tokenText,
+        onValueChange = { tokenText = it },
+        label = { Text("Token") },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(modifier = Modifier.height(12.dp))
 
-        Button(
-            onClick = {
-                val url = urlText.trim()
-                val token = tokenText.trim()
-                if (url.isEmpty() || token.isEmpty()) {
-                    statusText = "Bitte Server-URL und Token eintragen."
-                    return@Button
-                }
-                scope.launch {
-                    syncing = true
-                    statusText = "Synchronisiere …"
-                    try {
-                        val config = SyncConfig(url = url, token = token)
-                        // Siehe Klassen-KDoc: bewusst selbst geschrieben und
-                        // abgewartet, damit syncNow() garantiert die neue
-                        // Konfiguration sieht.
-                        withContext(Dispatchers.IO) {
-                            de.trailscape.core.setSyncConfig(AppServices.keyValueStore, config)
-                        }
-                        appViewModel.setSyncConfig(config)
-                        val result = appViewModel.syncNow()
-                        statusText = "${result.pushed} hochgeladen, ${result.pulled} geladen, " +
-                            "${result.total} Touren"
-                    } catch (e: Exception) {
-                        // Vorher gewann die technische Meldung („Failed to
-                        // connect to …"); der deutsche Satz kam nur zum
-                        // Vorschein, wenn die Ausnahme gar keinen Text trug.
-                        statusText = withCause(
-                            "Der Abgleich ist fehlgeschlagen. Prüfe Server-URL und Token " +
-                                "und ob der Server erreichbar ist.",
-                            e,
-                        )
-                    } finally {
-                        syncing = false
-                    }
-                }
-            },
-            enabled = !syncing,
-        ) {
-            if (syncing) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(18.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            } else {
-                // Nicht „Jetzt synchronisieren": So hiess auch der Knopf der
-                // Health-Connect-Karte, der Touren aus Health Connect holt.
-                // Hier geht es in beide Richtungen und gegen einen eigenen
-                // Server — das sagt die Beschriftung jetzt.
-                Text("Mit Server abgleichen")
+    Button(
+        onClick = {
+            val url = urlText.trim()
+            val token = tokenText.trim()
+            if (url.isEmpty() || token.isEmpty()) {
+                statusText = "Bitte Server-URL und Token eintragen."
+                return@Button
             }
+            scope.launch {
+                syncing = true
+                statusText = "Synchronisiere …"
+                try {
+                    val config = SyncConfig(url = url, token = token)
+                    // Siehe Klassen-KDoc: bewusst selbst geschrieben und
+                    // abgewartet, damit syncNow() garantiert die neue
+                    // Konfiguration sieht.
+                    withContext(Dispatchers.IO) {
+                        de.trailscape.core.setSyncConfig(AppServices.keyValueStore, config)
+                    }
+                    appViewModel.setSyncConfig(config)
+                    val result = appViewModel.syncNow()
+                    statusText = "${result.pushed} hochgeladen, ${result.pulled} geladen, " +
+                        "${result.total} Touren"
+                } catch (e: Exception) {
+                    // Vorher gewann die technische Meldung („Failed to
+                    // connect to …"); der deutsche Satz kam nur zum
+                    // Vorschein, wenn die Ausnahme gar keinen Text trug.
+                    statusText = withCause(
+                        "Der Abgleich ist fehlgeschlagen. Prüfe Server-URL und Token " +
+                            "und ob der Server erreichbar ist.",
+                        e,
+                    )
+                } finally {
+                    syncing = false
+                }
+            }
+        },
+        enabled = !syncing,
+    ) {
+        if (syncing) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp),
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+        } else {
+            // Nicht „Jetzt synchronisieren": So hiess auch der Knopf der
+            // Health-Connect-Karte, der Touren aus Health Connect holt.
+            // Hier geht es in beide Richtungen und gegen einen eigenen
+            // Server — das sagt die Beschriftung jetzt.
+            Text("Mit Server abgleichen")
         }
-
-        statusText?.let { status ->
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(text = status, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Details zum Aufsetzen eines eigenen Sync-Servers findest du im " +
-                "Repository unter server/README.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
+
+    statusText?.let { status ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(text = status, style = MaterialTheme.typography.bodyMedium)
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "Details zum Aufsetzen eines eigenen Sync-Servers findest du im " +
+            "Repository unter server/README.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }

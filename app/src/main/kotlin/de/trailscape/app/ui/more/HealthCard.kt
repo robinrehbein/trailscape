@@ -74,10 +74,14 @@ private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
  * Abweichung vom Original: statt `HealthPluginGateway.installHealthConnect()`
  * (das es auf Android nativ nicht mehr gibt, siehe `HealthTypes.kt`-KDoc)
  * oeffnet der Installations-Button hier direkt den Play Store per Intent.
+ *
+ * Der Inhalt der Zeile „Health Connect" in der Gruppe „Profil & Daten" des
+ * Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
+ * stellt Titel und Aufklapp-Rahmen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun HealthCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -97,208 +101,206 @@ fun HealthCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         refreshLastSyncAt()
     }
 
-    MoreSectionCard(title = "Health Connect", modifier = modifier) {
-        val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
-        // Dieselbe Warnfarbe wie die Ampeln des Trainings-Tabs; vorher lag hier
-        // eine private Kopie von `Colors.orange.shade800`, die im Dunkelmodus
-        // nicht mit aufgehellt wurde.
-        val warningColor = LocalSignalColors.current.warning
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // Dieselbe Warnfarbe wie die Ampeln des Trainings-Tabs; vorher lag hier
+    // eine private Kopie von `Colors.orange.shade800`, die im Dunkelmodus
+    // nicht mit aufgehellt wurde.
+    val warningColor = LocalSignalColors.current.warning
 
-        when (val current = connection) {
-            null -> Text("Prüfe Verbindung …", style = MaterialTheme.typography.bodyMedium)
-            else -> Row(verticalAlignment = Alignment.Top) {
-                Icon(
-                    imageVector = if (current.isReady) Icons.Filled.CheckCircle else Icons.Filled.Info,
-                    contentDescription = null,
-                    tint = if (current.isReady) MaterialTheme.colorScheme.primary else hintColor,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = current.message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+    when (val current = connection) {
+        null -> Text("Prüfe Verbindung …", style = MaterialTheme.typography.bodyMedium)
+        else -> Row(verticalAlignment = Alignment.Top) {
+            Icon(
+                imageVector = if (current.isReady) Icons.Filled.CheckCircle else Icons.Filled.Info,
+                contentDescription = null,
+                tint = if (current.isReady) MaterialTheme.colorScheme.primary else hintColor,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = current.message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
         }
-        Spacer(modifier = Modifier.height(12.dp))
+    }
+    Spacer(modifier = Modifier.height(12.dp))
 
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            when {
-                connection?.availability == HealthAvailability.NICHT_INSTALLIERT -> {
-                    Button(
-                        onClick = { openHealthConnectInPlayStore(context) },
-                        enabled = !busy,
-                    ) { Text("Health Connect installieren") }
-                }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        when {
+            connection?.availability == HealthAvailability.NICHT_INSTALLIERT -> {
+                Button(
+                    onClick = { openHealthConnectInPlayStore(context) },
+                    enabled = !busy,
+                ) { Text("Health Connect installieren") }
+            }
 
-                connection?.needsPermissions == true -> {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                try {
-                                    // requestHealthPermissions() wechselt intern auf
-                                    // Dispatchers.IO (siehe AppViewModel-KDoc) — auf dem
-                                    // Main-Thread wuerde HealthConnectGateway hier
-                                    // verklemmen, weil es auf den Berechtigungsdialog
-                                    // wartet.
-                                    appViewModel.requestHealthPermissions()
-                                } catch (e: HealthSyncException) {
-                                    // Der Berechtigungsweg wirft bei jedem
-                                    // Problem des Anbieters (SecurityException,
-                                    // RemoteException, abgebrochener Dialog) —
-                                    // ungefangen waere das ein Absturz.
-                                    appViewModel.showMessage(e.message)
-                                } finally {
-                                    busy = false
-                                }
+            connection?.needsPermissions == true -> {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            try {
+                                // requestHealthPermissions() wechselt intern auf
+                                // Dispatchers.IO (siehe AppViewModel-KDoc) — auf dem
+                                // Main-Thread wuerde HealthConnectGateway hier
+                                // verklemmen, weil es auf den Berechtigungsdialog
+                                // wartet.
+                                appViewModel.requestHealthPermissions()
+                            } catch (e: HealthSyncException) {
+                                // Der Berechtigungsweg wirft bei jedem
+                                // Problem des Anbieters (SecurityException,
+                                // RemoteException, abgebrochener Dialog) —
+                                // ungefangen waere das ein Absturz.
+                                appViewModel.showMessage(e.message)
+                            } finally {
+                                busy = false
                             }
-                        },
-                        enabled = !busy,
-                    ) { Text("Verbinden") }
-                }
-
-                connection?.isReady == true -> {
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                try {
-                                    val count = appViewModel.syncHealthNow(reimportAll = false)
-                                    appViewModel.showMessage(
-                                        if (count > 0) {
-                                            "$count ${if (count == 1) "Tour" else "Touren"} importiert"
-                                        } else {
-                                            "Keine neuen Touren"
-                                        },
-                                    )
-                                } catch (e: HealthSyncException) {
-                                    appViewModel.showMessage(e.message)
-                                } finally {
-                                    busy = false
-                                }
-                                refreshLastSyncAt()
-                            }
-                        },
-                        enabled = !busy,
-                    ) {
-                        if (busy) {
-                            CircularProgressIndicator(
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(18.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                        } else {
-                            // Nicht „Jetzt synchronisieren": So heisst auch der
-                            // Knopf der Sync-Karte weiter unten, der etwas
-                            // voellig anderes tut (Abgleich mit dem eigenen
-                            // Server). Hier werden Workouts und Vitalwerte aus
-                            // Health Connect **geholt** — in eine Richtung.
-                            Text("Neue Touren holen")
                         }
-                    }
-                    NeutralButton(
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                try {
-                                    val count = appViewModel.syncHealthNow(reimportAll = true)
-                                    appViewModel.showMessage(
-                                        if (count > 0) {
-                                            "$count ${if (count == 1) "Tour" else "Touren"} importiert"
-                                        } else {
-                                            "Keine neuen Touren"
-                                        },
-                                    )
-                                } catch (e: HealthSyncException) {
-                                    appViewModel.showMessage(e.message)
-                                } finally {
-                                    busy = false
-                                }
-                                refreshLastSyncAt()
+                    },
+                    enabled = !busy,
+                ) { Text("Verbinden") }
+            }
+
+            connection?.isReady == true -> {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            try {
+                                val count = appViewModel.syncHealthNow(reimportAll = false)
+                                appViewModel.showMessage(
+                                    if (count > 0) {
+                                        "$count ${if (count == 1) "Tour" else "Touren"} importiert"
+                                    } else {
+                                        "Keine neuen Touren"
+                                    },
+                                )
+                            } catch (e: HealthSyncException) {
+                                appViewModel.showMessage(e.message)
+                            } finally {
+                                busy = false
                             }
-                        },
-                        enabled = !busy,
-                    ) { Text("Alles neu importieren") }
+                            refreshLastSyncAt()
+                        }
+                    },
+                    enabled = !busy,
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        // Nicht „Jetzt synchronisieren": So heisst auch der
+                        // Knopf der Sync-Karte weiter unten, der etwas
+                        // voellig anderes tut (Abgleich mit dem eigenen
+                        // Server). Hier werden Workouts und Vitalwerte aus
+                        // Health Connect **geholt** — in eine Richtung.
+                        Text("Neue Touren holen")
+                    }
                 }
+                NeutralButton(
+                    onClick = {
+                        scope.launch {
+                            busy = true
+                            try {
+                                val count = appViewModel.syncHealthNow(reimportAll = true)
+                                appViewModel.showMessage(
+                                    if (count > 0) {
+                                        "$count ${if (count == 1) "Tour" else "Touren"} importiert"
+                                    } else {
+                                        "Keine neuen Touren"
+                                    },
+                                )
+                            } catch (e: HealthSyncException) {
+                                appViewModel.showMessage(e.message)
+                            } finally {
+                                busy = false
+                            }
+                            refreshLastSyncAt()
+                        }
+                    },
+                    enabled = !busy,
+                ) { Text("Alles neu importieren") }
             }
         }
+    }
 
-        lastSyncAt?.let { at ->
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Letzter Sync: ${formatDateTime(at)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-        }
-
-        val currentReport = report
-        if (currentReport != null) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "${currentReport.workoutsFound} " +
-                    "${if (currentReport.workoutsFound == 1) "Workout" else "Workouts"} gefunden · " +
-                    "${currentReport.imported.size} importiert · " +
-                    "${currentReport.mergedRides.size} mit Puls angereichert · " +
-                    "${currentReport.duplicatesSkipped} " +
-                    if (currentReport.duplicatesSkipped == 1) "Duplikat" else "Duplikate",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-            if (currentReport.debugLines.isNotEmpty()) {
-                TextButton(onClick = { showDebugDialog = true }) {
-                    Text("Diagnose-Details", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            if (currentReport.workoutsFound == 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                NoticeBox(
-                    icon = Icons.Filled.Info,
-                    color = hintColor,
-                    text = "Keine Workouts im Zeitraum — prüfe in der App deiner Uhr " +
-                        "(Samsung Health, Garmin Connect, Fitbit …), ob sie ihre " +
-                        "Trainings nach Health Connect schreibt.",
-                )
-            }
-        }
-
+    lastSyncAt?.let { at ->
         Spacer(modifier = Modifier.height(12.dp))
-        val routesMissing = currentReport?.routesMissing ?: 0
-        if (routesMissing > 0) {
-            NoticeBox(
-                icon = Icons.Filled.LocationOn,
-                color = warningColor,
-                // „in Health Connect" gehoert in BEIDE Zweige: Ohne die Angabe
-                // sucht der Nutzer die Einstellung in Trailscape — und findet
-                // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
-                // ausserdem ganz, der Pfad lief ungebremst in den naechsten
-                // Satzteil.
-                text = "Für $routesMissing " +
-                    "${if (routesMissing == 1) "importierte Tour" else "importierte Touren"} hat " +
-                    "Health Connect keine Route geliefert. Erlaube in Health Connect unter " +
-                    "„App-Berechtigungen → Trailscape → Trainingsrouten“ den dauerhaften " +
-                    "Zugriff, damit die aufgezeichnete Strecke mitkommt.",
-            )
-        } else {
-            Text(
-                text = "Damit auch die aufgezeichnete Route mit importiert wird, erlaube in " +
-                    "Health Connect unter „App-Berechtigungen → Trailscape → Trainingsrouten“ " +
-                    "den dauerhaften Zugriff. Ohne diese Freigabe werden Distanz, Dauer und " +
-                    "Herzfrequenz trotzdem übernommen.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "„Alles neu importieren“ betrachtet wieder die letzten " +
-                "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage.",
+            text = "Letzter Sync: ${formatDateTime(at)}",
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,
         )
     }
+
+    val currentReport = report
+    if (currentReport != null) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "${currentReport.workoutsFound} " +
+                "${if (currentReport.workoutsFound == 1) "Workout" else "Workouts"} gefunden · " +
+                "${currentReport.imported.size} importiert · " +
+                "${currentReport.mergedRides.size} mit Puls angereichert · " +
+                "${currentReport.duplicatesSkipped} " +
+                if (currentReport.duplicatesSkipped == 1) "Duplikat" else "Duplikate",
+            style = MaterialTheme.typography.bodySmall,
+            color = hintColor,
+        )
+        if (currentReport.debugLines.isNotEmpty()) {
+            TextButton(onClick = { showDebugDialog = true }) {
+                Text("Diagnose-Details", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (currentReport.workoutsFound == 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            NoticeBox(
+                icon = Icons.Filled.Info,
+                color = hintColor,
+                text = "Keine Workouts im Zeitraum — prüfe in der App deiner Uhr " +
+                    "(Samsung Health, Garmin Connect, Fitbit …), ob sie ihre " +
+                    "Trainings nach Health Connect schreibt.",
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+    val routesMissing = currentReport?.routesMissing ?: 0
+    if (routesMissing > 0) {
+        NoticeBox(
+            icon = Icons.Filled.LocationOn,
+            color = warningColor,
+            // „in Health Connect" gehoert in BEIDE Zweige: Ohne die Angabe
+            // sucht der Nutzer die Einstellung in Trailscape — und findet
+            // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
+            // ausserdem ganz, der Pfad lief ungebremst in den naechsten
+            // Satzteil.
+            text = "Für $routesMissing " +
+                "${if (routesMissing == 1) "importierte Tour" else "importierte Touren"} hat " +
+                "Health Connect keine Route geliefert. Erlaube in Health Connect unter " +
+                "„App-Berechtigungen → Trailscape → Trainingsrouten“ den dauerhaften " +
+                "Zugriff, damit die aufgezeichnete Strecke mitkommt.",
+        )
+    } else {
+        Text(
+            text = "Damit auch die aufgezeichnete Route mit importiert wird, erlaube in " +
+                "Health Connect unter „App-Berechtigungen → Trailscape → Trainingsrouten“ " +
+                "den dauerhaften Zugriff. Ohne diese Freigabe werden Distanz, Dauer und " +
+                "Herzfrequenz trotzdem übernommen.",
+            style = MaterialTheme.typography.bodySmall,
+            color = hintColor,
+        )
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = "„Alles neu importieren“ betrachtet wieder die letzten " +
+            "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
 
     if (showDebugDialog && report != null) {
         HealthDebugDialog(

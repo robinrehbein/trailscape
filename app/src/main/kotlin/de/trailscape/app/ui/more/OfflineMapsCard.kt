@@ -60,11 +60,15 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * JSON-Decoder an dieser Stelle hat frueher Stil und Zeitpunkt schlicht
  * verworfen.
  *
+ * Der Inhalt der Zeile „Offline-Karten" in der Gruppe „Karte" des Mehr-Tabs
+ * (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel
+ * und Aufklapp-Rahmen.
+ *
  * @param onMessage Kanal fuer kurze Rueckmeldungen (Loeschfehler); im Mehr-Tab
  *   `AppViewModel::showMessage`, damit die Snackbar dieselbe ist wie ueberall.
  */
 @Composable
-fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modifier) {
+fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
     val context = LocalContext.current
 
     var loading by remember { mutableStateOf(true) }
@@ -95,66 +99,64 @@ fun OfflineMapsCard(onMessage: (String) -> Unit = {}, modifier: Modifier = Modif
         }
     }
 
-    MoreSectionCard(title = "Offline-Karten", modifier = modifier) {
-        val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
-        Text(
-            text = "Für die Offline-Nutzung heruntergeladene Kartenausschnitte. Der Download " +
-                "neuer Ausschnitte läuft über die Karte.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = "Für die Offline-Nutzung heruntergeladene Kartenausschnitte. Der Download " +
+            "neuer Ausschnitte läuft über die Karte.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+
+    when {
+        loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
+        errorText != null -> Text(
+            text = errorText ?: "",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
         )
-        Spacer(modifier = Modifier.height(12.dp))
 
-        when {
-            loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
-            errorText != null -> Text(
-                text = errorText ?: "",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-
-            regions.isEmpty() -> Text(
-                text = "Keine Offline-Karten gespeichert.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            else -> {
-                Column {
-                    regions.forEachIndexed { index, info ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = info.name, style = MaterialTheme.typography.bodyLarge)
-                                Text(
-                                    text = info.details,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = hintColor,
-                                )
-                            }
-                            if (busyRegionId == info.id) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.height(20.dp),
-                                )
-                            } else {
-                                IconButton(onClick = { confirmDeleteRegion = info }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "Löschen")
-                                }
-                            }
+        regions.isEmpty() -> Text(
+            text = "Keine Offline-Karten gespeichert.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        else -> {
+            Column {
+                regions.forEachIndexed { index, info ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = info.name, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text = info.details,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = hintColor,
+                            )
                         }
-                        if (index != regions.lastIndex) {
-                            HorizontalDivider()
+                        if (busyRegionId == info.id) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.height(20.dp),
+                            )
+                        } else {
+                            IconButton(onClick = { confirmDeleteRegion = info }) {
+                                Icon(Icons.Filled.Delete, contentDescription = "Löschen")
+                            }
                         }
                     }
+                    if (index != regions.lastIndex) {
+                        HorizontalDivider()
+                    }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                NeutralButton(
-                    onClick = { confirmDeleteAll = true },
-                    enabled = !deleteAllBusy,
-                    destructive = true,
-                ) { Text("Alle löschen") }
             }
+            Spacer(modifier = Modifier.height(12.dp))
+            NeutralButton(
+                onClick = { confirmDeleteAll = true },
+                enabled = !deleteAllBusy,
+                destructive = true,
+            ) { Text("Alle löschen") }
         }
     }
 

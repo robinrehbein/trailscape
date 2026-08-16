@@ -30,8 +30,19 @@ import de.trailscape.core.tsbBandMessages
 import kotlin.math.roundToInt
 
 /**
- * Karte „Form": PMC-Sparkline (CTL/ATL), TSB, Rampenrate und Belastungs-
- * verhaeltnis.
+ * Karte „Form": PMC-Sparkline (Fitness/Ermuedung), Formwert, Rampenrate und
+ * Belastungsverhaeltnis.
+ *
+ * ## Klartext statt Kuerzel
+ * Die drei Kennzahlen heissen in der Beschriftung Fitness, Ermuedung und
+ * Form — nicht CTL, ATL, TSB. Wer aus einem anderen Trainingstool umsteigt,
+ * bekommt die Kuerzel trotzdem: einmal, gebuendelt, als kleine Fussnote direkt
+ * unter der Kennzahlen-Zeile — nicht an jeder einzelnen Kennzahl, denn dann
+ * waere die Uebersetzung nur Dekoration neben dem eigentlich gemeinten
+ * Kuerzel. Frueher stand hier ausserdem ein aufklappbares Glossar
+ * (`GlossaryCard.kt`, inzwischen geloescht): Es war das schriftliche
+ * Eingestaendnis, dass die Oberflaeche selbst nicht verstaendlich genug ist.
+ * Jetzt spricht sie die Sprache direkt.
  *
  * Port von `_buildFormCard` (`lib/screens/training_screen.dart`).
  */
@@ -116,10 +127,16 @@ fun FormCard(insights: TrainingInsights) {
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                FigureText(latest.ctl.roundToInt().toString(), "Fitness (CTL)", color = trainingGood)
-                FigureText(latest.atl.roundToInt().toString(), "Ermüdung (ATL)", color = trainingWarning)
-                FigureText(formatSigned(latest.tsb), "Form (TSB)")
+                FigureText(latest.ctl.roundToInt().toString(), "Fitness", color = trainingGood)
+                FigureText(latest.atl.roundToInt().toString(), "Ermüdung", color = trainingWarning)
+                FigureText(formatSigned(latest.tsb), "Form")
             }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "In anderen Trainings-Apps: CTL, ATL, TSB.",
+                style = MaterialTheme.typography.bodySmall,
+                color = theme.onSurfaceVariant,
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
@@ -132,7 +149,7 @@ fun FormCard(insights: TrainingInsights) {
                     "Rampenrate: noch keine Aussage möglich (weniger als " +
                         "7 Tage Historie)."
                 } else {
-                    "Rampenrate: ${formatSigned(ramp)} CTL-Punkte pro Woche — " +
+                    "Rampenrate: ${formatSigned(ramp)} Fitness-Punkte pro Woche — " +
                         "${rampBandLabels.getValue(rampBand)}."
                 },
                 style = MaterialTheme.typography.bodySmall,
