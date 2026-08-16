@@ -502,66 +502,9 @@ internal fun LocationPermissionNotice(
 
 // --------------------------------------------------------------- Bedienteile
 
-/**
- * Pillenfoermiger Knopf mit Text (oben links: „Route planen"). Die Pille erbt
- * ihre Form von `shapes.small`, die inaktive Flaeche ist die One-UI-Karte
- * (`surfaceContainerLow`); nur der aktive Zustand faerbt sich mit der
- * Kartenfarbe der Funktion.
- */
-@Composable
-internal fun MapPillButton(
-    label: String,
-    icon: ImageVector,
-    active: Boolean,
-    activeColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val background = if (active) activeColor else MaterialTheme.colorScheme.surfaceContainerLow
-    val foreground = if (active) Color.White else MaterialTheme.colorScheme.onSurface
-    Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = background,
-        contentColor = foreground,
-        shadowElevation = 2.dp,
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(text = label, style = MaterialTheme.typography.labelLarge)
-        }
-    }
-}
-
-/** Runder Knopf mit Symbol (Suche, Kartenstil, Offline). */
-@Composable
-internal fun MapCircleButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    active: Boolean = false,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.size(48.dp),
-        enabled = enabled,
-        shape = CircleShape,
-        color = if (active) RouteBlue else MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = if (active) Color.White else MaterialTheme.colorScheme.onSurface,
-        shadowElevation = 2.dp,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(22.dp))
-        }
-    }
-}
+// `MapPillButton` und `MapCircleButton` sind mit der oberen Knopfreihe
+// entfallen: Suche, „Route planen", Kartenstil und Offline wohnen jetzt im
+// Erkunden-Gesicht des unteren Blatts (siehe `ExploreSheet.kt`).
 
 /**
  * Der grosse Aufnahmeknopf: gruener Kreis (Start) bzw. rotes Quadrat (Stopp)

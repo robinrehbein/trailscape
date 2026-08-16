@@ -156,6 +156,13 @@ internal fun PlanningSheet(
     onShare: () -> Unit,
     onNavigate: () -> Unit,
     onHoverPoint: (TrackPoint?) -> Unit,
+    /**
+     * Beendet den Planungsmodus — das X in der Kopfzeile. Frueher stand dafuer
+     * die Pille „Planung beenden" am oberen Kartenrand; der Ausgang eines
+     * Modus gehoert aber dorthin, wo der Modus wohnt (und die Pille sprengte
+     * mit ihrem langen Text die obere Knopfreihe, siehe `ExploreSheet.kt`).
+     */
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val profileLabel = routeProfileLabels[profile] ?: "Route"
@@ -227,6 +234,12 @@ internal fun PlanningSheet(
                         .size(48.dp)
                         .padding(12.dp),
                 )
+                // Eigenes Klickziel INNERHALB der aufklappbaren Zeile: Das X
+                // beendet den Modus, die restliche Zeile klappt nur auf/zu —
+                // zwei verschiedene Folgen, zwei getrennte Flaechen.
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Filled.Close, contentDescription = "Planung beenden")
+                }
             }
 
             if (!expanded) return@Column
@@ -260,31 +273,22 @@ internal fun PlanningSheet(
                     )
                 }
 
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
+                // Keine zweite Statuszeile mehr: Die Kopfzeile traegt den
+                // Status (auch aufgeklappt sichtbar), der Koerper traegt die
+                // Bedienung — vorher stand „Noch keine Wegpunkte" doppelt
+                // untereinander auf demselben Blatt.
                 if (!generated) {
                     // Die generierte Runde hat keine Wegpunkte, die sich
                     // auflisten liessen (siehe [generated] oben) — die Liste
-                    // gilt deshalb nur fuer selbst geplante Routen.
+                    // gilt deshalb nur fuer selbst geplante Routen. Einen
+                    // erklaerenden Hinweistext braucht sie nicht mehr: Setzen
+                    // sagt die gestrichelte Zeile („… oder Karte antippen"),
+                    // Entfernen zeigt das X jeder Zeile.
                     Spacer(Modifier.height(8.dp))
                     WaypointList(
                         waypoints = waypoints,
                         onRemove = onRemoveWaypoint,
                         onAddViaSearch = onAddWaypointViaSearch,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    // Was die Liste selbst schon zeigt (Namen, Entfernen ueber
-                    // X) muss der Hinweis nicht mehr erklaeren — geblieben ist
-                    // nur, was ausschliesslich am Kartentipp haengt.
-                    Text(
-                        text = PLAN_HINT,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
@@ -649,7 +653,11 @@ private fun RoundTripEntry(
     }
 }
 
-/** Die Zustandszeile der Planung — eingeklappt wie aufgeklappt dieselbe. */
+/**
+ * Die Zustandszeile der Planung — sie lebt NUR in der Kopfzeile, die in
+ * beiden Klappzustaenden sichtbar bleibt. Der aufgeklappte Koerper wiederholt
+ * sie bewusst nicht (frueher stand sie dort ein zweites Mal).
+ */
 private fun planningStatus(
     waypoints: List<Waypoint>,
     route: PlannedRoute?,
@@ -749,16 +757,6 @@ private fun routeProfileHint(profile: RouteProfile): String? = when (profile) {
     RouteProfile.RADWEGE -> "Bevorzugt ausgewiesene Radwege"
     RouteProfile.KUERZESTER -> "Kürzeste Strecke, ohne Rücksicht auf den Belag"
 }
-
-/**
- * Hinweistext der Planung. Stand frueher woertlich wie `_planHint` in Dart und
- * erklaerte Setzen **und** Entfernen eines Wegpunkts per Kartentipp — seit
- * [WaypointList] zeigt die Liste selbst, wie ein Wegpunkt heisst und wie er
- * (ueber das X) verschwindet, der Hinweis bleibt darum nur fuer das, was
- * ausschliesslich am Kartentipp haengt.
- */
-internal const val PLAN_HINT: String =
-    "Tippe auf die Karte, um einen Wegpunkt zu setzen oder zu entfernen."
 
 /** Wie viele Suchtreffer angezeigt werden (Dart: `results.take(5)`). */
 internal const val MAX_SEARCH_RESULTS: Int = 5

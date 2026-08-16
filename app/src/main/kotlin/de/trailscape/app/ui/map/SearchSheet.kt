@@ -65,7 +65,7 @@ import de.trailscape.core.GeoResult
  *
  * ## Autofokus
  * Das Suchfeld bekommt den Fokus (und damit die Tastatur), sobald das Blatt
- * steht — wer die Lupe antippt, will tippen, nicht erst noch das Feld selbst
+ * steht — wer die Suchzeile antippt, will tippen, nicht erst noch das Feld selbst
  * treffen.
  *
  * ## „Zuletzt gesucht" statt Treffer, wenn das Feld leer ist

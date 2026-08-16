@@ -905,10 +905,10 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Wirft die Planung weg, aber nicht endgueltig: Eine Meldung mit
      * „Rückgängig" holt sie zurueck.
      *
-     * Die Pille „Planung beenden" sitzt direkt neben der Lupe, und „Leeren"
-     * steht mitten zwischen den uebrigen Knoepfen — beide vernichteten bis
-     * hierher eine halbe Stunde Arbeit mit einem Fehlgriff und ohne jede
-     * Nachfrage. Ein Bestaetigungsdialog waere der schlechtere Tausch: Er
+     * Das X „Planung beenden" sitzt in der Kopfzeile des Planungsblatts
+     * direkt neben dem Klappgriff, und „Leeren" steht mitten zwischen den
+     * uebrigen Knoepfen — beide vernichteten bis hierher eine halbe Stunde
+     * Arbeit mit einem Fehlgriff und ohne jede Nachfrage. Ein Bestaetigungsdialog waere der schlechtere Tausch: Er
      * kostet **jedes** Mal einen Tipp, waehrend die Meldung nur im seltenen
      * Fehlerfall etwas verlangt. Der Touren-Tab loest das Loeschen laengst
      * genauso.
@@ -933,6 +933,28 @@ fun MapScreen(appViewModel: AppViewModel) {
         routeFromGenerator = false
         plannedRoute = null
         plannedFor = null
+    }
+
+    /**
+     * Wechselt nach [MapMode.PLANEN] — der Einstieg „Route planen" im
+     * Erkunden-Blatt (`ExploreSheet.kt`).
+     */
+    fun enterPlanning() {
+        if (isRecording) {
+            appViewModel.showMessage("Beende zuerst die Aufzeichnung.")
+            return
+        }
+        // Ein noch nicht uebernommener Vorschlag weicht: Wer „Route planen"
+        // drueckt, will selbst planen, und zwei Panels uebereinander helfen
+        // niemandem.
+        if (generation.target != null) discardGeneratedRoute()
+        // Eine Route, die schon steht, bleibt dagegen liegen — sie ueberlebt
+        // den Start der Aufzeichnung (siehe [runRecording]), und genau sie
+        // ist der Grund, die Planung wieder zu oeffnen.
+        appViewModel.select(null)
+        mode = MapMode.PLANEN
+        planSheetExpanded = true
+        planError = null
     }
 
     /**
@@ -1119,7 +1141,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Oeffnet das Suchblatt.
      *
      * ## Zwei Aufrufmodi
-     * Ohne [onPicked] (der Normalfall — die Lupe oben rechts) landet der
+     * Ohne [onPicked] (der Normalfall — die Suchzeile im Erkunden-Blatt) landet der
      * gewaehlte Ort in [selectedPlace] und zeigt die Ortskarte ([PlaceCard]).
      * Mit [onPicked] wird das Blatt zum reinen Ortswaehler: Die Auswahl geht
      * ausschliesslich an [onPicked], [selectedPlace] bleibt unberuehrt und die
@@ -1651,64 +1673,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                     .padding(OverlayScreenPadding),
                 verticalArrangement = Arrangement.spacedBy(OverlayGap),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (navTarget == null) {
-                        val isPlanning = mode == MapMode.PLANEN
-                        MapPillButton(
-                            label = if (isPlanning) "Planung beenden" else "Route planen",
-                            icon = if (isPlanning) Icons.Filled.Close else Icons.Filled.Place,
-                            active = isPlanning,
-                            activeColor = RouteBlue,
-                            onClick = {
-                                if (isPlanning) {
-                                    exitPlanningWithUndo("Planung beendet.")
-                                } else if (isRecording) {
-                                    appViewModel.showMessage("Beende zuerst die Aufzeichnung.")
-                                } else {
-                                    // Ein noch nicht uebernommener Vorschlag
-                                    // weicht: Wer „Route planen" drueckt, will
-                                    // selbst planen, und zwei Panels
-                                    // uebereinander helfen niemandem.
-                                    if (generation.target != null) discardGeneratedRoute()
-                                    // Eine Route, die schon steht, bleibt
-                                    // dagegen liegen — sie ueberlebt seit
-                                    // Kurzem den Start der Aufzeichnung (siehe
-                                    // [runRecording]), und genau sie ist der
-                                    // Grund, die Planung wieder zu oeffnen.
-                                    appViewModel.select(null)
-                                    mode = MapMode.PLANEN
-                                    planSheetExpanded = true
-                                    planError = null
-                                }
-                            },
-                        )
-                        Spacer(Modifier.width(OverlayGap))
-                    }
-                    MapCircleButton(
-                        icon = Icons.Filled.Search,
-                        contentDescription = "Ort suchen",
-                        active = searchOpen,
-                        onClick = { if (searchOpen) closeSearchSheet() else openPlaceSearch() },
-                    )
-                    Spacer(Modifier.width(OverlayGap))
-                    MapCircleButton(
-                        icon = Icons.Filled.Layers,
-                        contentDescription = "Kartenstil",
-                        onClick = { showStyleSheet = true },
-                    )
-                    Spacer(Modifier.width(OverlayGap))
-                    MapCircleButton(
-                        icon = Icons.Filled.DownloadForOffline,
-                        contentDescription = "Kartenausschnitt herunterladen",
-                        enabled = !downloadState.running,
-                        onClick = ::startDownload,
-                    )
-                }
-
+                // Keine Knopfreihe mehr an dieser Kante: Suche, „Route
+                // planen", Kartenstil und Offline wohnen im Erkunden-Gesicht
+                // des unteren Blatts (siehe `ExploreSheet.kt`). Oben bleiben
+                // nur Zustaende, die sich ueber die Karte legen MUESSEN
+                // (Hinweise, Navigation, Generator, Downloadfortschritt).
                 locationDeniedAction?.let {
                     LocationPermissionNotice(
                         text = "Standortfreigabe wurde abgelehnt – ohne sie geht es hier " +
@@ -1907,6 +1876,26 @@ fun MapScreen(appViewModel: AppViewModel) {
                             },
                             onNavigate = ::navigatePlannedRoute,
                             onHoverPoint = { hoverPoint = it },
+                            onClose = { exitPlanningWithUndo("Planung beendet.") },
+                        )
+                    }
+
+                    // Das Ruhegesicht des Blatts (siehe `ExploreSheet.kt`):
+                    // Suche und Werkzeuge, aber nur, wenn kein anderes
+                    // Gesicht dran ist — keine Aufzeichnung, keine gewaehlte
+                    // Tour, kein Ort, keine Planung, keine Navigation und
+                    // kein offener Generator-Vorschlag (dessen Panel liegt
+                    // oben; zwei Werkzeugflaechen zugleich helfen niemandem).
+                    if (mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
+                        place == null && navTarget == null && generation.target == null
+                    ) {
+                        Spacer(Modifier.height(OverlayGap))
+                        ExploreSheet(
+                            onOpenSearch = { openPlaceSearch() },
+                            onStartPlanning = ::enterPlanning,
+                            onOpenStyle = { showStyleSheet = true },
+                            onDownload = ::startDownload,
+                            downloadEnabled = !downloadState.running,
                         )
                     }
 
