@@ -65,6 +65,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
@@ -225,34 +226,38 @@ import kotlinx.coroutines.withContext
  *    aktuelle Position (Zoom ~13) — kein Dart-Vorbild. Details siehe der
  *    Effekt bei `autoLocationZoomDone` weiter unten.
  *
- * ## Das Tourenblatt und seine Rangfolge am unteren Kartenrand
+ * ## Die Tourenliste und ihre Rangfolge am unteren Kartenrand
  * Seit dem Wegfall des eigenen Touren-Tabs (siehe `ui/TrailscapeApp.kt`,
- * „Warum Touren und Karte eine Seite sind") liegt die Tourenliste als
- * drittes Blatt ueber der Karte ([TourSheet], `TourSheet.kt`): eingeklappt
- * eine Zeile („Touren" · Anzahl), aufgeklappt bis zu
+ * „Warum Touren und Karte eine Seite sind") liegt die Tourenliste als Koerper
+ * des Erkunden-Blatts ([ExploreSheet], `ExploreSheet.kt`) — kein eigenes
+ * drittes Blatt mehr: Eingeklappt zeigt das Blatt Suchzeile und Werkzeugreihe,
+ * aufgeklappt (ueber [SwipeableSheet], `SwipeableSheet.kt`) zusaetzlich die
+ * Kopfzeile „Touren" (· Anzahl) und die Liste bis zu
  * [TOUR_SHEET_MAX_HEIGHT_FACTOR] der Bildschirmhoehe. Am unteren Rand
  * bewerben sich damit mehrere Zustaende um denselben Platz — Aufzeichnung,
  * Navigation, Planung, ausgewaehlte Tour (`RideCard`), offene Suche und
- * Tourenblatt —, und es gilt eine feste Rangfolge:
+ * Erkunden-Blatt —, und es gilt eine feste Rangfolge:
  *
  *  1. **Aufzeichnung, Navigation, Planung, ausgewaehlte Tour oder offene
  *     Suche haben Vorrang.** Sie laufen entweder waehrend der Fahrt (die
  *     Live-Leiste und die Navigationsleiste duerfen nicht hinter einer Liste
  *     verschwinden) oder sind eine bewusste Handlung der Nutzerin (Planung,
- *     eine ausgewaehlte Tour, eine Suche) — das Tourenblatt weicht in allen
- *     diesen Faellen auf [TourSheetState.HIDDEN].
- *  2. **Sonst ist [TourSheetState.PEEK] der Ruhezustand**: eine Zeile, die
- *     die Karte kaum verdeckt. [TourSheetState.FULL] entsteht nur auf zwei
- *     Wegen — die Nutzerin tippt selbst auf die Kopfzeile, oder ein anderer
- *     Tab bittet ueber [AppViewModel.tourSheetRequest] darum (siehe „Vier
- *     Tabs sind das Maximum" in `TrailscapeApp.kt`: „Touren" ist kein
- *     eigenes Ziel mehr, sondern genau dieser Wunsch).
+ *     eine ausgewaehlte Tour, eine Suche) — das Erkunden-Blatt und mit ihm
+ *     die Tourenliste sind in all diesen Faellen ueberhaupt nicht komponiert
+ *     (siehe die Sichtbarkeitsbedingung um den `ExploreSheet`-Aufruf weiter
+ *     unten).
+ *  2. **Sonst ist die eingeklappte Stufe der Ruhezustand**: eine Zeile, die
+ *     die Karte kaum verdeckt. Aufgeklappt entsteht nur auf zwei Wegen — die
+ *     Nutzerin zieht oder tippt selbst am Griff, oder ein anderer Tab bittet
+ *     ueber [AppViewModel.tourSheetRequest] darum (siehe „Vier Tabs sind das
+ *     Maximum" in `TrailscapeApp.kt`: „Touren" ist kein eigenes Ziel mehr,
+ *     sondern genau dieser Wunsch).
  *  3. **Ein schon aufgeschlagenes Blatt faellt beim Eintreten eines
- *     Vorrang-Zustands auf PEEK zurueck und bleibt dort**, auch nachdem der
- *     Vorrang-Zustand wieder endet — es springt nicht von selbst wieder auf
- *     FULL. Wer waehrend der Aufzeichnung zufaellig auf „Touren" tippt, soll
- *     nach dem Stopp nicht ueberrascht ein offenes Blatt vorfinden, das sie
- *     selbst nie geoeffnet hat.
+ *     Vorrang-Zustands auf die eingeklappte Stufe zurueck und bleibt dort**,
+ *     auch nachdem der Vorrang-Zustand wieder endet — es springt nicht von
+ *     selbst wieder auf. Wer waehrend der Aufzeichnung zufaellig auf
+ *     „Touren" tippt, soll nach dem Stopp nicht ueberrascht ein offenes
+ *     Blatt vorfinden, das sie selbst nie geoeffnet hat.
  *
  * Die Detailansicht einer Tour ([RideDetailHost] aus `ui/rides/TourList.kt`)
  * liegt darueber noch einmal in einem eigenen Fenster (`Dialog`, wie der
@@ -266,13 +271,13 @@ import kotlinx.coroutines.withContext
  * Detailfenster braucht dafuer keinen eigenen `BackHandler` — als eigenes
  * `Dialog`-Fenster faengt es die Geste ab, bevor sie diesen Screen ueberhaupt
  * erreicht (dieselbe Mechanik wie beim Fahrmodus). Fuer Blatt und Planung
- * steht ein einzelner `BackHandler` weiter unten: Ist das Blatt
- * aufgeschlagen, schliesst die erste Geste es auf PEEK; ist stattdessen die
- * Planung an (das Blatt ist dann ohnehin HIDDEN, siehe Punkt 1), beendet sie
- * ueber [exitPlanningWithUndo] die Planung — mit derselben Rueckhol-Snackbar
- * wie der Knopf „Planung beenden". Ist keins von beidem der Fall, bleibt der
- * `BackHandler` deaktiviert und die Geste faellt auf das normale Verhalten
- * der App zurueck.
+ * steht ein einzelner `BackHandler` weiter unten: Ist das Erkunden-Blatt
+ * aufgeschlagen, schliesst die erste Geste es wieder ein; ist stattdessen die
+ * Planung an (das Erkunden-Blatt ist dann ohnehin nicht komponiert, siehe
+ * Punkt 1), beendet sie ueber [exitPlanningWithUndo] die Planung — mit
+ * derselben Rueckhol-Snackbar wie der Knopf „Planung beenden". Ist keins von
+ * beidem der Fall, bleibt der `BackHandler` deaktiviert und die Geste faellt
+ * auf das normale Verhalten der App zurueck.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -388,6 +393,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     // noch aendern kann.
     var planSource by remember { mutableStateOf<RoutingSource?>(null) }
 
+    // Woher [plannedRoute] tatsaechlich stammt — anders als [planSource]
+    // bewusst NICHT wieder auf `null` gesetzt, sobald die Berechnung fertig
+    // ist: Die Planungszeile soll auch bei stehender Route noch sagen „Gerät"
+    // oder „Server" (siehe `PlanningSheet`s `source`-Parameter). Der Nutzer
+    // hat den stillen Server-Rueckfall bis hierher nie gesehen (siehe
+    // Aufgaben-Hintergrund „Routing-Transparenz").
+    var routeSource by remember { mutableStateOf<RoutingSource?>(null) }
+
     // Ob [plannedRoute] aus dem Rundkurs-Generator stammt statt aus gesetzten
     // Wegpunkten. Der Generator bringt eine fertige Route ohne Wegpunkte mit —
     // ohne dieses Flag wuerde der Planungs-Effekt unten sie beim naechsten Lauf
@@ -447,13 +460,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     // die Fahrerin ploetzlich wieder die kleine Live-Leiste vor sich hat.
     var rideMode by rememberSaveable { mutableStateOf(false) }
 
-    // Die Stufe des Tourenblatts (siehe `TourSheet.kt`) — `rememberSaveable`,
-    // damit eine Drehung nicht ein von der Nutzerin aufgeschlagenes Blatt
-    // wieder einklappt. PEEK ist der Startwert: Beim allerersten Aufbau
-    // dieses Screens gilt noch kein Vorrang-Zustand, und die Zeile "Touren"
-    // ist die richtige Ruhelage (siehe Klassen-KDoc, "Rangfolge am unteren
-    // Kartenrand").
-    var tourSheet by rememberSaveable { mutableStateOf(TourSheetState.PEEK) }
+    // Ob die Tourenliste im Erkunden-Blatt aufgeklappt ist (siehe
+    // `ExploreSheet.kt`) — `rememberSaveable`, damit eine Drehung nicht ein
+    // von der Nutzerin aufgeschlagenes Blatt wieder einklappt. `false` ist
+    // der Startwert: Beim allerersten Aufbau dieses Screens gilt noch kein
+    // Vorrang-Zustand, und die eingeklappte Zeile ist die richtige Ruhelage
+    // (siehe Klassen-KDoc, "Rangfolge am unteren Kartenrand").
+    var toursExpanded by rememberSaveable { mutableStateOf(false) }
 
     // Die in der Tourendetailansicht geoeffnete Tour. Bewusst die ID und
     // nicht das `Ride` selbst — wortgleiche Begruendung wie beim frueheren
@@ -733,6 +746,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 plannedRoute = outcome.route
                 plannedFor = inputs
                 planError = null
+                routeSource = outcome.source
                 // Kein Fehler, sondern eine Gelegenheit: Die Route ist da (ueber
                 // den Server), koennte beim naechsten Mal aber lokal und
                 // schneller entstehen. Das Angebot blockiert nichts.
@@ -742,8 +756,18 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // Wegpunkte bleiben stehen, damit es sich erneut versuchen laesst.
                 plannedRoute = null
                 plannedFor = null
+                routeSource = null
                 planError = it.message?.takeIf(String::isNotBlank)
                     ?: "Route konnte nicht berechnet werden."
+                // Auch im Fehlerfall dasselbe Angebot wie sonst nur nach Erfolg:
+                // Schlaegt sogar der Server ab (z. B. eine 600-km-Route ohne
+                // lokale Kacheln, siehe `missingSegmentsFor`-KDoc), soll die
+                // Nutzerin den Ausweg sehen und nicht nur „Server überlastet"
+                // lesen. `missingSegmentsFor` ist leer, wenn nichts fehlt —
+                // `offerMissingSegments` tut dann nichts.
+                appViewModel.offerMissingSegments(
+                    missingSegmentsFor(context, waypoints, routeProfile),
+                )
             }
         planBusy = false
         planProgress = null
@@ -1572,7 +1596,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     val tourSheetRequest by appViewModel.tourSheetRequest.collectAsStateWithLifecycle()
     LaunchedEffect(tourSheetRequest) {
         if (tourSheetRequest) {
-            tourSheet = TourSheetState.FULL
+            toursExpanded = true
             appViewModel.consumeTourSheetRequest()
         }
     }
@@ -1601,31 +1625,33 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // -------------------------------------------------- Tourenblatt: Rangfolge
-    // Ausformuliert im Klassen-KDoc oben („Das Tourenblatt und seine Rangfolge
+    // Ausformuliert im Klassen-KDoc oben („Die Tourenliste und ihre Rangfolge
     // am unteren Kartenrand"); hier nur die Umsetzung. Bewusst ein eigener
-    // Effekt statt einer reinen Ableitung: Ein schon aufgeschlagenes Blatt
-    // soll beim Eintreten eines Vorrang-Zustands **dauerhaft** auf PEEK
-    // zurueckfallen — mit einer reinen Ableitung (`if (vorrang) HIDDEN else
-    // tourSheet`) bliebe der gespeicherte Zustand FULL und spraenge sofort
-    // wieder auf, sobald der Vorrang-Zustand endet.
+    // Effekt statt einer reinen Ableitung: Eine schon aufgeschlagene
+    // Tourenliste soll beim Eintreten eines Vorrang-Zustands **dauerhaft**
+    // wieder einklappen — mit einer reinen Ableitung bliebe
+    // `toursExpanded` unveraendert `true` und spraenge sofort wieder auf,
+    // sobald der Vorrang-Zustand endet. Eine abgeleitete „Sichtbarkeits"-
+    // Variable braucht es dagegen nicht mehr: Das Erkunden-Blatt ist in all
+    // diesen Zustaenden ohnehin nicht komponiert (siehe die Bedingung um den
+    // `ExploreSheet`-Aufruf weiter unten).
     val tourSheetPriorityActive =
         isRecording || navTarget != null || mode == MapMode.PLANEN ||
             selectedRide != null || selectedPlace != null || searchOpen
     LaunchedEffect(tourSheetPriorityActive) {
-        if (tourSheetPriorityActive && tourSheet == TourSheetState.FULL) {
-            tourSheet = TourSheetState.PEEK
+        if (tourSheetPriorityActive && toursExpanded) {
+            toursExpanded = false
         }
     }
-    val tourSheetState = if (tourSheetPriorityActive) TourSheetState.HIDDEN else tourSheet
 
-    // Zurueck-Geste: erst das Blatt auf PEEK, dann die Planung (mit derselben
-    // Rueckhol-Snackbar wie der Knopf „Planung beenden"), sonst das normale
-    // Verhalten der App. Die Tourendetailansicht braucht hier keinen Fall —
-    // sie faengt die Geste bereits als eigenes Dialogfenster ab (siehe unten
-    // und das Klassen-KDoc oben).
-    BackHandler(enabled = tourSheetState == TourSheetState.FULL || mode == MapMode.PLANEN) {
-        if (tourSheetState == TourSheetState.FULL) {
-            tourSheet = TourSheetState.PEEK
+    // Zurueck-Geste: erst die Tourenliste wieder einklappen, dann die Planung
+    // (mit derselben Rueckhol-Snackbar wie der Knopf „Planung beenden"),
+    // sonst das normale Verhalten der App. Die Tourendetailansicht braucht
+    // hier keinen Fall — sie faengt die Geste bereits als eigenes
+    // Dialogfenster ab (siehe unten und das Klassen-KDoc oben).
+    BackHandler(enabled = toursExpanded || mode == MapMode.PLANEN) {
+        if (toursExpanded) {
+            toursExpanded = false
         } else {
             exitPlanningWithUndo("Planung beendet.")
         }
@@ -1829,6 +1855,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
                             progress = planProgress,
                             generated = routeFromGenerator,
+                            source = routeSource,
                             locating = locating,
                             onRoundTrip = ::startRoundTrip,
                             onUseMyPosition = ::useMyPositionAsStart,
@@ -1880,38 +1907,31 @@ fun MapScreen(appViewModel: AppViewModel) {
                         )
                     }
 
-                    // Das Ruhegesicht des Blatts (siehe `ExploreSheet.kt`):
-                    // Suche und Werkzeuge, aber nur, wenn kein anderes
-                    // Gesicht dran ist — keine Aufzeichnung, keine gewaehlte
-                    // Tour, kein Ort, keine Planung, keine Navigation und
-                    // kein offener Generator-Vorschlag (dessen Panel liegt
-                    // oben; zwei Werkzeugflaechen zugleich helfen niemandem).
+                    // Das eine untere Blatt (siehe `ExploreSheet.kt`): Suche,
+                    // Werkzeuge und die Tourenliste als aufziehbarer Koerper —
+                    // aber nur, wenn kein anderes Gesicht dran ist — keine
+                    // Aufzeichnung, keine gewaehlte Tour, kein Ort, keine
+                    // Planung, keine Navigation und kein offener
+                    // Generator-Vorschlag (dessen Panel liegt oben; zwei
+                    // Werkzeugflaechen zugleich helfen niemandem). Das ist
+                    // zugleich die Rangfolge aus dem Klassen-KDoc oben („Die
+                    // Tourenliste und ihre Rangfolge am unteren Kartenrand"):
+                    // In all diesen Faellen ist das Blatt schlicht nicht
+                    // komponiert, kein eigener HIDDEN-Zustand noetig.
                     if (mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
                         place == null && navTarget == null && generation.target == null
                     ) {
                         Spacer(Modifier.height(OverlayGap))
                         ExploreSheet(
+                            expanded = toursExpanded,
+                            onExpandedChange = { toursExpanded = it },
+                            rideCount = rides.size,
+                            toursMaxHeight = screenHeight * TOUR_SHEET_MAX_HEIGHT_FACTOR,
                             onOpenSearch = { openPlaceSearch() },
                             onStartPlanning = ::enterPlanning,
                             onOpenStyle = { showStyleSheet = true },
                             onDownload = ::startDownload,
                             downloadEnabled = !downloadState.running,
-                        )
-                    }
-
-                    // Unterstes Element des Stapels — siehe Klassen-KDoc,
-                    // „Das Tourenblatt und seine Rangfolge am unteren
-                    // Kartenrand". `TourSheet` selbst zeichnet bei HIDDEN
-                    // nichts; der Spacer bleibt trotzdem an eine Sichtbar-
-                    // keitspruefung gebunden, sonst bliebe eine leere
-                    // 8-dp-Luecke uebrig, wo eigentlich Karte sein sollte.
-                    if (tourSheetState != TourSheetState.HIDDEN) {
-                        Spacer(Modifier.height(OverlayGap))
-                        TourSheet(
-                            state = tourSheetState,
-                            onStateChange = { tourSheet = it },
-                            rideCount = rides.size,
-                            maxHeight = screenHeight * TOUR_SHEET_MAX_HEIGHT_FACTOR,
                         ) { padding ->
                             TourListContent(
                                 appViewModel = appViewModel,
@@ -1923,7 +1943,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                     // jede neu ausgewaehlte Tour — ein
                                     // zweiter Aufruf waere nur ein doppelter.
                                     appViewModel.select(ride.id)
-                                    tourSheet = TourSheetState.PEEK
+                                    toursExpanded = false
                                 },
                                 contentPadding = padding,
                             )

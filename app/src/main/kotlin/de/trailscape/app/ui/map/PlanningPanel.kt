@@ -22,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
@@ -31,8 +30,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -70,6 +67,7 @@ import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteProfile
+import de.trailscape.core.RoutingSource
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
 import de.trailscape.core.maxRouteTargetKm
@@ -107,6 +105,16 @@ import kotlin.math.roundToInt
  * Die Stufe steuert der Screen ([expanded]/[onExpandedChange]), damit sie
  * einen Tabwechsel uebersteht und damit er sie selbst schliessen kann, sobald
  * die Nutzerin sichtbar mit der Karte arbeitet.
+ *
+ * ## [SwipeableSheet] statt eigener Klapp-Mechanik
+ * Frueher klappte die ganze Kopfzeile per `clickable` samt Pfeilsymbol um —
+ * ein harter Zustandswechsel ohne Fingerfuehrung. [SwipeableSheet]
+ * (`SwipeableSheet.kt`) ersetzt das durch den Griff und das stufenlose Ziehen,
+ * das alle unteren Blaetter der Karte inzwischen teilen; Pfeil und
+ * `clickable`-Zeile entfallen deshalb hier ersatzlos. Peek bleibt die
+ * bisherige Kopfzeile (Profil, Statuszeile, Fortschrittskringel, X „Planung
+ * beenden"), Body der bisherige aufgeklappte Koerper unveraendert samt seiner
+ * eigenen `heightIn(max)`- und `verticalScroll`-Kombination.
  */
 @Composable
 internal fun PlanningSheet(
@@ -134,6 +142,21 @@ internal fun PlanningSheet(
      * zaehlen liessen — die Zeile nennt stattdessen die Herkunft.
      */
     generated: Boolean = false,
+    /**
+     * Woher [route] stammt — auf dem Geraet oder ueber den Routing-Server
+     * (siehe `OfflineFirstRouting.kt`, `chooseRoutingSource`). `null`, solange
+     * keine Route steht; dann bleibt die Statuszeile ohne Herkunftsangabe.
+     *
+     * ## Warum das ueberhaupt sichtbar ist
+     * Trailscape entscheidet das bis hierher still: lokal nur, wenn Profil
+     * und alle Kacheln der Strecke vorhanden sind, sonst wortlos ueber
+     * brouter.de. Wer nie eine Kachel geladen hat, sah davon nichts — bis der
+     * oeffentliche Server bei einer langen Route ablehnte und die Meldung
+     * „Der Routing-Server ist gerade überlastet" ohne jeden Zusammenhang zur
+     * eigentlichen Ursache stand. Ein Wort an der Statuszeile reicht, um das
+     * ehrlich zu machen, ohne eine eigene Kachel dafuer zu brauchen.
+     */
+    source: RoutingSource? = null,
     /**
      * Ob gerade auf einen GPS-Fix gewartet wird. Das dauert bis zu zehn
      * Sekunden und geschah vorher ohne jede Anzeige — der Knopf sah kaputt aus.
@@ -172,22 +195,22 @@ internal fun PlanningSheet(
         busy = busy,
         progress = progress,
         generated = generated,
+        source = source,
         locating = locating,
     )
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Column {
-            // Kopfzeile: eingeklappt die ganze Planung in einer Zeile,
-            // aufgeklappt der Griff, mit dem sie wieder zugeht. Die ganze
-            // Zeile ist die Flaeche — ein Pfeil allein waere ein 24-dp-Ziel
-            // am Daumen.
+    SwipeableSheet(
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
+        modifier = modifier,
+        peek = {
+            // Die ganze Planung in einer Zeile: Profil, Status, bei Bedarf
+            // der Fortschrittskringel und das X „Planung beenden". Kein
+            // eigener Klapp-Mechanismus mehr hier — Griff und Ziehen bringt
+            // [SwipeableSheet] mit.
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onExpandedChange(!expanded) }
                     .heightIn(min = 48.dp)
                     .padding(start = CardPadding, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -219,31 +242,15 @@ internal fun PlanningSheet(
                     )
                     Spacer(Modifier.width(8.dp))
                 }
-                Icon(
-                    imageVector = if (expanded) {
-                        Icons.Filled.ArrowDropDown
-                    } else {
-                        Icons.Filled.ArrowDropUp
-                    },
-                    contentDescription = if (expanded) {
-                        "Planung einklappen"
-                    } else {
-                        "Planung aufklappen"
-                    },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .padding(12.dp),
-                )
-                // Eigenes Klickziel INNERHALB der aufklappbaren Zeile: Das X
-                // beendet den Modus, die restliche Zeile klappt nur auf/zu —
-                // zwei verschiedene Folgen, zwei getrennte Flaechen.
+                // Eigenes Klickziel: Das X beendet den Modus, unabhaengig vom
+                // Ziehen/Tippen des restlichen Blatts — zwei verschiedene
+                // Folgen, zwei getrennte Flaechen.
                 IconButton(onClick = onClose) {
                     Icon(Icons.Filled.Close, contentDescription = "Planung beenden")
                 }
             }
-
-            if (!expanded) return@Column
-
+        },
+        body = {
             Column(
                 modifier = Modifier
                     .heightIn(max = maxHeight)
@@ -302,14 +309,18 @@ internal fun PlanningSheet(
                     Spacer(Modifier.height(8.dp))
                     // Der Fehler nennt den Server, kennt aber den Ausweg
                     // nicht: Trailscape rechnet Routen auch ohne Netz, sobald
-                    // die Routing-Karten der Gegend auf dem Geraet liegen.
+                    // die Routing-Karten der Gegend auf dem Geraet liegen. Wie
+                    // sie dorthin kommen, sagt dieser Hinweis nicht mehr
+                    // ausformuliert — fehlen sie fuer genau diese Strecke,
+                    // bietet Trailscape den Download direkt an (siehe
+                    // `AppViewModel.offerMissingSegments`, ausgeloest auch im
+                    // Fehlerzweig der Planung in `MapScreen.kt`); das doppelt
+                    // sich sonst mit „Mehr“ → „Karten für Offline-Routing“.
                     NoticeBox(
                         icon = Icons.Filled.Info,
                         color = LocalSignalColors.current.caution,
-                        text = "Ohne Netz rechnet Trailscape auch auf dem Gerät — dafür " +
-                            "braucht es die Routing-Karten dieser Gegend. Du lädst sie " +
-                            "unter „Mehr“ → „Karten für Offline-Routing“, am besten vor " +
-                            "der Fahrt im WLAN.",
+                        text = "Ohne Netz rechnet Trailscape auch auf dem Gerät, sobald die " +
+                            "Routing-Karten dieser Gegend geladen sind.",
                     )
                 }
 
@@ -392,8 +403,8 @@ internal fun PlanningSheet(
                     )
                 }
             }
-        }
-    }
+        },
+    )
 }
 
 /**
@@ -657,6 +668,12 @@ private fun RoundTripEntry(
  * Die Zustandszeile der Planung — sie lebt NUR in der Kopfzeile, die in
  * beiden Klappzustaenden sichtbar bleibt. Der aufgeklappte Koerper wiederholt
  * sie bewusst nicht (frueher stand sie dort ein zweites Mal).
+ *
+ * Steht eine selbst geplante Route, haengt [routeSourceSuffix] „ · Gerät"
+ * bzw. „ · Server" an — waehrend der Berechnung sagt das bereits
+ * `progress` in Praesens („Berechne auf dem Gerät …", siehe
+ * `planProgressText` in `MapScreen.kt`), eine zweite Zeile dafuer braucht es
+ * nicht.
  */
 private fun planningStatus(
     waypoints: List<Waypoint>,
@@ -664,6 +681,7 @@ private fun planningStatus(
     busy: Boolean,
     progress: String?,
     generated: Boolean,
+    source: RoutingSource?,
     locating: Boolean,
 ): String = when {
     locating -> "Position wird ermittelt …"
@@ -674,11 +692,21 @@ private fun planningStatus(
 
     route != null ->
         "${planningRouteLabel(waypoints)} · ${formatKmDe(route.distanceKm)} km · " +
-            "${route.ascentM.roundToInt()} Hm ↑"
+            "${route.ascentM.roundToInt()} Hm ↑" + routeSourceSuffix(source)
 
     waypoints.size == 1 -> "1 Wegpunkt – setze mindestens 2."
     waypoints.size > 1 -> "${waypoints.size} Wegpunkte – berechne Route …"
     else -> "Noch keine Wegpunkte"
+}
+
+/**
+ * „ · Gerät" bzw. „ · Server" — nichts, solange [source] `null` ist (keine
+ * Route, oder eine vom Generator, siehe [PlanningSheet]s `source`-KDoc).
+ */
+private fun routeSourceSuffix(source: RoutingSource?): String = when (source) {
+    RoutingSource.OFFLINE -> " · Gerät"
+    RoutingSource.SERVER -> " · Server"
+    null -> ""
 }
 
 /**

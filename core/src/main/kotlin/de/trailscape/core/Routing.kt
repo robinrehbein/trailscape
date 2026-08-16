@@ -75,6 +75,37 @@ const val CUSTOM_GRAVEL_PROFILE: String = "custom:gravel"
 private const val FALLBACK_PROFILE = "trekking"
 
 // ---------------------------------------------------------------------------
+// Server-Basis-URL (oeffentlich oder selbst betrieben)
+// ---------------------------------------------------------------------------
+
+/**
+ * Standard-Basis-URL des oeffentlichen BRouter-Servers fuer die
+ * Routenberechnung.
+ *
+ * Bewusst **ohne** Schluss-Slash: [requestRouteOnce] haengt direkt
+ * `?lonlats=…` an, [uploadGravelProfile] `/profile`. Wer eine eigene
+ * Basis-URL hereinreicht, darf trotzdem mit Schluss-Slash ankommen —
+ * [normalizeServerBaseUrl] gleicht das aus, bevor angehaengt wird.
+ *
+ * Betrifft ausdruecklich nur die ROUTENBERECHNUNG. Die Segment-Downloads
+ * (`*.rd5`-Kacheln, siehe [brouterSegmentBaseUrl] in `RoutingSegments.kt`)
+ * bleiben davon unabhaengig fest auf brouter.de: Dort liegen die offiziellen
+ * Kacheln, ein selbst betriebener Routing-Server bietet sie in aller Regel
+ * gar nicht an — eine eigene Basis-URL fuer die Berechnung ist also keine
+ * Aussage darueber, woher die Kartendaten kommen sollen.
+ */
+const val defaultBrouterServerUrl: String = "https://brouter.de/brouter"
+
+/**
+ * Entfernt einen etwaigen Schluss-Slash von [baseUrl].
+ *
+ * Sowohl die Voreinstellung als auch eine selbst eingetragene Server-URL
+ * laufen hier durch: Nutzer geben Basis-URLs erfahrungsgemaess mal mit, mal
+ * ohne Schluss-Slash ein, und beides soll zur selben Anfrage fuehren.
+ */
+private fun normalizeServerBaseUrl(baseUrl: String): String = baseUrl.trimEnd('/')
+
+// ---------------------------------------------------------------------------
 // Serverlast, Leg-Splitting und Fehlermeldungen
 // ---------------------------------------------------------------------------
 
@@ -394,12 +425,12 @@ fun resetCustomProfileCacheForTesting() {
  * Lädt das Gravel-Custom-Profil hoch und liefert die vom Server vergebene
  * `profileid` – oder `null`, wenn das Hochladen scheitert.
  */
-private fun uploadGravelProfile(client: HttpClient): String? {
+private fun uploadGravelProfile(client: HttpClient, baseUrl: String): String? {
     val response = try {
         client.execute(
             HttpRequest(
                 method = HttpMethod.POST,
-                url = "https://brouter.de/brouter/profile",
+                url = "${normalizeServerBaseUrl(baseUrl)}/profile",
                 body = gravelProfileText(),
             ),
         )
@@ -439,8 +470,9 @@ private fun uploadGravelProfile(client: HttpClient): String? {
 }
 
 /** Setzt genau eine Routing-Anfrage ab. */
-private fun requestRouteOnce(lonlats: String, profileId: String, client: HttpClient): HttpResponse {
-    val url = "https://brouter.de/brouter?lonlats=$lonlats&profile=$profileId&alternativeidx=0&format=geojson"
+private fun requestRouteOnce(lonlats: String, profileId: String, client: HttpClient, baseUrl: String): HttpResponse {
+    val url = "${normalizeServerBaseUrl(baseUrl)}?lonlats=$lonlats&profile=$profileId" +
+        "&alternativeidx=0&format=geojson"
     return try {
         client.execute(HttpRequest(method = HttpMethod.GET, url = url))
     } catch (e: Exception) {
@@ -462,13 +494,14 @@ private fun requestRoute(
     profileId: String,
     client: HttpClient,
     sleeper: (Long) -> Unit,
+    baseUrl: String,
 ): HttpResponse {
-    val first = requestRouteOnce(lonlats, profileId, client)
+    val first = requestRouteOnce(lonlats, profileId, client, baseUrl)
     if (isOk(first) || !isServerOverloadBody(first.body)) {
         return first
     }
     sleeper(watchdogRetryPauseMs)
-    return requestRouteOnce(lonlats, profileId, client)
+    return requestRouteOnce(lonlats, profileId, client, baseUrl)
 }
 
 private fun isOk(response: HttpResponse): Boolean =
@@ -494,15 +527,16 @@ private fun fetchRouteWithCustomGravel(
     lonlats: String,
     client: HttpClient,
     sleeper: (Long) -> Unit,
+    baseUrl: String,
 ): PlannedRoute {
     var profileId = customGravelProfileId
     if (profileId == null) {
-        profileId = uploadGravelProfile(client)
+        profileId = uploadGravelProfile(client, baseUrl)
         customGravelProfileId = profileId
     }
 
     if (profileId != null) {
-        val response = requestRoute(lonlats, profileId, client, sleeper)
+        val response = requestRoute(lonlats, profileId, client, sleeper, baseUrl)
         if (isOk(response)) {
             return parseBrouterGeoJson(response.body)
         }
@@ -516,10 +550,10 @@ private fun fetchRouteWithCustomGravel(
         // Vermutlich wurde das hochgeladene Profil serverseitig verworfen:
         // einmal neu hochladen und wiederholen.
         customGravelProfileId = null
-        val freshId = uploadGravelProfile(client)
+        val freshId = uploadGravelProfile(client, baseUrl)
         if (freshId != null) {
             customGravelProfileId = freshId
-            val retry = requestRoute(lonlats, freshId, client, sleeper)
+            val retry = requestRoute(lonlats, freshId, client, sleeper, baseUrl)
             if (isOk(retry)) {
                 return parseBrouterGeoJson(retry.body)
             }
@@ -531,7 +565,7 @@ private fun fetchRouteWithCustomGravel(
     }
 
     // Fallback: öffentliches Profil, damit immer eine Route herauskommt.
-    return parseRouteResponse(requestRoute(lonlats, FALLBACK_PROFILE, client, sleeper))
+    return parseRouteResponse(requestRoute(lonlats, FALLBACK_PROFILE, client, sleeper, baseUrl))
 }
 
 /** Routet **ein** Leg (eine Server-Anfrage) und liefert das Teilergebnis. */
@@ -540,14 +574,15 @@ private fun fetchLeg(
     profileId: String,
     client: HttpClient,
     sleeper: (Long) -> Unit,
+    baseUrl: String,
 ): PlannedRoute {
     val lonlats = waypoints.joinToString("|") { wp ->
         "${toStringAsFixed(wp.lon, 6)},${toStringAsFixed(wp.lat, 6)}"
     }
     return if (profileId == CUSTOM_GRAVEL_PROFILE) {
-        fetchRouteWithCustomGravel(lonlats, client, sleeper)
+        fetchRouteWithCustomGravel(lonlats, client, sleeper, baseUrl)
     } else {
-        parseRouteResponse(requestRoute(lonlats, profileId, client, sleeper))
+        parseRouteResponse(requestRoute(lonlats, profileId, client, sleeper, baseUrl))
     }
 }
 
@@ -574,6 +609,12 @@ private fun fetchLeg(
  *   dem Watchdog-Retry; injizierbar, damit Tests nicht real warten.
  * @param onProgress Fortschritt `(erledigte Legs, Legs gesamt)`; wird auch
  *   bei nur einem Leg aufgerufen (`0/1`, dann `1/1`).
+ * @param baseUrl Basis-URL des Routing-Servers, ohne den Anfrageteil
+ *   (`?lonlats=…`). Vorgabe ist [defaultBrouterServerUrl]; ein selbst
+ *   betriebener Server kommt mit oder ohne Schluss-Slash zurecht (siehe
+ *   [normalizeServerBaseUrl]). Neu am Ende der Parameterliste angehaengt,
+ *   damit bestehende positionelle Aufrufe (z. B. in `RouteGenerator.kt`)
+ *   unveraendert bleiben.
  */
 fun fetchRoute(
     waypoints: List<Waypoint>,
@@ -581,6 +622,7 @@ fun fetchRoute(
     client: HttpClient,
     sleeper: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) },
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
+    baseUrl: String = defaultBrouterServerUrl,
 ): PlannedRoute {
     if (waypoints.size < 2) {
         throw Exception("Mindestens zwei Wegpunkte nötig.")
@@ -594,7 +636,7 @@ fun fetchRoute(
         if (index > 0) {
             sleeper(legRequestPauseMs)
         }
-        parts.add(fetchLeg(leg, profileId, client, sleeper))
+        parts.add(fetchLeg(leg, profileId, client, sleeper, baseUrl))
         onProgress?.invoke(index + 1, legs.size)
     }
 

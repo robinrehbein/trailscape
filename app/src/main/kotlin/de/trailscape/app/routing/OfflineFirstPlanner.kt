@@ -83,6 +83,13 @@ private fun offlineRoutingSetup(context: Context, profile: RouteProfile): Offlin
  *   Arbeitsthread** aufgerufen; Compose-Zustaende duerfen von dort gesetzt
  *   werden (Snapshot-Zustand ist threadsicher), alles andere nicht.
  * @param onProgress `(fertige Etappen, Etappen gesamt)`, gleiche Bedingungen.
+ *
+ * ## Woher die Server-URL kommt
+ * Bewusst kein eigener Parameter dafuer: [AppServices.routingServerSettings]
+ * wird bei jedem Aufruf frisch gelesen, damit eine gerade im Mehr-Tab
+ * geaenderte URL auch ohne Neustart der Planung sofort gilt — dieselbe
+ * Direktheit wie bei [AppServices.httpClient] und [AppServices.segmentInventory]
+ * hier direkt darunter.
  */
 suspend fun planRouteOfflineFirst(
     context: Context,
@@ -109,8 +116,37 @@ suspend fun planRouteOfflineFirst(
             setup = setup,
             onSource = onSource,
             onProgress = onProgress,
+            serverBaseUrl = AppServices.routingServerSettings.effectiveUrl(),
         )
     }
+}
+
+/**
+ * Welche Kacheln fuer [waypoints] und [profile] lokal fehlen — unabhaengig
+ * davon, ob am Ende ueberhaupt lokal gerechnet wird.
+ *
+ * ## Wozu, wenn [planRouteOfflineFirst] das doch laengst weiss
+ * Nur im Erfolgsfall: Ein zurueckgegebenes [RoutingResult] traegt
+ * [RoutingResult.missingSegmentFiles] bereits fertig. Scheitert die
+ * Berechnung dagegen komplett (lokal UND Server, oder Server allein — siehe
+ * `de.trailscape.core.routeOfflineFirst`), fliegt statt eines Ergebnisses
+ * eine Ausnahme, und die darin verpackte Fehlermeldung sagt nichts ueber
+ * fehlende Kacheln. Genau der Fall aus der Praxis: eine 600-km-Route ohne
+ * lokale Kacheln, der Server lehnt sie als zu gross ab — die Nutzerin liest
+ * „Der Routing-Server ist gerade überlastet" und erfaehrt nie, dass es einen
+ * Ausweg gaebe. Diese Funktion baut denselben [OfflineRoutingSetup] noch
+ * einmal (billig: nur Bestand auflisten, kein Netz) und fragt
+ * [chooseRoutingSource] direkt — dieselbe reine Antwort wie innerhalb von
+ * [routeOfflineFirst], nur diesmal fuer die Oberflaeche im Fehlerzweig.
+ */
+suspend fun missingSegmentsFor(
+    context: Context,
+    waypoints: List<Waypoint>,
+    profile: RouteProfile,
+): List<String> {
+    val appContext = context.applicationContext
+    val setup = withContext(Dispatchers.IO) { offlineRoutingSetup(appContext, profile) }
+    return chooseRoutingSource(waypoints, setup).missingSegmentFiles
 }
 
 // ---------------------------------------------------------------------------

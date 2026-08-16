@@ -51,17 +51,18 @@ import de.trailscape.core.GeoResult
  * passiert, entscheidet [PlaceCard] anhand des Kartenmodus (siehe deren
  * KDoc), nicht mehr die Suchzeile selbst.
  *
- * ## Warum `ModalBottomSheet` und nicht die Bauart von `PlanningSheet`/`TourSheet`
- * `PlanningSheet` und `TourSheet` sind Karten, die dauerhaft am unteren
- * Bildschirmrand mitlaufen (kein Scrim, koexistieren mit der Karte) — dieses
- * Blatt dagegen ist ein kurzer, modaler Vorgang mit eigener Tastatur, der beim
- * Verlassen wieder ganz verschwindet. Genau dafuer hat diese Datei-Familie
- * schon ein Vorbild: `MapStyleSheet` (unten in `MapScreen.kt`) ist bereits ein
- * „von unten hochfahrendes Blatt" ueber `ModalBottomSheet` — mit Scrim,
- * eigenem Fenster und dem in Material 3 eingebauten Griff ([BottomSheetDefaults]
- * `DragHandle`, hier der geforderte „Grabber"). Dieses Blatt uebernimmt genau
- * diese Mechanik und nur den *Inhalt* (Suchfeld, Trefferzeilen) von
- * `PlanningSheet`/`TourSheet`.
+ * ## Warum `ModalBottomSheet` und nicht die Bauart von `PlanningSheet`/`ExploreSheet`
+ * `PlanningSheet` und `ExploreSheet` sind Karten, die dauerhaft am unteren
+ * Bildschirmrand mitlaufen (kein Scrim, koexistieren mit der Karte, dazu
+ * ueber [SwipeableSheet] echt ziehbar) — dieses Blatt dagegen ist ein kurzer,
+ * modaler Vorgang mit eigener Tastatur, der beim Verlassen wieder ganz
+ * verschwindet. Genau dafuer hat diese Datei-Familie schon ein Vorbild:
+ * `MapStyleSheet` (unten in `MapScreen.kt`) ist bereits ein „von unten
+ * hochfahrendes Blatt" ueber `ModalBottomSheet` — mit Scrim, eigenem Fenster
+ * und dem in Material 3 eingebauten Griff ([BottomSheetDefaults] `DragHandle`,
+ * hier der geforderte „Grabber"). Dieses Blatt uebernimmt genau diese Mechanik
+ * und nur den *Inhalt* (Suchfeld, Trefferzeilen) von
+ * `PlanningSheet`/`ExploreSheet`.
  *
  * ## Autofokus
  * Das Suchfeld bekommt den Fokus (und damit die Tastatur), sobald das Blatt

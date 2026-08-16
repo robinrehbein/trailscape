@@ -175,6 +175,45 @@ class RoutingTest {
     }
 
     @Test
+    fun `baut die URL mit eigener Basis-URL auf, mit und ohne Schluss-Slash`() {
+        val capturedUrls = mutableListOf<String>()
+        val client = HttpClient { request ->
+            capturedUrls.add(request.url)
+            HttpResponse(200, SAMPLE_GEO_JSON)
+        }
+
+        val waypoints = listOf(
+            Waypoint(lat = 48.1, lon = 11.1),
+            Waypoint(lat = 48.2, lon = 11.2),
+        )
+
+        fetchRoute(waypoints, "fastbike", client, baseUrl = "https://mein-server.example/brouter")
+        fetchRoute(waypoints, "fastbike", client, baseUrl = "https://mein-server.example/brouter/")
+
+        val expected = "https://mein-server.example/brouter?lonlats=11.100000,48.100000|11.200000,48.200000" +
+            "&profile=fastbike&alternativeidx=0&format=geojson"
+        // Mit und ohne Schluss-Slash fuehren zu genau derselben Anfrage.
+        assertEquals(listOf(expected, expected), capturedUrls)
+    }
+
+    @Test
+    fun `ohne eigene Basis-URL bleibt es bei brouter de`() {
+        var capturedUrl: String? = null
+        val client = HttpClient { request ->
+            capturedUrl = request.url
+            HttpResponse(200, SAMPLE_GEO_JSON)
+        }
+
+        fetchRoute(
+            listOf(Waypoint(lat = 48.1, lon = 11.1), Waypoint(lat = 48.2, lon = 11.2)),
+            "trekking",
+            client,
+        )
+
+        assertTrue(capturedUrl!!.startsWith(defaultBrouterServerUrl))
+    }
+
+    @Test
     fun `wirft bei HTTP-Fehler mit Servertext`() {
         val client = HttpClient { HttpResponse(500, "Server explodiert") }
 

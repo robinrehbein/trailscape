@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
@@ -55,11 +56,13 @@ import de.trailscape.app.routing.SegmentPhase
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.map.currentLocation
 import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.map.missingPermissions
 import de.trailscape.core.GeoResult
+import de.trailscape.core.defaultBrouterServerUrl
 import de.trailscape.core.parseSegmentTile
 import de.trailscape.core.searchPlaces
 import de.trailscape.core.segmentTileAt
@@ -108,6 +111,16 @@ import kotlinx.coroutines.withContext
  * ueber fremdes Datenvolumen, die niemand getroffen hat. „Nach
  * Aktualisierungen suchen" ist deshalb ein Knopf.
  *
+ * ## Warum die Server-URL am Ende der Karte NICHT die Kacheln oben betrifft
+ * Zwei verschiedene Server-Rollen leben zufaellig auf derselben Domain: Die
+ * Kachel-Downloads (Liste oben) holen `*.rd5`-Dateien immer von brouter.de,
+ * weil dort die offiziellen Kartendaten liegen — ein selbst betriebener
+ * Server bietet sie in aller Regel gar nicht an. Das Textfeld am Fussende
+ * stellt dagegen um, wohin eine Route zur **Berechnung** geschickt wird
+ * (siehe `de.trailscape.app.routing.RoutingServerSettings`). Wer beides
+ * verwechselt, wundert sich, warum der eigene Server keine Kacheln anbietet
+ * — deshalb der Hinweistext direkt am Feld.
+ *
  * Der Inhalt der Zeile „Karten für Offline-Routing" in der Gruppe „Karte"
  * des Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
  * stellt Titel und Aufklapp-Rahmen.
@@ -119,6 +132,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     val inventory = AppServices.segmentInventory
 
     val unmeteredOnly by appViewModel.segmentUnmeteredOnly.collectAsStateWithLifecycle()
+    val routingServerUrl by appViewModel.routingServerUrl.collectAsStateWithLifecycle()
     val status by remember { SegmentDownloads.statusFlow(context) }
         .collectAsStateWithLifecycle(initialValue = null)
 
@@ -450,6 +464,23 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             onCheckedChange = appViewModel::setSegmentUnmeteredOnly,
         )
     }
+
+    // ------------------------------------------------- Eigener Routing-Server
+    Spacer(Modifier.height(12.dp))
+    OneUiTextField(
+        label = "Eigener Routing-Server (URL)",
+        value = routingServerUrl,
+        onValueChange = appViewModel::setRoutingServerUrl,
+        placeholder = defaultBrouterServerUrl,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+    )
+    Text(
+        text = "Betrifft nur die Routenberechnung, nicht die Routingdaten oben — die " +
+            "kommen weiterhin von brouter.de. Leer lassen für den öffentlichen Server.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+        modifier = Modifier.padding(top = 4.dp),
+    )
 
     if (busy) {
         Spacer(Modifier.height(12.dp))

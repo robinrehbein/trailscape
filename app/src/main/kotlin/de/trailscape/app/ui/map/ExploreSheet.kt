@@ -2,7 +2,9 @@ package de.trailscape.app.ui.map
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +18,6 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,24 +27,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 
 /**
- * Das Ruhegesicht des einen Karten-Blatts — [MapMode.ERKUNDEN] ohne Auswahl.
+ * Das Ruhegesicht des einen Karten-Blatts — [MapMode.ERKUNDEN] ohne Auswahl —
+ * als [SwipeableSheet]: Peek ist Suchzeile und Werkzeugreihe (unveraendert),
+ * der Koerper ist die Tourenliste, die frueher ein eigenes drittes Blatt
+ * (`TourSheet`, inzwischen entfernt) unter der Planung war.
  *
- * ## Warum ein Blatt statt einer Knopfreihe oben
- * Vorher lagen „Route planen", Lupe, Kartenstil und Offline-Download als
- * Pille plus drei Rundknoepfe am oberen Kartenrand. Das hatte zwei sichtbare
- * Fehler: Die Pille war niedriger als die Knoepfe daneben, und mit dem
- * laengeren aktiven Text („Planung beenden") wurde der letzte Knopf
- * zusammengequetscht — die Reihe hatte schlicht keine Platzlogik. Der
- * eigentliche Grund liegt aber tiefer: Die Karte hat seit dem Umbau EIN
- * unteres Blatt, das mit dem Modus sein Gesicht wechselt (Planung, Tour,
- * Ort, Aufzeichnung) — nur der Ruhezustand verstreute seine Werkzeuge noch
- * oben. Jetzt wohnen alle Werkzeuge im selben Blatt; oben bleibt Karte.
+ * ## Warum die Tourenliste jetzt IM Erkunden-Blatt steckt statt daneben
+ * `TourSheet` mit seiner Stufe `HIDDEN` loeste ein Problem, das mit dem
+ * echten Ziehen ueber [SwipeableSheet] gar nicht mehr existiert: Ein
+ * eigenes drittes Blatt war noetig, weil das Planungsblatt nur zwei Stufen
+ * kannte und die Tourenliste trotzdem *irgendwo* still bleiben musste,
+ * waehrend Aufzeichnung, Navigation oder eine gewaehlte Tour den unteren Rand
+ * beanspruchten. Diese Faelle komponieren aber ohnehin schon KEIN
+ * Erkunden-Blatt (siehe die Sichtbarkeitsbedingung um den Aufruf in
+ * `MapScreen.kt`) — die Tourenliste braucht also keinen eigenen
+ * Vorrang-Zustand mehr, sie verschwindet automatisch mit ihrem Blatt.
  *
  * ## Suchfeld zuerst
  * Die Suche ist die haeufigste Aktion und steht deshalb als volle Zeile im
@@ -58,77 +62,131 @@ import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
  * keine Stufen einer Entscheidung — deshalb drei gleiche helle Flaechen
  * (One UI: [NeutralButton]) und keine gefaerbte Pille, die eine Rangfolge
  * behauptet, die es nicht gibt.
+ *
+ * ## Kopfzeile und Inhalt des Koerpers
+ * Dieselbe Bauart wie zuvor bei `TourSheet`: „Touren" links (titleSmall),
+ * die Anzahl rechts (labelMedium), darunter [tours] in einer `Box` mit
+ * [toursMaxHeight] als Obergrenze. [tours] bekommt nur eine [PaddingValues]
+ * gereicht und weiss nichts von `Card` oder Kopfzeile — der Aufrufer
+ * (`MapScreen.kt`) fuellt sie mit `TourListContent` aus `ui/rides/TourList.kt`;
+ * deren `LazyColumn` nimmt die Werte unveraendert als eigenes
+ * `contentPadding`, damit weder die Kopfzeile ueberdeckt wird noch der letzte
+ * Eintrag am unteren Blattrand klebt. Waagerecht und senkrecht gelten
+ * dieselben Randmasse wie im aufgeklappten Planungsblatt
+ * ([CardPadding]/[OverlayCardPaddingVertical]) — ein drittes Randmass haette
+ * hier nichts erklaert, was diese beiden nicht schon tun.
  */
 @Composable
 internal fun ExploreSheet(
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    rideCount: Int,
+    toursMaxHeight: Dp,
     onOpenSearch: () -> Unit,
     onStartPlanning: () -> Unit,
     onOpenStyle: () -> Unit,
     onDownload: () -> Unit,
     downloadEnabled: Boolean,
     modifier: Modifier = Modifier,
+    tours: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = CardPadding,
-                vertical = OverlayCardPaddingVertical,
-            ),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(MaterialTheme.shapes.extraSmall)
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .clickable(onClick = onOpenSearch)
-                    .heightIn(min = 52.dp)
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    SwipeableSheet(
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
+        modifier = modifier,
+        peek = {
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = CardPadding,
+                    vertical = OverlayCardPaddingVertical,
+                ),
             ) {
-                Icon(
-                    Icons.Filled.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    text = "Ort, Stadt oder Straße suchen",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.extraSmall)
+                        .background(MaterialTheme.colorScheme.surfaceContainer)
+                        .clickable(onClick = onOpenSearch)
+                        .heightIn(min = 52.dp)
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Ort, Stadt oder Straße suchen",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
-            Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp))
 
-            Row(modifier = Modifier.fillMaxWidth()) {
-                ExploreTool(
-                    icon = Icons.Filled.Place,
-                    label = "Route planen",
-                    onClick = onStartPlanning,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                ExploreTool(
-                    icon = Icons.Filled.Layers,
-                    label = "Kartenstil",
-                    onClick = onOpenStyle,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                ExploreTool(
-                    icon = Icons.Filled.DownloadForOffline,
-                    label = "Offline",
-                    onClick = onDownload,
-                    enabled = downloadEnabled,
-                    modifier = Modifier.weight(1f),
-                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    ExploreTool(
+                        icon = Icons.Filled.Place,
+                        label = "Route planen",
+                        onClick = onStartPlanning,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    ExploreTool(
+                        icon = Icons.Filled.Layers,
+                        label = "Kartenstil",
+                        onClick = onOpenStyle,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    ExploreTool(
+                        icon = Icons.Filled.DownloadForOffline,
+                        label = "Offline",
+                        onClick = onDownload,
+                        enabled = downloadEnabled,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
-        }
-    }
+        },
+        body = {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = CardPadding, end = CardPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Touren",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = rideCount.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                // Nur die Obergrenze wird hier erzwungen, keine eigene
+                // `verticalScroll` — der Inhalt ist eine `LazyColumn` und
+                // scrollt selbst; ein zweiter Scrollcontainer aussen wuerde
+                // nur widerspruechliche Gesten erzeugen.
+                Box(modifier = Modifier.heightIn(max = toursMaxHeight)) {
+                    tours(
+                        PaddingValues(
+                            horizontal = CardPadding,
+                            vertical = OverlayCardPaddingVertical,
+                        ),
+                    )
+                }
+            }
+        },
+    )
 }
 
 /**
