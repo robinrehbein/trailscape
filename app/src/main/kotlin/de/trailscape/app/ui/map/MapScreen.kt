@@ -2,6 +2,7 @@ package de.trailscape.app.ui.map
 
 import android.content.Context
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -10,12 +11,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -35,6 +40,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,6 +59,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
@@ -66,6 +74,8 @@ import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.rides.RideDetailHost
+import de.trailscape.app.ui.rides.TourListContent
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OverlayGap
@@ -164,6 +174,55 @@ import kotlinx.coroutines.withContext
  *    Karte noch nicht selbst bewegt, zoomt sie einmalig sanft auf die
  *    aktuelle Position (Zoom ~13) — kein Dart-Vorbild. Details siehe der
  *    Effekt bei `autoLocationZoomDone` weiter unten.
+ *
+ * ## Das Tourenblatt und seine Rangfolge am unteren Kartenrand
+ * Seit dem Wegfall des eigenen Touren-Tabs (siehe `ui/TrailscapeApp.kt`,
+ * „Warum Touren und Karte eine Seite sind") liegt die Tourenliste als
+ * drittes Blatt ueber der Karte ([TourSheet], `TourSheet.kt`): eingeklappt
+ * eine Zeile („Touren" · Anzahl), aufgeklappt bis zu
+ * [TOUR_SHEET_MAX_HEIGHT_FACTOR] der Bildschirmhoehe. Am unteren Rand
+ * bewerben sich damit mehrere Zustaende um denselben Platz — Aufzeichnung,
+ * Navigation, Planung, ausgewaehlte Tour (`RideCard`), offene Suche und
+ * Tourenblatt —, und es gilt eine feste Rangfolge:
+ *
+ *  1. **Aufzeichnung, Navigation, Planung, ausgewaehlte Tour oder offene
+ *     Suche haben Vorrang.** Sie laufen entweder waehrend der Fahrt (die
+ *     Live-Leiste und die Navigationsleiste duerfen nicht hinter einer Liste
+ *     verschwinden) oder sind eine bewusste Handlung der Nutzerin (Planung,
+ *     eine ausgewaehlte Tour, eine Suche) — das Tourenblatt weicht in allen
+ *     diesen Faellen auf [TourSheetState.HIDDEN].
+ *  2. **Sonst ist [TourSheetState.PEEK] der Ruhezustand**: eine Zeile, die
+ *     die Karte kaum verdeckt. [TourSheetState.FULL] entsteht nur auf zwei
+ *     Wegen — die Nutzerin tippt selbst auf die Kopfzeile, oder ein anderer
+ *     Tab bittet ueber [AppViewModel.tourSheetRequest] darum (siehe „Vier
+ *     Tabs sind das Maximum" in `TrailscapeApp.kt`: „Touren" ist kein
+ *     eigenes Ziel mehr, sondern genau dieser Wunsch).
+ *  3. **Ein schon aufgeschlagenes Blatt faellt beim Eintreten eines
+ *     Vorrang-Zustands auf PEEK zurueck und bleibt dort**, auch nachdem der
+ *     Vorrang-Zustand wieder endet — es springt nicht von selbst wieder auf
+ *     FULL. Wer waehrend der Aufzeichnung zufaellig auf „Touren" tippt, soll
+ *     nach dem Stopp nicht ueberrascht ein offenes Blatt vorfinden, das sie
+ *     selbst nie geoeffnet hat.
+ *
+ * Die Detailansicht einer Tour ([RideDetailHost] aus `ui/rides/TourList.kt`)
+ * liegt darueber noch einmal in einem eigenen Fenster (`Dialog`, wie der
+ * Fahrmodus — siehe dessen KDoc „Warum ein eigenes Fenster" in
+ * `RideModeScreen.kt`): Nur ein eigenes Fenster deckt auch die schwebende
+ * Navigationskapsel ab, die in `TrailscapeApp.kt` als Geschwister-`Box`
+ * **ueber** dem gesamten `NavHost` und damit auch ueber diesem Screen liegt.
+ *
+ * Die Systemzurueckgeste ordnet sich in dieselbe Rangfolge ein: **Detail**
+ * vor **Blatt** vor **Planung** vor der App-Voreinstellung. Das
+ * Detailfenster braucht dafuer keinen eigenen `BackHandler` — als eigenes
+ * `Dialog`-Fenster faengt es die Geste ab, bevor sie diesen Screen ueberhaupt
+ * erreicht (dieselbe Mechanik wie beim Fahrmodus). Fuer Blatt und Planung
+ * steht ein einzelner `BackHandler` weiter unten: Ist das Blatt
+ * aufgeschlagen, schliesst die erste Geste es auf PEEK; ist stattdessen die
+ * Planung an (das Blatt ist dann ohnehin HIDDEN, siehe Punkt 1), beendet sie
+ * ueber [exitPlanningWithUndo] die Planung — mit derselben Rueckhol-Snackbar
+ * wie der Knopf „Planung beenden". Ist keins von beidem der Fall, bleibt der
+ * `BackHandler` deaktiviert und die Geste faellt auf das normale Verhalten
+ * der App zurueck.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -302,6 +361,22 @@ fun MapScreen(appViewModel: AppViewModel) {
     // `rememberSaveable`: Eine Drehung am Lenker darf nicht dazu fuehren, dass
     // die Fahrerin ploetzlich wieder die kleine Live-Leiste vor sich hat.
     var rideMode by rememberSaveable { mutableStateOf(false) }
+
+    // Die Stufe des Tourenblatts (siehe `TourSheet.kt`) — `rememberSaveable`,
+    // damit eine Drehung nicht ein von der Nutzerin aufgeschlagenes Blatt
+    // wieder einklappt. PEEK ist der Startwert: Beim allerersten Aufbau
+    // dieses Screens gilt noch kein Vorrang-Zustand, und die Zeile "Touren"
+    // ist die richtige Ruhelage (siehe Klassen-KDoc, "Rangfolge am unteren
+    // Kartenrand").
+    var tourSheet by rememberSaveable { mutableStateOf(TourSheetState.PEEK) }
+
+    // Die in der Tourendetailansicht geoeffnete Tour. Bewusst die ID und
+    // nicht das `Ride` selbst — wortgleiche Begruendung wie beim frueheren
+    // `detailRideId` in `ui/rides/RidesScreen.kt`: Nach einem Umbenennen oder
+    // einem HF-Merge aus Health Connect liefert `appViewModel.rides` ein
+    // neues Objekt, ueber die ID zeigt die Ansicht immer auf den aktuellen
+    // Stand.
+    var detailRideId by rememberSaveable { mutableStateOf<String?>(null) }
 
     var showStyleSheet by remember { mutableStateOf(false) }
     var saveRouteDialog by remember { mutableStateOf(false) }
@@ -1124,6 +1199,71 @@ fun MapScreen(appViewModel: AppViewModel) {
         controller.fitToPoints(candidate.route.points)
     }
 
+    // ------------------------------------------------ Touren-Tab → Kartenscreen
+    // Seit dem Wegfall des eigenen Touren-Tabs (siehe `ui/TrailscapeApp.kt`,
+    // „Warum Touren und Karte eine Seite sind") bittet die Huelle hier statt
+    // eines Tab-Wechsels nur noch darum, das Tourenblatt aufzuschlagen.
+    val tourSheetRequest by appViewModel.tourSheetRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(tourSheetRequest) {
+        if (tourSheetRequest) {
+            tourSheet = TourSheetState.FULL
+            appViewModel.consumeTourSheetRequest()
+        }
+    }
+
+    // Von der Startseite (oder anderswo) angeforderte Tourendetailansicht —
+    // wortgleich uebernommen aus dem frueheren `ui/rides/RidesScreen.kt`: Erst
+    // quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge eine
+    // Anfrage kurz nach dem Kaltstart (Liste noch leer) spurlos verloren.
+    val pendingRideDetailRequest by appViewModel.pendingRideDetail.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingRideDetailRequest, rides) {
+        val wanted = pendingRideDetailRequest ?: return@LaunchedEffect
+        if (rides.any { it.id == wanted }) {
+            detailRideId = wanted
+            appViewModel.consumeRideDetailRequest()
+        }
+    }
+
+    // Verschwindet die geoeffnete Tour aus der Liste (Sync, Loeschen aus dem
+    // Blatt), ohne dass die Detailansicht selbst geloescht hat, schliesst sie
+    // sich von selbst statt eine nicht mehr existierende Tour anzuzeigen —
+    // wortgleiche Uebernahme derselben Regel aus `ui/rides/RidesScreen.kt`.
+    LaunchedEffect(rides) {
+        if (detailRideId != null && rides.none { it.id == detailRideId }) {
+            detailRideId = null
+        }
+    }
+
+    // -------------------------------------------------- Tourenblatt: Rangfolge
+    // Ausformuliert im Klassen-KDoc oben („Das Tourenblatt und seine Rangfolge
+    // am unteren Kartenrand"); hier nur die Umsetzung. Bewusst ein eigener
+    // Effekt statt einer reinen Ableitung: Ein schon aufgeschlagenes Blatt
+    // soll beim Eintreten eines Vorrang-Zustands **dauerhaft** auf PEEK
+    // zurueckfallen — mit einer reinen Ableitung (`if (vorrang) HIDDEN else
+    // tourSheet`) bliebe der gespeicherte Zustand FULL und spraenge sofort
+    // wieder auf, sobald der Vorrang-Zustand endet.
+    val tourSheetPriorityActive =
+        isRecording || navTarget != null || planning || selectedRide != null || searchOpen
+    LaunchedEffect(tourSheetPriorityActive) {
+        if (tourSheetPriorityActive && tourSheet == TourSheetState.FULL) {
+            tourSheet = TourSheetState.PEEK
+        }
+    }
+    val tourSheetState = if (tourSheetPriorityActive) TourSheetState.HIDDEN else tourSheet
+
+    // Zurueck-Geste: erst das Blatt auf PEEK, dann die Planung (mit derselben
+    // Rueckhol-Snackbar wie der Knopf „Planung beenden"), sonst das normale
+    // Verhalten der App. Die Tourendetailansicht braucht hier keinen Fall —
+    // sie faengt die Geste bereits als eigenes Dialogfenster ab (siehe unten
+    // und das Klassen-KDoc oben).
+    BackHandler(enabled = tourSheetState == TourSheetState.FULL || planning) {
+        if (tourSheetState == TourSheetState.FULL) {
+            tourSheet = TourSheetState.PEEK
+        } else {
+            exitPlanningWithUndo("Planung beendet.")
+        }
+    }
+
     // ------------------------------------------------------------------ Aufbau
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
@@ -1279,113 +1419,153 @@ fun MapScreen(appViewModel: AppViewModel) {
             // bzw. die Tour-Karte und ganz unten das Planungsblatt. Dass die
             // Planung hier und nicht mehr oben liegt, ist der Kern der
             // Umstellung — die Knoepfe stehen jetzt *ueber* ihr statt auf ihr.
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .widthIn(max = ContentMaxWidth)
-                    .fillMaxWidth()
-                    .padding(OverlayScreenPadding)
-                    // Die Navigationskapsel schwebt ueber der Karte (siehe
-                    // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
-                    // ihre Hoehe nach oben — sonst laege das Planungsblatt
-                    // teilweise hinter ihr.
-                    .padding(bottom = LocalFloatingNavigationBarSpace.current),
-                horizontalAlignment = Alignment.End,
-            ) {
-                RecordButton(
-                    recording = isRecording,
-                    onClick = { if (isRecording) RecordingRepository.stop() else startRecording() },
-                )
-                Spacer(Modifier.height(12.dp))
-                LocateButton(onClick = ::goToMyPosition, following = followMe)
-                Spacer(Modifier.height(12.dp))
-
-                val ride = selectedRide
-                when {
-                    isRecording -> LiveRecordingCard(
-                        speedKmh = speedKmh,
-                        distanceKm = recordedKm,
-                        elapsedS = (elapsedMs / 1000).toInt(),
-                        ascentM = liveAscentM,
-                        pointCount = livePoints.size,
-                        paused = isPaused,
-                        onTogglePause = { RecordingRepository.togglePause() },
-                        onStop = { RecordingRepository.stop() },
-                        onOpenRideMode = { rideMode = true },
+            // Waehrend die Suche offen ist, bleibt dieser Stapel weg. Beide
+            // Stapel haengen an gegenueberliegenden Kanten derselben Box; mit
+            // aufgeklappter Tastatur ist dazwischen so wenig Platz, dass das
+            // Planungsblatt von unten in die Trefferliste der Suche lief und sie
+            // halb verdeckte. Ein Suchtreffer ist ausserdem genau der Moment, in
+            // dem niemand die Aufnahme- oder Standortknoepfe braucht — und
+            // sobald die Suche zu ist, steht alles unveraendert wieder da.
+            if (!searchOpen) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth()
+                        .padding(OverlayScreenPadding)
+                        // Die Navigationskapsel schwebt ueber der Karte (siehe
+                        // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
+                        // ihre Hoehe nach oben — sonst laege das Planungsblatt
+                        // teilweise hinter ihr.
+                        .padding(bottom = LocalFloatingNavigationBarSpace.current),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    RecordButton(
+                        recording = isRecording,
+                        onClick = { if (isRecording) RecordingRepository.stop() else startRecording() },
                     )
+                    Spacer(Modifier.height(12.dp))
+                    LocateButton(onClick = ::goToMyPosition, following = followMe)
+                    Spacer(Modifier.height(12.dp))
 
-                    ride != null -> RideCard(
-                        ride = ride,
-                        navigating = navTarget?.rideId == ride.id,
-                        onNavigate = { navigateRide(ride) },
-                        onShare = { shareRoute(ride.name, ride.points) },
-                        onDelete = { deleteDialogRide = ride },
-                        onClose = {
-                            hoverPoint = null
-                            appViewModel.select(null)
-                        },
-                        onHoverPoint = { hoverPoint = it },
-                    )
-                }
+                    val ride = selectedRide
+                    when {
+                        isRecording -> LiveRecordingCard(
+                            speedKmh = speedKmh,
+                            distanceKm = recordedKm,
+                            elapsedS = (elapsedMs / 1000).toInt(),
+                            ascentM = liveAscentM,
+                            pointCount = livePoints.size,
+                            paused = isPaused,
+                            onTogglePause = { RecordingRepository.togglePause() },
+                            onStop = { RecordingRepository.stop() },
+                            onOpenRideMode = { rideMode = true },
+                        )
 
-                if (planning) {
-                    Spacer(Modifier.height(OverlayGap))
-                    PlanningSheet(
-                        expanded = planSheetExpanded,
-                        onExpandedChange = { planSheetExpanded = it },
-                        profile = routeProfile,
-                        onProfileChange = { routeProfile = it },
-                        waypointCount = waypoints.size,
-                        route = plannedRoute,
-                        busy = planBusy,
-                        error = planError,
-                        maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
-                        progress = planProgress,
-                        generated = routeFromGenerator,
-                        locating = locating,
-                        onRoundTrip = ::startRoundTrip,
-                        onUseMyPosition = ::useMyPositionAsStart,
-                        onUndo = {
-                            routeFromGenerator = false
-                            waypoints = waypoints.dropLast(1)
-                        },
-                        onClear = {
-                            // Wie „Planung beenden": Der Fehlgriff darf nicht
-                            // das Ende der Arbeit sein (siehe
-                            // [exitPlanningWithUndo]) — nur bleibt der
-                            // Planungsmodus hier an.
-                            val snapshot = PlanningSnapshot(
-                                waypoints = waypoints,
-                                route = plannedRoute,
-                                plannedFor = plannedFor,
-                                fromGenerator = routeFromGenerator,
-                            )
-                            routeFromGenerator = false
-                            waypoints = emptyList()
-                            plannedRoute = null
-                            plannedFor = null
-                            planError = null
-                            planSheetExpanded = true
-                            if (!snapshot.isEmpty) {
-                                scope.launch {
-                                    val answer = snackbarHostState.showSnackbar(
-                                        message = "Planung geleert.",
-                                        actionLabel = "Rückgängig",
-                                        duration = SnackbarDuration.Long,
-                                    )
-                                    if (answer == SnackbarResult.ActionPerformed) {
-                                        restorePlanning(snapshot)
+                        ride != null -> RideCard(
+                            ride = ride,
+                            navigating = navTarget?.rideId == ride.id,
+                            onNavigate = { navigateRide(ride) },
+                            onShare = { shareRoute(ride.name, ride.points) },
+                            onDelete = { deleteDialogRide = ride },
+                            onClose = {
+                                hoverPoint = null
+                                appViewModel.select(null)
+                            },
+                            onHoverPoint = { hoverPoint = it },
+                        )
+                    }
+
+                    if (planning) {
+                        Spacer(Modifier.height(OverlayGap))
+                        PlanningSheet(
+                            expanded = planSheetExpanded,
+                            onExpandedChange = { planSheetExpanded = it },
+                            profile = routeProfile,
+                            onProfileChange = { routeProfile = it },
+                            waypointCount = waypoints.size,
+                            route = plannedRoute,
+                            busy = planBusy,
+                            error = planError,
+                            maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
+                            progress = planProgress,
+                            generated = routeFromGenerator,
+                            locating = locating,
+                            onRoundTrip = ::startRoundTrip,
+                            onUseMyPosition = ::useMyPositionAsStart,
+                            onUndo = {
+                                routeFromGenerator = false
+                                waypoints = waypoints.dropLast(1)
+                            },
+                            onClear = {
+                                // Wie „Planung beenden": Der Fehlgriff darf nicht
+                                // das Ende der Arbeit sein (siehe
+                                // [exitPlanningWithUndo]) — nur bleibt der
+                                // Planungsmodus hier an.
+                                val snapshot = PlanningSnapshot(
+                                    waypoints = waypoints,
+                                    route = plannedRoute,
+                                    plannedFor = plannedFor,
+                                    fromGenerator = routeFromGenerator,
+                                )
+                                routeFromGenerator = false
+                                waypoints = emptyList()
+                                plannedRoute = null
+                                plannedFor = null
+                                planError = null
+                                planSheetExpanded = true
+                                if (!snapshot.isEmpty) {
+                                    scope.launch {
+                                        val answer = snackbarHostState.showSnackbar(
+                                            message = "Planung geleert.",
+                                            actionLabel = "Rückgängig",
+                                            duration = SnackbarDuration.Long,
+                                        )
+                                        if (answer == SnackbarResult.ActionPerformed) {
+                                            restorePlanning(snapshot)
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        onSave = { saveRouteDialog = true },
-                        onShare = {
-                            plannedRoute?.let { shareRoute("trailscape-route", it.points) }
-                        },
-                        onNavigate = ::navigatePlannedRoute,
-                        onHoverPoint = { hoverPoint = it },
-                    )
+                            },
+                            onSave = { saveRouteDialog = true },
+                            onShare = {
+                                plannedRoute?.let { shareRoute("trailscape-route", it.points) }
+                            },
+                            onNavigate = ::navigatePlannedRoute,
+                            onHoverPoint = { hoverPoint = it },
+                        )
+                    }
+
+                    // Unterstes Element des Stapels — siehe Klassen-KDoc,
+                    // „Das Tourenblatt und seine Rangfolge am unteren
+                    // Kartenrand". `TourSheet` selbst zeichnet bei HIDDEN
+                    // nichts; der Spacer bleibt trotzdem an eine Sichtbar-
+                    // keitspruefung gebunden, sonst bliebe eine leere
+                    // 8-dp-Luecke uebrig, wo eigentlich Karte sein sollte.
+                    if (tourSheetState != TourSheetState.HIDDEN) {
+                        Spacer(Modifier.height(OverlayGap))
+                        TourSheet(
+                            state = tourSheetState,
+                            onStateChange = { tourSheet = it },
+                            rideCount = rides.size,
+                            maxHeight = screenHeight * TOUR_SHEET_MAX_HEIGHT_FACTOR,
+                        ) { padding ->
+                            TourListContent(
+                                appViewModel = appViewModel,
+                                onOpenDetail = { detailRideId = it },
+                                onShowOnMap = { ride ->
+                                    // Kein manueller `controller.fitToPoints`
+                                    // hier: Der Effekt auf `selectedRide?.id`
+                                    // weiter oben zoomt schon automatisch auf
+                                    // jede neu ausgewaehlte Tour — ein
+                                    // zweiter Aufruf waere nur ein doppelter.
+                                    appViewModel.select(ride.id)
+                                    tourSheet = TourSheetState.PEEK
+                                },
+                                contentPadding = padding,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1451,6 +1631,55 @@ fun MapScreen(appViewModel: AppViewModel) {
             },
             onClose = { rideMode = false },
         )
+    }
+
+    // ---------------------------------------------------------- Tourendetail
+    // Eigenes Fenster aus demselben Grund wie der Fahrmodus (siehe dessen
+    // KDoc „Warum ein eigenes Fenster" oben): Die schwebende Navigationskapsel
+    // aus `ui/TrailscapeApp.kt` liegt als Geschwister-`Box` UEBER dem gesamten
+    // `NavHost` und damit auch ueber jeder gewoehnlichen Ebene dieses Screens
+    // — nur ein `Dialog` deckt sie mit ab und macht sie unbedienbar, solange
+    // die Detailansicht offen ist. Die Zurueck-Geste braucht dafuer keinen
+    // eigenen Fall (siehe Klassen-KDoc, Rangfolge der Zurueck-Geste): Ein
+    // `Dialog` faengt sie bereits als eigenes Fenster ab, bevor sie den
+    // `BackHandler` weiter oben ueberhaupt erreicht — [RideDetailHost] bringt
+    // dafuer sogar schon einen eigenen `BackHandler` mit.
+    detailRideId?.let { id ->
+        Dialog(
+            onDismissRequest = { detailRideId = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            // `usePlatformDefaultWidth = false` macht dieses Fenster randlos —
+            // dieselbe Falle wie beim Fahrmodus (siehe dessen KDoc). Anders als
+            // im `NavHost` von `TrailscapeApp.kt` sind die Systemleisten hier
+            // NICHT schon aufgeloest: [RideDetailHost] (und mit ihm
+            // `RideDetailScreen.kt`) setzt `contentWindowInsets = WindowInsets
+            // (0, 0, 0, 0)` in der Annahme, dass genau das laengst geschehen
+            // ist — eine Annahme, die in diesem eigenen Fenster nicht mehr
+            // stimmt. Dieselbe Aufloesung (oben und seitlich; unten bewusst
+            // nicht, siehe dort) wird deshalb hier wiederholt, sonst zeichnet
+            // die Kopfzeile der Detailansicht unter die Statusleiste.
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(
+                                WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                            ),
+                        ),
+                ) {
+                    RideDetailHost(
+                        rideId = id,
+                        appViewModel = appViewModel,
+                        onBack = { detailRideId = null },
+                    )
+                }
+            }
+        }
     }
 
     // Fehlende Kartendaten: ein Angebot, keine Fehlermeldung. Die Route liegt
@@ -1748,6 +1977,23 @@ private const val PLAN_PANEL_MAX_HEIGHT_FACTOR = 0.55f
  * misst eine Zeile.
  */
 private const val PLAN_SHEET_MAX_HEIGHT_FACTOR = 0.45f
+
+/**
+ * Maximale Hoehe des **aufgeklappten** Tourenblatts.
+ *
+ * Deutlich grosszuegiger als [PLAN_SHEET_MAX_HEIGHT_FACTOR]: Ueber dem
+ * Tourenblatt stehen in seinem einzigen Sichtbarkeits-Zustand (siehe die
+ * Rangfolge im Klassen-KDoc — es ist ohnehin HIDDEN, sobald noch etwas
+ * anderes um den unteren Rand konkurriert) ausschliesslich die beiden runden
+ * Knoepfe, keine zweite Kopfzeile und kein Fehlertext wie bei der Planung.
+ * Vorbild ist ausdruecklich Google Maps/Komoot: Wer eine Liste aufschlaegt,
+ * will moeglichst viele Touren auf einen Blick sehen, ohne staendig zu
+ * scrollen — die Karte ist in diesem Moment ohnehin Nebensache. 0,8 laesst
+ * trotzdem einen schmalen Kartenstreifen samt der beiden Knoepfe sichtbar,
+ * damit der Wechsel zurueck auf PEEK nie ein Blindflug ist — ganz
+ * verschwinden darf die Karte nicht.
+ */
+private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"

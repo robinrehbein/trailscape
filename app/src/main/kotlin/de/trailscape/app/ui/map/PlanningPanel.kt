@@ -38,6 +38,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,6 +49,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,11 +115,23 @@ internal fun SearchPanel(
             ),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                TextField(
                     value = query,
                     onValueChange = onQueryChange,
                     modifier = Modifier.weight(1f),
                     singleLine = true,
+                    // Gefuellte Flaeche ohne Rahmen und ohne Unterstreichung —
+                    // dasselbe Gewand wie die Formularfelder der App (siehe
+                    // `components/OneUiTextField.kt`). Der gruene Rahmen des
+                    // Material-Feldes war der lauteste Strich auf der ganzen
+                    // Karte.
+                    shape = MaterialTheme.shapes.small,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
                     placeholder = { Text("Ort, Stadt oder Straße suchen…") },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     trailingIcon = {
@@ -185,7 +200,12 @@ internal fun SearchPanel(
                     )
                     Spacer(Modifier.width(8.dp))
                     TextButton(onClick = { onSelect(result) }) {
-                        Text(if (planning) "Als Ziel" else "Anzeigen")
+                        // „Als Ziel" versprach mehr, als der Griff tut: Der
+                        // Treffer wird ans Ende der Wegpunktliste gehaengt
+                        // (siehe `onSearchResult` in MapScreen.kt). Er ist
+                        // damit der neue letzte Punkt — aber eben ein
+                        // Wegpunkt, dem weitere folgen duerfen.
+                        Text(if (planning) "Als Wegpunkt" else "Anzeigen")
                     }
                 }
             }

@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -191,7 +192,13 @@ fun RowScope.OneUiNavigationBarItem(
                 // ein Umbruch die Kapsel hoeher macht.
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelSmall,
+                    // Nur das aktive Ziel steht fett. One UI gewichtet die
+                    // Beschriftung mit der Auswahl mit; alle fuenf Labels im
+                    // selben halbfetten Schnitt liessen die Leiste laut und
+                    // die Auswahl schwerer erkennbar wirken.
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = if (selected) FontWeight.W600 else FontWeight.W400,
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 3.dp, start = 2.dp, end = 2.dp),

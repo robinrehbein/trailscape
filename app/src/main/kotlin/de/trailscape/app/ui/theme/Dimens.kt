@@ -3,11 +3,15 @@ package de.trailscape.app.ui.theme
 import androidx.compose.ui.unit.dp
 
 /**
- * Das Raster, an das sich alle Tabs halten — im One-UI-Mass: grosszuegige
- * Raender (20 dp), Karten mit etwas mehr Luft innen (20 dp) und dafuer ein
- * ruhigerer Abstand zwischen den Karten (12 dp), weil die stark gerundeten
- * Flaechen ohnehin visuell trennen. Wer eine neue Karte oder einen neuen
- * Screen baut, nimmt diese Konstanten, statt eine weitere Zahl zu erfinden.
+ * Das Raster, an das sich alle Tabs halten. Die Zahlen sind an den
+ * Samsung-Einstellungen unter One UI 8.5 abgemessen (Bildschirmrand rund
+ * 14–16 dp, Innenabstand einer Karte rund 16 dp, sichtbarer Abstand zwischen
+ * zwei Karten rund 12 dp): Die App stand vorher durchgehend auf 20 dp und
+ * wirkte daneben luftig-fremd — bei 360 dp Bildschirmbreite gehen 8 dp
+ * Rand plus Innenabstand direkt von der Textbreite ab.
+ *
+ * Wer eine neue Karte oder einen neuen Screen baut, nimmt diese Konstanten,
+ * statt eine weitere Zahl zu erfinden.
  */
 
 /**
@@ -18,13 +22,13 @@ import androidx.compose.ui.unit.dp
 val ContentMaxWidth = 640.dp
 
 /** Rand einer Bildschirmliste zum Bildschirmrand. */
-val ScreenPadding = 20.dp
+val ScreenPadding = 16.dp
 
 /** Senkrechter Abstand zwischen zwei Karten einer Liste. */
 val CardGap = 12.dp
 
 /** Innenabstand einer Karte. */
-val CardPadding = 20.dp
+val CardPadding = 16.dp
 
 /**
  * Innenabstand einer Karte, die auf der Karte schwebt (Karten-Tab). Etwas

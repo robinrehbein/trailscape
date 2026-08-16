@@ -19,7 +19,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.theme.CardPadding
@@ -134,30 +134,27 @@ fun GoalCard(
             Text("Dein Ziel", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedTextField(
+            OneUiTextField(
+                label = "Name",
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Name") },
-                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
+                OneUiTextField(
+                    label = "Distanz (km)",
                     value = distanceText,
                     onValueChange = { distanceText = it },
-                    label = { Text("Distanz (km)") },
-                    singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                OutlinedTextField(
+                OneUiTextField(
+                    label = "Höhenmeter (optional)",
                     value = ascentText,
                     onValueChange = { ascentText = it },
-                    label = { Text("Höhenmeter (optional)") },
-                    singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                 )
@@ -165,17 +162,17 @@ fun GoalCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
+                OneUiTextField(
+                    label = "Zieldatum",
                     value = goalDate?.let { formatDate(it) } ?: "",
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Zieldatum") },
                     // „Datum wählen" ist eine Aufforderung, kein Wert — als
                     // `value` sah sie aus wie ein bereits gesetztes Datum und
                     // haette bei einer Bildschirmvorlesung als Inhalt des Felds
                     // gegolten. Als `placeholder` verschwindet sie, sobald ein
                     // echtes Datum darin steht.
-                    placeholder = { Text("Datum wählen") },
+                    placeholder = "Datum wählen",
                     modifier = Modifier.fillMaxWidth(),
                 )
                 // Ueberlagerung statt `enabled = false`: das Feld soll normal
