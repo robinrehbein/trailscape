@@ -445,7 +445,7 @@ internal fun DownloadProgressCard(
  * bevor irgendeine Entscheidung fiel: Die Ablehnung blieb Ablehnung, „Genau“
  * blieb ungewaehlt, die Nutzerin sah eine Zeile, die schon wieder weg war,
  * wenn sie reagieren wollte. Das ist genau die Regel, die der Touren-Tab beim
- * Undo-Loeschen schon gefunden hat (siehe `RidesScreen.kt`): Snackbar nur fuer
+ * Undo-Loeschen schon gefunden hat (siehe `TourList.kt`): Snackbar nur fuer
  * Bestaetigungen, alles mit Handlungsbedarf wird ein stehender Zustand an der
  * Stelle des Geschehens mit der Aktion daneben — hier auf der Karte, wo die
  * verweigerte Aktion ausgeloest wurde.

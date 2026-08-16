@@ -105,7 +105,7 @@ import de.trailscape.core.routeTargetForSession
  *  * **Keine `_EntranceFade`-Animation.** Das Original blendet die ersten
  *    Karten gestaffelt ein (~40 ms Versatz je Karte). Hier liegen alle Karten
  *    in derselben `LazyColumn` wie die Planwochen — bei vielen Wochen wuerden
- *    recycelte Items erneut einblenden. `ui/rides/RidesScreen.kt` verzichtet
+ *    recycelte Items erneut einblenden. `ui/rides/TourList.kt` verzichtet
  *    aus demselben Grund bereits darauf.
  *  * **Kein `TweenAnimationBuilder`-Aequivalent** fuer Readiness-Score und die
  *    Fitness/Ermüdung/Form-Kennzahlen — sie werden statisch gezeigt.

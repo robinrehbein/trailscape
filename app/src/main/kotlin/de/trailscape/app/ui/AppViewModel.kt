@@ -304,26 +304,65 @@ class AppViewModel(
     private val _pendingRideDetail = MutableStateFlow<String?>(null)
 
     /**
-     * Die Tour, deren Detailansicht der Touren-Tab als Naechstes oeffnen soll.
+     * Die Tour, deren Detailansicht als Naechstes geoeffnet werden soll.
      * Dasselbe Muster wie [pendingRouteTarget], aus demselben Grund: Zwischen
-     * dem Tippen auf der Startseite und dem Erscheinen des Touren-Screens liegt
-     * ein Tab-Wechsel, den ein einmaliges Ereignis nicht ueberleben wuerde.
+     * dem Tippen auf der Startseite und dem Erscheinen des Tourenblatts ueber
+     * der Karte liegt ein Tab-Wechsel, den ein einmaliges Ereignis nicht
+     * ueberleben wuerde.
      *
      * Ohne diesen Weg landete „Letzte Tour" nur in der Liste — der Nutzer haette
      * die Tour, die er gerade angetippt hat, dort ein zweites Mal suchen und
      * antippen muessen.
+     *
+     * Abgeholt wird der Wert seit dem Zusammenlegen von Touren und Karte vom
+     * Karten-Screen (Baustein `ui/rides/TourList.kt`), nicht mehr von einem
+     * eigenen Touren-Tab — [requestRideDetail] und dieser Zustand selbst
+     * blieben dabei unveraendert, nur der Abholer ist ein anderer.
      */
     val pendingRideDetail: StateFlow<String?> = _pendingRideDetail.asStateFlow()
 
-    /** Oeffnet die Detailansicht einer Tour und wechselt in den Touren-Tab. */
+    /** Oeffnet die Detailansicht einer Tour und wechselt zur Karte. */
     fun requestRideDetail(rideId: String) {
         _pendingRideDetail.value = rideId
         requestTab(AppTab.RIDES)
     }
 
-    /** Quittiert die abgeholte Tour (ruft der Touren-Screen). */
+    /** Quittiert die abgeholte Tour (ruft der Karten-Screen). */
     fun consumeRideDetailRequest() {
         _pendingRideDetail.value = null
+    }
+
+    // -------------------------------------------------------------------------
+    // Touren-Tab → Tourenblatt ueber der Karte
+    // -------------------------------------------------------------------------
+
+    private val _tourSheetRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte an den Karten-Screen, das Tourenblatt aufzuschlagen — dasselbe
+     * Muster wie [pendingRouteTarget] und [pendingRideDetail], aus demselben
+     * Grund: [AppTab.RIDES] loest die Navigationshuelle auf die Route „karte"
+     * auf (siehe `TrailscapeApp.kt`), aber zwischen dem Aufruf und dem
+     * Erscheinen des Karten-Screens liegt derselbe Tab-Wechsel. Ein einmaliges
+     * Ereignis waere bis dahin verpufft, ohne dass das Blatt je aufginge — der
+     * gehaltene Wert wartet, bis der Karten-Screen in der Komposition ist.
+     *
+     * Bewusst ein simples `Boolean` und keine ID wie bei [pendingRideDetail]:
+     * Es gibt nichts auszuwaehlen, nur ein „jetzt zeigen". Legt hin, wer zur
+     * Karte navigieren und dabei die Liste statt der reinen Kartenansicht
+     * zeigen will (aktuell nur die Aufloesung von [AppTab.RIDES]); der
+     * Karten-Screen holt es ab und quittiert mit [consumeTourSheetRequest].
+     */
+    val tourSheetRequest: StateFlow<Boolean> = _tourSheetRequest.asStateFlow()
+
+    /** Bittet den Karten-Screen, das Tourenblatt aufzuschlagen. */
+    fun requestTourSheet() {
+        _tourSheetRequest.value = true
+    }
+
+    /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
+    fun consumeTourSheetRequest() {
+        _tourSheetRequest.value = false
     }
 
     // -------------------------------------------------------------------------
@@ -464,7 +503,7 @@ class AppViewModel(
      * sofort aus der Liste — loescht sie aber erst nach [UNDO_DELETE_GRACE_MS]
      * wirklich von der Platte (`rideStorage.deleteRide`). Der Touren-Tab zeigt
      * in dieser Frist eine Snackbar „Tour gelöscht" mit Aktion „Rückgängig"
-     * (siehe `RidesScreen.kt`); tippt niemand darauf, laeuft der hier
+     * (siehe `TourList.kt`); tippt niemand darauf, laeuft der hier
      * gestartete Timer ab und die Datei ist weg.
      *
      * Folgt eine weitere Loeschung — derselben oder einer anderen Tour —,
@@ -1328,7 +1367,7 @@ const val ONBOARDING_STORAGE_KEY: String = "trailscape.onboarding.v1"
 
 /**
  * Wartezeit, bevor eine per [AppViewModel.deleteRideWithUndo] entfernte Tour
- * endgueltig von der Platte verschwindet. `RidesScreen` legt die Anzeigedauer
+ * endgueltig von der Platte verschwindet. `TourList` legt die Anzeigedauer
  * seiner Undo-Snackbar auf denselben Wert, damit beide synchron ablaufen.
  */
 const val UNDO_DELETE_GRACE_MS: Long = 5_000L

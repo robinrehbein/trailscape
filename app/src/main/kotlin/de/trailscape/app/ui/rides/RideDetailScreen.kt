@@ -102,11 +102,11 @@ import kotlinx.coroutines.withContext
  * die gefahrene Spur auf der Karte, alle Kennzahlen aus [de.trailscape.core.RideStats],
  * Hoehen-, Tempo- und Pulsverlauf und — falls die Datenlage es hergibt — die
  * Auswertung aus `:core` (Entkopplung, VO2max). Erreichbar durch Antippen eines
- * Listeneintrags in `RidesScreen.kt`.
+ * Listeneintrags in `TourList.kt`.
  *
  * ## Kein eigener Navigationseintrag
  * Die Ansicht ist ein **Zustand des Touren-Tabs**, kein Ziel im `NavHost`:
- * `RidesScreen` merkt sich die angetippte Tour-ID in einem `rememberSaveable`
+ * `TourList` (RideDetailHost) merkt sich die angetippte Tour-ID in einem `rememberSaveable`
  * und zeigt statt der Liste diesen Screen; die Systemzurueckgeste faengt dort
  * ein `BackHandler` ab. Die Navigationsstruktur der App (`ui/TrailscapeApp.kt`)
  * bleibt dadurch unberuehrt — und die Liste behaelt ihren Scrollzustand, weil
@@ -140,7 +140,7 @@ import kotlinx.coroutines.withContext
  * ist richtig.
  *
  * @param snackbarHostState bewusst von der Liste hereingereicht: Meldungen aus
- *   [AppViewModel.messages] sammelt `RidesScreen` fuer beide Ansichten ein, und
+ *   [AppViewModel.messages] sammelt der Karten-Screen fuer beide Ansichten ein, und
  *   die „Rückgängig"-Snackbar nach dem Loeschen soll dieselbe bleiben.
  */
 @OptIn(ExperimentalMaterial3Api::class)

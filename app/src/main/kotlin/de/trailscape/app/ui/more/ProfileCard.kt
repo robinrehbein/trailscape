@@ -11,13 +11,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +27,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.OneUiDropdownField
+import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.core.Sex
 import de.trailscape.core.TrainingProfile
@@ -66,7 +63,6 @@ import kotlin.math.round
  * bekam Trainingslast, HFmax und Schwelle aus den Massen eines fremden Koerpers
  * als „deine Werte" ausgegeben.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileCardContent(appViewModel: AppViewModel) {
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
@@ -112,41 +108,44 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     Spacer(modifier = Modifier.height(12.dp))
 
     Row {
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Alter",
             value = ageText,
             onValueChange = { ageText = it },
-            label = { Text("Alter") },
             // Der Platzhalter nennt genau die Zahl, mit der bis zur
             // Eingabe gerechnet wird — sichtbar als Vorschlag (grau, im
             // leeren Feld) statt als scheinbar eigene Angabe.
-            placeholder = { Text(defaultTrainingProfile.ageYears.toString()) },
+            placeholder = defaultTrainingProfile.ageYears.toString(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
             modifier = Modifier.weight(1f),
         )
         Spacer(modifier = Modifier.width(12.dp))
-        SexDropdown(value = sex, onChange = { sex = it }, modifier = Modifier.weight(1f))
+        OneUiDropdownField(
+            label = "Geschlecht",
+            value = sex,
+            options = sexOptions,
+            onChange = { sex = it },
+            modifier = Modifier.weight(1f),
+        )
     }
     Spacer(modifier = Modifier.height(12.dp))
 
     Row {
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Gewicht (kg)",
             value = weightText,
             onValueChange = { weightText = it },
-            label = { Text("Gewicht (kg)") },
-            placeholder = { Text(formatProfileNumber(defaultTrainingProfile.weightKg)) },
+            placeholder = formatProfileNumber(defaultTrainingProfile.weightKg),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            singleLine = true,
             modifier = Modifier.weight(1f),
         )
         Spacer(modifier = Modifier.width(12.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Rad + Gepäck (kg)",
             value = setupMassText,
             onValueChange = { setupMassText = it },
-            label = { Text("Rad + Gepäck (kg)") },
-            placeholder = { Text(formatProfileNumber(defaultSetupMassKg)) },
+            placeholder = formatProfileNumber(defaultSetupMassKg),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            singleLine = true,
             modifier = Modifier.weight(1f),
         )
     }
@@ -171,12 +170,11 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     )
     Spacer(modifier = Modifier.height(12.dp))
 
-    OutlinedTextField(
+    OneUiTextField(
+        label = "Zeit pro Woche (Stunden, optional)",
         value = weeklyHoursText,
         onValueChange = { weeklyHoursText = it },
-        label = { Text("Zeit pro Woche (Stunden, optional)") },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(modifier = Modifier.height(4.dp))
@@ -208,30 +206,27 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
             color = hintColor,
         )
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "HFmax (bpm, optional)",
             value = hrMaxText,
             onValueChange = { hrMaxText = it },
-            label = { Text("HFmax (bpm, optional)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Schwellenpuls LTHR (bpm, optional)",
             value = lthrText,
             onValueChange = { lthrText = it },
-            label = { Text("Schwellenpuls LTHR (bpm, optional)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Ruhepuls (bpm, optional)",
             value = restingHrText,
             onValueChange = { restingHrText = it },
-            label = { Text("Ruhepuls (bpm, optional)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -242,12 +237,11 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
         )
 
         Spacer(modifier = Modifier.height(12.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Schwellenleistung FTP (Watt, optional)",
             value = ftpText,
             onValueChange = { ftpText = it },
-            label = { Text("Schwellenleistung FTP (Watt, optional)") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(4.dp))
@@ -301,36 +295,11 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SexDropdown(value: Sex, onChange: (Sex) -> Unit, modifier: Modifier = Modifier) {
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }, modifier = modifier) {
-        OutlinedTextField(
-            value = sexLabels.getValue(value),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Geschlecht") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            sexLabels.forEach { (sexValue, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onChange(sexValue)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-private val sexLabels: Map<Sex, String> = linkedMapOf(
+/**
+ * Die Auswahl des Geschlechts — als geordnete Liste, weil die Reihenfolge im
+ * aufgeklappten Menue genau diese ist (siehe [OneUiDropdownField]).
+ */
+private val sexOptions: List<Pair<Sex, String>> = listOf(
     Sex.MAENNLICH to "männlich",
     Sex.WEIBLICH to "weiblich",
     Sex.UNBEKANNT to "keine Angabe",

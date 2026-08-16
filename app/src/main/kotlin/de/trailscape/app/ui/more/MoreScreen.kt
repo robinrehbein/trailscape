@@ -137,7 +137,7 @@ fun MoreScreen(appViewModel: AppViewModel) {
     val scrollBehavior = oneUiTopAppBarScrollBehavior()
 
     Scaffold(
-        // Siehe RidesScreen.kt: Die aeussere Huelle (TrailscapeApp) hat die
+        // Siehe TourList.kt: Die aeussere Huelle (TrailscapeApp) hat die
         // System-Insets bereits aufgeloest — hier duerfen sie nicht nochmal
         // aufschlagen.
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

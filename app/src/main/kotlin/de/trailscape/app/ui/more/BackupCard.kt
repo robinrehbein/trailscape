@@ -72,7 +72,7 @@ import kotlinx.coroutines.withContext
  * Speicherort direkt, kein Zwischenschritt ueber ein Share-Sheet noetig),
  * Import ueber [ActivityResultContracts.OpenDocument]. Der Einzelimport
  * („Tour importieren") teilt seine Dateitypenerkennung mit dem
- * Import-Knopf in `ui/rides/RidesScreen.kt` (siehe `ui/ActivityFileImport.kt`).
+ * Import-Knopf in `ui/rides/TourList.kt` (siehe `ui/ActivityFileImport.kt`).
  *
  * ## Archiv-Import
  * „Archiv importieren (ZIP)" oeffnet den ZIP-Stream zweimal: einmal fuer
@@ -185,9 +185,9 @@ fun BackupCardContent(appViewModel: AppViewModel) {
 
     // Einzelimport einer Aktivitaetsdatei (GPX oder FIT, je auch `.gz`) —
     // Erkennung und Lesen teilt sich `importActivityFile` mit dem
-    // Import-Knopf in `ui/rides/RidesScreen.kt` (`ui/ActivityFileImport.kt`).
+    // Import-Knopf in `ui/rides/TourList.kt` (`ui/ActivityFileImport.kt`).
     // Bewusst `*/*`: Der MIME-Typ ist je nach Dateimanager/Anbieter
-    // uneinheitlich (siehe RidesScreen-KDoc), ein enger Filter blendet die
+    // uneinheitlich (siehe TourList-KDoc), ein enger Filter blendet die
     // Datei bei manchen davon schlicht aus.
     val importActivityLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
