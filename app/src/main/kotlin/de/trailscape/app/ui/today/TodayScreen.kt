@@ -33,6 +33,7 @@ import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.screenContentPadding
+import de.trailscape.app.ui.planFeasibilityIdentityKey
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.weekdayDateFormat
@@ -67,9 +68,12 @@ import java.time.LocalDateTime
  *  1. **Kopf** — Begruessung, Wochentag, Datum. Immer.
  *  2. **Tagesempfehlung** — immer: Auch ohne jede Historie liefert `:core` eine
  *     Empfehlung (dann „Grundlageneinheit") und daraus ein Routenziel.
- *  3. **Traegt der Plan?** — nur, wenn die laengste geplante Fahrt die
- *     Zieldistanz deutlich verfehlt. Sie steht bewusst weit oben: Ein Plan, der
- *     das Ziel nicht einholt, ist die wichtigste Auskunft der Seite.
+ *  3. **„Plan und Ziel passen nicht zusammen"** — nur, wenn die laengste
+ *     geplante Fahrt die Zieldistanz deutlich verfehlt UND diese Fassung des
+ *     Plans noch nicht mit „Verstanden" quittiert wurde
+ *     ([AppViewModel.planFeasibilityAckKey]). Sie steht bewusst weit oben: Ein
+ *     Plan, der das Ziel nicht einholt, ist die wichtigste Auskunft der Seite —
+ *     aber eben nur, bis sie einmal gelesen wurde.
  *  4. **Aufzeichnung** — nur, wenn schon Touren existieren. Beim Erststart
  *     traegt der Leerzustand ganz unten denselben Knopf; zweimal „Tour
  *     aufzeichnen" auf einem Bildschirm waere genau die Doppelung, die diese
@@ -94,6 +98,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    val planFeasibilityAckKey by appViewModel.planFeasibilityAckKey.collectAsStateWithLifecycle()
 
     // Das Tagesprogramm des Plans: hoechstens eine Einheit wird gezeigt. Plaene
     // aus `:core` setzen nie zwei Einheiten auf denselben Tag; kaeme durch ein
@@ -123,6 +128,10 @@ fun TodayScreen(appViewModel: AppViewModel) {
     // beim Anlegen: Wer den Plan vor acht Wochen erstellt hat, liest die
     // Warnung sonst nie wieder.
     val feasibility = remember(plan) { plan?.let { assessPlanFeasibility(it) } }
+
+    // Schluessel des aktuellen Plans fuer die Quittierung der Karte (siehe
+    // [AppViewModel.acknowledgePlanFeasibility]): Nur ohne Plan `null`.
+    val planKey = remember(plan) { plan?.let { planFeasibilityIdentityKey(it) } }
 
     // Laufende Planwoche; `null` vor Planbeginn und ohne Plan.
     val currentWeek = remember(plan) {
@@ -185,15 +194,25 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     )
                 }
 
-                // Nur, wenn der Plan sein Ziel nicht traegt — sonst waere es
-                // eine Karte, die jeden Tag dasselbe Unauffaellige sagt.
-                feasibility?.takeIf { !it.feasible }?.let { verdict ->
-                    item(key = "plan-tragfaehigkeit") { PlanFeasibilityCard(verdict) }
+                // Nur, wenn der Plan sein Ziel nicht traegt UND diese
+                // Fassung des Plans noch nicht mit „Verstanden" quittiert
+                // wurde — sonst waere es eine Karte, die jeden Tag dasselbe
+                // Unauffaellige sagt.
+                feasibility?.takeIf { !it.feasible && planKey != planFeasibilityAckKey }?.let { verdict ->
+                    item(key = "plan-tragfaehigkeit") {
+                        PlanFeasibilityCard(
+                            feasibility = verdict,
+                            onAdjustGoal = { appViewModel.requestTab(AppTab.TRAINING) },
+                            onAcknowledge = {
+                                planKey?.let { appViewModel.acknowledgePlanFeasibility(it) }
+                            },
+                        )
+                    }
                 }
 
                 if (rides.isNotEmpty()) {
                     item(key = "aufzeichnen") {
-                        RecordPromptCard(onOpenMap = { appViewModel.requestTab(AppTab.MAP) })
+                        RecordPromptCard(onStartRecording = appViewModel::requestRecording)
                     }
                 }
 
@@ -222,7 +241,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 } else {
                     item(key = "erste-tour") {
                         FirstRideState(
-                            onRecord = { appViewModel.requestTab(AppTab.MAP) },
+                            onRecord = appViewModel::requestRecording,
                             onImport = { appViewModel.requestMoreSection(MoreSection.BACKUP) },
                         )
                     }
@@ -276,16 +295,17 @@ private fun greetingFor(hour: Int): String = when (hour) {
  * Ohne Trainingsziel gibt es keinen Plan — und damit weder Wochenziel noch
  * Tagesprogramm. Statt eine leere Wochenkarte zu zeigen, steht hier der
  * kuerzeste Weg dorthin.
+ *
+ * Textbudget: ein Satz Fliesstext, dann der Knopf. Was der Knopf bewirkt,
+ * sagt der Knopf selbst — eine Hinweiszeile darunter waere ein zweites
+ * Eingestaendnis derselben Sache.
  */
 @Composable
 private fun GoalPromptState(onOpenTraining: () -> Unit) {
     EmptyState(
         title = "Trainingsziel festlegen",
-        body = "Sag Trailscape, worauf du hinfährst — Distanz und Datum genügen. Daraus " +
-            "entsteht ein Wochenplan mit Aufbau-, Erholungs- und Taperwochen, und hier " +
-            "steht dann jeden Morgen die Einheit des Tages mit Zielkilometern.",
-        hint = "Ohne Ziel bleibt die Tagesempfehlung oben trotzdem gültig — sie kommt aus " +
-            "deinen Erholungswerten, nicht aus dem Plan.",
+        body = "Sag Trailscape, worauf du hinfährst — Distanz und Datum genügen, daraus " +
+            "entsteht dein Wochenplan.",
         actions = {
             Button(onClick = onOpenTraining) { Text("Ziel eintragen") }
         },
@@ -297,18 +317,22 @@ private fun GoalPromptState(onOpenTraining: () -> Unit) {
  *
  * Traegt hier — und nur hier — den Aufzeichnen-Knopf, weil die Karte
  * „Aufzeichnung" in diesem Fall ausgeblendet ist (siehe KDoc von
- * [TodayScreen]).
+ * [TodayScreen]). [onRecord] ist dieselbe
+ * [de.trailscape.app.ui.AppViewModel.requestRecording]-Bitte wie beim Knopf
+ * der Karte „Aufzeichnung" ([RecordPromptCard]): Ein Leerzustand, der bloss
+ * zur Karte wechselt statt die Aufzeichnung wirklich anzustossen, waere
+ * genau die Zwei-Schritt-Huerde, die dieser Knopf woanders schon abgebaut
+ * hat.
+ *
+ * Textbudget: ein Satz Fliesstext. Das ZIP-Import-Wissen wohnt in der
+ * Backup-Karte unter Mehr → Daten & Backup, wo der Import tatsaechlich
+ * stattfindet — eine Hinweiszeile hier waere nur ein Vorgriff darauf.
  */
 @Composable
 private fun FirstRideState(onRecord: () -> Unit, onImport: () -> Unit) {
     EmptyState(
         title = "Los geht's",
-        body = "Sobald die erste Tour gefahren oder importiert ist, steht sie hier — mit " +
-            "Distanz, Dauer und Höhenmetern. Aus den Touren wächst außerdem dein " +
-            "Trainingsbild: Fitness, Ermüdung und die Empfehlung oben werden mit jeder " +
-            "Fahrt genauer.",
-        hint = "Ein ganzer Strava- oder Garmin-Export lässt sich als ZIP-Archiv auf einmal " +
-            "einlesen — unter Mehr → Daten & Backup.",
+        body = "Sobald die erste Tour gefahren oder importiert ist, landet sie hier.",
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
             OutlinedButton(onClick = onImport) { Text("Touren importieren") }

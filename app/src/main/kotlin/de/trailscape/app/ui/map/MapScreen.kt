@@ -115,7 +115,10 @@ import kotlinx.coroutines.withContext
  * Zur laufenden Aufzeichnung gehoert neben der Live-Leiste der **Fahrmodus**
  * (`RideModeScreen.kt`): dieselben Werte, aber gross genug fuer den Blick aus
  * einem Meter. Er haelt hier nur ein `Boolean` (`rideMode`) — Zustand,
- * Kommandos und Navigationswerte bleiben die dieses Screens.
+ * Kommandos und Navigationswerte bleiben die dieses Screens. Er ist fuer eine
+ * Aufzeichnung der Normalfall: Startet sie durch eine Nutzeraktion in dieser
+ * Sitzung, oeffnet er direkt (siehe `runRecording()`), nicht erst ueber einen
+ * eigenen Knopf in der Live-Leiste.
  *
  * Port von `lib/screens/map_screen.dart` (2154 Zeilen) auf Compose und
  * MapLibre. Der Screen selbst haelt nur den *Bildschirmzustand* (Planungsmodus,
@@ -154,6 +157,14 @@ import kotlinx.coroutines.withContext
  *    Hoehenprofil, Speichern, Teilen und Navigation funktionieren damit ohne
  *    einen zweiten Weg. Das Flutter-Original kannte weder Generator noch
  *    Uebergabe zwischen den Tabs.
+ *  * **Aufzeichnung von der Startseite.** Die Karte „Aufzeichnung" im
+ *    Heute-Tab (`RecordPromptCard` in `ui/today/TodayCards.kt`) schickt ueber
+ *    [AppViewModel.pendingRecordStart] dieselbe Bitte her, die dieser Screen
+ *    sonst nur vom gruenen Knopf kennt — abgeholt und ausgeloest wird sie ueber
+ *    **dieselbe** lokale Funktion `startRecording()`, also mit derselben
+ *    Berechtigungsabfrage. Vorher versprach die Karte auf der Startseite nur
+ *    den Weg dorthin und erklaerte in einem Absatz, wo der eigentliche Knopf
+ *    liegt; jetzt haelt der eine Knopf das eine Versprechen.
  *  * **Rundkurs auch ohne Trainingsziel.** Im Planungsblatt steht bei null
  *    Wegpunkten „Runde ab hier" mit drei Distanzen und einem Feld fuer die
  *    eigene Zahl (siehe [startRoundTrip] und `PlanningPanel.kt`). Vorher war
@@ -261,6 +272,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Tab-Wechsel (siehe RouteGenerationController).
     val generation by RouteGenerationController.state.collectAsStateWithLifecycle()
     val pendingRouteTarget by appViewModel.pendingRouteTarget.collectAsStateWithLifecycle()
+
+    // Die Aufzeichnungs-Bitte von der Startseite (siehe [pendingRouteTarget]
+    // gleich darueber, dasselbe Muster): Der Effekt weiter unten holt sie ab,
+    // sobald die lokalen Aktionen dieses Screens (u. a. `startRecording`)
+    // deklariert sind.
+    val pendingRecordStart by appViewModel.pendingRecordStart.collectAsStateWithLifecycle()
 
     // Das offene Download-Angebot fuer fehlende Routing-Kacheln (siehe
     // AppViewModel.segmentOffer). Liegt dort und nicht hier, damit es einen
@@ -372,7 +389,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     // Die in der Tourendetailansicht geoeffnete Tour. Bewusst die ID und
     // nicht das `Ride` selbst — wortgleiche Begruendung wie beim frueheren
-    // `detailRideId` in `ui/rides/RidesScreen.kt`: Nach einem Umbenennen oder
+    // `detailRideId` in `ui/rides/TourList.kt`: Nach einem Umbenennen oder
     // einem HF-Merge aus Health Connect liefert `appViewModel.rides` ein
     // neues Objekt, ueber die ID zeigt die Ansicht immer auf den aktuellen
     // Stand.
@@ -395,6 +412,22 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Funktionen stehen und der Launcher-Callback sie nicht sehen kann.
     var grantedAction by remember { mutableStateOf<PendingAction?>(null) }
 
+    // Verweigerte Freigabe oder „Ungefähr“ statt „Genau“ beim Aufzeichnen:
+    // Beides braucht eine Entscheidung, keine Kenntnisnahme — bis hierher
+    // liefen beide Faelle als 4-Sekunden-Snackbar und waren verschwunden,
+    // bevor sich etwas taete. Die Karte dazu ([LocationPermissionNotice] in
+    // `MapPanels.kt`) ist deshalb ein stehender Zustand statt einer Snackbar
+    // (siehe deren KDoc fuer die Begruendung im Detail).
+    //
+    // [locationDeniedAction] traegt dieselbe Absicht wie [pendingAction], nur
+    // fuer den abgelehnten Fall — „Erneut fragen" liest sie wieder aus und
+    // loest denselben [withPermissions]-Pfad noch einmal aus. Fuer den
+    // Ungefaehr-Fall reicht ein Schalter: Er tritt ausschliesslich bei
+    // [PendingAction.RECORD] auf (siehe `permissionLauncher` gleich unten),
+    // „Erneut fragen" ruft dort deshalb direkt [startRecording] auf.
+    var locationDeniedAction by remember { mutableStateOf<PendingAction?>(null) }
+    var impreciseLocationNotice by remember { mutableStateOf(false) }
+
     // --------------------------------------------------------- Berechtigungen
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -406,15 +439,16 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (action == PendingAction.RECORD && !hasFineLocationPermission(context)) {
             // „Ungefaehr" statt „Genau": Die Karte kaeme damit zurecht, die
             // Aufzeichnung nicht — sie haengt am GPS-Provider, der
-            // ACCESS_FINE_LOCATION verlangt. Ohne diese Meldung liefe der
-            // Dienst los und braeche wortlos wieder ab.
+            // ACCESS_FINE_LOCATION verlangt. Das bleibt ein stehender Hinweis
+            // auf der Karte (siehe [LocationPermissionNotice]) statt einer
+            // Snackbar: Der Dienst liefe sonst entweder wortlos wieder ab,
+            // oder die Meldung waere laengst weg, wenn die Nutzerin reagieren
+            // wollte.
             pendingNavigateRideId = null
-            appViewModel.showMessage(
-                "Zum Aufzeichnen wird der genaue Standort gebraucht. " +
-                    "Bitte waehle in der Abfrage „Genau“ statt „Ungefähr“.",
-            )
+            impreciseLocationNotice = true
             return@rememberLauncherForActivityResult
         }
+        impreciseLocationNotice = false
         if (locationGranted || action == PendingAction.GENERATE_ROUTES) {
             // Die Rundkurs-Suche braucht die Freigabe nicht zwingend: Ohne sie
             // startet die Runde eben in der Kartenmitte. Sie hier trotzdem
@@ -422,10 +456,15 @@ fun MapScreen(appViewModel: AppViewModel) {
             // zu bekommen — abgelehnt zu werden darf die Suche aber nicht
             // blockieren, sonst haengt die Nutzerin bei dauerhaft verweigerter
             // Freigabe fest.
+            locationDeniedAction = null
             grantedAction = action
         } else {
-            pendingNavigateRideId = null
-            appViewModel.showMessage("Standortfreigabe wurde abgelehnt.")
+            // Bleibt als stehender Hinweis auf der Karte liegen (siehe
+            // [LocationPermissionNotice]) statt als Snackbar zu verschwinden —
+            // die verweigerte Freigabe braucht eine Entscheidung, keine
+            // Kenntnisnahme. `pendingNavigateRideId` bleibt deshalb bewusst
+            // stehen: „Erneut fragen" nimmt genau diese Tour wieder auf.
+            locationDeniedAction = action
         }
     }
 
@@ -854,6 +893,22 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Ein noch offenes Generator-Panel wird geschlossen; sein Vorschlag zaehlt
      * nur dann als „die Route", wenn er vorher uebernommen wurde (dann ist der
      * Planungsmodus an, siehe [applyGeneratedRoute]).
+     *
+     * ## Warum hier `rideMode = true` gesetzt wird
+     * Diese Funktion laeuft ausschliesslich, wenn eine Nutzeraktion in dieser
+     * Sitzung die Aufzeichnung tatsaechlich in Gang setzt — ueber den gruenen
+     * Aufnahme-Knopf oder die von der Startseite gereichte Bitte (siehe
+     * [pendingRecordStart] weiter unten), beide ueber [startRecording] und
+     * damit [withPermissions]. Der Fahrmodus ist fuer eine Aufzeichnung der
+     * Normalfall, nicht ein Angebot, das erst gefunden werden muss — deshalb
+     * oeffnet er direkt an der Stelle, an der die Aufzeichnung wirklich
+     * beginnt. Bewusst **hier** und nicht in einem `LaunchedEffect` auf
+     * [isRecording]: Ein solcher Effekt liefe auch dann, wenn eine laengst
+     * laufende Aufzeichnung nur durch Tab-Wechsel oder Drehung wieder in die
+     * Komposition kommt — genau das darf den Fahrmodus nicht von selbst
+     * aufreissen (siehe dessen `rememberSaveable` weiter oben). Die
+     * Zeile steht bewusst **nach** der Standort-Pruefung: Bricht die Funktion
+     * vorher ab, hat auch nichts begonnen, das ein Fahrmodus zeigen koennte.
      */
     fun runRecording() {
         if (!isLocationEnabled(context)) {
@@ -871,6 +926,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         searchMarker = null
         hoverPoint = null
         appViewModel.select(null)
+        rideMode = true
         RecordingRepository.start(context)
     }
 
@@ -1140,13 +1196,15 @@ fun MapScreen(appViewModel: AppViewModel) {
         withPermissions(PendingAction.NAVIGATE_ROUTE) { runNavigatePlannedRoute() }
     }
 
-    // Nachgereichte Absicht ausfuehren, sobald die Freigabe erteilt wurde. Der
-    // Launcher-Callback selbst kann die Aktionen oben nicht aufrufen (lokale
-    // Funktionen, die erst nach ihm im Rumpf stehen), deshalb der Umweg ueber
-    // [grantedAction].
-    LaunchedEffect(grantedAction) {
-        val action = grantedAction ?: return@LaunchedEffect
-        grantedAction = null
+    /**
+     * Fuehrt die zu [action] gehoerende `run…`-Funktion aus — die Berechtigung
+     * gilt an dieser Stelle als erteilt, das haben die beiden Aufrufer schon
+     * geprueft. Gemeinsame Stelle fuer den Effekt unten (frisch erteilte
+     * Freigabe) und [retryLocationPermission] („Erneut fragen" auf einer
+     * zuvor verweigerten): Beide fuehren am Ende dieselbe Absicht aus, nur
+     * ueber verschiedene Wege dorthin.
+     */
+    fun runPendingAction(action: PendingAction) {
         when (action) {
             PendingAction.RECORD -> runRecording()
             PendingAction.LOCATE -> runGoToMyPosition()
@@ -1161,6 +1219,31 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
+    /**
+     * „Erneut fragen" auf [LocationPermissionNotice]: fragt dieselbe
+     * Berechtigung fuer dieselbe gemerkte Absicht noch einmal an — derselbe
+     * [withPermissions]-Pfad wie beim ersten Versuch. Der Hinweis raeumt sich
+     * schon hier ab, nicht erst nach einer erneuten Ablehnung: Liegt die
+     * Freigabe inzwischen laengst vor (z. B. ueber die System-Einstellungen
+     * erteilt), lief `withPermissions` sofort durch, ohne den Launcher und
+     * damit ohne dessen Aufraeumen unten im Callback zu beruehren.
+     */
+    fun retryLocationPermission() {
+        val action = locationDeniedAction ?: return
+        locationDeniedAction = null
+        withPermissions(action) { runPendingAction(action) }
+    }
+
+    // Nachgereichte Absicht ausfuehren, sobald die Freigabe erteilt wurde. Der
+    // Launcher-Callback selbst kann die Aktionen oben nicht aufrufen (lokale
+    // Funktionen, die erst nach ihm im Rumpf stehen), deshalb der Umweg ueber
+    // [grantedAction].
+    LaunchedEffect(grantedAction) {
+        val action = grantedAction ?: return@LaunchedEffect
+        grantedAction = null
+        runPendingAction(action)
+    }
+
     // ------------------------------------- Trainingsempfehlung → Routenziel
     // Das Ziel wartet als StateFlow im AppViewModel, bis dieser Screen nach dem
     // Tab-Wechsel wirklich in der Komposition ist (siehe dessen KDoc).
@@ -1170,6 +1253,26 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (planning) exitPlanning()
         appViewModel.select(null)
         RouteGenerationController.open(target)
+    }
+
+    // -------------------------------------- Startseite → Aufzeichnung starten
+    // Dasselbe Muster wie eben bei [pendingRouteTarget]: Die Bitte wartet im
+    // AppViewModel, bis dieser Screen nach dem Tab-Wechsel wirklich in der
+    // Komposition ist. Ausgeloest wird **derselbe** Pfad wie am gruenen
+    // Aufnahme-Knopf — dieselbe lokale Funktion [startRecording], die zuerst
+    // die Berechtigungen prueft und erst danach ueber [runRecording] startet.
+    // Ein zweiter, eigener Startweg fuer die Startseite wuerde die
+    // Berechtigungslogik entweder verdoppeln oder umgehen; so bleibt es bei
+    // genau einer Stelle, und die Standortabfrage erscheint dort, wo sie auch
+    // sonst erscheint — auf der Karte, nicht auf der Startseite.
+    LaunchedEffect(pendingRecordStart) {
+        if (!pendingRecordStart) return@LaunchedEffect
+        appViewModel.consumeRecordStart()
+        // Laeuft schon eine Aufzeichnung, ist die Bitte bereits erfuellt —
+        // ein erneuter Aufruf wuerde nur unnoetig Planung/Auswahl zuruecksetzen
+        // (siehe [runRecording]), ohne dass sich am Zustand etwas aendert.
+        if (isRecording) return@LaunchedEffect
+        startRecording()
     }
 
     // Der ausgewaehlte Vorschlag ist die Vorschau auf der Karte: Er landet in
@@ -1212,7 +1315,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // Von der Startseite (oder anderswo) angeforderte Tourendetailansicht —
-    // wortgleich uebernommen aus dem frueheren `ui/rides/RidesScreen.kt`: Erst
+    // wortgleich uebernommen aus dem frueheren `ui/rides/TourList.kt`: Erst
     // quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge eine
     // Anfrage kurz nach dem Kaltstart (Liste noch leer) spurlos verloren.
     val pendingRideDetailRequest by appViewModel.pendingRideDetail.collectAsStateWithLifecycle()
@@ -1227,7 +1330,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Verschwindet die geoeffnete Tour aus der Liste (Sync, Loeschen aus dem
     // Blatt), ohne dass die Detailansicht selbst geloescht hat, schliesst sie
     // sich von selbst statt eine nicht mehr existierende Tour anzuzeigen —
-    // wortgleiche Uebernahme derselben Regel aus `ui/rides/RidesScreen.kt`.
+    // wortgleiche Uebernahme derselben Regel aus `ui/rides/TourList.kt`.
     LaunchedEffect(rides) {
         if (detailRideId != null && rides.none { it.id == detailRideId }) {
             detailRideId = null
@@ -1360,6 +1463,27 @@ fun MapScreen(appViewModel: AppViewModel) {
                         contentDescription = "Kartenausschnitt herunterladen",
                         enabled = !downloadState.running,
                         onClick = ::startDownload,
+                    )
+                }
+
+                locationDeniedAction?.let {
+                    LocationPermissionNotice(
+                        text = "Standortfreigabe wurde abgelehnt – ohne sie geht es hier " +
+                            "nicht weiter.",
+                        onRetry = ::retryLocationPermission,
+                        onDismiss = { locationDeniedAction = null },
+                    )
+                }
+
+                if (impreciseLocationNotice) {
+                    LocationPermissionNotice(
+                        text = "Zum Aufzeichnen wird der genaue Standort gebraucht. " +
+                            "Wähle in der Abfrage „Genau“ statt „Ungefähr“.",
+                        onRetry = {
+                            impreciseLocationNotice = false
+                            startRecording()
+                        },
+                        onDismiss = { impreciseLocationNotice = false },
                     )
                 }
 

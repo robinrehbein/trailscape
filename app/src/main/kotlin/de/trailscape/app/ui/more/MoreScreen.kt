@@ -1,7 +1,5 @@
 package de.trailscape.app.ui.more
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -13,11 +11,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
@@ -37,36 +33,60 @@ import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
-import kotlinx.coroutines.delay
 
 /**
  * „Mehr"-Tab — Port von `lib/screens/more_screen.dart`.
  *
- * Neun Themenkarten untereinander: Profil, Daten & Backup, Health Connect,
- * Erinnerungen, Kartenstil, Offline-Karten, Karten für Offline-Routing,
- * Sync (Selfhost) und Über. Jede
- * Karte ist eine eigene, in sich geschlossene Datei in diesem Paket — siehe
- * deren KDoc fuer Details und (falls vorhanden) bewusste Abweichungen vom
- * Dart-Original.
+ * ## Gruppen statt neun Vollkarten
+ * Der Screen zeigte frueher neun vollstaendig ausgeklappte Themenkarten
+ * untereinander — eine Schublade mit neun Faechern, alle gleichzeitig offen.
+ * Er ist jetzt nach dem Muster der One-UI-Einstellungsliste gebaut: drei
+ * versal beschriftete Gruppen ([MoreGroup]), jede eine einzige Karte
+ * ([MoreGroupCard]) mit flachen, einzeln aufklappbaren Zeilen ([MoreRow]).
+ * Tiefe entsteht erst beim Antippen einer Zeile — vorher sieht man nur den
+ * Titel und, wo vorhanden, eine Statuszeile.
  *
- * Die **Reihenfolge** ist auf den Erstnutzer hin sortiert (Begruendung im
- * Rumpf), nicht mehr die des Dart-Originals.
+ *  * **„Profil & Daten"** — Profil, Daten & Backup, Health Connect. Alle drei
+ *    drehen sich um dieselbe Frage: Woher kommen die Zahlen, mit denen die
+ *    App rechnet?
+ *  * **„Karte"** — Offline-Karten, Karten fuer Offline-Routing. Beide laden
+ *    etwas fuers netzlose Fahren herunter (siehe `OfflineRoutingCard.kt` fuer
+ *    die Abgrenzung).
+ *  * **„App"** — Erinnerungen, Sync (Selfhost), Ueber. Verhalten und
+ *    Rahmendaten der App selbst, ohne Bezug zu einer bestimmten Tour.
+ *
+ * Jede Zeile ruft eine `…Content()`-Funktion aus der jeweiligen Datei dieses
+ * Pakets auf — das unveraenderte Innenleben (Formulare, Dialoge, Launcher)
+ * der frueheren Vollkarte, nur ohne deren eigene Karten-Huelle und
+ * Titel-Text (das uebernimmt jetzt [MoreRow]). Details und bewusste
+ * Abweichungen vom Dart-Original stehen weiterhin im KDoc der jeweiligen
+ * Datei.
+ *
+ * Die **Reihenfolge** der Gruppen und Zeilen ist auf den Erstnutzer hin
+ * sortiert (Begruendung im Rumpf), nicht mehr die des Dart-Originals.
  *
  * Darueber liegt — nur wenn es etwas zu melden gibt — die Update-Karte
- * (`UpdateCard.kt`).
+ * (`UpdateCard.kt`), ausserhalb jeder Gruppe.
+ *
+ * ## Kartenstil ist umgezogen
+ * Die Kartenstil-Auswahl hatte zwei Wohnorte: als Bottom-Sheet auf der Karte
+ * *und* als eigene Karte hier. Dieselbe Entscheidung an zwei Stellen zu
+ * treffen ist keine Bequemlichkeit, sondern eine offene Frage, welche der
+ * beiden gerade gilt. Die Auswahl lebt jetzt ausschliesslich dort, wo ihre
+ * Wirkung sofort sichtbar ist — auf der Karte, ueber dem Ebenen-Knopf
+ * (`ui/map/MapScreen.kt`). `MapStyleCard.kt` ist ersatzlos entfallen.
  *
  * ## Sprungziele von aussen
- * Neun Karten sind zu viele, um von einem Leerzustand aus nur „irgendwohin in
- * den Mehr-Tab" zu schicken. [AppViewModel.pendingMoreSection] nennt deshalb
- * die gemeinte Karte; dieser Screen scrollt beim Eintreffen dorthin und hebt
- * sie kurz hervor (siehe [HIGHLIGHT_MS]). Die Zuordnung Wert → Position steht
- * ausschliesslich in [moreSectionOrder].
+ * [AppViewModel.pendingMoreSection] nennt eine Zeile, zu der dieser Screen
+ * von aussen springen soll (siehe [moreGroupIndex] fuer die Zuordnung zur
+ * Gruppe). Der Screen scrollt beim Eintreffen zur Gruppe **und** klappt die
+ * gemeinte Zeile auf ([MoreRow.expandOnArrival]) — das Aufklappen selbst
+ * zeigt, wo man gelandet ist. Einen zusaetzlichen Leuchtrahmen braucht es
+ * dafuer nicht mehr: Der fruehere Rahmen war das Eingestaendnis, dass sich
+ * neun gleich aussehende Vollkarten sonst nicht unterscheiden liessen: eine
+ * aufgeklappte Zeile neben eingeklappten braucht diese Krücke nicht.
  *
- * ## Bewusste Abweichungen vom Original
- *  * **Kartenstil-Auswahl** (neu, kein Dart-Vorbild): Der native Kartenstil-
- *    Katalog lebt im geteilten [AppViewModel] (`ui/MapStyles.kt`) und wird
- *    auch im Karten-Screen angeboten — die Auswahl gehoert deshalb sinnvoll
- *    auch hier ins „Mehr"-Tab.
+ * ## Weitere bewusste Abweichungen vom Original
  *  * **Offline-Karten-Verwaltung** ersetzt die Kachel-Cache-Karte des
  *    Originals (`TileCache`): Die native App nutzt MapLibres eigene
  *    Offline-Regionen statt eines selbstgebauten Tile-Caches. Der Download
@@ -90,10 +110,11 @@ fun MoreScreen(appViewModel: AppViewModel) {
 
     val listState = rememberLazyListState()
 
-    // Welche Karte gerade hervorgehoben ist; `null` = keine. Eigener Zustand
-    // und nicht `requestedSection`, weil die Bitte sofort quittiert wird — die
-    // Hervorhebung soll den Tab-Wechsel aber ueberdauern.
-    var highlighted by remember { mutableStateOf<MoreSection?>(null) }
+    // Welche Zeile beim Eintreffen aufklappen soll; `null` = keine. Eigener
+    // Zustand und nicht `requestedSection` direkt, weil die Bitte sofort
+    // quittiert wird (siehe unten) — das Aufklapp-Signal soll den
+    // Tab-Wechsel aber ueberdauern, bis [MoreRow] es uebernimmt.
+    var expandTarget by remember { mutableStateOf<MoreSection?>(null) }
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -103,32 +124,20 @@ fun MoreScreen(appViewModel: AppViewModel) {
     }
 
     // Die Update-Karte steht ueber allem und verschiebt damit jeden Index um
-    // eins — deshalb wird sie hier mitgezaehlt statt in [moreSectionOrder].
+    // eins — deshalb wird sie hier mitgezaehlt statt in [moreGroupIndex].
     val updateCardShown = updateVersion != null
     LaunchedEffect(requestedSection, updateCardShown) {
         val wanted = requestedSection ?: return@LaunchedEffect
-        val index = moreSectionOrder.indexOf(wanted)
-        if (index >= 0) {
-            listState.animateScrollToItem(index + if (updateCardShown) 1 else 0)
-        }
+        val index = moreGroupIndex(wanted)
+        listState.animateScrollToItem(index + if (updateCardShown) 1 else 0)
         appViewModel.consumeMoreSectionRequest()
-        highlighted = wanted
-    }
-
-    // Eigener Effekt, damit das Quittieren oben die Wartezeit nicht abbricht:
-    // `consumeMoreSectionRequest()` setzt `requestedSection` auf `null` und
-    // startet den Effekt darueber sofort neu — ein `delay` in dessen Rumpf
-    // wuerde dabei mit abgebrochen und die Hervorhebung bliebe ewig stehen.
-    LaunchedEffect(highlighted) {
-        if (highlighted == null) return@LaunchedEffect
-        delay(HIGHLIGHT_MS)
-        highlighted = null
+        expandTarget = wanted
     }
 
     val scrollBehavior = oneUiTopAppBarScrollBehavior()
 
     Scaffold(
-        // Siehe RidesScreen.kt: Die aeussere Huelle (TrailscapeApp) hat die
+        // Siehe TourList.kt: Die aeussere Huelle (TrailscapeApp) hat die
         // System-Insets bereits aufgeloest — hier duerfen sie nicht nochmal
         // aufschlagen.
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -160,13 +169,6 @@ fun MoreScreen(appViewModel: AppViewModel) {
                 contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                // Reihenfolge fuer den Erstnutzer: erst das Profil (ohne Alter
-                // und Gewicht rechnet nichts richtig), dann die beiden Wege,
-                // auf denen Daten hereinkommen — der Import und Health
-                // Connect. Danach erst die Einstellungen, die man auch spaeter
-                // noch entdecken kann. Vorher stand „Kartenstil" auf Platz
-                // zwei und „Daten & Backup" hinter Health Connect, obwohl die
-                // Leerzustaende aller Tabs auf den Import verweisen.
                 // Ganz oben und nur, wenn es wirklich etwas Neues gibt: Die
                 // App aktualisiert sich nicht von selbst (Sideload), der
                 // Hinweis ist also die einzige Nachricht darueber — und
@@ -179,72 +181,71 @@ fun MoreScreen(appViewModel: AppViewModel) {
                         )
                     }
                 }
+                // Gruppe 1 von 3, Index 0 in [moreGroupIndex]: erst das
+                // Profil (ohne Alter und Gewicht rechnet nichts richtig),
+                // dann die beiden Wege, auf denen Daten hereinkommen — der
+                // Import und Health Connect.
                 item {
-                    ProfileCard(appViewModel, modifier = highlight(highlighted, MoreSection.PROFILE))
+                    MoreGroup(label = "Profil & Daten") {
+                        MoreRow(
+                            title = "Profil",
+                            expandOnArrival = expandTarget == MoreSection.PROFILE,
+                        ) { ProfileCardContent(appViewModel) }
+                        HorizontalDivider()
+                        MoreRow(
+                            title = "Daten & Backup",
+                            expandOnArrival = expandTarget == MoreSection.BACKUP,
+                        ) { BackupCardContent(appViewModel) }
+                        HorizontalDivider()
+                        MoreRow(
+                            title = "Health Connect",
+                            expandOnArrival = expandTarget == MoreSection.HEALTH,
+                        ) { HealthCardContent(appViewModel) }
+                    }
                 }
+                // Gruppe 2 von 3: Beide Zeilen laden etwas fuer die netzlose
+                // Fahrt herunter, meinen aber Verschiedenes (Kartenbild gegen
+                // Wegedaten) — nebeneinander ist der Unterschied eine Frage
+                // von zwei Zeilen Text (siehe OfflineRoutingCard.kt).
                 item {
-                    BackupCard(appViewModel, modifier = highlight(highlighted, MoreSection.BACKUP))
+                    MoreGroup(label = "Karte") {
+                        MoreRow(
+                            title = "Offline-Karten",
+                        ) { OfflineMapsCardContent(onMessage = appViewModel::showMessage) }
+                        HorizontalDivider()
+                        MoreRow(
+                            title = "Karten für Offline-Routing",
+                        ) { OfflineRoutingCardContent(appViewModel) }
+                    }
                 }
+                // Gruppe 3 von 3: Verhalten und Rahmendaten der App selbst.
+                // Die Erinnerungen stehen zuerst, weil sie entscheiden, ob
+                // die App von sich aus etwas sagt — das wiegt schwerer als
+                // Sync-Zugangsdaten oder die Über-Karte.
                 item {
-                    HealthCard(appViewModel, modifier = highlight(highlighted, MoreSection.HEALTH))
+                    MoreGroup(label = "App") {
+                        MoreRow(title = "Erinnerungen") { ReminderCardContent(appViewModel) }
+                        HorizontalDivider()
+                        MoreRow(title = "Sync (Selfhost)") { SyncCardContent(appViewModel) }
+                        HorizontalDivider()
+                        MoreRow(title = "Über") { AboutCardContent(appViewModel) }
+                    }
                 }
-                // Vor den beiden Darstellungs-Einstellungen: Die Erinnerungen
-                // entscheiden, ob die App von sich aus etwas sagt — das ist
-                // eine Verhaltensfrage und wiegt schwerer als die Wahl des
-                // Kartenhintergrunds. Sie stehen hinter Health Connect, weil
-                // die Tageseinheit ohne Plan und ohne Daten nichts zu melden
-                // haette.
-                item { ReminderCard(appViewModel) }
-                item { MapStyleCard(appViewModel) }
-                item { OfflineMapsCard(onMessage = appViewModel::showMessage) }
-                // Direkt hinter den Offline-Karten: Beide speichern „Karten",
-                // meinen aber Verschiedenes (Bild gegen Wegedaten). Nebeneinander
-                // ist der Unterschied eine Frage von zwei Zeilen Text; getrennt
-                // waere er ein Missverstaendnis (siehe OfflineRoutingCard.kt).
-                item { OfflineRoutingCard(appViewModel) }
-                item { SyncCard(appViewModel) }
-                item { AboutCard(appViewModel) }
             }
         }
     }
 }
 
 /**
- * Die Karten dieses Screens in Anzeigereihenfolge, soweit sie Sprungziel sein
- * koennen — der Index in dieser Liste ist der Index in der `LazyColumn`
- * (ohne die vorgeschaltete Update-Karte, siehe Aufrufstelle).
+ * Zu welcher Gruppe (Index in der `LazyColumn`, ohne die vorgeschaltete
+ * Update-Karte — siehe Aufrufstelle) ein Sprungziel gehoert. Alle drei
+ * moeglichen Werte liegen heute in derselben Gruppe „Profil & Daten"
+ * (Index 0); ein Sprung faehrt dorthin, [MoreRow.expandOnArrival] klappt
+ * dann die passende Zeile auf.
  *
- * Wird die Reihenfolge im Rumpf geaendert, muss sie hier mitgehen; deshalb
- * stehen beide in derselben Datei und unmittelbar untereinander.
+ * Wird die Gruppierung im Rumpf geaendert, muss diese Zuordnung mitgehen;
+ * deshalb stehen beide in derselben Datei und unmittelbar untereinander.
  */
-private val moreSectionOrder: List<MoreSection> = listOf(
-    MoreSection.PROFILE,
-    MoreSection.BACKUP,
-    MoreSection.HEALTH,
-)
-
-/** Wie lange die angesprungene Karte hervorgehoben bleibt. */
-private const val HIGHLIGHT_MS: Long = 1_800L
-
-/**
- * Ein weicher Rahmen um die angesprungene Karte.
- *
- * Ohne ihn endet der Sprung bei einer Liste gleich aussehender Karten — der
- * Nutzer sieht, dass sich etwas bewegt hat, aber nicht, worauf er schauen soll.
- * Bewusst nur ein Rahmen und keine Farbflaeche: Die Karte soll gefunden werden,
- * nicht wie ein Fehler aussehen. Der Rahmen nimmt den Kartenradius aus dem
- * Theme (`MaterialTheme.shapes.medium`), damit er der Rundung der Karte folgt.
- */
-@Composable
-private fun highlight(highlighted: MoreSection?, section: MoreSection): Modifier {
-    val alpha by animateFloatAsState(
-        targetValue = if (highlighted == section) 1f else 0f,
-        label = "Hervorhebung",
-    )
-    if (alpha <= 0f) return Modifier
-    return Modifier.border(
-        width = 2.dp,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
-        shape = MaterialTheme.shapes.medium,
-    )
+private fun moreGroupIndex(section: MoreSection): Int = when (section) {
+    MoreSection.PROFILE, MoreSection.BACKUP, MoreSection.HEALTH -> 0
 }

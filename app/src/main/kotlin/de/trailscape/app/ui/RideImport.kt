@@ -4,7 +4,7 @@ import de.trailscape.core.Ride
 
 /**
  * Duplikatpruefung fuer importierte Touren — geteilt von der Tourenliste
- * (`ui/rides/RidesScreen.kt`) und der Backup-Karte (`ui/more/BackupCard.kt`).
+ * (`ui/rides/TourList.kt`) und der Backup-Karte (`ui/more/BackupCard.kt`).
  *
  * Die eigentliche Regel liegt seit dem Massenimport in `:core`
  * (`RideDuplicates.kt`), weil `importArchive` sie ebenfalls braucht. Diese

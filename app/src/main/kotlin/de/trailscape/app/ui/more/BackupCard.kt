@@ -72,7 +72,7 @@ import kotlinx.coroutines.withContext
  * Speicherort direkt, kein Zwischenschritt ueber ein Share-Sheet noetig),
  * Import ueber [ActivityResultContracts.OpenDocument]. Der Einzelimport
  * („Tour importieren") teilt seine Dateitypenerkennung mit dem
- * Import-Knopf in `ui/rides/RidesScreen.kt` (siehe `ui/ActivityFileImport.kt`).
+ * Import-Knopf in `ui/rides/TourList.kt` (siehe `ui/ActivityFileImport.kt`).
  *
  * ## Archiv-Import
  * „Archiv importieren (ZIP)" oeffnet den ZIP-Stream zweimal: einmal fuer
@@ -98,9 +98,13 @@ import kotlinx.coroutines.withContext
  * damals nur `material-icons-core` ein, dessen kleiner Symbolsatz weder ein
  * Save- noch ein Routen-Symbol enthielt). Seit `material-icons-extended`
  * eingebunden ist, stehen beide zur Verfuegung.
+ *
+ * Der Inhalt der Zeile „Daten & Backup" in der Gruppe „Profil & Daten" des
+ * Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
+ * stellt Titel und Aufklapp-Rahmen.
  */
 @Composable
-fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun BackupCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -181,9 +185,9 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
 
     // Einzelimport einer Aktivitaetsdatei (GPX oder FIT, je auch `.gz`) —
     // Erkennung und Lesen teilt sich `importActivityFile` mit dem
-    // Import-Knopf in `ui/rides/RidesScreen.kt` (`ui/ActivityFileImport.kt`).
+    // Import-Knopf in `ui/rides/TourList.kt` (`ui/ActivityFileImport.kt`).
     // Bewusst `*/*`: Der MIME-Typ ist je nach Dateimanager/Anbieter
-    // uneinheitlich (siehe RidesScreen-KDoc), ein enger Filter blendet die
+    // uneinheitlich (siehe TourList-KDoc), ein enger Filter blendet die
     // Datei bei manchen davon schlicht aus.
     val importActivityLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -270,80 +274,78 @@ fun BackupCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    MoreSectionCard(title = "Daten & Backup", modifier = modifier) {
-        Text(
-            text = "Sichere alle Touren und dein Trainingsprofil in einer Datei — zum " +
-                "Übertragen auf ein neues Gerät oder als Backup vor einer Neuinstallation. " +
-                "Einzelne GPX- oder FIT-Dateien (z. B. aus Komoot oder Strava) lassen sich " +
-                "ebenfalls importieren — oder gleich ein ganzer Strava-/Garmin-Export als " +
-                "ZIP-Archiv.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "Sichere alle Touren und dein Trainingsprofil in einer Datei — zum " +
+            "Übertragen auf ein neues Gerät oder als Backup vor einer Neuinstallation. " +
+            "Einzelne GPX- oder FIT-Dateien (z. B. aus Komoot oder Strava) lassen sich " +
+            "ebenfalls importieren — oder gleich ein ganzer Strava-/Garmin-Export als " +
+            "ZIP-Archiv.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
 
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Button(
+            onClick = { exportLauncher.launch(backupFileName(LocalDate.now())) },
+            enabled = !busy,
         ) {
-            Button(
-                onClick = { exportLauncher.launch(backupFileName(LocalDate.now())) },
-                enabled = !busy,
-            ) {
-                Icon(
-                    Icons.Filled.Save,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Backup exportieren")
-            }
-            NeutralButton(
-                onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
-                enabled = !busy,
-            ) {
-                Icon(
-                    Icons.Filled.Upload,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Backup importieren")
-            }
-            NeutralButton(
-                onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
-                enabled = !busy,
-            ) {
-                Icon(
-                    Icons.Filled.Route,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Tour importieren (GPX/FIT)")
-            }
-            NeutralButton(
-                onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
-                enabled = !busy && !archiveBusy,
-            ) {
-                Icon(
-                    Icons.Filled.FolderZip,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize),
-                )
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Archiv importieren (ZIP)")
-            }
-        }
-
-        if (busy) {
-            Spacer(modifier = Modifier.height(12.dp))
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
+            Icon(
+                Icons.Filled.Save,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
             )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Backup exportieren")
         }
+        NeutralButton(
+            onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
+            enabled = !busy,
+        ) {
+            Icon(
+                Icons.Filled.Upload,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Backup importieren")
+        }
+        NeutralButton(
+            onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
+            enabled = !busy,
+        ) {
+            Icon(
+                Icons.Filled.Route,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Tour importieren (GPX/FIT)")
+        }
+        NeutralButton(
+            onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
+            enabled = !busy && !archiveBusy,
+        ) {
+            Icon(
+                Icons.Filled.FolderZip,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Archiv importieren (ZIP)")
+        }
+    }
+
+    if (busy) {
+        Spacer(modifier = Modifier.height(12.dp))
+        LinearProgressIndicator(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp),
+        )
     }
 
     if (archiveBusy) {

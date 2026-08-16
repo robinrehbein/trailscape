@@ -13,7 +13,7 @@ import java.util.Locale
  * # Datums- und Zahlenformate der Oberflaeche — an EINER Stelle
  *
  * Vorher legte sich jeder Screen seinen eigenen [DateTimeFormatter] an
- * (`RidesScreen`, `MapScreen`, `GoalCard`, `PlanSection`, `OfflineMapsCard`,
+ * (`TourList`, `MapScreen`, `GoalCard`, `PlanSection`, `OfflineMapsCard`,
  * `HealthCard` — sechs Deklarationen fuer im Kern zwei Muster). Und die Zahlen
  * liefen auseinander: `formatKm` aus `:core` liefert `"42.3"` mit **Punkt**,
  * `formatHours`/`germanFixed` dagegen `"1,5"` mit **Komma** — in einer

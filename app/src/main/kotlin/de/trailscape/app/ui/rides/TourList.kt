@@ -144,8 +144,10 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * ## Undo-Snackbar bleibt lokal, „normale" Meldungen nicht mehr
  * [AppViewModel.messages] sammelt jetzt der Karten-Screen ein (er umschliesst
  * dieses Blatt und bleibt bestehen, waehrend das Blatt auf- und zufaehrt) —
- * ein Importfehler oder eine erkannte Dublette laufen also weiterhin ueber
- * [AppViewModel.showMessage], zeigen sich aber dort. Die „Rückgängig"-Snackbar
+ * eine erkannte Dublette oder der Import-Erfolg laufen also weiterhin ueber
+ * [AppViewModel.showMessage], zeigen sich aber dort. Ein Import-*Fehler*
+ * dagegen ist keine Meldung, sondern eine Entscheidung und bleibt deshalb als
+ * Dialog stehen (siehe [importErrorMessage]). Die „Rückgängig"-Snackbar
  * beim Loeschen ist etwas anderes: Sie braucht eine Aktionsschaltflaeche und
  * eine eigene Anzeigedauer (siehe [DeleteRideDialog]), Dinge, die der einfache
  * Text-Kanal von `messages` nicht kennt. Diese Datei bringt dafuer einen
@@ -182,6 +184,13 @@ fun TourListContent(
     var renameTarget by remember { mutableStateOf<Ride?>(null) }
     var deleteTarget by remember { mutableStateOf<Ride?>(null) }
 
+    // Ein gescheiterter Import ist eine Entscheidung, keine Meldung: Der
+    // Fehlertext bleibt als Dialog stehen, bis eine andere Datei gewaehlt
+    // oder geschlossen wird — eine 4-Sekunden-Snackbar waere verschwunden,
+    // bevor jemand vom Dateidialog zurueckgeblickt hat (Regel: Snackbar nur
+    // fuer Bestaetigungen, stehender Zustand fuer Entscheidungen).
+    var importErrorMessage by remember { mutableStateOf<String?>(null) }
+
     // Nur fuer die „Rückgängig"-Snackbar (siehe Klassen-KDoc oben) — normale
     // Meldungen laufen nicht mehr durch diesen Screen.
     val snackbarHostState = remember { SnackbarHostState() }
@@ -211,13 +220,13 @@ fun TourListContent(
                 }
             } catch (e: Exception) {
                 // Deutscher Satz mit Handlungsanweisung zuerst, technische
-                // Ursache nur in Klammern (siehe ui/ErrorText.kt).
-                appViewModel.showMessage(
-                    withCause(
-                        "Die Datei konnte nicht importiert werden. Trailscape liest " +
-                            "GPX- und FIT-Dateien, auch als .gz gepackt.",
-                        e,
-                    ),
+                // Ursache nur in Klammern (siehe ui/ErrorText.kt) — als
+                // stehender Dialog, nicht als Snackbar (siehe
+                // [importErrorMessage]).
+                importErrorMessage = withCause(
+                    "Die Datei konnte nicht importiert werden. Trailscape liest " +
+                        "GPX- und FIT-Dateien, auch als .gz gepackt.",
+                    e,
                 )
             } finally {
                 importing = false
@@ -352,6 +361,25 @@ fun TourListContent(
             onDismiss = { deleteTarget = null },
         )
     }
+
+    importErrorMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = { importErrorMessage = null },
+            title = { Text("Import fehlgeschlagen") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        importErrorMessage = null
+                        startImport()
+                    },
+                ) { Text("Andere Datei wählen") }
+            },
+            dismissButton = {
+                TextButton(onClick = { importErrorMessage = null }) { Text("Schließen") }
+            },
+        )
+    }
 }
 
 /**
@@ -401,7 +429,7 @@ private fun TourListHeader(
 /**
  * Detailansicht einer Tour samt ihrer Dialoge (Umbenennen, Loeschen, Teilen)
  * als eigenstaendige Vollbildansicht — Nachfolger des fruesheren
- * `if (detailRide != null)`-Zweigs von `RidesScreen.kt`.
+ * `if (detailRide != null)`-Zweigs von `TourList.kt`.
  *
  * ## Warum eine Tour-ID statt eines internen Zustands
  * `RidesScreen` merkte sich die geoeffnete Tour frueher selbst
@@ -769,8 +797,10 @@ private fun RideCard(
 /**
  * Was die Tourenliste kann, solange nichts gespeichert ist.
  *
- * Derselbe Aufbau wie im Trainings-Tab (siehe `ui/components/EmptyState.kt`)
- * samt der drei Wege, auf denen eine Tour hier landen kann.
+ * Textbudget wie in allen Leerzustaenden (`ui/components/EmptyState.kt`): ein
+ * Satz, dann die Aktionen. Die drei Wege, auf denen eine Tour hier landen
+ * kann, stehen als Knoepfe da und brauchen keine Vorrede; das ZIP-Wissen wohnt
+ * beim Archiv-Import selbst (Mehr -> Daten & Backup).
  */
 @Composable
 private fun RidesEmptyState(
@@ -780,12 +810,8 @@ private fun RidesEmptyState(
 ) {
     EmptyState(
         title = "Noch keine Touren",
-        body = "Hier sammeln sich alle Touren — aufgezeichnete wie importierte — mit " +
-            "Distanz, Dauer, Höhenmetern, Ø-Puls und der berechneten Trainingslast. " +
-            "Ein Tipp auf eine Tour zeigt sie auf der Karte, der Knopf „Details“ " +
-            "zeigt sie im Detail — mit Karte, Höhenprofil und Verläufen.",
-        hint = "Ein ganzer Strava- oder Garmin-Export lässt sich als ZIP-Archiv auf " +
-            "einmal einlesen — unter Mehr → Daten & Backup.",
+        body = "Jede aufgezeichnete oder importierte Tour landet hier — mit Distanz, " +
+            "Dauer, Höhenmetern und Trainingslast.",
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
             TextButton(onClick = onImportFile) { Text("GPX-/FIT-Datei öffnen") }

@@ -43,6 +43,10 @@ import kotlin.math.round
  * `lib/screens/more_screen.dart`. Alter, Geschlecht und Gewicht sind Pflicht,
  * alle anderen Felder optional.
  *
+ * Der Inhalt der Zeile „Profil" in der Gruppe „Profil & Daten" des
+ * Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
+ * stellt Titel und Aufklapp-Rahmen.
+ *
  * Uebernimmt ein von aussen (Backup-Import, initialer Ladevorgang) neu
  * gesetztes [AppViewModel.profile] in die Eingabefelder — aber nur, wenn sich
  * die Signatur wirklich geaendert hat, damit eigene Tastatureingaben nicht
@@ -60,7 +64,7 @@ import kotlin.math.round
  * als „deine Werte" ausgegeben.
  */
 @Composable
-fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun ProfileCardContent(appViewModel: AppViewModel) {
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
     val confirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -95,201 +99,199 @@ fun ProfileCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
         sex = profile.sex
     }
 
-    MoreSectionCard(title = "Profil", modifier = modifier) {
-        Text(
-            text = "Alter, Geschlecht und Gewicht sind die Grundlage für Trainingslast, " +
-                "Fitness-Kurve und Erholungswerte.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "Alter, Geschlecht und Gewicht sind die Grundlage für Trainingslast, " +
+            "Fitness-Kurve und Erholungswerte.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
 
-        Row {
-            OneUiTextField(
-                label = "Alter",
-                value = ageText,
-                onValueChange = { ageText = it },
-                // Der Platzhalter nennt genau die Zahl, mit der bis zur
-                // Eingabe gerechnet wird — sichtbar als Vorschlag (grau, im
-                // leeren Feld) statt als scheinbar eigene Angabe.
-                placeholder = defaultTrainingProfile.ageYears.toString(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            OneUiDropdownField(
-                label = "Geschlecht",
-                value = sex,
-                options = sexOptions,
-                onChange = { sex = it },
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row {
-            OneUiTextField(
-                label = "Gewicht (kg)",
-                value = weightText,
-                onValueChange = { weightText = it },
-                placeholder = formatProfileNumber(defaultTrainingProfile.weightKg),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            OneUiTextField(
-                label = "Rad + Gepäck (kg)",
-                value = setupMassText,
-                onValueChange = { setupMassText = it },
-                placeholder = formatProfileNumber(defaultSetupMassKg),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        if (!confirmed) {
-            Text(
-                text = "Noch nicht eingetragen — wir rechnen bis dahin mit Standardwerten " +
-                    "(${defaultTrainingProfile.ageYears} Jahre, " +
-                    "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg). " +
-                    "Trainingslast, HFmax, Schwelle und geschätzte Leistung sind deshalb " +
-                    "nur grobe Schätzungen.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-        }
-        Text(
-            text = "Ohne Angabe rechnen wir mit ${formatProfileNumber(defaultSetupMassKg)} kg " +
-                "für Rad und Gepäck.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
+    Row {
         OneUiTextField(
-            label = "Zeit pro Woche (Stunden, optional)",
-            value = weeklyHoursText,
-            onValueChange = { weeklyHoursText = it },
+            label = "Alter",
+            value = ageText,
+            onValueChange = { ageText = it },
+            // Der Platzhalter nennt genau die Zahl, mit der bis zur
+            // Eingabe gerechnet wird — sichtbar als Vorschlag (grau, im
+            // leeren Feld) statt als scheinbar eigene Angabe.
+            placeholder = defaultTrainingProfile.ageYears.toString(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        OneUiDropdownField(
+            label = "Geschlecht",
+            value = sex,
+            options = sexOptions,
+            onChange = { sex = it },
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    Row {
+        OneUiTextField(
+            label = "Gewicht (kg)",
+            value = weightText,
+            onValueChange = { weightText = it },
+            placeholder = formatProfileNumber(defaultTrainingProfile.weightKg),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        OneUiTextField(
+            label = "Rad + Gepäck (kg)",
+            value = setupMassText,
+            onValueChange = { setupMassText = it },
+            placeholder = formatProfileNumber(defaultSetupMassKg),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.weight(1f),
+        )
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+    if (!confirmed) {
+        Text(
+            text = "Noch nicht eingetragen — wir rechnen bis dahin mit Standardwerten " +
+                "(${defaultTrainingProfile.ageYears} Jahre, " +
+                "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg). " +
+                "Trainingslast, HFmax, Schwelle und geschätzte Leistung sind deshalb " +
+                "nur grobe Schätzungen.",
+            style = MaterialTheme.typography.bodySmall,
+            color = hintColor,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+    }
+    Text(
+        text = "Ohne Angabe rechnen wir mit ${formatProfileNumber(defaultSetupMassKg)} kg " +
+            "für Rad und Gepäck.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+
+    OneUiTextField(
+        label = "Zeit pro Woche (Stunden, optional)",
+        value = weeklyHoursText,
+        onValueChange = { weeklyHoursText = it },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = "Mit deinem Zeitbudget deckeln wir das Wochenziel auf das, was sich in " +
+            "dieser Zeit realistisch fahren lässt.",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+
+    TextButton(onClick = { advancedOpen = !advancedOpen }) {
+        Icon(
+            imageVector = if (advancedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = hintColor,
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text("Erweitert", style = MaterialTheme.typography.titleSmall)
+    }
+
+    if (advancedOpen) {
+        Text(
+            text = "Ohne eigene Werte schätzen wir die maximale Herzfrequenz aus deinem " +
+                "Alter (208 − 0,7 × Alter) und die Schwelle daraus. Ein HFmax-Feldtest — " +
+                "nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten mit maximalem " +
+                "Endspurt — verbessert die Genauigkeit aller Auswertungen deutlich.",
+            style = MaterialTheme.typography.bodySmall,
+            color = hintColor,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OneUiTextField(
+            label = "HFmax (bpm, optional)",
+            value = hrMaxText,
+            onValueChange = { hrMaxText = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OneUiTextField(
+            label = "Schwellenpuls LTHR (bpm, optional)",
+            value = lthrText,
+            onValueChange = { lthrText = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        OneUiTextField(
+            label = "Ruhepuls (bpm, optional)",
+            value = restingHrText,
+            onValueChange = { restingHrText = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Mit deinem Zeitbudget deckeln wir das Wochenziel auf das, was sich in " +
-                "dieser Zeit realistisch fahren lässt.",
+            text = "Ohne eigenen Ruhepuls nehmen wir den aus deinen Vitaldaten gemessenen Wert.",
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,
         )
-        Spacer(modifier = Modifier.height(8.dp))
-
-        TextButton(onClick = { advancedOpen = !advancedOpen }) {
-            Icon(
-                imageVector = if (advancedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = hintColor,
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Erweitert", style = MaterialTheme.typography.titleSmall)
-        }
-
-        if (advancedOpen) {
-            Text(
-                text = "Ohne eigene Werte schätzen wir die maximale Herzfrequenz aus deinem " +
-                    "Alter (208 − 0,7 × Alter) und die Schwelle daraus. Ein HFmax-Feldtest — " +
-                    "nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten mit maximalem " +
-                    "Endspurt — verbessert die Genauigkeit aller Auswertungen deutlich.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OneUiTextField(
-                label = "HFmax (bpm, optional)",
-                value = hrMaxText,
-                onValueChange = { hrMaxText = it },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OneUiTextField(
-                label = "Schwellenpuls LTHR (bpm, optional)",
-                value = lthrText,
-                onValueChange = { lthrText = it },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            OneUiTextField(
-                label = "Ruhepuls (bpm, optional)",
-                value = restingHrText,
-                onValueChange = { restingHrText = it },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Ohne eigenen Ruhepuls nehmen wir den aus deinen Vitaldaten gemessenen Wert.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-            OneUiTextField(
-                label = "Schwellenleistung FTP (Watt, optional)",
-                value = ftpText,
-                onValueChange = { ftpText = it },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten " +
-                    "kannst. Sie ist der Massstab für jede Trainingslast: An ihr hängen " +
-                    "Fitness (CTL), Ermüdung (ATL), Form (TSB) und dein Wochenziel — " +
-                    "änderst du sie, verschieben sich auch alle bisherigen Werte.\n\n" +
-                    "Ohne Eintrag schätzen wir: zuerst aus deinem besten " +
-                    "20-Minuten-Abschnitt (× 0,95), dann aus dem Abgleich mit deiner " +
-                    "gemessenen Herzfrequenz, notfalls grob mit " +
-                    "${formatProfileNumber(defaultEftpWPerKg)} W/kg — für ambitionierte " +
-                    "Fahrer:innen deutlich zu niedrig. Ein eigener Wert ist deshalb die " +
-                    "wirksamste Einzelangabe in diesem Formular. Für eine belastbare Zahl " +
-                    "fährst du nach gutem Aufwärmen 20 Minuten am Anschlag und trägst " +
-                    "95 % deiner Durchschnittsleistung ein; ohne Leistungsmesser bleibt " +
-                    "es auch hier ein Schätzwert.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-        }
 
         Spacer(modifier = Modifier.height(12.dp))
-        statusText?.let { status ->
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+        OneUiTextField(
+            label = "Schwellenleistung FTP (Watt, optional)",
+            value = ftpText,
+            onValueChange = { ftpText = it },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten " +
+                "kannst. Sie ist der Massstab für jede Trainingslast: An ihr hängen " +
+                "Fitness (CTL), Ermüdung (ATL), Form (TSB) und dein Wochenziel — " +
+                "änderst du sie, verschieben sich auch alle bisherigen Werte.\n\n" +
+                "Ohne Eintrag schätzen wir: zuerst aus deinem besten " +
+                "20-Minuten-Abschnitt (× 0,95), dann aus dem Abgleich mit deiner " +
+                "gemessenen Herzfrequenz, notfalls grob mit " +
+                "${formatProfileNumber(defaultEftpWPerKg)} W/kg — für ambitionierte " +
+                "Fahrer:innen deutlich zu niedrig. Ein eigener Wert ist deshalb die " +
+                "wirksamste Einzelangabe in diesem Formular. Für eine belastbare Zahl " +
+                "fährst du nach gutem Aufwärmen 20 Minuten am Anschlag und trägst " +
+                "95 % deiner Durchschnittsleistung ein; ohne Leistungsmesser bleibt " +
+                "es auch hier ein Schätzwert.",
+            style = MaterialTheme.typography.bodySmall,
+            color = hintColor,
+        )
+    }
 
-        Button(
-            onClick = {
-                statusText = saveProfile(
-                    current = profile,
-                    ageText = ageText,
-                    sex = sex,
-                    weightText = weightText,
-                    setupMassText = setupMassText,
-                    weeklyHoursText = weeklyHoursText,
-                    hrMaxText = hrMaxText,
-                    lthrText = lthrText,
-                    restingHrText = restingHrText,
-                    ftpText = ftpText,
-                    onSave = appViewModel::setProfile,
-                )
-            },
-        ) {
-            Text("Profil speichern")
-        }
+    Spacer(modifier = Modifier.height(12.dp))
+    statusText?.let { status ->
+        Text(
+            text = status,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+
+    Button(
+        onClick = {
+            statusText = saveProfile(
+                current = profile,
+                ageText = ageText,
+                sex = sex,
+                weightText = weightText,
+                setupMassText = setupMassText,
+                weeklyHoursText = weeklyHoursText,
+                hrMaxText = hrMaxText,
+                lthrText = lthrText,
+                restingHrText = restingHrText,
+                ftpText = ftpText,
+                onSave = appViewModel::setProfile,
+            )
+        },
+    ) {
+        Text("Profil speichern")
     }
 }
 

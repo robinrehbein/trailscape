@@ -6,7 +6,7 @@ import java.io.File
  * Gemeinsame Verwaltung des Cache-Verzeichnisses, aus dem der FileProvider
  * geteilte GPX-Dateien ausliefert (`res/xml/file_paths.xml`).
  *
- * Geteilt von der Tourenliste (`ui/rides/RidesScreen.kt`) und der Karte
+ * Geteilt von der Tourenliste (`ui/rides/TourList.kt`) und der Karte
  * (`ui/map/MapScreen.kt`), weil beide dieselbe Datei-Uebergabe benutzen und
  * sich vorher genau nicht in die Quere kommen duerfen:
  *

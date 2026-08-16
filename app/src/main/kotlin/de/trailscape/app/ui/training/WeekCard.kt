@@ -25,7 +25,7 @@ import kotlin.math.roundToInt
 
 /**
  * Karte „Belastung dieser Woche": Wochenlast, Zielwert (Last-Budget, Stunden)
- * und Deload-Empfehlung.
+ * und Empfehlung zur Entlastungswoche.
  *
  * ## Warum nicht mehr „Diese Woche"
  * So hiess auch die Karte der Startseite (`ui/today/TodayCards.kt`) — und die
@@ -123,7 +123,13 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
             NoticeBox(
                 icon = if (deload.recommended) Icons.Filled.Warning else Icons.Filled.CheckCircle,
                 color = if (deload.recommended) trainingWarning else trainingGood,
-                title = deload.title,
+                // `deload.title` kommt aus `:core` und sagt im Nicht-Fall noch
+                // „Kein Deload nötig" — ein Anglizismus, den `:core` (Tests,
+                // andere Aufrufer) nicht verlieren soll. Der Ja-Fall dort
+                // heisst bereits „Entlastungswoche empfohlen"; wir spiegeln
+                // dieselbe Uebersetzung hier lokal ueber das Flag, ohne den
+                // Text zu parsen.
+                title = if (deload.recommended) deload.title else "Keine Entlastungswoche nötig",
                 text = if (deloadRange != null) "${deload.detail} Richtwert: $deloadRange." else deload.detail,
             )
 

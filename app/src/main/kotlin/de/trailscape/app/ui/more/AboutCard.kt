@@ -78,9 +78,13 @@ private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
  *
  * Braucht das [AppViewModel] fuer die `debugLines` des letzten Health-Syncs —
  * den optionalen Anhang im Problem-Bericht.
+ *
+ * Der Inhalt der Zeile „Über" in der Gruppe „App" des Mehr-Tabs (siehe
+ * `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel und
+ * Aufklapp-Rahmen.
  */
 @Composable
-fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
+fun AboutCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val syncReport by appViewModel.lastSyncReport.collectAsStateWithLifecycle()
@@ -97,107 +101,105 @@ fun AboutCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     var licensesExpanded by remember { mutableStateOf(false) }
     var updateStatus by remember { mutableStateOf<String?>(null) }
 
-    MoreSectionCard(title = "Über", modifier = modifier) {
+    Text(
+        text = "Trailscape ist kostenlos und local-first: deine Touren bleiben auf " +
+            "deinem Gerät, ein Sync-Server ist optional. Kartendaten © " +
+            "OpenStreetMap-Mitwirkende, Routing über BRouter.",
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    Text(
+        text = "Version $versionName · freie Software unter der GNU GPL v3 oder später",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Die Erststart-Einfuehrung ist sonst unwiederbringlich weg, sobald
+        // sie einmal weggeklickt wurde — und sie ist die einzige Stelle,
+        // die den Ueberblick ueber alle Tabs am Stueck gibt.
+        TextButton(
+            onClick = { appViewModel.showOnboardingAgain() },
+            contentPadding = PaddingValues(0.dp),
+        ) { Text("Einführung erneut ansehen") }
+        TextButton(
+            onClick = { uriHandler.openUri(REPOSITORY_URL) },
+            contentPadding = PaddingValues(0.dp),
+        ) { Text("Quellcode auf GitHub") }
+        TextButton(
+            onClick = { uriHandler.openUri(PRIVACY_URL) },
+            contentPadding = PaddingValues(0.dp),
+        ) { Text("Datenschutz") }
+        TextButton(
+            onClick = { showProblemDialog = true },
+            contentPadding = PaddingValues(0.dp),
+        ) { Text("Problem melden") }
+        // Der automatische Check laeuft still und hoechstens einmal am Tag
+        // (siehe UpdateChecker). Dieser Knopf ist der Weg, es *jetzt* zu
+        // wissen — samt sichtbarer Antwort, auch wenn sie „alles aktuell"
+        // lautet: Eine Pruefung ohne Rueckmeldung fuehlt sich kaputt an.
+        TextButton(
+            onClick = {
+                if (updateStatus == UPDATE_CHECK_RUNNING) return@TextButton
+                scope.launch {
+                    updateStatus = UPDATE_CHECK_RUNNING
+                    updateStatus = when (val result = appViewModel.checkForUpdateNow()) {
+                        is UpdateCheckResult.Available ->
+                            "Version ${result.versionName} ist verfügbar."
+                        UpdateCheckResult.UpToDate -> "Du bist aktuell."
+                        else -> "Prüfung nicht möglich — bist du gerade offline?"
+                    }
+                }
+            },
+            contentPadding = PaddingValues(0.dp),
+        ) { Text("Nach Updates suchen") }
+    }
+
+    updateStatus?.let { status ->
         Text(
-            text = "Trailscape ist kostenlos und local-first: deine Touren bleiben auf " +
-                "deinem Gerät, ein Sync-Server ist optional. Kartendaten © " +
-                "OpenStreetMap-Mitwirkende, Routing über BRouter.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Version $versionName · freie Software unter der GNU GPL v3 oder später",
+            text = status,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(modifier = Modifier.height(4.dp))
-
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Die Erststart-Einfuehrung ist sonst unwiederbringlich weg, sobald
-            // sie einmal weggeklickt wurde — und sie ist die einzige Stelle,
-            // die den Ueberblick ueber alle Tabs am Stueck gibt.
+        if (updateVersion != null) {
             TextButton(
-                onClick = { appViewModel.showOnboardingAgain() },
+                onClick = { uriHandler.openUri(RELEASE_PAGE_URL) },
                 contentPadding = PaddingValues(0.dp),
-            ) { Text("Einführung erneut ansehen") }
-            TextButton(
-                onClick = { uriHandler.openUri(REPOSITORY_URL) },
-                contentPadding = PaddingValues(0.dp),
-            ) { Text("Quellcode auf GitHub") }
-            TextButton(
-                onClick = { uriHandler.openUri(PRIVACY_URL) },
-                contentPadding = PaddingValues(0.dp),
-            ) { Text("Datenschutz") }
-            TextButton(
-                onClick = { showProblemDialog = true },
-                contentPadding = PaddingValues(0.dp),
-            ) { Text("Problem melden") }
-            // Der automatische Check laeuft still und hoechstens einmal am Tag
-            // (siehe UpdateChecker). Dieser Knopf ist der Weg, es *jetzt* zu
-            // wissen — samt sichtbarer Antwort, auch wenn sie „alles aktuell"
-            // lautet: Eine Pruefung ohne Rueckmeldung fuehlt sich kaputt an.
-            TextButton(
-                onClick = {
-                    if (updateStatus == UPDATE_CHECK_RUNNING) return@TextButton
-                    scope.launch {
-                        updateStatus = UPDATE_CHECK_RUNNING
-                        updateStatus = when (val result = appViewModel.checkForUpdateNow()) {
-                            is UpdateCheckResult.Available ->
-                                "Version ${result.versionName} ist verfügbar."
-                            UpdateCheckResult.UpToDate -> "Du bist aktuell."
-                            else -> "Prüfung nicht möglich — bist du gerade offline?"
-                        }
-                    }
-                },
-                contentPadding = PaddingValues(0.dp),
-            ) { Text("Nach Updates suchen") }
+            ) { Text("Herunterladen") }
         }
+    }
 
-        updateStatus?.let { status ->
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 4.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+
+    TextButton(
+        onClick = { licensesExpanded = !licensesExpanded },
+        contentPadding = PaddingValues(0.dp),
+    ) {
+        Text(if (licensesExpanded) "Open-Source-Lizenzen ausblenden" else "Open-Source-Lizenzen")
+    }
+
+    AnimatedVisibility(visible = licensesExpanded) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            NoticeGroup(title = "Verwendete Bibliotheken", notices = libraryNotices)
+            Spacer(modifier = Modifier.height(12.dp))
+            NoticeGroup(title = "Daten und Dienste", notices = dataNotices)
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = status,
+                text = "Trailscape selbst steht unter der GNU General Public License, " +
+                    "Version 3 oder später. Du darfst die App benutzen, weitergeben und " +
+                    "verändern — abgeleitete Versionen müssen ihrerseits quelloffen " +
+                    "unter der GPL stehen.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (updateVersion != null) {
-                TextButton(
-                    onClick = { uriHandler.openUri(RELEASE_PAGE_URL) },
-                    contentPadding = PaddingValues(0.dp),
-                ) { Text("Herunterladen") }
-            }
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 4.dp),
-            color = MaterialTheme.colorScheme.outlineVariant,
-        )
-
-        TextButton(
-            onClick = { licensesExpanded = !licensesExpanded },
-            contentPadding = PaddingValues(0.dp),
-        ) {
-            Text(if (licensesExpanded) "Open-Source-Lizenzen ausblenden" else "Open-Source-Lizenzen")
-        }
-
-        AnimatedVisibility(visible = licensesExpanded) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                NoticeGroup(title = "Verwendete Bibliotheken", notices = libraryNotices)
-                Spacer(modifier = Modifier.height(12.dp))
-                NoticeGroup(title = "Daten und Dienste", notices = dataNotices)
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Trailscape selbst steht unter der GNU General Public License, " +
-                        "Version 3 oder später. Du darfst die App benutzen, weitergeben und " +
-                        "verändern — abgeleitete Versionen müssen ihrerseits quelloffen " +
-                        "unter der GPL stehen.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                TextButton(
-                    onClick = { uriHandler.openUri(LICENSE_URL) },
-                    contentPadding = PaddingValues(0.dp),
-                ) { Text("Lizenztext lesen") }
-            }
+            TextButton(
+                onClick = { uriHandler.openUri(LICENSE_URL) },
+                contentPadding = PaddingValues(0.dp),
+            ) { Text("Lizenztext lesen") }
         }
     }
 

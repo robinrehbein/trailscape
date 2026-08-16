@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
 /**
  * Einzelimport einer per SAF ausgewaehlten Aktivitaetsdatei (GPX oder FIT,
  * je auch `.gz`) — geteilt zwischen dem Import-Knopf im Touren-Screen
- * (`ui/rides/RidesScreen.kt`) und der „Aktivitaet importieren"-Schaltflaeche
+ * (`ui/rides/TourList.kt`) und der „Aktivitaet importieren"-Schaltflaeche
  * der Backup-Karte (`ui/more/BackupCard.kt`), damit beide dieselbe
  * Dateitypenerkennung nutzen.
  *

@@ -14,17 +14,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +37,7 @@ import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.training.readinessBandColor
 import de.trailscape.core.PlanFeasibility
 import de.trailscape.core.Ride
@@ -77,6 +78,20 @@ import kotlin.math.roundToInt
  * Entscheidung ([TodayRoute] aus `:core`): Wurde heruntergestuft, nennt die
  * Karte beide Zahlen und den Grund, und der Knopf traegt genau die Distanz, die
  * er auch erzeugt.
+ *
+ * ## Eine Karte, eine Aussage
+ * Bis hierher stapelte die Karte bis zu drei gleichgeformte, farbig hinterlegte
+ * Hinweisbloecke uebereinander: die Empfehlung, die Abweichungsbegruendung und
+ * (ohne Daten) der Uhren-Hinweis — drei Flaechen, die um denselben Blick
+ * konkurrierten, obwohl nur eine der Kern der Karte ist. Empfehlung und
+ * Abweichung stehen jetzt als **ein** ungerahmter Textblock: Titel der
+ * Empfehlung, darunter genau ein Satz — der [TodayRoute.note] der Abweichung,
+ * wenn es eine gibt, sonst [de.trailscape.core.DailyRecommendation.detail].
+ * Zwei Saetze zur selben Sache waeren die alte Doppelung nur kleiner gefasst.
+ * Der Erklaersatz zum Score ([de.trailscape.core.Readiness.detail]) entfaellt
+ * hier komplett: Er wiederholt nur, was der Trainings-Tab (`VitalsCard`) je
+ * Signal bereits mit eigener Ampel zeigt, und diese Karte ist die Antwort auf
+ * „was fahre ich heute", nicht die Diagnose dahinter.
  *
  * @param todayRoute Ergebnis von [de.trailscape.core.decideTodayRoute] —
  *   Routenziel, geplante Einheit und der erklaerende Satz in einem.
@@ -133,17 +148,6 @@ internal fun TodayRecommendationCard(
                         )
                     }
                 }
-                // Der Satz zum Wert („woraus sich der Score speist") bleibt
-                // erhalten; die Einzelbegruendungen der Empfehlung
-                // (`recommendation.reasons`) nicht — sie stehen als Messwert
-                // samt Ampel im Trainings-Tab (`VitalsCard`) und wuerden diese
-                // Karte in eine Diagnose verwandeln.
-                Text(
-                    text = readiness.detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = theme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
                 // Ohne Gesamtwert bleibt die Karte nicht stumm: `:core` sagt
@@ -161,28 +165,28 @@ internal fun TodayRecommendationCard(
                 }
             }
 
-            NoticeBox(
-                icon = Icons.Filled.Favorite,
+            // Empfehlung und Abweichung als EIN Textblock, ohne NoticeBox-
+            // Rahmen: Titel der Empfehlung, darunter genau ein erklaerender
+            // Satz. Steht [TodayRoute.note], TRAEGT er diesen Satz — er nennt
+            // ohnehin beide Zahlen und den Grund (siehe [TodayRoute]) und ist
+            // damit die genauere Aussage; ohne Abweichung faellt die Karte auf
+            // `recommendation.detail` zurueck. Zwei Saetze nebeneinander waeren
+            // dieselbe Doppelung, die diese Karte gerade abgelegt hat.
+            Text(
+                text = recommendation.title,
+                style = MaterialTheme.typography.titleSmall,
                 color = color,
-                title = recommendation.title,
-                text = recommendation.detail,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = todayRoute.note ?: recommendation.detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.onSurfaceVariant,
             )
 
             if (session != null) {
                 Spacer(modifier = Modifier.height(12.dp))
                 PlannedSessionBlock(session)
-            }
-
-            // Der Satz zur Abweichung — er gehoert zwischen Plan und Knopf,
-            // weil er genau erklaert, warum der Knopf gleich eine andere Zahl
-            // traegt als die Zeile darueber.
-            todayRoute.note?.let { note ->
-                Spacer(modifier = Modifier.height(12.dp))
-                NoticeBox(
-                    icon = Icons.Filled.Route,
-                    color = color,
-                    text = note,
-                )
             }
 
             if (onPlanRoute != null) {
@@ -206,14 +210,14 @@ internal fun TodayRecommendationCard(
                 }
             }
 
+            // Ein Satz statt zwei: Was die Uhr liefert, steht schon im
+            // Mehr-Tab selbst — hier reicht der Anstoss, dorthin zu tippen.
             if (showHealthHint) {
                 Spacer(modifier = Modifier.height(12.dp))
                 NoticeBox(
                     icon = Icons.Filled.Watch,
                     color = theme.onSurfaceVariant,
-                    text = "Mit einer Uhr, die Ruhepuls, HRV und Schlaf nach Health Connect " +
-                        "schreibt, wird hier zusätzlich deine Tagesbereitschaft angezeigt. " +
-                        "Verbinden lässt sie sich im Mehr-Tab.",
+                    text = "Verbinde eine Uhr im Mehr-Tab, um hier deine Tagesbereitschaft zu sehen.",
                     modifier = Modifier.clickable(onClick = onOpenHealth),
                 )
             }
@@ -227,34 +231,90 @@ private fun routeButtonSuffix(target: RouteTarget): String =
         ascentPreferenceLabels.getValue(target.ascentPreference).lowercase()
 
 /**
- * Warnung, wenn der Plan sein eigenes Ziel nicht traegt.
+ * Hinweis, wenn der Plan sein eigenes Ziel nicht traegt.
  *
- * Bis hierher gab es sie nicht: Ein Einsteiger mit dem Ziel „200 km in 12
- * Wochen" bekam einen Plan, dessen laengste Fahrt 45 km war, las „Plan mit 12
- * Wochen erstellt." und hielt ihn fuer tragfaehig. Der Text nennt deshalb drei
- * Dinge, nicht nur das Problem: was der Plan hergibt, welches Ziel er truege
- * und wie lange das gewuenschte braeuchte — der Rat ist die Haelfte der
- * Auskunft.
+ * ## Warnung oder Auskunft?
+ * Bis hierher stand hier Fehlerrot mit Warndreieck unter der Frage „Trägt dein
+ * Plan?" — und das an jedem einzelnen Tag, an dem die Zieldistanz das Volumen
+ * des Plans uebersteigt, also potenziell wochenlang. Fehlerrot ist die Farbe,
+ * die diese App sonst fuer akute, handlungsbeduerftige Zustaende reserviert
+ * (Ruhetag, abgebrochene Aufzeichnung); hier ist nichts akut — der Plan laeuft
+ * unveraendert weiter, er traegt nur ein kuerzeres Ziel als eingetragen. Eine
+ * Frage im Titel unterstellt zudem eine Unsicherheit, die die App gar nicht
+ * hat: Sie hat die Antwort schon berechnet. Titel deshalb als Feststellung,
+ * Farbe die mildere `caution`-Stufe (dieselbe wie ein Deload-Hinweis), Icon ein
+ * schlichtes Info-Zeichen statt des Warndreiecks.
+ *
+ * ## Zahlen statt Fliesstext
+ * [PlanFeasibility] traegt die Distanzen bereits als eigene Felder
+ * ([PlanFeasibility.longestRideKm], [PlanFeasibility.goalDistanceKm],
+ * [PlanFeasibility.suggestedDistanceKm]) — [PlanFeasibility.message] schreibt
+ * exakt dieselben Zahlen nur in einen Absatz mit Prozentangabe um. Eine
+ * kompakte Zahlenzeile im Stil von [Fact] sagt dasselbe auf einen Blick statt
+ * in einem Satz zum Lesen. Der zweite, erlaeuternde Absatz „Der Plan bleibt
+ * gültig …" entfaellt: Das sagt jetzt der Knopf „Ziel anpassen", nicht mehr
+ * ein zweiter Text daneben.
+ *
+ * ## Quittierung
+ * „Verstanden" ruft [onAcknowledge] — `TodayScreen` bindet das an
+ * `AppViewModel.acknowledgePlanFeasibility` und blendet die Karte danach fuer
+ * genau diesen Plan aus. Ohne dieses Gedaechtnis kaeme der Hinweis bei jedem
+ * App-Start wieder, obwohl niemand am Plan etwas geaendert hat — ein neuer
+ * oder veraenderter Plan (andere Zieldistanz, anderes Zieldatum, andere
+ * Laufzeit) traegt einen anderen Schluessel und zeigt die Karte automatisch
+ * wieder.
  */
 @Composable
-internal fun PlanFeasibilityCard(feasibility: PlanFeasibility) {
-    val theme = MaterialTheme.colorScheme
+internal fun PlanFeasibilityCard(
+    feasibility: PlanFeasibility,
+    onAdjustGoal: () -> Unit,
+    onAcknowledge: () -> Unit,
+) {
+    val cautionColor = LocalSignalColors.current.caution
     Card {
         Column(modifier = Modifier.padding(CardPadding)) {
-            Text("Trägt dein Plan?", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = cautionColor,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Plan und Ziel passen nicht zusammen",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
-            NoticeBox(
-                icon = Icons.Filled.Warning,
-                color = theme.error,
-                text = feasibility.message ?: "",
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Der Plan bleibt gültig – er bereitet dich nur auf eine kürzere Distanz " +
-                    "vor, als du eingetragen hast. Ein neues Ziel legst du im Trainings-Tab an.",
-                style = MaterialTheme.typography.bodySmall,
-                color = theme.onSurfaceVariant,
-            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Fact(
+                    label = "Längste Fahrt",
+                    value = "${feasibility.longestRideKm} km",
+                    compact = true,
+                )
+                Fact(
+                    label = "Ziel",
+                    value = "${formatKmDe(feasibility.goalDistanceKm)} km",
+                    compact = true,
+                )
+                feasibility.suggestedDistanceKm?.let { suggested ->
+                    Fact(
+                        label = "Trägt bis",
+                        value = "$suggested km",
+                        compact = true,
+                        valueColor = cautionColor,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = onAdjustGoal) { Text("Ziel anpassen") }
+                TextButton(onClick = onAcknowledge) { Text("Verstanden") }
+            }
         }
     }
 }
@@ -305,23 +365,26 @@ private fun PlannedSessionBlock(session: TrainingSession) {
 /**
  * Der zweite deutliche Weg von dieser Seite weg: aufzeichnen.
  *
- * Der Knopf **wechselt nur** in den Karten-Tab und startet die Aufzeichnung
- * nicht selbst. Das ist Absicht: Der Start haengt an Standort- und (ab
+ * Der Knopf loest [de.trailscape.app.ui.AppViewModel.requestRecording] aus —
+ * er startet die Aufzeichnung nicht selbst, sondern reicht die Bitte an den
+ * Karten-Tab weiter. Das ist Absicht: Der Start haengt an Standort- und (ab
  * Android 13) Benachrichtigungs-Berechtigung, die `ui/map/MapScreen.kt` mit
  * eigenen Launchern einholt, bevor es
  * [de.trailscape.app.record.RecordingRepository.start] ruft. Ein zweiter
- * Startpfad haette diese Berechtigungslogik entweder verdoppelt oder umgangen
- * — beides schlechter als ein Klick mehr. Beschriftung und Hinweis sagen
- * deshalb genau das, was passiert.
+ * Startpfad hier haette diese Berechtigungslogik entweder verdoppelt oder
+ * umgangen; so gibt es nur den einen, und der Nutzer sieht davon nichts
+ * ausser dem einen Tab-Wechsel — die Berechtigungsfrage erscheint dort, wo
+ * sie ohnehin hingehoert. Ein Erklaertext dazu erledigt sich damit von
+ * selbst: Der Knopf verspricht „Aufzeichnung starten" und tut genau das.
  */
 @Composable
-internal fun RecordPromptCard(onOpenMap: () -> Unit) {
+internal fun RecordPromptCard(onStartRecording: () -> Unit) {
     Card {
         Column(modifier = Modifier.padding(CardPadding)) {
             Text("Aufzeichnung", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
             Button(
-                onClick = onOpenMap,
+                onClick = onStartRecording,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 contentPadding = PaddingValues(horizontal = 20.dp),
             ) {
@@ -331,15 +394,8 @@ internal fun RecordPromptCard(onOpenMap: () -> Unit) {
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Karte öffnen zum Aufzeichnen")
+                Text("Aufzeichnung starten")
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Die Aufzeichnung startest du auf der Karte mit dem grünen Knopf unten " +
-                    "rechts — dort wird auch nach der Standortfreigabe gefragt.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

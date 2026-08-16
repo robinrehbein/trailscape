@@ -107,10 +107,15 @@ fun VitalsCard(
 
             if (vo2.available) {
                 Spacer(modifier = Modifier.height(12.dp))
+                // Der gedaempfte Untertext erklaert den Begriff direkt an der
+                // Kennzahl mit — genau die Definition, die vorher nur im
+                // separaten Glossar stand (`GlossaryCard.kt`, geloescht). Wer
+                // die Zahl nicht kennt, braucht dafuer keinen zweiten Ort.
                 SignalRow(
                     color = unknown,
                     headline = vo2.text,
-                    detail = "Geschätzt (${confidenceLabels.getValue(vo2.confidence)}) — " +
+                    detail = "Ein Mass für deine maximale Sauerstoffaufnahme unter Volllast — " +
+                        "geschätzt (${confidenceLabels.getValue(vo2.confidence)}), deshalb " +
                         "ein Bereich, keine Messung.",
                 )
             }

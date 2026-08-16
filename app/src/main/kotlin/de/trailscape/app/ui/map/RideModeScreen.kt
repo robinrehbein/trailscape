@@ -61,13 +61,22 @@ import kotlin.math.roundToInt
  * # Fahrmodus — dieselbe laufende Aufzeichnung, nur fuer den Blick im Fahren
  *
  * Die Live-Leiste auf der Karte ([LiveRecordingCard]) ist zum Nachschauen im
- * Stand gebaut: vier Kennzahlen nebeneinander in `headlineSmall`, zwei 40-dp-
- * Knoepfe mit 18-dp-Symbolen. Auf Schotter, mit Handschuhen, bei Sonne und
- * Vibration ist davon nichts mehr bedienbar oder lesbar. Der Fahrmodus ist die
- * Antwort darauf — **kein zweiter Aufzeichnungsweg**: Er liest exakt dieselben
- * StateFlows des [de.trailscape.app.record.RecordingRepository], die auch die
- * Leiste zeigt, und schickt dieselben zwei Kommandos zurueck. Verlassen wird er
- * ohne jede Wirkung auf die Aufzeichnung.
+ * Stand gebaut: vier Kennzahlen nebeneinander in `headlineSmall`, zwei
+ * 48-dp-Knoepfe mit 18-dp-Symbolen — die Material-Mindestflaeche, mehr nicht.
+ * Auf Schotter, mit Handschuhen, bei Sonne und Vibration ist davon nichts mehr
+ * sicher zu treffen oder aus der Bewegung heraus zu lesen. Der Fahrmodus ist
+ * die Antwort darauf — **kein zweiter Aufzeichnungsweg**: Er liest exakt
+ * dieselben StateFlows des [de.trailscape.app.record.RecordingRepository], die
+ * auch die Leiste zeigt, und schickt dieselben zwei Kommandos zurueck.
+ * Verlassen wird er ohne jede Wirkung auf die Aufzeichnung.
+ *
+ * Startet die Aufzeichnung durch eine Nutzeraktion, ist dieser Bildschirm
+ * schon der erste, den man sieht (siehe `runRecording()` in `MapScreen.kt`)
+ * — der Fahrmodus ist damit der Normalfall einer Aufzeichnung, nicht ein
+ * Angebot, das ueber einen eigenen Knopf erst gefunden werden muss. Der Knopf
+ * „Fahrmodus" in der Live-Leiste bleibt trotzdem: Er ist der Rueckweg, wenn
+ * man diesen Bildschirm selbst verlassen hat, waehrend die Aufzeichnung
+ * weiterlief.
  *
  * ## Warum genau diese vier Werte — und nichts weiter
  * Leitfrage war ausschliesslich: *Was liest man im Fahren mit einem Blick aus

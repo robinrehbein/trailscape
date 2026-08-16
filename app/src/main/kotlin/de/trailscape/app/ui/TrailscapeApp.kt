@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.automirrored.outlined.ShowChart
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -145,6 +145,20 @@ import de.trailscape.app.ui.training.TrainingScreen
  * kurz (das laengste ist „Training"), und jedes Label ist einzeilig mit
  * Ellipse gesetzt — auf einem 320-dp-Geraet bleiben je Ziel deutlich mehr als
  * die frueheren 60 dp, in denen nichts abgeschnitten aussehen darf.
+ *
+ * ## Duenne Symbole, die das sagen, was sie zeigen
+ * One UI 8/9 zeichnet Systemsymbole duenn (outlined), nicht gefuellt — gefuellte
+ * Icons sind dort dem *ausgewaehlten* Zustand vorbehalten, nicht der Ruhelage.
+ * Deshalb sind alle vier Icons hier `Outlined`-Varianten. Zwei davon trugen
+ * vorher eine Bedeutung, die nicht zum Tab passte: TRAINING zeigte ein Herz
+ * (`Favorite`) — das Symbol fuer Favoriten bzw. Herzfrequenz, obwohl der Tab
+ * Trainingskurven und Auswertung zeigt, keinen Puls. Das Herz bleibt deshalb
+ * app-weit der Herzfrequenz vorbehalten; TRAINING bekommt `ShowChart`. MORE
+ * zeigte ein Zahnrad (`Settings`), obwohl das Label „Mehr" heisst, nicht
+ * „Einstellungen" — `MoreHoriz` sagt dasselbe wie die Beschriftung, so wie es
+ * auch Samsungs eigene Apps fuer ihren „Mehr"-Tab tun. MAP zeigte eine einzelne
+ * Ortsmarke (`Place`); eine Karte ist aber kein einzelner Ort, sondern die
+ * Flaeche selbst — `Map` trifft das ehrlicher.
  */
 private enum class TopLevelDestination(
     val tab: AppTab,
@@ -152,10 +166,10 @@ private enum class TopLevelDestination(
     val label: String,
     val icon: ImageVector,
 ) {
-    HOME(AppTab.HOME, "heute", "Heute", Icons.Filled.Today),
-    MAP(AppTab.MAP, "karte", "Karte", Icons.Filled.Place),
-    TRAINING(AppTab.TRAINING, "training", "Training", Icons.Filled.Favorite),
-    MORE(AppTab.MORE, "mehr", "Mehr", Icons.Filled.Settings),
+    HOME(AppTab.HOME, "heute", "Heute", Icons.Outlined.Today),
+    MAP(AppTab.MAP, "karte", "Karte", Icons.Outlined.Map),
+    TRAINING(AppTab.TRAINING, "training", "Training", Icons.AutoMirrored.Outlined.ShowChart),
+    MORE(AppTab.MORE, "mehr", "Mehr", Icons.Outlined.MoreHoriz),
 }
 
 @Composable
