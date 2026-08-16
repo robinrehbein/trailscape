@@ -22,13 +22,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +41,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.components.OneUiDropdownField
+import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
@@ -380,56 +377,31 @@ private fun ProfileFields(
     error: String?,
 ) {
     Row(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Alter",
             value = ageText,
             onValueChange = onAgeChange,
-            label = { Text("Alter") },
-            singleLine = true,
-            isError = error != null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f),
         )
         Spacer(modifier = Modifier.width(12.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Gewicht (kg)",
             value = weightText,
             onValueChange = onWeightChange,
-            label = { Text("Gewicht (kg)") },
-            singleLine = true,
-            isError = error != null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.weight(1f),
         )
     }
     Spacer(modifier = Modifier.height(12.dp))
 
-    var expanded by remember { mutableStateOf(false) }
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
+    OneUiDropdownField(
+        label = "Geschlecht (optional)",
+        value = sex,
+        options = onboardingSexOptions,
+        onChange = onSexChange,
         modifier = Modifier.fillMaxWidth(),
-    ) {
-        OutlinedTextField(
-            value = onboardingSexLabels.getValue(sex),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Geschlecht (optional)") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            onboardingSexLabels.forEach { (value, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onSexChange(value)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    )
 
     if (error != null) {
         Spacer(modifier = Modifier.height(8.dp))
@@ -528,7 +500,7 @@ private fun PageDots(count: Int, current: Int) {
     }
 }
 
-private val onboardingSexLabels: Map<Sex, String> = linkedMapOf(
+private val onboardingSexOptions: List<Pair<Sex, String>> = listOf(
     Sex.MAENNLICH to "männlich",
     Sex.WEIBLICH to "weiblich",
     Sex.UNBEKANNT to "keine Angabe",

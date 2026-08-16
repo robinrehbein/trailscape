@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 
 /**
  * # Die grosse One-UI-Kopfzeile
@@ -57,6 +58,11 @@ fun OneUiLargeTopAppBar(
         navigationIcon = navigationIcon,
         actions = actions,
         scrollBehavior = scrollBehavior,
+        // Material gibt der grossen Leiste 152 dp. In den Samsung-Apps steht
+        // derselbe Titel bei rund 40 dp unter der Statusleiste — die
+        // Material-Hoehe schob ihn auf ueber das Doppelte und liess den
+        // halben Bildschirm leer, bevor die erste Karte kam.
+        expandedHeight = 96.dp,
         windowInsets = WindowInsets(0, 0, 0, 0),
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent,

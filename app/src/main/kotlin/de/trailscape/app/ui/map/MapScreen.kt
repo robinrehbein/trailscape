@@ -1279,113 +1279,122 @@ fun MapScreen(appViewModel: AppViewModel) {
             // bzw. die Tour-Karte und ganz unten das Planungsblatt. Dass die
             // Planung hier und nicht mehr oben liegt, ist der Kern der
             // Umstellung — die Knoepfe stehen jetzt *ueber* ihr statt auf ihr.
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .widthIn(max = ContentMaxWidth)
-                    .fillMaxWidth()
-                    .padding(OverlayScreenPadding)
-                    // Die Navigationskapsel schwebt ueber der Karte (siehe
-                    // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
-                    // ihre Hoehe nach oben — sonst laege das Planungsblatt
-                    // teilweise hinter ihr.
-                    .padding(bottom = LocalFloatingNavigationBarSpace.current),
-                horizontalAlignment = Alignment.End,
-            ) {
-                RecordButton(
-                    recording = isRecording,
-                    onClick = { if (isRecording) RecordingRepository.stop() else startRecording() },
-                )
-                Spacer(Modifier.height(12.dp))
-                LocateButton(onClick = ::goToMyPosition, following = followMe)
-                Spacer(Modifier.height(12.dp))
-
-                val ride = selectedRide
-                when {
-                    isRecording -> LiveRecordingCard(
-                        speedKmh = speedKmh,
-                        distanceKm = recordedKm,
-                        elapsedS = (elapsedMs / 1000).toInt(),
-                        ascentM = liveAscentM,
-                        pointCount = livePoints.size,
-                        paused = isPaused,
-                        onTogglePause = { RecordingRepository.togglePause() },
-                        onStop = { RecordingRepository.stop() },
-                        onOpenRideMode = { rideMode = true },
+            // Waehrend die Suche offen ist, bleibt dieser Stapel weg. Beide
+            // Stapel haengen an gegenueberliegenden Kanten derselben Box; mit
+            // aufgeklappter Tastatur ist dazwischen so wenig Platz, dass das
+            // Planungsblatt von unten in die Trefferliste der Suche lief und sie
+            // halb verdeckte. Ein Suchtreffer ist ausserdem genau der Moment, in
+            // dem niemand die Aufnahme- oder Standortknoepfe braucht — und
+            // sobald die Suche zu ist, steht alles unveraendert wieder da.
+            if (!searchOpen) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth()
+                        .padding(OverlayScreenPadding)
+                        // Die Navigationskapsel schwebt ueber der Karte (siehe
+                        // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
+                        // ihre Hoehe nach oben — sonst laege das Planungsblatt
+                        // teilweise hinter ihr.
+                        .padding(bottom = LocalFloatingNavigationBarSpace.current),
+                    horizontalAlignment = Alignment.End,
+                ) {
+                    RecordButton(
+                        recording = isRecording,
+                        onClick = { if (isRecording) RecordingRepository.stop() else startRecording() },
                     )
+                    Spacer(Modifier.height(12.dp))
+                    LocateButton(onClick = ::goToMyPosition, following = followMe)
+                    Spacer(Modifier.height(12.dp))
 
-                    ride != null -> RideCard(
-                        ride = ride,
-                        navigating = navTarget?.rideId == ride.id,
-                        onNavigate = { navigateRide(ride) },
-                        onShare = { shareRoute(ride.name, ride.points) },
-                        onDelete = { deleteDialogRide = ride },
-                        onClose = {
-                            hoverPoint = null
-                            appViewModel.select(null)
-                        },
-                        onHoverPoint = { hoverPoint = it },
-                    )
-                }
+                    val ride = selectedRide
+                    when {
+                        isRecording -> LiveRecordingCard(
+                            speedKmh = speedKmh,
+                            distanceKm = recordedKm,
+                            elapsedS = (elapsedMs / 1000).toInt(),
+                            ascentM = liveAscentM,
+                            pointCount = livePoints.size,
+                            paused = isPaused,
+                            onTogglePause = { RecordingRepository.togglePause() },
+                            onStop = { RecordingRepository.stop() },
+                            onOpenRideMode = { rideMode = true },
+                        )
 
-                if (planning) {
-                    Spacer(Modifier.height(OverlayGap))
-                    PlanningSheet(
-                        expanded = planSheetExpanded,
-                        onExpandedChange = { planSheetExpanded = it },
-                        profile = routeProfile,
-                        onProfileChange = { routeProfile = it },
-                        waypointCount = waypoints.size,
-                        route = plannedRoute,
-                        busy = planBusy,
-                        error = planError,
-                        maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
-                        progress = planProgress,
-                        generated = routeFromGenerator,
-                        locating = locating,
-                        onRoundTrip = ::startRoundTrip,
-                        onUseMyPosition = ::useMyPositionAsStart,
-                        onUndo = {
-                            routeFromGenerator = false
-                            waypoints = waypoints.dropLast(1)
-                        },
-                        onClear = {
-                            // Wie „Planung beenden": Der Fehlgriff darf nicht
-                            // das Ende der Arbeit sein (siehe
-                            // [exitPlanningWithUndo]) — nur bleibt der
-                            // Planungsmodus hier an.
-                            val snapshot = PlanningSnapshot(
-                                waypoints = waypoints,
-                                route = plannedRoute,
-                                plannedFor = plannedFor,
-                                fromGenerator = routeFromGenerator,
-                            )
-                            routeFromGenerator = false
-                            waypoints = emptyList()
-                            plannedRoute = null
-                            plannedFor = null
-                            planError = null
-                            planSheetExpanded = true
-                            if (!snapshot.isEmpty) {
-                                scope.launch {
-                                    val answer = snackbarHostState.showSnackbar(
-                                        message = "Planung geleert.",
-                                        actionLabel = "Rückgängig",
-                                        duration = SnackbarDuration.Long,
-                                    )
-                                    if (answer == SnackbarResult.ActionPerformed) {
-                                        restorePlanning(snapshot)
+                        ride != null -> RideCard(
+                            ride = ride,
+                            navigating = navTarget?.rideId == ride.id,
+                            onNavigate = { navigateRide(ride) },
+                            onShare = { shareRoute(ride.name, ride.points) },
+                            onDelete = { deleteDialogRide = ride },
+                            onClose = {
+                                hoverPoint = null
+                                appViewModel.select(null)
+                            },
+                            onHoverPoint = { hoverPoint = it },
+                        )
+                    }
+
+                    if (planning) {
+                        Spacer(Modifier.height(OverlayGap))
+                        PlanningSheet(
+                            expanded = planSheetExpanded,
+                            onExpandedChange = { planSheetExpanded = it },
+                            profile = routeProfile,
+                            onProfileChange = { routeProfile = it },
+                            waypointCount = waypoints.size,
+                            route = plannedRoute,
+                            busy = planBusy,
+                            error = planError,
+                            maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
+                            progress = planProgress,
+                            generated = routeFromGenerator,
+                            locating = locating,
+                            onRoundTrip = ::startRoundTrip,
+                            onUseMyPosition = ::useMyPositionAsStart,
+                            onUndo = {
+                                routeFromGenerator = false
+                                waypoints = waypoints.dropLast(1)
+                            },
+                            onClear = {
+                                // Wie „Planung beenden": Der Fehlgriff darf nicht
+                                // das Ende der Arbeit sein (siehe
+                                // [exitPlanningWithUndo]) — nur bleibt der
+                                // Planungsmodus hier an.
+                                val snapshot = PlanningSnapshot(
+                                    waypoints = waypoints,
+                                    route = plannedRoute,
+                                    plannedFor = plannedFor,
+                                    fromGenerator = routeFromGenerator,
+                                )
+                                routeFromGenerator = false
+                                waypoints = emptyList()
+                                plannedRoute = null
+                                plannedFor = null
+                                planError = null
+                                planSheetExpanded = true
+                                if (!snapshot.isEmpty) {
+                                    scope.launch {
+                                        val answer = snackbarHostState.showSnackbar(
+                                            message = "Planung geleert.",
+                                            actionLabel = "Rückgängig",
+                                            duration = SnackbarDuration.Long,
+                                        )
+                                        if (answer == SnackbarResult.ActionPerformed) {
+                                            restorePlanning(snapshot)
+                                        }
                                     }
                                 }
-                            }
-                        },
-                        onSave = { saveRouteDialog = true },
-                        onShare = {
-                            plannedRoute?.let { shareRoute("trailscape-route", it.points) }
-                        },
-                        onNavigate = ::navigatePlannedRoute,
-                        onHoverPoint = { hoverPoint = it },
-                    )
+                            },
+                            onSave = { saveRouteDialog = true },
+                            onShare = {
+                                plannedRoute?.let { shareRoute("trailscape-route", it.points) }
+                            },
+                            onNavigate = ::navigatePlannedRoute,
+                            onHoverPoint = { hoverPoint = it },
+                        )
+                    }
                 }
             }
         }

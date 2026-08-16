@@ -8,7 +8,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.SyncConfig
@@ -68,20 +68,18 @@ fun SyncCard(appViewModel: AppViewModel, modifier: Modifier = Modifier) {
     }
 
     MoreSectionCard(title = "Sync (Selfhost)", modifier = modifier) {
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Server-URL",
             value = urlText,
             onValueChange = { urlText = it },
-            label = { Text("Server-URL") },
-            singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
+        OneUiTextField(
+            label = "Token",
             value = tokenText,
             onValueChange = { tokenText = it },
-            label = { Text("Token") },
-            singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
         )
