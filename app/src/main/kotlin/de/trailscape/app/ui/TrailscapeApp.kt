@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Settings
@@ -39,7 +38,6 @@ import de.trailscape.app.ui.components.OneUiNavigationBarItem
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
-import de.trailscape.app.ui.rides.RidesScreen
 import de.trailscape.app.ui.today.TodayScreen
 import de.trailscape.app.ui.training.TrainingScreen
 
@@ -47,17 +45,28 @@ import de.trailscape.app.ui.training.TrainingScreen
  * # Navigationshuelle der App — und die Zustaendigkeitsgrenzen dahinter
  *
  * Diese Datei ist **gemeinsames Fundament**. Sie enthaelt nur die
- * Navigationsleiste, den `NavHost` und den Aufruf der fuenf Screens. Wer an
- * einem einzelnen Screen arbeitet, aendert sie **nicht** — die fuenf Aufrufe
+ * Navigationsleiste, den `NavHost` und den Aufruf der vier Screens. Wer an
+ * einem einzelnen Screen arbeitet, aendert sie **nicht** — die vier Aufrufe
  * unten sind fest verabredete Signaturen:
  *
  * ```kotlin
  * TodayScreen(appViewModel)
  * MapScreen(appViewModel)
- * RidesScreen(appViewModel)
  * TrainingScreen(appViewModel)
  * MoreScreen(appViewModel)
  * ```
+ *
+ * ## Warum Touren und Karte eine Seite sind
+ * Eine Tour ist zuerst und vor allem eine Linie auf der Karte — eine eigene
+ * Liste daneben duplizierte dieselbe Information nur in Textform. Die
+ * Navigationsleiste war ausserdem mit fuenf Zielen bereits voll (siehe unten,
+ * „Vier Tabs sind das Maximum" — vorher „Fuenf"): Ein Ziel, das man auch als
+ * Aufsatz auf ein bestehendes bauen kann, verdient keinen eigenen Platz in
+ * einer schon vollen Kapsel. Die Tourenliste liegt deshalb als Blatt
+ * (`ui/map/TourSheet.kt`) ueber der Karte — genau derselbe Baustein wie das
+ * Planungsblatt, nur mit anderem Inhalt. Der Baustein der Liste selbst
+ * (`ui/rides/TourList.kt`, `TourListContent`) ist damit kein eigener Screen
+ * mehr, sondern ein Zulieferer des Karten-Screens.
  *
  * ## Was wo liegt
  *
@@ -68,8 +77,8 @@ import de.trailscape.app.ui.training.TrainingScreen
  * | `ui/TrainingInsights.kt` | Fundament: reine Rechenschicht ueber `:core` |
  * | `ui/MapStyles.kt` | Fundament: Katalog der Kartenstile |
  * | `ui/today/TodayScreen.kt` | Startseite: Tagesempfehlung, Woche, letzte Tour |
- * | `ui/map/MapScreen.kt` | Karte, Planung, Navigation, Offline-Download |
- * | `ui/rides/RidesScreen.kt` | Tourenliste |
+ * | `ui/map/MapScreen.kt` | Karte, Tourenblatt, Planung, Navigation, Offline-Download |
+ * | `ui/rides/TourList.kt` | Baustein: Tourenliste und -detail im Blatt der Karte |
  * | `ui/training/TrainingScreen.kt` | Trainingsplan und Auswertung |
  * | `ui/more/MoreScreen.kt` | Einstellungen, Health, Backup, Sync |
  * | `ui/components/OneUiNavigationBar.kt` | Fundament: die schwebende Navigationskapsel |
@@ -97,7 +106,7 @@ import de.trailscape.app.ui.training.TrainingScreen
  *    durchgereicht wird. Screens erzeugen **kein** eigenes ViewModel.
  *
  * ## Erststart
- * Beim allerersten Start liegt vor den fuenf Tabs die Einfuehrung
+ * Beim allerersten Start liegt vor den vier Tabs die Einfuehrung
  * (`ui/onboarding/OnboardingScreen.kt`). Ob sie faellig ist, entscheidet
  * [AppViewModel.onboardingVisible] — der Zustand kommt aus den
  * SharedPreferences, nicht aus dieser Datei. Solange sie laeuft, gibt es keine
@@ -106,12 +115,20 @@ import de.trailscape.app.ui.training.TrainingScreen
  * ## Tab-Wechsel aus einem Screen heraus
  * Statt eines `onShowMap`-Callbacks (so machte es die Flutter-App) ruft ein
  * Screen `appViewModel.requestTab(AppTab.MAP)`; die Huelle beobachtet
- * [AppViewModel.tabRequest] und navigiert. Deshalb kommen alle fuenf Screens
+ * [AppViewModel.tabRequest] und navigiert. Deshalb kommen alle vier Screens
  * mit derselben, parameterlosen Signatur aus.
+ *
+ * [AppTab.RIDES] ist dabei eine Ausnahme, die kein eigenes Ziel mehr hat:
+ * Screens ausserhalb dieser Datei (`TodayScreen`, das Tourenblatt selbst)
+ * fragen weiterhin nach „dem Touren-Tab" — dieser Aufzaehlungswert bleibt
+ * deshalb bestehen, damit ihr Aufruf nicht geaendert werden muss. Die Huelle
+ * loest ihn beim Auftreffen aber auf die Route „karte" auf und bittet
+ * zusaetzlich per [AppViewModel.requestTourSheet] darum, das Tourenblatt
+ * aufzuschlagen (siehe `LaunchedEffect(tabRequest)` unten).
  */
 
 /**
- * Die fuenf Hauptbereiche in der Reihenfolge der Navigationsleiste.
+ * Die vier Hauptbereiche in der Reihenfolge der Navigationsleiste.
  *
  * ## Warum „Heute" vorne steht
  * Die App startete bisher auf der Karte. Wer sie morgens oeffnete, bekam damit
@@ -120,12 +137,14 @@ import de.trailscape.app.ui.training.TrainingScreen
  * Alleinstellungsmerkmal dieser App — lag drei Tabs weiter hinten am Ende einer
  * Karte. `HOME` ist deshalb das erste Ziel und die `startDestination`.
  *
- * ## Fuenf Tabs sind das Maximum
- * Fuenf Ziele fuellen die schwebende Kapsel
- * (`ui/components/OneUiNavigationBar.kt`) aus. Die Beschriftungen bleiben kurz
- * (das laengste ist „Training"), und jedes Label ist einzeilig mit Ellipse
- * gesetzt — auf einem 320-dp-Geraet bleiben je Ziel rund 60 dp, in denen nichts
- * abgeschnitten aussehen darf. Ein sechstes Ziel braeuchte ein anderes Muster.
+ * ## Vier Tabs sind das Maximum
+ * Die schwebende Kapsel (`ui/components/OneUiNavigationBar.kt`) war mit fuenf
+ * Zielen bereits voll ausgereizt — „Touren" ist deshalb keine eigene
+ * Kapsel-Position mehr, sondern das Blatt ueber der Karte (siehe oben, „Warum
+ * Touren und Karte eine Seite sind"). Die verbleibenden Beschriftungen bleiben
+ * kurz (das laengste ist „Training"), und jedes Label ist einzeilig mit
+ * Ellipse gesetzt — auf einem 320-dp-Geraet bleiben je Ziel deutlich mehr als
+ * die frueheren 60 dp, in denen nichts abgeschnitten aussehen darf.
  */
 private enum class TopLevelDestination(
     val tab: AppTab,
@@ -135,7 +154,6 @@ private enum class TopLevelDestination(
 ) {
     HOME(AppTab.HOME, "heute", "Heute", Icons.Filled.Today),
     MAP(AppTab.MAP, "karte", "Karte", Icons.Filled.Place),
-    TOURS(AppTab.RIDES, "touren", "Touren", Icons.AutoMirrored.Filled.List),
     TRAINING(AppTab.TRAINING, "training", "Training", Icons.Filled.Favorite),
     MORE(AppTab.MORE, "mehr", "Mehr", Icons.Filled.Settings),
 }
@@ -143,7 +161,7 @@ private enum class TopLevelDestination(
 @Composable
 fun TrailscapeApp() {
     // Activity-Scope: `viewModel()` ohne eigenen Store-Owner nimmt die
-    // Activity als Owner — genau eine Instanz fuer alle fuenf Tabs, die
+    // Activity als Owner — genau eine Instanz fuer alle vier Tabs, die
     // Tabwechsel und Konfigurationsaenderungen ueberlebt.
     val appViewModel: AppViewModel = viewModel()
 
@@ -154,8 +172,20 @@ fun TrailscapeApp() {
     val tabRequest by appViewModel.tabRequest.collectAsStateWithLifecycle()
     LaunchedEffect(tabRequest) {
         val requested = tabRequest ?: return@LaunchedEffect
-        val target = TopLevelDestination.entries.first { it.tab == requested }
-        navController.navigateToTab(target.route)
+        // AppTab.RIDES hat seit dem Zusammenlegen von Touren und Karte kein
+        // eigenes Ziel mehr in TopLevelDestination — `entries.first` wuerde
+        // dafuer werfen. Aufrufer (TodayScreen, das Tourenblatt) kennen und
+        // brauchen diesen Unterschied nicht: Sie bitten weiterhin um den
+        // „Touren-Tab", die Huelle loest das hier auf die Karte auf und
+        // bittet den Karten-Screen zusaetzlich, sein Tourenblatt
+        // aufzuschlagen (siehe [AppViewModel.requestTourSheet]).
+        if (requested == AppTab.RIDES) {
+            navController.navigateToTab(TopLevelDestination.MAP.route)
+            appViewModel.requestTourSheet()
+        } else {
+            val target = TopLevelDestination.entries.first { it.tab == requested }
+            navController.navigateToTab(target.route)
+        }
         appViewModel.consumeTabRequest()
     }
 
@@ -193,7 +223,6 @@ fun TrailscapeApp() {
             ) {
                 composable(TopLevelDestination.HOME.route) { TodayScreen(appViewModel) }
                 composable(TopLevelDestination.MAP.route) { MapScreen(appViewModel) }
-                composable(TopLevelDestination.TOURS.route) { RidesScreen(appViewModel) }
                 composable(TopLevelDestination.TRAINING.route) { TrainingScreen(appViewModel) }
                 composable(TopLevelDestination.MORE.route) { MoreScreen(appViewModel) }
             }

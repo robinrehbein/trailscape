@@ -1,0 +1,829 @@
+package de.trailscape.app.ui.rides
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.AppTab
+import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
+import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
+import de.trailscape.app.ui.components.EmptyState
+import de.trailscape.app.ui.components.Fact
+import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.formatDate
+import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.importActivityFile
+import de.trailscape.app.ui.isDuplicateRide
+import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.withCause
+import de.trailscape.core.LoadSource
+import de.trailscape.core.Ride
+import de.trailscape.core.formatDuration
+import de.trailscape.core.rideToGpx
+import de.trailscape.core.safeFileName
+import java.io.File
+import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * Kurzes Quellen-Label der Trainingslast fuer die Tourenliste
+ * (`rideLoadSourceShortLabels` aus `lib/screens/rides_screen.dart`).
+ */
+/**
+ * Hoehe der Ladeanzeige, solange die Tourenliste noch geladen wird. Eine
+ * Zeile hoch — gerade genug fuer den Kreis, ohne dass das Blatt darueber auf
+ * volle Hoehe aufzieht und danach wieder zusammenfaellt.
+ */
+private val LoadingRowHeight = 96.dp
+
+private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
+    LoadSource.HERZFREQUENZ to "Puls",
+    LoadSource.PHYSIK to "Leistung",
+    LoadSource.RPE to "Empfinden",
+    LoadSource.HEURISTIK to "geschätzt",
+    LoadSource.KEINE to "",
+)
+
+/**
+ * Tourenliste als Inhalt eines Blatts — Nachfolger des fruehen eigenen
+ * Touren-Tabs (`ui/rides/RidesScreen.kt`, entfallen). Karte und Touren sind zu
+ * einer Seite zusammengelegt; die Liste liegt seither als Blatt ueber der Karte
+ * (`ui/map/TourSheet.kt`, dort eingebaut).
+ *
+ * Deshalb **kein** `Scaffold`, **keine** Titelleiste und **keine** eigene
+ * Aufloesung der System-Insets: Dieses Composable zeichnet nur seinen Inhalt
+ * und fuellt, was der Behaelter ihm an Platz gibt. Randmasse fuer die
+ * schwebende Navigationskapsel kommen ueber [contentPadding] von aussen, nicht
+ * ueber `screenContentPadding()` wie bei einem eigenstaendigen Bildschirm.
+ *
+ * ## Kopfzeile statt schwebendem Import-Knopf
+ * Ein Blatt hat keinen Platz fuer einen FAB, der ueber allem schwebt — der
+ * bisherige `ExtendedFloatingActionButton` „Tour importieren" ist deshalb zur
+ * ersten Zeile der Liste geworden: Anzahl der Touren links, Knopf
+ * „Importieren" rechts (siehe [TourListHeader]). Er scrollt mit der Liste statt
+ * fest zu stehen — bei einer Liste, die selten mehr als eine Bildschirmseite
+ * fuellt, ist das kein Verlust.
+ *
+ * ## Tippen zeigt auf der Karte, „Details" oeffnet die Vollansicht
+ * Frueher oeffnete ein Tipp auf eine Karte sofort die Detailansicht. Jetzt
+ * liegt die Liste selbst ueber der Karte — der naheliegende Zweck eines Tipps
+ * ist deshalb, die Route der Tour dort zu zeigen ([onShowOnMap]), nicht in
+ * eine weitere Ansicht zu wechseln. Wer wirklich Kennzahlen, Hoehenprofil und
+ * Auswertung sehen will, tippt auf den eigens beschrifteten Knopf „Details"
+ * auf der Karte ([onOpenDetail]) — ein Weg, der ohne Raten auffindbar ist,
+ * weil er als Text und nicht nur im Ueberlaufmenue steht.
+ *
+ * ## Undo-Snackbar bleibt lokal, „normale" Meldungen nicht mehr
+ * [AppViewModel.messages] sammelt jetzt der Karten-Screen ein (er umschliesst
+ * dieses Blatt und bleibt bestehen, waehrend das Blatt auf- und zufaehrt) —
+ * ein Importfehler oder eine erkannte Dublette laufen also weiterhin ueber
+ * [AppViewModel.showMessage], zeigen sich aber dort. Die „Rückgängig"-Snackbar
+ * beim Loeschen ist etwas anderes: Sie braucht eine Aktionsschaltflaeche und
+ * eine eigene Anzeigedauer (siehe [DeleteRideDialog]), Dinge, die der einfache
+ * Text-Kanal von `messages` nicht kennt. Diese Datei bringt dafuer einen
+ * eigenen, kleinen [SnackbarHostState] mit und zeichnet ihn selbst als
+ * Overlay — nicht ueber einen zusaetzlichen Parameter nach aussen gereicht:
+ * Die Compose-Version dieses Projekts (Material 3 1.4.0) kennt kein
+ * `LocalSnackbarHostState`, und ein Blatt ueber einer Karte ist der falsche Ort
+ * fuer eine Annahme darueber, wie der Behaelter seinen eigenen SnackbarHost
+ * aufbaut. Ein selbstaendiges Overlay funktioniert unabhaengig davon.
+ *
+ * @param contentPadding wird unveraendert an die `LazyColumn` durchgereicht.
+ *   Der Behaelter (das Tourenblatt) traegt hierueber die Bodenfreiheit der
+ *   schwebenden Navigationskapsel bei — und, je nach Blatthoehe, zusaetzliche
+ *   Raender. Der Standardwert (kein Rand) gilt nur, wenn niemand etwas
+ *   uebergibt, etwa in einer Vorschau.
+ */
+@Composable
+fun TourListContent(
+    appViewModel: AppViewModel,
+    onOpenDetail: (String) -> Unit,
+    onShowOnMap: (Ride) -> Unit,
+    modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    val loading by appViewModel.ridesLoading.collectAsStateWithLifecycle()
+    val selectedId by appViewModel.selectedRideId.collectAsStateWithLifecycle()
+    val insights by appViewModel.insights.collectAsStateWithLifecycle()
+
+    var importing by rememberSaveable { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<Ride?>(null) }
+    var deleteTarget by remember { mutableStateOf<Ride?>(null) }
+
+    // Nur fuer die „Rückgängig"-Snackbar (siehe Klassen-KDoc oben) — normale
+    // Meldungen laufen nicht mehr durch diesen Screen.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val undoSnackbarJob = remember { mutableStateOf<Job?>(null) }
+
+    // Aktivitaets-Auswahl (GPX oder FIT) ueber das Storage Access Framework.
+    // Bewusst `*/*`: Der MIME-Typ einer .gpx-/.fit-Datei ist je nach Anbieter
+    // application/gpx+xml, application/xml, text/xml, application/octet-stream
+    // oder gar nichts — ein enger Filter blendet die Datei bei manchen
+    // Dateimanagern schlicht aus.
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importing = true
+        scope.launch {
+            try {
+                val ride = importActivityFile(context, uri)
+                // Inhaltsbasiert pruefen: `rideFromGpx`/`rideFromFit` vergeben
+                // bei jedem Import eine frische ID, ein ID-Vergleich ginge also
+                // immer ins Leere (siehe ui/RideImport.kt).
+                if (isDuplicateRide(rides, ride)) {
+                    appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
+                } else {
+                    appViewModel.addRide(ride)
+                    appViewModel.showMessage("„${ride.name}“ importiert")
+                }
+            } catch (e: Exception) {
+                // Deutscher Satz mit Handlungsanweisung zuerst, technische
+                // Ursache nur in Klammern (siehe ui/ErrorText.kt).
+                appViewModel.showMessage(
+                    withCause(
+                        "Die Datei konnte nicht importiert werden. Trailscape liest " +
+                            "GPX- und FIT-Dateien, auch als .gz gepackt.",
+                        e,
+                    ),
+                )
+            } finally {
+                importing = false
+            }
+        }
+    }
+    fun startImport() {
+        if (!importing) importLauncher.launch(arrayOf("*/*"))
+    }
+
+    // Teilen liegt als lokale Funktion vor, damit Liste und Kartenmenue
+    // nachweislich denselben Weg nehmen (siehe [shareGpx] am Dateiende).
+    fun share(ride: Ride) {
+        scope.launch {
+            try {
+                shareGpx(context, ride)
+            } catch (e: Exception) {
+                appViewModel.showMessage(
+                    withCause(
+                        "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
+                            "Speicher frei ist, und versuche es erneut.",
+                        e,
+                    ),
+                )
+            }
+        }
+    }
+
+    // Breite ja, Hoehe nein: Das Tourenblatt deckelt die Hoehe nur nach oben
+    // (`heightIn(max = …)` in `TourSheet.kt`). Wuerde hier `fillMaxSize`
+    // stehen, nähme die Liste diese Obergrenze immer ein — ein Blatt, das
+    // auch mit zwei Touren 80 % des Bildschirms verdeckt, davon vier Fuenftel
+    // leer. So waechst das Blatt mit seinem Inhalt und scrollt erst, wenn es
+    // an die Grenze stoesst.
+    Box(modifier = modifier.fillMaxWidth()) {
+        when {
+            loading && rides.isEmpty() -> Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Feste Hoehe statt `fillMaxSize` aus demselben Grund:
+                    // Ein Ladekreis soll das Blatt nicht auf volle Hoehe
+                    // aufziehen.
+                    .height(LoadingRowHeight),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+
+            rides.isEmpty() -> Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = ContentMaxWidth)
+                    .fillMaxWidth()
+                    .padding(contentPadding),
+            ) {
+                RidesEmptyState(
+                    onRecord = { appViewModel.requestTab(AppTab.MAP) },
+                    onImportFile = ::startImport,
+                    onOpenBackup = { appViewModel.requestTab(AppTab.MORE) },
+                )
+            }
+
+            else -> LazyColumn(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .widthIn(max = ContentMaxWidth)
+                    .fillMaxWidth(),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(CardGap),
+            ) {
+                item(key = "header") {
+                    TourListHeader(
+                        count = rides.size,
+                        importing = importing,
+                        onImport = ::startImport,
+                    )
+                }
+
+                items(items = rides, key = { it.id }) { ride ->
+                    val load = insights.rideLoads[ride.id]
+                    val loadText = if (load != null && load.available) {
+                        "Last ${load.load.roundToInt()} · " +
+                            loadSourceShortLabels[load.source].orEmpty()
+                    } else {
+                        null
+                    }
+
+                    RideCard(
+                        ride = ride,
+                        loadText = loadText,
+                        selected = ride.id == selectedId,
+                        onShowOnMap = { onShowOnMap(ride) },
+                        onOpenDetail = { onOpenDetail(ride.id) },
+                        onRename = { renameTarget = ride },
+                        onShare = { share(ride) },
+                        onDelete = { deleteTarget = ride },
+                    )
+                }
+            }
+        }
+
+        // Eigenes, kleines Overlay statt eines vom Behaelter uebernommenen
+        // SnackbarHost — Begruendung im Klassen-KDoc. Der untere Rand folgt
+        // demselben [contentPadding], damit die Meldung nicht hinter der
+        // schwebenden Navigationskapsel verschwindet.
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = contentPadding.calculateBottomPadding()),
+        )
+    }
+
+    renameTarget?.let { ride ->
+        RenameDialog(
+            ride = ride,
+            onDismiss = { renameTarget = null },
+            onConfirm = { newName ->
+                appViewModel.renameRide(ride.id, newName)
+                renameTarget = null
+            },
+        )
+    }
+
+    deleteTarget?.let { ride ->
+        DeleteRideDialog(
+            ride = ride,
+            appViewModel = appViewModel,
+            scope = scope,
+            snackbarHostState = snackbarHostState,
+            undoSnackbarJob = undoSnackbarJob,
+            onDismiss = { deleteTarget = null },
+        )
+    }
+}
+
+/**
+ * Kopfzeile der Liste: Anzahl der Touren links, Import-Knopf rechts. Ersetzt
+ * den fruesheren `ExtendedFloatingActionButton` — Begruendung im KDoc von
+ * [TourListContent]. [NeutralButton] statt `Button`, weil der Import hier
+ * keine primaere Aktion der Seite ist (die primaere Aktion ist die Karte
+ * selbst) — derselbe Grund, aus dem `RideDetailScreen.kt` seinen Knopf
+ * „Auf der Karte öffnen" als [NeutralButton] zeichnet.
+ */
+@Composable
+private fun TourListHeader(
+    count: Int,
+    importing: Boolean,
+    onImport: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (count == 1) "1 Tour" else "$count Touren",
+            style = MaterialTheme.typography.titleMedium,
+        )
+
+        NeutralButton(onClick = onImport, enabled = !importing) {
+            if (importing) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Importieren")
+            }
+        }
+    }
+}
+
+/**
+ * Detailansicht einer Tour samt ihrer Dialoge (Umbenennen, Loeschen, Teilen)
+ * als eigenstaendige Vollbildansicht — Nachfolger des fruesheren
+ * `if (detailRide != null)`-Zweigs von `RidesScreen.kt`.
+ *
+ * ## Warum eine Tour-ID statt eines internen Zustands
+ * `RidesScreen` merkte sich die geoeffnete Tour frueher selbst
+ * (`rememberSaveable`), weil Liste und Detail **derselbe** Bildschirm waren.
+ * Jetzt ist die Liste ein Blatt ueber der Karte und die Detailansicht ein
+ * eigenstaendiges Vollbild, das der Karten-Screen darueber legt — welche Tour
+ * offen ist, haelt deshalb er als lokalen Zustand fest (angestossen ueber das
+ * `onOpenDetail`-Callback von [TourListContent]) und reicht ihn hier als
+ * einfachen Parameter herein. Diese Funktion bleibt bewusst zustandslos
+ * gegenueber der ID selbst; sie schlaegt nur den aktuellen Stand der Tour aus
+ * [AppViewModel.rides] nach —
+ * dieselbe Begruendung wie zuvor: Nach einem Umbenennen oder einem HF-Merge
+ * aus Health Connect liefert `rides` ein neues [Ride]-Objekt, und ueber die ID
+ * zeigt die Ansicht immer auf den aktuellen Stand.
+ *
+ * Verschwindet die Tour aus der Liste, waehrend die Ansicht offen ist (Loeschen
+ * anderswo, Sync), ruft diese Funktion [onBack] von selbst auf — genau wie
+ * frueher, als das schlicht ein Wechsel zurueck zur Liste war.
+ *
+ * ## Meldungen bleiben hier eingesammelt
+ * Anders als [TourListContent] sammelt diese Funktion [AppViewModel.messages]
+ * weiterhin selbst ein: Sie ist ein Vollbild mit eigenem `Scaffold` und eigener
+ * `SnackbarHost` (siehe `RideDetailScreen.kt`), nicht ein Blatt vor einer
+ * dauerhaften Karte — es gibt keinen laenger lebenden Bildschirm darunter, der
+ * die Meldungen sonst zeigen wuerde. Ein Teilen-Fehler etwa muss genau hier
+ * auftauchen.
+ */
+@Composable
+fun RideDetailHost(
+    rideId: String,
+    appViewModel: AppViewModel,
+    onBack: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    val ride = rides.firstOrNull { it.id == rideId }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    var renameTarget by remember { mutableStateOf<Ride?>(null) }
+    var deleteTarget by remember { mutableStateOf<Ride?>(null) }
+    val undoSnackbarJob = remember { mutableStateOf<Job?>(null) }
+
+    LaunchedEffect(appViewModel) {
+        appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+    }
+
+    // Siehe Klassen-KDoc: Eine Tour, die aus der Liste verschwindet, waehrend
+    // diese Ansicht offen ist, schliesst die Ansicht von selbst.
+    LaunchedEffect(ride) {
+        if (ride == null) onBack()
+    }
+
+    // Die Systemzurueckgeste fuehrt aus dem Detail zurueck, unabhaengig davon,
+    // ob die Tour schon geladen ist.
+    BackHandler(onBack = onBack)
+
+    if (ride == null) return
+
+    fun share(target: Ride) {
+        scope.launch {
+            try {
+                shareGpx(context, target)
+            } catch (e: Exception) {
+                appViewModel.showMessage(
+                    withCause(
+                        "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
+                            "Speicher frei ist, und versuche es erneut.",
+                        e,
+                    ),
+                )
+            }
+        }
+    }
+
+    RideDetailScreen(
+        ride = ride,
+        appViewModel = appViewModel,
+        snackbarHostState = snackbarHostState,
+        onBack = onBack,
+        onRename = { renameTarget = ride },
+        onShare = { share(ride) },
+        onDelete = { deleteTarget = ride },
+    )
+
+    renameTarget?.let { target ->
+        RenameDialog(
+            ride = target,
+            onDismiss = { renameTarget = null },
+            onConfirm = { newName ->
+                appViewModel.renameRide(target.id, newName)
+                renameTarget = null
+            },
+        )
+    }
+
+    deleteTarget?.let { target ->
+        DeleteRideDialog(
+            ride = target,
+            appViewModel = appViewModel,
+            scope = scope,
+            snackbarHostState = snackbarHostState,
+            undoSnackbarJob = undoSnackbarJob,
+            onDismiss = { deleteTarget = null },
+            // Die Detailansicht der geloeschten Tour muss zu sein, bevor die
+            // Undo-Snackbar erscheint — anders als in der Liste gibt es hier
+            // sonst nichts mehr anzuzeigen.
+            onDeleted = onBack,
+        )
+    }
+}
+
+/**
+ * Bestaetigungsdialog fuer das Loeschen samt „Rückgängig"-Snackbar — von
+ * [TourListContent] und [RideDetailHost] gemeinsam genutzt, damit beide
+ * nachweislich denselben Loeschweg nehmen und der Undo-Mechanismus nicht
+ * zweimal (und womoeglich unterschiedlich) gebaut wird.
+ *
+ * ## Loeschen mit „Rückgängig"
+ * Der Bestaetigungsdialog entfernt die Tour sofort aus der Liste
+ * ([AppViewModel.deleteRideWithUndo]), loescht die Datei aber erst nach
+ * [UNDO_DELETE_GRACE_MS], solange in der Zwischenzeit keine weitere Loeschung
+ * dazwischenkommt. Waehrenddessen zeigt [snackbarHostState] eine Snackbar
+ * „Tour gelöscht" mit Aktion „Rückgängig".
+ *
+ * Die Snackbar laeuft ueber `withTimeoutOrNull(UNDO_DELETE_GRACE_MS)`: Tippt
+ * niemand auf „Rückgängig", verschwindet sie nach Ablauf der Frist von selbst —
+ * zeitgleich mit dem im ViewModel laufenden Loesch-Timer.
+ *
+ * @param undoSnackbarJob Anzeige-Coroutine der aktuellen Undo-Snackbar, vom
+ *   Aufrufer gehalten (`remember { mutableStateOf<Job?>(null) }`) und
+ *   ueberlebt deshalb ueber mehrere Loeschungen hinweg. Ueberschreibt sich
+ *   selbst bei jeder neuen Loeschung — `Job.cancel()` auf die vorige laesst
+ *   deren Snackbar sofort verschwinden, statt sie hinter der neuen
+ *   einzureihen. Eine zweite Loeschung waehrend einer noch offenen Snackbar
+ *   bricht deren Anzeige-Coroutine ab; im ViewModel schliesst dieselbe Aktion
+ *   die vorige Loeschung sofort endgueltig ab.
+ * @param onDeleted zusaetzlich zu [onDismiss] aufgerufen, sobald die Loeschung
+ *   ausgeloest wurde — in [RideDetailHost] etwa, um sofort zur Liste
+ *   zurueckzukehren (dort gibt es sonst nichts mehr anzuzeigen).
+ *
+ * Stirbt der Prozess waehrend der Frist, bleibt die Datei einfach liegen — die
+ * Tour taucht beim naechsten Start ganz normal wieder auf. Akzeptierter
+ * Kompromiss, siehe KDoc von [AppViewModel.deleteRideWithUndo].
+ */
+@Composable
+private fun DeleteRideDialog(
+    ride: Ride,
+    appViewModel: AppViewModel,
+    scope: CoroutineScope,
+    snackbarHostState: SnackbarHostState,
+    undoSnackbarJob: MutableState<Job?>,
+    onDismiss: () -> Unit,
+    onDeleted: () -> Unit = {},
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tour löschen") },
+        text = { Text("Soll „${ride.name}“ wirklich gelöscht werden?") },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismiss()
+                    onDeleted()
+                    undoSnackbarJob.value?.cancel()
+                    appViewModel.deleteRideWithUndo(ride.id)
+                    undoSnackbarJob.value = scope.launch {
+                        val result = withTimeoutOrNull(UNDO_DELETE_GRACE_MS) {
+                            snackbarHostState.showSnackbar(
+                                message = "Tour gelöscht",
+                                actionLabel = "Rückgängig",
+                                duration = SnackbarDuration.Indefinite,
+                            )
+                        }
+                        if (result == SnackbarResult.ActionPerformed) {
+                            appViewModel.undoDeleteRide()
+                        }
+                    }
+                },
+            ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Abbrechen") }
+        },
+    )
+}
+
+@Composable
+private fun RenameDialog(
+    ride: Ride,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var name by rememberSaveable(ride.id) { mutableStateOf(ride.name) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Tour umbenennen") },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                singleLine = true,
+                label = { Text("Name") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank(),
+                onClick = { onConfirm(name) },
+            ) { Text("Speichern") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
+}
+
+/**
+ * Eine Tour-Karte der Liste.
+ *
+ * Ein Tipp auf die Karte zeigt die Route auf der Karte dahinter
+ * ([onShowOnMap]) statt die Detailansicht zu oeffnen — Begruendung im KDoc von
+ * [TourListContent]. Der eigens beschriftete Knopf „Details" unten rechts
+ * fuehrt in die Vollansicht ([onOpenDetail]); Umbenennen, Teilen und Loeschen
+ * bleiben im Ueberlaufmenue, weil sie seltener gebraucht werden und dort schon
+ * vorher lagen.
+ */
+@Composable
+private fun RideCard(
+    ride: Ride,
+    loadText: String?,
+    selected: Boolean,
+    onShowOnMap: () -> Unit,
+    onOpenDetail: () -> Unit,
+    onRename: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val colors = MaterialTheme.colorScheme
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onShowOnMap),
+        // Unselektiert erbt die Karte ihre Flaeche aus dem Theme (Default von
+        // Card, siehe theme/Color.kt); nur der Auswahlzustand hebt sie
+        // bewusst auf secondaryContainer.
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) colors.secondaryContainer else Color.Unspecified,
+        ),
+    ) {
+        // CardPadding (20 dp) ringsum wie in jeder anderen Karte der App;
+        // rechts bleibt es bei 4 dp, weil der IconButton daneben seinen
+        // eigenen Beruehrungsrand von 12 dp mitbringt und die Karte sonst
+        // rechts zu luftig wirkt.
+        Column(
+            modifier = Modifier.padding(
+                start = CardPadding,
+                end = 4.dp,
+                top = CardPadding,
+                bottom = CardPadding,
+            ),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = ride.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = formatDate(ride.createdAt),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+
+                Box {
+                    IconButton(onClick = { menuOpen = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
+                    }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Umbenennen") },
+                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                onRename()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Als GPX teilen") },
+                            leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                onShare()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Löschen") },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                            onClick = {
+                                menuOpen = false
+                                onDelete()
+                            },
+                        )
+                    }
+                }
+            }
+
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 12.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                RideFact("Distanz", "${formatKmDe(ride.stats.distanceKm)} km")
+                RideFact("Dauer", formatDuration(ride.stats.durationS))
+                RideFact("Höhenmeter", "${ride.stats.ascentM.roundToInt()} hm")
+                ride.stats.avgHrBpm?.let { RideFact("Ø Puls", "$it bpm") }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 12.dp, top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (loadText != null) {
+                        Text(
+                            text = loadText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.onSurfaceVariant,
+                        )
+                    }
+                    // Eine gespeicherte Planung sieht in dieser Liste sonst
+                    // genauso aus wie eine gefahrene Tour — sie zaehlt aber
+                    // weder fuer den Wochenfortschritt noch fuer die
+                    // Trainingsauswertung (siehe `:core`: `Ride.planned`).
+                    // Ohne Kennzeichnung waere ihr Fehlen in den Zahlen ein
+                    // Fehler, mit Kennzeichnung ist es eine Auskunft.
+                    if (ride.planned) {
+                        TagPill(text = "geplante Route")
+                    }
+                    if (ride.id.startsWith("hc-")) {
+                        TagPill(text = "aus Health Connect")
+                    }
+                }
+
+                TextButton(onClick = onOpenDetail) { Text("Details") }
+            }
+        }
+    }
+}
+
+/**
+ * Was die Tourenliste kann, solange nichts gespeichert ist.
+ *
+ * Derselbe Aufbau wie im Trainings-Tab (siehe `ui/components/EmptyState.kt`)
+ * samt der drei Wege, auf denen eine Tour hier landen kann.
+ */
+@Composable
+private fun RidesEmptyState(
+    onRecord: () -> Unit,
+    onImportFile: () -> Unit,
+    onOpenBackup: () -> Unit,
+) {
+    EmptyState(
+        title = "Noch keine Touren",
+        body = "Hier sammeln sich alle Touren — aufgezeichnete wie importierte — mit " +
+            "Distanz, Dauer, Höhenmetern, Ø-Puls und der berechneten Trainingslast. " +
+            "Ein Tipp auf eine Tour zeigt sie auf der Karte, der Knopf „Details“ " +
+            "zeigt sie im Detail — mit Karte, Höhenprofil und Verläufen.",
+        hint = "Ein ganzer Strava- oder Garmin-Export lässt sich als ZIP-Archiv auf " +
+            "einmal einlesen — unter Mehr → Daten & Backup.",
+        actions = {
+            Button(onClick = onRecord) { Text("Tour aufzeichnen") }
+            TextButton(onClick = onImportFile) { Text("GPX-/FIT-Datei öffnen") }
+            TextButton(onClick = onOpenBackup) { Text("Archiv importieren") }
+        },
+    )
+}
+
+/** Eine Kennzahl der Tour — dieselbe Grammatik wie ueberall ([Fact]). */
+@Composable
+private fun RideFact(label: String, value: String) {
+    Fact(label = label, value = value)
+}
+
+/**
+ * Teilt eine Tour als GPX-Datei ueber das System-Share-Sheet (z. B. fuer
+ * Komoot, Strava oder eine andere Trainings-App).
+ *
+ * Die Datei landet unter `<cacheDir>/geteilte-touren` — genau der Pfad, den
+ * `res/xml/file_paths.xml` fuer den FileProvider freigibt. Dabei werden **alte**
+ * Exporte aufgeraeumt (siehe `ui/ShareFiles.kt`), damit der Cache nicht
+ * mitwaechst; frische bleiben liegen, weil die Empfaenger-App sie erst nach
+ * dem Chooser liest.
+ */
+private suspend fun shareGpx(context: Context, ride: Ride) {
+    val uri = withContext(Dispatchers.IO) {
+        val dir = prepareShareDirectory(context.cacheDir)
+        val file = File(dir, "${safeFileName(ride.name)}.gpx")
+        file.writeText(rideToGpx(ride), Charsets.UTF_8)
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
+
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "application/gpx+xml"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, ride.name)
+        putExtra(Intent.EXTRA_TITLE, ride.name)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(Intent.createChooser(send, "Tour teilen"))
+}
