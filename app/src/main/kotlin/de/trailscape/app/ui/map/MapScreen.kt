@@ -1735,6 +1735,34 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ------------------------------------------------------------------ Aufbau
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
+    // ## Der Platz, den das Rundenwahl-Blatt wirklich hat
+    //
+    // Vorher bekam sein Koerper `0,55 * Bildschirmhoehe` als Obergrenze — auf
+    // einem 800-dp-Geraet 440 dp, waehrend der Stapel ihm nach Abzug von
+    // Kapselfreiheit, schwebenden Knoepfen und Raendern nur rund 120 dp lassen
+    // konnte. Das ist genau die Konstellation, in der ein `verticalScroll`
+    // NICHT scrollt: Sein Inhalt (rund 186 dp) blieb unter der Obergrenze, der
+    // Behaelter wurde also inhaltsgross und hatte keinen Scrollweg — nur das
+    // Fenster darum war kleiner. Ergebnis: unten abgeschnitten und kein Weg
+    // hin. Ein zu grosszuegiger Deckel ist hier schaedlicher als ein zu enger.
+    //
+    // Deshalb wird der Deckel jetzt aus dem verfuegbaren Platz gerechnet und
+    // nicht aus einem Anteil des Bildschirms geraten.
+    val generationSheetBudget = (
+        screenHeight -
+            LocalFloatingNavigationBarSpace.current -
+            OverlayFloatingButtonsHeight -
+            OverlayScreenPadding * 2 -
+            OverlayGap
+        ).coerceAtLeast(MinGenerationSheetBudget)
+
+    // Was der Peek unabhaengig von der Vorschlagsliste braucht — Griff,
+    // Titelzeile, die beiden Zielzeilen, „Übernehmen" und die Raender. Der Rest
+    // teilt sich zwischen Liste und Koerper auf; beide scrollen, wenn ihr
+    // Anteil nicht reicht.
+    val generationRest =
+        (generationSheetBudget - GenerationPeekFixedHeight).coerceAtLeast(120.dp)
+
     // Ob die Tastatur steht. Bewusst `WindowInsets.isImeVisible` und nicht
     // `WindowInsets.ime`: Die Huelle (`ui/TrailscapeApp.kt`) hat den
     // IME-Abstand mit `imePadding()` bereits **verzehrt**, hier kaeme also
@@ -1933,8 +1961,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                             expanded = planSheetExpanded,
                             onExpandedChange = { planSheetExpanded = it },
                             route = plannedRoute,
-                            candidatesMaxHeight = screenHeight * GENERATION_CANDIDATES_MAX_HEIGHT_FACTOR,
-                            bodyMaxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
+                            candidatesMaxHeight = generationRest * GENERATION_CANDIDATES_SHARE,
+                            bodyMaxHeight = generationRest * GENERATION_BODY_SHARE,
                             locating = locating,
                             onStart = ::generateRoutes,
                             onCancel = RouteGenerationController::cancel,
@@ -2500,16 +2528,18 @@ private fun planProgressText(source: RoutingSource?, done: Int, total: Int): Str
  */
 private val WAYPOINT_TOUCH_RADIUS_DP = 24.dp
 
-/** Maximale Hoehe des Rundkurs-Panels (Dart: `_planPanelMaxHeightFactor`). */
-private const val PLAN_PANEL_MAX_HEIGHT_FACTOR = 0.55f
-
 /**
  * Maximale Hoehe des **aufgeklappten** Planungsblatts.
  *
- * Knapper als [PLAN_PANEL_MAX_HEIGHT_FACTOR], weil ueber dem Blatt noch die
- * beiden runden Knoepfe (zusammen rund 120 dp) im selben Stapel stehen. Fuer
- * die Sicht auf die Karte ist ohnehin die eingeklappte Stufe zustaendig — sie
- * misst eine Zeile.
+ * Knapp gehalten, weil ueber dem Blatt noch die beiden runden Knoepfe
+ * (zusammen [OverlayFloatingButtonsHeight]) im selben Stapel stehen. Fuer die
+ * Sicht auf die Karte ist ohnehin die eingeklappte Stufe zustaendig — sie misst
+ * eine Zeile.
+ *
+ * Hier stand daneben `PLAN_PANEL_MAX_HEIGHT_FACTOR = 0.55f` fuer das
+ * Rundkurs-Panel. Das Panel gibt es nicht mehr (die Wahl ist selbst ein Blatt),
+ * und sein Deckel kommt jetzt aus dem verfuegbaren Platz statt aus einem
+ * Bildschirmanteil — siehe `generationSheetBudget` im Rumpf.
  */
 private const val PLAN_SHEET_MAX_HEIGHT_FACTOR = 0.45f
 
@@ -2549,16 +2579,36 @@ private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
 private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.3f
 
 /**
- * Anteil der Bildschirmhoehe, den die Kandidatenliste der Rundenwahl im immer
- * sichtbaren Teil ihres Blatts hoechstens einnimmt.
+ * Hoehe der beiden schwebenden Knoepfe ueber dem Blatt (Aufzeichnen, Position)
+ * samt ihrer Abstaende — 56 + 12 + 56 + 12 dp.
  *
- * Derselbe Gedanke wie bei [SEARCH_RESULTS_MAX_HEIGHT_FACTOR]: Was im Peek
- * steht, steht ohne Zutun im Bild, und darueber liegen noch die beiden
- * schwebenden Knoepfe (Aufzeichnen, Position). Ohne Deckel schoebe eine lange
- * Vorschlagsliste sie vom Bildschirm. Drei Vorschlaege — der Regelfall, siehe
- * `RouteGenerationController.CANDIDATE_COUNT` — passen ohne Scrollen hinein.
+ * Steht hier als Zahl, weil der Platz des Blatts davon abhaengt und Compose
+ * ihn nicht rueckwaerts erfragen kann, ohne die Komposition zu verschachteln.
+ * Wer die Knoepfe aendert, aendert diese Zeile mit.
  */
-private const val GENERATION_CANDIDATES_MAX_HEIGHT_FACTOR = 0.28f
+private val OverlayFloatingButtonsHeight = 136.dp
+
+/**
+ * Was der Peek der Rundenwahl unabhaengig von der Vorschlagsliste braucht:
+ * Griff (48), Titelzeile (48), die beiden Zielzeilen (~44), „Übernehmen" (48)
+ * und die Raender (~20).
+ */
+private val GenerationPeekFixedHeight = 208.dp
+
+/** Untergrenze, damit die Rechnung auf sehr flachen Fenstern nicht negativ wird. */
+private val MinGenerationSheetBudget = 240.dp
+
+/**
+ * Wie sich der Platz jenseits von [GenerationPeekFixedHeight] zwischen
+ * Vorschlagsliste und Koerper aufteilt.
+ *
+ * Die Liste bekommt den groesseren Anteil: Sie ist die Entscheidung. Der
+ * Koerper traegt Zusatzwissen (Hoehenprofil, Zweitaktionen) und darf dafuer
+ * scrollen — bei drei Vorschlaegen, dem Regelfall, passt die Liste ohnehin
+ * ohne Scrollen hinein.
+ */
+private const val GENERATION_CANDIDATES_SHARE = 0.62f
+private const val GENERATION_BODY_SHARE = 0.38f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"
