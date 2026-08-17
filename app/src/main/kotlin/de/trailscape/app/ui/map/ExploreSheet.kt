@@ -1,7 +1,5 @@
 package de.trailscape.app.ui.map
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,25 +11,27 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Place
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
+import de.trailscape.core.GeoResult
 
 /**
  * Das Ruhegesicht des einen Karten-Blatts — [MapMode.ERKUNDEN] ohne Auswahl —
@@ -50,12 +50,27 @@ import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
  * `MapScreen.kt`) — die Tourenliste braucht also keinen eigenen
  * Vorrang-Zustand mehr, sie verschwindet automatisch mit ihrem Blatt.
  *
- * ## Suchfeld zuerst
+ * ## Suchfeld zuerst — und es IST jetzt das Feld
  * Die Suche ist die haeufigste Aktion und steht deshalb als volle Zeile im
- * Kopf (Google-Maps-Muster). Die Zeile SIEHT aus wie das Suchfeld des
- * Suchblatts (gleiche Flaeche, gleiche Form wie `OneUiTextField`), IST aber
- * nur ein Knopf: Das echte Feld mit Tastatur lebt im modalen [SearchSheet] —
- * zwei fokussierbare Felder waeren zwei Tastatur-Zustaende fuer eine Aufgabe.
+ * Kopf (Google-Maps-Muster).
+ *
+ * Hier stand bis dahin eine **Attrappe**: eine `Row`, die aussah wie ein Feld,
+ * aber ein Knopf war und ein zweites, modales Blatt mit dem echten Feld
+ * oeffnete. Begruendet war das damit, dass zwei fokussierbare Felder zwei
+ * Tastatur-Zustaende fuer eine Aufgabe waeren — was stimmt, aber den Preis
+ * verschwieg: zwei Blaetter uebereinander, zwei Griffe, ein Scrim, der die
+ * Karte wegnahm, und ein Bedienelement, das eine Erwartung weckte und sie an
+ * einen anderen Ort weiterreichte.
+ *
+ * Jetzt gibt es nur noch **ein** Feld, und es sitzt hier. Bekommt es den
+ * Fokus, faehrt dasselbe Blatt auf und sein Koerper wechselt von der
+ * Tourenliste zu [PlaceResults] — Treffer, oder bei leerem Feld sofort der
+ * Suchverlauf. Die Karte bleibt dabei oben sichtbar, und das ist bei einer
+ * *Orts*suche keine Nebensache.
+ *
+ * Das modale [SearchSheet] bleibt bestehen, aber nur noch fuer die
+ * Wegpunktsuche der Planung — dort ist dieses Blatt gar nicht komponiert
+ * (Begruendung in dessen KDoc).
  *
  * ## Drei gleichrangige Werkzeuge, keine Hauptaktion
  * „Route planen", Kartenstil und Offline sind Einstiege in Verschiedenes,
@@ -82,7 +97,16 @@ internal fun ExploreSheet(
     onExpandedChange: (Boolean) -> Unit,
     rideCount: Int,
     toursMaxHeight: Dp,
-    onOpenSearch: () -> Unit,
+    searchMaxHeight: Dp,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    searching: Boolean,
+    onSearchingChange: (Boolean) -> Unit,
+    searchBusy: Boolean,
+    searchError: String?,
+    searchResults: List<GeoResult>,
+    searchHistory: List<Place>,
+    onSelectPlace: (Place) -> Unit,
     onStartPlanning: () -> Unit,
     onOpenStyle: () -> Unit,
     onDownload: () -> Unit,
@@ -101,88 +125,107 @@ internal fun ExploreSheet(
                     vertical = OverlayCardPaddingVertical,
                 ),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .background(MaterialTheme.colorScheme.surfaceContainer)
-                        .clickable(onClick = onOpenSearch)
-                        .heightIn(min = 52.dp)
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        Icons.Filled.Search,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = "Ort, Stadt oder Straße suchen",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                OneUiSearchField(
+                    value = searchQuery,
+                    onValueChange = onSearchQueryChange,
+                    placeholder = "Ort, Stadt oder Straße suchen",
+                    busy = searchBusy,
+                    onFocusChange = onSearchingChange,
+                )
 
-                Spacer(Modifier.height(8.dp))
+                // Waehrend gesucht wird, treten die drei Werkzeuge ab. Sie
+                // sind Einstiege in etwas Anderes und haetten unter einer
+                // laufenden Trefferliste nur die Haelfte der Blatthoehe
+                // gekostet, ohne je gemeint zu sein.
+                if (!searching) {
+                    Spacer(Modifier.height(8.dp))
 
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    ExploreTool(
-                        icon = Icons.Filled.Place,
-                        label = "Route planen",
-                        onClick = onStartPlanning,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    ExploreTool(
-                        icon = Icons.Filled.Layers,
-                        label = "Kartenstil",
-                        onClick = onOpenStyle,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    ExploreTool(
-                        icon = Icons.Filled.DownloadForOffline,
-                        label = "Offline",
-                        onClick = onDownload,
-                        enabled = downloadEnabled,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        ExploreTool(
+                            icon = Icons.Filled.Place,
+                            label = "Route planen",
+                            onClick = onStartPlanning,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        ExploreTool(
+                            icon = Icons.Filled.Layers,
+                            label = "Kartenstil",
+                            onClick = onOpenStyle,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        ExploreTool(
+                            icon = Icons.Filled.DownloadForOffline,
+                            label = "Offline",
+                            onClick = onDownload,
+                            enabled = downloadEnabled,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         },
         body = {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = CardPadding, end = CardPadding),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Touren",
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+            // Der Koerper hat zwei Gesichter: normalerweise die Tourenliste,
+            // waehrend der Suche die Treffer.
+            //
+            // Zwei verschiedene Obergrenzen, und das mit Absicht: Waehrend der
+            // Suche steht die Tastatur im Bild und nimmt gut ein Drittel des
+            // Bildschirms. Die grosszuegige Grenze der Tourenliste wuerde das
+            // Blatt dann oben abschneiden — fuenf Treffer plus fuenf
+            // Verlaufseintraege sind hoch genug, dass das keine graue Theorie
+            // ist. Was nicht hineinpasst, scrollt.
+            Box(
+                modifier = Modifier.heightIn(
+                    max = if (searching) searchMaxHeight else toursMaxHeight,
+                ),
+            ) {
+                if (searching) {
+                    PlaceResults(
+                        query = searchQuery,
+                        error = searchError,
+                        results = searchResults,
+                        history = searchHistory,
+                        onSelect = onSelectPlace,
+                        modifier = Modifier
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                horizontal = CardPadding,
+                                vertical = OverlayCardPaddingVertical,
+                            ),
                     )
-                    Text(
-                        text = rideCount.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                // Nur die Obergrenze wird hier erzwungen, keine eigene
-                // `verticalScroll` — der Inhalt ist eine `LazyColumn` und
-                // scrollt selbst; ein zweiter Scrollcontainer aussen wuerde
-                // nur widerspruechliche Gesten erzeugen.
-                Box(modifier = Modifier.heightIn(max = toursMaxHeight)) {
-                    tours(
-                        PaddingValues(
-                            horizontal = CardPadding,
-                            vertical = OverlayCardPaddingVertical,
-                        ),
-                    )
+                } else {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = CardPadding, end = CardPadding),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Touren",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Text(
+                                text = rideCount.toString(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        // Keine eigene `verticalScroll` — der Inhalt ist eine
+                        // `LazyColumn` und scrollt selbst; ein zweiter
+                        // Scrollcontainer aussen wuerde nur widerspruechliche
+                        // Gesten erzeugen.
+                        tours(
+                            PaddingValues(
+                                horizontal = CardPadding,
+                                vertical = OverlayCardPaddingVertical,
+                            ),
+                        )
+                    }
                 }
             }
         },
