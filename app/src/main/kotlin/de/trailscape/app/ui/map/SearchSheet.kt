@@ -42,7 +42,21 @@ import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.GeoResult
 
 /**
- * # Das Suchblatt — Ortssuche als von unten hochfahrendes Blatt
+ * # Das Suchblatt — die Ortssuche als **kurze Besorgung** aus einem anderen Blatt
+ *
+ * ## Wofuer es noch da ist, seit die Suche im Erkunden-Blatt wohnt
+ * Bis dahin bediente dieses Blatt beide Einstiege in die Ortssuche. Der
+ * haeufigere — die Suche im Erkunden-Blatt — laeuft inzwischen dort an Ort und
+ * Stelle (`ExploreSheet.kt`): Das Feld IST das Feld, der Koerper des Blatts
+ * zeigt die Treffer, die Karte bleibt sichtbar.
+ *
+ * Uebrig bleibt der zweite Einstieg, und der ist etwas anderes: **„Wegpunkt
+ * per Suche"** aus der Routenplanung (`openPlaceSearch { … }` mit Rueckruf in
+ * `MapScreen.kt`). Dort ist das Erkunden-Blatt gar nicht komponiert — der
+ * Bildschirm gehoert der Planung —, und die Suche ist eine kurze Besorgung:
+ * einen Ort holen, zurueckgeben, verschwinden. Genau dafuer ist ein modales
+ * Blatt gebaut. Was beide Faelle wirklich teilen, ist nicht das Blatt, sondern
+ * die Trefferliste; die steht deshalb als [PlaceResults] fuer sich.
  *
  * Ersetzt das fruehere `SearchPanel` (Karte im oberen Panelstapel,
  * `PlanningPanel.kt`), das mit Trefferzeile UND Textknopf („Anzeigen"/„Als
@@ -126,52 +140,86 @@ internal fun SearchSheet(
                 fieldModifier = Modifier.focusRequester(focusRequester),
             )
 
-            if (error != null) {
-                Text(
-                    text = error,
-                    modifier = Modifier.padding(top = 6.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                when {
-                    results.isNotEmpty() -> results.forEach { result ->
-                        PlaceRow(
-                            displayName = result.displayName,
-                            onClick = { onSelect(result.toPlace()) },
-                        )
-                    }
-
-                    query.isBlank() && history.isNotEmpty() -> {
-                        Text(
-                            text = "Zuletzt gesucht",
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        history.forEach { place ->
-                            PlaceRow(
-                                displayName = place.displayName,
-                                icon = Icons.Filled.History,
-                                onClick = { onSelect(place) },
-                            )
-                        }
-                    }
-
-                    query.isBlank() -> Text(
-                        text = "Suche nach einem Ort, einer Stadt oder einer Adresse.",
-                        modifier = Modifier.padding(top = 8.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            PlaceResults(
+                query = query,
+                error = error,
+                results = results,
+                history = history,
+                onSelect = onSelect,
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+            )
         }
     }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+}
+
+/**
+ * Was unter einem Suchfeld steht: Fehlermeldung, dann entweder Treffer, der
+ * Suchverlauf oder — wenn es beides nicht gibt — ein Satz, der sagt, was hier
+ * hingehoert.
+ *
+ * Eigene Funktion, weil es diese Liste inzwischen an **zwei** Stellen gibt:
+ * fest im Erkunden-Blatt der Karte (siehe `ExploreSheet.kt`) und in diesem
+ * modalen Blatt fuer die Wegpunktsuche der Planung. Das Gemeinsame ist die
+ * Liste, nicht das Blatt — genau deshalb steht sie hier fuer sich und nicht
+ * zweimal.
+ *
+ * Der **Verlauf erscheint sofort**, sobald das Feld leer und fokussiert ist,
+ * nicht erst nach dem ersten Zeichen: Wer die Suche oeffnet, hat meist ein
+ * Ziel im Kopf, das er schon einmal gesucht hat. Ein Tipp statt acht.
+ */
+@Composable
+internal fun PlaceResults(
+    query: String,
+    error: String?,
+    results: List<GeoResult>,
+    history: List<Place>,
+    onSelect: (Place) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        if (error != null) {
+            Text(
+                text = error,
+                modifier = Modifier.padding(top = 6.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        when {
+            results.isNotEmpty() -> results.forEach { result ->
+                PlaceRow(
+                    displayName = result.displayName,
+                    onClick = { onSelect(result.toPlace()) },
+                )
+            }
+
+            query.isBlank() && history.isNotEmpty() -> {
+                Text(
+                    text = "Zuletzt gesucht",
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                history.forEach { place ->
+                    PlaceRow(
+                        displayName = place.displayName,
+                        icon = Icons.Filled.History,
+                        onClick = { onSelect(place) },
+                    )
+                }
+            }
+
+            query.isBlank() -> Text(
+                text = "Suche nach einem Ort, einer Stadt oder einer Adresse.",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 /**

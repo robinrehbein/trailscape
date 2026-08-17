@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -162,9 +164,11 @@ import kotlinx.coroutines.withContext
  *    Effekt, der die Navigation beendet, wenn die navigierte Tour geloescht
  *    wird.
  *
- * `searchOpen` ist bewusst kein vierter Wert: Die Ortssuche bleibt in allen
- * drei Modi erreichbar (siehe „Suche jederzeit" unten) und ist damit
- * orthogonal zum Kartenmodus, nicht ein weiterer Zustand desselben Schalters.
+ * Die Ortssuche ist bewusst kein vierter Wert: Sie bleibt in allen drei Modi
+ * erreichbar (siehe „Suche jederzeit" unten) und ist damit orthogonal zum
+ * Kartenmodus, nicht ein weiterer Zustand desselben Schalters. Sie hat
+ * allerdings zwei Gesichter — `exploreSearching` fuer die Suche im
+ * Erkunden-Blatt, `searchOpen` fuer das modale Blatt der Wegpunktsuche.
  *
  * ## Bewusste Unterschiede zum Flutter-Original
  *  * **Kein Namensdialog nach dem Stopp.** In Flutter lief die Aufzeichnung im
@@ -183,11 +187,14 @@ import kotlinx.coroutines.withContext
  *  * **Keine Vibration bei „abseits der Route"**: Dafuer fehlt die
  *    `VIBRATE`-Berechtigung im Manifest, das hier nicht angefasst wird. Die
  *    Warnung erscheint als Meldung und in der Navigationsleiste.
- *  * **Suche jederzeit**, nicht nur im Planungsmodus — als von unten
- *    hochfahrendes Blatt (siehe `SearchSheet.kt`) statt als Panel im oberen
- *    Stapel; ein gewaehlter Treffer ist seither ein Ort-Objekt ([Place]) mit
- *    eigener Karte (`PlaceCard.kt`), keine Sofortaktion mehr an der
- *    Trefferzeile.
+ *  * **Suche jederzeit**, nicht nur im Planungsmodus, und **im Blatt selbst**
+ *    statt als Panel im oberen Stapel: Das Feld im Erkunden-Blatt ist das
+ *    echte Feld, sein Koerper zeigt beim Tippen die Treffer (siehe
+ *    `ExploreSheet.kt`). Vorher war die Zeile eine Attrappe, die ein zweites,
+ *    modales Blatt oeffnete — das gibt es nur noch fuer die Wegpunktsuche der
+ *    Planung (`SearchSheet.kt`). Ein gewaehlter Treffer ist ein Ort-Objekt
+ *    ([Place]) mit eigener Karte (`PlaceCard.kt`), keine Sofortaktion mehr an
+ *    der Trefferzeile.
  *  * **Hoehenprofil** fuer die ausgewaehlte Tour und die geplante Route — das
  *    hatte der Karten-Screen in Flutter noch nicht.
  *  * **Rundkurs aus der Trainingsempfehlung.** Der Trainings-Tab schickt ueber
@@ -306,6 +313,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     // zeigt.
     val placeSearchHistory by appViewModel.placeSearchHistory.collectAsStateWithLifecycle()
 
+    // Der Suchverlauf in der Form, die beide Suchen brauchen — das Blatt und
+    // das modale Blatt der Planung. Frueher stand dieselbe Umformung an der
+    // einen Aufrufstelle; mit zweien gehoert sie hierher.
+    val placeHistory by remember(placeSearchHistory) {
+        derivedStateOf { placeSearchHistory.map { Place(it.displayName, it.lat, it.lon) } }
+    }
+
     val isRecording by RecordingRepository.isRecording.collectAsStateWithLifecycle()
     val isPaused by RecordingRepository.isPaused.collectAsStateWithLifecycle()
     val elapsedMs by RecordingRepository.elapsedMs.collectAsStateWithLifecycle()
@@ -409,11 +423,27 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Hand geplant wird, faellt es zurueck auf `false`.
     var routeFromGenerator by rememberSaveable { mutableStateOf(false) }
 
+    // `searchOpen` steht nur noch fuer das **modale** Suchblatt, das heute
+    // ausschliesslich die Wegpunktsuche der Planung bedient (siehe
+    // `openPlaceSearch`). Die Ortssuche des Erkunden-Blatts laeuft dort an Ort
+    // und Stelle und haengt an `exploreSearching`.
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<GeoResult>>(emptyList()) }
     var searchBusy by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
+
+    /**
+     * Ob das Suchfeld im Erkunden-Blatt gerade den Fokus hat — und damit, ob
+     * dessen Koerper Treffer statt der Tourenliste zeigt.
+     *
+     * Absichtlich **kein** `rememberSaveable`: Nach einer Drehung oder einem
+     * Prozesstod haette das Feld den Fokus nicht mehr, ein wiederhergestelltes
+     * `true` wuerde also einen Zustand behaupten, den die Tastatur nicht
+     * teilt.
+     */
+    var exploreSearching by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
 
     // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
     // (siehe `PlaceCard.kt`). Ersetzt den fruehreren `searchMarker: Waypoint?`:
@@ -1163,20 +1193,21 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     /**
-     * Oeffnet das Suchblatt.
+     * Oeffnet das **modale** Suchblatt als reinen Ortswaehler.
      *
-     * ## Zwei Aufrufmodi
-     * Ohne [onPicked] (der Normalfall — die Suchzeile im Erkunden-Blatt) landet der
-     * gewaehlte Ort in [selectedPlace] und zeigt die Ortskarte ([PlaceCard]).
-     * Mit [onPicked] wird das Blatt zum reinen Ortswaehler: Die Auswahl geht
-     * ausschliesslich an [onPicked], [selectedPlace] bleibt unberuehrt und die
-     * Ortskarte erscheint nicht. Gedacht fuer Folge-Screens, die einen Ort an
-     * einer eigenen Stelle brauchen (z. B. eine einzelne Zeile einer
-     * Planungsliste) — sie rufen `openPlaceSearch { ort -> … }` auf und
-     * bekommen den gewaehlten Ort direkt zurueck, ohne je die Ortskarte zu
-     * sehen.
+     * Die Auswahl geht ausschliesslich an [onPicked]; [selectedPlace] bleibt
+     * unberuehrt und die Ortskarte erscheint nicht. Gebraucht wird das genau
+     * einmal: von „Wegpunkt per Suche" in der Routenplanung — dort ist das
+     * Erkunden-Blatt nicht komponiert, und die Suche ist eine kurze Besorgung,
+     * die einen Ort zurueckbringt und dann verschwindet.
+     *
+     * Die gewoehnliche Ortssuche laeuft **nicht** mehr hier durch: Sie sitzt
+     * seit dem Umbau im Erkunden-Blatt an Ort und Stelle (siehe
+     * `ExploreSheet.kt` und `exploreSearching` oben). [onPicked] ist deshalb
+     * kein optionaler Parameter mehr — ein Aufruf ohne Rueckruf haette keinen
+     * Aufrufer und waere nur noch ein zweiter Weg zu demselben Ziel.
      */
-    fun openPlaceSearch(onPicked: ((Place) -> Unit)? = null) {
+    fun openPlaceSearch(onPicked: (Place) -> Unit) {
         searchPickerCallback = onPicked
         searchQuery = ""
         searchResults = emptyList()
@@ -1191,11 +1222,32 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     /**
-     * Waehlt [place] aus dem Suchblatt — ein Nominatim-Treffer oder ein
-     * Eintrag aus „Zuletzt gesucht" (beide sind zu diesem Zeitpunkt schon ein
-     * [Place], siehe `SearchSheet.kt`). Schliesst das Blatt und bedient je
-     * nach Aufrufmodus entweder den Ortswaehler-Callback oder die normale
-     * Ortskarte (siehe [openPlaceSearch]).
+     * Beendet die Suche **im Erkunden-Blatt** (nicht die modale der Planung):
+     * Fokus weg, Tastatur zu, Feld und Treffer geleert, Koerper zurueck auf
+     * die Tourenliste.
+     *
+     * Das Leeren gehoert dazu und ist keine Bequemlichkeit: Bliebe die alte
+     * Anfrage stehen, zeigte das Blatt beim naechsten Antippen die Treffer von
+     * vorgestern, bevor der erste Buchstabe getippt ist.
+     */
+    fun endExploreSearch() {
+        exploreSearching = false
+        searchQuery = ""
+        searchResults = emptyList()
+        searchError = null
+        focusManager.clearFocus()
+    }
+
+    /**
+     * Waehlt [place] aus einer der beiden Suchen — ein Nominatim-Treffer oder
+     * ein Eintrag aus „Zuletzt gesucht" (beide sind zu diesem Zeitpunkt schon
+     * ein [Place], siehe [PlaceResults]).
+     *
+     * Steht ein Ortswaehler-Rueckruf offen (Wegpunktsuche der Planung, siehe
+     * [openPlaceSearch]), bekommt der den Ort und sonst passiert nichts.
+     * Andernfalls kommt der Aufruf aus dem Erkunden-Blatt: Dann wird [place]
+     * zum ausgewaehlten Ort, die Karte springt hin und die Ortskarte
+     * ([PlaceCard]) uebernimmt.
      */
     fun onPlaceChosen(place: Place) {
         val picker = searchPickerCallback
@@ -1645,16 +1697,38 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
-    // Zurueck-Geste: erst die Tourenliste wieder einklappen, dann die Planung
-    // (mit derselben Rueckhol-Snackbar wie der Knopf „Planung beenden"),
-    // sonst das normale Verhalten der App. Die Tourendetailansicht braucht
-    // hier keinen Fall — sie faengt die Geste bereits als eigenes
-    // Dialogfenster ab (siehe unten und das Klassen-KDoc oben).
-    BackHandler(enabled = toursExpanded || mode == MapMode.PLANEN) {
-        if (toursExpanded) {
-            toursExpanded = false
-        } else {
-            exitPlanningWithUndo("Planung beendet.")
+    // Suche und Blatt haengen aneinander, in beide Richtungen.
+    //
+    // Fokus im Suchfeld zieht das Blatt auf: Die Treffer stehen im Koerper,
+    // und der ist im eingeklappten Zustand nicht sichtbar — ohne das hier
+    // tippte man ins Leere.
+    LaunchedEffect(exploreSearching) {
+        if (exploreSearching) toursExpanded = true
+    }
+
+    // Und umgekehrt: Wer das Blatt zuschiebt — mit dem Finger, ueber den Griff
+    // oder weil ein Vorrang-Zustand es zuklappt —, ist mit der Suche fertig.
+    // Sonst bliebe die Tastatur vor einem Blatt stehen, das gar nichts mehr
+    // zeigt.
+    LaunchedEffect(toursExpanded) {
+        if (!toursExpanded && exploreSearching) endExploreSearch()
+    }
+
+    // Zurueck-Geste: erst die Suche verlassen, dann die Tourenliste wieder
+    // einklappen, dann die Planung (mit derselben Rueckhol-Snackbar wie der
+    // Knopf „Planung beenden"), sonst das normale Verhalten der App. Die
+    // Tourendetailansicht braucht hier keinen Fall — sie faengt die Geste
+    // bereits als eigenes Dialogfenster ab (siehe unten und das
+    // Klassen-KDoc oben).
+    //
+    // Die Suche steht vorn, weil sie der oberste Zustand ist: Wer sucht und
+    // zurueck geht, will aus der Suche heraus — nicht gleich das ganze Blatt
+    // zuklappen.
+    BackHandler(enabled = exploreSearching || toursExpanded || mode == MapMode.PLANEN) {
+        when {
+            exploreSearching -> endExploreSearch()
+            toursExpanded -> toursExpanded = false
+            else -> exitPlanningWithUndo("Planung beendet.")
         }
     }
 
@@ -1928,7 +2002,28 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onExpandedChange = { toursExpanded = it },
                             rideCount = rides.size,
                             toursMaxHeight = screenHeight * TOUR_SHEET_MAX_HEIGHT_FACTOR,
-                            onOpenSearch = { openPlaceSearch() },
+                            searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
+                            searchQuery = searchQuery,
+                            onSearchQueryChange = { searchQuery = it },
+                            searching = exploreSearching,
+                            onSearchingChange = { focused ->
+                                // Nur das Gewinnen des Fokus schaltet um. Das
+                                // Verlieren tut es NICHT: Wer eine Trefferzeile
+                                // antippt, nimmt dem Feld kurz den Fokus — die
+                                // Liste duerfte in genau diesem Moment nicht
+                                // unter dem Finger verschwinden. Beendet wird
+                                // die Suche ausdruecklich: ueber Zurueck, ueber
+                                // das Einklappen oder mit der Auswahl.
+                                if (focused) exploreSearching = true
+                            },
+                            searchBusy = searchBusy,
+                            searchError = searchError,
+                            searchResults = searchResults,
+                            searchHistory = placeHistory,
+                            onSelectPlace = { place ->
+                                endExploreSearch()
+                                onPlaceChosen(place)
+                            },
                             onStartPlanning = ::enterPlanning,
                             onOpenStyle = { showStyleSheet = true },
                             onDownload = ::startDownload,
@@ -1963,7 +2058,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             busy = searchBusy,
             error = searchError,
             results = searchResults,
-            history = placeSearchHistory.map { Place(it.displayName, it.lat, it.lon) },
+            history = placeHistory,
             onSelect = ::onPlaceChosen,
             onDismiss = ::closeSearchSheet,
         )
@@ -2397,6 +2492,19 @@ private const val PLAN_SHEET_MAX_HEIGHT_FACTOR = 0.45f
  * verschwinden darf die Karte nicht.
  */
 private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
+
+/**
+ * Anteil der Bildschirmhoehe, den die Trefferliste der Ortssuche im
+ * Erkunden-Blatt hoechstens einnimmt.
+ *
+ * Deutlich knapper als [TOUR_SHEET_MAX_HEIGHT_FACTOR], weil waehrend der Suche
+ * die Tastatur im Bild steht und rund ein Drittel des Bildschirms belegt. Vom
+ * Rest gehen Suchfeld, Blattraender und die Bodenfreiheit der
+ * Navigationskapsel ab; was bleibt, sind auf einem 800-dp-Geraet grob 290 dp.
+ * Ein Drittel liegt sicher darunter und traegt vier Trefferzeilen — mehr als
+ * Nominatim mit [MAX_SEARCH_RESULTS] ueberhaupt liefert. Der Rest scrollt.
+ */
+private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.34f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"
