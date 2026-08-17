@@ -35,6 +35,7 @@ import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.planFeasibilityIdentityKey
 import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.weekdayDateFormat
 import de.trailscape.core.assessPlanFeasibility
@@ -267,7 +268,13 @@ fun TodayScreen(appViewModel: AppViewModel) {
 @Composable
 private fun TodayHeader() {
     val now = remember { LocalDateTime.now() }
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // `start = CardPadding` wie bei `MoreGroupLabel`: Dieser Text steht ohne
+    // Karte direkt auf dem Grund und saesse sonst weiter aussen als jeder
+    // Text *in* einer Karte — eine zweite Kante, die es nicht geben darf.
+    // Eingerueckt sitzt er auf derselben Linie wie der Kartentext darunter und
+    // liegt damit auch jenseits der 24 dp, die der Leitfaden fuer Information
+    // verlangt. Samsungs Telefon-App setzt ihre Datumsueberschriften genauso.
+    Column(modifier = Modifier.fillMaxWidth().padding(start = CardPadding)) {
         Text(
             text = greetingFor(now.hour),
             // Eine Stufe unter der Erholungszahl der Empfehlungskarte: Der

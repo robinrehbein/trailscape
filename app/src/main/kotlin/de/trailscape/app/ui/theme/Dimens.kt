@@ -8,19 +8,32 @@ import androidx.compose.ui.unit.dp
  * Wer eine neue Karte oder einen neuen Screen baut, nimmt diese Konstanten,
  * statt eine weitere Zahl zu erfinden.
  *
- * ## Warum der Bildschirmrand 24 dp ist und nicht 16
+ * ## Die 24-dp-Regel — und worauf sie sich bezieht
  *
- * Hier standen 16 dp, begruendet mit einer Messung an den Samsung-Einstellungen.
- * Samsungs Designleitfaden schreibt aber **mindestens 24 dp** vor — und zwar
- * mit einer Begruendung, die eine Messung am flachen Screenshot nicht sehen
- * kann: die **Kruemmung** heutiger Displays, die **Reject-Zone** (Beruehrungen
- * am aeussersten Rand werden vom System verworfen) und die **Grip-Zone**
- * (Handballen beim Halten). Was auf dem Screenshot wie 16 dp aussieht, ist auf
- * dem Geraet teilweise gar nicht mehr zuverlaessig treffbar.
+ * Samsungs Designleitfaden verlangt, **Information und Bedienelemente** mit
+ * mindestens **24 dp** Abstand zum linken und rechten Bildschirmrand zu
+ * platzieren. Der Grund steht dort dabei und ist nicht wegzudiskutieren:
+ * Displaykruemmung, **Reject-Zone** (Beruehrungen am aeussersten Rand
+ * verwirft das System) und **Grip-Zone** (Handballen beim Halten).
  *
- * Der Leitfaden gewinnt hier gegen die Messung. Die 8 dp, die das je Seite
- * kostet, gehen von der Textbreite ab — das ist der Preis dafuer, dass am
- * Rand nichts liegt, was der Daumen nicht erreicht.
+ * Dieser Wert hier stand kurzzeitig auf 24 dp — und das war ein Denkfehler.
+ * Die Regel spricht von der **Information**, nicht vom Behaelter, in dem sie
+ * liegt. In Samsungs eigenen Einstellungen sitzt die Karte bei rund 16 dp;
+ * ihr Inhalt landet durch [CardPadding] erst bei rund 32 dp — die 24 dp sind
+ * also mit Reserve erfuellt, ohne dass die Karte selbst so weit einruecken
+ * muesste. Wer beides addiert, legt die Regel ein zweites Mal drauf, und der
+ * Unterschied faellt im direkten Vergleich mit einer Samsung-App sofort auf:
+ * Die eigenen Karten stehen sichtbar weiter innen als die des Systems.
+ *
+ * Daraus folgt die Aufteilung:
+ *
+ *  * [ScreenPadding] (16 dp) traegt die **Karte** an den Rand.
+ *  * [CardPadding] (16 dp) bringt den **Inhalt** auf die geforderten 24 dp
+ *    und darueber.
+ *  * Text, der ohne Karte direkt auf dem Grund steht — Begruessung,
+ *    Gruppenueberschrift —, bekommt [CardPadding] zusaetzlich, damit er auf
+ *    derselben Kante sitzt wie der Text *in* den Karten. Genau so macht es
+ *    Samsungs Telefon-App mit ihren Datumsueberschriften.
  */
 
 /**
@@ -31,10 +44,11 @@ import androidx.compose.ui.unit.dp
 val ContentMaxWidth = 640.dp
 
 /**
- * Rand einer Bildschirmliste zum Bildschirmrand. Samsungs Mindestmass, siehe
- * die Begruendung oben.
+ * Rand einer Bildschirmliste zum Bildschirmrand — der Abstand der **Karte**,
+ * nicht des Inhalts. An Samsungs Einstellungen gemessen; die 24-dp-Regel
+ * erfuellt erst [CardPadding] obendrauf. Siehe die Begruendung oben.
  */
-val ScreenPadding = 24.dp
+val ScreenPadding = 16.dp
 
 /** Senkrechter Abstand zwischen zwei Karten einer Liste. */
 val CardGap = 12.dp
@@ -55,12 +69,13 @@ val OverlayCardPaddingVertical = 14.dp
 /**
  * Rand der schwebenden Bedienflaechen zum Bildschirmrand (Karten-Tab).
  *
- * Dieselben 24 dp wie [ScreenPadding]: Kruemmung und Reject-Zone
- * interessiert es nicht, ob unter der Flaeche eine Liste oder eine Karte
- * liegt. Die Karte selbst bleibt davon unberuehrt — sie laeuft weiter
- * randlos bis zur Bildschirmkante, nur ihre Bedienflaechen ruecken ein.
+ * Dieselben 16 dp wie [ScreenPadding], und aus demselben Grund: Es ist der
+ * Abstand der *Flaeche*, ihr Inhalt kommt durch das Kartenpolster ohnehin
+ * jenseits der geforderten 24 dp an. Die Karte darunter bleibt unberuehrt —
+ * sie laeuft weiter randlos bis zur Bildschirmkante, nur ihre Bedienflaechen
+ * ruecken ein.
  */
-val OverlayScreenPadding = 24.dp
+val OverlayScreenPadding = 16.dp
 
 /** Abstand zwischen zwei schwebenden Bedienflaechen (Karten-Tab). */
 val OverlayGap = 8.dp
