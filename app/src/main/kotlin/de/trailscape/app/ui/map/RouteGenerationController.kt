@@ -91,7 +91,7 @@ object RouteGenerationController {
      * Startet die Suche ab [start].
      *
      * @param fromMapCenter ob [start] die Kartenmitte statt der echten Position
-     *   ist — das Panel weist darauf hin.
+     *   ist — das Blatt weist darauf hin.
      * @param onMessage geteilter Meldungskanal
      *   ([de.trailscape.app.ui.AppViewModel.showMessage]) fuer Hinweise, die
      *   auch dann noch ankommen sollen, wenn das Panel schon zu ist.
