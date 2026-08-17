@@ -58,7 +58,7 @@ fun PlanHeader(plan: TrainingPlan) {
 
 /**
  * @param onPlanRoute sucht zu einer Einheit eine passende Runde (siehe
- *   `ui/map/RouteGenerationPanel.kt`). Der Knopf steht bewusst nur an den
+ *   `ui/map/RouteGenerationSheet.kt`). Der Knopf steht bewusst nur an den
  *   Einheiten der **laufenden** Woche: Fuer eine Einheit in vier Wochen ist
  *   eine heute berechnete Runde wertlos, und die Zeile bliebe ueberladen.
  */
@@ -165,7 +165,7 @@ fun PlanWeekCard(
                                     Icon(
                                         Icons.Filled.Route,
                                         // "Runde", nicht "Route": Das Ergebnis ist ein generierter
-                                        // Rundkurs (siehe KDoc oben und `RouteGenerationPanel.kt`,
+                                        // Rundkurs (siehe KDoc oben und `RouteGenerationSheet.kt`,
                                         // das denselben Vorschlag ebenfalls "Runde" nennt) — Route
                                         // meint in dieser App eine geplante Strecke von A nach B.
                                         contentDescription = "Passende Runde für „${session.title}“ planen",

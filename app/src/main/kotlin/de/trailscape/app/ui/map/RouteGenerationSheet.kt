@@ -19,8 +19,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,8 +42,10 @@ import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
+import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteTarget
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.ascentPreferenceLabels
 import de.trailscape.core.formatHours
@@ -54,27 +54,67 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Das Panel „Trainingsempfehlung → passende Runde" auf der Karte.
+ * # Die Rundenwahl — als unteres Blatt, nicht als Karte oben
  *
- * Es erscheint, sobald der Trainings-Tab ueber
- * [de.trailscape.app.ui.AppViewModel.requestRouteGeneration] ein Ziel
- * herschickt, und fuehrt durch drei Zustaende: Ziel bestaetigen → suchen (mit
- * Fortschritt und Abbrechen) → einen Vorschlag waehlen und uebernehmen.
+ * „Trainingsempfehlung → passende Runde": Der Trainings-Tab schickt ueber
+ * [de.trailscape.app.ui.AppViewModel.requestRouteGeneration] ein Ziel her, und
+ * dieses Blatt fuehrt durch drei Zustaende — Ziel bestaetigen → suchen (mit
+ * Fortschritt und Abbruch) → einen Vorschlag waehlen und uebernehmen.
+ *
+ * ## Warum das hier unten sitzt und nicht mehr oben
+ * Bis dahin war das eine `Card` im **oberen** Stapel des Karten-Screens,
+ * waehrend das Planungsblatt unten mitlief. Zwei Flaechen an
+ * gegenueberliegenden Bildschirmraendern fuer **eine** Aufgabe — und weil das
+ * untere Blatt beim Aufziehen nach oben waechst, musste es irgendwann in die
+ * Kandidatenliste hineinlaufen. Das war kein Zufall, das war die Bauart.
+ *
+ * Jetzt gibt es zu jedem Zeitpunkt **ein** Blatt mit **einer** Aufgabe: erst
+ * waehlen (dieses hier), dann planen (`PlanningSheet`). Der obere Stapel
+ * behaelt nur, was sich ueber die Karte legen *muss* — Hinweise, Navigation,
+ * Downloadfortschritt.
+ *
+ * Dass die Planungswerkzeuge dabei zur Seite treten, kostet nichts: Eine
+ * generierte Runde hat keine Wegpunkte, die sich auflisten liessen, und das
+ * Routenprofil-Dropdown ist bei ihr ohnehin abgeschaltet (der Generator rechnet
+ * immer mit dem Gravel-Profil). Was wirklich hilft, ist das Hoehenprofil der
+ * Auswahl — und das steht im Koerper, einen Zug entfernt.
+ *
+ * ## Was im Peek steht und was im Koerper
+ * Im **Peek** die Entscheidung: Ziel, die Kandidaten, „Übernehmen". Sie ist die
+ * Aufgabe und darf nicht hinter einer Geste liegen — dieselbe Lehre wie bei der
+ * Ortssuche im Erkunden-Blatt.
+ *
+ * Im **Koerper** das Zusatzwissen: das Hoehenprofil der gewaehlten Runde und
+ * die Zweitaktionen. Solange noch gar nicht gesucht wurde, traegt er
+ * stattdessen die Erklaerung, was die Suche ueberhaupt tut und wie lange sie
+ * dauert — so hat der Griff in jeder Phase etwas zu zeigen.
+ *
+ * ## Ein Ausweg statt vier
+ * Vorher standen unter „Übernehmen" drei weitere Aktionen — „Andere
+ * Vorschläge", „Neu suchen", „Verwerfen" — und oben rechts ein X, das ebenfalls
+ * verwarf. Vier Auswege, zwei davon deckungsgleich. „Verwerfen" ist entfallen;
+ * das X sagt dasselbe und ist die Stelle, an der man es sucht.
  *
  * Der [de.trailscape.core.RouteCandidate.score] wird **nicht** angezeigt: Es
  * sind Strafpunkte, also ein internes Mass ohne Einheit. Was die Nutzerin
  * braucht, steht ohnehin da — die Reihenfolge (bester zuerst) und die
  * Abweichung vom Ziel in Prozent.
+ *
+ * @param route Die Vorschau der gewaehlten Runde. Kommt aus dem Karten-Screen,
+ *   der sie beim Waehlen setzt — dieses Blatt zeichnet daraus nur das
+ *   Hoehenprofil und rechnet nichts.
+ * @param candidatesMaxHeight Obergrenze fuer die Kandidatenliste im Peek. Der
+ *   Peek ist immer sichtbar; ohne Deckel schoeben viele Vorschlaege die
+ *   schwebenden Knoepfe darueber vom Bildschirm.
  */
 @Composable
-internal fun RouteGenerationPanel(
+internal fun RouteGenerationSheet(
     state: RouteGenerationState,
-    maxHeight: Dp,
-    /**
-     * Ob gerade auf einen GPS-Fix gewartet wird — das geschieht **vor** dem
-     * ersten Server-Aufruf und dauert bis zu zehn Sekunden. Ohne diese Anzeige
-     * passierte nach dem Tipp auf „Routen suchen" sichtbar gar nichts.
-     */
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    route: PlannedRoute?,
+    candidatesMaxHeight: Dp,
+    bodyMaxHeight: Dp,
     locating: Boolean = false,
     onStart: () -> Unit,
     onCancel: () -> Unit,
@@ -82,142 +122,165 @@ internal fun RouteGenerationPanel(
     onNextSuggestions: () -> Unit,
     onApply: () -> Unit,
     onDiscard: () -> Unit,
+    onHoverPoint: (TrackPoint?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val target = state.target ?: return
     val theme = MaterialTheme.colorScheme
     val signals = LocalSignalColors.current
+    val hasCandidates = state.candidates.isNotEmpty() && !state.running && !locating
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .heightIn(max = maxHeight)
-                .verticalScroll(rememberScrollState())
-                .padding(
+    SwipeableSheet(
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
+        modifier = modifier,
+        peek = {
+            Column(
+                modifier = Modifier.padding(
                     start = CardPadding,
-                    top = OverlayCardPaddingVertical,
-                    end = 8.dp,
+                    top = 2.dp,
+                    end = 4.dp,
                     bottom = OverlayCardPaddingVertical,
                 ),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Passende Runde",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    // Der einzige Ausweg — siehe „Ein Ausweg statt vier" oben.
+                    IconButton(onClick = onDiscard) {
+                        Icon(Icons.Filled.Close, contentDescription = "Routenvorschlag verwerfen")
+                    }
+                }
+
                 Text(
-                    text = "Passende Runde",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                IconButton(onClick = onDiscard) {
-                    Icon(Icons.Filled.Close, contentDescription = "Routenvorschlag verwerfen")
-                }
-            }
-
-            Text(
-                text = targetLine(target),
-                modifier = Modifier.padding(end = 8.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = sourceLine(target),
-                modifier = Modifier.padding(end = 8.dp),
-                style = MaterialTheme.typography.bodySmall,
-                color = theme.onSurfaceVariant,
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            for (hint in state.hints) {
-                NoticeBox(
-                    icon = Icons.Filled.Info,
-                    color = signals.caution,
-                    text = hint,
-                    modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                )
-            }
-
-            if (state.fromMapCenter) {
-                NoticeBox(
-                    icon = Icons.Filled.Info,
-                    color = signals.caution,
-                    text = "Deine Position war nicht verfügbar – die Runde startet in der " +
-                        "Kartenmitte. „Neu suchen“ nimmt den Startpunkt noch einmal neu auf.",
-                    modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                )
-            }
-
-            state.error?.let { error ->
-                NoticeBox(
-                    icon = Icons.Filled.Warning,
-                    color = signals.danger,
-                    text = error,
-                    modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
-                )
-            }
-
-            when {
-                locating -> Row(
+                    text = targetLine(target),
                     modifier = Modifier.padding(end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Position wird ermittelt …",
-                        style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = sourceLine(target),
+                    modifier = Modifier.padding(end = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = theme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                for (hint in state.hints) {
+                    NoticeBox(
+                        icon = Icons.Filled.Info,
+                        color = signals.caution,
+                        text = hint,
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                     )
                 }
 
-                state.running -> SearchProgress(
-                    done = state.done,
-                    total = state.total,
-                    onCancel = onCancel,
-                )
-
-                state.candidates.isEmpty() -> {
-                    Text(
-                        text = "Trailscape sucht ${RouteGenerationController.CANDIDATE_COUNT} " +
-                            "Rundkurse ab deiner aktuellen Position – ohne Standort ab der " +
-                            "Kartenmitte. Das dauert etwa eine halbe Minute; du kannst " +
-                            "zwischendurch ruhig den Tab wechseln.",
-                        modifier = Modifier.padding(end = 8.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = theme.onSurfaceVariant,
+                if (state.fromMapCenter) {
+                    NoticeBox(
+                        icon = Icons.Filled.Info,
+                        color = signals.caution,
+                        text = "Deine Position war nicht verfügbar – die Runde startet in der " +
+                            "Kartenmitte. „Neu suchen“ nimmt den Startpunkt noch einmal neu auf.",
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    PrimaryButton(
+                }
+
+                state.error?.let { error ->
+                    NoticeBox(
+                        icon = Icons.Filled.Warning,
+                        color = signals.danger,
+                        text = error,
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                    )
+                }
+
+                when {
+                    locating -> Row(
+                        modifier = Modifier.padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Position wird ermittelt …",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+
+                    state.running -> SearchProgress(
+                        done = state.done,
+                        total = state.total,
+                        onCancel = onCancel,
+                    )
+
+                    state.candidates.isEmpty() -> PrimaryButton(
                         text = if (state.error == null) "Routen suchen" else "Erneut suchen",
                         onClick = onStart,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(end = 8.dp),
                     )
-                }
 
-                else -> {
-                    state.candidates.forEachIndexed { index, candidate ->
-                        CandidateRow(
-                            candidate = candidate,
-                            rank = index + 1,
-                            selected = index == state.selectedIndex,
-                            onClick = { onSelect(index) },
-                            modifier = Modifier.padding(end = 8.dp, bottom = 6.dp),
+                    else -> {
+                        // Gedeckelt und scrollbar: Der Peek steht immer im
+                        // Bild, und ueber ihm liegen noch die beiden
+                        // schwebenden Knoepfe. Ohne Deckel schoebe eine lange
+                        // Liste sie vom Bildschirm.
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = candidatesMaxHeight)
+                                .verticalScroll(rememberScrollState()),
+                        ) {
+                            state.candidates.forEachIndexed { index, candidate ->
+                                CandidateRow(
+                                    candidate = candidate,
+                                    rank = index + 1,
+                                    selected = index == state.selectedIndex,
+                                    onClick = { onSelect(index) },
+                                    modifier = Modifier.padding(end = 8.dp, bottom = 6.dp),
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(2.dp))
+                        PrimaryButton(
+                            text = "Übernehmen",
+                            onClick = onApply,
+                            enabled = state.selected != null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = 8.dp),
                         )
                     }
-
-                    Spacer(Modifier.height(2.dp))
-                    PrimaryButton(
-                        text = "Übernehmen",
-                        onClick = onApply,
-                        enabled = state.selected != null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = 8.dp),
-                    )
+                }
+            }
+        },
+        body = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = bodyMaxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = CardPadding,
+                        end = CardPadding,
+                        bottom = OverlayCardPaddingVertical,
+                    ),
+            ) {
+                if (hasCandidates) {
+                    if (route != null && route.points.size >= 2) {
+                        ElevationProfile(
+                            points = route.points,
+                            lineColor = theme.primary,
+                            onHover = onHoverPoint,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -235,13 +298,25 @@ internal fun RouteGenerationPanel(
                         // bestimmen — nach einem GPS-Fix oder einer
                         // verschobenen Karte.
                         TextButton(onClick = onStart) { Text("Neu suchen") }
-                        TextButton(onClick = onDiscard) { Text("Verwerfen") }
                     }
+                } else {
+                    // Solange nichts zu waehlen ist, traegt der Koerper die
+                    // Erklaerung. Vorher stand sie im immer sichtbaren Teil und
+                    // war ab dem zweiten Mal nur noch Text im Weg.
+                    Text(
+                        text = "Trailscape sucht ${RouteGenerationController.CANDIDATE_COUNT} " +
+                            "Rundkurse ab deiner aktuellen Position – ohne Standort ab der " +
+                            "Kartenmitte. Das dauert etwa eine halbe Minute; du kannst " +
+                            "zwischendurch ruhig den Tab wechseln.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = theme.onSurfaceVariant,
+                    )
                 }
             }
-        }
-    }
+        },
+    )
 }
+
 
 /** Fortschritt der laufenden Suche mit Abbruch. */
 @Composable

@@ -201,7 +201,7 @@ import kotlinx.coroutines.withContext
  *    hatte der Karten-Screen in Flutter noch nicht.
  *  * **Rundkurs aus der Trainingsempfehlung.** Der Trainings-Tab schickt ueber
  *    [AppViewModel.pendingRouteTarget] ein Ziel her; dieser Screen oeffnet
- *    dafuer das Panel aus `RouteGenerationPanel.kt`, laesst im
+ *    dafuer das Blatt aus `RouteGenerationSheet.kt`, laesst im
  *    [RouteGenerationController] suchen und legt den uebernommenen Vorschlag in
  *    **denselben** `plannedRoute`-Zustand, den die Planung von Hand fuellt —
  *    Hoehenprofil, Speichern, Teilen und Navigation funktionieren damit ohne
@@ -1716,9 +1716,17 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Die Suche steht vorn, weil sie der oberste Zustand ist: Wer sucht und
     // zurueck geht, will aus der Suche heraus — nicht gleich das ganze Blatt
     // zuklappen.
-    BackHandler(enabled = exploreSearching || toursExpanded || mode == MapMode.PLANEN) {
+    BackHandler(
+        enabled = exploreSearching || generation.target != null ||
+            toursExpanded || mode == MapMode.PLANEN,
+    ) {
         when {
             exploreSearching -> endExploreSearch()
+            // Die Rundenwahl ist jetzt das unterste Blatt und damit der
+            // oberste Zustand. Vorher lag sie als eigene Karte oben und die
+            // Zurueck-Geste ging an ihr vorbei — sie beendete die Planung
+            // darunter, waehrend die Wahl unbeirrt stehen blieb.
+            generation.target != null -> discardGeneratedRoute()
             toursExpanded -> toursExpanded = false
             else -> exitPlanningWithUndo("Planung beendet.")
         }
@@ -1809,21 +1817,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                     )
                 }
 
-                if (generation.target != null) {
-                    RouteGenerationPanel(
-                        state = generation,
-                        maxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
-                        locating = locating,
-                        onStart = ::generateRoutes,
-                        onCancel = RouteGenerationController::cancel,
-                        onSelect = RouteGenerationController::select,
-                        onNextSuggestions = {
-                            RouteGenerationController.nextSuggestions(appViewModel::showMessage)
-                        },
-                        onApply = ::applyGeneratedRoute,
-                        onDiscard = ::discardGeneratedRoute,
-                    )
-                }
+                // Die Rundenwahl stand hier — als Karte im oberen Stapel,
+                // waehrend das Planungsblatt unten mitlief. Zwei Flaechen an
+                // gegenueberliegenden Raendern fuer eine Aufgabe, und das
+                // untere Blatt schnitt die obere beim Aufziehen ab. Sie ist
+                // jetzt selbst das untere Blatt (siehe `RouteGenerationSheet`
+                // weiter unten). Oben bleibt nur, was sich ueber die Karte
+                // legen MUSS.
 
                 if (downloadState.running) {
                     DownloadProgressCard(
@@ -1921,7 +1921,32 @@ fun MapScreen(appViewModel: AppViewModel) {
                         )
                     }
 
-                    if (mode == MapMode.PLANEN) {
+                    // Ein Blatt, eine Aufgabe: Solange Vorschlaege zur Wahl
+                    // stehen, IST das Blatt die Wahl; danach ist es die
+                    // Planung. Vorher liefen beide gleichzeitig — die Wahl
+                    // oben, die Planung unten — und ueberlappten sich beim
+                    // Aufziehen (siehe KDoc von `RouteGenerationSheet`).
+                    if (generation.target != null) {
+                        Spacer(Modifier.height(OverlayGap))
+                        RouteGenerationSheet(
+                            state = generation,
+                            expanded = planSheetExpanded,
+                            onExpandedChange = { planSheetExpanded = it },
+                            route = plannedRoute,
+                            candidatesMaxHeight = screenHeight * GENERATION_CANDIDATES_MAX_HEIGHT_FACTOR,
+                            bodyMaxHeight = screenHeight * PLAN_PANEL_MAX_HEIGHT_FACTOR,
+                            locating = locating,
+                            onStart = ::generateRoutes,
+                            onCancel = RouteGenerationController::cancel,
+                            onSelect = RouteGenerationController::select,
+                            onNextSuggestions = {
+                                RouteGenerationController.nextSuggestions(appViewModel::showMessage)
+                            },
+                            onApply = ::applyGeneratedRoute,
+                            onDiscard = ::discardGeneratedRoute,
+                            onHoverPoint = { hoverPoint = it },
+                        )
+                    } else if (mode == MapMode.PLANEN) {
                         Spacer(Modifier.height(OverlayGap))
                         PlanningSheet(
                             expanded = planSheetExpanded,
@@ -2522,6 +2547,18 @@ private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
  * [MAX_SEARCH_RESULTS] von fuenf also der uebliche Fall ohne Scrollen.
  */
 private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.3f
+
+/**
+ * Anteil der Bildschirmhoehe, den die Kandidatenliste der Rundenwahl im immer
+ * sichtbaren Teil ihres Blatts hoechstens einnimmt.
+ *
+ * Derselbe Gedanke wie bei [SEARCH_RESULTS_MAX_HEIGHT_FACTOR]: Was im Peek
+ * steht, steht ohne Zutun im Bild, und darueber liegen noch die beiden
+ * schwebenden Knoepfe (Aufzeichnen, Position). Ohne Deckel schoebe eine lange
+ * Vorschlagsliste sie vom Bildschirm. Drei Vorschlaege — der Regelfall, siehe
+ * `RouteGenerationController.CANDIDATE_COUNT` — passen ohne Scrollen hinein.
+ */
+private const val GENERATION_CANDIDATES_MAX_HEIGHT_FACTOR = 0.28f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"

@@ -138,7 +138,7 @@ internal fun PlanningSheet(
     progress: String? = null,
     /**
      * Ob [route] aus dem Rundkurs-Generator stammt (siehe
-     * `RouteGenerationPanel.kt`). Dann gibt es keine Wegpunkte, die sich
+     * `RouteGenerationSheet.kt`). Dann gibt es keine Wegpunkte, die sich
      * zaehlen liessen — die Zeile nennt stattdessen die Herkunft.
      */
     generated: Boolean = false,
