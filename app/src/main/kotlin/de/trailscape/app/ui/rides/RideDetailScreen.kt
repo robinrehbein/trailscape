@@ -31,8 +31,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -44,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +56,8 @@ import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.OneUiLargeTopAppBar
+import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.formatKmDe
@@ -163,22 +164,22 @@ internal fun RideDetailScreen(
     val curves by rememberRideCurves(ride)
     val analysis by rememberRideAnalysis(ride, load, insights.profile)
 
+    // Zweite Ebene: Der Leitfaden laesst die Kopfzeile hier **eingeklappt**
+    // starten, aber ausklappbar bleiben. Wer eine Tour geoeffnet hat, will die
+    // Tour sehen — nicht noch einmal deren Namen in Grossschrift. Vorher stand
+    // hier eine feste `TopAppBar`, die sich gar nicht oeffnen liess.
+    val scrollBehavior = oneUiTopAppBarScrollBehavior(initiallyCollapsed = true)
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
         // aufgeloest — genau wie in der Tourenliste duerfen sie hier kein
         // zweites Mal aufschlagen.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            TopAppBar(
-                windowInsets = WindowInsets(0, 0, 0, 0),
-                // Flache One-UI-Kopfzeile: keine eigene Flaeche, der
-                // Bildschirmhintergrund scheint durch.
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                ),
-                title = {
-                    Text(text = ride.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
+            OneUiLargeTopAppBar(
+                title = ride.name,
+                scrollBehavior = scrollBehavior,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -627,18 +628,45 @@ private fun rememberRideAnalysis(
     }
 }
 
-/** Gruener Start- und roter Zielpunkt — dieselben Marker wie auf dem Karten-Screen. */
+/**
+ * Start- und Zielpunkt — dieselben Marker wie auf dem Karten-Screen.
+ *
+ * Start ist ein einfacher Punkt, **Ziel eine Zielscheibe**: derselbe Punkt,
+ * umschlossen von einem Ring. Vorher unterschieden sich beide ausschliesslich
+ * durch die Farbe (gruen gegen rot) bei gleicher Form und gleicher Groesse —
+ * der Lehrbuchfall dessen, was der Leitfaden verbietet: Bedeutung allein ueber
+ * Farbe. Wer rot und gruen nicht auseinanderhaelt — und das sind rund acht
+ * Prozent der Maenner —, sah zwei identische Punkte und wusste nicht, wo die
+ * Tour begann.
+ *
+ * Die Probe des Leitfadens ist, den Bildschirm in Graustufen zu denken. Punkt
+ * gegen Punkt-im-Ring haelt ihr stand; die Farbe bleibt daneben als zweites,
+ * schnelleres Signal bestehen.
+ */
 private fun startAndFinishMarkers(ride: Ride): List<MapMarker> {
     if (ride.points.size < 2) {
         return emptyList()
     }
     val first = ride.points.first()
     val last = ride.points.last()
-    return listOf(
-        MapMarker(first.lat, first.lon, GravelGreen.toArgb(), radius = 7f),
-        MapMarker(last.lat, last.lon, RecordRed.toArgb(), radius = 7f),
-    )
+    return buildList {
+        add(MapMarker(first.lat, first.lon, GravelGreen.toArgb(), radius = 7f))
+        addAll(finishMarkers(last.lat, last.lon))
+    }
 }
+
+/**
+ * Der Zielpunkt als Zielscheibe: ein gefuellter Kern und ein Ring darum.
+ *
+ * Zwei Eintraege derselben [MapMarker]-Pipeline statt eines neuen Symbol-Layers
+ * — die vorhandene `CircleLayer`-Kette kann Radius und Ringform bereits (siehe
+ * `MapMarker.filled`), es braucht also weder ein Bild-Asset noch eine zweite
+ * Ebene.
+ */
+internal fun finishMarkers(lat: Double, lon: Double): List<MapMarker> = listOf(
+    MapMarker(lat, lon, RecordRed.toArgb(), radius = 4f),
+    MapMarker(lat, lon, RecordRed.toArgb(), radius = 9f, filled = false),
+)
 
 /**
  * Hoehe der eingebetteten Karte. Fest, weil sie in einer scrollbaren Spalte

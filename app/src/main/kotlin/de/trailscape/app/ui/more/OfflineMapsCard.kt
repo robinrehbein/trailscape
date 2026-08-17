@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -27,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatDate
@@ -161,7 +161,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
     }
 
     confirmDeleteRegion?.let { target ->
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = { confirmDeleteRegion = null },
             title = { Text("Offline-Karte löschen") },
             text = { Text("Soll „${target.name}“ wirklich gelöscht werden?") },
@@ -188,7 +188,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
     }
 
     if (confirmDeleteAll) {
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = { confirmDeleteAll = false },
             title = { Text("Offline-Karten löschen") },
             text = { Text("Sollen alle heruntergeladenen Kartenausschnitte wirklich gelöscht werden?") },

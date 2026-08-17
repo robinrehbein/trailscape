@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -35,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.reminder.ReminderScheduler
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
@@ -293,7 +293,7 @@ private fun ReminderTimeDialog(
         is24Hour = true,
     )
 
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text("Uhrzeit") },
         text = { TimeInput(state = state) },

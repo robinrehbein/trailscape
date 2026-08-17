@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- `DarkSurface` aus `ui/theme/Color.kt` — siehe values/colors.xml. -->
-    <color name="window_background">#101410</color>
+    <!--
+        Exakt `DarkSurface` aus `ui/theme/Color.kt` — Begruendung und
+        Aenderungshinweis stehen in values/colors.xml. Hier stand #101410
+        (gruenstichig), waehrend `DarkSurface` #0A0A0C ist.
+    -->
+    <color name="window_background">#0A0A0C</color>
 </resources>

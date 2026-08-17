@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -26,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.OneUiDialog
 
 /**
  * Der gemeinsame Melde-Dialog beider Wege (Absturz und „Problem melden").
@@ -62,7 +62,7 @@ fun ReportDialog(
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

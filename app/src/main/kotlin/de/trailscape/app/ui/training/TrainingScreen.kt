@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -31,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NoticeBox
@@ -309,7 +309,7 @@ private fun TrainingEmptyState(onRecord: () -> Unit, onImport: () -> Unit) {
             "importierten Touren.",
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
-            OutlinedButton(onClick = onImport) { Text("Alte Touren importieren") }
+            NeutralButton(onClick = onImport) { Text("Alte Touren importieren") }
         },
     )
 }

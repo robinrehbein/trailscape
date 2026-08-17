@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -47,6 +46,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.routing.InstalledSegment
 import de.trailscape.app.routing.SEGMENT_PART_SUFFIX
@@ -493,7 +493,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
 
     // ------------------------------------------------------------- Dialoge
     pendingOffer?.let { offer ->
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = { pendingOffer = null },
             icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
             title = { Text(if (pendingIsUpdate) "Routingdaten aktualisieren" else "Routingdaten laden") },
@@ -534,7 +534,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     }
 
     confirmDelete?.let { segment ->
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = { confirmDelete = null },
             title = { Text("Routingdaten löschen") },
             text = {

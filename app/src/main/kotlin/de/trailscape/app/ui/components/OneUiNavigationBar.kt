@@ -2,7 +2,7 @@ package de.trailscape.app.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -11,9 +11,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -36,12 +35,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.theme.LocalNavigationBarColors
+import de.trailscape.app.ui.theme.OneUiMotion
 
 /**
  * # Die schwebende One-UI-Navigationsleiste
@@ -96,12 +98,12 @@ fun OneUiNavigationBar(
             // hier bei 94 % Deckkraft die naechste Karte lesbar *in* der
             // Leiste; das sieht nach Fehler aus, nicht nach Glas.
             color = colors.container,
-            // Der Schatten traegt den Schwebe-Eindruck im Hellmodus allein:
-            // Dort ist die Kapsel weiss wie die Karten, die unter ihr
-            // wegscrollen — ohne ihn verschwaemme ihre Kante genau in dem
-            // Moment, in dem eine Karte darunter steht. Im Dunkelmodus ist er
-            // auf fast schwarzem Grund unsichtbar; dort trennt die Helligkeit.
-            shadowElevation = 12.dp,
+            // One UI 9 setzt schwebende Flaechen mit **geschichteter** Tiefe
+            // ab: ein schmales Randlicht an der Kante und ein leichterer
+            // Schatten darunter. Vorher trug ein 12-dp-Schatten die Schwebe
+            // allein und wirkte dadurch schwerer, als Samsungs Kapsel es tut.
+            border = BorderStroke(1.dp, colors.rim),
+            shadowElevation = 8.dp,
             // Volle Pille aus dem small-Slot des Themes — dieselbe Rundung wie
             // Knoepfe und Chips, damit die Leiste zur uebrigen App gehoert.
             shape = MaterialTheme.shapes.small,
@@ -112,7 +114,13 @@ fun OneUiNavigationBar(
                     // bleibt die Kapsel mittig und in Daumenbreite, statt sich
                     // ueber den halben Meter Bildschirm zu ziehen.
                     .widthIn(max = NavigationBarMaxWidth)
-                    .height(NavigationBarHeight)
+                    // `heightIn` statt `height`: Bei vergroesserter Schrift
+                    // waechst die Kapsel mit, statt die Beschriftung
+                    // abzuschneiden. Mit der frueheren festen Hoehe von 62 dp
+                    // war die Zeile schon ab rund 144 % Schriftgroesse unten
+                    // angeschnitten — nicht erst bei den 200 %, die der
+                    // Leitfaden verlangt.
+                    .heightIn(min = NavigationBarHeight)
                     .padding(horizontal = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -126,10 +134,12 @@ fun OneUiNavigationBar(
  * Ein Ziel der [OneUiNavigationBar]: Symbol ueber Beschriftung, im
  * ausgewaehlten Zustand in einer Pille.
  *
- * Die Pille wechselt weich (Farbe und ein Hauch Skalierung, beides mit der
- * gleichen Feder) — One UI reagiert auf jede Beruehrung sichtbar, ein harter
- * Umschlag wirkte dort fremd. Fuer die Bildschirmlesehilfe ist der Wechsel
- * belanglos: [selectable] meldet den Zustand unabhaengig von der Animation.
+ * Die Pille wechselt weich (Farbe und ein Hauch Skalierung, beides mit
+ * derselben Kurve aus [OneUiMotion]) und der Wechsel bekommt ein feines
+ * haptisches Echo — One UI antwortet auf jede Beruehrung sichtbar *und*
+ * fuehlbar, ein stummer harter Umschlag wirkte dort fremd. Fuer die
+ * Bildschirmlesehilfe ist beides belanglos: [selectable] meldet den Zustand
+ * unabhaengig von Animation und Haptik.
  */
 @Composable
 fun RowScope.OneUiNavigationBarItem(
@@ -141,37 +151,56 @@ fun RowScope.OneUiNavigationBarItem(
 ) {
     val colors = LocalNavigationBarColors.current
     val interactionSource = remember { MutableInteractionSource() }
+    val haptics = LocalHapticFeedback.current
 
+    // Feste Dauer und die One-UI-Kurve statt einer parameterlosen Feder: Eine
+    // Feder hat konstruktionsbedingt keine begrenzte Dauer, der Leitfaden
+    // verlangt aber 100 bis 500 ms (siehe `theme/Motion.kt`).
     val indicatorColor by animateColorAsState(
         targetValue = if (selected) colors.indicator else Color.Transparent,
-        animationSpec = spring(),
+        animationSpec = OneUiMotion.short(),
         label = "navIndicator",
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) colors.selectedContent else colors.unselectedContent,
-        animationSpec = spring(),
+        animationSpec = OneUiMotion.short(),
         label = "navContent",
     )
     val iconScale by animateFloatAsState(
         targetValue = if (selected) 1f else 0.92f,
-        animationSpec = spring(),
+        animationSpec = OneUiMotion.short(),
         label = "navIconScale",
     )
 
     Box(
         modifier = modifier
             .weight(1f)
-            .fillMaxHeight()
-            .padding(vertical = 7.dp)
+            // Kein `fillMaxHeight` mehr: Die Kapsel darf jetzt mit der Schrift
+            // wachsen (siehe `heightIn` oben), und eine Fuellung auf volle
+            // Hoehe haette in einer nur nach unten offenen Zeile keinen
+            // definierten Bezug mehr.
+            .padding(vertical = 6.dp)
             .clip(MaterialTheme.shapes.small)
             .background(indicatorColor)
             .selectable(
                 selected = selected,
-                onClick = onClick,
+                onClick = {
+                    // One UI gibt jeder Beruehrung ein feines, klickendes
+                    // Echo — hier war bisher gar keins. Bewusst nur beim
+                    // *Wechsel*: Wer denselben Reiter noch einmal antippt,
+                    // loest keinen Wechsel aus und soll auch nichts spueren.
+                    if (!selected) {
+                        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    }
+                    onClick()
+                },
                 role = Role.Tab,
                 interactionSource = interactionSource,
                 indication = ripple(),
-            ),
+            )
+            // Innenabstand der Pille: Sie umschliesst Symbol *und*
+            // Beschriftung, so wie in den Samsung-Apps.
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
@@ -209,20 +238,27 @@ fun RowScope.OneUiNavigationBarItem(
 }
 
 /**
- * Hoehe der Kapsel. Knapper als die 80 dp der Material-`NavigationBar`: Die
- * Kapsel steht frei und braucht deshalb keinen eigenen Rand nach unten —
- * dafuer sorgt [NavigationBarBottomMargin].
+ * Mindesthoehe der Kapsel. Knapper als die 80 dp der Material-`NavigationBar`
+ * und knapper als die frueheren 62 dp: One UI 9 zieht die schwebende Leiste
+ * gegenueber 8.5 kompakter und gibt ihr dafuer mehr Luft zum Rand.
+ *
+ * **Mindest**hoehe, nicht feste Hoehe — bei vergroesserter Schrift waechst
+ * die Kapsel mit, statt die Beschriftung abzuschneiden.
  */
-private val NavigationBarHeight = 62.dp
+private val NavigationBarHeight = 56.dp
 
-/** Abstand der Kapsel zu den Bildschirmseiten. */
-private val NavigationBarSideMargin = 16.dp
+/**
+ * Abstand der Kapsel zu den Bildschirmseiten. Dieselben 24 dp wie ueberall
+ * sonst (Kruemmung, Reject-Zone) — und zugleich die Richtung, in die One UI 9
+ * die Kapsel zieht: kompakter, mit groesserem Abstand zum Rand.
+ */
+private val NavigationBarSideMargin = 24.dp
 
 /** Breitengrenze der Kapsel — sie soll auch auf dem Tablet in Daumenreichweite bleiben. */
 private val NavigationBarMaxWidth = 520.dp
 
 /** Abstand der Kapsel zur Gestenleiste bzw. zum unteren Rand. */
-private val NavigationBarBottomMargin = 8.dp
+private val NavigationBarBottomMargin = 12.dp
 
 /** Symbolgroesse in der Kapsel; kleiner als die 24 dp von Material. */
 private val NavigationBarIconSize = 22.dp

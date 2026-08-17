@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
@@ -149,7 +149,7 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * dagegen ist keine Meldung, sondern eine Entscheidung und bleibt deshalb als
  * Dialog stehen (siehe [importErrorMessage]). Die „Rückgängig"-Snackbar
  * beim Loeschen ist etwas anderes: Sie braucht eine Aktionsschaltflaeche und
- * eine eigene Anzeigedauer (siehe [DeleteRideDialog]), Dinge, die der einfache
+ * eine eigene Anzeigedauer (siehe [DeleteRideWithUndo]), Dinge, die der einfache
  * Text-Kanal von `messages` nicht kennt. Diese Datei bringt dafuer einen
  * eigenen, kleinen [SnackbarHostState] mit und zeichnet ihn selbst als
  * Overlay — nicht ueber einen zusaetzlichen Parameter nach aussen gereicht:
@@ -352,7 +352,7 @@ fun TourListContent(
     }
 
     deleteTarget?.let { ride ->
-        DeleteRideDialog(
+        DeleteRideWithUndo(
             ride = ride,
             appViewModel = appViewModel,
             scope = scope,
@@ -363,7 +363,7 @@ fun TourListContent(
     }
 
     importErrorMessage?.let { message ->
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = { importErrorMessage = null },
             title = { Text("Import fehlgeschlagen") },
             text = { Text(message) },
@@ -528,7 +528,7 @@ fun RideDetailHost(
     }
 
     deleteTarget?.let { target ->
-        DeleteRideDialog(
+        DeleteRideWithUndo(
             ride = target,
             appViewModel = appViewModel,
             scope = scope,
@@ -576,8 +576,31 @@ fun RideDetailHost(
  * Tour taucht beim naechsten Start ganz normal wieder auf. Akzeptierter
  * Kompromiss, siehe KDoc von [AppViewModel.deleteRideWithUndo].
  */
+/**
+ * Loescht sofort und bietet stattdessen „Rückgängig" an — **ohne** vorherige
+ * Nachfrage.
+ *
+ * Hier stand ein Bestaetigungsdialog *und* danach die Rueckgaengig-Snackbar:
+ * zwei Sicherheitsnetze fuer dieselbe Handlung. Samsungs Leitfaden schliesst
+ * das aus — ein Bestaetigungsdialog gehoert nur dorthin, wo sich das Geloeschte
+ * **nicht** leicht wiederherstellen laesst; sonst wird sofort geloescht. Und
+ * wiederherstellbar ist es hier bewiesenermassen: [AppViewModel.deleteRideWithUndo]
+ * nimmt die Tour zunaechst nur aus der Liste und raeumt die Datei erst nach
+ * [UNDO_DELETE_GRACE_MS] weg.
+ *
+ * Der Gewinn ist nicht nur Regeltreue. Eine Nachfrage, die man immer mit „Ja"
+ * beantwortet, erzieht zum Wegklicken — und entwertet damit genau die
+ * Nachfragen, bei denen es ernst wird. Die Snackbar ist das ehrlichere
+ * Werkzeug: Sie kostet keinen Handgriff, wenn alles stimmt, und rettet den
+ * Fehlgriff trotzdem.
+ *
+ * Kein Dialog mehr, also auch keine sichtbare Oberflaeche — dieses Composable
+ * ist reiner Effekt. Der Aufrufer setzt es genauso ein wie vorher den Dialog
+ * (bei gesetztem `deleteTarget` einbinden); es meldet sich ueber [onDismiss]
+ * selbst wieder ab.
+ */
 @Composable
-private fun DeleteRideDialog(
+private fun DeleteRideWithUndo(
     ride: Ride,
     appViewModel: AppViewModel,
     scope: CoroutineScope,
@@ -586,36 +609,27 @@ private fun DeleteRideDialog(
     onDismiss: () -> Unit,
     onDeleted: () -> Unit = {},
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tour löschen") },
-        text = { Text("Soll „${ride.name}“ wirklich gelöscht werden?") },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onDismiss()
-                    onDeleted()
-                    undoSnackbarJob.value?.cancel()
-                    appViewModel.deleteRideWithUndo(ride.id)
-                    undoSnackbarJob.value = scope.launch {
-                        val result = withTimeoutOrNull(UNDO_DELETE_GRACE_MS) {
-                            snackbarHostState.showSnackbar(
-                                message = "Tour gelöscht",
-                                actionLabel = "Rückgängig",
-                                duration = SnackbarDuration.Indefinite,
-                            )
-                        }
-                        if (result == SnackbarResult.ActionPerformed) {
-                            appViewModel.undoDeleteRide()
-                        }
-                    }
-                },
-            ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Abbrechen") }
-        },
-    )
+    LaunchedEffect(ride.id) {
+        undoSnackbarJob.value?.cancel()
+        appViewModel.deleteRideWithUndo(ride.id)
+        // Bewusst `scope` und nicht der Effekt-Bereich: Der Effekt endet mit
+        // dem `onDismiss()` gleich darunter, die Snackbar soll aber ihre
+        // volle Frist stehen bleiben.
+        undoSnackbarJob.value = scope.launch {
+            val result = withTimeoutOrNull(UNDO_DELETE_GRACE_MS) {
+                snackbarHostState.showSnackbar(
+                    message = "Tour gelöscht",
+                    actionLabel = "Rückgängig",
+                    duration = SnackbarDuration.Indefinite,
+                )
+            }
+            if (result == SnackbarResult.ActionPerformed) {
+                appViewModel.undoDeleteRide()
+            }
+        }
+        onDeleted()
+        onDismiss()
+    }
 }
 
 @Composable
@@ -626,7 +640,7 @@ private fun RenameDialog(
 ) {
     var name by rememberSaveable(ride.id) { mutableStateOf(ride.name) }
 
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text("Tour umbenennen") },
         text = {

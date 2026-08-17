@@ -37,6 +37,18 @@ data class NavigationBarColors(
     val selectedContent: Color,
     /** Symbol und Beschriftung der uebrigen Ziele. */
     val unselectedContent: Color,
+    /**
+     * Das **Randlicht** der Kapsel: ein 1 dp schmaler, sehr blasser Streifen
+     * an ihrer Kante.
+     *
+     * One UI 9 kehrt vom Flachen ab und setzt schwebende Flaechen mit
+     * geschichteter Tiefe ab — Randlicht plus abgesetztem Schatten statt eines
+     * einzelnen schweren Schattens. Vorher trug hier ein 12-dp-Schatten die
+     * Schwebe allein; im Hellmodus war das der einzige Unterschied zwischen
+     * Kapsel und darunter wegscrollender Karte. Das Randlicht zieht die Kante
+     * nach, der Schatten darf dafuer leichter werden.
+     */
+    val rim: Color,
 )
 
 /**
@@ -51,6 +63,9 @@ internal val LightNavigationBarColors = NavigationBarColors(
     indicator = Color(0xFFDBDEE5),
     selectedContent = LightOnSurface,
     unselectedContent = LightOnSurfaceVariant,
+    // 8 % Schwarz: gerade genug, dass die Kante steht, ohne dass die Kapsel
+    // umrandet aussieht.
+    rim = LightOnSurface.copy(alpha = 0.08f),
 )
 
 /**
@@ -63,6 +78,10 @@ internal val DarkNavigationBarColors = NavigationBarColors(
     indicator = Color(0xFF3A3C43),
     selectedContent = Color(0xFFF2F2F5),
     unselectedContent = Color(0xFF9CA2AA),
+    // Im Dunkeln muss das Randlicht heller sein als der Grund, nicht dunkler —
+    // deshalb Weiss und etwas kraeftiger, weil ein Schatten hier ohnehin
+    // nichts traegt.
+    rim = Color(0xFFF2F2F5).copy(alpha = 0.12f),
 )
 
 /**

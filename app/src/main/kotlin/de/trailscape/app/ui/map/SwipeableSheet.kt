@@ -2,6 +2,7 @@ package de.trailscape.app.ui.map
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -29,11 +31,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.theme.OneUiMotion
 
 /**
  * # Das wischbare Blatt — Griff, Ziehen, Einrasten
@@ -78,7 +83,19 @@ internal fun SwipeableSheet(
     val density = LocalDensity.current
     var bodyHeightPx by remember { mutableIntStateOf(0) }
 
+    val haptics = LocalHapticFeedback.current
+
     val drag = remember { AnchoredDraggableState(initialValue = expanded) }
+
+    // Das Einrasten laeuft sonst auf der Compose-Vorgabe: eine Feder ohne
+    // begrenzte Dauer, die sich mit dem naechsten BOM-Update lautlos aendern
+    // kann. Der Leitfaden verlangt 100 bis 500 ms und die One-UI-Kurve —
+    // beides steht jetzt hier. (Das Feld `snapAnimationSpec` am Zustand selbst
+    // ist `internal`; der offizielle Weg fuehrt ueber das Fling-Verhalten.)
+    val fling = AnchoredDraggableDefaults.flingBehavior(
+        state = drag,
+        animationSpec = OneUiMotion.standard(),
+    )
 
     // Anker folgen der gemessenen Koerperhoehe. `updateAnchors` haelt dabei
     // den aktuellen Wert und setzt den Offset passend um — beim allerersten
@@ -105,7 +122,13 @@ internal fun SwipeableSheet(
     // Blatt -> Aussenzustand: erst beim Einrasten, nicht waehrend des Ziehens.
     LaunchedEffect(drag) {
         snapshotFlow { drag.settledValue }.collect { settled ->
-            if (settled != expanded) onExpandedChange(settled)
+            if (settled != expanded) {
+                // Der Rastpunkt ist genau die Stelle, an der One UI ein
+                // fuehlbares Echo setzt: Die Bewegung endet, und die Hand
+                // erfaehrt das, ohne hinzusehen.
+                haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                onExpandedChange(settled)
+            }
         }
     }
 
@@ -120,6 +143,7 @@ internal fun SwipeableSheet(
             modifier = Modifier.anchoredDraggable(
                 state = drag,
                 orientation = Orientation.Vertical,
+                flingBehavior = fling,
                 // Hochziehen (negatives dy) soll den Offset — die sichtbare
                 // Koerperhoehe — VERGROESSERN.
                 reverseDirection = true,
@@ -128,9 +152,18 @@ internal fun SwipeableSheet(
             // Der Griff: One UIs stehende Einladung zum Ziehen. Tippen
             // klappt weiterhin um — fuer alle, die nicht wischen moegen,
             // und fuer Bedienhilfen.
+            //
+            // `heightIn(min = 48.dp)` ist hier keine Kosmetik. Der Griff ist
+            // laut Absatz oben ausdruecklich die **Alternative zur Wischgeste**
+            // — und war mit 4 dp Strich plus 10 dp Rand ganze 14 dp hoch.
+            // Eine Alternative, die man kaum trifft, ist keine. Anders als bei
+            // einem Material-`IconButton` gibt es hier keine automatische
+            // Mindestflaeche, weil der Griff aus blanken Bausteinen gebaut
+            // ist; sie muss also von Hand stehen.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .clickable { onExpandedChange(!expanded) }
                     .semantics {
                         contentDescription = if (expanded) {
@@ -138,8 +171,7 @@ internal fun SwipeableSheet(
                         } else {
                             "Blatt aufklappen"
                         }
-                    }
-                    .padding(top = 8.dp, bottom = 2.dp),
+                    },
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
