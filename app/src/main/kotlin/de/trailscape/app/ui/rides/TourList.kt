@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -689,7 +690,12 @@ private fun RideCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onShowOnMap),
+            // `selectable` statt `clickable`: Die Auswahl stand bisher
+            // ausschliesslich in der Flaechenfarbe — wer den Bildschirm
+            // vorlesen laesst, erfuhr nie, welche Tour gerade auf der Karte
+            // liegt. Der Leitfaden verlangt, Zustaende anzusagen, und
+            // „ausgewaehlt" ist ausdruecklich einer davon.
+            .selectable(selected = selected, onClick = onShowOnMap),
         // Unselektiert erbt die Karte ihre Flaeche aus dem Theme (Default von
         // Card, siehe theme/Color.kt); nur der Auswahlzustand hebt sie
         // bewusst auf secondaryContainer.
@@ -711,10 +717,17 @@ private fun RideCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
+                    // Eine Zeile, nicht zwei: Der Leitfaden begrenzt den Titel
+                    // einer Listenzeile ausdruecklich auf eine Zeile — nur so
+                    // bleiben die Zeilen gleich hoch und die Liste ueberfliegbar.
+                    // Was nicht hineinpasst, steht vollstaendig in der
+                    // Detailansicht; die Kennzahlen darunter unterscheiden zwei
+                    // aehnlich benannte Touren ohnehin zuverlaessiger als ihr
+                    // abgeschnittener Name.
                     Text(
                         text = ride.name,
                         style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(

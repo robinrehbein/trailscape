@@ -607,6 +607,10 @@ private fun SegmentRow(
             IconButton(onClick = onUpdate, enabled = enabled) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Aktualisieren")
             }
+            // Ohne Abstand stossen zwei 48-dp-Ziele Kante an Kante — und der
+            // Fehlgriff landet auf „Löschen". Der Leitfaden verlangt neben
+            // ausreichender Groesse ausdruecklich auch Abstand.
+            Spacer(Modifier.width(8.dp))
         }
         IconButton(onClick = onDelete, enabled = enabled) {
             Icon(Icons.Filled.Delete, contentDescription = "Löschen")

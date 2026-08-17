@@ -29,6 +29,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiDialog
@@ -178,10 +182,22 @@ fun GoalCard(
                 // Ueberlagerung statt `enabled = false`: das Feld soll normal
                 // aussehen (Rahmenfarbe, Label), aber nur den Datumsdialog
                 // oeffnen — dasselbe Muster wie Darts `InkWell` um `InputDecorator`.
+                //
+                // Fuer eine Bildschirmvorlesung war das bisher eine Falle: An
+                // derselben Stelle lagen zwei Ziele — ein Textfeld, das nichts
+                // tut, und darueber eine namenlose Flaeche, die alles tut. Die
+                // gebuendelte Semantik macht daraus einen einzigen, benannten
+                // Halt, der auch sagt, was er ist.
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .clickable { showDatePicker = true },
+                        .clickable { showDatePicker = true }
+                        .clearAndSetSemantics {
+                            role = Role.Button
+                            contentDescription = goalDate
+                                ?.let { "Zieldatum, ${formatDate(it)}. Datum ändern" }
+                                ?: "Zieldatum wählen"
+                        },
                 )
             }
 
