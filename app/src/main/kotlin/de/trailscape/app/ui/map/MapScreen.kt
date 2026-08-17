@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +62,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.routing.missingSegmentsFor
@@ -100,6 +100,7 @@ import de.trailscape.core.computeStats
 import de.trailscape.core.haversineM
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
+import de.trailscape.app.ui.rides.finishMarkers
 import java.io.File
 import java.util.Locale
 import kotlin.math.abs
@@ -2082,7 +2083,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // in diesem Moment schon vor (ueber den Server berechnet) — hier geht es
     // nur darum, ob das naechste Mal ohne Netz und schneller gehen soll.
     segmentOffer?.let { offer ->
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = appViewModel::dismissSegmentOffer,
             icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
             title = { Text("Karten für Offline-Routing") },
@@ -2105,7 +2106,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     deleteDialogRide?.let { ride ->
-        AlertDialog(
+        OneUiDialog(
             onDismissRequest = { deleteDialogRide = null },
             title = { Text("Tour löschen") },
             text = { Text("Soll „${ride.name}“ wirklich gelöscht werden?") },
@@ -2168,17 +2169,22 @@ private fun buildMapMarkers(
     if (ride != null && ride.points.size >= 2) {
         val first = ride.points.first()
         val last = ride.points.last()
+        // Start ist ein Punkt, Ziel eine Zielscheibe — der Unterschied liegt in
+        // der Form, nicht nur in der Farbe (siehe `startAndFinishMarkers` in
+        // `rides/RideDetailScreen.kt`).
         add(MapMarker(first.lat, first.lon, GravelGreen.toArgb(), radius = 7f))
-        add(MapMarker(last.lat, last.lon, RecordRed.toArgb(), radius = 7f))
+        addAll(finishMarkers(last.lat, last.lon))
     }
     if (planning) {
         waypoints.forEachIndexed { index, waypoint ->
-            val color = when (index) {
-                0 -> GravelGreen
-                waypoints.lastIndex -> RecordRed
-                else -> RouteBlue
+            when (index) {
+                // Erster und letzter Wegpunkt tragen dieselbe Unterscheidung
+                // wie Start und Ziel einer gefahrenen Tour: Ein einzelner
+                // Wegpunkt ist nur Start, noch kein Ziel.
+                0 -> add(MapMarker(waypoint.lat, waypoint.lon, GravelGreen.toArgb(), radius = 8f))
+                waypoints.lastIndex -> addAll(finishMarkers(waypoint.lat, waypoint.lon))
+                else -> add(MapMarker(waypoint.lat, waypoint.lon, RouteBlue.toArgb(), radius = 8f))
             }
-            add(MapMarker(waypoint.lat, waypoint.lon, color.toArgb(), radius = 8f))
         }
     }
     place?.let { add(MapMarker(it.lat, it.lon, RouteBlue.toArgb(), radius = 10f, filled = false)) }
@@ -2271,7 +2277,7 @@ private fun NameDialog(
     onConfirm: (String) -> Unit,
 ) {
     var text by remember { mutableStateOf(suggestion) }
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

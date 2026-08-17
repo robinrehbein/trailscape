@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.onboarding
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -45,6 +46,7 @@ import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.OneUiMotion
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.Sex
@@ -483,10 +485,22 @@ private fun PageDots(count: Int, current: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         repeat(count) { index ->
             val active = index == current
+            // One UI markiert den aktuellen Schritt nicht durch einen
+            // *groesseren* Punkt, sondern durch einen **in die Breite
+            // gezogenen** — ein Strich zwischen Punkten. Hier stand ein 9-dp-
+            // Kreis neben 7-dp-Kreisen; auf Armlaenge war der Unterschied
+            // kaum zu sehen. Die Breite dagegen sieht man sofort, und zwar
+            // auch dann, wenn die Farbe nicht hilft.
+            val width by animateDpAsState(
+                targetValue = if (active) 22.dp else 7.dp,
+                animationSpec = OneUiMotion.short(),
+                label = "pageDotWidth",
+            )
             Box(
                 modifier = Modifier
                     .padding(end = 6.dp)
-                    .size(if (active) 9.dp else 7.dp)
+                    .width(width)
+                    .height(7.dp)
                     .clip(CircleShape)
                     .background(
                         if (active) {

@@ -23,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -186,7 +188,15 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     )
     Spacer(modifier = Modifier.height(8.dp))
 
-    TextButton(onClick = { advancedOpen = !advancedOpen }) {
+    // Der Text „Erweitert" bleibt in beiden Zustaenden gleich und das Icon
+    // traegt keinen Alternativtext — eine Bildschirmvorlesung meldete deshalb
+    // auf- wie zugeklappt exakt dasselbe. Dieselbe Loesung wie in `MoreRow`.
+    TextButton(
+        onClick = { advancedOpen = !advancedOpen },
+        modifier = Modifier.semantics {
+            stateDescription = if (advancedOpen) "Aufgeklappt" else "Zugeklappt"
+        },
+    ) {
         Icon(
             imageVector = if (advancedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = null,

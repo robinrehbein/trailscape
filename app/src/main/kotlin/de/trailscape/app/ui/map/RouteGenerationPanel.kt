@@ -32,6 +32,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -278,9 +280,17 @@ private fun CandidateRow(
     modifier: Modifier = Modifier,
 ) {
     val theme = MaterialTheme.colorScheme
+    // Ausserhalb des `semantics`-Blocks festhalten: Dort verdeckt die
+    // gleichnamige Semantik-Eigenschaft den Parameter.
+    val isSelected = selected
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            // Ohne dies stand die Auswahl nur in der Flaechenfarbe: Wer sich
+            // die Vorschlaege vorlesen laesst, hoerte viermal dasselbe und
+            // erfuhr nie, welcher gerade auf der Karte liegt.
+            .semantics { this.selected = isSelected },
         shape = MaterialTheme.shapes.medium,
         // Unselektiert eine Container-Stufe ueber der Karte des Panels, damit
         // die waehlbaren Reihen auf ihr sichtbar bleiben; ausgewaehlt heben

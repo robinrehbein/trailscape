@@ -330,7 +330,9 @@ internal fun RideCard(
                 FilledTonalIconButton(onClick = onShare) {
                     Icon(Icons.Filled.Share, contentDescription = "Als GPX teilen")
                 }
-                Spacer(Modifier.width(4.dp))
+                // 8 statt 4 dp: Rechts steht die destruktive Aktion, links
+                // eine harmlose — Fehlgriffe sind hier nicht symmetrisch.
+                Spacer(Modifier.width(8.dp))
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Filled.Delete, contentDescription = "Tour löschen", tint = MaterialTheme.colorScheme.error)
                 }

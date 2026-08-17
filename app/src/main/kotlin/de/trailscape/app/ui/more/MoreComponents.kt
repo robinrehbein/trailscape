@@ -1,6 +1,10 @@
 package de.trailscape.app.ui.more
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -26,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.OneUiMotion
 
 /**
  * Gemeinsame Bausteine des Mehr-Tabs: eine Gruppen-Grammatik statt neun
@@ -131,7 +136,15 @@ fun MoreRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        AnimatedVisibility(visible = expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            // Ohne Spec greift der Compose-Vorgabewert — eine Kurve, die im
+            // Code nicht steht und sich mit dem naechsten BOM-Update lautlos
+            // aendern kann. Der Leitfaden verlangt eine Dauer zwischen 100
+            // und 500 ms auf der One-UI-Kurve.
+            enter = expandVertically(OneUiMotion.standard()) + fadeIn(OneUiMotion.standard()),
+            exit = shrinkVertically(OneUiMotion.standard()) + fadeOut(OneUiMotion.standard()),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

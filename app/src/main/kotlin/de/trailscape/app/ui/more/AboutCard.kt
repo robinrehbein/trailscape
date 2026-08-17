@@ -1,6 +1,10 @@
 package de.trailscape.app.ui.more
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +34,7 @@ import de.trailscape.app.feedback.ProblemReportDialog
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.update.RELEASE_PAGE_URL
 import de.trailscape.app.update.UpdateCheckResult
+import de.trailscape.app.ui.theme.OneUiMotion
 import kotlinx.coroutines.launch
 
 private const val REPOSITORY_URL = ISSUE_REPOSITORY_URL
@@ -182,7 +187,15 @@ fun AboutCardContent(appViewModel: AppViewModel) {
         Text(if (licensesExpanded) "Open-Source-Lizenzen ausblenden" else "Open-Source-Lizenzen")
     }
 
-    AnimatedVisibility(visible = licensesExpanded) {
+    AnimatedVisibility(
+            visible = licensesExpanded,
+            // Ohne Spec greift der Compose-Vorgabewert — eine Kurve, die im
+            // Code nicht steht und sich mit dem naechsten BOM-Update lautlos
+            // aendern kann. Der Leitfaden verlangt eine Dauer zwischen 100
+            // und 500 ms auf der One-UI-Kurve.
+            enter = expandVertically(OneUiMotion.standard()) + fadeIn(OneUiMotion.standard()),
+            exit = shrinkVertically(OneUiMotion.standard()) + fadeOut(OneUiMotion.standard()),
+        ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             NoticeGroup(title = "Verwendete Bibliotheken", notices = libraryNotices)
             Spacer(modifier = Modifier.height(12.dp))

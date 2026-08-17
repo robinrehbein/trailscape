@@ -3,10 +3,16 @@
     <color name="ic_launcher_background">#264F3A</color>
 
     <!--
-        Fensterhintergrund, bevor Compose zeichnet. Bewusst exakt `LightSurface`
-        aus `ui/theme/Color.kt` (#F6FBF4) statt reinem Weiss: Sonst blitzt beim
-        Kaltstart eine andere Flaeche auf als die, die eine Zehntelsekunde
-        spaeter dasteht. Das dunkle Gegenstueck steht in values-night/.
+        Fensterhintergrund, bevor Compose zeichnet. Exakt `LightSurface` aus
+        `ui/theme/Color.kt` statt reinem Weiss: Sonst blitzt beim Kaltstart
+        eine andere Flaeche auf als die, die eine Zehntelsekunde spaeter
+        dasteht. Das dunkle Gegenstueck steht in values-night/.
+
+        WER `LightSurface` AENDERT, AENDERT DIESEN WERT MIT. Hier stand
+        #F6FBF4 — ein Rest der frueheren, gruenstichigen Farbwelt —, waehrend
+        `LightSurface` laengst auf #F4F4F6 stand. Der Kommentar behauptete
+        Gleichheit, die es nicht gab; genau das Aufblitzen, das er verhindern
+        sollte, war die Folge.
     -->
-    <color name="window_background">#F6FBF4</color>
+    <color name="window_background">#F4F4F6</color>
 </resources>

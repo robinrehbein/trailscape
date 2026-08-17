@@ -2,7 +2,7 @@ package de.trailscape.app.ui.components
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -35,9 +35,14 @@ fun NeutralButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.height(48.dp),
+        // `heightIn` statt `height`: 48 dp bleiben die Mindestflaeche, aber
+        // der Knopf darf wachsen. Bei doppelter Schriftgroesse — bis dahin
+        // muss die App laut Leitfaden ohne Funktionsverlust tragen — braucht
+        // schon eine einzeilige Beschriftung rund 40 dp; eine zweizeilige
+        // wurde von der frueheren festen Hoehe glatt abgeschnitten.
+        modifier = modifier.heightIn(min = 48.dp),
         enabled = enabled,
-        contentPadding = PaddingValues(horizontal = 20.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
         colors = if (destructive) {
             ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.errorContainer,

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -31,10 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.reminder.ReminderScheduler
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
@@ -228,10 +230,20 @@ private fun ReminderSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = {
+                    // One UI bildet die Bewegung eines Schalters haptisch nach —
+                    // der Leitfaden nennt Schalter ausdruecklich als Ort dafuer.
+                    haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                    onCheckedChange(it)
+                },
+            )
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -293,7 +305,7 @@ private fun ReminderTimeDialog(
         is24Hour = true,
     )
 
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text("Uhrzeit") },
         text = { TimeInput(state = state) },
