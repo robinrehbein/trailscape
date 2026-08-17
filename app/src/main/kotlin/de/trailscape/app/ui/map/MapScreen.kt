@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -287,7 +289,7 @@ import kotlinx.coroutines.withContext
  * beidem der Fall, bleibt der `BackHandler` deaktiviert und die Geste faellt
  * auf das normale Verhalten der App zurueck.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MapScreen(appViewModel: AppViewModel) {
     val context = LocalContext.current
@@ -1697,21 +1699,11 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
-    // Suche und Blatt haengen aneinander, in beide Richtungen.
-    //
-    // Fokus im Suchfeld zieht das Blatt auf: Die Treffer stehen im Koerper,
-    // und der ist im eingeklappten Zustand nicht sichtbar — ohne das hier
-    // tippte man ins Leere.
-    LaunchedEffect(exploreSearching) {
-        if (exploreSearching) toursExpanded = true
-    }
-
-    // Und umgekehrt: Wer das Blatt zuschiebt — mit dem Finger, ueber den Griff
-    // oder weil ein Vorrang-Zustand es zuklappt —, ist mit der Suche fertig.
-    // Sonst bliebe die Tastatur vor einem Blatt stehen, das gar nichts mehr
-    // zeigt.
-    LaunchedEffect(toursExpanded) {
-        if (!toursExpanded && exploreSearching) endExploreSearch()
+    // Ein Vorrang-Zustand beendet auch die Suche: Wer aufzeichnet, navigiert
+    // oder plant, sucht nicht nebenher — und eine Tastatur vor einem Blatt,
+    // das es nicht mehr gibt, waere das Schlechteste von beidem.
+    LaunchedEffect(tourSheetPriorityActive) {
+        if (tourSheetPriorityActive && exploreSearching) endExploreSearch()
     }
 
     // Zurueck-Geste: erst die Suche verlassen, dann die Tourenliste wieder
@@ -1734,6 +1726,13 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     // ------------------------------------------------------------------ Aufbau
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
+    // Ob die Tastatur steht. Bewusst `WindowInsets.isImeVisible` und nicht
+    // `WindowInsets.ime`: Die Huelle (`ui/TrailscapeApp.kt`) hat den
+    // IME-Abstand mit `imePadding()` bereits **verzehrt**, hier kaeme also
+    // ueberall null an. `isImeVisible` liest die Sichtbarkeit direkt am
+    // Fenster und ist davon unberuehrt.
+    val imeVisible = WindowInsets.isImeVisible
 
     Scaffold(
         // Die Huelle (TrailscapeApp) hat die System-Insets schon aufgeloest.
@@ -1858,7 +1857,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                         // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
                         // ihre Hoehe nach oben — sonst laege das Planungsblatt
                         // teilweise hinter ihr.
-                        .padding(bottom = LocalFloatingNavigationBarSpace.current),
+                        //
+                        // Bei offener Tastatur aber NICHT: Die Kapsel sitzt dann
+                        // hinter der Tastatur und ist gar nicht sichtbar. Der
+                        // reservierte Platz waere ein gutes Stueck Leere
+                        // zwischen Blatt und Tastatur — genau die Luecke, die
+                        // beim ersten Anlauf der Suche im Blatt zu sehen war.
+                        .padding(bottom = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current),
                     horizontalAlignment = Alignment.End,
                 ) {
                     RecordButton(
@@ -1999,7 +2004,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                         Spacer(Modifier.height(OverlayGap))
                         ExploreSheet(
                             expanded = toursExpanded,
-                            onExpandedChange = { toursExpanded = it },
+                            // Waehrend der Suche gibt es keinen Koerper zum
+                            // Auf- und Zuklappen; der Griff wird dann zum
+                            // Ausgang aus der Suche. Ohne das haette er im
+                            // Suchzustand gar keine Wirkung — ein Bedienelement,
+                            // das nichts tut, ist schlimmer als keins.
+                            onExpandedChange = { want ->
+                                if (exploreSearching) endExploreSearch() else toursExpanded = want
+                            },
                             rideCount = rides.size,
                             toursMaxHeight = screenHeight * TOUR_SHEET_MAX_HEIGHT_FACTOR,
                             searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
@@ -2498,13 +2510,18 @@ private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
  * Erkunden-Blatt hoechstens einnimmt.
  *
  * Deutlich knapper als [TOUR_SHEET_MAX_HEIGHT_FACTOR], weil waehrend der Suche
- * die Tastatur im Bild steht und rund ein Drittel des Bildschirms belegt. Vom
- * Rest gehen Suchfeld, Blattraender und die Bodenfreiheit der
- * Navigationskapsel ab; was bleibt, sind auf einem 800-dp-Geraet grob 290 dp.
- * Ein Drittel liegt sicher darunter und traegt vier Trefferzeilen — mehr als
- * Nominatim mit [MAX_SEARCH_RESULTS] ueberhaupt liefert. Der Rest scrollt.
+ * die Tastatur im Bild steht und rund ein Drittel des Bildschirms belegt. Was
+ * uebrig bleibt, teilt sich die Liste ausserdem mit dem Suchfeld, dem Griff
+ * und den beiden schwebenden Knoepfen (Aufzeichnen, Position), die im selben
+ * Stapel darueber sitzen.
+ *
+ * Das ist ein **Sicherheitsnetz**, keine Rechnung: Die Liste steht im Peek und
+ * wird deshalb ohnehin gegen den wirklich vorhandenen Platz gemessen. Der Wert
+ * begrenzt nur, wie viel sie sich davon nimmt, bevor sie zu scrollen anfaengt
+ * — grob drei bis vier Trefferzeilen auf einem 800-dp-Geraet, bei
+ * [MAX_SEARCH_RESULTS] von fuenf also der uebliche Fall ohne Scrollen.
  */
-private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.34f
+private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.3f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"

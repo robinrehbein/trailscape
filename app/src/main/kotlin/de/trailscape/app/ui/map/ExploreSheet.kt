@@ -115,7 +115,9 @@ internal fun ExploreSheet(
     tours: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
     SwipeableSheet(
-        expanded = expanded,
+        // Waehrend der Suche gibt es keinen ziehbaren Koerper — die Treffer
+        // stehen im Peek (Begruendung gleich darunter).
+        expanded = expanded && !searching,
         onExpandedChange = onExpandedChange,
         modifier = modifier,
         peek = {
@@ -133,11 +135,47 @@ internal fun ExploreSheet(
                     onFocusChange = onSearchingChange,
                 )
 
-                // Waehrend gesucht wird, treten die drei Werkzeuge ab. Sie
-                // sind Einstiege in etwas Anderes und haetten unter einer
-                // laufenden Trefferliste nur die Haelfte der Blatthoehe
-                // gekostet, ohne je gemeint zu sein.
-                if (!searching) {
+                if (searching) {
+                    // ## Warum die Treffer im Peek stehen und nicht im Koerper
+                    //
+                    // Der erste Anlauf legte sie in den ziehbaren Koerper —
+                    // naheliegend, denn dort steht auch die Tourenliste. Auf
+                    // dem Geraet blieben sie unsichtbar.
+                    //
+                    // Der Grund: Die Hoehe des Koerpers ist keine gemessene
+                    // Groesse, sondern der **Zieh-Offset** — eine von Hand
+                    // animierte Zahl zwischen zwei Ankern. Faehrt gleichzeitig
+                    // die Tastatur auf, animiert `imePadding` den verfuegbaren
+                    // Platz, waehrend `anchoredDraggable` seine Anker aus einer
+                    // Messung neu bildet, die genau in diesem Moment wandert.
+                    // Zwei Animationen um dieselbe Hoehe, und der Offset
+                    // gewinnt: Er stand auf null, das Fenster war zu, der
+                    // Inhalt dahinter.
+                    //
+                    // Der Peek hat dieses Problem nicht. Er ist gewoehnlicher
+                    // Inhalt mit gewoehnlicher Messung — er ist einfach da.
+                    // Deshalb wandert die Suche dorthin, statt den
+                    // Zieh-Mechanismus mit einem Sonderfall zu belasten.
+                    Spacer(Modifier.height(4.dp))
+                    PlaceResults(
+                        query = searchQuery,
+                        error = searchError,
+                        results = searchResults,
+                        history = searchHistory,
+                        onSelect = onSelectPlace,
+                        // Die Obergrenze ist hier nur noch ein Sicherheitsnetz:
+                        // Der Peek wird ohnehin gegen den wirklich vorhandenen
+                        // Platz gemessen, die Tastatur ist also schon
+                        // eingerechnet. Was trotzdem nicht hineinpasst, scrollt.
+                        modifier = Modifier
+                            .heightIn(max = searchMaxHeight)
+                            .verticalScroll(rememberScrollState()),
+                    )
+                } else {
+                    // Waehrend gesucht wird, treten die drei Werkzeuge ab. Sie
+                    // sind Einstiege in etwas Anderes und haetten unter einer
+                    // laufenden Trefferliste nur Hoehe gekostet, ohne je
+                    // gemeint zu sein.
                     Spacer(Modifier.height(8.dp))
 
                     Row(modifier = Modifier.fillMaxWidth()) {
@@ -167,65 +205,36 @@ internal fun ExploreSheet(
             }
         },
         body = {
-            // Der Koerper hat zwei Gesichter: normalerweise die Tourenliste,
-            // waehrend der Suche die Treffer.
-            //
-            // Zwei verschiedene Obergrenzen, und das mit Absicht: Waehrend der
-            // Suche steht die Tastatur im Bild und nimmt gut ein Drittel des
-            // Bildschirms. Die grosszuegige Grenze der Tourenliste wuerde das
-            // Blatt dann oben abschneiden — fuenf Treffer plus fuenf
-            // Verlaufseintraege sind hoch genug, dass das keine graue Theorie
-            // ist. Was nicht hineinpasst, scrollt.
-            Box(
-                modifier = Modifier.heightIn(
-                    max = if (searching) searchMaxHeight else toursMaxHeight,
-                ),
-            ) {
-                if (searching) {
-                    PlaceResults(
-                        query = searchQuery,
-                        error = searchError,
-                        results = searchResults,
-                        history = searchHistory,
-                        onSelect = onSelectPlace,
+            Box(modifier = Modifier.heightIn(max = toursMaxHeight)) {
+                Column {
+                    Row(
                         modifier = Modifier
-                            .verticalScroll(rememberScrollState())
-                            .padding(
-                                horizontal = CardPadding,
-                                vertical = OverlayCardPaddingVertical,
-                            ),
-                    )
-                } else {
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = CardPadding, end = CardPadding),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = "Touren",
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Text(
-                                text = rideCount.toString(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        // Keine eigene `verticalScroll` — der Inhalt ist eine
-                        // `LazyColumn` und scrollt selbst; ein zweiter
-                        // Scrollcontainer aussen wuerde nur widerspruechliche
-                        // Gesten erzeugen.
-                        tours(
-                            PaddingValues(
-                                horizontal = CardPadding,
-                                vertical = OverlayCardPaddingVertical,
-                            ),
+                            .fillMaxWidth()
+                            .padding(start = CardPadding, end = CardPadding),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Touren",
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = rideCount.toString(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                    // Keine eigene `verticalScroll` — der Inhalt ist eine
+                    // `LazyColumn` und scrollt selbst; ein zweiter
+                    // Scrollcontainer aussen wuerde nur widerspruechliche
+                    // Gesten erzeugen.
+                    tours(
+                        PaddingValues(
+                            horizontal = CardPadding,
+                            vertical = OverlayCardPaddingVertical,
+                        ),
+                    )
                 }
             }
         },
