@@ -126,6 +126,13 @@ internal fun PlanningSheet(
     route: PlannedRoute?,
     busy: Boolean,
     error: String?,
+    /**
+     * Obergrenze des aufgeklappten Koerpers — aus dem Platz gerechnet, den der
+     * Stapel dem Blatt lassen kann (`overlaySheetBudget` in `MapScreen.kt`),
+     * nicht aus einem Anteil der Bildschirmhoehe. Ein zu weiter Deckel nimmt
+     * dem `verticalScroll` seinen Scrollweg, ohne das Fenster mitwachsen zu
+     * lassen; das Blatt waere dann unten abgeschnitten und nicht scrollbar.
+     */
     maxHeight: Dp,
     /**
      * Rueckmeldung waehrend der Berechnung — entweder weil die Route in
