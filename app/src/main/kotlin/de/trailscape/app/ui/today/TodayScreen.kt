@@ -2,13 +2,10 @@ package de.trailscape.app.ui.today
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -83,11 +80,29 @@ import java.time.LocalDateTime
  *     Stelle die Einladung, ein Ziel festzulegen.
  *  6. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
  *
- * ## Kein `TopAppBar`
- * Anders als Touren, Training und Mehr traegt dieser Screen keine Titelleiste:
- * Der Kopf mit Begruessung und Datum sagt dasselbe waermer, und eine Leiste
- * „Heute" ueber „Guten Morgen" waere doppelt. Die Navigationsleiste beschriftet
- * den Tab ohnehin.
+ * ## Kein `TopAppBar` — und keine Begruessung mehr
+ * Anders als Training, Mehr und die Tourenansicht traegt dieser Screen keine
+ * einklappende Titelleiste. Das ist kein Rest, sondern eine Entscheidung.
+ *
+ * Samsungs ausgeklappte Kopfzeile nimmt **39,67 % der Bildschirmhoehe** ein
+ * (siehe `ui/components/OneUiTopAppBar.kt`). Bei einer Liste, durch die man
+ * ohnehin scrollt, ist das ein fairer Handel: eine Bildschirmhoehe Ruhe gegen
+ * einen Ankerpunkt in Daumenreichweite. Diese Seite ist keine Liste, sondern
+ * eine Auskunft — man oeffnet sie, um *eine* Sache zu sehen (die
+ * Tagesempfehlung und ihren einen Knopf) und ist dann fertig. Ein Drittel
+ * Leere davor tauschte genau die Information weg, fuer die es die Seite gibt.
+ * Der Leitfaden nimmt die Kopfzeile bei Bildschirmhoehen unter 580 dp aus
+ * demselben Grund zurueck, und die Karte (`ui/map/MapScreen.kt`) traegt sie
+ * ebenfalls nicht.
+ *
+ * Hier stand bis dahin eine Begruessung („Guten Morgen/Tag/Abend") im
+ * groessten Schriftgrad des Bildschirms. Sie ist **entfallen**: Sie belegte den
+ * hoechsten Slot, um mitzuteilen, dass Nachmittag ist — was die Statusleiste
+ * zwei Zentimeter darueber genauer sagt. Als Kopfzeile haette sie ausserdem
+ * behauptet, der Name des Bildschirms zu sein, und sich dabei dreimal am Tag
+ * umbenannt; der Leitfaden verlangt umgekehrt einen Titel, der
+ * **gleichlautend** zum Reiter („Heute") ist. Geblieben ist das Datum als
+ * ruhige Zeile — die einzige Auskunft, die der Kopf je hatte.
  *
  * ## Verhaeltnis zum Trainings-Tab
  * Die Tagesempfehlung steht **nur hier**. `ui/training/TrainingScreen.kt` zeigt
@@ -181,7 +196,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                item(key = "kopf") { TodayHeader() }
+                item(key = "datum") { TodayDateLine() }
 
                 item(key = "empfehlung") {
                     TodayRecommendationCard(
@@ -253,49 +268,30 @@ fun TodayScreen(appViewModel: AppViewModel) {
 }
 
 /**
- * Begruessung, Wochentag und Datum.
+ * Die Datumszeile ueber der ersten Karte.
  *
- * Die Tageszeit steuert nur die Anrede — mehr Zustand traegt der Kopf bewusst
- * nicht: Er soll die Seite eroeffnen, nicht selbst informieren. Ein einmal
- * gemerkter Zeitpunkt genuegt; wer die App ueber Mitternacht offen liegen
- * laesst, sieht das Datum beim naechsten Wechsel in diesen Tab aktualisiert.
+ * Bewusst **keine** Ueberschrift, sondern eine Zeile auf blankem Grund — das
+ * Idiom, das die App dafuer schon kennt ([de.trailscape.app.ui.more.MoreGroupLabel]):
+ * eingerueckt um [CardPadding], damit sie auf derselben Linie steht wie der
+ * Text *in* der Karte darunter und nicht weiter aussen als er. `titleSmall` auf
+ * `onSurfaceVariant` haelt sie auf Beschriftungshoehe: Sie eroeffnet die Seite,
+ * informiert aber nicht — das tut die Karte darunter.
  *
- * Das One-UI-Moment der Seite: Die Begruessung laeuft im groessten Slot
- * unterhalb von Titelleisten (headlineLarge — 30 sp und fett direkt aus dem
- * Theme-Slot), das Datum darunter mit einem kleinen Atemzug ruehig in
- * bodyLarge und onSurfaceVariant.
+ * Ein einmal gemerkter Zeitpunkt genuegt; wer die App ueber Mitternacht offen
+ * liegen laesst, sieht das Datum beim naechsten Wechsel in diesen Tab
+ * aktualisiert.
  */
 @Composable
-private fun TodayHeader() {
+private fun TodayDateLine() {
     val now = remember { LocalDateTime.now() }
-    // `start = CardPadding` wie bei `MoreGroupLabel`: Dieser Text steht ohne
-    // Karte direkt auf dem Grund und saesse sonst weiter aussen als jeder
-    // Text *in* einer Karte — eine zweite Kante, die es nicht geben darf.
-    // Eingerueckt sitzt er auf derselben Linie wie der Kartentext darunter und
-    // liegt damit auch jenseits der 24 dp, die der Leitfaden fuer Information
-    // verlangt. Samsungs Telefon-App setzt ihre Datumsueberschriften genauso.
-    Column(modifier = Modifier.fillMaxWidth().padding(start = CardPadding)) {
-        Text(
-            text = greetingFor(now.hour),
-            // Eine Stufe unter der Erholungszahl der Empfehlungskarte: Der
-            // Kopf eroeffnet die Seite, aber die eine Zahl, fuer die es sie
-            // gibt, traegt den groessten Slot.
-            style = MaterialTheme.typography.headlineLarge,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = weekdayDateFormat.format(now),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/** Anrede nach Tageszeit — die Grenzen folgen dem Alltag, nicht der Uhr. */
-private fun greetingFor(hour: Int): String = when (hour) {
-    in 5..10 -> "Guten Morgen"
-    in 11..17 -> "Guten Tag"
-    else -> "Guten Abend"
+    Text(
+        text = weekdayDateFormat.format(now),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = CardPadding),
+    )
 }
 
 /**
