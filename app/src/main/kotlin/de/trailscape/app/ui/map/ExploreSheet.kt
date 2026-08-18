@@ -90,6 +90,15 @@ import de.trailscape.core.GeoResult
  * dieselben Randmasse wie im aufgeklappten Planungsblatt
  * ([CardPadding]/[OverlayCardPaddingVertical]) — ein drittes Randmass haette
  * hier nichts erklaert, was diese beiden nicht schon tun.
+ *
+ * @param toursMaxHeight Obergrenze der Tourenliste. Muss aus dem Platz kommen,
+ *   den der Stapel dem Blatt wirklich lassen kann (`overlaySheetBudget` in
+ *   `MapScreen.kt`) — **nicht** aus einem Anteil der Bildschirmhoehe. Hier
+ *   stand `0,8 * Bildschirmhoehe`, also rund 665 dp, waehrend das Blatt selbst
+ *   nur gut 200 dp hoch werden konnte. Die `LazyColumn` blieb damit unter ihrer
+ *   Obergrenze, wurde inhaltsgross und hatte keinen Scrollweg; sichtbar war
+ *   trotzdem nur, was ins kleinere Fenster passte. Zwei Touren, eine zu sehen,
+ *   kein Scrollen — der Deckel war zu weit, nicht zu eng.
  */
 @Composable
 internal fun ExploreSheet(

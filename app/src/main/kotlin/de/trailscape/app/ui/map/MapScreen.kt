@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
@@ -1733,35 +1737,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ------------------------------------------------------------------ Aufbau
+    val density = LocalDensity.current
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-
-    // ## Der Platz, den das Rundenwahl-Blatt wirklich hat
-    //
-    // Vorher bekam sein Koerper `0,55 * Bildschirmhoehe` als Obergrenze — auf
-    // einem 800-dp-Geraet 440 dp, waehrend der Stapel ihm nach Abzug von
-    // Kapselfreiheit, schwebenden Knoepfen und Raendern nur rund 120 dp lassen
-    // konnte. Das ist genau die Konstellation, in der ein `verticalScroll`
-    // NICHT scrollt: Sein Inhalt (rund 186 dp) blieb unter der Obergrenze, der
-    // Behaelter wurde also inhaltsgross und hatte keinen Scrollweg — nur das
-    // Fenster darum war kleiner. Ergebnis: unten abgeschnitten und kein Weg
-    // hin. Ein zu grosszuegiger Deckel ist hier schaedlicher als ein zu enger.
-    //
-    // Deshalb wird der Deckel jetzt aus dem verfuegbaren Platz gerechnet und
-    // nicht aus einem Anteil des Bildschirms geraten.
-    val generationSheetBudget = (
-        screenHeight -
-            LocalFloatingNavigationBarSpace.current -
-            OverlayFloatingButtonsHeight -
-            OverlayScreenPadding * 2 -
-            OverlayGap
-        ).coerceAtLeast(MinGenerationSheetBudget)
-
-    // Was der Peek unabhaengig von der Vorschlagsliste braucht — Griff,
-    // Titelzeile, die beiden Zielzeilen, „Übernehmen" und die Raender. Der Rest
-    // teilt sich zwischen Liste und Koerper auf; beide scrollen, wenn ihr
-    // Anteil nicht reicht.
-    val generationRest =
-        (generationSheetBudget - GenerationPeekFixedHeight).coerceAtLeast(120.dp)
 
     // Ob die Tastatur steht. Bewusst `WindowInsets.isImeVisible` und nicht
     // `WindowInsets.ime`: Die Huelle (`ui/TrailscapeApp.kt`) hat den
@@ -1769,6 +1746,64 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ueberall null an. `isImeVisible` liest die Sichtbarkeit direkt am
     // Fenster und ist davon unberuehrt.
     val imeVisible = WindowInsets.isImeVisible
+
+    // ## Der Platz, den ein unteres Blatt wirklich hat
+    //
+    // Ein Blatt bekam seine Obergrenze frueher als **Anteil der
+    // Bildschirmhoehe** — 0,8 fuer die Tourenliste, 0,45 fuer die Planung. Das
+    // ist genau die Konstellation, in der ein `verticalScroll` oder eine
+    // `LazyColumn` NICHT scrollt: Faellt der Inhalt unter die Obergrenze, wird
+    // der Behaelter inhaltsgross und hat keinen Scrollweg — nur das Fenster
+    // darum (bei [SwipeableSheet] der Zieh-Offset, bei der Spalte hier der
+    // Rest des Stapels) ist kleiner. Ergebnis: unten abgeschnitten und kein Weg
+    // hin. Ein zu grosszuegiger Deckel ist hier schaedlicher als ein zu enger.
+    //
+    // Deshalb rechnet **ein** Budget den Platz aus, den der Stapel einem Blatt
+    // ueberhaupt lassen kann, und alle drei Blaetter ziehen davon nur noch ab,
+    // was ihr eigener Peek verbraucht.
+    //
+    // Was oben drueber steht — die beiden runden Knoepfe und die Karte zur
+    // Auswahl, falls eine dran ist — wird **gemessen** statt geschaetzt
+    // ([overlayHeaderPx] weiter unten). Eine Zahl von Hand haette die Karte
+    // nicht kennen koennen und waere bei 200 % Schriftgroesse ohnehin falsch.
+    var overlayHeaderPx by remember { mutableIntStateOf(0) }
+    val overlayHeaderHeight = if (overlayHeaderPx > 0) {
+        with(density) { overlayHeaderPx.toDp() }
+    } else {
+        // Erster Bildaufbau, noch nichts gemessen: die beiden Knoepfe als
+        // Startwert. Ohne ihn waere das Budget fuer genau einen Bildaufbau zu
+        // grosszuegig — also fuer einen Bildaufbau der alte Fehler.
+        OverlayFloatingButtonsHeight
+    }
+
+    // Oben loest die Huelle die System-Insets auf; diese Hoehe steht dem
+    // Karten-Screen gar nicht erst zur Verfuegung.
+    val overlayTopInset = WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
+
+    // Unten entweder die Tastatur (die Huelle hat dafuer schon `imePadding`
+    // gelegt) oder die Bodenfreiheit der schwebenden Kapsel — nie beides,
+    // genau wie im Padding des Stapels weiter unten.
+    val overlayBottomInset = if (imeVisible) {
+        WindowInsets.ime.asPaddingValues().calculateBottomPadding()
+    } else {
+        LocalFloatingNavigationBarSpace.current
+    }
+
+    val overlaySheetBudget = (
+        screenHeight -
+            overlayTopInset -
+            overlayBottomInset -
+            overlayHeaderHeight -
+            OverlayScreenPadding * 2 -
+            OverlayGap
+        ).coerceAtLeast(MinOverlaySheetBudget)
+
+    // Was der Peek der Rundenwahl unabhaengig von der Vorschlagsliste braucht —
+    // Griff, Titelzeile, die beiden Zielzeilen, „Übernehmen" und die Raender.
+    // Der Rest teilt sich zwischen Liste und Koerper auf; beide scrollen, wenn
+    // ihr Anteil nicht reicht.
+    val generationRest =
+        (overlaySheetBudget - GenerationPeekFixedHeight).coerceAtLeast(MinSheetBodyHeight)
 
     Scaffold(
         // Die Huelle (TrailscapeApp) hat die System-Insets schon aufgeloest.
@@ -1894,59 +1929,76 @@ fun MapScreen(appViewModel: AppViewModel) {
                         .padding(bottom = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current),
                     horizontalAlignment = Alignment.End,
                 ) {
-                    RecordButton(
-                        recording = isRecording,
-                        onClick = { if (isRecording) RecordingRepository.stop() else startRecording() },
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    LocateButton(onClick = ::goToMyPosition, following = followMe)
-                    Spacer(Modifier.height(12.dp))
-
                     val ride = selectedRide
                     val place = selectedPlace
-                    when {
-                        isRecording -> LiveRecordingCard(
-                            speedKmh = speedKmh,
-                            distanceKm = recordedKm,
-                            elapsedS = (elapsedMs / 1000).toInt(),
-                            ascentM = liveAscentM,
-                            pointCount = livePoints.size,
-                            paused = isPaused,
-                            onTogglePause = { RecordingRepository.togglePause() },
-                            onStop = { RecordingRepository.stop() },
-                            onOpenRideMode = { rideMode = true },
-                        )
 
-                        ride != null -> RideCard(
-                            ride = ride,
-                            navigating = navTarget?.rideId == ride.id,
-                            onNavigate = { navigateRide(ride) },
-                            onShare = { shareRoute(ride.name, ride.points) },
-                            onDelete = { deleteDialogRide = ride },
-                            onClose = {
-                                hoverPoint = null
-                                appViewModel.select(null)
+                    // Alles ueber dem Blatt in einer eigenen Spalte, damit es
+                    // sich in einem Stueck messen laesst — die Zahl ist das
+                    // [overlayHeaderHeight] der Budgetrechnung weiter oben.
+                    // Eine Konstante von Hand kannte die Karte nicht, die hier
+                    // je nach Zustand steht (Aufzeichnung, Tour, Ort), und lag
+                    // bei grosser Schrift ohnehin daneben.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { overlayHeaderPx = it.height },
+                        horizontalAlignment = Alignment.End,
+                    ) {
+                        RecordButton(
+                            recording = isRecording,
+                            onClick = {
+                                if (isRecording) RecordingRepository.stop() else startRecording()
                             },
-                            onHoverPoint = { hoverPoint = it },
                         )
+                        Spacer(Modifier.height(12.dp))
+                        LocateButton(onClick = ::goToMyPosition, following = followMe)
+                        Spacer(Modifier.height(12.dp))
 
-                        place != null -> PlaceCard(
-                            place = place,
-                            mode = mode,
-                            // Synchron aus dem Standortpunkt der Karte gelesen
-                            // (siehe dessen KDoc): kein zweiter GPS-Abonnent
-                            // nur fuer diese eine Entfernungszahl.
-                            distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
-                                haversineM(
-                                    TrackPoint(lat = lat, lon = lon),
-                                    TrackPoint(lat = place.lat, lon = place.lon),
-                                ) / 1000.0
-                            },
-                            onRouteHere = { runRouteToPlace(place) },
-                            onRoundTripHere = { runRoundTripFromPlace(place) },
-                            onAddWaypoint = { addPlaceAsWaypoint(place) },
-                            onClose = { selectedPlace = null },
-                        )
+                        when {
+                            isRecording -> LiveRecordingCard(
+                                speedKmh = speedKmh,
+                                distanceKm = recordedKm,
+                                elapsedS = (elapsedMs / 1000).toInt(),
+                                ascentM = liveAscentM,
+                                pointCount = livePoints.size,
+                                paused = isPaused,
+                                onTogglePause = { RecordingRepository.togglePause() },
+                                onStop = { RecordingRepository.stop() },
+                                onOpenRideMode = { rideMode = true },
+                            )
+
+                            ride != null -> RideCard(
+                                ride = ride,
+                                navigating = navTarget?.rideId == ride.id,
+                                onNavigate = { navigateRide(ride) },
+                                onShare = { shareRoute(ride.name, ride.points) },
+                                onDelete = { deleteDialogRide = ride },
+                                onClose = {
+                                    hoverPoint = null
+                                    appViewModel.select(null)
+                                },
+                                onHoverPoint = { hoverPoint = it },
+                            )
+
+                            place != null -> PlaceCard(
+                                place = place,
+                                mode = mode,
+                                // Synchron aus dem Standortpunkt der Karte
+                                // gelesen (siehe dessen KDoc): kein zweiter
+                                // GPS-Abonnent nur fuer diese eine
+                                // Entfernungszahl.
+                                distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
+                                    haversineM(
+                                        TrackPoint(lat = lat, lon = lon),
+                                        TrackPoint(lat = place.lat, lon = place.lon),
+                                    ) / 1000.0
+                                },
+                                onRouteHere = { runRouteToPlace(place) },
+                                onRoundTripHere = { runRoundTripFromPlace(place) },
+                                onAddWaypoint = { addPlaceAsWaypoint(place) },
+                                onClose = { selectedPlace = null },
+                            )
+                        }
                     }
 
                     // Ein Blatt, eine Aufgabe: Solange Vorschlaege zur Wahl
@@ -1985,7 +2037,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                             route = plannedRoute,
                             busy = planBusy,
                             error = planError,
-                            maxHeight = screenHeight * PLAN_SHEET_MAX_HEIGHT_FACTOR,
+                            maxHeight = (overlaySheetBudget - PlanningPeekFixedHeight)
+                                .coerceAtLeast(MinSheetBodyHeight),
                             progress = planProgress,
                             generated = routeFromGenerator,
                             source = routeSource,
@@ -2066,7 +2119,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 if (exploreSearching) endExploreSearch() else toursExpanded = want
                             },
                             rideCount = rides.size,
-                            toursMaxHeight = screenHeight * TOUR_SHEET_MAX_HEIGHT_FACTOR,
+                            toursMaxHeight = (overlaySheetBudget - ExplorePeekFixedHeight)
+                                .coerceAtLeast(MinSheetBodyHeight),
                             searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
                             searchQuery = searchQuery,
                             onSearchQueryChange = { searchQuery = it },
@@ -2529,46 +2583,13 @@ private fun planProgressText(source: RoutingSource?, done: Int, total: Int): Str
 private val WAYPOINT_TOUCH_RADIUS_DP = 24.dp
 
 /**
- * Maximale Hoehe des **aufgeklappten** Planungsblatts.
- *
- * Knapp gehalten, weil ueber dem Blatt noch die beiden runden Knoepfe
- * (zusammen [OverlayFloatingButtonsHeight]) im selben Stapel stehen. Fuer die
- * Sicht auf die Karte ist ohnehin die eingeklappte Stufe zustaendig — sie misst
- * eine Zeile.
- *
- * Hier stand daneben `PLAN_PANEL_MAX_HEIGHT_FACTOR = 0.55f` fuer das
- * Rundkurs-Panel. Das Panel gibt es nicht mehr (die Wahl ist selbst ein Blatt),
- * und sein Deckel kommt jetzt aus dem verfuegbaren Platz statt aus einem
- * Bildschirmanteil — siehe `generationSheetBudget` im Rumpf.
- */
-private const val PLAN_SHEET_MAX_HEIGHT_FACTOR = 0.45f
-
-/**
- * Maximale Hoehe des **aufgeklappten** Tourenblatts.
- *
- * Deutlich grosszuegiger als [PLAN_SHEET_MAX_HEIGHT_FACTOR]: Ueber dem
- * Tourenblatt stehen in seinem einzigen Sichtbarkeits-Zustand (siehe die
- * Rangfolge im Klassen-KDoc — es ist ohnehin HIDDEN, sobald noch etwas
- * anderes um den unteren Rand konkurriert) ausschliesslich die beiden runden
- * Knoepfe, keine zweite Kopfzeile und kein Fehlertext wie bei der Planung.
- * Vorbild ist ausdruecklich Google Maps/Komoot: Wer eine Liste aufschlaegt,
- * will moeglichst viele Touren auf einen Blick sehen, ohne staendig zu
- * scrollen — die Karte ist in diesem Moment ohnehin Nebensache. 0,8 laesst
- * trotzdem einen schmalen Kartenstreifen samt der beiden Knoepfe sichtbar,
- * damit der Wechsel zurueck auf PEEK nie ein Blindflug ist — ganz
- * verschwinden darf die Karte nicht.
- */
-private const val TOUR_SHEET_MAX_HEIGHT_FACTOR = 0.8f
-
-/**
  * Anteil der Bildschirmhoehe, den die Trefferliste der Ortssuche im
  * Erkunden-Blatt hoechstens einnimmt.
  *
- * Deutlich knapper als [TOUR_SHEET_MAX_HEIGHT_FACTOR], weil waehrend der Suche
- * die Tastatur im Bild steht und rund ein Drittel des Bildschirms belegt. Was
- * uebrig bleibt, teilt sich die Liste ausserdem mit dem Suchfeld, dem Griff
- * und den beiden schwebenden Knoepfen (Aufzeichnen, Position), die im selben
- * Stapel darueber sitzen.
+ * Knapp gehalten, weil waehrend der Suche die Tastatur im Bild steht und rund
+ * ein Drittel des Bildschirms belegt. Was uebrig bleibt, teilt sich die Liste
+ * ausserdem mit dem Suchfeld, dem Griff und den beiden schwebenden Knoepfen
+ * (Aufzeichnen, Position), die im selben Stapel darueber sitzen.
  *
  * Das ist ein **Sicherheitsnetz**, keine Rechnung: Die Liste steht im Peek und
  * wird deshalb ohnehin gegen den wirklich vorhandenen Platz gemessen. Der Wert
@@ -2582,21 +2603,51 @@ private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.3f
  * Hoehe der beiden schwebenden Knoepfe ueber dem Blatt (Aufzeichnen, Position)
  * samt ihrer Abstaende — 56 + 12 + 56 + 12 dp.
  *
- * Steht hier als Zahl, weil der Platz des Blatts davon abhaengt und Compose
- * ihn nicht rueckwaerts erfragen kann, ohne die Komposition zu verschachteln.
- * Wer die Knoepfe aendert, aendert diese Zeile mit.
+ * Nur noch **Startwert** fuer den allerersten Bildaufbau: Danach steht die
+ * gemessene Hoehe des ganzen Kopfteils (Knoepfe plus die Karte, die je nach
+ * Zustand darunter sitzt) zur Verfuegung — siehe `overlayHeaderPx` im Rumpf.
  */
 private val OverlayFloatingButtonsHeight = 136.dp
 
 /**
- * Was der Peek der Rundenwahl unabhaengig von der Vorschlagsliste braucht:
- * Griff (48), Titelzeile (48), die beiden Zielzeilen (~44), „Übernehmen" (48)
- * und die Raender (~20).
+ * Was die drei Blaetter jeweils **vor** ihrem Koerper verbrauchen. Das
+ * Blatt-Budget (`overlaySheetBudget` im Rumpf) minus diesen Wert ist der
+ * Deckel, gegen den der Koerper gemessen wird — und damit die Hoehe, ab der er
+ * zu scrollen anfaengt statt abgeschnitten zu werden.
+ *
+ * Warum von Hand gezaehlt und nicht gemessen: Der Peek liegt **innerhalb** des
+ * Blatts, dessen Koerperhoehe von dieser Zahl abhaengt. Eine Messung waere ein
+ * Kreis. Der Kopfteil ueber dem Blatt hat dieses Problem nicht und wird
+ * deshalb gemessen.
+ *
+ * Rundenwahl: Griff (48), Titelzeile (48), die beiden Zielzeilen (~44),
+ * „Übernehmen" (48) und die Raender (~20).
  */
 private val GenerationPeekFixedHeight = 208.dp
 
+/**
+ * Erkunden: Griff (48), Rand oben und unten (2 x 14), Suchfeld (56), Abstand
+ * (8) und die Werkzeugreihe (56) — siehe `ExploreSheet.kt`.
+ */
+private val ExplorePeekFixedHeight = 196.dp
+
+/**
+ * Planung: Griff (48) und die eine Statuszeile (`heightIn(min = 48.dp)`) —
+ * siehe `PlanningSheet` in `PlanningPanel.kt`.
+ */
+private val PlanningPeekFixedHeight = 96.dp
+
 /** Untergrenze, damit die Rechnung auf sehr flachen Fenstern nicht negativ wird. */
-private val MinGenerationSheetBudget = 240.dp
+private val MinOverlaySheetBudget = 240.dp
+
+/**
+ * Untergrenze fuer den Koerper eines Blatts.
+ *
+ * Bleibt vom Budget weniger uebrig (sehr flaches Fenster, grosse Karte
+ * darueber), ragt das Blatt lieber ein Stueck ueber den Stapel hinaus, als
+ * einen Koerper zu zeigen, in dem nicht einmal eine Zeile steht.
+ */
+private val MinSheetBodyHeight = 120.dp
 
 /**
  * Wie sich der Platz jenseits von [GenerationPeekFixedHeight] zwischen
