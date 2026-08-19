@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.asin
@@ -10,7 +11,7 @@ import kotlin.math.sin
 
 /**
  * Rundkurs-Generierung: aus einem [RouteTarget] und einem Startpunkt werden
- * ueber den BRouter-Server mehrere geschlossene Runden gebaut und bewertet.
+ * ueber ein [RoutingBackend] mehrere geschlossene Runden gebaut und bewertet.
  *
  * ## Algorithmus
  *
@@ -65,11 +66,14 @@ import kotlin.math.sin
  *
  * ## Betrieb
  *
- * Synchron und **streng sequenziell** — der oeffentliche BRouter-Server ist
- * eine Gemeinschaftsressource. Zwischen zwei Requests liegt eine Pause von
- * [defaultRequestPauseMs]; sie ist ueber den Parameter `sleeper` injizierbar,
- * damit Tests nicht real warten. Das UI wrappt den Aufruf mit
- * `Dispatchers.IO`.
+ * **Streng sequenziell** — laeuft das Routing ueber den oeffentlichen
+ * BRouter-Server, ist der eine Gemeinschaftsressource. Zwischen zwei
+ * Routing-Aufrufen liegt deshalb eine Pause von [defaultRequestPauseMs]; sie
+ * ist ueber den Parameter `sleeper` injizierbar, damit Tests nicht real
+ * warten. Wie geroutet wird, weiss die Generierung selbst nicht mehr: Sie
+ * bekommt ein [RoutingBackend] hereingereicht (in der App das
+ * Offline-zuerst-Routing der manuellen Planung, in Tests ein Fake) und ist
+ * dafuer `suspend` — der Aufrufer waehlt den Dispatcher.
  */
 
 /** Mittlerer Erdradius in Metern (wie in `Stats.kt`). */
@@ -90,7 +94,7 @@ const val maxRadiusAttempts: Int = 3
 /** Startwert des Korrekturfaktors zwischen Kreisumfang und real gefahrener Strecke. */
 const val circuitDetourFactor: Double = 1.25
 
-/** Pause zwischen zwei BRouter-Requests in ms. */
+/** Pause zwischen zwei Routing-Aufrufen in ms (Ruecksicht auf den geteilten Server). */
 const val defaultRequestPauseMs: Long = 250
 
 /** Goldener Winkel in Grad — verteilt aufeinanderfolgende Seeds maximal gleichmaessig. */
@@ -106,7 +110,7 @@ const val errorNoRouteFound: String =
 
 /** Ein bewerteter Rundkurs-Vorschlag. */
 data class RouteCandidate(
-    /** Die berechnete Route (Punkte, Distanz, Hoehenmeter) wie von [fetchRoute] geliefert. */
+    /** Die berechnete Route (Punkte, Distanz, Hoehenmeter) wie vom [RoutingBackend] geliefert. */
     val route: PlannedRoute,
     /** Distanz in km — identisch mit [PlannedRoute.distanceKm], hier fuer bequemes Sortieren. */
     val distanceKm: Double,
@@ -245,6 +249,26 @@ fun scoreRoute(
 // Generierung
 // ---------------------------------------------------------------------------
 
+/**
+ * Die Routing-Abstraktion der Rundkurs-Generierung.
+ *
+ * Der Generator weiss damit nichts mehr ueber HTTP oder lokale Kacheln — er
+ * reicht Wegpunkte und das gewaehlte [RouteProfile] hinein und bekommt eine
+ * fertige Strecke zurueck. In der App steckt dahinter dasselbe
+ * Offline-zuerst-Routing wie hinter der manuellen Planung
+ * (`routing/OfflineFirstPlanner.kt`), in Tests ein Fake.
+ */
+fun interface RoutingBackend {
+    /**
+     * Routet [waypoints] mit [profile] zu einer Strecke.
+     *
+     * @throws Exception mit deutschsprachiger Meldung, wenn keine Route
+     *   zustande kommt (kein Netz, keine Kacheln, kein Weg — die Meldung
+     *   traegt die Ursache).
+     */
+    suspend fun route(waypoints: List<Waypoint>, profile: RouteProfile): PlannedRoute
+}
+
 /** Zwischenergebnis eines Routing-Versuchs. */
 private class Attempt(val route: PlannedRoute, val deviation: Double)
 
@@ -255,27 +279,33 @@ private class Attempt(val route: PlannedRoute, val deviation: Double)
  * Die Liste ist aufsteigend nach [RouteCandidate.score] sortiert (kleiner =
  * besser). Einzelne fehlgeschlagene Kandidaten werden stillschweigend
  * uebersprungen; erst wenn **alle** scheitern, wirft die Funktion eine
- * [Exception] mit [errorNoRouteFound].
+ * [Exception], deren Meldung mit [errorNoRouteFound] beginnt und — wenn das
+ * Backend eine Ursache genannt hat — diese in Klammern anfuegt (z. B. „kein
+ * Netz“ vs. „kein Weg gefunden“; die letzte Backend-Ausnahme haengt
+ * zusaetzlich als `cause` daran).
  *
- * @param client HTTP-Abstraktion (in `:app` echter Stack, in Tests ein Fake).
+ * @param backend Routing-Abstraktion (in `:app` das Offline-zuerst-Routing
+ *   der manuellen Planung, in Tests ein Fake).
  * @param start Startpunkt; der Rundkurs beginnt und endet hier.
  * @param target Zielvorgabe aus `SessionTarget.kt`.
+ * @param profile Fahrprofil, mit dem alle Kandidaten gerechnet werden;
+ *   Vorgabe ist das Gravel-Profil [RouteProfile.SCHOTTER].
  * @param seed Deterministische Variation — `seed + 1` liefert andere Runden.
  * @param candidates Anzahl der Vorschlaege (1…8).
- * @param profileId BRouter-Profil; Vorgabe ist das eingebettete Gravel-Profil.
- * @param pauseMs Pause zwischen zwei Server-Requests.
- * @param sleeper Wartefunktion, injizierbar fuer Tests.
+ * @param pauseMs Pause zwischen zwei Routing-Aufrufen.
+ * @param sleeper Wartefunktion, injizierbar fuer Tests und fuer den Abbruch
+ *   von aussen (wirft sie, verlaesst die Generierung sofort).
  * @param onProgress Fortschritt `(erledigt, gesamt)` nach jedem Kandidaten.
  */
-fun generateRoutes(
-    client: HttpClient,
+suspend fun generateRoutes(
+    backend: RoutingBackend,
     start: TrackPoint,
     target: RouteTarget,
+    profile: RouteProfile = RouteProfile.SCHOTTER,
     seed: Int = 0,
     candidates: Int = 3,
-    profileId: String = CUSTOM_GRAVEL_PROFILE,
     pauseMs: Long = defaultRequestPauseMs,
-    sleeper: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) },
+    sleeper: suspend (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) },
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
 ): List<RouteCandidate> {
     val hints = mutableListOf<String>()
@@ -304,6 +334,10 @@ fun generateRoutes(
     val results = mutableListOf<RouteCandidate>()
     var requestsMade = 0
 
+    // Die letzte Backend-Ausnahme — scheitern ALLE Kandidaten, ist sie die
+    // konkreteste Auskunft ueber das Warum und gehoert in die Fehlermeldung.
+    var lastFailure: Exception? = null
+
     onProgress?.invoke(0, total)
 
     for (i in 0 until total) {
@@ -322,11 +356,14 @@ fun generateRoutes(
 
             val waypoints = loopWaypoints(start, radiusM, bearing, viaCount, clockwise)
             val route = try {
-                // sleeper durchreichen: bei einem Watchdog-Retry in fetchRoute
-                // soll in Tests ebenfalls nicht real gewartet werden.
-                fetchRoute(waypoints, profileId, client, sleeper)
-            } catch (_: Exception) {
+                backend.route(waypoints, profile)
+            } catch (e: CancellationException) {
+                // Ein Abbruch der umgebenden Coroutine ist kein gescheiterter
+                // Kandidat — er muss die Generierung als Ganzes verlassen.
+                throw e
+            } catch (e: Exception) {
                 // Kandidat aufgeben, spaetere Kandidaten bekommen ihre Chance.
+                lastFailure = e
                 break
             }
 
@@ -370,7 +407,14 @@ fun generateRoutes(
     }
 
     if (results.isEmpty()) {
-        throw Exception(errorNoRouteFound)
+        // Die Backend-Ursache anfuegen, damit die Oberflaeche „kein Netz /
+        // Server nicht erreichbar" von „kein Weg gefunden" unterscheiden kann.
+        val detail = lastFailure?.message?.takeIf(String::isNotBlank)
+        throw if (detail != null) {
+            Exception("$errorNoRouteFound ($detail)", lastFailure)
+        } else {
+            Exception(errorNoRouteFound, lastFailure)
+        }
     }
 
     return results.sortedWith(compareBy({ it.score }, { it.bearingDeg }))

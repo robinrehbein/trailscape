@@ -1,10 +1,13 @@
 package de.trailscape.core
 
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.coroutines.startCoroutine
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -13,13 +16,13 @@ import kotlin.test.assertTrue
 /**
  * Tests fuer `RouteGenerator.kt`.
  *
- * [FakeBrouter] erzeugt die BRouter-Antworten synthetisch im Format, das
- * [parseBrouterGeoJson] liest: Es liest die `lonlats` aus der Anfrage-URL,
- * misst den Umfang des Wegpunkt-Polygons mit [haversineM] und meldet
- * `track-length = Umfang × Umwegfaktor`. Damit ist die Radius-Iteration
- * exakt vorhersagbar — mit dem Standard-Umwegfaktor 1,3 trifft schon der
- * erste Versuch die 10-%-Toleranz, mit groesseren Faktoren braucht es
- * nachweisbar mehrere Runden.
+ * [FakeBackend] ist das [RoutingBackend] der Tests: Es misst den Umfang des
+ * hereingereichten Wegpunkt-Polygons mit [haversineM] und meldet
+ * `distanceKm = Umfang × Umwegfaktor`. Damit ist die Radius-Iteration exakt
+ * vorhersagbar — mit dem Standard-Umwegfaktor 1,3 trifft schon der erste
+ * Versuch die 10-%-Toleranz, mit groesseren Faktoren braucht es nachweisbar
+ * mehrere Runden. HTTP kommt nicht mehr vor: Der Generator kennt seit dem
+ * [RoutingBackend]-Umbau nur noch Wegpunkte, Profil und Strecke.
  */
 class RouteGeneratorTest {
     private companion object {
@@ -56,52 +59,64 @@ class RouteGeneratorTest {
                 lon = vias.sumOf { it.lon } / vias.size,
             )
         }
+
+        /**
+         * Fuehrt [block] synchron aus. `:core` haengt bewusst nicht an
+         * kotlinx-coroutines (siehe `build.gradle.kts`), also gibt es hier
+         * kein `runBlocking`; die Fakes suspendieren nie, deshalb liegt das
+         * Ergebnis unmittelbar nach `startCoroutine` vor — andernfalls
+         * schlaegt der `checkNotNull` laut fehl, statt still zu haengen.
+         */
+        fun <T> runSync(block: suspend () -> T): T {
+            var outcome: Result<T>? = null
+            block.startCoroutine(
+                object : Continuation<T> {
+                    override val context: CoroutineContext = EmptyCoroutineContext
+                    override fun resumeWith(result: Result<T>) {
+                        outcome = result
+                    }
+                },
+            )
+            return checkNotNull(outcome) {
+                "Der Test-Fake hat suspendiert — diese Tests rechnen synchron."
+            }.getOrThrow()
+        }
     }
 
     /**
-     * Synthetischer BRouter-Server.
+     * Synthetisches Routing-Backend.
      *
      * @param detourFactor Verhaeltnis der gemeldeten Streckenlaenge zum Umfang
      *   des Wegpunkt-Polygons.
-     * @param fixedDistanceKm Wenn gesetzt, meldet der Server immer diese Laenge
-     *   — der Radius hat dann keinen Einfluss (Test der Versuchsobergrenze).
+     * @param fixedDistanceKm Wenn gesetzt, meldet das Backend immer diese
+     *   Laenge — der Radius hat dann keinen Einfluss (Test der
+     *   Versuchsobergrenze).
      * @param ascentPerKm Hoehenmeter je Kilometer, abhaengig von den Wegpunkten.
-     * @param failAt Indizes von Routing-Anfragen, die mit HTTP 500 antworten.
-     * @param throwAt Indizes von Routing-Anfragen, die als Netzwerkfehler werfen.
+     * @param failAt Indizes von Routing-Aufrufen, die mit [failureMessage]
+     *   werfen (Netzfehler, Serverfehler — fuer den Generator dasselbe).
      */
-    private class FakeBrouter(
+    private class FakeBackend(
         val detourFactor: Double = 1.30,
         val fixedDistanceKm: Double? = null,
         val ascentPerKm: (List<TrackPoint>) -> Double = { 5.0 },
         val failAt: Set<Int> = emptySet(),
-        val throwAt: Set<Int> = emptySet(),
-    ) : HttpClient {
-        var routeRequests = 0
-        var profileUploads = 0
+        val failureMessage: String = "Netzwerk weg",
+    ) : RoutingBackend {
+        var calls = 0
+        val profiles = mutableListOf<RouteProfile>()
         val waypointSets = mutableListOf<List<TrackPoint>>()
         val reportedKm = mutableListOf<Double>()
 
-        override fun execute(request: HttpRequest): HttpResponse {
-            if (request.method == HttpMethod.POST) {
-                profileUploads += 1
-                return HttpResponse(200, """{"profileid":"fake-gravel"}""")
-            }
+        override suspend fun route(waypoints: List<Waypoint>, profile: RouteProfile): PlannedRoute {
+            val index = calls
+            calls += 1
+            profiles.add(profile)
 
-            val index = routeRequests
-            routeRequests += 1
-
-            val raw = request.url.substringAfter("lonlats=").substringBefore("&")
-            val points = raw.split("|").map { pair ->
-                val parts = pair.split(",")
-                TrackPoint(lat = parts[1].toDouble(), lon = parts[0].toDouble())
-            }
+            val points = waypoints.map { TrackPoint(lat = it.lat, lon = it.lon, ele = 500.0) }
             waypointSets.add(points)
 
-            if (index in throwAt) {
-                throw RuntimeException("Netzwerk weg")
-            }
             if (index in failAt) {
-                return HttpResponse(500, "kaputt")
+                throw RuntimeException(failureMessage)
             }
 
             var perimeterM = 0.0
@@ -112,64 +127,31 @@ class RouteGeneratorTest {
             reportedKm.add(distanceM / 1000)
             val ascentM = (distanceM / 1000) * ascentPerKm(points)
 
-            return HttpResponse(200, geoJson(points, distanceM, ascentM))
-        }
-
-        private fun geoJson(points: List<TrackPoint>, distanceM: Double, ascentM: Double): String {
-            val coords = points.joinToString(",") { "[${it.lon},${it.lat},500.0]" }
-            return """
-            {
-              "type": "FeatureCollection",
-              "features": [
-                {
-                  "type": "Feature",
-                  "properties": {
-                    "track-length": "${distanceM.toInt()}",
-                    "filtered ascend": "${ascentM.toInt()}"
-                  },
-                  "geometry": { "type": "LineString", "coordinates": [$coords] }
-                }
-              ]
-            }
-            """
+            return PlannedRoute(points = points, distanceKm = distanceM / 1000, ascentM = ascentM)
         }
     }
-
-    /** Zaehlt die Wartepausen, ohne real zu warten. */
-    private class FakeSleeper : (Long) -> Unit {
-        var calls = 0
-        var totalMs = 0L
-
-        override fun invoke(ms: Long) {
-            calls += 1
-            totalMs += ms
-        }
-    }
-
-    @BeforeTest
-    fun resetProfileCache() = resetCustomProfileCacheForTesting()
-
-    @AfterTest
-    fun clearProfileCache() = resetCustomProfileCacheForTesting()
 
     private fun generate(
-        client: HttpClient,
+        backend: RoutingBackend,
         target: RouteTarget,
         seed: Int = 0,
         candidates: Int = 3,
-        sleeper: (Long) -> Unit = {},
+        profile: RouteProfile = RouteProfile.SCHOTTER,
+        sleeper: suspend (Long) -> Unit = {},
         onProgress: ((Int, Int) -> Unit)? = null,
-    ): List<RouteCandidate> = generateRoutes(
-        client = client,
-        start = START,
-        target = target,
-        seed = seed,
-        candidates = candidates,
-        profileId = "trekking",
-        pauseMs = 0,
-        sleeper = sleeper,
-        onProgress = onProgress,
-    )
+    ): List<RouteCandidate> = runSync {
+        generateRoutes(
+            backend = backend,
+            start = START,
+            target = target,
+            profile = profile,
+            seed = seed,
+            candidates = candidates,
+            pauseMs = 0,
+            sleeper = sleeper,
+            onProgress = onProgress,
+        )
+    }
 
     // --- Geometrie ---
 
@@ -195,9 +177,9 @@ class RouteGeneratorTest {
 
     @Test
     fun `trifft die Zieldistanz innerhalb der Toleranz`() {
-        val client = FakeBrouter()
+        val backend = FakeBackend()
 
-        val results = generate(client, target(40.0))
+        val results = generate(backend, target(40.0))
 
         assertEquals(3, results.size)
         for (r in results) {
@@ -206,20 +188,20 @@ class RouteGeneratorTest {
                 "Abweichung ${r.distanceDeviation} bei ${r.distanceKm} km",
             )
         }
-        // Mit Umwegfaktor 1,3 passt der Startradius bereits: ein Request je Kandidat.
-        assertEquals(3, client.routeRequests)
+        // Mit Umwegfaktor 1,3 passt der Startradius bereits: ein Aufruf je Kandidat.
+        assertEquals(3, backend.calls)
     }
 
     @Test
     fun `Radius wird proportional nachgefuehrt, bis die Distanz passt`() {
         // Umwegfaktor 2,0 -> erster Versuch rund 44 % zu lang.
-        val client = FakeBrouter(detourFactor = 2.0)
+        val backend = FakeBackend(detourFactor = 2.0)
 
-        val results = generate(client, target(60.0), candidates = 1)
+        val results = generate(backend, target(60.0), candidates = 1)
 
         assertEquals(1, results.size)
-        assertEquals(2, client.routeRequests)
-        assertTrue(client.reportedKm[0] > 60.0 * 1.10, "erster Versuch war ${client.reportedKm[0]} km")
+        assertEquals(2, backend.calls)
+        assertTrue(backend.reportedKm[0] > 60.0 * 1.10, "erster Versuch war ${backend.reportedKm[0]} km")
         assertTrue(results[0].distanceDeviation <= routeToleranceRatio)
         assertEquals(60.0, results[0].distanceKm, 60.0 * routeToleranceRatio)
     }
@@ -227,11 +209,11 @@ class RouteGeneratorTest {
     @Test
     fun `hoechstens drei Versuche je Kandidat, bester Versuch gewinnt`() {
         // Die gemeldete Laenge haengt nicht vom Radius ab -> nie konvergent.
-        val client = FakeBrouter(fixedDistanceKm = 100.0)
+        val backend = FakeBackend(fixedDistanceKm = 100.0)
 
-        val results = generate(client, target(40.0), candidates = 1)
+        val results = generate(backend, target(40.0), candidates = 1)
 
-        assertEquals(maxRadiusAttempts, client.routeRequests)
+        assertEquals(maxRadiusAttempts, backend.calls)
         assertEquals(1, results.size)
         assertEquals(100.0, results[0].distanceKm, EPS)
         assertEquals(40.0, results[0].targetKm, EPS)
@@ -278,9 +260,9 @@ class RouteGeneratorTest {
 
     @Test
     fun `FLACH stellt die flache Runde nach vorn`() {
-        val client = FakeBrouter(ascentPerKm = ::ascentByBearing)
+        val backend = FakeBackend(ascentPerKm = ::ascentByBearing)
 
-        val results = generate(client, target(40.0, AscentPreference.FLACH))
+        val results = generate(backend, target(40.0, AscentPreference.FLACH))
 
         assertEquals(3, results.size)
         assertEquals(0.0, results.first().bearingDeg, EPS)
@@ -292,64 +274,112 @@ class RouteGeneratorTest {
 
     @Test
     fun `BERGIG stellt die hoehenmeterreiche Runde nach vorn`() {
-        val client = FakeBrouter(ascentPerKm = ::ascentByBearing)
+        val backend = FakeBackend(ascentPerKm = ::ascentByBearing)
 
-        val results = generate(client, target(40.0, AscentPreference.BERGIG))
+        val results = generate(backend, target(40.0, AscentPreference.BERGIG))
 
         assertEquals(3, results.size)
         assertEquals(120.0, results.first().bearingDeg, EPS)
         assertTrue(results.first().ascentPerKm > 15.0)
         // Dieselbe Runde ist unter FLACH die schlechteste.
-        val flach = generate(FakeBrouter(ascentPerKm = ::ascentByBearing), target(40.0, AscentPreference.FLACH))
+        val flach = generate(FakeBackend(ascentPerKm = ::ascentByBearing), target(40.0, AscentPreference.FLACH))
         assertEquals(120.0, flach.last().bearingDeg, EPS)
+    }
+
+    // --- Profil-Durchreichung ---
+
+    @Test
+    fun `reicht das gewaehlte Profil bei jedem Routing-Aufruf durch`() {
+        val backend = FakeBackend()
+
+        val results = generate(backend, target(40.0), profile = RouteProfile.ASPHALT)
+
+        assertEquals(3, results.size)
+        assertEquals(3, backend.profiles.size)
+        assertTrue(backend.profiles.all { it == RouteProfile.ASPHALT })
+    }
+
+    @Test
+    fun `ohne Angabe wird mit dem Gravel-Profil gerechnet`() {
+        val backend = FakeBackend()
+
+        runSync {
+            generateRoutes(
+                backend = backend,
+                start = START,
+                target = target(40.0),
+                pauseMs = 0,
+                sleeper = {},
+            )
+        }
+
+        assertTrue(backend.profiles.isNotEmpty())
+        assertTrue(backend.profiles.all { it == RouteProfile.SCHOTTER })
     }
 
     // --- Fehlertoleranz ---
 
     @Test
-    fun `einzelner Serverfehler kostet nur diesen Kandidaten`() {
-        // Kandidat 2 (Request-Index 1) antwortet mit HTTP 500.
-        val client = FakeBrouter(failAt = setOf(1))
+    fun `einzelner Routing-Fehler kostet nur diesen Kandidaten`() {
+        // Kandidat 2 (Aufruf-Index 1) scheitert.
+        val backend = FakeBackend(failAt = setOf(1))
 
-        val results = generate(client, target(40.0))
+        val results = generate(backend, target(40.0))
 
         assertEquals(2, results.size)
         assertTrue(results.none { it.bearingDeg == 120.0 })
     }
 
     @Test
-    fun `einzelner Netzwerkfehler kostet nur diesen Kandidaten`() {
-        val client = FakeBrouter(throwAt = setOf(0))
+    fun `scheitern alle Kandidaten, wirft es auf Deutsch samt Ursache`() {
+        val backend = FakeBackend(
+            failAt = setOf(0, 1, 2),
+            failureMessage = "Routing-Server nicht erreichbar. Bist du online?",
+        )
 
-        val results = generate(client, target(40.0))
+        val error = assertFailsWith<Exception> { generate(backend, target(40.0)) }
 
-        assertEquals(2, results.size)
-        assertTrue(results.none { it.bearingDeg == 0.0 })
+        // Generische Meldung vorn, die konkrete Backend-Ursache in Klammern —
+        // daran unterscheidet die Oberflaeche „kein Netz" von „kein Weg".
+        assertTrue(error.message!!.startsWith(errorNoRouteFound), "war: ${error.message}")
+        assertTrue(error.message!!.contains("Routing-Server nicht erreichbar"))
+        assertTrue(error.cause is RuntimeException)
     }
 
     @Test
-    fun `scheitern alle Kandidaten, wirft es auf Deutsch`() {
-        val client = FakeBrouter(failAt = setOf(0, 1, 2))
+    fun `eine Coroutine-Cancellation wird nicht als Kandidatenfehler geschluckt`() {
+        val backend = RoutingBackend { _, _ -> throw CancellationException("abgebrochen") }
 
-        val error = assertFailsWith<Exception> { generate(client, target(40.0)) }
+        assertFailsWith<CancellationException> { generate(backend, target(40.0)) }
+    }
 
-        assertEquals(errorNoRouteFound, error.message)
-        assertTrue(error.message!!.contains("Runde"))
+    @Test
+    fun `wirft der Sleeper, verlaesst die Suche sofort`() {
+        class Abort : Exception("Routensuche abgebrochen.")
+
+        // Umwegfaktor 2,0 -> der erste Kandidat braeuchte einen zweiten
+        // Versuch; vor dem zweiten Aufruf laeuft der Sleeper und wirft.
+        val backend = FakeBackend(detourFactor = 2.0)
+
+        assertFailsWith<Abort> {
+            generate(backend, target(40.0), candidates = 2, sleeper = { throw Abort() })
+        }
+        assertEquals(1, backend.calls)
     }
 
     // --- Reproduzierbarkeit ---
 
     @Test
     fun `Seed 0 verteilt die Kandidaten auf 0, 120 und 240 Grad`() {
-        val results = generate(FakeBrouter(), target(40.0))
+        val results = generate(FakeBackend(), target(40.0))
 
         assertEquals(listOf(0.0, 120.0, 240.0), results.map { it.bearingDeg }.sorted())
     }
 
     @Test
     fun `gleicher Seed liefert exakt dieselben Runden`() {
-        val a = generate(FakeBrouter(), target(40.0), seed = 7)
-        val b = generate(FakeBrouter(), target(40.0), seed = 7)
+        val a = generate(FakeBackend(), target(40.0), seed = 7)
+        val b = generate(FakeBackend(), target(40.0), seed = 7)
 
         assertEquals(a.map { it.bearingDeg }, b.map { it.bearingDeg })
         assertEquals(a.map { it.distanceKm }, b.map { it.distanceKm })
@@ -358,8 +388,8 @@ class RouteGeneratorTest {
 
     @Test
     fun `Seed plus eins wuerfelt andere Runden`() {
-        val a = generate(FakeBrouter(), target(40.0), seed = 7)
-        val b = generate(FakeBrouter(), target(40.0), seed = 8)
+        val a = generate(FakeBackend(), target(40.0), seed = 7)
+        val b = generate(FakeBackend(), target(40.0), seed = 8)
 
         assertTrue(a.map { it.bearingDeg }.toSet() != b.map { it.bearingDeg }.toSet())
         assertTrue(a.first().route.points != b.first().route.points)
@@ -369,9 +399,9 @@ class RouteGeneratorTest {
 
     @Test
     fun `zu kurze Zieldistanz wird auf 5 km angehoben`() {
-        val client = FakeBrouter()
+        val backend = FakeBackend()
 
-        val results = generate(client, target(1.5), candidates = 1)
+        val results = generate(backend, target(1.5), candidates = 1)
 
         assertEquals(minRouteTargetKm, results[0].targetKm, EPS)
         assertEquals(1, results[0].hints.size)
@@ -381,9 +411,9 @@ class RouteGeneratorTest {
 
     @Test
     fun `zu lange Zieldistanz wird auf 200 km gedeckelt`() {
-        val client = FakeBrouter()
+        val backend = FakeBackend()
 
-        val results = generate(client, target(500.0), candidates = 1)
+        val results = generate(backend, target(500.0), candidates = 1)
 
         assertEquals(maxRouteTargetKm, results[0].targetKm, EPS)
         assertTrue(results[0].hints.single().contains("200 km gedeckelt"))
@@ -392,15 +422,15 @@ class RouteGeneratorTest {
 
     @Test
     fun `im Normalfall gibt es keine Hinweise`() {
-        val results = generate(FakeBrouter(), target(40.0), candidates = 1)
+        val results = generate(FakeBackend(), target(40.0), candidates = 1)
 
         assertTrue(results[0].hints.isEmpty())
     }
 
     @Test
     fun `Kandidatenzahl wird auf 1 bis 8 begrenzt`() {
-        assertEquals(8, generate(FakeBrouter(), target(40.0), candidates = 20).size)
-        assertEquals(1, generate(FakeBrouter(), target(40.0), candidates = 0).size)
+        assertEquals(8, generate(FakeBackend(), target(40.0), candidates = 20).size)
+        assertEquals(1, generate(FakeBackend(), target(40.0), candidates = 0).size)
     }
 
     // --- Betrieb ---
@@ -409,46 +439,28 @@ class RouteGeneratorTest {
     fun `onProgress meldet Start und jeden Kandidaten`() {
         val progress = mutableListOf<Pair<Int, Int>>()
 
-        generate(FakeBrouter(), target(40.0), onProgress = { done, total -> progress.add(done to total) })
+        generate(FakeBackend(), target(40.0), onProgress = { done, total -> progress.add(done to total) })
 
         assertEquals(listOf(0 to 3, 1 to 3, 2 to 3, 3 to 3), progress)
     }
 
     @Test
-    fun `zwischen zwei Server-Anfragen wird gewartet, davor nicht`() {
-        val sleeper = FakeSleeper()
-        // Umwegfaktor 2,0 -> zwei Requests je Kandidat, zwei Kandidaten = 4 Requests.
-        val client = FakeBrouter(detourFactor = 2.0)
+    fun `zwischen zwei Routing-Aufrufen wird gewartet, davor nicht`() {
+        val pauses = mutableListOf<Long>()
+        // Umwegfaktor 2,0 -> zwei Aufrufe je Kandidat, zwei Kandidaten = 4 Aufrufe.
+        val backend = FakeBackend(detourFactor = 2.0)
 
-        generate(client, target(40.0), candidates = 2, sleeper = sleeper)
+        generate(backend, target(40.0), candidates = 2, sleeper = { ms -> pauses.add(ms) })
 
-        assertEquals(4, client.routeRequests)
-        assertEquals(client.routeRequests - 1, sleeper.calls)
+        assertEquals(4, backend.calls)
+        assertEquals(backend.calls - 1, pauses.size)
     }
 
     @Test
-    fun `mit dem Gravel-Profil wird das Custom-Profil einmal hochgeladen`() {
-        val client = FakeBrouter()
+    fun `die Route traegt die Punkte der Backend-Antwort`() {
+        val backend = FakeBackend()
 
-        val results = generateRoutes(
-            client = client,
-            start = START,
-            target = target(40.0),
-            candidates = 3,
-            pauseMs = 0,
-            sleeper = {},
-        )
-
-        assertEquals(3, results.size)
-        assertEquals(1, client.profileUploads)
-        assertEquals(3, client.routeRequests)
-    }
-
-    @Test
-    fun `die Route traegt die Punkte der Server-Antwort`() {
-        val client = FakeBrouter()
-
-        val results = generate(client, target(40.0), candidates = 1)
+        val results = generate(backend, target(40.0), candidates = 1)
         val route = results[0].route
 
         // 3 oder 4 Via-Punkte plus Start am Anfang und am Ende.

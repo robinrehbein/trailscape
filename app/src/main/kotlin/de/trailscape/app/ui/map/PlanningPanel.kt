@@ -270,18 +270,19 @@ internal fun PlanningSheet(
                 RouteProfileDropdown(
                     profile = profile,
                     onProfileChange = onProfileChange,
-                    // Bei einer generierten Runde war das Dropdown ein toter
-                    // Knopf: Der Generator rechnet immer mit dem
-                    // Gravel-Profil, und eine fertige Runde laesst sich ohne
-                    // Wegpunkte auch nicht nachrechnen.
+                    // Bei einer generierten Runde bleibt das Dropdown aus:
+                    // Der Generator hat zwar mit genau diesem Profil gerechnet
+                    // (siehe `RouteGenerationController`), aber eine fertige
+                    // Runde hat keine Wegpunkte, mit denen sich ein Wechsel
+                    // nachrechnen liesse.
                     enabled = !generated,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (generated) {
                     Text(
-                        text = "Vorschläge berechnet Trailscape immer mit dem Gravel-Profil " +
-                            "„Schotter & Kieswege“. Das Routenprofil gilt wieder, sobald du " +
-                            "selbst Wegpunkte setzt.",
+                        text = "Diese Runde wurde mit dem oben gewählten Routenprofil " +
+                            "berechnet. Ändern lässt es sich wieder, sobald du selbst " +
+                            "Wegpunkte setzt.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
