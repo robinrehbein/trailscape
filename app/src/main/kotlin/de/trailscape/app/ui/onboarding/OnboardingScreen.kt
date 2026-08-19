@@ -318,10 +318,10 @@ private enum class OnboardingPage(
             // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
             // — „unten" zeigte also auf nichts. Der Satz sagt jetzt, dass sie
             // gleich kommt.
-            "Sobald die Einführung durch ist, führen unten fünf Tabs dorthin: Heute (die " +
-                "Empfehlung), Karte (aufzeichnen und planen), Touren (alles Gefahrene), " +
-                "Training (Plan und Auswertung) und Mehr (Profil, Import, " +
-                "Einstellungen).",
+            "Sobald die Einführung durch ist, führen unten vier Tabs dorthin: Heute (die " +
+                "Empfehlung), Karte (aufzeichnen, planen — und deine Touren, als " +
+                "aufziehbares Blatt), Training (Plan und Auswertung) und Mehr (Profil, " +
+                "Import, Einstellungen).",
             "Alles liegt auf deinem Gerät. Kein Konto, keine Anmeldung, keine Telemetrie. " +
                 "Ein eigener Sync-Server ist möglich, aber freiwillig.",
         ),

@@ -36,6 +36,13 @@ import de.trailscape.core.trainingPlanStorageKey
  *    in `:core` nutzt intern den eigenen Schluessel `"trailscape.sync"`
  *    (privates `STORAGE_KEY` in `SyncClient.kt`) — auch das ist bereits ein
  *    `de.trailscape.core`-eigener Name, keine Flutter-Altlast.
+ *
+ * Backup: Die Datei `trailscape_prefs.xml` ist in `res/xml/backup_rules.xml`
+ * und `res/xml/data_extraction_rules.xml` ausdruecklich vom Auto Backup und
+ * vom Geraetewechsel-Transfer AUSGESCHLOSSEN — sie enthaelt das Sync-Token im
+ * Klartext und die Vitalhistorie (Begruendung dort und in `PRIVACY.md`,
+ * Abschnitt 7). Wer hier einen neuen Schluessel anlegt, darf sich also darauf
+ * verlassen, dass er das Geraet nicht ueber das Systembackup verlaesst.
  */
 private const val PREFS_FILE_NAME = "trailscape_prefs"
 

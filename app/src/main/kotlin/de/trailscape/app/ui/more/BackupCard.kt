@@ -283,6 +283,21 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    Spacer(modifier = Modifier.height(8.dp))
+    // Ehrlicher Hinweis statt Modal-Dialog: Die Export-Datei ist bewusst
+    // unverschluesseltes Klartext-JSON (lesbar, importierbar, zukunftssicher) —
+    // aber genau deshalb muss hier stehen, was drinsteckt, BEVOR jemand sie
+    // per Mail oder Cloud weiterreicht. Siehe PRIVACY.md, Abschnitt 7.
+    Text(
+        text = "Die exportierte Datei ist unverschlüsseltes Klartext-JSON und enthält " +
+            "deine vollständige Ortshistorie (jeden GPS-Punkt aller Touren, mit " +
+            "Zeitstempeln und ggf. Puls) sowie dein Trainingsprofil mit " +
+            "Gesundheitsdaten (Alter, Geschlecht, Gewicht, Ruhepuls, LTHR, FTP). " +
+            "Behandle sie entsprechend vertraulich, wenn du sie per Mail oder Cloud " +
+            "weitergibst.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     Spacer(modifier = Modifier.height(12.dp))
 
     FlowRow(

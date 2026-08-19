@@ -6,10 +6,10 @@
 
     Ohne <include> sichert Android per Voreinstellung alles: SharedPreferences
     und <filesDir> — also die Touren unter `rides/` und das Trainingsprofil.
-    Genau das ist gewollt. `getCacheDir()`, `getCodeCacheDir()` und
-    `getNoBackupFilesDir()` nimmt Android ohnehin nie mit, sie brauchen hier
-    keinen Eintrag. Ausgenommen wird nur, was auf einem anderen Geraet falsch
-    oder zu gross waere:
+    Fuer die Touren ist genau das gewollt. `getCacheDir()`, `getCodeCacheDir()`
+    und `getNoBackupFilesDir()` nimmt Android ohnehin nie mit, sie brauchen
+    hier keinen Eintrag. Ausgenommen wird, was auf einem anderen Geraet falsch
+    oder zu gross waere — und was das Geraet nicht ungefragt verlassen darf:
 
     * `recording/` — das Journal einer LAUFENDEN Aufzeichnung inklusive
       Lock-Datei. Wird es auf einem zweiten Geraet eingespielt, meldet die App
@@ -36,6 +36,17 @@
       (`PRIVACY.md`), dass Absturzberichte das Geraet nur verlassen, wenn der
       Nutzer sie selbst verschickt — ueber Auto Backup taeten sie es sonst
       stillschweigend.
+    * `trailscape_prefs.xml` (SharedPreferences) — darin liegen das
+      Sync-Zugangstoken im Klartext (`trailscape.sync`, siehe
+      `core/SyncClient.kt`) und die lokale Vitalhistorie mit 400 Tagen
+      Ruhepuls/HRV/Schlaf/VO2max (`trailscape.vitals.v1`, siehe
+      `core/VitalsHistory.kt`). Beides gehoert nicht ungefragt in ein
+      Google-Cloud-Backup — `PRIVACY.md` verspricht, dass Zugangsdaten und
+      Gesundheitswerte das Geraet nur auf ausdruecklichen Wunsch verlassen.
+      Konsequenz, und zwar gewollt: Einstellungen und Trainingsprofil wandern
+      beim Geraetewechsel NICHT mehr automatisch mit; der dokumentierte Weg
+      dafuer ist der manuelle Backup-Export (Mehr → Daten & Backup). Die
+      Touren unter `rides/` bleiben im Auto Backup enthalten.
 -->
 <full-backup-content>
     <exclude domain="file" path="recording" />
@@ -45,4 +56,5 @@
     <exclude domain="file" path="mbgl-offline.db-shm" />
     <exclude domain="file" path="segments" />
     <exclude domain="file" path="brouter" />
+    <exclude domain="sharedpref" path="trailscape_prefs.xml" />
 </full-backup-content>

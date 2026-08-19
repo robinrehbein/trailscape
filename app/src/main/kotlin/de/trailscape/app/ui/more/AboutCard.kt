@@ -10,12 +10,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,11 +28,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.ISSUE_REPOSITORY_URL
 import de.trailscape.app.feedback.ProblemReportDialog
 import de.trailscape.app.ui.AppViewModel
@@ -74,6 +83,14 @@ private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
  *    sie gaebe es keinen Weg, die Frage „habe ich die neueste Version?"
  *    aktiv zu stellen: Die App kommt per Sideload, kein Store aktualisiert
  *    sie.
+ *  * **Schalter fuer den stillen Start-Check** — der einzige Netzzugriff der
+ *    App, der nicht direkt aus einer Nutzeraktion folgt, und deshalb hier
+ *    abschaltbar (siehe `UpdateChecker.isAutoCheckEnabled`). Er sitzt bewusst
+ *    direkt neben „Nach Updates suchen": Wer ihn ausschaltet, sieht im selben
+ *    Blick den Knopf, der die Pruefung weiterhin von Hand erlaubt. Geht ueber
+ *    [AppServices.updateChecker] statt ueber das ViewModel — der Schalter ist
+ *    reine Einstellung ohne App-Zustand, wie es auch `OfflineRoutingCard`
+ *    und `SyncCard` mit ihren Einstellungen halten.
  *  * **Problem melden** — der einzige Meldeweg dieser App (siehe
  *    `feedback/ProblemReportDialog.kt`). Es gibt keine Telemetrie, die von
  *    selbst berichtet; ohne diesen Knopf erfaehrt niemand von einem Fehler.
@@ -175,6 +192,8 @@ fun AboutCardContent(appViewModel: AppViewModel) {
         }
     }
 
+    AutoUpdateCheckRow()
+
     HorizontalDivider(
         modifier = Modifier.padding(vertical = 4.dp),
         color = MaterialTheme.colorScheme.outlineVariant,
@@ -221,6 +240,58 @@ fun AboutCardContent(appViewModel: AppViewModel) {
             healthDiagnostics = syncReport?.debugLines.orEmpty(),
             onDismiss = { showProblemDialog = false },
         )
+    }
+}
+
+/**
+ * Zeile mit Schalter fuer den stillen Update-Check beim App-Start (siehe
+ * Karten-KDoc oben). Aufbau wie `ReminderSwitchRow` in `ReminderCard.kt`:
+ * Die ganze Zeile schaltet (`toggleable` mit [Role.Switch]), der Schalter
+ * selbst meldet nicht (`onCheckedChange = null`), sonst kaeme das Ereignis
+ * doppelt.
+ *
+ * Der Zustand lebt direkt im [de.trailscape.app.update.UpdateChecker]
+ * (SharedPreferences); das `remember` haelt nur die Anzeige synchron. Lesen
+ * und Schreiben eines einzelnen Preference-Werts ist auf dem Main-Thread in
+ * Ordnung (`apply()` schreibt asynchron) — dieselbe Abwaegung wie bei den
+ * uebrigen Einstellungs-Schaltern im Mehr-Tab.
+ */
+@Composable
+private fun AutoUpdateCheckRow() {
+    val haptics = LocalHapticFeedback.current
+    var enabled by remember { mutableStateOf(AppServices.updateChecker.isAutoCheckEnabled()) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = enabled,
+                role = Role.Switch,
+                onValueChange = {
+                    haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                    AppServices.updateChecker.setAutoCheckEnabled(it)
+                    enabled = it
+                },
+            )
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Täglich still nach Updates suchen",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = "Fragt beim App-Start höchstens einmal am Tag die Release-Liste auf " +
+                    "github.com ab — GitHub sieht dabei deine IP-Adresse. Ausgeschaltet " +
+                    "bleibt die Prüfung über „Nach Updates suchen“ jederzeit von Hand " +
+                    "möglich.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Switch(checked = enabled, onCheckedChange = null)
     }
 }
 

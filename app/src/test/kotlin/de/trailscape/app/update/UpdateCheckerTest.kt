@@ -157,6 +157,55 @@ class UpdateCheckerTest {
         assertEquals(2, client.requests.size)
     }
 
+    // --- Abschaltbarer Start-Check ---
+
+    @Test
+    fun `die Vorgabe ist eingeschaltet`() {
+        assertTrue(checker().isAutoCheckEnabled())
+    }
+
+    @Test
+    fun `ausgeschaltet geht beim Start keine Anfrage hinaus`() {
+        val store = FakeStore()
+        val client = RecordingClient { HttpResponse(200, releasesJson("v2.0.150")) }
+        val c = checker(store = store, client = client)
+        c.setAutoCheckEnabled(false)
+
+        val result = c.startupCheck()
+        assertEquals(0, client.requests.size)
+        assertNull(result.noticeVersion)
+        assertNull(result.announceVersion)
+    }
+
+    @Test
+    fun `ausgeschaltet zaehlt weiter der zuletzt bekannte Stand`() {
+        val store = FakeStore()
+        val client = RecordingClient { HttpResponse(200, releasesJson("v2.0.150")) }
+        checker(store = store, client = client, now = 1_000L).startupCheck()
+
+        // Drosselung laengst abgelaufen — trotzdem kein zweiter Netzzugriff,
+        // aber die Karte steht weiter (Stand des letzten erfolgreichen Laufs).
+        val c = checker(store = store, client = client, now = 1_000L + UPDATE_CHECK_INTERVAL_MS)
+        c.setAutoCheckEnabled(false)
+        val result = c.startupCheck()
+        assertEquals(1, client.requests.size)
+        assertEquals("2.0.150", result.noticeVersion)
+        assertNull(result.announceVersion)
+    }
+
+    @Test
+    fun `die manuelle Pruefung geht auch mit ausgeschaltetem Start-Check`() {
+        val store = FakeStore()
+        val client = RecordingClient { HttpResponse(200, releasesJson("v2.0.150")) }
+        val c = checker(store = store, client = client)
+        c.setAutoCheckEnabled(false)
+        assertEquals(UpdateCheckResult.Available("2.0.150", 150), c.checkNow())
+        assertEquals(1, client.requests.size)
+        // Das Wiedereinschalten laesst den Start-Check wieder ans Netz.
+        c.setAutoCheckEnabled(true)
+        assertTrue(c.isAutoCheckEnabled())
+    }
+
     // --- Versionsvergleich ---
 
     @Test
