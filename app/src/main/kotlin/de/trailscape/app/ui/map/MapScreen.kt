@@ -75,6 +75,8 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.record.abbiegehinweiseAktiviert
 import de.trailscape.app.record.batterieAusnahmeIntent
+import de.trailscape.app.record.navCourseUpAktiviert
+import de.trailscape.app.record.setzeNavCourseUpAktiviert
 import de.trailscape.app.record.setzeSprachansagenAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.record.batterieHinweisGezeigt
@@ -113,11 +115,16 @@ import de.trailscape.core.RoutingSource
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
+import de.trailscape.core.NAV_ZOOM_NAH
 import de.trailscape.core.buildGpx
 import de.trailscape.core.computeStats
+import de.trailscape.core.daempfeKurs
 import de.trailscape.core.extractTurnHints
+import de.trailscape.core.glaetteZoom
 import de.trailscape.core.haversineM
+import de.trailscape.core.kursZwischen
 import de.trailscape.core.naechsteKurve
+import de.trailscape.core.zoomFuerTempo
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import de.trailscape.app.ui.rides.finishMarkers
@@ -137,12 +144,15 @@ import kotlinx.coroutines.withContext
  * # Karte — Aufzeichnung, Planung, Navigation und Offline-Ausschnitte
  *
  * Zur laufenden Aufzeichnung gehoert neben der Live-Leiste der **Fahrmodus**
- * (`RideModeScreen.kt`): dieselben Werte, aber gross genug fuer den Blick aus
- * einem Meter. Er haelt hier nur ein `Boolean` (`rideMode`) — Zustand,
- * Kommandos und Navigationswerte bleiben die dieses Screens. Er ist fuer eine
- * Aufzeichnung der Normalfall: Startet sie durch eine Nutzeraktion in dieser
- * Sitzung, oeffnet er direkt (siehe `runRecording()`), nicht erst ueber einen
- * eigenen Knopf in der Live-Leiste.
+ * mit seinen zwei Seiten (siehe [RideModeSeite]): der grossen Datenseite
+ * (`RideModeScreen.kt`, dieselben Werte, aber gross genug fuer den Blick aus
+ * einem Meter) und der Kartenseite NAVI_KARTE (die Karte selbst mit
+ * Kompaktleiste aus `RideCompactBar.kt` und — falls navigiert wird — dem
+ * HUD). Der Fahrmodus haelt hier nur diesen Seiten-Zustand (`rideModeSeite`)
+ * — Zustand, Kommandos und Navigationswerte bleiben die dieses Screens. Er
+ * ist fuer eine Aufzeichnung der Normalfall: Startet sie durch eine
+ * Nutzeraktion in dieser Sitzung, oeffnet er direkt (siehe `runRecording()`),
+ * nicht erst ueber einen eigenen Knopf in der Live-Leiste.
  *
  * Port von `lib/screens/map_screen.dart` (2154 Zeilen) auf Compose und
  * MapLibre. Der Screen selbst haelt nur den *Bildschirmzustand* (Planungsmodus,
@@ -528,6 +538,24 @@ fun MapScreen(appViewModel: AppViewModel) {
     // `glaetteTempo` in `NavigationHud.kt`), `null` solange keins bekannt ist.
     var navTempoKmh by remember { mutableStateOf<Double?>(null) }
 
+    // Zustand der Navi-Kamera (Kernrechnung in `:core`, `NavCamera.kt`) —
+    // geschrieben vom Navigations-Effekt je Positionsupdate: der gedaempfte
+    // Fahrkurs in Grad (im Stand eingefroren, damit die Karte an der Ampel
+    // nicht kreiselt), der geglaettete Tempo-Zoom und die letzte
+    // Navi-Position, damit „Re-zentrieren" und der Kompass-Umschalter sofort
+    // fahren koennen statt auf den naechsten GPS-Punkt zu warten.
+    var navKurs by remember { mutableStateOf<Double?>(null) }
+    var navZoom by remember { mutableStateOf<Double?>(null) }
+    var navPosition by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+
+    // Kompass-Verhalten der Navi-Kamera: Fahrtrichtung oben (Default) oder
+    // Nord oben. Die Wahrheit liegt in den Prefs
+    // (`record/RecordingSettings.kt`, Schluessel `trailscape.nav.courseUp`);
+    // hier die Bildschirm-Kopie fuer den Kompass-Knopf — dasselbe Muster wie
+    // [sprachansagenAn] direkt darunter. Ausserhalb der Navigation bleibt die
+    // Karte unabhaengig davon bei Nord oben.
+    var navCourseUp by remember { mutableStateOf(navCourseUpAktiviert(context)) }
+
     // Der Hauptschalter „Sprachansagen" als Bildschirmzustand fuer den
     // Lautsprecher-Knopf im HUD. Die Wahrheit liegt in den Prefs
     // (`record/RecordingSettings.kt`, dieselben, die Mehr → Aufzeichnung
@@ -540,10 +568,20 @@ fun MapScreen(appViewModel: AppViewModel) {
     var liveAscentM by remember { mutableStateOf(0.0) }
     var hoverPoint by remember { mutableStateOf<TrackPoint?>(null) }
 
-    // Ob der Fahrmodus (`RideModeScreen.kt`) ueber der Karte liegt. Bewusst
-    // `rememberSaveable`: Eine Drehung am Lenker darf nicht dazu fuehren, dass
-    // die Fahrerin ploetzlich wieder die kleine Live-Leiste vor sich hat.
-    var rideMode by rememberSaveable { mutableStateOf(false) }
+    // Welche Seite des Fahrmodus offen ist (siehe [RideModeSeite]): KEINE
+    // (normale Karte mit Live-Leiste), DATEN (der grosse Dialog aus
+    // `RideModeScreen.kt`) oder NAVI_KARTE (die Karte selbst mit
+    // Kompaktleiste, `RideCompactBar.kt`, und — falls navigiert wird — dem
+    // HUD). Ersetzt das fruehere `rideMode: Boolean`; nur bei laufender
+    // Aufzeichnung relevant. Bewusst `rememberSaveable`: Eine Drehung am
+    // Lenker darf nicht dazu fuehren, dass die Fahrerin ploetzlich wieder die
+    // kleine Live-Leiste vor sich hat.
+    var rideModeSeite by rememberSaveable { mutableStateOf(RideModeSeite.KEINE) }
+
+    // Ob die Kartenseite des Fahrmodus gerade wirklich zu sehen ist — die
+    // eine Bedingung, an der Kompaktleiste, KeepScreenOn und die
+    // Zurueck-Geste dieser Seite haengen.
+    val naviKarteAktiv = rideModeSeite == RideModeSeite.NAVI_KARTE && isRecording
 
     // Ob der einmalige Batterieoptimierungs-Hinweis gerade offen ist (siehe
     // `BatteryNoticeDialog.kt`). Gesetzt in [runRecording], wenn die Ausnahme
@@ -754,6 +792,10 @@ fun MapScreen(appViewModel: AppViewModel) {
         // Wer die Karte selbst verschoben hat, will sie dort haben — auch
         // waehrend der Aufzeichnung. Der Positions-Knopf holt sie zurueck.
         if (!followMe) return@LaunchedEffect
+        // Waehrend einer Navigation fuehrt die Navi-Kamera im
+        // Navigations-Effekt (course-up, Tempo-Zoom, unteres Drittel) — ein
+        // zweiter Kamerazug je Punkt wuerde nur gegen sie ankaempfen.
+        if (navTarget != null) return@LaunchedEffect
         val last = livePoints.lastOrNull() ?: return@LaunchedEffect
         controller.moveTo(
             lat = last.lat,
@@ -765,9 +807,9 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     // Der Fahrmodus ist nur eine andere Ansicht auf dieselbe Aufzeichnung —
     // endet sie (auch ueber die Notification oder den Aufnahmeknopf), gibt es
-    // nichts mehr anzuzeigen, und er schliesst sich mit ihr.
+    // nichts mehr anzuzeigen, und beide Seiten schliessen sich mit ihr.
     LaunchedEffect(isRecording) {
-        if (!isRecording) rideMode = false
+        if (!isRecording) rideModeSeite = RideModeSeite.KEINE
     }
 
     LaunchedEffect(livePoints.size) {
@@ -936,17 +978,73 @@ fun MapScreen(appViewModel: AppViewModel) {
 
         var wasOffRoute = false
         var zielGemeldet = false
+        var vorherLat: Double? = null
+        var vorherLon: Double? = null
+        var vorherZeitMs = 0L
         positions.collect { (lat, lon) ->
             val state = navigator.update(lat, lon)
             navState = state
-            // Tempo fuer die Restzeit im HUD gleitend mitteln — je
-            // Positionsupdate, damit die Schaetzung dem Fahren folgt, ohne
-            // mit jedem GPS-Zacken zu springen.
-            navTempoKmh = glaetteTempo(navTempoKmh, RecordingRepository.speedKmh.value)
-            // `followMe` wird hier bei jedem Punkt frisch gelesen (kein
-            // Effekt-Schluessel): Der Navigator soll beim Umschalten
-            // weiterlaufen, nur die Kamera haelt sich zurueck.
-            if (followMe) controller.moveTo(lat, lon, minZoom = null, animate = false)
+            navPosition = lat to lon
+
+            // Tempo: bevorzugt aus der laufenden Aufzeichnung, ohne sie aus
+            // dem Weg zwischen den letzten beiden Fixes — Zoom und
+            // Kurs-Einfrieren der Navi-Kamera brauchen in beiden Faellen
+            // eine Zahl. Fuer die Restzeit im HUD wie bisher gleitend
+            // gemittelt (`glaetteTempo`).
+            val jetztMs = System.currentTimeMillis()
+            val vLat = vorherLat
+            val vLon = vorherLon
+            val schrittM = if (vLat != null && vLon != null) {
+                haversineM(TrackPoint(lat = vLat, lon = vLon), TrackPoint(lat = lat, lon = lon))
+            } else {
+                null
+            }
+            val schrittS = (jetztMs - vorherZeitMs) / 1000.0
+            val tempoRohKmh = RecordingRepository.speedKmh.value
+                ?: schrittM?.takeIf { vorherZeitMs > 0L && schrittS > 0.0 }
+                    ?.let { it / schrittS * 3.6 }
+            navTempoKmh = glaetteTempo(navTempoKmh, tempoRohKmh)
+
+            // Der Fahrkurs kommt aus den letzten beiden Fixes
+            // (Aufzeichnungspunkte tragen keinen GPS-Kurs); unterhalb weniger
+            // Meter Schritt ist die Richtung reines Rauschen und bleibt
+            // draussen. Daempfung samt Wraparound und Einfrieren im Stand in
+            // `:core` (`daempfeKurs`), ebenso der Tempo-Zoom.
+            val kursRoh = if (vLat != null && vLon != null &&
+                schrittM != null && schrittM >= NAV_KURS_MIN_SCHRITT_M
+            ) {
+                kursZwischen(vLat, vLon, lat, lon)
+            } else {
+                null
+            }
+            navKurs = daempfeKurs(navKurs, kursRoh, tempoRohKmh)
+            navZoom = glaetteZoom(navZoom, zoomFuerTempo(navTempoKmh))
+            vorherLat = lat
+            vorherLon = lon
+            vorherZeitMs = jetztMs
+
+            // `followMe` (und die uebrigen Kamera-Zustaende) werden hier bei
+            // jedem Punkt frisch gelesen (kein Effekt-Schluessel): Der
+            // Navigator soll beim Umschalten weiterlaufen, nur die Kamera
+            // haelt sich zurueck.
+            if (followMe) {
+                val anker = target.points.getOrNull(state.nearestIndex)
+                if (state.offRoute && anker != null) {
+                    // Abseits: so weit heraus, dass Position UND der naechste
+                    // Routenpunkt gemeinsam im Bild stehen (Zoomgrenzen und
+                    // Klemmung in `:core`); wieder auf der Route uebernimmt
+                    // die normale Navi-Kamera.
+                    controller.frameOffRoute(lat, lon, anker.lat, anker.lon)
+                } else {
+                    controller.moveToNavCamera(
+                        lat = lat,
+                        lon = lon,
+                        zoom = navZoom ?: NAV_ZOOM_NAH,
+                        bearingGrad = if (navCourseUp) navKurs ?: 0.0 else 0.0,
+                        versatz = navCourseUp,
+                    )
+                }
+            }
             if (state.offRoute && !wasOffRoute) {
                 appViewModel.showMessage("Achtung: Du bist abseits der Route.")
                 // Die Snackbar ist im Fahrmodus (eigenes Dialog-Fenster)
@@ -994,6 +1092,12 @@ fun MapScreen(appViewModel: AppViewModel) {
             navState = null
             navRideId = null
             navLabel = null
+            navKurs = null
+            navZoom = null
+            navPosition = null
+            // Auch hier die Navi-Kamera zuruecknehmen (Kurs Nord, Versatz
+            // weg) — dieselbe Aufraeumarbeit wie in [stopNavigation].
+            controller.resetNavCamera()
             mode = MapMode.ERKUNDEN
         }
     }
@@ -1037,6 +1141,15 @@ fun MapScreen(appViewModel: AppViewModel) {
         navTotalKm = 0.0
         navRideId = null
         navLabel = null
+        navKurs = null
+        navZoom = null
+        navPosition = null
+        navTempoKmh = null
+        // Die Navi-Kamera raeumt sich weg: Kurs zurueck auf Nord, der
+        // Drittel-Versatz (Kamera-Padding) auf null — danach verhaelt sich
+        // die Karte wieder exakt wie vor der Navigation. Eine laufende
+        // Aufzeichnung laeuft unbeirrt weiter; nur die Fuehrung endet.
+        controller.resetNavCamera()
         if (mode == MapMode.NAVIGIEREN) mode = MapMode.ERKUNDEN
     }
 
@@ -1177,15 +1290,18 @@ fun MapScreen(appViewModel: AppViewModel) {
      * weiter, nur die Tourauswahl wird gleich darunter geloescht (siehe
      * `appViewModel.select(null)`).
      *
-     * ## Warum hier `rideMode = true` gesetzt wird
+     * ## Warum hier die Fahrmodus-Seite gesetzt wird
      * Diese Funktion laeuft ausschliesslich, wenn eine Nutzeraktion in dieser
      * Sitzung die Aufzeichnung tatsaechlich in Gang setzt — ueber den gruenen
-     * Aufnahme-Knopf oder die von der Startseite gereichte Bitte (siehe
-     * [pendingRecordStart] weiter unten), beide ueber [startRecording] und
-     * damit [withPermissions]. Der Fahrmodus ist fuer eine Aufzeichnung der
-     * Normalfall, nicht ein Angebot, das erst gefunden werden muss — deshalb
-     * oeffnet er direkt an der Stelle, an der die Aufzeichnung wirklich
-     * beginnt. Bewusst **hier** und nicht in einem `LaunchedEffect` auf
+     * Aufnahme-Knopf, die von der Startseite gereichte Bitte (siehe
+     * [pendingRecordStart] weiter unten) oder den automatischen Mitstart
+     * beim Navigieren (siehe [starteNavigationsAnsicht]), alle ueber
+     * [startRecording] und damit [withPermissions]. Der Fahrmodus ist fuer
+     * eine Aufzeichnung der Normalfall, nicht ein Angebot, das erst gefunden
+     * werden muss — deshalb oeffnet er direkt an der Stelle, an der die
+     * Aufzeichnung wirklich beginnt: Bei laufender Navigation die
+     * NAVI_KARTE-Seite (Karte mit HUD und Kompaktleiste), sonst die
+     * Datenseite. Bewusst **hier** und nicht in einem `LaunchedEffect` auf
      * [isRecording]: Ein solcher Effekt liefe auch dann, wenn eine laengst
      * laufende Aufzeichnung nur durch Tab-Wechsel oder Drehung wieder in die
      * Komposition kommt — genau das darf den Fahrmodus nicht von selbst
@@ -1209,7 +1325,14 @@ fun MapScreen(appViewModel: AppViewModel) {
         selectedPlace = null
         hoverPoint = null
         appViewModel.select(null)
-        rideMode = true
+        // Laeuft eine Navigation, oeffnet direkt die Kartenseite des
+        // Fahrmodus — die Fuehrung (HUD, Navi-Kamera) ist dann wichtiger als
+        // die grossen Zahlen. Ohne Navigation wie gehabt die Datenseite.
+        rideModeSeite = if (navTarget != null) {
+            RideModeSeite.NAVI_KARTE
+        } else {
+            RideModeSeite.DATEN
+        }
         RecordingRepository.start(context)
         // Nach dem Start, nicht statt des Starts: Der Batterie-Hinweis ist
         // eine Empfehlung, keine Huerde — und er kommt hoechstens einmal
@@ -1247,6 +1370,31 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     fun goToMyPosition() {
         withPermissions(PendingAction.LOCATE) { runGoToMyPosition() }
+    }
+
+    /**
+     * „Re-zentrieren" ([RezentrierenChip]): holt die Navi-Kamera zurueck,
+     * nachdem die Karte selbst verschoben oder gezoomt wurde (das pausiert
+     * das Folgen, siehe `onUserPan`). Faehrt sofort auf die letzte bekannte
+     * Navi-Position statt auf den naechsten GPS-Punkt zu warten; ohne
+     * laufende Navigation (Kartenseite des Fahrmodus ohne Ziel) einfach
+     * zurueck auf den letzten Aufzeichnungspunkt mit der heutigen Kamera.
+     */
+    fun rezentriereNaviKamera() {
+        followMe = true
+        if (navTarget == null) {
+            livePoints.lastOrNull()?.let { controller.moveTo(it.lat, it.lon, minZoom = null) }
+            return
+        }
+        navPosition?.let { (lat, lon) ->
+            controller.moveToNavCamera(
+                lat = lat,
+                lon = lon,
+                zoom = navZoom ?: NAV_ZOOM_NAH,
+                bearingGrad = if (navCourseUp) navKurs ?: 0.0 else 0.0,
+                versatz = navCourseUp,
+            )
+        }
     }
 
     fun runUseMyPositionAsStart() {
@@ -1626,6 +1774,16 @@ fun MapScreen(appViewModel: AppViewModel) {
      *    auf einen frischen Fix (ersatzweise den letzten bekannten Standort),
      *    nicht erst beim naechsten GPS-Punkt des Navigations-Effekts. Wer
      *    zwischenzeitlich selbst pannt, gewinnt — dann bleibt die Kamera weg.
+     *    Ab dem ersten GPS-Punkt uebernimmt die **Navi-Kamera** des
+     *    Navigations-Effekts: course-up (sofern nicht auf Nord oben
+     *    umgeschaltet), Zoom nach Tempo, Position im unteren Drittel.
+     *  * **Aufzeichnung startet automatisch mit** (Komoot-Muster): ohne
+     *    laufende Aufzeichnung ueber [startRecording] samt Berechtigungs-
+     *    und Batteriefluss; mit laufender wechselt nur die Ansicht. In
+     *    beiden Faellen landet die Fahrt auf der NAVI_KARTE-Seite des
+     *    Fahrmodus. „Beenden" im HUD beendet weiterhin NUR die Navigation —
+     *    die Aufzeichnung endet ausschliesslich ueber ihre eigenen Knoepfe
+     *    (Kompaktleiste bzw. Datenseite, mit der Kreuz-Rueckfrage).
      *  * **Einmaliger Hinweis, wenn die Sprachansagen aus sind**: Wer
      *    „Navigieren" tippt, erwartet Ansagen; deren Hauptschalter steht ab
      *    Werk aber bewusst auf AUS (siehe `record/RecordingSettings.kt`). Die
@@ -1639,10 +1797,25 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun starteNavigationsAnsicht() {
         followMe = true
+        // Die gemerkte Kompass-Wahl frisch einlesen — wie [sprachansagenAn]
+        // kann sie sich seit dem letzten Navigationsstart geaendert haben.
+        navCourseUp = navCourseUpAktiviert(context)
         if (!sprachansagenAktiviert(context)) {
             appViewModel.showMessage(
                 "Sprachansagen sind aus — hier im HUD oder unter Mehr → Aufzeichnung einschalten.",
             )
+        }
+        // Komoot-Muster: Eine Navigation zeichnet automatisch mit auf.
+        // Laeuft schon eine Aufzeichnung, wechselt nur die Ansicht auf die
+        // Kartenseite des Fahrmodus; sonst startet die Aufzeichnung ueber den
+        // bestehenden Pfad ([startRecording], inklusive Berechtigungs- und
+        // Batteriefluss) und landet ueber [runRecording] ebenfalls dort.
+        // Wird die Berechtigung verweigert, laeuft die Navigation trotzdem —
+        // nur eben ohne Aufzeichnung ([withPermissions] blockiert nichts).
+        if (isRecording) {
+            rideModeSeite = RideModeSeite.NAVI_KARTE
+        } else {
+            startRecording()
         }
         scope.launch {
             val position = currentLocation(context)?.let { it.latitude to it.longitude }
@@ -1915,6 +2088,16 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
+    // Zurueck auf der Kartenseite des Fahrmodus fuehrt zur Datenseite —
+    // NICHT zum Beenden der Aufzeichnung oder aus dem Fahrmodus heraus.
+    // Bewusst ein eigener, NACH dem allgemeinen `BackHandler` komponierter
+    // Handler: Der zuletzt komponierte gewinnt, sobald er aktiviert ist, und
+    // waehrend der Aufzeichnung ist ohnehin keiner der obigen Zustaende
+    // erreichbar.
+    BackHandler(enabled = naviKarteAktiv) {
+        rideModeSeite = RideModeSeite.DATEN
+    }
+
     // ------------------------------------------------------------------ Aufbau
     val density = LocalDensity.current
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
@@ -2007,12 +2190,21 @@ fun MapScreen(appViewModel: AppViewModel) {
                 onMapTap = ::onMapTap,
                 onUserPan = { followMe = false },
                 modifier = Modifier.fillMaxSize(),
-                // Im Fahrmodus liegt die Karte vollstaendig verdeckt dahinter.
-                // Sie dann weiterzeichnen zu lassen waere ausgerechnet in dem
-                // Modus teuer, der fuer mehrstuendige Touren gedacht ist — und
-                // der ohnehin schon den Bildschirm anlaesst.
-                renderingActive = !rideMode,
+                // Hinter der Datenseite des Fahrmodus liegt die Karte
+                // vollstaendig verdeckt. Sie dann weiterzeichnen zu lassen
+                // waere ausgerechnet in dem Modus teuer, der fuer
+                // mehrstuendige Touren gedacht ist — und der ohnehin schon
+                // den Bildschirm anlaesst. Auf der NAVI_KARTE-Seite ist die
+                // Karte dagegen die Hauptdarstellerin und zeichnet natuerlich.
+                renderingActive = rideModeSeite != RideModeSeite.DATEN,
             )
+
+            // Auch die Kartenseite des Fahrmodus haelt den Bildschirm an —
+            // dieselbe Lenker-Situation wie im Dialog, nur mit Karte statt
+            // grosser Zahlen (KeepScreenOn wohnt in `RideModeScreen.kt`).
+            if (naviKarteAktiv) {
+                KeepScreenOn()
+            }
 
             // ------------------------------------------------------------ oben
             Column(
@@ -2066,6 +2258,37 @@ fun MapScreen(appViewModel: AppViewModel) {
                         },
                         onStop = ::stopNavigation,
                     )
+                    // Der Kompass-Umschalter der Navi-Kamera, rechtsbuendig
+                    // unter dem HUD: Fahrtrichtung oben <-> Nord oben; die
+                    // Wahl wandert in die Prefs und gilt fuer jede weitere
+                    // Navigation. Beim Umschalten faehrt die Kamera sofort —
+                    // nicht erst mit dem naechsten GPS-Punkt.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        NavKompassKnopf(
+                            courseUp = navCourseUp,
+                            onToggle = {
+                                val neu = !navCourseUp
+                                setzeNavCourseUpAktiviert(context, neu)
+                                navCourseUp = neu
+                                if (!neu) {
+                                    controller.resetNavCamera()
+                                } else if (followMe) {
+                                    navPosition?.let { (lat, lon) ->
+                                        controller.moveToNavCamera(
+                                            lat = lat,
+                                            lon = lon,
+                                            zoom = navZoom ?: NAV_ZOOM_NAH,
+                                            bearingGrad = navKurs ?: 0.0,
+                                            versatz = true,
+                                        )
+                                    }
+                                }
+                            },
+                        )
+                    }
                 }
 
                 // Die Rundenwahl stand hier — als Karte im oberen Stapel,
@@ -2097,7 +2320,41 @@ fun MapScreen(appViewModel: AppViewModel) {
             // halb verdeckte. Ein Suchtreffer ist ausserdem genau der Moment, in
             // dem niemand die Aufnahme- oder Standortknoepfe braucht — und
             // sobald die Suche zu ist, steht alles unveraendert wieder da.
-            if (!searchOpen) {
+            //
+            // Auf der NAVI_KARTE-Seite des Fahrmodus weicht der ganze Stapel
+            // der Kompaktleiste: Karte und Fuehrung sind dort die Hauptsache,
+            // Live-Leiste, Blaetter und die runden Knoepfe wuerden sie nur
+            // verstellen (Beenden/Pause wohnen in der Leiste, „Re-zentrieren"
+            // ersetzt den Positions-Knopf).
+            if (naviKarteAktiv) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .widthIn(max = ContentMaxWidth)
+                        .fillMaxWidth()
+                        .padding(OverlayScreenPadding)
+                        // Dieselbe Bodenfreiheit fuer die schwebende
+                        // Navigationskapsel wie beim normalen Stapel.
+                        .padding(bottom = LocalFloatingNavigationBarSpace.current),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (!followMe) {
+                        RezentrierenChip(onClick = ::rezentriereNaviKamera)
+                        Spacer(Modifier.height(OverlayGap))
+                    }
+                    RideCompactBar(
+                        speedKmh = speedKmh,
+                        distanceKm = recordedKm,
+                        ascentM = liveAscentM,
+                        elapsedS = (elapsedMs / 1000).toInt(),
+                        paused = isPaused,
+                        autoPaused = isAutoPaused,
+                        onTogglePause = { RecordingRepository.togglePause() },
+                        onStop = { RecordingRepository.stop() },
+                        onShowData = { rideModeSeite = RideModeSeite.DATEN },
+                    )
+                }
+            } else if (!searchOpen) {
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -2132,6 +2389,16 @@ fun MapScreen(appViewModel: AppViewModel) {
                             .onSizeChanged { overlayHeaderPx = it.height },
                         horizontalAlignment = Alignment.End,
                     ) {
+                        // Waehrend einer Navigation mit selbst verschobener
+                        // Karte: der Rueckweg in die Navi-Kamera — derselbe
+                        // Chip wie auf der NAVI_KARTE-Seite.
+                        if (navTarget != null && !followMe) {
+                            RezentrierenChip(
+                                onClick = ::rezentriereNaviKamera,
+                                modifier = Modifier.align(Alignment.CenterHorizontally),
+                            )
+                            Spacer(Modifier.height(12.dp))
+                        }
                         RecordButton(
                             recording = isRecording,
                             onClick = {
@@ -2153,7 +2420,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 autoPaused = isAutoPaused,
                                 onTogglePause = { RecordingRepository.togglePause() },
                                 onStop = { RecordingRepository.stop() },
-                                onOpenRideMode = { rideMode = true },
+                                onOpenRideMode = { rideModeSeite = RideModeSeite.DATEN },
                             )
 
                             ride != null -> RideCard(
@@ -2433,7 +2700,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // bekommt ausschliesslich fertige Werte: dieselben Aufzeichnungs-Flows wie
     // die Live-Leiste und den Navigationszustand, den der Effekt oben aus dem
     // `RouteNavigator` (`:core`) mitschreibt. Gerechnet wird dort nichts.
-    if (rideMode && isRecording) {
+    if (rideModeSeite == RideModeSeite.DATEN && isRecording) {
         RideModeScreen(
             speedKmh = speedKmh,
             distanceKm = recordedKm,
@@ -2455,10 +2722,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // Zurueck auf die Karte: Nach dem Stopp waehlt das AppViewModel
                 // die gespeicherte Tour aus und meldet sie — das gehoert auf
                 // die Karte, nicht hinter eine leere Fahranzeige.
-                rideMode = false
+                rideModeSeite = RideModeSeite.KEINE
                 RecordingRepository.stop()
             },
-            onClose = { rideMode = false },
+            onClose = { rideModeSeite = RideModeSeite.KEINE },
+            // „Karte" wechselt zur NAVI_KARTE-Seite dieses Screens (Dialog
+            // zu, Kompaktleiste an) — der Fahrmodus endet dabei nicht.
+            onShowMap = { rideModeSeite = RideModeSeite.NAVI_KARTE },
         )
     }
 
@@ -2575,6 +2845,30 @@ private enum class PendingAction {
     NAVIGATE_RIDE,
     NAVIGATE_ROUTE,
     GENERATE_ROUTES,
+}
+
+/**
+ * Die Seiten des Fahrmodus waehrend einer laufenden Aufzeichnung.
+ *
+ * Der Fahrmodus ist EIN Modus mit zwei Ansichten: [DATEN] ist der grosse
+ * Vollbild-Dialog (`RideModeScreen.kt`), [NAVI_KARTE] die Karte selbst mit
+ * Kompaktleiste (`RideCompactBar.kt`), HUD (falls navigiert wird) und
+ * KeepScreenOn — bewusst KEIN zweites Karten-Composable im Dialog, sondern
+ * ein Zustand dieses Screens, in dem der Dialog schlicht zu ist. [KEINE] ist
+ * die normale Karte mit der kleinen Live-Leiste (der Rueckweg, wenn der
+ * Fahrmodus per Zurueck-Geste verlassen wurde).
+ *
+ * Gewechselt wird ueber den „Karte"-Knopf bzw. die Wischgeste der Datenseite
+ * (→ [NAVI_KARTE]), den „Daten"-Knopf der Kompaktleiste und die
+ * Zurueck-Geste der Kartenseite (→ [DATEN]) sowie die Zurueck-Geste der
+ * Datenseite (→ [KEINE]). Enum statt zweier Booleans, damit sich Dialog und
+ * Karten-Overlay nie gleichzeitig fuer zustaendig halten; als `Serializable`
+ * bundle-faehig fuer `rememberSaveable` (dasselbe Muster wie [MapMode]).
+ */
+private enum class RideModeSeite {
+    KEINE,
+    DATEN,
+    NAVI_KARTE,
 }
 
 /** Was gerade navigiert wird — eine gespeicherte Tour oder die geplante Route. */
@@ -2936,6 +3230,14 @@ private const val SEARCH_DEBOUNCE_MS = 450L
 
 /** Zoomstufe des einmaligen automatischen Erst-Zooms auf die Position. */
 private const val AUTO_LOCATION_ZOOM = 13.0
+
+/**
+ * Mindestschritt (Meter) zwischen zwei Fixes, damit ihre Verbindungslinie
+ * als Fahrkurs zaehlt — darunter dominiert das GPS-Zittern die Richtung.
+ * Zusaetzlich zur Tempo-Schwelle in `daempfeKurs` (`:core`), die das
+ * Einfrieren im Stand regelt: Diese hier filtert schon den Rohwert.
+ */
+private const val NAV_KURS_MIN_SCHRITT_M = 2.0
 
 /**
  * Toleranz (Grad), innerhalb derer die Kamera noch als „am Deutschland-

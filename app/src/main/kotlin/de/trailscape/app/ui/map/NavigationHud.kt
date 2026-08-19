@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,9 +9,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Straight
 import androidx.compose.material.icons.filled.TurnLeft
 import androidx.compose.material.icons.filled.TurnRight
@@ -244,6 +248,85 @@ private fun OffRouteBanner() {
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
+    }
+}
+
+/**
+ * Der schlichte Kompass-Umschalter der Navi-Kamera: Fahrtrichtung oben
+ * (course-up, gefuellt in `primary`) oder Nord oben (blass). Er steht nur
+ * waehrend einer Navigation auf der Karte — ausserhalb ist die Karte ohnehin
+ * immer Nord oben — und schreibt seine Wahl in die Prefs
+ * (`record/RecordingSettings.kt`, `trailscape.nav.courseUp`), damit die
+ * naechste Navigation gleich richtig startet.
+ */
+@Composable
+internal fun NavKompassKnopf(
+    courseUp: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onToggle,
+        modifier = modifier.size(44.dp),
+        shape = CircleShape,
+        color = if (courseUp) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        contentColor = if (courseUp) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            MaterialTheme.colorScheme.primary
+        },
+        shadowElevation = 2.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Filled.Explore,
+                contentDescription = if (courseUp) {
+                    "Fahrtrichtung oben – auf Norden oben umschalten"
+                } else {
+                    "Norden oben – auf Fahrtrichtung oben umschalten"
+                },
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+/**
+ * „Re-zentrieren" — der Rueckweg in die Navi-Kamera, nachdem die Karte selbst
+ * verschoben oder gezoomt wurde (das Verschieben pausiert das Folgen, siehe
+ * `followMe` in `MapScreen.kt`). Sitzt ueber der Kompaktleiste bzw. am
+ * unteren Kartenrand — dort, wo der Daumen ohnehin ist — und ist dieselbe
+ * Pillen-Sprache wie die uebrigen Chips der App.
+ */
+@Composable
+internal fun RezentrierenChip(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        shadowElevation = 2.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.MyLocation,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Re-zentrieren",
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
     }
 }
 

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -122,10 +124,12 @@ import kotlin.math.roundToInt
  * **Pause/Weiter** wirkt sofort — ein versehentlicher Griff dorthin kostet ein
  * paar Sekunden Fahrzeit und sonst nichts. **Beenden** dagegen fragt zurueck
  * (siehe [StopConfirmation]), denn dieser Fehlgriff kostet die ganze Tour.
- * Zurueck zur Karte geht es ueber den beschrifteten Knopf in der Kopfzeile und
- * ueber die Zurueck-Geste ([BackHandler]) — beides ohne jede Wirkung auf die
- * Aufzeichnung, die als Vordergrunddienst ohnehin unabhaengig von dieser
- * Ansicht weiterlaeuft.
+ * Der beschriftete Knopf „Karte" in der Kopfzeile und ein horizontales
+ * Wischen wechseln zur **Kartenseite des Fahrmodus** (NAVI_KARTE in
+ * `MapScreen.kt`: Karte mit Kompaktleiste, KeepScreenOn bleibt an); die
+ * Zurueck-Geste ([BackHandler]) verlaesst den Fahrmodus ganz — alles ohne
+ * jede Wirkung auf die Aufzeichnung, die als Vordergrunddienst ohnehin
+ * unabhaengig von dieser Ansicht weiterlaeuft.
  *
  * Die Formen sind One UI: Bedienflaechen und Status-Chip sind volle Pillen und
  * erben sie von `MaterialTheme.shapes.small`, die Warnung ist ein 26-dp-Block
@@ -160,6 +164,13 @@ internal fun RideModeScreen(
     onTogglePause: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
+    /**
+     * Wechselt zur Kartenseite des Fahrmodus (NAVI_KARTE in `MapScreen.kt`):
+     * Dialog zu, Karte mit Kompaktleiste (und HUD, falls navigiert wird)
+     * uebernimmt. Ausgeloest vom „Karte"-Knopf der Kopfzeile und von der
+     * Wischgeste — beides ohne Wirkung auf die Aufzeichnung.
+     */
+    onShowMap: () -> Unit,
     // Ob die laufende Pause eine Auto-Pause ist (Stillstand erkannt, endet
     // von selbst bei Weiterfahrt) — nur fuer die Beschriftung des
     // Status-Chips, die Bedienung ist dieselbe wie bei einer manuellen Pause.
@@ -210,9 +221,26 @@ internal fun RideModeScreen(
                     // Erst die Systemleisten aussparen (das Fenster ist
                     // randlos), dann der normale Bildschirmrand.
                     .safeDrawingPadding()
-                    .padding(ScreenPadding),
+                    .padding(ScreenPadding)
+                    // Horizontales Wischen wechselt zur Kartenseite — die
+                    // Datenseite hat selbst keine horizontalen Gesten, die
+                    // Geste ist also konfliktfrei (der `verticalScroll` des
+                    // Koerpers laeuft quer dazu). Zurueck von der Karte geht
+                    // es bewusst NUR ueber den „Daten"-Knopf der
+                    // Kompaktleiste: Dort haetten Kartengesten Vorrang.
+                    .pointerInput(Unit) {
+                        var gesamtX = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { gesamtX = 0f },
+                            onDragEnd = {
+                                if (kotlin.math.abs(gesamtX) > SwipeZurKarteSchwelle.toPx()) {
+                                    onShowMap()
+                                }
+                            },
+                        ) { _, dragAmount -> gesamtX += dragAmount }
+                    },
             ) {
-                RideModeHeader(paused = paused, autoPaused = autoPaused, onClose = onClose)
+                RideModeHeader(paused = paused, autoPaused = autoPaused, onShowMap = onShowMap)
 
                 Column(
                     modifier = Modifier
@@ -345,14 +373,18 @@ internal data class RideModeNavigation(
 )
 
 /**
- * Kopfzeile: links der Zustand der Aufzeichnung, rechts der Weg zurueck.
+ * Kopfzeile: links der Zustand der Aufzeichnung, rechts der Wechsel zur
+ * Kartenseite.
  *
- * Der Rueckweg ist bewusst ein beschrifteter Knopf und kein blosses X-Symbol:
- * Wer den Fahrmodus zum ersten Mal sieht, soll ohne Probieren erkennen, dass
- * dahinter die Karte liegt — und nicht das Ende der Aufzeichnung.
+ * Der Knopf ist bewusst beschriftet und kein blosses X-Symbol: Wer den
+ * Fahrmodus zum ersten Mal sieht, soll ohne Probieren erkennen, dass
+ * dahinter die Karte liegt — und nicht das Ende der Aufzeichnung. Seit der
+ * Kartenseite des Fahrmodus wechselt er dorthin (Kompaktleiste statt
+ * Live-Leiste, KeepScreenOn bleibt an), statt den Fahrmodus zu verlassen;
+ * ganz heraus fuehrt weiterhin die Zurueck-Geste.
  */
 @Composable
-private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onClose: () -> Unit) {
+private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -382,10 +414,13 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onClose: () -> 
         }
         Spacer(Modifier.weight(1f))
         Surface(
-            onClick = onClose,
+            onClick = onShowMap,
             modifier = Modifier
                 .height(RideModeExitHeight)
-                .semantics { contentDescription = "Fahrmodus verlassen, zurück zur Karte" },
+                .semantics {
+                    contentDescription = "Zur Kartenseite des Fahrmodus wechseln, " +
+                        "Aufzeichnung läuft weiter"
+                },
             shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -546,9 +581,13 @@ private fun OffRouteWarning() {
  *
  * Bewusst kein `AlertDialog`: dessen Textknoepfe sind genau die kleinen Ziele,
  * die dieser Modus vermeiden soll.
+ *
+ * `internal`, weil dieselbe Rueckfrage auch das „Beenden" der Kompaktleiste
+ * auf der Kartenseite absichert (`RideCompactBar.kt`) — eine zweite,
+ * abweichende Rueckfrage fuer denselben Fehlgriff waere die schlechtere Kopie.
  */
 @Composable
-private fun StopConfirmation(onCancel: () -> Unit, onConfirm: () -> Unit) {
+internal fun StopConfirmation(onCancel: () -> Unit, onConfirm: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = "Aufzeichnung wirklich beenden?",
@@ -642,9 +681,13 @@ private fun RideModeAction(
  * das Flag beim Verlassen — auf welchem Weg auch immer (Knopf, Zurueck,
  * Beenden der Aufzeichnung, Prozessende der Komposition) — wieder zurueck. Ein
  * vergessenes Flag leert sonst den Akku, bis die App neu gestartet wird.
+ *
+ * `internal`, weil auch die Kartenseite des Fahrmodus (NAVI_KARTE in
+ * `MapScreen.kt`) den Bildschirm anhaelt — dieselbe Lenker-Situation, nur
+ * mit Karte statt grosser Zahlen.
  */
 @Composable
-private fun KeepScreenOn() {
+internal fun KeepScreenOn() {
     val view = LocalView.current
     DisposableEffect(view) {
         val window = view.context.findActivity()?.window
@@ -677,3 +720,11 @@ private fun Context.findActivity(): Activity? {
 private val SpeedValueSize = 96.sp
 private val SecondaryValueSize = 52.sp
 private val SmallValueSize = 30.sp
+
+/**
+ * Mindest-Wischstrecke fuer den Wechsel zur Kartenseite. Deutlich ueber dem
+ * System-Touch-Slop: Ein schraeger Scrollversuch oder ein Wackler am Lenker
+ * darf die Seite nicht wechseln — die Geste ist eine Abkuerzung, der Knopf
+ * bleibt der verlaessliche Weg.
+ */
+private val SwipeZurKarteSchwelle = 64.dp

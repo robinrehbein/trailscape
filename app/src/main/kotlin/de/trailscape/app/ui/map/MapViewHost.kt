@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.haversineM
+import de.trailscape.core.klemmeOffRouteZoom
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -104,6 +105,11 @@ internal fun MapViewHost(
     var savedLat by rememberSaveable { mutableStateOf(GERMANY_LAT) }
     var savedLon by rememberSaveable { mutableStateOf(GERMANY_LON) }
     var savedZoom by rememberSaveable { mutableStateOf(GERMANY_ZOOM) }
+    // Der Kurs (bearing) gehoert seit der Navi-Kamera mit zum geretteten
+    // Zustand: Eine Drehung waehrend der course-up-Navigation darf die Karte
+    // nicht zurueck auf Nord kippen. Ausserhalb der Navigation ist er 0 —
+    // das Bestandsverhalten (Nord oben) bleibt damit unveraendert.
+    var savedBearing by rememberSaveable { mutableStateOf(0.0) }
 
     val mapView = remember(context) {
         MapLibre.getInstance(context)
@@ -160,6 +166,7 @@ internal fun MapViewHost(
                 savedLat = camera.lat
                 savedLon = camera.lon
                 savedZoom = camera.zoom
+                savedBearing = camera.bearing
             }
             controller.detach()
             sync(Lifecycle.State.CREATED)
@@ -218,6 +225,7 @@ internal fun MapViewHost(
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(savedLat, savedLon))
                     .zoom(savedZoom)
+                    .bearing(savedBearing)
                     .build()
                 map.addOnMapClickListener { latLng ->
                     currentTap(latLng.latitude, latLng.longitude)
@@ -317,8 +325,18 @@ internal data class MapMarker(
     val filled: Boolean = true,
 )
 
-/** Kameraposition in der einfachsten Form, die der Screen braucht. */
-internal data class CameraSnapshot(val lat: Double, val lon: Double, val zoom: Double)
+/**
+ * Kameraposition in der einfachsten Form, die der Screen braucht.
+ *
+ * [bearing] kam mit der Navi-Kamera dazu (0 = Nord oben, der Default und das
+ * Bestandsverhalten ausserhalb der Navigation).
+ */
+internal data class CameraSnapshot(
+    val lat: Double,
+    val lon: Double,
+    val zoom: Double,
+    val bearing: Double = 0.0,
+)
 
 /**
  * Imperativer Griff auf die Karte. Alle Methoden sind aus dem Main-Thread
@@ -521,11 +539,114 @@ internal class MapController {
         }
     }
 
+    /**
+     * Fuehrt die **Navi-Kamera** nach: Position, Zoom und Kurs in einem Zug,
+     * die Position auf Wunsch ins untere Drittel des Bildes verschoben.
+     *
+     * ## Wie der Versatz ins untere Drittel funktioniert
+     * Ueber das Kamera-Padding von MapLibre 11 ([CameraPosition.Builder.padding]):
+     * Ein oberes Padding von [NAV_CAMERA_VERSATZ_ANTEIL] der Kartenhoehe
+     * verschiebt die Mitte des nutzbaren Ausschnitts nach unten — bei 0,4
+     * liegt der Zielpunkt auf 70 % der Hoehe, also im unteren Drittel, und
+     * die Fahrtrichtung bekommt den grossen Rest des Bildes. Das Padding
+     * haengt an der Kameraposition selbst, nicht am View, und wird von
+     * [resetNavCamera] wieder auf null gesetzt — ausserhalb der Navigation
+     * bleibt alles zentriert wie bisher.
+     *
+     * Gefahren wird mit `easeCamera` in [NAV_CAMERA_EASE_MS]: Die GPS-Punkte
+     * kommen etwa sekuendlich, und eine gleichlange, lineare Fahrt dorthin
+     * ergibt das fluessige Mitschwimmen der bekannten Navi-Apps — `moveCamera`
+     * wuerde springen, `animateCamera` mit seiner Beschleunigungskurve pumpen.
+     * Eine `ease`-Fahrt meldet sich ausserdem nicht als Geste, loest also
+     * nicht das „Nutzerin hat selbst verschoben"-Signal aus.
+     */
+    fun moveToNavCamera(
+        lat: Double,
+        lon: Double,
+        zoom: Double,
+        bearingGrad: Double,
+        versatz: Boolean,
+    ) {
+        run(afterReady = false) { map ->
+            val topPad = if (versatz) map.height * NAV_CAMERA_VERSATZ_ANTEIL else 0.0
+            map.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder()
+                        .target(LatLng(lat, lon))
+                        .zoom(zoom)
+                        .bearing(bearingGrad)
+                        .padding(0.0, topPad, 0.0, 0.0)
+                        .build(),
+                ),
+                NAV_CAMERA_EASE_MS,
+            )
+        }
+    }
+
+    /**
+     * Nimmt die Navi-Kamera zurueck: Kurs wieder Nord, Padding null, Position
+     * und Zoom bleiben, wo sie sind. Gerufen beim Ende der Navigation und
+     * beim Umschalten auf „Nord oben" — danach verhaelt sich die Kamera exakt
+     * wie vor der Navigation.
+     */
+    fun resetNavCamera() {
+        run(afterReady = false) { map ->
+            val position = map.cameraPosition
+            val target = position.target ?: return@run
+            map.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder()
+                        .target(target)
+                        .zoom(position.zoom)
+                        .bearing(0.0)
+                        .padding(0.0, 0.0, 0.0, 0.0)
+                        .build(),
+                ),
+                CAMERA_ANIMATION_MS,
+            )
+        }
+    }
+
+    /**
+     * Abseits der Route: zoomt so weit heraus, dass die eigene Position und
+     * der naechste Routenpunkt **gemeinsam** im Bild stehen — Nord oben und
+     * zentriert (kein Kurs-Drehen und kein Drittel-Versatz: Wer die Route
+     * sucht, braucht die Uebersicht, nicht den Fahr-Blick). Die Zoomgrenzen
+     * kommen aus `:core` (`klemmeOffRouteZoom`, 12..16).
+     */
+    fun frameOffRoute(lat: Double, lon: Double, routeLat: Double, routeLon: Double) {
+        run(afterReady = true) { map ->
+            val bounds = runCatching {
+                LatLngBounds.Builder()
+                    .include(LatLng(lat, lon))
+                    .include(LatLng(routeLat, routeLon))
+                    .build()
+            }.getOrNull() ?: return@run
+            val pad = OFF_ROUTE_FIT_PADDING_PX
+            val target = runCatching {
+                // Ausdruecklich fuer Nord oben (bearing 0, tilt 0) rechnen —
+                // die Kamera kann in diesem Moment noch course-up gedreht sein.
+                map.getCameraForLatLngBounds(bounds, intArrayOf(pad, pad, pad, pad), 0.0, 0.0)
+            }.getOrNull() ?: return@run
+            map.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder()
+                        .target(target.target)
+                        .zoom(klemmeOffRouteZoom(target.zoom))
+                        .bearing(0.0)
+                        .padding(0.0, 0.0, 0.0, 0.0)
+                        .build(),
+                ),
+                NAV_CAMERA_EASE_MS,
+            )
+        }
+    }
+
     /** Aktuelle Kameraposition, oder `null` solange die Karte nicht steht. */
     fun rememberCamera(): CameraSnapshot? {
         val position = map?.cameraPosition ?: return null
         val target = position.target ?: return null
-        return CameraSnapshot(target.latitude, target.longitude, position.zoom)
+        return CameraSnapshot(target.latitude, target.longitude, position.zoom, position.bearing)
     }
 
     /** Der sichtbare Ausschnitt — Grundlage des Offline-Downloads. */
@@ -746,5 +867,21 @@ internal const val MIN_RECORDING_ZOOM = 15.0
 private const val MAX_FIT_ZOOM = 16.0
 private const val MAX_CAMERA_ZOOM = 20.0
 private const val CAMERA_ANIMATION_MS = 600
+
+/**
+ * Anteil der Kartenhoehe, der als oberes Kamera-Padding die Position ins
+ * untere Drittel schiebt (siehe [MapController.moveToNavCamera]): Mitte des
+ * Rests = (0,4 + 1,0) / 2 = 70 % der Hoehe.
+ */
+private const val NAV_CAMERA_VERSATZ_ANTEIL = 0.4
+
+/**
+ * Dauer der Kamerafahrt je Navi-Update — knapp unter dem GPS-Sekundentakt,
+ * damit die naechste Fahrt die laufende abloest statt auf sie zu warten.
+ */
+private const val NAV_CAMERA_EASE_MS = 900
+
+/** Rand der Abseits-Ansicht um Position und Routenpunkt (Pixel). */
+private const val OFF_ROUTE_FIT_PADDING_PX = 96
 
 private val DEFAULT_FIT_PADDING = MapPadding(left = 48, top = 120, right = 48, bottom = 220)
