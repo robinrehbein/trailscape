@@ -41,6 +41,7 @@ import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.core.adaptPlan
 import de.trailscape.core.assessFitness
 import de.trailscape.core.routeTargetForSession
 
@@ -126,6 +127,25 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val assessment = remember(rides) { assessFitness(rides) }
+    // Lastwerte je Tour fuer Status-Zuordnung und Plan-Adaption — die Karten
+    // darunter brauchen nur die eine Zahl, nicht den ganzen RideLoad.
+    val rideLoadValues = remember(insights) {
+        insights.rideLoads.mapValues { it.value.load }
+    }
+    // Der ANGEZEIGTE Plan: an die gefahrene Realitaet angepasst, wenn ganze
+    // Wochen deutlich unter Soll lagen (`:core`, adaptPlan). Der gespeicherte
+    // Plan in [AppViewModel.plan] bleibt unveraendert — Format und Referenz
+    // fuer kuenftige Vergleiche.
+    val adaptedPlan = remember(plan, rides, rideLoadValues, insights.latest?.ctl) {
+        plan?.let {
+            adaptPlan(
+                plan = it,
+                rides = rides,
+                currentCtl = insights.latest?.ctl,
+                rideLoads = rideLoadValues,
+            )
+        }
+    }
     // Ob Alter und Gewicht vom Nutzer stammen — sonst rechnet dieser ganze Tab
     // mit den Annahmen aus `defaultTrainingProfile` (siehe
     // AppViewModel.profileConfirmed).
@@ -238,11 +258,18 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                         plan = plan,
                         rides = rides,
                         onSetPlan = { appViewModel.setPlan(it) },
+                        currentCtl = insights.latest?.ctl,
                     )
                 }
 
-                plan?.let { currentPlan ->
+                adaptedPlan?.let { adapted ->
+                    val currentPlan = adapted.plan
                     item(key = "plan-header") { PlanHeader(currentPlan) }
+                    if (adapted.adapted) {
+                        adapted.reason?.let { reason ->
+                            item(key = "plan-adaption") { PlanAdaptionNote(reason) }
+                        }
+                    }
                     items(items = currentPlan.weeks, key = { "plan-week-${it.index}" }) { week ->
                         PlanWeekCard(
                             week = week,
@@ -257,6 +284,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                                     ),
                                 )
                             },
+                            rideLoads = rideLoadValues,
                         )
                     }
                 }

@@ -496,6 +496,97 @@ class TrainingTest {
     }
 
     // -----------------------------------------------------------------------
+    // group('generatePlan – Last-Budgets (currentCtl)')
+    // -----------------------------------------------------------------------
+
+    /** Summe der Last-Ziele einer Woche. */
+    private fun weekLoad(plan: TrainingPlan, index: Int): Double =
+        plan.weeks[index].sessions.sumOf { it.targetLoad ?: 0.0 }
+
+    @Test
+    fun `ohne currentCtl tragen alle Einheiten km-abgeleitete Last-Ziele`() {
+        for (week in twelveWeekPlan.weeks) {
+            for (session in week.sessions) {
+                assertNotNull(session.targetLoad, "${week.index}/${session.title}")
+                assertTrue(session.targetLoad!! >= 1.0)
+            }
+        }
+        // Harte Einheit kostet pro Kilometer deutlich mehr als Grundlage (IF²).
+        val build = twelveWeekPlan.weeks.first()
+        val ga = build.sessions.first { it.title == "GA1" }
+        val hart = build.sessions.first { it.title == "Intervalle" }
+        assertTrue(
+            hart.targetLoad!! / hart.targetKm > 1.5 * (ga.targetLoad!! / ga.targetKm),
+            "harte Last/km ${hart.targetLoad!! / hart.targetKm} vs GA ${ga.targetLoad!! / ga.targetKm}",
+        )
+    }
+
+    @Test
+    fun `mit currentCtl folgen die Wochenbudgets der Standardrampe`() {
+        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 50.0)
+
+        // Dieselbe Formel wie das empfohlene Wochenziel der Auswertung:
+        // Budget = 7 × (CTL + Rampe / ctlWeeklyResponse); die CTL waechst je
+        // Aufbauwoche um die Rampe. Toleranz: Rundung je Einheit (±0,5 × n).
+        fun budget(ctl: Double): Double =
+            7 * (ctl + defaultTargetRampPerWeek / ctlWeeklyResponse)
+
+        assertEquals(budget(50.0), weekLoad(plan, 0), 2.0)
+        assertEquals(budget(54.0), weekLoad(plan, 1), 2.0)
+        assertEquals(budget(58.0), weekLoad(plan, 2), 2.0)
+        // Erholungswoche 3: 60 % des Budgets der Vorwoche.
+        assertEquals(budget(58.0) * 0.6, weekLoad(plan, 3), 2.0)
+        // Taper (Index 10): 50 % des Budget-Peaks (letzte Aufbauwoche, CTL 78).
+        assertEquals(budget(78.0) * 0.5, weekLoad(plan, 10), 2.0)
+
+        // Die Kilometer bleiben die alten — das Budget aendert nur die Last.
+        assertEquals(
+            twelveWeekPlan.weeks.map { it.targetKm },
+            plan.weeks.map { it.targetKm },
+        )
+        // Das Zielevent bleibt km-abgeleitet, mit und ohne Budget identisch.
+        assertEquals(
+            twelveWeekPlan.weeks.last().sessions.last().targetLoad,
+            plan.weeks.last().sessions.last().targetLoad,
+        )
+    }
+
+    @Test
+    fun `Last-Budget waechst je Aufbauwoche nie ueber 15 Prozent`() {
+        // Bei winziger CTL will die Rampe prozentual mehr als +15 % — der
+        // Deckel MAX_WEEKLY_INCREASE greift dann auch auf der Lastskala.
+        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.2)
+        val builds = plan.weeks
+            .filter { it.kind == WeekKind.AUFBAU }
+            .map { w -> w.sessions.sumOf { it.targetLoad ?: 0.0 } }
+        for (i in 1 until builds.size) {
+            assertTrue(
+                // 1,16 statt 1,15: Die Last-Ziele je Einheit sind auf ganze
+                // Zahlen gerundet, die Wochensumme traegt also bis zu ±1,5
+                // Rundungsrauschen.
+                builds[i] <= builds[i - 1] * 1.16,
+                "Budgetsprung ${builds[i - 1]} → ${builds[i]}",
+            )
+        }
+    }
+
+    @Test
+    fun `currentCtl null oder unbrauchbar verhaelt sich wie bisher`() {
+        assertEquals(
+            twelveWeekPlan,
+            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = null),
+        )
+        assertEquals(
+            twelveWeekPlan,
+            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.0),
+        )
+        assertEquals(
+            twelveWeekPlan,
+            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = Double.NaN),
+        )
+    }
+
+    // -----------------------------------------------------------------------
     // group('savePlan / loadPlan')
     // -----------------------------------------------------------------------
 
@@ -532,7 +623,31 @@ class TrainingTest {
             assertEquals(a.sessions.map { it.title }, b.sessions.map { it.title })
             assertEquals(a.sessions.map { it.description }, b.sessions.map { it.description })
             assertEquals(a.sessions.map { it.targetKm }, b.sessions.map { it.targetKm })
+            assertEquals(a.sessions.map { it.targetLoad }, b.sessions.map { it.targetLoad })
         }
+    }
+
+    @Test
+    fun `Speicher - ein Plan-JSON ohne targetLoad laedt mit null-Last-Zielen`() {
+        // Alte gespeicherte Plaene (Web-App, fruehere App-Versionen) kennen den
+        // Schluessel nicht — fehlender Schluessel ist der Normalfall, kein Fehler.
+        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now)
+        // `targetLoad` steht als letzter Schluessel jeder Session im JSON —
+        // herausschneiden ergibt exakt das alte Format.
+        val legacyJson = plan.toJson().toString()
+            .replace(Regex(""","targetLoad":[0-9.Ee+-]+"""), "")
+        assertFalse(legacyJson.contains("targetLoad"))
+
+        val store = InMemoryTrainingPlanStore(legacyJson)
+        val loaded = loadPlan(store)
+        assertNotNull(loaded)
+        assertTrue(loaded.weeks.flatMap { it.sessions }.all { it.targetLoad == null })
+        // Alles Uebrige kommt unveraendert an.
+        assertEquals(plan.weeks.map { it.targetKm }, loaded.weeks.map { it.targetKm })
+        assertEquals(
+            plan.weeks.flatMap { w -> w.sessions.map { it.targetKm } },
+            loaded.weeks.flatMap { w -> w.sessions.map { it.targetKm } },
+        )
     }
 
     @Test

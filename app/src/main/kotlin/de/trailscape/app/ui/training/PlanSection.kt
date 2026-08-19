@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,16 +30,23 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatDateShort
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.core.PlanSessionProgress
+import de.trailscape.core.PlanSessionStatus
 import de.trailscape.core.Ride
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
 import de.trailscape.core.canGenerateRouteFor
 import de.trailscape.core.currentWeekIndex
+import de.trailscape.core.planSessionStatusLabels
 import de.trailscape.core.weekKindLabels
 import de.trailscape.core.weekKm
+import de.trailscape.core.weekSessionProgress
+import kotlin.math.roundToInt
 
 /**
  * Titelzeile plus eine Karte je Trainingswoche.
@@ -57,10 +67,28 @@ fun PlanHeader(plan: TrainingPlan) {
 }
 
 /**
+ * Hinweiszeile ueber den Wochenkarten, wenn der angezeigte Plan von
+ * [de.trailscape.core.adaptPlan] an die gefahrene Realitaet angepasst wurde.
+ * Der gespeicherte Plan bleibt unveraendert — genau deshalb muss die
+ * Oberflaeche sagen, warum hier andere Zahlen stehen als beim Erstellen.
+ */
+@Composable
+fun PlanAdaptionNote(reason: String) {
+    NoticeBox(
+        icon = Icons.Filled.Info,
+        color = LocalSignalColors.current.caution,
+        title = "Plan an deine letzten Wochen angepasst",
+        text = reason,
+    )
+}
+
+/**
  * @param onPlanRoute sucht zu einer Einheit eine passende Runde (siehe
  *   `ui/map/RouteGenerationSheet.kt`). Der Knopf steht bewusst nur an den
  *   Einheiten der **laufenden** Woche: Fuer eine Einheit in vier Wochen ist
  *   eine heute berechnete Runde wertlos, und die Zeile bliebe ueberladen.
+ * @param rideLoads Last je Tour-ID (aus `insights.rideLoads`) — verfeinert die
+ *   Status-Zuordnung der Einheiten; ohne sie entscheidet die Distanz allein.
  */
 @Composable
 fun PlanWeekCard(
@@ -68,6 +96,7 @@ fun PlanWeekCard(
     plan: TrainingPlan,
     rides: List<Ride>,
     onPlanRoute: ((TrainingSession) -> Unit)? = null,
+    rideLoads: Map<String, Double> = emptyMap(),
 ) {
     val theme = MaterialTheme.colorScheme
     val activeIndex = currentWeekIndex(plan)
@@ -76,6 +105,13 @@ fun PlanWeekCard(
     val ridden = if (isPastOrCurrent) weekKm(week, rides) else 0.0
     val progress = if (week.targetKm > 0) (ridden / week.targetKm).toFloat().coerceIn(0f, 1f) else 0f
     val kindColor = weekKindColor(week.kind)
+    // Erledigt-Status je Einheit — nur fuer Wochen, die schon laufen oder
+    // vorbei sind; fuer kuenftige Wochen ist „offen" keine Auskunft.
+    val sessionProgress: Map<TrainingSession, PlanSessionProgress> = if (isPastOrCurrent) {
+        weekSessionProgress(week, rides, rideLoads = rideLoads).associateBy { it.session }
+    } else {
+        emptyMap()
+    }
 
     Card(
         colors = if (isCurrent) {
@@ -147,9 +183,17 @@ fun PlanWeekCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "${session.targetKm} km",
+                                // Ziel-Last neben den Kilometern, wenn der Plan
+                                // sie kennt — alte Plaene ohne `targetLoad`
+                                // zeigen weiterhin nur die Distanz.
+                                text = session.targetLoad
+                                    ?.let { "${session.targetKm} km · Last ${it.roundToInt()}" }
+                                    ?: "${session.targetKm} km",
                                 style = MaterialTheme.typography.bodyMedium,
                             )
+                            sessionProgress[session]?.let { entry ->
+                                SessionStatusIcon(entry.status)
+                            }
                             // Am Zielevent gibt es nichts zu generieren — die
                             // Strecke steht schon (siehe canGenerateRouteFor).
                             if (isCurrent && onPlanRoute != null &&
@@ -185,4 +229,30 @@ fun PlanWeekCard(
             }
         }
     }
+}
+
+/**
+ * Status-Marke einer Einheit: gruener Haken (erledigt), gelber Haken
+ * (teilweise), gedaempftes Kreuz (verpasst). „Offen" bekommt bewusst keine
+ * Marke — eine Zeile ohne Symbol *ist* die offene Einheit, und ein viertes
+ * Symbol wuerde die Ausnahmen verwaessern. Ein Kalendertag Toleranz und die
+ * 60-%-Schwelle stecken in `:core` ([weekSessionProgress]).
+ */
+@Composable
+private fun SessionStatusIcon(status: PlanSessionStatus) {
+    val signals = LocalSignalColors.current
+    val (icon, tint) = when (status) {
+        PlanSessionStatus.OFFEN -> return
+        PlanSessionStatus.ERLEDIGT -> Icons.Filled.CheckCircle to signals.good
+        PlanSessionStatus.TEILWEISE -> Icons.Filled.CheckCircle to signals.caution
+        PlanSessionStatus.VERPASST ->
+            Icons.Filled.Cancel to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Spacer(modifier = Modifier.width(6.dp))
+    Icon(
+        icon,
+        contentDescription = planSessionStatusLabels.getValue(status),
+        tint = tint,
+        modifier = Modifier.size(16.dp),
+    )
 }

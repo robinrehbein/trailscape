@@ -106,8 +106,45 @@ const val VITALS_WINDOW_DAYS: Int = 60
  */
 const val VITALS_HISTORY_WINDOW_DAYS: Int = 120
 
-/** Ziel-Rampenrate (CTL-Punkte pro Woche) fuer das empfohlene Wochenziel. */
-const val DEFAULT_TARGET_RAMP_PER_WEEK: Double = 4.0
+/**
+ * Ziel-Rampenrate (CTL-Punkte pro Woche) fuer das empfohlene Wochenziel —
+ * dieselbe Zahl, mit der auch `generatePlan` seine Wochen-Lastbudgets rechnet
+ * (`:core`, [de.trailscape.core.defaultTargetRampPerWeek]).
+ */
+const val DEFAULT_TARGET_RAMP_PER_WEEK: Double = de.trailscape.core.defaultTargetRampPerWeek
+
+/**
+ * Hoechstens so viele **harte Tage** je rollierende 7 Tage, bevor
+ * [de.trailscape.core.recommendToday] keinen weiteren harten Reiz mehr
+ * empfiehlt (`hitBudgetLeft`).
+ *
+ * Zwei ist die gaengige Obergrenze der Trainingslehre fuer intensive
+ * Einheiten pro Woche (polarisiertes Modell, vgl.
+ * `intensityDistributionTarget`: 15 % HIT-Anteil ≈ zwei Einheiten bei 4–5
+ * Fahrtagen) — und exakt das Raster, das die eigenen Plaene bauen: hoechstens
+ * eine Intervalleinheit plus das Zielevent. Vorher stand der Parameter fest
+ * auf `true`; bei durchgehend guter Readiness empfahl die App damit
+ * unbegrenzt viele harte Tage in Folge.
+ */
+const val MAX_HARD_DAYS_PER_7D: Int = 2
+
+/**
+ * Ab dieser Zeit ueber der Schwelle (Sekunden, `secondsAboveLthr` aus dem
+ * HF-Pfad) zaehlt ein Kalendertag als hart. 10 Minuten oberhalb der LTHR
+ * faehrt niemand aus Versehen — das ist die Groessenordnung eines einzelnen
+ * ernsthaften Intervalls, waehrend kurze Kuppen und Ampelsprints deutlich
+ * darunter bleiben.
+ */
+const val HARD_DAY_LTHR_SECONDS: Double = 600.0
+
+/**
+ * Rueckfall ohne Herzfrequenz: Tageslast, ab der ein Kalendertag als hart
+ * gilt. 100 ist per Definition der eTSS-Skala eine volle Stunde an der
+ * Schwelle (§3.3) — eine Grundlagenfahrt braucht dafuer ueber zwei Stunden
+ * (LIT ≈ 49 Last/h, siehe `weeklyLoadPerHour`), womit die Schwelle lange
+ * ruhige Touren zwar gelegentlich mitzaehlt, kurze lockere aber nie.
+ */
+const val HARD_DAY_LOAD: Double = 100.0
 
 /**
  * Halbe Breite des Fensters, aus dem der tourzeitnahe Ruhepuls kommt (Tage).
@@ -167,6 +204,12 @@ data class TrainingInsights(
      * Gesamtscore) — Grundlage des Deload-Triggers.
      */
     val readinessLast7: List<Double>,
+    /**
+     * Harte Tage der letzten 7 Kalendertage (heute eingeschlossen) — die
+     * Grundlage des HIT-Budgets in [recommendation] (siehe
+     * [MAX_HARD_DAYS_PER_7D] und [countHardDaysLast7]).
+     */
+    val hardDaysLast7: Int,
     val recommendation: DailyRecommendation,
     val deload: DeloadRecommendation,
     /**
@@ -467,7 +510,15 @@ fun computeInsights(
         tsb = tsb,
         trainingHistoryDays = fitness.historyDays,
     )
-    val recommendation = recommendToday(readiness = readiness, tsb = tsb)
+    // HIT-Budget: Wie viele harte Tage stecken schon in den letzten 7 Tagen?
+    // Vorher blieb `hitBudgetLeft` auf seinem Default `true` — bei
+    // durchgehend guter Readiness empfahl die App unbegrenzt harte Tage.
+    val hardDaysLast7 = countHardDaysLast7(ordered, rideLoads, now)
+    val recommendation = recommendToday(
+        readiness = readiness,
+        tsb = tsb,
+        hitBudgetLeft = hardDaysLast7 < MAX_HARD_DAYS_PER_7D,
+    )
 
     val weeklyLoad = sumLastDays(fitness, 7)
     val coveredDays = min(fitness.historyDays, 28)
@@ -514,6 +565,7 @@ fun computeInsights(
         sleep = sleep,
         readiness = readiness,
         readinessLast7 = readinessLast7,
+        hardDaysLast7 = hardDaysLast7,
         recommendation = recommendation,
         deload = deload,
         weeklyTarget = weeklyTarget,
@@ -543,6 +595,62 @@ private fun calibrated(base: RideLoad, calibration: LoadCalibration): RideLoad {
 
 private fun sumLastDays(series: FitnessSeries, days: Int): Double =
     series.lastDays(days).sumOf { it.load }
+
+/**
+ * Zaehlt die harten Kalendertage der letzten 7 Tage (heute eingeschlossen).
+ *
+ * Ein Tag ist hart, wenn
+ *  * die Zeit ueber der Schwelle (`secondsAboveLthr`, HF-Pfad) ueber alle
+ *    Touren des Tages [HARD_DAY_LTHR_SECONDS] erreicht — das direkte Signal
+ *    fuer einen gesetzten harten Reiz; oder
+ *  * **keine** Tour des Tages eine auswertbare Herzfrequenz hat und die
+ *    Tageslast [HARD_DAY_LOAD] erreicht — der grobe Rueckfall, wenn nur das
+ *    Physikmodell etwas sagt.
+ *
+ * Liegt Herzfrequenz vor, gewinnt sie: Eine lange ruhige Tour mit viel Last,
+ * aber ohne Schwellenzeit verbraucht kein HIT-Budget.
+ *
+ * @param ordered gefahrene Touren (bereits ohne Planungen, siehe
+ *   [computeInsights]).
+ * @param rideLoads kalibrierte Last je Tour-ID.
+ */
+internal fun countHardDaysLast7(
+    ordered: List<Ride>,
+    rideLoads: Map<String, RideLoad>,
+    now: LocalDateTime,
+): Int {
+    val today = now.toLocalDate()
+    val windowStart = today.minusDays(6)
+
+    data class DayAccumulator(
+        var secondsAboveLthr: Double = 0.0,
+        var load: Double = 0.0,
+        var hasHr: Boolean = false,
+    )
+
+    val byDay = HashMap<java.time.LocalDate, DayAccumulator>()
+    for (ride in ordered) {
+        val day = localOfEpochMs(ride.createdAt).toLocalDate()
+        if (day.isBefore(windowStart) || day.isAfter(today)) {
+            continue
+        }
+        val load = rideLoads[ride.id] ?: continue
+        val acc = byDay.getOrPut(day) { DayAccumulator() }
+        acc.load += load.load
+        if (load.heartRate.available) {
+            acc.hasHr = true
+            acc.secondsAboveLthr += load.heartRate.secondsAboveLthr
+        }
+    }
+
+    return byDay.values.count { acc ->
+        if (acc.hasHr) {
+            acc.secondsAboveLthr >= HARD_DAY_LTHR_SECONDS
+        } else {
+            acc.load >= HARD_DAY_LOAD
+        }
+    }
+}
 
 /**
  * VO2max aus den juengsten Touren mit brauchbarer Leistungsreihe; die

@@ -315,6 +315,22 @@ data class TrainingSession(
      * (siehe [canGenerateRouteFor]).
      */
     val isEvent: Boolean = false,
+    /**
+     * Ziel-Trainingslast der Einheit auf der eTSS-Skala (1 h an der Schwelle
+     * = 100), abgestimmt auf das Lastmodell aus `TrainingLoad.kt` /
+     * `PerformanceManagement.kt`.
+     *
+     * Die Bruecke zwischen Plan und Lastmodell: [targetKm] bleibt die Groesse
+     * fuers Routing, [targetLoad] die fuer CTL/ATL/Wochenbudget. Erzeugt wird
+     * der Wert zusammen mit den Kilometern in `generatePlan` (siehe dort
+     * `attachSessionLoads`), sodass beide Zahlen nie unabhaengig voneinander
+     * entstehen.
+     *
+     * `null` bei Plaenen aus der Zeit vor diesem Feld — ein fehlender
+     * Schluessel im JSON ist der Normalfall beim Lesen alter Plaene, kein
+     * Fehler.
+     */
+    val targetLoad: Double? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("day", day)
@@ -327,6 +343,7 @@ data class TrainingSession(
         if (isEvent) {
             put("isEvent", true)
         }
+        targetLoad?.let { put("targetLoad", it) }
     }
 
     companion object {
@@ -346,6 +363,7 @@ data class TrainingSession(
                 durationMin = json.optionalInt("durationMin"),
                 isEvent = json.optionalBoolean("isEvent")
                     ?: title.lowercase().startsWith(EVENT_TITLE_PREFIX),
+                targetLoad = json.optionalDouble("targetLoad"),
             )
         }
     }

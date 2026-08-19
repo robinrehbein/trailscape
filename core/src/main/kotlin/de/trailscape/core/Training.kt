@@ -24,6 +24,13 @@ const val trainingPlanStorageKey: String = "trailscape.plan"
 
 private val weekdays = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
+/**
+ * Index eines Plan-Wochentagskuerzels (0 = Mo … 6 = So); `-1` bei fremdem
+ * Kuerzel. Fuer `TrainingPlanProgress.kt`, damit die Status-Zuordnung mit
+ * derselben Tabelle rechnet, aus der [generatePlan] die Kuerzel erzeugt.
+ */
+internal fun planWeekdayIndex(day: String): Int = weekdays.indexOf(day)
+
 private const val MIN_WEEKS = 3
 private const val MAX_WEEKS = 52
 
@@ -121,6 +128,87 @@ private fun minutesFor(km: Double, intensity: SessionIntensity): Int =
 /** Umgekehrt: die Kilometer, die [minutes] bei nominalem Tempo ergeben. */
 private fun kmForMinutes(minutes: Int, intensity: SessionIntensity): Double =
     minutes / 60.0 * nominalSpeedKmh(intensity)
+
+// ---------------------------------------------------------------------------
+// Last-Ziele: die Bruecke zwischen Plan-Kilometern und Lastmodell
+// ---------------------------------------------------------------------------
+
+/**
+ * Angenommener Intensitaetsfaktor (IF) je Einheitstyp — derselbe Anker wie in
+ * der Herleitung von [weeklyLoadPerHour] (`TrainingLoad.kt`): Last = Dauer_h ×
+ * IF² × 100.
+ *
+ * LIT ≈ IF 0,70 (Grundlage), HIT ≈ IF 1,00 (harte Einheit); LOCKER liegt als
+ * reine Regenerationsfahrt darunter. Die Quadrierung ist der Grund, warum eine
+ * harte Einheit **pro Kilometer** rund das Doppelte einer Grundlagenfahrt
+ * kostet — genau die Asymmetrie, die reine Kilometerziele nie abbilden
+ * konnten.
+ */
+internal fun sessionIntensityIf(intensity: SessionIntensity): Double = when (intensity) {
+    SessionIntensity.LOCKER -> 0.60
+    SessionIntensity.GRUNDLAGE -> 0.70
+    SessionIntensity.HART -> 1.00
+}
+
+/**
+ * IF-Aufschlag fuer Plaene auf ein Ziel mit nennenswerten Hoehenmetern
+ * (≥ [CLIMB_HINT_THRESHOLD_M]): Der Plan fordert dann ausdruecklich Anstiege
+ * ([CLIMBING_HINT]), und Bergauffahren hebt die mittlere Intensitaet auch bei
+ * gleichem gefuehltem Einsatz. +0,05 IF entspricht grob dem Unterschied
+ * zwischen flacher und huegeliger Grundlagenfahrt; Regenerationsfahrten
+ * bleiben ausgenommen — sie sollen auch am Berg-Ziel flach bleiben (siehe
+ * `ascentPreferenceForSession`).
+ */
+private const val HILLY_IF_BONUS = 0.05
+
+/**
+ * Nominale Trainingslast einer Einheit aus Kilometern und Intensitaet:
+ * `Dauer_h × IF² × 100` mit der Dauer aus [nominalSpeedKmh] — dieselbe
+ * eTSS-Normierung wie `computeRideLoad` (§3.3), nur mit Planannahmen statt
+ * Messwerten.
+ */
+internal fun nominalSessionLoad(km: Double, intensity: SessionIntensity, hilly: Boolean): Double {
+    val hours = max(km, 0.0) / nominalSpeedKmh(intensity)
+    val bonus = if (hilly && intensity != SessionIntensity.LOCKER) HILLY_IF_BONUS else 0.0
+    val intensityFactor = sessionIntensityIf(intensity) + bonus
+    return hours * intensityFactor * intensityFactor * 100
+}
+
+/**
+ * Haengt an jede Einheit einer Woche ihr Last-Ziel ([TrainingSession.targetLoad]).
+ *
+ * Ohne [weekBudget] (kein CTL-Startwert vorhanden) ist das Last-Ziel schlicht
+ * die [nominalSessionLoad] der eigenen Kilometer — der alte, rein
+ * km-getriebene Plan, nur ehrlich in Last uebersetzt. Mit [weekBudget] wird
+ * das Wochen-Lastbudget **nach den nominalen Lasten gewichtet** auf die
+ * Einheiten verteilt: Die Kilometer bleiben unveraendert (fuers Routing),
+ * aber die Summe der Last-Ziele trifft das Budget, und eine harte Einheit
+ * bekommt ueber ihr IF² automatisch mehr Last pro Kilometer.
+ *
+ * Das Zielevent selbst behaelt immer seine km-abgeleitete Last: Es ist die
+ * Pruefung, kein budgetierter Trainingsreiz.
+ */
+internal fun attachSessionLoads(
+    sessions: List<TrainingSession>,
+    weekBudget: Double?,
+    hilly: Boolean,
+): List<TrainingSession> {
+    val nominal = sessions.map {
+        nominalSessionLoad(it.targetKm.toDouble(), it.intensity, hilly)
+    }
+    val budgetedSum = sessions.indices
+        .filter { !sessions[it].isEvent }
+        .sumOf { nominal[it] }
+    val scale = if (weekBudget != null && weekBudget > 0 && budgetedSum > 0) {
+        weekBudget / budgetedSum
+    } else {
+        1.0
+    }
+    return sessions.mapIndexed { i, session ->
+        val factor = if (session.isEvent) 1.0 else scale
+        session.copy(targetLoad = max(1.0, dartRound(nominal[i] * factor)))
+    }
+}
 
 /**
  * Persistenz des Trainingsplans — in Dart `SharedPreferences` unter
@@ -308,7 +396,7 @@ private fun longTourDescription(goal: Goal): String {
     return base
 }
 
-private fun buildSessions(
+internal fun buildSessions(
     kind: WeekKind,
     level: FitnessLevel,
     targetKm: Int,
@@ -479,7 +567,7 @@ private fun aufbauSessions(
     )
 }
 
-private fun zielwocheSessions(goal: Goal): List<TrainingSession> {
+internal fun zielwocheSessions(goal: Goal): List<TrainingSession> {
     val eventIndex = weekdayIndex(goal.date)
     val eventDay = weekdays[eventIndex]
     val eventKm = max(1, dartRound(goal.distanceKm).toInt())
@@ -546,7 +634,7 @@ private fun startKmFor(assessment: FitnessAssessment): Double =
     max(assessment.weeklyKm, levelBaseKm.getValue(assessment.level))
 
 /** Angestrebtes Spitzenvolumen — die Absicht, nicht die Zusage (siehe [planWeekVolumes]). */
-private fun peakKmFor(goal: Goal, startKm: Double): Double =
+internal fun peakKmFor(goal: Goal, startKm: Double): Double =
     max(goal.distanceKm * PEAK_DISTANCE_FACTOR, startKm)
 
 /**
@@ -573,7 +661,7 @@ private fun peakKmFor(goal: Goal, startKm: Double): Double =
  *
  * @param eventWeekKm Wochenvolumen der Zielwoche (Aktivierung + Event).
  */
-private fun planWeekVolumes(
+internal fun planWeekVolumes(
     kinds: List<WeekKind>,
     startKm: Double,
     peakKm: Double,
@@ -610,6 +698,85 @@ private fun planWeekVolumes(
     return targets
 }
 
+/** Ob der Plan bewusst Anstiege einbaut — dann gilt der IF-Aufschlag ([nominalSessionLoad]). */
+internal fun planIsHilly(goal: Goal): Boolean =
+    (goal.ascentM ?: 0.0) >= CLIMB_HINT_THRESHOLD_M
+
+/**
+ * Die Wochen-Lastbudgets eines Plans — das Gegenstueck zu [planWeekVolumes]
+ * auf der Lastskala.
+ *
+ * Ohne [currentCtl] (oder mit unbrauchbarem Wert) gibt es keine Budgets
+ * (lauter `null`): Die Last-Ziele der Einheiten entstehen dann rein aus ihren
+ * Kilometern ([attachSessionLoads]) — exakt das bisherige Verhalten, nur
+ * sichtbar gemacht.
+ *
+ * Mit CTL-Startwert rechnet jede **Aufbauwoche** mit [weeklyLoadTarget] und
+ * der Standardrampe [defaultTargetRampPerWeek]: Wochenbudget =
+ * `7 × (CTL + Rampe / ctlWeeklyResponse)`, danach waechst die angenommene CTL
+ * um die Rampe. Bewusst **dieselbe** Formel wie das empfohlene Wochenziel der
+ * Auswertung — Plan und Auswertung duerfen nicht zwei verschiedene Zahlen
+ * fuer dieselbe Woche nennen. Die Sicherheitsdeckel von [weeklyLoadTarget]
+ * (Vierwochenmittel, Zeitbudget) bleiben hier aus: Der Plan kennt beides
+ * nicht, und die Rampe selbst ist bereits die Begrenzung; zusaetzlich haelt
+ * [MAX_WEEKLY_INCREASE] jede Aufbauwoche unter +15 % gegen die letzte — die
+ * gleiche Grenze wie bei den Kilometern und nur bei sehr kleiner CTL
+ * ueberhaupt bindend.
+ *
+ * **Erholungswochen** skalieren das Budget der Vorwoche mit [RECOVERY_FACTOR],
+ * der **Taper** den erreichten Budget-Peak mit [TAPER_FACTOR] — dieselben
+ * Faktoren wie bei den Kilometern, damit beide Skalen dieselbe Blockstruktur
+ * erzaehlen. Die CTL waechst nur in Aufbauwochen: Erholung und Taper sollen
+ * die Fitness halten, nicht steigern. Die **Zielwoche** bekommt kein Budget —
+ * das Event ist die Pruefung, keine budgetierte Einheit.
+ */
+internal fun planWeekLoadBudgets(
+    kinds: List<WeekKind>,
+    currentCtl: Double?,
+): List<Double?> {
+    if (currentCtl == null || !currentCtl.isFinite() || currentCtl <= 0) {
+        return kinds.map { null }
+    }
+
+    var ctl = currentCtl
+    var lastBuildBudget: Double? = null
+    var achievedPeakBudget = 0.0
+    var previousBudget: Double? = null
+    val budgets = ArrayList<Double?>(kinds.size)
+
+    for (kind in kinds) {
+        val budget: Double? = when (kind) {
+            WeekKind.AUFBAU -> {
+                var wanted = weeklyLoadTarget(ctl, defaultTargetRampPerWeek).weeklyLoad
+                lastBuildBudget?.let { wanted = min(wanted, it * (1 + MAX_WEEKLY_INCREASE)) }
+                ctl += defaultTargetRampPerWeek
+                lastBuildBudget = wanted
+                achievedPeakBudget = max(achievedPeakBudget, wanted)
+                wanted
+            }
+
+            WeekKind.ERHOLUNG ->
+                (previousBudget ?: weeklyLoadTarget(ctl, defaultTargetRampPerWeek).weeklyLoad) *
+                    RECOVERY_FACTOR
+
+            WeekKind.TAPER -> {
+                val peak = if (achievedPeakBudget > 0) {
+                    achievedPeakBudget
+                } else {
+                    weeklyLoadTarget(ctl, defaultTargetRampPerWeek).weeklyLoad
+                }
+                peak * TAPER_FACTOR
+            }
+
+            WeekKind.ZIELWOCHE -> null
+        }
+        previousBudget = budget ?: previousBudget
+        budgets.add(budget)
+    }
+
+    return budgets
+}
+
 /**
  * Erzeugt einen Trainingsplan vom Montag der aktuellen Woche bis zur
  * Zielwoche.
@@ -621,11 +788,19 @@ private fun planWeekVolumes(
  * Zieldistanz ueberhaupt einholt, beantwortet [assessPlanFeasibility] — und die
  * Antwort gehoert vor die Augen der Nutzerin, bevor sie zwoelf Wochen darauf
  * baut.
+ *
+ * @param currentCtl aktuelle chronische Last (CTL) aus der
+ *   Performance-Management-Kurve, falls bekannt. Mit ihr bekommt jede Woche
+ *   ein Last-Budget aus der Standardrampe ([planWeekLoadBudgets]) und jede
+ *   Einheit ihr [TrainingSession.targetLoad]-Ziel daraus. Ohne sie (`null`,
+ *   alter Aufrufweg) bleiben die Kilometer die einzige Steuergroesse und die
+ *   Last-Ziele sind rein aus ihnen abgeleitet.
  */
 fun generatePlan(
     goal: Goal,
     assessment: FitnessAssessment,
     now: Long? = null,
+    currentCtl: Double? = null,
 ): TrainingPlan {
     val nowMs = now ?: System.currentTimeMillis()
     val firstMonday = startOfWeek(nowMs)
@@ -648,6 +823,8 @@ fun generatePlan(
         peakKm = peakKmFor(goal, startKm),
         eventWeekKm = zielwocheSessions(goal).sumOf { it.targetKm },
     )
+    val budgets = planWeekLoadBudgets(kinds, currentCtl)
+    val hilly = planIsHilly(goal)
 
     val weeks = kinds.indices.map { i ->
         TrainingWeek(
@@ -656,7 +833,11 @@ fun generatePlan(
             end = addWeeks(firstMonday, i + 1),
             kind = kinds[i],
             targetKm = volumes[i],
-            sessions = buildSessions(kinds[i], level, volumes[i], goal),
+            sessions = attachSessionLoads(
+                sessions = buildSessions(kinds[i], level, volumes[i], goal),
+                weekBudget = budgets[i],
+                hilly = hilly,
+            ),
         )
     }
 

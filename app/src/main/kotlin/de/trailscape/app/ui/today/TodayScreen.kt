@@ -35,6 +35,7 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.weekdayDateFormat
+import de.trailscape.core.adaptPlan
 import de.trailscape.core.assessPlanFeasibility
 import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.decideTodayRoute
@@ -116,11 +117,27 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val planFeasibilityAckKey by appViewModel.planFeasibilityAckKey.collectAsStateWithLifecycle()
 
+    // Der ANGEZEIGTE Plan: von `:core` (adaptPlan) an die gefahrene Realitaet
+    // angepasst, wenn ganze Wochen deutlich unter Soll lagen. Der gespeicherte
+    // Plan bleibt unveraendert — hier zaehlt, was heute realistisch ansteht,
+    // nicht, was vor Wochen aufgeschrieben wurde. Der Trainings-Tab leitet
+    // denselben Anzeige-Plan ab und erklaert die Anpassung dort.
+    val displayPlan = remember(plan, rides, insights) {
+        plan?.let {
+            adaptPlan(
+                plan = it,
+                rides = rides,
+                currentCtl = insights.latest?.ctl,
+                rideLoads = insights.rideLoads.mapValues { entry -> entry.value.load },
+            ).plan
+        }
+    }
+
     // Das Tagesprogramm des Plans: hoechstens eine Einheit wird gezeigt. Plaene
     // aus `:core` setzen nie zwei Einheiten auf denselben Tag; kaeme durch ein
     // fremdes Plan-JSON doch eine zweite dazu, ist die erste die richtige
     // Auskunft und der Trainings-Tab zeigt weiterhin alle.
-    val todaySession = remember(plan) { plan?.let { sessionsForDay(it).firstOrNull() } }
+    val todaySession = remember(displayPlan) { displayPlan?.let { sessionsForDay(it).firstOrNull() } }
 
     // Die Tagesentscheidung selbst liegt in `:core` ([decideTodayRoute]) und
     // nicht mehr hier. Sie stand frueher als `when`-Block in dieser Datei — die
@@ -142,16 +159,18 @@ fun TodayScreen(appViewModel: AppViewModel) {
 
     // Traegt der Plan sein eigenes Ziel? Die Antwort steht hier und nicht nur
     // beim Anlegen: Wer den Plan vor acht Wochen erstellt hat, liest die
-    // Warnung sonst nie wieder.
-    val feasibility = remember(plan) { plan?.let { assessPlanFeasibility(it) } }
+    // Warnung sonst nie wieder. Bewertet wird der ADAPTIERTE Stand — wenn die
+    // Realitaet den Aufbau eingedampft hat, muss auch das Urteil damit rechnen.
+    val feasibility = remember(displayPlan) { displayPlan?.let { assessPlanFeasibility(it) } }
 
     // Schluessel des aktuellen Plans fuer die Quittierung der Karte (siehe
     // [AppViewModel.acknowledgePlanFeasibility]): Nur ohne Plan `null`.
     val planKey = remember(plan) { plan?.let { planFeasibilityIdentityKey(it) } }
 
-    // Laufende Planwoche; `null` vor Planbeginn und ohne Plan.
-    val currentWeek = remember(plan) {
-        plan?.let { current -> current.weeks.getOrNull(currentWeekIndex(current)) }
+    // Laufende Planwoche (aus dem Anzeige-Plan); `null` vor Planbeginn und
+    // ohne Plan.
+    val currentWeek = remember(displayPlan) {
+        displayPlan?.let { current -> current.weeks.getOrNull(currentWeekIndex(current)) }
     }
     val riddenKm = remember(currentWeek, rides) { currentWeek?.let { weekKm(it, rides) } }
 
@@ -236,7 +255,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     item(key = "woche") {
                         WeekProgressCard(
                             week = currentWeek,
-                            weekCount = plan?.weeks?.size ?: 0,
+                            weekCount = displayPlan?.weeks?.size ?: 0,
                             riddenKm = riddenKm,
                         )
                     }

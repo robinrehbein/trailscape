@@ -63,6 +63,10 @@ import java.time.ZoneOffset
  * sobald dieser das erste Mal vorliegt ([initializedFromPlan]); spaetere
  * eigene Aenderungen an [plan] (z. B. durchs eigene „Plan erstellen") ueber-
  * schreiben die Eingabe danach nicht mehr.
+ *
+ * @param currentCtl aktuelle chronische Last aus der Auswertung
+ *   (`insights.latest?.ctl`) — damit rechnet `generatePlan` jeder Woche ein
+ *   Last-Budget aus; `null`, solange es keine Fitnesskurve gibt.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +74,7 @@ fun GoalCard(
     plan: TrainingPlan?,
     rides: List<Ride>,
     onSetPlan: (TrainingPlan?) -> Unit,
+    currentCtl: Double? = null,
 ) {
     val theme = MaterialTheme.colorScheme
 
@@ -123,7 +128,7 @@ fun GoalCard(
         val goal = Goal(name = trimmedName, distanceKm = distance, ascentM = ascent, date = dateMs)
         val assessment = assessFitness(rides)
         try {
-            val newPlan = generatePlan(goal, assessment)
+            val newPlan = generatePlan(goal, assessment, currentCtl = currentCtl)
             onSetPlan(newPlan)
             status = "Plan mit ${newPlan.weeks.size} Wochen erstellt."
             statusIsError = false

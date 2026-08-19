@@ -1,6 +1,7 @@
 package de.trailscape.app.ui
 
 import de.trailscape.core.Confidence
+import de.trailscape.core.DailyRecommendationKind
 import de.trailscape.core.DailyValue
 import de.trailscape.core.EftpSource
 import de.trailscape.core.Ride
@@ -324,6 +325,40 @@ class TrainingInsightsTest {
         restingHeartRate = VitalsTrend(series = series, lastWeekAvg = null, previousWeekAvg = null),
         sleepHours = VitalsTrend.empty,
     )
+
+    // -----------------------------------------------------------------------
+    // HIT-Budget: harte Tage der letzten 7 Tage
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `harte Tage werden ueber die Schwellenzeit gezaehlt`() {
+        // Profil (40 Jahre): HFmax 180, LTHR ≈ 160 — eine Stunde bei Puls 175
+        // ist eine volle Stunde ueber der Schwelle, Puls 120 reines LIT.
+        val hart1 = ride("h1", now.minusDays(1), hr = 175)
+        val hart2 = ride("h2", now.minusDays(3), hr = 175)
+        val locker = ride("e", now.minusDays(5), hr = 120)
+        val alt = ride("alt", now.minusDays(10), hr = 175) // ausserhalb des Fensters
+
+        val insights = computeInsights(listOf(hart1, hart2, locker, alt), null, profile, now)
+        assertEquals(2, insights.hardDaysLast7)
+        // Budget (max. 2 je 7 Tage) aufgebraucht → keine harte Einheit mehr,
+        // unabhaengig von der Tagesform.
+        assertTrue(insights.recommendation.kind != DailyRecommendationKind.HARTE_EINHEIT)
+
+        val einer = computeInsights(listOf(hart2, locker), null, profile, now)
+        assertEquals(1, einer.hardDaysLast7)
+
+        val keiner = computeInsights(listOf(locker, alt), null, profile, now)
+        assertEquals(0, keiner.hardDaysLast7)
+    }
+
+    @Test
+    fun `zwei harte Touren am selben Tag sind ein harter Tag`() {
+        val vormittag = ride("v", now.minusDays(2).withHour(9), hr = 175)
+        val nachmittag = ride("n", now.minusDays(2).withHour(15), hr = 175)
+        val insights = computeInsights(listOf(vormittag, nachmittag), null, profile, now)
+        assertEquals(1, insights.hardDaysLast7)
+    }
 
     @Test
     fun `Kartenstil faellt bei unbekannter Kennung auf den Standard zurueck`() {
