@@ -50,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -82,6 +83,7 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
+import de.trailscape.core.RideSummary
 import de.trailscape.core.formatDuration
 import de.trailscape.core.rideToGpx
 import de.trailscape.core.safeFileName
@@ -169,7 +171,7 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
 fun TourListContent(
     appViewModel: AppViewModel,
     onOpenDetail: (String) -> Unit,
-    onShowOnMap: (Ride) -> Unit,
+    onShowOnMap: (RideSummary) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -182,8 +184,8 @@ fun TourListContent(
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
 
     var importing by rememberSaveable { mutableStateOf(false) }
-    var renameTarget by remember { mutableStateOf<Ride?>(null) }
-    var deleteTarget by remember { mutableStateOf<Ride?>(null) }
+    var renameTarget by remember { mutableStateOf<RideSummary?>(null) }
+    var deleteTarget by remember { mutableStateOf<RideSummary?>(null) }
 
     // Ein gescheiterter Import ist eine Entscheidung, keine Meldung: Der
     // Fehlertext bleibt als Dialog stehen, bis eine andere Datei gewaehlt
@@ -240,10 +242,14 @@ fun TourListContent(
 
     // Teilen liegt als lokale Funktion vor, damit Liste und Kartenmenue
     // nachweislich denselben Weg nehmen (siehe [shareGpx] am Dateiende).
-    fun share(ride: Ride) {
+    // Die Liste haelt nur Zusammenfassungen — fuer das GPX wird die volle
+    // Tour on-demand geladen.
+    fun share(summary: RideSummary) {
         scope.launch {
             try {
-                shareGpx(context, ride)
+                val full = appViewModel.loadRide(summary.id)
+                    ?: error("Die Tour-Datei ist nicht mehr lesbar.")
+                shareGpx(context, full)
             } catch (e: Exception) {
                 appViewModel.showMessage(
                     withCause(
@@ -354,7 +360,7 @@ fun TourListContent(
 
     deleteTarget?.let { ride ->
         DeleteRideWithUndo(
-            ride = ride,
+            rideId = ride.id,
             appViewModel = appViewModel,
             scope = scope,
             snackbarHostState = snackbarHostState,
@@ -440,11 +446,12 @@ private fun TourListHeader(
  * offen ist, haelt deshalb er als lokalen Zustand fest (angestossen ueber das
  * `onOpenDetail`-Callback von [TourListContent]) und reicht ihn hier als
  * einfachen Parameter herein. Diese Funktion bleibt bewusst zustandslos
- * gegenueber der ID selbst; sie schlaegt nur den aktuellen Stand der Tour aus
- * [AppViewModel.rides] nach —
- * dieselbe Begruendung wie zuvor: Nach einem Umbenennen oder einem HF-Merge
- * aus Health Connect liefert `rides` ein neues [Ride]-Objekt, und ueber die ID
- * zeigt die Ansicht immer auf den aktuellen Stand.
+ * gegenueber der ID selbst; sie schlaegt die Zusammenfassung aus
+ * [AppViewModel.rides] nach und laedt die volle Tour (mit Punkten) on-demand
+ * ueber [AppViewModel.loadRide] — dieselbe Begruendung wie zuvor: Nach einem
+ * Umbenennen oder einem HF-Merge aus Health Connect aendert sich `updatedAt`
+ * der Zusammenfassung, und ueber (ID, updatedAt) zeigt die Ansicht immer auf
+ * den aktuellen Stand.
  *
  * Verschwindet die Tour aus der Liste, waehrend die Ansicht offen ist (Loeschen
  * anderswo, Sync), ruft diese Funktion [onBack] von selbst auf — genau wie
@@ -468,11 +475,22 @@ fun RideDetailHost(
     val scope = rememberCoroutineScope()
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
-    val ride = rides.firstOrNull { it.id == rideId }
+    val summary = rides.firstOrNull { it.id == rideId }
+
+    // Die volle Tour (mit Punkten) wird on-demand geladen — die Liste haelt
+    // nur noch Zusammenfassungen. Schluessel ist (ID, updatedAt): Nach einem
+    // Umbenennen oder HF-Merge aendert sich updatedAt und die Ansicht laedt
+    // die neue Fassung; der bereits angezeigte Stand bleibt waehrenddessen
+    // stehen (produceState behaelt seinen Wert ueber Schluesselwechsel).
+    val ride by produceState<Ride?>(initialValue = null, rideId, summary?.updatedAt) {
+        if (summary != null) {
+            value = appViewModel.loadRide(rideId)
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    var renameTarget by remember { mutableStateOf<Ride?>(null) }
-    var deleteTarget by remember { mutableStateOf<Ride?>(null) }
+    var renameTarget by remember { mutableStateOf<RideSummary?>(null) }
+    var deleteTarget by remember { mutableStateOf<RideSummary?>(null) }
     val undoSnackbarJob = remember { mutableStateOf<Job?>(null) }
 
     LaunchedEffect(appViewModel) {
@@ -481,15 +499,15 @@ fun RideDetailHost(
 
     // Siehe Klassen-KDoc: Eine Tour, die aus der Liste verschwindet, waehrend
     // diese Ansicht offen ist, schliesst die Ansicht von selbst.
-    LaunchedEffect(ride) {
-        if (ride == null) onBack()
+    LaunchedEffect(summary) {
+        if (summary == null) onBack()
     }
 
     // Die Systemzurueckgeste fuehrt aus dem Detail zurueck, unabhaengig davon,
     // ob die Tour schon geladen ist.
     BackHandler(onBack = onBack)
 
-    if (ride == null) return
+    val loaded = ride ?: return
 
     fun share(target: Ride) {
         scope.launch {
@@ -508,13 +526,13 @@ fun RideDetailHost(
     }
 
     RideDetailScreen(
-        ride = ride,
+        ride = loaded,
         appViewModel = appViewModel,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
-        onRename = { renameTarget = ride },
-        onShare = { share(ride) },
-        onDelete = { deleteTarget = ride },
+        onRename = { renameTarget = summary },
+        onShare = { share(loaded) },
+        onDelete = { deleteTarget = summary },
     )
 
     renameTarget?.let { target ->
@@ -530,7 +548,7 @@ fun RideDetailHost(
 
     deleteTarget?.let { target ->
         DeleteRideWithUndo(
-            ride = target,
+            rideId = target.id,
             appViewModel = appViewModel,
             scope = scope,
             snackbarHostState = snackbarHostState,
@@ -602,7 +620,7 @@ fun RideDetailHost(
  */
 @Composable
 private fun DeleteRideWithUndo(
-    ride: Ride,
+    rideId: String,
     appViewModel: AppViewModel,
     scope: CoroutineScope,
     snackbarHostState: SnackbarHostState,
@@ -610,9 +628,9 @@ private fun DeleteRideWithUndo(
     onDismiss: () -> Unit,
     onDeleted: () -> Unit = {},
 ) {
-    LaunchedEffect(ride.id) {
+    LaunchedEffect(rideId) {
         undoSnackbarJob.value?.cancel()
-        appViewModel.deleteRideWithUndo(ride.id)
+        appViewModel.deleteRideWithUndo(rideId)
         // Bewusst `scope` und nicht der Effekt-Bereich: Der Effekt endet mit
         // dem `onDismiss()` gleich darunter, die Snackbar soll aber ihre
         // volle Frist stehen bleiben.
@@ -635,7 +653,7 @@ private fun DeleteRideWithUndo(
 
 @Composable
 private fun RenameDialog(
-    ride: Ride,
+    ride: RideSummary,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
@@ -675,7 +693,7 @@ private fun RenameDialog(
  */
 @Composable
 private fun RideCard(
-    ride: Ride,
+    ride: RideSummary,
     loadText: String?,
     selected: Boolean,
     onShowOnMap: () -> Unit,

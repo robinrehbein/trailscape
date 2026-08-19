@@ -75,9 +75,10 @@ import kotlin.math.roundToInt
  *
  * Dass die Planungswerkzeuge dabei zur Seite treten, kostet nichts: Eine
  * generierte Runde hat keine Wegpunkte, die sich auflisten liessen, und das
- * Routenprofil-Dropdown ist bei ihr ohnehin abgeschaltet (der Generator rechnet
- * immer mit dem Gravel-Profil). Was wirklich hilft, ist das Hoehenprofil der
- * Auswahl — und das steht im Koerper, einen Zug entfernt.
+ * Routenprofil-Dropdown ist bei ihr ohnehin abgeschaltet (gesucht wird mit dem
+ * zuvor im Planungsblatt gewaehlten Profil; eine fertige Runde laesst sich
+ * ohne Wegpunkte nicht nachrechnen). Was wirklich hilft, ist das Hoehenprofil
+ * der Auswahl — und das steht im Koerper, einen Zug entfernt.
  *
  * ## Was im Peek steht und was im Koerper
  * Im **Peek** die Entscheidung: Ziel, die Kandidaten, „Übernehmen". Sie ist die
@@ -193,6 +194,19 @@ internal fun RouteGenerationSheet(
                         icon = Icons.Filled.Warning,
                         color = signals.danger,
                         text = error,
+                        modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
+                    )
+                    // Derselbe Ausweg wie im Fehlerzweig der manuellen Planung
+                    // (siehe `PlanningSheet` in `PlanningPanel.kt`): Der Fehler
+                    // nennt den Server, kennt aber den Ausweg nicht. Fehlen fuer
+                    // die versuchten Runden Kacheln, bietet Trailscape den
+                    // Download direkt an (`AppViewModel.offerMissingSegments`,
+                    // ausgeloest im Fehlerzweig des `RouteGenerationController`).
+                    NoticeBox(
+                        icon = Icons.Filled.Info,
+                        color = signals.caution,
+                        text = "Ohne Netz rechnet Trailscape auch auf dem Gerät, sobald die " +
+                            "Routing-Karten dieser Gegend geladen sind.",
                         modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                     )
                 }

@@ -82,15 +82,19 @@ import de.trailscape.core.DecouplingResult
 import de.trailscape.core.Ride
 import de.trailscape.core.RideCurve
 import de.trailscape.core.RideLoad
+import de.trailscape.core.SegmentEffortView
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.Vo2MaxEstimate
+import de.trailscape.core.buildRideSeries
 import de.trailscape.core.computeDecoupling
+import de.trailscape.core.computePhysicsEstimate
 import de.trailscape.core.confidenceLabels
 import de.trailscape.core.estimateVo2MaxFromSegments
 import de.trailscape.core.extractSteadySegments
 import de.trailscape.core.formatDuration
 import de.trailscape.core.heartRateCurve
 import de.trailscape.core.loadSourceLabels
+import de.trailscape.core.segmentEffortsForRide
 import de.trailscape.core.speedCurveKmh
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -159,10 +163,19 @@ internal fun RideDetailScreen(
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val load = insights.rideLoads[ride.id]
 
+    // Segment-Bestleistungen dieser Tour. Der Aufruf stoesst zugleich den
+    // lazy Erstlauf der Registry an (siehe [AppViewModel.refreshSegments]) —
+    // die Detailansicht ist ihr „erster Bedarf".
+    val segmentRegistry by appViewModel.segmentRegistry.collectAsStateWithLifecycle()
+    LaunchedEffect(ride.id) { appViewModel.refreshSegments() }
+    val segmentViews = remember(segmentRegistry, ride.id) {
+        segmentRegistry?.let { segmentEffortsForRide(it, ride.id) }.orEmpty()
+    }
+
     var menuOpen by remember { mutableStateOf(false) }
 
     val curves by rememberRideCurves(ride)
-    val analysis by rememberRideAnalysis(ride, load, insights.profile)
+    val analysis by rememberRideAnalysis(ride, insights.profile, insights.eftp.watts)
 
     // Zweite Ebene: Der Leitfaden laesst die Kopfzeile hier **eingeklappt**
     // starten, aber ausklappbar bleiben. Wer eine Tour geoeffnet hat, will die
@@ -307,6 +320,10 @@ internal fun RideDetailScreen(
                             formatValue = { "${it.roundToInt()} bpm" },
                         )
                     }
+                }
+
+                if (segmentViews.isNotEmpty()) {
+                    SegmentsCard(views = segmentViews)
                 }
 
                 RideAnalysisCard(
@@ -497,6 +514,78 @@ private fun RideAnalysisCard(
     }
 }
 
+/**
+ * Die Segmente dieser Tour: je automatisch erkanntem Anstieg die Zeit dieser
+ * Befahrung, die persoenliche Bestzeit, Anzahl der Befahrungen, der Platz und
+ * der Rueckstand — alles aus der lokalen Registry (`:core`,
+ * `RideSegments.kt`), nichts davon verlaesst das Geraet.
+ *
+ * Eine **neue** Bestzeit traegt eine Pille „★ Neue Bestzeit" in Signalfarbe;
+ * fuhr die Tour denselben Anstieg mehrmals (Runden), erscheint je Runde ein
+ * Eintrag. Ohne erkannte Segmente entfaellt die Karte ganz — dieselbe Regel
+ * wie bei den Kurven: kein leerer Abschnitt mit Hinweistext.
+ */
+@Composable
+private fun SegmentsCard(views: List<SegmentEffortView>) {
+    DetailCard {
+        Text(text = "Segmente", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "Automatisch erkannte Anstiege, verglichen mit deinen " +
+                "früheren Fahrten über dasselbe Stück.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        views.forEach { view ->
+            Spacer(Modifier.height(16.dp))
+            SegmentEffortEntry(view)
+        }
+    }
+}
+
+/** Ein Eintrag der Segmentkarte: Name, ggf. Bestzeit-Pille, Kennzahlenzeile. */
+@Composable
+private fun SegmentEffortEntry(view: SegmentEffortView) {
+    Column {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = view.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (view.isNewBest) {
+                // Bedeutung nicht allein ueber Farbe: der Stern und der Text
+                // tragen sie auch in Graustufen (siehe Leitfaden-Kommentar an
+                // [startAndFinishMarkers]).
+                TagPill(
+                    text = "★ Neue Bestzeit",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailFact("Zeit", formatDuration(view.timeS))
+            DetailFact("Bestzeit", formatDuration(view.bestTimeS))
+            DetailFact("Platz", "${view.rank}. von ${view.effortCount}")
+            DetailFact(
+                label = "Rückstand",
+                value = if (view.deltaToBestS <= 0) "–" else "+${view.deltaToBestS} s",
+            )
+            view.avgHr?.let { DetailFact("Ø Puls", "$it bpm") }
+        }
+    }
+}
+
 // -------------------------------------------------------------- Bausteine
 
 /** Eine Karte der Detailansicht — ueberall dasselbe Innenmass. */
@@ -587,43 +676,48 @@ private data class RideAnalysis(
 /**
  * Rechnet Entkopplung und VO2max fuer diese eine Tour.
  *
- * Grundlage ist die Leistungsreihe, die die Trainingsauswertung fuer die
- * Tourlast ohnehin schon gebaut hat ([RideLoad.physics]) — hier wird nichts neu
- * modelliert. Ohne Leistungsreihe (zu wenige Punkte, keine Zeitstempel) gibt es
- * nichts zu rechnen; nicht berechenbare Ergebnisse werden zu `null` und der
- * Abschnitt entfaellt.
+ * Die Leistungsreihe wird hier aus der (ohnehin fuer diese Ansicht geladenen)
+ * Volltour frisch gebaut: Die Trainingsauswertung haelt seit der Umstellung
+ * auf Zusammenfassungen keine Leistungsreihen mehr im Speicher — ihre
+ * [RideLoad]-Objekte tragen nur noch Kennzahlen (siehe `:core`,
+ * `RideLoadFacts.kt`). Der eine Aufbau fuer die eine offene Tour ist billig
+ * und laeuft auf `Dispatchers.Default`. Ohne Leistungsreihe (zu wenige
+ * Punkte, keine Zeitstempel, kein Hoehenprofil) gibt es nichts zu rechnen;
+ * nicht berechenbare Ergebnisse werden zu `null` und der Abschnitt entfaellt.
+ *
+ * @param eftpW die FTP der aktuellen Lastskala (`insights.eftp.watts`), damit
+ *   die hier gezeigte Analyse zur selben Skala gehoert wie die Trainingslast.
  */
 @Composable
 private fun rememberRideAnalysis(
     ride: Ride,
-    load: RideLoad?,
     profile: TrainingProfile,
-): State<RideAnalysis?> {
-    val physics = load?.physics
-    // Schluessel bewusst aus billigen Werten: Ein Gleichheitsvergleich der
-    // kompletten Leistungsreihe liefe bei jeder Rekomposition mit.
-    return produceState<RideAnalysis?>(
-        initialValue = null,
-        ride.id,
-        physics?.available,
-        physics?.eTss,
-        profile,
-    ) {
-        val estimate = physics
-        value = if (estimate == null || !estimate.available) {
+    eftpW: Double,
+): State<RideAnalysis?> = produceState<RideAnalysis?>(
+    initialValue = null,
+    ride.id,
+    ride.points.size,
+    profile,
+    eftpW,
+) {
+    value = withContext(Dispatchers.Default) {
+        val estimate = computePhysicsEstimate(
+            buildRideSeries(ride.points, profile),
+            profile,
+            eftpW = eftpW,
+        )
+        if (!estimate.available) {
             RideAnalysis(decoupling = null, vo2max = null)
         } else {
-            withContext(Dispatchers.Default) {
-                val decoupling = computeDecoupling(estimate, profile)
-                val vo2max = estimateVo2MaxFromSegments(
-                    extractSteadySegments(estimate.series, profile),
-                    profile,
-                )
-                RideAnalysis(
-                    decoupling = decoupling.takeIf { it.available },
-                    vo2max = vo2max.takeIf { it.available },
-                )
-            }
+            val decoupling = computeDecoupling(estimate, profile)
+            val vo2max = estimateVo2MaxFromSegments(
+                extractSteadySegments(estimate.series, profile),
+                profile,
+            )
+            RideAnalysis(
+                decoupling = decoupling.takeIf { it.available },
+                vo2max = vo2max.takeIf { it.available },
+            )
         }
     }
 }

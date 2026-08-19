@@ -70,6 +70,43 @@ class HeartRateLoadTest {
     }
 
     @Test
+    fun `Stehen mit 75 bpm erzeugt keine Bewegungszeit`() {
+        // Stehen an der Ampel: Position und Hoehe unveraendert, aber der Puls
+        // liegt mit 75 bpm ueber 1,15 x Ruhepuls (57,5 bei Ruhepuls 50).
+        // Frueher zaehlte das als Bewegungszeit und erzeugte TRIMP-Last im
+        // Stand — die Herzfrequenz darf aber nur entscheiden, wenn das
+        // Segment keine eigene Geschwindigkeitsbasis hat.
+        val points = List(61) { i ->
+            TrackPoint(lat = 47.0, lon = 11.0, ele = 100.0, time = T0 + i * 10_000L, hr = 75)
+        }
+        val series = buildRideSeries(points, refProfile)
+
+        assertEquals(0.0, series.movingTimeS, 1e-9)
+        assertEquals(600.0, series.totalTimeS, 1e-9)
+        assertFalse(computeHeartRateLoad(series, refProfile).available)
+    }
+
+    @Test
+    fun `ohne Geschwindigkeitsbasis entscheidet weiterhin der Puls`() {
+        // Ein GPS-Sprung ueber 25 m/s hat keine glaubwuerdige eigene
+        // Geschwindigkeit — genau dann (und nur dann) darf die Herzfrequenz
+        // das Segment zur Bewegungszeit zaehlen.
+        val step = 10_000L
+        val points = listOf(
+            TrackPoint(lat = 47.0, lon = 11.0, ele = 100.0, time = T0, hr = 130),
+            TrackPoint(lat = 47.0001, lon = 11.0, ele = 100.0, time = T0 + step, hr = 130),
+            // Sprung: rund 1,1 km in 10 s (> 25 m/s) — Ausreisser.
+            TrackPoint(lat = 47.01, lon = 11.0, ele = 100.0, time = T0 + 2 * step, hr = 130),
+        )
+        val series = buildRideSeries(points, refProfile)
+
+        // Das Sprung-Segment (10 s) zaehlt ueber den Puls; das erste Segment
+        // (rund 11 m in 10 s, also gut 1 m/s nach Glaettung) ueber das Tempo.
+        assertTrue(series.segments.last().moving)
+        assertEquals(20.0, series.movingTimeS, 1e-9)
+    }
+
+    @Test
     fun `sample-weise Integration liegt ueber der Durchschnitts-HF-Variante (Jensen)`() {
         // 30 min @110 + 30 min @150 vs. 60 min @130 (gleiche Ø-HF).
         val points = track(pointCount = 361, hr = { i -> if (i <= 180) 110 else 150 })

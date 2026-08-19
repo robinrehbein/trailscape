@@ -15,6 +15,23 @@
          Arbeit zugesteht. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Fuer den GPS-Wachhund der Aufzeichnung (RecordingService): Nach einem
+         AlarmManager-Weckruf haelt der Dienst fuer wenige Sekunden einen
+         PARTIAL_WAKE_LOCK (mit Timeout), um den Standort-Strom zu pruefen und
+         ggf. neu zu abonnieren. KEIN Dauer-WakeLock ueber die ganze Fahrt —
+         siehe die Klassendoku des RecordingService. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Fuer die Vibrationswarnung beim Verlassen der Route waehrend einer
+         Navigation (README-Zusage, siehe voice/Vibration.kt). Normal-Level,
+         kein Laufzeitdialog; abschaltbar unter Mehr → Aufzeichnung. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Erlaubt den Systemdialog „Batterieoptimierung ignorieren?"
+         (ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS). Ein GPS-Logger ist der
+         dokumentierte Ausnahmefall: Manche Hersteller-Energiesparer beenden
+         sonst die Aufzeichnung im Hintergrund. Angefragt wird hoechstens
+         einmal automatisch beim Start einer Aufzeichnung, sonst nur auf
+         Wunsch unter Mehr → Aufzeichnung. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- ACTIVITY_RECOGNITION bewusst NICHT deklariert: Trailscape zaehlt keine
          Schritte und erkennt keine Aktivitaeten selbst — das Aufzeichnen
          beruht ausschliesslich auf GPS-Standortpunkten. -->

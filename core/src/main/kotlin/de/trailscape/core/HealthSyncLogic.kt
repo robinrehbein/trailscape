@@ -245,6 +245,22 @@ fun rideTimeRange(ride: Ride): RideTimeRange {
 }
 
 /**
+ * Zeitraum aus einer punktfreien Zusammenfassung: `createdAt` plus Dauer —
+ * derselbe Rueckfall-Zweig, den [rideTimeRange] fuer Touren ohne
+ * Punkt-Zeitstempel nimmt. Fuer die Ueberlappungspruefung des Health-Imports
+ * gleichwertig, ohne dafuer die Punkte laden zu muessen.
+ */
+fun summaryTimeRange(info: RideInfo): RideTimeRange {
+    val startMs = info.createdAt
+    val durationS = info.stats.durationS
+    val endMs = if (durationS != null && durationS > 0) startMs + durationS * 1000L else startMs
+    return RideTimeRange(
+        start = dartLocalOf(startMs),
+        end = dartLocalOf(max(endMs, startMs)),
+    )
+}
+
+/**
  * Anteil des Zeitraums A, der von Zeitraum B ueberdeckt wird (0..1).
  *
  * Fuer einen punktfoermigen Zeitraum A (Start == Ende) gilt 1, wenn der Punkt
@@ -715,7 +731,51 @@ class HealthSyncService(
      * Wirft [HealthSyncException], wenn Health Connect nicht verfuegbar ist
      * oder die Berechtigungen fehlen.
      */
-    fun importWithReport(existing: List<Ride>, since: LocalDateTime? = null): HealthSyncReport {
+    fun importWithReport(existing: List<Ride>, since: LocalDateTime? = null): HealthSyncReport =
+        importWithReportInternal(
+            // Zeitraum wie eh und je aus den Punkten der bereits geladenen
+            // Touren; fuer den HF-Merge liegen sie ohnehin schon vor.
+            refs = existing.map { ExistingRideRef(it.id, rideTimeRange(it), it) },
+            loadRide = { null },
+            since = since,
+        )
+
+    /**
+     * Wie [importWithReport], arbeitet aber auf **Zusammenfassungen** statt
+     * voller Touren — die App muss dafuer nicht mehr saemtliche GPS-Punkte
+     * aller Touren in den Speicher heben.
+     *
+     * Der Zeitraum je Bestandstour kommt dann aus `createdAt` plus
+     * `stats.durationS` (siehe [summaryTimeRange]) statt aus den
+     * Punkt-Zeitstempeln — fuer die Ueberlappungspruefung gegen frische
+     * Workouts gleichwertig, denn beides beschreibt dieselbe Fahrt. Nur wenn
+     * ein Workout tatsaechlich ueberlappt UND die Tour fuer eine
+     * HF-Anreicherung infrage kommt, laedt [loadRide] die volle Tour nach;
+     * liefert es `null` (Datei unlesbar/geloescht), zaehlt die Session wie
+     * bisher als Duplikat und nichts geht verloren.
+     */
+    fun importWithReport(
+        existing: List<RideSummary>,
+        loadRide: (String) -> Ride?,
+        since: LocalDateTime? = null,
+    ): HealthSyncReport = importWithReportInternal(
+        refs = existing.map { ExistingRideRef(it.id, summaryTimeRange(it), null) },
+        loadRide = loadRide,
+        since = since,
+    )
+
+    /** Eine Bestandstour, wie die Import-Logik sie braucht: ID, Zeitraum, ggf. schon geladen. */
+    private class ExistingRideRef(
+        val id: String,
+        val range: RideTimeRange,
+        val preloaded: Ride?,
+    )
+
+    private fun importWithReportInternal(
+        refs: List<ExistingRideRef>,
+        loadRide: (String) -> Ride?,
+        since: LocalDateTime?,
+    ): HealthSyncReport {
         val connection = checkAvailability()
         if (!connection.isReady) {
             throw HealthSyncException(connection.message)
@@ -768,11 +828,10 @@ class HealthSyncService(
         // dieses Laufs importierte Sessions kommen ohne Tour dazu, damit zwei
         // nahezu identische Sessions nicht doppelt landen.
         val ranges = mutableListOf<TimeRangeWithRide>()
-        for (ride in existing) {
-            val range = rideTimeRange(ride)
-            ranges.add(TimeRangeWithRide(range.start, range.end, ride))
+        for (ref in refs) {
+            ranges.add(TimeRangeWithRide(ref.range.start, ref.range.end, ref))
         }
-        val knownIds = existing.map { it.id }.toMutableSet()
+        val knownIds = refs.map { it.id }.toMutableSet()
         val mergeTargets = mutableSetOf<String>()
 
         val candidates = mutableListOf<HealthWorkout>()
@@ -793,9 +852,12 @@ class HealthSyncService(
                 continue
             }
 
-            val ride = overlap.ride
+            val ref = overlap.ride
             // Nur bestehende Touren ohne Herzfrequenz werden angereichert, und
-            // jede hoechstens einmal je Lauf.
+            // jede hoechstens einmal je Lauf. Die volle Tour wird erst hier —
+            // also nur fuer tatsaechlich ueberlappende Sessions — geladen;
+            // laesst sie sich nicht laden, bleibt die Session ein Duplikat.
+            val ride = ref?.let { it.preloaded ?: loadRide(it.id) }
             if (ride == null || rideHasHeartRate(ride) || !mergeTargets.add(ride.id)) {
                 duplicates++
                 continue
@@ -984,7 +1046,7 @@ class HealthSyncService(
     private data class TimeRangeWithRide(
         val start: LocalDateTime,
         val end: LocalDateTime,
-        val ride: Ride?,
+        val ride: ExistingRideRef?,
     )
 
     private data class MergeCandidate(val workout: HealthWorkout, val ride: Ride)

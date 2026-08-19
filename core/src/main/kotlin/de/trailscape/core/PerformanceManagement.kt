@@ -268,6 +268,18 @@ fun dailyLoadsFrom(entries: Iterable<LoadEntry>): List<DailyLoad> {
     return days.map { DailyLoad(day = it, load = byDay[it]!!) }
 }
 
+/**
+ * Standard-Zielrampe in CTL-Punkten pro Woche (§6.3).
+ *
+ * 4 CTL/Woche liegt mitten im Band „Nachhaltiger Aufbau" von
+ * [classifyRampRate] (3…6) — genau die Rate, die die eigene Auswertung
+ * hinterher nicht anmahnt. Dieselbe Zahl benutzt sowohl das empfohlene
+ * Wochenziel der Auswertung (`computeInsights`) als auch das Last-Budget des
+ * Trainingsplans (`generatePlan`), damit Plan und Lastmodell nicht mit zwei
+ * verschiedenen Rampen rechnen.
+ */
+const val defaultTargetRampPerWeek: Double = 4.0
+
 /** Empfohlene Wochenlast fuer eine Zielrampe (§6.3). */
 data class WeeklyLoadTarget(
     val targetRamp: Double,

@@ -49,10 +49,7 @@ import de.trailscape.app.ui.isDuplicateRide
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.BulkImportResult
 import de.trailscape.core.FormatException
-import de.trailscape.core.Ride
-import de.trailscape.core.TrainingProfile
 import de.trailscape.core.backupFileName
-import de.trailscape.core.buildBackupJson
 import de.trailscape.core.importArchive
 import de.trailscape.core.parseBackupJson
 import de.trailscape.core.scanArchive
@@ -125,7 +122,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         scope.launch {
             busy = true
             try {
-                writeBackupFile(context, uri, rides, appViewModel.profile.value)
+                writeBackupFile(context, uri, appViewModel)
                 appViewModel.showMessage("Backup exportiert.")
             } catch (e: Exception) {
                 // Deutscher Satz zuerst, technische Ursache nur in Klammern —
@@ -280,6 +277,21 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             "Einzelne GPX- oder FIT-Dateien (z. B. aus Komoot oder Strava) lassen sich " +
             "ebenfalls importieren — oder gleich ein ganzer Strava-/Garmin-Export als " +
             "ZIP-Archiv.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    // Ehrlicher Hinweis statt Modal-Dialog: Die Export-Datei ist bewusst
+    // unverschluesseltes Klartext-JSON (lesbar, importierbar, zukunftssicher) —
+    // aber genau deshalb muss hier stehen, was drinsteckt, BEVOR jemand sie
+    // per Mail oder Cloud weiterreicht. Siehe PRIVACY.md, Abschnitt 7.
+    Text(
+        text = "Die exportierte Datei ist unverschlüsseltes Klartext-JSON und enthält " +
+            "deine vollständige Ortshistorie (jeden GPS-Punkt aller Touren, mit " +
+            "Zeitstempeln und ggf. Puls) sowie dein Trainingsprofil mit " +
+            "Gesundheitsdaten (Alter, Geschlecht, Gewicht, Ruhepuls, LTHR, FTP). " +
+            "Behandle sie entsprechend vertraulich, wenn du sie per Mail oder Cloud " +
+            "weitergibst.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -465,15 +477,21 @@ private suspend fun readTextFile(context: Context, uri: Uri): String = withConte
     } ?: throw FormatException(UNREADABLE_FILE_MESSAGE)
 }
 
-/** Schreibt das Backup-JSON in das vom SAF gewaehlte Ziel. Laeuft auf [Dispatchers.IO]. */
+/**
+ * Schreibt das Backup-JSON **streamend** in das vom SAF gewaehlte Ziel: Tour
+ * fuer Tour ueber [AppViewModel.writeBackup] geladen und geschrieben — der
+ * Gesamtdump entsteht nie als ein String im Speicher (frueher hielt
+ * `buildBackupJson` bei grossen Bestaenden hunderte MB fest). Laeuft auf
+ * [Dispatchers.IO].
+ */
 private suspend fun writeBackupFile(
     context: Context,
     uri: Uri,
-    rides: List<Ride>,
-    profile: TrainingProfile,
+    appViewModel: AppViewModel,
 ) = withContext(Dispatchers.IO) {
-    val json = buildBackupJson(rides, profile)
     context.contentResolver.openOutputStream(uri)?.use { stream ->
-        stream.write(json.toByteArray(Charsets.UTF_8))
+        java.io.BufferedWriter(java.io.OutputStreamWriter(stream, Charsets.UTF_8)).use { writer ->
+            appViewModel.writeBackup(writer)
+        }
     } ?: throw IllegalStateException("Die Datei konnte nicht geschrieben werden.")
 }

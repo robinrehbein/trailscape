@@ -140,6 +140,9 @@ internal fun LiveRecordingCard(
     onStop: () -> Unit,
     onOpenRideMode: () -> Unit,
     modifier: Modifier = Modifier,
+    // Ob die laufende Pause eine Auto-Pause ist — nur fuer die Statuszeile,
+    // Bedienung wie bei einer manuellen Pause.
+    autoPaused: Boolean = false,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -155,7 +158,11 @@ internal fun LiveRecordingCard(
                 RecordDot(color = MaterialTheme.colorScheme.error, size = 12.dp)
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (paused) "Pausiert" else "Aufzeichnung läuft",
+                    text = when {
+                        paused && autoPaused -> "Auto-Pause"
+                        paused -> "Pausiert"
+                        else -> "Aufzeichnung läuft"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.error,
                 )

@@ -9,6 +9,14 @@
     keine 25-MB-Grenze kennt: Eine laufende Aufzeichnung gehoert auch bei einem
     direkten Geraetewechsel nicht mit, und die MapLibre-Datenbank waere im
     laufenden Betrieb (WAL) ohnehin nur unvollstaendig kopiert.
+
+    `trailscape_prefs.xml` (SharedPreferences) ist wie in backup_rules.xml
+    ausgenommen — dort steht auch das Warum (Sync-Token im Klartext,
+    400 Tage Vitalhistorie). Bewusst auch beim <device-transfer>: Der laeuft
+    zwar Geraet-zu-Geraet ohne Google-Cloud, traegt das Token und die
+    Gesundheitswerte aber genauso ungefragt auf ein anderes Geraet; der
+    dokumentierte Weg fuer Profil und Einstellungen ist der manuelle
+    Backup-Export (Mehr → Daten & Backup).
 -->
 <data-extraction-rules>
     <cloud-backup>
@@ -19,6 +27,7 @@
         <exclude domain="file" path="mbgl-offline.db-shm" />
         <exclude domain="file" path="segments" />
         <exclude domain="file" path="brouter" />
+        <exclude domain="sharedpref" path="trailscape_prefs.xml" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="file" path="recording" />
@@ -28,5 +37,6 @@
         <exclude domain="file" path="mbgl-offline.db-shm" />
         <exclude domain="file" path="segments" />
         <exclude domain="file" path="brouter" />
+        <exclude domain="sharedpref" path="trailscape_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>

@@ -1436,6 +1436,50 @@ class HealthSyncTest {
     }
 
     @Test
+    fun `Zusammenfassungs-Variante - laedt nur ueberlappende Touren nach und merged wie bisher`() {
+        val gateway = mergeGatewayWith(
+            heartRate = listOf(
+                HealthHeartRateSample(time = mergeStart.plusMs(seconds(20)), bpm = 120.0),
+                HealthHeartRateSample(time = mergeStart.plusMs(minutes(10)), bpm = 150.0),
+                HealthHeartRateSample(time = mergeStart.plusMs(minutes(20)), bpm = 180.0),
+            ),
+        )
+
+        val ueberlappend = rideWithPoints(id = "lokal", start = mergeStart)
+        val fern = rideWithPoints(id = "fern", start = at(2026, 7, 20, 9))
+        val alle = listOf(ueberlappend, fern)
+        val loaded = mutableListOf<String>()
+
+        val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(
+            existing = alle.map { it.toSummary() },
+            loadRide = { id ->
+                loaded.add(id)
+                alle.firstOrNull { it.id == id }
+            },
+        )
+
+        // Nur die tatsaechlich ueberlappende Tour wurde von der Platte geholt —
+        // nie der Gesamtbestand.
+        assertEquals(listOf("lokal"), loaded)
+        assertEquals(listOf("lokal"), report.mergedRides.map { it.id })
+        assertEquals(listOf(120, 150, 180), report.mergedRides.single().points.map { it.hr })
+    }
+
+    @Test
+    fun `Zusammenfassungs-Variante - eine nicht ladbare Tour zaehlt als Duplikat statt zu verlieren`() {
+        val gateway = mergeGatewayWith()
+
+        val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(
+            existing = listOf(rideWithPoints(id = "lokal", start = mergeStart).toSummary()),
+            loadRide = { null },
+        )
+
+        assertTrue(report.imported.isEmpty())
+        assertTrue(report.mergedRides.isEmpty())
+        assertEquals(1, report.duplicatesSkipped)
+    }
+
+    @Test
     fun `HF-Merge - eine Tour mit vorhandener HF wird nicht angefasst`() {
         val gateway = mergeGatewayWith(
             heartRate = listOf(HealthHeartRateSample(time = mergeStart, bpm = 120.0)),

@@ -145,7 +145,7 @@ const val minSpeedSampleKm: Double = 3.0
  * mindestens [minSpeedSampleKm] lang. Median statt Mittelwert, weil eine
  * einzelne Renn- oder Schiebe-Tour den Schnitt sonst verzerrt.
  */
-fun typicalAvgSpeedKmh(recentRides: List<Ride>, rideCount: Int = speedHistoryRides): Double? {
+fun typicalAvgSpeedKmh(recentRides: List<RideInfo>, rideCount: Int = speedHistoryRides): Double? {
     if (rideCount <= 0) {
         return null
     }
@@ -211,7 +211,7 @@ fun intensitySpeedFactor(intensity: SessionIntensity): Double = when (intensity)
 fun planningSpeedKmh(
     intensity: SessionIntensity,
     profile: TrainingProfile,
-    recentRides: List<Ride>,
+    recentRides: List<RideInfo>,
 ): Double {
     val base = typicalAvgSpeedKmh(recentRides) ?: fallbackSpeedKmh(profile)
     return max(base * intensitySpeedFactor(intensity), 1.0)
@@ -324,7 +324,7 @@ fun ascentPreferenceForSession(session: TrainingSession): AscentPreference {
 fun routeTargetForSession(
     session: TrainingSession,
     profile: TrainingProfile,
-    recentRides: List<Ride>,
+    recentRides: List<RideInfo>,
 ): RouteTarget {
     val intensity = classifySessionIntensity(session)
     val speed = planningSpeedKmh(intensity, profile, recentRides)
@@ -423,7 +423,7 @@ private const val MAX_WEEK_HOURS_SHARE = 0.5
 fun routeTargetForToday(
     recommendation: DailyRecommendation,
     profile: TrainingProfile,
-    recentRides: List<Ride>,
+    recentRides: List<RideInfo>,
     weeklyTarget: WeeklyLoadTarget? = null,
 ): RouteTarget? {
     val kind = recommendation.kind

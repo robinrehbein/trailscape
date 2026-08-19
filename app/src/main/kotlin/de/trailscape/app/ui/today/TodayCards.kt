@@ -41,7 +41,7 @@ import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.training.readinessBandColor
 import de.trailscape.core.PlanFeasibility
-import de.trailscape.core.Ride
+import de.trailscape.core.RideInfo
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingSession
@@ -344,14 +344,16 @@ private fun PlannedSessionBlock(session: TrainingSession) {
                 modifier = Modifier.weight(1f),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            // Dauer nur, wenn der Plan sie kennt: Plaene aus der Zeit vor
-            // `TrainingSession.durationMin` tragen keine, und eine hier
-            // hergeleitete Zahl waere eine zweite Wahrheit neben der, mit der
-            // die Einheit erzeugt wurde.
+            // Dauer und Ziel-Last nur, wenn der Plan sie kennt: Plaene aus der
+            // Zeit vor `TrainingSession.durationMin`/`targetLoad` tragen
+            // keine, und eine hier hergeleitete Zahl waere eine zweite
+            // Wahrheit neben der, mit der die Einheit erzeugt wurde.
             Text(
-                text = session.durationMin
-                    ?.let { "${session.targetKm} km · ca. $it min" }
-                    ?: "${session.targetKm} km",
+                text = buildString {
+                    append("${session.targetKm} km")
+                    session.durationMin?.let { append(" · ca. $it min") }
+                    session.targetLoad?.let { append(" · Last ${it.roundToInt()}") }
+                },
                 style = MaterialTheme.typography.titleSmall,
             )
         }
@@ -457,7 +459,7 @@ internal fun WeekProgressCard(week: TrainingWeek, weekCount: Int, riddenKm: Doub
  * Liste sehen, nicht nebenbei den Kartenzustand veraendern.
  */
 @Composable
-internal fun LastRideCard(ride: Ride, onOpenRides: () -> Unit) {
+internal fun LastRideCard(ride: RideInfo, onOpenRides: () -> Unit) {
     val theme = MaterialTheme.colorScheme
 
     Card(

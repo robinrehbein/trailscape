@@ -253,6 +253,54 @@ class ExportTest {
         }
     }
 
+    // --- Streamendes Backup: byteidentisch zu buildBackupJson ---
+
+    @Test
+    fun `writeBackupJson ist byteidentisch zu buildBackupJson`() {
+        val rides = listOf(
+            ride(id = "a"),
+            ride(id = "b", name = "Feierabendrunde & \"Test\" <ä>"),
+            // Eine Tour ohne Punkte und mit gesetztem planned/updatedAt, damit
+            // auch leeres Punkt-Array und Sonderfelder verglichen werden.
+            ride(id = "c", points = emptyList()).copy(planned = true, updatedAt = 1700000999000L),
+        )
+        val profile = TrainingProfile(
+            ageYears = 34,
+            sex = Sex.WEIBLICH,
+            weightKg = 62.0,
+            hrMaxOverride = 188.0,
+        )
+        val at = 1700000123456L
+
+        val expected = buildBackupJson(rides, profile, exportedAtMs = at)
+        val streamed = StringBuilder()
+        writeBackupJson(streamed, rides.asSequence(), profile, exportedAtMs = at)
+
+        assertEquals(expected, streamed.toString())
+        // Und das Ergebnis bleibt eine gueltige Sicherung.
+        assertEquals(3, parseBackupJson(streamed.toString()).rides.size)
+    }
+
+    @Test
+    fun `writeBackupJson ohne Touren und ohne Profil ist byteidentisch`() {
+        val at = 1700000123456L
+        val expected = buildBackupJson(emptyList(), null, exportedAtMs = at)
+        val streamed = StringBuilder()
+        writeBackupJson(streamed, emptySequence(), null, exportedAtMs = at)
+        assertEquals(expected, streamed.toString())
+        assertTrue(parseBackupJson(streamed.toString()).rides.isEmpty())
+    }
+
+    @Test
+    fun `writeBackupJson mit genau einer Tour ist byteidentisch`() {
+        val at = 1700000123456L
+        val rides = listOf(ride(id = "solo"))
+        val expected = buildBackupJson(rides, null, exportedAtMs = at)
+        val streamed = StringBuilder()
+        writeBackupJson(streamed, rides.asSequence(), null, exportedAtMs = at)
+        assertEquals(expected, streamed.toString())
+    }
+
     // --- safeFileName / backupFileName ---
 
     @Test

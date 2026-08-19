@@ -128,16 +128,98 @@ fun rideFromGpx(xml: String, fallbackName: String, id: String? = null): Ride {
 /**
  * Baut eine vollstaendige Sicherung aus allen Touren und optional dem
  * Trainingsprofil als eingeruecktes JSON.
+ *
+ * Haelt dafuer den kompletten Dump als EINEN String im Speicher — fuer
+ * grosse Bestaende nimmt der Backup-Export in der App deshalb die streamende
+ * Variante [writeBackupJson], die Tour fuer Tour laedt und schreibt. Diese
+ * Funktion bleibt als Referenz-Implementierung des Formats bestehen; ein
+ * Test stellt sicher, dass beide byteidentische Ausgaben erzeugen.
+ *
+ * @param exportedAtMs Zeitstempel im `exportedAt`-Feld; Parameter (statt fest
+ *   `System.currentTimeMillis()`), damit der Byte-Vergleichstest beider
+ *   Varianten deterministisch ist.
  */
-fun buildBackupJson(rides: List<Ride>, profile: TrainingProfile?): String {
+fun buildBackupJson(
+    rides: List<Ride>,
+    profile: TrainingProfile?,
+    exportedAtMs: Long = System.currentTimeMillis(),
+): String {
     val json = buildJsonObject {
         put("app", backupAppName)
         put("backupVersion", backupFormatVersion)
-        put("exportedAt", formatIso8601Utc(System.currentTimeMillis()))
+        put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
+}
+
+/**
+ * Streamende Variante von [buildBackupJson]: schreibt die Sicherung Tour fuer
+ * Tour nach [out], ohne je alle Touren gleichzeitig im Speicher zu halten.
+ *
+ * [rides] wird genau einmal und lazy durchlaufen — der Aufrufer haengt hier
+ * typischerweise eine Sequenz an, die jede Tour erst beim Zugriff von der
+ * Platte laedt (`summaries.asSequence().mapNotNull { loadRide(it.id) }`).
+ *
+ * ## Byteidentisch zum bisherigen Format
+ * Kopf (app/backupVersion/exportedAt/profile) und jede einzelne Tour werden
+ * mit demselben [prettyJson] serialisiert wie in [buildBackupJson]; nur das
+ * Zusammenfuegen (Einrueckung der Tour-Objekte um eine Array-Ebene, Kommata,
+ * schliessende Klammern) passiert von Hand. `ExportTest` prueft die
+ * Byte-Gleichheit beider Varianten — auch fuer den leeren Bestand.
+ */
+fun writeBackupJson(
+    out: Appendable,
+    rides: Sequence<Ride>,
+    profile: TrainingProfile?,
+    exportedAtMs: Long = System.currentTimeMillis(),
+) {
+    // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
+    // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
+    // nachweislich aus demselben Serialisierer wie bisher.
+    val head = buildJsonObject {
+        put("app", backupAppName)
+        put("backupVersion", backupFormatVersion)
+        put("exportedAt", formatIso8601Utc(exportedAtMs))
+        put("profile", profile?.toJson() ?: JsonNull)
+    }
+    val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
+    // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
+    // einer eigenen Zeile).
+    out.append(headText.removeSuffix("\n}"))
+    out.append(",\n  \"rides\": [")
+
+    var first = true
+    for (ride in rides) {
+        out.append(if (first) "\n" else ",\n")
+        first = false
+        val rideText = prettyJson.encodeToString(JsonObject.serializer(), ride.toJson())
+        // Jede Zeile des einzeln serialisierten Tour-Objekts rueckt um eine
+        // Array-Ebene (4 Leerzeichen) ein — exakt dort, wo der
+        // Gesamt-Serialisierer sie hinschreiben wuerde.
+        var lineStart = 0
+        while (lineStart <= rideText.length) {
+            val lineEnd = rideText.indexOf('\n', lineStart)
+            if (lineStart > 0) {
+                out.append('\n')
+            }
+            out.append("    ")
+            if (lineEnd < 0) {
+                out.append(rideText, lineStart, rideText.length)
+                break
+            }
+            out.append(rideText, lineStart, lineEnd)
+            lineStart = lineEnd + 1
+        }
+    }
+
+    if (first) {
+        // Leerer Bestand: kotlinx schreibt ein leeres Array kompakt als `[]`.
+        out.append("]\n}")
+    } else {
+        out.append("\n  ]\n}")
+    }
 }
 
 /**

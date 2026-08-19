@@ -148,7 +148,7 @@ fun decideTodayRoute(
     recommendation: DailyRecommendation,
     session: TrainingSession?,
     profile: TrainingProfile,
-    recentRides: List<Ride>,
+    recentRides: List<RideInfo>,
     weeklyTarget: WeeklyLoadTarget? = null,
 ): TodayRoute {
     val kind = recommendation.kind

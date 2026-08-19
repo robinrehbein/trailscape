@@ -73,7 +73,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.record.abbiegehinweiseAktiviert
+import de.trailscape.app.record.batterieAusnahmeIntent
+import de.trailscape.app.record.batterieHinweisGezeigt
+import de.trailscape.app.record.merkeBatterieHinweisGezeigt
+import de.trailscape.app.record.vonBatterieoptimierungAusgenommen
 import de.trailscape.app.routing.missingSegmentsFor
+import de.trailscape.app.voice.VoiceAnnouncer
+import de.trailscape.app.voice.vibriereOffRoute
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
@@ -97,6 +104,7 @@ import de.trailscape.core.PlannedRoute
 import de.trailscape.core.Ride
 import de.trailscape.core.RouteNavigator
 import de.trailscape.core.RouteProfile
+import de.trailscape.core.TurnAnnouncer
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.RoutingSource
@@ -105,6 +113,7 @@ import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
 import de.trailscape.core.buildGpx
 import de.trailscape.core.computeStats
+import de.trailscape.core.extractTurnHints
 import de.trailscape.core.haversineM
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
@@ -190,9 +199,13 @@ import kotlinx.coroutines.withContext
  *    einer gespeicherten Tour.
  *  * **Positionen der Navigation** kommen aus der laufenden Aufzeichnung,
  *    wenn eine laeuft — das Original abonnierte GPS ein zweites Mal.
- *  * **Keine Vibration bei „abseits der Route"**: Dafuer fehlt die
- *    `VIBRATE`-Berechtigung im Manifest, das hier nicht angefasst wird. Die
- *    Warnung erscheint als Meldung und in der Navigationsleiste.
+ *  * **Vibration und Sprachansage bei „abseits der Route"** — zusaetzlich zur
+ *    Meldung und zur Navigationsleiste, denn beide sind im Fahrmodus (eigenes
+ *    Dialog-Fenster, siehe `RideModeScreen.kt`) unsichtbar. Dazu kommen
+ *    Abbiegehinweise aus der Routengeometrie (`TurnHints.kt` in `:core`) und
+ *    die Zielansage; gesprochen wird ueber `voice/VoiceAnnouncer.kt`
+ *    (Hauptschalter „Sprachansagen" unter Mehr → Aufzeichnung, Default AUS),
+ *    vibriert ueber `voice/Vibration.kt` (eigener Schalter, Default AN).
  *  * **Suche jederzeit**, nicht nur im Planungsmodus, und **im Blatt selbst**
  *    statt als Panel im oberen Stapel: Das Feld im Erkunden-Blatt ist das
  *    echte Feld, sein Koerper zeigt beim Tippen die Treffer (siehe
@@ -328,6 +341,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     val isRecording by RecordingRepository.isRecording.collectAsStateWithLifecycle()
     val isPaused by RecordingRepository.isPaused.collectAsStateWithLifecycle()
+    val isAutoPaused by RecordingRepository.isAutoPaused.collectAsStateWithLifecycle()
     val elapsedMs by RecordingRepository.elapsedMs.collectAsStateWithLifecycle()
     val recordedKm by RecordingRepository.distanceKm.collectAsStateWithLifecycle()
     val livePoints by RecordingRepository.points.collectAsStateWithLifecycle()
@@ -496,6 +510,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     // `rememberSaveable`: Eine Drehung am Lenker darf nicht dazu fuehren, dass
     // die Fahrerin ploetzlich wieder die kleine Live-Leiste vor sich hat.
     var rideMode by rememberSaveable { mutableStateOf(false) }
+
+    // Ob der einmalige Batterieoptimierungs-Hinweis gerade offen ist (siehe
+    // `BatteryNoticeDialog.kt`). Gesetzt in [runRecording], wenn die Ausnahme
+    // fehlt und der Hinweis noch nie lief (Prefs-Merker) — die Aufzeichnung
+    // startet unabhaengig davon.
+    var showBatteryNotice by remember { mutableStateOf(false) }
 
     // Ob die Tourenliste im Erkunden-Blatt aufgeklappt ist (siehe
     // `ExploreSheet.kt`) — `rememberSaveable`, damit eine Drehung nicht ein
@@ -851,6 +871,12 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         navTotalKm = navigator.totalKm
 
+        // Abbiegehinweise aus der Routengeometrie (`:core`, dort getestet).
+        // Je Effekt-Lauf eine frische Instanz — das IST der geforderte Reset
+        // bei Routenwechsel; bereits ueberfahrene Hinweise verfallen im
+        // Announcer selbst still.
+        val turnAnnouncer = TurnAnnouncer(extractTurnHints(target.points))
+
         // Laeuft eine Aufzeichnung, kommen die Positionen von dort — ein
         // zweiter GPS-Abonnent braeuchte nur Strom fuer dieselben Punkte.
         val positions: Flow<Pair<Double, Double>> = if (isRecording) {
@@ -860,6 +886,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
 
         var wasOffRoute = false
+        var zielGemeldet = false
         positions.collect { (lat, lon) ->
             val state = navigator.update(lat, lon)
             navState = state
@@ -869,8 +896,36 @@ fun MapScreen(appViewModel: AppViewModel) {
             if (followMe) controller.moveTo(lat, lon, minZoom = null, animate = false)
             if (state.offRoute && !wasOffRoute) {
                 appViewModel.showMessage("Achtung: Du bist abseits der Route.")
+                // Die Snackbar ist im Fahrmodus (eigenes Dialog-Fenster)
+                // unsichtbar und mit dem Telefon in der Tasche sowieso —
+                // deshalb je Off-Route-Episode zusaetzlich einmal Vibration
+                // (README-Zusage, eigener Schalter) und Sprachansage.
+                vibriereOffRoute(context)
+                VoiceAnnouncer.sagAn(context, "Du bist abseits der Route.")
+            }
+            if (!state.offRoute && wasOffRoute) {
+                VoiceAnnouncer.sagAn(context, "Zurück auf der Route.")
             }
             wasOffRoute = state.offRoute
+
+            if (!state.offRoute) {
+                // Abbiegehinweise nur auf der Route: Abseits stimmt der
+                // projizierte Fortschritt nicht, und eine Ansage „In 100
+                // Metern links" auf fremdem Weg waere eine Falschauskunft.
+                // Das Tempo kommt aus der laufenden Aufzeichnung; ohne sie
+                // nimmt der Announcer sein Standardtempo an.
+                if (abbiegehinweiseAktiviert(context)) {
+                    turnAnnouncer.melde(state.doneKm * 1000, RecordingRepository.speedKmh.value)
+                        ?.let { ansage -> VoiceAnnouncer.sagAn(context, ansage) }
+                }
+                if (!zielGemeldet && state.remainingKm <= ZIEL_ERREICHT_KM && state.doneKm > ZIEL_ERREICHT_KM) {
+                    // Einmal je Effekt-Lauf; die Mindest-Fahrstrecke davor
+                    // verhindert die Zielansage direkt am Start einer Runde,
+                    // deren Ziel neben dem Start liegt.
+                    zielGemeldet = true
+                    VoiceAnnouncer.sagAn(context, "Ziel erreicht.")
+                }
+            }
         }
     }
 
@@ -891,10 +946,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // Navigation nach Tabwechsel/Drehung wieder aufnehmen: Gerettet wurden nur
-    // Kennung und Beschriftung (siehe oben), die Punkte kommen aus den
-    // geladenen Touren bzw. aus der geretteten geplanten Route. Bis dahin zeigt
-    // die Leiste die gespeicherte Gesamtstrecke; den Rest rechnet der
-    // `RouteNavigator` beim naechsten GPS-Punkt neu.
+    // Kennung und Beschriftung (siehe oben), die Punkte kommen on-demand von
+    // der Platte (die Liste haelt nur noch Zusammenfassungen) bzw. aus der
+    // geretteten geplanten Route. Bis dahin zeigt die Leiste die gespeicherte
+    // Gesamtstrecke; den Rest rechnet der `RouteNavigator` beim naechsten
+    // GPS-Punkt neu.
     // Schluessel bewusst billig: `plannedRoute` traegt eine komplette
     // Punktliste, die Zahl der Punkte benennt den Wechsel genauso.
     LaunchedEffect(rides, plannedRoute?.points?.size, navLabel) {
@@ -902,7 +958,9 @@ fun MapScreen(appViewModel: AppViewModel) {
         val label = navLabel ?: return@LaunchedEffect
         val rideId = navRideId
         val points = if (rideId != null) {
-            rides.firstOrNull { it.id == rideId }?.points
+            // Erst die billige Anwesenheitspruefung ueber die Liste, dann der
+            // eine Dateizugriff — nicht umgekehrt.
+            if (rides.any { it.id == rideId }) appViewModel.loadRide(rideId)?.points else null
         } else {
             plannedRoute?.points
         }
@@ -1100,6 +1158,12 @@ fun MapScreen(appViewModel: AppViewModel) {
         appViewModel.select(null)
         rideMode = true
         RecordingRepository.start(context)
+        // Nach dem Start, nicht statt des Starts: Der Batterie-Hinweis ist
+        // eine Empfehlung, keine Huerde — und er kommt hoechstens einmal
+        // automatisch (siehe [showBatteryNotice]).
+        if (!vonBatterieoptimierungAusgenommen(context) && !batterieHinweisGezeigt(context)) {
+            showBatteryNotice = true
+        }
     }
 
     fun startRecording() {
@@ -1337,9 +1401,12 @@ fun MapScreen(appViewModel: AppViewModel) {
             ),
         )
         RouteGenerationController.start(
+            context = context,
             start = TrackPoint(lat = place.lat, lon = place.lon),
+            profile = routeProfile,
             fromMapCenter = false,
             onMessage = appViewModel::showMessage,
+            onOfferMissingSegments = appViewModel::offerMissingSegments,
         )
     }
 
@@ -1442,9 +1509,12 @@ fun MapScreen(appViewModel: AppViewModel) {
                 return@launch
             }
             RouteGenerationController.start(
+                context = context,
                 start = start,
+                profile = routeProfile,
                 fromMapCenter = position == null,
                 onMessage = appViewModel::showMessage,
+                onOfferMissingSegments = appViewModel::offerMissingSegments,
             )
         }
     }
@@ -1560,7 +1630,13 @@ fun MapScreen(appViewModel: AppViewModel) {
             PendingAction.NAVIGATE_RIDE -> {
                 val rideId = pendingNavigateRideId
                 pendingNavigateRideId = null
-                rides.firstOrNull { it.id == rideId }?.let { runNavigateRide(it) }
+                if (rideId != null) {
+                    // Die volle Tour on-demand laden — die Liste haelt nur
+                    // noch Zusammenfassungen ohne Punkte.
+                    scope.launch {
+                        appViewModel.loadRide(rideId)?.let { runNavigateRide(it) }
+                    }
+                }
             }
         }
     }
@@ -1962,6 +2038,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 ascentM = liveAscentM,
                                 pointCount = livePoints.size,
                                 paused = isPaused,
+                                autoPaused = isAutoPaused,
                                 onTogglePause = { RecordingRepository.togglePause() },
                                 onStop = { RecordingRepository.stop() },
                                 onOpenRideMode = { rideMode = true },
@@ -2213,6 +2290,32 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
+    // -------------------------------------------- Batterieoptimierungs-Hinweis
+    // Hoechstens einmal automatisch (Prefs-Merker), ausgeloest in
+    // [runRecording]; danach nur noch unter Mehr → Aufzeichnung.
+    if (showBatteryNotice) {
+        BatteryNoticeDialog(
+            onAllow = {
+                showBatteryNotice = false
+                merkeBatterieHinweisGezeigt(context)
+                try {
+                    context.startActivity(batterieAusnahmeIntent(context))
+                } catch (e: Exception) {
+                    // Manche Geraete kennen den Dialog nicht — dann bleibt nur
+                    // der Weg ueber die Systemeinstellungen.
+                    appViewModel.showMessage(
+                        "Der Systemdialog ließ sich nicht öffnen. Die Ausnahme lässt sich " +
+                            "in den Android-Einstellungen unter „Akku“ erteilen.",
+                    )
+                }
+            },
+            onLater = {
+                showBatteryNotice = false
+                merkeBatterieHinweisGezeigt(context)
+            },
+        )
+    }
+
     // ---------------------------------------------------------- Fahrmodus
     // Liegt als eigenes Fenster ueber allem (siehe `RideModeScreen.kt`) und
     // bekommt ausschliesslich fertige Werte: dieselben Aufzeichnungs-Flows wie
@@ -2225,6 +2328,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             elapsedS = (elapsedMs / 1000).toInt(),
             ascentM = liveAscentM,
             paused = isPaused,
+            autoPaused = isAutoPaused,
             navigation = navTarget?.let { target ->
                 RideModeNavigation(
                     label = target.label,
@@ -2663,6 +2767,14 @@ private const val GENERATION_BODY_SHARE = 0.38f
 
 /** Beschriftung der Navigation entlang der geplanten Route. */
 private const val PLANNED_ROUTE_LABEL = "Geplante Route"
+
+/**
+ * Restdistanz, ab der die Zielansage „Ziel erreicht" faellt (30 m — etwa die
+ * Off-Route-Austrittsschwelle des `RouteNavigator`, naeher projiziert GPS
+ * ohnehin nicht zuverlaessig). Dieselbe Distanz dient als Mindest-Fortschritt,
+ * damit eine Runde nicht schon am Start ihr eigenes Ziel meldet.
+ */
+private const val ZIEL_ERREICHT_KM = 0.03
 
 /** Wegpunktname der eigenen Position, gesetzt von [runRouteToPlace]. */
 private const val MY_LOCATION_WAYPOINT_NAME = "Mein Standort"

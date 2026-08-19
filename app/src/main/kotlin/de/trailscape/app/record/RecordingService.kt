@@ -2,6 +2,7 @@ package de.trailscape.app.record
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -18,6 +19,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.PowerManager
+import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -27,6 +30,7 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.LocationFusion
@@ -77,15 +81,28 @@ import java.util.concurrent.Executor
  * nichts mehr zum Fortsetzen, meldet er das laut, statt sich stillschweigend
  * zu beenden.
  *
- * ## Warum kein WakeLock
- * Der Dienst haelt bewusst keinen `PARTIAL_WAKE_LOCK`. Ein Wecker ueber drei
- * Stunden Fahrt kostet spuerbar Akku, und er wird fuer die Daten nicht
- * gebraucht: Jede GNSS-Meldung weckt das Geraet ohnehin auf, und genau dann
- * (und nur dann) gibt es etwas zu schreiben. Steht das Rad, kommen keine
+ * ## Warum kein dauerhafter WakeLock — aber ein Alarm-Wachhund
+ * Der Dienst haelt bewusst keinen dauerhaften `PARTIAL_WAKE_LOCK`. Ein Wecker
+ * ueber drei Stunden Fahrt kostet spuerbar Akku, und er wird fuer die Daten
+ * nicht gebraucht: Jede GNSS-Meldung weckt das Geraet ohnehin auf, und genau
+ * dann (und nur dann) gibt es etwas zu schreiben. Steht das Rad, kommen keine
  * Meldungen — und es geht auch nichts verloren. Was im Suspend stehen bleibt,
  * ist der sekuendliche [ticker] und mit ihm die Frische des Lebenszeichens;
  * dass daraus kein Datenverlust mehr folgt, ist der Zweck der Rangordnung oben
  * und der konservativen Auswertung in [beurteileJournal].
+ *
+ * Die Rechnung „GNSS-Callbacks wecken die CPU" hat aber eine Luecke: Sie gilt
+ * nur, solange der Listener ueberhaupt noch angemeldet ist. Raeumt ein
+ * OEM-Energiesparer ihn ab, kommen keine GNSS-Wakeups mehr — der
+ * Handler-[ticker] steht im CPU-Suspend still, und das Neu-Abonnieren in
+ * [pruefeStandortStrom] feuert deshalb nie. Genau fuer diesen Fall laeuft
+ * waehrend der Aufzeichnung zusaetzlich ein **AlarmManager-Wachhund**
+ * ([scheduleWatchdogAlarm], `setAndAllowWhileIdle`, alle rund
+ * [WATCHDOG_INTERVAL_MS] ms): Der Alarm weckt das Geraet unabhaengig vom
+ * Standort-Strom, der Dienst haelt fuer die wenigen Sekunden Arbeit einen
+ * kurzen `PARTIAL_WAKE_LOCK` mit Timeout ([WATCHDOG_WAKELOCK_TIMEOUT_MS]) und
+ * prueft dann Strom, Lebenszeichen und Notification — siehe
+ * [handleWatchdogAlarm].
  *
  * Die Entscheidung, ob ein Punkt aufgenommen wird, faellt ausschliesslich in
  * [PointFilter] (`:core`, plattformfrei und dort getestet). Dieser Service
@@ -160,6 +177,39 @@ class RecordingService : Service() {
     @Volatile
     private var pauseStartedAtMs: Long? = null
 
+    /**
+     * Ob die gerade offene Pause ([pauseStartedAtMs]) eine **Auto**-Pause ist
+     * (siehe [AutoPauseLogic]). Fuer das Pausenkonto, den [PointFilter] und
+     * die verstrichene Zeit zaehlt sie exakt wie eine manuelle Pause; der
+     * Unterschied liegt nur darin, wer sie beendet (die Weiterfahrt statt des
+     * Nutzers), im Journal-Vermerk und in der Anzeige.
+     */
+    @Volatile
+    private var autoPausiert = false
+
+    /**
+     * Die Auto-Pause-Zustandsmaschine — wie [filter] nur auf
+     * [recordingThread] angefasst. Ob ihr Urteil ueberhaupt ausgefuehrt wird,
+     * entscheidet der Schalter unter Mehr → Aufzeichnung (siehe
+     * [autoPauseAktiviert], gelesen je Probe direkt aus den Prefs).
+     */
+    private val autoPauseLogic = AutoPauseLogic()
+
+    /**
+     * Zaehler der Kilometer-Meilenstein-Ansagen (siehe [MeilensteinAnsagen])
+     * — wie [autoPauseLogic] nur auf [recordingThread] angefasst.
+     *
+     * Die Ansagen der Aufzeichnung (Start/Stopp/Pause/Meilensteine) haengen
+     * bewusst HIER am Dienst und nicht an einem Beobachter der
+     * [RecordingRepository]-Flows: Der Dienst ist die einzige Instanz, die
+     * Distanz und reine Fahrzeit ([elapsedMs] braucht das Pausenkonto, das
+     * nur er fuehrt) konsistent zum selben Zeitpunkt kennt — und er lebt
+     * auch dann, wenn die Oberflaeche laengst weggeraeumt ist. Ein
+     * Flow-Beobachter braeuchte einen eigenen Scope, der die Activity
+     * ueberlebt, nur um dieselben Werte zeitversetzt wieder zusammenzusetzen.
+     */
+    private val meilensteine = MeilensteinAnsagen()
+
     @Volatile
     private var distanceM = 0.0
     private var lastNotificationMs = 0L
@@ -188,6 +238,32 @@ class RecordingService : Service() {
      * Abonnieren nicht wieder bei null anfaengt.
      */
     private var letzterResubscribeMs = 0L
+
+    /**
+     * Wanduhr-Zeitpunkt der letzten **rohen** Standortmeldung — auch einer
+     * verworfenen. Waehrend einer Auto-Pause der Bezugspunkt des Wachhunds
+     * ([gpsStilleMs]): Angenommene Punkte gibt es dann konstruktionsbedingt
+     * keine, rohe Meldungen aber sehr wohl, und nur ihr Ausbleiben verraet
+     * einen abgeraeumten Listener.
+     */
+    @Volatile
+    private var letzteRohmeldungMs = 0L
+
+    /**
+     * Kurzer WakeLock fuer die Arbeit nach einem Wachhund-Alarm (siehe
+     * Klassendoc „Warum kein dauerhafter WakeLock"). Immer mit Timeout
+     * erworben ([WATCHDOG_WAKELOCK_TIMEOUT_MS]) — haengt die Arbeit, gibt das
+     * System ihn von selbst frei.
+     */
+    private val watchdogWakeLock: PowerManager.WakeLock? by lazy {
+        try {
+            getSystemService(PowerManager::class.java)
+                ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "trailscape:gps-watchdog")
+                ?.apply { setReferenceCounted(false) }
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     /**
      * Ob seit Beginn dieser Aufzeichnung mindestens ein Schreibvorgang ins
@@ -287,6 +363,19 @@ class RecordingService : Service() {
         val systemNeustart = intent == null
         val action = intent?.action ?: ACTION_CONTINUE
 
+        if (action == ACTION_WATCHDOG) {
+            // Sofort und noch auf dem Main-Thread: Zwischen dem Alarm und dem
+            // Abarbeiten auf dem Aufzeichnungs-Thread darf die CPU nicht
+            // wieder einschlafen. Timeout statt manuellem release als Netz —
+            // freigegeben wird regulaer am Ende von [handleWatchdogAlarm].
+            try {
+                watchdogWakeLock?.acquire(WATCHDOG_WAKELOCK_TIMEOUT_MS)
+            } catch (e: Exception) {
+                // Ohne WakeLock arbeitet der Wachhund trotzdem — nur ohne
+                // Garantie, dass die CPU bis zum Ende wach bleibt.
+            }
+        }
+
         if (!enterForeground()) {
             // Der Dienst darf nicht im Vordergrund laufen (fehlende
             // Standortberechtigung ab Android 14). Aufraeumen passiert wie
@@ -307,6 +396,15 @@ class RecordingService : Service() {
 
     override fun onDestroy() {
         stopUpdates()
+        // Bewusst KEIN cancelWatchdogAlarm(): Stirbt der Dienst ungefragt
+        // (Systemabbruch mitten in der Fahrt), soll der ueberlebende Alarm die
+        // Aufzeichnung wiederbeleben (siehe [handleWatchdogAlarm]). Die
+        // regulaeren Enden (finishAndStop/failAndStop) raeumen ihn selbst ab.
+        try {
+            watchdogWakeLock?.takeIf { it.isHeld }?.release()
+        } catch (e: Exception) {
+            // Schon freigegeben — nichts zu tun.
+        }
         handler.removeCallbacksAndMessages(null)
         // Netz gegen einen Systemabbruch, der weder finishAndStop noch
         // failAndStop durchlaeuft: Ein haengender Sink wuerde Uhr-Proben ins
@@ -334,6 +432,7 @@ class RecordingService : Service() {
                 ACTION_TOGGLE_PAUSE -> setPaused(pauseStartedAtMs == null)
                 ACTION_STOP -> finishAndStop()
                 ACTION_CONTINUE -> continueFromJournal(systemNeustart)
+                ACTION_WATCHDOG -> handleWatchdogAlarm()
                 else -> Unit
             }
         } finally {
@@ -361,13 +460,17 @@ class RecordingService : Service() {
 
         filter.reset()
         fusion = LocationFusion()
+        autoPauseLogic.reset()
+        meilensteine.reset()
         lastRecordedPoint = null
         startedAtMs = now
         pausedMsAccum = 0L
         pauseStartedAtMs = null
+        autoPausiert = false
         distanceM = 0.0
         lastNotificationMs = 0L
         lastAcceptedAtMs = 0L
+        letzteRohmeldungMs = 0L
         stromSeitMs = now
         letzterResubscribeMs = now
         journalSchreibfehler = false
@@ -402,7 +505,12 @@ class RecordingService : Service() {
         registriereWatchSampleSink()
         meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
+        // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
+        // beim Losfahren typischerweise schon in der Tasche. Den Hauptschalter
+        // „Sprachansagen" prueft der Announcer selbst.
+        VoiceAnnouncer.sagAn(this, "Aufzeichnung gestartet.")
         updateNotification(now, force = true)
+        scheduleWatchdogAlarm()
         handler.removeCallbacks(ticker)
         handler.post(ticker)
     }
@@ -452,6 +560,7 @@ class RecordingService : Service() {
                 RecordingRepository.publishError(message)
                 notifyError(message)
             }
+            cancelWatchdogAlarm()
             stopSelfSafely()
             return
         }
@@ -459,13 +568,23 @@ class RecordingService : Service() {
         startedAtMs = snapshot.startedAtMs
         pausedMsAccum = snapshot.pausedMs
         pauseStartedAtMs = snapshot.pausedSinceMs
+        // Eine offene AUTO-Pause wird als solche fortgesetzt: Die
+        // Zustandsmaschine steht dann wieder auf „autopausiert" und beendet
+        // die Pause von selbst, sobald die Weiterfahrt erkannt wird — eine
+        // offene manuelle Pause wartet dagegen weiter auf den Nutzer.
+        autoPausiert = snapshot.pausedSinceMs != null && snapshot.pausedSinceIsAuto
+        if (autoPausiert) autoPauseLogic.stelleAutoPauseWiederHer() else autoPauseLogic.reset()
         filter.restore(snapshot.points)
         filter.paused = snapshot.pausedSinceMs != null
         fusion = LocationFusion()
         lastRecordedPoint = snapshot.points.lastOrNull()
         distanceM = computeStats(snapshot.points).distanceKm * 1000
+        // Kein nachgeholtes „20 Kilometer" nach einem Dienst-Neustart bei
+        // Kilometer 23 — der Zaehler startet hinter dem Gefahrenen.
+        meilensteine.setzeAufDistanz(distanceM / 1000)
         lastNotificationMs = 0L
         lastAcceptedAtMs = 0L
+        letzteRohmeldungMs = 0L
         journalSchreibfehler = false
         schreibfehlerGemeldet = false
 
@@ -481,16 +600,36 @@ class RecordingService : Service() {
             startedAtMs = snapshot.startedAtMs,
             points = snapshot.points,
             paused = snapshot.pausedSinceMs != null,
+            autoPaused = autoPausiert,
         )
         updateNotification(now, force = true)
+        // Waehrend einer manuellen Pause schlaeft der Wachhund (siehe
+        // [setPaused]); eine Auto-Pause behaelt ihn, denn sie soll die
+        // Weiterfahrt auch dann erkennen, wenn der Energiesparer den
+        // Listener inzwischen abgeraeumt hat.
+        if (pauseStartedAtMs == null || autoPausiert) scheduleWatchdogAlarm()
         handler.removeCallbacks(ticker)
         handler.post(ticker)
     }
 
+    /**
+     * Manuelles Pausieren/Fortsetzen — Notification-Action, UI, Uhr.
+     *
+     * Zusammenspiel mit der Auto-Pause:
+     *  * **Pausieren waehrend einer Auto-Pause** wandelt sie in eine manuelle
+     *    um (die Weiterfahrt soll sie dann NICHT mehr von selbst beenden).
+     *    Im Journal steht dafuer das Paar `autoResume` + `pause` zum selben
+     *    Zeitpunkt — das Pausenkonto bleibt lueckenlos, und die
+     *    Wiederherstellung sieht eine gewoehnliche offene manuelle Pause.
+     *  * **Fortsetzen** beendet jede Pause, auch eine automatische — wer im
+     *    Stehen ausdruecklich „Weiter" drueckt, bekommt Weiter. Bleibt es
+     *    beim Stehen, greift die Auto-Pause nach ihrer Eintrittsdauer erneut.
+     *  * Eine manuelle Pause raeumt den Wachhund-Alarm ab (nichts zu
+     *    bewachen, siehe [handleWatchdogAlarm]); das Fortsetzen plant ihn neu.
+     */
     private fun setPaused(paused: Boolean) {
         if (!active) return
         val currentlyPaused = pauseStartedAtMs != null
-        if (paused == currentlyPaused) return
 
         val now = System.currentTimeMillis()
         // Der Pausenvermerk darf die Aufzeichnung nicht abbrechen: Seit
@@ -499,19 +638,111 @@ class RecordingService : Service() {
         // Aufzeichnungs-Thread und damit den ganzen Prozess reissen. Der
         // Pausenzustand im RAM stimmt auch ohne den Vermerk; nur das
         // Pausenkonto einer *wiederhergestellten* Tour waere dann unvollstaendig.
+        if (paused && currentlyPaused && autoPausiert) {
+            // Auto-Pause → manuelle Pause umwandeln (siehe KDoc).
+            autoPausiert = false
+            autoPauseLogic.reset()
+            journalSchreiben { journal.appendAutoResume(now) }
+            journalSchreiben { journal.appendPause(now) }
+            cancelWatchdogAlarm()
+            RecordingRepository.publishPaused(paused = true, auto = false)
+            updateNotification(now, force = true)
+            return
+        }
+        if (paused == currentlyPaused) return
+
         if (paused) {
             pauseStartedAtMs = now
             filter.paused = true
+            autoPauseLogic.reset()
             journalSchreiben { journal.appendPause(now) }
+            cancelWatchdogAlarm()
         } else {
+            val warAuto = autoPausiert
             pauseStartedAtMs?.let { pausedMsAccum += now - it }
             pauseStartedAtMs = null
+            autoPausiert = false
             filter.paused = false
-            journalSchreiben { journal.appendResume(now) }
+            autoPauseLogic.reset()
+            journalSchreiben { if (warAuto) journal.appendAutoResume(now) else journal.appendResume(now) }
+            scheduleWatchdogAlarm()
         }
 
         RecordingRepository.publishPaused(paused)
+        VoiceAnnouncer.sagAn(
+            this,
+            if (paused) "Aufzeichnung pausiert." else "Aufzeichnung fortgesetzt.",
+        )
         updateNotification(now, force = true)
+    }
+
+    /**
+     * Fuehrt einen Uebergang der Auto-Pause aus — dasselbe wie [setPaused],
+     * nur mit `autoPause`/`autoResume` im Journal und eigener Anzeige. Laeuft
+     * ausschliesslich auf [recordingThread] (aus [verarbeiteAutoPauseProbe]).
+     */
+    private fun setzeAutoPause(pausieren: Boolean) {
+        if (!active) return
+        val now = System.currentTimeMillis()
+        if (pausieren) {
+            if (pauseStartedAtMs != null) return
+            pauseStartedAtMs = now
+            autoPausiert = true
+            filter.paused = true
+            journalSchreiben { journal.appendAutoPause(now) }
+        } else {
+            if (!autoPausiert) return
+            pauseStartedAtMs?.let { pausedMsAccum += now - it }
+            pauseStartedAtMs = null
+            autoPausiert = false
+            filter.paused = false
+            journalSchreiben { journal.appendAutoResume(now) }
+        }
+
+        RecordingRepository.publishPaused(paused = pausieren, auto = pausieren)
+        // Dieselben Texte wie bei der manuellen Pause: Fuer die Fahrerin
+        // zaehlt, DASS pausiert wird, nicht wer es entschieden hat.
+        VoiceAnnouncer.sagAn(
+            this,
+            if (pausieren) "Aufzeichnung pausiert." else "Aufzeichnung fortgesetzt.",
+        )
+        updateNotification(now, force = true)
+    }
+
+    /**
+     * Reicht eine rohe Standortmeldung an die [AutoPauseLogic] und fuehrt ihr
+     * Urteil aus. Bewusst auch fuer **verworfene** Meldungen gerufen
+     * (Duplikat, Pause): Waehrend der Auto-Pause nimmt der [PointFilter]
+     * keine Punkte an — die Weiterfahrt laesst sich also nur an den rohen
+     * Meldungen erkennen.
+     *
+     * Waehrend einer **manuellen** Pause passiert hier nichts: Sie gehoert
+     * dem Nutzer, und niemand faehrt sie automatisch fort.
+     */
+    private fun verarbeiteAutoPauseProbe(
+        zeitMs: Long,
+        lat: Double,
+        lon: Double,
+        gemesseneKmh: Double?,
+    ) {
+        if (!active) return
+        if (pauseStartedAtMs != null && !autoPausiert) return
+
+        if (!autoPauseAktiviert(this)) {
+            // Der Schalter unter Mehr → Aufzeichnung ist aus. Wurde er
+            // waehrend einer laufenden Auto-Pause umgelegt, wird sofort
+            // weiter aufgezeichnet — eine Pause, die niemand mehr beenden
+            // wuerde, darf nicht offen bleiben.
+            if (autoPausiert) setzeAutoPause(false)
+            autoPauseLogic.reset()
+            return
+        }
+
+        when (autoPauseLogic.probe(zeitMs, lat, lon, gemesseneKmh)) {
+            AutoPauseLogic.Uebergang.PAUSIEREN -> setzeAutoPause(true)
+            AutoPauseLogic.Uebergang.FORTSETZEN -> setzeAutoPause(false)
+            null -> Unit
+        }
     }
 
     /**
@@ -525,9 +756,14 @@ class RecordingService : Service() {
      */
     private fun finishAndStop() {
         stopUpdates()
+        cancelWatchdogAlarm()
         handler.removeCallbacks(ticker)
         active = false
         RecordingRepository.detachWatchSampleSink()
+        // Vor dem Speichern angestossen: Die Bestaetigung soll unmittelbar auf
+        // den Stopp folgen. Der VoiceAnnouncer lebt am Prozess, nicht an
+        // diesem Dienst — das folgende stopSelf schneidet sie nicht ab.
+        VoiceAnnouncer.sagAn(this, "Aufzeichnung beendet.")
 
         val snapshot = journal.read()?.let { mitRamPunkten(it) }
         journal.close()
@@ -724,6 +960,7 @@ class RecordingService : Service() {
 
     private fun onLocation(location: Location) {
         if (!active) return
+        letzteRohmeldungMs = System.currentTimeMillis()
 
         // `null` heisst hier ausdruecklich „das Geraet hat den Wert nicht
         // gemeldet". Was daraus wird, entscheidet `:core` (siehe
@@ -766,6 +1003,18 @@ class RecordingService : Service() {
 
             is PointFilterResult.Rejected -> Unit
         }
+
+        // Nach dem Filter, fuer JEDE Meldung: Die Auto-Pause urteilt auch
+        // ueber verworfene Proben (siehe [verarbeiteAutoPauseProbe]). Das vom
+        // Geraet gemessene Tempo wird hier direkt aus [Location] geholt statt
+        // aus dem Sample — `toLocationSample` macht aus „nicht gemeldet" eine
+        // 0.0, und die Auto-Pause muss beides unterscheiden koennen.
+        verarbeiteAutoPauseProbe(
+            zeitMs = sample.timeMs,
+            lat = sample.lat,
+            lon = sample.lon,
+            gemesseneKmh = if (location.hasSpeed()) location.speed.toDouble() * 3.6 else null,
+        )
     }
 
     /**
@@ -816,6 +1065,12 @@ class RecordingService : Service() {
         lastRecordedPoint?.let { vorheriger -> distanceM += haversineM(vorheriger, point) }
         lastRecordedPoint = point
         RecordingRepository.publishPoint(point, distanceM / 1000, filter.currentSpeedKmh)
+        // Der Zaehler wandert auch bei ausgeschaltetem Unterschalter weiter
+        // (siehe [MeilensteinAnsagen.pruefe]) — nur gesprochen wird dann nicht.
+        val meilenstein = meilensteine.pruefe(distanceM / 1000, elapsedMs(System.currentTimeMillis()))
+        if (meilenstein != null && kilometerAnsagenAktiviert(this)) {
+            VoiceAnnouncer.sagAn(this, meilenstein)
+        }
         updateNotification(System.currentTimeMillis(), force = false)
     }
 
@@ -920,6 +1175,14 @@ class RecordingService : Service() {
      * Notification und der Heartbeat werden davon gedrosselt bedient
      * (alle [NOTIFICATION_INTERVAL_MS] ms), damit weder der
      * NotificationManager noch der Flash unnoetig beschaeftigt werden.
+     *
+     * Der Takt haengt an einem Handler und steht damit im CPU-Suspend still.
+     * Fuer die Anzeige ist das egal (kein Bildschirm, kein Publikum), fuer
+     * den GPS-Wachhund nicht: Faellt der Standort-Strom aus, weil ein
+     * OEM-Energiesparer den Listener abgeraeumt hat, gibt es auch keine
+     * GNSS-Wakeups mehr, die diesen Takt wieder anwerfen — dann uebernimmt
+     * der AlarmManager-Wachhund ([handleWatchdogAlarm]), der die CPU
+     * unabhaengig vom Standort-Strom weckt.
      */
     private val ticker = object : Runnable {
         override fun run() {
@@ -956,8 +1219,18 @@ class RecordingService : Service() {
      *     Sekundentakt passieren. Kommt trotzdem nichts, ist es kein
      *     Softwarefehler, sondern der Himmel.
      *
-     * Waehrend einer Pause schweigt der Wachhund: Dass dann keine Punkte
-     * kommen, ist der Zweck der Pause.
+     * Gerufen wird diese Pruefung von zwei Seiten: sekuendlich vom [ticker],
+     * solange die CPU wach ist — und vom AlarmManager-Wachhund
+     * ([handleWatchdogAlarm]), der genau den Fall abdeckt, in dem der
+     * abgeraeumte Listener auch die GNSS-Wakeups und damit den Ticker
+     * stillgelegt hat.
+     *
+     * Waehrend einer **manuellen** Pause schweigt der Wachhund: Dass dann
+     * keine Punkte kommen, ist der Zweck der Pause. Waehrend einer
+     * **Auto-Pause** waegt er weiter — sie soll die Weiterfahrt erkennen und
+     * braucht dafuer einen lebenden Standort-Strom; als Bezug dienen dann die
+     * rohen Meldungen ([letzteRohmeldungMs]), denn angenommene Punkte gibt es
+     * in der Pause konstruktionsbedingt keine (siehe [gpsStilleMs]).
      */
     private fun pruefeStandortStrom(nowMs: Long) {
         val stilleMs = gpsStilleMs(nowMs) ?: return
@@ -971,11 +1244,23 @@ class RecordingService : Service() {
 
     /**
      * Dauer der GPS-Stille in ms, oder `null`, wenn sie noch unterhalb der
-     * Meldeschwelle liegt bzw. gerade pausiert wird.
+     * Meldeschwelle liegt bzw. gerade **manuell** pausiert wird.
+     *
+     * Waehrend einer Auto-Pause zaehlen zusaetzlich die rohen (auch
+     * verworfenen) Meldungen als Lebenszeichen des Stroms: Angenommene Punkte
+     * gibt es in der Pause keine, ein gesundes GNSS liefert aber weiter rohe
+     * Meldungen — erst deren Ausbleiben verraet den abgeraeumten Listener,
+     * gegen den die Anmeldung dann erneuert werden muss, damit die
+     * Weiterfahrt ueberhaupt erkannt werden kann.
      */
     private fun gpsStilleMs(nowMs: Long): Long? {
-        if (!active || pauseStartedAtMs != null) return null
-        val bezug = maxOf(lastAcceptedAtMs, stromSeitMs)
+        if (!active) return null
+        if (pauseStartedAtMs != null && !autoPausiert) return null
+        val bezug = if (autoPausiert) {
+            maxOf(lastAcceptedAtMs, stromSeitMs, letzteRohmeldungMs)
+        } else {
+            maxOf(lastAcceptedAtMs, stromSeitMs)
+        }
         if (bezug <= 0L) return null
         val stilleMs = nowMs - bezug
         return if (stilleMs >= GPS_SILENT_WARN_MS) stilleMs else null
@@ -984,6 +1269,106 @@ class RecordingService : Service() {
     private fun elapsedMs(nowMs: Long): Long {
         val paused = pausedMsAccum + (pauseStartedAtMs?.let { nowMs - it } ?: 0L)
         return (nowMs - startedAtMs - paused).coerceAtLeast(0L)
+    }
+
+    // ------------------------------------------------- AlarmManager-Wachhund
+
+    /**
+     * Arbeit nach einem Wachhund-Alarm ([ACTION_WATCHDOG]) — die Antwort auf
+     * die Luecke im Ticker-Modell (siehe Klassendoc „Warum kein dauerhafter
+     * WakeLock"): Der Alarm weckt die CPU unabhaengig vom Standort-Strom,
+     * hier wird der Strom geprueft ([pruefeStandortStrom]), Lebenszeichen und
+     * Notification aufgefrischt und der naechste Alarm geplant.
+     *
+     * Trifft der Alarm einen **frisch gestarteten** Dienst (der Prozess der
+     * Aufzeichnung ist gestorben, der Alarm hat ueberlebt), ist das dieselbe
+     * Lage wie ein `START_STICKY`-Neustart: Gibt es noch ein Journal, wird
+     * die Aufzeichnung fortgesetzt — der Alarm ist damit ein zweiter
+     * Wiederbelebungsweg. Ohne Journal gibt es nichts zu bewachen, der Alarm
+     * wird abgeraeumt und der Dienst beendet sich.
+     *
+     * Der in `onStartCommand` erworbene WakeLock wird am Ende freigegeben;
+     * sein Timeout ist nur das Netz fuer den Fehlerfall.
+     */
+    private fun handleWatchdogAlarm() {
+        try {
+            if (!active) {
+                if (journal.exists()) {
+                    continueFromJournal(systemNeustart = true)
+                } else {
+                    cancelWatchdogAlarm()
+                    stopSelfSafely()
+                }
+                return
+            }
+
+            val now = System.currentTimeMillis()
+            pruefeStandortStrom(now)
+            // force: Der Alarm ist der einzige Taktgeber im Suspend — das
+            // Lebenszeichen (in updateNotification enthalten) darf nicht an
+            // der Notification-Drosselung haengen bleiben.
+            updateNotification(now, force = true)
+            if (pauseStartedAtMs == null || autoPausiert) scheduleWatchdogAlarm()
+        } finally {
+            try {
+                watchdogWakeLock?.takeIf { it.isHeld }?.release()
+            } catch (e: Exception) {
+                // Schon freigegeben (Timeout) — nichts zu tun.
+            }
+        }
+    }
+
+    /**
+     * Plant den naechsten Wachhund-Alarm in [WATCHDOG_INTERVAL_MS] ms.
+     * `setAndAllowWhileIdle` ist bewusst **inexakt** (kein
+     * `SCHEDULE_EXACT_ALARM` noetig): Ob der Alarm eine Minute frueher oder
+     * spaeter kommt, ist dem Wachhund gleich. Im Doze drosselt das System auf
+     * rund alle 9–15 Minuten pro App — auch das genuegt, es geht um Minuten,
+     * nicht um Sekunden. Jeder Alarm plant den naechsten selbst
+     * ([handleWatchdogAlarm]); abgeraeumt wird bei manueller Pause und an
+     * jedem Ende der Aufzeichnung ([cancelWatchdogAlarm]) — bewusst NICHT in
+     * `onDestroy`: Stirbt der Dienst ungefragt, soll der ueberlebende Alarm
+     * die Aufzeichnung wiederbeleben.
+     */
+    private fun scheduleWatchdogAlarm() {
+        val alarmManager = getSystemService(AlarmManager::class.java) ?: return
+        try {
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + WATCHDOG_INTERVAL_MS,
+                watchdogIntent(),
+            )
+        } catch (e: Exception) {
+            // Ohne Alarm bleibt der Ticker-Wachhund bestehen — schlechter,
+            // aber kein Grund, die Aufzeichnung abzubrechen.
+        }
+    }
+
+    /** Raeumt einen geplanten Wachhund-Alarm ab (siehe [scheduleWatchdogAlarm]). */
+    private fun cancelWatchdogAlarm() {
+        try {
+            getSystemService(AlarmManager::class.java)?.cancel(watchdogIntent())
+        } catch (e: Exception) {
+            // Nichts zu tun.
+        }
+    }
+
+    /**
+     * PendingIntent des Wachhund-Alarms. `getForegroundService`, weil der
+     * Alarm den Dienst auch dann treffen koennen muss, wenn dessen Prozess
+     * inzwischen gestorben ist (Wiederbelebung, siehe [handleWatchdogAlarm])
+     * — ein gewoehnlicher `getService` waere aus dem Hintergrund ab API 26
+     * nicht erlaubt. Stets dieselben Parameter, damit `cancel` denselben
+     * Intent trifft.
+     */
+    private fun watchdogIntent(): PendingIntent {
+        val intent = Intent(this, RecordingService::class.java).setAction(ACTION_WATCHDOG)
+        return PendingIntent.getForegroundService(
+            this,
+            REQUEST_WATCHDOG,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     // -------------------------------------------------------- Notifications
@@ -1038,7 +1423,11 @@ class RecordingService : Service() {
     private fun buildNotification(): Notification {
         val paused = pauseStartedAtMs != null
         val title = getString(
-            if (paused) R.string.recording_notification_paused_title else R.string.recording_notification_title,
+            when {
+                paused && autoPausiert -> R.string.recording_notification_auto_paused_title
+                paused -> R.string.recording_notification_paused_title
+                else -> R.string.recording_notification_title
+            },
         )
         val jetzt = System.currentTimeMillis()
         val stilleMs = gpsStilleMs(jetzt)
@@ -1144,6 +1533,7 @@ class RecordingService : Service() {
         RecordingRepository.publishError(message)
         notifyError(message)
 
+        cancelWatchdogAlarm()
         if (active || journal.exists()) {
             active = false
             RecordingRepository.detachWatchSampleSink()
@@ -1219,6 +1609,12 @@ class RecordingService : Service() {
          */
         const val ACTION_CONTINUE = "de.trailscape.app.record.action.CONTINUE"
 
+        /**
+         * Interner Alarm des GPS-Wachhunds (siehe [handleWatchdogAlarm]).
+         * Kommt ausschliesslich vom eigenen AlarmManager-PendingIntent.
+         */
+        const val ACTION_WATCHDOG = "de.trailscape.app.record.action.WATCHDOG"
+
         private const val CHANNEL_ID = "recording"
         private const val ERROR_CHANNEL_ID = "recording_errors"
         private const val NOTIFICATION_ID = 1
@@ -1228,9 +1624,26 @@ class RecordingService : Service() {
         private const val REQUEST_PAUSE = 2
         private const val REQUEST_RESUME = 3
         private const val REQUEST_OPEN = 4
+        private const val REQUEST_WATCHDOG = 5
 
         private const val TICK_INTERVAL_MS = 1_000L
         private const val NOTIFICATION_INTERVAL_MS = 5_000L
+
+        /**
+         * Abstand der Wachhund-Alarme ([scheduleWatchdogAlarm]). Drei Minuten
+         * sind kurz genug, um einen abgeraeumten Listener noch waehrend der
+         * Fahrt zu bemerken (die Warnschwelle [GPS_SILENT_WARN_MS] liegt
+         * genau dort), und selten genug, dass die Weckkosten im Akku
+         * untergehen.
+         */
+        private const val WATCHDOG_INTERVAL_MS = 3 * 60_000L
+
+        /**
+         * Timeout des Wachhund-WakeLocks — grosszuegig fuer ein paar
+         * Dateisystem- und Notification-Aufrufe, kurz genug, um bei einem
+         * Fehler keinen Akku zu kosten. Regulaer wird frueher freigegeben.
+         */
+        private const val WATCHDOG_WAKELOCK_TIMEOUT_MS = 10_000L
 
         /**
          * Ab dieser Stille im Standort-Strom steht „Kein GPS-Signal seit N min"

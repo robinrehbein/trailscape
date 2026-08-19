@@ -13,10 +13,17 @@ import de.trailscape.core.LoadCalibration
 import de.trailscape.core.LoadCalibrationSample
 import de.trailscape.core.LoadEntry
 import de.trailscape.core.LoadSource
-import de.trailscape.core.PowerSeries
 import de.trailscape.core.Readiness
 import de.trailscape.core.RestingHrAssessment
 import de.trailscape.core.Ride
+import de.trailscape.core.RideInfo
+import de.trailscape.core.RideLoadFacts
+import de.trailscape.core.RideLoadFactsStore
+import de.trailscape.core.InMemoryRideLoadFactsStore
+import de.trailscape.core.RideSummary
+import de.trailscape.core.StoredRideLoadFacts
+import de.trailscape.core.rideLoadFactsFromSummary
+import de.trailscape.core.rideLoadFromFacts
 import de.trailscape.core.RideLoad
 import de.trailscape.core.SleepAssessment
 import de.trailscape.core.SteadySegment
@@ -33,11 +40,10 @@ import de.trailscape.core.computeFitnessSeries
 import de.trailscape.core.computeLoadCalibration
 import de.trailscape.core.computeReadiness
 import de.trailscape.core.computeReadinessSeries
-import de.trailscape.core.computeRideLoadForRide
+import de.trailscape.core.computeRideLoadFacts
 import de.trailscape.core.dailyLoadsFrom
 import de.trailscape.core.eftpWindowDays
 import de.trailscape.core.estimateVo2Max
-import de.trailscape.core.extractSteadySegments
 import de.trailscape.core.maxLoad
 import de.trailscape.core.median
 import de.trailscape.core.recommendToday
@@ -106,8 +112,45 @@ const val VITALS_WINDOW_DAYS: Int = 60
  */
 const val VITALS_HISTORY_WINDOW_DAYS: Int = 120
 
-/** Ziel-Rampenrate (CTL-Punkte pro Woche) fuer das empfohlene Wochenziel. */
-const val DEFAULT_TARGET_RAMP_PER_WEEK: Double = 4.0
+/**
+ * Ziel-Rampenrate (CTL-Punkte pro Woche) fuer das empfohlene Wochenziel —
+ * dieselbe Zahl, mit der auch `generatePlan` seine Wochen-Lastbudgets rechnet
+ * (`:core`, [de.trailscape.core.defaultTargetRampPerWeek]).
+ */
+const val DEFAULT_TARGET_RAMP_PER_WEEK: Double = de.trailscape.core.defaultTargetRampPerWeek
+
+/**
+ * Hoechstens so viele **harte Tage** je rollierende 7 Tage, bevor
+ * [de.trailscape.core.recommendToday] keinen weiteren harten Reiz mehr
+ * empfiehlt (`hitBudgetLeft`).
+ *
+ * Zwei ist die gaengige Obergrenze der Trainingslehre fuer intensive
+ * Einheiten pro Woche (polarisiertes Modell, vgl.
+ * `intensityDistributionTarget`: 15 % HIT-Anteil ≈ zwei Einheiten bei 4–5
+ * Fahrtagen) — und exakt das Raster, das die eigenen Plaene bauen: hoechstens
+ * eine Intervalleinheit plus das Zielevent. Vorher stand der Parameter fest
+ * auf `true`; bei durchgehend guter Readiness empfahl die App damit
+ * unbegrenzt viele harte Tage in Folge.
+ */
+const val MAX_HARD_DAYS_PER_7D: Int = 2
+
+/**
+ * Ab dieser Zeit ueber der Schwelle (Sekunden, `secondsAboveLthr` aus dem
+ * HF-Pfad) zaehlt ein Kalendertag als hart. 10 Minuten oberhalb der LTHR
+ * faehrt niemand aus Versehen — das ist die Groessenordnung eines einzelnen
+ * ernsthaften Intervalls, waehrend kurze Kuppen und Ampelsprints deutlich
+ * darunter bleiben.
+ */
+const val HARD_DAY_LTHR_SECONDS: Double = 600.0
+
+/**
+ * Rueckfall ohne Herzfrequenz: Tageslast, ab der ein Kalendertag als hart
+ * gilt. 100 ist per Definition der eTSS-Skala eine volle Stunde an der
+ * Schwelle (§3.3) — eine Grundlagenfahrt braucht dafuer ueber zwei Stunden
+ * (LIT ≈ 49 Last/h, siehe `weeklyLoadPerHour`), womit die Schwelle lange
+ * ruhige Touren zwar gelegentlich mitzaehlt, kurze lockere aber nie.
+ */
+const val HARD_DAY_LOAD: Double = 100.0
 
 /**
  * Halbe Breite des Fensters, aus dem der tourzeitnahe Ruhepuls kommt (Tage).
@@ -167,6 +210,12 @@ data class TrainingInsights(
      * Gesamtscore) — Grundlage des Deload-Triggers.
      */
     val readinessLast7: List<Double>,
+    /**
+     * Harte Tage der letzten 7 Kalendertage (heute eingeschlossen) — die
+     * Grundlage des HIT-Budgets in [recommendation] (siehe
+     * [MAX_HARD_DAYS_PER_7D] und [countHardDaysLast7]).
+     */
+    val hardDaysLast7: Int,
     val recommendation: DailyRecommendation,
     val deload: DeloadRecommendation,
     /**
@@ -301,49 +350,63 @@ private fun profileForRide(
 }
 
 /**
- * Cache-Schluessel einer Tourlast: Tour-Identitaet inklusive der Teile, die
- * sich nachtraeglich aendern koennen (HF-Merge ergaenzt Punkte und Ø-Puls),
- * plus das fuer diese Tour benutzte Profil und die benutzte FTP.
- */
-private fun loadKey(ride: Ride, profileSignature: String, eftpW: Double): String =
-    "${ride.id}|${ride.createdAt}|${ride.points.size}|" +
-        "${ride.stats.avgHrBpm ?: "-"}|$profileSignature|${dartRoundInt(eftpW)}"
-
-/**
- * Berechnet die komplette Trainingsauswertung.
+ * Berechnet die komplette Trainingsauswertung — aus **Zusammenfassungen**
+ * plus einem persistenten Destillat-Cache statt aus vollen Touren.
+ *
+ * ## Warum keine Punktlisten mehr hereinkommen
+ * Frueher bekam diese Funktion `List<Ride>` mit saemtlichen GPS-Punkten und
+ * cachte die Tourlasten fluechtig ueber eine JSON-Signatur (`rideSignatures`/
+ * `baseLoadCache`). Der Preis: Der komplette Bestand musste dauerhaft im RAM
+ * liegen, und jeder App-Start rechnete alles neu. Beides ersetzt der
+ * persistente [RideLoadFactsStore]: Je Tour liegt dort ein punktfreies
+ * Destillat ([RideLoadFacts]) — HF-Last, NP/Bewegungszeit, bestes
+ * 20-min-Mittel, Steady-Segmente. Nur wenn der Eintrag fehlt oder ungueltig
+ * ist (die Tour wurde geaendert: `updatedAt`; oder das fuer sie geltende
+ * Profil hat sich geaendert: Signatur), laedt [loadRide] die volle Tour genau
+ * einmal nach. Die alte Signatur-Mechanik ist damit vollstaendig abgeloest —
+ * die Profil-Signatur je Tour lebt jetzt IM Cache-Eintrag
+ * ([StoredRideLoadFacts.profileSignature]), die Invalidierung bei
+ * Tour-Aenderungen laeuft ueber [RideSummary.updatedAt].
  *
  * ## Zwei Durchgaenge — und warum
  * Die Lastskala haengt an der FTP (`eTSS = h × IF² × 100`), die FTP aber an
  * den Touren. Deshalb:
  *
  *  1. **Durchgang 1** rechnet mit dem reinen Profilwert
- *     ([TrainingProfile.eftpW]). Er liefert die Leistungsreihen (die von der
- *     FTP gar nicht abhaengen) und damit sowohl das beste 20-min-Mittel als
- *     auch α = `median(Last_HF / Last_Physik)`.
+ *     ([TrainingProfile.eftpW]). Er liefert die FTP-unabhaengigen Kennzahlen
+ *     (bestes 20-min-Mittel) und α = `median(Last_HF / Last_Physik)`.
  *  2. **[resolveEftp]** waehlt daraus die FTP. Steckt α darin, ist der Wert
  *     der Fixpunkt `Profil-FTP / √α` — genau deshalb muss Durchgang 1 mit
  *     eben diesem Profilwert gerechnet haben.
  *  3. **Durchgang 2** rechnet die Lasten mit der gewaehlten FTP neu — und nur
- *     dann, wenn sie sich ueberhaupt geaendert hat.
+ *     dann, wenn sie sich ueberhaupt geaendert hat. Weil das Destillat
+ *     FTP-unabhaengig ist, kostet dieser Durchgang keine Punktzugriffe.
  *
  * α wird danach **nicht mehr** als Faktor auf die Physiklast gelegt: Es steckt
  * bereits in der FTP, und zweimal korrigieren waere schlicht falsch. Der
  * Faktorweg bleibt nur fuer den Fall, dass die Nutzerin eine eigene FTP
  * eingetragen hat — deren Zahl fassen wir nicht an.
  *
- * @param baseLoadCache Cache der **unkalibrierten** Tourlasten. Wird in-place
- *   auf die aktuell gebrauchten Eintraege reduziert (wie das Dart-Original,
- *   das `_baseLoadCache` bei jedem Lauf leert und neu fuellt) — dadurch
- *   waechst er nicht mit geloeschten Touren mit. Weil der Schluessel die
- *   benutzte FTP enthaelt, stehen darin bis zu zwei Eintraege je Tour (einer
- *   je Durchgang); im eingeschwungenen Zustand ist damit beides ein Treffer.
+ * ## Grenzfall: Tour laesst sich nicht laden
+ * Liefert [loadRide] `null` (Datei geloescht oder in Quarantaene), faellt die
+ * Tour auf ein Stats-Destillat zurueck ([rideLoadFactsFromSummary]) — grobe
+ * Heuristik-Last statt lautlosem Loch in der Fitnesskurve. Dieses Notnagel-
+ * Destillat wird bewusst NICHT in den Cache gelegt, damit eine wieder lesbare
+ * Datei beim naechsten Lauf erneut versucht wird.
+ *
+ * @param factsStore persistenter Destillat-Cache (in der App
+ *   `rides/last-cache.json`, siehe `data/RideLoadCacheStore.kt`); Default ist
+ *   ein fluechtiger In-Memory-Store fuer Tests.
+ * @param loadRide laedt die volle Tour fuer ein fehlendes/ungueltiges
+ *   Destillat; Default `null` = nur Stats-Notnagel (Tests ohne Punkte).
  */
 fun computeInsights(
-    rides: List<Ride>,
+    rides: List<RideSummary>,
     vitals: VitalsSummary?,
     profile: TrainingProfile,
     now: LocalDateTime = LocalDateTime.now(),
-    baseLoadCache: MutableMap<String, RideLoad> = mutableMapOf(),
+    factsStore: RideLoadFactsStore = InMemoryRideLoadFactsStore(),
+    loadRide: (String) -> Ride? = { null },
 ): TrainingInsights {
     val effective = effectiveProfile(profile, vitals)
     val restingHrSeries = vitals?.restingHeartRate?.series ?: emptyList()
@@ -358,29 +421,57 @@ fun computeInsights(
 
     // Profil je Tour: zeitnaher Ruhepuls statt eines Medians ueber die ganze
     // Historie (der Ruhepuls steckt ueber die HF-Reserve in jedem TRIMP).
+    // Dazu je Tour das Destillat — aus dem Cache oder einmalig frisch aus der
+    // nachgeladenen Volltour.
     val rideProfiles = LinkedHashMap<String, TrainingProfile>()
-    val rideSignatures = LinkedHashMap<String, String>()
-    for (ride in ordered) {
+    val factsById = LinkedHashMap<String, RideLoadFacts>()
+    for (summary in ordered) {
         val rideProfile = profileForRide(
             base = effective,
             userOverride = profile.restingHrOverride,
             restingSeries = restingHrSeries,
-            at = localOfEpochMs(ride.createdAt),
+            at = localOfEpochMs(summary.createdAt),
         )
-        rideProfiles[ride.id] = rideProfile
-        rideSignatures[ride.id] = rideProfile.toJson().toString()
-    }
+        rideProfiles[summary.id] = rideProfile
+        val signature = rideProfile.toJson().toString()
 
-    val kept = LinkedHashMap<String, RideLoad>()
-    fun loadFor(ride: Ride, eftpW: Double): RideLoad {
-        val key = loadKey(ride, rideSignatures.getValue(ride.id), eftpW)
-        val value = baseLoadCache[key]
-            ?: computeRideLoadForRide(ride, rideProfiles.getValue(ride.id), eftpW = eftpW)
-        kept[key] = value
-        return value
+        val cached = factsStore.get(summary.id)
+        val facts = if (cached != null &&
+            cached.updatedAt == summary.updatedAt &&
+            cached.profileSignature == signature
+        ) {
+            cached.facts
+        } else {
+            val full = loadRide(summary.id)
+            if (full != null) {
+                val computed = computeRideLoadFacts(full, rideProfile)
+                factsStore.put(
+                    summary.id,
+                    StoredRideLoadFacts(
+                        updatedAt = summary.updatedAt,
+                        profileSignature = signature,
+                        facts = computed,
+                    ),
+                )
+                computed
+            } else {
+                rideLoadFactsFromSummary(summary)
+            }
+        }
+        factsById[summary.id] = facts
     }
+    // Eintraege geloeschter Touren raeumen sich hier mit ab; danach ist der
+    // Stand auf der Platte.
+    factsStore.retainAll(factsById.keys)
+    factsStore.flush()
 
-    // --- Durchgang 1: Profil-FTP. Liefert Leistungsreihen und α.
+    fun loadFor(summary: RideSummary, eftpW: Double): RideLoad = rideLoadFromFacts(
+        facts = factsById.getValue(summary.id),
+        profile = rideProfiles.getValue(summary.id),
+        eftpW = eftpW,
+    )
+
+    // --- Durchgang 1: Profil-FTP. Liefert die Kennzahlen fuer α und FTP.
     val anchorEftpW = effective.eftpW
     val firstPass = ordered.map { loadFor(it, anchorEftpW) }
 
@@ -401,19 +492,24 @@ fun computeInsights(
         },
     )
 
-    // --- FTP aufloesen. Fuer das 20-min-Mittel zaehlt nur das juengste Fenster.
+    // --- FTP aufloesen. Fuer das 20-min-Mittel zaehlt nur das juengste
+    // Fenster; der Bestwert je Tour steht fertig im Destillat.
     val windowStart = now.minusDays(eftpWindowDays.toLong())
-    val recentSeries = mutableListOf<PowerSeries>()
-    for ((index, ride) in ordered.withIndex()) {
-        if (localOfEpochMs(ride.createdAt).isBefore(windowStart)) {
+    var bestRecentTwentyMinW: Double? = null
+    for (summary in ordered) {
+        if (localOfEpochMs(summary.createdAt).isBefore(windowStart)) {
             continue
         }
-        val physics = firstPass[index].physics
-        if (physics.available) {
-            recentSeries.add(physics.series)
+        val facts = factsById.getValue(summary.id)
+        if (!facts.physicsAvailable) {
+            continue
+        }
+        val best = facts.bestTwentyMinW ?: continue
+        if (bestRecentTwentyMinW == null || best > bestRecentTwentyMinW) {
+            bestRecentTwentyMinW = best
         }
     }
-    val eftp = resolveEftp(effective, recentSeries, calibration)
+    val eftp = resolveEftp(effective, bestTwentyMinW = bestRecentTwentyMinW, calibration = calibration)
 
     // --- Durchgang 2 nur, wenn sich die Skala wirklich verschiebt.
     val secondPass = if (abs(eftp.watts - anchorEftpW) < 0.5) {
@@ -421,9 +517,6 @@ fun computeInsights(
     } else {
         ordered.map { loadFor(it, eftp.watts) }
     }
-
-    baseLoadCache.clear()
-    baseLoadCache.putAll(kept)
 
     // α steckt schon in der FTP, wenn es dort angewandt wurde — dann darf es
     // nicht noch einmal als Faktor auf die Physiklast wirken.
@@ -467,7 +560,15 @@ fun computeInsights(
         tsb = tsb,
         trainingHistoryDays = fitness.historyDays,
     )
-    val recommendation = recommendToday(readiness = readiness, tsb = tsb)
+    // HIT-Budget: Wie viele harte Tage stecken schon in den letzten 7 Tagen?
+    // Vorher blieb `hitBudgetLeft` auf seinem Default `true` — bei
+    // durchgehend guter Readiness empfahl die App unbegrenzt harte Tage.
+    val hardDaysLast7 = countHardDaysLast7(ordered, rideLoads, now)
+    val recommendation = recommendToday(
+        readiness = readiness,
+        tsb = tsb,
+        hitBudgetLeft = hardDaysLast7 < MAX_HARD_DAYS_PER_7D,
+    )
 
     val weeklyLoad = sumLastDays(fitness, 7)
     val coveredDays = min(fitness.historyDays, 28)
@@ -514,10 +615,11 @@ fun computeInsights(
         sleep = sleep,
         readiness = readiness,
         readinessLast7 = readinessLast7,
+        hardDaysLast7 = hardDaysLast7,
         recommendation = recommendation,
         deload = deload,
         weeklyTarget = weeklyTarget,
-        vo2max = estimateVo2max(ordered, rideLoads, effective, vitals),
+        vo2max = estimateVo2max(ordered, factsById, effective, vitals),
         weeklyLoad = weeklyLoad,
         fourWeekMeanWeeklyLoad = fourWeekMean,
     )
@@ -545,12 +647,75 @@ private fun sumLastDays(series: FitnessSeries, days: Int): Double =
     series.lastDays(days).sumOf { it.load }
 
 /**
+ * Zaehlt die harten Kalendertage der letzten 7 Tage (heute eingeschlossen).
+ *
+ * Ein Tag ist hart, wenn
+ *  * die Zeit ueber der Schwelle (`secondsAboveLthr`, HF-Pfad) ueber alle
+ *    Touren des Tages [HARD_DAY_LTHR_SECONDS] erreicht — das direkte Signal
+ *    fuer einen gesetzten harten Reiz; oder
+ *  * **keine** Tour des Tages eine auswertbare Herzfrequenz hat und die
+ *    Tageslast [HARD_DAY_LOAD] erreicht — der grobe Rueckfall, wenn nur das
+ *    Physikmodell etwas sagt.
+ *
+ * Liegt Herzfrequenz vor, gewinnt sie: Eine lange ruhige Tour mit viel Last,
+ * aber ohne Schwellenzeit verbraucht kein HIT-Budget.
+ *
+ * @param ordered gefahrene Touren (bereits ohne Planungen, siehe
+ *   [computeInsights]) — Zusammenfassungen genuegen, gebraucht wird nur
+ *   `createdAt`.
+ * @param rideLoads kalibrierte Last je Tour-ID.
+ */
+internal fun countHardDaysLast7(
+    ordered: List<RideInfo>,
+    rideLoads: Map<String, RideLoad>,
+    now: LocalDateTime,
+): Int {
+    val today = now.toLocalDate()
+    val windowStart = today.minusDays(6)
+
+    data class DayAccumulator(
+        var secondsAboveLthr: Double = 0.0,
+        var load: Double = 0.0,
+        var hasHr: Boolean = false,
+    )
+
+    val byDay = HashMap<java.time.LocalDate, DayAccumulator>()
+    for (ride in ordered) {
+        val day = localOfEpochMs(ride.createdAt).toLocalDate()
+        if (day.isBefore(windowStart) || day.isAfter(today)) {
+            continue
+        }
+        val load = rideLoads[ride.id] ?: continue
+        val acc = byDay.getOrPut(day) { DayAccumulator() }
+        acc.load += load.load
+        if (load.heartRate.available) {
+            acc.hasHr = true
+            acc.secondsAboveLthr += load.heartRate.secondsAboveLthr
+        }
+    }
+
+    return byDay.values.count { acc ->
+        if (acc.hasHr) {
+            acc.secondsAboveLthr >= HARD_DAY_LTHR_SECONDS
+        } else {
+            acc.load >= HARD_DAY_LOAD
+        }
+    }
+}
+
+/**
  * VO2max aus den juengsten Touren mit brauchbarer Leistungsreihe; die
  * Plattform (Samsung Health) gewinnt, falls sie einen Wert liefert.
+ *
+ * Die Steady-Segmente stehen fertig im Destillat ([RideLoadFacts]) — dort mit
+ * dem tourzeitnahen Profil gerechnet, was fuer [extractSteadySegments]
+ * dasselbe Ergebnis liefert wie frueher das effektive Profil: Der einzige
+ * Unterschied beider Profile ist der Ruhepuls, und der geht weder in die
+ * Leistungsreihe noch in das HFmax-Fenster der Segmentsuche ein.
  */
 private fun estimateVo2max(
-    ordered: List<Ride>,
-    loads: Map<String, RideLoad>,
+    ordered: List<RideSummary>,
+    facts: Map<String, RideLoadFacts>,
     profile: TrainingProfile,
     vitals: VitalsSummary?,
 ): Vo2MaxEstimate {
@@ -559,16 +724,16 @@ private fun estimateVo2max(
         // Hoechstens die 20 juengsten Touren betrachten, damit die Auswertung
         // auch bei langer Historie schnell bleibt.
         var scanned = 0
-        for (ride in ordered.asReversed()) {
+        for (summary in ordered.asReversed()) {
             if (scanned >= 20 || segments.size >= 12) {
                 break
             }
             scanned++
-            val physics = loads[ride.id]?.physics ?: continue
-            if (!physics.available) {
+            val rideFacts = facts[summary.id] ?: continue
+            if (!rideFacts.physicsAvailable) {
                 continue
             }
-            segments.addAll(extractSteadySegments(physics.series, profile))
+            segments.addAll(rideFacts.steadySegments)
         }
     }
     return estimateVo2Max(

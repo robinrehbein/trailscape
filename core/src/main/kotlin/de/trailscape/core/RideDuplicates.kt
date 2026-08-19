@@ -23,14 +23,19 @@ package de.trailscape.core
  * allein reicht erst recht nicht. Zusammen sind sie fuer den Zweck
  * („versehentlich zweimal dieselbe Datei gewaehlt") trennscharf genug, ohne
  * die Punktlisten Punkt fuer Punkt vergleichen zu muessen.
+ *
+ * Der Bestand kommt als [RideInfo] herein — die Pruefung braucht nur
+ * Startzeitpunkt und [RideInfo.pointCount], laeuft also unveraendert ueber
+ * die punktfreien Zusammenfassungen der Tourenliste.
  */
-fun findDuplicateRide(existing: List<Ride>, candidate: Ride): Ride? = existing.firstOrNull { ride ->
-    ride.id == candidate.id ||
-        (ride.createdAt == candidate.createdAt && ride.points.size == candidate.points.size)
-}
+fun findDuplicateRide(existing: List<RideInfo>, candidate: Ride): RideInfo? =
+    existing.firstOrNull { ride ->
+        ride.id == candidate.id ||
+            (ride.createdAt == candidate.createdAt && ride.pointCount == candidate.points.size)
+    }
 
 /** Kurzform von [findDuplicateRide] fuer den blossen Ja/Nein-Fall. */
-fun isDuplicateRide(existing: List<Ride>, candidate: Ride): Boolean =
+fun isDuplicateRide(existing: List<RideInfo>, candidate: Ride): Boolean =
     findDuplicateRide(existing, candidate) != null
 
 /** Meldung, wenn ein Import an der Duplikatpruefung haengen bleibt. */

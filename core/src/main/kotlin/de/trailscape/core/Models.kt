@@ -97,13 +97,101 @@ data class RideStats(
     }
 }
 
+/**
+ * Die punktfreien Kerndaten einer Tour — das, was Listen, Trainingsauswertung
+ * und Sync-Entscheidung brauchen, ohne die GPS-Punkte im Speicher zu halten.
+ *
+ * Implementiert von [Ride] (der vollen Tour) und [RideSummary] (dem
+ * Index-Eintrag). Funktionen, die nur ueber Kennzahlen und Zeitstempel
+ * rechnen (Wochenkilometer, Fitness-Einstufung, Duplikatpruefung, ...),
+ * nehmen dieses Interface entgegen — sie laufen damit unveraendert ueber
+ * volle Touren UND ueber Zusammenfassungen. Wer die Punkte wirklich braucht,
+ * verlangt weiterhin ein [Ride].
+ */
+interface RideInfo {
+    val id: String
+    val name: String
+
+    /** ms seit Epoch. */
+    val createdAt: Long
+
+    /** ms seit Epoch; siehe [Ride.updatedAt]. */
+    val updatedAt: Long
+    val stats: RideStats
+
+    /** Siehe [Ride.planned]. */
+    val planned: Boolean
+
+    /**
+     * Anzahl der Trackpunkte. Teil der Zusammenfassung, weil die
+     * Duplikatpruefung ([findDuplicateRide]) sie braucht — sie vergleicht
+     * Startzeitpunkt UND Punktzahl, ohne die Punktlisten selbst zu laden.
+     */
+    val pointCount: Int
+}
+
+/**
+ * Punktfreie Zusammenfassung einer gespeicherten Tour — der Eintrag des
+ * Touren-Index (`rides/index.json` in `:app`).
+ *
+ * Existiert, damit die Tourenliste nicht mehr saemtliche GPS-Punkte aller
+ * Touren dauerhaft im RAM halten muss: Bei ~500 Touren × 4000 Punkten sind
+ * das 200+ MB geboxter Nullable-Felder ([TrackPoint]). Die volle Tour wird
+ * nur noch bei Bedarf geladen (Detailansicht, Kartenzeichnung, GPX-Export,
+ * Sync-Push).
+ *
+ * ## Format
+ * Eigenes JSON NUR fuer den Index — das Tour-Dateiformat ([Ride.toJson])
+ * bleibt unangetastet und rueckwaertskompatibel. Der Index ist ein reiner
+ * Cache: Fehlt er oder ist er kaputt, wird er aus den Tour-Dateien neu
+ * aufgebaut.
+ */
+data class RideSummary(
+    override val id: String,
+    override val name: String,
+    /** ms seit Epoch. */
+    override val createdAt: Long,
+    override val updatedAt: Long,
+    override val stats: RideStats,
+    override val planned: Boolean = false,
+    override val pointCount: Int = 0,
+) : RideInfo {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("id", id)
+        put("name", name)
+        put("createdAt", createdAt)
+        put("updatedAt", updatedAt)
+        put("pointCount", pointCount)
+        if (planned) {
+            put("planned", true)
+        }
+        put("stats", stats.toJson())
+    }
+
+    companion object {
+        fun fromJson(json: JsonObject): RideSummary {
+            val createdAt = json.requiredLong("createdAt")
+            return RideSummary(
+                id = json.requiredString("id"),
+                name = json.requiredString("name"),
+                createdAt = createdAt,
+                updatedAt = json.optionalLong("updatedAt") ?: createdAt,
+                pointCount = json.optionalInt("pointCount") ?: 0,
+                planned = json.optionalBoolean("planned") ?: false,
+                stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) }
+                    ?: RideStats.empty,
+            )
+        }
+    }
+}
+
 /** Eine aufgezeichnete Fahrt. */
 data class Ride(
-    val id: String,
-    val name: String,
+    override val id: String,
+    override val name: String,
     /** ms seit Epoch. */
-    val createdAt: Long,
-    val stats: RideStats,
+    override val createdAt: Long,
+    override val stats: RideStats,
     val points: List<TrackPoint> = emptyList(),
     /**
      * `true`, wenn dieser Eintrag eine **Planung** ist und niemand dafuer im
@@ -126,8 +214,38 @@ data class Ride(
      * lesen sich als `false` — also als gefahren, was fuer alles, was vor
      * dieser Aenderung entstanden ist, auch stimmt.
      */
-    val planned: Boolean = false,
-) {
+    override val planned: Boolean = false,
+    /**
+     * Zeitpunkt der letzten inhaltlichen Aenderung (ms seit Epoch) — der
+     * Dreh- und Angelpunkt des bidirektionalen Syncs: [syncRides] entscheidet
+     * per Last-Write-Wins ueber genau diesen Wert, welche Seite die neuere
+     * Fassung einer Tour hat (Umbenennung, HF-Anreicherung, ...).
+     *
+     * ## Rueckwaertskompatibilitaet
+     * Das Feld ist **nachtraeglich** ergaenzt. Alte Tour-Dateien (Flutter-App,
+     * Web-App, bestehende Server-Bestaende) kennen den Schluessel nicht; beim
+     * Lesen faellt [fromJson] dann auf [createdAt] zurueck — eine nie
+     * bearbeitete Tour ist so alt wie ihre Aufzeichnung, was fuer alles vor
+     * dieser Aenderung auch stimmt. Beim Schreiben wird der Schluessel
+     * dagegen **immer** mitgeschrieben (angehaengt, hinter `planned`), damit
+     * jede neu gespeicherte Datei sync-faehig ist; alte Leser ignorieren
+     * unbekannte Schluessel.
+     */
+    override val updatedAt: Long = createdAt,
+) : RideInfo {
+    override val pointCount: Int get() = points.size
+
+    /** Punktfreie Zusammenfassung dieser Tour (siehe [RideSummary]). */
+    fun toSummary(): RideSummary = RideSummary(
+        id = id,
+        name = name,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        stats = stats,
+        planned = planned,
+        pointCount = points.size,
+    )
+
     fun toJson(): JsonObject = buildJsonObject {
         put("id", id)
         put("name", name)
@@ -139,19 +257,27 @@ data class Ride(
         if (planned) {
             put("planned", true)
         }
+        // Immer geschrieben (siehe [updatedAt]) — als letzter Schluessel,
+        // damit alles davor byteweise beim alten Format bleibt.
+        put("updatedAt", updatedAt)
     }
 
     companion object {
-        fun fromJson(json: JsonObject): Ride = Ride(
-            id = json.requiredString("id"),
-            name = json.requiredString("name"),
-            createdAt = json.requiredLong("createdAt"),
-            points = json.requiredArray("points").map { TrackPoint.fromJson(it.asRequiredObject()) },
-            // Entspricht Darts `json['stats'] is Map<String, dynamic> ? ... : const RideStats(...)`:
-            // fehlt 'stats' oder ist es kein Objekt, wird lautlos auf leere Stats zurueckgefallen.
-            stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) } ?: RideStats.empty,
-            planned = json.optionalBoolean("planned") ?: false,
-        )
+        fun fromJson(json: JsonObject): Ride {
+            val createdAt = json.requiredLong("createdAt")
+            return Ride(
+                id = json.requiredString("id"),
+                name = json.requiredString("name"),
+                createdAt = createdAt,
+                points = json.requiredArray("points").map { TrackPoint.fromJson(it.asRequiredObject()) },
+                // Entspricht Darts `json['stats'] is Map<String, dynamic> ? ... : const RideStats(...)`:
+                // fehlt 'stats' oder ist es kein Objekt, wird lautlos auf leere Stats zurueckgefallen.
+                stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) } ?: RideStats.empty,
+                planned = json.optionalBoolean("planned") ?: false,
+                // Fehlender Schluessel = alte Datei: siehe [updatedAt].
+                updatedAt = json.optionalLong("updatedAt") ?: createdAt,
+            )
+        }
     }
 }
 
@@ -163,7 +289,7 @@ data class Ride(
  * Auswertung, die „gefahren" meint, geht hierdurch; wer sie vergisst, zaehlt
  * Kilometer, die nie gefahren wurden.
  */
-fun riddenRides(rides: List<Ride>): List<Ride> = rides.filter { !it.planned }
+fun <T : RideInfo> riddenRides(rides: List<T>): List<T> = rides.filter { !it.planned }
 
 /** Fitness-Stufen wie in der Flutter-App und der Web-Referenz. */
 enum class FitnessLevel(
@@ -290,6 +416,22 @@ data class TrainingSession(
      * (siehe [canGenerateRouteFor]).
      */
     val isEvent: Boolean = false,
+    /**
+     * Ziel-Trainingslast der Einheit auf der eTSS-Skala (1 h an der Schwelle
+     * = 100), abgestimmt auf das Lastmodell aus `TrainingLoad.kt` /
+     * `PerformanceManagement.kt`.
+     *
+     * Die Bruecke zwischen Plan und Lastmodell: [targetKm] bleibt die Groesse
+     * fuers Routing, [targetLoad] die fuer CTL/ATL/Wochenbudget. Erzeugt wird
+     * der Wert zusammen mit den Kilometern in `generatePlan` (siehe dort
+     * `attachSessionLoads`), sodass beide Zahlen nie unabhaengig voneinander
+     * entstehen.
+     *
+     * `null` bei Plaenen aus der Zeit vor diesem Feld — ein fehlender
+     * Schluessel im JSON ist der Normalfall beim Lesen alter Plaene, kein
+     * Fehler.
+     */
+    val targetLoad: Double? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("day", day)
@@ -302,6 +444,7 @@ data class TrainingSession(
         if (isEvent) {
             put("isEvent", true)
         }
+        targetLoad?.let { put("targetLoad", it) }
     }
 
     companion object {
@@ -321,6 +464,7 @@ data class TrainingSession(
                 durationMin = json.optionalInt("durationMin"),
                 isEvent = json.optionalBoolean("isEvent")
                     ?: title.lowercase().startsWith(EVENT_TITLE_PREFIX),
+                targetLoad = json.optionalDouble("targetLoad"),
             )
         }
     }

@@ -98,7 +98,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 | Modul | Was | Warum getrennt |
 |---|---|---|
 | `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 662 Unit-Tests hängen hier |
-| `:app` | Android: Compose/Material-3-Oberfläche (fünf Tabs — Heute, Karte, Touren, Training, Mehr), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
+| `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Training, Mehr; die Tourenliste liegt als Blatt auf der Karte), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
 
@@ -181,7 +181,9 @@ Jeder Push auf `main` baut die App und hängt sie an das GitHub-Release
 1. APK auf dem Android-Gerät herunterladen und öffnen
 2. Installation aus unbekannten Quellen für den Browser erlauben
 3. Beim ersten Start die Berechtigungen erteilen:
-   - **Standort** — „Immer erlauben" für die Aufzeichnung im Hintergrund
+   - **Standort** — „Während der Nutzung erlauben" genügt: Die Aufzeichnung
+     läuft als Vordergrunddienst und damit auch bei gesperrtem Display weiter;
+     eine Hintergrund-Standortberechtigung fragt die App gar nicht an
    - **Benachrichtigungen** — für die Aufzeichnungs-Anzeige und, falls
      eingeschaltet, für die Erinnerungen
    - **Health Connect** — optional, nur für die Gesundheitsdaten
@@ -214,8 +216,11 @@ neu bauen). Der Vertriebsweg dieses Projekts bleibt der direkte APK-Download.
 Hintergrund die veröffentlichten Releases ab. Gibt es eine neuere Nummer als
 die eigene, erscheint einmalig eine Snackbar und im Mehr-Tab eine schließbare
 Karte mit dem Knopf „Herunterladen"; unter **Mehr → Über → Nach Updates
-suchen** lässt sich die Prüfung jederzeit von Hand auslösen. Ohne Netz passiert
-schlicht nichts — die Prüfung meldet nie einen Fehler und blockiert nie.
+suchen** lässt sich die Prüfung jederzeit von Hand auslösen. Der stille Check
+lässt sich an derselben Stelle abschalten („Täglich still nach Updates
+suchen") — dann geht beim Start keine Anfrage an GitHub hinaus. Ohne Netz
+passiert schlicht nichts — die Prüfung meldet nie einen Fehler und blockiert
+nie.
 
 ## Umstieg von Version 1.x
 
@@ -246,10 +251,12 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 
 ## Datenschutz
 
-Alles bleibt lokal. Die App spricht nur mit Diensten, die für eine konkrete
-Aktion nötig sind: Kachelserver für die Karte, BRouter für die
-Routenberechnung, Nominatim für die Zielsuche und — wenn eingerichtet — dem
-eigenen Sync-Server. Kein Analytics, keine Telemetrie, keine Werbung, kein
+Alles bleibt lokal. Die App spricht mit den Diensten, die für eine konkrete
+Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
+und Kachel-Downloads, Nominatim für die Zielsuche und — wenn eingerichtet —
+dem eigenen Sync-Server. Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
+tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter
+**Mehr → Über**. Kein Analytics, keine Telemetrie, keine Werbung, kein
 Konto.
 
 Was genau wann an wen geht, steht ausführlich und nachprüfbar in

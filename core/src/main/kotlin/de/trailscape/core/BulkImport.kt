@@ -162,7 +162,7 @@ fun scanArchive(zipBytes: ByteArray): List<ArchiveEntry> =
  */
 fun importArchive(
     input: InputStream,
-    existing: List<Ride> = emptyList(),
+    existing: List<RideInfo> = emptyList(),
     total: Int? = null,
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
 ): BulkImportResult {
@@ -170,7 +170,7 @@ fun importArchive(
     val duplicates = mutableListOf<String>()
     val errors = mutableListOf<BulkImportError>()
     // Bestand + bereits im Archiv Gefundenes: erkennt auch Doppelte innerhalb des ZIPs.
-    val seen = ArrayList(existing)
+    val seen = ArrayList<RideInfo>(existing)
     var done = 0
     // Fortlaufende IDs: rideFromGpx/rideFromFit wuerden sonst allen Touren
     // desselben Millisekunden-Ticks dieselbe ID geben — und die
@@ -227,7 +227,7 @@ fun importArchive(
  */
 fun importArchive(
     zipBytes: ByteArray,
-    existing: List<Ride> = emptyList(),
+    existing: List<RideInfo> = emptyList(),
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
 ): BulkImportResult {
     val total = scanArchive(zipBytes).size

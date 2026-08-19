@@ -38,10 +38,10 @@ class OkHttpClientAdapter(
 
     override fun execute(request: HttpRequest): HttpResponse {
         // OkHttp verlangt fuer POST/PUT einen (ggf. leeren) Body, waehrend GET
-        // gar keinen haben darf — alle drei Aufrufstellen in :core setzen bei
-        // POST/PUT zwar immer einen Body, dieser Fallback macht den Adapter
-        // aber robust, falls das in Zukunft nicht mehr gilt.
-        val requiresBody = request.method != HttpMethod.GET
+        // gar keinen haben darf und DELETE ihn nur erlaubt — alle Aufrufstellen
+        // in :core setzen bei POST/PUT zwar immer einen Body, dieser Fallback
+        // macht den Adapter aber robust, falls das in Zukunft nicht mehr gilt.
+        val requiresBody = request.method == HttpMethod.POST || request.method == HttpMethod.PUT
         val requestBodyText = request.body
         val body = when {
             requestBodyText != null -> requestBodyText.toRequestBody(JSON_MEDIA_TYPE)
@@ -80,6 +80,7 @@ class OkHttpClientAdapter(
         HttpMethod.GET -> "GET"
         HttpMethod.POST -> "POST"
         HttpMethod.PUT -> "PUT"
+        HttpMethod.DELETE -> "DELETE"
     }
 
     private companion object {

@@ -160,6 +160,86 @@ class RecordingJournalTest {
         assertFalse(journal().exists())
     }
 
+    // --- Auto-Pause im Journal ---
+
+    @Test
+    fun `autoPause und autoResume stehen als eigene Zeilen im Journal`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendAutoPause(2_000L)
+        j.appendAutoResume(5_000L)
+        j.close()
+
+        val lines = activeFile().readLines()
+        assertEquals("""{"type":"autoPause","at":2000}""", lines[1])
+        assertEquals("""{"type":"autoResume","at":5000}""", lines[2])
+    }
+
+    @Test
+    fun `Auto-Pausen zaehlen ins Pausenkonto wie manuelle`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendAutoPause(2_000L)
+        j.appendAutoResume(5_000L)
+        j.appendPause(9_000L)
+        j.appendResume(10_000L)
+        j.close()
+
+        val snapshot = assertNotNull(journal().read())
+        assertEquals(4_000L, snapshot.pausedMs)
+        assertNull(snapshot.pausedSinceMs)
+        assertFalse(snapshot.pausedSinceIsAuto)
+    }
+
+    @Test
+    fun `eine offene Auto-Pause bleibt als solche erkennbar`() {
+        // Der Fall der Wiederherstellung: Der Dienst starb mitten in einer
+        // Auto-Pause. `continueFromJournal` muss wissen, dass diese Pause bei
+        // Weiterfahrt von selbst enden soll — anders als eine manuelle.
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendAutoPause(2_000L)
+        j.appendAutoResume(5_000L)
+        j.appendAutoPause(9_000L)
+        j.close()
+
+        val snapshot = assertNotNull(journal().read())
+        assertEquals(3_000L, snapshot.pausedMs)
+        assertEquals(9_000L, snapshot.pausedSinceMs)
+        assertTrue(snapshot.pausedSinceIsAuto)
+    }
+
+    @Test
+    fun `eine offene manuelle Pause gilt nicht als Auto-Pause`() {
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendPause(2_000L)
+        j.close()
+
+        val snapshot = assertNotNull(journal().read())
+        assertEquals(2_000L, snapshot.pausedSinceMs)
+        assertFalse(snapshot.pausedSinceIsAuto)
+    }
+
+    @Test
+    fun `Umwandlung in eine manuelle Pause schreibt das Paar autoResume plus pause`() {
+        // So schreibt der Dienst das manuelle Pausieren waehrend einer
+        // Auto-Pause (siehe RecordingService.setPaused): Die Auto-Pause endet
+        // auf dem Papier, die manuelle beginnt im selben Moment — das
+        // Pausenkonto bleibt lueckenlos, die offene Pause ist manuell.
+        val j = journal()
+        j.begin("id-1", 1_000L)
+        j.appendAutoPause(2_000L)
+        j.appendAutoResume(6_000L)
+        j.appendPause(6_000L)
+        j.close()
+
+        val snapshot = assertNotNull(journal().read())
+        assertEquals(4_000L, snapshot.pausedMs)
+        assertEquals(6_000L, snapshot.pausedSinceMs)
+        assertFalse(snapshot.pausedSinceIsAuto)
+    }
+
     // --- Absturzfestigkeit ---
 
     @Test

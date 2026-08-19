@@ -57,6 +57,9 @@ data class StartupUpdate(
  *    [UPDATE_CHECK_INTERVAL_MS] wirklich aufs Netz zu; der Zeitstempel wird
  *    nur nach einer *erfolgreichen* Abfrage fortgeschrieben, damit ein
  *    Start ohne Empfang die Pruefung nicht fuer einen ganzen Tag verbraucht.
+ *  * **Abschaltbar.** Der stille Start-Check laesst sich unter „Mehr → Über"
+ *    ausschalten ([isAutoCheckEnabled]); dann geht beim Start keine Anfrage
+ *    an GitHub hinaus. Die manuelle Pruefung bleibt davon unberuehrt.
  *
  * @param installedRunNumber die Lauf-Nummer der laufenden App
  *   ([runNumberFromVersionCode] auf dem `versionCode` des PackageManagers);
@@ -75,11 +78,25 @@ class UpdateChecker(
      * Karte auch ohne Netz sofort steht), dann — falls faellig — eine
      * Abfrage.
      *
+     * Respektiert [isAutoCheckEnabled]: Ist die Einstellung aus, geht **keine**
+     * Anfrage hinaus — es zaehlt dann nur, was ein frueherer Lauf schon wusste
+     * ([cachedResult]). Die Pruefung des Schalters passiert bewusst hier drin
+     * und nicht beim Aufrufer: So gibt es genau eine Stelle, an der der stille
+     * Start-Check aufs Netz darf, und die Zusage aus `PRIVACY.md`
+     * („abschaltbar") haengt nicht davon ab, dass jede Aufrufstelle daran
+     * denkt.
+     *
      * Vermerkt die angekuendigte Version gleich mit; ein zweiter Aufruf
      * liefert fuer dieselbe Version [StartupUpdate.announceVersion] `null`.
      */
     fun startupCheck(): StartupUpdate {
-        val fresh = check(force = false)
+        val fresh = if (isAutoCheckEnabled()) {
+            check(force = false)
+        } else {
+            // Wie bei greifender Drosselung: kein Netzzugriff, weiter mit dem
+            // gespeicherten Stand.
+            UpdateCheckResult.Skipped
+        }
         // Bei Skipped/Failed zaehlt, was beim letzten erfolgreichen Lauf
         // herauskam — sonst verschwaende ein Start ohne Empfang den Hinweis.
         val effective = when (fresh) {
@@ -111,6 +128,23 @@ class UpdateChecker(
             write(ANNOUNCED_KEY, result.versionName)
         }
         return result
+    }
+
+    /**
+     * Ob der stille Start-Check aufs Netz darf. Vorgabe: **an** — ohne diese
+     * Pruefung erfaehrt eine per Sideload verteilte App nie von neuen
+     * Versionen. Nur ein ausdrueckliches Abschalten (gespeichertes `"false"`)
+     * zaehlt; jeder andere oder fehlende Wert bedeutet an.
+     *
+     * Betrifft ausschliesslich [startupCheck]. Die manuelle Pruefung
+     * ([checkNow], „Mehr → Über → Nach Updates suchen") geht immer — wer den
+     * Knopf drueckt, will die Anfrage ja gerade.
+     */
+    fun isAutoCheckEnabled(): Boolean = read(AUTO_CHECK_KEY) != "false"
+
+    /** Schaltet den stillen Start-Check an oder aus (siehe [isAutoCheckEnabled]). */
+    fun setAutoCheckEnabled(enabled: Boolean) {
+        write(AUTO_CHECK_KEY, enabled.toString())
     }
 
     /**
@@ -206,5 +240,11 @@ class UpdateChecker(
 
         /** Version, deren Hinweis-Karte weggewischt wurde. */
         const val DISMISSED_KEY = "trailscape.update.dismissed"
+
+        /**
+         * Einstellung „taeglich still nach Updates suchen" — fehlt der
+         * Schluessel, gilt an (siehe [isAutoCheckEnabled]).
+         */
+        const val AUTO_CHECK_KEY = "trailscape.updates.autoCheck"
     }
 }

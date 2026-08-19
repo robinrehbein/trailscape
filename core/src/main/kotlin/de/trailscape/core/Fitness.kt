@@ -40,7 +40,7 @@ private fun determineLevel(
  * Zeit verwendet.
  */
 fun assessFitness(
-    rides: List<Ride>,
+    rides: List<RideInfo>,
     now: Long? = null,
 ): FitnessAssessment {
     val nowMs = now ?: System.currentTimeMillis()
