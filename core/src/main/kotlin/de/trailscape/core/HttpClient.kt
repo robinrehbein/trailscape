@@ -18,7 +18,7 @@ package de.trailscape.core
  */
 
 /** HTTP-Methode einer [HttpRequest]. Nur die von Trailscape tatsaechlich benutzten. */
-enum class HttpMethod { GET, POST, PUT }
+enum class HttpMethod { GET, POST, PUT, DELETE }
 
 /**
  * Eine einzelne HTTP-Anfrage.

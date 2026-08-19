@@ -127,6 +127,23 @@ data class Ride(
      * dieser Aenderung entstanden ist, auch stimmt.
      */
     val planned: Boolean = false,
+    /**
+     * Zeitpunkt der letzten inhaltlichen Aenderung (ms seit Epoch) — der
+     * Dreh- und Angelpunkt des bidirektionalen Syncs: [syncRides] entscheidet
+     * per Last-Write-Wins ueber genau diesen Wert, welche Seite die neuere
+     * Fassung einer Tour hat (Umbenennung, HF-Anreicherung, ...).
+     *
+     * ## Rueckwaertskompatibilitaet
+     * Das Feld ist **nachtraeglich** ergaenzt. Alte Tour-Dateien (Flutter-App,
+     * Web-App, bestehende Server-Bestaende) kennen den Schluessel nicht; beim
+     * Lesen faellt [fromJson] dann auf [createdAt] zurueck — eine nie
+     * bearbeitete Tour ist so alt wie ihre Aufzeichnung, was fuer alles vor
+     * dieser Aenderung auch stimmt. Beim Schreiben wird der Schluessel
+     * dagegen **immer** mitgeschrieben (angehaengt, hinter `planned`), damit
+     * jede neu gespeicherte Datei sync-faehig ist; alte Leser ignorieren
+     * unbekannte Schluessel.
+     */
+    val updatedAt: Long = createdAt,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("id", id)
@@ -139,19 +156,27 @@ data class Ride(
         if (planned) {
             put("planned", true)
         }
+        // Immer geschrieben (siehe [updatedAt]) — als letzter Schluessel,
+        // damit alles davor byteweise beim alten Format bleibt.
+        put("updatedAt", updatedAt)
     }
 
     companion object {
-        fun fromJson(json: JsonObject): Ride = Ride(
-            id = json.requiredString("id"),
-            name = json.requiredString("name"),
-            createdAt = json.requiredLong("createdAt"),
-            points = json.requiredArray("points").map { TrackPoint.fromJson(it.asRequiredObject()) },
-            // Entspricht Darts `json['stats'] is Map<String, dynamic> ? ... : const RideStats(...)`:
-            // fehlt 'stats' oder ist es kein Objekt, wird lautlos auf leere Stats zurueckgefallen.
-            stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) } ?: RideStats.empty,
-            planned = json.optionalBoolean("planned") ?: false,
-        )
+        fun fromJson(json: JsonObject): Ride {
+            val createdAt = json.requiredLong("createdAt")
+            return Ride(
+                id = json.requiredString("id"),
+                name = json.requiredString("name"),
+                createdAt = createdAt,
+                points = json.requiredArray("points").map { TrackPoint.fromJson(it.asRequiredObject()) },
+                // Entspricht Darts `json['stats'] is Map<String, dynamic> ? ... : const RideStats(...)`:
+                // fehlt 'stats' oder ist es kein Objekt, wird lautlos auf leere Stats zurueckgefallen.
+                stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) } ?: RideStats.empty,
+                planned = json.optionalBoolean("planned") ?: false,
+                // Fehlender Schluessel = alte Datei: siehe [updatedAt].
+                updatedAt = json.optionalLong("updatedAt") ?: createdAt,
+            )
+        }
     }
 }
 

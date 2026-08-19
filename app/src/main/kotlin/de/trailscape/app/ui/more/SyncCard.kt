@@ -109,8 +109,16 @@ fun SyncCardContent(appViewModel: AppViewModel) {
                     }
                     appViewModel.setSyncConfig(config)
                     val result = appViewModel.syncNow()
-                    statusText = "${result.pushed} hochgeladen, ${result.pulled} geladen, " +
-                        "${result.total} Touren"
+                    // Kompakter Ergebnissatz: Loeschungen und Aktualisierungen
+                    // nur nennen, wenn es welche gab — der haeufigste Fall
+                    // bleibt so kurz wie bisher.
+                    val deleted = result.deletedLocal + result.deletedRemote
+                    statusText = buildString {
+                        append("${result.pushed} hochgeladen, ${result.pulled} geladen")
+                        if (result.updated > 0) append(" (davon ${result.updated} aktualisiert)")
+                        if (deleted > 0) append(", $deleted gelöscht")
+                        append(", ${result.total} Touren")
+                    }
                 } catch (e: Exception) {
                     // Vorher gewann die technische Meldung („Failed to
                     // connect to …"); der deutsche Satz kam nur zum

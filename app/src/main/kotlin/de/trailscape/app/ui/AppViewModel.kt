@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.data.TombstoneStore
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderStore
 import de.trailscape.app.routing.RoutingServerSettings
@@ -134,6 +135,8 @@ enum class MoreSection {
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
     private val rideStorage: RideStorage = AppServices.rideStorage,
+    /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
+    private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
     private val keyValueStore: KeyValueStore = AppServices.keyValueStore,
     private val trainingPlanStore: TrainingPlanStore = AppServices.trainingPlanStore,
     /** Einstellungen der lokalen Erinnerungen (siehe [reminderSettings]). */
@@ -456,10 +459,19 @@ class AppViewModel(
         }
     }
 
+    /**
+     * Markiert eine Tour als **jetzt** geaendert — jeder Speicherweg, der eine
+     * lokale Bearbeitung darstellt, laeuft hierdurch, damit der Selfhost-Sync
+     * die Aenderung per Last-Write-Wins propagiert (siehe [Ride.updatedAt]).
+     * Bewusst NICHT beim Speichern gepullter Touren in [syncNow] — die
+     * behalten den `updatedAt` des Servers, sonst entstuende ein Push-Loop.
+     */
+    private fun Ride.touchedNow(): Ride = copy(updatedAt = System.currentTimeMillis())
+
     /** Speichert eine neue Tour, laedt die Liste neu und waehlt sie aus. */
     fun addRide(ride: Ride) {
         viewModelScope.launch {
-            withContext(io) { rideStorage.saveRide(ride) }
+            withContext(io) { rideStorage.saveRide(ride.touchedNow()) }
             reloadRides()
             select(ride.id)
         }
@@ -473,7 +485,7 @@ class AppViewModel(
     fun addRides(newRides: List<Ride>) {
         if (newRides.isEmpty()) return
         viewModelScope.launch {
-            withContext(io) { rideStorage.saveRides(newRides) }
+            withContext(io) { rideStorage.saveRides(newRides.map { it.touchedNow() }) }
             reloadRides()
         }
     }
@@ -488,7 +500,12 @@ class AppViewModel(
      */
     fun removeRide(id: String) {
         viewModelScope.launch {
-            withContext(io) { rideStorage.deleteRide(id) }
+            withContext(io) {
+                rideStorage.deleteRide(id)
+                // Loesch-Merkzettel fuer den Selfhost-Sync, sonst kaeme die
+                // Tour beim naechsten Abgleich vom Server zurueck.
+                tombstoneStore.add(id)
+            }
             reloadRides()
         }
     }
@@ -530,7 +547,12 @@ class AppViewModel(
         _rides.value = _rides.value.filterNot { it.id == id }
         val job = viewModelScope.launch {
             delay(UNDO_DELETE_GRACE_MS)
-            withContext(io) { rideStorage.deleteRide(id) }
+            withContext(io) {
+                rideStorage.deleteRide(id)
+                // Erst nach der Gnadenfrist — ein Undo soll keinen
+                // Loesch-Merkzettel fuer den Selfhost-Sync hinterlassen.
+                tombstoneStore.add(id)
+            }
             pendingDeletion = null
         }
         pendingDeletion = PendingRideDeletion(ride, job)
@@ -558,7 +580,11 @@ class AppViewModel(
         pendingDeletion = null
         pending.job.cancel()
         viewModelScope.launch {
-            withContext(io) { rideStorage.deleteRide(pending.ride.id) }
+            withContext(io) {
+                rideStorage.deleteRide(pending.ride.id)
+                // Endgueltig geloescht — Merkzettel fuer den Selfhost-Sync.
+                tombstoneStore.add(pending.ride.id)
+            }
         }
     }
 
@@ -573,7 +599,7 @@ class AppViewModel(
         viewModelScope.launch {
             val ride = _rides.value.firstOrNull { it.id == id } ?: return@launch
             if (ride.name == trimmed) return@launch
-            withContext(io) { rideStorage.saveRide(ride.copy(name = trimmed)) }
+            withContext(io) { rideStorage.saveRide(ride.copy(name = trimmed).touchedNow()) }
             reloadRides()
         }
     }
@@ -863,8 +889,11 @@ class AppViewModel(
 
         val saved = withContext(io) {
             runCatching {
-                rideStorage.saveRides(report.imported)
-                rideStorage.saveRides(report.mergedRides)
+                // touchedNow(): Auch die HF-Anreicherung bestehender Touren
+                // ist eine Bearbeitung, die der Selfhost-Sync per
+                // Last-Write-Wins zum Server tragen soll.
+                rideStorage.saveRides(report.imported.map { it.touchedNow() })
+                rideStorage.saveRides(report.mergedRides.map { it.touchedNow() })
             }
         }
         if (saved.isFailure) {
@@ -1259,9 +1288,14 @@ class AppViewModel(
         val result = withContext(io) {
             syncRides(
                 listLocal = { rideStorage.listRides() },
+                // Bewusst OHNE touchedNow(): gepullte Touren behalten den
+                // updatedAt des Servers (siehe [touchedNow]).
                 saveLocal = { rideStorage.saveRide(it) },
                 client = httpClient,
                 store = keyValueStore,
+                deleteLocal = { rideStorage.deleteRide(it) },
+                listTombstones = { tombstoneStore.list() },
+                replaceTombstones = { tombstoneStore.replaceAll(it) },
             )
         }
         reloadRides()

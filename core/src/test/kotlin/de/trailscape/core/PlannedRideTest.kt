@@ -53,8 +53,10 @@ class PlannedRideTest {
         val json = ride("abc", 1_700_000_000_000, 12.3).toJson()
 
         assertFalse(json.containsKey("planned"))
-        // Reihenfolge und Umfang der bisherigen Schluessel bleiben unangetastet.
-        assertEquals(listOf("id", "name", "createdAt", "points", "stats"), json.keys.toList())
+        // Reihenfolge der bisherigen Schluessel bleibt unangetastet; nur das
+        // immer geschriebene `updatedAt` (Selfhost-Sync, Last-Write-Wins)
+        // haengt hinten an — siehe [Ride.updatedAt].
+        assertEquals(listOf("id", "name", "createdAt", "points", "stats", "updatedAt"), json.keys.toList())
     }
 
     @Test
@@ -62,7 +64,7 @@ class PlannedRideTest {
         val json = ride("abc", 1, 12.3, planned = true).toJson()
 
         assertEquals(
-            listOf("id", "name", "createdAt", "points", "stats", "planned"),
+            listOf("id", "name", "createdAt", "points", "stats", "planned", "updatedAt"),
             json.keys.toList(),
         )
         assertEquals(true, Ride.fromJson(json).planned)

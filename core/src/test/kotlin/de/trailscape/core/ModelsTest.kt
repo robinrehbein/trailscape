@@ -191,6 +191,44 @@ class ModelsTest {
     }
 
     @Test
+    fun `Ride ohne updatedAt-Schluessel faellt auf createdAt zurueck (alte Datei)`() {
+        // Alte Tour-Dateien (Flutter-App, Web-App, Bestandsserver) kennen den
+        // Schluessel nicht — fehlend heisst: nie bearbeitet, so alt wie die
+        // Aufzeichnung.
+        val json = obj("""{"id":"x","name":"n","createdAt":1700000000000,"points":[]}""")
+
+        val ride = Ride.fromJson(json)
+
+        assertEquals(1700000000000L, ride.updatedAt)
+    }
+
+    @Test
+    fun `Ride schreibt updatedAt immer und liest es im Roundtrip zurueck`() {
+        val ride = Ride(
+            id = "x",
+            name = "n",
+            createdAt = 1700000000000L,
+            stats = RideStats.empty,
+            points = emptyList(),
+            updatedAt = 1700000123456L,
+        )
+
+        val json = ride.toJson()
+        assertTrue(json.containsKey("updatedAt"))
+
+        val roundTripped = Ride.fromJson(json)
+        assertEquals(1700000123456L, roundTripped.updatedAt)
+        assertEquals(ride, roundTripped)
+    }
+
+    @Test
+    fun `Ride mit explizitem updatedAt gleich null faellt auf createdAt zurueck`() {
+        val json = obj("""{"id":"x","name":"n","createdAt":5,"points":[],"updatedAt":null}""")
+
+        assertEquals(5L, Ride.fromJson(json).updatedAt)
+    }
+
+    @Test
     fun `Ride ohne id wirft wie Darts null as String`() {
         val json = obj("""{"name":"n","createdAt":1,"points":[],"stats":{}}""")
 

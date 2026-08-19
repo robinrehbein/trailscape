@@ -74,6 +74,14 @@ object AppServices {
         RideStorage(File(appContext.filesDir, "rides"))
     }
 
+    /**
+     * Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]) — liegt
+     * im selben Verzeichnis wie die Tour-Dateien (`<filesDir>/rides`).
+     */
+    val tombstoneStore: TombstoneStore by lazy {
+        TombstoneStore(File(appContext.filesDir, "rides"))
+    }
+
     private val prefs by lazy { trailscapePrefs(appContext) }
 
     /** Implementierung von `:core`s [KeyValueStore] (u. a. fuer `SyncConfig`). */
