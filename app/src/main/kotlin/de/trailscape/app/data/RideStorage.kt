@@ -453,10 +453,12 @@ class RideStorage(private val ridesDir: File) {
 
         /**
          * Bekannte Nicht-Tour-Dateien im Touren-Verzeichnis: der Index
-         * selbst, der Loesch-Merkzettel des Syncs (siehe [TombstoneStore])
-         * und der Tourlast-Cache (siehe [RideLoadCacheStore]). Sie duerfen
-         * weder als Tour gelesen noch in Quarantaene verschoben werden.
+         * selbst, der Loesch-Merkzettel des Syncs (siehe [TombstoneStore]),
+         * der Tourlast-Cache (siehe [RideLoadCacheStore]) und die
+         * Segment-Registry (siehe [SegmentStore]). Sie duerfen weder als
+         * Tour gelesen noch in Quarantaene verschoben werden.
          */
-        private val RESERVED_FILE_NAMES = setOf(INDEX_FILE_NAME, "tombstones.json", "last-cache.json")
+        private val RESERVED_FILE_NAMES =
+            setOf(INDEX_FILE_NAME, "tombstones.json", "last-cache.json", "segmente.json")
     }
 }

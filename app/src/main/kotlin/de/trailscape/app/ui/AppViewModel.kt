@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideLoadCacheStore
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.data.SegmentStore
 import de.trailscape.app.data.TombstoneStore
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderStore
@@ -27,6 +28,8 @@ import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
 import de.trailscape.core.RouteTarget
+import de.trailscape.core.SegmentNewBest
+import de.trailscape.core.SegmentRegistry
 import de.trailscape.core.SyncConfig
 import de.trailscape.core.SyncResult
 import de.trailscape.core.TrainingPlan
@@ -34,14 +37,18 @@ import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
+import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
 import de.trailscape.core.readVitalsHistory
+import de.trailscape.core.retainRidesInSegmentRegistry
+import de.trailscape.core.ridesNeedingSegmentUpdate
 import de.trailscape.core.savePlan
 import de.trailscape.core.shouldShowShortSleeperHint
 import de.trailscape.core.syncRides
 import de.trailscape.core.toLocalRideSummary
+import de.trailscape.core.updateSegmentRegistry
 import de.trailscape.core.writeBackupJson
 import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
@@ -66,6 +73,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -149,6 +158,8 @@ class AppViewModel(
     private val rideLoadCache: de.trailscape.core.RideLoadFactsStore = AppServices.rideLoadCacheStore,
     /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
     private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
+    /** Persistente Segment-Registry der lokalen Bestleistungen (siehe [SegmentStore]). */
+    private val segmentStore: SegmentStore = AppServices.segmentStore,
     private val keyValueStore: KeyValueStore = AppServices.keyValueStore,
     private val trainingPlanStore: TrainingPlanStore = AppServices.trainingPlanStore,
     /** Einstellungen der lokalen Erinnerungen (siehe [reminderSettings]). */
@@ -610,6 +621,9 @@ class AppViewModel(
             withContext(io) { rideStorage.saveRide(touched) }
             upsertSummary(touched.toSummary())
             select(ride.id)
+            // Segment-Bestleistungen im Hintergrund nachziehen — mit
+            // Bestzeit-Hinweis, das hier ist eine neue Tour.
+            refreshSegments(reportRideIds = setOf(ride.id))
         }
     }
 
@@ -627,6 +641,7 @@ class AppViewModel(
             allSummaries = (allSummaries.filterNot { it.id in byId } + byId.values.map { it.toSummary() })
                 .sortedByDescending { it.createdAt }
             publishRides()
+            refreshSegments(reportRideIds = byId.keys)
         }
     }
 
@@ -648,6 +663,8 @@ class AppViewModel(
             }
             allSummaries = allSummaries.filterNot { it.id == id }
             publishRides()
+            // Efforts der geloeschten Tour still aus der Registry raeumen.
+            refreshSegments()
         }
     }
 
@@ -708,6 +725,7 @@ class AppViewModel(
             allSummaries = allSummaries.filterNot { it.id == id }
             publishRides()
             pendingDeletion = null
+            refreshSegments()
         }
         pendingDeletion = PendingRideDeletion(summary, job)
     }
@@ -750,6 +768,7 @@ class AppViewModel(
             pendingDeletionIds.remove(pending.summary.id)
             allSummaries = allSummaries.filterNot { it.id == pending.summary.id }
             publishRides()
+            refreshSegments()
         }
     }
 
@@ -1081,10 +1100,15 @@ class AppViewModel(
             // Die Liste trotzdem neu laden: Vielleicht ist ein Teil der Touren
             // vor dem Fehler schon auf der Platte gelandet.
             reloadRides()
+            refreshSegments()
             return false
         }
 
         reloadRides()
+        // Neue Touren mit Bestzeit-Hinweis einrechnen; die nur um
+        // Herzfrequenz angereicherten (mergedRides) zieht der Abgleich ueber
+        // ihr neues updatedAt still nach.
+        refreshSegments(reportRideIds = report.imported.mapTo(HashSet()) { it.id })
         return true
     }
 
@@ -1134,6 +1158,102 @@ class AppViewModel(
 
     /** Trainingslast einer einzelnen Tour; `null`, wenn sie unbekannt ist. */
     fun rideLoad(rideId: String): RideLoad? = insights.value.rideLoads[rideId]
+
+    // -------------------------------------------------------------------------
+    // Segment-Bestleistungen
+    // -------------------------------------------------------------------------
+
+    private val _segmentRegistry = MutableStateFlow<SegmentRegistry?>(null)
+
+    /**
+     * Die Segment-Registry der lokalen Bestleistungen (siehe `:core`,
+     * `RideSegments.kt`) — `null`, solange sie in diesem Prozesslauf noch nie
+     * gebraucht wurde. Der erste Lauf ueber den Bestand passiert **lazy**
+     * beim ersten [refreshSegments] (Detailansicht oder Pflege-Hook), nicht
+     * beim App-Start: Wer nur auf die Karte schaut, zahlt nichts dafuer.
+     */
+    val segmentRegistry: StateFlow<SegmentRegistry?> = _segmentRegistry.asStateFlow()
+
+    /** Serialisiert die Pflege-Laeufe — es rechnet immer hoechstens einer. */
+    private val segmentMutex = Mutex()
+
+    /**
+     * Bringt die Segment-Registry auf den Stand des aktuellen Tourbestands —
+     * der EINE Pflegeweg, gerufen nach jeder Bestandsaenderung (Aufzeichnung
+     * beendet, Import, Health-Import, Sync, Loeschung) und beim ersten Bedarf
+     * der Detailansicht.
+     *
+     * Laeuft komplett im Hintergrund ([computation]); Volltouren werden dafuer
+     * **nacheinander** on-demand geladen und wieder verworfen — nie der ganze
+     * Bestand auf einmal (siehe `reconcileSegments`). Fehler sind still: Eine
+     * nicht aktualisierte Registry kostet nur einen spaeteren Neuversuch.
+     *
+     * @param reportRideIds Touren, deren neue Bestleistungen gemeldet werden
+     *   sollen (Snackbar „Neue Bestzeit …"). Leer fuer stille Laeufe —
+     *   erster Bestandslauf, Sync und Loeschungen melden nichts, sonst
+     *   feierte die App beim Nachrechnen alter Touren jahrealte Fahrten.
+     */
+    fun refreshSegments(reportRideIds: Set<String> = emptySet()) {
+        viewModelScope.launch {
+            val newBests = withContext(computation) {
+                runCatching { reconcileSegments(reportRideIds) }.getOrDefault(emptyList())
+            }
+            reportNewBests(newBests)
+        }
+    }
+
+    /**
+     * Der eigentliche Abgleich (unter [segmentMutex]): Registry laden (beim
+     * ersten Mal von der Platte), Efforts geloeschter Touren entfernen, dann
+     * jede neue oder geaenderte Tour einzeln laden und einrechnen —
+     * chronologisch, damit „neue Bestzeit" auch beim Nachrechnen stimmt.
+     * Geschrieben wird nur, wenn sich wirklich etwas geaendert hat.
+     */
+    private suspend fun reconcileSegments(reportRideIds: Set<String>): List<SegmentNewBest> =
+        segmentMutex.withLock {
+            val before = _segmentRegistry.value
+                ?: withContext(io) { runCatching { segmentStore.read() }.getOrDefault(SegmentRegistry.EMPTY) }
+            val summaries = _rides.value
+
+            var registry = retainRidesInSegmentRegistry(before, summaries.mapTo(HashSet()) { it.id })
+            val newBests = mutableListOf<SegmentNewBest>()
+            for (info in ridesNeedingSegmentUpdate(registry, summaries)) {
+                // Eine Volltour zurzeit: laden, einrechnen, verwerfen.
+                val ride = withContext(io) { rideStorage.loadRide(info.id) } ?: continue
+                val update = updateSegmentRegistry(registry, ride)
+                registry = update.registry
+                if (info.id in reportRideIds) {
+                    newBests += update.newBests
+                }
+            }
+
+            _segmentRegistry.value = registry
+            if (registry !== before) {
+                withContext(io) { runCatching { segmentStore.write(registry) } }
+            }
+            newBests
+        }
+
+    /** Der Hinweis nach der Fahrt: einmalige Snackbar ueber [messages]. */
+    private fun reportNewBests(newBests: List<SegmentNewBest>) {
+        when {
+            newBests.isEmpty() -> Unit
+            newBests.size == 1 -> {
+                val best = newBests.first()
+                showMessage(
+                    "Neue Bestzeit auf „${best.segmentName}“: ${formatDuration(best.timeS)}, " +
+                        "${formatImprovement(best.improvementS)} schneller.",
+                )
+            }
+            // Mehrere auf einmal (z. B. Runden-Tour ueber mehrere Anstiege):
+            // EINE Meldung statt einer Snackbar-Kaskade.
+            else -> showMessage("Neue Bestzeiten auf ${newBests.size} Segmenten.")
+        }
+    }
+
+    /** „14 s" unter einer Minute, sonst „1:15 min" — fuer die Bestzeit-Meldung. */
+    private fun formatImprovement(seconds: Int): String =
+        if (seconds < 60) "$seconds s" else "${formatDuration(seconds)} min"
 
     // -------------------------------------------------------------------------
     // Trainingsplan
@@ -1483,6 +1603,9 @@ class AppViewModel(
             )
         }
         reloadRides()
+        // Still: Gepullte Touren sind meist alte Bekannte anderer Geraete —
+        // ein Bestzeit-Jubel Tage nach der Fahrt waere nur Laerm.
+        refreshSegments()
         return result
     }
 
@@ -1567,6 +1690,9 @@ class AppViewModel(
                 select(rideId)
                 RecordingRepository.clearFinishedRide()
                 showMessage("Tour gespeichert.")
+                // Nach der Fahrt: Segmente einrechnen und eine etwaige
+                // Bestzeit als Snackbar melden.
+                refreshSegments(reportRideIds = setOf(rideId))
             }
         }
 

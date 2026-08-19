@@ -82,6 +82,7 @@ import de.trailscape.core.DecouplingResult
 import de.trailscape.core.Ride
 import de.trailscape.core.RideCurve
 import de.trailscape.core.RideLoad
+import de.trailscape.core.SegmentEffortView
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.Vo2MaxEstimate
 import de.trailscape.core.buildRideSeries
@@ -93,6 +94,7 @@ import de.trailscape.core.extractSteadySegments
 import de.trailscape.core.formatDuration
 import de.trailscape.core.heartRateCurve
 import de.trailscape.core.loadSourceLabels
+import de.trailscape.core.segmentEffortsForRide
 import de.trailscape.core.speedCurveKmh
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -160,6 +162,15 @@ internal fun RideDetailScreen(
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val load = insights.rideLoads[ride.id]
+
+    // Segment-Bestleistungen dieser Tour. Der Aufruf stoesst zugleich den
+    // lazy Erstlauf der Registry an (siehe [AppViewModel.refreshSegments]) —
+    // die Detailansicht ist ihr „erster Bedarf".
+    val segmentRegistry by appViewModel.segmentRegistry.collectAsStateWithLifecycle()
+    LaunchedEffect(ride.id) { appViewModel.refreshSegments() }
+    val segmentViews = remember(segmentRegistry, ride.id) {
+        segmentRegistry?.let { segmentEffortsForRide(it, ride.id) }.orEmpty()
+    }
 
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -309,6 +320,10 @@ internal fun RideDetailScreen(
                             formatValue = { "${it.roundToInt()} bpm" },
                         )
                     }
+                }
+
+                if (segmentViews.isNotEmpty()) {
+                    SegmentsCard(views = segmentViews)
                 }
 
                 RideAnalysisCard(
@@ -495,6 +510,78 @@ private fun RideAnalysisCard(
                     "kein Messwert.",
                 confidence = estimate.confidence,
             )
+        }
+    }
+}
+
+/**
+ * Die Segmente dieser Tour: je automatisch erkanntem Anstieg die Zeit dieser
+ * Befahrung, die persoenliche Bestzeit, Anzahl der Befahrungen, der Platz und
+ * der Rueckstand — alles aus der lokalen Registry (`:core`,
+ * `RideSegments.kt`), nichts davon verlaesst das Geraet.
+ *
+ * Eine **neue** Bestzeit traegt eine Pille „★ Neue Bestzeit" in Signalfarbe;
+ * fuhr die Tour denselben Anstieg mehrmals (Runden), erscheint je Runde ein
+ * Eintrag. Ohne erkannte Segmente entfaellt die Karte ganz — dieselbe Regel
+ * wie bei den Kurven: kein leerer Abschnitt mit Hinweistext.
+ */
+@Composable
+private fun SegmentsCard(views: List<SegmentEffortView>) {
+    DetailCard {
+        Text(text = "Segmente", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "Automatisch erkannte Anstiege, verglichen mit deinen " +
+                "früheren Fahrten über dasselbe Stück.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        views.forEach { view ->
+            Spacer(Modifier.height(16.dp))
+            SegmentEffortEntry(view)
+        }
+    }
+}
+
+/** Ein Eintrag der Segmentkarte: Name, ggf. Bestzeit-Pille, Kennzahlenzeile. */
+@Composable
+private fun SegmentEffortEntry(view: SegmentEffortView) {
+    Column {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = view.name,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (view.isNewBest) {
+                // Bedeutung nicht allein ueber Farbe: der Stern und der Text
+                // tragen sie auch in Graustufen (siehe Leitfaden-Kommentar an
+                // [startAndFinishMarkers]).
+                TagPill(
+                    text = "★ Neue Bestzeit",
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailFact("Zeit", formatDuration(view.timeS))
+            DetailFact("Bestzeit", formatDuration(view.bestTimeS))
+            DetailFact("Platz", "${view.rank}. von ${view.effortCount}")
+            DetailFact(
+                label = "Rückstand",
+                value = if (view.deltaToBestS <= 0) "–" else "+${view.deltaToBestS} s",
+            )
+            view.avgHr?.let { DetailFact("Ø Puls", "$it bpm") }
         }
     }
 }

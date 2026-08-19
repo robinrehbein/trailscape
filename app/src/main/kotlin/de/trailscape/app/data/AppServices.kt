@@ -91,6 +91,15 @@ object AppServices {
         RideLoadCacheStore(File(appContext.filesDir, "rides"))
     }
 
+    /**
+     * Persistente Segment-Registry der lokalen Bestleistungen (siehe
+     * [SegmentStore]) — `<filesDir>/rides/segmente.json`, im selben
+     * Verzeichnis wie die Tour-Dateien.
+     */
+    val segmentStore: SegmentStore by lazy {
+        SegmentStore(File(appContext.filesDir, "rides"))
+    }
+
     private val prefs by lazy { trailscapePrefs(appContext) }
 
     /** Implementierung von `:core`s [KeyValueStore] (u. a. fuer `SyncConfig`). */
