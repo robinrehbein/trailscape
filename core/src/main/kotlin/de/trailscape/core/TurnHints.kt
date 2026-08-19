@@ -219,6 +219,32 @@ fun extractTurnHints(
     return hints
 }
 
+/**
+ * Kontinuierliche Naechste-Kurve-Auskunft fuer die Anzeige: der naechste noch
+ * bevorstehende Kurvenpunkt und die Distanz bis dahin **entlang der Route**,
+ * in Metern.
+ *
+ * Anders als der [TurnAnnouncer] (Zustandsmaschine, jede Kurve hoechstens
+ * einmal) ist das eine reine Funktion je Aufruf — gedacht fuer ein HUD, das
+ * bei jedem Positionsupdate „In 250 m links" anzeigen will, nicht ansagen.
+ * Die Grenzziehung ist dieselbe wie dort: Ein Hinweis, dessen [TurnHint.distanzM]
+ * hoechstens [doneM] ist, gilt als ueberfahren — auch bei exakt gleicher
+ * Distanz; eine Kurve, in deren Scheitel man steht, liegt nicht mehr „vor"
+ * einem.
+ *
+ * @param hints Kurvenpunkte aus [extractTurnHints], in Routenreihenfolge.
+ * @param doneM zurueckgelegte Distanz entlang der Route in Metern
+ *   (`NavState.doneKm * 1000`, siehe Datei-KDoc).
+ * @return naechster Hinweis und Restdistanz bis dahin (immer > 0), oder
+ *   `null` hinter der letzten Kurve bzw. bei einer Route ohne Kurven.
+ */
+fun naechsteKurve(hints: List<TurnHint>, doneM: Double): Pair<TurnHint, Double>? {
+    for (hint in hints) {
+        if (hint.distanzM > doneM) return hint to (hint.distanzM - doneM)
+    }
+    return null
+}
+
 /** Vorlauf der Ansage als Fahrzeit: rund so viele Sekunden vor der Kurve. */
 const val ANSAGE_VORLAUF_S = 8.0
 

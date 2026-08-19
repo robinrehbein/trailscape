@@ -56,7 +56,9 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.core.TurnRichtung
 import de.trailscape.core.formatDuration
+import de.trailscape.core.turnAnsageText
 import kotlin.math.roundToInt
 
 /**
@@ -100,9 +102,10 @@ import kotlin.math.roundToInt
  * sind schon die Obergrenze dessen, was ein Blick erfasst.
  *
  * Laeuft zusaetzlich eine **Navigation**, kommen Restdistanz (in derselben
- * Groesse wie Distanz und Fahrzeit) und die Abweichungswarnung dazu — beides
- * Werte, nach denen man im Fahren wirklich handelt. Die Navigationslogik selbst
- * bleibt, wo sie ist: `RouteNavigator` in `:core`, ausgewertet in
+ * Groesse wie Distanz und Fahrzeit), die naechste Kurve (Pfeil plus Distanz,
+ * siehe [NextTurnRow]) und die Abweichungswarnung dazu — alles Werte, nach
+ * denen man im Fahren wirklich handelt. Die Navigationslogik selbst bleibt,
+ * wo sie ist: `RouteNavigator` und `TurnHints` in `:core`, ausgewertet in
  * `MapScreen.kt`. Hier wird nur angezeigt, was dort schon berechnet ist.
  *
  * Liefert eine gekoppelte Uhr live Werte (Handy-Bruecke, siehe
@@ -265,6 +268,11 @@ internal fun RideModeScreen(
                             spoken = "Noch ${formatKmDe(navigation.remainingKm)} Kilometer " +
                                 "bis zum Ziel der Route ${navigation.label}",
                         )
+                        Spacer(Modifier.height(CardGap))
+                        NextTurnRow(
+                            richtung = navigation.naechsteKurve,
+                            abstandM = navigation.naechsteKurveM,
+                        )
                         if (navigation.offRoute) {
                             Spacer(Modifier.height(CardGap))
                             OffRouteWarning()
@@ -324,12 +332,16 @@ internal fun RideModeScreen(
     }
 }
 
-/** Restdistanz und Abweichung der laufenden Navigation — fertig aus `:core`. */
+/** Restdistanz, naechste Kurve und Abweichung der laufenden Navigation — fertig aus `:core`. */
 internal data class RideModeNavigation(
     /** Name der Tour bzw. „Geplante Route". */
     val label: String,
     val remainingKm: Double,
     val offRoute: Boolean,
+    /** Richtung der naechsten Kurve, `null` = keine Kurve in Sicht. */
+    val naechsteKurve: TurnRichtung? = null,
+    /** Distanz bis zur naechsten Kurve entlang der Route in Metern. */
+    val naechsteKurveM: Double? = null,
 )
 
 /**
@@ -436,6 +448,62 @@ private fun BigValue(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * Die naechste Kurve als eigene Zeile: Pfeil plus gerundete Distanz — dieselbe
+ * Auskunft wie im Navigations-HUD auf der Karte (`NavigationHud.kt`), nur in
+ * Fahr-Groesse. Die Zeile steht an FESTER Position (immer, wenn navigiert
+ * wird): Ohne Kurve in Sicht zeigt sie den Geradeaus-Pfeil, statt zu
+ * verschwinden — die uebrigen Kacheln sollen beim Naeherkommen einer Kurve
+ * nicht springen (dieselbe Regel wie bei der Puls-Kachel, siehe Klassen-KDoc).
+ */
+@Composable
+private fun NextTurnRow(richtung: TurnRichtung?, abstandM: Double?) {
+    val spoken = if (richtung != null && abstandM != null) {
+        "Nächste Kurve: ${turnAnsageText(richtung, abstandM)}"
+    } else {
+        "Keine Kurve in Sicht, dem Routenverlauf folgen."
+    }
+    Row(
+        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = turnRichtungIcon(richtung),
+            contentDescription = null,
+            modifier = Modifier.size(52.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text(
+                text = if (richtung != null && abstandM != null) {
+                    kurveAbstandKurzText(abstandM)
+                } else {
+                    "Geradeaus"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = SecondaryValueSize,
+                lineHeight = SecondaryValueSize * 1.1f,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (richtung != null) {
+                    kurveAnzeigeWort(richtung)
+                } else {
+                    "nächste Kurve"
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
