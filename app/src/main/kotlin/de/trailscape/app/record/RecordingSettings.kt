@@ -16,6 +16,12 @@ import de.trailscape.app.data.trailscapePrefs
  * schlanke Karte „Aufzeichnung" unter Mehr (`ui/more/RecordingCard.kt`)
  * liest/schreibt sie direkt im Composable.
  *
+ * Neben der Auto-Pause wohnen hier auch die Schalter der **Sprachansagen**
+ * (Hauptschalter, Abbiegehinweise, Kilometer-Ansagen — gesprochen ueber
+ * `voice/VoiceAnnouncer.kt`) und der **Off-Route-Vibration**
+ * (`voice/Vibration.kt`); gelesen werden sie ausser vom Dienst auch vom
+ * Navigations-Effekt in `ui/map/MapScreen.kt`.
+ *
  * Dazu die beiden Handgriffe fuer die **Batterieoptimierung**: Manche
  * Hersteller-Energiesparer raeumen den Standort-Listener eines laufenden
  * Vordergrunddienstes ab — die Aufzeichnung laeuft dann scheinbar weiter,
@@ -27,6 +33,29 @@ import de.trailscape.app.data.trailscapePrefs
 
 /** Schluessel des Auto-Pause-Schalters (Boolean, Default AN). */
 internal const val PREF_AUTO_PAUSE = "trailscape.autopause"
+
+/**
+ * Schluessel des Hauptschalters „Sprachansagen" (Boolean, Default AUS).
+ *
+ * Bewusst AUS: Dass das Telefon ploetzlich spricht — womoeglich ueber eine
+ * laufende Musikwiedergabe —, soll eine bewusste Entscheidung sein, kein
+ * Ueberraschungseffekt der ersten Fahrt nach dem Update.
+ */
+internal const val PREF_VOICE = "trailscape.voice"
+
+/** Schluessel des Unterschalters „Abbiegehinweise" (Boolean, Default AN). */
+internal const val PREF_VOICE_TURNS = "trailscape.voiceTurns"
+
+/** Schluessel des Unterschalters „Kilometer-Ansagen" (Boolean, Default AN). */
+internal const val PREF_VOICE_MILESTONES = "trailscape.voiceMilestones"
+
+/**
+ * Schluessel des Schalters „Vibration abseits der Route" (Boolean, Default
+ * AN). Bewusst UNABHAENGIG vom Hauptschalter [PREF_VOICE]: Die Vibration
+ * braucht keine Sprachausgabe und warnt auch die, die nie eine Ansage hoeren
+ * wollen (siehe `voice/Vibration.kt`).
+ */
+internal const val PREF_OFFROUTE_VIBRATION = "trailscape.offrouteVibration"
 
 /**
  * Schluessel des Merkers, dass der Batterieoptimierungs-Hinweis beim Start
@@ -42,6 +71,56 @@ internal fun autoPauseAktiviert(context: Context): Boolean =
 /** Schreibt den Auto-Pause-Schalter. */
 internal fun setzeAutoPauseAktiviert(context: Context, aktiviert: Boolean) {
     trailscapePrefs(context).edit().putBoolean(PREF_AUTO_PAUSE, aktiviert).apply()
+}
+
+/**
+ * Ob der Hauptschalter „Sprachansagen" an ist (Default AUS, siehe
+ * [PREF_VOICE]). Zentraler Guard: `voice/VoiceAnnouncer.sagAn` prueft ihn bei
+ * jeder Ansage selbst.
+ */
+internal fun sprachansagenAktiviert(context: Context): Boolean =
+    trailscapePrefs(context).getBoolean(PREF_VOICE, false)
+
+/** Schreibt den Hauptschalter „Sprachansagen". */
+internal fun setzeSprachansagenAktiviert(context: Context, aktiviert: Boolean) {
+    trailscapePrefs(context).edit().putBoolean(PREF_VOICE, aktiviert).apply()
+}
+
+/**
+ * Ob Abbiegehinweise angesagt werden sollen (Default AN). Wirkt nur, wenn
+ * auch [sprachansagenAktiviert] an ist — den Hauptschalter prueft der
+ * `VoiceAnnouncer` selbst.
+ */
+internal fun abbiegehinweiseAktiviert(context: Context): Boolean =
+    trailscapePrefs(context).getBoolean(PREF_VOICE_TURNS, true)
+
+/** Schreibt den Unterschalter „Abbiegehinweise". */
+internal fun setzeAbbiegehinweiseAktiviert(context: Context, aktiviert: Boolean) {
+    trailscapePrefs(context).edit().putBoolean(PREF_VOICE_TURNS, aktiviert).apply()
+}
+
+/**
+ * Ob Kilometer-Meilensteine angesagt werden sollen (Default AN). Wirkt nur,
+ * wenn auch [sprachansagenAktiviert] an ist.
+ */
+internal fun kilometerAnsagenAktiviert(context: Context): Boolean =
+    trailscapePrefs(context).getBoolean(PREF_VOICE_MILESTONES, true)
+
+/** Schreibt den Unterschalter „Kilometer-Ansagen". */
+internal fun setzeKilometerAnsagenAktiviert(context: Context, aktiviert: Boolean) {
+    trailscapePrefs(context).edit().putBoolean(PREF_VOICE_MILESTONES, aktiviert).apply()
+}
+
+/**
+ * Ob beim Verlassen der Route vibriert werden soll (Default AN, unabhaengig
+ * vom Hauptschalter — siehe [PREF_OFFROUTE_VIBRATION]).
+ */
+internal fun offRouteVibrationAktiviert(context: Context): Boolean =
+    trailscapePrefs(context).getBoolean(PREF_OFFROUTE_VIBRATION, true)
+
+/** Schreibt den Schalter „Vibration abseits der Route". */
+internal fun setzeOffRouteVibrationAktiviert(context: Context, aktiviert: Boolean) {
+    trailscapePrefs(context).edit().putBoolean(PREF_OFFROUTE_VIBRATION, aktiviert).apply()
 }
 
 /** Ob der einmalige Batterie-Hinweis beim Aufzeichnungsstart schon lief. */

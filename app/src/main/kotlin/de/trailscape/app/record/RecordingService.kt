@@ -30,6 +30,7 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.LocationFusion
@@ -193,6 +194,21 @@ class RecordingService : Service() {
      * [autoPauseAktiviert], gelesen je Probe direkt aus den Prefs).
      */
     private val autoPauseLogic = AutoPauseLogic()
+
+    /**
+     * Zaehler der Kilometer-Meilenstein-Ansagen (siehe [MeilensteinAnsagen])
+     * — wie [autoPauseLogic] nur auf [recordingThread] angefasst.
+     *
+     * Die Ansagen der Aufzeichnung (Start/Stopp/Pause/Meilensteine) haengen
+     * bewusst HIER am Dienst und nicht an einem Beobachter der
+     * [RecordingRepository]-Flows: Der Dienst ist die einzige Instanz, die
+     * Distanz und reine Fahrzeit ([elapsedMs] braucht das Pausenkonto, das
+     * nur er fuehrt) konsistent zum selben Zeitpunkt kennt — und er lebt
+     * auch dann, wenn die Oberflaeche laengst weggeraeumt ist. Ein
+     * Flow-Beobachter braeuchte einen eigenen Scope, der die Activity
+     * ueberlebt, nur um dieselben Werte zeitversetzt wieder zusammenzusetzen.
+     */
+    private val meilensteine = MeilensteinAnsagen()
 
     @Volatile
     private var distanceM = 0.0
@@ -445,6 +461,7 @@ class RecordingService : Service() {
         filter.reset()
         fusion = LocationFusion()
         autoPauseLogic.reset()
+        meilensteine.reset()
         lastRecordedPoint = null
         startedAtMs = now
         pausedMsAccum = 0L
@@ -488,6 +505,10 @@ class RecordingService : Service() {
         registriereWatchSampleSink()
         meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
+        // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
+        // beim Losfahren typischerweise schon in der Tasche. Den Hauptschalter
+        // „Sprachansagen" prueft der Announcer selbst.
+        VoiceAnnouncer.sagAn(this, "Aufzeichnung gestartet.")
         updateNotification(now, force = true)
         scheduleWatchdogAlarm()
         handler.removeCallbacks(ticker)
@@ -558,6 +579,9 @@ class RecordingService : Service() {
         fusion = LocationFusion()
         lastRecordedPoint = snapshot.points.lastOrNull()
         distanceM = computeStats(snapshot.points).distanceKm * 1000
+        // Kein nachgeholtes „20 Kilometer" nach einem Dienst-Neustart bei
+        // Kilometer 23 — der Zaehler startet hinter dem Gefahrenen.
+        meilensteine.setzeAufDistanz(distanceM / 1000)
         lastNotificationMs = 0L
         lastAcceptedAtMs = 0L
         letzteRohmeldungMs = 0L
@@ -645,6 +669,10 @@ class RecordingService : Service() {
         }
 
         RecordingRepository.publishPaused(paused)
+        VoiceAnnouncer.sagAn(
+            this,
+            if (paused) "Aufzeichnung pausiert." else "Aufzeichnung fortgesetzt.",
+        )
         updateNotification(now, force = true)
     }
 
@@ -672,6 +700,12 @@ class RecordingService : Service() {
         }
 
         RecordingRepository.publishPaused(paused = pausieren, auto = pausieren)
+        // Dieselben Texte wie bei der manuellen Pause: Fuer die Fahrerin
+        // zaehlt, DASS pausiert wird, nicht wer es entschieden hat.
+        VoiceAnnouncer.sagAn(
+            this,
+            if (pausieren) "Aufzeichnung pausiert." else "Aufzeichnung fortgesetzt.",
+        )
         updateNotification(now, force = true)
     }
 
@@ -726,6 +760,10 @@ class RecordingService : Service() {
         handler.removeCallbacks(ticker)
         active = false
         RecordingRepository.detachWatchSampleSink()
+        // Vor dem Speichern angestossen: Die Bestaetigung soll unmittelbar auf
+        // den Stopp folgen. Der VoiceAnnouncer lebt am Prozess, nicht an
+        // diesem Dienst — das folgende stopSelf schneidet sie nicht ab.
+        VoiceAnnouncer.sagAn(this, "Aufzeichnung beendet.")
 
         val snapshot = journal.read()?.let { mitRamPunkten(it) }
         journal.close()
@@ -1027,6 +1065,12 @@ class RecordingService : Service() {
         lastRecordedPoint?.let { vorheriger -> distanceM += haversineM(vorheriger, point) }
         lastRecordedPoint = point
         RecordingRepository.publishPoint(point, distanceM / 1000, filter.currentSpeedKmh)
+        // Der Zaehler wandert auch bei ausgeschaltetem Unterschalter weiter
+        // (siehe [MeilensteinAnsagen.pruefe]) — nur gesprochen wird dann nicht.
+        val meilenstein = meilensteine.pruefe(distanceM / 1000, elapsedMs(System.currentTimeMillis()))
+        if (meilenstein != null && kilometerAnsagenAktiviert(this)) {
+            VoiceAnnouncer.sagAn(this, meilenstein)
+        }
         updateNotification(System.currentTimeMillis(), force = false)
     }
 

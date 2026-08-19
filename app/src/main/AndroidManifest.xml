@@ -21,6 +21,10 @@
          ggf. neu zu abonnieren. KEIN Dauer-WakeLock ueber die ganze Fahrt —
          siehe die Klassendoku des RecordingService. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Fuer die Vibrationswarnung beim Verlassen der Route waehrend einer
+         Navigation (README-Zusage, siehe voice/Vibration.kt). Normal-Level,
+         kein Laufzeitdialog; abschaltbar unter Mehr → Aufzeichnung. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Erlaubt den Systemdialog „Batterieoptimierung ignorieren?"
          (ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS). Ein GPS-Logger ist der
          dokumentierte Ausnahmefall: Manche Hersteller-Energiesparer beenden
