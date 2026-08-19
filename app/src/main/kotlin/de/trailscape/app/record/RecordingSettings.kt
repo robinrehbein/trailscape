@@ -64,6 +64,15 @@ internal const val PREF_OFFROUTE_VIBRATION = "trailscape.offrouteVibration"
  */
 internal const val PREF_BATTERY_NOTICE_SHOWN = "trailscape.batteryNoticeShown"
 
+/**
+ * Schluessel des Kompass-Verhaltens der Navi-Kamera (Boolean, Default AN =
+ * Fahrtrichtung oben). Umgeschaltet wird direkt am Kompass-Knopf auf der
+ * Karte (`ui/map/MapScreen.kt`); die Wahl gilt fuer jede kuenftige
+ * Navigation, bis sie wieder umgelegt wird. Ausserhalb der Navigation bleibt
+ * die Karte unabhaengig davon bei Nord oben.
+ */
+internal const val PREF_NAV_COURSE_UP = "trailscape.nav.courseUp"
+
 /** Ob die Auto-Pause eingeschaltet ist (Default AN). */
 internal fun autoPauseAktiviert(context: Context): Boolean =
     trailscapePrefs(context).getBoolean(PREF_AUTO_PAUSE, true)
@@ -121,6 +130,15 @@ internal fun offRouteVibrationAktiviert(context: Context): Boolean =
 /** Schreibt den Schalter „Vibration abseits der Route". */
 internal fun setzeOffRouteVibrationAktiviert(context: Context, aktiviert: Boolean) {
     trailscapePrefs(context).edit().putBoolean(PREF_OFFROUTE_VIBRATION, aktiviert).apply()
+}
+
+/** Ob die Navi-Kamera in Fahrtrichtung dreht (Default AN, siehe [PREF_NAV_COURSE_UP]). */
+internal fun navCourseUpAktiviert(context: Context): Boolean =
+    trailscapePrefs(context).getBoolean(PREF_NAV_COURSE_UP, true)
+
+/** Schreibt das Kompass-Verhalten der Navi-Kamera. */
+internal fun setzeNavCourseUpAktiviert(context: Context, aktiviert: Boolean) {
+    trailscapePrefs(context).edit().putBoolean(PREF_NAV_COURSE_UP, aktiviert).apply()
 }
 
 /** Ob der einmalige Batterie-Hinweis beim Aufzeichnungsstart schon lief. */
