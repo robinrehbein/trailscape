@@ -75,6 +75,8 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.record.abbiegehinweiseAktiviert
 import de.trailscape.app.record.batterieAusnahmeIntent
+import de.trailscape.app.record.setzeSprachansagenAktiviert
+import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.record.batterieHinweisGezeigt
 import de.trailscape.app.record.merkeBatterieHinweisGezeigt
 import de.trailscape.app.record.vonBatterieoptimierungAusgenommen
@@ -115,6 +117,7 @@ import de.trailscape.core.buildGpx
 import de.trailscape.core.computeStats
 import de.trailscape.core.extractTurnHints
 import de.trailscape.core.haversineM
+import de.trailscape.core.naechsteKurve
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import de.trailscape.app.ui.rides.finishMarkers
@@ -503,6 +506,37 @@ fun MapScreen(appViewModel: AppViewModel) {
     // wieder ein.
     var followMe by rememberSaveable { mutableStateOf(true) }
 
+    // Kurvenpunkte der navigierten Route — einmal je Ziel aus der Geometrie
+    // extrahiert (`extractTurnHints`, `:core`). Dieselbe Liste fuettert den
+    // `TurnAnnouncer` im Navigations-Effekt (Ansagen) und die kontinuierliche
+    // Naechste-Kurve-Anzeige in HUD (`NavigationHud.kt`) und Fahrmodus.
+    val turnHints = remember(navTarget) {
+        navTarget?.points?.let(::extractTurnHints) ?: emptyList()
+    }
+
+    // Die naechste Kurve fuer die Anzeige: naechster noch bevorstehender
+    // Hinweis plus Distanz bis dahin entlang der Route (`naechsteKurve`,
+    // `:core`). Jenseits der Sichtweite zeigen HUD und Fahrmodus den
+    // Geradeaus-Pfeil (siehe `NAECHSTE_KURVE_SICHT_M` in `NavigationHud.kt`).
+    val naechsteKurveInfo = navState?.let { state ->
+        naechsteKurve(turnHints, state.doneKm * 1000)
+            ?.takeIf { it.second <= NAECHSTE_KURVE_SICHT_M }
+    }
+
+    // Gleitend gemitteltes Tempo fuer die Restzeit-Schaetzung im HUD —
+    // geschrieben vom Navigations-Effekt je Positionsupdate (siehe
+    // `glaetteTempo` in `NavigationHud.kt`), `null` solange keins bekannt ist.
+    var navTempoKmh by remember { mutableStateOf<Double?>(null) }
+
+    // Der Hauptschalter „Sprachansagen" als Bildschirmzustand fuer den
+    // Lautsprecher-Knopf im HUD. Die Wahrheit liegt in den Prefs
+    // (`record/RecordingSettings.kt`, dieselben, die Mehr → Aufzeichnung
+    // schreibt); hier steht nur die Kopie, die Compose zum Neuzeichnen des
+    // Knopfes braucht. Der Navigations-Effekt liest sie bei jedem Start der
+    // Navigation frisch ein, falls der Schalter zwischenzeitlich unter Mehr
+    // umgelegt wurde.
+    var sprachansagenAn by remember { mutableStateOf(sprachansagenAktiviert(context)) }
+
     var liveAscentM by remember { mutableStateOf(0.0) }
     var hoverPoint by remember { mutableStateOf<TrackPoint?>(null) }
 
@@ -645,8 +679,16 @@ fun MapScreen(appViewModel: AppViewModel) {
     // wurde.
 
     // ------------------------------------------------- Karte mit Daten fuellen
-    LaunchedEffect(controller, selectedRide?.id, selectedRide?.points?.size) {
-        controller.setTrack(selectedRide?.points ?: emptyList())
+    LaunchedEffect(controller, selectedRide?.id, selectedRide?.points?.size, navTarget) {
+        // Die navigierte Tour bleibt auch ohne Auswahl auf der Karte: Der
+        // Start der Navigation hebt die Tourauswahl auf (die Tour-Karte
+        // weicht dem HUD, siehe [runNavigateRide]), aber die Linie ist
+        // waehrend der Fahrt gerade die Hauptinformation. Die geplante Route
+        // (rideId == null) zeichnet dagegen weiterhin ausschliesslich die
+        // eigene blaue Ebene (`setPlannedRoute`) — sonst laege dieselbe
+        // Strecke doppelt uebereinander.
+        val navPoints = navTarget?.takeIf { it.rideId != null }?.points
+        controller.setTrack(selectedRide?.points ?: navPoints ?: emptyList())
     }
 
     LaunchedEffect(controller, selectedRide?.id) {
@@ -871,11 +913,18 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         navTotalKm = navigator.totalKm
 
-        // Abbiegehinweise aus der Routengeometrie (`:core`, dort getestet).
-        // Je Effekt-Lauf eine frische Instanz — das IST der geforderte Reset
-        // bei Routenwechsel; bereits ueberfahrene Hinweise verfallen im
-        // Announcer selbst still.
-        val turnAnnouncer = TurnAnnouncer(extractTurnHints(target.points))
+        // Der Lautsprecher-Knopf im HUD und Mehr → Aufzeichnung schreiben in
+        // dieselben Prefs; beim (Neu-)Start der Navigation wird die
+        // Bildschirm-Kopie einmal frisch gelesen.
+        sprachansagenAn = sprachansagenAktiviert(context)
+        navTempoKmh = null
+
+        // Abbiegehinweise aus der Routengeometrie (`:core`, dort getestet) —
+        // dieselben `turnHints`, die auch die Anzeige speisen. Je Effekt-Lauf
+        // eine frische Announcer-Instanz — das IST der geforderte Reset bei
+        // Routenwechsel; bereits ueberfahrene Hinweise verfallen im Announcer
+        // selbst still.
+        val turnAnnouncer = TurnAnnouncer(turnHints)
 
         // Laeuft eine Aufzeichnung, kommen die Positionen von dort — ein
         // zweiter GPS-Abonnent braeuchte nur Strom fuer dieselben Punkte.
@@ -890,6 +939,10 @@ fun MapScreen(appViewModel: AppViewModel) {
         positions.collect { (lat, lon) ->
             val state = navigator.update(lat, lon)
             navState = state
+            // Tempo fuer die Restzeit im HUD gleitend mitteln — je
+            // Positionsupdate, damit die Schaetzung dem Fahren folgt, ohne
+            // mit jedem GPS-Zacken zu springen.
+            navTempoKmh = glaetteTempo(navTempoKmh, RecordingRepository.speedKmh.value)
             // `followMe` wird hier bei jedem Punkt frisch gelesen (kein
             // Effekt-Schluessel): Der Navigator soll beim Umschalten
             // weiterlaufen, nur die Kamera haelt sich zurueck.
@@ -1564,6 +1617,42 @@ fun MapScreen(appViewModel: AppViewModel) {
         generateRoutes()
     }
 
+    /**
+     * Schaltet die Karte beim Start jeder Navigation in den Fahr-Blick —
+     * gemeinsames Stueck aller Startpfade ([runNavigateRide] fuer die
+     * gespeicherte Tour, [runNavigatePlannedRoute] fuer die geplante Route):
+     *
+     *  * **Karte folgt der Position**: `followMe` an; zentriert wird sofort
+     *    auf einen frischen Fix (ersatzweise den letzten bekannten Standort),
+     *    nicht erst beim naechsten GPS-Punkt des Navigations-Effekts. Wer
+     *    zwischenzeitlich selbst pannt, gewinnt — dann bleibt die Kamera weg.
+     *  * **Einmaliger Hinweis, wenn die Sprachansagen aus sind**: Wer
+     *    „Navigieren" tippt, erwartet Ansagen; deren Hauptschalter steht ab
+     *    Werk aber bewusst auf AUS (siehe `record/RecordingSettings.kt`). Die
+     *    Snackbar nennt beide Wege zum Einschalten — den Lautsprecher im HUD
+     *    und Mehr → Aufzeichnung — und laeuft ueber denselben Meldungskanal
+     *    wie alle Hinweise dieses Screens.
+     *
+     * Das Schliessen der jeweiligen Bedienflaeche (Tour-Karte bzw.
+     * Planungsblatt) bleibt bei den Aufrufern — es ist je Startpfad ein
+     * anderes Blatt.
+     */
+    fun starteNavigationsAnsicht() {
+        followMe = true
+        if (!sprachansagenAktiviert(context)) {
+            appViewModel.showMessage(
+                "Sprachansagen sind aus — hier im HUD oder unter Mehr → Aufzeichnung einschalten.",
+            )
+        }
+        scope.launch {
+            val position = currentLocation(context)?.let { it.latitude to it.longitude }
+                ?: controller.lastKnownLocation()
+            if (position != null && followMe) {
+                controller.moveTo(position.first, position.second, MIN_RECORDING_ZOOM)
+            }
+        }
+    }
+
     fun runNavigateRide(ride: Ride) {
         pendingNavigateRideId = null
         locationGranted = true
@@ -1576,6 +1665,14 @@ fun MapScreen(appViewModel: AppViewModel) {
         // erreichbar — waehrend [MapMode.PLANEN] laesst sich keine Tour
         // auswaehlen).
         mode = MapMode.NAVIGIEREN
+        // Echter Navigationsmodus statt Statuszeile: Die Tour-Karte mit dem
+        // eben getippten „Navigieren" weicht (die Linie der Tour bleibt, siehe
+        // den `setTrack`-Effekt oben), das HUD uebernimmt, die Kamera geht auf
+        // die Position. Wird die Tour spaeter erneut ausgewaehlt, zeigt ihre
+        // Karte wie bisher den deaktivierten Knopf „Navigation läuft".
+        hoverPoint = null
+        appViewModel.select(null)
+        starteNavigationsAnsicht()
     }
 
     fun navigateRide(ride: Ride) {
@@ -1605,6 +1702,12 @@ fun MapScreen(appViewModel: AppViewModel) {
         navRideId = null
         navLabel = PLANNED_ROUTE_LABEL
         navTarget = NavigationTarget(null, PLANNED_ROUTE_LABEL, route.points)
+        // Der Modus bleibt PLANEN (siehe KDoc oben), aber die Ansicht wird
+        // trotzdem zur Navigation: Das Planungsblatt klappt ein — Wegpunkte
+        // setzt jetzt niemand mehr, und das HUD braucht die Karte —, die
+        // Kamera geht auf die Position.
+        planSheetExpanded = false
+        starteNavigationsAnsicht()
     }
 
     fun navigatePlannedRoute() {
@@ -1947,11 +2050,20 @@ fun MapScreen(appViewModel: AppViewModel) {
                 }
 
                 navTarget?.let { target ->
-                    NavigationCard(
+                    NavigationHud(
                         label = target.label,
                         remainingKm = navState?.remainingKm ?: navTotalKm,
                         doneKm = navState?.doneKm,
                         offRoute = navState?.offRoute == true,
+                        naechsteKurve = naechsteKurveInfo?.first?.richtung,
+                        kurveAbstandM = naechsteKurveInfo?.second,
+                        tempoKmh = navTempoKmh,
+                        sprachansagenAn = sprachansagenAn,
+                        onToggleSprachansagen = {
+                            val neu = !sprachansagenAn
+                            setzeSprachansagenAktiviert(context, neu)
+                            sprachansagenAn = neu
+                        },
                         onStop = ::stopNavigation,
                     )
                 }
@@ -2334,6 +2446,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                     label = target.label,
                     remainingKm = navState?.remainingKm ?: navTotalKm,
                     offRoute = navState?.offRoute == true,
+                    naechsteKurve = naechsteKurveInfo?.first?.richtung,
+                    naechsteKurveM = naechsteKurveInfo?.second,
                 )
             },
             onTogglePause = { RecordingRepository.togglePause() },

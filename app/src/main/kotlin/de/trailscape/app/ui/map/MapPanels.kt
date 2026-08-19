@@ -61,9 +61,10 @@ import kotlin.math.roundToInt
 
 /**
  * Die Bedienflaechen, die auf der Karte liegen: Live-Leiste der Aufzeichnung,
- * Statistik-Karte der ausgewaehlten Tour, Navigationsleiste, Downloadanzeige,
- * der stehende Standort-Hinweis ([LocationPermissionNotice]) und die kleinen
- * Knoepfe am oberen Rand.
+ * Statistik-Karte der ausgewaehlten Tour, Downloadanzeige, der stehende
+ * Standort-Hinweis ([LocationPermissionNotice]) und die kleinen Knoepfe am
+ * oberen Rand. (Das Navigations-HUD hat seine eigene Datei,
+ * `NavigationHud.kt`.)
  *
  * Flaechen, Formen und **Tinte** erben das One-UI-Theme (`MaterialTheme`,
  * heller/dunkler Modus): Die Karten bringen Rundung (26 dp) und
@@ -348,58 +349,9 @@ internal fun RideCard(
     }
 }
 
-/** Leiste waehrend der Navigation (`_NavBar` im Original). */
-@Composable
-internal fun NavigationCard(
-    label: String,
-    remainingKm: Double,
-    doneKm: Double?,
-    offRoute: Boolean,
-    onStop: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(
-                start = CardPadding,
-                top = OverlayCardPaddingVertical,
-                end = 8.dp,
-                bottom = OverlayCardPaddingVertical,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${formatKmDe(remainingKm)} km übrig",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = if (doneKm == null) {
-                        label
-                    } else {
-                        "$label · ${formatKmDe(doneKm)} km geschafft"
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (offRoute) {
-                    Text(
-                        text = "Abseits der Route",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-            TextButton(onClick = onStop) { Text("Beenden") }
-        }
-    }
-}
+// Die fruehere `NavigationCard` („X km übrig / Beenden") ist durch das
+// Navigations-HUD ersetzt (siehe `NavigationHud.kt`): Pfeil und Distanz zur
+// naechsten Kurve, Restdistanz mit Restzeit, Lautsprecher und Beenden.
 
 /** Fortschritt des Offline-Downloads (`_DownloadProgress` im Original). */
 @Composable

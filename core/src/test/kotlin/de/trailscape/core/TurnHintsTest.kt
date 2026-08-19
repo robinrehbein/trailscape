@@ -223,6 +223,41 @@ class TurnHintsTest {
         assertNotNull(announcer.melde(445.0, 30.0))
     }
 
+    // --- naechsteKurve ---
+
+    @Test
+    fun `vor der ersten Kurve zeigt naechsteKurve auf sie`() {
+        val hints = listOf(hintBei(500.0), hintBei(900.0, TurnRichtung.LINKS))
+        val (hint, restM) = naechsteKurve(hints, 100.0)!!
+        assertEquals(500.0, hint.distanzM)
+        assertEquals(400.0, restM, 1e-9)
+    }
+
+    @Test
+    fun `zwischen zwei Kurven zaehlt die zweite`() {
+        val hints = listOf(hintBei(500.0), hintBei(900.0, TurnRichtung.LINKS))
+        val (hint, restM) = naechsteKurve(hints, 600.0)!!
+        assertEquals(TurnRichtung.LINKS, hint.richtung)
+        assertEquals(300.0, restM, 1e-9)
+    }
+
+    @Test
+    fun `nach der letzten Kurve gibt es nichts mehr`() {
+        val hints = listOf(hintBei(500.0), hintBei(900.0))
+        assertNull(naechsteKurve(hints, 950.0))
+        assertNull(naechsteKurve(emptyList(), 0.0))
+    }
+
+    @Test
+    fun `exakt auf dem Kurvenpunkt gilt die Kurve als ueberfahren`() {
+        // Dieselbe Grenzziehung wie im TurnAnnouncer (distanzM <= doneM):
+        // Wer im Scheitel steht, bekommt schon die naechste Kurve gezeigt.
+        val hints = listOf(hintBei(500.0), hintBei(900.0, TurnRichtung.LINKS))
+        val (hint, restM) = naechsteKurve(hints, 500.0)!!
+        assertEquals(900.0, hint.distanzM)
+        assertEquals(400.0, restM, 1e-9)
+    }
+
     // --- Ansagetexte ---
 
     @Test
