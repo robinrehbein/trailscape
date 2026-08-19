@@ -1,10 +1,16 @@
 package de.trailscape.app.data
 
 import de.trailscape.core.Ride
+import de.trailscape.core.RideSummary
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Persistenz fuer aufgezeichnete Touren.
@@ -17,18 +23,72 @@ import kotlinx.serialization.json.JsonObject
  * (Backup-Import), NICHT ein Format-Bruch. Ein `.json`-Backup aus der
  * Flutter-App laesst sich unveraendert in dieses Verzeichnis kopieren.
  *
- * Anders als das Dart-Original (das `dir.list()` gegen `Directory` nutzt und
- * damit async/Future-basiert ist) sind alle Methoden hier synchron: Aufrufer
- * (ViewModels in Phase 4) sind fuer den `Dispatchers.IO`-Wechsel selbst
- * verantwortlich, siehe [AppServices.appScope].
+ * ## Der Metadaten-Index (`index.json`)
+ * Frueher parste `listRides()` bei jedem Aufruf JEDE Datei vollstaendig —
+ * inklusive saemtlicher GPS-Punkte. Bei ~500 Touren × 4000 Punkten sind das
+ * 200+ MB geboxter Nullable-Felder im Heap, nur um eine Liste zu zeigen.
+ * Seitdem haelt `<filesDir>/rides/index.json` je Tour eine punktfreie
+ * [RideSummary] plus einen Datei-Fingerabdruck (Groesse + mtime):
+ *
+ *  * [listSummaries] liest den Index und gleicht ihn gegen das Verzeichnis
+ *    ab — nur neue/geaenderte Dateien werden nachgeparst, verschwundene
+ *    fliegen heraus. Fehlt der Index oder ist er kaputt, wird er komplett
+ *    aus den Tour-Dateien neu aufgebaut; er ist ein reiner **Cache**, nie
+ *    die Wahrheit.
+ *  * [saveRide]/[deleteRide] pflegen den Index inkrementell und schreiben
+ *    ihn atomar (tmp + rename) — ohne `fsync`, denn ein im Absturz
+ *    verlorener Index wird beim naechsten [listSummaries] neu aufgebaut.
+ *  * [loadRide] liefert die volle Tour fuer den, der wirklich Punkte
+ *    braucht (Detailansicht, Kartenzeichnung, GPX-Export, Sync-Push).
+ *
+ * ## Defekte Dateien: Quarantaene statt stilles Verschwinden
+ * Frueher schluckte das Einlesen jede Exception — eine defekte Datei
+ * verschwand lautlos aus der Liste UND aus jedem spaeteren Backup. Jetzt
+ * wandert sie nach `<filesDir>/rides/defekt/`, und [listSummaries] meldet
+ * die Anzahl im Ergebnis, damit die App es einmalig anzeigen kann. Die
+ * Datei selbst bleibt erhalten (nichts wird geloescht), nur eben ausserhalb
+ * des aktiven Bestands. `tombstones.json` und `index.json` selbst sind davon
+ * ausgenommen — sie sind bekannte Nicht-Tour-Dateien im selben Verzeichnis
+ * (siehe [TombstoneStore]).
+ *
+ * Anders als das Dart-Original sind alle Methoden synchron: Aufrufer
+ * (ViewModels) sind fuer den `Dispatchers.IO`-Wechsel selbst verantwortlich,
+ * siehe [AppServices.appScope]. Die Methoden sind `@Synchronized`, damit
+ * parallele Aufrufe (Sync-Lauf neben Health-Import) den Index nicht
+ * zerschreiben.
  *
  * @param ridesDir Wurzelverzeichnis fuer die Tour-Dateien. In der App
  *   `<filesDir>/rides`, siehe [AppServices]. Als Konstruktor-Parameter (statt
  *   fest verdrahtetem `Context`-Zugriff) gehalten, damit sich die Klasse ohne
- *   Android-Runtime instanziieren liesse — Tests dafuer fehlen in diesem
- *   Modul dennoch bewusst (siehe Klassendoc unten).
+ *   Android-Runtime instanziieren und als JVM-Unit-Test pruefen laesst
+ *   (siehe `app/src/test/.../RideStorageTest.kt`).
  */
 class RideStorage(private val ridesDir: File) {
+
+    /**
+     * Ergebnis von [listSummaries]: die Zusammenfassungen (neueste zuerst)
+     * plus die Zahl der in diesem Lauf als defekt aussortierten Dateien.
+     * [quarantinedCount] > 0 heisst: genau jetzt sind Dateien nach `defekt/`
+     * verschoben worden — die App zeigt dann einmalig einen Hinweis.
+     */
+    data class SummaryListing(
+        val summaries: List<RideSummary>,
+        val quarantinedCount: Int,
+    )
+
+    /** Ein Index-Eintrag: Zusammenfassung plus Datei-Fingerabdruck. */
+    private data class IndexEntry(
+        val fileName: String,
+        val fileSize: Long,
+        val fileModifiedAt: Long,
+        val summary: RideSummary,
+    )
+
+    /**
+     * In-Memory-Spiegel des Index, Schluessel ist der Dateiname. `null` =
+     * noch nicht geladen. Zugriff nur aus `@Synchronized`-Methoden.
+     */
+    private var indexCache: MutableMap<String, IndexEntry>? = null
 
     private fun ensureDir(): File {
         if (!ridesDir.exists()) {
@@ -39,33 +99,117 @@ class RideStorage(private val ridesDir: File) {
 
     private fun rideFile(dir: File, id: String): File = File(dir, "$id.json")
 
+    private fun indexFile(): File = File(ridesDir, INDEX_FILE_NAME)
+
+    private fun quarantineDir(): File = File(ridesDir, QUARANTINE_DIR_NAME)
+
+    // -------------------------------------------------------------- Lesen
+
     /**
-     * Liefert alle gespeicherten Touren, neueste zuerst (nach `createdAt`
-     * absteigend sortiert). Dateien, die nicht als gueltige Tour gelesen
-     * werden koennen (kaputtes JSON, falsches Format), werden uebersprungen
-     * — genau wie im Dart-Original.
+     * Liefert die Zusammenfassungen aller gespeicherten Touren, neueste
+     * zuerst (nach `createdAt` absteigend), ohne eine einzige Punktliste in
+     * den Speicher zu heben — solange der Index aktuell ist.
+     *
+     * Der Index wird dabei gegen das Verzeichnis abgeglichen: neue oder
+     * geaenderte Dateien (Fingerabdruck Groesse + mtime weicht ab) werden
+     * nachgeparst, verschwundene entfernt, defekte in Quarantaene verschoben
+     * (siehe Klassen-KDoc). Ein fehlender oder kaputter Index loest den
+     * kompletten Neuaufbau aus.
      */
-    fun listRides(): List<Ride> {
+    @Synchronized
+    fun listSummaries(): SummaryListing {
         val dir = ensureDir()
+        val index = loadIndex()
         val files = dir.listFiles() ?: emptyArray()
 
-        val rides = mutableListOf<Ride>()
+        val fresh = LinkedHashMap<String, IndexEntry>()
+        var quarantined = 0
+        var dirty = false
+
         for (file in files) {
             if (!file.isFile) continue
+            // `<id>.json.tmp` u. Ä. fallen schon hier heraus — es zaehlt nur
+            // die Endung `.json` (der fruehere zusaetzliche `.tmp`-Check war
+            // deshalb unerreichbarer Code und ist entfallen).
             if (!file.name.endsWith(".json")) continue
-            if (file.name.endsWith(".tmp")) continue
-            readRideFile(file)?.let { rides.add(it) }
+            if (file.name in RESERVED_FILE_NAMES) continue
+
+            val known = index[file.name]
+            if (known != null &&
+                known.fileSize == file.length() &&
+                known.fileModifiedAt == file.lastModified()
+            ) {
+                fresh[file.name] = known
+                continue
+            }
+
+            dirty = true
+            val ride = readRideFile(file)
+            if (ride == null) {
+                quarantineFile(file)
+                quarantined++
+                continue
+            }
+            fresh[file.name] = IndexEntry(
+                fileName = file.name,
+                fileSize = file.length(),
+                fileModifiedAt = file.lastModified(),
+                summary = ride.toSummary(),
+            )
         }
 
-        rides.sortByDescending { it.createdAt }
-        return rides
+        if (fresh.keys != index.keys) {
+            dirty = true
+        }
+        indexCache = fresh
+        if (dirty) {
+            writeIndex(fresh)
+        }
+
+        return SummaryListing(
+            summaries = fresh.values.map { it.summary }.sortedByDescending { it.createdAt },
+            quarantinedCount = quarantined,
+        )
     }
 
-    /** Liefert eine einzelne Tour anhand ihrer ID, oder `null` falls sie nicht existiert oder nicht gelesen werden kann. */
-    fun getRide(id: String): Ride? {
-        val file = rideFile(ensureDir(), id)
+    /**
+     * Laedt eine einzelne Tour vollstaendig (mit Punkten), oder `null`, falls
+     * sie nicht existiert oder nicht lesbar ist. Eine unlesbare Datei wandert
+     * dabei in die Quarantaene und aus dem Index — der naechste
+     * [listSummaries]-Lauf zeigt den Bestand dann ohne sie.
+     */
+    @Synchronized
+    fun loadRide(id: String): Ride? {
+        val dir = ensureDir()
+        val file = rideFile(dir, id)
         if (!file.exists()) return null
-        return readRideFile(file)
+        val ride = readRideFile(file)
+        if (ride == null) {
+            quarantineFile(file)
+            val index = loadIndex()
+            if (index.remove(file.name) != null) {
+                writeIndex(index)
+            }
+        }
+        return ride
+    }
+
+    /**
+     * Liefert alle gespeicherten Touren VOLLSTAENDIG (inkl. Punkte), neueste
+     * zuerst.
+     *
+     * Uebergangs-API: Im Normalbetrieb liest niemand mehr den Gesamtbestand —
+     * Listen laufen ueber [listSummaries], Einzelzugriffe ueber [loadRide],
+     * das Backup streamt Tour fuer Tour. Diese Methode bleibt fuer
+     * Sonderfaelle, die wirklich alles brauchen, und haelt dann bewusst den
+     * kompletten Bestand im Speicher. Defekte Dateien werden hier — anders
+     * als frueher — ebenfalls in Quarantaene verschoben statt still
+     * uebersprungen.
+     */
+    @Synchronized
+    fun listRides(): List<Ride> {
+        val listing = listSummaries()
+        return listing.summaries.mapNotNull { loadRide(it.id) }
     }
 
     private fun readRideFile(file: File): Ride? = try {
@@ -73,10 +217,40 @@ class RideStorage(private val ridesDir: File) {
         val json = Json.parseToJsonElement(raw) as JsonObject
         Ride.fromJson(json)
     } catch (e: Exception) {
-        // Defekte Datei ueberspringen — entspricht dem catch-all im
-        // Dart-Original (kaputtes JSON, falsches Format, IO-Fehler).
+        // Kaputtes JSON, falsches Format, IO-Fehler: Der Aufrufer entscheidet
+        // ueber Quarantaene — hier nur das Signal.
         null
     }
+
+    /**
+     * Verschiebt eine unlesbare Datei nach `defekt/` statt sie still zu
+     * ueberspringen. Schlaegt das Verschieben fehl (z. B. kein Platz), bleibt
+     * die Datei liegen und faellt beim naechsten Lauf erneut auf — besser
+     * eine wiederholte Meldung als ein stiller Verlust.
+     */
+    private fun quarantineFile(file: File) {
+        try {
+            val dir = quarantineDir()
+            if (!dir.exists()) {
+                dir.mkdirs()
+            }
+            var target = File(dir, file.name)
+            if (target.exists()) {
+                // Namenskollision (z. B. zweimal dieselbe ID defekt): eindeutig
+                // machen statt die aeltere Quarantaene-Datei zu ueberschreiben.
+                target = File(dir, "${file.name.removeSuffix(".json")}-${System.currentTimeMillis()}.json")
+            }
+            if (file.renameTo(target)) {
+                println("RideStorage: unlesbare Tour-Datei ${file.name} nach ${QUARANTINE_DIR_NAME}/ verschoben.")
+            } else {
+                println("RideStorage: unlesbare Tour-Datei ${file.name} konnte nicht verschoben werden.")
+            }
+        } catch (e: Exception) {
+            println("RideStorage: Quarantaene fuer ${file.name} fehlgeschlagen: $e")
+        }
+    }
+
+    // ------------------------------------------------------------ Schreiben
 
     /**
      * Speichert eine Tour atomar: es wird zunaechst in eine `.tmp`-Datei
@@ -87,7 +261,8 @@ class RideStorage(private val ridesDir: File) {
      * Der Dateiname ergibt sich allein aus [Ride.id] — die Funktion ist damit
      * zugleich das Update: eine bereits gespeicherte Tour mit derselben ID
      * wird vollstaendig ersetzt (z. B. wenn der Health-Import sie
-     * nachtraeglich um Herzfrequenzdaten anreichert).
+     * nachtraeglich um Herzfrequenzdaten anreichert). Der Index-Eintrag wird
+     * im selben Zug aktualisiert — kein erneutes Einlesen des Bestands.
      *
      * ## Warum `fd.sync()` und nicht nur `writeText`
      * Diese Methode steht am Ende der Absturzsicherung: Unmittelbar nachdem sie
@@ -106,7 +281,30 @@ class RideStorage(private val ridesDir: File) {
      * — bei einer Handvoll Touren pro Woche und einem Massenimport, der ohnehin
      * IO-gebunden ist, nicht messbar.
      */
+    @Synchronized
     fun saveRide(ride: Ride) {
+        saveRideInternal(ride)
+        writeIndex(loadIndex())
+    }
+
+    /**
+     * Speichert bzw. aktualisiert mehrere Touren nacheinander (siehe
+     * [saveRide]) — der Index wird dabei nur EINMAL am Ende geschrieben.
+     */
+    @Synchronized
+    fun saveRides(rides: Iterable<Ride>) {
+        var any = false
+        rides.forEach {
+            saveRideInternal(it)
+            any = true
+        }
+        if (any) {
+            writeIndex(loadIndex())
+        }
+    }
+
+    /** Schreibt die Datei und pflegt den In-Memory-Index; persistiert ihn NICHT. */
+    private fun saveRideInternal(ride: Ride) {
         val dir = ensureDir()
         val file = rideFile(dir, ride.id)
         val tmpFile = File(dir, "${file.name}.tmp")
@@ -120,6 +318,13 @@ class RideStorage(private val ridesDir: File) {
             writeAndSync(file, json)
             tmpFile.delete()
         }
+
+        loadIndex()[file.name] = IndexEntry(
+            fileName = file.name,
+            fileSize = file.length(),
+            fileModifiedAt = file.lastModified(),
+            summary = ride.toSummary(),
+        )
     }
 
     /**
@@ -143,16 +348,115 @@ class RideStorage(private val ridesDir: File) {
         }
     }
 
-    /** Speichert bzw. aktualisiert mehrere Touren nacheinander (siehe [saveRide]). */
-    fun saveRides(rides: Iterable<Ride>) {
-        rides.forEach { saveRide(it) }
-    }
-
-    /** Loescht eine Tour. Existiert sie nicht, passiert nichts. */
+    /** Loescht eine Tour (Datei + Index-Eintrag). Existiert sie nicht, passiert nichts. */
+    @Synchronized
     fun deleteRide(id: String) {
-        val file = rideFile(ensureDir(), id)
+        val dir = ensureDir()
+        val file = rideFile(dir, id)
         if (file.exists()) {
             file.delete()
         }
+        val index = loadIndex()
+        if (index.remove(file.name) != null) {
+            writeIndex(index)
+        }
+    }
+
+    // ---------------------------------------------------------------- Index
+
+    /**
+     * Laedt den Index in den Speicher (einmalig). Fehlende oder kaputte Datei
+     * ergibt eine leere Map — [listSummaries] baut dann alles neu auf.
+     */
+    private fun loadIndex(): MutableMap<String, IndexEntry> {
+        indexCache?.let { return it }
+        val loaded = LinkedHashMap<String, IndexEntry>()
+        val file = indexFile()
+        if (file.exists()) {
+            try {
+                val root = Json.parseToJsonElement(file.readText(Charsets.UTF_8)) as JsonObject
+                val entries = root["entries"] as? JsonArray ?: JsonArray(emptyList())
+                for (element in entries) {
+                    val obj = element as? JsonObject ?: continue
+                    val entry = readIndexEntry(obj) ?: continue
+                    loaded[entry.fileName] = entry
+                }
+            } catch (e: Exception) {
+                // Kaputter Index: Cache leer lassen — der naechste
+                // listSummaries-Lauf parst die Tour-Dateien neu und schreibt
+                // einen frischen Index. Kein Datenverlust, der Index ist nur
+                // ein Cache.
+                loaded.clear()
+            }
+        }
+        indexCache = loaded
+        return loaded
+    }
+
+    private fun readIndexEntry(obj: JsonObject): IndexEntry? {
+        val fileName = (obj["file"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
+        val size = (obj["size"] as? JsonPrimitive)?.content?.toLongOrNull() ?: return null
+        val mtime = (obj["mtime"] as? JsonPrimitive)?.content?.toLongOrNull() ?: return null
+        val summary = try {
+            RideSummary.fromJson(obj["summary"] as? JsonObject ?: return null)
+        } catch (e: Exception) {
+            return null
+        }
+        return IndexEntry(fileName = fileName, fileSize = size, fileModifiedAt = mtime, summary = summary)
+    }
+
+    /**
+     * Schreibt den Index atomar (tmp + rename). Scheitern ist unkritisch —
+     * der Index wird beim naechsten Lauf neu aufgebaut; deshalb (anders als
+     * bei den Tour-Dateien) auch kein `fsync`.
+     */
+    private fun writeIndex(index: Map<String, IndexEntry>) {
+        try {
+            val dir = ensureDir()
+            val json = buildJsonObject {
+                put("version", 1)
+                put(
+                    "entries",
+                    buildJsonArray {
+                        index.values.forEach { entry ->
+                            add(
+                                buildJsonObject {
+                                    put("file", entry.fileName)
+                                    put("size", entry.fileSize)
+                                    put("mtime", entry.fileModifiedAt)
+                                    put("summary", entry.summary.toJson())
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            val file = indexFile()
+            val tmp = File(dir, "${file.name}.tmp")
+            tmp.writeText(json.toString(), Charsets.UTF_8)
+            if (!tmp.renameTo(file)) {
+                file.writeText(json.toString(), Charsets.UTF_8)
+                tmp.delete()
+            }
+        } catch (e: Exception) {
+            // Bewusst geschluckt: Ein nicht geschriebener Index kostet nur den
+            // Neuaufbau beim naechsten Start, nie Tourdaten.
+        }
+    }
+
+    companion object {
+        /** Dateiname des Metadaten-Index im Touren-Verzeichnis. */
+        const val INDEX_FILE_NAME: String = "index.json"
+
+        /** Unterverzeichnis fuer unlesbare Tour-Dateien (Quarantaene). */
+        const val QUARANTINE_DIR_NAME: String = "defekt"
+
+        /**
+         * Bekannte Nicht-Tour-Dateien im Touren-Verzeichnis: der Index
+         * selbst, der Loesch-Merkzettel des Syncs (siehe [TombstoneStore])
+         * und der Tourlast-Cache (siehe [RideLoadCacheStore]). Sie duerfen
+         * weder als Tour gelesen noch in Quarantaene verschoben werden.
+         */
+        private val RESERVED_FILE_NAMES = setOf(INDEX_FILE_NAME, "tombstones.json", "last-cache.json")
     }
 }

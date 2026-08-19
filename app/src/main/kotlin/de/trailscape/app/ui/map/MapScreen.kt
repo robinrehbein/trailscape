@@ -946,10 +946,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // Navigation nach Tabwechsel/Drehung wieder aufnehmen: Gerettet wurden nur
-    // Kennung und Beschriftung (siehe oben), die Punkte kommen aus den
-    // geladenen Touren bzw. aus der geretteten geplanten Route. Bis dahin zeigt
-    // die Leiste die gespeicherte Gesamtstrecke; den Rest rechnet der
-    // `RouteNavigator` beim naechsten GPS-Punkt neu.
+    // Kennung und Beschriftung (siehe oben), die Punkte kommen on-demand von
+    // der Platte (die Liste haelt nur noch Zusammenfassungen) bzw. aus der
+    // geretteten geplanten Route. Bis dahin zeigt die Leiste die gespeicherte
+    // Gesamtstrecke; den Rest rechnet der `RouteNavigator` beim naechsten
+    // GPS-Punkt neu.
     // Schluessel bewusst billig: `plannedRoute` traegt eine komplette
     // Punktliste, die Zahl der Punkte benennt den Wechsel genauso.
     LaunchedEffect(rides, plannedRoute?.points?.size, navLabel) {
@@ -957,7 +958,9 @@ fun MapScreen(appViewModel: AppViewModel) {
         val label = navLabel ?: return@LaunchedEffect
         val rideId = navRideId
         val points = if (rideId != null) {
-            rides.firstOrNull { it.id == rideId }?.points
+            // Erst die billige Anwesenheitspruefung ueber die Liste, dann der
+            // eine Dateizugriff — nicht umgekehrt.
+            if (rides.any { it.id == rideId }) appViewModel.loadRide(rideId)?.points else null
         } else {
             plannedRoute?.points
         }
@@ -1627,7 +1630,13 @@ fun MapScreen(appViewModel: AppViewModel) {
             PendingAction.NAVIGATE_RIDE -> {
                 val rideId = pendingNavigateRideId
                 pendingNavigateRideId = null
-                rides.firstOrNull { it.id == rideId }?.let { runNavigateRide(it) }
+                if (rideId != null) {
+                    // Die volle Tour on-demand laden — die Liste haelt nur
+                    // noch Zusammenfassungen ohne Punkte.
+                    scope.launch {
+                        appViewModel.loadRide(rideId)?.let { runNavigateRide(it) }
+                    }
+                }
             }
         }
     }

@@ -101,6 +101,10 @@ data class RemoteRideSummary(
 /** Die fuer die Sync-Entscheidung noetige Zusammenfassung einer lokalen Tour. */
 data class LocalRideSummary(val id: String, val updatedAt: Long)
 
+/** [LocalRideSummary] aus einer beliebigen Tour(-Zusammenfassung). */
+fun RideInfo.toLocalRideSummary(): LocalRideSummary =
+    LocalRideSummary(id = id, updatedAt = updatedAt)
+
 /**
  * Das Ergebnis von [planSync]: welche Touren-IDs in welche Richtung wandern.
  *
@@ -405,15 +409,25 @@ private fun pullRide(client: HttpClient, config: SyncConfig, entry: RemoteRideSu
  * — die Regeln stehen an [planSync], diese Funktion fuehrt den Plan nur
  * sequenziell aus (Push, Pull, Loeschungen, Tombstone-Bestand ersetzen).
  *
- * Alle Seiteneffekte sind injiziert und damit testbar: [listLocal]/[saveLocal]
- * und [deleteLocal] fuer die Tour-Dateien, [listTombstones]/[replaceTombstones]
- * fuer den Loesch-Merkzettel (siehe SyncTombstones.kt), [client]/[store] fuer
- * Netzwerk und Konfiguration. Die Tombstone-Parameter haben No-Op-Defaults —
- * ein Aufrufer ohne Tombstone-Persistenz bekommt exakt das alte Verhalten
- * (plus Last-Write-Wins-Updates).
+ * Alle Seiteneffekte sind injiziert und damit testbar:
+ * [listLocal]/[loadLocal]/[saveLocal] und [deleteLocal] fuer die
+ * Tour-Dateien, [listTombstones]/[replaceTombstones] fuer den
+ * Loesch-Merkzettel (siehe SyncTombstones.kt), [client]/[store] fuer Netzwerk
+ * und Konfiguration. Die Tombstone-Parameter haben No-Op-Defaults — ein
+ * Aufrufer ohne Tombstone-Persistenz bekommt exakt das alte Verhalten (plus
+ * Last-Write-Wins-Updates).
+ *
+ * ## Warum Zusammenfassungen plus Lade-Callback
+ * Fuer die Sync-**Entscheidung** ([planSync]) reichen `id` und `updatedAt` —
+ * dafuer muss niemand saemtliche GPS-Punkte aller Touren in den Speicher
+ * heben. Nur fuer den **Push** braucht es die volle Tour; die holt sich diese
+ * Funktion je betroffener ID einzeln ueber [loadLocal]. Liefert [loadLocal]
+ * `null` (Datei zwischenzeitlich geloescht oder unlesbar), wird die ID
+ * uebersprungen — genau wie zuvor eine aus der Liste verschwundene Tour.
  */
 fun syncRides(
-    listLocal: () -> List<Ride>,
+    listLocal: () -> List<LocalRideSummary>,
+    loadLocal: (String) -> Ride?,
     saveLocal: (Ride) -> Unit,
     client: HttpClient,
     store: KeyValueStore,
@@ -428,16 +442,15 @@ fun syncRides(
     val tombstones = listTombstones()
 
     val plan = planSync(
-        local = localRides.map { LocalRideSummary(id = it.id, updatedAt = it.updatedAt) },
+        local = localRides,
         remote = remoteRides,
         tombstones = tombstones,
     )
 
-    val localById = localRides.associateBy { it.id }
     val remoteById = remoteRides.associateBy { it.id }
 
     for (id in plan.pushNew + plan.pushUpdated) {
-        val ride = localById[id] ?: continue
+        val ride = loadLocal(id) ?: continue
         pushRide(client, config, ride)
     }
 

@@ -111,7 +111,7 @@ private fun sessionDate(week: TrainingWeek, session: TrainingSession): java.time
  */
 fun weekSessionProgress(
     week: TrainingWeek,
-    rides: List<Ride>,
+    rides: List<RideInfo>,
     now: Long? = null,
     rideLoads: Map<String, Double> = emptyMap(),
 ): List<PlanSessionProgress> {
@@ -121,7 +121,7 @@ fun weekSessionProgress(
     val latest = weekStartDate.plusDays(6L + sessionMatchToleranceDays)
 
     // Kandidatinnen einmal vorbereiten: Kalendertag + Distanz.
-    data class Candidate(val ride: Ride, val date: java.time.LocalDate) {
+    data class Candidate(val ride: RideInfo, val date: java.time.LocalDate) {
         var taken: Boolean = false
     }
 
@@ -270,7 +270,7 @@ data class AdaptedPlan(
  */
 fun adaptPlan(
     plan: TrainingPlan,
-    rides: List<Ride>,
+    rides: List<RideInfo>,
     now: Long? = null,
     currentCtl: Double? = null,
     rideLoads: Map<String, Double> = emptyMap(),

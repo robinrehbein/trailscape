@@ -1083,7 +1083,7 @@ fun sessionsForDay(plan: TrainingPlan, now: Long? = null): List<TrainingSession>
  * speichern" auf der Karte legte eine gewoehnliche Tour an, und der
  * Wochenfortschritt sprang, ohne dass jemand im Sattel sass.
  */
-fun weekKm(week: TrainingWeek, rides: List<Ride>): Double {
+fun weekKm(week: TrainingWeek, rides: List<RideInfo>): Double {
     var total = 0.0
     for (ride in riddenRides(rides)) {
         if (ride.createdAt >= week.start && ride.createdAt < week.end) {

@@ -41,7 +41,7 @@ import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Goal
-import de.trailscape.core.Ride
+import de.trailscape.core.RideInfo
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.assessFitness
 import de.trailscape.core.errorTooFar
@@ -72,7 +72,7 @@ import java.time.ZoneOffset
 @Composable
 fun GoalCard(
     plan: TrainingPlan?,
-    rides: List<Ride>,
+    rides: List<RideInfo>,
     onSetPlan: (TrainingPlan?) -> Unit,
     currentCtl: Double? = null,
 ) {

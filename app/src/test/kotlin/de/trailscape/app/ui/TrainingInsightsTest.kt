@@ -4,8 +4,9 @@ import de.trailscape.core.Confidence
 import de.trailscape.core.DailyRecommendationKind
 import de.trailscape.core.DailyValue
 import de.trailscape.core.EftpSource
+import de.trailscape.core.InMemoryRideLoadFactsStore
 import de.trailscape.core.Ride
-import de.trailscape.core.RideLoad
+import de.trailscape.core.RideLoadFactsStore
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsSummary
@@ -19,7 +20,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
@@ -37,6 +37,31 @@ class TrainingInsightsTest {
 
     private fun epochMs(at: LocalDateTime): Long =
         at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    /**
+     * Ruft [computeInsights] so auf, wie es die App tut: mit Zusammenfassungen
+     * plus Lade-Callback auf die vollen Touren. [loadedIds] protokolliert,
+     * fuer welche IDs tatsaechlich die Volltour nachgeladen wurde — die
+     * Grundlage der Cache-Tests.
+     */
+    private fun insightsOf(
+        rides: List<Ride>,
+        vitals: VitalsSummary? = null,
+        profile: TrainingProfile = this.profile,
+        now: LocalDateTime = this.now,
+        factsStore: RideLoadFactsStore = InMemoryRideLoadFactsStore(),
+        loadedIds: MutableList<String>? = null,
+    ) = computeInsights(
+        rides = rides.map { it.toSummary() },
+        vitals = vitals,
+        profile = profile,
+        now = now,
+        factsStore = factsStore,
+        loadRide = { id ->
+            loadedIds?.add(id)
+            rides.firstOrNull { it.id == id }
+        },
+    )
 
     /**
      * Eine Stunde gleichmaessiges Fahren mit Puls.
@@ -73,12 +98,7 @@ class TrainingInsightsTest {
 
     @Test
     fun `ohne Daten bleiben alle abgeleiteten Werte leer`() {
-        val insights = computeInsights(
-            rides = emptyList(),
-            vitals = null,
-            profile = profile,
-            now = now,
-        )
+        val insights = insightsOf(rides = emptyList())
 
         assertTrue(insights.rideLoads.isEmpty())
         assertTrue(insights.fitness.points.isEmpty())
@@ -96,21 +116,23 @@ class TrainingInsightsTest {
     @Test
     fun `Tourlast entspricht dem Rechenkern und die Fitnesskurve laeuft bis heute`() {
         val ride = ride("a", now.minusDays(3))
-        val insights = computeInsights(
-            rides = listOf(ride),
-            vitals = null,
-            profile = profile,
-            now = now,
-        )
+        val insights = insightsOf(rides = listOf(ride))
 
         assertEquals(setOf("a"), insights.rideLoads.keys)
         // Unter fuenf Kalibrierungspaaren ist α = 1,0 — die Last muss deshalb
-        // exakt der unveraenderten :core-Berechnung entsprechen.
+        // exakt der unveraenderten :core-Berechnung entsprechen. Verglichen
+        // werden die Kennzahlen: Das aus dem Destillat rekonstruierte
+        // RideLoad traegt bewusst keine Leistungsreihe mehr (siehe
+        // :core/RideLoadFacts.kt), ein Objektvergleich ginge daran vorbei.
         assertEquals(1.0, insights.calibration.alpha)
-        assertEquals(
-            computeRideLoadForRide(ride, profile, eftpW = insights.eftp.watts),
-            insights.rideLoads.getValue("a"),
-        )
+        val expected = computeRideLoadForRide(ride, profile, eftpW = insights.eftp.watts)
+        val actual = insights.rideLoads.getValue("a")
+        assertEquals(expected.load, actual.load, 1e-9)
+        assertEquals(expected.source, actual.source)
+        assertEquals(expected.confidence, actual.confidence)
+        assertEquals(expected.note, actual.note)
+        assertEquals(expected.heartRate.load, actual.heartRate.load, 1e-9)
+        assertEquals(expected.physics.eTss, actual.physics.eTss, 1e-9)
 
         val latest = assertNotNull(insights.latest)
         assertEquals(now.toLocalDate().atStartOfDay(), latest.day)
@@ -129,8 +151,8 @@ class TrainingInsightsTest {
         val gefahren = ride("a", now.minusDays(3))
         val geplant = ride("p", now.minusDays(1)).copy(planned = true)
 
-        val mitPlanung = computeInsights(listOf(gefahren, geplant), null, profile, now)
-        val ohnePlanung = computeInsights(listOf(gefahren), null, profile, now)
+        val mitPlanung = insightsOf(listOf(gefahren, geplant))
+        val ohnePlanung = insightsOf(listOf(gefahren))
 
         assertEquals(setOf("a"), mitPlanung.rideLoads.keys)
         assertEquals(ohnePlanung.weeklyLoad, mitPlanung.weeklyLoad)
@@ -141,18 +163,62 @@ class TrainingInsightsTest {
     @Test
     fun `unveraenderte Touren werden aus dem Cache bedient`() {
         val ride = ride("a", now.minusDays(2))
-        val cache = mutableMapOf<String, RideLoad>()
+        val store = InMemoryRideLoadFactsStore()
+        val loaded = mutableListOf<String>()
 
-        val first = computeInsights(listOf(ride), null, profile, now, cache)
-        assertEquals(1, cache.size)
+        val first = insightsOf(listOf(ride), factsStore = store, loadedIds = loaded)
+        // Der erste Lauf laedt die Volltour genau einmal (beide FTP-Durchgaenge
+        // teilen sich EIN Destillat).
+        assertEquals(listOf("a"), loaded)
+        assertEquals(1, store.size)
 
-        val second = computeInsights(listOf(ride), null, profile, now, cache)
-        // Identitaet, nicht nur Gleichheit: der zweite Lauf hat nicht gerechnet.
-        assertSame(first.rideLoads.getValue("a"), second.rideLoads.getValue("a"))
+        val second = insightsOf(listOf(ride), factsStore = store, loadedIds = loaded)
+        // Kein weiterer Volltour-Zugriff: der zweite Lauf kam komplett aus dem
+        // Destillat-Cache — und rechnet dieselbe Last.
+        assertEquals(listOf("a"), loaded)
+        assertEquals(first.rideLoads.getValue("a").load, second.rideLoads.getValue("a").load, 1e-9)
 
         // Eine geloeschte Tour raeumt ihren Cache-Eintrag mit ab.
-        computeInsights(emptyList(), null, profile, now, cache)
-        assertTrue(cache.isEmpty())
+        insightsOf(emptyList(), factsStore = store)
+        assertEquals(0, store.size)
+    }
+
+    @Test
+    fun `der Cache invalidiert ueber updatedAt`() {
+        val ride = ride("a", now.minusDays(2))
+        val store = InMemoryRideLoadFactsStore()
+        val loaded = mutableListOf<String>()
+
+        insightsOf(listOf(ride), factsStore = store, loadedIds = loaded)
+        assertEquals(listOf("a"), loaded)
+
+        // Unveraendertes updatedAt: kein Nachladen.
+        insightsOf(listOf(ride), factsStore = store, loadedIds = loaded)
+        assertEquals(listOf("a"), loaded)
+
+        // Bearbeitung (z. B. HF-Merge) setzt updatedAt — der Eintrag ist
+        // ungueltig, die Volltour wird genau einmal neu destilliert.
+        val touched = ride.copy(updatedAt = ride.updatedAt + 1)
+        insightsOf(listOf(touched), factsStore = store, loadedIds = loaded)
+        assertEquals(listOf("a", "a"), loaded)
+        insightsOf(listOf(touched), factsStore = store, loadedIds = loaded)
+        assertEquals(listOf("a", "a"), loaded)
+    }
+
+    @Test
+    fun `ohne ladbare Volltour faellt die Last auf die Stats-Heuristik zurueck`() {
+        val ride = ride("a", now.minusDays(2))
+        // Kein Lade-Callback: wie eine Datei, die in Quarantaene liegt.
+        val insights = computeInsights(
+            rides = listOf(ride.toSummary()),
+            vitals = null,
+            profile = profile,
+            now = now,
+        )
+        val load = insights.rideLoads.getValue("a")
+        // Grobe Heuristik statt Loch in der Fitnesskurve.
+        assertTrue(load.available)
+        assertTrue(load.load > 0.0)
     }
 
     @Test
@@ -178,7 +244,7 @@ class TrainingInsightsTest {
         assertEquals(55.0, effectiveProfile(own, vitals).restingHrOverride)
 
         // Und die Auswertung benutzt genau dieses effektive Profil.
-        assertEquals(effective, computeInsights(emptyList(), vitals, profile, now).profile)
+        assertEquals(effective, insightsOf(emptyList(), vitals = vitals).profile)
     }
 
     // -----------------------------------------------------------------------
@@ -187,7 +253,7 @@ class TrainingInsightsTest {
 
     @Test
     fun `ohne Belege bleibt es beim Profil-Default, aber ehrlich beschriftet`() {
-        val insights = computeInsights(emptyList(), null, profile, now)
+        val insights = insightsOf(emptyList())
         assertEquals(EftpSource.GESCHAETZT, insights.eftp.source)
         // 2,4 W/kg × 78 kg.
         assertEquals(187.2, insights.eftp.watts, 1e-9)
@@ -202,7 +268,7 @@ class TrainingInsightsTest {
     fun `eingetragene FTP bestimmt die Lastskala und steht so im Hinweis`() {
         val strong = profile.copyWith(eftpOverrideW = 250.0)
         val ride = ride("a", now.minusDays(2), hr = null)
-        val insights = computeInsights(listOf(ride), null, strong, now)
+        val insights = insightsOf(listOf(ride), profile = strong)
 
         assertEquals(EftpSource.EINGETRAGEN, insights.eftp.source)
         assertEquals(250.0, insights.eftp.watts, 0.0)
@@ -213,7 +279,7 @@ class TrainingInsightsTest {
         // Und die Skala haengt wirklich daran: `eTSS ∝ 1/FTP²`, die haelftige
         // FTP ergibt die vierfache Last.
         val weak = profile.copyWith(eftpOverrideW = 125.0)
-        val weakLoad = computeInsights(listOf(ride), null, weak, now)
+        val weakLoad = insightsOf(listOf(ride), profile = weak)
             .rideLoads.getValue("a").load
         val strongLoad = insights.rideLoads.getValue("a").load
         assertEquals(4.0, weakLoad / strongLoad, 0.01)
@@ -227,7 +293,7 @@ class TrainingInsightsTest {
         val rides = (0 until 6).map { i ->
             ride("r$i", now.minusDays((3 + i * 2).toLong()), speedMs = 8.33)
         }
-        val insights = computeInsights(rides, null, profile, now)
+        val insights = insightsOf(rides)
 
         assertTrue(insights.calibration.sampleCount >= 5)
         assertTrue(insights.calibration.rawAlpha!! < 0.6, "α = ${insights.calibration.rawAlpha}")
@@ -251,7 +317,7 @@ class TrainingInsightsTest {
         val rides = (0 until 6).map { i ->
             ride("r$i", now.minusDays((3 + i * 2).toLong()), speedMs = 8.33)
         }
-        val insights = computeInsights(rides, null, entered, now)
+        val insights = insightsOf(rides, profile = entered)
         assertEquals(250.0, insights.eftp.watts, 0.0)
         assertNull(insights.eftp.alphaApplied)
     }
@@ -287,7 +353,7 @@ class TrainingInsightsTest {
         )
         val oldRide = ride("alt", now.minusDays(340))
         val newRide = ride("neu", now.minusDays(3))
-        val insights = computeInsights(listOf(oldRide, newRide), vitals, profile, now)
+        val insights = insightsOf(listOf(oldRide, newRide), vitals = vitals)
 
         // Der Ruhepuls geht ueber die Herzfrequenzreserve in jeden TRIMP ein:
         // Bei gleichem Puls von 140 ergibt ein tieferer Ruhepuls einen
@@ -339,16 +405,16 @@ class TrainingInsightsTest {
         val locker = ride("e", now.minusDays(5), hr = 120)
         val alt = ride("alt", now.minusDays(10), hr = 175) // ausserhalb des Fensters
 
-        val insights = computeInsights(listOf(hart1, hart2, locker, alt), null, profile, now)
+        val insights = insightsOf(listOf(hart1, hart2, locker, alt))
         assertEquals(2, insights.hardDaysLast7)
         // Budget (max. 2 je 7 Tage) aufgebraucht → keine harte Einheit mehr,
         // unabhaengig von der Tagesform.
         assertTrue(insights.recommendation.kind != DailyRecommendationKind.HARTE_EINHEIT)
 
-        val einer = computeInsights(listOf(hart2, locker), null, profile, now)
+        val einer = insightsOf(listOf(hart2, locker))
         assertEquals(1, einer.hardDaysLast7)
 
-        val keiner = computeInsights(listOf(locker, alt), null, profile, now)
+        val keiner = insightsOf(listOf(locker, alt))
         assertEquals(0, keiner.hardDaysLast7)
     }
 
@@ -356,7 +422,7 @@ class TrainingInsightsTest {
     fun `zwei harte Touren am selben Tag sind ein harter Tag`() {
         val vormittag = ride("v", now.minusDays(2).withHour(9), hr = 175)
         val nachmittag = ride("n", now.minusDays(2).withHour(15), hr = 175)
-        val insights = computeInsights(listOf(vormittag, nachmittag), null, profile, now)
+        val insights = insightsOf(listOf(vormittag, nachmittag))
         assertEquals(1, insights.hardDaysLast7)
     }
 

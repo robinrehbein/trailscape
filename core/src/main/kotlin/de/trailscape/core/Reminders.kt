@@ -226,7 +226,7 @@ fun dueReminder(
     settings: ReminderSettings,
     state: ReminderState,
     plan: TrainingPlan?,
-    rides: List<Ride>,
+    rides: List<RideInfo>,
 ): ReminderNotice? {
     val today = now.toLocalDate()
     val timeOfDay = now.toLocalTime()
@@ -345,7 +345,7 @@ private fun dailySessionNotice(now: LocalDateTime, plan: TrainingPlan?): Reminde
 private fun weeklyReviewNotice(
     now: LocalDateTime,
     plan: TrainingPlan?,
-    rides: List<Ride>,
+    rides: List<RideInfo>,
 ): ReminderNotice? {
     if (plan == null) return null
     val week = activeWeek(plan, dartEpochMs(now)) ?: return null
@@ -372,7 +372,7 @@ private fun weeklyReviewNotice(
  * nicht — sie ist keine Fahrt, und der Anstupser darf nicht verstummen, weil
  * jemand eine Route abgelegt hat.
  */
-private fun nudgeNotice(today: LocalDate, rides: List<Ride>): ReminderNotice? {
+private fun nudgeNotice(today: LocalDate, rides: List<RideInfo>): ReminderNotice? {
     val lastRideOn = riddenRides(rides).maxOfOrNull { it.createdAt }
         ?.let { dartLocalOf(it).toLocalDate() }
         ?: return null

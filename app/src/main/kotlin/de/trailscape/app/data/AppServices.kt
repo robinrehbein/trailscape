@@ -82,6 +82,15 @@ object AppServices {
         TombstoneStore(File(appContext.filesDir, "rides"))
     }
 
+    /**
+     * Persistenter Tourlast-Cache der Trainingsauswertung (siehe
+     * [RideLoadCacheStore]) — `<filesDir>/rides/last-cache.json`, im selben
+     * Verzeichnis wie die Tour-Dateien.
+     */
+    val rideLoadCacheStore: RideLoadCacheStore by lazy {
+        RideLoadCacheStore(File(appContext.filesDir, "rides"))
+    }
+
     private val prefs by lazy { trailscapePrefs(appContext) }
 
     /** Implementierung von `:core`s [KeyValueStore] (u. a. fuer `SyncConfig`). */
@@ -187,10 +196,10 @@ object AppServices {
      * gibt der Aufrufer bei jedem Lauf selbst herein
      * (`importWithReport(existing = ...)`) und speichert das Ergebnis auch
      * selbst — `HealthSyncService` kennt weder [RideStorage] noch das
-     * Dateisystem. Der uebliche Ablauf in Phase 4 ist deshalb:
-     * `rideStorage.listRides()` → `healthSyncService.importWithReport(...)` →
-     * die Touren aus `imported` und `mergedRides` ueber [rideStorage]
-     * zurueckschreiben.
+     * Dateisystem. Der uebliche Ablauf ist deshalb:
+     * `rideStorage.listSummaries()` → `healthSyncService.importWithReport(
+     * existing = summaries, loadRide = rideStorage::loadRide)` → die Touren
+     * aus `imported` und `mergedRides` ueber [rideStorage] zurueckschreiben.
      *
      * Der dritte Konstruktorparameter (`now`) bleibt auf seiner Vorgabe
      * `LocalDateTime.now()`; er existiert nur, damit die `:core`-Tests die Uhr

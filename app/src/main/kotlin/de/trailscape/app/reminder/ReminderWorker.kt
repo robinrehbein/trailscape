@@ -61,7 +61,9 @@ internal class ReminderWorker(
                 settings = settings,
                 state = state,
                 plan = loadPlan(AppServices.trainingPlanStore),
-                rides = AppServices.rideStorage.listRides(),
+                // Zusammenfassungen genuegen: Die Erinnerungslogik rechnet nur
+                // ueber Kennzahlen und Zeitstempel, nie ueber GPS-Punkte.
+                rides = AppServices.rideStorage.listSummaries().summaries,
             )
 
             if (notice != null && ReminderNotifications.show(applicationContext, notice)) {

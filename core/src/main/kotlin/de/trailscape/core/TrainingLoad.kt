@@ -1679,6 +1679,25 @@ fun resolveEftp(
     profile: TrainingProfile,
     recent: Iterable<PowerSeries> = emptyList(),
     calibration: LoadCalibration = LoadCalibration.NEUTRAL,
+): EftpEstimate = resolveEftp(
+    profile = profile,
+    bestTwentyMinW = bestTwentyMinuteMeanW(recent),
+    calibration = calibration,
+)
+
+/**
+ * Wie [resolveEftp], nimmt aber das bereits ermittelte beste 20-min-Mittel
+ * entgegen statt der vollen Leistungsreihen.
+ *
+ * Existiert fuer Aufrufer, die die Leistungsreihen nicht mehr im Speicher
+ * halten (der Bestwert je Tour liegt im persistenten Last-Cache, siehe
+ * `RideLoadFacts.kt`) — das Ergebnis ist per Konstruktion identisch zur
+ * Reihen-Variante, weil die nur [bestTwentyMinuteMeanW] aus den Reihen zieht.
+ */
+fun resolveEftp(
+    profile: TrainingProfile,
+    bestTwentyMinW: Double?,
+    calibration: LoadCalibration = LoadCalibration.NEUTRAL,
 ): EftpEstimate {
     val override = profile.eftpOverrideW
     if (override != null) {
@@ -1689,7 +1708,7 @@ fun resolveEftp(
         )
     }
 
-    val best = bestTwentyMinuteMeanW(recent)
+    val best = bestTwentyMinW
     val anchor = profile.eftpW
 
     // α greift nur, wenn es aus genug Paaren stammt und im gueltigen Fenster
@@ -1708,9 +1727,9 @@ fun resolveEftp(
         )
     }
 
-    // Genau hier haengt [estimateEftpW] in der App — die Funktion existierte
-    // bisher nur im Test, weil sie niemand aufgerufen hat.
-    val fromPower = estimateEftpW(recent, profile)
+    // Dieselbe Rechnung wie [estimateEftpW], nur ueber den vorab bestimmten
+    // Bestwert statt der Reihen.
+    val fromPower = best?.let { clamp(0.95 * it, minEftpW, maxEftpW) } ?: anchor
     if (best != null && fromPower > anchor) {
         return EftpEstimate(
             watts = fromPower,

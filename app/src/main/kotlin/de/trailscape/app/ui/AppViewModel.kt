@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.data.RideLoadCacheStore
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.data.TombstoneStore
 import de.trailscape.app.record.RecordingRepository
@@ -24,6 +25,7 @@ import de.trailscape.core.KeyValueStore
 import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
+import de.trailscape.core.RideSummary
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.SyncConfig
 import de.trailscape.core.SyncResult
@@ -39,6 +41,8 @@ import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.savePlan
 import de.trailscape.core.shouldShowShortSleeperHint
 import de.trailscape.core.syncRides
+import de.trailscape.core.toLocalRideSummary
+import de.trailscape.core.writeBackupJson
 import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
 import java.time.LocalDateTime
@@ -56,6 +60,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
@@ -125,9 +130,14 @@ enum class MoreSection {
  *    `loadRides()` von Hand um; hier faellt dieser Schritt weg und die
  *    Auswahl kann per Konstruktion nicht auf eine veraltete Tour zeigen.
  *  * `insights` ist kein lazy Cache mit manueller Invalidierung, sondern ein
- *    aus (Touren, Vitaldaten, Profil) abgeleiteter Flow. Der Cache der
- *    unkalibrierten Tourlasten bleibt erhalten (siehe [baseLoadCache]), die
- *    Invalidierung passiert aber nicht mehr von Hand.
+ *    aus (Touren, Vitaldaten, Profil) abgeleiteter Flow. Die Tourlasten
+ *    kommen aus einem persistenten Destillat-Cache je Tour (siehe
+ *    [RideLoadCacheStore] und `:core`/`RideLoadFacts.kt`); die Invalidierung
+ *    laeuft ueber `updatedAt` und Profil-Signatur, nie von Hand.
+ *  * [rides] haelt **Zusammenfassungen** ([RideSummary]) statt voller Touren:
+ *    Der komplette Bestand mit allen GPS-Punkten dauerhaft im RAM war bei
+ *    grossen Bestaenden ein OOM-Risiko. Volle Touren laedt [selectedRide]
+ *    bzw. [loadRide] on-demand.
  *  * Zusaetzlich zum Original: [renameRide], [mapStyle], [plan],
  *    [syncConfig], [tabRequest], [pendingRouteTarget] und [messages] — in
  *    Flutter lagen diese Zustaende verstreut in den einzelnen Screens.
@@ -135,6 +145,8 @@ enum class MoreSection {
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
     private val rideStorage: RideStorage = AppServices.rideStorage,
+    /** Persistenter Tourlast-Cache der Trainingsauswertung (siehe [RideLoadCacheStore]). */
+    private val rideLoadCache: de.trailscape.core.RideLoadFactsStore = AppServices.rideLoadCacheStore,
     /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
     private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
     private val keyValueStore: KeyValueStore = AppServices.keyValueStore,
@@ -421,10 +433,17 @@ class AppViewModel(
     // Touren
     // -------------------------------------------------------------------------
 
-    private val _rides = MutableStateFlow<List<Ride>>(emptyList())
+    private val _rides = MutableStateFlow<List<RideSummary>>(emptyList())
 
-    /** Alle gespeicherten Touren, **neueste zuerst** (wie `listRides()` in Dart). */
-    val rides: StateFlow<List<Ride>> = _rides.asStateFlow()
+    /**
+     * Zusammenfassungen aller gespeicherten Touren, **neueste zuerst**.
+     *
+     * Bewusst [RideSummary] statt voller [Ride]-Objekte: Der Gesamtbestand
+     * mit allen GPS-Punkten dauerhaft im RAM war der Speicherfresser der App
+     * (200+ MB bei ~500 Touren). Wer Punkte braucht, laedt die eine Tour
+     * on-demand — ueber [selectedRide] oder [loadRide].
+     */
+    val rides: StateFlow<List<RideSummary>> = _rides.asStateFlow()
 
     private val _ridesLoading = MutableStateFlow(true)
 
@@ -437,26 +456,142 @@ class AppViewModel(
     val selectedRideId: StateFlow<String?> = _selectedRideId.asStateFlow()
 
     /**
-     * Die ausgewaehlte Tour, abgeleitet aus [rides] und [selectedRideId]:
-     * verschwindet automatisch, wenn die Tour geloescht wurde, und zeigt nach
-     * einem HF-Merge automatisch auf die angereicherte Fassung.
+     * Ungefilterte, sortierte Zusammenfassungen — die Quelle von [_rides].
+     * [publishRides] blendet daraus die gerade schwebende Loeschung aus
+     * (siehe [deleteRideWithUndo]); nur ueber diesen einen Weg wird [_rides]
+     * geschrieben, damit die Ausblendung an KEINER Stelle vergessen werden
+     * kann — auch nicht bei einem `reloadRides()` mitten in der Gnadenfrist.
+     */
+    private var allSummaries: List<RideSummary> = emptyList()
+
+    /**
+     * IDs, deren Loeschung gerade schwebt (Datei noch da, Tour schon aus der
+     * Liste). Nur aus `viewModelScope`-Coroutinen (Main) angefasst.
+     */
+    private val pendingDeletionIds = mutableSetOf<String>()
+
+    /** Veroeffentlicht [allSummaries] ohne die schwebenden Loeschungen. */
+    private fun publishRides() {
+        _rides.value = if (pendingDeletionIds.isEmpty()) {
+            allSummaries
+        } else {
+            allSummaries.filterNot { it.id in pendingDeletionIds }
+        }
+    }
+
+    /** Ersetzt bzw. ergaenzt eine Zusammenfassung und haelt die Sortierung. */
+    private fun upsertSummary(summary: RideSummary) {
+        allSummaries = (allSummaries.filterNot { it.id == summary.id } + summary)
+            .sortedByDescending { it.createdAt }
+        publishRides()
+    }
+
+    private val _selectedRideLoading = MutableStateFlow(false)
+
+    /** Ob [selectedRide] gerade von der Platte geladen wird. */
+    val selectedRideLoading: StateFlow<Boolean> = _selectedRideLoading.asStateFlow()
+
+    /**
+     * Die ausgewaehlte Tour — **on-demand von der Platte geladen** statt aus
+     * einer im RAM gehaltenen Vollliste gefischt.
+     *
+     * Abgeleitet aus [rides] und [selectedRideId]: verschwindet automatisch,
+     * wenn die Tour geloescht wurde, und laedt nach einem HF-Merge oder
+     * Umbenennen automatisch die neue Fassung (der Schluessel enthaelt
+     * `updatedAt`). `WhileSubscribed` statt `Eagerly`: Ohne Beobachter (kein
+     * Karten-Screen in der Komposition) wird weder geladen noch die zuletzt
+     * geladene Tour laenger als noetig festgehalten.
      */
     val selectedRide: StateFlow<Ride?> = combine(_rides, _selectedRideId) { list, id ->
-        if (id == null) null else list.firstOrNull { it.id == id }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+        // Schluessel bewusst billig (ID + updatedAt) statt der Tour selbst:
+        // distinctUntilChanged verhindert, dass jede Listen-Emission die
+        // Datei neu liest.
+        if (id == null) null else list.firstOrNull { it.id == id }?.let { it.id to it.updatedAt }
+    }
+        .distinctUntilChanged()
+        .mapLatest { key ->
+            if (key == null) {
+                null
+            } else {
+                _selectedRideLoading.value = true
+                try {
+                    withContext(io) { rideStorage.loadRide(key.first) }
+                } finally {
+                    _selectedRideLoading.value = false
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /**
+     * Laedt eine volle Tour (mit Punkten) on-demand von der Platte; `null`,
+     * wenn sie nicht (mehr) lesbar ist. Fuer punktbeduerftige Einzelfaelle
+     * ausserhalb der Auswahl — GPX-Teilen, Navigation, Detailansicht.
+     */
+    suspend fun loadRide(id: String): Ride? = withContext(io) { rideStorage.loadRide(id) }
+
+    /**
+     * Schreibt die vollstaendige Sicherung (alle Touren + Profil) **streamend**
+     * nach [out]: Tour fuer Tour ueber [RideStorage.loadRide] geladen und
+     * sofort geschrieben — der Gesamtdump entsteht nie als ein String im
+     * Speicher (siehe `:core`, `writeBackupJson`; byteidentisch zum
+     * bisherigen `buildBackupJson`-Format). Eine nicht (mehr) lesbare Datei
+     * wird uebersprungen; sie liegt dann bereits in der Quarantaene und wurde
+     * gemeldet (siehe [reportQuarantined]).
+     */
+    suspend fun writeBackup(out: Appendable) {
+        withContext(io) {
+            val summaries = rideStorage.listSummaries().summaries
+            writeBackupJson(
+                out = out,
+                rides = summaries.asSequence().mapNotNull { rideStorage.loadRide(it.id) },
+                profile = _profile.value,
+            )
+        }
+    }
 
     /** Laedt alle gespeicherten Touren neu. Die Auswahl bleibt erhalten. */
     fun refreshRides() {
         viewModelScope.launch { reloadRides() }
     }
 
+    /**
+     * Liest den Bestand neu ein — nur noch Zusammenfassungen ueber den
+     * Metadaten-Index (siehe [RideStorage.listSummaries]), kein Voll-Parse
+     * aller Dateien mehr. Wird nur noch fuer echte Bestandsaenderungen von
+     * aussen gebraucht (Import, Sync, Health, Aufzeichnungsende); einzelne
+     * Mutationen pflegen die Liste inkrementell.
+     */
     private suspend fun reloadRides() {
         _ridesLoading.value = true
         try {
-            _rides.value = withContext(io) { rideStorage.listRides() }
+            val listing = withContext(io) { rideStorage.listSummaries() }
+            allSummaries = listing.summaries
+            publishRides()
+            reportQuarantined(listing.quarantinedCount)
         } finally {
             _ridesLoading.value = false
         }
+    }
+
+    /** Ob der Quarantaene-Hinweis in diesem Prozesslauf schon gezeigt wurde. */
+    private var quarantineReported = false
+
+    /**
+     * Meldet einmalig, dass unlesbare Tour-Dateien in Quarantaene verschoben
+     * wurden — der Ersatz fuer das fruehere stille Verschlucken defekter
+     * Dateien (die damit auch aus jedem spaeteren Backup verschwanden).
+     */
+    private fun reportQuarantined(count: Int) {
+        if (count <= 0 || quarantineReported) return
+        quarantineReported = true
+        showMessage(
+            if (count == 1) {
+                "1 Tourdatei war unlesbar und liegt jetzt im Ordner „defekt“."
+            } else {
+                "$count Tourdateien waren unlesbar und liegen jetzt im Ordner „defekt“."
+            },
+        )
     }
 
     /**
@@ -468,31 +603,36 @@ class AppViewModel(
      */
     private fun Ride.touchedNow(): Ride = copy(updatedAt = System.currentTimeMillis())
 
-    /** Speichert eine neue Tour, laedt die Liste neu und waehlt sie aus. */
+    /** Speichert eine neue Tour, ergaenzt die Liste inkrementell und waehlt sie aus. */
     fun addRide(ride: Ride) {
         viewModelScope.launch {
-            withContext(io) { rideStorage.saveRide(ride.touchedNow()) }
-            reloadRides()
+            val touched = ride.touchedNow()
+            withContext(io) { rideStorage.saveRide(touched) }
+            upsertSummary(touched.toSummary())
             select(ride.id)
         }
     }
 
     /**
      * Speichert mehrere Touren, ohne die Auswahl zu aendern (z. B. beim
-     * Health-Connect-Import). Laedt die Liste nur neu, wenn tatsaechlich
-     * etwas gespeichert wurde.
+     * Health-Connect-Import). Die Liste wird inkrementell ergaenzt — kein
+     * Neueinlesen des Bestands.
      */
     fun addRides(newRides: List<Ride>) {
         if (newRides.isEmpty()) return
         viewModelScope.launch {
-            withContext(io) { rideStorage.saveRides(newRides.map { it.touchedNow() }) }
-            reloadRides()
+            val touched = newRides.map { it.touchedNow() }
+            withContext(io) { rideStorage.saveRides(touched) }
+            val byId = touched.associateBy { it.id }
+            allSummaries = (allSummaries.filterNot { it.id in byId } + byId.values.map { it.toSummary() })
+                .sortedByDescending { it.createdAt }
+            publishRides()
         }
     }
 
     /**
-     * Loescht eine Tour und laedt die Liste neu. Die Auswahl loest sich
-     * dadurch von selbst auf (siehe [selectedRide]).
+     * Loescht eine Tour und nimmt sie inkrementell aus der Liste. Die Auswahl
+     * loest sich dadurch von selbst auf (siehe [selectedRide]).
      *
      * Sofortige, endgueltige Loeschung ohne Rueckgaengig-Moeglichkeit — benutzt
      * vom Karten-Screen (Loeschen der gerade offenen Tour). Der Touren-Tab
@@ -506,12 +646,13 @@ class AppViewModel(
                 // Tour beim naechsten Abgleich vom Server zurueck.
                 tombstoneStore.add(id)
             }
-            reloadRides()
+            allSummaries = allSummaries.filterNot { it.id == id }
+            publishRides()
         }
     }
 
     /** Eine per [deleteRideWithUndo] optimistisch entfernte, aber noch nicht endgueltig geloeschte Tour. */
-    private data class PendingRideDeletion(val ride: Ride, val job: Job)
+    private data class PendingRideDeletion(val summary: RideSummary, val job: Job)
 
     /**
      * Ausstehende Loeschung, die [deleteRideWithUndo] zuletzt angestossen hat —
@@ -540,11 +681,21 @@ class AppViewModel(
      * taucht beim naechsten Start ganz normal wieder in der Liste auf. Das ist
      * bewusst so belassen (kein Datenverlust) statt ueber einen persistenten
      * „geloescht, aber…"-Zustand nachzuhalten.
+     *
+     * ## Das fruehere Race mit `reloadRides()`
+     * Vorher entfernte diese Methode die Tour nur aus dem einen Listen-Wert;
+     * lief in der Frist ein `reloadRides()` (Sync, Health-Import,
+     * Aufzeichnungsende), tauchte die Tour wieder in der Liste auf — und die
+     * Datei wurde nach Fristablauf TROTZDEM geloescht: eine sichtbare Tour
+     * verschwand kommentarlos. Jetzt laeuft jede Veroeffentlichung der Liste
+     * durch [publishRides], das schwebende Loeschungen zentral herausfiltert
+     * — egal, woher die Liste gerade kommt.
      */
     fun deleteRideWithUndo(id: String) {
-        val ride = _rides.value.firstOrNull { it.id == id } ?: return
+        val summary = _rides.value.firstOrNull { it.id == id } ?: return
         finalizePendingDeletion()
-        _rides.value = _rides.value.filterNot { it.id == id }
+        pendingDeletionIds.add(id)
+        publishRides()
         val job = viewModelScope.launch {
             delay(UNDO_DELETE_GRACE_MS)
             withContext(io) {
@@ -553,9 +704,12 @@ class AppViewModel(
                 // Loesch-Merkzettel fuer den Selfhost-Sync hinterlassen.
                 tombstoneStore.add(id)
             }
+            pendingDeletionIds.remove(id)
+            allSummaries = allSummaries.filterNot { it.id == id }
+            publishRides()
             pendingDeletion = null
         }
-        pendingDeletion = PendingRideDeletion(ride, job)
+        pendingDeletion = PendingRideDeletion(summary, job)
     }
 
     /**
@@ -563,15 +717,23 @@ class AppViewModel(
      * (Aktion der Snackbar). Ohne ausstehende Loeschung — etwa weil die Frist
      * schon abgelaufen ist — passiert nichts.
      *
-     * Fuegt die Tour wieder ein und sortiert die Liste neu ein statt sie
-     * anzuhaengen: [rides] ist immer nach Datum sortiert, das muss nach dem
-     * Undo weiter gelten.
+     * Die Tour steckt noch in [allSummaries] (sie war nur ausgeblendet, die
+     * Datei nie weg) — das Aufheben des Filters bringt sie an ihrer alten,
+     * nach Datum sortierten Stelle zurueck. War die Zusammenfassung durch ein
+     * zwischenzeitliches `reloadRides()` bereits wieder eingelesen, gilt
+     * dasselbe.
      */
     fun undoDeleteRide() {
         val pending = pendingDeletion ?: return
         pendingDeletion = null
         pending.job.cancel()
-        _rides.value = (_rides.value + pending.ride).sortedByDescending { it.createdAt }
+        pendingDeletionIds.remove(pending.summary.id)
+        if (allSummaries.none { it.id == pending.summary.id }) {
+            // Sicherheitsnetz: Sollte die Zusammenfassung der Quelle
+            // abhandengekommen sein, kommt sie aus dem Merker zurueck.
+            allSummaries = (allSummaries + pending.summary).sortedByDescending { it.createdAt }
+        }
+        publishRides()
     }
 
     /** Schliesst eine noch laufende Loeschung sofort endgueltig ab (siehe [deleteRideWithUndo]). */
@@ -581,10 +743,13 @@ class AppViewModel(
         pending.job.cancel()
         viewModelScope.launch {
             withContext(io) {
-                rideStorage.deleteRide(pending.ride.id)
+                rideStorage.deleteRide(pending.summary.id)
                 // Endgueltig geloescht — Merkzettel fuer den Selfhost-Sync.
-                tombstoneStore.add(pending.ride.id)
+                tombstoneStore.add(pending.summary.id)
             }
+            pendingDeletionIds.remove(pending.summary.id)
+            allSummaries = allSummaries.filterNot { it.id == pending.summary.id }
+            publishRides()
         }
     }
 
@@ -592,15 +757,24 @@ class AppViewModel(
      * Benennt eine Tour um. Leere Namen werden ignoriert, fuehrende/folgende
      * Leerzeichen abgeschnitten. Kein Dart-Vorbild — die Flutter-App konnte
      * Touren nicht umbenennen.
+     *
+     * Inkrementell statt Bestands-Neuladen: EINE Datei laden, aendern,
+     * speichern, Zusammenfassung in der Liste ersetzen — frueher las diese
+     * Methode danach den kompletten Bestand neu von der Platte.
      */
     fun renameRide(id: String, name: String) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         viewModelScope.launch {
-            val ride = _rides.value.firstOrNull { it.id == id } ?: return@launch
-            if (ride.name == trimmed) return@launch
-            withContext(io) { rideStorage.saveRide(ride.copy(name = trimmed).touchedNow()) }
-            reloadRides()
+            val current = _rides.value.firstOrNull { it.id == id } ?: return@launch
+            if (current.name == trimmed) return@launch
+            val renamed = withContext(io) {
+                val ride = rideStorage.loadRide(id) ?: return@withContext null
+                val updated = ride.copy(name = trimmed).touchedNow()
+                rideStorage.saveRide(updated)
+                updated.toSummary()
+            } ?: return@launch
+            upsertSummary(renamed)
         }
     }
 
@@ -824,7 +998,12 @@ class AppViewModel(
             runCatching {
                 val connection = refreshHealthConnection()
                 if (!connection.isReady) return@runCatching
-                val report = withContext(io) { healthSync.importWithReport(existing = _rides.value) }
+                val report = withContext(io) {
+                    healthSync.importWithReport(
+                        existing = _rides.value,
+                        loadRide = { rideStorage.loadRide(it) },
+                    )
+                }
                 // Ein fehlgeschlagenes Speichern ist der eine Fehler, den auch
                 // der stille Sync melden muss: Die Nutzerin sieht sonst nie,
                 // dass Touren fehlen (der Zeitstempel ist zwar
@@ -856,6 +1035,7 @@ class AppViewModel(
         val report = withContext(io) {
             healthSync.importWithReport(
                 existing = _rides.value,
+                loadRide = { rideStorage.loadRide(it) },
                 since = if (reimportAll) fullHealthWindowStart() else null,
             )
         }
@@ -923,17 +1103,17 @@ class AppViewModel(
     // -------------------------------------------------------------------------
 
     /**
-     * Cache der Tourlasten **vor** Kalibrierung. Wird ausschliesslich aus dem
-     * `mapLatest`-Block unten benutzt; `mapLatest` bricht den vorigen Lauf ab,
-     * bevor es den naechsten startet, und [computeInsights] enthaelt keinen
-     * Suspendierungspunkt — es gibt also nie zwei gleichzeitige Zugriffe.
-     */
-    private val baseLoadCache = mutableMapOf<String, RideLoad>()
-
-    /**
      * Gesamte Trainingsauswertung (CTL/ATL/TSB-Serie, Ampeln, Readiness,
      * Deload, Wochenziel, VO2max, Tourlasten). Rechnet sich neu, sobald sich
      * Touren, Vitaldaten oder Profil aendern — und nur dann.
+     *
+     * Arbeitet auf den **Zusammenfassungen**: Das je Tour noetige
+     * Punkt-Destillat kommt aus dem persistenten [rideLoadCache]
+     * (`rides/last-cache.json`); nur fuer fehlende oder ungueltige Eintraege
+     * laedt der Lauf die eine volle Tour nach — die frueher dafuer im RAM
+     * gehaltenen Punktlisten aller Touren gibt es nicht mehr. `mapLatest`
+     * bricht den vorigen Lauf ab, bevor es den naechsten startet — es gibt
+     * also nie zwei gleichzeitige Zugriffe auf den Cache aus diesem Flow.
      */
     val insights: StateFlow<TrainingInsights> =
         combine(_rides, _vitals, _profile) { rides, vitals, profile ->
@@ -945,7 +1125,8 @@ class AppViewModel(
                     vitals = vitals,
                     profile = profile,
                     now = LocalDateTime.now(),
-                    baseLoadCache = baseLoadCache,
+                    factsStore = rideLoadCache,
+                    loadRide = { rideStorage.loadRide(it) },
                 )
             }
             .flowOn(computation)
@@ -1287,7 +1468,10 @@ class AppViewModel(
     suspend fun syncNow(): SyncResult {
         val result = withContext(io) {
             syncRides(
-                listLocal = { rideStorage.listRides() },
+                // Fuer die Sync-Entscheidung reichen die Zusammenfassungen;
+                // volle Touren laedt der Sync nur je Push ueber loadLocal.
+                listLocal = { rideStorage.listSummaries().summaries.map { it.toLocalRideSummary() } },
+                loadLocal = { rideStorage.loadRide(it) },
                 // Bewusst OHNE touchedNow(): gepullte Touren behalten den
                 // updatedAt des Servers (siehe [touchedNow]).
                 saveLocal = { rideStorage.saveRide(it) },

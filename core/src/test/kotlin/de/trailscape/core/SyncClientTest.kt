@@ -118,13 +118,23 @@ class SyncClientTest {
         )
 
         val saved = mutableListOf<Ride>()
+        val loadedIds = mutableListOf<String>()
+        val local = listOf(sharedRide, localOnlyRide)
 
         val result = syncRides(
-            listLocal = { listOf(sharedRide, localOnlyRide) },
+            listLocal = { local.map { it.toLocalRideSummary() } },
+            loadLocal = { id ->
+                loadedIds.add(id)
+                local.firstOrNull { it.id == id }
+            },
             saveLocal = { saved.add(it) },
             client = client,
             store = store,
         )
+
+        // Volltouren werden nur fuer den Push nachgeladen — nie der ganze
+        // Bestand (die Entscheidung faellt allein ueber die Zusammenfassungen).
+        assertEquals(listOf("local-only"), loadedIds)
 
         assertEquals(1, result.pushed)
         assertEquals(1, result.pulled)
@@ -147,7 +157,13 @@ class SyncClientTest {
         val client = HttpClient { HttpResponse(401, "nope") }
 
         val e = assertFailsWith<Exception> {
-            syncRides(listLocal = { emptyList() }, saveLocal = {}, client = client, store = store)
+            syncRides(
+                listLocal = { emptyList() },
+                loadLocal = { null },
+                saveLocal = {},
+                client = client,
+                store = store,
+            )
         }
         assertEquals("Token wird vom Server abgelehnt.", e.message)
     }
@@ -163,7 +179,13 @@ class SyncClientTest {
         val client = HttpClient { throw RuntimeException("Netzwerkfehler") }
 
         val e = assertFailsWith<Exception> {
-            syncRides(listLocal = { emptyList() }, saveLocal = {}, client = client, store = store)
+            syncRides(
+                listLocal = { emptyList() },
+                loadLocal = { null },
+                saveLocal = {},
+                client = client,
+                store = store,
+            )
         }
         assertEquals("Sync-Server nicht erreichbar.", e.message)
     }
@@ -173,7 +195,13 @@ class SyncClientTest {
         val store = FakeKeyValueStore()
 
         val e = assertFailsWith<Exception> {
-            syncRides(listLocal = { emptyList() }, saveLocal = {}, client = failingClient(), store = store)
+            syncRides(
+                listLocal = { emptyList() },
+                loadLocal = { null },
+                saveLocal = {},
+                client = failingClient(),
+                store = store,
+            )
         }
         assertEquals("Sync ist nicht konfiguriert.", e.message)
     }
@@ -469,7 +497,8 @@ class SyncClientTest {
         var tombstonesAfter: List<RideTombstone>? = null
 
         val result = syncRides(
-            listLocal = { localRides },
+            listLocal = { localRides.map { it.toLocalRideSummary() } },
+            loadLocal = { id -> localRides.firstOrNull { it.id == id } },
             saveLocal = { saved.add(it) },
             client = client,
             store = store,
@@ -531,6 +560,7 @@ class SyncClientTest {
 
         val result = syncRides(
             listLocal = { emptyList() },
+            loadLocal = { throw AssertionError("nichts zu pushen") },
             saveLocal = { throw AssertionError("nichts zu pullen") },
             client = client,
             store = store,

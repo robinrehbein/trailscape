@@ -36,7 +36,7 @@ import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.PlanSessionProgress
 import de.trailscape.core.PlanSessionStatus
-import de.trailscape.core.Ride
+import de.trailscape.core.RideInfo
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
@@ -94,7 +94,7 @@ fun PlanAdaptionNote(reason: String) {
 fun PlanWeekCard(
     week: TrainingWeek,
     plan: TrainingPlan,
-    rides: List<Ride>,
+    rides: List<RideInfo>,
     onPlanRoute: ((TrainingSession) -> Unit)? = null,
     rideLoads: Map<String, Double> = emptyMap(),
 ) {
