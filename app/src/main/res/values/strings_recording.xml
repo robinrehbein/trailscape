@@ -10,6 +10,7 @@
 -->
 <resources>
     <string name="recording_notification_paused_title">Trailscape pausiert</string>
+    <string name="recording_notification_auto_paused_title">Auto-Pause — Trailscape wartet auf Weiterfahrt</string>
     <string name="recording_notification_waiting">Warte auf GPS-Signal …</string>
     <!-- %1$s = Distanz in km (eine Nachkommastelle), %2$s = Dauer H:MM:SS -->
     <string name="recording_notification_progress">%1$s km · %2$s</string>

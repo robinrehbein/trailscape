@@ -120,6 +120,11 @@ const val maxSegmentDtS: Double = 120.0
 /**
  * Bewegungsschwelle: Geschwindigkeit in m/s bzw. HF-Faktor ueber Ruhepuls
  * (§2.1, „moving time").
+ *
+ * Die Herzfrequenz ist dabei nur noch der **Rueckfall** fuer Segmente ohne
+ * eigene Geschwindigkeitsbasis (siehe [buildRideSeries]): Wer an der Ampel
+ * steht, hat einen leicht erhoehten Puls — frueher zaehlte das als
+ * Bewegungszeit und erzeugte TRIMP-Last im Stand.
  */
 const val movingSpeedMs: Double = 1.0
 const val movingHrRestFactor: Double = 1.15
@@ -915,6 +920,12 @@ fun buildRideSeries(points: List<TrackPoint>, profile: TrainingProfile): RideSer
     val segDist = MutableList(n) { 0.0 }
     val segDt = MutableList(n) { 0.0 }
     val rawSpeed = MutableList(n) { 0.0 }
+    // Ob rawSpeed[i] eine echte Messung DIESES Segments ist. `false` heisst:
+    // Der Wert ist nur der fortgeschriebene Vorgaenger (Zeitsprung dt <= 0
+    // oder verworfener GPS-Ausreisser ueber 25 m/s) — das Segment hat also
+    // keine eigene Distanz-/Zeitbasis, und nur dann darf die Herzfrequenz
+    // ersatzweise ueber „bewegt" entscheiden (siehe Bewegungsurteil unten).
+    val speedKnown = MutableList(n) { false }
     for (i in 1 until n) {
         val dt = times[i] - times[i - 1]
         val d = haversineM(timed[i - 1], timed[i])
@@ -922,7 +933,12 @@ fun buildRideSeries(points: List<TrackPoint>, profile: TrainingProfile): RideSer
         segDist[i] = d
         if (dt > 0) {
             val v = d / dt
-            rawSpeed[i] = if (v > 25) rawSpeed[i - 1] else v
+            if (v > 25) {
+                rawSpeed[i] = rawSpeed[i - 1]
+            } else {
+                rawSpeed[i] = v
+                speedKnown[i] = true
+            }
         } else {
             rawSpeed[i] = rawSpeed[i - 1]
         }
@@ -993,8 +1009,16 @@ fun buildRideSeries(points: List<TrackPoint>, profile: TrainingProfile): RideSer
         }
 
         val isGap = dt > maxSegmentDtS
-        val moving = !isGap &&
-            (speed[i] > movingSpeedMs || (hr != null && hr > movingHrRestFactor * restingHr))
+        // Bewegt ist, was sich messbar bewegt. Die Herzfrequenz entscheidet
+        // nur dann ersatzweise, wenn das Segment keine eigene
+        // Geschwindigkeitsbasis hat (siehe [speedKnown]) — frueher genuegte
+        // ein Puls ueber 1,15 x Ruhepuls auch im Stand, und Stehen an der
+        // Ampel mit 75 bpm erzeugte Bewegungszeit und TRIMP-Last.
+        val moving = !isGap && if (speedKnown[i]) {
+            speed[i] > movingSpeedMs
+        } else {
+            hr != null && hr > movingHrRestFactor * restingHr
+        }
 
         if (moving) {
             movingTimeS += dt

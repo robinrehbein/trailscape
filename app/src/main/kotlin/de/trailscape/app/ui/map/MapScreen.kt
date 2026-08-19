@@ -73,6 +73,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.record.batterieAusnahmeIntent
+import de.trailscape.app.record.batterieHinweisGezeigt
+import de.trailscape.app.record.merkeBatterieHinweisGezeigt
+import de.trailscape.app.record.vonBatterieoptimierungAusgenommen
 import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.app.ui.AppViewModel
@@ -328,6 +332,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     val isRecording by RecordingRepository.isRecording.collectAsStateWithLifecycle()
     val isPaused by RecordingRepository.isPaused.collectAsStateWithLifecycle()
+    val isAutoPaused by RecordingRepository.isAutoPaused.collectAsStateWithLifecycle()
     val elapsedMs by RecordingRepository.elapsedMs.collectAsStateWithLifecycle()
     val recordedKm by RecordingRepository.distanceKm.collectAsStateWithLifecycle()
     val livePoints by RecordingRepository.points.collectAsStateWithLifecycle()
@@ -496,6 +501,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     // `rememberSaveable`: Eine Drehung am Lenker darf nicht dazu fuehren, dass
     // die Fahrerin ploetzlich wieder die kleine Live-Leiste vor sich hat.
     var rideMode by rememberSaveable { mutableStateOf(false) }
+
+    // Ob der einmalige Batterieoptimierungs-Hinweis gerade offen ist (siehe
+    // `BatteryNoticeDialog.kt`). Gesetzt in [runRecording], wenn die Ausnahme
+    // fehlt und der Hinweis noch nie lief (Prefs-Merker) — die Aufzeichnung
+    // startet unabhaengig davon.
+    var showBatteryNotice by remember { mutableStateOf(false) }
 
     // Ob die Tourenliste im Erkunden-Blatt aufgeklappt ist (siehe
     // `ExploreSheet.kt`) — `rememberSaveable`, damit eine Drehung nicht ein
@@ -1100,6 +1111,12 @@ fun MapScreen(appViewModel: AppViewModel) {
         appViewModel.select(null)
         rideMode = true
         RecordingRepository.start(context)
+        // Nach dem Start, nicht statt des Starts: Der Batterie-Hinweis ist
+        // eine Empfehlung, keine Huerde — und er kommt hoechstens einmal
+        // automatisch (siehe [showBatteryNotice]).
+        if (!vonBatterieoptimierungAusgenommen(context) && !batterieHinweisGezeigt(context)) {
+            showBatteryNotice = true
+        }
     }
 
     fun startRecording() {
@@ -1337,9 +1354,12 @@ fun MapScreen(appViewModel: AppViewModel) {
             ),
         )
         RouteGenerationController.start(
+            context = context,
             start = TrackPoint(lat = place.lat, lon = place.lon),
+            profile = routeProfile,
             fromMapCenter = false,
             onMessage = appViewModel::showMessage,
+            onOfferMissingSegments = appViewModel::offerMissingSegments,
         )
     }
 
@@ -1442,9 +1462,12 @@ fun MapScreen(appViewModel: AppViewModel) {
                 return@launch
             }
             RouteGenerationController.start(
+                context = context,
                 start = start,
+                profile = routeProfile,
                 fromMapCenter = position == null,
                 onMessage = appViewModel::showMessage,
+                onOfferMissingSegments = appViewModel::offerMissingSegments,
             )
         }
     }
@@ -1962,6 +1985,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 ascentM = liveAscentM,
                                 pointCount = livePoints.size,
                                 paused = isPaused,
+                                autoPaused = isAutoPaused,
                                 onTogglePause = { RecordingRepository.togglePause() },
                                 onStop = { RecordingRepository.stop() },
                                 onOpenRideMode = { rideMode = true },
@@ -2213,6 +2237,32 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
+    // -------------------------------------------- Batterieoptimierungs-Hinweis
+    // Hoechstens einmal automatisch (Prefs-Merker), ausgeloest in
+    // [runRecording]; danach nur noch unter Mehr → Aufzeichnung.
+    if (showBatteryNotice) {
+        BatteryNoticeDialog(
+            onAllow = {
+                showBatteryNotice = false
+                merkeBatterieHinweisGezeigt(context)
+                try {
+                    context.startActivity(batterieAusnahmeIntent(context))
+                } catch (e: Exception) {
+                    // Manche Geraete kennen den Dialog nicht — dann bleibt nur
+                    // der Weg ueber die Systemeinstellungen.
+                    appViewModel.showMessage(
+                        "Der Systemdialog ließ sich nicht öffnen. Die Ausnahme lässt sich " +
+                            "in den Android-Einstellungen unter „Akku“ erteilen.",
+                    )
+                }
+            },
+            onLater = {
+                showBatteryNotice = false
+                merkeBatterieHinweisGezeigt(context)
+            },
+        )
+    }
+
     // ---------------------------------------------------------- Fahrmodus
     // Liegt als eigenes Fenster ueber allem (siehe `RideModeScreen.kt`) und
     // bekommt ausschliesslich fertige Werte: dieselben Aufzeichnungs-Flows wie
@@ -2225,6 +2275,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             elapsedS = (elapsedMs / 1000).toInt(),
             ascentM = liveAscentM,
             paused = isPaused,
+            autoPaused = isAutoPaused,
             navigation = navTarget?.let { target ->
                 RideModeNavigation(
                     label = target.label,

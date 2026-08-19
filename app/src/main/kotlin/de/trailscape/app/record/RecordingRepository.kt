@@ -44,6 +44,7 @@ object RecordingRepository {
 
     private val _isRecording = MutableStateFlow(false)
     private val _isPaused = MutableStateFlow(false)
+    private val _isAutoPaused = MutableStateFlow(false)
     private val _startedAtMs = MutableStateFlow<Long?>(null)
     private val _elapsedMs = MutableStateFlow(0L)
     private val _distanceKm = MutableStateFlow(0.0)
@@ -78,6 +79,15 @@ object RecordingRepository {
 
     /** Ob die laufende Aufzeichnung pausiert ist. */
     val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
+
+    /**
+     * Ob die laufende Pause eine **Auto**-Pause ist (Stillstand erkannt, siehe
+     * `AutoPauseLogic`). Immer nur zusammen mit [isPaused] `true`; die UI
+     * unterscheidet daran „Pausiert" von „Auto-Pause". Fortgesetzt wird eine
+     * Auto-Pause von selbst bei Weiterfahrt — oder jederzeit manuell ueber
+     * [resume]/[togglePause].
+     */
+    val isAutoPaused: StateFlow<Boolean> = _isAutoPaused.asStateFlow()
 
     /** Startzeitpunkt in ms seit Epoch, `null` wenn nicht aufgezeichnet wird. */
     val startedAtMs: StateFlow<Long?> = _startedAtMs.asStateFlow()
@@ -226,9 +236,15 @@ object RecordingRepository {
         appContext = context.applicationContext
     }
 
-    internal fun publishStarted(startedAtMs: Long, points: List<TrackPoint>, paused: Boolean) {
+    internal fun publishStarted(
+        startedAtMs: Long,
+        points: List<TrackPoint>,
+        paused: Boolean,
+        autoPaused: Boolean = false,
+    ) {
         _isRecording.value = true
         _isPaused.value = paused
+        _isAutoPaused.value = paused && autoPaused
         _startedAtMs.value = startedAtMs
         _points.value = points
         _lastPoint.value = points.lastOrNull()
@@ -236,8 +252,9 @@ object RecordingRepository {
         _lastError.value = null
     }
 
-    internal fun publishPaused(paused: Boolean) {
+    internal fun publishPaused(paused: Boolean, auto: Boolean = false) {
         _isPaused.value = paused
+        _isAutoPaused.value = paused && auto
     }
 
     internal fun publishPoint(point: TrackPoint, distanceKm: Double, speedKmh: Double?) {
@@ -256,6 +273,7 @@ object RecordingRepository {
     internal fun publishStopped(finishedRideId: String?) {
         _isRecording.value = false
         _isPaused.value = false
+        _isAutoPaused.value = false
         _startedAtMs.value = null
         _elapsedMs.value = 0L
         _distanceKm.value = 0.0

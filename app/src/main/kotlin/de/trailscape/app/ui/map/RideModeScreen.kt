@@ -157,6 +157,10 @@ internal fun RideModeScreen(
     onTogglePause: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
+    // Ob die laufende Pause eine Auto-Pause ist (Stillstand erkannt, endet
+    // von selbst bei Weiterfahrt) — nur fuer die Beschriftung des
+    // Status-Chips, die Bedienung ist dieselbe wie bei einer manuellen Pause.
+    autoPaused: Boolean = false,
 ) {
     Dialog(
         onDismissRequest = onClose,
@@ -205,7 +209,7 @@ internal fun RideModeScreen(
                     .safeDrawingPadding()
                     .padding(ScreenPadding),
             ) {
-                RideModeHeader(paused = paused, onClose = onClose)
+                RideModeHeader(paused = paused, autoPaused = autoPaused, onClose = onClose)
 
                 Column(
                     modifier = Modifier
@@ -336,7 +340,7 @@ internal data class RideModeNavigation(
  * dahinter die Karte liegt — und nicht das Ende der Aufzeichnung.
  */
 @Composable
-private fun RideModeHeader(paused: Boolean, onClose: () -> Unit) {
+private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onClose: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -355,7 +359,11 @@ private fun RideModeHeader(paused: Boolean, onClose: () -> Unit) {
             },
         ) {
             Text(
-                text = if (paused) "Pausiert" else "Aufzeichnung läuft",
+                text = when {
+                    paused && autoPaused -> "Auto-Pause"
+                    paused -> "Pausiert"
+                    else -> "Aufzeichnung läuft"
+                },
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
             )

@@ -33,10 +33,17 @@ import kotlinx.serialization.json.put
  * ```json
  * {"type":"point","point":{"lat":52.51,"lon":13.37,"ele":38.0,"time":1723118405000}}
  * ```
- * Pause/Fortsetzung:
+ * Pause/Fortsetzung — manuell (`pause`/`resume`) oder durch die Auto-Pause
+ * (`autoPause`/`autoResume`, siehe `AutoPauseLogic`). Beide Paare zaehlen
+ * identisch ins Pausenkonto; die Unterscheidung braucht nur die
+ * Wiederherstellung, damit eine offene **Auto**-Pause nach einem Neustart des
+ * Dienstes von selbst endet, sobald wieder gefahren wird, waehrend eine offene
+ * manuelle Pause auf den Nutzer wartet:
  * ```json
  * {"type":"pause","at":1723118500000}
  * {"type":"resume","at":1723118560000}
+ * {"type":"autoPause","at":1723118600000}
+ * {"type":"autoResume","at":1723118660000}
  * ```
  *
  * Nicht parsebare Zeilen werden beim Lesen uebersprungen. Das deckt genau den
@@ -84,6 +91,12 @@ internal class RecordingJournal(
         val pausedMs: Long,
         /** Beginn einer noch offenen Pause in ms seit Epoch, sonst `null`. */
         val pausedSinceMs: Long?,
+        /**
+         * `true`, wenn die offene Pause ([pausedSinceMs]) eine Auto-Pause ist.
+         * Ohne offene Pause immer `false`. Die Wiederherstellung setzt dann
+         * die Auto-Pause-Erkennung fort, statt auf einen Nutzer zu warten.
+         */
+        val pausedSinceIsAuto: Boolean = false,
         /** `true`, wenn mindestens eine Zeile nicht gelesen werden konnte. */
         val hadUnreadableLines: Boolean,
     )
@@ -146,6 +159,26 @@ internal class RecordingJournal(
         writeLine(
             buildJsonObject {
                 put("type", TYPE_RESUME)
+                put("at", atMs)
+            },
+        )
+    }
+
+    /** Vermerkt den Beginn einer Auto-Pause (siehe Klassendoc, Pausenpaare). */
+    fun appendAutoPause(atMs: Long) = synchronized(this) {
+        writeLine(
+            buildJsonObject {
+                put("type", TYPE_AUTO_PAUSE)
+                put("at", atMs)
+            },
+        )
+    }
+
+    /** Vermerkt das Ende einer Auto-Pause. */
+    fun appendAutoResume(atMs: Long) = synchronized(this) {
+        writeLine(
+            buildJsonObject {
+                put("type", TYPE_AUTO_RESUME)
                 put("at", atMs)
             },
         )
@@ -278,6 +311,8 @@ internal class RecordingJournal(
         private const val TYPE_POINT = "point"
         private const val TYPE_PAUSE = "pause"
         private const val TYPE_RESUME = "resume"
+        private const val TYPE_AUTO_PAUSE = "autoPause"
+        private const val TYPE_AUTO_RESUME = "autoResume"
 
         /** Verzeichnis des Journals; oeffentlich, damit die Recovery es scannen kann. */
         fun directory(filesDir: File): File = File(filesDir, "recording")
@@ -352,7 +387,30 @@ internal class RecordingJournal(
             val points = mutableListOf<TrackPoint>()
             var pausedMs = 0L
             var pausedSince: Long? = null
+            var pausedSinceAuto = false
             var unreadable = false
+
+            // Manuelle und automatische Pausen zaehlen identisch ins
+            // Pausenkonto; nur die Herkunft der noch offenen Pause wird
+            // mitgefuehrt (siehe [Snapshot.pausedSinceIsAuto]). Beide
+            // Schliess-Typen beenden die offene Pause, egal wie sie begann —
+            // der Dienst schreibt beim Umwandeln einer Auto- in eine manuelle
+            // Pause ohnehin `autoResume` + `pause` als Paar.
+            fun beginnePause(at: Long?, auto: Boolean) {
+                if (pausedSince == null) {
+                    pausedSince = at
+                    pausedSinceAuto = auto && at != null
+                }
+            }
+
+            fun beendePause(at: Long?) {
+                val since = pausedSince
+                if (since != null && at != null && at > since) {
+                    pausedMs += at - since
+                }
+                pausedSince = null
+                pausedSinceAuto = false
+            }
 
             for (line in lines) {
                 if (line.isBlank()) continue
@@ -388,18 +446,11 @@ internal class RecordingJournal(
                         if (point == null) unreadable = true else points.add(point)
                     }
 
-                    TYPE_PAUSE -> {
-                        if (pausedSince == null) pausedSince = obj.long("at")
-                    }
+                    TYPE_PAUSE -> beginnePause(obj.long("at"), auto = false)
 
-                    TYPE_RESUME -> {
-                        val since = pausedSince
-                        val at = obj.long("at")
-                        if (since != null && at != null && at > since) {
-                            pausedMs += at - since
-                        }
-                        pausedSince = null
-                    }
+                    TYPE_AUTO_PAUSE -> beginnePause(obj.long("at"), auto = true)
+
+                    TYPE_RESUME, TYPE_AUTO_RESUME -> beendePause(obj.long("at"))
 
                     else -> unreadable = true
                 }
@@ -415,6 +466,7 @@ internal class RecordingJournal(
                 points = points,
                 pausedMs = pausedMs,
                 pausedSinceMs = pausedSince,
+                pausedSinceIsAuto = pausedSinceAuto,
                 hadUnreadableLines = unreadable,
             )
         }

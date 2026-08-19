@@ -52,8 +52,9 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
  *  * **„Karte"** — Offline-Karten, Karten fuer Offline-Routing. Beide laden
  *    etwas fuers netzlose Fahren herunter (siehe `OfflineRoutingCard.kt` fuer
  *    die Abgrenzung).
- *  * **„App"** — Erinnerungen, Sync (Selfhost), Ueber. Verhalten und
- *    Rahmendaten der App selbst, ohne Bezug zu einer bestimmten Tour.
+ *  * **„App"** — Aufzeichnung, Erinnerungen, Sync (Selfhost), Ueber.
+ *    Verhalten und Rahmendaten der App selbst, ohne Bezug zu einer
+ *    bestimmten Tour.
  *
  * Jede Zeile ruft eine `…Content()`-Funktion aus der jeweiligen Datei dieses
  * Pakets auf — das unveraenderte Innenleben (Formulare, Dialoge, Launcher)
@@ -224,6 +225,8 @@ fun MoreScreen(appViewModel: AppViewModel) {
                 // Sync-Zugangsdaten oder die Über-Karte.
                 item {
                     MoreGroup(label = "App") {
+                        MoreRow(title = "Aufzeichnung") { RecordingCardContent() }
+                        HorizontalDivider()
                         MoreRow(title = "Erinnerungen") { ReminderCardContent(appViewModel) }
                         HorizontalDivider()
                         MoreRow(title = "Sync (Selfhost)") { SyncCardContent(appViewModel) }
