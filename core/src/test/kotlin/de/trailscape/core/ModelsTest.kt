@@ -282,6 +282,42 @@ class ModelsTest {
         }
     }
 
+    @Test
+    fun `Goal mit targetTimeMin round-tripped`() {
+        val json = obj(
+            """{"name":"Alpencross","distanceKm":180.0,"ascentM":4200.0,"targetTimeMin":390,"date":1735689600000}""",
+        )
+
+        val goal = Goal.fromJson(json)
+
+        assertEquals(390, goal.targetTimeMin!!)
+        assertEquals(goal, Goal.fromJson(goal.toJson()))
+    }
+
+    @Test
+    fun `Goal ohne Zielzeit behaelt den Schluessel als explizites null`() {
+        // Wie ascentM: der Schluessel steht immer im JSON. Alte Dateien ohne
+        // den Schluessel (und neue ohne Zeitziel) lesen sich beide als null.
+        val json = obj(
+            """{"name":"Feierabendrunde","distanceKm":25.0,"ascentM":null,"targetTimeMin":null,"date":1700000000000}""",
+        )
+
+        val goal = Goal.fromJson(json)
+
+        assertNull(goal.targetTimeMin)
+        val roundTripped = goal.toJson()
+        assertTrue(roundTripped.containsKey("targetTimeMin"))
+        assertEquals(JsonNull, roundTripped["targetTimeMin"])
+        assertEquals(goal, Goal.fromJson(roundTripped))
+    }
+
+    @Test
+    fun `Goal aus einer alten Datei ohne targetTimeMin-Schluessel liest null`() {
+        val json = obj("""{"name":"Alpencross","distanceKm":180.0,"ascentM":4200.0,"date":1735689600000}""")
+
+        assertNull(Goal.fromJson(json).targetTimeMin)
+    }
+
     // --- TrainingPlan / TrainingWeek / TrainingSession ---
 
     @Test

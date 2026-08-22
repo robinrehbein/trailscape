@@ -328,6 +328,18 @@ data class Goal(
     val name: String,
     val distanceKm: Double,
     val ascentM: Double? = null,
+    /**
+     * Angestrebte Fahrzeit fuer das Ziel in Minuten — die sportliche Ambition
+     * neben der reinen Distanz („120 km unter 6:30 h").
+     *
+     * `null` heisst: kein Zeitziel, das Ziel ist ein Distanzziel. Wie
+     * [ascentM] wird der Schluessel immer geschrieben (auch als explizites
+     * `null`); alte Plan-Dateien ohne den Schluessel lesen sich als `null`.
+     * Die Bewertung einer Zielzeit (noetiger Schnitt, Prognose, Urteil) steht
+     * in `GoalTime.kt` und ist bewusst kein Feld, sondern eine Rechnung ueber
+     * dem gespeicherten Ziel.
+     */
+    val targetTimeMin: Int? = null,
     /** ms seit Epoch. */
     val date: Long,
 ) {
@@ -335,6 +347,7 @@ data class Goal(
         put("name", name)
         put("distanceKm", distanceKm)
         put("ascentM", ascentM)
+        put("targetTimeMin", targetTimeMin)
         put("date", date)
     }
 
@@ -343,6 +356,7 @@ data class Goal(
             name = json.requiredString("name"),
             distanceKm = json.requiredDouble("distanceKm"),
             ascentM = json.optionalDouble("ascentM"),
+            targetTimeMin = json.optionalInt("targetTimeMin"),
             date = json.requiredLong("date"),
         )
     }

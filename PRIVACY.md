@@ -26,11 +26,11 @@ Servernamen sind bewusst mit angegeben.
   ausschließlich auf dem Gerät verarbeitet. Sie werden nirgendwohin übertragen
   und nicht nach Health Connect zurückgeschrieben.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
-  (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
-  Sync-Server) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
-  GitHub, höchstens einmal am Tag, abschaltbar unter *Mehr → Über*. Diese
-  Dienste sehen dabei deine IP-Adresse — siehe unten, Abschnitt „Was das
-  Gerät nach außen sendet".
+  (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, auf Tipp abgerufene
+  Wettervorhersage, optional dein eigener Sync-Server) — plus **eine**
+  Ausnahme: eine stille Update-Prüfung bei GitHub, höchstens einmal am Tag,
+  abschaltbar unter *Mehr → Über*. Diese Dienste sehen dabei deine
+  IP-Adresse — siehe unten, Abschnitt „Was das Gerät nach außen sendet".
 
 ---
 
@@ -101,6 +101,7 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | **brouter.de** | wenn du eine Route berechnen lässt | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
 | **brouter.de** | wenn du unter *Mehr → Offline-Routing* Routing-Kacheln herunterlädst oder aktualisierst (`https://brouter.de/brouter/segments4/…`, siehe `app/…/routing/SegmentDownloader.kt` und `core/…/RoutingSegments.kt`) | der Name der gewählten **5°×5°-Kachel** (z. B. `E10_N45.rd5`) — daraus ergibt sich die grobe Region, für die du Routing willst, typischerweise also deine Wohn- oder Urlaubsgegend. Bei einer Delta-Aktualisierung steht zusätzlich die **MD5-Prüfsumme deines lokalen Kachelstands** in der URL; sie verrät dem Server, welchen Tagesstand du zuletzt geladen hattest, aber nichts über deine Touren |
 | **nominatim.openstreetmap.org** | wenn du in der Routenplanung nach einem Ort suchst | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
+| **api.open-meteo.com** (Wettervorhersage) | wenn du auf der Startseite „Fenster suchen" oder „Aktualisieren" tippst | die **Koordinaten des Starts deiner letzten Tour** (Breite/Länge) für die stündliche 2-Tages-Vorhersage — daraus ergibt sich deine ungefähre Wohn- oder Fahrgegend (`core/…/Weather.kt`). Ohne gespeicherte Tour gibt es keine Anfrage, und nichts geht automatisch raus: Das Fenster wird nur auf deinen Tipp hin geladen |
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
 | **api.github.com** (Update-Prüfung) | beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |

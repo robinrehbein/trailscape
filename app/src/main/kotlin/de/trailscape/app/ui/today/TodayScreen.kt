@@ -67,19 +67,21 @@ import java.time.LocalDateTime
  *  1. **Kopf** — Begruessung, Wochentag, Datum. Immer.
  *  2. **Tagesempfehlung** — immer: Auch ohne jede Historie liefert `:core` eine
  *     Empfehlung (dann „Grundlageneinheit") und daraus ein Routenziel.
- *  3. **„Plan und Ziel passen nicht zusammen"** — nur, wenn die laengste
+ *  3. **Wetterfenster** — nur mit mindestens einer Tour (der Ort der
+ *     Vorhersage ist der Start der letzten Tour); Abruf per Knopf.
+ *  4. **„Plan und Ziel passen nicht zusammen"** — nur, wenn die laengste
  *     geplante Fahrt die Zieldistanz deutlich verfehlt UND diese Fassung des
  *     Plans noch nicht mit „Verstanden" quittiert wurde
  *     ([AppViewModel.planFeasibilityAckKey]). Sie steht bewusst weit oben: Ein
  *     Plan, der das Ziel nicht einholt, ist die wichtigste Auskunft der Seite —
  *     aber eben nur, bis sie einmal gelesen wurde.
- *  4. **Aufzeichnung** — nur, wenn schon Touren existieren. Beim Erststart
+ *  5. **Aufzeichnung** — nur, wenn schon Touren existieren. Beim Erststart
  *     traegt der Leerzustand ganz unten denselben Knopf; zweimal „Tour
  *     aufzeichnen" auf einem Bildschirm waere genau die Doppelung, die diese
  *     Seite abschaffen soll.
- *  5. **Diese Woche** — nur mit laufendem Plan; ohne Plan steht an dieser
+ *  6. **Diese Woche** — nur mit laufendem Plan; ohne Plan steht an dieser
  *     Stelle die Einladung, ein Ziel festzulegen.
- *  6. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
+ *  7. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
  *
  * ## Kein `TopAppBar` — und keine Begruessung mehr
  * Anders als Training, Mehr und die Tourenansicht traegt dieser Screen keine
@@ -116,6 +118,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val planFeasibilityAckKey by appViewModel.planFeasibilityAckKey.collectAsStateWithLifecycle()
+    val weather by appViewModel.weather.collectAsStateWithLifecycle()
 
     // Der ANGEZEIGTE Plan: von `:core` (adaptPlan) an die gefahrene Realitaet
     // angepasst, wenn ganze Wochen deutlich unter Soll lagen. Der gespeicherte
@@ -227,6 +230,21 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         },
                         onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
                     )
+                }
+
+                // Das Wetterfenster steht nur mit mindestens einer Tour: Der
+                // Ort der Vorhersage ist der Start der letzten Tour (keine
+                // eigene Standortabfrage), und ohne jede Tour gaebe es auch
+                // nichts, wofuer das Fenster gut sein muesste. Die Dauer der
+                // heutigen Einheit uebernimmt die Karte vom Tagesziel.
+                if (rides.isNotEmpty()) {
+                    item(key = "wetter") {
+                        TodayWeatherCard(
+                            state = weather,
+                            durationH = todayRoute.target?.durationH,
+                            onRefresh = appViewModel::refreshWeather,
+                        )
+                    }
                 }
 
                 // Nur, wenn der Plan sein Ziel nicht traegt UND diese

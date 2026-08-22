@@ -396,6 +396,52 @@ private fun longTourDescription(goal: Goal): String {
     return base
 }
 
+/**
+ * „h:mm"-Darstellung einer Zielzeit in Minuten (390 → „6:30") — fuer den
+ * Zielevent-Text.
+ */
+private fun formatGoalTime(min: Int): String =
+    "${min / 60}:${(min % 60).toString().padStart(2, '0')}"
+
+/**
+ * Der Zielzeit-Satz des Zielevents — leer, wenn das Ziel keine Zeitambition
+ * traegt. Nennt Zeit und den Schnitt, den sie verlangt (eine Nachkommastelle,
+ * deutsch mit Komma), weil „6:30 h" ohne „dafür Ø 18,5 km/h" keine
+ * Fahrinformation ist.
+ */
+private fun goalTimeText(goal: Goal): String {
+    val minutes = goal.targetTimeMin ?: return ""
+    if (minutes <= 0) {
+        return ""
+    }
+    val pace = requiredPaceKmh(goal.distanceKm, minutes)
+        ?.let { dartRound1(it).toString().replace('.', ',') }
+        ?: return ""
+    return " Zielzeit ${formatGoalTime(minutes)} h (Ø $pace km/h)."
+}
+
+/**
+ * Die Beschreibung des Zielevents: Distanz (und Hoehenmeter ab
+ * [CLIMB_HINT_THRESHOLD_M]), gefolgt von der Zielzeit, falls das Ziel eine
+ * traegt, gefolgt vom Renntag-Rat. Ohne Zielzeit ist der Text identisch zum
+ * bisherigen.
+ */
+private fun eventDescription(goal: Goal, eventKm: Int, ascentM: Double?): String {
+    val hilly = ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M
+    val intro = if (hilly) {
+        "Dein Zielevent über $eventKm km und rund ${dartRound(ascentM!!).toInt()} Hm"
+    } else {
+        "Dein Zielevent über $eventKm km"
+    }
+    val time = goalTimeText(goal)
+    val tail = if (hilly) {
+        "teile dir die Kraft an den Anstiegen ein und trinke von Beginn an regelmäßig."
+    } else {
+        "starte kontrolliert, halte dein Tempo und versorge dich unterwegs konsequent."
+    }
+    return if (time.isEmpty()) "$intro – $tail" else "$intro –$time $tail"
+}
+
 internal fun buildSessions(
     kind: WeekKind,
     level: FitnessLevel,
@@ -576,13 +622,7 @@ internal fun zielwocheSessions(goal: Goal): List<TrainingSession> {
     val eventSession = TrainingSession(
         day = eventDay,
         title = "Zielevent: ${goal.name}",
-        description = if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) {
-            "Dein Zielevent über $eventKm km und rund ${dartRound(ascentM).toInt()} Hm – " +
-                "teile dir die Kraft an den Anstiegen ein und trinke von Beginn an regelmäßig."
-        } else {
-            "Dein Zielevent über $eventKm km – starte kontrolliert, halte dein Tempo und " +
-                "versorge dich unterwegs konsequent."
-        },
+        description = eventDescription(goal, eventKm, ascentM),
         targetKm = eventKm,
         intensity = SessionIntensity.HART,
         // Keine Dauerangabe: Wie lange das Event dauert, entscheidet der

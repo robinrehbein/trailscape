@@ -31,6 +31,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
   dafür eine passende Rundstrecke generiert
 - Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
+- Wetterfenster: das beste Zeitfenster für die heutige Einheit aus der
+  stündlichen Vorhersage (Open-Meteo) — Abruf per Knopf, gerechnet für den
+  Start deiner letzten Tour, keine eigene Standortabfrage
 
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
@@ -68,6 +71,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
 - Trainingsplan mit progressiver Steigerung, Erholungswochen und
   Fortschrittsverfolgung
+- Optionale Zielzeit fürs Trainingsziel: der Schnitt, den sie verlangt, die
+  Prognose aus der eigenen Historie und ein ehrliches Urteil — live im
+  Zielformular, im Zielevent-Text und gegen die gefahrenen Realität
 - Performance-Management-Chart (Fitness, Ermüdung, Form) über die Trainingslast
 - Tagesempfehlung („Readiness") aus Ruhepuls, HRV (rMSSD) und Schlaf
 
@@ -253,8 +259,9 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 
 Alles bleibt lokal. Die App spricht mit den Diensten, die für eine konkrete
 Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
-und Kachel-Downloads, Nominatim für die Zielsuche und — wenn eingerichtet —
-dem eigenen Sync-Server. Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
+und Kachel-Downloads, Nominatim für die Zielsuche, Open-Meteo für die per
+Knopf abgerufene Wettervorhersage und — wenn eingerichtet — dem eigenen
+Sync-Server. Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
 tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter
 **Mehr → Über**. Kein Analytics, keine Telemetrie, keine Werbung, kein
 Konto.

@@ -2,6 +2,7 @@ package de.trailscape.app.data
 
 import de.trailscape.core.Ride
 import de.trailscape.core.RideSummary
+import de.trailscape.core.TrackPoint
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.serialization.json.Json
@@ -210,6 +211,29 @@ class RideStorage(private val ridesDir: File) {
     fun listRides(): List<Ride> {
         val listing = listSummaries()
         return listing.summaries.mapNotNull { loadRide(it.id) }
+    }
+
+    /**
+     * Der Startpunkt der juengsten **gefahrenen** Tour — ein grober Anker fuer
+     * Ortsdienste ohne Standortabfrage (aktuell: die Wettervorhersage der
+     * Startseite, `ui/AppViewModel.refreshWeather`).
+     *
+     * Bevorzugt gefahrene Touren ([Ride.planned]): Wo du wirklich losgefahren
+     * bist, wohnst du eher in der Naehe als am Anfang einer gespeicherten
+     * Planung. Um eine ganze Punktliste zu vermeiden, wird nur die Tour-Datei
+     * des Kandidaten geladen — eine Datei, einmal, je Wetterabruf.
+     */
+    @Synchronized
+    fun latestRideStartPoint(): TrackPoint? {
+        val summaries = listSummaries().summaries
+        val candidates = summaries.filter { !it.planned }.ifEmpty { summaries }
+        for (summary in candidates) {
+            val start = loadRide(summary.id)?.points?.firstOrNull()
+            if (start != null) {
+                return start
+            }
+        }
+        return null
     }
 
     private fun readRideFile(file: File): Ride? = try {

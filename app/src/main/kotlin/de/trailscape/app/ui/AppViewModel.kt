@@ -27,6 +27,7 @@ import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
+import de.trailscape.core.RideWindow
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.SegmentNewBest
 import de.trailscape.core.SegmentRegistry
@@ -37,6 +38,8 @@ import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
+import de.trailscape.core.bestRideWindow
+import de.trailscape.core.fetchWeatherForecast
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.healthSyncInitialWindowMs
@@ -1256,6 +1259,100 @@ class AppViewModel(
         if (seconds < 60) "$seconds s" else "${formatDuration(seconds)} min"
 
     // -------------------------------------------------------------------------
+    // Wetterfenster für die heutige Einheit
+    // -------------------------------------------------------------------------
+
+    /**
+     * Zustand der Wetterkarte der Startseite (`ui/today/TodayWeatherCard.kt`).
+     *
+     * Der Abruf ist bewusst **nutzergesteuert** (Knopf „Fenster suchen"): Die
+     * App fragt sonst niemanden ohne Anlass um Wetter — einzig die
+     * Update-Pruefung geht ohne Nutzeraktion raus, und das soll so bleiben
+     * (siehe `PRIVACY.md`).
+     */
+    sealed interface WeatherUiState {
+        /** Noch nie geholt — die Karte bietet den Abruf an. */
+        data object Idle : WeatherUiState
+
+        /** Abruf laeuft. */
+        data object Loading : WeatherUiState
+
+        /** Ergebnis: das beste Fenster samt Hole-Zeitpunkt. */
+        data class Ready(val window: RideWindow, val fetchedAtMs: Long) : WeatherUiState
+
+        /** Gescheitert oder kein Fenster/Standort — die Karte sagt es und bietet Neuversuch. */
+        data object Unavailable : WeatherUiState
+    }
+
+    private val _weather = MutableStateFlow<WeatherUiState>(WeatherUiState.Idle)
+
+    /** Das Wetterfenster der heutigen Einheit (siehe [WeatherUiState]). */
+    val weather: StateFlow<WeatherUiState> = _weather.asStateFlow()
+
+    /** Serialisiert Abrufe — es laeuft hoechstens einer. */
+    private val weatherMutex = Mutex()
+
+    /** Zeitpunkt des letzten erfolgreichen Abrufs; 0 = nie. */
+    private var weatherFetchedAtMs = 0L
+
+    /** Dauer, fuer die das letzte Ergebnis gerechnet wurde. */
+    private var weatherDurationH = 0.0
+
+    /**
+     * Holt die Vorhersage und sucht das beste Fahrfenster für [durationH]
+     * (die erwartete Dauer der heutigen Einheit).
+     *
+     * Ohne [force] wird ein frisches Ergebnis ([WEATHER_CACHE_MS]) fuer
+     * **dieselbe** Dauer still weiterverwendet — der Knopf „Aktualisieren"
+     * laeuft immer los. Der Ort ist der Startpunkt der juengsten Tour
+     * ([RideStorage.latestRideStartPoint]): keine Standortabfrage, keine neue
+     * Berechtigung, und die Frage „bei mir zuhause" beantwortet der Ort, an
+     * dem Touren real beginnen. Fehler landen als [WeatherUiState.Unavailable]
+     * in der Karte, nicht als Snackbar — Wetter ist eine Auskunft, kein
+     * Vorgang, ueber den ein Dialog rechtfertigen muesste.
+     */
+    fun refreshWeather(durationH: Double, force: Boolean = false) {
+        if (!durationH.isFinite() || durationH <= 0) {
+            return
+        }
+        viewModelScope.launch {
+            weatherMutex.withLock {
+                val now = System.currentTimeMillis()
+                val cached = _weather.value
+                if (!force && cached is WeatherUiState.Ready &&
+                    cached.fetchedAtMs == weatherFetchedAtMs &&
+                    now - weatherFetchedAtMs < WEATHER_CACHE_MS &&
+                    weatherDurationH == durationH
+                ) {
+                    return@withLock
+                }
+                if (cached is WeatherUiState.Loading) {
+                    return@withLock
+                }
+                _weather.value = WeatherUiState.Loading
+                val state = withContext(io) {
+                    runCatching {
+                        val start = rideStorage.latestRideStartPoint()
+                            ?: return@runCatching WeatherUiState.Unavailable
+                        val forecast = fetchWeatherForecast(start.lat, start.lon, httpClient)
+                        val window = bestRideWindow(
+                            forecast,
+                            durationH,
+                            System.currentTimeMillis(),
+                        ) ?: return@runCatching WeatherUiState.Unavailable
+                        WeatherUiState.Ready(window, System.currentTimeMillis())
+                    }.getOrDefault(WeatherUiState.Unavailable)
+                }
+                if (state is WeatherUiState.Ready) {
+                    weatherFetchedAtMs = state.fetchedAtMs
+                    weatherDurationH = durationH
+                }
+                _weather.value = state
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Trainingsplan
     // -------------------------------------------------------------------------
 
@@ -1893,3 +1990,10 @@ private fun decodePlaceSearchHistory(raw: String?): List<PlaceSearchHistoryEntry
 private const val HEALTH_SAVE_FAILED_MESSAGE: String =
     "Die importierten Touren konnten nicht gespeichert werden. " +
         "Beim nächsten Sync wird es erneut versucht."
+
+/**
+ * Wie lange ein geholtes Wetterfenster als frisch gilt (siehe
+ * [AppViewModel.refreshWeather]) — 45 Minuten: Stuendliche Werte, und wer
+ * eine Stunde spaeter nochmal fragt, will aktuelle.
+ */
+const val WEATHER_CACHE_MS: Long = 45L * 60 * 1000

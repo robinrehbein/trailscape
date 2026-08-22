@@ -93,6 +93,16 @@ fun formatKmDe(km: Double): String = formatKm(km).replace('.', ',')
 fun formatOneDecimalDe(value: Double): String = formatDecimalDe(value, 1)
 
 /**
+ * Eine Dauer in Minuten als `h:mm` mit Stunden-Suffix — 390 → „6:30 h".
+ *
+ * Fuer Zielzeiten (Trainingsziel), nicht fuer Anzeigen von Stoppuhren: Die
+ * Pläne der App zählen Zeit in Minuten, die Oberfläche aber spricht von
+ * „6:30 h", wenn eine Ambition gemeint ist.
+ */
+fun formatDurationHm(minutes: Int): String =
+    "${minutes / 60}:${(minutes % 60).toString().padStart(2, '0')} h"
+
+/**
  * Eine Dateigroesse in der groessten passenden Einheit, deutsch —
  * `119,4 MB`, `1,3 GB`, `640 KB`.
  *
