@@ -95,6 +95,7 @@ import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.rememberActivityImportAction
 import de.trailscape.app.ui.rides.RideDetailHost
 import de.trailscape.app.ui.rides.TourListContent
 import de.trailscape.app.ui.theme.CardPadding
@@ -270,10 +271,10 @@ import kotlinx.coroutines.withContext
  * Seit dem Wegfall des eigenen Touren-Tabs (siehe `ui/TrailscapeApp.kt`,
  * „Warum Touren und Karte eine Seite sind") liegt die Tourenliste als Koerper
  * des Erkunden-Blatts ([ExploreSheet], `ExploreSheet.kt`) — kein eigenes
- * drittes Blatt mehr: Eingeklappt zeigt das Blatt Suchzeile und Werkzeugreihe,
+ * drittes Blatt mehr: Eingeklappt zeigt das Blatt Suchzeile, Werkzeugreihe
+ * und die Touren-Zeile („N Touren" samt „Importieren", siehe dessen KDoc),
  * aufgeklappt (ueber [SwipeableSheet], `SwipeableSheet.kt`) zusaetzlich die
- * Kopfzeile „Touren" (· Anzahl) und die Liste bis zu
- * [TOUR_SHEET_MAX_HEIGHT_FACTOR] der Bildschirmhoehe. Am unteren Rand
+ * Liste selbst. Am unteren Rand
  * bewerben sich damit mehrere Zustaende um denselben Platz — Aufzeichnung,
  * Navigation, Planung, ausgewaehlte Tour (`RideCard`), offene Suche und
  * Erkunden-Blatt —, und es gilt eine feste Rangfolge:
@@ -596,6 +597,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Vorrang-Zustand, und die eingeklappte Zeile ist die richtige Ruhelage
     // (siehe Klassen-KDoc, "Rangfolge am unteren Kartenrand").
     var toursExpanded by rememberSaveable { mutableStateOf(false) }
+
+    // Der Einzelimport (GPX/FIT) als eine geteilte Aktion samt SAF-Launcher
+    // und Fehlerdialog (siehe `ui/ActivityImportAction.kt`). Liegt auf
+    // Screen-Ebene, damit die Touren-Zeile im Erkunden-Blatt und der
+    // Leerzustand der Tourenliste nachweislich denselben Weg nehmen — und
+    // damit der Fehlerdialog stehen bleibt, auch wenn das Blatt gerade
+    // auf- oder zufaehrt.
+    val importAction = rememberActivityImportAction(appViewModel)
 
     // Die in der Tourendetailansicht geoeffnete Tour. Bewusst die ID und
     // nicht das `Ride` selbst — wortgleiche Begruendung wie beim frueheren
@@ -2603,6 +2612,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onOpenStyle = { showStyleSheet = true },
                             onDownload = ::startDownload,
                             downloadEnabled = !downloadState.running,
+                            importing = importAction.importing,
+                            onImport = importAction.start,
                         ) { padding ->
                             TourListContent(
                                 appViewModel = appViewModel,
@@ -2616,6 +2627,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                     appViewModel.select(ride.id)
                                     toursExpanded = false
                                 },
+                                onImportFile = importAction.start,
                                 contentPadding = padding,
                             )
                         }
@@ -3139,9 +3151,10 @@ private val GenerationPeekFixedHeight = 208.dp
 
 /**
  * Erkunden: Griff (48), Rand oben und unten (2 x 14), Suchfeld (56), Abstand
- * (8) und die Werkzeugreihe (56) — siehe `ExploreSheet.kt`.
+ * (8), die Werkzeugreihe (56) sowie Abstand (4) und Touren-Zeile (40) —
+ * siehe `ExploreSheet.kt`.
  */
-private val ExplorePeekFixedHeight = 196.dp
+private val ExplorePeekFixedHeight = 240.dp
 
 /**
  * Planung: Griff (48) und die eine Statuszeile (`heightIn(min = 48.dp)`) —

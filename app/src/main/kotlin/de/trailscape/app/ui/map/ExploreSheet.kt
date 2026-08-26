@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,12 +15,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,18 +84,28 @@ import de.trailscape.core.GeoResult
  * (One UI: [NeutralButton]) und keine gefaerbte Pille, die eine Rangfolge
  * behauptet, die es nicht gibt.
  *
- * ## Kopfzeile und Inhalt des Koerpers
- * Dieselbe Bauart wie zuvor bei `TourSheet`: „Touren" links (titleSmall),
- * die Anzahl rechts (labelMedium), darunter [tours] in einer `Box` mit
- * [toursMaxHeight] als Obergrenze. [tours] bekommt nur eine [PaddingValues]
+ * ## Die Touren-Zeile: sagen, was hinter dem Griff liegt
+ * Unter den Werkzeugen steht eine kompakte Zeile „N Touren" (Tipp klappt die
+ * Liste auf, derselbe Weg wie der Griff) und rechts „Importieren"
+ * ([onImport]). Vorher verriet der eingeklappte Zustand mit keinem Wort, dass
+ * hinter dem Griff die Tourenliste — und in ihr der einzige Import-Einstieg
+ * dieses Tabs — wohnt; seit dem Wegfall des eigenen Touren-Tabs war der
+ * GPX-Import damit faktisch unauffindbar („kann ich keine GPX-Dateien mehr
+ * importieren?"). Jetzt stehen beide Auskuenfte im Ruhezustand: dass es Touren
+ * gibt, und wie eine neue hereinkommt. Waehrend der Suche tritt die Zeile mit
+ * den Werkzeugen ab (gleiche Begruendung dort im Code).
+ *
+ * ## Inhalt des Koerpers
+ * [tours] in einer `Box` mit [toursMaxHeight] als Obergrenze — die fruehere
+ * Kopfzeile „Touren · Anzahl" ist entfallen, seit die Touren-Zeile im Peek
+ * dieselbe Auskunft dauerhaft gibt. [tours] bekommt nur eine [PaddingValues]
  * gereicht und weiss nichts von `Card` oder Kopfzeile — der Aufrufer
  * (`MapScreen.kt`) fuellt sie mit `TourListContent` aus `ui/rides/TourList.kt`;
  * deren `LazyColumn` nimmt die Werte unveraendert als eigenes
- * `contentPadding`, damit weder die Kopfzeile ueberdeckt wird noch der letzte
- * Eintrag am unteren Blattrand klebt. Waagerecht und senkrecht gelten
- * dieselben Randmasse wie im aufgeklappten Planungsblatt
- * ([CardPadding]/[OverlayCardPaddingVertical]) — ein drittes Randmass haette
- * hier nichts erklaert, was diese beiden nicht schon tun.
+ * `contentPadding`, damit der letzte Eintrag nicht am unteren Blattrand klebt.
+ * Waagerecht und senkrecht gelten dieselben Randmasse wie im aufgeklappten
+ * Planungsblatt ([CardPadding]/[OverlayCardPaddingVertical]) — ein drittes
+ * Randmass haette hier nichts erklaert, was diese beiden nicht schon tun.
  *
  * @param toursMaxHeight Obergrenze der Tourenliste. Muss aus dem Platz kommen,
  *   den der Stapel dem Blatt wirklich lassen kann (`overlaySheetBudget` in
@@ -120,6 +136,8 @@ internal fun ExploreSheet(
     onOpenStyle: () -> Unit,
     onDownload: () -> Unit,
     downloadEnabled: Boolean,
+    importing: Boolean,
+    onImport: () -> Unit,
     modifier: Modifier = Modifier,
     tours: @Composable (contentPadding: PaddingValues) -> Unit,
 ) {
@@ -210,41 +228,66 @@ internal fun ExploreSheet(
                             modifier = Modifier.weight(1f),
                         )
                     }
+
+                    // Die Touren-Zeile (siehe Klassen-KDoc): links der Weg zur
+                    // Liste, rechts der Import — beide auch im Ruhezustand
+                    // sichtbar, nicht erst hinter dem Griff.
+                    Spacer(Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(onClick = { onExpandedChange(!expanded) }) {
+                            Text(
+                                text = if (rideCount == 1) "1 Tour" else "$rideCount Touren",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Icon(
+                                imageVector = if (expanded) {
+                                    Icons.Filled.KeyboardArrowDown
+                                } else {
+                                    Icons.Filled.KeyboardArrowUp
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+
+                        TextButton(onClick = onImport, enabled = !importing) {
+                            if (importing) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Filled.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text("Importieren")
+                            }
+                        }
+                    }
                 }
             }
         },
         body = {
             Box(modifier = Modifier.heightIn(max = toursMaxHeight)) {
-                Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = CardPadding, end = CardPadding),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "Touren",
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            text = rideCount.toString(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    // Keine eigene `verticalScroll` — der Inhalt ist eine
-                    // `LazyColumn` und scrollt selbst; ein zweiter
-                    // Scrollcontainer aussen wuerde nur widerspruechliche
-                    // Gesten erzeugen.
-                    tours(
-                        PaddingValues(
-                            horizontal = CardPadding,
-                            vertical = OverlayCardPaddingVertical,
-                        ),
-                    )
-                }
+                // Keine eigene Kopfzeile mehr — die Touren-Zeile im Peek nennt
+                // die Anzahl bereits (siehe Klassen-KDoc). Und keine eigene
+                // `verticalScroll` — der Inhalt ist eine `LazyColumn` und
+                // scrollt selbst; ein zweiter Scrollcontainer aussen wuerde
+                // nur widerspruechliche Gesten erzeugen.
+                tours(
+                    PaddingValues(
+                        horizontal = CardPadding,
+                        vertical = OverlayCardPaddingVertical,
+                    ),
+                )
             }
         },
     )

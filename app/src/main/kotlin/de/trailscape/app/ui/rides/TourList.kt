@@ -2,11 +2,7 @@ package de.trailscape.app.ui.rides
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,17 +10,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
@@ -66,16 +58,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
-import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.Fact
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.importActivityFile
-import de.trailscape.app.ui.isDuplicateRide
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
@@ -127,13 +115,14 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * schwebende Navigationskapsel kommen ueber [contentPadding] von aussen, nicht
  * ueber `screenContentPadding()` wie bei einem eigenstaendigen Bildschirm.
  *
- * ## Kopfzeile statt schwebendem Import-Knopf
- * Ein Blatt hat keinen Platz fuer einen FAB, der ueber allem schwebt — der
- * bisherige `ExtendedFloatingActionButton` „Tour importieren" ist deshalb zur
- * ersten Zeile der Liste geworden: Anzahl der Touren links, Knopf
- * „Importieren" rechts (siehe [TourListHeader]). Er scrollt mit der Liste statt
- * fest zu stehen — bei einer Liste, die selten mehr als eine Bildschirmseite
- * fuellt, ist das kein Verlust.
+ * ## Import wohnt nicht mehr in der Liste
+ * Der Import-Knopf stand zuletzt als Kopfzeile in dieser Liste — und war damit
+ * nur zu finden, wer das Erkunden-Blatt erst aufzieht. Seither haelt der
+ * Karten-Screen die Aktion selbst (`rememberActivityImportAction` in
+ * `ui/ActivityImportAction.kt`) und zeigt sie in der immer sichtbaren
+ * Touren-Zeile des eingeklappten Erkunden-Blatts (`ui/map/ExploreSheet.kt`).
+ * Diese Liste bekommt davon nur noch [onImportFile] fuer ihren Leerzustand
+ * gereicht — derselbe Weg, keine zweite Verdrahtung.
  *
  * ## Tippen zeigt auf der Karte, „Details" oeffnet die Vollansicht
  * Frueher oeffnete ein Tipp auf eine Karte sofort die Detailansicht. Jetzt
@@ -148,9 +137,7 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * [AppViewModel.messages] sammelt jetzt der Karten-Screen ein (er umschliesst
  * dieses Blatt und bleibt bestehen, waehrend das Blatt auf- und zufaehrt) —
  * eine erkannte Dublette oder der Import-Erfolg laufen also weiterhin ueber
- * [AppViewModel.showMessage], zeigen sich aber dort. Ein Import-*Fehler*
- * dagegen ist keine Meldung, sondern eine Entscheidung und bleibt deshalb als
- * Dialog stehen (siehe [importErrorMessage]). Die „Rückgängig"-Snackbar
+ * [AppViewModel.showMessage], zeigen sich aber dort. Die „Rückgängig"-Snackbar
  * beim Loeschen ist etwas anderes: Sie braucht eine Aktionsschaltflaeche und
  * eine eigene Anzeigedauer (siehe [DeleteRideWithUndo]), Dinge, die der einfache
  * Text-Kanal von `messages` nicht kennt. Diese Datei bringt dafuer einen
@@ -161,6 +148,9 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * fuer eine Annahme darueber, wie der Behaelter seinen eigenen SnackbarHost
  * aufbaut. Ein selbstaendiges Overlay funktioniert unabhaengig davon.
  *
+ * @param onImportFile startet den Einzelimport (GPX/FIT) — die eine, vom
+ *   Karten-Screen gehaltene Aktion (`rememberActivityImportAction`), hier nur
+ *   fuer den Knopf „GPX-/FIT-Datei öffnen" im Leerzustand gebraucht.
  * @param contentPadding wird unveraendert an die `LazyColumn` durchgereicht.
  *   Der Behaelter (das Tourenblatt) traegt hierueber die Bodenfreiheit der
  *   schwebenden Navigationskapsel bei — und, je nach Blatthoehe, zusaetzliche
@@ -172,6 +162,7 @@ fun TourListContent(
     appViewModel: AppViewModel,
     onOpenDetail: (String) -> Unit,
     onShowOnMap: (RideSummary) -> Unit,
+    onImportFile: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -183,62 +174,13 @@ fun TourListContent(
     val selectedId by appViewModel.selectedRideId.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
 
-    var importing by rememberSaveable { mutableStateOf(false) }
     var renameTarget by remember { mutableStateOf<RideSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<RideSummary?>(null) }
-
-    // Ein gescheiterter Import ist eine Entscheidung, keine Meldung: Der
-    // Fehlertext bleibt als Dialog stehen, bis eine andere Datei gewaehlt
-    // oder geschlossen wird — eine 4-Sekunden-Snackbar waere verschwunden,
-    // bevor jemand vom Dateidialog zurueckgeblickt hat (Regel: Snackbar nur
-    // fuer Bestaetigungen, stehender Zustand fuer Entscheidungen).
-    var importErrorMessage by remember { mutableStateOf<String?>(null) }
 
     // Nur fuer die „Rückgängig"-Snackbar (siehe Klassen-KDoc oben) — normale
     // Meldungen laufen nicht mehr durch diesen Screen.
     val snackbarHostState = remember { SnackbarHostState() }
     val undoSnackbarJob = remember { mutableStateOf<Job?>(null) }
-
-    // Aktivitaets-Auswahl (GPX oder FIT) ueber das Storage Access Framework.
-    // Bewusst `*/*`: Der MIME-Typ einer .gpx-/.fit-Datei ist je nach Anbieter
-    // application/gpx+xml, application/xml, text/xml, application/octet-stream
-    // oder gar nichts — ein enger Filter blendet die Datei bei manchen
-    // Dateimanagern schlicht aus.
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        importing = true
-        scope.launch {
-            try {
-                val ride = importActivityFile(context, uri)
-                // Inhaltsbasiert pruefen: `rideFromGpx`/`rideFromFit` vergeben
-                // bei jedem Import eine frische ID, ein ID-Vergleich ginge also
-                // immer ins Leere (siehe ui/RideImport.kt).
-                if (isDuplicateRide(rides, ride)) {
-                    appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
-                } else {
-                    appViewModel.addRide(ride)
-                    appViewModel.showMessage("„${ride.name}“ importiert")
-                }
-            } catch (e: Exception) {
-                // Deutscher Satz mit Handlungsanweisung zuerst, technische
-                // Ursache nur in Klammern (siehe ui/ErrorText.kt) — als
-                // stehender Dialog, nicht als Snackbar (siehe
-                // [importErrorMessage]).
-                importErrorMessage = withCause(
-                    "Die Datei konnte nicht importiert werden. Trailscape liest " +
-                        "GPX- und FIT-Dateien, auch als .gz gepackt.",
-                    e,
-                )
-            } finally {
-                importing = false
-            }
-        }
-    }
-    fun startImport() {
-        if (!importing) importLauncher.launch(arrayOf("*/*"))
-    }
 
     // Teilen liegt als lokale Funktion vor, damit Liste und Kartenmenue
     // nachweislich denselben Weg nehmen (siehe [shareGpx] am Dateiende).
@@ -291,7 +233,7 @@ fun TourListContent(
             ) {
                 RidesEmptyState(
                     onRecord = { appViewModel.requestTab(AppTab.MAP) },
-                    onImportFile = ::startImport,
+                    onImportFile = onImportFile,
                     onOpenBackup = { appViewModel.requestTab(AppTab.MORE) },
                 )
             }
@@ -304,14 +246,6 @@ fun TourListContent(
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                item(key = "header") {
-                    TourListHeader(
-                        count = rides.size,
-                        importing = importing,
-                        onImport = ::startImport,
-                    )
-                }
-
                 items(items = rides, key = { it.id }) { ride ->
                     val load = insights.rideLoads[ride.id]
                     val loadText = if (load != null && load.available) {
@@ -369,68 +303,6 @@ fun TourListContent(
         )
     }
 
-    importErrorMessage?.let { message ->
-        OneUiDialog(
-            onDismissRequest = { importErrorMessage = null },
-            title = { Text("Import fehlgeschlagen") },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        importErrorMessage = null
-                        startImport()
-                    },
-                ) { Text("Andere Datei wählen") }
-            },
-            dismissButton = {
-                TextButton(onClick = { importErrorMessage = null }) { Text("Schließen") }
-            },
-        )
-    }
-}
-
-/**
- * Kopfzeile der Liste: Anzahl der Touren links, Import-Knopf rechts. Ersetzt
- * den fruesheren `ExtendedFloatingActionButton` — Begruendung im KDoc von
- * [TourListContent]. [NeutralButton] statt `Button`, weil der Import hier
- * keine primaere Aktion der Seite ist (die primaere Aktion ist die Karte
- * selbst) — derselbe Grund, aus dem `RideDetailScreen.kt` seinen Knopf
- * „Auf der Karte öffnen" als [NeutralButton] zeichnet.
- */
-@Composable
-private fun TourListHeader(
-    count: Int,
-    importing: Boolean,
-    onImport: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = if (count == 1) "1 Tour" else "$count Touren",
-            style = MaterialTheme.typography.titleMedium,
-        )
-
-        NeutralButton(onClick = onImport, enabled = !importing) {
-            if (importing) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(18.dp),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-            } else {
-                Icon(
-                    Icons.Filled.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Importieren")
-            }
-        }
-    }
 }
 
 /**
