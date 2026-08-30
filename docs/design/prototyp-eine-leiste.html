@@ -15,6 +15,12 @@
   Route, Kartenpins, Werte und der ●-Knopf („Route bereit“) rechnen sich aus den Wegpunkten
   selbst — bei Rundweg schließt sich die Linie zurück zu Punkt 1, unter zwei Punkten (bzw. einem
   bei Rundweg) verschwindet sie und „Fahren →“ wird inaktiv.
+
+  Entdeckt-Kacheln (Demo): Der Chip „⊞ Kacheln“ legt ein z14-artiges Raster über die Karte —
+  schon befahrene Kacheln bleiben klar (dünner Akzentrahmen), alles Unbefahrene liegt unter
+  Nebel; das größte voll erkundete Quadrat ist markiert, eine Pille zählt mit. Wer eine Fahrt
+  beendet, sieht in der Zusammenfassung „+3 neue Kacheln“ und die Kacheln ploppen im Raster auf.
+  Der Layer ist reines Overlay unter der Routenlinie und fängt keine Taps ab.
 -->
 <style>
   :root{
@@ -35,6 +41,7 @@
     --inv:#2E3033;
     --on-inv:#F2F2F4;
     --map:#E8EDE8;
+    --fog:rgba(26,27,30,.13);
     --topo:rgba(45,90,60,.10);
     --acc-soft:rgba(13,122,66,.45);
     --acc-fill:rgba(13,122,66,.16);
@@ -66,6 +73,7 @@
       --inv:#E3E3E7;
       --on-inv:#2E3033;
       --map:#181D24;
+      --fog:rgba(0,0,0,.44);
       --topo:rgba(255,255,255,.045);
       --acc-soft:rgba(107,214,156,.5);
       --acc-fill:rgba(107,214,156,.18);
@@ -95,6 +103,7 @@
     --inv:#E3E3E7;
     --on-inv:#2E3033;
     --map:#181D24;
+    --fog:rgba(0,0,0,.44);
     --topo:rgba(255,255,255,.045);
     --acc-soft:rgba(107,214,156,.5);
     --acc-fill:rgba(107,214,156,.18);
@@ -175,6 +184,17 @@
   .overlay-top .chip{background:var(--card);box-shadow:var(--elev)}
   .overlay-top .chip.on{background:var(--acc);color:var(--on-acc)}
   .discover-hint{position:absolute;top:62px;left:50%;transform:translateX(-50%);background:var(--card);box-shadow:var(--elev);border-radius:999px;padding:7px 15px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
+  /* Entdeckt-Kacheln: Raster als HTML-Grid UNTER der Routen-SVG — befahrene Kacheln bleiben
+     klar (dünner Akzentrahmen), Unbefahrenes liegt unter Nebel. Fängt keine Taps ab. */
+  .tilelayer{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(12,1fr);pointer-events:none}
+  .tilelayer .tc{background:var(--fog)}
+  .tilelayer .tc.on{background:transparent;box-shadow:inset 0 0 0 1px var(--acc-soft)}
+  .tilelayer .tc.new{background:var(--acc-fill);box-shadow:inset 0 0 0 2px var(--acc);animation:tilePop .45s ease-out}
+  @keyframes tilePop{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.tilelayer .tc.new{animation:none}}
+  .maxsq{grid-column:2/span 3;grid-row:9/span 3;border:2px solid var(--acc);border-radius:10px;margin:-1px}
+  .tilestats{position:absolute;top:60px;left:12px;z-index:2;background:var(--card);box-shadow:var(--elev);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  .tilestats b{color:var(--acc)}
   /* Wegpunkt-Pins über der Karten-SVG (HTML, damit Kreis + Ziffer trotz preserveAspectRatio="none" rund und lesbar bleiben) */
   .mappins{position:absolute;inset:0;z-index:1;pointer-events:none}
   .wppin{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:var(--acc);color:var(--on-acc);border:2px solid var(--card);box-shadow:var(--elev);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
@@ -358,6 +378,7 @@
   .modalcard .num-line{font-weight:700;font-size:21px;font-variant-numeric:tabular-nums}
   .sumplan{font-size:12.5px;color:var(--mut)}
   .sumplan.ok{color:var(--acc);font-weight:700}
+  .sumtiles{font-size:12.5px;color:var(--acc);font-weight:600}
   .toast{position:absolute;left:50%;bottom:calc(var(--barh) + 24px);transform:translateX(-50%) translateY(8px);background:var(--inv);color:var(--on-inv);border-radius:999px;padding:9px 17px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:90%;box-shadow:var(--elev)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .hint{position:absolute;left:14px;right:14px;bottom:calc(var(--barh) + 24px);z-index:40;background:var(--card);border-radius:26px;padding:13px 18px;font-size:12.5px;color:var(--ink);text-align:center;transition:opacity .4s,transform .4s;box-shadow:var(--elev-hi);pointer-events:none}
@@ -412,6 +433,7 @@
     <!-- ══ KARTE ══ -->
     <section class="screen flush" id="s-karte">
       <div class="mapfill" id="mapCanvas">
+        <div class="tilelayer" id="tileLayer" hidden aria-hidden="true"></div>
         <svg viewBox="0 0 100 140" preserveAspectRatio="none" aria-label="Kartenansicht mit geplanter Route">
           <path class="route alt" id="alt1" d="M22 122 C 8 94, 30 72, 24 46 S 50 20, 78 12" hidden/>
           <path class="route alt" id="alt2" d="M22 122 C 56 114, 82 94, 74 64 S 58 30, 78 12" hidden/>
@@ -424,8 +446,10 @@
         <div class="overlay-top">
           <button class="chip on" id="chipPlan">Zum Plan: 45 km</button>
           <button class="chip" id="chipDiscover">✦ Entdecken</button>
+          <button class="chip" id="chipTiles">⊞ Kacheln</button>
         </div>
         <div class="discover-hint" id="discoverHint" hidden>Tippe eine Route an</div>
+        <div class="tilestats" id="tileStats" hidden><b id="tileCount">31</b> Kacheln · Größtes Quadrat <b>3×3</b></div>
       </div>
 
       <!-- Ortskarte (Tap auf die Karte) + Bottom-Sheet: eingeklappt (nur Suche) · aufgezogen (Aktionen) · planen -->
@@ -725,6 +749,7 @@
       <div class="num-line" id="sumLine">4,2 km · 12:34 · TL ≈ 8</div>
       <div class="muted" style="font-size:12.5px" id="sumName">Heutige GA1-Runde</div>
       <div class="sumplan" id="sumPlan">✓ GA1-Einheit erfüllt</div>
+      <div class="sumtiles" id="sumTiles" hidden>⊞ +3 neue Kacheln entdeckt</div>
       <button class="btn" id="btnToReview">Zur Auswertung</button>
     </div>
   </div>
@@ -1222,7 +1247,7 @@
   }
   /* Tap auf die Karte: in der Planen-Stufe direkt ein Wegpunkt, sonst Ortskarte */
   $('mapCanvas').addEventListener('click',e=>{
-    if(e.target.closest('.overlay-top, .discover-hint, .route.alt')) return;
+    if(e.target.closest('.overlay-top, .discover-hint, .tilestats, .route.alt')) return;
     const r=$('mapCanvas').getBoundingClientRect();
     if(!r.width || !r.height) return;
     const pt={
@@ -1277,6 +1302,47 @@
     $('chipPlan').classList.remove('on');
   });
   $('chipPlan').addEventListener('click',()=>{ exitDiscover(); setPresetPlan(); setSheet('plan'); });
+
+  /* ── Entdeckt-Kacheln ── */
+  const TILE_COLS=8, TILE_ROWS=12;
+  /* Befahren laut Demo-Historie: Heimat-Cluster unten links + Band entlang der Touren nach
+     Nordosten. (0,8) fehlt bewusst — so bleibt das größte Quadrat 3×3 statt 4×4. */
+  const exploredTiles=new Set([
+    '1,8','2,8','3,8', '0,9','1,9','2,9','3,9', '0,10','1,10','2,10','3,10',
+    '0,11','1,11','2,11','3,11',
+    '3,7','4,7','4,6','5,6','5,5','5,4','6,4','6,3','6,2','6,1','7,1','7,0','6,0',
+    '2,6','1,7','7,5'
+  ]);
+  const freshTiles=['4,4','4,5','3,6'];  /* kommen mit der ersten beendeten Fahrt dazu */
+  let tilesFresh=false;
+  function renderTiles(){
+    const layer=$('tileLayer');
+    layer.textContent='';
+    for(let r=0;r<TILE_ROWS;r++) for(let c=0;c<TILE_COLS;c++){
+      const d=document.createElement('div');
+      d.className='tc'+(exploredTiles.has(c+','+r)?(tilesFresh&&freshTiles.includes(c+','+r)?' on new':' on'):'');
+      layer.appendChild(d);
+    }
+    const sq=document.createElement('div');
+    sq.className='maxsq';
+    layer.appendChild(sq);
+    $('tileCount').textContent=exploredTiles.size;
+  }
+  $('chipTiles').addEventListener('click',()=>{
+    S.tiles=!S.tiles;
+    if(S.tiles) renderTiles();
+    $('tileLayer').hidden=!S.tiles;
+    $('tileStats').hidden=!S.tiles;
+    $('chipTiles').classList.toggle('on',S.tiles);
+    if(S.tiles) toast('Befahrene Kacheln bleiben klar — der Nebel wartet auf dich');
+  });
+  function exploreFreshTiles(){
+    if(tilesFresh) return false;                    /* nur die erste Fahrt der Demo bringt Neuland */
+    tilesFresh=true;
+    freshTiles.forEach(t=>exploredTiles.add(t));
+    if(S.tiles) renderTiles();
+    return true;
+  }
   ['alt1','alt2','alt3'].forEach(id=>{
     $(id).addEventListener('click',()=>{
       S.altSel=id;
@@ -1367,6 +1433,7 @@
     const p=$('sumPlan');
     if(S.nav){ p.textContent='✓ GA1-Einheit erfüllt'; p.className='sumplan ok'; }
     else { p.textContent='Freie Fahrt — zählt in die Belastungsrechnung'; p.className='sumplan'; }
+    $('sumTiles').hidden=!exploreFreshTiles();
     $('sumLayer').hidden=false;
   });
 

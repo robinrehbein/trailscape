@@ -41,6 +41,7 @@ import kotlinx.coroutines.SupervisorJob
  * `AppServices.healthSyncStore`, `AppServices.trainingPlanStore`,
  * `AppServices.healthGateway`, `AppServices.healthSyncService`,
  * `AppServices.updateChecker`, `AppServices.reminderStore`,
+ * `AppServices.explorerTilesCacheStore`,
  * `AppServices.appScope`, `AppServices.segmentInventory`,
  * `AppServices.segmentDownloader`, `AppServices.segmentSettings`,
  * `AppServices.routingServerSettings`.
@@ -89,6 +90,15 @@ object AppServices {
      */
     val rideLoadCacheStore: RideLoadCacheStore by lazy {
         RideLoadCacheStore(File(appContext.filesDir, "rides"))
+    }
+
+    /**
+     * Persistenter Kachel-Cache der Entdeckt-Kacheln (siehe
+     * [ExplorerTilesCacheStore]) — `<filesDir>/rides/explorer-tiles.json`, im
+     * selben Verzeichnis wie die Tour-Dateien.
+     */
+    val explorerTilesCacheStore: ExplorerTilesCacheStore by lazy {
+        ExplorerTilesCacheStore(File(appContext.filesDir, "rides"))
     }
 
     /**

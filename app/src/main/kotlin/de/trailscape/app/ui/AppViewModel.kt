@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.data.ExplorerTilesCacheStore
 import de.trailscape.app.data.RideLoadCacheStore
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.data.SegmentStore
@@ -17,6 +18,8 @@ import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
+import de.trailscape.core.ExplorerTile
+import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthSyncReport
@@ -37,6 +40,7 @@ import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
+import de.trailscape.core.collectExplorerTiles
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.healthSyncInitialWindowMs
@@ -165,6 +169,8 @@ class AppViewModel(
     private val rideStorage: RideStorage = AppServices.rideStorage,
     /** Persistenter Tourlast-Cache der Trainingsauswertung (siehe [RideLoadCacheStore]). */
     private val rideLoadCache: de.trailscape.core.RideLoadFactsStore = AppServices.rideLoadCacheStore,
+    /** Persistenter Kachel-Cache der Entdeckt-Kacheln (siehe [ExplorerTilesCacheStore]). */
+    private val explorerTilesStore: ExplorerTilesStore = AppServices.explorerTilesCacheStore,
     /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
     private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
     /** Persistente Segment-Registry der lokalen Bestleistungen (siehe [SegmentStore]). */
@@ -734,6 +740,10 @@ class AppViewModel(
             // Segment-Bestleistungen im Hintergrund nachziehen — mit
             // Bestzeit-Hinweis, das hier ist eine neue Tour.
             refreshSegments(reportRideIds = setOf(ride.id))
+            // Ebenso die Entdeckt-Kacheln (still). Eine gespeicherte geplante
+            // Route aendert daran nichts — `collectExplorerTiles` in `:core`
+            // laesst geplante Touren aus.
+            refreshExplorerTilesIfEnabled()
         }
     }
 
@@ -752,6 +762,7 @@ class AppViewModel(
                 .sortedByDescending { it.createdAt }
             publishRides()
             refreshSegments(reportRideIds = byId.keys)
+            refreshExplorerTilesIfEnabled()
         }
     }
 
@@ -1219,6 +1230,9 @@ class AppViewModel(
         // Herzfrequenz angereicherten (mergedRides) zieht der Abgleich ueber
         // ihr neues updatedAt still nach.
         refreshSegments(reportRideIds = report.imported.mapTo(HashSet()) { it.id })
+        // Still: Importierte Touren sind meist alte Fahrten — ein „+12 neue
+        // Kacheln entdeckt" gehoert nur hinter eine gerade beendete Fahrt.
+        refreshExplorerTilesIfEnabled()
         return true
     }
 
@@ -1468,6 +1482,107 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Entdeckt-Kacheln
+    // -------------------------------------------------------------------------
+
+    private val _explorerTilesEnabled = MutableStateFlow(false)
+
+    /**
+     * Ob der Karten-Layer „Entdeckt-Kacheln" an ist: Alle jemals befahrenen
+     * z14-Kacheln bleiben klar, ueber allem anderen liegt ein leichter Nebel
+     * (siehe `:core`, `ExplorerTiles.kt`, und `ui/map/ExplorerTileLayer.kt`).
+     *
+     * Ab Werk **aus**, und das mit Absicht: Der Layer legt sich ueber die
+     * ganze Karte und braucht dazu einen Lauf ueber den gesamten Tourbestand.
+     * Wer ihn nicht kennt, soll ihn nicht ungefragt vorgesetzt bekommen —
+     * gefunden wird er im Kartenstil-Blatt gleich unter der Stilliste.
+     */
+    val explorerTilesEnabled: StateFlow<Boolean> = _explorerTilesEnabled.asStateFlow()
+
+    /**
+     * Schaltet den Layer und merkt sich das dauerhaft — dasselbe Muster wie
+     * [setMapStyle] daneben, nur mit einem Schalter statt einer ID: „an" legt
+     * eine `1` ab, „aus" raeumt den Schluessel weg. So ist der fehlende
+     * Schluessel eindeutig der Auslieferungszustand.
+     *
+     * Beim Einschalten laeuft sofort eine Neuberechnung ([refreshExplorerTiles]):
+     * Ohne sie bliebe die Karte nach dem Umlegen des Schalters unveraendert,
+     * bis zufaellig eine Tour endet.
+     */
+    fun setExplorerTilesEnabled(enabled: Boolean) {
+        if (_explorerTilesEnabled.value == enabled) return
+        _explorerTilesEnabled.value = enabled
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    if (enabled) {
+                        keyValueStore.setString(EXPLORER_TILES_STORAGE_KEY, "1")
+                    } else {
+                        keyValueStore.remove(EXPLORER_TILES_STORAGE_KEY)
+                    }
+                }
+            }
+            if (enabled) refreshExplorerTiles()
+        }
+    }
+
+    private val _explorerTiles = MutableStateFlow<Set<ExplorerTile>>(emptySet())
+
+    /**
+     * Alle befahrenen Kacheln des gesamten Bestands — die Grundlage von Nebel,
+     * Raster, groesstem Quadrat und Zaehler-Pille auf der Karte.
+     *
+     * Wird beim Ausschalten des Layers bewusst **nicht** geleert: Die UI
+     * blendet ueber [explorerTilesEnabled] aus, und der gemerkte Stand
+     * erspart beim Wiedereinschalten den kompletten Lauf ueber den Bestand.
+     */
+    val explorerTiles: StateFlow<Set<ExplorerTile>> = _explorerTiles.asStateFlow()
+
+    /**
+     * Rechnet den Kachelbestand neu — ueber den persistenten Cache
+     * ([explorerTilesStore]), sodass jede Tour ihre Punkte nur ein einziges
+     * Mal durchlaufen muss; danach traegt `rides/explorer-tiles.json` die paar
+     * Kachelnummern je Tour.
+     *
+     * `suspend` und nicht „feuern und vergessen": Der Aufrufer nach einer
+     * beendeten Fahrt muss den Stand *davor* mit dem *danach* vergleichen
+     * koennen, um „+3 neue Kacheln" melden zu duerfen. Wer das nicht braucht,
+     * ruft [refreshExplorerTilesIfEnabled].
+     *
+     * Geplante Routen zaehlen nicht mit — das filtert `collectExplorerTiles`
+     * in `:core` selbst; hier gehen schlicht die aktuellen Zusammenfassungen
+     * hinein. Fehler sind still: Ein nicht aktualisierter Kachelbestand
+     * kostet nur einen spaeteren Neuversuch.
+     */
+    private suspend fun refreshExplorerTiles() {
+        // Vor dem Dispatcher-Wechsel gelesen: [allSummaries] gehoert dem
+        // Main-Thread (siehe [publishRides]) und wird nicht nebenbei aus einer
+        // IO-Coroutine angefasst.
+        val summaries = allSummaries
+        val tiles = withContext(io) {
+            runCatching {
+                collectExplorerTiles(
+                    summaries = summaries,
+                    store = explorerTilesStore,
+                    loadRide = { rideStorage.loadRide(it) },
+                )
+            }.getOrNull()
+        } ?: return
+        _explorerTiles.value = tiles
+    }
+
+    /**
+     * [refreshExplorerTiles] fuer alle Bestandsaenderungen, die nichts vom
+     * Ergebnis wissen wollen (Import, Health, Sync) — und nur, wenn der Layer
+     * ueberhaupt an ist: Wer ihn nie einschaltet, soll nach jedem Import
+     * keinen Lauf ueber seinen ganzen Tourbestand bezahlen.
+     */
+    private fun refreshExplorerTilesIfEnabled() {
+        if (!_explorerTilesEnabled.value) return
+        viewModelScope.launch { refreshExplorerTiles() }
+    }
+
+    // -------------------------------------------------------------------------
     // Suchverlauf der Ortssuche (Karten-Tab)
     // -------------------------------------------------------------------------
 
@@ -1714,8 +1829,10 @@ class AppViewModel(
         }
         reloadRides()
         // Still: Gepullte Touren sind meist alte Bekannte anderer Geraete —
-        // ein Bestzeit-Jubel Tage nach der Fahrt waere nur Laerm.
+        // ein Bestzeit-Jubel Tage nach der Fahrt waere nur Laerm. Fuer die
+        // Entdeckt-Kacheln gilt dasselbe: nachziehen, nicht feiern.
         refreshSegments()
+        refreshExplorerTilesIfEnabled()
         return result
     }
 
@@ -1800,6 +1917,20 @@ class AppViewModel(
                 select(rideId)
                 RecordingRepository.clearFinishedRide()
                 showMessage("Tour gespeichert.")
+                // Nach der Fahrt: die Entdeckt-Kacheln nachziehen und melden,
+                // wie viele davon neu sind — der eigentliche Reiz des Layers
+                // ist ja, dass eine Fahrt ihn veraendert. Der Vergleich
+                // braucht den Stand *vor* der Neuberechnung, deshalb hier
+                // synchron ([refreshExplorerTiles] wartet auf sein Ergebnis)
+                // statt ueber [refreshExplorerTilesIfEnabled].
+                if (_explorerTilesEnabled.value) {
+                    val vorher = _explorerTiles.value
+                    refreshExplorerTiles()
+                    val neue = (_explorerTiles.value - vorher).size
+                    if (neue > 0) {
+                        showMessage("⊞ +$neue neue Kacheln entdeckt.")
+                    }
+                }
                 // Nach der Fahrt: Segmente einrechnen und eine etwaige
                 // Bestzeit als Snackbar melden.
                 refreshSegments(reportRideIds = setOf(rideId))
@@ -1817,6 +1948,9 @@ class AppViewModel(
                     mapStyle = mapStyleById(
                         runCatching { keyValueStore.getString(MAP_STYLE_STORAGE_KEY) }.getOrNull(),
                     ),
+                    explorerTilesEnabled = runCatching {
+                        keyValueStore.getString(EXPLORER_TILES_STORAGE_KEY) != null
+                    }.getOrDefault(false),
                     syncConfig = runCatching { getSyncConfig(keyValueStore) }.getOrNull(),
                     onboardingSeen = runCatching {
                         keyValueStore.getString(ONBOARDING_STORAGE_KEY) != null
@@ -1836,6 +1970,7 @@ class AppViewModel(
             _plan.value = restored.plan
             _planFeasibilityAckKey.value = restored.planFeasibilityAckKey
             _mapStyle.value = restored.mapStyle
+            _explorerTilesEnabled.value = restored.explorerTilesEnabled
             _placeSearchHistory.value = restored.placeSearchHistory
             _syncConfig.value = restored.syncConfig
             _reminderSettings.value = restored.reminderSettings
@@ -1861,6 +1996,12 @@ class AppViewModel(
             _onboardingVisible.value = !restored.onboardingSeen
 
             reloadRides()
+            // Erst nach [reloadRides]: Der Kachel-Lauf arbeitet auf den
+            // Zusammenfassungen, die es davor noch gar nicht gibt. Wer den
+            // Layer eingeschaltet gelassen hat, findet ihn beim naechsten
+            // Start sonst leer vor — ohne Nebel und ohne Zaehler, bis
+            // zufaellig eine Tour endet.
+            refreshExplorerTilesIfEnabled()
             autoSyncHealth()
         }
 
@@ -1874,6 +2015,7 @@ class AppViewModel(
         val profileConfirmed: Boolean,
         val plan: TrainingPlan?,
         val mapStyle: MapStyle,
+        val explorerTilesEnabled: Boolean,
         val syncConfig: SyncConfig?,
         val onboardingSeen: Boolean,
         val reminderSettings: ReminderSettings,
@@ -1911,6 +2053,19 @@ fun planFeasibilityIdentityKey(plan: TrainingPlan): String =
  * muessen.
  */
 const val ONBOARDING_STORAGE_KEY: String = "trailscape.onboarding.v1"
+
+/**
+ * Schluessel im [KeyValueStore], unter dem steht, dass der Karten-Layer
+ * „Entdeckt-Kacheln" eingeschaltet ist (siehe
+ * [AppViewModel.explorerTilesEnabled]).
+ *
+ * Im selben `trailscape.*`-Namensraum wie alle uebrigen Schluessel (siehe
+ * `data/PrefsStores.kt`). Der Wert ist immer `"1"`; „aus" wird durch das
+ * Entfernen des Schluessels ausgedrueckt, damit ein fehlender Schluessel
+ * eindeutig der Auslieferungszustand ist und nicht mit „schon einmal
+ * abgeschaltet" verwechselt werden kann.
+ */
+const val EXPLORER_TILES_STORAGE_KEY: String = "trailscape.map.explorertiles.v1"
 
 /**
  * Wartezeit, bevor eine per [AppViewModel.deleteRideWithUndo] entfernte Tour

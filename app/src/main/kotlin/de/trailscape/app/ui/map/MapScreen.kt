@@ -23,9 +23,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -36,6 +39,8 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,6 +62,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -90,6 +96,7 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.app.ui.theme.OverlayScreenPadding
 import de.trailscape.core.AscentPreference
+import de.trailscape.core.ExplorerSquare
 import de.trailscape.core.GeoResult
 import de.trailscape.core.NavState
 import de.trailscape.core.PlannedRoute
@@ -111,6 +118,7 @@ import de.trailscape.core.extractTurnHints
 import de.trailscape.core.glaetteZoom
 import de.trailscape.core.haversineM
 import de.trailscape.core.kursZwischen
+import de.trailscape.core.largestExplorerSquare
 import de.trailscape.core.naechsteKurve
 import de.trailscape.core.zoomFuerTempo
 import de.trailscape.core.safeFileName
@@ -363,6 +371,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     // dieselbe kurze Liste, die auch das Suchblatt unter „Zuletzt gesucht"
     // zeigt.
     val placeSearchHistory by appViewModel.placeSearchHistory.collectAsStateWithLifecycle()
+
+    // Entdeckt-Kacheln: der Schalter aus dem Kartenstil-Blatt und der
+    // Kachelbestand des ganzen Tourarchivs (siehe AppViewModel). Beides liegt
+    // dort und nicht hier, weil der Bestand einen Lauf ueber alle Touren
+    // kostet und einen Tab-Wechsel ueberleben muss.
+    val explorerTilesEnabled by appViewModel.explorerTilesEnabled.collectAsStateWithLifecycle()
+    val explorerTiles by appViewModel.explorerTiles.collectAsStateWithLifecycle()
 
     // Der Suchverlauf in der Form, die beide Suchen brauchen — das Blatt und
     // das modale Blatt der Planung. Frueher stand dieselbe Umformung an der
@@ -783,6 +798,41 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     LaunchedEffect(controller, plannedRoute) {
         controller.setPlannedRoute(plannedRoute?.points ?: emptyList())
+    }
+
+    /**
+     * Das groesste zusammenhaengende Quadrat des aktuellen Kachelbestands —
+     * gemerkt aus derselben Rechnung, die auch das GeoJSON dafuer baut. Die
+     * Zaehler-Pille zeigt es an; sie duerfte es keinesfalls selbst noch einmal
+     * ermitteln, denn die Suche laeuft ueber den gesamten Bestand und stuende
+     * damit bei jeder Rekomposition im Main-Thread.
+     */
+    var explorerMaxSquare by remember { mutableStateOf<ExplorerSquare?>(null) }
+
+    // Die drei Kachel-Ebenen fuellen. Aus tausenden Kacheln entstehen hier
+    // ebenso viele GeoJSON-Rechtecke — das ist Rechenarbeit und gehoert
+    // deshalb auf Dispatchers.Default; gesetzt wird erst das fertige Ergebnis.
+    // Ist der Layer aus, gehen drei leere Merkmalsammlungen hinaus (siehe
+    // [MapController.setExplorerTiles]) und die Ebenen zeichnen nichts.
+    LaunchedEffect(explorerTilesEnabled, explorerTiles, controller.isReady) {
+        if (!controller.isReady) return@LaunchedEffect
+        if (!explorerTilesEnabled) {
+            explorerMaxSquare = null
+            controller.setExplorerTiles(null, null, null)
+            return@LaunchedEffect
+        }
+        val tiles = explorerTiles
+        val geoJson = withContext(Dispatchers.Default) {
+            val square = largestExplorerSquare(tiles)
+            ExplorerTileGeoJson(
+                fog = fogFeatureCollection(tiles),
+                outline = exploredOutlineFeatureCollection(tiles),
+                maxSquare = maxSquareFeatureCollection(square),
+                square = square,
+            )
+        }
+        explorerMaxSquare = geoJson.square
+        controller.setExplorerTiles(geoJson.fog, geoJson.outline, geoJson.maxSquare)
     }
 
     // Der Ablesepunkt des Hoehenprofils gehoert zu genau einer Tour bzw. Route.
@@ -2438,6 +2488,29 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // tiefer ohnehin dauerhaft steht. Oben bleiben nur Zustaende,
                 // die sich ueber die Karte legen MUESSEN (Hinweise,
                 // Navigation, Downloadfortschritt).
+
+                // Die Zaehler-Pille der Entdeckt-Kacheln ist der einzige
+                // Bewohner dieser Kante, der KEIN Hinweis ist — sie zeigt
+                // einen Zustand an und laesst sich nicht bedienen. Sie steht
+                // hier im selben Stapel und nicht als eigenes Overlay in der
+                // Box, damit sie sich niemals mit einem Hinweis oder dem
+                // Navigations-HUD ueberlagert; der Stapel schiebt beides
+                // sauber untereinander.
+                //
+                // Gezeigt nur im ruhigen Kartenzustand: Wer aufzeichnet oder
+                // navigiert, braucht am oberen Rand jeden Pixel fuer HUD und
+                // Hinweise — und die Zahl aendert sich waehrend der Fahrt
+                // ohnehin erst beim Speichern der Tour (siehe die Snackbar im
+                // AppViewModel).
+                if (explorerTilesEnabled && explorerTiles.isNotEmpty() &&
+                    !isRecording && navTarget == null
+                ) {
+                    ExplorerTilesPill(
+                        tileCount = explorerTiles.size,
+                        square = explorerMaxSquare,
+                    )
+                }
+
                 locationDeniedAction?.let {
                     LocationPermissionNotice(
                         text = "Standortfreigabe wurde abgelehnt – ohne sie geht es hier " +
@@ -2891,6 +2964,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                 appViewModel.setMapStyle(it)
                 showStyleSheet = false
             },
+            explorerTilesEnabled = explorerTilesEnabled,
+            // Bewusst OHNE Schliessen des Blatts: Der Nebel liegt hinter dem
+            // Blatt und ist beim Umlegen sofort zu sehen — wer ihn danach
+            // wieder ausschalten will, muesste das Blatt sonst erneut suchen.
+            onExplorerTilesEnabledChange = appViewModel::setExplorerTilesEnabled,
             onDismiss = { showStyleSheet = false },
         )
     }
@@ -3146,12 +3224,25 @@ private fun rideFromPlannedRoute(name: String, route: PlannedRoute): Ride {
     )
 }
 
-/** Auswahl des Kartenstils (Port des `_showStyleSheet`-Bottom-Sheets). */
+/**
+ * Auswahl des Kartenstils (Port des `_showStyleSheet`-Bottom-Sheets), seit
+ * den Entdeckt-Kacheln zugleich der Ort ihres Schalters.
+ *
+ * ## Warum der Kachel-Schalter hier wohnt und nicht im Mehr-Tab
+ * Er beantwortet dieselbe Frage wie die Stilliste darueber: „Wie soll die
+ * Karte aussehen?" Seine Wirkung ist sofort und ausschliesslich auf der Karte
+ * zu sehen — und genau die liegt hinter diesem Blatt. Im Mehr-Tab waere er
+ * eine Einstellung ohne sichtbares Ergebnis, drei Bildschirme von ihrer
+ * Wirkung entfernt. Die Trennlinie markiert dabei den Wechsel von „welche
+ * Kacheln" zu „was liegt darueber": ein Schalter, keine weitere Stil-Option.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MapStyleSheet(
     current: MapStyle,
     onSelect: (MapStyle) -> Unit,
+    explorerTilesEnabled: Boolean,
+    onExplorerTilesEnabledChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
@@ -3192,9 +3283,111 @@ private fun MapStyleSheet(
                     }
                 }
             }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = CardPadding, vertical = 8.dp),
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // `toggleable` statt eines Klick-Modifiers am Schalter:
+                    // Die ganze Zeile schaltet, und die Bedienhilfen melden
+                    // sie als einen Schalter statt als Text plus Knopf —
+                    // dasselbe Muster wie die Schalterzeilen im Mehr-Tab
+                    // (`more/RecordingCard.kt`).
+                    .toggleable(
+                        value = explorerTilesEnabled,
+                        role = Role.Switch,
+                        onValueChange = onExplorerTilesEnabledChange,
+                    )
+                    .padding(horizontal = CardPadding, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Entdeckt-Kacheln", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Befahrene Gegenden bleiben klar, der Rest liegt unter Nebel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                // `onCheckedChange = null`: Der Schalter ist hier nur die
+                // Anzeige des Zustands, geschaltet wird ueber die Zeile.
+                Switch(checked = explorerTilesEnabled, onCheckedChange = null)
+            }
         }
     }
 }
+
+/**
+ * Die Zaehler-Pille der Entdeckt-Kacheln: „312 Kacheln · Größtes Quadrat 6×6"
+ * — klein, oben links auf der Karte und nur, wenn der Layer an ist und
+ * ueberhaupt etwas entdeckt wurde.
+ *
+ * Das groesste Quadrat kommt fertig herein ([square]) statt hier gerechnet zu
+ * werden: Die Suche laeuft ueber den gesamten Kachelbestand und gehoert
+ * deshalb in die Hintergrundrechnung, die ohnehin schon das GeoJSON dafuer
+ * baut (siehe den zugehoerigen `LaunchedEffect` in [MapScreen]). Unter
+ * Kantenlaenge 2 bleibt es unerwaehnt — ein „Größtes Quadrat 1×1" hat jeder,
+ * der einmal um den Block gefahren ist, und waere keine Auskunft.
+ *
+ * Form und Farben wie beim [RezentrierenChip] am unteren Rand, nur in der
+ * ruhigen Flaechenfarbe statt in der Akzentfarbe: Die Pille meldet einen
+ * Stand, sie will nicht angetippt werden.
+ */
+@Composable
+private fun ExplorerTilesPill(
+    tileCount: Int,
+    square: ExplorerSquare?,
+    modifier: Modifier = Modifier,
+) {
+    val text = buildString {
+        append(tileCount)
+        append(" Kacheln")
+        if (square != null && square.size >= 2) {
+            append(" · Größtes Quadrat ")
+            append(square.size)
+            append("×")
+            append(square.size)
+        }
+    }
+    Surface(
+        modifier = modifier
+            // Rueckt an der MapLibre-Attribution vorbei, die als Info-Knopf
+            // in genau dieser Ecke der Karte sitzt (`attributionGravity` in
+            // `MapViewHost.kt`, oben links mit 12 px Rand) und aus
+            // rechtlichen Gruenden erreichbar bleiben muss. Die Pille steht
+            // dadurch neben ihr statt auf ihr.
+            .padding(start = ExplorerPillAttributionInset),
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shadowElevation = 2.dp,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+        )
+    }
+}
+
+/**
+ * Das fertige GeoJSON der drei Kachel-Ebenen samt dem groessten Quadrat, das
+ * dabei ohnehin ermittelt wurde.
+ *
+ * Ein eigener Typ statt vier lose Rueckgabewerte: Alle vier entstehen in
+ * derselben Hintergrundrechnung und gehoeren zum selben Kachelstand — sie
+ * duerfen nie aus zwei verschiedenen Laeufen stammen.
+ */
+private data class ExplorerTileGeoJson(
+    val fog: String,
+    val outline: String,
+    val maxSquare: String,
+    val square: ExplorerSquare?,
+)
 
 /** Namensabfrage (`_askName` im Original). */
 @Composable
@@ -3296,6 +3489,23 @@ private fun planProgressText(source: RoutingSource?, done: Int, total: Int): Str
  * Radius sind die geforderten 48 dp im Durchmesser.
  */
 private val WAYPOINT_TOUCH_RADIUS_DP = 24.dp
+
+/**
+ * Wie weit die Zaehler-Pille der Entdeckt-Kacheln vom linken Rand des oberen
+ * Overlay-Stapels einrueckt (siehe [ExplorerTilesPill]).
+ *
+ * Der Platz gehoert dem Attributions-Knopf von MapLibre, der in genau dieser
+ * Ecke der Karte sitzt (`attributionGravity = TOP or START` in
+ * `MapViewHost.kt`). Er ist rechtlich Pflicht (OSM/CARTO/Esri) und muss
+ * antippbar bleiben — der lange Kommentar dort beschreibt ausdruecklich, dass
+ * diese Ecke in jedem Bildschirmzustand frei bleibt. Die Pille haelt sich
+ * daran und stellt sich daneben.
+ *
+ * Grosszuegig gerechnet: Das Symbol misst rund 24 dp, sein Rand von 12 px
+ * faellt je nach Displaydichte zwischen 3 und 12 dp aus, und die
+ * Beruehrungsflaeche darf nicht am Rand der Pille kleben.
+ */
+private val ExplorerPillAttributionInset = 40.dp
 
 /**
  * Anteil der Bildschirmhoehe, den die Trefferliste der Ortssuche im
