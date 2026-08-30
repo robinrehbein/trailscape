@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
@@ -86,9 +87,25 @@ import kotlin.math.roundToInt
  */
 
 /**
- * Die Routenplanung als **unteres Blatt mit zwei Stufen**.
+ * Die Routenplanung als **oberste Stufe des einen Kartenblatts**
+ * ([MapSheetStage.PLANEN], siehe `MapMode.kt` und den Karte-Screen in
+ * `docs/design/prototyp-eine-leiste.html`).
  *
- * ## Warum unten, und warum zwei Stufen
+ * Sie steht an derselben Stelle im Stapel wie das Erkunden-Gesicht
+ * (`ExploreSheet.kt`) und tritt an die Stelle von dessen Aktionszeile; der
+ * Griff bleibt, der Zurueck-Pfeil in der Kopfzeile fuehrt eine Stufe tiefer
+ * ([onClose]).
+ *
+ * ## Der Griff bleibt hier die innere Stufe
+ * Anders als im Entwurf klappt der Griff in dieser Stufe nicht zurueck auf
+ * die Aktionszeile, sondern zwischen vollem Planungsinhalt und blosser
+ * Statuszeile um. Der Grund steht in der Aufgabe selbst: Wegpunkte werden auf
+ * die **Karte** getippt, und dafuer muss sich das Blatt wegraeumen lassen,
+ * ohne die Planung zu verlieren (`onMapTap` in `MapScreen.kt` tut genau das
+ * beim ersten Wegpunkt). Beide Zustaende bleiben dabei das, was der Entwurf
+ * verlangt: Griff plus eine Zeile, oder Griff plus eine Zeile plus Inhalt.
+ *
+ * ## Warum unten, und warum ueberhaupt eine eingeklappte Stufe
  * Vorher war das hier eine Karte im oberen Stapel — zusammen mit Suche,
  * Navigationsleiste und Generator-Panel belegten die Panels auf einem
  * 360×800-dp-Geraet ueber 600 der rund 720 nutzbaren dp. Uebrig blieb ein
@@ -112,9 +129,9 @@ import kotlin.math.roundToInt
  * (`SwipeableSheet.kt`) ersetzt das durch den Griff und das stufenlose Ziehen,
  * das alle unteren Blaetter der Karte inzwischen teilen; Pfeil und
  * `clickable`-Zeile entfallen deshalb hier ersatzlos. Peek bleibt die
- * bisherige Kopfzeile (Profil, Statuszeile, Fortschrittskringel, X „Planung
- * beenden"), Body der bisherige aufgeklappte Koerper unveraendert samt seiner
- * eigenen `heightIn(max)`- und `verticalScroll`-Kombination.
+ * bisherige Kopfzeile (Profil, Statuszeile, Fortschrittskringel,
+ * Zurueck-Pfeil), Body der bisherige aufgeklappte Koerper unveraendert samt
+ * seiner eigenen `heightIn(max)`- und `verticalScroll`-Kombination.
  */
 @Composable
 internal fun PlanningSheet(
@@ -187,10 +204,13 @@ internal fun PlanningSheet(
     onNavigate: () -> Unit,
     onHoverPoint: (TrackPoint?) -> Unit,
     /**
-     * Beendet den Planungsmodus — das X in der Kopfzeile. Frueher stand dafuer
-     * die Pille „Planung beenden" am oberen Kartenrand; der Ausgang eines
-     * Modus gehoert aber dorthin, wo der Modus wohnt (und die Pille sprengte
-     * mit ihrem langen Text die obere Knopfreihe, siehe `ExploreSheet.kt`).
+     * Eine Stufe tiefer — der Zurueck-Pfeil in der Kopfzeile. Der Aufrufer
+     * (`MapScreen.kt`, `goToSheetStage`) faehrt damit auf die Aktionszeile
+     * zurueck und beendet dabei die Planung, mit derselben
+     * Rueckhol-Snackbar wie die Zurueck-Geste. Frueher stand dafuer die Pille
+     * „Planung beenden" am oberen Kartenrand; der Ausgang eines Modus gehoert
+     * aber dorthin, wo der Modus wohnt (und die Pille sprengte mit ihrem
+     * langen Text die obere Knopfreihe, siehe `ExploreSheet.kt`).
      */
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -249,11 +269,24 @@ internal fun PlanningSheet(
                     )
                     Spacer(Modifier.width(8.dp))
                 }
-                // Eigenes Klickziel: Das X beendet den Modus, unabhaengig vom
-                // Ziehen/Tippen des restlichen Blatts — zwei verschiedene
-                // Folgen, zwei getrennte Flaechen.
+                // Eigenes Klickziel: Der Pfeil geht eine Stufe tiefer,
+                // unabhaengig vom Ziehen/Tippen des restlichen Blatts — zwei
+                // verschiedene Folgen, zwei getrennte Flaechen.
+                //
+                // Frueher stand hier ein X „Planung beenden". Es tut dasselbe
+                // wie heute, aber es log ueber die Struktur: Die Planung ist
+                // seit dem Umbau kein eigenes Blatt mehr, das man schliesst,
+                // sondern die oberste Stufe des einen Kartenblatts (siehe
+                // `MapMode.kt`, [MapSheetStage]) — und was von dort wegfuehrt,
+                // fuehrt eine Stufe zurueck auf die Aktionszeile. Genau so
+                // steht es auch im freigegebenen Entwurf
+                // (`docs/design/prototyp-eine-leiste.html`, „‹ Zurück zu den
+                // Kartenaktionen").
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Planung beenden")
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Zurück zu den Kartenaktionen",
+                    )
                 }
             }
         },

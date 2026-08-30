@@ -116,34 +116,27 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
 )
 
 /**
- * Die Tourenliste als **Baustein** — bewusst ohne eigenen Bildschirmrahmen,
- * weil es sie an zwei Orten gibt:
- *
- *  * im Touren-Tab (`ui/rides/RidesScreen.kt`) als chronologische Sicht auf
- *    den Bestand — der Hauptzugang,
- *  * als Koerper des Erkunden-Blatts ueber der Karte
- *    (`ui/map/ExploreSheet.kt`) als raeumliche Sicht.
- *
- * Beide zeigen dieselben Karten, dieselben Menues und denselben Leerzustand,
- * weil sie dieselbe Funktion aufrufen. Ein zweiter Listenaufbau fuer den Tab
- * waere die Gelegenheit gewesen, dass „Löschen" an zwei Stellen zwei
- * verschiedene Dinge tut.
+ * Die Tourenliste als **Baustein** — bewusst ohne eigenen Bildschirmrahmen.
+ * Ihr einziger Wirt ist heute der Touren-Tab (`ui/rides/RidesScreen.kt`);
+ * das Erkunden-Blatt ueber der Karte, das sie frueher als zweiten Behaelter
+ * zeigte, fuehrt seit dem Sheet-Umbau keine Tourenliste mehr (die Karte
+ * zeigt eine Spur nur noch „auf Zuruf" ueber
+ * `AppViewModel.requestShowRideOnMap`). Der Zuschnitt als rahmenloser
+ * Baustein bleibt trotzdem: Er haelt die Liste frei von Layout-Annahmen
+ * ihres Wirts und liesse einen zweiten Behaelter jederzeit wieder zu, ohne
+ * dass „Löschen" an zwei Stellen zwei verschiedene Dinge taete.
  *
  * Deshalb **kein** `Scaffold`, **keine** Titelleiste und **keine** eigene
  * Aufloesung der System-Insets: Dieses Composable zeichnet nur seinen Inhalt
- * und fuellt, was der Behaelter ihm an Platz gibt. Randmasse — fuer die
- * schwebende Navigationskapsel und, im Blatt, dessen eigene Raender — kommen
- * ueber [contentPadding] von aussen; der Touren-Tab reicht dort schlicht
- * `screenContentPadding()` herein.
+ * und fuellt, was der Behaelter ihm an Platz gibt. Randmasse — etwa fuer die
+ * schwebende Navigationskapsel — kommen ueber [contentPadding] von aussen;
+ * der Touren-Tab reicht dort schlicht `screenContentPadding()` herein.
  *
- * ## Import wohnt nicht mehr in der Liste
- * Der Import-Knopf stand zuletzt als Kopfzeile in dieser Liste — und war damit
- * nur zu finden, wer das Erkunden-Blatt erst aufzieht. Seither haelt der
- * Karten-Screen die Aktion selbst (`rememberActivityImportAction` in
- * `ui/ActivityImportAction.kt`) und zeigt sie in der immer sichtbaren
- * Touren-Zeile des eingeklappten Erkunden-Blatts (`ui/map/ExploreSheet.kt`).
- * Diese Liste bekommt davon nur noch [onImportFile] fuer ihren Leerzustand
- * gereicht — derselbe Weg, keine zweite Verdrahtung.
+ * ## Import wohnt nicht in der Liste
+ * Die Import-Aktion haelt der Touren-Tab selbst
+ * (`rememberActivityImportAction` in `ui/ActivityImportAction.kt`) und zeigt
+ * sie in seiner Kopfzeile. Diese Liste bekommt davon nur noch [onImportFile]
+ * fuer ihren Leerzustand gereicht — derselbe Weg, keine zweite Verdrahtung.
  *
  * ## Eine gemeinsame Gruppen-Karte statt fuenf Einzelkacheln
  * Zieldesign `docs/design/prototyp-eine-leiste.html` (Screen „Touren") und
@@ -194,8 +187,8 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  *   fuer den Knopf „GPX-/FIT-Datei öffnen" im Leerzustand gebraucht.
  * @param contentPadding wird unveraendert an die `LazyColumn` durchgereicht.
  *   Der Behaelter traegt hierueber die Bodenfreiheit der schwebenden
- *   Navigationskapsel bei — im Tourenblatt zusaetzlich dessen eigene Raender,
- *   im Touren-Tab schlicht `screenContentPadding()`. Der Standardwert (kein
+ *   Navigationskapsel bei — im Touren-Tab schlicht `screenContentPadding()`.
+ *   Der Standardwert (kein
  *   Rand) gilt nur, wenn niemand etwas uebergibt, etwa in einer Vorschau.
  */
 @Composable
@@ -245,12 +238,11 @@ fun TourListContent(
         }
     }
 
-    // Breite ja, Hoehe nein: Das Tourenblatt deckelt die Hoehe nur nach oben
-    // (`heightIn(max = …)` in `ExploreSheet.kt`). Wuerde hier `fillMaxSize`
-    // stehen, nähme die Liste diese Obergrenze immer ein — ein Blatt, das
-    // auch mit zwei Touren 80 % des Bildschirms verdeckt, davon vier Fuenftel
-    // leer. So waechst das Blatt mit seinem Inhalt und scrollt erst, wenn es
-    // an die Grenze stoesst.
+    // Breite ja, Hoehe nein: Ein Behaelter, der die Hoehe nur nach oben
+    // deckelt (`heightIn(max = …)`), soll mit dem Inhalt wachsen duerfen.
+    // Wuerde hier `fillMaxSize` stehen, naehme die Liste eine solche
+    // Obergrenze immer ein — auch mit zwei Touren vier Fuenftel leer. So
+    // scrollt sie erst, wenn der Inhalt an die Grenze stoesst.
     Box(modifier = modifier.fillMaxWidth()) {
         when {
             loading && rides.isEmpty() -> Box(
@@ -383,11 +375,11 @@ fun TourListContent(
  * ## Warum eine Tour-ID statt eines internen Zustands
  * Der fruehe Touren-Bildschirm merkte sich die geoeffnete Tour selbst
  * (`rememberSaveable`), weil Liste und Detail **derselbe** Bildschirm waren.
- * Jetzt ist die Liste ein Baustein in zwei Behaeltern und die Detailansicht
- * ein eigenstaendiges Vollbild, das der jeweilige Behaelter darueber legt
- * (`ui/rides/RidesScreen.kt`, `ui/map/MapScreen.kt` — beide in einem eigenen
- * `Dialog`-Fenster, damit auch die schwebende Navigationskapsel verdeckt
- * ist). Welche Tour offen ist, haelt deshalb er als lokalen Zustand fest
+ * Jetzt ist die Liste ein rahmenloser Baustein und die Detailansicht ein
+ * eigenstaendiges Vollbild, das der Wirt darueber legt
+ * (`ui/rides/RidesScreen.kt`, in einem eigenen `Dialog`-Fenster, damit auch
+ * die schwebende Navigationskapsel verdeckt ist). Welche Tour offen ist,
+ * haelt deshalb er als lokalen Zustand fest
  * (angestossen ueber das
  * `onOpenDetail`-Callback von [TourListContent]) und reicht ihn hier als
  * einfachen Parameter herein. Diese Funktion bleibt bewusst zustandslos

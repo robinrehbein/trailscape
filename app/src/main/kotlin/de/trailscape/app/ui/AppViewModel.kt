@@ -374,41 +374,43 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
-    // „Auf der Karte zeigen" → Tourenblatt ueber der Karte
+    // „Auf der Karte zeigen" → Tour-Spur auf Zuruf
     // -------------------------------------------------------------------------
 
-    private val _tourSheetRequest = MutableStateFlow(false)
+    private val _showRideOnMapRequest = MutableStateFlow<String?>(null)
 
     /**
-     * Bitte an den Karten-Screen, das Tourenblatt aufzuschlagen — dasselbe
-     * Muster wie [pendingRouteTarget] und [pendingRideDetail], aus demselben
-     * Grund: Zwischen dem Aufruf und dem Erscheinen des Karten-Screens liegt
-     * ein Tab-Wechsel. Ein einmaliges Ereignis waere bis dahin verpufft, ohne
-     * dass das Blatt je aufginge — der gehaltene Wert wartet, bis der
-     * Karten-Screen in der Komposition ist.
+     * Die Tour, deren Spur der Karten-Tab als Naechstes zeigen soll — dasselbe
+     * Muster wie [pendingRideDetail] und [pendingRouteTarget], aus demselben
+     * Grund: Zwischen dem Tippen im Touren-Tab und dem Erscheinen des
+     * Karten-Screens liegt ein Tab-Wechsel. Ein einmaliges Ereignis waere bis
+     * dahin verpufft, ohne dass die Spur je erschiene — der gehaltene Wert
+     * wartet, bis der Karten-Screen in der Komposition ist.
      *
-     * Bewusst ein simples `Boolean` und keine ID wie bei [pendingRideDetail]:
-     * Es gibt nichts auszuwaehlen, nur ein „jetzt zeigen". Legt hin, wer zur
-     * Karte navigieren und dabei die raeumliche Sicht auf den Tourenbestand
-     * zeigen will; der Karten-Screen holt es ab und quittiert mit
-     * [consumeTourSheetRequest].
+     * Abgeholt und quittiert wird der Wert vom Karten-Screen
+     * (`ui/map/MapScreen.kt`, siehe [consumeShowRideOnMapRequest]).
      *
-     * Der Aufrufer war bis zur Fuehrung „Eine Leiste" die Huelle selbst — sie
-     * loeste [AppTab.RIDES] auf die Karte auf. „Touren" ist inzwischen wieder
-     * ein eigener Tab (`ui/rides/RidesScreen.kt`), das Blatt ueber der Karte
-     * bleibt aber als **raeumliche** Sicht bestehen; diese Bitte ist der Weg
-     * dorthin und funktioniert unveraendert weiter.
+     * ## Ersatz fuer das Tourenblatt, nicht fuer die Auswahl
+     * Bis zur Dreiteilung des Karten-Blatts (Suche/Aktionen/Planen) oeffnete
+     * „Auf der Karte zeigen" das Tourenblatt ueber der Karte — eine zweite,
+     * dauerhafte Kopie der Tourenliste neben dem inzwischen eigenstaendigen
+     * Touren-Tab. Die liegt jetzt **nur noch** im Touren-Tab; die Karte zeigt
+     * eine Tour-Spur seither ausschliesslich „auf Zuruf" von dort aus — dieser
+     * Zustand ist der Zuruf. Er ersetzt bewusst NICHT [selectedRideId]: Wer
+     * eine Tour hier hinlegt, will sie einmalig auf der Karte sehen, nicht
+     * dauerhaft „ausgewaehlt" haben.
      */
-    val tourSheetRequest: StateFlow<Boolean> = _tourSheetRequest.asStateFlow()
+    val showRideOnMapRequest: StateFlow<String?> = _showRideOnMapRequest.asStateFlow()
 
-    /** Bittet den Karten-Screen, das Tourenblatt aufzuschlagen. */
-    fun requestTourSheet() {
-        _tourSheetRequest.value = true
+    /** Zeigt die Spur der Tour [rideId] auf der Karte und wechselt dorthin. */
+    fun requestShowRideOnMap(rideId: String) {
+        _showRideOnMapRequest.value = rideId
+        requestTab(AppTab.MAP)
     }
 
     /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
-    fun consumeTourSheetRequest() {
-        _tourSheetRequest.value = false
+    fun consumeShowRideOnMapRequest() {
+        _showRideOnMapRequest.value = null
     }
 
     // -------------------------------------------------------------------------
