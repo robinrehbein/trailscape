@@ -30,11 +30,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiLargeTopAppBar
+import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
@@ -47,48 +48,66 @@ import de.trailscape.core.assessFitness
 import de.trailscape.core.routeTargetForSession
 
 /**
- * Trainings-Tab: Form-Kurve (Fitness/Ermüdung/Form), Vitalwerte, Wochenziel,
- * Zielformular und Trainingsplan.
+ * # Trainings-Tab: **ein** Scroll-Screen in drei Kapiteln
  *
- * Port von `lib/screens/training_screen.dart` (1.281 Zeilen). Die komplette
- * sportwissenschaftliche Auswertung liegt bereits fertig in
+ * Gestaltungsvorlage ist der Screen „Training" des Referenzprototyps
+ * `docs/design/prototyp-eine-leiste.html`: Form → Plan → Werte, jedes Kapitel
+ * mit einer Mono-Kapitelmarke ([SectionEyebrow]) darueber, und **keine**
+ * Segmente, keine Reiter, kein Umschalten. Die drei Marken sind der ganze
+ * Ersatz fuer eine zweite Navigationsebene — man erkennt beim Scrollen, wo man
+ * ist, statt vorher zu waehlen, was man sehen will.
+ *
+ * ## Die drei Kapitel und was in ihnen wohnt
+ *  * **Form** — [FormCard] (Lastskala-Hinweis, PMC-Kurve, die Kennzahlen
+ *    Fitness/Ermuedung/Form als Chips), darunter [FormCoachCard] mit der
+ *    Deutung als Akzentkarte, dann [FitnessCard] mit der Einstufung aus den
+ *    letzten acht Wochen. Alles, was beschreibt, **wie fit du gerade bist**.
+ *  * **Plan** — [WeekCard] (Wochenlast, Zielwert, Entlastungswoche),
+ *    [PlanHeader] mit [PlanAdaptionNote], die [PlanWeekCard]s aller Wochen und
+ *    zuletzt [GoalCard], das Zielformular. Alles, was beschreibt, **worauf du
+ *    hinfaehrst**.
+ *  * **Werte** — [VitalsTiles], das Kachel-Raster der Erholungssignale samt
+ *    Deutungszeile. Alles, was **gemessen** wurde statt gerechnet.
+ *
+ * Die Zuordnung ist die einzige inhaltliche Entscheidung dieses Umbaus:
+ * Karten, die der Prototyp nicht kennt (Fitnesslevel, Wochenlast, Zielformular),
+ * sind nicht entfallen, sondern in das Kapitel gewandert, dessen Frage sie
+ * beantworten. [GoalCard] steht dabei bewusst **am Ende** von „Plan": Sie ist
+ * das Formular, mit dem der Plan entsteht oder geloescht wird — man liest den
+ * Plan haeufiger, als man ihn neu setzt.
+ *
+ * ## Was hier nicht gerechnet wird
+ * Die komplette sportwissenschaftliche Auswertung liegt fertig in
  * [AppViewModel.insights] ([de.trailscape.app.ui.TrainingInsights]); dieser
  * Screen ist reine Darstellung plus das Zielformular (Persistenz laeuft ueber
  * [AppViewModel.plan]/[AppViewModel.setPlan]).
  *
  * ## Die Tagesempfehlung ist umgezogen — vollstaendig
- * Die Karte „Heute" (Readiness-Score, Empfehlung, Knopf „Passende Runde
- * planen") stand hier ganz oben und ist ersatzlos entfallen; sie ist jetzt die
+ * Die Karte „Heute" (Readiness-Score, Empfehlung, Knopf „Runde zum Plan
+ * bauen") stand hier ganz oben und ist ersatzlos entfallen; sie ist jetzt die
  * Startseite (`ui/today/TodayScreen.kt`). Bewusst **nicht** in reduzierter Form
  * stehen geblieben: Zwei Orte, an denen derselbe Score und dieselbe Empfehlung
  * stehen, waeren genau die Redundanz, wegen der bisher niemand wusste, wo die
- * Tagesauskunft eigentlich zu Hause ist — und die Version hier war die, die
- * kaum jemand gefunden hat. Die dazugehoerige Datei `ReadinessCard.kt` ist
- * deshalb geloescht statt verwaist zurueckgelassen; ihre Ampelfarbe
- * ([readinessBandColor], `TrainingColors.kt`) benutzt die Startseite weiter.
- *
- * Was hier bleibt, ist die Analyse dahinter: Die Einzelsignale, aus denen sich
- * die Bereitschaft zusammensetzt, stehen unveraendert in [VitalsCard] — dort
- * mit Messwert, Ampel und Begruendung, also genau in der Tiefe, fuer die man
- * diesen Tab oeffnet.
+ * Tagesauskunft eigentlich zu Hause ist. Was hier bleibt, ist die Analyse
+ * dahinter: die Einzelsignale im Kapitel „Werte", dort mit Messwert, Ampel und
+ * Begruendung, also genau in der Tiefe, fuer die man diesen Tab oeffnet.
  *
  * ## Leerzustand
  * Ohne eine einzige Tour sagte dieser Tab bisher in jeder Karte einzeln „noch
  * keine Daten" — und erklaerte nirgends, *warum* und *wie lange* das so bleibt.
- * Deshalb steht bei leerer Tourenliste [TrainingEmptyState] ganz oben: zwei
- * kurze Saetze, dass Fitness und Erholung ~2 Wochen Historie brauchen, und die
- * beiden kuerzesten Wege zu echten Daten. Die Modellerklaerung (CTL/ATL)
- * gehoert in die Kartentiefe, nicht in die Einstiegszeile.
+ * Deshalb steht bei leerer Tourenliste [TrainingEmptyState] ganz oben, noch vor
+ * dem ersten Kapitel: zwei kurze Saetze, dass Fitness und Erholung ~2 Wochen
+ * Historie brauchen, und die beiden kuerzesten Wege zu echten Daten.
  *
- * Zwei Karten fehlen in diesem Zustand ganz: [WeekCard] und [FitnessCard].
- * Beide *behaupteten* ohne Datengrundlage etwas — die eine „Keine
- * Entlastungswoche nötig — Deine Belastung sieht aktuell tragfähig aus" (eine
- * Entwarnung auf null Datenpunkten), die andere stufte den Nutzer am ersten
- * Tag als „Einsteiger" ein. Der Leerzustand darueber sagt bereits, dass beides
- * Historie braucht; eine erfundene Auskunft daneben macht ihn unglaubwuerdig.
- * Die uebrigen Karten
- * bleiben stehen — Vitalwerte koennen naemlich auch ganz ohne Touren schon aus
- * Health Connect kommen, und das Zielformular funktioniert ebenfalls sofort.
+ * Drei Bausteine fehlen in diesem Zustand ganz: [WeekCard], [FitnessCard] und
+ * [FormCoachCard]. Alle drei *behaupteten* ohne Datengrundlage etwas — „Keine
+ * Entlastungswoche nötig" ist eine Entwarnung auf null Datenpunkten,
+ * „Einsteiger" eine Einstufung ohne Grundlage, und ein Coach-Satz zur Form
+ * waere ein Urteil ueber eine Kurve, die es noch nicht gibt. Der Leerzustand
+ * darueber sagt bereits, dass alles davon Historie braucht; eine erfundene
+ * Auskunft daneben macht ihn unglaubwuerdig. Die uebrigen Bausteine bleiben
+ * stehen — Vitalwerte koennen naemlich auch ganz ohne Touren schon aus Health
+ * Connect kommen, und das Zielformular funktioniert ebenfalls sofort.
  *
  * ## Ein Hinweis am Rand
  * **Ganz oben**, solange [AppViewModel.profileConfirmed] aus ist: dass alle
@@ -98,10 +117,26 @@ import de.trailscape.core.routeTargetForSession
  * inzwischen geloescht). Es ist gegenstandslos geworden: Die Karten sprechen
  * die Begriffe jetzt selbst im Klartext (Fitness/Ermüdung/Form statt
  * CTL/ATL/TSB, Entlastungswoche statt Deload), und die wenigen Begriffe mit
- * echtem Erklaerungswert (VO2max) stehen als gedaempfter Untertext direkt an
- * ihrer Kennzahl (siehe [VitalsCard]). Ein Nachschlagewerk fuer eine Sprache,
- * die man gar nicht mehr uebersetzen muss, waere selbst wieder erklaerungs-
- * beduerftig.
+ * echtem Erklaerungswert (VO₂max) stehen als gedaempfter Untertext direkt an
+ * ihrer Kennzahl (siehe [VitalsTiles]).
+ *
+ * ## Die Kopfzeile bleibt
+ * Anders als die Startseite traegt dieser Screen weiter die grosse
+ * One-UI-Kopfzeile ([OneUiLargeTopAppBar]) mit dem Titel „Training" und dem ⚙
+ * darin. Der Prototyp zeichnet den Titel als Inhaltszeile — hier ist er die
+ * Kopfzeile, und das ist der bessere Handel: Dieser Tab **ist** eine lange
+ * Liste, durch die man ohnehin scrollt (der Grund, aus dem der Leitfaden die
+ * ausklappbare Kopfzeile ueberhaupt vorsieht), und das ⚙ steht damit an
+ * derselben Stelle wie im Touren-Tab. Der grosse zentrierte Titel ist genau
+ * der „grosse Screen-Titel" der Zielgestaltung, nur in der Fassung, die One UI
+ * dafuer vorsieht.
+ *
+ * ## Bodenfreiheit
+ * Der Inhalt scrollt unter der schwebenden Navigationskapsel hindurch; damit
+ * das letzte Element vollstaendig ueber ihr ausrollt, traegt die Liste
+ * [screenContentPadding] als `contentPadding` — es rechnet
+ * [LocalFloatingNavigationBarSpace] unten dazu. Dieselbe Zahl bekommt der
+ * `SnackbarHost`.
  *
  * ## Bewusste Abweichungen vom Dart-Original
  *  * **Keine `_EntranceFade`-Animation.** Das Original blendet die ersten
@@ -109,11 +144,8 @@ import de.trailscape.core.routeTargetForSession
  *    in derselben `LazyColumn` wie die Planwochen — bei vielen Wochen wuerden
  *    recycelte Items erneut einblenden. `ui/rides/TourList.kt` verzichtet
  *    aus demselben Grund bereits darauf.
- *  * **Kein `TweenAnimationBuilder`-Aequivalent** fuer Readiness-Score und die
+ *  * **Kein `TweenAnimationBuilder`-Aequivalent** fuer die
  *    Fitness/Ermüdung/Form-Kennzahlen — sie werden statisch gezeigt.
- *  * **Ampelpunkt statt Icon** bei den Vitalwerte-Zeilen (siehe KDoc von
- *    [SignalRow]) — bewusste Gestaltung passend zur Ampel-Metapher des
- *    Readiness-Systems, unabhaengig vom verfuegbaren Icon-Satz.
  *  * **Zeitbudget-Hinweis antippbar.** Siehe KDoc von [WeekCard].
  *
  * Alle deutschen Texte, Zahlenformate (`formatKm`/`formatHours` aus `:core`)
@@ -156,6 +188,10 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     // die Entscheidung faellt beim App-Start im ViewModel.
     val showShortSleeperHint by appViewModel.shortSleeperHintVisible
         .collectAsStateWithLifecycle()
+
+    // Ohne eine einzige Fitnesskurve gibt es nichts zu deuten — dann entfaellt
+    // die Coach-Karte des Form-Kapitels (siehe KDoc oben).
+    val hasFitnessCurve = insights.fitness.latest != null
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
@@ -207,6 +243,9 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     .fillMaxHeight()
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
+                // Unten steckt darin die Bodenfreiheit der schwebenden Kapsel
+                // ([LocalFloatingNavigationBarSpace]) — ohne sie bliebe die
+                // letzte Wochenkarte hinter der Leiste liegen.
                 contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
@@ -225,7 +264,8 @@ fun TrainingScreen(appViewModel: AppViewModel) {
 
                 // Solange das Profil nicht bestaetigt ist, stehen unter allen
                 // Zahlen dieses Tabs Annahmen (Alter 40, 75 kg). Einmal gesagt,
-                // ganz oben — nicht in jeder Karte einzeln.
+                // ganz oben — nicht in jeder Karte einzeln, und vor dem ersten
+                // Kapitel, weil der Vorbehalt fuer alle drei gilt.
                 if (!profileConfirmed) {
                     item(key = "profil-hinweis") {
                         UnconfirmedProfileNotice(
@@ -236,13 +276,18 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     }
                 }
 
+                // ----------------------------------------------- Kapitel FORM
+                item(key = "sec-form") { SectionEyebrow("Form") }
                 item(key = "form") { FormCard(insights) }
-                // Ohne eine einzige Tour haetten beide Karten nichts zu sagen —
-                // sie sagten es aber trotzdem, und zwar falsch: „Kein Deload
-                // nötig — Deine Belastung sieht aktuell tragfähig aus" ist eine
-                // Entwarnung auf null Datenpunkten, und „Einsteiger" eine
-                // Einstufung ohne Grundlage. Der Leerzustand ganz oben erklaert
-                // bereits, dass beides Historie braucht.
+                if (hasFitnessCurve) {
+                    item(key = "form-coach") { FormCoachCard(insights) }
+                }
+                if (rides.isNotEmpty()) {
+                    item(key = "fitness") { FitnessCard(assessment) }
+                }
+
+                // ----------------------------------------------- Kapitel PLAN
+                item(key = "sec-plan") { SectionEyebrow("Plan") }
                 if (rides.isNotEmpty()) {
                     item(key = "week") {
                         WeekCard(
@@ -255,24 +300,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             },
                         )
                     }
-                }
-                item(key = "vitals") {
-                    VitalsCard(
-                        insights = insights,
-                        showShortSleeperHint = showShortSleeperHint,
-                        onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
-                    )
-                }
-                if (rides.isNotEmpty()) {
-                    item(key = "fitness") { FitnessCard(assessment) }
-                }
-                item(key = "goal") {
-                    GoalCard(
-                        plan = plan,
-                        rides = rides,
-                        onSetPlan = { appViewModel.setPlan(it) },
-                        currentCtl = insights.latest?.ctl,
-                    )
                 }
 
                 adaptedPlan?.let { adapted ->
@@ -300,6 +327,25 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             rideLoads = rideLoadValues,
                         )
                     }
+                }
+
+                item(key = "goal") {
+                    GoalCard(
+                        plan = plan,
+                        rides = rides,
+                        onSetPlan = { appViewModel.setPlan(it) },
+                        currentCtl = insights.latest?.ctl,
+                    )
+                }
+
+                // ---------------------------------------------- Kapitel WERTE
+                item(key = "sec-werte") { SectionEyebrow("Werte") }
+                item(key = "vitals") {
+                    VitalsTiles(
+                        insights = insights,
+                        showShortSleeperHint = showShortSleeperHint,
+                        onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
+                    )
                 }
             }
         }
@@ -337,7 +383,7 @@ private fun UnconfirmedProfileNotice(onOpenProfile: () -> Unit) {
  * uebrigen Leerzustaende, weil sie verhindert, dass ein leerer Trainings-Tab
  * am zweiten Tag wie ein Fehler wirkt. Die CTL/ATL-Modellerklaerung entfaellt
  * dagegen: Wer die Begriffe wissen will, findet sie in den Karten selbst
- * ([VitalsCard], [FitnessCard]). Kein Hinweis mehr auf den Countdown — die
+ * ([VitalsTiles], [FitnessCard]). Kein Hinweis mehr auf den Countdown — die
  * Karten unten zaehlen ohnehin selbst herunter
  * (`FitnessSeries.daysUntilDisplayReady` aus `:core`).
  */

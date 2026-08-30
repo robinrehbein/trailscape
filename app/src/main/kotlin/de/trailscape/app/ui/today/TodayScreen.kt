@@ -2,6 +2,7 @@ package de.trailscape.app.ui.today
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,11 +27,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
+import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.planFeasibilityIdentityKey
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
@@ -48,12 +50,11 @@ import java.time.LocalDateTime
 /**
  * # Startseite „Heute" — die Antwort auf „Was soll ich heute fahren?"
  *
- * Bis hierher startete die App auf der Karte: Wer sie morgens oeffnete, sah
- * eine Landkarte und musste sich die eigentliche Auskunft selbst
- * zusammensuchen — Tagesform im Trainings-Tab, Wochenfortschritt weiter unten,
- * die automatische Rundengenerierung als kleiner Knopf am Ende einer Karte.
- * Dieser Screen buendelt genau diese Auskunft und macht sie zum Erstkontakt:
- * Bereitschaft → heutige Einheit → passende Runde → losfahren.
+ * Gestaltungsvorlage ist der Screen „Heute" des Referenzprototyps
+ * `docs/design/prototyp-eine-leiste.html` (samt den Mockups im Abschnitt
+ * „Empfehlung" von `docs/design/ui-navigationsstudien.html`). Er setzt die
+ * Seite nicht als Kartenstapel, sondern als **eine Auskunft in fuenf Stufen**;
+ * die Bausteine dazu stehen in `TodayCards.kt`, die Reihenfolge hier.
  *
  * ## Was hier NICHT passiert
  * Kein einziger Wert wird hier gerechnet. Bereitschaft, Empfehlung und
@@ -62,28 +63,40 @@ import java.time.LocalDateTime
  * [sessionsForDay], die Verrechnung von Tagesform und Planeinheit aus
  * [decideTodayRoute], das Urteil ueber den Plan aus [assessPlanFeasibility] und
  * der Wochenfortschritt aus [weekKm]/[currentWeekIndex] — alles `:core`. Der
- * Screen entscheidet nur, *welche* Karte etwas zu sagen hat.
+ * Screen entscheidet nur, *welche* Stufe etwas zu sagen hat.
  *
- * ## Reihenfolge und Sichtbarkeit
- * Jede Karte erscheint nur, wenn sie eine Aussage traegt:
- *  1. **Kopf** — Begruessung, Wochentag, Datum. Immer.
- *  2. **Tagesempfehlung** — immer: Auch ohne jede Historie liefert `:core` eine
- *     Empfehlung (dann „Grundlageneinheit") und daraus ein Routenziel.
- *  3. **„Plan und Ziel passen nicht zusammen"** — nur, wenn die laengste
- *     geplante Fahrt die Zieldistanz deutlich verfehlt UND diese Fassung des
- *     Plans noch nicht mit „Verstanden" quittiert wurde
- *     ([AppViewModel.planFeasibilityAckKey]). Sie steht bewusst weit oben: Ein
- *     Plan, der das Ziel nicht einholt, ist die wichtigste Auskunft der Seite —
- *     aber eben nur, bis sie einmal gelesen wurde.
- *  4. **Aufzeichnung** — nur, wenn schon Touren existieren. Beim Erststart
- *     traegt der Leerzustand ganz unten denselben Knopf; zweimal „Tour
- *     aufzeichnen" auf einem Bildschirm waere genau die Doppelung, die diese
- *     Seite abschaffen soll.
- *  5. **Diese Woche** — nur mit laufendem Plan; ohne Plan steht an dieser
- *     Stelle die Einladung, ein Ziel festzulegen.
- *  6. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
+ * ## Die Reihenfolge — und wann eine Stufe entfaellt
+ *  1. **Kopf** — grosser Screen-Titel „Heute", darunter dezent Wochentag und
+ *     Datum. Immer.
+ *  2. **Bereitschaft** ([ReadinessCard]) — Ring, Coach-Satz, Einheitszeile.
+ *     Immer: Auch ohne jede Historie liefert `:core` eine Empfehlung (dann
+ *     „Grundlageneinheit"); ohne Erholungssignale entfaellt nur der Ring.
+ *  3. **„Runde zum Plan bauen"** ([BuildRouteButton]) — nur, wenn `:core` ein
+ *     Routenziel liefert. An einem Ruhetag und am Zieltag gibt es keins, und
+ *     ein Angebot zur Ausfahrt waere dort der falsche Rat.
+ *  4. **Zahlenzeile** ([TodayCockpitRow]) — Wochen-km, Form, Planwoche, ohne
+ *     Karte drumherum. Nur, wenn wenigstens eine der drei Zahlen existiert.
+ *  5. **Coach** ([TodayCoachCard]) — die Gruende, aus denen die heutige
+ *     Empfehlung folgt. Nur, wenn `:core` welche nennt.
+ *  6. **„Plan und Ziel passen nicht zusammen"** ([PlanFeasibilityCard]) — nur,
+ *     wenn die laengste geplante Fahrt die Zieldistanz deutlich verfehlt UND
+ *     diese Fassung des Plans noch nicht mit „Verstanden" quittiert wurde
+ *     ([AppViewModel.planFeasibilityAckKey]). Sie steht bei den Plan-Stufen und
+ *     nicht mehr ganz oben: Ein Plan, der sein Ziel nicht einholt, ist eine
+ *     wichtige Auskunft — aber keine ueber *heute*, und heute ist, wofuer es
+ *     diese Seite gibt.
+ *  7. **Plan-Ausblick** ([PlanOutlookCard]) — mit laufendem Plan; ohne Plan
+ *     steht an dieser Stelle die Einladung, ein Ziel festzulegen.
+ *  8. **Letzte Tour** — bzw. der Erststart-Zustand, wenn es keine gibt.
  *
- * ## Kein `TopAppBar` — und keine Begruessung mehr
+ * ## Die Karte „Aufzeichnung" ist entfallen
+ * Der schwebende ●-Knopf neben der Navigationskapsel ist seit der Fuehrung
+ * „Eine Leiste" der eine Weg in die Fahrt; eine zweite, vollbreite
+ * „Aufzeichnung starten"-Karte mitten in der Tagesauskunft war dieselbe
+ * Handlung ein zweites Mal. Die ausfuehrliche Begruendung steht im KDoc von
+ * `TodayCards.kt`.
+ *
+ * ## Kein `TopAppBar` — der Titel steht im Inhalt
  * Anders als Training, Mehr und die Tourenansicht traegt dieser Screen keine
  * einklappende Titelleiste. Das ist kein Rest, sondern eine Entscheidung.
  *
@@ -91,34 +104,31 @@ import java.time.LocalDateTime
  * (siehe `ui/components/OneUiTopAppBar.kt`). Bei einer Liste, durch die man
  * ohnehin scrollt, ist das ein fairer Handel: eine Bildschirmhoehe Ruhe gegen
  * einen Ankerpunkt in Daumenreichweite. Diese Seite ist keine Liste, sondern
- * eine Auskunft — man oeffnet sie, um *eine* Sache zu sehen (die
- * Tagesempfehlung und ihren einen Knopf) und ist dann fertig. Ein Drittel
- * Leere davor tauschte genau die Information weg, fuer die es die Seite gibt.
- * Der Leitfaden nimmt die Kopfzeile bei Bildschirmhoehen unter 580 dp aus
- * demselben Grund zurueck, und die Karte (`ui/map/MapScreen.kt`) traegt sie
- * ebenfalls nicht.
+ * eine Auskunft — man oeffnet sie, um *eine* Sache zu sehen (die Bereitschaft
+ * und ihren einen Knopf) und ist dann fertig. Ein Drittel Leere davor
+ * tauschte genau die Information weg, fuer die es die Seite gibt.
  *
- * Hier stand bis dahin eine Begruessung („Guten Morgen/Tag/Abend") im
- * groessten Schriftgrad des Bildschirms. Sie ist **entfallen**: Sie belegte den
- * hoechsten Slot, um mitzuteilen, dass Nachmittag ist — was die Statusleiste
- * zwei Zentimeter darueber genauer sagt. Als Kopfzeile haette sie ausserdem
- * behauptet, der Name des Bildschirms zu sein, und sich dabei dreimal am Tag
- * umbenannt; der Leitfaden verlangt umgekehrt einen Titel, der
- * **gleichlautend** zum Reiter („Heute") ist. Geblieben ist das Datum als
- * ruhige Zeile — die einzige Auskunft, die der Kopf je hatte.
+ * Der grosse Titel selbst ist damit nicht verschwunden, er ist nur Inhalt
+ * geworden ([TodayHeader]) — genau wie im Prototyp, dessen `.bigtitle` in
+ * derselben Spalte steht wie die Karten darunter und mit ihnen wegscrollt.
  *
  * Das eine Bedienelement, das sonst in einer Kopfzeile saesse, gibt es
  * trotzdem: das ⚙ in den Mehr-Bereich (seit der Fuehrung „Eine Leiste" kein
  * Tab mehr, siehe `ui/TrailscapeApp.kt`). Es schwebt hier oben rechts ueber
  * dem Inhalt — an genau der Stelle, an der es in den Kopfzeilen von Touren und
- * Training steht, und genau so, wie der Prototyp der Studie es zeigt. Eine
- * ganze Kopfzeile nur fuer diesen einen Knopf einzufuehren waere der
- * schlechtere Tausch: Sie kostete ein Drittel Bildschirm.
+ * Training steht, und genau so, wie der Prototyp der Studie es zeigt.
+ *
+ * ## Bodenfreiheit
+ * Der Inhalt scrollt unter der schwebenden Navigationskapsel hindurch; damit
+ * das letzte Element trotzdem vollstaendig ueber ihr ausrollt, traegt die
+ * Liste [screenContentPadding] als `contentPadding` — es rechnet
+ * [LocalFloatingNavigationBarSpace] unten dazu. Dieselbe Zahl bekommt der
+ * `SnackbarHost`, sonst erschiene die Meldung hinter der Kapsel.
  *
  * ## Verhaeltnis zum Trainings-Tab
  * Die Tagesempfehlung steht **nur hier**. `ui/training/TrainingScreen.kt` zeigt
- * seit dieser Aenderung ausschliesslich Plan, Verlauf und Auswertung — die
- * Begruendung dazu steht dort im KDoc.
+ * ausschliesslich Form, Plan und Werte — die Begruendung dazu steht dort im
+ * KDoc.
  */
 @Composable
 fun TodayScreen(appViewModel: AppViewModel) {
@@ -155,7 +165,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
     // einzigen Test. Dort wirkte die Bereitschaft ausserdem binaer: entweder
     // Ruhetag oder volle Plandistanz. Jetzt daempft die Tagesform Distanz,
     // Hoehenprofil und Intensitaet, liefert den erklaerenden Satz gleich mit —
-    // und dieser Screen entscheidet weiterhin nur, welche Karte etwas zu sagen
+    // und dieser Screen entscheidet weiterhin nur, welche Stufe etwas zu sagen
     // hat.
     val todayRoute = remember(insights, rides, todaySession) {
         decideTodayRoute(
@@ -184,12 +194,31 @@ fun TodayScreen(appViewModel: AppViewModel) {
     }
     val riddenKm = remember(currentWeek, rides) { currentWeek?.let { weekKm(it, rides) } }
 
+    // Die „Schluessel-Einheit" der laufenden Woche fuer den Plan-Ausblick: die
+    // Einheit mit den meisten Kilometern. Bewusst keine Rechnung ueber den
+    // Kalender — `TrainingSession.day` ist ein Wochentagskuerzel („Sa"), kein
+    // Datum; und was die Woche traegt, ist ohnehin ihre laengste Fahrt.
+    val keySession = remember(currentWeek) { currentWeek?.sessions?.maxByOrNull { it.targetKm } }
+
     // Ohne ein einziges Erholungssignal ist die Bereitschaft kein „leerer
-    // Wert", sondern schlicht nicht Teil dieser Seite (siehe
-    // [TodayRecommendationCard]).
+    // Wert", sondern schlicht nicht Teil dieser Seite (siehe [ReadinessCard]).
     val hasHealthData = insights.restingHr.available ||
         insights.hrv.available ||
         insights.sleep.available
+
+    // Die drei Zahlen der Cockpit-Zeile. Jede fuer sich optional; sind alle
+    // drei leer, entfaellt die Zeile ganz.
+    val weekKmText = if (currentWeek != null && riddenKm != null) {
+        "${formatKmDe(riddenKm)}/${currentWeek.targetKm}"
+    } else {
+        null
+    }
+    val planWeekText = if (currentWeek != null && displayPlan != null) {
+        "${currentWeek.index + 1}/${displayPlan.weeks.size}"
+    } else {
+        null
+    }
+    val formValue = insights.latest?.tsb
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
@@ -222,21 +251,48 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     .fillMaxHeight()
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
+                // Unten steckt darin die Bodenfreiheit der schwebenden Kapsel
+                // ([LocalFloatingNavigationBarSpace]) — ohne sie bliebe das
+                // letzte Element hinter der Leiste liegen.
                 contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                item(key = "datum") { TodayDateLine() }
+                item(key = "kopf") { TodayHeader() }
 
-                item(key = "empfehlung") {
-                    TodayRecommendationCard(
+                item(key = "bereitschaft") {
+                    ReadinessCard(
                         insights = insights,
                         todayRoute = todayRoute,
                         showHealthHint = !insights.readiness.available && !hasHealthData,
-                        onPlanRoute = todayRoute.target?.let { target ->
-                            { appViewModel.requestRouteGeneration(target) }
-                        },
                         onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
                     )
+                }
+
+                // Kein Routenziel heisst: heute wird nicht gefahren (Ruhetag)
+                // oder die Strecke steht schon (Zieltag). Beides sind Faelle,
+                // in denen der Knopf nichts anzubieten haette.
+                todayRoute.target?.let { target ->
+                    item(key = "runde") {
+                        BuildRouteButton(
+                            target = target,
+                            onPlanRoute = { appViewModel.requestRouteGeneration(target) },
+                        )
+                    }
+                }
+
+                if (weekKmText != null || formValue != null || planWeekText != null) {
+                    item(key = "cockpit") {
+                        TodayCockpitRow(
+                            weekKmText = weekKmText,
+                            tsb = formValue,
+                            planWeekText = planWeekText,
+                        )
+                    }
+                }
+
+                val reasons = insights.recommendation.reasons
+                if (reasons.isNotEmpty()) {
+                    item(key = "coach") { TodayCoachCard(reasons) }
                 }
 
                 // Nur, wenn der Plan sein Ziel nicht traegt UND diese
@@ -255,18 +311,14 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     }
                 }
 
-                if (rides.isNotEmpty()) {
-                    item(key = "aufzeichnen") {
-                        RecordPromptCard(onStartRecording = appViewModel::requestRecording)
-                    }
-                }
-
                 if (currentWeek != null && riddenKm != null) {
-                    item(key = "woche") {
-                        WeekProgressCard(
+                    item(key = "plan-ausblick") {
+                        PlanOutlookCard(
                             week = currentWeek,
                             weekCount = displayPlan?.weeks?.size ?: 0,
                             riddenKm = riddenKm,
+                            keySession = keySession,
+                            onOpenTraining = { appViewModel.requestTab(AppTab.TRAINING) },
                         )
                     }
                 } else if (plan == null) {
@@ -317,36 +369,57 @@ fun TodayScreen(appViewModel: AppViewModel) {
 }
 
 /**
- * Die Datumszeile ueber der ersten Karte.
+ * Der Kopf der Seite: grosser Screen-Titel „Heute", darunter Wochentag und
+ * Datum.
  *
- * Bewusst **keine** Ueberschrift, sondern eine Zeile auf blankem Grund — das
- * Idiom, das die App dafuer schon kennt ([de.trailscape.app.ui.more.MoreGroupLabel]):
- * eingerueckt um [CardPadding], damit sie auf derselben Linie steht wie der
- * Text *in* der Karte darunter und nicht weiter aussen als er. `titleSmall` auf
- * `onSurfaceVariant` haelt sie auf Beschriftungshoehe: Sie eroeffnet die Seite,
- * informiert aber nicht — das tut die Karte darunter.
+ * ## Warum der Titel wieder da ist
+ * Hier stand zuletzt nur eine Datumszeile. Der Titel fehlte, weil es keine
+ * Kopfzeile gibt — und damit fehlte der Seite ihr Name: Der Leitfaden verlangt
+ * einen Titel, der **gleichlautend** zum Reiter ist, und der Prototyp zeigt ihn
+ * gross ueber der ersten Karte. Als Inhalt statt als Leiste kostet er nur seine
+ * eigene Zeilenhoehe und nicht ein Drittel Bildschirm.
+ *
+ * Er laeuft im `headlineLarge`-Slot — der groessten Stufe, die neben dem
+ * schwebenden ⚙ noch ruhig wirkt — und laesst rechts genau dessen Trefferflaeche
+ * frei, damit lange Uebersetzungen nicht unter dem Symbol verschwinden.
+ *
+ * Das Datum bleibt, was es war: eine Zeile auf blankem Grund, um [CardPadding]
+ * eingerueckt, damit sie auf derselben Kante steht wie der Text *in* der Karte
+ * darunter. Es eroeffnet die Seite, informiert aber nicht — das tut die Karte
+ * darunter. Genau so setzt Samsungs Telefon-App ihre Datumsueberschriften.
  *
  * Ein einmal gemerkter Zeitpunkt genuegt; wer die App ueber Mitternacht offen
  * liegen laesst, sieht das Datum beim naechsten Wechsel in diesen Tab
  * aktualisiert.
  */
 @Composable
-private fun TodayDateLine() {
+private fun TodayHeader() {
     val now = remember { LocalDateTime.now() }
-    Text(
-        text = weekdayDateFormat.format(now),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = CardPadding),
-    )
+            // Rechts bleibt die Flaeche des schwebenden Zahnrads frei.
+            .padding(start = CardPadding, end = SettingsActionWidth),
+    ) {
+        Text(text = "Heute", style = MaterialTheme.typography.headlineLarge)
+        Text(
+            text = weekdayDateFormat.format(now),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**
+ * Breite, die der Kopf rechts fuer das schwebende ⚙ freihaelt — die
+ * Trefferflaeche eines [androidx.compose.material3.IconButton].
+ */
+private val SettingsActionWidth = 48.dp
+
+/**
  * Ohne Trainingsziel gibt es keinen Plan — und damit weder Wochenziel noch
- * Tagesprogramm. Statt eine leere Wochenkarte zu zeigen, steht hier der
- * kuerzeste Weg dorthin.
+ * Tagesprogramm. Statt eines leeren Plan-Ausblicks steht hier der kuerzeste
+ * Weg dorthin.
  *
  * Textbudget: ein Satz Fliesstext, dann der Knopf. Was der Knopf bewirkt,
  * sagt der Knopf selbst — eine Hinweiszeile darunter waere ein zweites
@@ -367,14 +440,15 @@ private fun GoalPromptState(onOpenTraining: () -> Unit) {
 /**
  * Erststart: noch keine einzige Tour.
  *
- * Traegt hier — und nur hier — den Aufzeichnen-Knopf, weil die Karte
- * „Aufzeichnung" in diesem Fall ausgeblendet ist (siehe KDoc von
- * [TodayScreen]). [onRecord] ist dieselbe
- * [de.trailscape.app.ui.AppViewModel.requestRecording]-Bitte wie beim Knopf
- * der Karte „Aufzeichnung" ([RecordPromptCard]): Ein Leerzustand, der bloss
- * zur Karte wechselt statt die Aufzeichnung wirklich anzustossen, waere
- * genau die Zwei-Schritt-Huerde, die dieser Knopf woanders schon abgebaut
- * hat.
+ * Traegt hier — und nur hier — den Aufzeichnen-Knopf. Seit die Dauerkarte
+ * „Aufzeichnung" entfallen ist (der schwebende ●-Knopf tut dasselbe, siehe
+ * KDoc von `TodayCards.kt`), ist das kein zweiter Startweg mehr, sondern die
+ * Wegbeschreibung des Leerzustands: Wer noch keine Tour hat, soll nicht raten
+ * muessen, was als Naechstes zu tun ist. [onRecord] ist dieselbe
+ * [de.trailscape.app.ui.AppViewModel.requestRecording]-Bitte, die auch der
+ * ●-Knopf ausloest — ein Leerzustand, der bloss den Tab wechselt statt die
+ * Aufzeichnung wirklich anzustossen, waere genau die Zwei-Schritt-Huerde, die
+ * dieser Knopf woanders schon abgebaut hat.
  *
  * Textbudget: ein Satz Fliesstext. Das ZIP-Import-Wissen wohnt in der
  * Backup-Karte unter Mehr → Daten & Backup, wo der Import tatsaechlich

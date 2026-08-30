@@ -24,6 +24,12 @@ import kotlin.math.roundToInt
  * Karte „Dein Fitnesslevel": Einstufung (Einsteiger/Fortgeschritten/
  * Ambitioniert) aus den Fahrten der letzten 8 Wochen.
  *
+ * Sie schliesst das Kapitel „Form" des Trainings-Tabs ab (siehe KDoc von
+ * [TrainingScreen]): Kurve und Kennzahlen sagen, wie die Form gerade steht —
+ * diese Karte sagt, auf welchem Niveau. Im Prototyp
+ * (`docs/design/prototyp-eine-leiste.html`) kommt sie nicht vor, weil er nur
+ * den Regelfall zeichnet; entfallen ist sie deshalb nicht.
+ *
  * Port von `_buildFitnessCard` (`lib/screens/training_screen.dart`).
  */
 @Composable

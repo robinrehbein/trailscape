@@ -238,10 +238,12 @@ import kotlinx.coroutines.withContext
  *    Hoehenprofil, Speichern, Teilen und Navigation funktionieren damit ohne
  *    einen zweiten Weg. Das Flutter-Original kannte weder Generator noch
  *    Uebergabe zwischen den Tabs.
- *  * **Aufzeichnung von der Startseite.** Die Karte „Aufzeichnung" im
- *    Heute-Tab (`RecordPromptCard` in `ui/today/TodayCards.kt`) schickt ueber
+ *  * **Aufzeichnung von ausserhalb.** Der schwebende REC-Knopf der Huelle
+ *    (`ui/components/RecCapsuleButton.kt` samt Bereit-Dialog) und der
+ *    Erststart-Leerzustand des Heute-Tabs schicken ueber
  *    [AppViewModel.pendingRecordStart] dieselbe Bitte her, die dieser Screen
- *    sonst nur vom gruenen Knopf kennt — abgeholt und ausgeloest wird sie ueber
+ *    sonst nur von seinem frueheren Knopf kannte — abgeholt und ausgeloest
+ *    wird sie ueber
  *    **dieselbe** lokale Funktion `startRecording()`, also mit derselben
  *    Berechtigungsabfrage. Vorher versprach die Karte auf der Startseite nur
  *    den Weg dorthin und erklaerte in einem Absatz, wo der eigentliche Knopf

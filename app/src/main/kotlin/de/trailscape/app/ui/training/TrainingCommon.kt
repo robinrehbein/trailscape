@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.Fact
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.LocalSignalColors
 
 /**
@@ -27,6 +28,11 @@ import de.trailscape.app.ui.theme.LocalSignalColors
  * Der frueher hier ebenfalls definierte Hinweisblock (`_notice`) steht jetzt
  * als gemeinsame Fassung in `ui/components/NoticeBox.kt` — es gab ihn vorher
  * zweimal, hier und im Mehr-Paket.
+ *
+ * Mit dem Umbau auf die drei Abschnitte Form → Plan → Werte
+ * (`docs/design/prototyp-eine-leiste.html`) ist [MetricChip] dazugekommen: die
+ * Kennzahl als Pille, wenn sie zu einem Bild darueber gehoert statt fuer sich
+ * zu stehen.
  */
 
 /**
@@ -37,6 +43,36 @@ import de.trailscape.app.ui.theme.LocalSignalColors
 @Composable
 fun FigureText(value: String, label: String, color: Color? = null) {
     Fact(label = label, value = value, valueColor = color ?: Color.Unspecified)
+}
+
+/**
+ * Kennzahl als Pille — „Fitness 62", „Ermüdung 71", „Form −9".
+ *
+ * Die Chip-Form der Zielgestaltung (`docs/design/prototyp-eine-leiste.html`,
+ * Abschnitt „Form"): Wo eine Zahl **zur Kurve darueber gehoert** statt fuer
+ * sich zu stehen, liest sie sich als deren Legende, nicht als eigener Block.
+ * Fuer alles andere bleibt [FigureText] die Grammatik der App.
+ *
+ * Die Pille selbst ist [de.trailscape.app.ui.components.TagPill] — dieselbe
+ * wie Wochentyp- und Fitnesslevel-Marke, mit der 15-%-Toenung der Signalfarbe
+ * und dem Text in deren Vollton.
+ *
+ * @param color die Signalfarbe der Kennzahl. [Color.Unspecified] heisst „diese
+ *   Zahl hat nichts zu melden" (z. B. ein Formwert im neutralen Band, siehe
+ *   [tsbBandColor]) — dann traegt die Pille die neutrale Tonflaeche des
+ *   Schemas statt einer Ampelfarbe, die es gar nicht gibt.
+ */
+@Composable
+fun MetricChip(text: String, color: Color) {
+    if (color == Color.Unspecified) {
+        TagPill(text = text)
+    } else {
+        TagPill(
+            text = text,
+            containerColor = color.copy(alpha = 0.15f),
+            contentColor = color,
+        )
+    }
 }
 
 /**
