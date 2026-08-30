@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.NeutralButton
@@ -66,6 +68,16 @@ internal fun placeTitleAndArea(displayName: String): Pair<String, String> {
  * Wegpunkt der laufenden Route. Zwei verschiedene Knopfsaetze fuer denselben
  * Zustand haetten dieselbe Frage zweimal beantworten muessen.
  *
+ * ## „+ Als Wegpunkt" verkettet mehrere Orte zu einer Route
+ * Anders als [onRouteHere] und [onRoundTripHere] fuehrt [onAddAsWaypoint]
+ * nicht sofort zu einer eigenen Fahrt: Der Ort wird als weiterer Punkt in
+ * eine Route eingereiht, die so mehrere Orte verketten kann. Ob dafuer eine
+ * neue Planung beginnt oder ein laufender Plan fortgesetzt wird, entscheidet
+ * allein der Aufrufer (`MapScreen.kt`) — die Ortskarte kennt nur den einen
+ * angetippten Ort, keinen Planungszustand. Zielbild ist die dritte Aktion
+ * neben „Route hierher" und „Runde ab hier" in
+ * docs/design/prototyp-eine-leiste.html.
+ *
  * ## Keine Aktion waehrend [MapMode.NAVIGIEREN]
  * `MapMode.kt` beschreibt genau eine Ausnahme von den dokumentierten
  * Uebergaengen (Navigieren der eigenen geplanten Route bleibt in
@@ -81,6 +93,10 @@ internal fun placeTitleAndArea(displayName: String): Pair<String, String> {
  *   Aufrufer (`MapScreen.kt`) synchron aus `MapController.lastKnownLocation()`
  *   — ein zweiter GPS-Abonnent nur fuer diese eine Zahl waere unnoetig, der
  *   Standortpunkt der Karte ist ohnehin schon aktiv.
+ * @param onAddAsWaypoint Reiht [place] als weiteren Punkt in eine Route ein,
+ *   die so mehrere Orte verketten kann — ob damit eine neue Planung beginnt
+ *   oder eine laufende fortgesetzt wird, entscheidet der Aufrufer. Siehe
+ *   „+ Als Wegpunkt" in docs/design/prototyp-eine-leiste.html.
  */
 @Composable
 internal fun PlaceCard(
@@ -90,6 +106,7 @@ internal fun PlaceCard(
     onRouteHere: () -> Unit,
     onRoundTripHere: () -> Unit,
     onAddWaypoint: () -> Unit,
+    onAddAsWaypoint: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -139,17 +156,45 @@ internal fun PlaceCard(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                MapMode.ERKUNDEN -> Row {
+                // Primaerknopf ueber einer Sekundaerzeile statt drei
+                // Pillen nebeneinander: Bei drei Aktionen quetscht eine
+                // einzige Reihe "Route hierher" auf 360 dp unlesbar zusammen
+                // (siehe Klassen-KDoc). Entspricht dem Zielbild in
+                // docs/design/prototyp-eine-leiste.html (dort .placesecond).
+                MapMode.ERKUNDEN -> Column {
                     PrimaryButton(
                         text = "Route hierher",
                         onClick = onRouteHere,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.width(8.dp))
-                    NeutralButton(
-                        onClick = onRoundTripHere,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Runde ab hier") }
+                    Spacer(Modifier.height(8.dp))
+                    Row {
+                        NeutralButton(
+                            onClick = onRoundTripHere,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                text = "Runde ab hier",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        NeutralButton(
+                            onClick = onAddAsWaypoint,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clearAndSetSemantics {
+                                    contentDescription = "Ort als Wegpunkt zur Route hinzufügen"
+                                },
+                        ) {
+                            Text(
+                                text = "+ Als Wegpunkt",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
 
                 // Siehe Klassen-KDoc: kein neuer, undokumentierter

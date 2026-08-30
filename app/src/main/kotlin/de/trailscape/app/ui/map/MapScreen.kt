@@ -434,6 +434,27 @@ fun MapScreen(appViewModel: AppViewModel) {
     var plannedFor by rememberSaveable { mutableStateOf<String?>(null) }
 
     var routeProfile by rememberSaveable { mutableStateOf(RouteProfile.GRAVEL) }
+
+    /**
+     * Die Streckenart der Planung: `false` = „Einfach" (A nach B, Vorgabe),
+     * `true` = „Rundweg" — dann kehrt die Route vom letzten Wegpunkt zum
+     * **ersten** zurueck (siehe den Segmentschalter in `PlanningPanel.kt` und
+     * `routingWaypoints` im Planungs-Effekt weiter unten).
+     *
+     * Der Wert geht in [planningInputsKey] ein: Ohne ihn saehe der Effekt beim
+     * blossen Umschalten unveraenderte Wegpunkte und liesse die alte Route
+     * stehen.
+     *
+     * Bewusst kein eigener Saver in `PlanningStateSavers.kt`: Ein `Boolean`
+     * geht ohne Umweg ins Bundle. Und bewusst nicht in [exitPlanning]
+     * zurueckgesetzt — die Streckenart ist wie das Routenprofil eine
+     * Voreinstellung der Nutzerin, keine Arbeit an einer einzelnen Route.
+     *
+     * Fuer eine Runde aus dem Generator (`routeFromGenerator`) gilt er nicht:
+     * Die kommt als fertige Schleife ohne Wegpunkte an (siehe
+     * `RouteGenerationSheet.kt`), es gaebe dort nichts zu schliessen.
+     */
+    var roundTrip by rememberSaveable { mutableStateOf(false) }
     var planBusy by remember { mutableStateOf(false) }
     var planError by remember { mutableStateOf<String?>(null) }
 
@@ -856,7 +877,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ---------------------------------------------------------- Routenplanung
-    LaunchedEffect(waypoints, routeProfile, routeFromGenerator) {
+    LaunchedEffect(waypoints, routeProfile, roundTrip, routeFromGenerator) {
         if (routeFromGenerator) {
             // Die Route kommt fertig aus dem Rundkurs-Generator; sie hat keine
             // Wegpunkte, aus denen sich etwas nachrechnen liesse.
@@ -873,7 +894,20 @@ fun MapScreen(appViewModel: AppViewModel) {
             planProgress = null
             return@LaunchedEffect
         }
-        val inputs = planningInputsKey(waypoints, routeProfile)
+        // „Rundweg": Die Liste, die zum Routing geht, bekommt den ersten
+        // Wegpunkt noch einmal ans Ende — damit schliesst sich die Schleife,
+        // und Distanz und Hoehenmeter (und darueber das Kilometer-Etikett des
+        // Aufnahme-Knopfs, siehe `reportPlannedRoute` weiter unten) rechnen die
+        // Rueckfahrt von selbst mit. Die **angezeigte** Wegpunktliste im
+        // Planungsblatt bleibt ohne dieses Duplikat: Es ist kein Wegpunkt, den
+        // die Nutzerin gesetzt hat, sondern die Folge der gewaehlten
+        // Streckenart.
+        val routingWaypoints = if (roundTrip && waypoints.size >= 2) {
+            waypoints + waypoints.first()
+        } else {
+            waypoints
+        }
+        val inputs = planningInputsKey(waypoints, routeProfile, roundTrip)
         if (plannedRoute != null && plannedFor == inputs) {
             // Nach Tabwechsel oder Drehung laeuft dieser Effekt erneut, obwohl
             // sich nichts geaendert hat — die vorhandene Route ist die Antwort.
@@ -898,7 +932,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         val result = runCatching {
             planRouteOfflineFirst(
                 context = context,
-                waypoints = waypoints,
+                waypoints = routingWaypoints,
                 profile = routeProfile,
                 onSource = { source -> planSource = source },
                 onProgress = { done, total ->
@@ -931,7 +965,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // lesen. `missingSegmentsFor` ist leer, wenn nichts fehlt —
                 // `offerMissingSegments` tut dann nichts.
                 appViewModel.offerMissingSegments(
-                    missingSegmentsFor(context, waypoints, routeProfile),
+                    missingSegmentsFor(context, routingWaypoints, routeProfile),
                 )
             }
         planBusy = false
@@ -1720,6 +1754,42 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         waypoints = waypoints + Waypoint(place.lat, place.lon, name = place.displayName)
         controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
+    }
+
+    /**
+     * „+ Als Wegpunkt" auf der Ortskarte — die Aktion, die es dort **in jedem**
+     * Kartenmodus gibt (siehe den Karte-Screen in
+     * `docs/design/prototyp-eine-leiste.html`): Sie ist der Weg, auf dem aus
+     * einem gesuchten Ort eine Route aus mehreren Orten wird, ohne vorher
+     * „Route planen" zu suchen.
+     *
+     * Zwei Faelle, ein Ergebnis:
+     *  * **Planung laeuft nicht** — die Planung beginnt hier (derselbe Einstieg
+     *    [enterPlanning] wie die Aktionszeile des Kartenblatts), und der Ort ist
+     *    ihr erster Wegpunkt. Was von einer frueheren Planung noch herumliegt
+     *    (eine Route, die die Aufzeichnung ueberlebt hat, siehe [runRecording],
+     *    oder eine uebernommene Generator-Runde), wird dabei zum neuen Anfang
+     *    weggeraeumt.
+     *  * **Planung laeuft** — der Ort haengt sich hinten an, ueber genau
+     *    dieselbe [addPlaceAsWaypoint], die auch die Wegpunktsuche der
+     *    Planungsliste benutzt. Damit entstehen Name und Koordinate auf beiden
+     *    Wegen identisch, samt der dortigen Sonderregel fuer eine noch nicht
+     *    bestaetigte uebernommene Runde.
+     *
+     * [enterPlanning] lehnt waehrend einer laufenden Aufzeichnung ab (mit
+     * eigener Meldung); dass es dazu kam, steht danach am Modus — deshalb die
+     * zweite Abfrage statt einer Kopie jener Bedingung.
+     */
+    fun addPlaceAsWaypointFromCard(place: Place) {
+        if (mode != MapMode.PLANEN) {
+            enterPlanning()
+            if (mode != MapMode.PLANEN) return
+            routeFromGenerator = false
+            plannedRoute = null
+            plannedFor = null
+            waypoints = emptyList()
+        }
+        addPlaceAsWaypoint(place)
     }
 
     fun shareRoute(name: String, points: List<TrackPoint>) {
@@ -2599,7 +2669,22 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 },
                                 onRouteHere = { runRouteToPlace(place) },
                                 onRoundTripHere = { runRoundTripFromPlace(place) },
-                                onAddWaypoint = { addPlaceAsWaypoint(place) },
+                                // Beide Wegpunkt-Aktionen der Ortskarte — „Als
+                                // Wegpunkt" waehrend der Planung und
+                                // „+ Als Wegpunkt" im Erkunden-Zustand — gehen
+                                // durch **dieselbe** Funktion: Sie startet die
+                                // Planung, falls sie noch nicht laeuft, und
+                                // haengt den Ort sonst hinten an, ueber
+                                // denselben Weg wie die Wegpunktsuche der
+                                // Planungsliste (gleicher Name, gleiche
+                                // Koordinate). Zwei Lambdas mit derselben
+                                // Fallunterscheidung waeren zwei Gelegenheiten,
+                                // sie auseinanderlaufen zu lassen. Die
+                                // Ortskarte schliesst dabei wie bei den anderen
+                                // Aktionen (`selectedPlace = null` steckt in
+                                // [addPlaceAsWaypoint]).
+                                onAddWaypoint = { addPlaceAsWaypointFromCard(place) },
+                                onAddAsWaypoint = { addPlaceAsWaypointFromCard(place) },
                                 onClose = { selectedPlace = null },
                             )
                         }
@@ -2647,6 +2732,12 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onExpandedChange = { planSheetExpanded = it },
                             profile = routeProfile,
                             onProfileChange = { routeProfile = it },
+                            // Der Segmentschalter „Einfach | Rundweg": Er
+                            // aendert keinen Wegpunkt, nur die Art, wie sie
+                            // verbunden werden — nachgerechnet wird ueber
+                            // `roundTrip` im Schluessel des Planungs-Effekts.
+                            roundTrip = roundTrip,
+                            onRoundTripChange = { roundTrip = it },
                             waypoints = waypoints,
                             route = plannedRoute,
                             busy = planBusy,
@@ -3328,13 +3419,26 @@ private data class PlanningSnapshot(
 }
 
 /**
- * Kennzeichnet, wofuer eine Route berechnet wurde: Profil und Wegpunkte.
+ * Kennzeichnet, wofuer eine Route berechnet wurde: Profil, Streckenart und
+ * Wegpunkte.
  *
  * Fuenf Nachkommastellen sind rund ein Meter — genauer setzt niemand einen
  * Wegpunkt, und die Zeichenkette bleibt kurz genug fuer das Bundle.
+ *
+ * [roundTrip] gehoert mit in den Schluessel, obwohl er die Wegpunkte nicht
+ * aendert: Beim Umschalten von „Einfach" auf „Rundweg" bleibt die Liste gleich,
+ * die zu rechnende Route aber nicht — ohne dieses Zeichen haette der
+ * Planungs-Effekt die alte Route als „passt schon" durchgewunken.
  */
-private fun planningInputsKey(waypoints: List<Waypoint>, profile: RouteProfile): String =
-    waypoints.joinToString(separator = ";", prefix = "${profile.name}|") { waypoint ->
+private fun planningInputsKey(
+    waypoints: List<Waypoint>,
+    profile: RouteProfile,
+    roundTrip: Boolean,
+): String =
+    waypoints.joinToString(
+        separator = ";",
+        prefix = "${profile.name}|${if (roundTrip) "R" else "E"}|",
+    ) { waypoint ->
         String.format(Locale.ROOT, "%.5f,%.5f", waypoint.lat, waypoint.lon)
     }
 
