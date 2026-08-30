@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,8 +48,10 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
@@ -258,6 +262,17 @@ internal fun RideDetailScreen(
                     .padding(screenContentPadding()),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
+                // Titel + Datum/Typ-Zeile (Zieldesign
+                // `docs/design/prototyp-eine-leiste.html`, Screen
+                // „Tour-Detail", `#dName`/`#dDate`): Der Titel selbst liegt in
+                // der auf-/einklappbaren [OneUiLargeTopAppBar] oben, dieser
+                // Zeile obliegt nur das gedaempfte Darunter.
+                Text(
+                    text = rideDateTypeLine(ride),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
                 if (ride.points.isNotEmpty()) {
                     RideMapCard(
                         ride = ride,
@@ -269,24 +284,22 @@ internal fun RideDetailScreen(
                     )
                 }
 
-                // Eine gespeicherte Planung sieht hier aus wie eine Tour, hat
-                // aber weder Trainingslast noch Auswertung — ohne diesen Satz
-                // waere das ein Fehler statt einer Auskunft (siehe `:core`:
-                // `Ride.planned`).
-                if (ride.planned) {
-                    NoticeBox(
-                        icon = Icons.Filled.Route,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        text = "Das ist eine gespeicherte Planung, keine gefahrene Tour. Sie " +
-                            "zählt deshalb nicht für Wochenfortschritt, Fitness und Form.",
-                    )
-                }
-
-                RideFactsCard(ride = ride)
+                RideStatsRow(ride = ride)
 
                 val elevation = curves?.elevation.orEmpty()
                 if (elevation.size >= 2) {
                     DetailCard {
+                        // Mono-Eyebrow „HÖHENPROFIL": bewusst nicht identisch
+                        // mit dem Zieldesign-Mockup (dessen `.p-eyebrow` dort
+                        // ohne `.mono` steht) — die Aufgabenstellung verlangt
+                        // hier ausdruecklich die Monospace-Grossschrift-
+                        // Variante, siehe [DetailEyebrow].
+                        DetailEyebrow(
+                            text = "Höhenprofil",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            mono = true,
+                        )
+                        Spacer(Modifier.height(8.dp))
                         // Wiederverwendung statt Nachbau: dieselbe Darstellung
                         // wie auf dem Karten-Screen. Die Linienfarbe kommt hier
                         // aber aus dem Theme — das feste Kartengruen liegt dort
@@ -298,6 +311,34 @@ internal fun RideDetailScreen(
                         )
                     }
                 }
+
+                RideAnalysisCard(
+                    load = load,
+                    decoupling = analysis?.decoupling,
+                    vo2max = analysis?.vo2max,
+                )
+
+                // Ab hier alles Weitere, das die Zielstruktur nicht mehr
+                // namentlich vorgibt, aber unveraendert erhalten bleibt: die
+                // Planungs-Ausnahme, die restlichen Kennzahlen, Tempo- und
+                // Pulskurve, Segmente.
+
+                // Eine gespeicherte Planung sieht hier aus wie eine Tour, hat
+                // aber weder Trainingslast noch Auswertung — ohne diesen Satz
+                // waere das ein Fehler statt einer Auskunft (siehe `:core`:
+                // `Ride.planned`). Die kurze Erwaehnung in der Datum/Typ-Zeile
+                // oben ersetzt diesen Hinweis nicht: Dort steht nur, *was* die
+                // Tour ist, hier *was das fuer die Auswertung bedeutet*.
+                if (ride.planned) {
+                    NoticeBox(
+                        icon = Icons.Filled.Route,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "Das ist eine gespeicherte Planung, keine gefahrene Tour. Sie " +
+                            "zählt deshalb nicht für Wochenfortschritt, Fitness und Form.",
+                    )
+                }
+
+                RideExtraFactsCard(ride = ride)
 
                 curves?.speed?.let { speed ->
                     DetailCard {
@@ -325,12 +366,6 @@ internal fun RideDetailScreen(
                 if (segmentViews.isNotEmpty()) {
                     SegmentsCard(views = segmentViews)
                 }
-
-                RideAnalysisCard(
-                    load = load,
-                    decoupling = analysis?.decoupling,
-                    vo2max = analysis?.vo2max,
-                )
 
                 // Der schwebende Knopf der Liste ist hier zwar weg, ein wenig
                 // Luft unter der letzten Karte tut dem Daumen trotzdem gut.
@@ -411,33 +446,105 @@ private fun RideMapCard(
     }
 }
 
-/** Alle Kennzahlen der Tour — die Zahlen selbst stammen unveraendert aus `ride.stats`. */
+/**
+ * Datum/Typ-Zeile direkt unter dem Titel — Zieldesign
+ * `docs/design/prototyp-eine-leiste.html`, Screen „Tour-Detail" (`#dDate`):
+ * Datum und Uhrzeit, ergaenzt um die Herkunft, falls die Tour eine
+ * gespeicherte Planung ist oder aus Health Connect stammt. Der Titel selbst
+ * liegt weiterhin in der auf-/einklappbaren [OneUiLargeTopAppBar] — dieser
+ * Zeile obliegt nur das Darunter.
+ *
+ * Ersetzt nicht die ausfuehrliche Planungs-[NoticeBox] weiter unten: Dort
+ * steht, was die Kennzeichnung fuer die Auswertung bedeutet, hier nur, dass
+ * sie zutrifft.
+ */
+private fun rideDateTypeLine(ride: Ride): String = buildList {
+    add(formatDateTime(localOfEpochMs(ride.createdAt)))
+    if (ride.planned) add("Geplante Route")
+    if (ride.id.startsWith("hc-")) add("aus Health Connect")
+}.joinToString(" · ")
+
+/**
+ * Die vierteilige Statistik-Zeile (Zieldesign
+ * `docs/design/prototyp-eine-leiste.html`, Klasse `.statrow4`): Distanz,
+ * Gesamtdauer, Anstieg und Ø Puls als grosse, zentrierte Zahlen mit
+ * Tabellenziffern ([BigStat]) — bewusst nicht ueber das gemeinsame [Fact]
+ * (Label-ueber-Wert, linksbuendig, keine Tabellenziffern), sondern nach dem
+ * Muster von `CompactValue` in `ui/map/RideCompactBar.kt`, das im Fahrmodus
+ * bereits fette Zahlen mit Tabellenziffern zeigt. Fehlt die Herzfrequenz
+ * (haeufig bei importierten GPX-Dateien), steht „–" statt die vierte Spalte
+ * ausfallen zu lassen — die Zeile bleibt so immer vierteilig, wie das
+ * Zieldesign es zeigt.
+ */
 @Composable
-private fun RideFactsCard(ride: Ride) {
+private fun RideStatsRow(ride: Ride) {
     val stats = ride.stats
 
     DetailCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceAround,
+        ) {
+            BigStat(value = formatKmDe(stats.distanceKm), label = "km")
+            BigStat(value = formatDuration(stats.durationS), label = "h:min")
+            BigStat(value = "${stats.ascentM.roundToInt()}", label = "Hm")
+            BigStat(
+                value = stats.avgHrBpm?.toString() ?: "–",
+                label = "Ø Puls",
+            )
+        }
+    }
+}
+
+/**
+ * Ein Wert der vierteiligen Statistik-Zeile: grosse, zentrierte Zahl in
+ * Tabellenziffern ([fontFeatureSettings] `"tnum"`, Repo-Muster fuer
+ * Zahlenreihen — siehe `ui/map/RideCompactBar.kt`), kleine Einheit darunter.
+ */
+@Composable
+private fun BigStat(value: String, label: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Text(
-            text = formatDateTime(localOfEpochMs(ride.createdAt)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            text = value,
+            style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(12.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
+ * Die restlichen Kennzahlen der Tour, die nicht in [RideStatsRow] stehen —
+ * Fahrzeit (im Unterschied zur Gesamtdauer dort), Ø Tempo, Abstieg, Max-Puls
+ * — plus die Health-Connect-Kennzeichnung. Unveraendert aus der fruesheren
+ * `RideFactsCard`, nur um die vier Werte bereinigt, die jetzt gross oben
+ * stehen (und um das Datum, das in die Datum/Typ-Zeile gewandert ist).
+ */
+@Composable
+private fun RideExtraFactsCard(ride: Ride) {
+    val stats = ride.stats
+
+    DetailCard {
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DetailFact("Distanz", "${formatKmDe(stats.distanceKm)} km")
             DetailFact("Fahrzeit", formatDuration(stats.movingTimeS))
-            DetailFact("Gesamtdauer", formatDuration(stats.durationS))
             DetailFact(
                 label = "Ø Tempo",
                 value = stats.avgSpeedKmh?.let { "${formatOneDecimalDe(it)} km/h" } ?: "–",
             )
-            DetailFact("Höhenmeter ↑", "${stats.ascentM.roundToInt()} hm")
             DetailFact("Höhenmeter ↓", "${stats.descentM.roundToInt()} hm")
-            stats.avgHrBpm?.let { DetailFact("Ø Puls", "$it bpm") }
             stats.maxHrBpm?.let { DetailFact("Max. Puls", "$it bpm") }
         }
         if (ride.id.startsWith("hc-")) {
@@ -447,7 +554,9 @@ private fun RideFactsCard(ride: Ride) {
             // HealthSyncLogic.kt) — unabhaengig davon, welche App die Daten
             // dort hineingeschrieben hat. Samsung Health ist nur eine von
             // vielen Quellen; wer eine Garmin traegt, hielt den Chip fuer einen
-            // Fehler.
+            // Fehler. Steht zusaetzlich zur kurzen Erwaehnung in der
+            // Datum/Typ-Zeile, weil dort nur der Text steht — die Pille bleibt
+            // die auffindbare Marke, wie ueberall sonst in der App.
             TagPill(text = "aus Health Connect")
         }
     }
@@ -461,6 +570,14 @@ private fun RideFactsCard(ride: Ride) {
  * gefahren), entfaellt die Karte ganz. Die Gruende dafuer stehen bewusst
  * **nicht** hier: Sie sind fuer die Nutzerin nicht handlungsleitend — sie kann
  * eine gefahrene Tour nicht nachtraeglich gleichmaessiger machen.
+ *
+ * Zieldesign `docs/design/prototyp-eine-leiste.html` (Klasse `.coach`): eine
+ * Akzent-Container-Karte ([CoachCard], `primaryContainer`/`onPrimaryContainer`
+ * statt der neutralen Kartenflaeche) mit der Eyebrow „Coach" statt des
+ * frueheren Titels „Analyse" — dieselbe Kennzeichnung wie die Coach-Kacheln
+ * auf „Heute" und „Training". Anders als beim Hoehenprofil bewusst **nicht**
+ * die Monospace-Variante: Im Zieldesign traegt `.coach .eyebrow` keine
+ * `.mono`-Klasse, „Coach" bleibt dort schlichte Groteskschrift.
  */
 @Composable
 private fun RideAnalysisCard(
@@ -473,8 +590,11 @@ private fun RideAnalysisCard(
         return
     }
 
-    DetailCard {
-        Text(text = "Analyse", style = MaterialTheme.typography.titleMedium)
+    CoachCard {
+        DetailEyebrow(
+            text = "Coach",
+            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = EyebrowAlpha),
+        )
 
         usableLoad?.let { entry ->
             Spacer(Modifier.height(12.dp))
@@ -596,6 +716,28 @@ private fun DetailCard(content: @Composable () -> Unit) {
     }
 }
 
+/**
+ * Die Akzent-Container-Karte fuer die Coach-Einordnung ([RideAnalysisCard]) —
+ * Zieldesign `docs/design/prototyp-eine-leiste.html`, Klasse `.coach`:
+ * `primaryContainer`/`onPrimaryContainer` statt der neutralen Kartenflaeche
+ * von [DetailCard], sonst dasselbe Innenmass. Die Vorlagen-Farben (One-UI
+ * `--acc-cont`/`--on-acc-cont`) sind exakt `primaryContainer`/
+ * `onPrimaryContainer` aus `theme/Color.kt`, deshalb genuegt hier
+ * [CardDefaults.cardColors] statt eigener Farbwerte.
+ */
+@Composable
+private fun CoachCard(content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(CardPadding)) { content() }
+    }
+}
+
 /** Eine Kennzahl der Detailansicht — dieselbe Grammatik wie ueberall ([Fact]). */
 @Composable
 private fun DetailFact(label: String, value: String) {
@@ -603,9 +745,54 @@ private fun DetailFact(label: String, value: String) {
 }
 
 /**
+ * Kleine Kennzeichnung ueber einem Abschnitt oder einer Karte — Zieldesign
+ * `docs/design/prototyp-eine-leiste.html`, Klasse `.eyebrow`: 12 sp/600 mit
+ * leichter Spreizung, gedaempfte Farbe.
+ *
+ * [mono] schaltet auf die Monospace-Grossschrift-Variante um (`.eyebrow.mono`
+ * im Zieldesign, siehe der Trainings-Screen „FORM · 90 TAGE") — hier fuer den
+ * Hoehenprofil-Abschnitt gebraucht ([RideDetailScreen]), damit er sich von
+ * der schlichten „Coach"-Kennzeichnung absetzt.
+ *
+ * Rein privat in dieser Datei: Ein gleichnamiger, geteilter Baustein unter
+ * `ui/components/` existierte zum Zeitpunkt dieser Umstellung noch nicht.
+ * Parallele Arbeit an `ui/today`/`ui/training` koennte einen anlegen — eine
+ * lokale Kopie hier ist die sicherere Wahl als ein moeglicher Namenskonflikt.
+ */
+@Composable
+private fun DetailEyebrow(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    mono: Boolean = false,
+) {
+    Text(
+        text = if (mono) text.uppercase() else text,
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+            letterSpacing = if (mono) 1.2.sp else 0.4.sp,
+        ),
+        color = color,
+        modifier = modifier,
+    )
+}
+
+/** Deckkraft gedaempfter Eyebrow-/Nebentexte auf der Coach-Akzentkarte ([CoachCard]). */
+private const val EyebrowAlpha = 0.75f
+
+/**
  * Ein Eintrag der Analyse: die Zahl gross und fett im One-UI-Mass
  * (headlineSmall auf labelMedium), darunter kurze Erklaerung und wie
  * belastbar er ist.
+ *
+ * Liegt seit der Umstellung auf [CoachCard] auf akzentfarbenem Grund statt
+ * der neutralen Kartenflaeche: Erklaerung und Verlaesslichkeit laufen deshalb
+ * ueber `onPrimaryContainer` (gedaempft, [EyebrowAlpha]) statt ueber das feste
+ * `onSurfaceVariant`. Das Label aus [Fact] bleibt dabei unveraendert bei
+ * `onSurfaceVariant` — [Fact] ist ein geteilter Baustein unter
+ * `ui/components/` und liegt ausserhalb dessen, was diese Umstellung anfassen
+ * darf; der Kontrast auf der hellgruenen Flaeche bleibt ausreichend, auch
+ * wenn er nicht exakt denselben Farbton traegt wie der Rest der Karte.
  */
 @Composable
 private fun AnalysisEntry(
@@ -614,18 +801,19 @@ private fun AnalysisEntry(
     explanation: String,
     confidence: Confidence,
 ) {
+    val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
     Column {
         Fact(label = label, value = value)
         Text(
             text = explanation,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = onContainer.copy(alpha = EyebrowAlpha),
         )
         if (confidence != Confidence.NONE) {
             Text(
                 text = "Verlässlichkeit: ${confidenceLabels[confidence].orEmpty()}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = onContainer.copy(alpha = EyebrowAlpha),
             )
         }
     }

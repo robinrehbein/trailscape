@@ -3,6 +3,7 @@ package de.trailscape.app.ui.rides
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,23 +11,25 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +52,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -60,7 +66,6 @@ import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.EmptyState
-import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
@@ -71,6 +76,7 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.LoadSource
 import de.trailscape.core.Ride
+import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
 import de.trailscape.core.formatDuration
 import de.trailscape.core.rideToGpx
@@ -87,6 +93,12 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Kurzes Quellen-Label der Trainingslast fuer die Tourenliste
  * (`rideLoadSourceShortLabels` aus `lib/screens/rides_screen.dart`).
+ *
+ * Seit der Umstellung auf die kompakte Trainingslast-Pille (siehe
+ * [TrainingLoadChip]) steht dieses Label nicht mehr sichtbar in der Zeile —
+ * die Pille zeigt nur noch „TL 68". Es traegt stattdessen deren
+ * Sprachausgabe, damit die Quelle (Puls/Leistung/Empfinden/geschaetzt) nicht
+ * verloren geht, nur weil fuer sie kein sichtbarer Platz mehr ist.
  */
 /**
  * Hoehe der Ladeanzeige, solange die Tourenliste noch geladen wird. Eine
@@ -133,15 +145,33 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * Diese Liste bekommt davon nur noch [onImportFile] fuer ihren Leerzustand
  * gereicht — derselbe Weg, keine zweite Verdrahtung.
  *
- * ## Tippen zeigt auf der Karte, „Details" oeffnet die Vollansicht
- * Frueher oeffnete ein Tipp auf eine Karte sofort die Detailansicht. Im Blatt
- * ueber der Karte ist der naheliegende Zweck eines Tipps aber, die Route der
- * Tour dort zu zeigen ([onShowOnMap]), nicht in eine weitere Ansicht zu
- * wechseln — und im Touren-Tab bedeutet dieselbe Geste dasselbe, nur mit
- * einem Tab-Wechsel davor („zeig mir das auf der Karte"). Wer wirklich
- * Kennzahlen, Hoehenprofil und Auswertung sehen will, tippt auf den eigens
- * beschrifteten Knopf „Details" ([onOpenDetail]) — ein Weg, der ohne Raten
- * auffindbar ist, weil er als Text und nicht nur im Ueberlaufmenue steht.
+ * ## Eine gemeinsame Gruppen-Karte statt fuenf Einzelkacheln
+ * Zieldesign `docs/design/prototyp-eine-leiste.html` (Screen „Touren") und
+ * `docs/design/ui-navigationsstudien.html#empfehlung` (Mockup 6): Die Touren
+ * stehen als schlanke Zeilen — Name fett, darunter gedaempft „Datum · km ·
+ * Zeit · Hm[ · Ø Puls]", rechts die Trainingslast als Akzent-Pille
+ * ([TrainingLoadChip]) — **in einer einzigen** gefuellten [Card] mit
+ * Hairline-Trennern ([HorizontalDivider], Farbe `outlineVariant` — exakt der
+ * `--hair`-Ton des Zieldesigns) zwischen den Zeilen, statt einer Karte je
+ * Tour mit eigenem Schatten und eigenem Randabstand. Das macht die Liste vor
+ * allem **kuerzer**: Was vorher als 2×2-Kennzahlengitter plus „Details"-Zeile
+ * pro Tour mehrere Zeilenhoehen brauchte, ist jetzt eine schlanke Zeile, und
+ * mehr Touren passen ueber die schwebende Navigationskapsel hinaus sichtbar
+ * auf den Bildschirm.
+ *
+ * ## Tippen oeffnet die Vollansicht, „Auf der Karte zeigen" liegt im Menue
+ * Anders als in der fruesheren Fassung dieser Liste oeffnet ein Tipp auf eine
+ * Zeile jetzt direkt die Detailansicht ([onOpenDetail]) — die kompakte Zeile
+ * hat keinen Platz mehr fuer einen zweiten, eigens beschrifteten „Details"-
+ * Knopf daneben, und mit nur einer Kernaktion pro Zeile ist die Vollansicht
+ * die naheliegendere: Wer eine Tour antippt, will ueberwiegend ihre
+ * Kennzahlen und ihr Hoehenprofil sehen, nicht nur ihre Spur auf der Karte
+ * dahinter. „Auf der Karte zeigen" ([onShowOnMap]) — die Tour auswaehlen und
+ * ihre Route dort markieren — steht dafuer als erster Eintrag im
+ * Ueberlaufmenue jeder Zeile bereit, gleichrangig neben Umbenennen, Teilen
+ * und Loeschen. Der Auswahlzustand (heller hinterlegte Zeile, `selected` in
+ * der Semantik) bleibt dabei unveraendert bestehen, auch wenn ihn jetzt eine
+ * Menueaktion statt der Zeile selbst setzt.
  *
  * ## Undo-Snackbar bleibt lokal, „normale" Meldungen nicht mehr
  * [AppViewModel.messages] sammelt der **Behaelter** ein — der Karten-Screen
@@ -249,6 +279,16 @@ fun TourListContent(
                 )
             }
 
+            // Eine einzige Gruppen-Karte statt einer Karte je Tour (siehe
+            // Klassen-KDoc oben) — deshalb hier bewusst nur zwei `item`s statt
+            // eines `items(...)` je Tour: die Eyebrow-Zeile „Letzte Touren"
+            // (Zieldesign-Mockup 6) und darunter eine einzelne [Card], die
+            // ihre Zeilen selbst als nicht-lazy [Column] auflistet. Die
+            // Zeilen sind reiner Text ohne eigene Karten, Schatten oder
+            // Diagramme, das macht das Verzichten auf `items(...)`-
+            // Virtualisierung hier vertretbar; virtualisiert bliebe ohnehin
+            // nur der aeussere Wechsel zwischen Eyebrow und Karte, nicht die
+            // eigentliche Liste.
             else -> LazyColumn(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -257,25 +297,44 @@ fun TourListContent(
                 contentPadding = contentPadding,
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                items(items = rides, key = { it.id }) { ride ->
-                    val load = insights.rideLoads[ride.id]
-                    val loadText = if (load != null && load.available) {
-                        "Last ${load.load.roundToInt()} · " +
-                            loadSourceShortLabels[load.source].orEmpty()
-                    } else {
-                        null
-                    }
-
-                    RideCard(
-                        ride = ride,
-                        loadText = loadText,
-                        selected = ride.id == selectedId,
-                        onShowOnMap = { onShowOnMap(ride) },
-                        onOpenDetail = { onOpenDetail(ride.id) },
-                        onRename = { renameTarget = ride },
-                        onShare = { share(ride) },
-                        onDelete = { deleteTarget = ride },
+                item {
+                    Text(
+                        text = "Letzte Touren",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // Dieselbe waagerechte Einrueckung wie der Name in
+                        // jeder [RideRow] darunter (dort `CardPadding` als
+                        // Zeilenpolster) — sonst staende die Eyebrow ohne
+                        // sichtbaren Grund weiter links als die Kartentexte.
+                        modifier = Modifier.padding(horizontal = CardPadding),
                     )
+                }
+                item {
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            rides.forEachIndexed { index, ride ->
+                                val load = insights.rideLoads[ride.id]
+                                    ?.takeIf { it.available }
+
+                                RideRow(
+                                    ride = ride,
+                                    load = load,
+                                    selected = ride.id == selectedId,
+                                    onOpenDetail = { onOpenDetail(ride.id) },
+                                    onShowOnMap = { onShowOnMap(ride) },
+                                    onRename = { renameTarget = ride },
+                                    onShare = { share(ride) },
+                                    onDelete = { deleteTarget = ride },
+                                )
+
+                                if (index != rides.lastIndex) {
+                                    HorizontalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -568,22 +627,23 @@ private fun RenameDialog(
 }
 
 /**
- * Eine Tour-Karte der Liste.
+ * Eine Tour-Zeile der Gruppen-Karte (Zieldesign
+ * `docs/design/prototyp-eine-leiste.html`, Screen „Touren"): Name fett in
+ * einer Zeile, darunter gedaempft [rideMetaLine], rechts die Trainingslast
+ * als Akzent-Pille ([TrainingLoadChip]).
  *
- * Ein Tipp auf die Karte zeigt die Route auf der Karte dahinter
- * ([onShowOnMap]) statt die Detailansicht zu oeffnen — Begruendung im KDoc von
- * [TourListContent]. Der eigens beschriftete Knopf „Details" unten rechts
- * fuehrt in die Vollansicht ([onOpenDetail]); Umbenennen, Teilen und Loeschen
- * bleiben im Ueberlaufmenue, weil sie seltener gebraucht werden und dort schon
- * vorher lagen.
+ * Ein Tipp auf die Zeile oeffnet die Detailansicht ([onOpenDetail]) —
+ * Begruendung im KDoc von [TourListContent]. „Auf der Karte zeigen"
+ * ([onShowOnMap]), Umbenennen, Teilen und Loeschen liegen gemeinsam im
+ * Ueberlaufmenue.
  */
 @Composable
-private fun RideCard(
+private fun RideRow(
     ride: RideSummary,
-    loadText: String?,
+    load: RideLoad?,
     selected: Boolean,
-    onShowOnMap: () -> Unit,
     onOpenDetail: () -> Unit,
+    onShowOnMap: () -> Unit,
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
@@ -591,126 +651,56 @@ private fun RideCard(
     var menuOpen by remember { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
 
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            // `selectable` statt `clickable`: Die Auswahl stand bisher
-            // ausschliesslich in der Flaechenfarbe — wer den Bildschirm
-            // vorlesen laesst, erfuhr nie, welche Tour gerade auf der Karte
-            // liegt. Der Leitfaden verlangt, Zustaende anzusagen, und
-            // „ausgewaehlt" ist ausdruecklich einer davon.
-            .selectable(selected = selected, onClick = onShowOnMap),
-        // Unselektiert erbt die Karte ihre Flaeche aus dem Theme (Default von
-        // Card, siehe theme/Color.kt); nur der Auswahlzustand hebt sie
-        // bewusst auf secondaryContainer.
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) colors.secondaryContainer else Color.Unspecified,
-        ),
+            // `selectable` statt `clickable`: Die Auswahl stand bisher (und
+            // steht weiterhin) ausschliesslich in der Flaechenfarbe — wer den
+            // Bildschirm vorlesen laesst, erfuhr nie, welche Tour gerade auf
+            // der Karte liegt. Der Leitfaden verlangt, Zustaende anzusagen,
+            // und „ausgewaehlt" ist ausdruecklich einer davon. Den Zustand
+            // setzt inzwischen „Auf der Karte zeigen" im Ueberlaufmenue statt
+            // eines Tipps auf die Zeile (siehe Klassen-KDoc) — die Semantik
+            // bleibt trotzdem an der Zeile, weil sie beschreibt, was gerade
+            // *ist*, nicht, was ein Tipp hier ausloest.
+            .selectable(selected = selected, onClick = onOpenDetail)
+            .background(if (selected) colors.secondaryContainer else Color.Transparent)
+            .padding(horizontal = CardPadding, vertical = RideRowVerticalPadding),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // CardPadding (20 dp) ringsum wie in jeder anderen Karte der App;
-        // rechts bleibt es bei 4 dp, weil der IconButton daneben seinen
-        // eigenen Beruehrungsrand von 12 dp mitbringt und die Karte sonst
-        // rechts zu luftig wirkt.
-        Column(
-            modifier = Modifier.padding(
-                start = CardPadding,
-                end = 4.dp,
-                top = CardPadding,
-                bottom = CardPadding,
-            ),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    // Eine Zeile, nicht zwei: Der Leitfaden begrenzt den Titel
-                    // einer Listenzeile ausdruecklich auf eine Zeile — nur so
-                    // bleiben die Zeilen gleich hoch und die Liste ueberfliegbar.
-                    // Was nicht hineinpasst, steht vollstaendig in der
-                    // Detailansicht; die Kennzahlen darunter unterscheiden zwei
-                    // aehnlich benannte Touren ohnehin zuverlaessiger als ihr
-                    // abgeschnittener Name.
-                    Text(
-                        text = ride.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        text = formatDate(ride.createdAt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.onSurfaceVariant,
-                    )
-                }
+        Column(modifier = Modifier.weight(1f)) {
+            // Eine Zeile, nicht zwei: Der Leitfaden begrenzt den Titel einer
+            // Listenzeile ausdruecklich auf eine Zeile — nur so bleiben die
+            // Zeilen gleich hoch und die Liste ueberfliegbar. Was nicht
+            // hineinpasst, steht vollstaendig in der Detailansicht.
+            Text(
+                text = ride.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = rideMetaLine(ride),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 2.dp),
+            )
 
-                Box {
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Umbenennen") },
-                            leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onRename()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Als GPX teilen") },
-                            leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onShare()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Löschen") },
-                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                            onClick = {
-                                menuOpen = false
-                                onDelete()
-                            },
-                        )
-                    }
-                }
-            }
-
-            FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 12.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                RideFact("Distanz", "${formatKmDe(ride.stats.distanceKm)} km")
-                RideFact("Dauer", formatDuration(ride.stats.durationS))
-                RideFact("Höhenmeter", "${ride.stats.ascentM.roundToInt()} hm")
-                ride.stats.avgHrBpm?.let { RideFact("Ø Puls", "$it bpm") }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 12.dp, top = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(
+            // Eine gespeicherte Planung sieht in dieser Liste sonst genauso
+            // aus wie eine gefahrene Tour — sie zaehlt aber weder fuer den
+            // Wochenfortschritt noch fuer die Trainingsauswertung (siehe
+            // `:core`: `Ride.planned`). Ohne Kennzeichnung waere ihr Fehlen in
+            // den Zahlen ein Fehler, mit Kennzeichnung ist es eine Auskunft.
+            // In der kompakten Zeile nur bei Bedarf: Die meisten Touren
+            // brauchen keine der beiden Marken und bleiben so einzeilig.
+            if (ride.planned || ride.id.startsWith("hc-")) {
+                FlowRow(
+                    modifier = Modifier.padding(top = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (loadText != null) {
-                        Text(
-                            text = loadText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.onSurfaceVariant,
-                        )
-                    }
-                    // Eine gespeicherte Planung sieht in dieser Liste sonst
-                    // genauso aus wie eine gefahrene Tour — sie zaehlt aber
-                    // weder fuer den Wochenfortschritt noch fuer die
-                    // Trainingsauswertung (siehe `:core`: `Ride.planned`).
-                    // Ohne Kennzeichnung waere ihr Fehlen in den Zahlen ein
-                    // Fehler, mit Kennzeichnung ist es eine Auskunft.
                     if (ride.planned) {
                         TagPill(text = "geplante Route")
                     }
@@ -718,11 +708,122 @@ private fun RideCard(
                         TagPill(text = "aus Health Connect")
                     }
                 }
+            }
+        }
 
-                TextButton(onClick = onOpenDetail) { Text("Details") }
+        if (load != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            TrainingLoadChip(
+                load = load.load.roundToInt(),
+                source = loadSourceShortLabels[load.source].orEmpty(),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Auf der Karte zeigen") },
+                    leadingIcon = { Icon(Icons.Filled.Map, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onShowOnMap()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Umbenennen") },
+                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onRename()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Als GPX teilen") },
+                    leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onShare()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Löschen") },
+                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    },
+                )
             }
         }
     }
+}
+
+/** Senkrechter Innenabstand einer [RideRow] — kompakter als eine volle [CardPadding]. */
+private val RideRowVerticalPadding = 12.dp
+
+/**
+ * Die gedaempfte Kennzahlen-Zeile einer [RideRow]: Datum, Distanz, Dauer,
+ * Hoehenmeter und — falls vorhanden — Ø Puls, durch " · " getrennt (Muster
+ * „Datum · km · Zeit · Hm[ · Ø Puls]" aus dem Zieldesign
+ * `docs/design/prototyp-eine-leiste.html`). Bewusst eine einzelne Zeile statt
+ * des fruesheren Kennzahlengitters ([Fact] je Wert): Fuer eine Gruppen-Karte
+ * mit vielen Touren zaehlt Ueberfliegbarkeit mehr als Tabellenoptik, und die
+ * volle Aufschluesselung steht unveraendert in der Detailansicht.
+ */
+private fun rideMetaLine(ride: RideSummary): String {
+    val stats = ride.stats
+    return buildList {
+        add(formatDate(ride.createdAt))
+        add("${formatKmDe(stats.distanceKm)} km")
+        add(formatDuration(stats.durationS))
+        add("${stats.ascentM.roundToInt()} Hm")
+        stats.avgHrBpm?.let { add("Ø $it bpm") }
+    }.joinToString(" · ")
+}
+
+/**
+ * Die Trainingslast als kompakte Akzent-Pille („TL 68") — Zieldesign
+ * `docs/design/prototyp-eine-leiste.html`, Klasse `.tlchip`: die getoente
+ * Flaeche des Themes ([MaterialTheme.colorScheme.surfaceContainer], derselbe
+ * Farbwert wie `--tone`) mit akzentfarbener, fetter Schrift
+ * ([MaterialTheme.colorScheme.primary], derselbe Farbwert wie `--acc`) statt
+ * der neutralen [TagPill]-Faerbung — deshalb hier eine eigene, kleine Pille
+ * statt einer Wiederverwendung von [TagPill].
+ *
+ * Die Quelle der Trainingslast (Puls/Leistung/Empfinden/geschaetzt) faellt in
+ * der sichtbaren Pille weg, weil in der kompakten Zeile kein Platz mehr dafuer
+ * ist — sie steht unveraendert in der Detailansicht
+ * ([RideAnalysisCard]/[AnalysisEntry]). Damit sie trotzdem nicht ganz
+ * verschwindet, traegt die Pille sie als vollstaendige Sprachausgabe.
+ */
+@Composable
+private fun TrainingLoadChip(load: Int, source: String, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    val description = if (source.isEmpty()) {
+        "Trainingslast $load"
+    } else {
+        "Trainingslast $load ($source)"
+    }
+    Text(
+        text = "TL $load",
+        // Tabellenziffern (Repo-Muster fuer Zahlenreihen, siehe
+        // `ui/map/RideCompactBar.kt`): Die Liste stellt die Trainingslast
+        // mehrerer Touren untereinander dar, und dafuer sollen die Ziffern
+        // gleich breit laufen statt bei jedem Wert die Pillenbreite zu
+        // aendern.
+        style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+        color = colors.primary,
+        maxLines = 1,
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(colors.surfaceContainer)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .semantics { contentDescription = description },
+    )
 }
 
 /**
@@ -749,12 +850,6 @@ private fun RidesEmptyState(
             TextButton(onClick = onOpenBackup) { Text("Archiv importieren") }
         },
     )
-}
-
-/** Eine Kennzahl der Tour — dieselbe Grammatik wie ueberall ([Fact]). */
-@Composable
-private fun RideFact(label: String, value: String) {
-    Fact(label = label, value = value)
 }
 
 /**
