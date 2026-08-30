@@ -8,7 +8,8 @@ App-Screenshots vom Gerät abgeglichen werden.
 | Nr. | Screen |
 |---|---|
 | 01 | Heute |
-| 02 | Karte & Planung |
+| 02 | Karte & Planung (Sheet eingeklappt) |
+| 02b | Karte & Planung (Sheet aufgezogen) |
 | 03 | Bereit-Dialog „Freie Fahrt" |
 | 04 | Bereit-Dialog „Geplante Tour" |
 | 05 | Fahrmodus, Seite Karte |

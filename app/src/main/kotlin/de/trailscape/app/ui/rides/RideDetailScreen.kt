@@ -53,7 +53,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.components.Fact
@@ -279,7 +278,7 @@ internal fun RideDetailScreen(
                         style = mapStyle,
                         onOpenOnMap = {
                             appViewModel.select(ride.id)
-                            appViewModel.requestTab(AppTab.MAP)
+                            appViewModel.requestShowRideOnMap(ride.id)
                         },
                     )
                 }

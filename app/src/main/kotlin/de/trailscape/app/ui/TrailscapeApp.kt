@@ -86,8 +86,11 @@ import de.trailscape.app.ui.training.TrainingScreen
  *    Als aufziehbares Blatt hinter einem Griff am unteren Kartenrand war die
  *    Liste faktisch unauffindbar: Wer die App nicht kannte, fand seine Touren
  *    nicht. Sie hat deshalb wieder einen eigenen, beschrifteten Platz
- *    (`ui/rides/RidesScreen.kt`) — das Blatt ueber der Karte
- *    (`ui/map/ExploreSheet.kt`) bleibt daneben unangetastet bestehen.
+ *    (`ui/rides/RidesScreen.kt`) und lebt jetzt **ausschliesslich** dort — das
+ *    Blatt ueber der Karte (`ui/map/ExploreSheet.kt`) zeigt keine Tourenliste
+ *    mehr. Eine Tour-Spur zeigt die Karte seither nur noch „auf Zuruf" aus dem
+ *    Touren-Tab (`AppViewModel.requestShowRideOnMap`); das Blatt selbst ist auf
+ *    Suche, Planung und Kartenwerkzeuge reduziert.
  *  * **Mehr wandert hinters Zahnrad.** „Mehr" war nie ein Ort, an den man
  *    geht, sondern eine Schublade, in der man etwas nachschlaegt — Profil,
  *    Import, Offline-Karten, Sync. Ein Viertel der immer sichtbaren
@@ -114,9 +117,9 @@ import de.trailscape.app.ui.training.TrainingScreen
  * | `ui/TrainingInsights.kt` | Fundament: reine Rechenschicht ueber `:core` |
  * | `ui/MapStyles.kt` | Fundament: Katalog der Kartenstile |
  * | `ui/today/TodayScreen.kt` | Startseite: Tagesempfehlung, Woche, letzte Tour |
- * | `ui/map/MapScreen.kt` | Karte, Tourenblatt, Planung, Navigation, Offline-Download |
+ * | `ui/map/MapScreen.kt` | Karte, Suche/Aktionen/Planen, Navigation, Offline-Download |
  * | `ui/rides/RidesScreen.kt` | Touren-Tab: Vollbild-Liste und Detailansicht |
- * | `ui/rides/TourList.kt` | Baustein: Tourenliste und -detail (Tab und Kartenblatt) |
+ * | `ui/rides/TourList.kt` | Baustein: Tourenliste und -detail |
  * | `ui/training/TrainingScreen.kt` | Trainingsplan und Auswertung |
  * | `ui/more/MoreScreen.kt` | Einstellungen, Health, Backup, Sync — hinterm Zahnrad |
  * | `ui/components/OneUiNavigationBar.kt` | Fundament: die schwebende Navigationskapsel |

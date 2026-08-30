@@ -47,8 +47,8 @@ import de.trailscape.core.GeoResult
  * ## Wofuer es noch da ist, seit die Suche im Erkunden-Blatt wohnt
  * Bis dahin bediente dieses Blatt beide Einstiege in die Ortssuche. Der
  * haeufigere — die Suche im Erkunden-Blatt — laeuft inzwischen dort an Ort und
- * Stelle (`ExploreSheet.kt`): Das Feld IST das Feld, der Koerper des Blatts
- * zeigt die Treffer, die Karte bleibt sichtbar.
+ * Stelle (`ExploreSheet.kt`): Das Feld IST das Feld, die Treffer stehen direkt
+ * darunter, die Karte bleibt sichtbar.
  *
  * Uebrig bleibt der zweite Einstieg, und der ist etwas anderes: **„Wegpunkt
  * per Suche"** aus der Routenplanung (`openPlaceSearch { … }` mit Rueckruf in

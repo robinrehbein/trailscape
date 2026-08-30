@@ -464,8 +464,9 @@ internal fun LocationPermissionNotice(
 // --------------------------------------------------------------- Bedienteile
 
 // `MapPillButton` und `MapCircleButton` sind mit der oberen Knopfreihe
-// entfallen: Suche, „Route planen", Kartenstil und Offline wohnen jetzt im
-// Erkunden-Gesicht des unteren Blatts (siehe `ExploreSheet.kt`).
+// entfallen: Suche, „Route planen", Kartenstil und Offline wohnen jetzt in den
+// Stufen des einen unteren Blatts (siehe `ExploreSheet.kt` und
+// [MapSheetStage]).
 
 /**
  * Runder Knopf „Meine Position", 56 dp wie frueher der Aufnahmeknopf an

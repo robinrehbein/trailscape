@@ -1,4 +1,13 @@
 <title>Eine Leiste</title>
+<!--
+  Interaktiver Prototyp „Eine Leiste“: vier Tabs plus abgesetzter ●-Knopf in einer schwebenden
+  Pillen-Navbar, dazu Bereit-Screen, Fahr-Cockpit und Mehr-Sheet. Der Karte-Tab ist jetzt eine
+  fast bildschirmfüllende Karte mit nur zwei Overlay-Chips („Zum Plan“, „Entdecken“); alles
+  andere steckt in einem Bottom-Sheet über der Leiste, das drei Zustände kennt — eingeklappt
+  (nur Suchfeld), aufgezogen (Route planen · Kartenstil · Offline) und planen (Radtyp, Untergrund,
+  Routenwerte, „Fahren →“). Gewechselt wird per Tap oder vertikalem Ziehen am Grabber; der
+  Zustand bleibt über Tab-Wechsel hinweg erhalten. Touren leben ausschließlich im eigenen Tab.
+-->
 <style>
   :root{
     color-scheme:light;
@@ -158,8 +167,20 @@
   .overlay-top .chip{background:var(--card);box-shadow:var(--elev)}
   .overlay-top .chip.on{background:var(--acc);color:var(--on-acc)}
   .discover-hint{position:absolute;top:62px;left:50%;transform:translateX(-50%);background:var(--card);box-shadow:var(--elev);border-radius:999px;padding:7px 15px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
-  .plansheet{position:absolute;left:12px;right:12px;bottom:calc(var(--barh) + 10px);background:var(--card);border-radius:28px;padding:10px 16px 16px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:var(--elev-hi)}
+  /* Karten-Bottom-Sheet: drei Zustände — eingeklappt · aufgezogen · planen */
+  .mapsheet{position:absolute;left:12px;right:12px;bottom:calc(var(--barh) + 10px);background:var(--card);border-radius:26px;z-index:3;overflow:hidden;box-shadow:var(--elev-hi);transition:height .2s ease-out}
+  .sheet-grab{display:flex;align-items:center;justify-content:center;width:100%;height:22px;flex:0 0 auto;touch-action:none;cursor:grab;border-radius:26px 26px 0 0}
+  .sheet-grab:active{cursor:grabbing}
   .handle{width:38px;height:4px;border-radius:2px;background:var(--hair);margin:0 auto}
+  .sheet-body{display:flex;flex-direction:column;gap:10px;padding:2px 14px 12px}
+  .sheet-search{display:flex;align-items:center;gap:9px;width:100%;min-height:44px;padding:0 16px;border-radius:999px;background:var(--tone);color:var(--mut);font-size:13.5px;font-weight:500;text-align:left}
+  .sheet-actions{display:flex;gap:8px}
+  .sheet-actions button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:58px;border-radius:20px;background:var(--tone);font-size:11.5px;font-weight:600;line-height:1.2;padding:8px 4px;text-align:center}
+  .sheet-actions .ic{font-size:16px;line-height:1}
+  .sheet-plan{display:flex;flex-direction:column;gap:10px}
+  .planhead{display:flex;align-items:center;gap:8px}
+  .planback{width:30px;height:30px;flex:0 0 auto;border-radius:50%;background:var(--tone);color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1}
+  .planback:active{transform:scale(.94)}
   .seg{display:flex;background:var(--tone);border-radius:999px;padding:3px}
   .seg button{flex:1;min-height:34px;border-radius:999px;font-weight:600;font-size:13px;color:var(--mut)}
   .seg button.on{background:var(--acc);color:var(--on-acc)}
@@ -360,25 +381,42 @@
           <circle class="pt-end" cx="78" cy="12" r="2.6"/>
         </svg>
         <div class="overlay-top">
-          <button class="chip" id="chipZiel">🔍 Ziel</button>
           <button class="chip on" id="chipPlan">Zum Plan: 45 km</button>
           <button class="chip" id="chipDiscover">✦ Entdecken</button>
         </div>
         <div class="discover-hint" id="discoverHint" hidden>Tippe eine Route an</div>
       </div>
-      <div class="plansheet">
-        <div class="handle"></div>
-        <div class="seg" role="group" aria-label="Radtyp">
-          <button class="on" id="segGravel">Gravel</button>
-          <button id="segRenn">Rennrad</button>
+
+      <!-- Bottom-Sheet: eingeklappt (nur Suche) · aufgezogen (Aktionen) · planen -->
+      <div class="mapsheet" id="mapSheet" data-state="collapsed">
+        <button class="sheet-grab" id="sheetGrab" aria-expanded="false" aria-controls="sheetBody" aria-label="Kartenpanel auf- oder zuklappen">
+          <span class="handle"></span>
+        </button>
+        <div class="sheet-body" id="sheetBody">
+          <button class="sheet-search" id="sheetSearch"><span aria-hidden="true">🔍</span>Ort, Stadt oder Straße suchen…</button>
+          <div class="sheet-actions" id="sheetActions" role="group" aria-label="Kartenaktionen" hidden>
+            <button id="actPlan"><span class="ic" aria-hidden="true">📍</span>Route planen</button>
+            <button id="actStyle"><span class="ic" aria-hidden="true">◧</span>Kartenstil</button>
+            <button id="actOffline"><span class="ic" aria-hidden="true">⬇</span>Offline</button>
+          </div>
+          <div class="sheet-plan" id="sheetPlan" hidden>
+            <div class="planhead">
+              <button class="planback" id="btnPlanBack" aria-label="Zurück zu den Kartenaktionen">‹</button>
+              <span class="eyebrow">Route planen</span>
+            </div>
+            <div class="seg" role="group" aria-label="Radtyp">
+              <button class="on" id="segGravel">Gravel</button>
+              <button id="segRenn">Rennrad</button>
+            </div>
+            <div class="chiprow" role="group" aria-label="Untergrund">
+              <button class="chip on" data-surface="gemischt">Gemischt</button>
+              <button class="chip" data-surface="asphalt">Asphalt</button>
+              <button class="chip" data-surface="radwege">Radwege</button>
+            </div>
+            <div class="routestats" id="routeStats">44,8 km · 380 Hm · ~1:58 h</div>
+            <button class="btn" id="btnRideNow">Fahren →</button>
+          </div>
         </div>
-        <div class="chiprow" role="group" aria-label="Untergrund">
-          <button class="chip on" data-surface="gemischt">Gemischt</button>
-          <button class="chip" data-surface="asphalt">Asphalt</button>
-          <button class="chip" data-surface="radwege">Radwege</button>
-        </div>
-        <div class="routestats" id="routeStats">44,8 km · 380 Hm · ~1:58 h</div>
-        <button class="btn" id="btnRideNow">Fahren →</button>
       </div>
     </section>
 
@@ -647,7 +685,8 @@
     rideName:'Freie Fahrt', routeKm:0,
     t:0, dist:0, speed:24.3, hr:142, hrSum:0, hrN:0,
     page:0, timer:null, discover:false, altSel:null,
-    seg:'gravel', surface:'gemischt', detailIdx:0
+    seg:'gravel', surface:'gemischt', detailIdx:0,
+    sheet:'collapsed'           // Karten-Sheet: collapsed · expanded · plan (bleibt über Tab-Wechsel erhalten)
   };
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -786,6 +825,7 @@
   function loadPlanRoute(){
     exitDiscover();
     setRouteReady('Heutige GA1-Runde', routeVals[S.seg][S.surface]);
+    setSheet('plan');           /* Karte öffnet direkt im Planen-Zustand */
   }
   $('btnBuildRoute').addEventListener('click',()=>{
     loadPlanRoute();
@@ -798,6 +838,68 @@
       $('secPlan').scrollIntoView({behavior:reduceMotion?'auto':'smooth',block:'start'});
     });
   });
+
+  /* ── Karte: Bottom-Sheet mit drei Zuständen ── */
+  const mapSheet=$('mapSheet'), sheetGrab=$('sheetGrab');
+  const SHEET_STATES=['collapsed','expanded','plan'];
+  let sheetTimer=null;
+  function renderSheet(){
+    mapSheet.dataset.state=S.sheet;
+    $('sheetActions').hidden = S.sheet!=='expanded';
+    $('sheetPlan').hidden    = S.sheet!=='plan';
+    sheetGrab.setAttribute('aria-expanded', S.sheet==='collapsed' ? 'false' : 'true');
+  }
+  function setSheet(state){
+    if(SHEET_STATES.indexOf(state)<0 || state===S.sheet) return;
+    /* Screen unsichtbar (anderer Tab) oder reduzierte Bewegung: ohne Höhen-Animation umschalten */
+    const live = mapSheet.offsetParent !== null;
+    const from = live ? mapSheet.getBoundingClientRect().height : 0;
+    S.sheet=state;
+    renderSheet();
+    clearTimeout(sheetTimer);
+    if(!live || reduceMotion){ mapSheet.style.height=''; return; }
+    mapSheet.style.height='auto';
+    const to = mapSheet.getBoundingClientRect().height;
+    mapSheet.style.height=from+'px';
+    void mapSheet.offsetHeight;                       /* Reflow erzwingen */
+    requestAnimationFrame(()=>{ mapSheet.style.height=to+'px'; });
+    sheetTimer=setTimeout(()=>{ mapSheet.style.height=''; }, 240);
+  }
+  const sheetDown = () => setSheet(S.sheet==='plan' ? 'expanded' : 'collapsed');
+  const sheetUp   = () => { if(S.sheet==='collapsed') setSheet('expanded'); };
+
+  /* Grabber: Tap togglet eine Stufe, vertikales Ziehen wechselt richtungsabhängig */
+  (function(){
+    let startY=0, dy=0, dragging=false, moved=false;
+    sheetGrab.addEventListener('pointerdown',e=>{
+      dragging=true; moved=false; startY=e.clientY; dy=0;
+      try{ sheetGrab.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    sheetGrab.addEventListener('pointermove',e=>{
+      if(!dragging) return;
+      dy=e.clientY-startY;
+      if(Math.abs(dy)>8) moved=true;
+    });
+    function end(){
+      if(!dragging) return;
+      dragging=false;
+      if(!moved) return;                              /* Tap → click-Handler */
+      if(dy<=-26) sheetUp();
+      else if(dy>=26) sheetDown();
+    }
+    sheetGrab.addEventListener('pointerup',end);
+    sheetGrab.addEventListener('pointercancel',()=>{ dragging=false; moved=false; });
+    sheetGrab.addEventListener('click',e=>{
+      if(moved){ moved=false; e.preventDefault(); return; }
+      if(S.sheet==='collapsed') setSheet('expanded'); else sheetDown();
+    });
+  })();
+
+  $('sheetSearch').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
+  $('actPlan').addEventListener('click',()=>setSheet('plan'));
+  $('actStyle').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
+  $('actOffline').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
+  $('btnPlanBack').addEventListener('click',()=>setSheet('expanded'));
 
   /* ── Karte ── */
   function updateRouteStats(){
@@ -826,8 +928,7 @@
     $('chipDiscover').classList.add('on');
     $('chipPlan').classList.remove('on');
   });
-  $('chipPlan').addEventListener('click',()=>{ exitDiscover(); planChanged(); });
-  $('chipZiel').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
+  $('chipPlan').addEventListener('click',()=>{ exitDiscover(); planChanged(); setSheet('plan'); });
   ['alt1','alt2','alt3'].forEach(id=>{
     $(id).addEventListener('click',()=>{
       S.altSel=id;
@@ -835,6 +936,7 @@
       $(id).classList.add('sel');
       $('discoverHint').hidden=true;
       planChanged();
+      setSheet('plan');                               /* gewählte Route direkt im Sheet nachrechnen */
       toast('Route übernommen — '+altVals[id]);
     });
   });
@@ -1073,6 +1175,7 @@
   setTimeout(()=>hint.classList.add('gone'),4200);
 
   /* ── Init ── */
+  renderSheet();
   setTab('heute');
   updateRecBtn();
 })();

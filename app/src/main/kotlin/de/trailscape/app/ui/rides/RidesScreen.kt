@@ -160,13 +160,14 @@ fun RidesScreen(appViewModel: AppViewModel) {
             TourListContent(
                 appViewModel = appViewModel,
                 onOpenDetail = { detailRideId = it },
-                // „Auf der Karte zeigen": die Tour auswaehlen und in den
-                // Karten-Tab wechseln — dort liegt sie danach als Linie samt
-                // Tourkarte am unteren Rand. Genau der Weg, den auch die
-                // Startseite fuer „Letzte Tour" nimmt, nur ohne Detailansicht.
+                // „Auf der Karte zeigen": die Tour auswaehlen (fuer die
+                // Hervorhebung der Zeile hier) und ihre Spur „auf Zuruf" beim
+                // Karten-Tab anfordern — der Karten-Screen wechselt dorthin
+                // und zeigt sie, holt sich die ID aber selbst ab (siehe
+                // [AppViewModel.showRideOnMapRequest]).
                 onShowOnMap = { ride ->
                     appViewModel.select(ride.id)
-                    appViewModel.requestTab(AppTab.MAP)
+                    appViewModel.requestShowRideOnMap(ride.id)
                 },
                 onImportFile = importAction.start,
                 modifier = Modifier.fillMaxSize(),
