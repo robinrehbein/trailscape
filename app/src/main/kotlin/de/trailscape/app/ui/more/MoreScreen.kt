@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -35,7 +39,29 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 
 /**
- * „Mehr"-Tab — Port von `lib/screens/more_screen.dart`.
+ * Der „Mehr"-Bereich — Port von `lib/screens/more_screen.dart`.
+ *
+ * ## Kein Tab mehr, sondern die zweite Ebene hinterm Zahnrad
+ * Dieser Bildschirm war einmal der vierte Reiter der Navigationskapsel. Seit
+ * der Fuehrung „Eine Leiste" (siehe `ui/TrailscapeApp.kt`) ist er ein
+ * **gepushtes Ziel** der Route „mehr": Erreichbar ueber das ⚙ rechts in den
+ * Kopfzeilen von Heute, Touren und Training
+ * (`ui/components/SettingsAction.kt`), verlassen ueber den Zurueck-Pfeil oder
+ * die Systemzurueckgeste.
+ *
+ * Der Grund ist eine Platzrechnung: „Mehr" ist kein Ort, an den man geht,
+ * sondern eine Schublade, in der man etwas nachschlaegt — Profil, Import,
+ * Offline-Karten, Sync. Ein Viertel der immer sichtbaren Hauptnavigation war
+ * dafuer der teuerste Platz der App fuer den seltensten Handgriff; „Touren"
+ * hat ihn bekommen.
+ *
+ * Praktisch aendert das an dieser Datei zweierlei: Die Kopfzeile traegt einen
+ * Zurueck-Pfeil ([onBack]) und startet eingeklappt — beides die Konvention des
+ * Leitfadens fuer die zweite Ebene (siehe
+ * `ui/components/OneUiTopAppBar.kt`, `initiallyCollapsed`). Auf der Route
+ * „mehr" gibt es ausserdem weder Navigationskapsel noch Aufnahme-Knopf; die
+ * Bodenfreiheit ([LocalFloatingNavigationBarSpace]) meldet dort nur noch die
+ * Gestenleiste, ohne dass diese Datei etwas davon wissen muesste.
  *
  * ## Gruppen statt neun Vollkarten
  * Der Screen zeigte frueher neun vollstaendig ausgeklappte Themenkarten
@@ -102,9 +128,15 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
  *    im Original): einfacher Sichtbarkeits-Umschalter statt Groessen-
  *    Animation, gleiches Ergebnis ohne zusaetzliche Animations-API.
  */
+/**
+ * @param onBack fuehrt aus dem Mehr-Bereich zurueck dorthin, von wo das
+ *   Zahnrad angetippt wurde (in der App `navController.popBackStack()`).
+ *   Optional, damit Vorschauen und Tests den Bildschirm ohne Navigationsgraph
+ *   zeigen koennen — ohne Rueckweg entfaellt schlicht der Pfeil.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoreScreen(appViewModel: AppViewModel) {
+fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     val snackbarHostState = remember { SnackbarHostState() }
     val updateVersion by appViewModel.updateAvailable.collectAsStateWithLifecycle()
     val requestedSection by appViewModel.pendingMoreSection.collectAsStateWithLifecycle()
@@ -135,7 +167,11 @@ fun MoreScreen(appViewModel: AppViewModel) {
         expandTarget = wanted
     }
 
-    val scrollBehavior = oneUiTopAppBarScrollBehavior()
+    // Zweite Ebene, also eingeklappt startend: Wer das Zahnrad antippt, will
+    // die Einstellungen sehen und nicht zuerst das Wort „Mehr" in Grossschrift
+    // (siehe `oneUiTopAppBarScrollBehavior`). Aufziehen laesst sie sich
+    // trotzdem, die Leiste bleibt dieselbe.
+    val scrollBehavior = oneUiTopAppBarScrollBehavior(initiallyCollapsed = true)
 
     Scaffold(
         // Siehe TourList.kt: Die aeussere Huelle (TrailscapeApp) hat die
@@ -143,7 +179,22 @@ fun MoreScreen(appViewModel: AppViewModel) {
         // aufschlagen.
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { OneUiLargeTopAppBar("Mehr", scrollBehavior) },
+        topBar = {
+            OneUiLargeTopAppBar(
+                title = "Mehr",
+                scrollBehavior = scrollBehavior,
+                navigationIcon = {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Zurück",
+                            )
+                        }
+                    }
+                },
+            )
+        },
         snackbarHost = {
             // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
             // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).

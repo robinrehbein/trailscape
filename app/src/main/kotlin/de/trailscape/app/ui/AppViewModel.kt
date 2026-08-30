@@ -80,10 +80,19 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
 /**
- * Die fuenf Hauptbereiche als navigierbarer Wert (siehe [AppViewModel.requestTab]).
+ * Die Hauptbereiche als navigierbarer Wert (siehe [AppViewModel.requestTab]).
  *
  * Reihenfolge wie in der Navigationsleiste (`ui/TrailscapeApp.kt`): [HOME] ist
- * die Startseite „Heute" und damit der erste Tab.
+ * die Startseite „Heute" und damit der erste Tab, danach [MAP], [RIDES] und
+ * [TRAINING] — vier gleichrangige Ziele in der schwebenden Kapsel.
+ *
+ * [MORE] ist der eine Wert, der **kein** Tab ist: „Mehr" liegt seit der
+ * Fuehrung „Eine Leiste" hinter dem Zahnrad in den Kopfzeilen von Heute,
+ * Touren und Training und ist ein gepushtes Ziel der Route „mehr" (siehe
+ * `ui/TrailscapeApp.kt`). Der Aufzaehlungswert bleibt trotzdem bestehen: Ein
+ * gutes Dutzend Aufrufer — Leerzustaende, Hinweise, [requestMoreSection] —
+ * bittet weiterhin schlicht um „den Mehr-Bereich" und braucht den Unterschied
+ * zwischen Tab und gepushtem Ziel nicht zu kennen. Die Huelle loest ihn auf.
  */
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
 
@@ -338,34 +347,34 @@ class AppViewModel(
     /**
      * Die Tour, deren Detailansicht als Naechstes geoeffnet werden soll.
      * Dasselbe Muster wie [pendingRouteTarget], aus demselben Grund: Zwischen
-     * dem Tippen auf der Startseite und dem Erscheinen des Tourenblatts ueber
-     * der Karte liegt ein Tab-Wechsel, den ein einmaliges Ereignis nicht
-     * ueberleben wuerde.
+     * dem Tippen auf der Startseite und dem Erscheinen der Tourenliste liegt
+     * ein Tab-Wechsel, den ein einmaliges Ereignis nicht ueberleben wuerde.
      *
      * Ohne diesen Weg landete „Letzte Tour" nur in der Liste — der Nutzer haette
      * die Tour, die er gerade angetippt hat, dort ein zweites Mal suchen und
      * antippen muessen.
      *
-     * Abgeholt wird der Wert seit dem Zusammenlegen von Touren und Karte vom
-     * Karten-Screen (Baustein `ui/rides/TourList.kt`), nicht mehr von einem
-     * eigenen Touren-Tab — [requestRideDetail] und dieser Zustand selbst
-     * blieben dabei unveraendert, nur der Abholer ist ein anderer.
+     * Abgeholt wird der Wert vom Touren-Tab (`ui/rides/RidesScreen.kt`), der
+     * seit der Fuehrung „Eine Leiste" wieder ein eigenes Ziel ist. Davor lag
+     * die Liste als Blatt ueber der Karte und der Karten-Screen holte den Wert
+     * ab; [requestRideDetail] und dieser Zustand selbst blieben ueber beide
+     * Umbauten hinweg unveraendert, nur der Abholer ist ein anderer.
      */
     val pendingRideDetail: StateFlow<String?> = _pendingRideDetail.asStateFlow()
 
-    /** Oeffnet die Detailansicht einer Tour und wechselt zur Karte. */
+    /** Oeffnet die Detailansicht einer Tour und wechselt in den Touren-Tab. */
     fun requestRideDetail(rideId: String) {
         _pendingRideDetail.value = rideId
         requestTab(AppTab.RIDES)
     }
 
-    /** Quittiert die abgeholte Tour (ruft der Karten-Screen). */
+    /** Quittiert die abgeholte Tour (ruft der Touren-Tab). */
     fun consumeRideDetailRequest() {
         _pendingRideDetail.value = null
     }
 
     // -------------------------------------------------------------------------
-    // Touren-Tab → Tourenblatt ueber der Karte
+    // „Auf der Karte zeigen" → Tourenblatt ueber der Karte
     // -------------------------------------------------------------------------
 
     private val _tourSheetRequest = MutableStateFlow(false)
@@ -373,17 +382,22 @@ class AppViewModel(
     /**
      * Bitte an den Karten-Screen, das Tourenblatt aufzuschlagen — dasselbe
      * Muster wie [pendingRouteTarget] und [pendingRideDetail], aus demselben
-     * Grund: [AppTab.RIDES] loest die Navigationshuelle auf die Route „karte"
-     * auf (siehe `TrailscapeApp.kt`), aber zwischen dem Aufruf und dem
-     * Erscheinen des Karten-Screens liegt derselbe Tab-Wechsel. Ein einmaliges
-     * Ereignis waere bis dahin verpufft, ohne dass das Blatt je aufginge — der
-     * gehaltene Wert wartet, bis der Karten-Screen in der Komposition ist.
+     * Grund: Zwischen dem Aufruf und dem Erscheinen des Karten-Screens liegt
+     * ein Tab-Wechsel. Ein einmaliges Ereignis waere bis dahin verpufft, ohne
+     * dass das Blatt je aufginge — der gehaltene Wert wartet, bis der
+     * Karten-Screen in der Komposition ist.
      *
      * Bewusst ein simples `Boolean` und keine ID wie bei [pendingRideDetail]:
      * Es gibt nichts auszuwaehlen, nur ein „jetzt zeigen". Legt hin, wer zur
-     * Karte navigieren und dabei die Liste statt der reinen Kartenansicht
-     * zeigen will (aktuell nur die Aufloesung von [AppTab.RIDES]); der
-     * Karten-Screen holt es ab und quittiert mit [consumeTourSheetRequest].
+     * Karte navigieren und dabei die raeumliche Sicht auf den Tourenbestand
+     * zeigen will; der Karten-Screen holt es ab und quittiert mit
+     * [consumeTourSheetRequest].
+     *
+     * Der Aufrufer war bis zur Fuehrung „Eine Leiste" die Huelle selbst — sie
+     * loeste [AppTab.RIDES] auf die Karte auf. „Touren" ist inzwischen wieder
+     * ein eigener Tab (`ui/rides/RidesScreen.kt`), das Blatt ueber der Karte
+     * bleibt aber als **raeumliche** Sicht bestehen; diese Bitte ist der Weg
+     * dorthin und funktioniert unveraendert weiter.
      */
     val tourSheetRequest: StateFlow<Boolean> = _tourSheetRequest.asStateFlow()
 
@@ -395,6 +409,100 @@ class AppViewModel(
     /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
     fun consumeTourSheetRequest() {
         _tourSheetRequest.value = false
+    }
+
+    // -------------------------------------------------------------------------
+    // Geplante Route → der Aufnahme-Knopf der Navigationshuelle
+    // -------------------------------------------------------------------------
+
+    private val _plannedRouteKm = MutableStateFlow<Double?>(null)
+
+    /**
+     * Die Laenge der aktuell geplanten Route in Kilometern, oder `null`, wenn
+     * gerade keine vorliegt.
+     *
+     * ## Warum die Huelle das ueberhaupt wissen muss
+     * Der Aufnahme-Knopf schwebt seit der Navigations-Fuehrung „Eine Leiste"
+     * neben der Navigationskapsel und damit **ausserhalb** jedes Screens
+     * (siehe `ui/TrailscapeApp.kt` und `ui/components/RecCapsuleButton.kt`).
+     * Er hat drei Zustaende — Ruhe, „Route bereit", „laeuft" —, und den
+     * mittleren kann er nur zeigen, wenn er von einer geplanten Route weiss.
+     * Die Route selbst lebt aber als Bildschirmzustand im Karten-Screen
+     * (`plannedRoute` in `ui/map/MapScreen.kt`) und ueberlebt dort einen
+     * Tab-Wechsel nur, weil sie in `rememberSaveable` liegt — von aussen ist
+     * sie unerreichbar.
+     *
+     * Hier steht deshalb bewusst **nur die eine Zahl**, die der Knopf und
+     * sein Dialog anzeigen — nicht die Route, nicht ihre Punkte, nicht der
+     * Planungszustand. Die Planungslogik bleibt vollstaendig im Karten-Screen;
+     * dieser Wert ist ihr Schaufenster, kein zweiter Wohnort. Wer die Route
+     * wirklich braucht (navigieren, verwerfen), bittet den Karten-Screen
+     * darum — siehe [navigatePlannedRequest] und [discardPlannedRouteRequest].
+     *
+     * Ueberlebt bewusst **keinen** Prozesstod: Der Karten-Screen meldet den
+     * Wert nach, sobald er wieder in der Komposition ist. Bis dahin zeigt der
+     * Knopf seine Ruhelage — eine Zahl, fuer die es gerade keine Route gibt,
+     * waere schlimmer als ein Knopf, der einen Tab-Wechsel spaeter Bescheid
+     * weiss.
+     */
+    val plannedRouteKm: StateFlow<Double?> = _plannedRouteKm.asStateFlow()
+
+    /**
+     * Meldet der Huelle, dass eine Route vorliegt ([km]) bzw. keine mehr
+     * ([km] `= null`). Ruft ausschliesslich der Karten-Screen.
+     */
+    fun reportPlannedRoute(km: Double?) {
+        _plannedRouteKm.value = km
+    }
+
+    private val _navigatePlannedRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte an den Karten-Screen, die geplante Route zu navigieren — dasselbe
+     * Muster wie [pendingRecordStart], aus demselben Grund und mit demselben
+     * Gewinn: Der Karten-Screen beantwortet sie mit seiner **bestehenden**
+     * lokalen Funktion `navigatePlannedRoute()`, also samt Standort- und
+     * Benachrichtigungsabfrage. Der Dialog am Aufnahme-Knopf (siehe
+     * `ui/ReadyToRideDialog.kt`) haette diese Berechtigungslogik sonst
+     * verdoppeln oder umgehen muessen.
+     */
+    val navigatePlannedRequest: StateFlow<Boolean> = _navigatePlannedRequest.asStateFlow()
+
+    /** Bittet den Karten-Tab, die geplante Route zu navigieren, und wechselt dorthin. */
+    fun requestNavigatePlanned() {
+        _navigatePlannedRequest.value = true
+        requestTab(AppTab.MAP)
+    }
+
+    /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
+    fun consumeNavigatePlannedRequest() {
+        _navigatePlannedRequest.value = false
+    }
+
+    private val _discardPlannedRouteRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte an den Karten-Screen, die geplante Route (und mit ihr die
+     * Planung) wegzuwerfen — der „Route verwerfen"-Weg aus dem Dialog des
+     * Aufnahme-Knopfs.
+     *
+     * Bewusst **ohne** Tab-Wechsel: Wer eine Route verwirft, will nicht als
+     * Belohnung auf der Karte landen. [plannedRouteKm] wird deshalb sofort
+     * mitgeleert, damit der Knopf augenblicklich in seine Ruhelage faellt;
+     * das eigentliche Aufraeumen erledigt der Karten-Screen, sobald er das
+     * naechste Mal komponiert ist.
+     */
+    val discardPlannedRouteRequest: StateFlow<Boolean> = _discardPlannedRouteRequest.asStateFlow()
+
+    /** Wirft die geplante Route weg (siehe [discardPlannedRouteRequest]). */
+    fun requestDiscardPlannedRoute() {
+        _plannedRouteKm.value = null
+        _discardPlannedRouteRequest.value = true
+    }
+
+    /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
+    fun consumeDiscardPlannedRouteRequest() {
+        _discardPlannedRouteRequest.value = false
     }
 
     // -------------------------------------------------------------------------

@@ -272,4 +272,17 @@ object OneUiNavigationBarDefaults {
      * unteren System-Inset.
      */
     val OverlaySpace: Dp = NavigationBarHeight + NavigationBarBottomMargin * 2
+
+    /**
+     * Der seitliche Rand, den die Kapsel sich selbst gibt.
+     *
+     * Oeffentlich, seit **neben** der Kapsel noch etwas steht: Der schwebende
+     * Aufnahme-Knopf ([RecCapsuleButton], eingesetzt in `ui/TrailscapeApp.kt`)
+     * sitzt als eigenstaendiger Kreis rechts daneben und muss zum
+     * Bildschirmrand denselben Abstand halten wie die Kapsel zu ihrem —
+     * sonst stuenden die beiden Nachbarn sichtbar auf verschiedenen Linien.
+     * Ein zweiter, von Hand gepflegter 24-dp-Wert in der Huelle waere genau
+     * die Art Kopie, die beim naechsten Feinschliff auseinanderlaeuft.
+     */
+    val SideMargin: Dp = NavigationBarSideMargin
 }

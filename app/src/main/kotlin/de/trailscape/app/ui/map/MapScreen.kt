@@ -245,7 +245,15 @@ import kotlinx.coroutines.withContext
  *    **dieselbe** lokale Funktion `startRecording()`, also mit derselben
  *    Berechtigungsabfrage. Vorher versprach die Karte auf der Startseite nur
  *    den Weg dorthin und erklaerte in einem Absatz, wo der eigentliche Knopf
- *    liegt; jetzt haelt der eine Knopf das eine Versprechen.
+ *    liegt; jetzt haelt der eine Knopf das eine Versprechen. Denselben Weg
+ *    nimmt seit der Fuehrung „Eine Leiste" der schwebende Aufnahme-Knopf der
+ *    Huelle (`ui/components/RecCapsuleButton.kt`) samt seinem Bereit-Dialog
+ *    (`ui/ReadyToRideDialog.kt`) — fuer die Aufzeichnung ueber
+ *    [AppViewModel.requestRecording], fuer „Mit Navigation starten" ueber
+ *    [AppViewModel.navigatePlannedRequest]. Die Berechtigungslogik dieses
+ *    Screens bleibt damit die einzige der App; was die Huelle von der Planung
+ *    ueberhaupt weiss, ist die eine Kilometerzahl aus
+ *    [AppViewModel.plannedRouteKm], die der Effekt weiter unten meldet.
  *  * **Rundkurs auch ohne Trainingsziel.** Im Planungsblatt steht bei null
  *    Wegpunkten „Runde ab hier" mit drei Distanzen und einem Feld fuer die
  *    eigene Zahl (siehe [startRoundTrip] und `PlanningPanel.kt`). Vorher war
@@ -268,9 +276,13 @@ import kotlinx.coroutines.withContext
  *    Effekt bei `autoLocationZoomDone` weiter unten.
  *
  * ## Die Tourenliste und ihre Rangfolge am unteren Kartenrand
- * Seit dem Wegfall des eigenen Touren-Tabs (siehe `ui/TrailscapeApp.kt`,
- * „Warum Touren und Karte eine Seite sind") liegt die Tourenliste als Koerper
- * des Erkunden-Blatts ([ExploreSheet], `ExploreSheet.kt`) — kein eigenes
+ * Die Tourenliste liegt als Koerper des Erkunden-Blatts ([ExploreSheet],
+ * `ExploreSheet.kt`) — hier als **raeumliche** Sicht auf den Bestand: eine
+ * Tour auswaehlen, waehrend man ohnehin auf die Karte schaut. Die
+ * chronologische Sicht ist seit der Fuehrung „Eine Leiste" wieder ein eigener
+ * Tab (`ui/rides/RidesScreen.kt`, siehe `ui/TrailscapeApp.kt`); beide teilen
+ * sich denselben Baustein [TourListContent], es gibt also nur eine
+ * Tourenliste in zwei Behaeltern. Kein eigenes
  * drittes Blatt mehr: Eingeklappt zeigt das Blatt Suchzeile, Werkzeugreihe
  * und die Touren-Zeile („N Touren" samt „Importieren", siehe dessen KDoc),
  * aufgeklappt (ueber [SwipeableSheet], `SwipeableSheet.kt`) zusaetzlich die
@@ -289,10 +301,9 @@ import kotlinx.coroutines.withContext
  *     unten).
  *  2. **Sonst ist die eingeklappte Stufe der Ruhezustand**: eine Zeile, die
  *     die Karte kaum verdeckt. Aufgeklappt entsteht nur auf zwei Wegen — die
- *     Nutzerin zieht oder tippt selbst am Griff, oder ein anderer Tab bittet
- *     ueber [AppViewModel.tourSheetRequest] darum (siehe „Vier Tabs sind das
- *     Maximum" in `TrailscapeApp.kt`: „Touren" ist kein eigenes Ziel mehr,
- *     sondern genau dieser Wunsch).
+ *     Nutzerin zieht oder tippt selbst am Griff, oder ein anderer Bildschirm
+ *     bittet ueber [AppViewModel.tourSheetRequest] darum („zeig mir das auf
+ *     der Karte").
  *  3. **Ein schon aufgeschlagenes Blatt faellt beim Eintreten eines
  *     Vorrang-Zustands auf die eingeklappte Stufe zurueck und bleibt dort**,
  *     auch nachdem der Vorrang-Zustand wieder endet — es springt nicht von
@@ -2009,10 +2020,67 @@ fun MapScreen(appViewModel: AppViewModel) {
         controller.fitToPoints(candidate.route.points)
     }
 
-    // ------------------------------------------------ Touren-Tab → Kartenscreen
-    // Seit dem Wegfall des eigenen Touren-Tabs (siehe `ui/TrailscapeApp.kt`,
-    // „Warum Touren und Karte eine Seite sind") bittet die Huelle hier statt
-    // eines Tab-Wechsels nur noch darum, das Tourenblatt aufzuschlagen.
+    // ------------------------------- geplante Route → Aufnahme-Knopf der Huelle
+    // Der schwebende Aufnahme-Knopf neben der Navigationskapsel (siehe
+    // `ui/TrailscapeApp.kt` und `ui/components/RecCapsuleButton.kt`) zeigt
+    // „Route bereit" mit Kilometerzahl, sobald hier eine geplante Route liegt.
+    // Er steht ausserhalb jedes Screens und kann `plannedRoute` — einen
+    // `rememberSaveable`-Zustand dieses Bildschirms — nicht sehen; gemeldet
+    // wird deshalb die eine Zahl, die er anzeigt.
+    //
+    // Bewusst EIN abgeleiteter Effekt statt eines Aufrufs an jeder der elf
+    // Stellen, an denen `plannedRoute` entsteht oder verschwindet (Berechnung,
+    // Fehlschlag, Generator, `exitPlanning`, `restorePlanning`,
+    // `discardGeneratedRoute`, `runRecording`, Kartentipp …): Elf Aufrufe
+    // waeren elf Gelegenheiten, einen zu vergessen — und ein vergessener
+    // liesse den Knopf eine Route anbieten, die es nicht mehr gibt. So kann
+    // die Meldung per Konstruktion nicht von der Wahrheit abweichen.
+    //
+    // Waehrend einer laufenden Navigation meldet der Effekt `null`: Die Route
+    // wird dann bereits gefahren, „bereit" waere die falsche Auskunft. Der
+    // Schluessel ist bewusst billig (Zahl und Boolean statt der Route selbst
+    // mit ihrer kompletten Punktliste), damit der Vergleich nicht bei jeder
+    // Rekomposition ueber tausende Punkte laeuft.
+    LaunchedEffect(plannedRoute?.distanceKm, navTarget != null) {
+        appViewModel.reportPlannedRoute(
+            if (navTarget == null) plannedRoute?.distanceKm else null,
+        )
+    }
+
+    // „Mit Navigation starten" aus dem Bereit-Dialog des Aufnahme-Knopfs
+    // (`ui/ReadyToRideDialog.kt`) — dasselbe Muster und derselbe Gewinn wie
+    // bei [pendingRecordStart] gleich darueber: Beantwortet wird die Bitte mit
+    // **derselben** lokalen Funktion, die auch der „Navigieren"-Knopf im
+    // Planungsblatt ausloest, also samt Berechtigungsabfrage. Die Huelle baut
+    // keinen zweiten Startweg.
+    val navigatePlannedRequest by appViewModel.navigatePlannedRequest
+        .collectAsStateWithLifecycle()
+    LaunchedEffect(navigatePlannedRequest) {
+        if (!navigatePlannedRequest) return@LaunchedEffect
+        appViewModel.consumeNavigatePlannedRequest()
+        // Ist die Route zwischenzeitlich verschwunden, tut `navigatePlannedRoute`
+        // von sich aus nichts — die Pruefung steht dort.
+        navigatePlannedRoute()
+    }
+
+    // „Route verwerfen" aus demselben Dialog. Die Huelle hat ihre Anzeige
+    // schon geleert; hier wird die Planung wirklich weggeraeumt — inklusive
+    // eines noch offenen Generator-Panels, dessen Vorschlag sonst beim
+    // naechsten Blick auf die Karte wieder als Route dastuende.
+    val discardPlannedRouteRequest by appViewModel.discardPlannedRouteRequest
+        .collectAsStateWithLifecycle()
+    LaunchedEffect(discardPlannedRouteRequest) {
+        if (!discardPlannedRouteRequest) return@LaunchedEffect
+        appViewModel.consumeDiscardPlannedRouteRequest()
+        if (generation.target != null) discardGeneratedRoute()
+        exitPlanning()
+    }
+
+    // ------------------------------------- „auf der Karte zeigen" → Tourenblatt
+    // Wer den Tourenbestand raeumlich sehen will, bittet ueber
+    // [AppViewModel.tourSheetRequest] darum, das Blatt aufzuschlagen — die
+    // chronologische Sicht ist seit der Fuehrung „Eine Leiste" ein eigener Tab
+    // (`ui/rides/RidesScreen.kt`), diese hier bleibt daneben bestehen.
     val tourSheetRequest by appViewModel.tourSheetRequest.collectAsStateWithLifecycle()
     LaunchedEffect(tourSheetRequest) {
         if (tourSheetRequest) {
@@ -2021,18 +2089,14 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
     }
 
-    // Von der Startseite (oder anderswo) angeforderte Tourendetailansicht —
-    // wortgleich uebernommen aus dem frueheren `ui/rides/TourList.kt`: Erst
-    // quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge eine
-    // Anfrage kurz nach dem Kaltstart (Liste noch leer) spurlos verloren.
-    val pendingRideDetailRequest by appViewModel.pendingRideDetail.collectAsStateWithLifecycle()
-    LaunchedEffect(pendingRideDetailRequest, rides) {
-        val wanted = pendingRideDetailRequest ?: return@LaunchedEffect
-        if (rides.any { it.id == wanted }) {
-            detailRideId = wanted
-            appViewModel.consumeRideDetailRequest()
-        }
-    }
+    // [AppViewModel.pendingRideDetail] holt dieser Screen NICHT mehr ab: Die
+    // Detailansicht einer von aussen angeforderten Tour gehoert seit der
+    // Fuehrung „Eine Leiste" in den Touren-Tab (`ui/rides/RidesScreen.kt`),
+    // und `requestRideDetail` navigiert genau dorthin. Zwei Abholer waeren ein
+    // Rennen: Der noch komponierte Karten-Screen kaeme dem Tab zuvor und
+    // oeffnete das Detailfenster ueber der Karte, waehrend die Navigation
+    // zugleich wegwechselt. Das lokale [detailRideId] bleibt — es traegt
+    // weiterhin, was im Tourenblatt dieser Karte angetippt wurde.
 
     // Verschwindet die geoeffnete Tour aus der Liste (Sync, Loeschen aus dem
     // Blatt), ohne dass die Detailansicht selbst geloescht hat, schliesst sie
