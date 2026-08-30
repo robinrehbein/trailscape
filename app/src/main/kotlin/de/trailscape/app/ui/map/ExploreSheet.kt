@@ -126,9 +126,17 @@ internal fun ExploreSheet(
         modifier = modifier,
         peek = {
             Column(
+                // Oben KEIN eigener Abstand: Die Griffzeile des
+                // [SwipeableSheet] reserviert bereits 48 dp Beruehrflaeche —
+                // ein zusaetzliches Polster darunter stapelte im ersten
+                // Geraetetest sichtbar Leerraum auf Leerraum, und der
+                // "schlanke" eingeklappte Zustand war ein hoher. Unten reicht
+                // ein knapperes Mass als das allgemeine Overlay-Polster.
                 modifier = Modifier.padding(
-                    horizontal = CardPadding,
-                    vertical = OverlayCardPaddingVertical,
+                    start = CardPadding,
+                    end = CardPadding,
+                    top = 0.dp,
+                    bottom = 10.dp,
                 ),
             ) {
                 OneUiSearchField(
