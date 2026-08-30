@@ -104,16 +104,25 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
 )
 
 /**
- * Tourenliste als Inhalt eines Blatts — Nachfolger des fruehen eigenen
- * Touren-Tabs (`ui/rides/RidesScreen.kt`, entfallen). Karte und Touren sind zu
- * einer Seite zusammengelegt; die Liste liegt seither als Blatt ueber der Karte
- * (`ui/map/ExploreSheet.kt`, dort eingebaut).
+ * Die Tourenliste als **Baustein** — bewusst ohne eigenen Bildschirmrahmen,
+ * weil es sie an zwei Orten gibt:
+ *
+ *  * im Touren-Tab (`ui/rides/RidesScreen.kt`) als chronologische Sicht auf
+ *    den Bestand — der Hauptzugang,
+ *  * als Koerper des Erkunden-Blatts ueber der Karte
+ *    (`ui/map/ExploreSheet.kt`) als raeumliche Sicht.
+ *
+ * Beide zeigen dieselben Karten, dieselben Menues und denselben Leerzustand,
+ * weil sie dieselbe Funktion aufrufen. Ein zweiter Listenaufbau fuer den Tab
+ * waere die Gelegenheit gewesen, dass „Löschen" an zwei Stellen zwei
+ * verschiedene Dinge tut.
  *
  * Deshalb **kein** `Scaffold`, **keine** Titelleiste und **keine** eigene
  * Aufloesung der System-Insets: Dieses Composable zeichnet nur seinen Inhalt
- * und fuellt, was der Behaelter ihm an Platz gibt. Randmasse fuer die
- * schwebende Navigationskapsel kommen ueber [contentPadding] von aussen, nicht
- * ueber `screenContentPadding()` wie bei einem eigenstaendigen Bildschirm.
+ * und fuellt, was der Behaelter ihm an Platz gibt. Randmasse — fuer die
+ * schwebende Navigationskapsel und, im Blatt, dessen eigene Raender — kommen
+ * ueber [contentPadding] von aussen; der Touren-Tab reicht dort schlicht
+ * `screenContentPadding()` herein.
  *
  * ## Import wohnt nicht mehr in der Liste
  * Der Import-Knopf stand zuletzt als Kopfzeile in dieser Liste — und war damit
@@ -125,18 +134,20 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * gereicht — derselbe Weg, keine zweite Verdrahtung.
  *
  * ## Tippen zeigt auf der Karte, „Details" oeffnet die Vollansicht
- * Frueher oeffnete ein Tipp auf eine Karte sofort die Detailansicht. Jetzt
- * liegt die Liste selbst ueber der Karte — der naheliegende Zweck eines Tipps
- * ist deshalb, die Route der Tour dort zu zeigen ([onShowOnMap]), nicht in
- * eine weitere Ansicht zu wechseln. Wer wirklich Kennzahlen, Hoehenprofil und
- * Auswertung sehen will, tippt auf den eigens beschrifteten Knopf „Details"
- * auf der Karte ([onOpenDetail]) — ein Weg, der ohne Raten auffindbar ist,
- * weil er als Text und nicht nur im Ueberlaufmenue steht.
+ * Frueher oeffnete ein Tipp auf eine Karte sofort die Detailansicht. Im Blatt
+ * ueber der Karte ist der naheliegende Zweck eines Tipps aber, die Route der
+ * Tour dort zu zeigen ([onShowOnMap]), nicht in eine weitere Ansicht zu
+ * wechseln — und im Touren-Tab bedeutet dieselbe Geste dasselbe, nur mit
+ * einem Tab-Wechsel davor („zeig mir das auf der Karte"). Wer wirklich
+ * Kennzahlen, Hoehenprofil und Auswertung sehen will, tippt auf den eigens
+ * beschrifteten Knopf „Details" ([onOpenDetail]) — ein Weg, der ohne Raten
+ * auffindbar ist, weil er als Text und nicht nur im Ueberlaufmenue steht.
  *
  * ## Undo-Snackbar bleibt lokal, „normale" Meldungen nicht mehr
- * [AppViewModel.messages] sammelt jetzt der Karten-Screen ein (er umschliesst
- * dieses Blatt und bleibt bestehen, waehrend das Blatt auf- und zufaehrt) —
- * eine erkannte Dublette oder der Import-Erfolg laufen also weiterhin ueber
+ * [AppViewModel.messages] sammelt der **Behaelter** ein — der Karten-Screen
+ * bzw. der Touren-Tab —, weil er bestehen bleibt, waehrend das Blatt auf- und
+ * zufaehrt. Eine erkannte Dublette oder der Import-Erfolg laufen also
+ * weiterhin ueber
  * [AppViewModel.showMessage], zeigen sich aber dort. Die „Rückgängig"-Snackbar
  * beim Loeschen ist etwas anderes: Sie braucht eine Aktionsschaltflaeche und
  * eine eigene Anzeigedauer (siehe [DeleteRideWithUndo]), Dinge, die der einfache
@@ -149,13 +160,13 @@ private val loadSourceShortLabels: Map<LoadSource, String> = mapOf(
  * aufbaut. Ein selbstaendiges Overlay funktioniert unabhaengig davon.
  *
  * @param onImportFile startet den Einzelimport (GPX/FIT) — die eine, vom
- *   Karten-Screen gehaltene Aktion (`rememberActivityImportAction`), hier nur
+ *   Behaelter gehaltene Aktion (`rememberActivityImportAction`), hier nur
  *   fuer den Knopf „GPX-/FIT-Datei öffnen" im Leerzustand gebraucht.
  * @param contentPadding wird unveraendert an die `LazyColumn` durchgereicht.
- *   Der Behaelter (das Tourenblatt) traegt hierueber die Bodenfreiheit der
- *   schwebenden Navigationskapsel bei — und, je nach Blatthoehe, zusaetzliche
- *   Raender. Der Standardwert (kein Rand) gilt nur, wenn niemand etwas
- *   uebergibt, etwa in einer Vorschau.
+ *   Der Behaelter traegt hierueber die Bodenfreiheit der schwebenden
+ *   Navigationskapsel bei — im Tourenblatt zusaetzlich dessen eigene Raender,
+ *   im Touren-Tab schlicht `screenContentPadding()`. Der Standardwert (kein
+ *   Rand) gilt nur, wenn niemand etwas uebergibt, etwa in einer Vorschau.
  */
 @Composable
 fun TourListContent(
@@ -311,11 +322,14 @@ fun TourListContent(
  * `if (detailRide != null)`-Zweigs von `TourList.kt`.
  *
  * ## Warum eine Tour-ID statt eines internen Zustands
- * `RidesScreen` merkte sich die geoeffnete Tour frueher selbst
+ * Der fruehe Touren-Bildschirm merkte sich die geoeffnete Tour selbst
  * (`rememberSaveable`), weil Liste und Detail **derselbe** Bildschirm waren.
- * Jetzt ist die Liste ein Blatt ueber der Karte und die Detailansicht ein
- * eigenstaendiges Vollbild, das der Karten-Screen darueber legt — welche Tour
- * offen ist, haelt deshalb er als lokalen Zustand fest (angestossen ueber das
+ * Jetzt ist die Liste ein Baustein in zwei Behaeltern und die Detailansicht
+ * ein eigenstaendiges Vollbild, das der jeweilige Behaelter darueber legt
+ * (`ui/rides/RidesScreen.kt`, `ui/map/MapScreen.kt` — beide in einem eigenen
+ * `Dialog`-Fenster, damit auch die schwebende Navigationskapsel verdeckt
+ * ist). Welche Tour offen ist, haelt deshalb er als lokalen Zustand fest
+ * (angestossen ueber das
  * `onOpenDetail`-Callback von [TourListContent]) und reicht ihn hier als
  * einfachen Parameter herein. Diese Funktion bleibt bewusst zustandslos
  * gegenueber der ID selbst; sie schlaegt die Zusammenfassung aus

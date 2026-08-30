@@ -317,11 +317,14 @@ private enum class OnboardingPage(
                 "trägt, bekommt Ruhepuls, HRV und Schlaf zusätzlich in die Rechnung.",
             // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
             // — „unten" zeigte also auf nichts. Der Satz sagt jetzt, dass sie
-            // gleich kommt.
+            // gleich kommt. Inhaltlich beschreibt er die Fuehrung „Eine
+            // Leiste" (siehe `ui/TrailscapeApp.kt`): vier Tabs, daneben der
+            // runde Aufnahme-Knopf, Einstellungen hinterm Zahnrad.
             "Sobald die Einführung durch ist, führen unten vier Tabs dorthin: Heute (die " +
-                "Empfehlung), Karte (aufzeichnen, planen — und deine Touren, als " +
-                "aufziehbares Blatt), Training (Plan und Auswertung) und Mehr (Profil, " +
-                "Import, Einstellungen).",
+                "Empfehlung), Karte (planen und navigieren), Touren (alles Gefahrene) " +
+                "und Training (Plan und Auswertung). Daneben schwebt der runde Knopf, " +
+                "mit dem jede Fahrt beginnt; Profil, Import und Einstellungen liegen " +
+                "hinter dem Zahnrad oben rechts.",
             "Alles liegt auf deinem Gerät. Kein Konto, keine Anmeldung, keine Telemetrie. " +
                 "Ein eigener Sync-Server ist möglich, aber freiwillig.",
         ),

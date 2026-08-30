@@ -29,11 +29,13 @@ import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.planFeasibilityIdentityKey
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.weekdayDateFormat
 import de.trailscape.core.adaptPlan
 import de.trailscape.core.assessPlanFeasibility
@@ -104,6 +106,14 @@ import java.time.LocalDateTime
  * umbenannt; der Leitfaden verlangt umgekehrt einen Titel, der
  * **gleichlautend** zum Reiter („Heute") ist. Geblieben ist das Datum als
  * ruhige Zeile — die einzige Auskunft, die der Kopf je hatte.
+ *
+ * Das eine Bedienelement, das sonst in einer Kopfzeile saesse, gibt es
+ * trotzdem: das ⚙ in den Mehr-Bereich (seit der Fuehrung „Eine Leiste" kein
+ * Tab mehr, siehe `ui/TrailscapeApp.kt`). Es schwebt hier oben rechts ueber
+ * dem Inhalt — an genau der Stelle, an der es in den Kopfzeilen von Touren und
+ * Training steht, und genau so, wie der Prototyp der Studie es zeigt. Eine
+ * ganze Kopfzeile nur fuer diesen einen Knopf einzufuehren waere der
+ * schlechtere Tausch: Sie kostete ein Drittel Bildschirm.
  *
  * ## Verhaeltnis zum Trainings-Tab
  * Die Tagesempfehlung steht **nur hier**. `ui/training/TrainingScreen.kt` zeigt
@@ -282,6 +292,26 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     }
                 }
             }
+
+            // Das Zahnrad in den Mehr-Bereich (seit der Fuehrung „Eine
+            // Leiste" kein Tab mehr, siehe `ui/TrailscapeApp.kt`). Auf
+            // Touren und Training sitzt es rechts in der Kopfzeile — diese
+            // Seite hat bewusst keine (Begruendung im KDoc oben), also
+            // schwebt es hier ueber dem Inhalt, an derselben Stelle wie
+            // dort. Genau das tut auch der Prototyp der Studie: ein
+            // freistehendes ⚙ oben rechts.
+            //
+            // Der Innenabstand ist [ScreenPadding] abzueglich der 12 dp, die
+            // ein [androidx.compose.material3.IconButton] als Beruehrungsrand
+            // um sein 24-dp-Symbol legt — so steht das Symbol auf derselben
+            // Linie wie der Karteninhalt darunter und der Knopf behaelt
+            // trotzdem seine volle Trefferflaeche.
+            SettingsAction(
+                onClick = { appViewModel.requestTab(AppTab.MORE) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(ScreenPadding - 12.dp),
+            )
         }
     }
 }

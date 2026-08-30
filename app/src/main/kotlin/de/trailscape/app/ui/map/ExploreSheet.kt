@@ -89,7 +89,7 @@ import de.trailscape.core.GeoResult
  * Liste auf, derselbe Weg wie der Griff) und rechts „Importieren"
  * ([onImport]). Vorher verriet der eingeklappte Zustand mit keinem Wort, dass
  * hinter dem Griff die Tourenliste — und in ihr der einzige Import-Einstieg
- * dieses Tabs — wohnt; seit dem Wegfall des eigenen Touren-Tabs war der
+ * dieses Tabs — wohnt; solange es keinen eigenen Touren-Tab gab, war der
  * GPX-Import damit faktisch unauffindbar („kann ich keine GPX-Dateien mehr
  * importieren?"). Jetzt stehen beide Auskuenfte im Ruhezustand: dass es Touren
  * gibt, und wie eine neue hereinkommt. Waehrend der Suche tritt die Zeile mit

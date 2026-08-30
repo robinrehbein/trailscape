@@ -1,0 +1,2645 @@
+<title>Trailscape Navigationsstudien</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F3F4EF; --panel:#FBFBF8; --ink:#20261E; --mut:#5C6657;
+  --line:#DBDFD3; --acc:#2E5E43; --acc-ink:#FFFFFF; --wash:#E9ECE2;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15180F; --panel:#1C2016; --ink:#E9ECE1; --mut:#9AA48F;
+    --line:#2C3126; --acc:#8FBF9D; --acc-ink:#14210F; --wash:#232821;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15180F; --panel:#1C2016; --ink:#E9ECE1; --mut:#9AA48F;
+  --line:#2C3126; --acc:#8FBF9D; --acc-ink:#14210F; --wash:#232821;
+}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Instrument Sans",system-ui,sans-serif;
+  font-size:16px; line-height:1.6;
+}
+a{color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+
+/* ---------- Frame: Hero ---------- */
+.hero{padding:72px 0 40px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:"Spline Sans Mono",monospace;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--acc);margin-bottom:16px}
+h1{font-family:"Bricolage Grotesque","Instrument Sans",sans-serif;font-weight:800;font-size:clamp(34px,5.5vw,58px);line-height:1.05;text-wrap:balance;max-width:16ch}
+.hero p.lead{max-width:62ch;margin-top:20px;font-size:18px;color:var(--mut)}
+
+/* ---------- Frame: Ziel ---------- */
+.goal{padding:48px 0;border-bottom:1px solid var(--line)}
+.goal-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+@media (max-width:820px){.goal-grid{grid-template-columns:1fr}}
+h2.frame{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:26px;margin-bottom:14px;text-wrap:balance}
+.goal p{max-width:60ch;color:var(--ink)}
+.goal p + p{margin-top:12px}
+.goal .kern{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+.kern h3{font-family:"Spline Sans Mono",monospace;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:12px}
+.kern ol{padding-left:20px;display:grid;gap:6px;font-size:15px}
+.kern ol strong{font-weight:600}
+.screens-note{margin-top:14px;font-size:14px;color:var(--mut);max-width:58ch}
+
+/* ---------- Frame: Index ---------- */
+.idx{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--line)}
+.idx-row{display:flex;gap:8px;overflow-x:auto;padding:12px 24px;max-width:1160px;margin:0 auto}
+.idx a{flex:0 0 auto;text-decoration:none;font-family:"Spline Sans Mono",monospace;font-size:12px;
+  border:1px solid var(--line);border-radius:99px;padding:6px 12px;color:var(--mut);background:var(--panel);white-space:nowrap}
+.idx a:hover,.idx a:focus-visible{color:var(--ink);border-color:var(--acc);outline:none}
+
+/* ---------- Konzept-Sektionen ---------- */
+.concept{padding:64px 0 32px;border-bottom:1px solid var(--line);scroll-margin-top:64px}
+.c-head{display:flex;gap:20px;align-items:baseline}
+.c-num{font-family:"Spline Sans Mono",monospace;font-size:14px;color:var(--a);border:1px solid var(--a);border-radius:99px;padding:4px 12px;flex:0 0 auto}
+.c-head h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:clamp(26px,3.4vw,38px);line-height:1.1}
+.c-tag{color:var(--mut);font-size:17px;margin-top:6px;max-width:60ch}
+.c-lead{margin-top:18px;max-width:68ch}
+.c-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:22px}
+@media (max-width:820px){.c-facts{grid-template-columns:1fr}}
+.c-facts>div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;font-size:14.5px}
+.c-facts h4{font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--a);margin-bottom:6px}
+.c-facts p{color:var(--mut)}
+
+/* ---------- Shots ---------- */
+.shots{display:flex;gap:22px;overflow-x:auto;padding:26px 4px 18px;align-items:flex-start}
+.shot{flex:0 0 auto;width:252px}
+.shot-label{font-family:"Spline Sans Mono",monospace;font-size:12px;font-weight:600;margin-top:12px}
+.shot-note{font-size:12.5px;color:var(--mut);line-height:1.45;margin-top:3px}
+
+/* ---------- Phone & UI-Bausteine ---------- */
+.phone{
+  width:252px;height:524px;border-radius:26px;overflow:hidden;position:relative;
+  border:1px solid var(--line);
+  background:var(--m-bg,#FCFCFA);color:var(--m-fg,#242A22);
+  display:flex;flex-direction:column;
+  font-size:10px;line-height:1.35;
+  box-shadow:0 10px 26px rgba(20,30,20,.10);
+}
+.p-status{display:flex;justify-content:space-between;padding:9px 16px 4px;font-size:8px;opacity:.55;font-variant-numeric:tabular-nums}
+.p-body{flex:1;display:flex;flex-direction:column;padding:4px 12px 10px;gap:8px;min-height:0;position:relative}
+.p-body.flush{padding:0;gap:0}
+.p-h1{font-family:"Bricolage Grotesque",sans-serif;font-size:16px;font-weight:700;line-height:1.15}
+.p-sub{font-size:8.5px;opacity:.58}
+.p-topbar{display:flex;align-items:center;gap:8px;padding:2px 0}
+.p-topbar .grow{flex:1}
+.p-ic{width:20px;height:20px;border-radius:99px;background:var(--m-card,#EFF1E9);display:flex;align-items:center;justify-content:center;font-size:9px;flex:0 0 auto}
+.p-card{background:var(--m-card,#F0F2EA);border-radius:12px;padding:9px 10px}
+.p-card.acc{background:var(--a);color:var(--a-ink,#fff)}
+.p-card.line{background:transparent;border:1px dashed color-mix(in srgb,var(--m-fg,#242A22) 25%,transparent)}
+.p-row{display:flex;align-items:center;gap:7px;padding:6px 2px;border-bottom:1px solid color-mix(in srgb,var(--m-fg,#242A22) 8%,transparent);font-size:9px}
+.p-row:last-child{border-bottom:0}
+.p-row .grow{flex:1;min-width:0}
+.p-row b{font-size:9.5px;display:block}
+.p-row small{font-size:8px;opacity:.55;display:block}
+.p-chip{border-radius:99px;padding:2px 7px;font-size:7.5px;background:color-mix(in srgb,var(--m-fg,#242A22) 8%,transparent);white-space:nowrap}
+.p-chip.on{background:var(--a);color:var(--a-ink,#fff)}
+.p-btn{background:var(--a);color:var(--a-ink,#fff);border-radius:99px;padding:7px 10px;text-align:center;font-weight:700;font-size:9.5px}
+.p-btn.ghost{background:transparent;color:var(--m-fg,#242A22);border:1px solid color-mix(in srgb,var(--m-fg,#242A22) 30%,transparent)}
+.p-nav{display:flex;border-top:1px solid color-mix(in srgb,var(--m-fg,#242A22) 10%,transparent);padding:7px 4px 12px;background:var(--m-bg,#FCFCFA)}
+.p-nav span{flex:1;text-align:center;font-size:7.5px;opacity:.45}
+.p-nav span.on{opacity:1;color:var(--a);font-weight:700}
+.p-map{position:relative;border-radius:12px;overflow:hidden;flex:1;min-height:60px;
+  background:
+   repeating-radial-gradient(circle at 72% 18%, transparent 0 15px, color-mix(in srgb,var(--m-fg,#242A22) 9%,transparent) 15px 16px),
+   repeating-radial-gradient(circle at 18% 78%, transparent 0 20px, color-mix(in srgb,var(--m-fg,#242A22) 7%,transparent) 20px 21px),
+   var(--m-map,#E7ECDF);}
+.p-map.fill{border-radius:0;flex:1}
+.p-route{position:absolute;inset:0;width:100%;height:100%}
+.p-route path{fill:none;stroke:var(--a);stroke-width:3;stroke-linecap:round}
+.p-route .alt{stroke:color-mix(in srgb,var(--m-fg,#242A22) 30%,transparent);stroke-width:2;stroke-dasharray:4 3}
+.p-route circle{fill:var(--a)}
+.p-route circle.end{fill:var(--m-fg,#242A22)}
+.p-overlay{position:absolute;left:8px;right:8px}
+.p-sheet{background:var(--m-bg,#FCFCFA);border-radius:16px 16px 0 0;padding:7px 12px 12px;box-shadow:0 -4px 14px rgba(0,0,0,.14)}
+.p-handle{width:30px;height:4px;border-radius:2px;background:color-mix(in srgb,var(--m-fg,#242A22) 22%,transparent);margin:0 auto 7px}
+.p-seg{display:flex;background:color-mix(in srgb,var(--m-fg,#242A22) 8%,transparent);border-radius:99px;padding:2px}
+.p-seg span{flex:1;text-align:center;padding:4px 2px;border-radius:99px;font-size:8px;opacity:.6}
+.p-seg span.on{background:var(--a);color:var(--a-ink,#fff);opacity:1;font-weight:700}
+.p-fab{position:absolute;right:12px;bottom:12px;background:var(--a);color:var(--a-ink,#fff);border-radius:16px;padding:9px 12px;font-weight:700;font-size:9.5px;box-shadow:0 4px 10px rgba(0,0,0,.22)}
+.p-big{font-family:"Bricolage Grotesque",sans-serif;font-size:34px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.p-big small{font-size:10px;font-weight:600;opacity:.55}
+.p-grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.p-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.p-stat b{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;display:block;line-height:1.15}
+.p-stat small{font-size:7.5px;opacity:.55;text-transform:uppercase;letter-spacing:.06em}
+.p-ring{width:58px;height:58px;border-radius:99px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(var(--a) calc(var(--v,82)*1%), color-mix(in srgb,var(--m-fg,#242A22) 12%,transparent) 0)}
+.p-ring>div{width:44px;height:44px;border-radius:99px;background:var(--m-bg,#FCFCFA);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.p-ring small{font-size:6.5px;font-weight:600;opacity:.55}
+.p-bar{height:5px;border-radius:3px;background:color-mix(in srgb,var(--m-fg,#242A22) 10%,transparent);overflow:hidden}
+.p-bar>i{display:block;height:100%;border-radius:3px;background:var(--a);width:var(--v,60%)}
+.p-spark{width:100%;height:100%;display:block}
+.p-spark polyline{fill:none;stroke-width:2;stroke-linecap:round}
+.p-spark .a{stroke:var(--a)}
+.p-spark .m{stroke:color-mix(in srgb,var(--m-fg,#242A22) 35%,transparent)}
+.p-spark .d{stroke:color-mix(in srgb,var(--m-fg,#242A22) 55%,transparent);stroke-dasharray:3 3}
+.p-area{width:100%;height:100%;display:block}
+.p-area path.f{fill:color-mix(in srgb,var(--a) 25%,transparent);stroke:var(--a);stroke-width:1.5}
+.p-dots{display:flex;gap:4px;justify-content:center;padding:8px 0 12px}
+.p-dots i{width:5px;height:5px;border-radius:99px;background:color-mix(in srgb,var(--m-fg,#242A22) 20%,transparent)}
+.p-dots i.on{background:var(--a);width:14px}
+.p-back{font-size:9px;opacity:.65}
+.mono{font-family:"Spline Sans Mono",monospace}
+
+/* ---------- Vergleich & Footer ---------- */
+.compare{padding:56px 0 40px}
+.compare .tbl{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:"Spline Sans Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+tr:last-child td{border-bottom:0}
+td b{font-weight:700}
+td{color:var(--mut)}
+td:first-child{color:var(--ink);white-space:nowrap}
+.foot{padding:36px 0 64px;color:var(--mut);font-size:14px;max-width:64ch}
+</style>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Trailscape · Designstudie</div>
+    <h1>Zehn Wege durch dieselbe App</h1>
+    <p class="lead">Zehn in sich geschlossene Navigations&shy;konzepte für Trailscape.
+    Jeder Entwurf zeigt dieselben sieben Kern-Screens, damit die Führungen direkt
+    vergleichbar sind — bewusst ohne Bindung an die heutige Tab-Struktur.</p>
+  </div>
+</header>
+
+<nav class="idx" aria-label="Konzeptübersicht">
+  <div class="idx-row">
+    <a href="#ziel">Ziel</a>
+    <a href="#k1">01 Vier Räume</a>
+    <a href="#k2">02 Eine Karte</a>
+    <a href="#k3">03 Der Coach</a>
+    <a href="#k4">04 Kacheln</a>
+    <a href="#k5">05 Seiten</a>
+    <a href="#k6">06 Die Schublade</a>
+    <a href="#k7">07 Das Deck</a>
+    <a href="#k8">08 Der geführte Weg</a>
+    <a href="#k9">09 Drei Welten</a>
+    <a href="#k10">10 Randlos</a>
+    <a href="#vergleich">Vergleich</a>
+    <a href="#empfehlung" style="border-color:#F26B21;color:#F26B21">★ Empfehlung</a>
+  </div>
+</nav>
+
+<section class="goal" id="ziel">
+  <div class="wrap goal-grid">
+    <div>
+      <h2 class="frame">Wovon wir ausgehen</h2>
+      <p><strong>Trailscape sagt dir, was du heute fahren solltest — und baut dir die
+      Runde dazu.</strong> Die App verbindet drei Dinge, die sonst auf drei Apps
+      verteilt sind: Trainingssteuerung (Bereitschaft aus Ruhepuls, HRV und Schlaf,
+      Trainingsplan, Belastungsrechnung), Routengenerierung (passende Rundstrecke
+      vor der Haustür, per BRouter) und GPS-Aufzeichnung mit Auswertung.</p>
+      <p>Die gefahrene Tour fließt zurück in die Belastungsrechnung — der Kreis
+      schließt sich. Alles local-first: kein Konto, kein Abo, keine Telemetrie.
+      Der wichtigste Moment der App ist morgens: <em>„Wie bereit bin ich, was steht
+      an, gib mir die Route dazu."</em> Der zweitwichtigste ist unterwegs auf dem
+      Rad, mit Handschuhen und Sonne auf dem Display.</p>
+    </div>
+    <div class="kern">
+      <h3>Diese sieben Screens enthält jeder Entwurf</h3>
+      <ol>
+        <li><strong>Heute</strong> — Bereitschaft, heutige Einheit, Einstieg in die Runde</li>
+        <li><strong>Karte &amp; Planung</strong> — Karte, Zielsuche, Fahrradtyp, Wegart, Höhenprofil</li>
+        <li><strong>Fahrmodus</strong> — Aufzeichnung und Navigation während der Fahrt</li>
+        <li><strong>Touren</strong> — Liste aller aufgezeichneten Fahrten</li>
+        <li><strong>Tour-Detail</strong> — Spur, Höhenprofil, Puls, Entkopplung, VO₂max</li>
+        <li><strong>Training</strong> — Form (PMC), Plan, Wochenziel, Vitalwerte</li>
+        <li><strong>Mehr</strong> — Profil, Erinnerungen, Offline-Karten, Sync, Backup, Über</li>
+      </ol>
+      <p class="screens-note">Das Onboarding ist bei jedem Konzept im Text erwähnt,
+      wo es von der Führung abweicht. Inhalte sind überall dieselben — nur die
+      Führung ändert sich.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 01 VIER RÄUME ================= -->
+<section class="concept" id="k1" style="--a:#3E7C4F;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">01</span>
+      <div>
+        <h2>Vier Räume</h2>
+        <p class="c-tag">Der verfeinerte Klassiker: fünf gleichrangige Tabs, null Überraschung, jede Funktion in zwei Tipps erreichbar.</p>
+      </div>
+    </div>
+    <p class="c-lead">Die konservative Referenz, an der sich alle anderen Entwürfe messen müssen.
+    Jeder Lebensbereich der App bekommt einen eigenen Tab — anders als heute rücken die Touren
+    aus dem Karten-Blatt in einen eigenen Raum. Der Fahrmodus legt sich als Vollbild über alles
+    und blendet die Tabs aus: Wer fährt, navigiert nicht durch die App.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Bottom-Tabs: Heute · Karte · Touren · Training · Mehr. Details werden klassisch gepusht (Zurück-Pfeil). Onboarding als einmalige Seitenfolge davor.</p></div>
+      <div><h4>Stärke</h4><p>Sofort verstanden, barrierearm, jeder Bereich hat eine Adresse. Ideal, wenn Nutzer die App sehr unterschiedlich nutzen.</p></div>
+      <div><h4>Risiko</h4><p>Kein Bereich führt: Der Morgen-Moment („was fahre ich heute?") ist ein Tab unter fünf statt der Star der App.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-h1">Heute</div>
+            <div class="p-sub">Donnerstag, 28. August</div>
+            <div class="p-card" style="display:flex;gap:10px;align-items:center">
+              <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+              <div><b style="font-size:11px">Guter Tag für Belastung</b>
+                <div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+            </div>
+            <div class="p-card">
+              <b style="font-size:11px">Heutige Einheit</b>
+              <div class="p-sub" style="margin:2px 0 6px">GA1 Grundlagenfahrt · 45 km · ~2:00 h</div>
+              <div class="p-btn">Passende Runde generieren</div>
+            </div>
+            <div class="p-card">
+              <div style="display:flex;justify-content:space-between"><b>Diese Woche</b><span class="p-sub">78 / 120 km</span></div>
+              <div class="p-bar" style="--v:65%;margin-top:5px"><i></i></div>
+            </div>
+            <div class="p-row"><div class="p-ic">↺</div><div class="grow"><b>Feierabendrunde</b><small>Di · 32,4 km · 1:24 h · 410 Hm</small></div><span class="p-sub">›</span></div>
+          </div>
+          <div class="p-nav"><span class="on">Heute</span><span>Karte</span><span>Touren</span><span>Training</span><span>Mehr</span></div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Startraum: Bereitschaft, Einheit, ein Knopf zur Runde.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M22 138 C 44 112, 20 84, 52 62 S 84 34, 76 14"/><circle cx="22" cy="138" r="3"/><circle class="end" cx="76" cy="14" r="3"/></svg>
+              <div class="p-overlay" style="top:8px;display:flex;gap:6px">
+                <div class="p-card" style="flex:1;padding:6px 9px;font-size:8.5px">🔍 Ziel suchen …</div>
+                <div class="p-ic" style="background:var(--m-bg)">◧</div>
+              </div>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <div class="p-seg" style="margin-bottom:6px"><span class="on">Gravel</span><span>Rennrad</span></div>
+              <div style="display:flex;gap:4px;margin-bottom:7px"><span class="p-chip on">Gemischt</span><span class="p-chip">Asphalt</span><span class="p-chip">Radwege</span><span class="p-chip">Kürzester</span></div>
+              <div style="height:26px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L15 14 L30 17 L48 6 L66 12 L82 4 L100 16 L100 24 L0 24 Z"/></svg></div>
+              <div style="display:flex;justify-content:space-between;margin:4px 0 6px" class="p-sub"><span>44,8 km</span><span>380 Hm</span><span>~1:58 h</span></div>
+              <div class="p-btn">Navigation starten</div>
+            </div>
+          </div>
+          <div class="p-nav"><span>Heute</span><span class="on">Karte</span><span>Touren</span><span>Training</span><span>Mehr</span></div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Planungs-Sheet über der Karte, Stilwechsel oben rechts.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div style="text-align:center;margin-top:8px">
+              <div class="p-big">24,3<small> km/h</small></div>
+              <div class="p-sub">Tempo</div>
+            </div>
+            <div class="p-grid3" style="text-align:center;margin-top:4px">
+              <div class="p-stat"><b>12,4</b><small>km</small></div>
+              <div class="p-stat"><b>0:32</b><small>Fahrzeit</small></div>
+              <div class="p-stat"><b>210</b><small>Hm</small></div>
+            </div>
+            <div class="p-card" style="display:flex;justify-content:space-between;align-items:center">
+              <span>♥ 142 <span class="p-sub">Zone 2</span></span><span class="p-sub">Ø 138</span>
+            </div>
+            <div class="p-map" style="min-height:120px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M18 88 C 40 70, 30 44, 58 36 S 88 22, 82 8"/><circle cx="82" cy="8" r="3"/></svg>
+            </div>
+            <div class="p-grid2">
+              <div class="p-btn ghost">❙❙ Pause</div>
+              <div class="p-btn">■ Beenden</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Vollbild ohne Tabs — die App tritt hinter die Fahrt zurück.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><div class="p-h1 grow">Touren</div><div class="p-ic">⇅</div><div class="p-ic">＋</div></div>
+            <div class="p-row"><div class="p-ic">🚵</div><div class="grow"><b>Feierabendrunde</b><small>26. Aug · 32,4 km · 1:24 h · 410 Hm</small></div><span class="p-chip">TL 68</span></div>
+            <div class="p-row"><div class="p-ic">🚵</div><div class="grow"><b>Schotterschleife Nord</b><small>24. Aug · 61,0 km · 2:51 h · 720 Hm</small></div><span class="p-chip">TL 121</span></div>
+            <div class="p-row"><div class="p-ic">🚴</div><div class="grow"><b>GA1 Kanalrunde</b><small>22. Aug · 45,2 km · 1:58 h · 180 Hm</small></div><span class="p-chip">TL 74</span></div>
+            <div class="p-row"><div class="p-ic">🚵</div><div class="grow"><b>Waldkante West</b><small>19. Aug · 28,7 km · 1:19 h · 350 Hm</small></div><span class="p-chip">TL 61</span></div>
+            <div class="p-row"><div class="p-ic">🚴</div><div class="grow"><b>Intervalle K3</b><small>17. Aug · 38,9 km · 1:30 h · 490 Hm</small></div><span class="p-chip">TL 98</span></div>
+          </div>
+          <div class="p-nav"><span>Heute</span><span>Karte</span><span class="on">Touren</span><span>Training</span><span>Mehr</span></div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Eigener Tab statt Blatt auf der Karte; Import über „＋".</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Touren</span><div class="grow"></div><div class="p-ic">⇪</div><div class="p-ic">⋯</div></div>
+            <div><b style="font-size:12px">Feierabendrunde</b><div class="p-sub">Di, 26. Aug · 17:31</div></div>
+            <div class="p-map" style="min-height:96px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>410</b><small>Hm</small></div>
+            </div>
+            <div class="p-card"><b>Höhenprofil</b>
+              <div style="height:26px;margin-top:4px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div>
+            </div>
+            <div class="p-card"><div style="display:flex;justify-content:space-between"><span>Ø Puls <b>138</b></span><span>Entkopplung <b>4,2 %</b></span><span>VO₂max <b>48</b></span></div></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Gepushter Screen mit Zurück-Führung, Teilen oben rechts.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-h1">Training</div>
+            <div class="p-card">
+              <div style="display:flex;justify-content:space-between"><b>Form</b><span class="p-sub">90 Tage</span></div>
+              <div style="height:44px;margin-top:4px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+              </svg></div>
+              <div style="display:flex;gap:4px;margin-top:5px"><span class="p-chip on">Fitness 62</span><span class="p-chip">Ermüdung 71</span><span class="p-chip">Form −9</span></div>
+            </div>
+            <div class="p-card">
+              <div style="display:flex;justify-content:space-between"><b>Plan · Woche 6 von 12</b><span class="p-sub">Aufbau</span></div>
+              <div class="p-bar" style="--v:50%;margin-top:5px"><i></i></div>
+              <div class="p-sub" style="margin-top:5px">Nächste Einheit: Sa · Lange Fahrt 80 km</div>
+            </div>
+            <div class="p-card"><div style="display:flex;justify-content:space-between"><span>Ruhepuls <b>52</b></span><span>HRV <b>68</b></span><span>Schlaf <b>7:20</b></span></div></div>
+          </div>
+          <div class="p-nav"><span>Heute</span><span>Karte</span><span>Touren</span><span class="on">Training</span><span>Mehr</span></div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">PMC, Plan und Vitalwerte in einer Scroll-Spalte.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-h1">Mehr</div>
+            <div class="p-row"><div class="p-ic">👤</div><div class="grow"><b>Profil &amp; Trainingszonen</b><small>FTP, Maximalpuls, Fahrertyp</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Erinnerungen</b><small>Tageseinheit · Wochenrückblick</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b><small>2 Regionen · 184 MB</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b><small>Eigener Server · zuletzt 8:12</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b><small>Export · Import · GPX</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">♥</div><div class="grow"><b>Health Connect</b><small>Lesend verbunden</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über</b><small>v2.0.184 · Updates · Lizenzen</small></div><span class="p-sub">›</span></div>
+          </div>
+          <div class="p-nav"><span>Heute</span><span>Karte</span><span>Touren</span><span>Training</span><span class="on">Mehr</span></div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Flache Liste, jede Karte des heutigen Mehr-Tabs als Zeile.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 02 EINE KARTE ================= -->
+<section class="concept" id="k2" style="--a:#2C6E9F;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">02</span>
+      <div>
+        <h2>Eine Karte</h2>
+        <p class="c-tag">Die Karte ist die App. Alles andere sind Ebenen darüber — wie bei Google Maps, aber fürs Training.</p>
+      </div>
+    </div>
+    <p class="c-lead">Es gibt keinen einzigen Screen ohne Karte. Der Morgen begrüßt dich als
+    Karte deiner Gegend mit einer aufgelegten Tageskarte; Planung, Touren und Training sind
+    Sheets und Panels, die sich über die immer präsente Karte schieben. Räumliches Denken
+    („wo fahre ich?") wird zum Grundmodus — passend zu einer App, deren Kernversprechen eine
+    Runde vor der Haustür ist.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Eine persistente Karten-Leinwand. Unten ein Dock mit drei Ankern (Suchen · Aufzeichnen · Du), alles Weitere als Bottom-Sheets und Slide-in-Panels. Onboarding: die Karte zoomt beim ersten Start auf deinen Standort und erklärt die drei Anker.</p></div>
+      <div><h4>Stärke</h4><p>Maximale Kontinuität — kein Kontextwechsel zwischen Planen, Fahren und Nachschauen. Touren und Routen leben dort, wo sie stattfinden.</p></div>
+      <div><h4>Risiko</h4><p>Training und Einstellungen wirken auf einer Karte „untergemietet"; viele gestapelte Ebenen brauchen sehr diszipliniertes Sheet-Management.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M50 120 C 70 100, 74 76, 56 62 S 26 44, 40 24" stroke-dasharray="5 4"/><circle cx="50" cy="120" r="3"/></svg>
+              <div class="p-overlay" style="top:10px">
+                <div class="p-card" style="background:var(--m-bg);box-shadow:0 3px 10px rgba(0,0,0,.15)">
+                  <div style="display:flex;gap:9px;align-items:center">
+                    <div class="p-ring" style="--v:82;width:44px;height:44px"><div style="width:33px;height:33px;font-size:11px">82</div></div>
+                    <div class="grow"><b style="font-size:10.5px">Guten Morgen — GA1, 45 km</b>
+                      <div class="p-sub">Vorschlag liegt auf der Karte</div></div>
+                  </div>
+                  <div class="p-btn" style="margin-top:7px">Diese Runde fahren</div>
+                </div>
+              </div>
+              <div class="p-overlay" style="bottom:12px">
+                <div class="p-card" style="background:var(--m-bg);display:flex;justify-content:space-around;padding:8px;border-radius:99px;box-shadow:0 3px 10px rgba(0,0,0,.15)">
+                  <span>🔍 Suchen</span><span style="color:var(--a);font-weight:700">● Aufzeichnen</span><span>👤 Du</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Der Morgen ist eine Karte: Tagesrunde liegt schon gestrichelt da.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M20 100 C 44 82, 24 58, 52 44 S 84 26, 78 10"/><circle cx="20" cy="100" r="3"/><circle class="end" cx="78" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <div class="p-card line" style="margin-bottom:6px;padding:6px 9px">📍 Schotterwerk Hügelheim</div>
+              <div class="p-seg" style="margin-bottom:6px"><span class="on">Gravel</span><span>Rennrad</span></div>
+              <div style="display:flex;gap:4px;margin-bottom:7px"><span class="p-chip on">Gemischt</span><span class="p-chip">Asphalt</span><span class="p-chip">Radwege</span></div>
+              <div style="height:24px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 19 L20 11 L38 15 L58 5 L78 13 L100 9 L100 24 L0 24 Z"/></svg></div>
+              <div style="display:flex;justify-content:space-between;margin:4px 0 6px" class="p-sub"><span>52,1 km</span><span>540 Hm</span><span>~2:22 h</span></div>
+              <div class="p-btn">Los</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Planung ist nur ein tieferes Sheet derselben Leinwand.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 160" preserveAspectRatio="none"><path d="M30 140 C 52 118, 36 92, 60 74 S 88 46, 80 20"/><circle cx="30" cy="140" r="3"/></svg>
+              <div class="p-overlay" style="top:8px">
+                <div class="p-card acc" style="display:flex;gap:8px;align-items:center">
+                  <b style="font-size:15px">↰</b><div><b>In 220 m links</b><div style="opacity:.75;font-size:8px">Kiesweg am Wehr</div></div>
+                </div>
+              </div>
+              <div class="p-overlay" style="bottom:10px">
+                <div class="p-card" style="background:var(--m-bg);display:flex;justify-content:space-between;align-items:center">
+                  <div class="p-stat"><b>24,3</b><small>km/h</small></div>
+                  <div class="p-stat"><b>12,4</b><small>km</small></div>
+                  <div class="p-stat"><b>32,4</b><small>km übrig</small></div>
+                  <div class="p-ic" style="background:var(--a);color:var(--a-ink)">❙❙</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">HUD oben, Kompaktleiste unten — die Karte bleibt Bühne.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill" style="opacity:.92">
+              <svg class="p-route" viewBox="0 0 100 90" preserveAspectRatio="none">
+                <path d="M18 70 C 34 56, 30 40, 50 34" style="stroke-width:2"/>
+                <path d="M60 76 C 74 62, 66 48, 82 38" style="stroke-width:2;opacity:.55"/>
+                <path d="M30 20 C 44 26, 58 18, 72 24" style="stroke-width:2;opacity:.35"/>
+              </svg>
+            </div>
+            <div class="p-sheet" style="max-height:58%">
+              <div class="p-handle"></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:11px">Deine Touren</b><span class="p-chip">Auf Karte: alle</span></div>
+              <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>26. Aug · 32,4 km · 410 Hm</small></div><span class="p-chip on">TL 68</span></div>
+              <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>24. Aug · 61,0 km · 720 Hm</small></div><span class="p-chip">TL 121</span></div>
+              <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>22. Aug · 45,2 km · 180 Hm</small></div><span class="p-chip">TL 74</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Alle Spuren zugleich auf der Karte; die Liste wählt aus.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 70" preserveAspectRatio="none"><path d="M16 58 C 36 44, 30 28, 54 22 S 86 16, 82 8"/><circle cx="16" cy="58" r="3"/><circle class="end" cx="82" cy="8" r="3"/></svg>
+            </div>
+            <div class="p-sheet" style="max-height:66%">
+              <div class="p-handle"></div>
+              <b style="font-size:11px">Feierabendrunde</b>
+              <div class="p-sub" style="margin-bottom:5px">Di, 26. Aug · 17:31 · Gravel</div>
+              <div class="p-grid3" style="text-align:center;margin-bottom:6px">
+                <div class="p-stat"><b>32,4</b><small>km</small></div>
+                <div class="p-stat"><b>1:24</b><small>h</small></div>
+                <div class="p-stat"><b>410</b><small>Hm</small></div>
+              </div>
+              <div style="height:24px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div>
+              <div class="p-sub" style="display:flex;justify-content:space-between;margin-top:5px"><span>Ø Puls 138</span><span>Entkopplung 4,2 %</span><span>VO₂max 48</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Das Sheet wächst — die gefahrene Spur bleibt sichtbar.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush" style="flex-direction:row">
+            <div class="p-map fill" style="flex:0 0 34%;opacity:.5;border-radius:0"></div>
+            <div style="flex:1;background:var(--m-bg);padding:10px 12px;display:flex;flex-direction:column;gap:7px;box-shadow:-4px 0 14px rgba(0,0,0,.14)">
+              <b style="font-size:12px">Training</b>
+              <div class="p-card">
+                <b>Form</b>
+                <div style="height:36px;margin-top:3px"><svg class="p-spark" viewBox="0 0 100 36" preserveAspectRatio="none">
+                  <polyline class="m" points="0,27 20,24 40,22 60,20 80,19 100,16"/>
+                  <polyline class="a" points="0,24 20,25 40,19 60,25 80,18 100,13"/>
+                </svg></div>
+                <div style="display:flex;gap:4px;margin-top:4px"><span class="p-chip on">Fit 62</span><span class="p-chip">Erm 71</span><span class="p-chip">Form −9</span></div>
+              </div>
+              <div class="p-card"><b>Woche 6/12</b><div class="p-bar" style="--v:50%;margin-top:4px"><i></i></div><div class="p-sub" style="margin-top:4px">Sa: Lange Fahrt 80 km</div></div>
+              <div class="p-card"><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Slide-in-Panel von rechts; die Karte lugt als Anker hervor.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill" style="opacity:.45"></div>
+            <div class="p-overlay" style="top:10px;left:auto;width:72%">
+              <div class="p-card" style="background:var(--m-bg);box-shadow:0 4px 14px rgba(0,0,0,.18)">
+                <div class="p-row"><div class="p-ic">👤</div><div class="grow"><b>Profil &amp; Zonen</b></div></div>
+                <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Erinnerungen</b></div></div>
+                <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b><small>2 Regionen</small></div></div>
+                <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b></div></div>
+                <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b></div></div>
+                <div class="p-row"><div class="p-ic">♥</div><div class="grow"><b>Health Connect</b></div></div>
+                <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über</b></div></div>
+              </div>
+            </div>
+            <div class="p-overlay" style="bottom:12px">
+              <div class="p-card" style="background:var(--m-bg);display:flex;justify-content:space-around;padding:8px;border-radius:99px">
+                <span>🔍 Suchen</span><span>● Aufzeichnen</span><span style="color:var(--a);font-weight:700">👤 Du</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">„Du"-Anker öffnet das Menü als schwebende Ebene.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 03 DER COACH ================= -->
+<section class="concept" id="k3" style="--a:#C25B35;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">03</span>
+      <div>
+        <h2>Der Coach</h2>
+        <p class="c-tag">Ein vertikaler Tages-Feed, der spricht: Die App führt wie ein Trainer, nicht wie ein Menü.</p>
+      </div>
+    </div>
+    <p class="c-lead">Statt Tabs gibt es einen einzigen Strom aus Karten in zeitlicher Ordnung —
+    morgens die Bereitschaft und die Einheit, nach der Fahrt die Auswertung, sonntags der
+    Wochenrückblick. Jede Karte trägt ihre eigenen Aktionen; alles Tiefere wird gepusht und
+    kehrt in den Feed zurück. Die Erinnerungs-Notifications der App und die Oberfläche sprechen
+    dieselbe Sprache: kurze Coach-Sätze mit klarer Empfehlung.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Ein Feed als Wurzel, Details als Push-Screens, das Archiv als gefilterter Feed. Profil-Avatar oben rechts führt zu Einstellungen. Onboarding ist die erste „Unterhaltung": drei Fragen des Coachs.</p></div>
+      <div><h4>Stärke</h4><p>Der Kernmoment — „was soll ich heute tun?" — ist die App. Niedrigste Einstiegshürde für Nutzer ohne Trainingswissen.</p></div>
+      <div><h4>Risiko</h4><p>Gezieltes Nachschlagen („zeig mir Tour X vom Mai") kostet mehr Tipps; der Ton muss sitzen, sonst kippt Coach in Kitsch.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><b style="font-size:13px" class="grow">Trailscape</b><div class="p-ic">🗂</div><div class="p-ic" style="background:var(--a);color:var(--a-ink)">R</div></div>
+            <div class="p-sub mono">DONNERSTAG, 7:02</div>
+            <div class="p-card">
+              <b style="font-size:11px">Guten Morgen. Bereitschaft 82 — dein Körper ist erholt.</b>
+              <div class="p-sub" style="margin:3px 0 6px">Ruhepuls 52 · HRV 68 · Schlaf 7:20. Heute steht GA1 an: 45 km locker, Zone 2.</div>
+              <div class="p-grid2"><div class="p-btn">Runde bauen</div><div class="p-btn ghost">Heute nicht</div></div>
+            </div>
+            <div class="p-card">
+              <b>Deine Woche</b>
+              <div class="p-bar" style="--v:65%;margin:5px 0"><i></i></div>
+              <div class="p-sub">78 von 120 km — Samstag entscheidet.</div>
+            </div>
+            <div class="p-sub mono">DIENSTAG</div>
+            <div class="p-card">
+              <div style="display:flex;gap:8px"><div class="p-map" style="flex:0 0 52px;min-height:40px;border-radius:8px"></div>
+              <div class="grow"><b>Feierabendrunde — sauber gefahren</b><div class="p-sub">32,4 km · Zone 2 gehalten · TL 68</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Der Feed ist die App: Empfehlung oben, Geschichte darunter.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:04</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body flush">
+            <div style="padding:6px 12px" class="p-topbar"><span class="p-back">‹ Zurück zum Tag</span></div>
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M50 100 C 72 84, 70 60, 50 48 S 26 30, 42 14"/><circle cx="50" cy="100" r="3"/></svg>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <b style="font-size:11px">Dein Vorschlag: 44,8 km · 380 Hm</b>
+              <div class="p-sub" style="margin:2px 0 7px">Gravel, gemischt, Start an der Haustür. Passt zur GA1-Vorgabe.</div>
+              <div class="p-grid2"><div class="p-btn">Los geht's</div><div class="p-btn ghost">↻ Andere Runde</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Planung als Antwort des Coachs: Vorschlag, würfeln, los.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div style="text-align:center;margin-top:14px">
+              <div class="p-big">142<small> ♥</small></div>
+              <div class="p-chip on" style="display:inline-block;margin-top:4px">Zone 2 — genau richtig</div>
+            </div>
+            <div class="p-grid3" style="text-align:center;margin-top:8px">
+              <div class="p-stat"><b>24,3</b><small>km/h</small></div>
+              <div class="p-stat"><b>12,4</b><small>km</small></div>
+              <div class="p-stat"><b>0:32</b><small>h</small></div>
+            </div>
+            <div style="flex:1"></div>
+            <div class="p-card"><div class="p-sub">Coach: Tempo halten — nach der Brücke kommt die einzige Rampe.</div></div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙ Pause</div><div class="p-btn">■ Fertig</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Puls statt Tempo im Zentrum — der Coach steuert die Belastung.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Tag</span><b class="grow" style="text-align:center;font-size:11px">Archiv</b><div class="p-ic">🔍</div></div>
+            <div class="p-sub mono">AUGUST · 5 FAHRTEN · 206 KM</div>
+            <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>Di 26. · 32,4 km · TL 68</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. · 61,0 km · TL 121</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. · 45,2 km · TL 74</small></div><span class="p-sub">›</span></div>
+            <div class="p-sub mono" style="margin-top:4px">JULI · 9 FAHRTEN · 388 KM</div>
+            <div class="p-row"><div class="grow"><b>Alpenvorland-Tag</b><small>Sa 26. · 94,8 km · TL 201</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="grow"><b>Intervalle K3</b><small>Do 17. · 38,9 km · TL 98</small></div><span class="p-sub">›</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Das Archiv ist der Feed rückwärts, nach Monaten gebündelt.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Archiv</span><div class="grow"></div><div class="p-ic">⇪</div></div>
+            <b style="font-size:12px">Das war deine Feierabendrunde</b>
+            <div class="p-map" style="min-height:88px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>Ø 138</b><small>Puls</small></div>
+            </div>
+            <div class="p-card"><b>Coach-Blick</b><div class="p-sub" style="margin-top:3px">Entkopplung 4,2 % — deine Grundlage wird stabiler. VO₂max-Schätzung bleibt bei 48.</div></div>
+            <div class="p-card line"><div class="p-sub">Diese Fahrt brachte TL 68 → Form −9 → morgen lockerer Tag.</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Auswertung als erzählte Einordnung, nicht als Zahlenfriedhof.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Tag</span><b class="grow" style="text-align:center;font-size:11px">Dein Verlauf</b><div style="width:20px"></div></div>
+            <div class="p-card">
+              <b>Form der letzten 90 Tage</b>
+              <div style="height:46px;margin-top:4px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+              </svg></div>
+              <div class="p-sub" style="margin-top:4px">Fitness steigt seit 6 Wochen. Ermüdung ist hoch — die Erholungswoche kommt zur rechten Zeit.</div>
+            </div>
+            <div class="p-card"><b>Plan · Woche 6 von 12</b><div class="p-bar" style="--v:50%;margin:4px 0"><i></i></div><div class="p-sub">Sa: Lange Fahrt 80 km · So: Ruhetag</div></div>
+            <div class="p-card"><div class="p-sub">Ruhepuls 52 ↓ · HRV 68 ↑ · Schlaf 7:20</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Zahlen ja — aber immer mit einem Satz, was sie bedeuten.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div style="display:flex;gap:9px;align-items:center;margin-top:4px">
+              <div class="p-ic" style="width:34px;height:34px;background:var(--a);color:var(--a-ink);font-size:14px">R</div>
+              <div><b style="font-size:12px">Robin</b><div class="p-sub">Gravel · FTP 245 · seit März 2026</div></div>
+            </div>
+            <div class="p-row"><div class="p-ic">👤</div><div class="grow"><b>Profil &amp; Trainingszonen</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Wie oft darf ich mich melden?</b><small>Tageseinheit 7:00 · Rückblick So 18:00</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b><small>2 Regionen · 184 MB</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b><small>Eigener Server</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über</b><small>v2.0.184</small></div><span class="p-sub">›</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Hinter dem Avatar; Erinnerungen heißen, was sie sind.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+<!-- ================= 04 KACHELN ================= -->
+<section class="concept" id="k4" style="--a:#7A4E8F;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">04</span>
+      <div>
+        <h2>Kacheln</h2>
+        <p class="c-tag">Hub &amp; Spoke: ein Startbrett aus Kacheln, jede Kachel ein Vollbild-Bereich mit klarem Rückweg.</p>
+      </div>
+    </div>
+    <p class="c-lead">Kein dauerhaftes Navigationsmöbel — die App ist ein Brett aus sechs Kacheln,
+    die ihre Kernzahl schon auf dem Hub zeigen (Bereitschaft als Ring, Wochenstand als Balken,
+    letzte Tour als Miniatur). Jeder Bereich öffnet als Vollbild und nutzt die ganze Fläche;
+    zurück geht es immer zum Brett. Das Muster von Bank- und Smart-Home-Apps, übertragen auf
+    Training: Übersicht zuerst, Tiefe auf Abruf.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Hub mit 6 Kacheln → Vollbild-Bereiche (eine Ebene tief, Details als zweite Ebene mit Brotkrume). Onboarding baut das Brett Kachel für Kachel auf.</p></div>
+      <div><h4>Stärke</h4><p>Der Hub ist zugleich Dashboard: Ein Blick morgens genügt oft, ganz ohne Navigation. Fläche für großzügige Vollbild-Bereiche.</p></div>
+      <div><h4>Risiko</h4><p>Wechsel zwischen Bereichen kostet immer den Umweg über den Hub; bei häufigem Karte↔Training-Pendeln wird das zäh.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-h1">Trailscape</div>
+            <div class="p-sub">Do, 28. August</div>
+            <div class="p-grid2" style="flex:1">
+              <div class="p-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+                <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+                <small class="p-sub">Bereitschaft</small>
+              </div>
+              <div class="p-card acc" style="display:flex;flex-direction:column;justify-content:center">
+                <b style="font-size:11px">Heute: GA1</b>
+                <span style="opacity:.8;font-size:8.5px">45 km · ~2:00 h</span>
+                <b style="margin-top:6px">Runde bauen →</b>
+              </div>
+              <div class="p-card" style="display:flex;flex-direction:column;justify-content:center">
+                <b>Woche</b><div class="p-bar" style="--v:65%;margin:4px 0"><i></i></div>
+                <small class="p-sub">78 / 120 km</small>
+              </div>
+              <div class="p-card" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+                <div class="p-map" style="border-radius:0;min-height:0"></div>
+                <div style="padding:5px 8px"><b>Karte</b></div>
+              </div>
+              <div class="p-card" style="display:flex;flex-direction:column;justify-content:center">
+                <b>Touren</b><small class="p-sub">Zuletzt: Feierabendrunde, 32,4 km</small>
+              </div>
+              <div class="p-card" style="display:flex;flex-direction:column;justify-content:center">
+                <b>Training</b><small class="p-sub">Form −9 · Woche 6/12</small>
+              </div>
+            </div>
+            <div class="p-btn" style="background:var(--m-fg);color:var(--m-bg)">● Aufzeichnen</div>
+            <div class="p-sub" style="text-align:center">Einstellungen</div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Der Hub ist Startseite und Dashboard zugleich.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div style="padding:6px 12px" class="p-topbar"><span class="p-back">‹ Brett</span><b class="grow" style="text-align:center;font-size:11px">Karte</b><div class="p-ic">◧</div></div>
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M22 102 C 44 84, 24 60, 52 46 S 84 26, 78 10"/><circle cx="22" cy="102" r="3"/><circle class="end" cx="78" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <div class="p-seg" style="margin-bottom:6px"><span class="on">Gravel</span><span>Rennrad</span></div>
+              <div style="display:flex;gap:4px;margin-bottom:6px"><span class="p-chip on">Gemischt</span><span class="p-chip">Asphalt</span><span class="p-chip">Radwege</span></div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px" class="p-sub"><span>44,8 km</span><span>380 Hm</span><span>~1:58 h</span></div>
+              <div class="p-btn">Navigation starten</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Vollbild-Bereich, Rückweg oben links immer gleich.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div class="p-grid2" style="flex:1;grid-template-rows:1fr 1fr 1fr">
+              <div class="p-card" style="grid-column:1/3;display:flex;flex-direction:column;align-items:center;justify-content:center">
+                <div class="p-big">24,3<small> km/h</small></div>
+              </div>
+              <div class="p-card" style="text-align:center;display:flex;flex-direction:column;justify-content:center"><b style="font-size:16px">12,4</b><small class="p-sub">km</small></div>
+              <div class="p-card" style="text-align:center;display:flex;flex-direction:column;justify-content:center"><b style="font-size:16px">0:32</b><small class="p-sub">Fahrzeit</small></div>
+              <div class="p-card" style="text-align:center;display:flex;flex-direction:column;justify-content:center"><b style="font-size:16px">210</b><small class="p-sub">Hm</small></div>
+              <div class="p-card" style="text-align:center;display:flex;flex-direction:column;justify-content:center"><b style="font-size:16px">♥142</b><small class="p-sub">Zone 2</small></div>
+            </div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙ Pause</div><div class="p-btn">■ Beenden</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Auch die Fahrt spricht Kachel: vier Felder, große Ziffern.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Brett</span><b class="grow" style="text-align:center;font-size:11px">Touren</b><div class="p-ic">＋</div></div>
+            <div class="p-grid2">
+              <div class="p-card" style="padding:0;overflow:hidden">
+                <div class="p-map" style="border-radius:0;min-height:52px"><svg class="p-route" viewBox="0 0 100 60"><path d="M20 48 C 40 36, 44 24, 70 16" style="stroke-width:2"/></svg></div>
+                <div style="padding:5px 8px"><b>Feierabendrunde</b><br><small class="p-sub">32,4 km · TL 68</small></div>
+              </div>
+              <div class="p-card" style="padding:0;overflow:hidden">
+                <div class="p-map" style="border-radius:0;min-height:52px"><svg class="p-route" viewBox="0 0 100 60"><path d="M14 20 C 40 30, 60 46, 86 38" style="stroke-width:2"/></svg></div>
+                <div style="padding:5px 8px"><b>Schotterschleife</b><br><small class="p-sub">61,0 km · TL 121</small></div>
+              </div>
+              <div class="p-card" style="padding:0;overflow:hidden">
+                <div class="p-map" style="border-radius:0;min-height:52px"><svg class="p-route" viewBox="0 0 100 60"><path d="M18 44 C 34 20, 66 22, 84 40" style="stroke-width:2"/></svg></div>
+                <div style="padding:5px 8px"><b>GA1 Kanalrunde</b><br><small class="p-sub">45,2 km · TL 74</small></div>
+              </div>
+              <div class="p-card" style="padding:0;overflow:hidden">
+                <div class="p-map" style="border-radius:0;min-height:52px"><svg class="p-route" viewBox="0 0 100 60"><path d="M22 16 C 36 40, 64 44, 82 20" style="stroke-width:2"/></svg></div>
+                <div style="padding:5px 8px"><b>Waldkante West</b><br><small class="p-sub">28,7 km · TL 61</small></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Galerie statt Liste — jede Fahrt als Miniaturkarte.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Touren</span><div class="grow"></div><div class="p-ic">⇪</div><div class="p-ic">⋯</div></div>
+            <b style="font-size:12px">Feierabendrunde</b>
+            <div class="p-map" style="min-height:86px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid2">
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">32,4</b><br><small class="p-sub">km</small></div>
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">1:24</b><br><small class="p-sub">h</small></div>
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">410</b><br><small class="p-sub">Hm</small></div>
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">Ø 138</b><br><small class="p-sub">Puls</small></div>
+            </div>
+            <div class="p-card"><div style="height:24px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Zweite Ebene mit Brotkrume „Touren"; Stats als Kachelquartett.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Brett</span><b class="grow" style="text-align:center;font-size:11px">Training</b><div style="width:20px"></div></div>
+            <div class="p-card">
+              <b>Form (90 Tage)</b>
+              <div style="height:44px;margin-top:4px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+              </svg></div>
+            </div>
+            <div class="p-grid2">
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">62</b><br><small class="p-sub">Fitness</small></div>
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">71</b><br><small class="p-sub">Ermüdung</small></div>
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">−9</b><br><small class="p-sub">Form</small></div>
+              <div class="p-card" style="text-align:center"><b style="font-size:14px">6/12</b><br><small class="p-sub">Planwoche</small></div>
+            </div>
+            <div class="p-card"><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20 · nächste Einheit Sa 80 km</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Dieselbe Kachelsprache wie der Hub — nur eine Ebene tiefer.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Brett</span><b class="grow" style="text-align:center;font-size:11px">Einstellungen</b><div style="width:20px"></div></div>
+            <div class="p-grid2">
+              <div class="p-card"><b>👤 Profil</b><br><small class="p-sub">FTP 245 · Zonen</small></div>
+              <div class="p-card"><b>🔔 Erinnerungen</b><br><small class="p-sub">2 von 3 aktiv</small></div>
+              <div class="p-card"><b>🗺 Offline-Karten</b><br><small class="p-sub">2 Regionen</small></div>
+              <div class="p-card"><b>⟳ Sync</b><br><small class="p-sub">zuletzt 8:12</small></div>
+              <div class="p-card"><b>🗄 Backup</b><br><small class="p-sub">Export · Import</small></div>
+              <div class="p-card"><b>♥ Health</b><br><small class="p-sub">verbunden</small></div>
+            </div>
+            <div class="p-card line"><div class="p-sub">Über Trailscape · v2.0.184 · Nach Updates suchen · Lizenzen · Datenschutz</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Auch die Verwaltung bleibt im Kachelraster.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 05 SEITEN ================= -->
+<section class="concept" id="k5" style="--a:#1F7A78;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">05</span>
+      <div>
+        <h2>Seiten</h2>
+        <p class="c-tag">Fünf Vollbild-Seiten nebeneinander, mit dem Daumen durchgeblättert — wie ein Radcomputer zum Wischen.</p>
+      </div>
+    </div>
+    <p class="c-lead">Die App ist ein horizontales Band: Heute · Karte · Touren · Training · Mehr,
+    jede Seite randlos und ohne Navigationsleiste. Ein Punkteindikator unten und die angeschnittene
+    Nachbarseite am Rand zeigen, wo man ist. Das Muster der Radcomputer (Wahoo, Garmin: Blättern
+    zwischen Datenseiten) wird zur App-Führung — besonders stimmig, weil auch der Fahrmodus so
+    funktioniert: Er ist keine andere Welt, sondern eine Seite, die sich über das Band legt.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Horizontaler Pager mit 5 Seiten + Punkteindikator. Details öffnen vertikal (von unten) und schließen nach unten. Onboarding: einmal durchs Band geblättert.</p></div>
+      <div><h4>Stärke</h4><p>Einhandbedienung mit Handschuhen; die Geste „blättern" ist dieselbe im Stand und auf dem Rad. Keine UI-Möbel verstellen den Inhalt.</p></div>
+      <div><h4>Risiko</h4><p>Reihenfolge ist Schicksal: Von Seite 1 zu Seite 5 sind es vier Wischer. Unsichtbare Struktur muss erlernt werden.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body flush" style="flex-direction:row">
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 10px;gap:8px">
+              <div class="p-sub mono">SEITE 1 · HEUTE</div>
+              <div style="text-align:center;margin-top:8px">
+                <div class="p-ring" style="--v:82;width:74px;height:74px;margin:0 auto"><div style="width:56px;height:56px;font-size:18px">82<small>bereit</small></div></div>
+              </div>
+              <div style="text-align:center"><b style="font-size:13px">GA1 Grundlagenfahrt</b><div class="p-sub">45 km · ~2:00 h · Zone 2</div></div>
+              <div class="p-btn">Runde generieren</div>
+              <div class="p-card"><div style="display:flex;justify-content:space-between"><b>Woche</b><span class="p-sub">78/120 km</span></div><div class="p-bar" style="--v:65%;margin-top:4px"><i></i></div></div>
+              <div style="flex:1"></div>
+              <div class="p-dots"><i class="on"></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div style="flex:0 0 14px;border-left:1px solid color-mix(in srgb,var(--m-fg) 12%,transparent);background:var(--m-map,#E7ECDF)"></div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Seite 1; rechts schaut die Karte schon herein.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 150" preserveAspectRatio="none"><path d="M24 128 C 46 106, 26 80, 54 62 S 86 36, 78 14"/><circle cx="24" cy="128" r="3"/><circle class="end" cx="78" cy="14" r="3"/></svg>
+              <div class="p-overlay" style="top:8px"><div class="p-sub mono" style="background:var(--m-bg);border-radius:99px;padding:3px 10px;display:inline-block">SEITE 2 · KARTE</div></div>
+              <div class="p-overlay" style="bottom:44px">
+                <div class="p-card" style="background:var(--m-bg)">
+                  <div style="display:flex;gap:4px;margin-bottom:5px"><span class="p-chip on">Gravel</span><span class="p-chip">Gemischt</span><span class="p-chip">44,8 km · 380 Hm</span></div>
+                  <div class="p-btn">Navigation starten</div>
+                </div>
+              </div>
+            </div>
+            <div class="p-dots" style="background:var(--m-bg)"><i></i><i class="on"></i><i></i><i></i><i></i></div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Seite 2, randlos; Planung als schwebende Karte.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div class="p-sub mono" style="text-align:center">FAHRT · SEITE 1/3 — WISCHEN FÜR KARTE</div>
+            <div style="text-align:center;margin-top:16px">
+              <div class="p-big" style="font-size:44px">24,3</div>
+              <div class="p-sub">km/h</div>
+            </div>
+            <div style="text-align:center;margin-top:10px">
+              <div class="p-big" style="font-size:30px">12,4</div>
+              <div class="p-sub">km</div>
+            </div>
+            <div class="p-grid2" style="text-align:center;margin-top:8px">
+              <div class="p-stat"><b>0:32</b><small>Fahrzeit</small></div>
+              <div class="p-stat"><b>♥ 142</b><small>Zone 2</small></div>
+            </div>
+            <div style="flex:1"></div>
+            <div class="p-dots"><i class="on"></i><i></i><i></i></div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙</div><div class="p-btn">■</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Dieselbe Geste unterwegs: Datenseite ↔ Karte ↔ Profil.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush" style="flex-direction:row">
+            <div style="flex:0 0 14px;border-right:1px solid color-mix(in srgb,var(--m-fg) 12%,transparent);background:var(--m-map,#E7ECDF)"></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 10px;gap:2px">
+              <div class="p-sub mono">SEITE 3 · TOUREN</div>
+              <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>Di 26. · 32,4 km · 1:24 h</small></div><span class="p-chip">TL 68</span></div>
+              <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. · 61,0 km · 2:51 h</small></div><span class="p-chip">TL 121</span></div>
+              <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. · 45,2 km · 1:58 h</small></div><span class="p-chip">TL 74</span></div>
+              <div class="p-row"><div class="grow"><b>Waldkante West</b><small>Di 19. · 28,7 km · 1:19 h</small></div><span class="p-chip">TL 61</span></div>
+              <div class="p-sub" style="text-align:center;margin-top:6px">↑ Tour öffnen: antippen — schließt nach unten</div>
+              <div style="flex:1"></div>
+              <div class="p-dots"><i></i><i></i><i class="on"></i><i></i><i></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Seite 3; links lugt die Karte, rechts käme Training.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div style="text-align:center"><div class="p-handle" style="margin-bottom:2px"></div><div class="p-sub">Nach unten wischen zum Schließen</div></div>
+            <b style="font-size:12px">Feierabendrunde</b>
+            <div class="p-map" style="min-height:92px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>410</b><small>Hm</small></div>
+            </div>
+            <div class="p-card"><div style="height:24px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div></div>
+            <div class="p-sub" style="display:flex;justify-content:space-between"><span>Ø Puls 138</span><span>Entkopplung 4,2 %</span><span>VO₂max 48</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Vertikale Achse = Tiefe; horizontale Achse bleibt das Band.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush" style="flex-direction:row">
+            <div style="flex:0 0 14px;border-right:1px solid color-mix(in srgb,var(--m-fg) 12%,transparent);background:var(--m-card)"></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 10px;gap:7px">
+              <div class="p-sub mono">SEITE 4 · TRAINING</div>
+              <div class="p-card">
+                <b>Form</b>
+                <div style="height:40px;margin-top:3px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                  <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                  <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                  <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+                </svg></div>
+                <div style="display:flex;gap:4px;margin-top:4px"><span class="p-chip on">Fit 62</span><span class="p-chip">Erm 71</span><span class="p-chip">Form −9</span></div>
+              </div>
+              <div class="p-card"><b>Woche 6/12</b><div class="p-bar" style="--v:50%;margin:4px 0"><i></i></div><div class="p-sub">Sa: Lange Fahrt 80 km</div></div>
+              <div class="p-card"><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+              <div style="flex:1"></div>
+              <div class="p-dots"><i></i><i></i><i></i><i class="on"></i><i></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Seite 4 — eine Wisch-Nachbarin der Touren.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush" style="flex-direction:row">
+            <div style="flex:0 0 14px;border-right:1px solid color-mix(in srgb,var(--m-fg) 12%,transparent);background:var(--m-card)"></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 10px;gap:2px">
+              <div class="p-sub mono">SEITE 5 · MEHR</div>
+              <div class="p-row"><div class="p-ic">👤</div><div class="grow"><b>Profil &amp; Zonen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Erinnerungen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">♥</div><div class="grow"><b>Health Connect</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über · v2.0.184</b></div><span class="p-sub">›</span></div>
+              <div style="flex:1"></div>
+              <div class="p-dots"><i></i><i></i><i></i><i></i><i class="on"></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Letzte Seite des Bandes — bewusst am Rand.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 06 DIE SCHUBLADE ================= -->
+<section class="concept" id="k6" style="--a:#4F5AA8;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">06</span>
+      <div>
+        <h2>Die Schublade</h2>
+        <p class="c-tag">Klassisches Material Design: Toolbar, Navigations-Schublade, ein einziger allgegenwärtiger Aufnahme-Knopf.</p>
+      </div>
+    </div>
+    <p class="c-lead">Die Struktur wandert aus dem Daumenbereich in eine Schublade: Alle Bereiche —
+    auch Nischen wie Offline-Karten oder Sync — stehen dort gleichrangig untereinander. Dafür wird
+    unten Platz frei für das Einzige, das wirklich immer erreichbar sein muss: den runden
+    Aufzeichnen-Knopf, der auf jedem Screen schwebt. Ein Entwurf für Werkzeug-Menschen, die
+    Trailscape wie eine Werkbank benutzen.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Hamburger-Schublade mit allen Zielen, Toolbar mit Screen-Titel, persistenter FAB „Aufzeichnen". Training gliedert sich in Top-Tabs. Onboarding: klassischer Erststart-Dialogfluss.</p></div>
+      <div><h4>Stärke</h4><p>Skaliert auf beliebig viele Bereiche, ohne die Haupt-UI zu verstopfen; die Aufnahme ist von überall einen Tipp entfernt.</p></div>
+      <div><h4>Risiko</h4><p>Die Schublade versteckt die Struktur; „Heute" verliert seine Bühne. Wirkt 2026 spürbar retro.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><div class="p-ic">☰</div><b class="grow" style="font-size:12px">Heute</b><div class="p-ic">🔔</div></div>
+            <div class="p-card" style="display:flex;gap:10px;align-items:center">
+              <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+              <div><b style="font-size:11px">Guter Tag für Belastung</b><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+            </div>
+            <div class="p-card">
+              <b>Heutige Einheit: GA1 · 45 km</b>
+              <div class="p-sub" style="margin:2px 0 6px">Zone 2 · ~2:00 h</div>
+              <div class="p-btn">Runde generieren</div>
+            </div>
+            <div class="p-card"><div style="display:flex;justify-content:space-between"><b>Woche</b><span class="p-sub">78/120 km</span></div><div class="p-bar" style="--v:65%;margin-top:4px"><i></i></div></div>
+            <div style="flex:1"></div>
+            <div style="position:relative;height:34px">
+              <div class="p-fab" style="bottom:0;border-radius:99px">● REC</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Toolbar + Inhalt; der FAB „REC" schwebt auf jedem Screen.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div style="padding:6px 12px" class="p-topbar"><div class="p-ic">☰</div><b class="grow" style="font-size:12px">Karte</b><div class="p-ic">🔍</div><div class="p-ic">◧</div></div>
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 130" preserveAspectRatio="none"><path d="M22 112 C 44 92, 24 66, 52 50 S 84 30, 78 12"/><circle cx="22" cy="112" r="3"/><circle class="end" cx="78" cy="12" r="3"/></svg>
+              <div class="p-fab">● REC</div>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <div style="display:flex;gap:4px;margin-bottom:6px"><span class="p-chip on">Gravel</span><span class="p-chip">Gemischt</span><span class="p-chip">44,8 km</span><span class="p-chip">380 Hm</span></div>
+              <div class="p-btn">Navigation starten</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Suche und Kartenstil als Toolbar-Aktionen.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div class="p-card acc" style="display:flex;justify-content:space-between;align-items:center">
+              <span><b>Aufzeichnung läuft</b></span><span class="mono">0:32:11</span>
+            </div>
+            <div style="text-align:center;margin-top:10px">
+              <div class="p-big">24,3<small> km/h</small></div>
+            </div>
+            <div class="p-grid3" style="text-align:center;margin-top:6px">
+              <div class="p-stat"><b>12,4</b><small>km</small></div>
+              <div class="p-stat"><b>210</b><small>Hm</small></div>
+              <div class="p-stat"><b>♥142</b><small>Zone 2</small></div>
+            </div>
+            <div class="p-map" style="min-height:120px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M18 88 C 40 70, 30 44, 58 36 S 88 22, 82 8"/></svg>
+            </div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙ Pause</div><div class="p-btn">■ Beenden</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Der FAB wird zum Vollbild; Statuskarte wie die Notification.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><div class="p-ic">☰</div><b class="grow" style="font-size:12px">Touren</b><div class="p-ic">⇅</div></div>
+            <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>Di 26. Aug · 32,4 km · 410 Hm · Ø 138</small></div><span class="p-chip">68</span></div>
+            <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. Aug · 61,0 km · 720 Hm · Ø 132</small></div><span class="p-chip">121</span></div>
+            <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. Aug · 45,2 km · 180 Hm · Ø 128</small></div><span class="p-chip">74</span></div>
+            <div class="p-row"><div class="grow"><b>Waldkante West</b><small>Di 19. Aug · 28,7 km · 350 Hm · Ø 141</small></div><span class="p-chip">61</span></div>
+            <div class="p-row"><div class="grow"><b>Intervalle K3</b><small>Do 17. Aug · 38,9 km · 490 Hm · Ø 152</small></div><span class="p-chip">98</span></div>
+            <div style="flex:1"></div>
+            <div style="position:relative;height:34px"><div class="p-fab" style="bottom:0;border-radius:99px">● REC</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Dichte Werkbank-Liste; GPX-Import über die Toolbar.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">←</span><b class="grow" style="font-size:12px">Feierabendrunde</b><div class="p-ic">⇪</div><div class="p-ic">⋮</div></div>
+            <div class="p-map" style="min-height:92px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>410</b><small>Hm</small></div>
+            </div>
+            <div class="p-card"><b>Höhenprofil</b><div style="height:22px;margin-top:3px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div></div>
+            <div class="p-card"><b>Analyse</b><div class="p-sub" style="margin-top:2px">Ø Puls 138 · Entkopplung 4,2 % · VO₂max 48</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Toolbar-Navigation mit Überlauf-Menü (Umbenennen, Löschen).</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><div class="p-ic">☰</div><b class="grow" style="font-size:12px">Training</b></div>
+            <div style="display:flex;border-bottom:1px solid color-mix(in srgb,var(--m-fg) 12%,transparent)">
+              <span style="flex:1;text-align:center;padding:5px;color:var(--a);font-weight:700;border-bottom:2px solid var(--a);font-size:9px">FORM</span>
+              <span style="flex:1;text-align:center;padding:5px;opacity:.5;font-size:9px">PLAN</span>
+              <span style="flex:1;text-align:center;padding:5px;opacity:.5;font-size:9px">WERTE</span>
+            </div>
+            <div class="p-card">
+              <div style="height:52px"><svg class="p-spark" viewBox="0 0 100 44" preserveAspectRatio="none">
+                <polyline class="m" points="0,32 15,30 30,27 45,28 60,24 75,22 100,20"/>
+                <polyline class="d" points="0,38 15,33 30,35 45,26 60,31 75,24 100,29"/>
+                <polyline class="a" points="0,28 15,29 30,24 45,31 60,22 75,25 100,16"/>
+              </svg></div>
+              <div style="display:flex;gap:4px;margin-top:5px"><span class="p-chip on">Fitness 62</span><span class="p-chip">Ermüdung 71</span><span class="p-chip">Form −9</span></div>
+            </div>
+            <div class="p-card"><div class="p-sub">Interpretation: Aufbauphase, Ermüdung hoch — Erholungswoche ab Montag.</div></div>
+            <div style="flex:1"></div>
+            <div style="position:relative;height:34px"><div class="p-fab" style="bottom:0;border-radius:99px">● REC</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Top-Tabs gliedern Form / Plan / Werte — klassisch Material.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush" style="flex-direction:row">
+            <div style="flex:0 0 74%;background:var(--m-bg);padding:10px 12px;display:flex;flex-direction:column;gap:1px;box-shadow:4px 0 14px rgba(0,0,0,.16)">
+              <b style="font-size:12px;padding:4px 0">Trailscape</b>
+              <div class="p-sub" style="margin-bottom:6px">v2.0.184 · local-first</div>
+              <div class="p-row" style="color:var(--a)"><b>◉ Heute</b></div>
+              <div class="p-row"><div class="grow">Karte</div></div>
+              <div class="p-row"><div class="grow">Touren</div></div>
+              <div class="p-row"><div class="grow">Training</div></div>
+              <div class="p-sub mono" style="margin:7px 0 2px">VERWALTUNG</div>
+              <div class="p-row"><div class="grow">Profil &amp; Zonen</div></div>
+              <div class="p-row"><div class="grow">Erinnerungen</div></div>
+              <div class="p-row"><div class="grow">Offline-Karten</div></div>
+              <div class="p-row"><div class="grow">Sync</div></div>
+              <div class="p-row"><div class="grow">Daten &amp; Backup</div></div>
+              <div class="p-row"><div class="grow">Health Connect</div></div>
+              <div class="p-row"><div class="grow">Über</div></div>
+            </div>
+            <div style="flex:1;background:color-mix(in srgb,var(--m-fg) 45%,transparent)"></div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Die Schublade ist das „Mehr": alles gleichrangig an einem Ort.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 07 DAS DECK ================= -->
+<section class="concept" id="k7" style="--a:#B0781A;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">07</span>
+      <div>
+        <h2>Das Deck</h2>
+        <p class="c-tag">Zwei Welten — Planen und Auswerten — und dazwischen eine persistente Fahrleiste, die wie ein Mini-Player andockt.</p>
+      </div>
+    </div>
+    <p class="c-lead">Das Spotify-Muster für den Sport: Die App hat nur zwei Tabs, <em>Planen</em>
+    (Heute + Karte) und <em>Auswerten</em> (Touren + Training). Die Aufzeichnung ist keine Seite,
+    sondern ein Zustand — eine Leiste am unteren Rand, die immer zeigt, was gerade läuft, und
+    sich per Wisch zum Vollbild-Cockpit aufzieht. Pausieren, weiterfahren, durch die App stöbern,
+    während die Fahrt weiterläuft: alles ohne Kontextverlust.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Zwei Tabs + expandierbare Deck-Leiste (collapsed ↔ Vollbild). Details pushen innerhalb ihres Tabs. Mehr hinter dem Zahnrad. Onboarding endet bewusst mit der ersten angedockten Leiste („bereit zum Aufzeichnen").</p></div>
+      <div><h4>Stärke</h4><p>Die Fahrt ist nie weg und nie im Weg — der stärkste Umgang mit dem Dauerzustand „Aufzeichnung läuft" von allen zehn Entwürfen.</p></div>
+      <div><h4>Risiko</h4><p>Nur zwei Tabs heißt: Heute und Karte teilen sich eine Bühne, Touren und Training auch — die zweite Ebene muss sauber sitzen.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><b class="grow" style="font-size:12px">Planen</b><div class="p-ic">⚙</div></div>
+            <div class="p-card" style="display:flex;gap:10px;align-items:center">
+              <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+              <div><b style="font-size:11px">GA1 · 45 km · Zone 2</b><div class="p-sub">Guter Tag für Belastung</div></div>
+            </div>
+            <div class="p-card" style="padding:0;overflow:hidden">
+              <div class="p-map" style="min-height:104px;border-radius:0">
+                <svg class="p-route" viewBox="0 0 100 70" preserveAspectRatio="none"><path d="M20 58 C 42 46, 30 28, 56 22 S 86 16, 80 8" stroke-dasharray="5 4"/></svg>
+              </div>
+              <div style="padding:7px 9px"><div class="p-btn">Diese Runde fahren · 44,8 km</div></div>
+            </div>
+            <div class="p-card"><div style="display:flex;justify-content:space-between"><b>Woche</b><span class="p-sub">78/120 km</span></div><div class="p-bar" style="--v:65%;margin-top:4px"><i></i></div></div>
+            <div style="flex:1"></div>
+            <div class="p-card" style="display:flex;justify-content:space-between;align-items:center;border:1px solid color-mix(in srgb,var(--a) 45%,transparent)">
+              <span class="p-sub">● Bereit zum Aufzeichnen</span><b style="color:var(--a)">Start</b>
+            </div>
+          </div>
+          <div class="p-nav"><span class="on">Planen</span><span>Auswerten</span></div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Planen-Tab; unten wartet das eingeklappte Deck.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 130" preserveAspectRatio="none"><path d="M22 112 C 44 92, 24 66, 52 50 S 84 30, 78 12"/><circle cx="22" cy="112" r="3"/><circle class="end" cx="78" cy="12" r="3"/></svg>
+              <div class="p-overlay" style="top:8px"><div class="p-card" style="background:var(--m-bg);padding:6px 9px;font-size:8.5px">🔍 Schotterwerk Hügelheim</div></div>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <div style="display:flex;gap:4px;margin-bottom:6px"><span class="p-chip on">Gravel</span><span class="p-chip">Gemischt</span><span class="p-chip">52,1 km · 540 Hm</span></div>
+              <div class="p-btn">Navigation starten</div>
+            </div>
+          </div>
+          <div class="p-nav"><span class="on">Planen</span><span>Auswerten</span></div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Karte ist die zweite Seite des Planen-Tabs.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body" style="background:linear-gradient(color-mix(in srgb,var(--a) 14%,var(--m-bg)),var(--m-bg))">
+            <div style="text-align:center"><div class="p-handle"></div><div class="p-sub">Deck einklappen</div></div>
+            <div style="text-align:center;margin-top:10px">
+              <div class="p-big" style="font-size:40px">24,3</div><div class="p-sub">km/h</div>
+            </div>
+            <div class="p-grid3" style="text-align:center;margin-top:8px">
+              <div class="p-stat"><b>12,4</b><small>km</small></div>
+              <div class="p-stat"><b>0:32</b><small>Fahrzeit</small></div>
+              <div class="p-stat"><b>210</b><small>Hm</small></div>
+            </div>
+            <div class="p-card" style="display:flex;justify-content:space-between"><span>♥ 142 · Zone 2</span><span class="p-sub">Ø 138</span></div>
+            <div style="flex:1"></div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙ Pause</div><div class="p-btn">■ Beenden</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Das aufgezogene Deck — wie ein „Now Playing" fürs Rad.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:41</span><span>REC ❙❙ 0:58</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><b class="grow" style="font-size:12px">Auswerten</b><div class="p-ic">＋</div></div>
+            <div class="p-seg"><span class="on">Touren</span><span>Training</span></div>
+            <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>Di 26. · 32,4 km · TL 68</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. · 61,0 km · TL 121</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. · 45,2 km · TL 74</small></div><span class="p-sub">›</span></div>
+            <div style="flex:1"></div>
+            <div class="p-card acc" style="display:flex;justify-content:space-between;align-items:center">
+              <span><b>❙❙ Pausiert</b> · 12,4 km · 0:58</span><b>▲</b>
+            </div>
+          </div>
+          <div class="p-nav"><span>Planen</span><span class="on">Auswerten</span></div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Stöbern während der Pause — die Fahrleiste bleibt angedockt.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Touren</span><div class="grow"></div><div class="p-ic">⇪</div></div>
+            <b style="font-size:12px">Feierabendrunde</b>
+            <div class="p-map" style="min-height:88px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>410</b><small>Hm</small></div>
+            </div>
+            <div class="p-card"><div style="height:24px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div></div>
+            <div class="p-sub" style="display:flex;justify-content:space-between"><span>Ø 138</span><span>Entk. 4,2 %</span><span>VO₂max 48</span></div>
+          </div>
+          <div class="p-nav"><span>Planen</span><span class="on">Auswerten</span></div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Push innerhalb von Auswerten; Tab bleibt sichtbar.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><b class="grow" style="font-size:12px">Auswerten</b><div class="p-ic">⚙</div></div>
+            <div class="p-seg"><span>Touren</span><span class="on">Training</span></div>
+            <div class="p-card">
+              <b>Form</b>
+              <div style="height:42px;margin-top:3px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+              </svg></div>
+              <div style="display:flex;gap:4px;margin-top:4px"><span class="p-chip on">Fit 62</span><span class="p-chip">Erm 71</span><span class="p-chip">Form −9</span></div>
+            </div>
+            <div class="p-card"><b>Woche 6/12</b><div class="p-bar" style="--v:50%;margin:4px 0"><i></i></div><div class="p-sub">Sa: Lange Fahrt 80 km</div></div>
+            <div class="p-card"><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+          </div>
+          <div class="p-nav"><span>Planen</span><span class="on">Auswerten</span></div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Zweites Segment im Auswerten-Tab.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div style="flex:1;background:color-mix(in srgb,var(--m-fg) 35%,transparent)"></div>
+            <div class="p-sheet" style="max-height:78%">
+              <div class="p-handle"></div>
+              <b style="font-size:11px">Einstellungen</b>
+              <div class="p-row"><div class="p-ic">👤</div><div class="grow"><b>Profil &amp; Zonen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Erinnerungen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b><small>2 Regionen · 184 MB</small></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">♥</div><div class="grow"><b>Health Connect</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über · v2.0.184</b></div><span class="p-sub">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Zahnrad öffnet ein Sheet — kein eigener Tab nötig.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+<!-- ================= 08 DER GEFÜHRTE WEG ================= -->
+<section class="concept" id="k8" style="--a:#5C7A29;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">08</span>
+      <div>
+        <h2>Der geführte Weg</h2>
+        <p class="c-tag">Die App als Ablauf: Bereitschaft → Einheit → Route → Fahren. Jeden Tag derselbe kurze Weg, alles andere ist Logbuch.</p>
+      </div>
+    </div>
+    <p class="c-lead">Radikalste Zuspitzung auf den Kernmoment: Trailscape wird zum täglichen
+    Dreischritt mit sichtbarem Stepper. Schritt 1 zeigt die Bereitschaft und die daraus folgende
+    Einheit, Schritt 2 legt die Route fest, Schritt 3 ist die Fahrt. Wer nicht im Ablauf ist,
+    findet alles Gefahrene und den Trainingsverlauf im <em>Logbuch</em>, alles Verwaltende hinter
+    dem Profil. Die App fragt nicht „wohin willst du navigieren?", sondern „machen wir den
+    nächsten Schritt?".</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Linearer Flow mit Stepper (1 · 2 · 3) als Hauptpfad; zwei Neben-Eingänge: Logbuch (Touren + Training) und Profil (Mehr). Onboarding ist derselbe Flow — beim ersten Mal mit Erklärungen.</p></div>
+      <div><h4>Stärke</h4><p>Null Entscheidungslast: Der tägliche Weg ist immer gleich und in 20 Sekunden durchlaufen. Perfekt für Gewohnheitsbildung.</p></div>
+      <div><h4>Risiko</h4><p>Freies Erkunden („einfach mal Karte schauen") liegt quer zum Flow; Power-Nutzer könnten sich bevormundet fühlen.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><div class="p-ic">🗂</div><div class="grow"></div><span class="p-chip on">1</span><span class="p-chip">2</span><span class="p-chip">3</span><div class="grow"></div><div class="p-ic">👤</div></div>
+            <div style="text-align:center;margin-top:10px">
+              <div class="p-ring" style="--v:82;width:84px;height:84px;margin:0 auto"><div style="width:64px;height:64px;font-size:20px">82<small>bereit</small></div></div>
+              <div class="p-sub" style="margin-top:6px">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div>
+            </div>
+            <div class="p-card" style="text-align:center">
+              <b style="font-size:12px">Also heute: GA1 Grundlagenfahrt</b>
+              <div class="p-sub" style="margin-top:2px">45 km · ~2:00 h · Zone 2 — Woche 6, Aufbau</div>
+            </div>
+            <div style="flex:1"></div>
+            <div class="p-btn">Weiter zur Route →</div>
+            <div class="p-sub" style="text-align:center">Heute lieber Ruhetag</div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Schritt 1: Zustand und Vorgabe, eine einzige Weiter-Taste.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:03</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body flush">
+            <div style="padding:6px 12px" class="p-topbar"><span class="p-back">‹ 1</span><div class="grow"></div><span class="p-chip">1</span><span class="p-chip on">2</span><span class="p-chip">3</span><div class="grow"></div><div style="width:20px"></div></div>
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M50 100 C 72 84, 70 60, 50 48 S 26 30, 42 14"/><circle cx="50" cy="100" r="3"/></svg>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <b style="font-size:11px">Deine Runde: 44,8 km · 380 Hm</b>
+              <div style="display:flex;gap:4px;margin:5px 0 7px"><span class="p-chip on">Gravel</span><span class="p-chip">Gemischt</span><span class="p-chip">↻ Neu würfeln</span></div>
+              <div class="p-btn">Weiter: Losfahren →</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Schritt 2: Die Route ist Vorschlag, kein Formular.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><div class="grow"></div><span class="p-chip">1</span><span class="p-chip">2</span><span class="p-chip on">3</span><div class="grow"></div></div>
+            <div style="text-align:center;margin-top:12px">
+              <div class="p-big">24,3<small> km/h</small></div>
+            </div>
+            <div class="p-grid3" style="text-align:center;margin-top:8px">
+              <div class="p-stat"><b>12,4</b><small>von 44,8 km</small></div>
+              <div class="p-stat"><b>0:32</b><small>Fahrzeit</small></div>
+              <div class="p-stat"><b>♥142</b><small>Zone 2 ✓</small></div>
+            </div>
+            <div class="p-bar" style="--v:28%"><i></i></div>
+            <div class="p-map" style="min-height:110px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M18 88 C 40 70, 30 44, 58 36 S 88 22, 82 8"/></svg>
+            </div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙</div><div class="p-btn">■ Schritt 3 beenden</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Schritt 3: Fortschrittsbalken gegen das Tagesziel.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Heute</span><b class="grow" style="text-align:center;font-size:11px">Logbuch</b><div class="p-ic">🔍</div></div>
+            <div class="p-seg"><span class="on">Fahrten</span><span>Verlauf</span></div>
+            <div class="p-card" style="display:flex;justify-content:space-between"><span><b>August</b></span><span class="p-sub">5 Fahrten · 206 km · 2 150 Hm</span></div>
+            <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>Di 26. · 32,4 km · TL 68</small></div><span class="p-chip on">✓ Plan</span></div>
+            <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. · 61,0 km · TL 121</small></div><span class="p-chip on">✓ Plan</span></div>
+            <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. · 45,2 km · TL 74</small></div><span class="p-chip on">✓ Plan</span></div>
+            <div class="p-row"><div class="grow"><b>Waldkante West</b><small>Di 19. · 28,7 km · TL 61</small></div><span class="p-chip">frei</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Das Logbuch zeigt je Fahrt, ob sie eine Plan-Einheit war.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Logbuch</span><div class="grow"></div><div class="p-ic">⇪</div></div>
+            <b style="font-size:12px">Feierabendrunde</b>
+            <div class="p-chip on" style="align-self:flex-start">✓ hat GA1 vom Dienstag erfüllt</div>
+            <div class="p-map" style="min-height:84px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>Ø 138</b><small>Puls</small></div>
+            </div>
+            <div class="p-card"><div style="height:22px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div></div>
+            <div class="p-sub" style="display:flex;justify-content:space-between"><span>Entkopplung 4,2 %</span><span>VO₂max 48</span><span>TL 68</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Jede Fahrt wird gegen ihre Plan-Einheit gelesen.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Heute</span><b class="grow" style="text-align:center;font-size:11px">Logbuch</b><div style="width:20px"></div></div>
+            <div class="p-seg"><span>Fahrten</span><span class="on">Verlauf</span></div>
+            <div class="p-card">
+              <b>Form</b>
+              <div style="height:42px;margin-top:3px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+              </svg></div>
+              <div style="display:flex;gap:4px;margin-top:4px"><span class="p-chip on">Fit 62</span><span class="p-chip">Erm 71</span><span class="p-chip">Form −9</span></div>
+            </div>
+            <div class="p-card"><b>Plan · Woche 6/12 · Aufbau</b><div class="p-bar" style="--v:50%;margin:4px 0"><i></i></div><div class="p-sub">Mo Ruhe · Mi GA1 ✓ · Sa Lange Fahrt 80 km</div></div>
+            <div class="p-card"><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Verlauf = zweiter Reiter des Logbuchs, kein eigener Ort.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Heute</span><b class="grow" style="text-align:center;font-size:11px">Profil</b><div style="width:20px"></div></div>
+            <div class="p-card" style="display:flex;gap:9px;align-items:center">
+              <div class="p-ic" style="width:32px;height:32px;background:var(--a);color:var(--a-ink)">R</div>
+              <div><b>Robin</b><div class="p-sub">Gravel · FTP 245 · Plan „12 Wochen Aufbau"</div></div>
+            </div>
+            <div class="p-row"><div class="p-ic">🎯</div><div class="grow"><b>Trainingsplan &amp; Zonen</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Erinnerungen</b><small>Tageseinheit 7:00</small></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">♥</div><div class="grow"><b>Health Connect</b></div><span class="p-sub">›</span></div>
+            <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über · v2.0.184</b></div><span class="p-sub">›</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Alles Verwaltende gebündelt hinter dem Profil.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 09 DREI WELTEN ================= -->
+<section class="concept" id="k9" style="--a:#46627A;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">09</span>
+      <div>
+        <h2>Drei Welten</h2>
+        <p class="c-tag">Ein expliziter Modus-Schalter oben — Planen · Fahren · Auswerten — und jede Welt hat ihre eigene kleine Navigation.</p>
+      </div>
+    </div>
+    <p class="c-lead">Der Radsport kennt drei Geisteszustände: vor der Fahrt, auf der Fahrt, nach
+    der Fahrt. Dieser Entwurf macht sie zur obersten Ordnung. Ein Segmentschalter im Kopf wechselt
+    die Welt, und jede Welt trägt unten nur die zwei, drei Reiter, die sie wirklich braucht.
+    Planen bündelt Heute + Karte + Plan; Fahren ist das Cockpit; Auswerten hält Touren, Training
+    und Werte. Die Struktur erklärt dem Nutzer nebenbei das Produktmodell der App.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Segmentschalter (3 Welten) oben, kontextuelle Sub-Tabs unten. Die Welt „Fahren" wird beim Aufzeichnen automatisch aktiv. Einstellungen global hinter „⋯". Onboarding stellt die drei Welten in drei Schritten vor.</p></div>
+      <div><h4>Stärke</h4><p>Mentales Modell und UI decken sich exakt; jede Welt bleibt klein und aufgeräumt. Der Fahren-Modus hat einen legitimen festen Platz.</p></div>
+      <div><h4>Risiko</h4><p>Zwei Navigationsebenen (Welt + Sub-Tab) kosten Lernaufwand; der Schalter oben liegt außerhalb der Daumenzone.</p></div>
+    </div>
+    <div class="shots">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body">
+            <div class="p-seg"><span class="on">Planen</span><span>Fahren</span><span>Auswerten</span></div>
+            <div class="p-card" style="display:flex;gap:10px;align-items:center;margin-top:2px">
+              <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+              <div><b style="font-size:11px">Guter Tag für Belastung</b><div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+            </div>
+            <div class="p-card">
+              <b>Heute: GA1 · 45 km · Zone 2</b>
+              <div class="p-btn" style="margin-top:6px">Runde generieren</div>
+            </div>
+            <div class="p-card"><div style="display:flex;justify-content:space-between"><b>Woche</b><span class="p-sub">78/120 km</span></div><div class="p-bar" style="--v:65%;margin-top:4px"><i></i></div></div>
+          </div>
+          <div class="p-nav"><span class="on">Heute</span><span>Karte</span><span>Plan</span></div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Welt „Planen", Sub-Tab „Heute" — oben Welt, unten Ort.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div style="padding:4px 12px 6px"><div class="p-seg"><span class="on">Planen</span><span>Fahren</span><span>Auswerten</span></div></div>
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 120" preserveAspectRatio="none"><path d="M22 102 C 44 84, 24 60, 52 46 S 84 26, 78 10"/><circle cx="22" cy="102" r="3"/><circle class="end" cx="78" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-sheet">
+              <div class="p-handle"></div>
+              <div style="display:flex;gap:4px;margin-bottom:6px"><span class="p-chip on">Gravel</span><span class="p-chip">Gemischt</span><span class="p-chip">44,8 km · 380 Hm</span></div>
+              <div class="p-btn">In die Welt „Fahren" →</div>
+            </div>
+          </div>
+          <div class="p-nav"><span>Heute</span><span class="on">Karte</span><span>Plan</span></div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Der Start-Knopf wechselt wörtlich die Welt.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span>REC ● 0:32</span></div>
+          <div class="p-body">
+            <div class="p-seg"><span>Planen</span><span class="on">Fahren</span><span>Auswerten</span></div>
+            <div style="text-align:center;margin-top:12px">
+              <div class="p-big" style="font-size:40px">24,3</div><div class="p-sub">km/h</div>
+            </div>
+            <div class="p-grid3" style="text-align:center;margin-top:8px">
+              <div class="p-stat"><b>12,4</b><small>km</small></div>
+              <div class="p-stat"><b>0:32</b><small>Fahrzeit</small></div>
+              <div class="p-stat"><b>210</b><small>Hm</small></div>
+            </div>
+            <div class="p-card" style="display:flex;justify-content:space-between"><span>♥ 142 · Zone 2</span><span class="p-sub">In 220 m links ↰</span></div>
+            <div style="flex:1"></div>
+            <div class="p-grid2"><div class="p-btn ghost">❙❙ Pause</div><div class="p-btn">■ Beenden</div></div>
+          </div>
+          <div class="p-nav"><span class="on">Cockpit</span><span>Karte</span></div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">„Fahren" ist eine echte Welt mit Cockpit- und Karten-Reiter.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-seg"><span>Planen</span><span>Fahren</span><span class="on">Auswerten</span></div>
+            <div class="p-row" style="margin-top:2px"><div class="grow"><b>Feierabendrunde</b><small>Di 26. · 32,4 km · 1:24 h · 410 Hm</small></div><span class="p-chip">TL 68</span></div>
+            <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. · 61,0 km · 2:51 h · 720 Hm</small></div><span class="p-chip">TL 121</span></div>
+            <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. · 45,2 km · 1:58 h · 180 Hm</small></div><span class="p-chip">TL 74</span></div>
+            <div class="p-row"><div class="grow"><b>Waldkante West</b><small>Di 19. · 28,7 km · 1:19 h · 350 Hm</small></div><span class="p-chip">TL 61</span></div>
+          </div>
+          <div class="p-nav"><span class="on">Touren</span><span>Training</span><span>Werte</span></div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Auswerten-Welt mit eigenen drei Reitern.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-topbar"><span class="p-back">‹ Touren</span><div class="grow"></div><div class="p-ic">⇪</div><div class="p-ic">⋯</div></div>
+            <b style="font-size:12px">Feierabendrunde</b>
+            <div class="p-map" style="min-height:88px">
+              <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/><circle cx="16" cy="84" r="3"/><circle class="end" cx="80" cy="10" r="3"/></svg>
+            </div>
+            <div class="p-grid3" style="text-align:center">
+              <div class="p-stat"><b>32,4</b><small>km</small></div>
+              <div class="p-stat"><b>1:24</b><small>h</small></div>
+              <div class="p-stat"><b>410</b><small>Hm</small></div>
+            </div>
+            <div class="p-card"><div style="height:24px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div></div>
+            <div class="p-sub" style="display:flex;justify-content:space-between"><span>Ø 138</span><span>Entk. 4,2 %</span><span>VO₂max 48</span></div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Detail als Push innerhalb der Auswerten-Welt.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="p-seg"><span>Planen</span><span>Fahren</span><span class="on">Auswerten</span></div>
+            <div class="p-card" style="margin-top:2px">
+              <b>Form</b>
+              <div style="height:42px;margin-top:3px"><svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline class="m" points="0,30 15,28 30,25 45,26 60,22 75,20 100,18"/>
+                <polyline class="d" points="0,34 15,30 30,32 45,24 60,28 75,22 100,26"/>
+                <polyline class="a" points="0,26 15,27 30,22 45,28 60,20 75,23 100,15"/>
+              </svg></div>
+              <div style="display:flex;gap:4px;margin-top:4px"><span class="p-chip on">Fit 62</span><span class="p-chip">Erm 71</span><span class="p-chip">Form −9</span></div>
+            </div>
+            <div class="p-card"><b>Plan · Woche 6/12</b><div class="p-bar" style="--v:50%;margin:4px 0"><i></i></div><div class="p-sub">Sa: Lange Fahrt 80 km</div></div>
+          </div>
+          <div class="p-nav"><span>Touren</span><span class="on">Training</span><span>Werte</span></div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Mittlerer Reiter der Auswerten-Welt; „Werte" hält die Vitals.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div style="flex:1;background:color-mix(in srgb,var(--m-fg) 35%,transparent)"></div>
+            <div class="p-sheet" style="max-height:80%">
+              <div class="p-handle"></div>
+              <b style="font-size:11px">Einstellungen — gelten in allen Welten</b>
+              <div class="p-row"><div class="p-ic">👤</div><div class="grow"><b>Profil &amp; Zonen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🔔</div><div class="grow"><b>Erinnerungen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🗺</div><div class="grow"><b>Offline-Karten</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">⟳</div><div class="grow"><b>Sync</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">🗄</div><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">♥</div><div class="grow"><b>Health Connect</b></div><span class="p-sub">›</span></div>
+              <div class="p-row"><div class="p-ic">ℹ</div><div class="grow"><b>Über · v2.0.184</b></div><span class="p-sub">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Bewusst weltenlos: ein globales Sheet hinter „⋯".</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= 10 RANDLOS ================= -->
+<section class="concept" id="k10" style="--a:#E3D64B;--a-ink:#1A1C10">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">10</span>
+      <div>
+        <h2>Randlos</h2>
+        <p class="c-tag">Gesten statt Möbel: ein dunkles, typografisches Interface, dessen Ränder die Navigation sind — Reflektor-Gelb auf Asphalt.</p>
+      </div>
+    </div>
+    <p class="c-lead">Der Gegenpol zu allen anderen Entwürfen: keine Tabs, keine Toolbar, kein
+    Menü-Icon. Jeder Screen ist randlos und die vier Bildschirmkanten sind die Wege — von links
+    kommen die Touren, von rechts das Training, von unten die Verwaltung, ein Tipp auf die Mitte
+    startet den Tag. Schmale Leuchtkanten deuten die Richtungen an, bis man sie verinnerlicht hat.
+    Dunkel und kontrastreich wie ein Fahrradcomputer bei Nachtfahrt; die Akzentfarbe ist das Gelb
+    von Reflektorfolie.</p>
+    <div class="c-facts">
+      <div><h4>Führung</h4><p>Edge-Swipes von vier Kanten + ein zentraler Tageseinstieg. Zurück = Wisch zurück zur Kante. Onboarding: vier geführte Wischer, einer pro Kante — danach bleiben nur die Leuchtkanten als Spur.</p></div>
+      <div><h4>Stärke</h4><p>Maximale Fläche für Karte und Zahlen; einhändig und blind bedienbar, wenn gelernt. Starker eigener Charakter.</p></div>
+      <div><h4>Risiko</h4><p>Unsichtbare Navigation ist die steilste Lernkurve aller Entwürfe und kollidiert mit System-Gesten; Barrierefreiheit braucht ein sichtbares Fallback.</p></div>
+    </div>
+    <div class="shots" style="--m-bg:#121410;--m-fg:#ECEEE2;--m-card:#1D2019;--m-map:#1A1E17">
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>7:02</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body">
+            <div style="position:absolute;left:0;top:20%;bottom:20%;width:2px;background:linear-gradient(transparent,var(--a),transparent);opacity:.7"></div>
+            <div style="position:absolute;right:0;top:20%;bottom:20%;width:2px;background:linear-gradient(transparent,var(--a),transparent);opacity:.7"></div>
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center;gap:6px">
+              <div class="mono" style="font-size:9px;opacity:.55">DO 28. AUG · 7:02</div>
+              <div class="p-big" style="font-size:56px;color:var(--a)">82</div>
+              <div class="mono" style="font-size:9px;letter-spacing:.2em">BEREIT</div>
+              <div style="margin-top:10px"><b style="font-size:13px">GA1 · 45 km · Zone 2</b>
+                <div class="p-sub">Ruhepuls 52 · HRV 68 · Schlaf 7:20</div></div>
+              <div class="p-btn" style="margin:12px 24px 0">Tag starten</div>
+            </div>
+            <div class="mono p-sub" style="display:flex;justify-content:space-between;font-size:7px">
+              <span>‹ TOUREN</span><span>▲ MEHR</span><span>TRAINING ›</span>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Heute</div>
+        <div class="shot-note">Nur Typografie und eine Zahl; die Kanten glimmen als Wegweiser.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 92%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill">
+              <svg class="p-route" viewBox="0 0 100 150" preserveAspectRatio="none"><path d="M24 128 C 46 106, 26 80, 54 62 S 86 36, 78 14"/><circle cx="24" cy="128" r="3"/><circle class="end" cx="78" cy="14" r="3" style="fill:var(--m-fg)"/></svg>
+              <div class="p-overlay" style="bottom:10px">
+                <div class="p-card" style="display:flex;justify-content:space-between;align-items:center">
+                  <span class="mono" style="font-size:8px">GRAVEL · GEMISCHT</span>
+                  <b>44,8 km · 380 Hm</b>
+                  <b style="color:var(--a)">LOS →</b>
+                </div>
+              </div>
+              <div class="p-overlay" style="top:10px"><span class="p-chip" style="background:var(--m-card)">Doppeltipp: Kartenstil</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Karte &amp; Planung</div>
+        <div class="shot-note">Randlose Karte; Planung als eine schwebende Zeile.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>10:07</span><span style="color:var(--a)">REC ● 0:32</span></div>
+          <div class="p-body">
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center;gap:2px">
+              <div class="p-big" style="font-size:64px;color:var(--a)">24<span style="font-size:26px">,3</span></div>
+              <div class="mono" style="font-size:8px;letter-spacing:.25em;opacity:.6">KM/H</div>
+              <div style="display:flex;justify-content:center;gap:22px;margin-top:16px">
+                <div class="p-stat"><b style="font-size:18px">12,4</b><small>km</small></div>
+                <div class="p-stat"><b style="font-size:18px">0:32</b><small>h</small></div>
+                <div class="p-stat"><b style="font-size:18px">142</b><small>♥ z2</small></div>
+              </div>
+            </div>
+            <div class="mono p-sub" style="text-align:center;font-size:7px">HALTEN = PAUSE · DOPPELT = KARTE · KANTE ▲ = BEENDEN</div>
+          </div>
+        </div>
+        <div class="shot-label">Fahrmodus</div>
+        <div class="shot-note">Nachtfahrt-Cockpit: eine Zahl regiert, Gesten statt Knöpfe.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="mono" style="font-size:9px;letter-spacing:.2em;opacity:.6">‹ TOUREN</div>
+            <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Feierabendrunde</b><small>Di 26. · 32,4 km · 410 Hm</small></div><span class="p-chip" style="background:var(--m-card);color:var(--a)">68</span></div>
+            <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Schotterschleife Nord</b><small>So 24. · 61,0 km · 720 Hm</small></div><span class="p-chip" style="background:var(--m-card);color:var(--a)">121</span></div>
+            <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22. · 45,2 km · 180 Hm</small></div><span class="p-chip" style="background:var(--m-card);color:var(--a)">74</span></div>
+            <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Waldkante West</b><small>Di 19. · 28,7 km · 350 Hm</small></div><span class="p-chip" style="background:var(--m-card);color:var(--a)">61</span></div>
+            <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Intervalle K3</b><small>Do 17. · 38,9 km · 490 Hm</small></div><span class="p-chip" style="background:var(--m-card);color:var(--a)">98</span></div>
+            <div style="flex:1"></div>
+            <div class="mono p-sub" style="text-align:center;font-size:7px">ZURÜCKWISCHEN = HEUTE</div>
+          </div>
+        </div>
+        <div class="shot-label">Touren</div>
+        <div class="shot-note">Von der linken Kante hereingewischt; TL leuchtet gelb.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div class="p-map fill" style="flex:0 0 44%">
+              <svg class="p-route" viewBox="0 0 100 70" preserveAspectRatio="none"><path d="M16 58 C 36 44, 30 28, 54 22 S 86 16, 82 8"/><circle cx="16" cy="58" r="3"/></svg>
+            </div>
+            <div style="flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:7px">
+              <b style="font-size:13px">Feierabendrunde</b>
+              <div class="mono p-sub" style="font-size:8px">DI 26. AUG · GRAVEL</div>
+              <div style="display:flex;gap:18px">
+                <div class="p-stat"><b style="font-size:16px;color:var(--a)">32,4</b><small>km</small></div>
+                <div class="p-stat"><b style="font-size:16px">1:24</b><small>h</small></div>
+                <div class="p-stat"><b style="font-size:16px">410</b><small>hm</small></div>
+                <div class="p-stat"><b style="font-size:16px">138</b><small>Ø ♥</small></div>
+              </div>
+              <div style="height:26px"><svg class="p-area" viewBox="0 0 100 24" preserveAspectRatio="none"><path class="f" d="M0 20 L18 12 L34 16 L52 5 L70 14 L86 8 L100 18 L100 24 L0 24 Z"/></svg></div>
+              <div class="mono p-sub" style="font-size:8px">ENTKOPPLUNG 4,2 % · VO₂MAX 48 · TL 68</div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Tour-Detail</div>
+        <div class="shot-note">Karte oben, Daten unten — keine Chromleiste dazwischen.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body">
+            <div class="mono" style="font-size:9px;letter-spacing:.2em;opacity:.6;text-align:right">TRAINING ›</div>
+            <div class="p-card">
+              <div class="mono" style="font-size:8px;opacity:.6">FORM · 90 TAGE</div>
+              <div style="height:52px;margin-top:4px"><svg class="p-spark" viewBox="0 0 100 44" preserveAspectRatio="none">
+                <polyline class="m" points="0,32 15,30 30,27 45,28 60,24 75,22 100,20"/>
+                <polyline class="d" points="0,38 15,33 30,35 45,26 60,31 75,24 100,29"/>
+                <polyline class="a" points="0,28 15,29 30,24 45,31 60,22 75,25 100,16"/>
+              </svg></div>
+            </div>
+            <div style="display:flex;gap:16px;justify-content:center">
+              <div class="p-stat" style="text-align:center"><b style="font-size:18px">62</b><small>Fitness</small></div>
+              <div class="p-stat" style="text-align:center"><b style="font-size:18px">71</b><small>Ermüdung</small></div>
+              <div class="p-stat" style="text-align:center"><b style="font-size:18px;color:var(--a)">−9</b><small>Form</small></div>
+            </div>
+            <div class="p-card"><div class="mono p-sub" style="font-size:8px">WOCHE 6/12 · SA LANGE FAHRT 80 KM</div><div class="p-bar" style="--v:50%;margin-top:4px"><i></i></div></div>
+            <div class="p-card"><div class="mono p-sub" style="font-size:8px">RUHEPULS 52 · HRV 68 · SCHLAF 7:20</div></div>
+          </div>
+        </div>
+        <div class="shot-label">Training</div>
+        <div class="shot-note">Von rechts; Zahlen als Typografie, kein Kartenstapel.</div>
+      </div>
+
+      <div class="shot">
+        <div class="phone">
+          <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+          <div class="p-body flush">
+            <div style="flex:1;opacity:.3;padding:14px;display:flex;flex-direction:column;justify-content:center;text-align:center">
+              <div class="p-big" style="font-size:40px;color:var(--a)">82</div>
+            </div>
+            <div class="p-sheet" style="background:var(--m-card);max-height:70%">
+              <div class="p-handle" style="background:rgba(255,255,255,.25)"></div>
+              <div class="mono" style="font-size:8px;letter-spacing:.2em;opacity:.6;margin-bottom:4px">▲ MEHR</div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Profil &amp; Zonen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Erinnerungen</b></div><span class="p-sub">›</span></div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Offline-Karten</b><small>2 Regionen · 184 MB</small></div><span class="p-sub">›</span></div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Sync</b></div><span class="p-sub">›</span></div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub">›</span></div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Health Connect</b></div><span class="p-sub">›</span></div>
+              <div class="p-row" style="border-color:rgba(255,255,255,.08)"><div class="grow"><b>Über · v2.0.184</b></div><span class="p-sub">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="shot-label">Mehr</div>
+        <div class="shot-note">Von der Unterkante; der Tag scheint gedimmt durch.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ================= VERGLEICH ================= -->
+<section class="compare" id="vergleich">
+  <div class="wrap">
+    <h2 class="frame">Die zehn Führungen nebeneinander</h2>
+    <div class="tbl">
+      <table>
+        <thead>
+          <tr><th>Entwurf</th><th>Grundmuster</th><th>Wofür optimiert</th><th>Wann es kippt</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>01 Vier Räume</b></td><td>5 Bottom-Tabs</td><td>Vertrautheit, gleichrangige Bereiche</td><td>Der Morgen-Moment geht in der Gleichrangigkeit unter</td></tr>
+          <tr><td><b>02 Eine Karte</b></td><td>Karten-Leinwand + Sheets</td><td>Räumliches Denken, Kontinuität Planen→Fahren</td><td>Training und Verwaltung wirken untergemietet</td></tr>
+          <tr><td><b>03 Der Coach</b></td><td>Vertikaler Tages-Feed</td><td>Empfehlung als Produktkern, Einsteiger</td><td>Gezieltes Nachschlagen wird umständlich</td></tr>
+          <tr><td><b>04 Kacheln</b></td><td>Hub &amp; Spoke</td><td>Dashboard-Blick, großzügige Vollbild-Bereiche</td><td>Häufige Bereichswechsel laufen über den Hub</td></tr>
+          <tr><td><b>05 Seiten</b></td><td>Horizontaler Pager</td><td>Einhand- und Handschuhbedienung</td><td>Ferne Seiten kosten viele Wischer</td></tr>
+          <tr><td><b>06 Die Schublade</b></td><td>Drawer + Toolbar + FAB</td><td>Viele gleichrangige Werkzeuge, Aufnahme überall</td><td>Struktur versteckt, wirkt retro</td></tr>
+          <tr><td><b>07 Das Deck</b></td><td>2 Tabs + persistente Fahrleiste</td><td>Aufzeichnung als Dauerzustand</td><td>Zweite Ebene in beiden Tabs muss sitzen</td></tr>
+          <tr><td><b>08 Der geführte Weg</b></td><td>Linearer Flow + Logbuch</td><td>Gewohnheit, null Entscheidungslast</td><td>Freies Erkunden liegt quer zum Flow</td></tr>
+          <tr><td><b>09 Drei Welten</b></td><td>Modus-Schalter + Sub-Tabs</td><td>Deckung von UI und mentalem Modell</td><td>Zwei Navigationsebenen wollen gelernt sein</td></tr>
+          <tr><td><b>10 Randlos</b></td><td>Edge-Gesten, kein Chrome</td><td>Maximale Fläche, Charakter, Nachtfahrt</td><td>Unsichtbare Navigation, Barrierefreiheit</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="foot">Die Entwürfe sind bewusst als Reinformen gezeichnet — in der Praxis lassen sich
+    Züge kombinieren: etwa die Deck-Leiste aus 07 in den Vier Räumen von 01, oder der Coach-Ton
+    aus 03 auf dem Heute-Tab jedes anderen Entwurfs. Alle Mockups verwenden echte Inhalte und
+    Werte aus dem Funktionsumfang von Trailscape 2.x.</p>
+  </div>
+</section>
+<!-- ================= EMPFEHLUNG: EINE LEISTE ================= -->
+<section class="concept" id="empfehlung" style="--a:#0D7A42;--a-ink:#fff">
+  <div class="wrap">
+    <div class="c-head">
+      <span class="c-num">★</span>
+      <div>
+        <h2>Dein Zuschnitt: Eine Leiste</h2>
+        <p class="c-tag">Im Test gereift statt am Reißbrett entworfen: vier flache Ziele, ein einziger Knopf für die Fahrt, konsequent One UI.</p>
+      </div>
+    </div>
+    <p class="c-lead">Der Ausgangspunkt war der Cockpit-Coach: das Gerüst der Drei Welten aus
+    Konzept 09, oben Planen · Fahren · Auswerten, darunter je eigene Bereichs-Reiter. Im
+    interaktiven Test dreier Navigations-Varianten fiel das Urteil eindeutig aus — <strong>zwei
+    Navigationsebenen sind zu viel</strong>, gegen den Alltag verloren die geschachtelten Welten
+    gegen die flacheren der zehn Reinformen. Die Konsequenz war keine Politur, sondern ein
+    Rückbau: aus zwei Ebenen wurde eine. „Fahren" hörte auf, ein Ort zu sein, an den du
+    navigierst, und wurde ein Zustand, den die App an dir erkennt. Plan und Werte wurden zu
+    Inhalt statt zu Navigationszielen. Am Ende steht <strong>eine Leiste</strong>: Heute · Karte ·
+    Touren · Training, und daneben, abgesetzt, der runde ●-Knopf für die Fahrt.</p>
+    <div class="c-facts" style="grid-template-columns:repeat(2,1fr)">
+      <div><h4>Eine Leiste statt zwei Ebenen</h4><p>Der Test zeigte, dass ein Modus-Schalter über den Bereichs-Tabs nicht als Struktur gelesen wird, sondern als Umweg: erst die Welt wählen, dann erst den Bereich — zwei Tipps für eine Absicht. Die flacheren Konzepte kamen ohne diesen Umweg aus. Die Antwort ist keine dritte Ebene, sondern der Verzicht auf die zweite: vier gleichrangige Ziele, sofort sichtbar, ohne Zwischenschritt.</p></div>
+      <div><h4>Der ●-Knopf: Zustand statt Ziel</h4><p>Fahren steht nicht mehr in der Leiste, weil Fahren kein Ort ist, sondern ein Zustand mit drei Ausprägungen. Leer: freie Fahrt der Nase entlang, mit einem dezenten Hinweis auf die Tageseinheit. Route bereit: gesetzt über „Runde zum Plan bauen", die Kartenplanung oder „Diese Tour fahren" im Tour-Detail — sichtbar als dünner Ring mit km-Label, Start dann direkt in die Navigation, mit den Auswegen „Ohne Route, nur aufzeichnen" und „Route verwerfen". Läuft: der Knopf pulsiert, die Zeit tickt, ein Tipp öffnet das Vollbild-Cockpit. Am Ende unterscheidet die Zusammenfassung „✓ GA1-Einheit erfüllt" von „Freie Fahrt — zählt in die Belastungsrechnung".</p></div>
+      <div><h4>One UI nach der echten App</h4><p>Die Formensprache folgt keinem generischen Material-Vorbild, sondern exakt den Theme-Tokens aus <code>Color.kt</code>: One UI 9 mit kühlem Hellgrau und weißen 26-dp-Karten im hellen Theme, Beinahe-Schwarz mit dunklen Karten im dunklen, dazwischen das Trailscape-Grün als Akzent und durchgängig Pillen-Buttons. Beide Themes tragen das Konzept vollständig — der Fahrmodus lebt visuell im Dunkeln, als Nachtfahrt-Cockpit, unabhängig vom App-weiten Theme. Die App bringt mit ihren <code>OneUi*</code>-Komponenten die Bausteine dafür schon mit; dieser Zuschnitt zeichnet nur nach, was dort schon angelegt ist.</p></div>
+      <div><h4>Schwebende Navbar</h4><p>Die untere Leiste folgt dem Samsung-Health-Muster aus One UI 8: eine frei schwebende Pillen-Navbar mit einer Ton-Pille hinter dem aktiven Tab, die über dem Inhalt schwebt statt ihn an den Rand zu drängen. Der ●-Knopf sitzt als eigener, abgesetzter Kreis daneben statt als fünfter Tab darin — er teilt sich die Navigationsebene mit den vier Zielen, ohne einer von ihnen zu sein, und bekommt so sichtbar seine Sonderrolle als Zustand, nicht als Ziel.</p></div>
+    </div>
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   Empfehlungs-Mockups „Eine Leiste" — One-UI-Look, vollständig gescopet auf
+   .shots.oneui, damit nichts in die übrigen Kapitel der Studie blutet.
+   Basis-Vokabular (.phone/.p-card/.p-row/…) kommt aus dem Studien-CSS,
+   hier stehen nur Overrides und die neuen Leisten-/Overlay-Bausteine.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Gehäuse & Grundtypografie ── */
+.shots.oneui .phone{
+  font-family:system-ui,Roboto,"Segoe UI",sans-serif;
+  border:1px solid color-mix(in srgb,var(--m-fg) 12%,transparent);
+  border-radius:24px;
+  box-shadow:0 12px 30px rgba(20,25,20,.14);
+}
+.shots.oneui .p-status{padding:8px 14px 2px;font-size:7.5px;opacity:.45}
+.shots.oneui .p-body{padding:6px 12px 12px;gap:9px}
+.shots.oneui .p-body.flush{padding:0;gap:0}
+.shots.oneui .p-body.padbar{padding-bottom:48px}   /* Platz für die schwebende Leiste */
+.shots.oneui .p-h1{font-family:inherit;font-size:15px;font-weight:700;letter-spacing:-.01em;margin-top:3px}
+.shots.oneui .p-big{font-family:inherit;font-weight:700}
+.shots.oneui .p-sub{font-size:8px;opacity:.62}
+.shots.oneui .p-eyebrow{display:block;font-size:7.5px;font-weight:600;letter-spacing:.03em;opacity:.62}
+.shots.oneui .p-eyebrow.mono{font-family:ui-monospace,"Spline Sans Mono",monospace;
+  text-transform:uppercase;letter-spacing:.14em;opacity:.55}
+.shots.oneui .p-back{font-size:8.5px;font-weight:600;opacity:.6}
+
+/* ── Flächen: randlos, 18px, hauchzarte Elevation ── */
+.shots.oneui .p-card{background:var(--m-card);border-radius:18px;padding:10px 12px;
+  box-shadow:0 1px 2px rgba(0,0,0,.05),0 3px 10px rgba(0,0,0,.06)}
+.shots.oneui .p-card.flat{box-shadow:none}
+.shots.oneui .p-card.coach{background:var(--cc);color:var(--on-cc);box-shadow:none}
+.shots.oneui .p-card.coach .p-sub,
+.shots.oneui .p-card.coach .p-eyebrow{opacity:.75}
+.shots.oneui .p-ic{width:19px;height:19px;font-size:9px;background:var(--m-card);
+  box-shadow:0 1px 3px rgba(0,0,0,.08);opacity:.9}
+.shots.oneui .p-ring>div{background:var(--m-card)}
+.shots.oneui .p-row{padding:7px 3px;border-bottom-color:color-mix(in srgb,var(--m-fg) 9%,transparent)}
+.shots.oneui .p-map{border-radius:18px}
+.shots.oneui .p-map.fill{border-radius:0}
+
+/* ── Pillen: Buttons, Chips, Segmente ── */
+.shots.oneui .p-btn{border-radius:999px;padding:9px 12px;font-weight:600;font-size:10px}
+.shots.oneui .p-chip{border-radius:999px;padding:3px 9px;font-size:8px;font-weight:600;
+  background:color-mix(in srgb,var(--m-fg) 7%,transparent)}
+.shots.oneui .p-chip.on{background:var(--a);color:var(--a-ink)}
+.shots.oneui .p-chip.tl{color:var(--a);font-weight:700;font-variant-numeric:tabular-nums}
+.shots.oneui .p-chip.gps{background:var(--cc);color:var(--on-cc)}
+.shots.oneui .p-chip.raised{background:var(--m-card);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.shots.oneui .p-seg{border-radius:999px;background:color-mix(in srgb,var(--m-fg) 7%,transparent)}
+.shots.oneui .p-seg span{font-size:8.5px;font-weight:600}
+.shots.oneui .p-stat b{font-size:13px}
+.shots.oneui .p-stat small{font-size:7.5px;text-transform:none;letter-spacing:0}
+.shots.oneui .p-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.shots.oneui .p-link{color:var(--a);font-weight:600;font-size:9px;text-align:center}
+.shots.oneui .p-quiet{font-size:8px;opacity:.5;text-align:center}
+
+/* ── DIE EINE LEISTE: schwebende Pille + abgesetzter ●-Kreis ── */
+.shots.oneui .p-leiste{position:absolute;left:8px;right:8px;bottom:8px;z-index:6;
+  display:flex;align-items:center;gap:6px}
+.shots.oneui .p-pill{flex:1;min-width:0;height:34px;padding:3px;border-radius:999px;
+  background:var(--m-card);display:flex;align-items:stretch;
+  box-shadow:0 3px 10px rgba(0,0,0,.10),0 10px 24px rgba(0,0,0,.10)}
+.shots.oneui .p-tab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:1px;border-radius:999px;white-space:nowrap;
+  font-size:7px;font-weight:500;color:color-mix(in srgb,var(--m-fg) 62%,transparent)}
+.shots.oneui .p-tab.on{background:#0D7A4215;color:var(--a);font-weight:700}
+.shots.oneui .p-tico{width:12px;height:12px;display:block;flex:0 0 auto}
+.shots.oneui .p-recwrap{flex:0 0 auto;position:relative;display:flex}
+.shots.oneui .p-rec{position:relative;width:30px;height:30px;border-radius:50%;
+  background:var(--m-card);color:var(--a);display:flex;align-items:center;justify-content:center;
+  font-size:11px;box-shadow:0 3px 10px rgba(0,0,0,.10),0 10px 24px rgba(0,0,0,.10)}
+.shots.oneui .p-rec.loaded::before{content:"";position:absolute;inset:-2.5px;border-radius:50%;
+  border:1.5px solid var(--a);opacity:.9}
+.shots.oneui .p-reclabel{position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);
+  font-size:7px;font-weight:700;color:var(--a);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* ── Vollbild-Overlays: Bereit-Screen ── */
+.shots.oneui .p-body.full{padding:6px 12px 16px;gap:0;position:relative;justify-content:center}
+.shots.oneui .p-chev{position:absolute;top:1px;left:0;right:0;text-align:center;
+  font-size:11px;line-height:1;opacity:.4}
+.shots.oneui .p-readycard{background:var(--m-card);border-radius:20px;padding:16px 14px;
+  display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.06),0 12px 28px rgba(0,0,0,.10)}
+.shots.oneui .p-readycard>*{max-width:100%}
+.shots.oneui .p-readycard .p-btn{align-self:stretch;margin-top:2px}
+.shots.oneui .p-readytitle{font-size:13px;font-weight:700;line-height:1.2}
+
+/* ── Vollbild-Overlays: Fahrmodus ── */
+.shots.oneui .p-body.ride{padding:6px 8px 10px;gap:7px;position:relative}
+.shots.oneui .p-ridectl{display:flex;gap:6px;align-items:stretch}
+.shots.oneui .p-dotsbtn{flex:0 0 34px;display:flex;align-items:center;justify-content:center;gap:4px;
+  border-radius:999px;background:color-mix(in srgb,var(--m-fg) 9%,transparent)}
+.shots.oneui .p-dotsbtn i{width:4px;height:4px;border-radius:99px;
+  background:color-mix(in srgb,var(--m-fg) 25%,transparent)}
+.shots.oneui .p-dotsbtn i.on{width:9px;background:var(--a)}
+.shots.oneui .p-ridebtn{flex:1;text-align:center;border-radius:999px;padding:8px 6px;
+  font-weight:600;font-size:9px;background:color-mix(in srgb,var(--m-fg) 9%,transparent)}
+.shots.oneui .p-ridebtn.stop{color:var(--err,#BB2016)}
+.shots.oneui .p-pur{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center}
+.shots.oneui .p-pur .p-big{font-size:46px;color:var(--a);line-height:1}
+.shots.oneui .p-zone{margin-top:5px;font-size:7.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;opacity:.6}
+.shots.oneui .p-zone b{color:var(--a);opacity:1}
+.shots.oneui .p-trio{display:flex;gap:20px;margin-top:14px;text-align:center}
+.shots.oneui .p-announce{display:flex;gap:7px;align-items:flex-start;text-align:left;margin-top:16px}
+.shots.oneui .p-announce span{color:var(--a);flex:0 0 auto;font-size:9px}
+
+/* ── Bottom-Sheet „Mehr" ── */
+.shots.oneui .p-scrim{position:absolute;inset:0;z-index:1;background:rgba(0,0,0,.42)}
+.shots.oneui .p-sheet{background:var(--m-card);border-radius:20px;padding:8px 12px 12px;
+  box-shadow:0 -2px 8px rgba(0,0,0,.10),0 10px 30px rgba(0,0,0,.16)}
+.shots.oneui .p-sheet.bottom{position:absolute;left:0;right:0;bottom:0;z-index:2;
+  border-radius:20px 20px 0 0}
+.shots.oneui .p-sheet.float{position:absolute;border-radius:20px}
+.shots.oneui .p-handle{width:26px;height:3px;margin:0 auto 8px;
+  background:color-mix(in srgb,var(--m-fg) 18%,transparent)}
+.shots.oneui .p-sw{position:relative;flex:0 0 auto;width:22px;height:13px;border-radius:999px;background:var(--a)}
+.shots.oneui .p-sw::after{content:"";position:absolute;top:1.5px;left:1.5px;width:10px;height:10px;
+  border-radius:50%;background:#fff;transform:translateX(9px);box-shadow:0 1px 2px rgba(0,0,0,.3)}
+</style>
+
+<div class="shots oneui" style="--a:#0D7A42;--a-ink:#fff;--m-bg:#F4F4F6;--m-card:#FFFFFF;--m-map:#E8EDE8;--m-fg:#1A1B1E;--cc:#C3F0D4;--on-cc:#002411">
+
+  <!-- Icon-Vorrat für die Leiste (einmal definiert, per <use> referenziert) -->
+  <svg style="display:none" aria-hidden="true">
+    <symbol id="ts-ic-heute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/>
+    </symbol>
+    <symbol id="ts-ic-karte" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/>
+    </symbol>
+    <symbol id="ts-ic-touren" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a4 4 0 0 0 0-8H9a4 4 0 0 1 0-8h7"/>
+    </symbol>
+    <symbol id="ts-ic-training" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 20V13M10 20V6M16 20v-9M22 20H2"/>
+    </symbol>
+  </svg>
+
+  <!-- ══════════ 1 · HEUTE ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+      <div class="p-body padbar">
+        <div class="p-topbar"><div class="p-h1 grow">Heute</div><div class="p-ic">⚙</div></div>
+        <div class="p-card" style="display:flex;gap:10px;align-items:center">
+          <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+          <div>
+            <b style="font-size:10.5px;display:block;line-height:1.3">Erholt. Heute zahlt sich Grundlage aus.</b>
+            <div class="p-sub" style="margin-top:3px">GA1 · 45 km · Zone 2 · ~2:00 h</div>
+          </div>
+        </div>
+        <div class="p-btn">Runde zum Plan bauen</div>
+        <div style="display:flex;justify-content:space-around;padding:1px 0">
+          <div class="p-stat" style="text-align:center"><b>78<span style="opacity:.45;font-size:10px">/120</span></b><small>Wochen-km</small></div>
+          <div class="p-stat" style="text-align:center"><b style="color:#BB2016">−9</b><small>Form</small></div>
+          <div class="p-stat" style="text-align:center"><b>6/12</b><small>Planwoche</small></div>
+        </div>
+        <div class="p-card coach">
+          <span class="p-eyebrow">Coach</span>
+          <div style="margin-top:2px;font-size:9px">Samstag wird lang (80 km) — heute nicht überziehen.</div>
+        </div>
+        <div class="p-card" style="display:flex;align-items:center;gap:8px">
+          <div class="grow" style="flex:1;min-width:0">
+            <span class="p-eyebrow">Plan-Ausblick</span>
+            <b style="font-size:9.5px;display:block;margin-top:2px">Woche 6/12 · Sa: Lange Fahrt 80 km</b>
+          </div>
+          <span class="p-sub" style="font-size:11px">›</span>
+        </div>
+      </div>
+      <div class="p-leiste">
+        <div class="p-pill">
+          <span class="p-tab on"><svg class="p-tico"><use href="#ts-ic-heute"/></svg>Heute</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-karte"/></svg>Karte</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-touren"/></svg>Touren</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-training"/></svg>Training</span>
+        </div>
+        <div class="p-recwrap"><span class="p-rec">●</span></div>
+      </div>
+    </div>
+    <div class="shot-label">Heute</div>
+    <div class="shot-note">Der Morgen-Moment: Bereitschaft, Coach-Satz, ein Knopf zur Runde. Der ●-Kreis rechts ist ruhig — es liegt noch keine Route bereit.</div>
+  </div>
+
+  <!-- ══════════ 2 · KARTE & PLANUNG ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:44</span><span>▲ ▮▮ 87%</span></div>
+      <div class="p-body flush">
+        <div class="p-map fill">
+          <svg class="p-route" viewBox="0 0 100 140" preserveAspectRatio="none" aria-label="Kartenansicht mit geplanter Route">
+            <path class="alt" d="M22 122 C 56 114, 82 94, 74 64 S 58 30, 78 12"/>
+            <path d="M22 122 C 46 100, 24 74, 52 58 S 86 34, 78 12"/>
+            <circle cx="22" cy="122" r="3"/>
+            <circle class="end" cx="78" cy="12" r="3"/>
+          </svg>
+          <div class="p-overlay" style="top:9px;display:flex;gap:5px">
+            <span class="p-chip raised">🔍 Ziel</span>
+            <span class="p-chip on">Zum Plan: 45 km</span>
+            <span class="p-chip raised">✦ Entdecken</span>
+          </div>
+          <div class="p-overlay p-sheet float" style="bottom:48px">
+            <div class="p-handle"></div>
+            <div class="p-seg" style="margin-bottom:7px"><span class="on">Gravel</span><span>Rennrad</span></div>
+            <div style="display:flex;gap:5px;margin-bottom:8px">
+              <span class="p-chip on">Gemischt</span><span class="p-chip">Asphalt</span><span class="p-chip">Radwege</span>
+            </div>
+            <div class="p-sub" style="text-align:center;font-weight:700;font-size:8.5px;opacity:.7;margin-bottom:7px">44,8 km · 380 Hm · ~1:58 h</div>
+            <div class="p-btn">Fahren →</div>
+          </div>
+        </div>
+      </div>
+      <div class="p-leiste">
+        <div class="p-pill">
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-heute"/></svg>Heute</span>
+          <span class="p-tab on"><svg class="p-tico"><use href="#ts-ic-karte"/></svg>Karte</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-touren"/></svg>Touren</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-training"/></svg>Training</span>
+        </div>
+        <div class="p-recwrap">
+          <span class="p-reclabel">44,8 km</span>
+          <span class="p-rec loaded">●</span>
+        </div>
+      </div>
+    </div>
+    <div class="shot-label">Karte &amp; Planung</div>
+    <div class="shot-note">Plansheet schwebt über der Karte, die Leiste bleibt stehen. Sobald die Route steht, bekommt der ●-Kreis einen Ring und die Distanz als Mini-Label.</div>
+  </div>
+
+  <!-- ══════════ 3 · BEREIT: GEPLANTE TOUR ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:46</span><span>▲ ▮▮ 86%</span></div>
+      <div class="p-body full">
+        <div class="p-chev">⌄</div>
+        <div class="p-readycard">
+          <span class="p-eyebrow">Bereit</span>
+          <div class="p-readytitle">Geplante Tour</div>
+          <span class="p-chip gps">GPS ✓</span>
+          <div>
+            <b style="font-size:10.5px">Heutige GA1-Runde</b>
+            <div class="p-sub" style="margin-top:3px;font-variant-numeric:tabular-nums">44,8 km · 380 Hm · ~1:58 h</div>
+          </div>
+          <div class="p-btn">Mit Navigation starten</div>
+          <div class="p-link">Ohne Route, nur aufzeichnen</div>
+          <div class="p-quiet">✕ Route verwerfen</div>
+        </div>
+      </div>
+    </div>
+    <div class="shot-label">Bereit: Geplante Tour</div>
+    <div class="shot-note">Ein Druck auf den ●-Kreis hebt diesen Vollbild-Halt hoch: eine Karte, eine Hauptaktion, zwei Auswege. Die Leiste tritt ab — wer fährt, navigiert nicht.</div>
+  </div>
+
+  <!-- ══════════ 4 · FAHRMODUS · KARTE (dunkel) ══════════ -->
+  <div class="shot">
+    <div class="phone" style="--m-bg:#0A0A0C;--m-card:#1C1D21;--m-fg:#E3E3E7;--a:#6BD69C;--a-ink:#00391D;--m-map:#181D24;--cc:#155F38;--on-cc:#A7F2C6;--err:#FFB4A9">
+      <div class="p-status"><span>21:14</span><span>REC ● 0:34</span></div>
+      <div class="p-body ride">
+        <div class="p-chev">⌄</div>
+        <div class="p-map" style="margin-top:12px">
+          <svg class="p-route" viewBox="0 0 100 160" preserveAspectRatio="none" aria-label="Fahrkarte mit laufender Route">
+            <path d="M30 142 C 52 118, 36 92, 60 74 S 88 46, 80 20"/>
+            <circle cx="30" cy="142" r="3"/>
+          </svg>
+          <div class="p-overlay p-card coach" style="top:8px;display:flex;gap:9px;align-items:center">
+            <span style="font-size:17px;font-weight:700;line-height:1">↰</span>
+            <div>
+              <b style="font-size:10px;display:block">In 220 m links</b>
+              <span class="p-sub">Kiesweg am Wehr</span>
+            </div>
+          </div>
+          <div class="p-overlay p-card" style="bottom:8px;display:flex;justify-content:space-between">
+            <div class="p-stat" style="text-align:center"><b>23,8</b><small>km/h</small></div>
+            <div class="p-stat" style="text-align:center"><b style="color:var(--a)">143</b><small>♥ Z2 ✓</small></div>
+            <div class="p-stat" style="text-align:center"><b>44,8</b><small>km übrig</small></div>
+          </div>
+        </div>
+        <div class="p-ridectl">
+          <div class="p-dotsbtn"><i class="on"></i><i></i></div>
+          <div class="p-ridebtn">❙❙ Pause</div>
+          <div class="p-ridebtn stop">■ Beenden</div>
+        </div>
+      </div>
+    </div>
+    <div class="shot-label">Fahrmodus · Karte</div>
+    <div class="shot-note">Nachtfahrt: dunkler Grund, Abbiegehinweis als Akzent-Container ganz oben, Zahlen unten, alles daumenbreit. Seite 1 von 2.</div>
+  </div>
+
+  <!-- ══════════ 5 · FAHRMODUS · PUR (dunkel) ══════════ -->
+  <div class="shot">
+    <div class="phone" style="--m-bg:#0A0A0C;--m-card:#1C1D21;--m-fg:#E3E3E7;--a:#6BD69C;--a-ink:#00391D;--m-map:#181D24;--cc:#155F38;--on-cc:#A7F2C6;--err:#FFB4A9">
+      <div class="p-status"><span>21:29</span><span>REC ● 0:49</span></div>
+      <div class="p-body ride">
+        <div class="p-chev">⌄</div>
+        <div class="p-pur">
+          <div class="p-big">143</div>
+          <div class="p-zone">Puls · Zone 2 <b>✓</b></div>
+          <div class="p-trio">
+            <div class="p-stat"><b>23,8</b><small>km/h</small></div>
+            <div class="p-stat"><b>12,4</b><small>km</small></div>
+            <div class="p-stat"><b>0:49</b><small>Zeit</small></div>
+          </div>
+          <div class="p-card p-announce">
+            <span>🔊</span>
+            <div class="p-sub" style="font-size:8.5px">„Gleich kommt die einzige Rampe — Trittfrequenz hoch."</div>
+          </div>
+        </div>
+        <div class="p-ridectl">
+          <div class="p-dotsbtn"><i></i><i class="on"></i></div>
+          <div class="p-ridebtn">❙❙ Pause</div>
+          <div class="p-ridebtn stop">■ Beenden</div>
+        </div>
+      </div>
+    </div>
+    <div class="shot-label">Fahrmodus · Pur</div>
+    <div class="shot-note">Ein Daumenwisch weiter: nur die eine Zahl, die zählt, plus die gesprochene Coach-Ansage. Seite 2 von 2 — Steuerung bleibt identisch.</div>
+  </div>
+
+  <!-- ══════════ 6 · TOUREN ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:41</span><span>▲ ▮▮ 87%</span></div>
+      <div class="p-body padbar">
+        <div class="p-h1">Touren</div>
+        <span class="p-eyebrow">Letzte Touren</span>
+        <div class="p-card" style="padding:2px 10px">
+          <div class="p-row"><div class="grow"><b>Feierabendrunde</b><small>Di 26.8. · 32,4 km · 1:24 h · 410 Hm</small></div><span class="p-chip tl">TL 68</span></div>
+          <div class="p-row"><div class="grow"><b>Schotterschleife Nord</b><small>So 24.8. · 61,0 km · 2:41 h · 720 Hm</small></div><span class="p-chip tl">TL 121</span></div>
+          <div class="p-row"><div class="grow"><b>GA1 Kanalrunde</b><small>Fr 22.8. · 45,2 km · 1:58 h · 180 Hm</small></div><span class="p-chip tl">TL 74</span></div>
+          <div class="p-row"><div class="grow"><b>Waldkante West</b><small>Di 19.8. · 28,7 km · 1:19 h · 350 Hm</small></div><span class="p-chip tl">TL 61</span></div>
+          <div class="p-row"><div class="grow"><b>Intervalle K3</b><small>Do 17.8. · 38,9 km · 1:47 h · 490 Hm</small></div><span class="p-chip tl">TL 98</span></div>
+        </div>
+      </div>
+      <div class="p-leiste">
+        <div class="p-pill">
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-heute"/></svg>Heute</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-karte"/></svg>Karte</span>
+          <span class="p-tab on"><svg class="p-tico"><use href="#ts-ic-touren"/></svg>Touren</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-training"/></svg>Training</span>
+        </div>
+        <div class="p-recwrap"><span class="p-rec">●</span></div>
+      </div>
+    </div>
+    <div class="shot-label">Touren</div>
+    <div class="shot-note">Eine weiße Gruppen-Karte statt fünf Einzelkacheln; die Trainingslast rechts als Pille macht die Liste scanbar.</div>
+  </div>
+
+  <!-- ══════════ 7 · TOUR-DETAIL ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:42</span><span>▲ ▮▮ 87%</span></div>
+      <div class="p-body padbar" style="gap:7px">
+        <div class="p-back">‹ Touren</div>
+        <div>
+          <b style="font-size:13px;font-weight:700">Feierabendrunde</b>
+          <div class="p-sub" style="margin-top:1px">Di 26.8. · 17:31</div>
+        </div>
+        <div class="p-map" style="flex:0 0 auto;height:76px">
+          <svg class="p-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Tourspur">
+            <path d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/>
+            <circle cx="16" cy="84" r="3"/>
+            <circle class="end" cx="80" cy="10" r="3"/>
+          </svg>
+        </div>
+        <div class="p-card p-grid4" style="text-align:center">
+          <div class="p-stat"><b>32,4</b><small>km</small></div>
+          <div class="p-stat"><b>1:24</b><small>h:min</small></div>
+          <div class="p-stat"><b>410</b><small>Hm</small></div>
+          <div class="p-stat"><b>138</b><small>Ø ♥</small></div>
+        </div>
+        <div class="p-card">
+          <span class="p-eyebrow">Höhenprofil</span>
+          <div style="height:32px;margin-top:5px">
+            <svg class="p-area" viewBox="0 0 100 26" preserveAspectRatio="none">
+              <path class="f" d="M0 21 L14 13 L26 17 L40 6 L54 15 L68 9 L82 14 L100 19 L100 26 L0 26 Z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="p-card coach">
+          <span class="p-eyebrow">Coach</span>
+          <div style="margin-top:2px;font-size:8.5px">Entkopplung 4,2 % — Grundlage stabil. Diese Fahrt hat die GA1-Einheit erfüllt.</div>
+        </div>
+        <div class="p-btn">Diese Tour fahren</div>
+      </div>
+      <div class="p-leiste">
+        <div class="p-pill">
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-heute"/></svg>Heute</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-karte"/></svg>Karte</span>
+          <span class="p-tab on"><svg class="p-tico"><use href="#ts-ic-touren"/></svg>Touren</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-training"/></svg>Training</span>
+        </div>
+        <div class="p-recwrap"><span class="p-rec">●</span></div>
+      </div>
+    </div>
+    <div class="shot-label">Tour-Detail</div>
+    <div class="shot-note">Gepusht aus der Liste — die Leiste bleibt sichtbar und hält „Touren" markiert, damit der Rückweg nie verloren geht.</div>
+  </div>
+
+  <!-- ══════════ 8 · TRAINING ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:43</span><span>▲ ▮▮ 86%</span></div>
+      <div class="p-body padbar" style="gap:7px">
+        <div class="p-h1">Training</div>
+        <span class="p-eyebrow mono">Form · 90 Tage</span>
+        <div class="p-card">
+          <div style="height:52px">
+            <svg class="p-spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-label="Formkurve über 90 Tage">
+              <polyline class="m" points="0,34 12,31 25,32 38,25 50,28 63,23 76,25 88,20 100,24"/>
+              <polyline class="a" points="0,30 12,29 25,26 38,27 50,23 63,21 76,19 88,18 100,16"/>
+              <polyline class="d" points="0,26 12,27 25,23 38,29 50,25 63,28 76,26 88,29 100,31"/>
+            </svg>
+          </div>
+          <div style="display:flex;gap:5px;margin-top:8px">
+            <span class="p-chip on">Fit 62</span><span class="p-chip">Erm 71</span><span class="p-chip">Form −9</span>
+          </div>
+        </div>
+        <span class="p-eyebrow mono">Plan</span>
+        <div class="p-card">
+          <b style="font-size:9.5px">Woche 6 von 12 · Aufbau</b>
+          <div class="p-bar" style="--v:50%;margin-top:7px"><i></i></div>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:8px">
+            <span class="p-sub" style="width:14px">Sa</span>
+            <span class="grow" style="flex:1;font-size:9px;font-weight:600">Lange Fahrt · 80 km</span>
+            <span class="p-chip">geplant</span>
+          </div>
+        </div>
+        <span class="p-eyebrow mono">Werte</span>
+        <div class="p-grid2">
+          <div class="p-card"><span class="p-eyebrow">Ruhepuls</span><b style="font-size:15px;font-weight:700">52</b> <span style="color:var(--a);font-size:8px;font-weight:700">↓ gut</span></div>
+          <div class="p-card"><span class="p-eyebrow">HRV</span><b style="font-size:15px;font-weight:700">68</b> <span class="p-sub">ms</span> <span style="color:var(--a);font-size:8px;font-weight:700">↑</span></div>
+          <div class="p-card"><span class="p-eyebrow">Schlaf</span><b style="font-size:15px;font-weight:700">7:20</b> <span class="p-sub">h</span></div>
+          <div class="p-card"><span class="p-eyebrow">VO₂max</span><b style="font-size:15px;font-weight:700">48</b> <span class="p-sub">stabil</span></div>
+        </div>
+      </div>
+      <div class="p-leiste">
+        <div class="p-pill">
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-heute"/></svg>Heute</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-karte"/></svg>Karte</span>
+          <span class="p-tab"><svg class="p-tico"><use href="#ts-ic-touren"/></svg>Touren</span>
+          <span class="p-tab on"><svg class="p-tico"><use href="#ts-ic-training"/></svg>Training</span>
+        </div>
+        <div class="p-recwrap"><span class="p-rec">●</span></div>
+      </div>
+    </div>
+    <div class="shot-label">Training</div>
+    <div class="shot-note">Ein einziger Scroll-Screen in drei Kapiteln: Form → Plan → Werte. Die Mono-Zwischentitel ersetzen eine zweite Reiterleiste.</div>
+  </div>
+
+  <!-- ══════════ 9 · MEHR ══════════ -->
+  <div class="shot">
+    <div class="phone">
+      <div class="p-status"><span>9:41</span><span>▲ ▮▮ 86%</span></div>
+      <div class="p-body">
+        <div class="p-topbar"><div class="p-h1 grow">Heute</div><div class="p-ic">⚙</div></div>
+        <div class="p-card" style="display:flex;gap:10px;align-items:center">
+          <div class="p-ring" style="--v:82"><div>82<small>bereit</small></div></div>
+          <div>
+            <b style="font-size:10.5px;display:block;line-height:1.3">Erholt. Heute zahlt sich Grundlage aus.</b>
+            <div class="p-sub" style="margin-top:3px">GA1 · 45 km · Zone 2 · ~2:00 h</div>
+          </div>
+        </div>
+        <div class="p-btn">Runde zum Plan bauen</div>
+      </div>
+      <div class="p-scrim"></div>
+      <div class="p-sheet bottom">
+        <div class="p-handle"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0 2px 4px">
+          <b style="font-size:10px">Mehr &amp; Einstellungen</b>
+          <span class="p-ic" style="box-shadow:none;background:color-mix(in srgb,var(--m-fg) 7%,transparent)">✕</span>
+        </div>
+        <div class="p-row"><div class="grow"><b>Profil &amp; Zonen</b></div><span class="p-sub" style="font-size:10px">›</span></div>
+        <div class="p-row"><div class="grow"><b>Coach-Stimme</b><small>Ansagen während der Fahrt</small></div><span class="p-sw"></span></div>
+        <div class="p-row"><div class="grow"><b>Tageseinheit 7:00</b><small>Erinnerung an den Tagesplan</small></div><span class="p-sw"></span></div>
+        <div class="p-row"><div class="grow"><b>Offline-Karten</b><small>2 Regionen · 184 MB</small></div><span class="p-sub" style="font-size:10px">›</span></div>
+        <div class="p-row"><div class="grow"><b>Sync</b></div><span class="p-sub" style="font-size:10px">›</span></div>
+        <div class="p-row"><div class="grow"><b>Daten &amp; Backup</b></div><span class="p-sub" style="font-size:10px">›</span></div>
+        <div class="p-row"><div class="grow"><b>Health Connect</b></div><span class="p-sub" style="font-size:10px">›</span></div>
+        <div class="p-row"><div class="grow"><b>Über</b><small>v2.0.184</small></div><span class="p-sub" style="font-size:10px">›</span></div>
+      </div>
+    </div>
+    <div class="shot-label">Mehr</div>
+    <div class="shot-note">Alles Selten-Genutzte liegt hinter dem ⚙ als Bottom-Sheet — es kostet keinen Platz in der Leiste und deckt sie beim Öffnen komplett zu.</div>
+  </div>
+
+</div>
+
+    <p class="foot">Dieses Kapitel bildet den klickbaren Prototyp ab:
+    <a href="https://claude.ai/code/artifact/60ea65e1-93e8-4a61-8689-762291705b4f">Eine Leiste</a>,
+    durchgängig in hellem und dunklem Theme. Von den Reinformen steckt mehr im Finale, als die
+    Herkunft aus 09 vermuten lässt: die flachen, gleichrangigen Tabs aus <em>01</em>, der knappe
+    Coach-Ton aus <em>03</em>, die wischbaren Fahrseiten Karte/Pur aus <em>05</em> und Fahren als
+    eigener Zustand statt eigener Ort aus <em>07</em>.</p>
+  </div>
+</section>

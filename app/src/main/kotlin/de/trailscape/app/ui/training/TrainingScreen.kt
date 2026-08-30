@@ -35,6 +35,7 @@ import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiLargeTopAppBar
+import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.defaultTrainingProfile
@@ -168,7 +169,19 @@ fun TrainingScreen(appViewModel: AppViewModel) {
         // aufgeloest und als Padding an den NavHost gegeben.
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { OneUiLargeTopAppBar("Training", scrollBehavior) },
+        topBar = {
+            OneUiLargeTopAppBar(
+                title = "Training",
+                scrollBehavior = scrollBehavior,
+                // Das Zahnrad rechts ist seit der Fuehrung „Eine Leiste" der
+                // Einstieg in den Mehr-Bereich — er ist kein Tab mehr (siehe
+                // `ui/TrailscapeApp.kt`). Dieselbe Stelle in allen drei
+                // Listen-Tabs, damit man ihn nicht suchen muss.
+                actions = {
+                    SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
+                },
+            )
+        },
         snackbarHost = {
             // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
             // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).
