@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -400,7 +401,13 @@ fun TrailscapeApp() {
                     .windowInsetsPadding(WindowInsets.navigationBars),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OneUiNavigationBar(modifier = Modifier.weight(1f)) {
+                // 14 statt 24 dp Aussenrand: Die Zeile teilt sich der Knopf
+                // mit der Kapsel — ohne die engeren Raender enden die
+                // Tab-Beschriftungen auf schmalen Geraeten in Ellipsen.
+                OneUiNavigationBar(
+                    modifier = Modifier.weight(1f),
+                    horizontalMargin = 14.dp,
+                ) {
                     TopLevelDestination.entries.forEach { destination ->
                         val selected = currentDestination?.hierarchy?.any {
                             it.route == destination.route

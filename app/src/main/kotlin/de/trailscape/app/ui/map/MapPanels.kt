@@ -468,48 +468,10 @@ internal fun LocationPermissionNotice(
 // Erkunden-Gesicht des unteren Blatts (siehe `ExploreSheet.kt`).
 
 /**
- * Der grosse Aufnahmeknopf: gruener Kreis (Start) bzw. rotes Quadrat (Stopp)
- * ueber der Flaeche des Knopfs. Seit `material-icons-extended` eingebunden
- * ist, kommen Start- und Stopp-Symbol als echte Vektor-Icons statt als
- * selbst gezeichnete Formen. Groesse bleibt der 56-dp-Knopf; die Farben
- * kommen seit dem One-UI-Umzug aus dem Schema (`primary`/`error`) statt aus
- * den Kachelfarben — auf der hellen wie dunklen Kartenflaeche geprueft.
- */
-@Composable
-internal fun RecordButton(
-    recording: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        onClick = onClick,
-        modifier = modifier.size(56.dp),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shadowElevation = 2.dp,
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            if (recording) {
-                Icon(
-                    Icons.Filled.Stop,
-                    contentDescription = "Aufzeichnung beenden",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(28.dp),
-                )
-            } else {
-                Icon(
-                    Icons.Filled.PlayArrow,
-                    contentDescription = "Aufzeichnung starten",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(32.dp),
-                )
-            }
-        }
-    }
-}
-
-/**
- * Runder Knopf „Meine Position", gleiche Groesse wie [RecordButton].
+ * Runder Knopf „Meine Position", 56 dp wie frueher der Aufnahmeknopf an
+ * dieser Stelle (der mit der Fuehrung „Eine Leiste" in den schwebenden
+ * REC-Knopf der Navigationshuelle umgezogen ist,
+ * `ui/components/RecCapsuleButton.kt`).
  *
  * Er ist zugleich die Anzeige und der Rueckweg fuer „Karte folgt mir": Solange
  * die Karte der eigenen Position folgt, ist er gefuellt gruen; sobald die

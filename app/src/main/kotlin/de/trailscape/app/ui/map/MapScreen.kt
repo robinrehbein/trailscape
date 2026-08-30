@@ -2472,13 +2472,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                             )
                             Spacer(Modifier.height(12.dp))
                         }
-                        RecordButton(
-                            recording = isRecording,
-                            onClick = {
-                                if (isRecording) RecordingRepository.stop() else startRecording()
-                            },
-                        )
-                        Spacer(Modifier.height(12.dp))
+                        // Der fruehere RecordButton an dieser Stelle ist mit
+                        // der Fuehrung "Eine Leiste" entfallen: Die Aufnahme
+                        // startet und stoppt jetzt der eine schwebende
+                        // REC-Knopf neben der Navigationskapsel (siehe
+                        // `ui/components/RecCapsuleButton.kt`) — zwei
+                        // Startknoepfe auf demselben Bildschirm waren nach dem
+                        // ersten Geraetetest sichtbar einer zu viel.
                         LocateButton(onClick = ::goToMyPosition, following = followMe)
                         Spacer(Modifier.height(12.dp))
 
