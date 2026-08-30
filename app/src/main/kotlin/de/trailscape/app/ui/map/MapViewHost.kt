@@ -40,6 +40,7 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.Layer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
@@ -354,6 +355,14 @@ internal class MapController {
 
     /** GeoJSON je Quelle — die Wahrheit, aus der der Stil wieder aufgebaut wird. */
     private val geoJson: MutableMap<String, String> = linkedMapOf(
+        // Die drei Kachel-Quellen stehen bewusst mit in dieser Map und nicht
+        // irgendwo daneben: Ein Stilwechsel raeumt saemtliche Quellen ab, und
+        // nur was hier steht, baut [onStyleLoaded] wieder auf. Sonst waere der
+        // Nebel nach jedem Wechsel des Kartenstils weg — genau wie es der
+        // Tour-Linie ohne SOURCE_TRACK ergehen wuerde.
+        SOURCE_FOG to EMPTY_FEATURES,
+        SOURCE_FOG_OUTLINE to EMPTY_FEATURES,
+        SOURCE_MAX_SQUARE to EMPTY_FEATURES,
         SOURCE_TRACK to EMPTY_FEATURES,
         SOURCE_PLANNED to EMPTY_FEATURES,
         SOURCE_LIVE to EMPTY_FEATURES,
@@ -426,6 +435,42 @@ internal class MapController {
                 PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
             ),
         )
+        // Die drei Ebenen der Entdeckt-Kacheln liegen UNTER der Tour-Linie:
+        // Nebel, Kachelraster und Groesstes-Quadrat sind Untergrund, die Spur
+        // einer Tour, die geplante Route und die Marker bleiben darueber
+        // lesbar. [addLayerIfAbsent] haengt oben an und taugt dafuer nicht —
+        // deshalb [addLayerBelowIfAbsent] mit [LAYER_TRACK] als Anker. Jede
+        // weitere Ebene, die hier direkt unter [LAYER_TRACK] eingehaengt wird,
+        // landet ueber der zuvor eingehaengten; die Reihenfolge der drei
+        // Aufrufe ist also zugleich ihre Stapelreihenfolge von unten nach
+        // oben.
+        loaded.addLayerBelowIfAbsent(
+            FillLayer(LAYER_FOG, SOURCE_FOG).withProperties(
+                PropertyFactory.fillColor(FOG_COLOR),
+                // Ohne das zeichnet MapLibre die Kanten aneinandergrenzender
+                // Nebel-Rechtecke einzeln weich aus — an jeder gemeinsamen
+                // Kante liegen dann zwei halbdurchsichtige Raender
+                // uebereinander und es entsteht ein sichtbares Gitternetz aus
+                // Haarlinien quer ueber die ganze unbefahrene Flaeche.
+                PropertyFactory.fillAntialias(false),
+            ),
+            below = LAYER_TRACK,
+        )
+        loaded.addLayerBelowIfAbsent(
+            LineLayer(LAYER_FOG_OUTLINE, SOURCE_FOG_OUTLINE).withProperties(
+                PropertyFactory.lineColor(EXPLORED_OUTLINE_COLOR),
+                PropertyFactory.lineWidth(EXPLORED_OUTLINE_WIDTH),
+            ),
+            below = LAYER_TRACK,
+        )
+        loaded.addLayerBelowIfAbsent(
+            LineLayer(LAYER_MAX_SQUARE, SOURCE_MAX_SQUARE).withProperties(
+                PropertyFactory.lineColor(MAX_SQUARE_COLOR),
+                PropertyFactory.lineWidth(MAX_SQUARE_WIDTH),
+            ),
+            below = LAYER_TRACK,
+        )
+
         loaded.addLayerIfAbsent(
             LineLayer(LAYER_PLANNED, SOURCE_PLANNED).withProperties(
                 PropertyFactory.lineColor(PLANNED_COLOR),
@@ -482,6 +527,25 @@ internal class MapController {
     /** Alle runden Marker auf einmal. */
     fun setMarkers(markers: List<MapMarker>) {
         setSource(SOURCE_MARKERS, markerFeatureCollection(markers))
+    }
+
+    /**
+     * Die drei Ebenen der Entdeckt-Kacheln in einem Zug: der Nebel ueber allem
+     * Unbefahrenen, das gruene Raster um das Befahrene und der Rahmen des
+     * groessten zusammenhaengenden Quadrats. Das GeoJSON rechnet der Screen
+     * (siehe `ExplorerTileLayer.kt`) — hier kommt es nur an.
+     *
+     * `null` je Ebene heisst „nichts anzeigen" und setzt [EMPTY_FEATURES]:
+     * Eine leere Merkmalsammlung zeichnet nichts, die Ebene bleibt aber
+     * stehen. Das ist billiger und vor allem zustandsaermer als ein
+     * Sichtbarkeits-Schalter ([PropertyFactory.visibility]), der nach jedem
+     * Stilwechsel eigens wiederhergestellt werden muesste — das GeoJSON
+     * dagegen liegt ohnehin in [geoJson] und kommt von selbst zurueck.
+     */
+    fun setExplorerTiles(fogJson: String?, outlineJson: String?, maxSquareJson: String?) {
+        setSource(SOURCE_FOG, fogJson ?: EMPTY_FEATURES)
+        setSource(SOURCE_FOG_OUTLINE, outlineJson ?: EMPTY_FEATURES)
+        setSource(SOURCE_MAX_SQUARE, maxSquareJson ?: EMPTY_FEATURES)
     }
 
     private fun setLine(sourceId: String, points: List<TrackPoint>) {
@@ -758,6 +822,22 @@ private fun Style.addLayerIfAbsent(layer: Layer) {
     }
 }
 
+/**
+ * Wie [addLayerIfAbsent], haengt die Ebene aber direkt **unter** [below] ein
+ * statt oben auf den Stapel.
+ *
+ * Gebraucht fuer alles, was Untergrund ist und nicht Aufschrift: Die
+ * Entdeckt-Kacheln liegen so unter Tourlinie, geplanter Route und Markern,
+ * ohne dass diese in einer bestimmten Reihenfolge hinzugefuegt werden
+ * muessten. [below] muss zu diesem Zeitpunkt im Stil stehen — sonst wirft
+ * MapLibre.
+ */
+private fun Style.addLayerBelowIfAbsent(layer: Layer, below: String) {
+    if (getLayer(layer.id) == null) {
+        addLayerBelow(layer, below)
+    }
+}
+
 /** Rand einer Kamerafahrt in Pixeln. */
 internal data class MapPadding(val left: Int, val top: Int, val right: Int, val bottom: Int)
 
@@ -826,10 +906,23 @@ private const val SOURCE_PLANNED = "ts-planned-source"
 private const val SOURCE_LIVE = "ts-live-source"
 private const val SOURCE_MARKERS = "ts-marker-source"
 
+/** Nebel ueber allem Unbefahrenen (siehe [MapController.setExplorerTiles]). */
+private const val SOURCE_FOG = "ts-fog-source"
+
+/** Das gruene Raster um die befahrenen Kacheln. */
+private const val SOURCE_FOG_OUTLINE = "ts-fog-outline-source"
+
+/** Der Rahmen des groessten zusammenhaengenden Quadrats. */
+private const val SOURCE_MAX_SQUARE = "ts-maxsquare-source"
+
 private const val LAYER_TRACK = "ts-track-layer"
 private const val LAYER_PLANNED = "ts-planned-layer"
 private const val LAYER_LIVE = "ts-live-layer"
 private const val LAYER_MARKERS = "ts-marker-layer"
+
+private const val LAYER_FOG = "ts-fog-layer"
+private const val LAYER_FOG_OUTLINE = "ts-fog-outline-layer"
+private const val LAYER_MAX_SQUARE = "ts-maxsquare-layer"
 
 private const val PROP_COLOR = "ts-color"
 private const val PROP_RADIUS = "ts-radius"
@@ -855,6 +948,37 @@ private val TRACK_COLOR = GravelGreen.toArgb()
 private val PLANNED_COLOR = RouteBlue.toArgb()
 private val LIVE_COLOR = RecordRed.toArgb()
 private val MARKER_STROKE_COLOR = Color.White.toArgb()
+
+/**
+ * Der Schleier ueber dem Unbefahrenen: ein dunkles, sehr kuehles Grau bei
+ * rund 33 % Deckkraft (84/255).
+ *
+ * Bewusst eine feste Zahl und keine Theme-Farbe — aus demselben Grund wie die
+ * drei Tourfarben in `MapColors.kt`: Sie liegt auf den Kartenkacheln, nicht
+ * auf einer Theme-Flaeche. Der Nebel muss im hellen wie im dunklen Modus
+ * gleich dicht wirken; eine Theme-Farbe waere im Dunkelmodus hell und wuerde
+ * das Verhaeltnis umdrehen. Und er muss duenn bleiben: Er soll zeigen, wo man
+ * noch nicht war, nicht die Karte darunter unbenutzbar machen — man plant ja
+ * gerade dort die naechste Tour.
+ *
+ * Voll qualifiziert, weil [androidx.compose.ui.graphics.Color] in dieser
+ * Datei bereits als `Color` importiert ist.
+ */
+private val FOG_COLOR = android.graphics.Color.argb(84, 22, 24, 28)
+
+/**
+ * Das Raster um die befahrenen Kacheln: [GravelGreen], aber auf rund 45 %
+ * heruntergenommen (115/255). Voll deckend waere aus der Uebersicht ein
+ * gruenes Gitter, das jede Tourlinie ueberstimmt — es soll die entdeckte
+ * Flaeche nur umreissen.
+ */
+private val EXPLORED_OUTLINE_COLOR = android.graphics.Color.argb(115, 0x2D, 0x5A, 0x3D)
+
+/** Der Rahmen des groessten Quadrats — [GravelGreen] voll, er ist die Trophaee. */
+private val MAX_SQUARE_COLOR = GravelGreen.toArgb()
+
+private const val EXPLORED_OUTLINE_WIDTH = 1.0f
+private const val MAX_SQUARE_WIDTH = 2.5f
 
 /** Kartenmitte beim ersten Start: Deutschland, wie im Flutter-Original. */
 internal const val GERMANY_LAT = 51.0
