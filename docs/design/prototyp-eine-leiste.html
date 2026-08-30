@@ -7,6 +7,14 @@
   (nur Suchfeld), aufgezogen (Route planen · Kartenstil · Offline) und planen (Radtyp, Untergrund,
   Routenwerte, „Fahren →“). Gewechselt wird per Tap oder vertikalem Ziehen am Grabber; der
   Zustand bleibt über Tab-Wechsel hinweg erhalten. Touren leben ausschließlich im eigenen Tab.
+
+  Neu in der Karte: ein Tap auf die Karte setzt einen Pin und öffnet eine schwebende Ortskarte
+  („Route hierher“ · „Runde ab hier“ · „+ Als Wegpunkt“) — damit wird das Verketten mehrerer
+  Orte sichtbar, das die echte App zwar kann, aber von der Ortskarte aus versteckt. Die
+  Planen-Stufe zeigt darum eine nummerierte Wegpunktliste und den Schalter „Einfach | Rundweg“;
+  Route, Kartenpins, Werte und der ●-Knopf („Route bereit“) rechnen sich aus den Wegpunkten
+  selbst — bei Rundweg schließt sich die Linie zurück zu Punkt 1, unter zwei Punkten (bzw. einem
+  bei Rundweg) verschwindet sie und „Fahren →“ wird inaktiv.
 -->
 <style>
   :root{
@@ -167,8 +175,24 @@
   .overlay-top .chip{background:var(--card);box-shadow:var(--elev)}
   .overlay-top .chip.on{background:var(--acc);color:var(--on-acc)}
   .discover-hint{position:absolute;top:62px;left:50%;transform:translateX(-50%);background:var(--card);box-shadow:var(--elev);border-radius:999px;padding:7px 15px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
+  /* Wegpunkt-Pins über der Karten-SVG (HTML, damit Kreis + Ziffer trotz preserveAspectRatio="none" rund und lesbar bleiben) */
+  .mappins{position:absolute;inset:0;z-index:1;pointer-events:none}
+  .wppin{position:absolute;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:var(--acc);color:var(--on-acc);border:2px solid var(--card);box-shadow:var(--elev);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .wppin.place{width:16px;height:16px;background:var(--card);border:3px solid var(--acc)}
+
+  /* Stapel über der Leiste: Ortskarte schwebt über dem Bottom-Sheet */
+  .sheetstack{position:absolute;left:12px;right:12px;bottom:calc(var(--barh) + 10px);z-index:3;display:flex;flex-direction:column;gap:10px}
+  .placecard{position:relative;background:var(--card);border-radius:26px;padding:15px 16px 14px;box-shadow:var(--elev-hi);display:flex;flex-direction:column;gap:10px;animation:placeIn .16s ease-out}
+  @keyframes placeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .placecard .pname{font-size:16px;font-weight:700;line-height:1.25;padding-right:38px}
+  .placecard .paddr{color:var(--mut);font-size:12.5px;margin-top:-7px;padding-right:38px}
+  .placeclose{position:absolute;top:11px;right:12px}
+  .placesecond{display:flex;gap:7px}
+  .placesecond button{flex:1;min-width:0;background:var(--tone);color:var(--acc);font-weight:600;font-size:13px;min-height:42px;border-radius:999px;padding:0 8px}
+  .placesecond button:active{transform:scale(.98)}
+
   /* Karten-Bottom-Sheet: drei Zustände — eingeklappt · aufgezogen · planen */
-  .mapsheet{position:absolute;left:12px;right:12px;bottom:calc(var(--barh) + 10px);background:var(--card);border-radius:26px;z-index:3;overflow:hidden;box-shadow:var(--elev-hi);transition:height .2s ease-out}
+  .mapsheet{position:relative;background:var(--card);border-radius:26px;overflow:hidden;box-shadow:var(--elev-hi);transition:height .2s ease-out}
   .sheet-grab{display:flex;align-items:center;justify-content:center;width:100%;height:22px;flex:0 0 auto;touch-action:none;cursor:grab;border-radius:26px 26px 0 0}
   .sheet-grab:active{cursor:grabbing}
   .handle{width:38px;height:4px;border-radius:2px;background:var(--hair);margin:0 auto}
@@ -177,7 +201,7 @@
   .sheet-actions{display:flex;gap:8px}
   .sheet-actions button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:58px;border-radius:20px;background:var(--tone);font-size:11.5px;font-weight:600;line-height:1.2;padding:8px 4px;text-align:center}
   .sheet-actions .ic{font-size:16px;line-height:1}
-  .sheet-plan{display:flex;flex-direction:column;gap:10px}
+  .sheet-plan{display:flex;flex-direction:column;gap:8px;max-height:min(50dvh,420px);overflow-y:auto;overscroll-behavior:contain}
   .planhead{display:flex;align-items:center;gap:8px}
   .planback{width:30px;height:30px;flex:0 0 auto;border-radius:50%;background:var(--tone);color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1}
   .planback:active{transform:scale(.94)}
@@ -187,6 +211,22 @@
   .chiprow{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
   .chiprow::-webkit-scrollbar{display:none}
   .routestats{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--mut);text-align:center}
+  /* Wegpunktliste in der Planen-Stufe */
+  .wplist{list-style:none;margin:0;padding:0;max-height:112px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+  .wprow{display:flex;align-items:center;gap:9px;padding:4px 2px}
+  .wpnum{flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:var(--acc);color:var(--on-acc);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .wpname{flex:1;min-width:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wpsub{color:var(--mut);font-weight:500}
+  .wpdel{flex:0 0 28px;width:28px;height:28px;border-radius:50%;color:var(--mut);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .wpdel:active{transform:scale(.92);background:var(--tone)}
+  .wpempty{font-size:12.5px;color:var(--mut);padding:3px 2px;line-height:1.35}
+  .wpfoot{display:flex;align-items:center;gap:8px}
+  .wpsearch{flex:1;min-width:0;display:flex;align-items:center;gap:7px;min-height:34px;padding:0 2px;border-radius:14px;color:var(--acc);font-size:13px;font-weight:600;white-space:nowrap}
+  .segmode{flex:0 0 auto}
+  .segmode button{padding:0 13px;font-size:12.5px}
+  .planhint{font-size:12px;color:var(--mut);text-align:center;line-height:1.35}
+  .btn[disabled]{opacity:.42;cursor:default}
+  .btn[disabled]:active{transform:none}
 
   /* ── Training (ein Scroll-Screen) ── */
   .sechead{margin-top:8px}
@@ -371,15 +411,16 @@
 
     <!-- ══ KARTE ══ -->
     <section class="screen flush" id="s-karte">
-      <div class="mapfill">
+      <div class="mapfill" id="mapCanvas">
         <svg viewBox="0 0 100 140" preserveAspectRatio="none" aria-label="Kartenansicht mit geplanter Route">
           <path class="route alt" id="alt1" d="M22 122 C 8 94, 30 72, 24 46 S 50 20, 78 12" hidden/>
           <path class="route alt" id="alt2" d="M22 122 C 56 114, 82 94, 74 64 S 58 30, 78 12" hidden/>
           <path class="route alt" id="alt3" d="M22 122 C 40 112, 72 108, 88 82 S 92 38, 78 12" hidden/>
           <path class="route" id="mainRoute" d="M22 122 C 46 100, 24 74, 52 58 S 86 34, 78 12"/>
-          <circle class="pt-start" cx="22" cy="122" r="2.6"/>
-          <circle class="pt-end" cx="78" cy="12" r="2.6"/>
+          <circle class="pt-start" id="ptStart" cx="22" cy="122" r="2.6"/>
+          <circle class="pt-end" id="ptEnd" cx="78" cy="12" r="2.6"/>
         </svg>
+        <div class="mappins" id="mapPins" aria-hidden="true"></div>
         <div class="overlay-top">
           <button class="chip on" id="chipPlan">Zum Plan: 45 km</button>
           <button class="chip" id="chipDiscover">✦ Entdecken</button>
@@ -387,7 +428,18 @@
         <div class="discover-hint" id="discoverHint" hidden>Tippe eine Route an</div>
       </div>
 
-      <!-- Bottom-Sheet: eingeklappt (nur Suche) · aufgezogen (Aktionen) · planen -->
+      <!-- Ortskarte (Tap auf die Karte) + Bottom-Sheet: eingeklappt (nur Suche) · aufgezogen (Aktionen) · planen -->
+      <div class="sheetstack">
+      <div class="placecard" id="placeCard" role="dialog" aria-label="Angetippter Ort" hidden>
+        <button class="xbtn placeclose" id="btnPlaceClose" aria-label="Ortskarte schließen">✕</button>
+        <div class="pname" id="placeName">Schwieberdingen</div>
+        <div class="paddr" id="placeAddr">Hauptstraße 24 · 71701 Schwieberdingen</div>
+        <button class="btn" id="btnRouteHere">Route hierher</button>
+        <div class="placesecond">
+          <button id="btnLoopHere">Runde ab hier</button>
+          <button id="btnAddWaypoint">+ Als Wegpunkt</button>
+        </div>
+      </div>
       <div class="mapsheet" id="mapSheet" data-state="collapsed">
         <button class="sheet-grab" id="sheetGrab" aria-expanded="false" aria-controls="sheetBody" aria-label="Kartenpanel auf- oder zuklappen">
           <span class="handle"></span>
@@ -404,6 +456,14 @@
               <button class="planback" id="btnPlanBack" aria-label="Zurück zu den Kartenaktionen">‹</button>
               <span class="eyebrow">Route planen</span>
             </div>
+            <ol class="wplist" id="wpList"></ol>
+            <div class="wpfoot">
+              <button class="wpsearch" id="btnWpSearch"><span aria-hidden="true">＋</span>Ort suchen</button>
+              <div class="seg segmode" role="group" aria-label="Streckenart">
+                <button id="segOneway">Einfach</button>
+                <button class="on" id="segRound">Rundweg</button>
+              </div>
+            </div>
             <div class="seg" role="group" aria-label="Radtyp">
               <button class="on" id="segGravel">Gravel</button>
               <button id="segRenn">Rennrad</button>
@@ -414,9 +474,11 @@
               <button class="chip" data-surface="radwege">Radwege</button>
             </div>
             <div class="routestats" id="routeStats">44,8 km · 380 Hm · ~1:58 h</div>
+            <div class="planhint" id="planHint" hidden></div>
             <button class="btn" id="btnRideNow">Fahren →</button>
           </div>
         </div>
+      </div>
       </div>
     </section>
 
@@ -686,7 +748,11 @@
     t:0, dist:0, speed:24.3, hr:142, hrSum:0, hrN:0,
     page:0, timer:null, discover:false, altSel:null,
     seg:'gravel', surface:'gemischt', detailIdx:0,
-    sheet:'collapsed'           // Karten-Sheet: collapsed · expanded · plan (bleibt über Tab-Wechsel erhalten)
+    sheet:'collapsed',          // Karten-Sheet: collapsed · expanded · plan (bleibt über Tab-Wechsel erhalten)
+    wps:[],                     // Wegpunkte {name,addr,x,y} — Reihenfolge = Route
+    wpActive:false,             // false = unangetastete Tagesroute (Standardlinie), true = eigener Wegpunkt-Plan
+    mode:'round',               // Streckenart: 'oneway' (einfach) · 'round' (Rundweg)
+    place:null                  // aktuell angetippter Ort (Ortskarte offen)
   };
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -733,6 +799,7 @@
   }
   function setTab(t){
     S.tab=t;
+    if(t!=='karte') closePlace();
     showScreen('s-'+t);
     updateBar();
   }
@@ -824,7 +891,7 @@
   /* ── Heute ── */
   function loadPlanRoute(){
     exitDiscover();
-    setRouteReady('Heutige GA1-Runde', routeVals[S.seg][S.surface]);
+    setPresetPlan();            /* Rundweg mit einem Wegpunkt „Start (Zuhause)“ */
     setSheet('plan');           /* Karte öffnet direkt im Planen-Zustand */
   }
   $('btnBuildRoute').addEventListener('click',()=>{
@@ -850,6 +917,7 @@
     sheetGrab.setAttribute('aria-expanded', S.sheet==='collapsed' ? 'false' : 'true');
   }
   function setSheet(state){
+    if(state==='plan') closePlace();                  /* Ortskarte weicht der Planen-Stufe */
     if(SHEET_STATES.indexOf(state)<0 || state===S.sheet) return;
     /* Screen unsichtbar (anderer Tab) oder reduzierte Bewegung: ohne Höhen-Animation umschalten */
     const live = mapSheet.offsetParent !== null;
@@ -901,34 +969,314 @@
   $('actOffline').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
   $('btnPlanBack').addEventListener('click',()=>setSheet('expanded'));
 
-  /* ── Karte ── */
+  /* ══ Karte: Ortskarte, Wegpunkte, Streckenart ══════════════════════════════
+     Geometrie in Karten-Einheiten (SVG-viewBox 100×140). Aus der Linienlänge
+     entstehen km/Hm/Zeit — der Rundweg ist dadurch von selbst länger als die
+     einfache Strecke. Der Maßstab KMF ist so geeicht, dass die Standard-
+     Hausrunde exakt die bisherigen Werte (44,8 km · 380 Hm · ~1:58 h) trifft. */
+  const DEFAULT_D = 'M22 122 C 46 100, 24 74, 52 58 S 86 34, 78 12';
+  const BASE_KM = 44.8;
+  const HOME = () => ({name:'Start (Zuhause)', addr:'Ludwigsburger Straße 12 · 70435 Stuttgart', x:22, y:122, home:true});
+  const places = [
+    {name:'Schwieberdingen',        addr:'Hauptstraße 24 · 71701 Schwieberdingen'},
+    {name:'Hemmingen',              addr:'Schlossstraße 9 · 71282 Hemmingen'},
+    {name:'Markgröningen',          addr:'Marktplatz 3 · 71706 Markgröningen'},
+    {name:'Schotterwerk Hügelheim', addr:'Zufahrt Nord · K 1671, 71706 Markgröningen'}
+  ];
+  let placeIdx = 0;
+
+  /* Radtyp/Untergrund als Faktoren — direkt aus routeVals abgeleitet, damit die
+     bisherigen Zahlen 1:1 erhalten bleiben. */
+  const profile = (function(){
+    const out = {};
+    Object.keys(routeVals).forEach(seg=>{
+      out[seg] = {};
+      Object.keys(routeVals[seg]).forEach(su=>{
+        const m = routeVals[seg][su].match(/([\d,]+) km · (\d+) Hm · ~(\d+):(\d+)/);
+        const km = parseFloat(m[1].replace(',','.')), hm = +m[2], min = (+m[3])*60 + (+m[4]);
+        out[seg][su] = {kmMult:km/BASE_KM, hmPerKm:hm/km, minPerKm:min/km};
+      });
+    });
+    return out;
+  })();
+
+  /* SVG-Elemente kennen keine .hidden-Eigenschaft — deshalb das Attribut direkt setzen */
+  function svgShow(el, show){
+    if(show) el.removeAttribute('hidden'); else el.setAttribute('hidden','');
+  }
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  const clampPt = p => ({x:clamp(p.x,7,93), y:clamp(p.y,9,131)});
+  const f2 = n => Math.round(n*10)/10;
+  /* Schleife um einen einzelnen Punkt (Rundweg mit nur einem Wegpunkt) */
+  function loopAround(p){
+    return [[0,0],[-12,-36],[12,-70],[48,-88],[64,-48],[32,-18]]
+      .map(o=>clampPt({x:p.x+o[0], y:p.y+o[1]}));
+  }
+  function routePoints(){
+    const pts = S.wps.map(w=>({x:w.x, y:w.y}));
+    if(S.mode==='round'){
+      if(pts.length===1) return {pts:loopAround(pts[0]), closed:true};
+      if(pts.length===2){                                   /* Hin- und Rückweg auseinanderziehen */
+        const a=pts[0], b=pts[1];
+        const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1;
+        const off=Math.min(30, len*0.45);
+        pts.splice(1,0,clampPt({x:(a.x+b.x)/2 + dy/len*off, y:(a.y+b.y)/2 - dx/len*off}));
+      }
+      return {pts, closed:true};
+    }
+    return {pts, closed:false};
+  }
+  function polyLen(pts, closed){
+    let l=0;
+    for(let i=1;i<pts.length;i++) l += Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);
+    if(closed && pts.length>1) l += Math.hypot(pts[0].x-pts[pts.length-1].x, pts[0].y-pts[pts.length-1].y);
+    return l;
+  }
+  /* Catmull-Rom → Bézier: weiche Linie durch alle Wegpunkte */
+  function pathFrom(pts, closed){
+    if(pts.length<2) return '';
+    const P = closed ? pts.concat([pts[0]]) : pts.slice();
+    const n = P.length, t = 0.22;
+    let d = 'M'+f2(P[0].x)+' '+f2(P[0].y);
+    for(let i=0;i<n-1;i++){
+      const p0 = i>0 ? P[i-1] : (closed ? P[n-2] : P[0]);
+      const p1 = P[i], p2 = P[i+1];
+      const p3 = (i+2<n) ? P[i+2] : (closed ? P[1] : P[n-1]);
+      const c1x = p1.x + (p2.x-p0.x)*t, c1y = p1.y + (p2.y-p0.y)*t;
+      const c2x = p2.x - (p3.x-p1.x)*t, c2y = p2.y - (p3.y-p1.y)*t;
+      d += ' C'+f2(c1x)+' '+f2(c1y)+', '+f2(c2x)+' '+f2(c2y)+', '+f2(p2.x)+' '+f2(p2.y);
+    }
+    return closed ? d+' Z' : d;
+  }
+  const KMF = BASE_KM / polyLen(loopAround({x:22,y:122}), true);
+
+  function routeValid(){
+    if(!S.wpActive) return true;                            /* Ausgangszustand: vorgeplante Tagesroute */
+    return S.mode==='round' ? S.wps.length>=1 : S.wps.length>=2;
+  }
+  function statsFor(baseKm){
+    const p = profile[S.seg][S.surface];
+    const km = baseKm*p.kmMult;
+    const min = Math.round(km*p.minPerKm);
+    return de1(km)+' km · '+Math.round(km*p.hmPerKm)+' Hm · ~'+Math.floor(min/60)+':'+String(min%60).padStart(2,'0')+' h';
+  }
+  function planStats(){
+    if(!S.wpActive) return routeVals[S.seg][S.surface];
+    if(!routeValid()) return '— km';
+    const r = routePoints();
+    return statsFor(polyLen(r.pts, r.closed)*KMF);
+  }
+  function planName(){
+    if(S.altSel) return 'Entdecker-Runde';
+    if(!S.wpActive) return 'Heutige GA1-Runde';
+    if(S.wps.length===1 && S.wps[0].home) return 'Heutige GA1-Runde';
+    const last = S.wps[S.wps.length-1];
+    if(!last) return 'Heutige GA1-Runde';
+    return S.mode==='round' ? 'Runde über '+last.name : 'Route nach '+last.name;
+  }
+
   function updateRouteStats(){
     if(S.altSel){ $('routeStats').textContent = altVals[S.altSel]; return; }
-    $('routeStats').textContent = routeVals[S.seg][S.surface];
+    $('routeStats').textContent = planStats();
   }
   function planChanged(){
     updateRouteStats();
-    setRouteReady(S.altSel ? 'Entdecker-Runde' : 'Heutige GA1-Runde', $('routeStats').textContent);
+    renderPlan();
+    if(S.altSel || routeValid()) setRouteReady(planName(), $('routeStats').textContent);
+    else clearRouteReady();
   }
+
+  /* ── Wegpunktliste, Pins und Linie zeichnen ── */
+  function renderWpList(){
+    const list = $('wpList');
+    list.innerHTML='';
+    if(S.wps.length===0){
+      const li=document.createElement('li');
+      li.className='wpempty';
+      li.textContent = S.wpActive
+        ? 'Keine Wegpunkte — tippe auf die Karte.'
+        : 'Vorgeplante Tagesroute — tippe auf die Karte für eigene Wegpunkte.';
+      list.appendChild(li);
+      return;
+    }
+    S.wps.forEach((w,i)=>{
+      const li=document.createElement('li'); li.className='wprow';
+      const num=document.createElement('span'); num.className='wpnum'; num.textContent=String(i+1);
+      const name=document.createElement('span'); name.className='wpname'; name.textContent=w.name;
+      const role=document.createElement('span'); role.className='wpsub';
+      role.textContent = i===0 ? ' · Start' : (S.mode==='oneway' && i===S.wps.length-1 ? ' · Ziel' : '');
+      name.appendChild(role);
+      const del=document.createElement('button');
+      del.className='wpdel'; del.type='button'; del.textContent='✕';
+      del.setAttribute('aria-label','Wegpunkt '+(i+1)+' ('+w.name+') entfernen');
+      del.addEventListener('click',()=>removeWaypoint(i));
+      li.appendChild(num); li.appendChild(name); li.appendChild(del);
+      list.appendChild(li);
+    });
+  }
+  function renderPins(){
+    const box=$('mapPins');
+    box.innerHTML='';
+    if(S.wpActive){
+      S.wps.forEach((w,i)=>{
+        const el=document.createElement('span');
+        el.className='wppin';
+        el.style.left=(w.x)+'%';
+        el.style.top=(w.y/140*100)+'%';
+        el.textContent=String(i+1);
+        box.appendChild(el);
+      });
+    }
+    if(S.place){
+      const el=document.createElement('span');
+      el.className='wppin place';
+      el.style.left=(S.place.x)+'%';
+      el.style.top=(S.place.y/140*100)+'%';
+      box.appendChild(el);
+    }
+  }
+  function renderRouteLine(){
+    const line=$('mainRoute');
+    if(!S.wpActive){
+      line.setAttribute('d', DEFAULT_D);
+      svgShow(line, true);
+      svgShow($('ptStart'), true); svgShow($('ptEnd'), true);
+      return;
+    }
+    svgShow($('ptStart'), false); svgShow($('ptEnd'), false);
+    const r = routeValid() ? routePoints() : null;
+    const d = r ? pathFrom(r.pts, r.closed) : '';
+    if(d) line.setAttribute('d', d);
+    svgShow(line, !!d);
+  }
+  function renderPlan(){
+    renderWpList();
+    renderPins();
+    renderRouteLine();
+    $('segOneway').classList.toggle('on', S.mode==='oneway');
+    $('segRound').classList.toggle('on', S.mode==='round');
+    const ok = S.altSel || routeValid();
+    const hint=$('planHint');
+    $('btnRideNow').disabled = !ok;
+    hint.hidden = ok;
+    if(!ok){
+      hint.textContent = S.mode==='oneway'
+        ? 'Einfache Strecke: mindestens zwei Punkte — tippe auf die Karte.'
+        : 'Rundweg: mindestens einen Startpunkt — tippe auf die Karte.';
+    }
+  }
+
+  /* ── Wegpunkte setzen und entfernen ── */
+  function beginPlan(){
+    if(S.discover) exitDiscover();
+    S.altSel=null;
+    S.wpActive=true;
+  }
+  function addWaypoint(p){
+    beginPlan();
+    S.wps.push(p);
+    planChanged();
+    return S.wps.length;
+  }
+  function removeWaypoint(i){
+    beginPlan();
+    const w=S.wps.splice(i,1)[0];
+    planChanged();
+    if(w) toast(w.name+' entfernt');
+  }
+  function setMode(m){
+    if(S.mode===m) return;
+    beginPlan();
+    if(S.wps.length===0) S.wps=[HOME()];                    /* Schalter greift immer sichtbar */
+    S.mode=m;
+    planChanged();
+  }
+  /* „Zum Plan“ / „Runde zum Plan bauen“: Rundweg ab Zuhause */
+  function setPresetPlan(){
+    beginPlan();
+    S.mode='round';
+    S.wps=[HOME()];
+    planChanged();
+  }
+
+  /* ── Ortskarte ── */
+  function closePlace(){
+    if(!S.place) return;
+    S.place=null;
+    $('placeCard').hidden=true;
+    renderPins();
+  }
+  function openPlace(pt){
+    const p=places[placeIdx % places.length];
+    placeIdx++;
+    S.place={name:p.name, addr:p.addr, x:pt.x, y:pt.y};
+    $('placeName').textContent=p.name;
+    $('placeAddr').textContent=p.addr;
+    $('placeCard').hidden=false;
+    renderPins();
+  }
+  function nextPlace(pt){
+    const p=places[placeIdx % places.length];
+    placeIdx++;
+    return {name:p.name, addr:p.addr, x:pt.x, y:pt.y};
+  }
+  /* Tap auf die Karte: in der Planen-Stufe direkt ein Wegpunkt, sonst Ortskarte */
+  $('mapCanvas').addEventListener('click',e=>{
+    if(e.target.closest('.overlay-top, .discover-hint, .route.alt')) return;
+    const r=$('mapCanvas').getBoundingClientRect();
+    if(!r.width || !r.height) return;
+    const pt={
+      x: clamp((e.clientX-r.left)/r.width*100, 7, 93),
+      y: clamp((e.clientY-r.top)/r.height*140, 9, 131)
+    };
+    if(S.sheet==='plan'){
+      const w=nextPlace(pt);
+      const n=addWaypoint(w);
+      toast('Wegpunkt '+n+': '+w.name);
+    } else {
+      openPlace(pt);
+    }
+  });
+  $('btnPlaceClose').addEventListener('click',closePlace);
+  $('btnRouteHere').addEventListener('click',()=>{
+    const p=S.place; if(!p) return;
+    beginPlan();
+    S.mode='oneway';
+    S.wps=[HOME(), {name:p.name, addr:p.addr, x:p.x, y:p.y}];
+    setSheet('plan');                                       /* schließt auch die Ortskarte */
+    planChanged();
+    toast('Strecke nach '+p.name);
+  });
+  $('btnLoopHere').addEventListener('click',()=>toast('Im Prototyp: Runden-Generator'));
+  $('btnAddWaypoint').addEventListener('click',()=>{
+    const p=S.place; if(!p) return;
+    const n=addWaypoint({name:p.name, addr:p.addr, x:p.x, y:p.y});
+    setSheet('plan');
+    toast('Wegpunkt '+n+': '+p.name);
+  });
+  $('btnWpSearch').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
+  $('segOneway').addEventListener('click',()=>setMode('oneway'));
+  $('segRound').addEventListener('click',()=>setMode('round'));
   function exitDiscover(){
     S.discover=false; S.altSel=null;
-    ['alt1','alt2','alt3'].forEach(id=>{const p=$(id); p.hidden=true; p.classList.remove('sel');});
+    ['alt1','alt2','alt3'].forEach(id=>{const p=$(id); svgShow(p,false); p.classList.remove('sel');});
     $('mainRoute').style.opacity='';
     $('discoverHint').hidden=true;
     $('chipDiscover').classList.remove('on');
     $('chipPlan').classList.add('on');
     updateRouteStats();
+    renderPlan();               /* „Fahren →“ wieder am Wegpunkt-Plan ausrichten */
   }
   $('chipDiscover').addEventListener('click',()=>{
     if(S.discover){ exitDiscover(); return; }
     S.discover=true;
-    ['alt1','alt2','alt3'].forEach(id=>{$(id).hidden=false;});
+    ['alt1','alt2','alt3'].forEach(id=>{svgShow($(id),true);});
     $('mainRoute').style.opacity='.3';
     $('discoverHint').hidden=false;
     $('chipDiscover').classList.add('on');
     $('chipPlan').classList.remove('on');
   });
-  $('chipPlan').addEventListener('click',()=>{ exitDiscover(); planChanged(); setSheet('plan'); });
+  $('chipPlan').addEventListener('click',()=>{ exitDiscover(); setPresetPlan(); setSheet('plan'); });
   ['alt1','alt2','alt3'].forEach(id=>{
     $(id).addEventListener('click',()=>{
       S.altSel=id;
@@ -951,7 +1299,8 @@
   });
   $('btnRideNow').addEventListener('click',()=>{
     if(S.riding){ openFull(cockpit); return; }
-    setRouteReady(S.altSel ? 'Entdecker-Runde' : 'Heutige GA1-Runde', $('routeStats').textContent);
+    if(!S.altSel && !routeValid()){ toast('Erst Wegpunkte setzen'); return; }
+    setRouteReady(planName(), $('routeStats').textContent);
     startRide(true);
     openFull(cockpit);
   });
@@ -1176,6 +1525,7 @@
 
   /* ── Init ── */
   renderSheet();
+  renderPlan();                 /* Wegpunktliste, Pins, Streckenart-Schalter */
   setTab('heute');
   updateRecBtn();
 })();
