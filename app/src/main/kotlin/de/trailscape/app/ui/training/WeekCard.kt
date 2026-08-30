@@ -27,12 +27,20 @@ import kotlin.math.roundToInt
  * Karte „Belastung dieser Woche": Wochenlast, Zielwert (Last-Budget, Stunden)
  * und Empfehlung zur Entlastungswoche.
  *
- * ## Warum nicht mehr „Diese Woche"
- * So hiess auch die Karte der Startseite (`ui/today/TodayCards.kt`) — und die
- * zeigt etwas anderes: gefahrene gegen geplante **Kilometer** der Planwoche.
- * Hier geht es um **Last** (7-Tage-Summe, Zielwert, Deload), also um eine ganz
- * andere Zahl mit derselben Ueberschrift. Der Titel nennt jetzt, worum es geht;
- * der der Startseite bleibt, weil dort die schlichtere Auskunft steht.
+ * ## Warum nicht „Diese Woche"
+ * So hiess einmal auch die Wochenkarte der Startseite — und die zeigte etwas
+ * anderes: gefahrene gegen geplante **Kilometer** der Planwoche (heute steckt
+ * das in `PlanOutlookCard`, `ui/today/TodayCards.kt`). Hier geht es um
+ * **Last** (7-Tage-Summe, Zielwert, Deload), also um eine ganz andere Zahl. Der
+ * Titel nennt deshalb, worum es geht, statt eine Zeitspanne zu benennen, die
+ * beide teilen.
+ *
+ * ## Ihr Platz: das Kapitel „Plan"
+ * Sie eroeffnet den Plan-Abschnitt des Trainings-Tabs (siehe KDoc von
+ * [TrainingScreen]): Bevor die einzelnen Wochen des Trainingsplans kommen,
+ * steht hier, was die **laufende** Woche an Last verlangt und ob sie
+ * tragfaehig ist. Im Kapitel „Form" waere sie falsch — sie beschreibt keine
+ * Fitness, sondern ein Pensum.
  *
  * Port von `_buildWeekCard` (`lib/screens/training_screen.dart`).
  *

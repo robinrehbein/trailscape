@@ -58,6 +58,15 @@ import java.time.ZoneOffset
  *
  * Port von `_buildGoalCard` (`lib/screens/training_screen.dart`).
  *
+ * ## Ihr Platz: am Ende des Kapitels „Plan"
+ * Sie stand frueher **vor** dem Plan, gleich unter den Vitalwerten. Seit dem
+ * Umbau auf die drei Kapitel Form → Plan → Werte
+ * (`docs/design/prototyp-eine-leiste.html`, siehe KDoc von [TrainingScreen])
+ * schliesst sie das Plan-Kapitel ab: Ein Formular, mit dem der Plan entsteht
+ * oder geloescht wird, ist die seltenere Handlung — man liest den Plan
+ * haeufiger, als man ihn neu setzt, und wer ihn neu setzen will, hat ihn
+ * vorher gelesen.
+ *
  * Die Formularfelder werden — wie im Dart-Original (`_loadPlan()` in
  * `initState`) — genau **einmal** aus einem vorhandenen Plan vorbefuellt,
  * sobald dieser das erste Mal vorliegt ([initializedFromPlan]); spaetere

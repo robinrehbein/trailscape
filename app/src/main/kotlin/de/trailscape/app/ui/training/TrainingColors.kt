@@ -6,7 +6,9 @@ import androidx.compose.ui.graphics.Color
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RecoveryFlag
+import de.trailscape.core.TsbBand
 import de.trailscape.core.WeekKind
+import de.trailscape.core.classifyTsb
 
 /**
  * Farben des Trainings-Tabs — Port der Konstanten/Switch-Ausdruecke aus
@@ -47,6 +49,27 @@ fun readinessBandColor(band: ReadinessBand): Color = when (band) {
     ReadinessBand.NORMAL -> trainingCaution
     ReadinessBand.LOCKER -> trainingWarning
     ReadinessBand.RUHE -> trainingDanger
+}
+
+/**
+ * Farbe eines Formwerts (TSB, §4.4) — dieselbe Zahl soll auf der Startseite und
+ * im Trainings-Tab nicht unterschiedlich eingefaerbt sein.
+ *
+ * Die Zuordnung folgt der Bedeutung der Baender, nicht ihrem Vorzeichen:
+ * Frische und Formspitze sind gut (gruen), der produktive Bereich ist gewollte
+ * Ermuedung und damit ein Hinweis (gelb), erst die deutliche Ueberlastung
+ * warnt (orange). „Neutral" bekommt **keine** Farbe: Ein Wert, der nichts zu
+ * melden hat, soll auch nicht leuchten — er laeuft in der normalen Textfarbe
+ * mit ([Color.Unspecified] uebernimmt sie vom umgebenden Slot).
+ */
+@Composable
+@ReadOnlyComposable
+fun tsbBandColor(tsb: Double): Color = when (classifyTsb(tsb)) {
+    TsbBand.SEHR_FRISCH -> trainingGood
+    TsbBand.FORMSPITZE -> trainingGood
+    TsbBand.NEUTRAL -> Color.Unspecified
+    TsbBand.PRODUKTIV -> trainingCaution
+    TsbBand.UEBERLASTUNG -> trainingWarning
 }
 
 /** Ampelfarbe eines Erholungssignals (Ruhepuls, HRV, Schlaf). */

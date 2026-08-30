@@ -81,6 +81,11 @@ import de.trailscape.app.ui.theme.OneUiMotion
 @Composable
 fun OneUiNavigationBar(
     modifier: Modifier = Modifier,
+    // Seit die Kapsel sich die Zeile mit dem REC-Knopf teilt
+    // (`TrailscapeApp`), darf die Huelle die Aussenraender enger stellen:
+    // Mit den vollen 24 dp auf beiden Seiten plus dem Knopf daneben endeten
+    // die Beschriftungen auf schmalen Geraeten in Ellipsen ("Traini…").
+    horizontalMargin: Dp = NavigationBarSideMargin,
     content: @Composable RowScope.() -> Unit,
 ) {
     val colors = LocalNavigationBarColors.current
@@ -88,7 +93,7 @@ fun OneUiNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = NavigationBarSideMargin, vertical = NavigationBarBottomMargin),
+            .padding(horizontal = horizontalMargin, vertical = NavigationBarBottomMargin),
         contentAlignment = Alignment.Center,
     ) {
         Surface(

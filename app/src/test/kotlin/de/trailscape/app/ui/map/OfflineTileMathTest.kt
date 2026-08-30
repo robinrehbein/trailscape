@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.mapStyleById
 import de.trailscape.app.ui.mapStyles
 import kotlin.test.Test
@@ -20,7 +21,19 @@ import kotlin.test.assertTrue
  */
 class OfflineTileMathTest {
 
-    private val voyager = mapStyleById("voyager")
+    /**
+     * Fixture mit maxZoom 20, unabhaengig vom Stil-Katalog: Die erwarteten
+     * Zoom-Bereiche unten sind gegen diese Obergrenze gerechnet und sollen
+     * nicht mitwandern, wenn der Katalog seinen Standardstil wechselt (wie
+     * beim Abschied von CARTO, siehe `MapStyles.kt`).
+     */
+    private val voyager = MapStyle(
+        id = "test-strasse",
+        label = "Straßenkarte (Test)",
+        urlTemplate = "https://tiles.example/{z}/{x}/{y}.png",
+        maxZoom = 20,
+        attribution = "Test",
+    )
     private val opentopo = mapStyleById("opentopo")
 
     /** Sichtbarer Ausschnitt eines 360 × 800 dp grossen Telefons um [lat]/[lon]. */

@@ -49,7 +49,14 @@ import de.trailscape.core.weekSessionProgress
 import kotlin.math.roundToInt
 
 /**
- * Titelzeile plus eine Karte je Trainingswoche.
+ * Titelzeile plus eine Karte je Trainingswoche — der Hauptteil des Kapitels
+ * „Plan" im Trainings-Tab (siehe KDoc von
+ * [de.trailscape.app.ui.training.TrainingScreen]).
+ *
+ * Die Zeile traegt **keine** eigene Ueberschrift „Plan" mehr: Die steht seit
+ * dem Umbau auf die drei Kapitel als Mono-Kapitelmarke
+ * ([de.trailscape.app.ui.components.SectionEyebrow]) darueber. Was hier steht,
+ * ist das Ziel selbst — Name, Distanz, Datum.
  *
  * Port von `_buildPlanWeeks` (`lib/screens/training_screen.dart`). Bewusst
  * ohne `_EntranceFade`-Aequivalent: die Wochenliste steht in derselben

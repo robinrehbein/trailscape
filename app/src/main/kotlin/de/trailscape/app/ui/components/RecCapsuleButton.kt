@@ -9,9 +9,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.LocalNavigationBarColors
 import de.trailscape.core.formatDuration
@@ -68,17 +72,13 @@ import de.trailscape.core.formatDuration
  * stehender statt eines laufenden Rings ist hier die Auskunft "angehalten",
  * nicht nur eine Nebenwirkung der Animation.
  *
- * ## Warum das Label nicht das Layout verschiebt
- * Das Mini-Label unter dem Knopf (Kilometer bzw. Fahrzeit) darf die
- * Beruehrungsflaeche nicht wandern lassen, wenn ein Zustand mit Label auf
- * einen ohne folgt — sonst zielt der zweite Fingertipp knapp daneben. Und es
- * darf auch die **Ausrichtung** nicht verzerren: Der Nachbar in der Zeile ist
- * die Navigationskapsel, und deren Mitte soll mit der Mitte des *Kreises*
- * fluchten, nicht mit der Mitte aus Kreis plus Anhaengsel. Der Wurzel-[Box]
- * misst deshalb nur den quadratischen Knopf-Slot (Kreis samt symmetrischer
- * Ringluft); das Label haengt per [Alignment.BottomCenter] und einem
- * `offset` **unterhalb** dieses Rahmens, ohne Hoehe zu beanspruchen — es
- * ragt in den Randstreifen ueber der Gestenleiste, wo nichts anderes wohnt.
+ * ## Warum das Label IM Kreis wohnt
+ * Das Mini-Label (Kilometer bzw. Fahrzeit) stand zuerst unter dem Knopf —
+ * auf dem Geraet landete es damit exakt in der System-Gestenzone und war
+ * unsichtbar (die Kapselzeile sitzt direkt ueber der Gestenleiste, darunter
+ * ist kein nutzbarer Platz). Es steht deshalb **im** Kreis unter dem Punkt:
+ * immer sichtbar, verschiebt nichts, und der Kreis bleibt exakt der
+ * quadratische Knopf-Slot, dessen Mitte mit der Kapselmitte fluchtet.
  *
  * Ein einziger `onClick` traegt alle drei Zustaende — was ein Tipp bedeutet
  * (Aufzeichnung starten, Cockpit oeffnen, Route verwerfen-Dialog o. ae.),
@@ -197,36 +197,44 @@ fun RecCapsuleButton(
                 border = if (isRecording) null else BorderStroke(1.dp, navColors.rim),
                 shadowElevation = RecButtonElevation,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(RecDotSize)
-                        .clip(CircleShape)
-                        .background(dotColor),
-                )
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(if (label == null) RecDotSize else RecDotSmallSize)
+                            .clip(CircleShape)
+                            .background(dotColor),
+                    )
+                    if (label != null) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = RecLabelFontSize,
+                                lineHeight = RecLabelLineHeight,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = if (isRecording) {
+                                    FontFamily.Monospace
+                                } else {
+                                    FontFamily.Default
+                                },
+                            ),
+                            color = dotColor,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                // Die Auskunft steckt schon im
+                                // `contentDescription` des Knopfs; ein
+                                // tickendes Zweitlabel wuerde die
+                                // Bildschirmlesehilfe bei jeder Sekunde
+                                // erneut ansagen lassen.
+                                .clearAndSetSemantics {},
+                        )
+                    }
+                }
             }
-        }
-
-        if (label != null) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = if (isRecording) FontFamily.Monospace else FontFamily.Default,
-                ),
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    // Haengt unterhalb des gemessenen Rahmens (siehe
-                    // Kopfkommentar, "Warum das Label nicht das Layout
-                    // verschiebt").
-                    .offset(y = RecLabelGap + RecLabelSlotHeight)
-                    // Die Auskunft steckt schon im `contentDescription` des
-                    // Knopfs; ein tickendes Zweitlabel wuerde die
-                    // Bildschirmlesehilfe bei jeder Sekunde erneut
-                    // ansagen lassen.
-                    .clearAndSetSemantics {},
-            )
         }
     }
 }
@@ -235,12 +243,13 @@ fun RecCapsuleButton(
 private val RecButtonSize = 56.dp
 
 /**
- * Fester Platzbedarf des gesamten Bausteins (Knopf plus der Luft, die der
- * Ring beim Pulsieren braucht). Bleibt ueber alle drei Zustaende hinweg
- * gleich, damit der Knopf niemals wandert, wenn ein Ring erscheint oder
- * verschwindet.
+ * Fester Platzbedarf des gesamten Bausteins: der Knopf plus eine schmale
+ * Luft fuer den starren Ring. Der **Puls**-Ring darf beim Ausdehnen bewusst
+ * ueber diesen Rahmen hinauszeichnen (Compose beschneidet nicht) — ein
+ * breiterer Slot wuerde nur der Navigationskapsel Platz wegnehmen, deren
+ * Beschriftungen auf schmalen Geraeten sonst mit Ellipse enden.
  */
-private val RecButtonSlotSize = 84.dp
+private val RecButtonSlotSize = 64.dp
 
 /** Schatten der Kapselflaeche — dieselbe Zahl wie [OneUiNavigationBar]. */
 private val RecButtonElevation = 8.dp
@@ -267,11 +276,12 @@ private const val PulseMaxScale = 1.3f
 /** Deckkraft, mit der der Puls startet, bevor er auf 0 auslaeuft. */
 private const val PulseMaxAlpha = 0.85f
 
-/** Abstand zwischen Knopf und Mini-Label. */
-private val RecLabelGap = 2.dp
+/** Kleinerer Punkt, wenn darunter im Kreis noch das Mini-Label steht. */
+private val RecDotSmallSize = 10.dp
 
-/** Fester Platz fuer das Mini-Label — reserviert, auch wenn es (Idle) fehlt. */
-private val RecLabelSlotHeight = 14.dp
+/** Schriftmasse des Mini-Labels im Kreis — klein, aber lesbar. */
+private val RecLabelFontSize = 9.sp
+private val RecLabelLineHeight = 10.sp
 
 /**
  * Masse, die die Navigationshuelle fuer die Ausrichtung des Knopfs neben der

@@ -54,17 +54,28 @@ data class MapStyle(
 }
 
 /**
- * Alle auswaehlbaren Kartenstile. Der erste Eintrag ist der Standard —
- * identische Reihenfolge, IDs und Beschriftungen wie in der Flutter-App,
- * damit eine gespeicherte Auswahl nach dem Umzug weiter passt.
+ * Alle auswaehlbaren Kartenstile. Der erste Eintrag ist der Standard.
+ *
+ * ## Warum die Strassenkarte nicht mehr von CARTO kommt
+ * CARTO liefert seine freien `basemaps.cartocdn.com`-Kacheln seit
+ * August 2026 nur noch mit API-Schluessel aus — anonyme Abrufe bekommen
+ * Kacheln mit dem Wasserzeichen "API KEY REQUIRED" quer ueber der Karte.
+ * Ein Schluessel widerspraeche dem Grundsatz "ohne API-Schluessel" dieser
+ * Liste (und muesste in einer quelloffenen App ohnehin mitgeliefert
+ * werden). Die Strassenkarte kommt deshalb vom FOSSGIS-Kachelserver
+ * (`tile.openstreetmap.de`): weltweite Abdeckung, aufgeraeumter Stil,
+ * schluessellos. Die neue ID (`osmde`) sorgt dafuer, dass alte
+ * CARTO-Kachel-Caches nicht mit den neuen Kacheln vermischt werden;
+ * eine gespeicherte `voyager`-Auswahl faellt ueber [mapStyleById] von
+ * selbst auf diesen Standard zurueck.
  */
 val mapStyles: List<MapStyle> = listOf(
     MapStyle(
-        id = "voyager",
+        id = "osmde",
         label = "Straßenkarte",
-        urlTemplate = "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        maxZoom = 20,
-        attribution = "© OpenStreetMap-Mitwirkende © CARTO",
+        urlTemplate = "https://tile.openstreetmap.de/{z}/{x}/{y}.png",
+        maxZoom = 19,
+        attribution = "© OpenStreetMap-Mitwirkende",
     ),
     MapStyle(
         id = "cyclosm",
@@ -104,7 +115,7 @@ val mapStyles: List<MapStyle> = listOf(
  * Liste ohne jede Erlaeuterung.
  */
 fun mapStyleSubtitle(id: String): String? = when (id) {
-    "voyager" -> "Klar und aufgeräumt (Standard)"
+    "osmde" -> "Klar und aufgeräumt (Standard)"
     "cyclosm" -> "Radwege & Wegbeläge hervorgehoben"
     else -> null
 }
