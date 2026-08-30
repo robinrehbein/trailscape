@@ -1,31 +1,113 @@
 <title>Eine Leiste</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;600&display=swap">
 <style>
   :root{
-    --bg:#12151A; --card:#1C2129; --map:#181D24;
-    --ink:#EAEDF2; --mut:rgba(234,237,242,.55); --hair:rgba(255,255,255,.08);
-    --acc:#F26B21; --acc-ink:#FFFFFF; --pos:#6BBF7E;
-    --barh:66px; --toph:44px;
-    --sans:'Instrument Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
-    --disp:'Bricolage Grotesque','Instrument Sans',system-ui,sans-serif;
-    --mono:'Spline Sans Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    color-scheme:light;
+    /* ── One-UI-Farbwelt (hell, komplett) ── */
+    --stage:#E2E4E8;
+    --bg:#F4F4F6;
+    --card:#FFFFFF;
+    --tone:#EFEFF2;
+    --ink:#1A1B1E;
+    --mut:#545B63;
+    --hair:#DDDEE3;
+    --acc:#0D7A42;
+    --on-acc:#FFFFFF;
+    --acc-cont:#C3F0D4;
+    --on-acc-cont:#002411;
+    --err:#BB2016;
+    --inv:#2E3033;
+    --on-inv:#F2F2F4;
+    --map:#E8EDE8;
+    --topo:rgba(45,90,60,.10);
+    --acc-soft:rgba(13,122,66,.45);
+    --acc-fill:rgba(13,122,66,.16);
+    --scrim:rgba(0,0,0,.42);
+    --swoff:#C9CBD1;
+    --barbg:rgba(255,255,255,.92);
+    --barsolid:#FFFFFF;
+    --elev:0 1px 2px rgba(0,0,0,.05),0 3px 12px rgba(0,0,0,.06);
+    --elev-hi:0 4px 10px rgba(0,0,0,.08),0 12px 30px rgba(0,0,0,.12);
+    --fabshadow:0 6px 16px rgba(13,122,66,.35);
+    --barh:64px;
+    --sans:system-ui,'Roboto','Segoe UI',sans-serif;
   }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --stage:#060607;
+      --bg:#0A0A0C;
+      --card:#1C1D21;
+      --tone:#26272C;
+      --ink:#E3E3E7;
+      --mut:#BFC3C9;
+      --hair:#3A3B40;
+      --acc:#6BD69C;
+      --on-acc:#00391D;
+      --acc-cont:#155F38;
+      --on-acc-cont:#A7F2C6;
+      --err:#FFB4A9;
+      --inv:#E3E3E7;
+      --on-inv:#2E3033;
+      --map:#181D24;
+      --topo:rgba(255,255,255,.045);
+      --acc-soft:rgba(107,214,156,.5);
+      --acc-fill:rgba(107,214,156,.18);
+      --scrim:rgba(0,0,0,.6);
+      --swoff:#3A3B40;
+      --barbg:rgba(28,29,33,.95);
+      --barsolid:#1C1D21;
+      --elev:0 1px 2px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.3);
+      --elev-hi:0 4px 10px rgba(0,0,0,.45),0 14px 34px rgba(0,0,0,.5);
+      --fabshadow:0 6px 16px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --stage:#060607;
+    --bg:#0A0A0C;
+    --card:#1C1D21;
+    --tone:#26272C;
+    --ink:#E3E3E7;
+    --mut:#BFC3C9;
+    --hair:#3A3B40;
+    --acc:#6BD69C;
+    --on-acc:#00391D;
+    --acc-cont:#155F38;
+    --on-acc-cont:#A7F2C6;
+    --err:#FFB4A9;
+    --inv:#E3E3E7;
+    --on-inv:#2E3033;
+    --map:#181D24;
+    --topo:rgba(255,255,255,.045);
+    --acc-soft:rgba(107,214,156,.5);
+    --acc-fill:rgba(107,214,156,.18);
+    --scrim:rgba(0,0,0,.6);
+    --swoff:#3A3B40;
+    --barbg:rgba(28,29,33,.95);
+    --barsolid:#1C1D21;
+    --elev:0 1px 2px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.3);
+    --elev-hi:0 4px 10px rgba(0,0,0,.45),0 14px 34px rgba(0,0,0,.5);
+    --fabshadow:0 6px 16px rgba(0,0,0,.5);
+  }
+
   *{box-sizing:border-box}
   [hidden]{display:none!important}
-  body{margin:0;background:#0B0D10;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--stage);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
   button{font-family:var(--sans);color:inherit;background:none;border:0;padding:0;cursor:pointer;font-size:inherit}
-  button:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:8px}
+  button:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:18px}
   .stage{min-height:100dvh;display:flex;align-items:center;justify-content:center}
   .phone{position:relative;width:100%;height:100dvh;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
   @media (min-width:480px){
-    .phone{max-width:400px;height:min(860px,94dvh);border-radius:28px;border:1px solid var(--hair);box-shadow:0 34px 90px rgba(0,0,0,.55)}
+    .phone{max-width:400px;height:min(860px,94dvh);border-radius:28px;border:1px solid var(--hair);box-shadow:0 34px 90px rgba(0,0,0,.35)}
   }
-  .eyebrow{font-family:var(--mono);text-transform:uppercase;letter-spacing:.18em;font-size:10px;color:var(--mut)}
-  .num{font-family:var(--disp);font-weight:800;font-variant-numeric:tabular-nums}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--mut)}
+  .num{font-weight:700;font-variant-numeric:tabular-nums}
+  .muted{color:var(--mut)}
+  .bigtitle{font-size:28px;font-weight:700;line-height:1.15;margin:56px 4px 10px;flex:0 0 auto}
 
-  /* ── Schlanke Titelzeile ── */
-  .topbar{flex:0 0 var(--toph);display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 16px;border-bottom:1px solid var(--hair);z-index:15}
-  .gearbtn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--mut)}
+  /* ── Schwebendes ⚙ oben rechts ── */
+  .topbar{position:absolute;top:8px;right:8px;z-index:15}
+  .gearbtn{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--mut);background:var(--card);box-shadow:var(--elev)}
   .gearbtn:active{transform:scale(.94)}
   .gearbtn svg{width:19px;height:19px}
 
@@ -36,25 +118,25 @@
   .screen.flush{padding:0;overflow:hidden;gap:0}
   @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
-  /* ── Cards & bits ── */
-  .card{background:var(--card);border-radius:14px;padding:14px}
-  .coach{border:1px solid rgba(255,255,255,.18);background:transparent}
-  .coach .eyebrow{color:var(--acc);margin-bottom:4px;display:block}
-  .coach p{margin:0;color:var(--mut)}
-  .btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:999px;background:var(--acc);color:var(--acc-ink);font-weight:700;font-size:15px;padding:0 20px;width:100%}
+  /* ── Karten & Bausteine (One UI: weiße/angehobene Fläche, 26px, keine Border) ── */
+  .card{background:var(--card);border-radius:26px;padding:16px 18px;box-shadow:var(--elev)}
+  .coach{background:var(--acc-cont);color:var(--on-acc-cont);box-shadow:none}
+  .coach .eyebrow{color:var(--on-acc-cont);opacity:.75;margin-bottom:4px;display:block}
+  .coach p{margin:0;color:var(--on-acc-cont)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border-radius:999px;background:var(--acc);color:var(--on-acc);font-weight:600;font-size:15px;padding:0 20px;width:100%}
   .btn:active{transform:scale(.98)}
-  .chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:7px 13px;min-height:32px;font-size:12px;font-weight:600;background:var(--card);color:var(--ink);white-space:nowrap}
-  .chip.on{background:var(--acc);color:var(--acc-ink)}
+  .chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:7px 14px;min-height:32px;font-size:12.5px;font-weight:600;background:var(--tone);color:var(--ink);white-space:nowrap}
+  .chip.on{background:var(--acc);color:var(--on-acc)}
   .statmini{text-align:center}
-  .statmini b{font-family:var(--disp);font-weight:800;font-size:19px;font-variant-numeric:tabular-nums;display:block;line-height:1.1}
-  .statmini small{display:block;color:var(--mut);font-size:10.5px;margin-top:2px}
+  .statmini b{font-weight:700;font-size:19px;font-variant-numeric:tabular-nums;display:block;line-height:1.1}
+  .statmini small{display:block;color:var(--mut);font-size:10.5px;margin-top:2px;font-weight:500}
 
   /* ── Heute ── */
   .readiness{display:flex;gap:16px;align-items:center}
-  .ring{--v:82;flex:0 0 92px;width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--v)*1%),rgba(255,255,255,.08) 0);display:flex;align-items:center;justify-content:center}
+  .ring{--v:82;flex:0 0 92px;width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--v)*1%),var(--tone) 0);display:flex;align-items:center;justify-content:center}
   .ring>div{width:72px;height:72px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
-  .ring b{font-family:var(--disp);font-weight:800;font-size:27px;font-variant-numeric:tabular-nums}
-  .ring small{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-top:3px}
+  .ring b{font-weight:700;font-size:27px;font-variant-numeric:tabular-nums}
+  .ring small{font-size:10px;font-weight:600;color:var(--mut);margin-top:3px}
   .cockpitrow{display:flex;justify-content:space-around;padding:4px 0}
   .planlook{display:flex;align-items:center;gap:12px;width:100%;text-align:left}
   .planlook .grow{flex:1;min-width:0}
@@ -63,141 +145,155 @@
 
   /* ── Karte ── */
   .mapfill{position:absolute;inset:0;background:var(--map);background-image:
-      repeating-radial-gradient(circle at 28% 72%, transparent 0 33px, rgba(255,255,255,.045) 33px 34px),
-      repeating-radial-gradient(circle at 78% 18%, transparent 0 47px, rgba(255,255,255,.035) 47px 48px),
-      repeating-radial-gradient(circle at 55% 45%, transparent 0 80px, rgba(255,255,255,.025) 80px 81px)}
+      repeating-radial-gradient(circle at 28% 72%, transparent 0 33px, var(--topo) 33px 34px),
+      repeating-radial-gradient(circle at 78% 18%, transparent 0 47px, var(--topo) 47px 48px),
+      repeating-radial-gradient(circle at 55% 45%, transparent 0 80px, var(--topo) 80px 81px)}
   .mapfill svg{position:absolute;inset:0;width:100%;height:100%}
-  .route{fill:none;stroke:var(--acc);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-  .route.alt{stroke:rgba(242,107,33,.55);stroke-dasharray:6 5;cursor:pointer;pointer-events:stroke;stroke-width:2.2}
+  .route{fill:none;stroke:var(--acc);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  .route.alt{stroke:var(--acc-soft);stroke-dasharray:6 5;cursor:pointer;pointer-events:stroke;stroke-width:2.2}
   .route.alt.sel{stroke:var(--acc);stroke-dasharray:none;stroke-width:2.8}
   .pt-start{fill:var(--acc)} .pt-end{fill:var(--ink)}
-  .overlay-top{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;z-index:2}
+  .overlay-top{position:absolute;top:12px;left:12px;right:54px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;z-index:2}
   .overlay-top::-webkit-scrollbar{display:none}
-  .discover-hint{position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(18,21,26,.88);border:1px solid var(--hair);border-radius:999px;padding:7px 14px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
-  .plansheet{position:absolute;left:0;right:0;bottom:var(--barh);background:var(--card);border-radius:18px 18px 0 0;padding:10px 16px 42px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:0 -10px 26px rgba(0,0,0,.3)}
-  .handle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin:0 auto}
-  .seg{display:flex;background:rgba(255,255,255,.06);border-radius:999px;padding:3px}
+  .overlay-top .chip{background:var(--card);box-shadow:var(--elev)}
+  .overlay-top .chip.on{background:var(--acc);color:var(--on-acc)}
+  .discover-hint{position:absolute;top:62px;left:50%;transform:translateX(-50%);background:var(--card);box-shadow:var(--elev);border-radius:999px;padding:7px 15px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
+  .plansheet{position:absolute;left:0;right:0;bottom:var(--barh);background:var(--card);border-radius:28px 28px 0 0;padding:10px 16px 42px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:var(--elev-hi)}
+  .handle{width:38px;height:4px;border-radius:2px;background:var(--hair);margin:0 auto}
+  .seg{display:flex;background:var(--tone);border-radius:999px;padding:3px}
   .seg button{flex:1;min-height:34px;border-radius:999px;font-weight:600;font-size:13px;color:var(--mut)}
-  .seg button.on{background:var(--acc);color:var(--acc-ink)}
+  .seg button.on{background:var(--acc);color:var(--on-acc)}
   .chiprow{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
   .chiprow::-webkit-scrollbar{display:none}
-  .chiprow .chip{background:rgba(255,255,255,.08)}
-  .chiprow .chip.on{background:var(--acc);color:var(--acc-ink)}
-  .routestats{font-family:var(--mono);font-size:12px;color:var(--mut);text-align:center;letter-spacing:.04em}
+  .routestats{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--mut);text-align:center}
 
   /* ── Training (ein Scroll-Screen) ── */
-  .sechead{margin-top:6px}
-  .sechead:first-child{margin-top:0}
-  .bar-prog{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+  .sechead{margin-top:8px}
+  .bar-prog{height:6px;border-radius:3px;background:var(--tone);overflow:hidden}
   .bar-prog>i{display:block;height:100%;width:50%;background:var(--acc);border-radius:3px}
-  .week{display:flex;flex-direction:column}
-  .wrow{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--hair)}
+  .week{display:flex;flex-direction:column;padding:8px 12px}
+  .wrow{display:flex;align-items:center;gap:12px;padding:10px 8px;border-bottom:1px solid var(--hair)}
   .wrow:last-child{border-bottom:0}
-  .wrow .day{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--mut);width:24px;flex:0 0 auto}
+  .wrow .day{font-size:11.5px;font-weight:600;color:var(--mut);width:24px;flex:0 0 auto;font-variant-numeric:tabular-nums}
   .wrow .lbl{flex:1;font-weight:600}
   .wrow.rest .lbl{color:var(--mut);font-weight:400}
-  .wrow .done{color:var(--pos);font-weight:700}
-  .wrow.today{background:rgba(242,107,33,.09);border-radius:10px;padding-left:8px;padding-right:8px;border-bottom-color:transparent}
-  .wrow.today .lbl{color:var(--acc)}
-  .wrow.today .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--acc)}
+  .wrow .done{color:var(--acc);font-weight:700}
+  .wrow.today{background:var(--acc-cont);border-radius:18px;padding-left:10px;padding-right:10px;border-bottom-color:transparent}
+  .wrow.today .day{color:var(--on-acc-cont);opacity:.75}
+  .wrow.today .lbl{color:var(--on-acc-cont)}
+  .wrow.today .tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;color:var(--on-acc-cont)}
   .chartcard svg{display:block;width:100%}
+  .chart-fit{stroke:var(--acc)}
+  .chart-fatigue{stroke:var(--mut);opacity:.65}
+  .chart-form{stroke:var(--ink)}
   .legend{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
-  .legend .chip{background:rgba(255,255,255,.08);font-family:var(--mono);font-size:11px;letter-spacing:.03em}
-  .legend .chip.on{background:var(--acc);color:var(--acc-ink)}
+  .legend .chip{font-size:11.5px;font-variant-numeric:tabular-nums}
   .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .tile{background:var(--card);border-radius:14px;padding:13px}
-  .tile b{font-family:var(--disp);font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.1}
+  .tile{background:var(--card);border-radius:26px;padding:14px 15px;box-shadow:var(--elev)}
+  .tile b{font-weight:700;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.1}
   .tile b .unit{font-size:13px;font-weight:600;color:var(--mut)}
   .tile .trend{font-size:12px;font-weight:700;margin-left:4px}
-  .trend.good{color:var(--pos)}
+  .trend.good{color:var(--acc)}
   .tile svg{display:block;width:100%;height:22px;margin-top:8px}
   .tile .read{color:var(--mut);font-size:11px;margin-top:7px;line-height:1.35}
   .spark{fill:none;stroke:var(--acc);stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linecap:round}
+  .profilefill{fill:var(--acc-fill);stroke:var(--acc);stroke-width:1;vector-effect:non-scaling-stroke}
 
   /* ── Touren & Detail ── */
-  .tourrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 2px;border-bottom:1px solid var(--hair)}
+  .tourrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 6px;border-bottom:1px solid var(--hair);border-radius:18px}
   .tourrow:last-child{border-bottom:0}
   .tourrow .grow{flex:1;min-width:0}
   .tourrow b{display:block;font-size:14px}
   .tourrow small{color:var(--mut);font-size:12px}
-  .tlchip{flex:0 0 auto;font-family:var(--disp);font-weight:800;font-variant-numeric:tabular-nums;background:var(--card);color:var(--acc);border-radius:999px;padding:7px 13px;font-size:14px}
-  .backbtn{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--mut);min-height:36px;align-self:flex-start;padding:0 6px 0 0}
-  .detailmap{position:relative;height:170px;border-radius:14px;overflow:hidden;background:var(--map);background-image:repeating-radial-gradient(circle at 30% 70%, transparent 0 30px, rgba(255,255,255,.04) 30px 31px);flex:0 0 auto}
+  .tlchip{flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums;background:var(--tone);color:var(--acc);border-radius:999px;padding:7px 13px;font-size:13.5px}
+  .backbtn{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--mut);min-height:36px;align-self:flex-start;padding:0 6px 0 0;margin-top:6px}
+  .detailmap{position:relative;height:170px;border-radius:26px;overflow:hidden;background:var(--map);background-image:repeating-radial-gradient(circle at 30% 70%, transparent 0 30px, var(--topo) 30px 31px);flex:0 0 auto;box-shadow:var(--elev)}
   .detailmap svg{position:absolute;inset:0;width:100%;height:100%}
-  .statrow4{display:flex;justify-content:space-around;padding:2px 0}
+  .statrow4{display:flex;justify-content:space-around;padding:14px 8px}
 
-  /* ── Die EINE Leiste ── */
-  .bar{position:absolute;left:0;right:0;bottom:0;height:var(--barh);z-index:20;background:rgba(18,21,26,.92);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--hair);box-shadow:0 -14px 34px rgba(0,0,0,.4);display:flex;align-items:stretch;padding:4px 6px 6px}
-  .navtab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mut);font-size:10.5px;font-weight:600;min-height:44px;border-radius:12px}
-  .navtab svg{width:20px;height:20px}
+  /* ── Die EINE Leiste (One UI: neutrale Fläche, aktiver Tab in Akzentfarbe) ── */
+  .bar{position:absolute;left:0;right:0;bottom:0;height:var(--barh);z-index:20;background:var(--barbg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--hair);display:flex;align-items:stretch;padding:4px 6px 6px}
+  .navtab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mut);font-size:11px;font-weight:500;min-height:44px;border-radius:18px}
+  .navtab svg{width:21px;height:21px}
   .navtab.on{color:var(--acc);font-weight:700}
   .recwrap{flex:0 0 78px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;position:relative}
-  .rec{position:relative;width:58px;height:58px;margin-top:-24px;border-radius:50%;background:var(--acc);color:var(--acc-ink);display:flex;align-items:center;justify-content:center;font-size:19px;border:4px solid var(--bg);box-shadow:0 8px 20px rgba(242,107,33,.4)}
+  .rec{position:relative;width:58px;height:58px;margin-top:-22px;border-radius:50%;background:var(--acc);color:var(--on-acc);display:flex;align-items:center;justify-content:center;font-size:19px;border:4px solid var(--barsolid);box-shadow:var(--fabshadow)}
   .rec:active{transform:scale(.95)}
-  .rec::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none}
+  .rec::before{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none;transition:opacity .18s}
+  .rec.loaded::before{opacity:.9}
+  .rec::after{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none}
   .rec.live::after{animation:pulse 1.6s ease-out infinite}
   @keyframes pulse{0%{transform:scale(.88);opacity:.85}70%{transform:scale(1.3);opacity:0}100%{transform:scale(1.3);opacity:0}}
-  .reclabel{font-family:var(--mono);font-size:10px;font-weight:600;color:var(--acc);margin-top:1px;font-variant-numeric:tabular-nums;letter-spacing:.04em}
+  .reclabel{font-size:10px;font-weight:700;color:var(--acc);margin-top:1px;font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
 
-  /* ── Bereit-Overlay & Fahr-Cockpit (Vollbild) ── */
+  /* ── Bereit-Screen & Fahr-Cockpit (Vollbild) ── */
   .full{position:absolute;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .22s ease-out}
   .full.open{transform:translateY(0)}
   .grabrow{flex:0 0 44px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab}
-  .chevbtn{width:44px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--mut);border-radius:12px}
+  .chevbtn{width:44px;height:36px;display:flex;align-items:center;justify-content:center;color:var(--mut);border-radius:18px}
   .chevbtn svg{width:22px;height:22px}
-  .ready-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 24px 60px;text-align:center}
-  .gpschip{color:var(--pos);background:rgba(107,191,126,.1);border:1px solid rgba(107,191,126,.4)}
-  .startbtn{min-height:54px;border-radius:999px;background:var(--acc);color:var(--acc-ink);font-weight:700;font-size:16px;padding:0 30px;margin-top:10px}
+  .ready-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px 60px}
+  .ready-card{background:var(--card);border-radius:28px;box-shadow:var(--elev);padding:28px 24px;width:100%;max-width:330px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+  .ready-title{font-size:22px;font-weight:700;margin:0;line-height:1.2}
+  .gpschip{background:var(--acc-cont);color:var(--on-acc-cont)}
+  .startbtn{min-height:52px;border-radius:999px;background:var(--acc);color:var(--on-acc);font-weight:600;font-size:16px;padding:0 30px;margin-top:6px;width:100%}
   .startbtn:active{transform:scale(.98)}
+  .linkbtn{color:var(--acc);font-weight:600;font-size:14px;min-height:40px;padding:0 12px;border-radius:999px}
+  .discardbtn{color:var(--mut);font-size:12.5px;min-height:36px;padding:0 12px;border-radius:999px}
+  .notice{display:block;background:var(--acc-cont);color:var(--on-acc-cont);border-radius:26px;padding:14px 18px;font-size:13px;text-align:left;width:100%;max-width:330px;margin-top:16px}
+  .notice b{display:block;font-size:13.5px}
+  .notice span{opacity:.8}
 
   .ride-wrap{flex:1;position:relative;overflow:hidden;touch-action:none;min-height:0}
   .ride-track{display:flex;height:100%;transition:transform .22s ease-out;will-change:transform}
   .ride-page{flex:0 0 100%;min-width:100%;position:relative;height:100%}
-  .hud{position:absolute;top:12px;left:12px;right:12px;background:var(--acc);color:var(--acc-ink);border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;z-index:2}
-  .hud .arrow{font-family:var(--disp);font-weight:800;font-size:26px;line-height:1}
+  .hud{position:absolute;top:12px;left:12px;right:12px;background:var(--acc);color:var(--on-acc);border-radius:26px;padding:13px 18px;display:flex;gap:12px;align-items:center;z-index:2;box-shadow:var(--elev)}
+  .hud .arrow{font-weight:700;font-size:26px;line-height:1}
   .hud b{font-size:15px;display:block}
   .hud small{opacity:.85;font-size:12px}
-  .ridestats{position:absolute;left:12px;right:12px;bottom:12px;background:var(--card);border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;z-index:2;box-shadow:0 8px 22px rgba(0,0,0,.35)}
+  .ridestats{position:absolute;left:12px;right:12px;bottom:12px;background:var(--card);border-radius:26px;padding:13px 18px;display:flex;justify-content:space-between;z-index:2;box-shadow:var(--elev-hi)}
   .pur{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:4px;padding:0 24px;text-align:center}
-  .pur .bignum{font-family:var(--disp);font-weight:800;font-size:64px;line-height:1;color:var(--acc);font-variant-numeric:tabular-nums}
-  .pur .zone{font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--mut);text-transform:uppercase;margin-top:6px}
-  .pur .zone .ok{color:var(--pos)}
+  .pur .bignum{font-weight:700;font-size:64px;line-height:1;color:var(--acc);font-variant-numeric:tabular-nums}
+  .pur .zone{font-size:11px;font-weight:600;letter-spacing:.14em;color:var(--mut);text-transform:uppercase;margin-top:6px}
+  .pur .zone .ok{color:var(--acc)}
   .pur .trio{display:flex;gap:28px;margin-top:22px}
-  .announce{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:14px;padding:13px 15px;margin-top:26px;max-width:300px;text-align:left}
+  .announce{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:26px;padding:14px 17px;margin-top:26px;max-width:300px;text-align:left;box-shadow:var(--elev)}
   .announce .spk{color:var(--acc);flex:0 0 auto}
   .announce p{margin:0;color:var(--mut);font-size:13px}
-  .cockpit-controls{flex:0 0 auto;display:flex;gap:8px;padding:10px 12px 14px;border-top:1px solid var(--hair)}
-  .dotsbtn{flex:0 0 56px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;background:rgba(255,255,255,.05);min-height:48px}
-  .dotsbtn i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.28)}
+  .cockpit-controls{flex:0 0 auto;display:flex;gap:8px;padding:10px 12px 14px}
+  .dotsbtn{flex:0 0 56px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;background:var(--tone);min-height:48px}
+  .dotsbtn i{width:7px;height:7px;border-radius:50%;background:var(--hair)}
   .dotsbtn i.on{background:var(--acc)}
-  .ridebtn{flex:1;min-height:48px;border-radius:999px;background:rgba(255,255,255,.08);font-weight:700;font-size:14px}
-  .ridebtn.stop{background:rgba(242,107,33,.16);color:var(--acc)}
+  .ridebtn{flex:1;min-height:48px;border-radius:999px;background:var(--tone);font-weight:600;font-size:14px}
+  .ridebtn.stop{color:var(--err)}
 
-  /* ── Sheet, Modal, Toast, Hint ── */
+  /* ── Sheet, Dialog, Toast, Hinweis ── */
   .layer{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;justify-content:flex-end}
   .layer.center{justify-content:center;align-items:center;padding:24px}
-  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);border:0;cursor:default}
-  .sheet{position:relative;background:var(--card);border-radius:18px 18px 0 0;padding:10px 16px 22px;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;transition:transform .2s ease-out}
+  .scrim{position:absolute;inset:0;background:var(--scrim);border:0;cursor:default}
+  .sheet{position:relative;background:var(--card);border-radius:28px 28px 0 0;padding:10px 14px 22px;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;transition:transform .2s ease-out;box-shadow:var(--elev-hi)}
   .layer[hidden]{display:none}
-  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 0 4px;touch-action:none;cursor:grab}
-  .sheet-head b{font-size:14px}
-  .xbtn{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--mut);flex:0 0 auto}
-  .srow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 2px;border-bottom:1px solid var(--hair);min-height:48px}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 4px;touch-action:none;cursor:grab}
+  .sheet-head b{font-size:15px}
+  .xbtn{width:34px;height:34px;border-radius:50%;background:var(--tone);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--mut);flex:0 0 auto}
+  .srow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 12px;border-bottom:1px solid var(--hair);min-height:48px;border-radius:18px}
   .srow:last-child{border-bottom:0}
   .srow .grow{flex:1;min-width:0}
   .srow b{display:block;font-size:14px;font-weight:600}
   .srow small{color:var(--mut);font-size:12px}
   .srow .chev{color:var(--mut)}
-  .switch{position:relative;flex:0 0 46px;width:46px;height:28px;border-radius:999px;background:rgba(255,255,255,.14);transition:background .15s}
-  .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s}
+  .switch{position:relative;flex:0 0 46px;width:46px;height:28px;border-radius:999px;background:var(--swoff);transition:background .15s}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
   .switch[aria-checked="true"]{background:var(--acc)}
   .switch[aria-checked="true"]::after{transform:translateX(18px)}
-  .modalcard{position:relative;background:var(--card);border-radius:18px;padding:22px 20px 18px;width:100%;max-width:320px;text-align:center;display:flex;flex-direction:column;gap:12px}
-  .modalcard .num-line{font-family:var(--disp);font-weight:800;font-size:21px;font-variant-numeric:tabular-nums}
-  .toast{position:absolute;left:50%;bottom:calc(var(--barh) + 36px);transform:translateX(-50%) translateY(8px);background:#262C36;border:1px solid var(--hair);color:var(--ink);border-radius:999px;padding:9px 17px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:90%}
+  .modalcard{position:relative;background:var(--card);border-radius:28px;padding:24px 22px 18px;width:100%;max-width:320px;text-align:center;display:flex;flex-direction:column;gap:11px;box-shadow:var(--elev-hi)}
+  .modalcard .num-line{font-weight:700;font-size:21px;font-variant-numeric:tabular-nums}
+  .sumplan{font-size:12.5px;color:var(--mut)}
+  .sumplan.ok{color:var(--acc);font-weight:700}
+  .toast{position:absolute;left:50%;bottom:calc(var(--barh) + 36px);transform:translateX(-50%) translateY(8px);background:var(--inv);color:var(--on-inv);border-radius:999px;padding:9px 17px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:90%;box-shadow:var(--elev)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-  .hint{position:absolute;left:14px;right:14px;bottom:calc(var(--barh) + 36px);z-index:40;background:rgba(38,44,54,.96);border:1px solid var(--hair);border-radius:14px;padding:12px 16px;font-size:12.5px;color:var(--ink);text-align:center;transition:opacity .4s,transform .4s;box-shadow:0 10px 26px rgba(0,0,0,.4);pointer-events:none}
-  .hint.gone{opacity:0;transform:translateY(8px);pointer-events:none}
+  .hint{position:absolute;left:14px;right:14px;bottom:calc(var(--barh) + 36px);z-index:40;background:var(--card);border-radius:26px;padding:13px 18px;font-size:12.5px;color:var(--ink);text-align:center;transition:opacity .4s,transform .4s;box-shadow:var(--elev-hi);pointer-events:none}
+  .hint.gone{opacity:0;transform:translateY(8px)}
 
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{transition:none!important;animation:none!important}
@@ -207,9 +303,8 @@
 <div class="stage">
 <div class="phone">
 
-  <!-- Schlanke Titelzeile mit ⚙ -->
+  <!-- Schwebendes ⚙ -->
   <header class="topbar">
-    <span class="eyebrow" id="topTitle">Heute</span>
     <button class="gearbtn" id="btnMore" aria-label="Mehr &amp; Einstellungen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3.2"/>
@@ -222,17 +317,18 @@
 
     <!-- ══ HEUTE ══ -->
     <section class="screen" id="s-heute">
+      <h1 class="bigtitle">Heute</h1>
       <div class="card readiness">
         <div class="ring" style="--v:82"><div><b class="num">82</b><small>bereit</small></div></div>
         <div>
           <b style="font-size:15px;display:block;line-height:1.35">Erholt. Heute zahlt sich Grundlage aus.</b>
-          <div style="color:var(--mut);margin-top:4px">GA1 · 45 km · Zone 2 · ~2:00 h</div>
+          <div class="muted" style="margin-top:4px">GA1 · 45 km · Zone 2 · ~2:00 h</div>
         </div>
       </div>
       <button class="btn" id="btnBuildRoute">Runde zum Plan bauen</button>
       <div class="cockpitrow">
         <div class="statmini"><b>78<span style="color:var(--mut);font-weight:600">/120</span></b><small>Wochen-km</small></div>
-        <div class="statmini"><b style="color:var(--acc)">−9</b><small>Form</small></div>
+        <div class="statmini"><b style="color:var(--err)">−9</b><small>Form</small></div>
         <div class="statmini"><b>6/12</b><small>Planwoche</small></div>
       </div>
       <div class="card coach"><span class="eyebrow">Coach</span><p>Samstag wird lang (80 km) — heute nicht überziehen.</p></div>
@@ -281,16 +377,17 @@
 
     <!-- ══ TOUREN ══ -->
     <section class="screen" id="s-touren">
+      <h1 class="bigtitle">Touren</h1>
       <span class="eyebrow">Letzte Touren</span>
-      <div class="card" style="padding:2px 14px" id="tourList"></div>
+      <div class="card" style="padding:4px 10px" id="tourList"></div>
     </section>
 
     <!-- ══ TOUR-DETAIL ══ -->
     <section class="screen" id="s-detail">
       <button class="backbtn" id="btnBackTours">‹ Touren</button>
       <div>
-        <b style="font-size:18px;font-family:var(--disp);font-weight:800" id="dName">Feierabendrunde</b>
-        <div style="color:var(--mut);font-size:12px;margin-top:2px" id="dDate">Di 26.8.</div>
+        <b style="font-size:22px;font-weight:700" id="dName">Feierabendrunde</b>
+        <div class="muted" style="font-size:12px;margin-top:2px" id="dDate">Di 26.8.</div>
       </div>
       <div class="detailmap">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Tourspur">
@@ -305,10 +402,11 @@
         <div class="statmini"><b id="dHm">410</b><small>Hm</small></div>
         <div class="statmini"><b id="dHr">138</b><small>Ø ♥</small></div>
       </div>
+      <button class="btn" id="btnRideTour">Diese Tour fahren</button>
       <div class="card chartcard">
         <span class="eyebrow">Höhenprofil</span>
         <svg viewBox="0 0 100 26" preserveAspectRatio="none" style="height:52px;margin-top:8px">
-          <path d="M0 21 L14 13 L26 17 L40 6 L54 15 L68 9 L82 14 L100 19 L100 26 L0 26 Z" fill="rgba(242,107,33,.28)" stroke="var(--acc)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+          <path class="profilefill" d="M0 21 L14 13 L26 17 L40 6 L54 15 L68 9 L82 14 L100 19 L100 26 L0 26 Z"/>
         </svg>
       </div>
       <div class="card coach"><span class="eyebrow">Coach</span><p id="dCoach">Entkopplung 4,2 % — Grundlage stabil. Diese Fahrt hat die GA1-Einheit erfüllt.</p></div>
@@ -316,13 +414,14 @@
 
     <!-- ══ TRAINING (ein Scroll-Screen: Form → Plan → Werte) ══ -->
     <section class="screen" id="s-training">
+      <h1 class="bigtitle">Training</h1>
 
-      <span class="eyebrow sechead" id="secForm">Form · 90 Tage</span>
+      <span class="eyebrow sechead" id="secForm" style="margin-top:0">Form · 90 Tage</span>
       <div class="card chartcard">
         <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:96px" aria-label="Formkurve über 90 Tage">
-          <polyline points="0,34 12,31 25,32 38,25 50,28 63,23 76,25 88,20 100,24" fill="none" stroke="rgba(234,237,242,.4)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
-          <polyline points="0,30 12,29 25,26 38,27 50,23 63,21 76,19 88,18 100,16" fill="none" stroke="var(--acc)" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
-          <polyline points="0,26 12,27 25,23 38,29 50,25 63,28 76,26 88,29 100,31" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+          <polyline class="chart-fatigue" points="0,34 12,31 25,32 38,25 50,28 63,23 76,25 88,20 100,24" fill="none" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+          <polyline class="chart-fit" points="0,30 12,29 25,26 38,27 50,23 63,21 76,19 88,18 100,16" fill="none" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
+          <polyline class="chart-form" points="0,26 12,27 25,23 38,29 50,25 63,28 76,26 88,29 100,31" fill="none" stroke-width="1.2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
         </svg>
         <div class="legend">
           <span class="chip on">Fit 62</span>
@@ -341,7 +440,7 @@
         <div class="wrow rest"><span class="day">Mo</span><span class="lbl">Ruhetag</span></div>
         <div class="wrow"><span class="day">Di</span><span class="lbl">GA1 · 45 km</span><span class="done">✓</span></div>
         <div class="wrow rest"><span class="day">Mi</span><span class="lbl">Ruhetag</span></div>
-        <div class="wrow today"><span class="day" style="color:var(--acc)">Do</span><span class="lbl">GA1 · 45 km</span><span class="tag">← HEUTE</span></div>
+        <div class="wrow today"><span class="day">Do</span><span class="lbl">GA1 · 45 km</span><span class="tag">← HEUTE</span></div>
         <div class="wrow rest"><span class="day">Fr</span><span class="lbl">Ruhetag</span></div>
         <div class="wrow"><span class="day">Sa</span><span class="lbl">Lange Fahrt · 80 km</span></div>
         <div class="wrow rest"><span class="day">So</span><span class="lbl">Ruhetag</span></div>
@@ -390,7 +489,7 @@
       <span>Karte</span>
     </button>
     <div class="recwrap">
-      <button class="rec" id="btnRec" aria-label="Fahrt starten">●</button>
+      <button class="rec" id="btnRec" aria-label="Jetzt fahren">●</button>
       <span class="reclabel" id="recLabel" hidden>0:00</span>
     </div>
     <button class="navtab" data-tab="touren">
@@ -406,21 +505,41 @@
   <!-- Erste-Nutzung-Hinweis -->
   <div class="hint" id="hint">Eine Leiste für alles — der Knopf in der Mitte ist deine Fahrt.</div>
 
-  <!-- ══ Bereit-Overlay (Vollbild) ══ -->
+  <!-- ══ Bereit-Screen (Vollbild, zwei Varianten) ══ -->
   <div class="full" id="readyLayer" hidden>
     <div class="grabrow">
       <button class="chevbtn" id="btnCloseReady" aria-label="Schließen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 9 7 7 7-7"/></svg>
       </button>
     </div>
-    <div class="ready-body">
-      <span class="eyebrow">Bereit</span>
-      <span class="chip gpschip">GPS ✓</span>
-      <div>
-        <b style="font-size:20px;font-family:var(--disp);font-weight:800">GA1 · 45 km</b>
-        <div style="color:var(--mut);margin-top:4px">Zone 2 · ~2:00 h · Runde zum Plan</div>
+    <!-- Variante LEER: Freie Fahrt -->
+    <div class="ready-body" id="readyFree">
+      <div class="ready-card">
+        <span class="eyebrow">Bereit</span>
+        <h2 class="ready-title">Freie Fahrt</h2>
+        <span class="chip gpschip">GPS ✓</span>
+        <div class="muted" style="font-size:13px">Ohne Navigation aufzeichnen — die Route entsteht unterwegs.</div>
+        <button class="startbtn" id="btnStartFree">● Aufzeichnung starten</button>
       </div>
-      <button class="startbtn" id="btnStart">● Aufzeichnung starten</button>
+      <button class="notice" id="btnReadyHint">
+        <b>Heute steht GA1 an</b>
+        <span>Runde dazu bauen? Tippen für die Tagesroute auf der Karte.</span>
+      </button>
+    </div>
+    <!-- Variante ROUTE BEREIT: Geplante Tour -->
+    <div class="ready-body" id="readyPlanned" hidden>
+      <div class="ready-card">
+        <span class="eyebrow">Bereit</span>
+        <h2 class="ready-title">Geplante Tour</h2>
+        <span class="chip gpschip">GPS ✓</span>
+        <div>
+          <b style="font-size:17px" id="rdName">Heutige GA1-Runde</b>
+          <div class="muted" style="margin-top:4px;font-variant-numeric:tabular-nums" id="rdStats">44,8 km · 380 Hm · ~1:58 h</div>
+        </div>
+        <button class="startbtn" id="btnStartNav">Mit Navigation starten</button>
+        <button class="linkbtn" id="btnStartNoRoute">Ohne Route, nur aufzeichnen</button>
+        <button class="discardbtn" id="btnDiscard">✕ Route verwerfen</button>
+      </div>
     </div>
   </div>
 
@@ -441,11 +560,11 @@
               <circle class="pt-start" cx="30" cy="142" r="2.6"/>
             </svg>
           </div>
-          <div class="hud"><span class="arrow">↰</span><div><b>In 220 m links</b><small>Kiesweg am Wehr</small></div></div>
+          <div class="hud" id="hud"><span class="arrow">↰</span><div><b>In 220 m links</b><small>Kiesweg am Wehr</small></div></div>
           <div class="ridestats">
             <div class="statmini"><b id="rSpeed1">24,3</b><small>km/h</small></div>
-            <div class="statmini"><b id="rHr1" style="color:var(--acc)">142</b><small>♥ <span style="color:var(--pos)">Z2 ✓</span></small></div>
-            <div class="statmini"><b id="rLeft1">44,8</b><small>km übrig</small></div>
+            <div class="statmini"><b id="rHr1" style="color:var(--acc)">142</b><small>♥ <span style="color:var(--acc)">Z2 ✓</span></small></div>
+            <div class="statmini"><b id="rLeft1">44,8</b><small id="rLeftLbl">km übrig</small></div>
           </div>
         </div>
         <!-- Seite 2: Pur -->
@@ -493,9 +612,10 @@
   <div class="layer center" id="sumLayer" hidden>
     <div class="scrim"></div>
     <div class="modalcard" role="dialog" aria-label="Fahrt gespeichert">
-      <span class="eyebrow" style="color:var(--pos)">Fahrt gespeichert</span>
+      <span class="eyebrow" style="color:var(--acc)">Fahrt gespeichert</span>
       <div class="num-line" id="sumLine">4,2 km · 12:34 · TL ≈ 8</div>
-      <div style="color:var(--mut);font-size:12.5px">Heutige GA1-Runde</div>
+      <div class="muted" style="font-size:12.5px" id="sumName">Heutige GA1-Runde</div>
+      <div class="sumplan" id="sumPlan">✓ GA1-Einheit erfüllt</div>
       <button class="btn" id="btnToReview">Zur Auswertung</button>
     </div>
   </div>
@@ -513,10 +633,12 @@
   /* ── Zustand ── */
   const S = {
     tab:'heute',
-    riding:false, paused:false,
+    riding:false, paused:false, nav:false,
+    routeReady:null,            // null = LEER · {name,stats,km,kmLabel} = ROUTE BEREIT
+    rideName:'Freie Fahrt', routeKm:0,
     t:0, dist:0, speed:24.3, hr:142, hrSum:0, hrN:0,
     page:0, timer:null, discover:false, altSel:null,
-    seg:'gravel', surface:'gemischt'
+    seg:'gravel', surface:'gemischt', detailIdx:0
   };
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -527,6 +649,7 @@
     {name:'Waldkante West',       date:'Di 19.8.', km:'28,7', hm:350, hr:141, tl:61,  time:'1:19'},
     {name:'Intervalle K3',        date:'Do 17.8.', km:'38,9', hm:490, hr:152, tl:98,  time:'1:47'}
   ];
+  const defaultCoach = 'Entkopplung 4,2 % — Grundlage stabil. Diese Fahrt hat die GA1-Einheit erfüllt.';
 
   const announcements = [
     '„Gleich kommt die einzige Rampe — Trittfrequenz hoch."',
@@ -554,13 +677,11 @@
 
   /* ── Navigation: EINE Leiste, vier Tabs ── */
   const screenIds=['s-heute','s-karte','s-touren','s-detail','s-training'];
-  const titles={heute:'Heute',karte:'Karte',touren:'Touren',training:'Training'};
   function showScreen(id){
     screenIds.forEach(s=>$(s).classList.toggle('active', s===id));
   }
   function updateBar(){
     document.querySelectorAll('.navtab[data-tab]').forEach(b=>b.classList.toggle('on', b.dataset.tab===S.tab));
-    $('topTitle').textContent = titles[S.tab];
   }
   function setTab(t){
     S.tab=t;
@@ -583,21 +704,82 @@
   $('btnCloseReady').addEventListener('click',()=>closeFull(readyLayer));
   $('btnMinimize').addEventListener('click',()=>{ closeFull(cockpit); toast('Aufzeichnung läuft weiter — Knopf in der Mitte'); });
 
-  /* ── Der zentrale ●-Knopf ── */
-  function updateRecBtn(){
-    const b=$('btnRec');
-    b.classList.toggle('live', S.riding);
-    b.setAttribute('aria-label', S.riding ? 'Fahr-Cockpit öffnen — Aufzeichnung läuft' : 'Fahrt starten');
-    $('recLabel').hidden = !S.riding;
+  /* ── Der zentrale ●-Knopf „jetzt fahren“: LEER · ROUTE BEREIT · LÄUFT ── */
+  function setRouteReady(name, stats){
+    const km = parseFloat(stats.replace(',','.'));
+    S.routeReady = {name, stats, km, kmLabel: de1(km)+' km'};
+    updateRecBtn();
   }
+  function clearRouteReady(){
+    S.routeReady=null;
+    updateRecBtn();
+  }
+  function updateRecBtn(){
+    const b=$('btnRec'), lbl=$('recLabel');
+    b.classList.toggle('live', S.riding);
+    b.classList.toggle('loaded', !S.riding && !!S.routeReady);
+    if(S.riding){
+      b.setAttribute('aria-label','Fahr-Cockpit öffnen — Aufzeichnung läuft');
+      lbl.hidden=false; lbl.textContent=fmtTime(S.t);
+    } else if(S.routeReady){
+      b.setAttribute('aria-label','Jetzt fahren — Route bereit: '+S.routeReady.name);
+      lbl.hidden=false; lbl.textContent=S.routeReady.kmLabel;
+    } else {
+      b.setAttribute('aria-label','Jetzt fahren');
+      lbl.hidden=true;
+    }
+  }
+  function renderReady(){
+    const planned=!!S.routeReady;
+    $('readyFree').hidden=planned;
+    $('readyPlanned').hidden=!planned;
+    if(planned){
+      $('rdName').textContent=S.routeReady.name;
+      $('rdStats').textContent=S.routeReady.stats;
+    }
+  }
+  function openReady(){ renderReady(); openFull(readyLayer); }
   $('btnRec').addEventListener('click',()=>{
     if(S.riding) openFull(cockpit);
-    else openFull(readyLayer);
+    else openReady();
+  });
+
+  /* Bereit-Screen: Freie Fahrt */
+  $('btnStartFree').addEventListener('click',()=>{
+    closeFull(readyLayer);
+    startRide(false);
+    openFull(cockpit);
+  });
+  $('btnReadyHint').addEventListener('click',()=>{
+    closeFull(readyLayer);
+    loadPlanRoute();
+    setTab('karte');
+    toast('Tagesroute geladen: 45 km');
+  });
+  /* Bereit-Screen: Geplante Tour */
+  $('btnStartNav').addEventListener('click',()=>{
+    closeFull(readyLayer);
+    startRide(true);
+    openFull(cockpit);
+  });
+  $('btnStartNoRoute').addEventListener('click',()=>{
+    closeFull(readyLayer);
+    startRide(false);
+    openFull(cockpit);
+  });
+  $('btnDiscard').addEventListener('click',()=>{
+    clearRouteReady();
+    renderReady();
+    toast('Route verworfen');
   });
 
   /* ── Heute ── */
-  $('btnBuildRoute').addEventListener('click',()=>{
+  function loadPlanRoute(){
     exitDiscover();
+    setRouteReady('Heutige GA1-Runde', routeVals[S.seg][S.surface]);
+  }
+  $('btnBuildRoute').addEventListener('click',()=>{
+    loadPlanRoute();
     setTab('karte');
     toast('Runde zum Plan: 45 km erstellt');
   });
@@ -612,6 +794,10 @@
   function updateRouteStats(){
     if(S.altSel){ $('routeStats').textContent = altVals[S.altSel]; return; }
     $('routeStats').textContent = routeVals[S.seg][S.surface];
+  }
+  function planChanged(){
+    updateRouteStats();
+    setRouteReady(S.altSel ? 'Entdecker-Runde' : 'Heutige GA1-Runde', $('routeStats').textContent);
   }
   function exitDiscover(){
     S.discover=false; S.altSel=null;
@@ -631,7 +817,7 @@
     $('chipDiscover').classList.add('on');
     $('chipPlan').classList.remove('on');
   });
-  $('chipPlan').addEventListener('click',exitDiscover);
+  $('chipPlan').addEventListener('click',()=>{ exitDiscover(); planChanged(); });
   $('chipZiel').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
   ['alt1','alt2','alt3'].forEach(id=>{
     $(id).addEventListener('click',()=>{
@@ -639,21 +825,23 @@
       ['alt1','alt2','alt3'].forEach(x=>$(x).classList.remove('sel'));
       $(id).classList.add('sel');
       $('discoverHint').hidden=true;
-      updateRouteStats();
+      planChanged();
       toast('Route übernommen — '+altVals[id]);
     });
   });
-  $('segGravel').addEventListener('click',()=>{S.seg='gravel';S.altSel=null;$('segGravel').classList.add('on');$('segRenn').classList.remove('on');updateRouteStats();});
-  $('segRenn').addEventListener('click',()=>{S.seg='rennrad';S.altSel=null;$('segRenn').classList.add('on');$('segGravel').classList.remove('on');updateRouteStats();});
+  $('segGravel').addEventListener('click',()=>{S.seg='gravel';S.altSel=null;$('segGravel').classList.add('on');$('segRenn').classList.remove('on');planChanged();});
+  $('segRenn').addEventListener('click',()=>{S.seg='rennrad';S.altSel=null;$('segRenn').classList.add('on');$('segGravel').classList.remove('on');planChanged();});
   document.querySelectorAll('[data-surface]').forEach(b=>{
     b.addEventListener('click',()=>{
       S.surface=b.dataset.surface; S.altSel=null;
       document.querySelectorAll('[data-surface]').forEach(x=>x.classList.toggle('on',x===b));
-      updateRouteStats();
+      planChanged();
     });
   });
   $('btnRideNow').addEventListener('click',()=>{
-    startRide();
+    if(S.riding){ openFull(cockpit); return; }
+    setRouteReady(S.altSel ? 'Entdecker-Runde' : 'Heutige GA1-Runde', $('routeStats').textContent);
+    startRide(true);
     openFull(cockpit);
   });
 
@@ -666,12 +854,12 @@
   }
   function updateRideUI(){
     const km = S.dist/1000;
-    const left = Math.max(0, 44.8-km);
+    const third = S.nav ? Math.max(0, S.routeKm-km) : km;
     $('rSpeed1').textContent = de1(S.speed);
     $('rSpeed2').textContent = de1(S.speed);
     $('rHr1').textContent = S.hr;
     $('rHr2').textContent = S.hr;
-    $('rLeft1').textContent = de1(left);
+    $('rLeft1').textContent = de1(third);
     $('rDist2').textContent = de1(km);
     $('rTime2').textContent = fmtTime(S.t);
     $('recLabel').textContent = fmtTime(S.t);
@@ -687,21 +875,21 @@
     S.hrSum += S.hr; S.hrN++;
     updateRideUI();
   }
-  function startRide(){
+  function startRide(nav){
     if(S.riding) return;
     S.riding=true; S.paused=false;
+    S.nav = !!(nav && S.routeReady);
+    S.routeKm = S.nav ? S.routeReady.km : 0;
+    S.rideName = S.nav ? S.routeReady.name : 'Freie Fahrt';
     S.t=0; S.dist=0; S.speed=24.3; S.hr=142; S.hrSum=0; S.hrN=0;
+    $('hud').hidden = !S.nav;                       /* Freie Fahrt: keine Abbiege-HUD */
+    $('rLeftLbl').textContent = S.nav ? 'km übrig' : 'km';
     setPage(0);
     $('btnPause').textContent='❙❙ Pause';
     updateRideUI();
     S.timer=setInterval(tick,1000);
     updateRecBtn();
   }
-  $('btnStart').addEventListener('click',()=>{
-    closeFull(readyLayer);
-    startRide();
-    openFull(cockpit);
-  });
   $('btnPause').addEventListener('click',()=>{
     if(!S.riding) return;
     S.paused=!S.paused;
@@ -715,6 +903,10 @@
     const km = S.dist/1000;
     const tl = Math.max(1, Math.round(S.t/60*0.62));
     $('sumLine').textContent = de1(km)+' km · '+fmtTime(S.t)+' · TL ≈ '+tl;
+    $('sumName').textContent = S.rideName;
+    const p=$('sumPlan');
+    if(S.nav){ p.textContent='✓ GA1-Einheit erfüllt'; p.className='sumplan ok'; }
+    else { p.textContent='Freie Fahrt — zählt in die Belastungsrechnung'; p.className='sumplan'; }
     $('sumLayer').hidden=false;
   });
 
@@ -723,15 +915,16 @@
     const mins = Math.max(1, Math.round(S.t/60));
     const avgHr = S.hrN>0 ? Math.round(S.hrSum/S.hrN) : 142;
     tours.unshift({
-      name:'Heutige GA1-Runde', date:'Heute',
+      name:S.rideName, date:'Heute',
       km:de1(km), hm:Math.round(km*8.5), hr:avgHr,
       tl:Math.max(1, Math.round(S.t/60*0.62)),
-      time:Math.floor(mins/60)+':'+String(mins%60).padStart(2,'0')
+      time:Math.floor(mins/60)+':'+String(mins%60).padStart(2,'0'),
+      coach:S.nav ? defaultCoach : 'Ruhig gefahren — freie Fahrt, sauber in Zone 2. Zählt in die Belastungsrechnung.'
     });
     renderTours();
     $('sumLayer').hidden=true;
-    S.riding=false; S.paused=false;
-    updateRecBtn();
+    S.riding=false; S.paused=false; S.nav=false;
+    clearRouteReady();                              /* nach Beenden: Zustand LEER */
     closeFull(cockpit);
     S.tab='touren';
     openDetail(0);
@@ -806,18 +999,25 @@
   }
   function openDetail(i){
     const t=tours[i];
+    S.detailIdx=i;
     $('dName').textContent=t.name;
     $('dDate').textContent=t.date;
     $('dKm').textContent=t.km;
     $('dTime').textContent=t.time;
     $('dHm').textContent=t.hm;
     $('dHr').textContent=t.hr;
-    $('dCoach').textContent='Entkopplung 4,2 % — Grundlage stabil. Diese Fahrt hat die GA1-Einheit erfüllt.';
+    $('dCoach').textContent=t.coach || defaultCoach;
     S.tab='touren';
     showScreen('s-detail');
     updateBar();
   }
   $('btnBackTours').addEventListener('click',()=>setTab('touren'));
+  $('btnRideTour').addEventListener('click',()=>{      /* gespeicherte Tour nachfahren */
+    if(S.riding){ openFull(cockpit); return; }
+    const t=tours[S.detailIdx];
+    setRouteReady(t.name, t.km+' km · '+t.hm+' Hm');
+    openReady();
+  });
   renderTours();
 
   /* ── Mehr-Sheet ── */
@@ -862,7 +1062,6 @@
   /* ── Erste-Nutzung-Hinweis ── */
   const hint=$('hint');
   setTimeout(()=>hint.classList.add('gone'),4200);
-  hint.addEventListener('click',()=>hint.classList.add('gone'));
 
   /* ── Init ── */
   setTab('heute');
