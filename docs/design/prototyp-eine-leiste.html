@@ -28,7 +28,7 @@
     --elev:0 1px 2px rgba(0,0,0,.05),0 3px 12px rgba(0,0,0,.06);
     --elev-hi:0 4px 10px rgba(0,0,0,.08),0 12px 30px rgba(0,0,0,.12);
     --fabshadow:0 6px 16px rgba(13,122,66,.35);
-    --barh:64px;
+    --barh:76px; /* 12px Randabstand + 64px Pillenhöhe — Bezug für Toast/Hint/Sheet/Scroll-Padding */
     --sans:system-ui,'Roboto','Segoe UI',sans-serif;
   }
   @media (prefers-color-scheme: dark){
@@ -54,7 +54,7 @@
       --acc-fill:rgba(107,214,156,.18);
       --scrim:rgba(0,0,0,.6);
       --swoff:#3A3B40;
-      --barbg:rgba(28,29,33,.95);
+      --barbg:rgba(28,29,33,.94);
       --barsolid:#1C1D21;
       --elev:0 1px 2px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.3);
       --elev-hi:0 4px 10px rgba(0,0,0,.45),0 14px 34px rgba(0,0,0,.5);
@@ -83,7 +83,7 @@
     --acc-fill:rgba(107,214,156,.18);
     --scrim:rgba(0,0,0,.6);
     --swoff:#3A3B40;
-    --barbg:rgba(28,29,33,.95);
+    --barbg:rgba(28,29,33,.94);
     --barsolid:#1C1D21;
     --elev:0 1px 2px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.3);
     --elev-hi:0 4px 10px rgba(0,0,0,.45),0 14px 34px rgba(0,0,0,.5);
@@ -158,7 +158,7 @@
   .overlay-top .chip{background:var(--card);box-shadow:var(--elev)}
   .overlay-top .chip.on{background:var(--acc);color:var(--on-acc)}
   .discover-hint{position:absolute;top:62px;left:50%;transform:translateX(-50%);background:var(--card);box-shadow:var(--elev);border-radius:999px;padding:7px 15px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
-  .plansheet{position:absolute;left:0;right:0;bottom:var(--barh);background:var(--card);border-radius:28px 28px 0 0;padding:10px 16px 42px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:var(--elev-hi)}
+  .plansheet{position:absolute;left:12px;right:12px;bottom:calc(var(--barh) + 10px);background:var(--card);border-radius:28px;padding:10px 16px 16px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:var(--elev-hi)}
   .handle{width:38px;height:4px;border-radius:2px;background:var(--hair);margin:0 auto}
   .seg{display:flex;background:var(--tone);border-radius:999px;padding:3px}
   .seg button{flex:1;min-height:34px;border-radius:999px;font-weight:600;font-size:13px;color:var(--mut)}
@@ -211,20 +211,27 @@
   .detailmap svg{position:absolute;inset:0;width:100%;height:100%}
   .statrow4{display:flex;justify-content:space-around;padding:14px 8px}
 
-  /* ── Die EINE Leiste (One UI: neutrale Fläche, aktiver Tab in Akzentfarbe) ── */
-  .bar{position:absolute;left:0;right:0;bottom:0;height:var(--barh);z-index:20;background:var(--barbg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--hair);display:flex;align-items:stretch;padding:4px 6px 6px}
-  .navtab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mut);font-size:11px;font-weight:500;min-height:44px;border-radius:18px}
-  .navtab svg{width:21px;height:21px}
-  .navtab.on{color:var(--acc);font-weight:700}
-  .recwrap{flex:0 0 78px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;position:relative}
-  .rec{position:relative;width:58px;height:58px;margin-top:-22px;border-radius:50%;background:var(--acc);color:var(--on-acc);display:flex;align-items:center;justify-content:center;font-size:19px;border:4px solid var(--barsolid);box-shadow:var(--fabshadow)}
+  /* ── Die EINE Leiste (Samsung-Health-Stil: schwebende Pille + abgesetzter ●-Kreis rechts) ── */
+  .bar{position:absolute;left:12px;right:12px;bottom:12px;z-index:20;display:flex;align-items:center;gap:9px}
+  .pillnav{flex:1;min-width:0;height:64px;border-radius:999px;background:var(--barbg);box-shadow:var(--elev-hi);display:flex;align-items:stretch;padding:5px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .navtab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--mut);font-size:11px;font-weight:500;border-radius:999px;padding:0 2px;white-space:nowrap}
+  .navtab svg{width:21px;height:21px;flex:0 0 auto}
+  .navtab.on{background:var(--acc-fill);color:var(--acc);font-weight:700}
+  .recwrap{flex:0 0 auto;position:relative;display:flex}
+  .rec{position:relative;width:58px;height:58px;border-radius:50%;background:var(--barsolid);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:19px;box-shadow:var(--elev-hi)}
   .rec:active{transform:scale(.95)}
-  .rec::before{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none;transition:opacity .18s}
+  .rec.live{background:var(--acc);color:var(--on-acc);box-shadow:var(--fabshadow)}
+  .rec::before{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none;transition:opacity .18s}
   .rec.loaded::before{opacity:.9}
-  .rec::after{content:"";position:absolute;inset:-9px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none}
+  .rec::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--acc);opacity:0;pointer-events:none}
   .rec.live::after{animation:pulse 1.6s ease-out infinite}
   @keyframes pulse{0%{transform:scale(.88);opacity:.85}70%{transform:scale(1.3);opacity:0}100%{transform:scale(1.3);opacity:0}}
-  .reclabel{font-size:10px;font-weight:700;color:var(--acc);margin-top:1px;font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
+  .reclabel{position:absolute;top:calc(100% + 1px);left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--acc);font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
+  @media (max-width:380px){
+    .bar{gap:8px}
+    .pillnav{padding:4px}
+    .navtab{font-size:10px}
+  }
 
   /* ── Bereit-Screen & Fahr-Cockpit (Vollbild) ── */
   .full{position:absolute;inset:0;z-index:45;background:var(--bg);display:flex;flex-direction:column;transform:translateY(100%);transition:transform .22s ease-out}
@@ -290,9 +297,9 @@
   .modalcard .num-line{font-weight:700;font-size:21px;font-variant-numeric:tabular-nums}
   .sumplan{font-size:12.5px;color:var(--mut)}
   .sumplan.ok{color:var(--acc);font-weight:700}
-  .toast{position:absolute;left:50%;bottom:calc(var(--barh) + 36px);transform:translateX(-50%) translateY(8px);background:var(--inv);color:var(--on-inv);border-radius:999px;padding:9px 17px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:90%;box-shadow:var(--elev)}
+  .toast{position:absolute;left:50%;bottom:calc(var(--barh) + 24px);transform:translateX(-50%) translateY(8px);background:var(--inv);color:var(--on-inv);border-radius:999px;padding:9px 17px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:90%;box-shadow:var(--elev)}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-  .hint{position:absolute;left:14px;right:14px;bottom:calc(var(--barh) + 36px);z-index:40;background:var(--card);border-radius:26px;padding:13px 18px;font-size:12.5px;color:var(--ink);text-align:center;transition:opacity .4s,transform .4s;box-shadow:var(--elev-hi);pointer-events:none}
+  .hint{position:absolute;left:14px;right:14px;bottom:calc(var(--barh) + 24px);z-index:40;background:var(--card);border-radius:26px;padding:13px 18px;font-size:12.5px;color:var(--ink);text-align:center;transition:opacity .4s,transform .4s;box-shadow:var(--elev-hi);pointer-events:none}
   .hint.gone{opacity:0;transform:translateY(8px)}
 
   @media (prefers-reduced-motion: reduce){
@@ -480,30 +487,32 @@
 
   <!-- ══ Die EINE Leiste ══ -->
   <nav class="bar" aria-label="Hauptnavigation">
-    <button class="navtab on" data-tab="heute">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>
-      <span>Heute</span>
-    </button>
-    <button class="navtab" data-tab="karte">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/></svg>
-      <span>Karte</span>
-    </button>
+    <div class="pillnav">
+      <button class="navtab on" data-tab="heute">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/></svg>
+        <span>Heute</span>
+      </button>
+      <button class="navtab" data-tab="karte">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.5 9 4l6 2.5L21 4v13.5L15 20l-6-2.5L3 20Z"/><path d="M9 4v13.5M15 6.5V20"/></svg>
+        <span>Karte</span>
+      </button>
+      <button class="navtab" data-tab="touren">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a4 4 0 0 0 0-8H9a4 4 0 0 1 0-8h7"/></svg>
+        <span>Touren</span>
+      </button>
+      <button class="navtab" data-tab="training">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 20V13M10 20V6M16 20v-9M22 20H2"/></svg>
+        <span>Training</span>
+      </button>
+    </div>
     <div class="recwrap">
       <button class="rec" id="btnRec" aria-label="Jetzt fahren">●</button>
       <span class="reclabel" id="recLabel" hidden>0:00</span>
     </div>
-    <button class="navtab" data-tab="touren">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h7a4 4 0 0 0 0-8H9a4 4 0 0 1 0-8h7"/></svg>
-      <span>Touren</span>
-    </button>
-    <button class="navtab" data-tab="training">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 20V13M10 20V6M16 20v-9M22 20H2"/></svg>
-      <span>Training</span>
-    </button>
   </nav>
 
   <!-- Erste-Nutzung-Hinweis -->
-  <div class="hint" id="hint">Eine Leiste für alles — der Knopf in der Mitte ist deine Fahrt.</div>
+  <div class="hint" id="hint">Eine Leiste für alles — der runde Knopf rechts ist deine Fahrt.</div>
 
   <!-- ══ Bereit-Screen (Vollbild, zwei Varianten) ══ -->
   <div class="full" id="readyLayer" hidden>
@@ -702,9 +711,9 @@
   }
   const readyLayer=$('readyLayer'), cockpit=$('cockpit');
   $('btnCloseReady').addEventListener('click',()=>closeFull(readyLayer));
-  $('btnMinimize').addEventListener('click',()=>{ closeFull(cockpit); toast('Aufzeichnung läuft weiter — Knopf in der Mitte'); });
+  $('btnMinimize').addEventListener('click',()=>{ closeFull(cockpit); toast('Aufzeichnung läuft weiter — Knopf rechts unten'); });
 
-  /* ── Der zentrale ●-Knopf „jetzt fahren“: LEER · ROUTE BEREIT · LÄUFT ── */
+  /* ── Der ●-Knopf „jetzt fahren“ rechts neben der Pille: LEER · ROUTE BEREIT · LÄUFT ── */
   function setRouteReady(name, stats){
     const km = parseFloat(stats.replace(',','.'));
     S.routeReady = {name, stats, km, kmLabel: de1(km)+' km'};
@@ -975,7 +984,7 @@
       if(!dragging) return;
       dragging=false;
       cockpit.style.transition='';
-      if(dy>90){ closeFull(cockpit); toast('Aufzeichnung läuft weiter — Knopf in der Mitte'); }
+      if(dy>90){ closeFull(cockpit); toast('Aufzeichnung läuft weiter — Knopf rechts unten'); }
       else cockpit.style.transform='';
     }
     grab.addEventListener('pointerup',end);
