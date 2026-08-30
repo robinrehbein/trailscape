@@ -1,0 +1,800 @@
+<title>Daumen-Dock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --bg:#12151A; --card:#1C2129; --map:#181D24;
+    --ink:#EAEDF2; --mut:rgba(234,237,242,.55); --hair:rgba(255,255,255,.08);
+    --acc:#F26B21; --acc-ink:#FFFFFF; --pos:#6BBF7E;
+    --dockh:122px; --toph:44px;
+    --sans:'Instrument Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    --disp:'Bricolage Grotesque','Instrument Sans',system-ui,sans-serif;
+    --mono:'Spline Sans Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{margin:0;background:#0B0D10;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  button{font-family:var(--sans);color:inherit;background:none;border:0;padding:0;cursor:pointer;font-size:inherit}
+  button:focus-visible, [tabindex]:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:8px}
+  .stage{min-height:100dvh;display:flex;align-items:center;justify-content:center}
+  .phone{position:relative;width:100%;height:100dvh;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
+  @media (min-width:480px){
+    .phone{max-width:400px;height:min(860px,94dvh);border-radius:28px;border:1px solid var(--hair);box-shadow:0 34px 90px rgba(0,0,0,.55)}
+  }
+  .eyebrow{font-family:var(--mono);text-transform:uppercase;letter-spacing:.18em;font-size:10px;color:var(--mut)}
+  .num{font-family:var(--disp);font-weight:800;font-variant-numeric:tabular-nums}
+
+  /* ── Topbar ── */
+  .topbar{flex:0 0 var(--toph);display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--hair);z-index:15}
+  .recpill{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;color:var(--acc);background:rgba(242,107,33,.12);border:1px solid rgba(242,107,33,.35);border-radius:999px;padding:5px 12px;min-height:28px}
+  .recpill .dot{animation:blink 1.2s step-end infinite}
+  @keyframes blink{50%{opacity:.25}}
+
+  /* ── Screens ── */
+  main{flex:1;position:relative;overflow:hidden;min-height:0}
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;gap:12px;overflow-y:auto;overflow-x:hidden;padding:16px 16px calc(var(--dockh) + 20px)}
+  .screen.active{display:flex;animation:screenIn .18s ease-out}
+  .screen.flush{padding:0;overflow:hidden;gap:0}
+  @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+  /* ── Cards & bits ── */
+  .card{background:var(--card);border-radius:14px;padding:14px}
+  .coach{border:1px solid rgba(255,255,255,.18);background:transparent}
+  .coach .eyebrow{color:var(--acc);margin-bottom:4px;display:block}
+  .coach p{margin:0;color:var(--mut)}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:999px;background:var(--acc);color:var(--acc-ink);font-weight:700;font-size:15px;padding:0 20px;width:100%}
+  .btn:active{transform:scale(.98)}
+  .chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:7px 13px;min-height:32px;font-size:12px;font-weight:600;background:var(--card);color:var(--ink);white-space:nowrap}
+  .chip.on{background:var(--acc);color:var(--acc-ink)}
+  .statmini{text-align:center}
+  .statmini b{font-family:var(--disp);font-weight:800;font-size:19px;font-variant-numeric:tabular-nums;display:block;line-height:1.1}
+  .statmini small{display:block;color:var(--mut);font-size:10.5px;margin-top:2px}
+
+  /* ── Heute ── */
+  .readiness{display:flex;gap:16px;align-items:center}
+  .ring{--v:82;flex:0 0 92px;width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--acc) calc(var(--v)*1%),rgba(255,255,255,.08) 0);display:flex;align-items:center;justify-content:center}
+  .ring>div{width:72px;height:72px;border-radius:50%;background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+  .ring b{font-family:var(--disp);font-weight:800;font-size:27px;font-variant-numeric:tabular-nums}
+  .ring small{font-family:var(--mono);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-top:3px}
+  .cockpit{display:flex;justify-content:space-around;padding:4px 0}
+
+  /* ── Map ── */
+  .mapfill{position:absolute;inset:0;background:var(--map);background-image:
+      repeating-radial-gradient(circle at 28% 72%, transparent 0 33px, rgba(255,255,255,.045) 33px 34px),
+      repeating-radial-gradient(circle at 78% 18%, transparent 0 47px, rgba(255,255,255,.035) 47px 48px),
+      repeating-radial-gradient(circle at 55% 45%, transparent 0 80px, rgba(255,255,255,.025) 80px 81px)}
+  .mapfill svg{position:absolute;inset:0;width:100%;height:100%}
+  .route{fill:none;stroke:var(--acc);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  .route.alt{stroke:rgba(242,107,33,.55);stroke-dasharray:6 5;cursor:pointer;pointer-events:stroke;stroke-width:2.2}
+  .route.alt.sel{stroke:var(--acc);stroke-dasharray:none;stroke-width:2.8}
+  .pt-start{fill:var(--acc)} .pt-end{fill:var(--ink)}
+  .overlay-top{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;z-index:2}
+  .overlay-top::-webkit-scrollbar{display:none}
+  .discover-hint{position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(18,21,26,.88);border:1px solid var(--hair);border-radius:999px;padding:7px 14px;font-size:12px;color:var(--mut);z-index:2;white-space:nowrap}
+  .plansheet{position:absolute;left:0;right:0;bottom:var(--dockh);background:var(--card);border-radius:18px 18px 0 0;padding:10px 16px 14px;display:flex;flex-direction:column;gap:10px;z-index:3;box-shadow:0 -10px 26px rgba(0,0,0,.3)}
+  .handle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin:0 auto}
+  .seg{display:flex;background:rgba(255,255,255,.06);border-radius:999px;padding:3px}
+  .seg button{flex:1;min-height:34px;border-radius:999px;font-weight:600;font-size:13px;color:var(--mut)}
+  .seg button.on{background:var(--acc);color:var(--acc-ink)}
+  .chiprow{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+  .chiprow::-webkit-scrollbar{display:none}
+  .chiprow .chip{background:rgba(255,255,255,.08)}
+  .chiprow .chip.on{background:var(--acc);color:var(--acc-ink)}
+  .routestats{font-family:var(--mono);font-size:12px;color:var(--mut);text-align:center;letter-spacing:.04em}
+
+  /* ── Plan ── */
+  .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden}
+  .bar>i{display:block;height:100%;width:50%;background:var(--acc);border-radius:3px}
+  .week{display:flex;flex-direction:column}
+  .wrow{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--hair)}
+  .wrow:last-child{border-bottom:0}
+  .wrow .day{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--mut);width:24px;flex:0 0 auto}
+  .wrow .lbl{flex:1;font-weight:600}
+  .wrow.rest .lbl{color:var(--mut);font-weight:400}
+  .wrow .done{color:var(--pos);font-weight:700}
+  .wrow.today{background:rgba(242,107,33,.09);border-radius:10px;padding-left:8px;padding-right:8px;border-bottom-color:transparent}
+  .wrow.today .lbl{color:var(--acc)}
+  .wrow.today .tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--acc)}
+
+  /* ── Fahren ── */
+  .ready-wrap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 24px var(--dockh);text-align:center}
+  .gpschip{border-color:rgba(107,191,126,.4);color:var(--pos);background:rgba(107,191,126,.1);border:1px solid rgba(107,191,126,.4)}
+  .ride-wrap{position:absolute;inset:0;overflow:hidden;touch-action:none}
+  .ride-track{display:flex;height:100%;transition:transform .22s ease-out;will-change:transform}
+  .ride-page{flex:0 0 100%;min-width:100%;position:relative;height:100%}
+  .hud{position:absolute;top:12px;left:12px;right:12px;background:var(--acc);color:var(--acc-ink);border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;z-index:2}
+  .hud .arrow{font-family:var(--disp);font-weight:800;font-size:26px;line-height:1}
+  .hud b{font-size:15px;display:block}
+  .hud small{opacity:.85;font-size:12px}
+  .ridestats{position:absolute;left:12px;right:12px;bottom:calc(var(--dockh) + 12px);background:var(--card);border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;z-index:2;box-shadow:0 8px 22px rgba(0,0,0,.35)}
+  .pur{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:4px;padding:0 24px var(--dockh);text-align:center}
+  .pur .bignum{font-family:var(--disp);font-weight:800;font-size:64px;line-height:1;color:var(--acc);font-variant-numeric:tabular-nums}
+  .pur .zone{font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--mut);text-transform:uppercase;margin-top:6px}
+  .pur .zone .ok{color:var(--pos)}
+  .pur .trio{display:flex;gap:28px;margin-top:22px}
+  .announce{display:flex;gap:10px;align-items:flex-start;background:var(--card);border-radius:14px;padding:13px 15px;margin-top:26px;max-width:300px;text-align:left}
+  .announce .spk{color:var(--acc);flex:0 0 auto}
+  .announce p{margin:0;color:var(--mut);font-size:13px}
+
+  /* ── Auswerten ── */
+  .tourrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 2px;border-bottom:1px solid var(--hair)}
+  .tourrow:last-child{border-bottom:0}
+  .tourrow .grow{flex:1;min-width:0}
+  .tourrow b{display:block;font-size:14px}
+  .tourrow small{color:var(--mut);font-size:12px}
+  .tlchip{flex:0 0 auto;font-family:var(--disp);font-weight:800;font-variant-numeric:tabular-nums;background:var(--card);color:var(--acc);border-radius:999px;padding:7px 13px;font-size:14px}
+  .backbtn{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--mut);min-height:36px;align-self:flex-start;padding:0 6px 0 0}
+  .detailmap{position:relative;height:170px;border-radius:14px;overflow:hidden;background:var(--map);background-image:repeating-radial-gradient(circle at 30% 70%, transparent 0 30px, rgba(255,255,255,.04) 30px 31px);flex:0 0 auto}
+  .detailmap svg{position:absolute;inset:0;width:100%;height:100%}
+  .statrow4{display:flex;justify-content:space-around;padding:2px 0}
+  .chartcard svg{display:block;width:100%}
+  .legend{display:flex;gap:7px;margin-top:10px;flex-wrap:wrap}
+  .legend .chip{background:rgba(255,255,255,.08);font-family:var(--mono);font-size:11px;letter-spacing:.03em}
+  .legend .chip.on{background:var(--acc);color:var(--acc-ink)}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tile{background:var(--card);border-radius:14px;padding:13px}
+  .tile b{font-family:var(--disp);font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.1}
+  .tile b .unit{font-size:13px;font-weight:600;color:var(--mut)}
+  .tile .trend{font-size:12px;font-weight:700;margin-left:4px}
+  .trend.good{color:var(--pos)}
+  .tile svg{display:block;width:100%;height:22px;margin-top:8px}
+  .tile .read{color:var(--mut);font-size:11px;margin-top:7px;line-height:1.35}
+  .spark{fill:none;stroke:var(--acc);stroke-width:1.8;vector-effect:non-scaling-stroke;stroke-linecap:round}
+
+  /* ── Dock (Variante B) ── */
+  .dock{position:absolute;left:0;right:0;bottom:0;z-index:20;background:rgba(18,21,26,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--hair);box-shadow:0 -14px 34px rgba(0,0,0,.4);padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+  .dock-worlds{display:flex;gap:8px}
+  .wpill{flex:1;min-height:44px;border-radius:999px;background:rgba(255,255,255,.05);color:var(--mut);font-weight:600;font-size:13.5px}
+  .wpill.on{background:var(--acc);color:var(--acc-ink);font-weight:700}
+  .wpill.more{flex:0 0 46px;font-size:19px;letter-spacing:.05em}
+  .subrow{display:flex;gap:8px;min-height:48px;align-items:stretch}
+  .tab{flex:1;border-radius:999px;font-weight:600;font-size:13.5px;color:var(--mut);min-height:48px}
+  .tab.on{background:rgba(242,107,33,.16);color:var(--acc);font-weight:700}
+  .startbtn{flex:1;min-height:48px;border-radius:999px;background:var(--acc);color:var(--acc-ink);font-weight:700;font-size:15px}
+  .dotsbtn{flex:0 0 56px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:999px;background:rgba(255,255,255,.05)}
+  .dotsbtn i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.28)}
+  .dotsbtn i.on{background:var(--acc)}
+  .ridebtn{flex:1;min-height:48px;border-radius:999px;background:rgba(255,255,255,.08);font-weight:700;font-size:14px}
+  .ridebtn.stop{background:rgba(242,107,33,.16);color:var(--acc)}
+
+  /* ── Sheet, Modal, Toast, Hint ── */
+  .layer{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;justify-content:flex-end}
+  .layer.center{justify-content:center;align-items:center;padding:24px}
+  .scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);border:0;cursor:default}
+  .sheet{position:relative;background:var(--card);border-radius:18px 18px 0 0;padding:10px 16px 22px;max-height:78%;overflow-y:auto;display:flex;flex-direction:column;transition:transform .2s ease-out}
+  .layer[hidden]{display:none}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 0 4px;touch-action:none;cursor:grab}
+  .sheet-head b{font-size:14px}
+  .xbtn{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--mut);flex:0 0 auto}
+  .srow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:13px 2px;border-bottom:1px solid var(--hair);min-height:48px}
+  .srow:last-child{border-bottom:0}
+  .srow .grow{flex:1;min-width:0}
+  .srow b{display:block;font-size:14px;font-weight:600}
+  .srow small{color:var(--mut);font-size:12px}
+  .srow .chev{color:var(--mut)}
+  .switch{position:relative;flex:0 0 46px;width:46px;height:28px;border-radius:999px;background:rgba(255,255,255,.14);transition:background .15s}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s}
+  .switch[aria-checked="true"]{background:var(--acc)}
+  .switch[aria-checked="true"]::after{transform:translateX(18px)}
+  .modalcard{position:relative;background:var(--card);border-radius:18px;padding:22px 20px 18px;width:100%;max-width:320px;text-align:center;display:flex;flex-direction:column;gap:12px}
+  .modalcard .num-line{font-family:var(--disp);font-weight:800;font-size:21px;font-variant-numeric:tabular-nums}
+  .toast{position:absolute;left:50%;bottom:calc(var(--dockh) + 16px);transform:translateX(-50%) translateY(8px);background:#262C36;border:1px solid var(--hair);color:var(--ink);border-radius:999px;padding:9px 17px;font-size:12.5px;z-index:60;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;white-space:nowrap;max-width:90%}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .hint{position:absolute;left:14px;right:14px;bottom:calc(var(--dockh) + 14px);z-index:40;background:rgba(38,44,54,.96);border:1px solid var(--hair);border-radius:14px;padding:12px 16px;font-size:12.5px;color:var(--ink);text-align:center;transition:opacity .4s,transform .4s;box-shadow:0 10px 26px rgba(0,0,0,.4)}
+  .hint.gone{opacity:0;transform:translateY(8px);pointer-events:none}
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{transition:none!important;animation:none!important}
+  }
+</style>
+
+<div class="stage">
+<div class="phone">
+
+  <!-- Titel-/Statuszeile -->
+  <header class="topbar">
+    <span class="eyebrow" id="topTitle">Planen</span>
+    <button class="recpill" id="recPill" hidden aria-label="Laufende Aufzeichnung öffnen"><span class="dot">●</span> REC <span id="recTime">0:00</span> · <span id="recDist">0,0</span> km</button>
+  </header>
+
+  <main>
+
+    <!-- ══ PLANEN · Heute ══ -->
+    <section class="screen" id="s-planen-heute">
+      <div class="card readiness">
+        <div class="ring" style="--v:82"><div><b class="num">82</b><small>bereit</small></div></div>
+        <div>
+          <b style="font-size:15px;display:block;line-height:1.35">Erholt. Heute zahlt sich Grundlage aus.</b>
+          <div style="color:var(--mut);margin-top:4px">GA1 · 45 km · Zone 2 · ~2:00 h</div>
+        </div>
+      </div>
+      <button class="btn" id="btnBuildRoute">Runde zum Plan bauen</button>
+      <div class="cockpit">
+        <div class="statmini"><b>78<span style="color:var(--mut);font-weight:600">/120</span></b><small>Wochen-km</small></div>
+        <div class="statmini"><b style="color:var(--acc)">−9</b><small>Form</small></div>
+        <div class="statmini"><b>6/12</b><small>Planwoche</small></div>
+      </div>
+      <div class="card coach"><span class="eyebrow">Coach</span><p>Samstag wird lang (80 km) — heute nicht überziehen.</p></div>
+    </section>
+
+    <!-- ══ PLANEN · Karte ══ -->
+    <section class="screen flush" id="s-planen-karte">
+      <div class="mapfill">
+        <svg viewBox="0 0 100 140" preserveAspectRatio="none" aria-label="Kartenansicht mit geplanter Route">
+          <path class="route alt" id="alt1" d="M22 122 C 8 94, 30 72, 24 46 S 50 20, 78 12" hidden/>
+          <path class="route alt" id="alt2" d="M22 122 C 56 114, 82 94, 74 64 S 58 30, 78 12" hidden/>
+          <path class="route alt" id="alt3" d="M22 122 C 40 112, 72 108, 88 82 S 92 38, 78 12" hidden/>
+          <path class="route" id="mainRoute" d="M22 122 C 46 100, 24 74, 52 58 S 86 34, 78 12"/>
+          <circle class="pt-start" cx="22" cy="122" r="2.6"/>
+          <circle class="pt-end" cx="78" cy="12" r="2.6"/>
+        </svg>
+        <div class="overlay-top">
+          <button class="chip" id="chipZiel">🔍 Ziel</button>
+          <button class="chip on" id="chipPlan">Zum Plan: 45 km</button>
+          <button class="chip" id="chipDiscover">✦ Entdecken</button>
+        </div>
+        <div class="discover-hint" id="discoverHint" hidden>Tippe eine Route an</div>
+      </div>
+      <div class="plansheet">
+        <div class="handle"></div>
+        <div class="seg" role="group" aria-label="Radtyp">
+          <button class="on" id="segGravel">Gravel</button>
+          <button id="segRenn">Rennrad</button>
+        </div>
+        <div class="chiprow" role="group" aria-label="Untergrund">
+          <button class="chip on" data-surface="gemischt">Gemischt</button>
+          <button class="chip" data-surface="asphalt">Asphalt</button>
+          <button class="chip" data-surface="radwege">Radwege</button>
+        </div>
+        <div class="routestats" id="routeStats">44,8 km · 380 Hm · ~1:58 h</div>
+        <button class="btn" id="btnRideNow">Fahren →</button>
+      </div>
+    </section>
+
+    <!-- ══ PLANEN · Plan ══ -->
+    <section class="screen" id="s-planen-plan">
+      <div class="card">
+        <b style="font-size:15px">Woche 6 von 12 · Aufbau</b>
+        <div class="bar" style="margin-top:10px"><i></i></div>
+      </div>
+      <div class="card week">
+        <div class="wrow rest"><span class="day">Mo</span><span class="lbl">Ruhetag</span></div>
+        <div class="wrow"><span class="day">Di</span><span class="lbl">GA1 · 45 km</span><span class="done">✓</span></div>
+        <div class="wrow rest"><span class="day">Mi</span><span class="lbl">Ruhetag</span></div>
+        <div class="wrow today"><span class="day" style="color:var(--acc)">Do</span><span class="lbl">GA1 · 45 km</span><span class="tag">← HEUTE</span></div>
+        <div class="wrow rest"><span class="day">Fr</span><span class="lbl">Ruhetag</span></div>
+        <div class="wrow"><span class="day">Sa</span><span class="lbl">Lange Fahrt · 80 km</span></div>
+        <div class="wrow rest"><span class="day">So</span><span class="lbl">Ruhetag</span></div>
+      </div>
+      <div class="card coach"><span class="eyebrow">Coach</span><p>Die Erholungswoche ab Montag macht aus Ermüdung Form.</p></div>
+    </section>
+
+    <!-- ══ FAHREN ══ -->
+    <section class="screen flush" id="s-fahren">
+      <!-- Bereit -->
+      <div class="ready-wrap" id="readyWrap">
+        <span class="eyebrow">Bereit</span>
+        <span class="chip gpschip">GPS ✓</span>
+        <div>
+          <b style="font-size:20px;font-family:var(--disp);font-weight:800">GA1 · 45 km</b>
+          <div style="color:var(--mut);margin-top:4px">Zone 2 · ~2:00 h · Runde zum Plan</div>
+        </div>
+        <div style="color:var(--mut);font-size:12px">Start unten im Dock.</div>
+      </div>
+      <!-- Aufzeichnung: 2 wischbare Seiten -->
+      <div class="ride-wrap" id="rideWrap" hidden>
+        <div class="ride-track" id="rideTrack">
+          <!-- Seite 1: Karte -->
+          <div class="ride-page">
+            <div class="mapfill">
+              <svg viewBox="0 0 100 160" preserveAspectRatio="none" aria-label="Fahrkarte">
+                <path class="route" d="M30 142 C 52 118, 36 92, 60 74 S 88 46, 80 20"/>
+                <circle class="pt-start" cx="30" cy="142" r="2.6"/>
+              </svg>
+            </div>
+            <div class="hud"><span class="arrow">↰</span><div><b>In 220 m links</b><small>Kiesweg am Wehr</small></div></div>
+            <div class="ridestats">
+              <div class="statmini"><b id="rSpeed1">24,3</b><small>km/h</small></div>
+              <div class="statmini"><b id="rHr1" style="color:var(--acc)">142</b><small>♥ <span style="color:var(--pos)">Z2 ✓</span></small></div>
+              <div class="statmini"><b id="rLeft1">44,8</b><small>km übrig</small></div>
+            </div>
+          </div>
+          <!-- Seite 2: Pur -->
+          <div class="ride-page">
+            <div class="pur">
+              <div class="bignum" id="rHr2">142</div>
+              <div class="zone">Puls · Zone 2 <span class="ok">✓</span></div>
+              <div class="trio">
+                <div class="statmini"><b id="rSpeed2">24,3</b><small>km/h</small></div>
+                <div class="statmini"><b id="rDist2">0,0</b><small>km</small></div>
+                <div class="statmini"><b id="rTime2">0:00</b><small>Zeit</small></div>
+              </div>
+              <div class="announce"><span class="spk">🔊</span><p id="announceText">„Gleich kommt die einzige Rampe — Trittfrequenz hoch."</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ AUSWERTEN · Touren ══ -->
+    <section class="screen" id="s-ausw-touren">
+      <span class="eyebrow">Letzte Touren</span>
+      <div class="card" style="padding:2px 14px" id="tourList"></div>
+    </section>
+
+    <!-- ══ AUSWERTEN · Tour-Detail ══ -->
+    <section class="screen" id="s-tour-detail">
+      <button class="backbtn" id="btnBackTours">‹ Touren</button>
+      <div>
+        <b style="font-size:18px;font-family:var(--disp);font-weight:800" id="dName">Feierabendrunde</b>
+        <div style="color:var(--mut);font-size:12px;margin-top:2px" id="dDate">Di 26.8.</div>
+      </div>
+      <div class="detailmap">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Tourspur">
+          <path class="route" d="M16 84 C 36 62, 28 40, 54 34 S 86 24, 80 10"/>
+          <circle class="pt-start" cx="16" cy="84" r="2.8"/>
+          <circle class="pt-end" cx="80" cy="10" r="2.8"/>
+        </svg>
+      </div>
+      <div class="card statrow4">
+        <div class="statmini"><b id="dKm">32,4</b><small>km</small></div>
+        <div class="statmini"><b id="dTime">1:24</b><small>h:min</small></div>
+        <div class="statmini"><b id="dHm">410</b><small>Hm</small></div>
+        <div class="statmini"><b id="dHr">138</b><small>Ø ♥</small></div>
+      </div>
+      <div class="card chartcard">
+        <span class="eyebrow">Höhenprofil</span>
+        <svg viewBox="0 0 100 26" preserveAspectRatio="none" style="height:52px;margin-top:8px">
+          <path d="M0 21 L14 13 L26 17 L40 6 L54 15 L68 9 L82 14 L100 19 L100 26 L0 26 Z" fill="rgba(242,107,33,.28)" stroke="var(--acc)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+        </svg>
+      </div>
+      <div class="card coach"><span class="eyebrow">Coach</span><p id="dCoach">Entkopplung 4,2 % — Grundlage stabil. Diese Fahrt hat die GA1-Einheit erfüllt.</p></div>
+    </section>
+
+    <!-- ══ AUSWERTEN · Training ══ -->
+    <section class="screen" id="s-ausw-training">
+      <div class="card chartcard">
+        <span class="eyebrow">Form · 90 Tage</span>
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:96px;margin-top:10px" aria-label="Formkurve über 90 Tage">
+          <polyline points="0,34 12,31 25,32 38,25 50,28 63,23 76,25 88,20 100,24" fill="none" stroke="rgba(234,237,242,.4)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+          <polyline points="0,30 12,29 25,26 38,27 50,23 63,21 76,19 88,18 100,16" fill="none" stroke="var(--acc)" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
+          <polyline points="0,26 12,27 25,23 38,29 50,25 63,28 76,26 88,29 100,31" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+        </svg>
+        <div class="legend">
+          <span class="chip on">Fit 62</span>
+          <span class="chip">Erm 71</span>
+          <span class="chip">Form −9</span>
+        </div>
+      </div>
+      <div class="card coach"><span class="eyebrow">Coach</span><p>Sechs Wochen Aufbau tragen — die Erholungswoche ab Montag macht daraus Form.</p></div>
+      <div class="card">
+        <b>Woche 6/12</b>
+        <div class="bar" style="margin:10px 0"><i></i></div>
+        <div style="color:var(--mut);font-size:12.5px">Sa: Lange Fahrt 80 km · So: Ruhetag</div>
+      </div>
+    </section>
+
+    <!-- ══ AUSWERTEN · Werte ══ -->
+    <section class="screen" id="s-ausw-werte">
+      <span class="eyebrow">Vitalwerte</span>
+      <div class="tiles">
+        <div class="tile">
+          <span class="eyebrow">Ruhepuls</span>
+          <div style="margin-top:6px"><b class="num">52</b><span class="trend good">↓ gut</span></div>
+          <svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark" points="0,6 16,8 33,7 50,11 66,10 83,14 100,15"/></svg>
+          <div class="read">Drei Schläge unter deinem Monatsmittel.</div>
+        </div>
+        <div class="tile">
+          <span class="eyebrow">HRV</span>
+          <div style="margin-top:6px"><b class="num">68 <span class="unit">ms</span></b><span class="trend good">↑</span></div>
+          <svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark" points="0,14 16,15 33,11 50,12 66,8 83,9 100,4"/></svg>
+          <div class="read">Steigend — die Erholung greift.</div>
+        </div>
+        <div class="tile">
+          <span class="eyebrow">Schlaf</span>
+          <div style="margin-top:6px"><b class="num">7:20 <span class="unit">h</span></b></div>
+          <svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark" points="0,12 16,9 33,13 50,10 66,7 83,10 100,6"/></svg>
+          <div class="read">Solide Nacht, leicht über Soll.</div>
+        </div>
+        <div class="tile">
+          <span class="eyebrow">VO₂max</span>
+          <div style="margin-top:6px"><b class="num">48</b></div>
+          <svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline class="spark" points="0,15 16,13 33,13 50,11 66,10 83,10 100,9"/></svg>
+          <div class="read">Stabil seit vier Wochen.</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ══ Daumen-Dock ══ -->
+  <nav class="dock" aria-label="Hauptnavigation">
+    <div class="dock-worlds">
+      <button class="wpill on" data-world="planen">Planen</button>
+      <button class="wpill" data-world="fahren">Fahren</button>
+      <button class="wpill" data-world="auswerten">Auswerten</button>
+      <button class="wpill more" id="btnMore" aria-label="Mehr">⋯</button>
+    </div>
+    <div class="subrow" id="subPlanen">
+      <button class="tab on" data-sec="heute">Heute</button>
+      <button class="tab" data-sec="karte">Karte</button>
+      <button class="tab" data-sec="plan">Plan</button>
+    </div>
+    <div class="subrow" id="subAusw" hidden>
+      <button class="tab on" data-sec="touren">Touren</button>
+      <button class="tab" data-sec="training">Training</button>
+      <button class="tab" data-sec="werte">Werte</button>
+    </div>
+    <div class="subrow" id="subReady" hidden>
+      <button class="startbtn" id="btnStart">● Aufzeichnung starten</button>
+    </div>
+    <div class="subrow" id="subRide" hidden>
+      <button class="dotsbtn" id="btnDots" aria-label="Fahrseite wechseln"><i class="on" id="dot0"></i><i id="dot1"></i></button>
+      <button class="ridebtn" id="btnPause">❙❙ Pause</button>
+      <button class="ridebtn stop" id="btnStop">■ Beenden</button>
+    </div>
+  </nav>
+
+  <!-- Erste-Nutzung-Hinweis -->
+  <div class="hint" id="hint">Alles Wichtige liegt unten: oben im Dock die Welt, darunter der Bereich.</div>
+
+  <!-- Mehr-Sheet -->
+  <div class="layer" id="moreLayer" hidden>
+    <button class="scrim" id="moreScrim" aria-label="Schließen"></button>
+    <div class="sheet" id="moreSheet" role="dialog" aria-label="Einstellungen">
+      <div class="sheet-head" id="sheetHead">
+        <div><div class="handle" style="margin:0 auto 10px"></div><b>Einstellungen — gelten in allen Welten</b></div>
+        <button class="xbtn" id="btnCloseMore" aria-label="Schließen">✕</button>
+      </div>
+      <button class="srow" data-toast><span class="grow"><b>Profil &amp; Zonen</b></span><span class="chev">›</span></button>
+      <div class="srow"><span class="grow"><b>Coach-Stimme</b><small>Ansagen während der Fahrt</small></span><button class="switch" id="swVoice" role="switch" aria-checked="true" aria-label="Coach-Stimme"></button></div>
+      <div class="srow"><span class="grow"><b>Tageseinheit 7:00</b><small>Erinnerung an den Tagesplan</small></span><button class="switch" id="swReminder" role="switch" aria-checked="true" aria-label="Tageseinheit 7:00"></button></div>
+      <button class="srow" data-toast><span class="grow"><b>Offline-Karten</b><small>2 Regionen · 184 MB</small></span><span class="chev">›</span></button>
+      <button class="srow" data-toast><span class="grow"><b>Sync</b></span><span class="chev">›</span></button>
+      <button class="srow" data-toast><span class="grow"><b>Daten &amp; Backup</b></span><span class="chev">›</span></button>
+      <button class="srow" data-toast><span class="grow"><b>Health Connect</b></span><span class="chev">›</span></button>
+      <button class="srow" data-toast><span class="grow"><b>Über</b><small>v2.0.184</small></span><span class="chev">›</span></button>
+    </div>
+  </div>
+
+  <!-- Zusammenfassung nach Beenden -->
+  <div class="layer center" id="sumLayer" hidden>
+    <div class="scrim"></div>
+    <div class="modalcard" role="dialog" aria-label="Fahrt gespeichert">
+      <span class="eyebrow" style="color:var(--pos)">Fahrt gespeichert</span>
+      <div class="num-line" id="sumLine">4,2 km · 12:34 · TL ≈ 8</div>
+      <div style="color:var(--mut);font-size:12.5px">Heutige GA1-Runde</div>
+      <button class="btn" id="btnToReview">Zur Auswertung</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+
+</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const $ = id => document.getElementById(id);
+
+  /* ── Zustand ── */
+  const S = {
+    world:'planen',
+    sec:{planen:'heute', auswerten:'touren'},
+    riding:false, paused:false,
+    t:0, dist:0, speed:24.3, hr:142, hrSum:0, hrN:0,
+    page:0, timer:null, discover:false, altSel:null,
+    seg:'gravel', surface:'gemischt'
+  };
+
+  const tours = [
+    {name:'Feierabendrunde',      date:'Di 26.8.', km:'32,4', hm:410, hr:138, tl:68,  time:'1:24'},
+    {name:'Schotterschleife Nord',date:'So 24.8.', km:'61,0', hm:720, hr:132, tl:121, time:'2:41'},
+    {name:'GA1 Kanalrunde',       date:'Fr 22.8.', km:'45,2', hm:180, hr:128, tl:74,  time:'1:58'},
+    {name:'Waldkante West',       date:'Di 19.8.', km:'28,7', hm:350, hr:141, tl:61,  time:'1:19'},
+    {name:'Intervalle K3',        date:'Do 17.8.', km:'38,9', hm:490, hr:152, tl:98,  time:'1:47'}
+  ];
+
+  const announcements = [
+    '„Gleich kommt die einzige Rampe — Trittfrequenz hoch."',
+    '„Zone 2 sauber gehalten — genau so."',
+    '„Halbzeit. Trink was."'
+  ];
+
+  const routeVals = {
+    gravel: {gemischt:'44,8 km · 380 Hm · ~1:58 h', asphalt:'46,2 km · 310 Hm · ~1:54 h', radwege:'43,1 km · 240 Hm · ~1:56 h'},
+    rennrad:{gemischt:'47,9 km · 320 Hm · ~1:52 h', asphalt:'49,5 km · 290 Hm · ~1:50 h', radwege:'45,6 km · 210 Hm · ~1:53 h'}
+  };
+  const altVals = {alt1:'38,9 km · 520 Hm · ~1:50 h', alt2:'52,6 km · 610 Hm · ~2:20 h', alt3:'47,3 km · 300 Hm · ~1:55 h'};
+
+  /* ── Helfer ── */
+  const de1 = n => n.toFixed(1).replace('.',',');
+  function fmtTime(s){
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=s%60;
+    return h>0 ? h+':'+String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0') : m+':'+String(ss).padStart(2,'0');
+  }
+  let toastTimer=null;
+  function toast(msg){
+    const t=$('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1700);
+  }
+
+  /* ── Screens & Navigation ── */
+  const screenIds=['s-planen-heute','s-planen-karte','s-planen-plan','s-fahren','s-ausw-touren','s-tour-detail','s-ausw-training','s-ausw-werte'];
+  function showScreen(id){
+    screenIds.forEach(s=>$(s).classList.toggle('active', s===id));
+  }
+  function screenFor(world){
+    if(world==='planen')   return 's-planen-'+S.sec.planen;
+    if(world==='auswerten')return 's-ausw-'+S.sec.auswerten;
+    return 's-fahren';
+  }
+  function updateDock(){
+    document.querySelectorAll('.wpill[data-world]').forEach(b=>b.classList.toggle('on', b.dataset.world===S.world));
+    $('subPlanen').hidden = S.world!=='planen';
+    $('subAusw').hidden   = S.world!=='auswerten';
+    $('subReady').hidden  = !(S.world==='fahren' && !S.riding);
+    $('subRide').hidden   = !(S.world==='fahren' && S.riding);
+    document.querySelectorAll('#subPlanen .tab').forEach(b=>b.classList.toggle('on', b.dataset.sec===S.sec.planen));
+    document.querySelectorAll('#subAusw .tab').forEach(b=>b.classList.toggle('on', b.dataset.sec===S.sec.auswerten));
+  }
+  function updateTop(){
+    $('topTitle').textContent = {planen:'Planen',fahren:'Fahren',auswerten:'Auswerten'}[S.world];
+    $('recPill').hidden = !(S.riding && S.world!=='fahren');
+  }
+  function setWorld(w){
+    S.world=w;
+    showScreen(screenFor(w));
+    if(w==='fahren') syncRideVisibility();
+    updateDock(); updateTop();
+  }
+  function setSection(world,sec){
+    S.sec[world]=sec;
+    if(S.world===world) showScreen(screenFor(world));
+    updateDock();
+  }
+
+  document.querySelectorAll('.wpill[data-world]').forEach(b=>b.addEventListener('click',()=>setWorld(b.dataset.world)));
+  document.querySelectorAll('#subPlanen .tab').forEach(b=>b.addEventListener('click',()=>setSection('planen',b.dataset.sec)));
+  document.querySelectorAll('#subAusw .tab').forEach(b=>b.addEventListener('click',()=>setSection('auswerten',b.dataset.sec)));
+  $('recPill').addEventListener('click',()=>setWorld('fahren'));
+
+  /* ── Planen: Heute ── */
+  $('btnBuildRoute').addEventListener('click',()=>{
+    exitDiscover();
+    setSection('planen','karte');
+    toast('Runde zum Plan: 45 km erstellt');
+  });
+
+  /* ── Planen: Karte ── */
+  function updateRouteStats(){
+    if(S.altSel){ $('routeStats').textContent = altVals[S.altSel]; return; }
+    $('routeStats').textContent = routeVals[S.seg][S.surface];
+  }
+  function exitDiscover(){
+    S.discover=false; S.altSel=null;
+    ['alt1','alt2','alt3'].forEach(id=>{const p=$(id); p.hidden=true; p.classList.remove('sel');});
+    $('mainRoute').style.opacity='';
+    $('discoverHint').hidden=true;
+    $('chipDiscover').classList.remove('on');
+    $('chipPlan').classList.add('on');
+    updateRouteStats();
+  }
+  $('chipDiscover').addEventListener('click',()=>{
+    if(S.discover){ exitDiscover(); return; }
+    S.discover=true;
+    ['alt1','alt2','alt3'].forEach(id=>{$(id).hidden=false;});
+    $('mainRoute').style.opacity='.3';
+    $('discoverHint').hidden=false;
+    $('chipDiscover').classList.add('on');
+    $('chipPlan').classList.remove('on');
+  });
+  $('chipPlan').addEventListener('click',exitDiscover);
+  $('chipZiel').addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt'));
+  ['alt1','alt2','alt3'].forEach(id=>{
+    $(id).addEventListener('click',()=>{
+      S.altSel=id;
+      ['alt1','alt2','alt3'].forEach(x=>$(x).classList.remove('sel'));
+      $(id).classList.add('sel');
+      $('discoverHint').hidden=true;
+      updateRouteStats();
+      toast('Route übernommen — '+altVals[id]);
+    });
+  });
+  $('segGravel').addEventListener('click',()=>{S.seg='gravel';S.altSel=null;$('segGravel').classList.add('on');$('segRenn').classList.remove('on');updateRouteStats();});
+  $('segRenn').addEventListener('click',()=>{S.seg='rennrad';S.altSel=null;$('segRenn').classList.add('on');$('segGravel').classList.remove('on');updateRouteStats();});
+  document.querySelectorAll('[data-surface]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      S.surface=b.dataset.surface; S.altSel=null;
+      document.querySelectorAll('[data-surface]').forEach(x=>x.classList.toggle('on',x===b));
+      updateRouteStats();
+    });
+  });
+  $('btnRideNow').addEventListener('click',()=>{ startRide(); setWorld('fahren'); });
+
+  /* ── Fahren: Simulation ── */
+  function syncRideVisibility(){
+    $('readyWrap').hidden = S.riding;
+    $('rideWrap').hidden  = !S.riding;
+  }
+  function setPage(p){
+    S.page=p;
+    $('rideTrack').style.transform='translateX('+(-p*100)+'%)';
+    $('dot0').classList.toggle('on',p===0);
+    $('dot1').classList.toggle('on',p===1);
+  }
+  function updateRideUI(){
+    const km = S.dist/1000;
+    const left = Math.max(0, 44.8-km);
+    $('rSpeed1').textContent = de1(S.speed);
+    $('rSpeed2').textContent = de1(S.speed);
+    $('rHr1').textContent = S.hr;
+    $('rHr2').textContent = S.hr;
+    $('rLeft1').textContent = de1(left);
+    $('rDist2').textContent = de1(km);
+    $('rTime2').textContent = fmtTime(S.t);
+    $('recTime').textContent = fmtTime(S.t);
+    $('recDist').textContent = de1(km);
+    const a = announcements[Math.floor(S.t/8)%announcements.length];
+    if($('announceText').textContent!==a) $('announceText').textContent=a;
+  }
+  function tick(){
+    if(S.paused) return;
+    S.t++;
+    S.speed = Math.min(27, Math.max(22, S.speed + (Math.random()*1.6-0.8)));
+    S.dist += S.speed/3.6;
+    S.hr = Math.min(147, Math.max(138, S.hr + Math.round(Math.random()*4-2)));
+    S.hrSum += S.hr; S.hrN++;
+    updateRideUI();
+  }
+  function startRide(){
+    if(S.riding) return;
+    S.riding=true; S.paused=false;
+    S.t=0; S.dist=0; S.speed=24.3; S.hr=142; S.hrSum=0; S.hrN=0;
+    setPage(0);
+    $('btnPause').textContent='❙❙ Pause';
+    updateRideUI();
+    syncRideVisibility();
+    S.timer=setInterval(tick,1000);
+    updateDock(); updateTop();
+  }
+  $('btnStart').addEventListener('click',startRide);
+  $('btnPause').addEventListener('click',()=>{
+    if(!S.riding) return;
+    S.paused=!S.paused;
+    $('btnPause').textContent = S.paused ? '▶ Weiter' : '❙❙ Pause';
+  });
+  $('btnDots').addEventListener('click',()=>setPage(S.page===0?1:0));
+
+  $('btnStop').addEventListener('click',()=>{
+    if(!S.riding) return;
+    clearInterval(S.timer); S.timer=null;
+    const km = S.dist/1000;
+    const tl = Math.max(1, Math.round(S.t/60*0.62));
+    $('sumLine').textContent = de1(km)+' km · '+fmtTime(S.t)+' · TL ≈ '+tl;
+    $('sumLayer').hidden=false;
+  });
+
+  $('btnToReview').addEventListener('click',()=>{
+    const km = S.dist/1000;
+    const mins = Math.max(1, Math.round(S.t/60));
+    const avgHr = S.hrN>0 ? Math.round(S.hrSum/S.hrN) : 142;
+    tours.unshift({
+      name:'Heutige GA1-Runde', date:'Heute',
+      km:de1(km), hm:Math.round(km*8.5), hr:avgHr,
+      tl:Math.max(1, Math.round(S.t/60*0.62)),
+      time:Math.floor(mins/60)+':'+String(mins%60).padStart(2,'0')
+    });
+    renderTours();
+    $('sumLayer').hidden=true;
+    S.riding=false; S.paused=false;
+    syncRideVisibility();
+    S.world='auswerten'; S.sec.auswerten='touren';
+    openDetail(0);
+    updateDock(); updateTop();
+  });
+
+  /* ── Wischen (Touch + Maus) auf den Fahrseiten ── */
+  (function(){
+    const wrap=$('rideWrap'), track=$('rideTrack');
+    let startX=0, dx=0, dragging=false;
+    wrap.addEventListener('pointerdown',e=>{
+      dragging=true; startX=e.clientX; dx=0;
+      track.style.transition='none';
+      wrap.setPointerCapture(e.pointerId);
+    });
+    wrap.addEventListener('pointermove',e=>{
+      if(!dragging) return;
+      dx=e.clientX-startX;
+      track.style.transform='translateX(calc('+(-S.page*100)+'% + '+dx+'px))';
+    });
+    function endDrag(){
+      if(!dragging) return;
+      dragging=false;
+      track.style.transition='';
+      if(dx<-60 && S.page===0) setPage(1);
+      else if(dx>60 && S.page===1) setPage(0);
+      else setPage(S.page);
+    }
+    wrap.addEventListener('pointerup',endDrag);
+    wrap.addEventListener('pointercancel',endDrag);
+  })();
+
+  /* ── Auswerten: Touren & Detail ── */
+  function renderTours(){
+    const list=$('tourList');
+    list.innerHTML='';
+    tours.forEach((t,i)=>{
+      const row=document.createElement('button');
+      row.className='tourrow';
+      row.innerHTML='<span class="grow"><b></b><small></small></span><span class="tlchip"></span>';
+      row.querySelector('b').textContent=t.name;
+      row.querySelector('small').textContent=t.date+' · '+t.km+' km · '+t.hm+' Hm · Ø '+t.hr;
+      row.querySelector('.tlchip').textContent='TL '+t.tl;
+      row.addEventListener('click',()=>openDetail(i));
+      list.appendChild(row);
+    });
+  }
+  function openDetail(i){
+    const t=tours[i];
+    $('dName').textContent=t.name;
+    $('dDate').textContent=t.date;
+    $('dKm').textContent=t.km;
+    $('dTime').textContent=t.time;
+    $('dHm').textContent=t.hm;
+    $('dHr').textContent=t.hr;
+    $('dCoach').textContent='Entkopplung 4,2 % — Grundlage stabil. Diese Fahrt hat die GA1-Einheit erfüllt.';
+    showScreen('s-tour-detail');
+    updateDock(); updateTop();
+  }
+  $('btnBackTours').addEventListener('click',()=>setSection('auswerten','touren'));
+  renderTours();
+
+  /* ── Mehr-Sheet ── */
+  const moreLayer=$('moreLayer'), moreSheet=$('moreSheet');
+  function openMore(){ moreLayer.hidden=false; moreSheet.style.transform=''; }
+  function closeMore(){ moreLayer.hidden=true; moreSheet.style.transform=''; }
+  $('btnMore').addEventListener('click',openMore);
+  $('btnCloseMore').addEventListener('click',closeMore);
+  $('moreScrim').addEventListener('click',closeMore);
+  document.querySelectorAll('#moreSheet [data-toast]').forEach(b=>b.addEventListener('click',()=>toast('Im Prototyp nicht hinterlegt')));
+  [['swVoice'],['swReminder']].forEach(([id])=>{
+    $(id).addEventListener('click',()=>{
+      const el=$(id);
+      el.setAttribute('aria-checked', el.getAttribute('aria-checked')==='true' ? 'false':'true');
+    });
+  });
+  /* Wisch nach unten am Sheet-Kopf */
+  (function(){
+    const head=$('sheetHead');
+    let startY=0, dy=0, dragging=false;
+    head.addEventListener('pointerdown',e=>{
+      if(e.target.id==='btnCloseMore') return;
+      dragging=true; startY=e.clientY; dy=0;
+      moreSheet.style.transition='none';
+      head.setPointerCapture(e.pointerId);
+    });
+    head.addEventListener('pointermove',e=>{
+      if(!dragging) return;
+      dy=Math.max(0,e.clientY-startY);
+      moreSheet.style.transform='translateY('+dy+'px)';
+    });
+    function end(){
+      if(!dragging) return;
+      dragging=false;
+      moreSheet.style.transition='';
+      if(dy>90) closeMore(); else moreSheet.style.transform='';
+    }
+    head.addEventListener('pointerup',end);
+    head.addEventListener('pointercancel',end);
+  })();
+
+  /* ── Erste-Nutzung-Hinweis ── */
+  const hint=$('hint');
+  setTimeout(()=>hint.classList.add('gone'),4200);
+  hint.addEventListener('click',()=>hint.classList.add('gone'));
+
+  /* ── Init ── */
+  setWorld('planen');
+})();
+</script>
