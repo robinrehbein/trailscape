@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -54,6 +56,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -139,6 +142,24 @@ internal fun PlanningSheet(
     onExpandedChange: (Boolean) -> Unit,
     profile: RouteProfile,
     onProfileChange: (RouteProfile) -> Unit,
+    /**
+     * Die gewaehlte Streckenart: `false` = „Einfach" (vom ersten zum letzten
+     * Wegpunkt), `true` = „Rundweg" (die Route kehrt vom letzten Wegpunkt zum
+     * **ersten** zurueck, die Schleife schliesst sich also). Angezeigt wird das
+     * als Segmentschalter neben dem Routenprofil; gerechnet wird es im
+     * Karten-Screen (`MapScreen.kt`, `routingWaypoints`), weshalb [waypoints]
+     * hier ohne den zurueckfuehrenden Punkt ankommt — er ist Folge der
+     * Streckenart, kein von der Nutzerin gesetzter Wegpunkt.
+     *
+     * Nicht zu verwechseln mit [onRoundTrip] weiter unten: Das ist der
+     * Rundkurs-**Generator** („Runde ab hier über X km"), der eine fertige
+     * Runde ohne Wegpunkte vorschlaegt. Dieser Schalter beschreibt dagegen, wie
+     * die selbst gesetzten Wegpunkte verbunden werden — er steht deshalb bei
+     * einer generierten Runde ([generated]) gar nicht erst da.
+     */
+    roundTrip: Boolean,
+    /** Umschalten zwischen „Einfach" und „Rundweg" — siehe [roundTrip]. */
+    onRoundTripChange: (Boolean) -> Unit,
     waypoints: List<Waypoint>,
     route: PlannedRoute?,
     busy: Boolean,
@@ -224,6 +245,7 @@ internal fun PlanningSheet(
         generated = generated,
         source = source,
         locating = locating,
+        roundTrip = roundTrip,
     )
 
     SwipeableSheet(
@@ -332,6 +354,17 @@ internal fun PlanningSheet(
                     // erklaerenden Hinweistext braucht sie nicht mehr: Setzen
                     // sagt die gestrichelte Zeile („… oder Karte antippen"),
                     // Entfernen zeigt das X jeder Zeile.
+                    //
+                    // Aus demselben Grund steht auch die Streckenart nur hier:
+                    // Eine fertige Generator-Runde ist bereits eine Schleife
+                    // und hat keine Wegpunkte, zwischen denen sich „Einfach"
+                    // und „Rundweg" unterscheiden liessen.
+                    Spacer(Modifier.height(8.dp))
+                    RouteShapeSegments(
+                        roundTrip = roundTrip,
+                        onRoundTripChange = onRoundTripChange,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     Spacer(Modifier.height(8.dp))
                     WaypointList(
                         waypoints = waypoints,
@@ -446,6 +479,94 @@ internal fun PlanningSheet(
             }
         },
     )
+}
+
+/**
+ * Der Segmentschalter „Einfach | Rundweg" — die **Streckenart** der Planung
+ * (siehe den Karte-Screen in `docs/design/prototyp-eine-leiste.html`).
+ *
+ * „Einfach" verbindet die Wegpunkte wie bisher vom ersten zum letzten.
+ * „Rundweg" schliesst die Route: Sie kehrt vom letzten Wegpunkt zum **ersten**
+ * zurueck. Der Rueckweg ist echtes Routing und keine Luftlinie — Distanz,
+ * Hoehenmeter und damit auch das Kilometer-Etikett des Aufnahme-Knopfs rechnen
+ * ihn mit (`MapScreen.kt`, `routingWaypoints` und `reportPlannedRoute`).
+ *
+ * ## Warum ein Segmentschalter und keine zwei Schaltflaechen
+ * Es sind zwei Faelle, die sich ausschliessen und die beide sichtbar sein
+ * sollen — genau das, wofuer One UI den Pillen-Segmentschalter kennt
+ * (heller Grund, das gewaehlte Segment in der Akzentfarbe). Eine Checkbox
+ * „Rundweg" waere kuerzer, wuerde die Gegenwahl aber verschweigen; ein Dropdown
+ * kostete einen zusaetzlichen Tipp fuer zwei Werte.
+ *
+ * ## Warum von Hand und nicht `SegmentedButton`
+ * Material 3 zeichnet seine `SingleChoiceSegmentedButtonRow` mit Rahmen und
+ * Haekchen im gewaehlten Segment — sichtbar Material, nicht One UI. Die Form
+ * kommt hier aus `MaterialTheme.shapes.small` (der Pillen-Slot, siehe
+ * `Shape.kt`), es bleibt also bei den Formen des Themes.
+ */
+@Composable
+private fun RouteShapeSegments(
+    roundTrip: Boolean,
+    onRoundTripChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            // Der schmale Rand laesst den hellen Grund als Rahmen um das
+            // gewaehlte Segment stehen — dieselbe Anmutung wie im Entwurf.
+            .padding(3.dp)
+            .selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RouteShapeSegment(
+            text = "Einfach",
+            selected = !roundTrip,
+            onSelect = { onRoundTripChange(false) },
+            modifier = Modifier.weight(1f),
+        )
+        RouteShapeSegment(
+            text = "Rundweg",
+            selected = roundTrip,
+            onSelect = { onRoundTripChange(true) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * Ein Segment von [RouteShapeSegments] — mit [Role.RadioButton] ausgezeichnet,
+ * weil es genau das ist: eine Wahl aus zweien. 42 dp plus den 3 dp Rand der
+ * Zeile ergeben die 48 dp, die ein Daumen braucht.
+ */
+@Composable
+private fun RouteShapeSegment(
+    text: String,
+    selected: Boolean,
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 42.dp)
+            .clip(MaterialTheme.shapes.small)
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
 }
 
 /**
@@ -724,6 +845,7 @@ private fun planningStatus(
     generated: Boolean,
     source: RoutingSource?,
     locating: Boolean,
+    roundTrip: Boolean,
 ): String = when {
     locating -> "Position wird ermittelt …"
     busy && progress != null -> progress
@@ -732,7 +854,7 @@ private fun planningStatus(
             "vorgeschlagene Runde"
 
     route != null ->
-        "${planningRouteLabel(waypoints)} · ${formatKmDe(route.distanceKm)} km · " +
+        "${planningRouteLabel(waypoints, roundTrip)} · ${formatKmDe(route.distanceKm)} km · " +
             "${route.ascentM.roundToInt()} Hm ↑" + routeSourceSuffix(source)
 
     waypoints.size == 1 -> "1 Wegpunkt – setze mindestens 2."
@@ -756,9 +878,17 @@ private fun routeSourceSuffix(source: RoutingSource?): String = when (source) {
  * (Suchtreffer oder eigene Position, siehe `Waypoint.name`) — sonst bleibt es
  * bei der reinen Anzahl, denn zwei „Wegpunkt N"-Platzhalter waeren keine
  * Verbesserung gegenueber der Zahl.
+ *
+ * Bei einem Rundweg fuehrt die Route zum Start zurueck — „Start → Ziel"
+ * behauptete dann das Falsche. Die Zeile sagt stattdessen „Rundweg ab …",
+ * und die Zwischenziele stecken weiter in km/Hm.
  */
-private fun planningRouteLabel(waypoints: List<Waypoint>): String {
+private fun planningRouteLabel(waypoints: List<Waypoint>, roundTrip: Boolean): String {
     val start = waypoints.firstOrNull()
+    if (roundTrip) {
+        return start?.name?.let { "Rundweg ab $it" }
+            ?: "Rundweg · ${waypoints.size} Wegpunkte"
+    }
     val end = waypoints.lastOrNull()
     if (start?.name == null && end?.name == null) return "${waypoints.size} Wegpunkte"
     val startLabel = start?.name ?: "Wegpunkt 1"

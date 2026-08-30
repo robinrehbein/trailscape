@@ -38,8 +38,15 @@ import de.trailscape.core.Waypoint
  * 290 kB und liegt weit ueber jeder real geplanten Route.
  *
  * ## Was hier bewusst NICHT liegt
- * Das Navigationsziel. Es traegt die Punktliste einer **gespeicherten Tour**,
- * und die kann bei stundenlangen Aufzeichnungen zehntausende Punkte haben. Der
+ * Die einfachen Werte der Planung — Routenprofil, Klappzustand und die
+ * Streckenart „Einfach/Rundweg" (`roundTrip` in `MapScreen.kt`). Ein `Boolean`
+ * oder ein `enum` geht ohne Umrechnung ins Bundle; ein Saver dafuer waere
+ * Zeremonie ohne Inhalt. Hier stehen nur die Typen aus `:core`, die den Weg
+ * durch das Bundle allein nicht schaffen.
+ *
+ * Ebenso wenig das Navigationsziel. Es traegt die Punktliste einer
+ * **gespeicherten Tour**, und die kann bei stundenlangen Aufzeichnungen
+ * zehntausende Punkte haben. Der
  * Screen rettet davon nur die Tour-Kennung und die Beschriftung und setzt das
  * Ziel danach aus den ohnehin geladenen Touren bzw. aus der geretteten
  * geplanten Route wieder zusammen (siehe `MapScreen.kt`).
