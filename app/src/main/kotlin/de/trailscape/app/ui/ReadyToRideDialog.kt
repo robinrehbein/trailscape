@@ -3,6 +3,13 @@ package de.trailscape.app.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.ButtonDefaults
@@ -113,7 +120,8 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Losfahren") },
+        title = { DialogTitleWithClose(onClose = onDismiss) },
+        contentPadding = 24.dp,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Die App zeichnet auf, die Route entsteht unterwegs.")
@@ -141,7 +149,6 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
                     offer?.let { appViewModel.requestRouteGeneration(it.target) }
                     onDismiss()
                 },
-                onDismiss = onDismiss,
             )
         },
     )
@@ -163,7 +170,8 @@ private fun PlannedRideDialog(
 ) {
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Losfahren") },
+        title = { DialogTitleWithClose(onClose = onDismiss) },
+        contentPadding = 24.dp,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Route · ${formatKmDe(distanceKm)} km, mit Abbiegehinweisen.")
@@ -181,7 +189,6 @@ private fun PlannedRideDialog(
                     appViewModel.requestRecording()
                     onDismiss()
                 },
-                onDismiss = onDismiss,
             )
         },
     )
@@ -189,8 +196,8 @@ private fun PlannedRideDialog(
 
 /**
  * Die Knoepfe des Losfahren-Dialogs untereinander, in klarer Rangfolge:
- * oben die Hauptaktion gefuellt, darunter die Alternative nur umrandet, ganz
- * unten „Abbrechen" als blosser Text. Nebeneinander passten drei Aktionen
+ * oben die Hauptaktion gefuellt, darunter die Alternative nur umrandet.
+ * Abbrechen ist das X oben rechts ([DialogTitleWithClose]). Nebeneinander passten drei Aktionen
  * nicht gleichwertig in eine Zeile, und drei gleich aussehende Textknoepfe
  * liessen offen, was der naheliegende Weg ist.
  */
@@ -200,7 +207,6 @@ private fun DialogButtonStack(
     onPrimary: () -> Unit,
     secondaryLabel: String?,
     onSecondary: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -223,9 +229,16 @@ private fun DialogButtonStack(
                 ),
             ) { Text(secondaryLabel, style = MaterialTheme.typography.labelLarge) }
         }
-        TextButton(
-            onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) { Text("Abbrechen", style = MaterialTheme.typography.labelLarge) }
+    }
+}
+
+/** „Losfahren" mit dem Schliessen-X oben rechts — statt „Abbrechen" unten. */
+@Composable
+private fun DialogTitleWithClose(onClose: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Losfahren", modifier = Modifier.weight(1f))
+        IconButton(onClick = onClose, modifier = Modifier.offset(x = 12.dp)) {
+            Icon(Icons.Rounded.Close, contentDescription = "Schließen")
+        }
     }
 }

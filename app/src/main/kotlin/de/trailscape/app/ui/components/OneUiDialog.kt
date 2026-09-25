@@ -20,6 +20,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
@@ -74,6 +75,9 @@ fun OneUiDialog(
     title: (@Composable () -> Unit)? = null,
     text: (@Composable () -> Unit)? = null,
     properties: DialogProperties = DialogProperties(),
+    // Innenabstand der Flaeche. Dialoge mit gestapelten, vollbreiten Knoepfen
+    // (Losfahren) brauchen mehr Luft zum Rand als die Textknopf-Dialoge.
+    contentPadding: Dp = CardPadding,
 ) {
     BasicAlertDialog(
         onDismissRequest = onDismissRequest,
@@ -111,7 +115,7 @@ fun OneUiDialog(
                 .padding(horizontal = 8.dp, vertical = 8.dp)
                 .navigationBarsPadding(),
         ) {
-            Column(modifier = Modifier.padding(CardPadding)) {
+            Column(modifier = Modifier.padding(contentPadding)) {
                 if (icon != null) {
                     Row(
                         modifier = Modifier
