@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -99,9 +100,10 @@ internal fun ExploreSheet(
     savedRoutes: List<RideSummary>,
     onSelectRoute: (RideSummary) -> Unit,
     onOpenOfflineMaps: () -> Unit,
-    bodyMaxHeight: Dp,
+    expandedHeight: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
+    onRevealFraction: ((Float) -> Unit)? = null,
 ) {
     SwipeableSheet(
         // Waehrend der Suche gehoert der Platz den Treffern.
@@ -112,6 +114,10 @@ internal fun ExploreSheet(
         },
         modifier = modifier,
         bottomInset = bottomInset,
+        // Ganz aufgezogen reicht die Karte bis oben — der Platz fuer
+        // gespeicherte Routen und Orte, ohne einen eigenen Bildschirm.
+        expandedHeight = expandedHeight,
+        onRevealFraction = onRevealFraction,
         peek = {
             Column(
                 modifier = Modifier.padding(
@@ -195,7 +201,7 @@ internal fun ExploreSheet(
                 onSelectPlace = onSelectPlace,
                 onOpenOfflineMaps = onOpenOfflineMaps,
                 modifier = Modifier
-                    .heightIn(max = bodyMaxHeight)
+                    .fillMaxHeight()
                     .verticalScroll(rememberScrollState()),
             )
         },

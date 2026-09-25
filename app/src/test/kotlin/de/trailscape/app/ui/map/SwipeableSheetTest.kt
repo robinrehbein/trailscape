@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -63,7 +64,10 @@ class SwipeableSheetTest {
             SwipeableSheet(
                 expanded = expanded,
                 onExpandedChange = { expanded = it },
-                peek = { Text("Kopf") },
+                // Wie die echten Peeks mit Rand unten: Die Karte ist rundum
+                // rund, und der Treffertest folgt ihrer Kontur — ein Wischen
+                // genau an der Unterkante laege sonst in der Ecke daneben.
+                peek = { Text("Kopf", Modifier.padding(bottom = 16.dp)) },
                 body = { Spacer(Modifier.height(200.dp)) },
             )
         }
@@ -89,6 +93,7 @@ class SwipeableSheetTest {
                 peek = {
                     Column(
                         Modifier
+                            .padding(bottom = 16.dp)
                             .heightIn(max = 120.dp)
                             .verticalScroll(rememberScrollState())
                             .testTag("liste"),

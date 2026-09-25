@@ -91,6 +91,8 @@ internal fun SwipeableSheet(
     peek: @Composable ColumnScope.() -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    expandedHeight: Dp? = null,
+    onRevealFraction: ((Float) -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
     SwipeableSheet(
@@ -100,6 +102,8 @@ internal fun SwipeableSheet(
         modifier = modifier,
         bottomInset = bottomInset,
         halfStop = false,
+        expandedHeight = expandedHeight,
+        onRevealFraction = onRevealFraction,
         body = body,
     )
 }
@@ -115,6 +119,14 @@ internal enum class SheetStop { Peek, Half, Full }
  * auf halber Koerperhoehe ein — aber nur, wenn der Koerper hoch genug ist,
  * dass die Mitte etwas anderes zeigt als eines der Enden
  * ([MinHalfStopBody]). Sonst verhaelt es sich wie das Zwei-Stufen-Blatt.
+ *
+ * @param expandedHeight Gesamthoehe der Karte, ganz aufgezogen. Gesetzt,
+ *   bekommt der Koerper genau den Rest nach Griff und Peek (gemessen) — die
+ *   Karte reicht dann bis oben, egal wie wenig Inhalt drin steht. Der Koerper
+ *   fuellt die Hoehe und scrollt selbst. Ohne: natuerliche Koerperhoehe.
+ * @param onRevealFraction Wie weit das Blatt gerade aufgezogen ist, 0 bis 1 —
+ *   bei jedem Bild waehrend des Ziehens. Damit blendet die Karte ihre Knoepfe
+ *   ueber dem Blatt im selben Mass aus, in dem das Blatt ihren Platz braucht.
  */
 @Composable
 internal fun SwipeableSheet(
@@ -124,10 +136,20 @@ internal fun SwipeableSheet(
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
     halfStop: Boolean = false,
+    expandedHeight: Dp? = null,
+    onRevealFraction: ((Float) -> Unit)? = null,
     body: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
     var bodyHeightPx by remember { mutableIntStateOf(0) }
+    var headHeightPx by remember { mutableIntStateOf(0) }
+    // Vor dem ersten Messen des Kopfs ein Schaetzwert — der Koerper braucht
+    // schon im ersten Bild eine feste Hoehe, sonst misst sein Scrollbereich
+    // unendlich.
+    val fixedBodyHeight = expandedHeight?.let { total ->
+        val head = if (headHeightPx > 0) with(density) { headHeightPx.toDp() } else FallbackHeadHeight
+        (total - head).coerceAtLeast(0.dp)
+    }
     val withHalf = halfStop && with(density) { bodyHeightPx.toDp() } >= MinHalfStopBody
     // Ohne Mittelstufe gibt es sie auch als Zustand nicht: aus „halb" wird
     // dann „ganz", damit das Blatt nicht auf einem fehlenden Anker haengt.
@@ -218,6 +240,16 @@ internal fun SwipeableSheet(
         )
     }
 
+    val currentOnReveal by rememberUpdatedState(onRevealFraction)
+    if (onRevealFraction != null) {
+        LaunchedEffect(drag) {
+            snapshotFlow {
+                val offset = drag.offset.takeIf { !it.isNaN() } ?: 0f
+                if (bodyHeightPx > 0) (offset / bodyHeightPx).coerceIn(0f, 1f) else 0f
+            }.collect { currentOnReveal?.invoke(it) }
+        }
+    }
+
     val revealed = drag.offset.takeIf { !it.isNaN() } ?: 0f
     val revealedDp = with(density) { revealed.coerceAtLeast(0f).toDp() }
     val canExpand = bodyHeightPx > 0
@@ -228,10 +260,9 @@ internal fun SwipeableSheet(
         SheetStop.Full -> SheetStop.Peek
     }
 
-    DockedSheetSurface(modifier = modifier) {
+    FloatingSheetSurface(modifier = modifier, bottomInset = bottomInset) {
         Column(
             modifier = Modifier
-                .padding(bottom = bottomInset)
                 .nestedScroll(nestedScroll)
                 .anchoredDraggable(
                     state = drag,
@@ -256,6 +287,9 @@ internal fun SwipeableSheet(
                     }
                 },
         ) {
+            // Griff und Peek zusammen gemessen: Was davon uebrig bleibt, ist
+            // mit [expandedHeight] die Hoehe des Koerpers.
+            Column(Modifier.onSizeChanged { headHeightPx = it.height }) {
             // Der Griff: One UIs stehende Einladung zum Ziehen. Tippen
             // schaltet eine Stufe weiter — fuer alle, die nicht wischen
             // moegen. Die Zeile ist bildschirmbreit und 24 dp hoch; die
@@ -277,6 +311,7 @@ internal fun SwipeableSheet(
             }
 
             peek()
+            }
 
             Box(
                 modifier = Modifier
@@ -291,6 +326,7 @@ internal fun SwipeableSheet(
                         // zeigt den Anfang des Koerpers und waechst mit dem
                         // Offset, statt den Inhalt zu stauchen.
                         .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                        .then(if (fixedBodyHeight != null) Modifier.height(fixedBodyHeight) else Modifier)
                         .onSizeChanged { bodyHeightPx = it.height },
                 ) {
                     body()
@@ -302,7 +338,7 @@ internal fun SwipeableSheet(
 
 /**
  * Ein Blatt ohne aufziehbaren Teil (Ort, Rundenwahl, Verlauf): dieselbe
- * angedockte Flaeche, aber **ohne Griff** — ein Griff, der nichts tut, waere
+ * schwebende Flaeche, aber **ohne Griff** — ein Griff, der nichts tut, waere
  * ein Versprechen ohne Einloesung. Statt des Griffs haelt ein Rand oben
  * denselben Abstand zum Inhalt.
  */
@@ -312,29 +348,33 @@ internal fun StaticSheet(
     bottomInset: Dp = 0.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    DockedSheetSurface(modifier = modifier) {
+    FloatingSheetSurface(modifier = modifier, bottomInset = bottomInset) {
         Column(
-            modifier = Modifier.padding(top = SheetHandleHeight, bottom = bottomInset),
+            modifier = Modifier.padding(top = SheetHandleHeight),
             content = content,
         )
     }
 }
 
 /**
- * Die gemeinsame Flaeche aller Kartenblaetter: am unteren Bildschirmrand
- * angedockt (Fuehrung „Klartext"), nur die oberen Ecken rund, unten buendig
- * mit dem Rand. Der Inhalt haelt ueber `bottomInset` Abstand zur
- * Navigationskapsel bzw. Gestenleiste, die Flaeche selbst laeuft bis an den
- * Rand.
+ * Die gemeinsame Flaeche aller Kartenblaetter: eine schwebende Karte mit
+ * Rand zu den Seiten und zur Navigationskapsel, alle Ecken rund. Die Karte
+ * bleibt darum herum sichtbar — das Blatt liegt auf ihr, statt sie
+ * abzuschneiden. Den Platz fuer Kapsel bzw. Gestenleiste ([bottomInset]) haelt
+ * die Flaeche als Aussenabstand frei.
  */
 @Composable
-private fun DockedSheetSurface(
+private fun FloatingSheetSurface(
     modifier: Modifier = Modifier,
+    bottomInset: Dp,
     content: @Composable () -> Unit,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = DockedSheetShape,
+        modifier = modifier
+            .padding(horizontal = SheetSideMargin)
+            .padding(bottom = bottomInset + SheetBottomGap)
+            .fillMaxWidth(),
+        shape = FloatingSheetShape,
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
         content()
@@ -415,5 +455,14 @@ internal val SheetHandleHeight = 24.dp
 /** Ab dieser Koerperhoehe lohnt eine Mittelstufe. */
 private val MinHalfStopBody = 240.dp
 
-/** Form eines am unteren Rand angedockten Kartenblatts: oben rund, unten buendig. */
-internal val DockedSheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+/** Form eines Kartenblatts: rundum rund, wie jede schwebende Karte. */
+internal val FloatingSheetShape = RoundedCornerShape(28.dp)
+
+/** Seitlicher Rand der Blatt-Karte zum Bildschirmrand. */
+internal val SheetSideMargin = 12.dp
+
+/** Luft zwischen Blatt-Karte und Navigationskapsel. */
+internal val SheetBottomGap = 8.dp
+
+/** Startwert fuer Griff + Peek, bis beides gemessen ist. */
+private val FallbackHeadHeight = 150.dp
