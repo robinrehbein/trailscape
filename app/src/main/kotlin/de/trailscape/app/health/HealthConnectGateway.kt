@@ -3,7 +3,9 @@ package de.trailscape.app.health
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregationResult
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -21,6 +23,8 @@ import de.trailscape.core.HealthActivityKind
 import de.trailscape.core.HealthAvailability
 import de.trailscape.core.HealthGateway
 import de.trailscape.core.HealthHeartRateSample
+import de.trailscape.core.HealthReadType
+import de.trailscape.core.HealthRouteReadResult
 import de.trailscape.core.HealthNumericSample
 import de.trailscape.core.HealthRoutePoint
 import de.trailscape.core.HealthSessionInfo
@@ -99,8 +103,9 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     /**
      * Zeigt den Health-Connect-Berechtigungsdialog und wartet auf das Ergebnis.
      *
-     * Angefragt wird [HealthPermissions.all] — Pflicht- und Zusatzrechte in
-     * einem Dialog, wie im Dart-Original. Massgeblich fuer das Ergebnis ist
+     * Angefragt wird [HealthPermissions.requestSet] — Pflicht- und Zusatzrechte
+     * in einem Dialog, wie im Dart-Original, dazu die Historien-Freigabe, wenn
+     * das Geraet sie kennt. Massgeblich fuer das Ergebnis ist
      * aber allein [HealthPermissions.required]: Wer nur HRV, VO2max oder die
      * Routen ablehnt, gilt trotzdem als verbunden.
      *
@@ -109,7 +114,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun requestPermissions(): Boolean {
         val client = requireClient()
         return runBlocking {
-            HealthPermissionHub.request(HealthPermissions.all)
+            HealthPermissionHub.request(HealthPermissions.requestSet(client))
                 ?: throw HealthSyncException(
                     "Der Berechtigungsdialog von Health Connect lässt sich nur öffnen, " +
                         "solange Trailscape im Vordergrund läuft.",
@@ -203,40 +208,73 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     }
 
     /**
-     * GPS-Routen im Fenster, nach `ExerciseSessionRecord`-ID gruppiert.
-     *
-     * Die Route steckt bei connect-client 1.1.0 im Session-Datensatz selbst:
-     * `exerciseRouteResult` ist entweder [ExerciseRouteResult.Data] (Route da),
-     * `ConsentRequired` (Health Connect verlangt eine ausdrueckliche Freigabe)
-     * oder `NoData` (Indoor-Session, keine Route aufgezeichnet). Nur der erste
-     * Fall landet in der Map — genau wie im Dart-Original, das leere
-     * Standortlisten uebersprang.
+     * GPS-Routen im Fenster, nach `ExerciseSessionRecord`-ID gruppiert — nur
+     * die freigegebenen, siehe [readRoutesWithStatus].
      */
     override fun readRoutes(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): Map<String, List<HealthRoutePoint>> = read("Die Routen") { client ->
+    ): Map<String, List<HealthRoutePoint>> = readRoutesWithStatus(from, to).routes
+
+    /**
+     * GPS-Routen im Fenster samt Freigabestatus.
+     *
+     * Die Route steckt bei connect-client 1.1.0 im Session-Datensatz selbst:
+     * `exerciseRouteResult` ist entweder [ExerciseRouteResult.Data] (Route da),
+     * [ExerciseRouteResult.ConsentRequired] (Route vorhanden, Health Connect
+     * verlangt aber eine Freigabe fuer genau diese Route — typisch, solange
+     * bei den Routen nicht „Immer erlauben" gesetzt ist) oder `NoData`
+     * (Indoor-Session, keine Route aufgezeichnet). Der erste Fall landet in
+     * [HealthRouteReadResult.routes], der zweite in
+     * [HealthRouteReadResult.consentRequired] — daraus wird im Import eine
+     * offene Freigabe, die `rememberRouteConsentLauncher` spaeter einholt.
+     */
+    override fun readRoutesWithStatus(
+        from: LocalDateTime,
+        to: LocalDateTime,
+    ): HealthRouteReadResult = read("Die Routen") { client ->
         val routes = linkedMapOf<String, List<HealthRoutePoint>>()
+        val consentRequired = linkedSetOf<String>()
         for (record in client.readAllPages(ExerciseSessionRecord::class, from, to)) {
-            val result = record.exerciseRouteResult
-            if (result !is ExerciseRouteResult.Data) {
-                continue
-            }
-            val locations = result.exerciseRoute.route
-            if (locations.isEmpty()) {
-                continue
-            }
-            routes[record.metadata.id] = locations.map { location ->
-                HealthRoutePoint(
-                    lat = location.latitude,
-                    lon = location.longitude,
-                    time = location.time.toLocal(),
-                    ele = location.altitude?.inMeters,
-                )
+            when (val result = record.exerciseRouteResult) {
+                is ExerciseRouteResult.Data -> {
+                    val points = result.exerciseRoute.toHealthRoutePoints()
+                    if (points.isNotEmpty()) {
+                        routes[record.metadata.id] = points
+                    }
+                }
+                is ExerciseRouteResult.ConsentRequired -> consentRequired.add(record.metadata.id)
+                else -> Unit
             }
         }
-        routes
+        HealthRouteReadResult(routes = routes, consentRequired = consentRequired)
     }
+
+    /**
+     * Freigabestatus der fuer die Diagnose relevanten Leserechte.
+     * [HealthReadType.HISTORIE] steht nur drin, wenn das Geraet die
+     * Historien-Freigabe ueberhaupt kennt.
+     */
+    override fun readPermissionStatus(): Map<HealthReadType, Boolean> =
+        read("Die Berechtigungen") { client ->
+            val granted = client.permissionController.getGrantedPermissions()
+            fun has(type: KClass<out Record>) =
+                granted.contains(HealthPermission.getReadPermission(type))
+            buildMap {
+                put(HealthReadType.RUHEPULS, has(RestingHeartRateRecord::class))
+                put(HealthReadType.SCHLAF, has(SleepSessionRecord::class))
+                put(HealthReadType.HRV, has(HeartRateVariabilityRmssdRecord::class))
+                put(HealthReadType.VO2MAX, has(Vo2MaxRecord::class))
+                put(HealthReadType.HERZFREQUENZ, has(HeartRateRecord::class))
+                put(HealthReadType.ROUTEN, granted.contains(HealthPermissions.READ_EXERCISE_ROUTES))
+                if (HealthPermissions.isHistoryFeatureAvailable(client)) {
+                    put(
+                        HealthReadType.HISTORIE,
+                        granted.contains(HealthPermissions.READ_HEALTH_DATA_HISTORY),
+                    )
+                }
+            }
+        }
 
     // -----------------------------------------------------------------------
     // Vitaldaten
@@ -254,12 +292,15 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         to: LocalDateTime,
     ): List<HealthHeartRateSample> = read("Die Herzfrequenz") { client ->
         client.readAllPages(HeartRateRecord::class, from, to)
-            .flatMap { record -> record.samples }
-            .map { sample ->
-                HealthHeartRateSample(
-                    time = sample.time.toLocal(),
-                    bpm = sample.beatsPerMinute.toDouble(),
-                )
+            .flatMap { record ->
+                val source = record.metadata.dataOrigin.packageName
+                record.samples.map { sample ->
+                    HealthHeartRateSample(
+                        time = sample.time.toLocal(),
+                        bpm = sample.beatsPerMinute.toDouble(),
+                        source = source,
+                    )
+                }
             }
             .sortedBy { it.time }
     }
@@ -269,7 +310,13 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         to: LocalDateTime,
     ): List<HealthNumericSample> = read("Der Ruhepuls") { client ->
         client.readAllPages(RestingHeartRateRecord::class, from, to)
-            .map { HealthNumericSample(it.time.toLocal(), it.beatsPerMinute.toDouble()) }
+            .map {
+                HealthNumericSample(
+                    it.time.toLocal(),
+                    it.beatsPerMinute.toDouble(),
+                    it.metadata.dataOrigin.packageName,
+                )
+            }
             .sortedBy { it.time }
     }
 
@@ -278,10 +325,17 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         to: LocalDateTime,
     ): List<HealthSleepSession> = read("Der Schlaf") { client ->
         // Bewusst die ganze Sitzung und nicht die einzelnen Phasen (`stages`):
-        // `HealthSyncService.readVitals` summiert Schlafdauer je Aufwachtag,
-        // und genau das erwartet auch das Dart-Original (SLEEP_SESSION).
+        // `HealthSyncService.readVitals` summiert Schlafdauer je Aufwachtag
+        // (nach dem Vereinigen ueberlappender Sitzungen mehrerer Apps), und
+        // genau das erwartet auch das Dart-Original (SLEEP_SESSION).
         client.readAllPages(SleepSessionRecord::class, from, to)
-            .map { HealthSleepSession(it.startTime.toLocal(), it.endTime.toLocal()) }
+            .map {
+                HealthSleepSession(
+                    it.startTime.toLocal(),
+                    it.endTime.toLocal(),
+                    it.metadata.dataOrigin.packageName,
+                )
+            }
             .sortedBy { it.start }
     }
 
@@ -291,7 +345,11 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     ): List<HealthNumericSample> = read("Der VO2max-Wert") { client ->
         client.readAllPages(Vo2MaxRecord::class, from, to)
             .map {
-                HealthNumericSample(it.time.toLocal(), it.vo2MillilitersPerMinuteKilogram)
+                HealthNumericSample(
+                    it.time.toLocal(),
+                    it.vo2MillilitersPerMinuteKilogram,
+                    it.metadata.dataOrigin.packageName,
+                )
             }
             .sortedBy { it.time }
     }
@@ -301,7 +359,13 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         to: LocalDateTime,
     ): List<HealthNumericSample> = read("Die Herzratenvariabilität") { client ->
         client.readAllPages(HeartRateVariabilityRmssdRecord::class, from, to)
-            .map { HealthNumericSample(it.time.toLocal(), it.heartRateVariabilityMillis) }
+            .map {
+                HealthNumericSample(
+                    it.time.toLocal(),
+                    it.heartRateVariabilityMillis,
+                    it.metadata.dataOrigin.packageName,
+                )
+            }
             .sortedBy { it.time }
     }
 
@@ -546,4 +610,19 @@ class HealthConnectGateway(context: Context) : HealthGateway {
             else -> "TYPE_$type"
         }
     }
+}
+
+/**
+ * Wandelt eine Health-Connect-Route in die `:core`-Punkte um — gemeinsam
+ * benutzt vom Import ([HealthConnectGateway.readRoutesWithStatus]) und vom
+ * Einzel-Freigabedialog (`ui/health/RouteConsent.kt`), dessen Contract die
+ * Route direkt zurueckgibt.
+ */
+fun ExerciseRoute.toHealthRoutePoints(): List<HealthRoutePoint> = route.map { location ->
+    HealthRoutePoint(
+        lat = location.latitude,
+        lon = location.longitude,
+        time = LocalDateTime.ofInstant(location.time, ZoneId.systemDefault()),
+        ele = location.altitude?.inMeters,
+    )
 }

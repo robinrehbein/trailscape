@@ -64,6 +64,12 @@
          funktioniert auch ohne diese Freigabe. -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
     <uses-permission android:name="android.permission.health.READ_VO2_MAX" />
+    <!-- Optional: Daten aelter als 30 Tage vor der ersten Freigabe. Ohne dieses
+         Recht liefert Health Connect nur die letzten 30 Tage; die
+         Vitalhistorie (Ruhepuls-/HRV-Baseline) liest aber bis zu 120 Tage.
+         Angefragt wird es nur, wenn das Geraet die Funktion kennt
+         (HealthPermissions.requestSet); die Verbindung gilt auch ohne. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
 
     <!-- Backup bewusst EINGESCHALTET: Trailscape haelt alle Daten lokal
          (Touren als JSON unter <filesDir>/rides, Profil in den
@@ -93,9 +99,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
-            <!-- Health Connect ruft diesen Intent auf, um die Begruendung
-                 fuer die angefragten Gesundheitsdaten anzuzeigen. -->
+        <!-- Begruendung der Health-Connect-Leserechte (Kurzfassung von
+             PRIVACY.md plus Link auf den Volltext). Health Connect ruft bis
+             Android 13 ACTION_SHOW_PERMISSIONS_RATIONALE auf. Frueher hing der
+             Filter an der MainActivity, die den Intent nicht auswertete. -->
+        <activity
+            android:name=".health.HealthPermissionsRationaleActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.Trailscape">
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
@@ -103,12 +117,12 @@
 
         <!-- Von Health Connect ab Android 14 verlangt: Einstiegspunkt, ueber
              den die Datenschutzerklaerung bzw. die Nutzungsbegruendung
-             erreichbar ist. Zeigt auf die MainActivity. -->
+             erreichbar ist. Zeigt auf dieselbe Begruendungs-Activity. -->
         <activity-alias
             android:name=".ViewPermissionUsageActivity"
             android:exported="true"
             android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
-            android:targetActivity=".MainActivity">
+            android:targetActivity=".health.HealthPermissionsRationaleActivity">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
                 <category android:name="android.intent.category.HEALTH_PERMISSIONS" />

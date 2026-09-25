@@ -242,14 +242,38 @@ data class HealthRoutePoint(
     val ele: Double? = null,
 )
 
-/** Eine Herzfrequenz-Messung. */
-data class HealthHeartRateSample(val time: LocalDateTime, val bpm: Double)
+/**
+ * Eine Herzfrequenz-Messung.
+ *
+ * [source] ist der Paketname der Quell-App (`metadata.dataOrigin`), soweit
+ * bekannt — nur fuer die Diagnose.
+ */
+data class HealthHeartRateSample(
+    val time: LocalDateTime,
+    val bpm: Double,
+    val source: String? = null,
+)
 
-/** Ein Messwert mit Zeitpunkt (Ruhepuls, VO2max, ...). */
-data class HealthNumericSample(val time: LocalDateTime, val value: Double)
+/**
+ * Ein Messwert mit Zeitpunkt (Ruhepuls, VO2max, ...). [source] wie bei
+ * [HealthHeartRateSample].
+ */
+data class HealthNumericSample(
+    val time: LocalDateTime,
+    val value: Double,
+    val source: String? = null,
+)
 
-/** Eine Schlafphase bzw. -sitzung. */
-data class HealthSleepSession(val start: LocalDateTime, val end: LocalDateTime) {
+/**
+ * Eine Schlafphase bzw. -sitzung. [source] ist die Quell-App; nach dem
+ * Zusammenfuehren ueberlappender Sitzungen verschiedener Apps
+ * ([mergeOverlappingSleep]) `null`.
+ */
+data class HealthSleepSession(
+    val start: LocalDateTime,
+    val end: LocalDateTime,
+    val source: String? = null,
+) {
     /** Dauer in Millisekunden. */
     val durationMs: Long
         get() = dartDurationMs(start, end)
@@ -294,7 +318,25 @@ data class HealthSyncReport(
      * wurden, was der native Reader sah und ob die Rueckfallebene griff.
      */
     val debugLines: List<String> = emptyList(),
+    /**
+     * Die Teilmenge von [routesMissing], bei der Health Connect die Route
+     * **hat**, aber eine ausdrueckliche Freigabe je Route verlangt
+     * (`ExerciseRouteResult.ConsentRequired`). Diese Touren lassen sich ueber
+     * den Einzel-Freigabedialog nachtraeglich vervollstaendigen; der Rest von
+     * [routesMissing] hat schlicht keine Routendaten ([routesWithoutData]).
+     */
+    val routeConsentPending: List<RouteConsentRequest> = emptyList(),
+    /**
+     * Diagnose der Vitaldaten je Datentyp (Freigabe, Anzahl, Quell-Apps) —
+     * wird nach dem Vitaldaten-Lesen ueber [withVitalsDiagnostics]
+     * nachgetragen, leer bis dahin.
+     */
+    val vitals: List<VitalsTypeDiagnostics> = emptyList(),
 ) {
+    /** Touren ohne Route, fuer die Health Connect auch keine Routendaten hat. */
+    val routesWithoutData: Int
+        get() = (routesMissing - routeConsentPending.size).coerceAtLeast(0)
+
     /** Wie viele Touren der Aufrufer speichern muss. */
     val changedCount: Int
         get() = imported.size + mergedRides.size
@@ -408,6 +450,23 @@ data class VitalsSummary(
      * Plattform-Grenze, Fehler). Die uebrigen Werte bleiben trotzdem gueltig.
      */
     val unavailable: Set<VitalsDataKind> = emptySet(),
+    /**
+     * Diagnose je Datentyp: Freigabe erteilt?, wie viele Eintraege, aus
+     * welchen Apps. Grundlage des Vitalwerte-Abschnitts in den
+     * Diagnose-Details ([describeVitalsDiagnostics]).
+     */
+    val diagnostics: List<VitalsTypeDiagnostics> = emptyList(),
+    /**
+     * Tage in [restingHeartRate], deren Wert nicht aus einem
+     * `RestingHeartRateRecord` stammt, sondern aus dem Nacht-Puls abgeleitet
+     * wurde ([nightlyRestingHeartRate]).
+     */
+    val restingHeartRateDerivedDays: Set<LocalDateTime> = emptySet(),
+    /**
+     * Ob die Historien-Freigabe (`READ_HEALTH_DATA_HISTORY`) erteilt ist;
+     * `null`, wenn unbekannt oder vom Geraet nicht unterstuetzt.
+     */
+    val historyAccessGranted: Boolean? = null,
 ) {
     /** Ob ueberhaupt Daten vorliegen. */
     val isEmpty: Boolean

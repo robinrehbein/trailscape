@@ -121,6 +121,22 @@ interface HealthGateway {
      */
     fun readRoutes(from: LocalDateTime, to: LocalDateTime): Map<String, List<HealthRoutePoint>>
 
+    /**
+     * Wie [readRoutes], meldet aber zusaetzlich die Sessions, deren Route
+     * Health Connect nur nach einer Einzel-Freigabe herausgibt
+     * (`ExerciseRouteResult.ConsentRequired`). Die Vorgabe kennt diesen Fall
+     * nicht und meldet keine.
+     */
+    fun readRoutesWithStatus(from: LocalDateTime, to: LocalDateTime): HealthRouteReadResult =
+        HealthRouteReadResult(routes = readRoutes(from, to))
+
+    /**
+     * Welche Leserechte erteilt sind, soweit sie die Diagnose betreffen.
+     * Fehlende Schluessel bedeuten „unbekannt" bzw. „vom Geraet nicht
+     * unterstuetzt"; `null` = die Implementierung meldet es gar nicht.
+     */
+    fun readPermissionStatus(): Map<HealthReadType, Boolean>? = null
+
     /** Herzfrequenz-Zeitreihe im Zeitraum. */
     fun readHeartRate(from: LocalDateTime, to: LocalDateTime): List<HealthHeartRateSample>
 
@@ -490,7 +506,7 @@ fun healthRideName(workout: HealthWorkout): String {
 }
 
 /** Naechstgelegene Herzfrequenz zu [time], maximal 30 s entfernt. */
-private fun nearestHr(samples: List<HealthHeartRateSample>, time: LocalDateTime): Int? {
+internal fun nearestHr(samples: List<HealthHeartRateSample>, time: LocalDateTime): Int? {
     if (samples.isEmpty()) {
         return null
     }
@@ -867,6 +883,7 @@ class HealthSyncService(
 
         val imported = mutableListOf<Ride>()
         var routesMissing = 0
+        val consentPending = mutableListOf<RouteConsentRequest>()
 
         if (candidates.isNotEmpty()) {
             val windowStart = candidates.first().start
@@ -876,7 +893,11 @@ class HealthSyncService(
             // ganze Fenster reicht. Die Herzfrequenz wird dagegen je Workout
             // gelesen: ueber 30 Tage kaemen sonst leicht sechsstellige Messreihen
             // zusammen.
-            val routes = readOptional({ gateway.readRoutes(windowStart, windowEnd) }, emptyMap())
+            val routeResult = readOptional(
+                { gateway.readRoutesWithStatus(windowStart, windowEnd) },
+                HealthRouteReadResult(routes = emptyMap()),
+            )
+            val routes = routeResult.routes
 
             for (workout in candidates) {
                 val heartRate = readOptional(
@@ -891,6 +912,20 @@ class HealthSyncService(
                 imported.add(ride)
                 if (workout.kind == HealthActivityKind.RADFAHREN && ride.points.isEmpty()) {
                     routesMissing++
+                    // ConsentRequired ist kein „keine Route": Die Route liegt
+                    // in Health Connect und laesst sich per Einzel-Freigabe
+                    // nachholen (siehe HealthRouteConsent.kt).
+                    if (routeResult.consentRequired.contains(workout.id)) {
+                        consentPending.add(
+                            RouteConsentRequest(
+                                sessionId = workout.id,
+                                rideId = ride.id,
+                                start = workout.start,
+                                end = workout.end,
+                                source = workout.sourceName,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -917,6 +952,12 @@ class HealthSyncService(
             "Ergebnis: ${imported.size} importiert, ${merged.size} angereichert, " +
                 "$duplicates Duplikat(e), $routesMissing ohne Route",
         )
+        if (routesMissing > 0) {
+            debug.add(
+                "Routen: ${consentPending.size} brauchen eine Einzel-Freigabe, " +
+                    "${routesMissing - consentPending.size} ohne Routendaten in Health Connect",
+            )
+        }
 
         return HealthSyncReport(
             from = from,
@@ -927,6 +968,7 @@ class HealthSyncService(
             duplicatesSkipped = duplicates,
             routesMissing = routesMissing,
             debugLines = debug.toList(),
+            routeConsentPending = consentPending.toList(),
         )
     }
 
@@ -984,6 +1026,19 @@ class HealthSyncService(
      * Wirft nicht: Faellt ein einzelner Datentyp aus (fehlende Berechtigung,
      * Plattform-Grenze), landet er in [VitalsSummary.unavailable]; die uebrigen
      * Werte werden trotzdem geliefert.
+     *
+     * Zwei Ableitungen kommen hinzu:
+     *  * **Ruhepuls-Ersatz:** Fuer jeden Tag ohne `RestingHeartRateRecord`
+     *    wird der Nacht-Puls gelesen und daraus ein Ruhepuls abgeleitet
+     *    ([nightWindowForDay], [nightlyRestingHeartRate]). Ein vorhandener
+     *    Datensatz gewinnt immer; welche Tage abgeleitet sind, steht in
+     *    [VitalsSummary.restingHeartRateDerivedDays].
+     *  * **Schlaf ohne Doppelzaehlung:** Ueberlappende Sitzungen mehrerer
+     *    Apps werden vor dem Summieren vereinigt ([mergeOverlappingSleep]).
+     *
+     * [VitalsSummary.diagnostics] haelt je Datentyp fest, ob die Freigabe
+     * erteilt ist, wie viele Eintraege kamen und aus welchen Apps — damit
+     * „leer" von „nicht freigegeben" unterscheidbar ist.
      */
     fun readVitals(days: Int = 14): VitalsSummary {
         val windowDays = max(1, days)
@@ -991,29 +1046,88 @@ class HealthSyncService(
         val from = dartPlusMillis(atMidnight(to), -(windowDays - 1).toLong() * 24 * 60 * 60 * 1000)
 
         val unavailable = linkedSetOf<VitalsDataKind>()
+        val errors = mutableMapOf<HealthReadType, String>()
 
         val resting = readOptional(
             { gateway.readRestingHeartRate(from, to) },
             emptyList(),
-        ) { unavailable.add(VitalsDataKind.RUHEPULS) }
+        ) { error ->
+            unavailable.add(VitalsDataKind.RUHEPULS)
+            errors[HealthReadType.RUHEPULS] = describeError(error)
+        }
         val sleep = readOptional(
             { gateway.readSleepSessions(from, to) },
             emptyList(),
-        ) { unavailable.add(VitalsDataKind.SCHLAF) }
+        ) { error ->
+            unavailable.add(VitalsDataKind.SCHLAF)
+            errors[HealthReadType.SCHLAF] = describeError(error)
+        }
         val vo2 = readOptional(
             { gateway.readVo2Max(from, to) },
             emptyList(),
-        ) { unavailable.add(VitalsDataKind.VO2MAX) }
+        ) { error ->
+            unavailable.add(VitalsDataKind.VO2MAX)
+            errors[HealthReadType.VO2MAX] = describeError(error)
+        }
         val hrv = readOptional(
             { gateway.readHrv(from, to) },
             emptyList(),
-        ) { unavailable.add(VitalsDataKind.HRV) }
+        ) { error ->
+            unavailable.add(VitalsDataKind.HRV)
+            errors[HealthReadType.HRV] = describeError(error)
+        }
+        val permissions = readOptional({ gateway.readPermissionStatus() }, null)
+
+        // Ruhepuls-Ersatz aus dem Nacht-Puls — nur fuer Tage ohne
+        // Ruhepuls-Datensatz (Methode siehe nightlyRestingHeartRate).
+        val restingDays = resting.mapTo(HashSet()) { atMidnight(it.time) }
+        val derived = linkedMapOf<LocalDateTime, Double>()
+        var fallbackAttempted = false
+        var nightSamples = 0
+        val nightOrigins = sortedSetOf<String>()
+        var day = atMidnight(from)
+        val lastDay = atMidnight(to)
+        while (!day.isAfter(lastDay)) {
+            if (!restingDays.contains(day)) {
+                val window = nightWindowForDay(day, sleep)
+                val windowEnd = if (window.end.isAfter(to)) to else window.end
+                if (window.start.isBefore(windowEnd)) {
+                    fallbackAttempted = true
+                    val samples = try {
+                        gateway.readHeartRate(window.start, windowEnd)
+                    } catch (error: Throwable) {
+                        // Ohne Herzfrequenz-Freigabe scheitern alle Naechte
+                        // gleich — einmal fragen reicht.
+                        errors[HealthReadType.HERZFREQUENZ] = describeError(error)
+                        break
+                    }
+                    nightSamples += samples.count {
+                        !it.time.isBefore(window.start) && it.time.isBefore(windowEnd)
+                    }
+                    samples.mapNotNullTo(nightOrigins) { it.source }
+                    nightlyRestingHeartRate(samples, window.start, windowEnd)?.let {
+                        derived[day] = it
+                    }
+                }
+            }
+            day = addDays(day, 1)
+        }
+        // Liefert der Ersatz Werte, ist die Ruhepuls-Reihe gueltig — auch wenn
+        // das Lesen der Ruhepuls-Datensaetze selbst scheiterte. Sonst wuerde
+        // VitalsHistory.merge die abgeleiteten Tage verwerfen.
+        if (derived.isNotEmpty()) {
+            unavailable.remove(VitalsDataKind.RUHEPULS)
+        }
 
         val restingSeries = dailyAverages(
-            resting.map { DayEntry(day = atMidnight(it.time), value = it.value) },
+            resting.map { DayEntry(day = atMidnight(it.time), value = it.value) } +
+                derived.map { (d, bpm) -> DayEntry(day = d, value = bpm) },
         )
+        // Ueberlappende Sitzungen (zwei Apps, dieselbe Nacht) zaehlen nur
+        // einmal — siehe mergeOverlappingSleep.
+        val mergedSleep = mergeOverlappingSleep(sleep)
         val sleepSeries = dailySums(
-            sleep.map {
+            mergedSleep.map {
                 DayEntry(
                     // Der Schlaf wird dem Aufwachtag zugeordnet.
                     day = atMidnight(it.end),
@@ -1040,7 +1154,93 @@ class HealthSyncService(
             vo2max = latestVo2?.let { dartRound1(it.value) },
             vo2maxAt = latestVo2?.time,
             unavailable = unavailable,
+            diagnostics = vitalsDiagnostics(
+                permissions = permissions,
+                errors = errors,
+                resting = resting,
+                derivedDays = derived.size,
+                fallbackAttempted = fallbackAttempted,
+                nightSamples = nightSamples,
+                nightOrigins = nightOrigins.toList(),
+                sleep = sleep,
+                mergedSleepCount = mergedSleep.size,
+                hrv = hrv,
+                vo2 = vo2,
+            ),
+            restingHeartRateDerivedDays = derived.keys.toSet(),
+            historyAccessGranted = permissions?.get(HealthReadType.HISTORIE),
         )
+    }
+
+    /** Stellt die Diagnose je Datentyp fuer [readVitals] zusammen. */
+    private fun vitalsDiagnostics(
+        permissions: Map<HealthReadType, Boolean>?,
+        errors: Map<HealthReadType, String>,
+        resting: List<HealthNumericSample>,
+        derivedDays: Int,
+        fallbackAttempted: Boolean,
+        nightSamples: Int,
+        nightOrigins: List<String>,
+        sleep: List<HealthSleepSession>,
+        mergedSleepCount: Int,
+        hrv: List<HealthNumericSample>,
+        vo2: List<HealthNumericSample>,
+    ): List<VitalsTypeDiagnostics> {
+        fun origins(sources: List<String?>): List<String> =
+            sources.filterNotNull().toSortedSet().toList()
+
+        val out = mutableListOf(
+            VitalsTypeDiagnostics(
+                type = HealthReadType.RUHEPULS,
+                permissionGranted = permissions?.get(HealthReadType.RUHEPULS),
+                recordCount = resting.size,
+                origins = origins(resting.map { it.source }),
+                error = errors[HealthReadType.RUHEPULS],
+                derivedDays = derivedDays,
+                fallbackAttempted = fallbackAttempted,
+            ),
+        )
+        if (fallbackAttempted) {
+            out.add(
+                VitalsTypeDiagnostics(
+                    type = HealthReadType.HERZFREQUENZ,
+                    permissionGranted = permissions?.get(HealthReadType.HERZFREQUENZ),
+                    recordCount = nightSamples,
+                    origins = nightOrigins,
+                    error = errors[HealthReadType.HERZFREQUENZ],
+                ),
+            )
+        }
+        out.add(
+            VitalsTypeDiagnostics(
+                type = HealthReadType.SCHLAF,
+                permissionGranted = permissions?.get(HealthReadType.SCHLAF),
+                recordCount = sleep.size,
+                origins = origins(sleep.map { it.source }),
+                error = errors[HealthReadType.SCHLAF],
+                mergedOverlaps = (sleep.count { !it.end.isBefore(it.start) } - mergedSleepCount)
+                    .coerceAtLeast(0),
+            ),
+        )
+        out.add(
+            VitalsTypeDiagnostics(
+                type = HealthReadType.HRV,
+                permissionGranted = permissions?.get(HealthReadType.HRV),
+                recordCount = hrv.size,
+                origins = origins(hrv.map { it.source }),
+                error = errors[HealthReadType.HRV],
+            ),
+        )
+        out.add(
+            VitalsTypeDiagnostics(
+                type = HealthReadType.VO2MAX,
+                permissionGranted = permissions?.get(HealthReadType.VO2MAX),
+                recordCount = vo2.size,
+                origins = origins(vo2.map { it.source }),
+                error = errors[HealthReadType.VO2MAX],
+            ),
+        )
+        return out
     }
 
     private data class TimeRangeWithRide(
@@ -1073,11 +1273,15 @@ class HealthSyncService(
         return null
     }
 
-    private fun <T> readOptional(read: () -> T, fallback: T, onError: (() -> Unit)? = null): T =
+    private fun <T> readOptional(
+        read: () -> T,
+        fallback: T,
+        onError: ((Throwable) -> Unit)? = null,
+    ): T =
         try {
             read()
-        } catch (_: Throwable) {
-            onError?.invoke()
+        } catch (error: Throwable) {
+            onError?.invoke(error)
             fallback
         }
 }
