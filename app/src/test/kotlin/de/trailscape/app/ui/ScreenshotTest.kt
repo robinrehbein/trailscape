@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
 import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
@@ -70,6 +71,10 @@ class ScreenshotTest {
     fun seed() {
         assumeTrue(System.getProperty("trailscape.screenshots") == "true")
         AppServices.keyValueStore.setString(ONBOARDING_STORAGE_KEY, "1")
+        // Der einmalige Tipp zum langen Druecken gilt als erledigt — sonst
+        // laege er je nach Wartezeit mal in einem Kartenbild, mal nicht. Sein
+        // eigenes Bild macht [karteLangDruckTipp].
+        AppServices.keyValueStore.setString(LONG_PRESS_HINT_STORAGE_KEY, "1")
         val rides = sampleRides()
         AppServices.rideStorage.saveRides(rides)
         val goal = Goal(
@@ -225,6 +230,20 @@ class ScreenshotTest {
             .performSemanticsAction(SemanticsActions.Expand)
         settle()
         shot("10-karte-tour-offen")
+    }
+
+    /**
+     * Der einmalige Tipp zum langen Druecken: erscheint beim ersten ruhigen
+     * Erkunden nach der Wartezeit (`LongPressHint.kt`) als Snackbar ueber der
+     * Kapsel.
+     */
+    @Test
+    fun karteLangDruckTipp() {
+        AppServices.keyValueStore.remove(LONG_PRESS_HINT_STORAGE_KEY)
+        start()
+        tab("Karte")
+        settle()
+        shot("44-karte-langdruck-tipp")
     }
 
     /**

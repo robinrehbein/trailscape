@@ -82,7 +82,20 @@ internal fun MapViewHost(
     controller: MapController,
     style: MapStyle,
     locationEnabled: Boolean,
+    /**
+     * Gewoehnlicher Tipp auf die Karte. Die Karte des Hauptscreens reicht hier
+     * bewusst nichts durch (Fuehrung „Klartext"): Ein Tipp legt nirgends etwas
+     * an und loescht nichts — er bleibt frei fuer Marker, Linien und das
+     * blosse Anfassen der Karte.
+     */
     onMapTap: (Double, Double) -> Unit,
+    /**
+     * Langer Druck auf die Karte — die **einzige** Geste, die auf der Karte
+     * etwas anlegt: beim Erkunden einen Punkt samt Ortskarte, in der Planung
+     * einen Wegpunkt (siehe `onMapLongPress` in `MapScreen.kt`). Weil man sie
+     * nicht sieht, erklaeren sie ein einmaliger Tipp und eine Zeile im
+     * „Wohin?"-Blatt (`LongPressHint.kt`).
+     */
     onMapLongPress: (Double, Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     gesturesEnabled: Boolean = true,
