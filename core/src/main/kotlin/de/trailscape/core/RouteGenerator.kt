@@ -63,6 +63,29 @@ import kotlin.math.sin
  *      belohnt, aber nur bis 15 m/km; jenseits von 25 m/km wird es mit
  *      `1 × (m/km − 25)` wieder bestraft, damit keine unfahrbare Rampenrunde
  *      gewinnt.
+ *  * Neue Gegenden (nur mit `preferNewAreas = true`): `−12 × Neu-Anteil`,
+ *    wobei Neu-Anteil = [RouteCandidate.newTileCount] /
+ *    [RouteCandidate.totalTileCount] (Entdeckt-Kacheln, siehe
+ *    `ExplorerTiles.kt`). Der Bonus ist bewusst **gedeckelt** und am Anteil
+ *    statt an der absoluten Zahl festgemacht — eine laengere Runde beruehrt
+ *    automatisch mehr Kacheln und soll dafuer nicht zusaetzlich belohnt
+ *    werden. Das Gewicht [noveltyScoreWeight] = 12 entspricht 12 Prozentpunkten
+ *    Distanzabweichung: Eine komplett neue Runde schlaegt eine voellig
+ *    bekannte, die bis zu 12 Prozentpunkte besser passt; eine halb neue
+ *    (Anteil 0,5) wiegt noch 6 Prozentpunkte auf. Liegt eine Runde aber mehr
+ *    als ~12 Prozentpunkte weiter daneben als die Alternative, gewinnt immer
+ *    die passendere — die Zieldistanz bleibt das Hauptkriterium, auch knapp
+ *    jenseits der 10-%-Toleranz aus Schritt 3. Ohne den Schalter bleibt der
+ *    Score exakt wie zuvor.
+ *
+ * **6. Kursneigung zu neuen Gegenden.** Mit `preferNewAreas = true` (und einer
+ * nicht leeren Menge entdeckter Kacheln) prueft der Generator je Kandidat vor
+ * dem ersten Routing drei Start-Bearings — den regulaeren `β` sowie `β ± δ`
+ * mit `δ = 360° / (4 × Kandidaten)` — und nimmt den, dessen Luftlinien-Polygon
+ * die meisten unentdeckten Kacheln streift ([unexploredTilesAlong]). Das kostet
+ * keinen einzigen zusaetzlichen Routing-Aufruf. Das Fenster ist klein genug,
+ * dass sich benachbarte Kandidaten nie ueberholen und "Neu wuerfeln" weiterhin
+ * andere Runden liefert; bei Gleichstand bleibt es bei `β`.
  *
  * ## Betrieb
  *
@@ -103,6 +126,13 @@ private const val GOLDEN_ANGLE_DEG = 137.50776405003785
 /** Gewicht der relativen Distanzabweichung in Strafpunkten (100 = 1 Punkt je Prozent). */
 private const val DISTANCE_WEIGHT = 100.0
 
+/**
+ * Maximaler Bonus in Strafpunkten fuer eine Runde, deren Kacheln **alle**
+ * unentdeckt sind (nur mit `preferNewAreas`). 12 Punkte = 12 Prozentpunkte
+ * Distanzabweichung — Begruendung siehe Datei-KDoc, Schritt 5.
+ */
+const val noveltyScoreWeight: Double = 12.0
+
 /** Fehlermeldung, wenn kein einziger Kandidat zustande kommt. */
 const val errorNoRouteFound: String =
     "Es ließ sich keine passende Runde berechnen. Versuche einen anderen Startpunkt " +
@@ -124,7 +154,18 @@ data class RouteCandidate(
     val targetKm: Double,
     /** Deutschsprachige Hinweise zum Ergebnis, z. B. wenn die Zieldistanz angepasst wurde. */
     val hints: List<String> = emptyList(),
+    /**
+     * Entdeckt-Kacheln (Stufe [EXPLORER_TILE_ZOOM]) auf dieser Route, die noch
+     * **nicht** in der uebergebenen Menge entdeckter Kacheln liegen — die Zahl
+     * hinter „+9 neu". Ohne uebergebene Menge zaehlt jede Kachel als neu.
+     */
+    val newTileCount: Int = 0,
+    /** Alle Entdeckt-Kacheln, durch die die Route fuehrt (neue wie bekannte). */
+    val totalTileCount: Int = 0,
 ) {
+    /** Anteil neuer Kacheln an allen Kacheln der Route (0…1, 0 ohne Kacheln). */
+    val newTileShare: Double get() = if (totalTileCount > 0) newTileCount.toDouble() / totalTileCount else 0.0
+
     /** Steigungsdichte in Hoehenmetern pro Kilometer. */
     val ascentPerKm: Double get() = if (distanceKm > 0) ascentM / distanceKm else 0.0
 
@@ -233,17 +274,50 @@ fun ascentScore(ascentPerKm: Double, preference: AscentPreference): Double {
     }
 }
 
-/** Gesamtstrafe eines Kandidaten: Distanzabweichung (stark gewichtet) plus [ascentScore]. */
+/**
+ * Bonus (als negative Strafpunkte) fuer den Anteil neuer Kacheln:
+ * `−`[noveltyScoreWeight]` × Anteil`, Anteil auf 0…1 geklemmt. Nicht endliche
+ * Werte zaehlen als 0 — ein kaputter Anteil darf nie die Sortierung kippen.
+ */
+fun noveltyScore(newTileShare: Double): Double {
+    val share = if (newTileShare.isFinite()) newTileShare.coerceIn(0.0, 1.0) else 0.0
+    return -noveltyScoreWeight * share
+}
+
+/**
+ * Gesamtstrafe eines Kandidaten: Distanzabweichung (stark gewichtet) plus
+ * [ascentScore] plus — nur wenn uebergeben — [noveltyScore] fuer den Anteil
+ * neuer Kacheln. Mit dem Vorgabewert `newTileShare = 0` ist das Ergebnis
+ * identisch mit der Bewertung ohne Entdecker-Modus.
+ */
 fun scoreRoute(
     distanceKm: Double,
     ascentM: Double,
     targetKm: Double,
     preference: AscentPreference,
+    newTileShare: Double = 0.0,
 ): Double {
     val deviation = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 1.0
     val perKm = if (distanceKm > 0) ascentM / distanceKm else 0.0
-    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference)
+    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare)
 }
+
+/**
+ * Kacheln entlang [points], die nicht in [explored] liegen, und die
+ * Gesamtzahl der beruehrten Kacheln — als `(neu, gesamt)`.
+ */
+internal fun countNewTiles(points: List<TrackPoint>, explored: Set<ExplorerTile>): Pair<Int, Int> {
+    val tiles = explorerTilesForTrack(points)
+    val fresh = if (explored.isEmpty()) tiles.size else tiles.count { it !in explored }
+    return fresh to tiles.size
+}
+
+/**
+ * Unentdeckte Kacheln entlang des Luftlinien-Polygons einer geplanten Runde
+ * (vor dem Routing) — Grundlage der Kursneigung (Datei-KDoc, Schritt 6).
+ */
+internal fun unexploredTilesAlong(waypoints: List<Waypoint>, explored: Set<ExplorerTile>): Int =
+    countNewTiles(waypoints.map { TrackPoint(lat = it.lat, lon = it.lon) }, explored).first
 
 // ---------------------------------------------------------------------------
 // Generierung
@@ -296,6 +370,11 @@ private class Attempt(val route: PlannedRoute, val deviation: Double)
  * @param sleeper Wartefunktion, injizierbar fuer Tests und fuer den Abbruch
  *   von aussen (wirft sie, verlaesst die Generierung sofort).
  * @param onProgress Fortschritt `(erledigt, gesamt)` nach jedem Kandidaten.
+ * @param exploredTiles Bereits entdeckte Kacheln (z. B. aus
+ *   [collectExplorerTiles]); daraus ergibt sich [RouteCandidate.newTileCount].
+ * @param preferNewAreas Schalter „Neue Gegenden bevorzugen": Bonus fuer neue
+ *   Kacheln im Score (Schritt 5) und Kursneigung (Schritt 6). Aus (Vorgabe),
+ *   bleiben Bearings und Scores unveraendert.
  */
 suspend fun generateRoutes(
     backend: RoutingBackend,
@@ -307,6 +386,8 @@ suspend fun generateRoutes(
     pauseMs: Long = defaultRequestPauseMs,
     sleeper: suspend (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) },
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
+    exploredTiles: Set<ExplorerTile> = emptySet(),
+    preferNewAreas: Boolean = false,
 ): List<RouteCandidate> {
     val hints = mutableListOf<String>()
     val rawKm = if (target.distanceKm.isFinite()) target.distanceKm else 0.0
@@ -341,11 +422,25 @@ suspend fun generateRoutes(
     onProgress?.invoke(0, total)
 
     for (i in 0 until total) {
-        val bearing = ((i * 360.0 / total) + seedOffset).mod(360.0)
+        val baseBearing = ((i * 360.0 / total) + seedOffset).mod(360.0)
         // 3 oder 4 Via-Punkte, deterministisch wechselnd — aendert die Rundenform.
         val viaCount = 3 + Math.floorMod(seed + i, 2)
 
         var radiusM = targetKm * 1000 / (2 * PI * circuitDetourFactor)
+
+        // Kursneigung zu unentdeckten Kacheln (Schritt 6): nur Geometrie, kein Routing.
+        val bearing = if (preferNewAreas && exploredTiles.isNotEmpty()) {
+            val delta = 360.0 / (4 * total)
+            // Reihenfolge = Tie-Break: maxBy nimmt das erste Maximum, bei
+            // Gleichstand bleibt es also beim regulaeren Kurs.
+            listOf(0.0, -delta, delta)
+                .map { (baseBearing + it).mod(360.0) }
+                .maxBy { b ->
+                    unexploredTilesAlong(loopWaypoints(start, radiusM, b, viaCount, clockwise), exploredTiles)
+                }
+        } else {
+            baseBearing
+        }
         var best: Attempt? = null
 
         for (attempt in 0 until maxRadiusAttempts) {
@@ -385,6 +480,8 @@ suspend fun generateRoutes(
 
         val found = best
         if (found != null) {
+            val (newTiles, totalTiles) = countNewTiles(found.route.points, exploredTiles)
+            val share = if (totalTiles > 0) newTiles.toDouble() / totalTiles else 0.0
             results.add(
                 RouteCandidate(
                     route = found.route,
@@ -395,10 +492,13 @@ suspend fun generateRoutes(
                         ascentM = found.route.ascentM,
                         targetKm = targetKm,
                         preference = target.ascentPreference,
+                        newTileShare = if (preferNewAreas) share else 0.0,
                     ),
                     bearingDeg = bearing,
                     targetKm = targetKm,
                     hints = hints.toList(),
+                    newTileCount = newTiles,
+                    totalTileCount = totalTiles,
                 ),
             )
         }
