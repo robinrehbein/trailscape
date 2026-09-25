@@ -1802,6 +1802,18 @@ class AppViewModel(
         _mapTaskActive.value = active
     }
 
+    private val _mapSheetUnderNav = MutableStateFlow(false)
+
+    /**
+     * Ob auf der Karte gerade das „Wohin?"-Blatt unter der Navigationskapsel
+     * liegt. Die Kapsel liegt dann flach auf dem Blatt statt zu schweben.
+     */
+    val mapSheetUnderNav: StateFlow<Boolean> = _mapSheetUnderNav.asStateFlow()
+
+    fun setMapSheetUnderNav(value: Boolean) {
+        _mapSheetUnderNav.value = value
+    }
+
     private val _rideDetailOpen = MutableStateFlow(false)
 
     /**

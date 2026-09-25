@@ -226,7 +226,8 @@ internal fun MapViewHost(
                     setAttributionMargins(12, 12, 0, 0)
                     isCompassEnabled = true
                     compassGravity = Gravity.TOP or Gravity.END
-                    setCompassMargins(0, 220, 16, 0)
+                    val rand = (16 * context.resources.displayMetrics.density).toInt()
+                    setCompassMargins(0, rand, rand, 0)
                     // Kein Property-Zugriff moeglich: Setzer und Getter heissen
                     // in MapLibre unterschiedlich (setCompassFadeFacingNorth /
                     // isCompassFadeWhenFacingNorth).
@@ -601,6 +602,18 @@ internal class MapController {
     // ---------------------------------------------------------------- Kamera
 
     /**
+     * Wie viele Pixel am unteren Rand die Blaetter bzw. Karten des Screens
+     * gerade verdecken — gemessen in `MapScreen.kt`. Zentrieren und Einpassen
+     * rechnen mit dem sichtbaren Rest, damit Standort und Route nie hinter
+     * dem Blatt liegen.
+     */
+    private var obscuredBottomPx = 0
+
+    fun setObscuredBottom(px: Int) {
+        obscuredBottomPx = px.coerceAtLeast(0)
+    }
+
+    /**
      * Faehrt die Kamera so, dass alle [points] sichtbar sind — mit demselben
      * Rand und derselben Zoomgrenze wie `_fitToPoints` im Flutter-Original.
      */
@@ -614,7 +627,12 @@ internal class MapController {
             val target = runCatching {
                 map.getCameraForLatLngBounds(
                     bounds,
-                    intArrayOf(padding.left, padding.top, padding.right, padding.bottom),
+                    intArrayOf(
+                        padding.left,
+                        padding.top,
+                        padding.right,
+                        max(padding.bottom, obscuredBottomPx + padding.left),
+                    ),
                 )
             }.getOrNull() ?: return@run
 
@@ -623,7 +641,12 @@ internal class MapController {
             val zoom = min(target.zoom, MAX_FIT_ZOOM)
             map.animateCamera(
                 CameraUpdateFactory.newCameraPosition(
-                    CameraPosition.Builder().target(target.target).zoom(zoom).build(),
+                    CameraPosition.Builder()
+                        .target(target.target)
+                        .zoom(zoom)
+                        // Das Ziel ist fuer die ungepolsterte Karte gerechnet.
+                        .padding(0.0, 0.0, 0.0, 0.0)
+                        .build(),
                 ),
                 CAMERA_ANIMATION_MS,
             )
@@ -637,7 +660,15 @@ internal class MapController {
     fun moveTo(lat: Double, lon: Double, minZoom: Double? = null, animate: Boolean = true) {
         run(afterReady = false) { map ->
             val zoom = if (minZoom == null) map.cameraPosition.zoom else max(map.cameraPosition.zoom, minZoom)
-            val update = CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), zoom)
+            // Mitte des sichtbaren Teils, nicht der ganzen Karte: Das Blatt
+            // unten verdeckt [obscuredBottomPx].
+            val update = CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(lat, lon))
+                    .zoom(zoom)
+                    .padding(0.0, 0.0, 0.0, obscuredBottomPx.toDouble())
+                    .build(),
+            )
             if (animate) map.animateCamera(update, CAMERA_ANIMATION_MS) else map.moveCamera(update)
         }
     }

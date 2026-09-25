@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatKmDe
@@ -109,18 +108,18 @@ internal fun PlaceCard(
     onAddAsWaypoint: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
 ) {
     val (title, area) = placeTitleAndArea(place.displayName)
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
+    // Ein angedocktes Blatt wie alle anderen am unteren Kartenrand — keine
+    // schwebende Karte mehr (ein Muster fuer „Info zu etwas auf der Karte").
+    // Ohne aufziehbaren Teil und daher ohne Griff.
+    StaticSheet(modifier = modifier, bottomInset = bottomInset) {
         // Rechts 8 dp statt CardPadding: derselbe Ausgleich fuer den
         // eigenen Beruehrungsrand des Schliessen-Knopfs wie bei RideCard.
         Column(
             modifier = Modifier.padding(
                 start = CardPadding,
-                top = OverlayCardPaddingVertical,
                 end = 8.dp,
                 bottom = OverlayCardPaddingVertical,
             ),

@@ -486,6 +486,24 @@ fun MapScreen(appViewModel: AppViewModel) {
     // die Karte sehen.
     var planSheetExpanded by rememberSaveable { mutableStateOf(true) }
 
+    // Mittelstufe des Planungsblatts (nur zusammen mit [planSheetExpanded]):
+    // halb aufgezogen zeigt es Profil und die ersten Wegpunkte, die Karte
+    // behaelt die obere Haelfte.
+    var planSheetHalf by rememberSaveable { mutableStateOf(false) }
+
+    // Das „Wohin?"-Blatt hochgewischt: gespeicherte Routen, zuletzt gesuchte
+    // Orte, Offline-Karten.
+    var exploreSheetExpanded by rememberSaveable { mutableStateOf(false) }
+
+    // Das Tour-Blatt hochgewischt: Hoehenprofil und weitere Werte. Jede neu
+    // gewaehlte Tour beginnt eingeklappt.
+    var rideSheetExpanded by rememberSaveable(selectedRide?.id) { mutableStateOf(false) }
+
+    // Gespeicherte Planungen fuer das hochgewischte „Wohin?"-Blatt.
+    val savedRoutes = remember(rides) {
+        rides.filter { it.planned }.sortedByDescending { it.createdAt }
+    }
+
     // Ob gerade auf einen GPS-Fix gewartet wird (bis zu zehn Sekunden, siehe
     // `CURRENT_LOCATION_TIMEOUT_MS` in `LocationAccess.kt`).
     var locating by remember { mutableStateOf(false) }
@@ -2236,16 +2254,22 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // --------------------------------------- Aufgabe → Kapsel tritt zurueck
-    // Ortskarte, „Runde ab hier", Vorschlaege und Planung sind Aufgaben; die
+    // Ort, Tour, „Runde ab hier", Vorschlaege und Planung sind Aufgaben; die
     // Huelle blendet solange Navigationskapsel und Fahren-Knopf aus. Beim
     // Verlassen des Tabs wird der Zustand zurueckgesetzt, sonst fehlte die
     // Kapsel auf dem naechsten Tab.
     val mapTaskActive = !isRecording && navTarget == null && (
         mode == MapMode.PLANEN || generation.target != null ||
-            selectedPlace != null || roundTripSetupOpen || historyMode
+            selectedPlace != null || selectedRide != null || roundTripSetupOpen || historyMode
         )
     LaunchedEffect(mapTaskActive) { appViewModel.setMapTaskActive(mapTaskActive) }
     DisposableEffect(Unit) { onDispose { appViewModel.setMapTaskActive(false) } }
+
+    // Liegt das „Wohin?"-Blatt unter der Kapsel, liegt die Kapsel flach darauf.
+    val sheetUnderNav = mode == MapMode.ERKUNDEN && !mapTaskActive && !isRecording &&
+        navTarget == null && !searchOpen
+    LaunchedEffect(sheetUnderNav) { appViewModel.setMapSheetUnderNav(sheetUnderNav) }
+    DisposableEffect(Unit) { onDispose { appViewModel.setMapSheetUnderNav(false) } }
 
     // Der ausgewaehlte Vorschlag ist die Vorschau auf der Karte: Er landet in
     // demselben `plannedRoute`, das auch die Planung von Hand fuellt — also in
@@ -2624,27 +2648,21 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // Hinweise — und die Zahl aendert sich waehrend der Fahrt
                 // ohnehin erst beim Speichern der Tour (siehe die Snackbar im
                 // AppViewModel).
-                // Oben: links die Kachel-Zaehler-Pille, rechts der
-                // Ebenen-Knopf (Kartenstil, Kacheln, Offline). Beide oeffnen
-                // dasselbe Blatt. Nur im ruhigen Kartenzustand — beim Fahren
+                // Oben links die Kachel-Zaehler-Pille; sie oeffnet dasselbe
+                // Blatt wie der Ebenen-Knopf. Der Knopf selbst steht unten
+                // rechts in der Knopfspalte ueber dem Blatt — mit dem Daumen
+                // erreichbar. Nur im ruhigen Kartenzustand — beim Fahren
                 // gehoert die Kante dem HUD und den Hinweisen.
-                if (!isRecording && navTarget == null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if ((explorerTilesEnabled || historyMode) && explorerTiles.isNotEmpty()) {
-                            ExplorerTilesPill(
-                                tileCount = explorerTiles.size,
-                                square = explorerMaxSquare,
-                                modifier = Modifier
-                                    .clip(MaterialTheme.shapes.small)
-                                    .clickable { showStyleSheet = true },
-                            )
-                        }
-                        Spacer(Modifier.weight(1f))
-                        MapLayersButton(onClick = { showStyleSheet = true })
-                    }
+                if (!isRecording && navTarget == null &&
+                    (explorerTilesEnabled || historyMode) && explorerTiles.isNotEmpty()
+                ) {
+                    ExplorerTilesPill(
+                        tileCount = explorerTiles.size,
+                        square = explorerMaxSquare,
+                        modifier = Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable { showStyleSheet = true },
+                    )
                 }
 
                 locationDeniedAction?.let {
@@ -2795,12 +2813,30 @@ fun MapScreen(appViewModel: AppViewModel) {
                 val sheetBottomInset = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current
                 val ride = selectedRide
                 val place = selectedPlace
-                val dockedSheetShown = generation.target != null || mode == MapMode.PLANEN ||
-                    roundTripSetupOpen || historyMode ||
-                    (
-                        mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
-                            place == null && navTarget == null
-                        )
+                // Welches Blatt am unteren Rand steht — eines zur Zeit, in
+                // dieser Rangfolge (siehe Klassen-KDoc, „Rangfolge am unteren
+                // Kartenrand"). Ort und Tour sind Blaetter wie alle anderen:
+                // Ein angetippter Ort legt sich waehrend der Planung kurz ueber
+                // das Planungsblatt („Als Wegpunkt") und gibt es danach zurueck.
+                val dockedSheet = when {
+                    generation.target != null -> DockedSheet.VORSCHLAEGE
+                    place != null && !isRecording -> DockedSheet.ORT
+                    mode == MapMode.PLANEN -> DockedSheet.PLANUNG
+                    ride != null && !isRecording -> DockedSheet.TOUR
+                    historyMode -> DockedSheet.VERLAUF
+                    roundTripSetupOpen -> DockedSheet.RUNDE
+                    mode == MapMode.ERKUNDEN && !isRecording && navTarget == null -> DockedSheet.ERKUNDEN
+                    else -> null
+                }
+                val dockedSheetShown = dockedSheet != null
+
+                // Was unten verdeckt ist, meldet der Stapel der Kamera: Blatt,
+                // Live-Leiste und — ohne Blatt — die Navigationskapsel.
+                var dockedSheetPx by remember { mutableIntStateOf(0) }
+                var topCardPx by remember { mutableIntStateOf(0) }
+                val navSpacePx = with(density) { sheetBottomInset.roundToPx() }
+                val obscuredBottomPx = topCardPx + if (dockedSheetShown) dockedSheetPx else navSpacePx
+                LaunchedEffect(obscuredBottomPx) { controller.setObscuredBottom(obscuredBottomPx) }
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -2842,34 +2878,34 @@ fun MapScreen(appViewModel: AppViewModel) {
                         // `ui/components/RecCapsuleButton.kt`) — zwei
                         // Startknoepfe auf demselben Bildschirm waren nach dem
                         // ersten Geraetetest sichtbar einer zu viel.
+                        // Die Kartenknoepfe in einer Spalte unten rechts,
+                        // direkt ueber dem Blatt (One UI: Bedienung in
+                        // Daumenreichweite): Ebenen, darunter die eigene
+                        // Position. Die Spalte faehrt mit dem Blatt hoch und
+                        // runter. Der Kompass erscheint nur, wenn die Karte
+                        // gedreht ist (MapLibre, oben rechts).
+                        if (!isRecording && navTarget == null) {
+                            MapLayersButton(onClick = { showStyleSheet = true })
+                            Spacer(Modifier.height(12.dp))
+                        }
                         LocateButton(onClick = ::goToMyPosition, following = followMe)
                         Spacer(Modifier.height(12.dp))
 
-                        // M3 „Enter and exit, within screen bounds": Die Karte
-                        // ueber dem Blatt klappt von unten auf, weg vom Rand,
-                        // und wieder zu. Dieselbe Tour bzw. derselbe Ort mit
-                        // neuem Stand tauscht still (gleicher `contentKey`).
-                        val topCard: Any? = when {
-                            isRecording -> RecordingCardKey
-                            ride != null -> ride
-                            place != null -> place
-                            else -> null
-                        }
+                        // M3 „Enter and exit, within screen bounds": Die
+                        // Live-Leiste ueber dem Rand klappt von unten auf, weg
+                        // vom Rand, und wieder zu. Ort und Tour sind keine
+                        // schwebenden Karten mehr, sondern Blaetter (unten).
+                        val topCard: Any? = if (isRecording) RecordingCardKey else null
                         AnimatedContent(
                             targetState = topCard,
-                            contentKey = { card ->
-                                when (card) {
-                                    is Ride -> "tour:${card.id}"
-                                    is Place -> "ort:${card.lat},${card.lon}"
-                                    else -> card
-                                }
-                            },
                             transitionSpec = {
                                 (M3Transitions.cardEnter() togetherWith M3Transitions.cardExit())
                                     .using(SizeTransform(clip = false))
                             },
                             contentAlignment = Alignment.BottomCenter,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onSizeChanged { topCardPx = it.height },
                             label = "Karte über dem Blatt",
                         ) { card ->
                         when (card) {
@@ -2886,53 +2922,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 onOpenRideMode = { rideModeSeite = RideModeSeite.DATEN },
                             )
 
-                            is Ride -> RideCard(
-                                ride = card,
-                                navigating = navTarget?.rideId == card.id,
-                                onNavigate = { navigateRide(card) },
-                                onShare = { shareRoute(card.name, card.points) },
-                                onDelete = { deleteDialogRide = card },
-                                onClose = {
-                                    hoverPoint = null
-                                    appViewModel.select(null)
-                                },
-                                onHoverPoint = { hoverPoint = it },
-                            )
-
-                            is Place -> PlaceCard(
-                                place = card,
-                                mode = mode,
-                                // Synchron aus dem Standortpunkt der Karte
-                                // gelesen (siehe dessen KDoc): kein zweiter
-                                // GPS-Abonnent nur fuer diese eine
-                                // Entfernungszahl.
-                                distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
-                                    haversineM(
-                                        TrackPoint(lat = lat, lon = lon),
-                                        TrackPoint(lat = card.lat, lon = card.lon),
-                                    ) / 1000.0
-                                },
-                                onRouteHere = { runRouteToPlace(card) },
-                                onRoundTripHere = { openRoundTripSetup(card) },
-                                // Beide Wegpunkt-Aktionen der Ortskarte — „Als
-                                // Wegpunkt" waehrend der Planung und
-                                // „+ Als Wegpunkt" im Erkunden-Zustand — gehen
-                                // durch **dieselbe** Funktion: Sie startet die
-                                // Planung, falls sie noch nicht laeuft, und
-                                // haengt den Ort sonst hinten an, ueber
-                                // denselben Weg wie die Wegpunktsuche der
-                                // Planungsliste (gleicher Name, gleiche
-                                // Koordinate). Zwei Lambdas mit derselben
-                                // Fallunterscheidung waeren zwei Gelegenheiten,
-                                // sie auseinanderlaufen zu lassen. Die
-                                // Ortskarte schliesst dabei wie bei den anderen
-                                // Aktionen (`selectedPlace = null` steckt in
-                                // [addPlaceAsWaypoint]).
-                                onAddWaypoint = { addPlaceAsWaypointFromCard(card) },
-                                onAddAsWaypoint = { addPlaceAsWaypointFromCard(card) },
-                                onClose = { selectedPlace = null },
-                            )
-
                             else -> Unit
                         }
                         }
@@ -2943,18 +2932,6 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // Planung. Vorher liefen beide gleichzeitig — die Wahl
                     // oben, die Planung unten — und ueberlappten sich beim
                     // Aufziehen (siehe KDoc von `RouteGenerationSheet`).
-                    // Welches Blatt am unteren Rand steht — eines zur Zeit, in
-                    // dieser Rangfolge (siehe Klassen-KDoc, „Rangfolge am
-                    // unteren Kartenrand").
-                    val dockedSheet = when {
-                        generation.target != null -> DockedSheet.VORSCHLAEGE
-                        mode == MapMode.PLANEN -> DockedSheet.PLANUNG
-                        historyMode -> DockedSheet.VERLAUF
-                        roundTripSetupOpen -> DockedSheet.RUNDE
-                        mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
-                            place == null && navTarget == null -> DockedSheet.ERKUNDEN
-                        else -> null
-                    }
                     // M3 „Enter and exit, beyond screen bounds": Ein Blatt faehrt
                     // ueber den unteren Rand herein und hinaus, ohne
                     // Ueberblenden; beim Wechsel faehrt das alte hinab, waehrend
@@ -2966,16 +2943,38 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // Wechsel dazwischen ist genau der Eintritt oben.
                     var sheetEntered by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) { sheetEntered = true }
+                    // Ort und Tour tragen ihren Gegenstand im Schluessel: Ein
+                    // anderer Ort tauscht das Blatt, derselbe mit neuem Stand
+                    // nicht.
+                    val sheetKey: Any? = when (dockedSheet) {
+                        DockedSheet.ORT -> place?.let { "ort:${it.lat},${it.lon}" }
+                        DockedSheet.TOUR -> ride?.let { "tour:${it.id}" }
+                        else -> dockedSheet
+                    }
+                    // Beim Hinausgleiten zeichnen Ort und Tour den letzten
+                    // Stand — ohne ihn waere das Blatt schlagartig leer.
+                    val lastPlace = remember { arrayOfNulls<Place>(1) }
+                    if (place != null) lastPlace[0] = place
+                    val lastRide = remember { arrayOfNulls<Ride>(1) }
+                    if (ride != null) lastRide[0] = ride
                     AnimatedContent(
-                        targetState = if (sheetEntered) dockedSheet else null,
+                        targetState = if (sheetEntered) sheetKey else null,
                         transitionSpec = {
                             (M3Transitions.sheetEnter() togetherWith M3Transitions.sheetExit())
                                 .using(SizeTransform(clip = false))
                         },
                         contentAlignment = Alignment.BottomCenter,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onSizeChanged { dockedSheetPx = it.height },
                         label = "Kartenblatt",
-                    ) { sheet ->
+                    ) { key ->
+                        val sheet = when (key) {
+                            null -> null
+                            is DockedSheet -> key
+                            is String -> if (key.startsWith("ort:")) DockedSheet.ORT else DockedSheet.TOUR
+                            else -> null
+                        }
                         // Die Vorschlagswahl wird beim Hinausgleiten mit dem
                         // letzten Stand gezeichnet — ohne Ziel zeichnet sie
                         // nichts, und das Blatt waere schlagartig weg.
@@ -3012,6 +3011,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                         Spacer(Modifier.height(OverlayGap))
                         PlanningSheet(
                             expanded = planSheetExpanded,
+                            half = planSheetHalf,
+                            onHalfChange = { planSheetHalf = it },
                             // Der Griff bleibt hier die Stufe zwischen vollem
                             // Planungsinhalt und blosser Statuszeile — nicht
                             // der Ausgang aus der Planung. Wer waehrend des
@@ -3107,6 +3108,53 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // („Rangfolge am unteren Kartenrand"): In all diesen
                     // Faellen ist das Blatt schlicht nicht komponiert, kein
                     // eigener Versteck-Zustand noetig.
+                    DockedSheet.ORT -> lastPlace[0]?.let { card ->
+                        Spacer(Modifier.height(OverlayGap))
+                        PlaceCard(
+                            place = card,
+                            mode = mode,
+                            // Synchron aus dem Standortpunkt der Karte
+                            // gelesen (siehe dessen KDoc): kein zweiter
+                            // GPS-Abonnent nur fuer diese eine
+                            // Entfernungszahl.
+                            distanceKm = controller.lastKnownLocation()?.let { (lat, lon) ->
+                                haversineM(
+                                    TrackPoint(lat = lat, lon = lon),
+                                    TrackPoint(lat = card.lat, lon = card.lon),
+                                ) / 1000.0
+                            },
+                            onRouteHere = { runRouteToPlace(card) },
+                            onRoundTripHere = { openRoundTripSetup(card) },
+                            // Beide Wegpunkt-Aktionen — „Als Wegpunkt"
+                            // waehrend der Planung und „+ Als Wegpunkt" im
+                            // Erkunden-Zustand — gehen durch **dieselbe**
+                            // Funktion: Sie startet die Planung, falls sie noch
+                            // nicht laeuft, und haengt den Ort sonst hinten an
+                            // (siehe [addPlaceAsWaypoint]).
+                            onAddWaypoint = { addPlaceAsWaypointFromCard(card) },
+                            onAddAsWaypoint = { addPlaceAsWaypointFromCard(card) },
+                            onClose = { selectedPlace = null },
+                            bottomInset = sheetBottomInset,
+                        )
+                    }
+                    DockedSheet.TOUR -> lastRide[0]?.let { card ->
+                        Spacer(Modifier.height(OverlayGap))
+                        RideCard(
+                            ride = card,
+                            navigating = navTarget?.rideId == card.id,
+                            onNavigate = { navigateRide(card) },
+                            onShare = { shareRoute(card.name, card.points) },
+                            onDelete = { deleteDialogRide = card },
+                            onClose = {
+                                hoverPoint = null
+                                appViewModel.select(null)
+                            },
+                            onHoverPoint = { hoverPoint = it },
+                            expanded = rideSheetExpanded,
+                            onExpandedChange = { rideSheetExpanded = it },
+                            bottomInset = sheetBottomInset,
+                        )
+                    }
                     DockedSheet.VERLAUF -> {
                         Spacer(Modifier.height(OverlayGap))
                         val ridden = rides.filterNot { it.planned }
@@ -3162,6 +3210,16 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 todayRoute.target?.let { appViewModel.requestRouteGeneration(it) }
                             },
                             onRoundTripHere = { openRoundTripSetup(null) },
+                            expanded = exploreSheetExpanded,
+                            onExpandedChange = { exploreSheetExpanded = it },
+                            savedRoutes = savedRoutes,
+                            onSelectRoute = { route ->
+                                exploreSheetExpanded = false
+                                appViewModel.select(route.id)
+                            },
+                            onOpenOfflineMaps = { showStyleSheet = true },
+                            bodyMaxHeight = (overlaySheetBudget - ExplorePeekFixedHeight)
+                                .coerceAtLeast(MinSheetBodyHeight),
                             bottomInset = sheetBottomInset,
                         )
                     }
@@ -3792,23 +3850,23 @@ private val OverlayFloatingButtonsHeight = 136.dp
  * Kreis. Der Kopfteil ueber dem Blatt hat dieses Problem nicht und wird
  * deshalb gemessen.
  *
- * Rundenwahl: Griff (48), Titelzeile (48), die beiden Zielzeilen (~44),
+ * Rundenwahl: Griff (24), Titelzeile (48), die beiden Zielzeilen (~44),
  * „Übernehmen" (48) und die Raender (~20).
  */
-private val GenerationPeekFixedHeight = 208.dp
-
-// Fuer das Erkunden-Gesicht braucht es keine solche Zahl mehr: Sein Koerper
-// ist seit dem Umbau auf drei Stufen nur noch die Aktionszeile — eine Zeile
-// fester Hoehe ohne Scrollweg, die in jedes Budget passt (siehe
-// `ExploreSheet.kt`). Der frueher hier stehende Wert (240 dp) beschrieb den
-// Peek mit Suchfeld, Werkzeugreihe UND Touren-Zeile und deckelte die
-// Tourenliste; beides gibt es nicht mehr.
+private val GenerationPeekFixedHeight = 184.dp
 
 /**
- * Planung: Griff (48) und die eine Statuszeile (`heightIn(min = 48.dp)`) —
+ * Erkunden: Griff (24), Suchfeld (~56), Abstand (12), die beiden Knoepfe (44)
+ * und der untere Rand (12) — siehe `ExploreSheet.kt`. Deckelt die Liste der
+ * gespeicherten Routen und Orte im hochgewischten Blatt.
+ */
+private val ExplorePeekFixedHeight = 150.dp
+
+/**
+ * Planung: Griff (24) und die eine Statuszeile (`heightIn(min = 48.dp)`) —
  * siehe `PlanningSheet` in `PlanningPanel.kt`.
  */
-private val PlanningPeekFixedHeight = 96.dp
+private val PlanningPeekFixedHeight = 72.dp
 
 /** Untergrenze, damit die Rechnung auf sehr flachen Fenstern nicht negativ wird. */
 private val MinOverlaySheetBudget = 240.dp
@@ -3934,7 +3992,7 @@ private fun MapLayersButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
 }
 
 /** Die Blaetter, die am unteren Kartenrand andocken — eines zur Zeit. */
-private enum class DockedSheet { VORSCHLAEGE, PLANUNG, VERLAUF, RUNDE, ERKUNDEN }
+private enum class DockedSheet { VORSCHLAEGE, ORT, PLANUNG, TOUR, VERLAUF, RUNDE, ERKUNDEN }
 
 /** Schluessel der Aufnahmekarte in der Wechselanimation ueber dem Blatt. */
 private object RecordingCardKey

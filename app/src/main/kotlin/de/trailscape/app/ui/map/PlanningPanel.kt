@@ -139,6 +139,13 @@ import kotlin.math.roundToInt
 internal fun PlanningSheet(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
+    /**
+     * Mittelstufe (nur zusammen mit [expanded]): halb aufgezogen zeigt das
+     * Blatt Profil, Streckenart und die ersten Wegpunkte, die Karte behaelt
+     * die obere Haelfte — die Stufe zum Wegpunktsetzen.
+     */
+    half: Boolean,
+    onHalfChange: (Boolean) -> Unit,
     profile: RouteProfile,
     onProfileChange: (RouteProfile) -> Unit,
     /**
@@ -250,8 +257,16 @@ internal fun PlanningSheet(
 
     SwipeableSheet(
         bottomInset = bottomInset,
-        expanded = expanded,
-        onExpandedChange = onExpandedChange,
+        stop = when {
+            !expanded -> SheetStop.Peek
+            half -> SheetStop.Half
+            else -> SheetStop.Full
+        },
+        onStopChange = { stop ->
+            onHalfChange(stop == SheetStop.Half)
+            onExpandedChange(stop != SheetStop.Peek)
+        },
+        halfStop = true,
         modifier = modifier,
         peek = {
             // Die ganze Planung in einer Zeile: Profil, Status, bei Bedarf

@@ -36,43 +36,39 @@ internal fun HistorySummarySheet(
     bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
-    SwipeableSheet(
-        expanded = false,
-        onExpandedChange = {},
+    StaticSheet(
         modifier = modifier,
         bottomInset = bottomInset,
-        peek = {
-            Column(
-                modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Wo du überall warst", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Grau = noch nie gefahren",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.Close, contentDescription = "Zurück zum Verlauf")
-                    }
-                }
-                Row(Modifier.fillMaxWidth()) {
-                    SummaryValue("$rideCount", "Touren", Modifier.weight(1f))
-                    SummaryValue("${formatKmDe(totalKm).substringBefore(',')} km", "gefahren", Modifier.weight(1f))
-                    SummaryValue("$tileCount", "Kacheln", Modifier.weight(1f))
-                    SummaryValue(
-                        squareSize?.takeIf { it >= 2 }?.let { "$it×$it" } ?: "–",
-                        "größtes Quadrat",
-                        Modifier.weight(1f),
+    ) {
+        Column(
+            modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Wo du überall warst", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Grau = noch nie gefahren",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Filled.Close, contentDescription = "Zurück zum Verlauf")
+                }
             }
-        },
-        body = {},
-    )
+            Row(Modifier.fillMaxWidth()) {
+                SummaryValue("$rideCount", "Touren", Modifier.weight(1f))
+                SummaryValue("${formatKmDe(totalKm).substringBefore(',')} km", "gefahren", Modifier.weight(1f))
+                SummaryValue("$tileCount", "Kacheln", Modifier.weight(1f))
+                SummaryValue(
+                    squareSize?.takeIf { it >= 2 }?.let { "$it×$it" } ?: "–",
+                    "größtes Quadrat",
+                    Modifier.weight(1f),
+                )
+            }
+        }
+    }
 }
 
 @Composable

@@ -23,6 +23,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -86,9 +88,14 @@ fun OneUiNavigationBar(
     // Mit den vollen 24 dp auf beiden Seiten plus dem Knopf daneben endeten
     // die Beschriftungen auf schmalen Geraeten in Ellipsen ("Traini…").
     horizontalMargin: Dp = NavigationBarSideMargin,
+    // `false`, wenn die Kapsel auf einer Flaeche liegt statt ueber Inhalt zu
+    // schweben (Karte: auf dem angedockten „Wohin?"-Blatt). Dann traegt sie
+    // keinen eigenen Schatten — zwei Schatten uebereinander wirken unruhig.
+    floating: Boolean = true,
     content: @Composable RowScope.() -> Unit,
 ) {
     val colors = LocalNavigationBarColors.current
+    val shadow by animateDpAsState(if (floating) 8.dp else 0.dp, label = "Kapselschatten")
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -108,7 +115,7 @@ fun OneUiNavigationBar(
             // Schatten darunter. Vorher trug ein 12-dp-Schatten die Schwebe
             // allein und wirkte dadurch schwerer, als Samsungs Kapsel es tut.
             border = BorderStroke(1.dp, colors.rim),
-            shadowElevation = 8.dp,
+            shadowElevation = shadow,
             // Volle Pille aus dem small-Slot des Themes — dieselbe Rundung wie
             // Knoepfe und Chips, damit die Leiste zur uebrigen App gehoert.
             shape = MaterialTheme.shapes.small,

@@ -234,8 +234,24 @@ private fun PlaceRow(
     icon: ImageVector = Icons.Filled.LocationOn,
 ) {
     val (title, area) = placeTitleAndArea(displayName)
+    SheetRow(title = title, subtitle = area, icon = icon, onClick = onClick)
+}
+
+/**
+ * Die Listenzeile der Kartenblaetter (Suchtreffer, gespeicherte Routen …):
+ * Symbol, Titel mit optionaler Unterzeile, Chevron. Die ganze Zeile ist die
+ * Aktion.
+ */
+@Composable
+internal fun SheetRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .heightIn(min = 48.dp)
@@ -256,9 +272,9 @@ private fun PlaceRow(
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.titleSmall,
             )
-            if (area.isNotBlank()) {
+            if (subtitle.isNotBlank()) {
                 Text(
-                    text = area,
+                    text = subtitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,

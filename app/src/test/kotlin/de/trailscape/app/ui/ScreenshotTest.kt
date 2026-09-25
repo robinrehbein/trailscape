@@ -8,7 +8,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -153,6 +156,19 @@ class ScreenshotTest {
         start()
         tab("Karte")
         shot("07-karte")
+        // Hochgewischt: gespeicherte Routen und Offline-Karten.
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
+            .performSemanticsAction(SemanticsActions.Expand)
+        settle()
+        shot("08-karte-wohin-offen")
+        // Eine gespeicherte Route antippen: das Tour-Blatt.
+        compose.onAllNodesWithText("Alb-Runde über Hayingen")[0].performClick()
+        settle()
+        shot("09-karte-tour")
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
+            .performSemanticsAction(SemanticsActions.Expand)
+        settle()
+        shot("10-karte-tour-offen")
     }
 
     private fun start() {
@@ -240,5 +256,15 @@ private fun sampleRides(): List<Ride> {
             ),
             points = points,
         )
-    }
+    } + Ride(
+        id = "sample-planned",
+        name = "Alb-Runde über Hayingen",
+        createdAt = NOW - DAY_MS,
+        stats = RideStats(distanceKm = 58.3, ascentM = 640.0, descentM = 640.0),
+        planned = true,
+        points = List(80) { i ->
+            val t = i / 79.0 * 2 * Math.PI
+            TrackPoint(lat = 48.30 + 0.04 * sin(t), lon = 9.40 + 0.06 * cos(t), ele = 700.0 + 60 * sin(t))
+        },
+    )
 }

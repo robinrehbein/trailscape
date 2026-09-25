@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DownloadForOffline
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Loop
+import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -32,7 +35,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.formatDateShort
+import de.trailscape.app.ui.formatKmDe
 import de.trailscape.core.GeoResult
+import de.trailscape.core.RideSummary
+import kotlin.math.roundToInt
 
 /**
  * Das „Wohin?"-Blatt der Karte (Fuehrung „Klartext",
@@ -52,12 +59,11 @@ import de.trailscape.core.GeoResult
  * in dasselbe (eine Runde bauen), keine Rangfolge. Fehlt die Tagesrunde,
  * nimmt „Runde ab hier" die ganze Breite.
  *
- * Was hier frueher im aufziehbaren Koerper stand, wohnt jetzt woanders:
- * Kartenstil, Kacheln und Offline hinter dem Ebenen-Knopf oben rechts
- * ([MapStyleSheet]), „Route planen" ueber das lange Druecken auf die Karte
- * bzw. die Ortskarte („Route hierher"). Das Blatt hat deshalb keinen Koerper
- * mehr und laesst sich nicht aufziehen — der Griff bleibt als Zeichen, dass
- * es ein Blatt ist, und gibt dem Suchfeld Luft nach oben.
+ * ## Hochgewischt: was man schon hat
+ * Der Griff haelt, was er verspricht: Hochgewischt zeigt das Blatt die
+ * gespeicherten Routen (Planungen, neueste zuerst), die zuletzt gesuchten
+ * Orte und den Weg zu den Offline-Karten. Vorher hatte das Blatt keinen
+ * Koerper, und Wischen am Griff tat schlicht nichts.
  *
  * @param todayRouteKm Laenge der heutigen Runde oder `null`, wenn es heute
  *   keine gibt.
@@ -80,14 +86,22 @@ internal fun ExploreSheet(
     todayRouteKm: Double?,
     onTodayRoute: () -> Unit,
     onRoundTripHere: () -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    savedRoutes: List<RideSummary>,
+    onSelectRoute: (RideSummary) -> Unit,
+    onOpenOfflineMaps: () -> Unit,
+    bodyMaxHeight: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
     SwipeableSheet(
-        expanded = false,
-        // Kein Koerper, nichts aufzuziehen: Der Griff beendet hoechstens eine
-        // laufende Suche, statt ins Leere zu klappen.
-        onExpandedChange = { if (searching) onEndSearch() },
+        // Waehrend der Suche gehoert der Platz den Treffern.
+        expanded = expanded && !searching,
+        onExpandedChange = { open ->
+            if (searching) onEndSearch()
+            onExpandedChange(open)
+        },
         modifier = modifier,
         bottomInset = bottomInset,
         peek = {
@@ -154,9 +168,77 @@ internal fun ExploreSheet(
                 }
             }
         },
-        body = {},
+        body = {
+            ExploreSheetBody(
+                savedRoutes = savedRoutes,
+                recentPlaces = searchHistory,
+                onSelectRoute = onSelectRoute,
+                onSelectPlace = onSelectPlace,
+                onOpenOfflineMaps = onOpenOfflineMaps,
+                modifier = Modifier
+                    .heightIn(max = bodyMaxHeight)
+                    .verticalScroll(rememberScrollState()),
+            )
+        },
     )
 }
+
+@Composable
+private fun ExploreSheetBody(
+    savedRoutes: List<RideSummary>,
+    recentPlaces: List<Place>,
+    onSelectRoute: (RideSummary) -> Unit,
+    onSelectPlace: (Place) -> Unit,
+    onOpenOfflineMaps: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.padding(start = CardPadding, end = CardPadding, bottom = 12.dp)) {
+        if (savedRoutes.isNotEmpty()) {
+            SectionLabel("Gespeicherte Routen")
+            savedRoutes.take(MAX_ROWS).forEach { ride ->
+                SheetRow(
+                    title = ride.name,
+                    subtitle = "${formatKmDe(ride.stats.distanceKm)} km · " +
+                        "${ride.stats.ascentM.roundToInt()} Hm · ${formatDateShort(ride.createdAt)}",
+                    icon = Icons.Rounded.Route,
+                    onClick = { onSelectRoute(ride) },
+                )
+            }
+        }
+        if (recentPlaces.isNotEmpty()) {
+            SectionLabel("Zuletzt gesucht")
+            recentPlaces.take(MAX_ROWS).forEach { place ->
+                val (title, area) = placeTitleAndArea(place.displayName)
+                SheetRow(
+                    title = title,
+                    subtitle = area,
+                    icon = Icons.Rounded.History,
+                    onClick = { onSelectPlace(place) },
+                )
+            }
+        }
+        SectionLabel("Karte")
+        SheetRow(
+            title = "Offline-Karten",
+            subtitle = "Gegenden für unterwegs ohne Netz laden",
+            icon = Icons.Rounded.DownloadForOffline,
+            onClick = onOpenOfflineMaps,
+        )
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** Hoechstens so viele Zeilen je Abschnitt — der Rest steht im Verlauf-Tab. */
+private const val MAX_ROWS = 5
 
 @Composable
 private fun ChipContent(icon: ImageVector, label: String) {
