@@ -143,6 +143,7 @@ import de.trailscape.core.zoomFuerTempo
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import de.trailscape.app.ui.rides.finishMarkers
+import de.trailscape.app.ui.rides.historyTotals
 import java.io.File
 import java.util.Locale
 import kotlin.math.abs
@@ -2416,7 +2417,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         appViewModel.select(rideId)
     }
 
-    // „Karte" im Verlauf: alle Spuren auf einmal.
+    // „Alle Touren auf der Karte" im Verlauf: alle Spuren auf einmal.
     val historyMapRequest by appViewModel.historyMapRequest.collectAsStateWithLifecycle()
     LaunchedEffect(historyMapRequest) {
         if (!historyMapRequest) return@LaunchedEffect
@@ -3178,10 +3179,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                     }
                     DockedSheet.VERLAUF -> {
                         Spacer(Modifier.height(OverlayGap))
-                        val ridden = rides.filterNot { it.planned }
+                        // Nur gefahrene Touren — Planungen zaehlen nicht (getestet).
+                        val totals = historyTotals(rides)
                         HistorySummarySheet(
-                            rideCount = ridden.size,
-                            totalKm = ridden.sumOf { it.stats.distanceKm },
+                            rideCount = totals.rideCount,
+                            totalKm = totals.totalKm,
                             tileCount = explorerTiles.size,
                             squareSize = explorerMaxSquare?.size,
                             onClose = {

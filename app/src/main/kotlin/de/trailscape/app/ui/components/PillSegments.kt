@@ -31,8 +31,10 @@ import androidx.compose.ui.unit.dp
  * Material-Segmentleiste, die mit Haken und Umriss aus dem Rest der App
  * herausfiel.
  *
- * Ueberall derselbe: Verlauf („Liste | Karte"), „Runde ab hier"
- * (Untergrund), Fahr-Cockpit („Daten | Karte").
+ * Ueberall derselbe: „Runde ab hier" (Untergrund), Fahr-Cockpit
+ * („Daten | Karte"). Im Verlauf stand frueher „Liste | Karte"; weil
+ * „Karte" dort nur den Tab wechselte, ist es jetzt ein ausgeschriebener Knopf
+ * (siehe `RidesScreen`).
  */
 @Composable
 fun PillSegments(

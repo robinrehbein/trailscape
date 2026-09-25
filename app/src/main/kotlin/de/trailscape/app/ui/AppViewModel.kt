@@ -1847,7 +1847,7 @@ class AppViewModel(
     }
 
     // ------------------------------------------------ Verlauf als Karte
-    // (Fuehrung „Klartext": „Liste | Karte" im Verlauf)
+    // (Fuehrung „Klartext": „Alle Touren auf der Karte" im Verlauf)
 
     private val _historyMapRequest = MutableStateFlow(false)
 

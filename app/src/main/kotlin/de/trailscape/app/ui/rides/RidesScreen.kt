@@ -9,8 +9,12 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.Icon
@@ -40,7 +44,7 @@ import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.ForwardBackwardHost
-import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiSearchField
@@ -67,6 +71,16 @@ import kotlinx.coroutines.Job
  * in der Liste ([VerlaufHeader]): eine Zeile Symbolknoepfe, darunter
  * „Verlauf" in `headlineLarge`. Beides scrollt mit weg.
  *
+ * ## „Alle Touren auf der Karte" statt „Liste | Karte"
+ * Unter dem Titel stand frueher ein Umschalter „Liste | Karte" — und die
+ * Navigationskapsel hat ebenfalls einen Tab „Karte". Zwei Stellen mit
+ * demselben Wort, die Verschiedenes tun, sind genau die Art Raetsel, die die
+ * App nicht stellen soll; ausserdem war es gar kein Umschalter: „Karte"
+ * wechselte den Tab, die Pille sprang also nie sichtbar um. Jetzt steht dort
+ * ein Knopf, der sagt, was passiert ([VerlaufHeader]). Er erscheint nur, wenn
+ * es mindestens eine *gefahrene* Tour gibt — geplante Routen zeichnet die
+ * Verlaufskarte nicht, ohne gefahrene Tour oeffnete sie eine leere Karte.
+ *
  * ## Die Detailansicht ist eine Ebene tiefer
  * Sie gleitet nach M3 „Forward and backward" ueber die Liste
  * ([ForwardBackwardHost]); die Liste bleibt darunter komponiert und steht
@@ -92,6 +106,9 @@ fun RidesScreen(appViewModel: AppViewModel) {
     var undoJob by remember { mutableStateOf<Job?>(null) }
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    // Nur gefahrene Touren landen auf der Verlaufskarte (siehe
+    // [AppViewModel.historyMapRequest]); Planungen allein ergaeben eine leere.
+    val hasRiddenRides = rides.any { !it.planned }
 
     // Die geoeffnete Tour als ID, nicht als `Ride`: Nach einem Umbenennen oder
     // HF-Merge liefert `appViewModel.rides` ein neues Objekt, ueber die ID
@@ -186,7 +203,7 @@ fun RidesScreen(appViewModel: AppViewModel) {
                                     onImportFile = importAction.start,
                                     onImportArchive = importArchive,
                                     onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
-                                    onShowMap = appViewModel::requestHistoryMap,
+                                    onShowMap = if (hasRiddenRides) appViewModel::requestHistoryMap else null,
                                 )
                             }
                         },
@@ -221,8 +238,11 @@ fun RidesScreen(appViewModel: AppViewModel) {
 
 /**
  * Der Kopf des Verlaufs (Zieldesign `.head` + `.title`): rechts oben Suche,
- * Import und Zahnrad, darunter der Titel. Ist die Suche offen, steht das
- * Suchfeld unter dem Titel; die Lupe wird dann zum Schliessen-Knopf.
+ * Import und Zahnrad, darunter der Titel und — sobald es eine gefahrene Tour
+ * gibt — der Knopf „Alle Touren auf der Karte". Ist die Suche offen, steht
+ * das Suchfeld darunter; die Lupe wird dann zum Schliessen-Knopf.
+ *
+ * @param onShowMap `null` blendet den Kartenknopf aus (keine gefahrene Tour).
  */
 @Composable
 private fun VerlaufHeader(
@@ -233,7 +253,7 @@ private fun VerlaufHeader(
     onImportFile: () -> Unit,
     onImportArchive: () -> Unit,
     onOpenSettings: () -> Unit,
-    onShowMap: () -> Unit,
+    onShowMap: (() -> Unit)?,
 ) {
     var importMenuOpen by remember { mutableStateOf(false) }
 
@@ -261,14 +281,22 @@ private fun VerlaufHeader(
                 SettingsAction(onClick = onOpenSettings)
             },
         )
-        // „Liste | Karte": Die Karte aller Spuren wohnt im Karten-Tab (echte
-        // Grundkarte, Kacheln); „Karte" wechselt dorthin, ✕ kommt zurueck.
-        PillSegments(
-            options = listOf("Liste", "Karte"),
-            selectedIndex = 0,
-            onSelect = { if (it == 1) onShowMap() },
-            modifier = Modifier.padding(top = 8.dp),
-        )
+        // Die Karte aller Spuren wohnt im Karten-Tab (echte Grundkarte,
+        // Kacheln); der Knopf wechselt dorthin, ✕ kommt zurueck. Ein
+        // ausgeschriebener Knopf statt Segment „Liste | Karte": Das Wort
+        // „Karte" allein gehoert der Navigationskapsel.
+        if (onShowMap != null) {
+            NeutralButton(
+                onClick = onShowMap,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
+                Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Alle Touren auf der Karte")
+            }
+        }
         if (searchOpen) {
             // Wer die Lupe antippt, will tippen: Fokus (und damit Tastatur)
             // gleich ins Feld.
