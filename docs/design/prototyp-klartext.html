@@ -234,7 +234,8 @@
   .map-bottom .sheet{border-radius:26px 26px 0 0;padding:6px 16px 22px}
   .map-bottom .sheet{grid-template-columns:minmax(0,1fr)}
   .map-bottom .sheet > *{min-width:0}
-  .map-bottom .sheet[data-k=idle]{padding-bottom:94px;gap:10px}
+  .map-bottom .sheet[data-k=idle]{padding-top:10px;padding-bottom:94px;gap:12px}
+  .map-bottom .sheet[data-k=idle] .grab{margin-bottom:4px}
   .map-bottom .sheet.peek > :not(.grabbtn):not(.rowlink){display:none}
   .grabbtn{justify-self:center;width:64px;height:18px;display:grid;place-items:center;margin-bottom:-4px}
   .grabbtn::before{content:"";width:40px;height:4px;border-radius:2px;background:var(--hair)}
@@ -555,6 +556,7 @@
 
           <!-- Zustand: Wohin? -->
           <div class="sheet" data-k="idle">
+            <div class="grab" aria-hidden="true"></div>
             <button class="search" data-toast="Suche öffnet sich über der Karte, mit letzten Zielen"><svg><use href="#i-search"/></svg><span>Wohin? Suchen oder lange drücken</span></button>
             <div class="chips one">
               <button class="chip acc" data-act="runde-heute"><svg><use href="#i-star"/></svg>Heute · 45 km</button>
