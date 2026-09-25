@@ -88,7 +88,19 @@ internal fun SwipeableSheet(
 
     val haptics = LocalHapticFeedback.current
 
-    val drag = remember { AnchoredDraggableState(initialValue = expanded) }
+    // Von Anfang an MIT Ankern: Ohne Anker findet `anchoredDraggable` beim
+    // Loslassen keinen Rastpunkt und stuerzt ab (NPE in `computeTarget`,
+    // Absturzbericht 2.0.160). Bis der Koerper gemessen ist, liegen beide
+    // Zustaende auf 0 — das Blatt laesst sich dann schlicht nicht aufziehen.
+    val drag = remember {
+        AnchoredDraggableState(
+            initialValue = expanded,
+            anchors = DraggableAnchors {
+                false at 0f
+                true at 0f
+            },
+        )
+    }
 
     // Das Einrasten laeuft sonst auf der Compose-Vorgabe: eine Feder ohne
     // begrenzte Dauer, die sich mit dem naechsten BOM-Update lautlos aendern
@@ -151,6 +163,8 @@ internal fun SwipeableSheet(
             modifier = Modifier.padding(bottom = bottomInset).anchoredDraggable(
                 state = drag,
                 orientation = Orientation.Vertical,
+                // Erst ziehbar, wenn es etwas aufzuziehen gibt.
+                enabled = bodyHeightPx > 0,
                 flingBehavior = fling,
                 // Hochziehen (negatives dy) soll den Offset — die sichtbare
                 // Koerperhoehe — VERGROESSERN.

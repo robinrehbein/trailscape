@@ -139,6 +139,15 @@ class ScreenshotTest {
         frames("32-detail")
     }
 
+    /** Karte betreten: Die Karte blendet ein, das Blatt faehrt von unten herauf. */
+    @Test
+    fun uebergangKarte() {
+        start()
+        compose.mainClock.autoAdvance = false
+        compose.onAllNodesWithText("Karte")[0].performClick()
+        frames("33-karte")
+    }
+
     @Test
     fun karte() {
         start()

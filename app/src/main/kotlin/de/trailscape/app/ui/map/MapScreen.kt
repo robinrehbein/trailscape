@@ -2960,8 +2960,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // Ueberblenden; beim Wechsel faehrt das alte hinab, waehrend
                     // das neue heraufkommt. Die Spalte darueber (Karten,
                     // Standort-Knopf) folgt der Hoehe gleitend.
+                    // Beim Betreten der Karte faehrt das Blatt von unten
+                    // herein, waehrend die Karte nur einblendet: Das erste
+                    // Bild zeigt noch kein Blatt, das zweite das echte — der
+                    // Wechsel dazwischen ist genau der Eintritt oben.
+                    var sheetEntered by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) { sheetEntered = true }
                     AnimatedContent(
-                        targetState = dockedSheet,
+                        targetState = if (sheetEntered) dockedSheet else null,
                         transitionSpec = {
                             (M3Transitions.sheetEnter() togetherWith M3Transitions.sheetExit())
                                 .using(SizeTransform(clip = false))
