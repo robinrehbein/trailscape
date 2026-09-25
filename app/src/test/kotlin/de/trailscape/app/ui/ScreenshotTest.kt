@@ -147,6 +147,39 @@ class ScreenshotTest {
     }
 
     /**
+     * Schmales, niedriges Geraet (360 × 640 dp) mit Samsungs erster
+     * Vergroesserungsstufe (115 %): Hier reichen vier Aktionskacheln nebeneinander
+     * nicht mehr fuer „Umbenennen" — sie muessen auf zwei Spalten umbrechen,
+     * statt das Wort zu trennen. Dazu das Karten-Tourblatt, ob ueber ihm noch
+     * Karte bleibt.
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    fun schmal() {
+        RuntimeEnvironment.setFontScale(1.15f)
+        start()
+        // Zuerst die Karte: Nach einem Besuch im Verlauf steht dort ein
+        // anderes Blatt, und der Weg zur gespeicherten Route waere ein anderer.
+        tab("Karte")
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
+            .performSemanticsAction(SemanticsActions.Expand)
+        settle()
+        compose.onAllNodesWithText("Alb-Runde über Hayingen")[0].performClick()
+        settle()
+        shot("17-karte-tour-schmal")
+        // Mit offenem Tourblatt ist die Navigationsleiste ausgeblendet.
+        compose.onAllNodesWithContentDescription("Auswahl aufheben")[0].performClick()
+        settle()
+        tab("Verlauf")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        // Auf 640 dp liegen die Kacheln unter dem Rand — hochgewischt.
+        compose.onAllNodesWithText("Locker", substring = true)[0].performTouchInput { swipeUp() }
+        settle()
+        shot("16-tour-schmal")
+    }
+
+    /**
      * Einzelbilder mitten in den Uebergaengen (M3: Top level, Forward and
      * backward) — zeigt, dass ausgeblendet wird, bevor eingeblendet wird.
      */

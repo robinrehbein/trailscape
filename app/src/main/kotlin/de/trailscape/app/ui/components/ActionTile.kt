@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -18,12 +19,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
@@ -42,9 +48,14 @@ import androidx.compose.ui.unit.dp
  * Die Hauptaktion („Losfahren", „Nochmal fahren") bleibt der gefuellte Knopf
  * in der Akzentfarbe. Diese Kacheln sind die Nebenaktionen und tragen deshalb
  * die neutrale Flaeche von [NeutralButton] (`surfaceContainerHighest`) —
- * dieselbe Familie, nur mit Symbol ueber dem Text. [destructive] faerbt wie
- * dort die *Flaeche* in der Fehler-Tonung, damit „Löschen" auch im
- * Augenwinkel als das erkennbar ist, was es ist.
+ * dieselbe Familie, nur mit Symbol ueber dem Text. [destructive] faerbt
+ * anders als dort nur Symbol und Wort rot, die Flaeche bleibt neutral: Eine
+ * rote *Flaeche* war im Dunkeln (`errorContainer`, tiefes Rot) neben dem
+ * mintgruenen Hauptknopf das lauteste Element des Bildschirms — Loeschen
+ * waere lauter gewesen als die Hauptaktion. One UI zeigt Loeschen in seiner
+ * Aktionsleiste genauso: neutrale Kachel, rotes Symbol, rotes Wort. Das
+ * reicht, um es im Augenwinkel zu erkennen. `error` erreicht auf beiden
+ * Kachelflaechen hell wie dunkel mehr als 4,5:1.
  *
  * ## [onCard]
  * Auf dem Bildschirmgrund (`surface`) hebt sich `surfaceContainerHighest` als
@@ -56,6 +67,11 @@ import androidx.compose.ui.unit.dp
  *
  * Die Beschriftung darf zweizeilig werden („Karte zeigen" bei grosser
  * Schrift); mehr nicht, sonst wachsen die Kacheln ueber die Hauptaktion.
+ *
+ * @param contentDescription was die Bildschirmlesehilfe statt [label] sagt,
+ *   wenn das kurze Wort allein das Objekt nicht nennt („Tour löschen" statt
+ *   „Löschen"). Es muss [label] enthalten, damit Sprachsteuerung („Tippe auf
+ *   Löschen") den Knopf weiter findet.
  */
 @Composable
 fun ActionTile(
@@ -65,31 +81,37 @@ fun ActionTile(
     modifier: Modifier = Modifier,
     destructive: Boolean = false,
     onCard: Boolean = false,
+    contentDescription: String? = null,
 ) {
     Button(
         onClick = onClick,
         // Mindestens 64 dp: Symbol (24) plus eine Zeile `labelMedium` plus
         // Innenabstand — und damit deutlich ueber der 48-dp-Beruehrflaeche.
-        modifier = modifier.heightIn(min = 64.dp),
+        modifier = modifier
+            .heightIn(min = 64.dp)
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
+                },
+            ),
         // Kleinere Rundung als die Pillen-Knoepfe: Eine hohe Pille wirkt wie
         // ein Oval, die Galerie-Leiste von One UI nimmt abgerundete Rechtecke.
         shape = RoundedCornerShape(16.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-        colors = if (destructive) {
-            ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            )
-        } else {
-            ButtonDefaults.buttonColors(
-                containerColor = if (onCard) {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            )
-        },
+        contentPadding = PaddingValues(horizontal = TilePaddingH, vertical = 8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (onCard) {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            },
+            contentColor = if (destructive) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+        ),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             // Das Symbol ist Schmuck, die Beschriftung sagt schon alles —
@@ -107,13 +129,24 @@ fun ActionTile(
     }
 }
 
-/** Eine Aktion fuer [ActionTileRow]: Beschriftung, Symbol, Handlung. */
+/**
+ * Eine Aktion fuer [ActionTileRow]: Beschriftung, Symbol, Handlung.
+ *
+ * @param contentDescription siehe [ActionTile].
+ */
 class TileAction(
     val label: String,
     val icon: ImageVector,
     val destructive: Boolean = false,
+    val contentDescription: String? = null,
     val onClick: () -> Unit,
 )
+
+/** Innenabstand links und rechts in einer [ActionTile]. */
+private val TilePaddingH = 4.dp
+
+/** Abstand zwischen den Kacheln, waagerecht wie senkrecht. */
+private val TileGap = 8.dp
 
 /**
  * Mehrere [ActionTile] gleich breit und gleich hoch nebeneinander.
@@ -121,10 +154,17 @@ class TileAction(
  * Gleich hoch ueber `IntrinsicSize.Min`: Bricht eine Beschriftung auf zwei
  * Zeilen um, wachsen die Nachbarn mit, statt als Treppe dazustehen.
  *
- * Ab grosser Systemschrift (ab 130 %) und mehr als zwei Aktionen stehen je
- * zwei in einer Reihe: Vier Kacheln auf 360 dp sind je rund 76 dp breit, und
- * ein Wort wie „Umbenennen" passt dann nicht mehr in eine Zeile — Compose
- * wuerde es mitten im Wort trennen. Zwei Spalten sind lesbarer als vier
+ * ## Wann zwei Spalten
+ * Passt das laengste *Wort* einer Beschriftung nicht mehr in eine Kachel,
+ * stehen je zwei Kacheln in einer Reihe (siehe [actionTileColumns]).
+ * Entschieden wird nach dem tatsaechlich verfuegbaren Platz, nicht nach der
+ * Schriftgroesse: „Umbenennen" ist bei 100 % rund 74 dp breit, eine von vier
+ * Kacheln auf einem 360-dp-Geraet bietet aber nur rund 68 dp — schon bei
+ * Standardschrift wuerde Compose das Wort mitten drin trennen
+ * („Umbenenne/n"). Umgekehrt reicht auf einem breiten Geraet auch bei
+ * 115 % noch eine Reihe. Gemessen wird deshalb mit derselben Schrift
+ * (`labelMedium`) und derselben Dichte samt Schriftskalierung, mit der die
+ * Kachel die Beschriftung setzt. Zwei Spalten sind lesbarer als vier
  * zerhackte.
  *
  * @param onCard die Kacheln liegen auf einer Karte statt auf dem Grund —
@@ -136,29 +176,67 @@ fun ActionTileRow(
     modifier: Modifier = Modifier,
     onCard: Boolean = false,
 ) {
-    val fontScale = LocalDensity.current.fontScale
-    val perRow = if (actions.size > 2 && fontScale >= 1.3f) 2 else actions.size
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        actions.chunked(perRow.coerceAtLeast(1)).forEach { chunk ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                chunk.forEach { action ->
-                    ActionTile(
-                        label = action.label,
-                        icon = action.icon,
-                        onClick = action.onClick,
-                        destructive = action.destructive,
-                        onCard = onCard,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    )
+    val measurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.labelMedium
+    val density = LocalDensity.current
+    val labels = actions.map { it.label }
+    // Nur das laengste Wort zaehlt: An Leerzeichen darf die Beschriftung
+    // umbrechen („Karte / zeigen"), mitten im Wort nicht.
+    val widestWord = remember(labels, style, density) {
+        val px = labels
+            .flatMap { it.split(' ') }
+            .maxOfOrNull { word ->
+                measurer.measure(word, style, softWrap = false, maxLines = 1).size.width
+            } ?: 0
+        with(density) { px.toDp() }
+    }
+    BoxWithConstraints(modifier = modifier) {
+        val perRow = if (constraints.hasBoundedWidth) {
+            actionTileColumns(actions.size, maxWidth, widestWord)
+        } else {
+            actions.size
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(TileGap)) {
+            actions.chunked(perRow.coerceAtLeast(1)).forEach { chunk ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(TileGap),
+                ) {
+                    chunk.forEach { action ->
+                        ActionTile(
+                            label = action.label,
+                            icon = action.icon,
+                            onClick = action.onClick,
+                            destructive = action.destructive,
+                            onCard = onCard,
+                            contentDescription = action.contentDescription,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Wie viele Kacheln je Reihe: alle nebeneinander, sonst zwei, sonst eine —
+ * die erste Aufteilung, bei der [widestWord] samt Innenabstand in eine
+ * Kachel passt. Drei je Reihe gibt es bewusst nicht: Vier Aktionen als drei
+ * plus eine saehen aus wie vergessen.
+ *
+ * Zwei dp Reserve fangen Rundung und Glyphenueberhang ab — lieber einmal
+ * zu frueh zwei Spalten als ein abgeschnittenes „n".
+ */
+internal fun actionTileColumns(count: Int, available: Dp, widestWord: Dp): Int {
+    if (count <= 1) return count.coerceAtLeast(1)
+    val candidates = listOf(count, 2, 1).filter { it <= count }.distinct()
+    return candidates.firstOrNull { columns ->
+        val tile = (available - TileGap * (columns - 1)) / columns
+        tile - TilePaddingH * 2 - 2.dp >= widestWord
+    } ?: 1
 }

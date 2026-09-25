@@ -58,15 +58,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
-import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.ActionTileRow
-import de.trailscape.app.ui.components.TileAction
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -282,18 +282,26 @@ internal fun RideDetailScreen(
                 // derselben Ordnung wie auf dem Karten-Tourblatt
                 // (`ui/map/MapPanels.kt`, [de.trailscape.app.ui.map.RideCard]):
                 // gefuellt die eine Hauptaktion, darunter neutrale Kacheln,
-                // Loeschen rot und ganz aussen. Loeschen fragt nicht nach,
-                // sondern bietet im Verlauf „Rückgängig" an (siehe
-                // [deleteRideWithUndo]).
+                // Loeschen mit rotem Wort und ganz aussen. Loeschen fragt nicht
+                // nach, sondern bietet im Verlauf „Rückgängig" an (siehe
+                // [deleteRideWithUndo]). Die Bildschirmlesehilfe hoert bei
+                // Teilen und Loeschen das Objekt mit — ein nacktes „Löschen"
+                // sagt nicht, *was* geloescht wird.
                 ActionTileRow(
                     actions = listOf(
                         TileAction("Karte zeigen", Icons.Filled.Map, onClick = onShowOnMap),
                         TileAction("Umbenennen", Icons.Filled.Edit, onClick = onRename),
-                        TileAction("Teilen", Icons.Filled.Share, onClick = onShare),
+                        TileAction(
+                            "Teilen",
+                            Icons.Filled.Share,
+                            contentDescription = "Tour als GPX teilen",
+                            onClick = onShare,
+                        ),
                         TileAction(
                             "Löschen",
                             Icons.Filled.Delete,
                             destructive = true,
+                            contentDescription = "Tour löschen",
                             onClick = onDelete,
                         ),
                     ),

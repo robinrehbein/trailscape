@@ -45,10 +45,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.ActionTileRow
 import de.trailscape.app.ui.components.HoldToEndButton
-import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -368,15 +368,36 @@ internal fun RideCard(
                         onClick = onNavigate,
                         enabled = !navigating,
                         modifier = Modifier.fillMaxWidth(),
+                        // Dasselbe Abspielsymbol wie „Diese Tour nochmal
+                        // fahren" im Tourdetail: gleiche Handlung, gleiches
+                        // Zeichen. Unterwegs faellt es weg — dann ist der
+                        // Knopf nur noch Anzeige, nichts zum Starten.
+                        leading = if (navigating) {
+                            null
+                        } else {
+                            {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        },
                     )
                     Spacer(Modifier.height(8.dp))
                     ActionTileRow(
                         actions = listOf(
-                            TileAction("Teilen", Icons.Filled.Share, onClick = onShare),
+                            TileAction(
+                                "Teilen",
+                                Icons.Filled.Share,
+                                contentDescription = "Tour als GPX teilen",
+                                onClick = onShare,
+                            ),
                             TileAction(
                                 "Löschen",
                                 Icons.Filled.Delete,
                                 destructive = true,
+                                contentDescription = "Tour löschen",
                                 onClick = onDelete,
                             ),
                         ),

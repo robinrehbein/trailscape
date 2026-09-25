@@ -106,9 +106,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Detailansicht; Umbenennen, Teilen, Loeschen und „Karte zeigen" wohnen
  * seit dem Klartext-Umbau nur noch dort, als beschriftete Kacheln — ein
  * Ueberlaufmenue je Zeile machte die Liste unruhig und bot dieselben vier
- * Handgriffe zweimal an. „geplante Route" und „aus Health Connect" stehen ebenfalls nur noch im
- * Detail: In der Zeile waren sie eine zweite Textzeile fuer eine Auskunft, die
- * man beim Ueberfliegen nicht braucht.
+ * Handgriffe zweimal an. „geplante Route" und „aus Health Connect" stehen
+ * ebenfalls nur noch im Detail: In der Zeile waren sie eine zweite
+ * Textzeile fuer eine Auskunft, die man beim Ueberfliegen nicht braucht.
  *
  * @param query Suchtext; filtert nach Namen ([filterRidesByName]).
  * @param onRecord / [onImportFile] / [onImportArchive] tragen den Leerzustand.
