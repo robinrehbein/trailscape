@@ -91,7 +91,19 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Anbindung an Health Connect (dorthin spiegelt Samsung Health die
   Watch-Daten): Import von Trainingseinheiten samt Route, Herzfrequenz,
   Ruhepuls, HRV, Schlaf, VO₂max
+- Nur Radfahrten werden als Touren übernommen. Mit der optionalen
+  Historien-Freigabe holt der erste Import einmalig die Radfahrten der letzten
+  12 Monate, sonst gibt Health Connect nur 30 Tage heraus
+- Touren, deren Route Health Connect nur nach einer Einzel-Freigabe
+  herausgibt, kommen zunächst ohne Karte; die Einstellungen zeigen, wie viele
+  es sind, und holen die Routen per Knopf nach
 - Ausschließlich lesend — Trailscape schreibt nichts nach Health Connect zurück
+
+**Galaxy Watch**
+- Die Trailscape-Uhr-App ist eine Begleiterin: Sie schickt Puls und GPS live
+  ans Handy, aufgezeichnet wird dort. Ohne Handy zeichnet sie keine Tour auf
+- Ohne Handy unterwegs? Die Fahrt mit Samsung Health auf der Uhr aufzeichnen —
+  Trailscape importiert sie danach über Health Connect
 
 **Selfhost-Sync (optional)**
 - Bidirektionale Synchronisierung der Touren mit einem eigenen Server

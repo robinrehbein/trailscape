@@ -57,6 +57,8 @@ class HealthSyncTest {
         var workoutDiagnostics: HealthWorkoutReadDiagnostics? = null,
         var consentRequired: Set<String> = emptySet(),
         var permissionStatus: Map<HealthReadType, Boolean>? = null,
+        var historyGranted: Boolean = false,
+        var failHistory: Boolean = false,
     ) : HealthGateway {
         var requestCount = 0
         var nativeSessionCalls = 0
@@ -70,6 +72,11 @@ class HealthSyncTest {
         override fun availability(): HealthAvailability = availabilityValue
 
         override fun hasPermissions(): Boolean = permissionsGranted
+
+        override fun hasHistoryPermission(): Boolean {
+            if (failHistory) throw IllegalStateException("historie kaputt")
+            return historyGranted
+        }
 
         override fun requestPermissions(): Boolean {
             requestCount++
@@ -1940,5 +1947,248 @@ class HealthSyncTest {
         assertEquals(healthRideId("gesperrt"), pending.rideId)
         assertEquals("com.sec.android.app.shealth", pending.source)
         assertTrue(report.debugLines.contains("Routen: 1 brauchen eine Einzel-Freigabe, 1 ohne Routendaten in Health Connect"))
+    }
+
+    // -----------------------------------------------------------------------
+    // Historien-Freigabe: Anfangsfenster und einmaliger Lang-Import
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `healthImportWindowStart - Anfangsfenster kommt als Parameter`() {
+        val now = at(2026, 8, 10)
+
+        assertEquals(
+            now.plusMs(-healthSyncHistoryWindowMs),
+            healthImportWindowStart(
+                since = null,
+                lastImportAt = null,
+                to = now,
+                initialWindowMs = healthSyncHistoryWindowMs,
+            ),
+        )
+        // Ein vorhandener Zeitstempel sticht das Anfangsfenster weiterhin.
+        val letzterImport = at(2026, 8, 5)
+        assertEquals(
+            letzterImport.plusMs(-healthSyncImportBackfillMs),
+            healthImportWindowStart(
+                since = null,
+                lastImportAt = letzterImport,
+                to = now,
+                initialWindowMs = healthSyncHistoryWindowMs,
+            ),
+        )
+    }
+
+    @Test
+    fun `Historie - erster Sync ohne Freigabe bleibt bei 30 Tagen`() {
+        val gateway = FakeHealthGateway(historyGranted = false)
+        val store = InMemoryHealthSyncStore()
+        val now = at(2026, 8, 10, 12)
+
+        val report = serviceOf(gateway, now, store).importWithReport(existing = emptyList())
+
+        assertEquals(now.plusMs(-healthSyncInitialWindowMs), gateway.lastWorkoutFrom)
+        assertFalse(report.historyImport)
+        assertFalse(store.historyImportDone())
+    }
+
+    @Test
+    fun `Historie - erster Sync mit Freigabe holt 365 Tage und merkt es sich`() {
+        val gateway = FakeHealthGateway(historyGranted = true)
+        val store = InMemoryHealthSyncStore()
+        val now = at(2026, 8, 10, 12)
+
+        val report = serviceOf(gateway, now, store).importWithReport(existing = emptyList())
+
+        assertEquals(now.plusMs(-healthSyncHistoryWindowMs), gateway.lastWorkoutFrom)
+        assertTrue(report.historyImport)
+        assertTrue(store.historyImportDone())
+        assertTrue(report.debugLines.any { it.startsWith("Historie: freigegeben") })
+
+        // Der naechste Lauf ist wieder ein normaler Folge-Sync mit Puffer.
+        val spaeter = at(2026, 8, 11, 12)
+        val zweiter = serviceOf(gateway, spaeter, store).importWithReport(existing = emptyList())
+        assertEquals(now.plusMs(-healthSyncImportBackfillMs), gateway.lastWorkoutFrom)
+        assertFalse(zweiter.historyImport)
+    }
+
+    @Test
+    fun `Historie - spaet erteilte Freigabe loest genau einmal den Lang-Import aus`() {
+        val gateway = FakeHealthGateway(historyGranted = false)
+        val store = InMemoryHealthSyncStore()
+
+        // Erster Sync ohne Freigabe: 30 Tage, Zeitstempel gesetzt.
+        serviceOf(gateway, at(2026, 8, 1, 12), store).importWithReport(existing = emptyList())
+        assertFalse(store.historyImportDone())
+
+        // Wochen spaeter kommt die Freigabe: Obwohl ein Zeitstempel da ist,
+        // wird das ganze Jahr gelesen.
+        gateway.historyGranted = true
+        val mitFreigabe = at(2026, 8, 20, 12)
+        val lang = serviceOf(gateway, mitFreigabe, store).importWithReport(existing = emptyList())
+        assertEquals(mitFreigabe.plusMs(-healthSyncHistoryWindowMs), gateway.lastWorkoutFrom)
+        assertTrue(lang.historyImport)
+
+        // Danach nie wieder: Folge-Syncs laufen ab dem Zeitstempel.
+        val danach = at(2026, 8, 21, 12)
+        val normal = serviceOf(gateway, danach, store).importWithReport(existing = emptyList())
+        assertEquals(mitFreigabe.plusMs(-healthSyncImportBackfillMs), gateway.lastWorkoutFrom)
+        assertFalse(normal.historyImport)
+    }
+
+    @Test
+    fun `Historie - ausdrueckliches since verbraucht den Lang-Import nicht`() {
+        val gateway = FakeHealthGateway(historyGranted = true)
+        val store = InMemoryHealthSyncStore()
+        val since = at(2026, 8, 1)
+
+        val report = serviceOf(gateway, at(2026, 8, 10), store)
+            .importWithReport(existing = emptyList(), since = since)
+
+        assertEquals(since, gateway.lastWorkoutFrom)
+        assertFalse(report.historyImport)
+        assertFalse(store.historyImportDone())
+    }
+
+    @Test
+    fun `Historie - Fehler beim Nachfragen der Freigabe faellt auf 30 Tage zurueck`() {
+        val gateway = FakeHealthGateway(failHistory = true)
+        val store = InMemoryHealthSyncStore()
+        val now = at(2026, 8, 10, 12)
+
+        serviceOf(gateway, now, store).importWithReport(existing = emptyList())
+
+        assertEquals(now.plusMs(-healthSyncInitialWindowMs), gateway.lastWorkoutFrom)
+        assertFalse(store.historyImportDone())
+    }
+
+    @Test
+    fun `Historie - Lang-Import uebernimmt nur Radsportarten`() {
+        val now = at(2026, 8, 10, 12)
+        val alt = now.plusMs(-days(200))
+        val gateway = FakeHealthGateway(
+            historyGranted = true,
+            workouts = listOf(
+                cycling(id = "rad", start = alt, end = alt.plusMs(hours(2))),
+                cycling(
+                    id = "rolle",
+                    start = alt.plusMs(days(1)),
+                    end = alt.plusMs(days(1) + hours(1)),
+                    kind = HealthActivityKind.RADFAHREN_INDOOR,
+                ),
+                cycling(
+                    id = "lauf",
+                    start = alt.plusMs(days(2)),
+                    end = alt.plusMs(days(2) + hours(1)),
+                    kind = HealthActivityKind.SONSTIGES,
+                ),
+            ),
+        )
+
+        val report = serviceOf(gateway, now).importWithReport(existing = emptyList())
+
+        assertTrue(report.historyImport)
+        assertEquals(2, report.workoutsFound)
+        assertEquals(
+            setOf(healthRideId("rad"), healthRideId("rolle")),
+            report.imported.map { it.id }.toSet(),
+        )
+    }
+
+    @Test
+    fun `historyAccessStatus - unterscheidet erteilt, fehlend und unbekannt`() {
+        val now = at(2026, 8, 10)
+        assertEquals(true, serviceOf(FakeHealthGateway(historyGranted = true), now).historyAccessStatus())
+        assertEquals(
+            false,
+            serviceOf(
+                FakeHealthGateway(permissionStatus = mapOf(HealthReadType.HISTORIE to false)),
+                now,
+            ).historyAccessStatus(),
+        )
+        // Kennt das Geraet die Freigabe nicht, fehlt der Schluessel.
+        assertNull(
+            serviceOf(FakeHealthGateway(permissionStatus = emptyMap()), now).historyAccessStatus(),
+        )
+    }
+
+    @Test
+    fun `fullWindowMs - ein Jahr nur mit Historien-Freigabe`() {
+        val now = at(2026, 8, 10)
+        assertEquals(
+            healthSyncHistoryWindowMs,
+            serviceOf(FakeHealthGateway(historyGranted = true), now).fullWindowMs(),
+        )
+        assertEquals(healthSyncInitialWindowMs, serviceOf(FakeHealthGateway(), now).fullWindowMs())
+    }
+
+    @Test
+    fun `requestHistoryAccess - fragt auch bei vorhandenen Pflichtrechten nach`() {
+        val gateway = FakeHealthGateway(permissionsGranted = true)
+        val service = serviceOf(gateway, at(2026, 8, 10))
+
+        assertFalse(service.requestHistoryAccess())
+        assertEquals(1, gateway.requestCount)
+
+        gateway.historyGranted = true
+        assertTrue(service.requestHistoryAccess())
+    }
+
+    // -----------------------------------------------------------------------
+    // Routen mit Freigabebedarf: uebersprungen und gezaehlt
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `summaryLine - zaehlt Touren ohne Route wegen fehlender Freigabe`() {
+        val start = at(2026, 8, 1, 10)
+        val gesperrt = (1..3).map { i ->
+            val tag = start.plusMs(days(i.toLong()))
+            cycling(id = "gesperrt$i", start = tag, end = tag.plusMs(hours(1)))
+        }
+        val gateway = FakeHealthGateway(
+            workouts = listOf(
+                cycling(id = "frei", start = start, end = start.plusMs(hours(1))),
+                cycling(id = "leer", start = start.plusMs(days(5)), end = start.plusMs(days(5) + hours(1))),
+            ) + gesperrt,
+            routes = mapOf(
+                "frei" to listOf(
+                    HealthRoutePoint(50.0, 8.0, start),
+                    HealthRoutePoint(50.01, 8.0, start.plusMs(minutes(10))),
+                ),
+            ),
+            consentRequired = gesperrt.map { it.id }.toSet(),
+        )
+
+        val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(existing = emptyList())
+
+        // Uebersprungen heisst: Die Tour kommt, nur ohne Route — und die
+        // Route bleibt ueber routeConsentPending nachholbar.
+        assertEquals(5, report.imported.size)
+        assertTrue(report.imported.filter { it.id.contains("gesperrt") }.all { it.points.isEmpty() })
+        assertEquals(3, report.routeConsentPending.size)
+        assertEquals(
+            "5 Touren importiert · 3 ohne Route (Freigabe nötig) · 1 ohne GPS-Daten",
+            report.summaryLine(),
+        )
+    }
+
+    @Test
+    fun `summaryLine - laesst Nullwerte weg`() {
+        val start = at(2026, 8, 1, 10)
+        val gateway = FakeHealthGateway(
+            workouts = listOf(cycling(id = "frei", start = start, end = start.plusMs(hours(1)))),
+            routes = mapOf(
+                "frei" to listOf(
+                    HealthRoutePoint(50.0, 8.0, start),
+                    HealthRoutePoint(50.01, 8.0, start.plusMs(minutes(10))),
+                ),
+            ),
+        )
+
+        val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(existing = emptyList())
+        assertEquals("1 Tour importiert", report.summaryLine())
+
+        val leer = serviceOf(FakeHealthGateway(), at(2026, 8, 10)).importWithReport(existing = emptyList())
+        assertEquals("Keine neuen Touren", leer.summaryLine())
     }
 }

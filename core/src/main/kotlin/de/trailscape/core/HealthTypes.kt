@@ -332,6 +332,12 @@ data class HealthSyncReport(
      * nachgetragen, leer bis dahin.
      */
     val vitals: List<VitalsTypeDiagnostics> = emptyList(),
+    /**
+     * Ob dieser Lauf der einmalige Lang-Import mit Historien-Freigabe war
+     * ([healthSyncHistoryWindowMs]). Der Aufrufer braucht das, um bei einem
+     * gescheiterten Speichern auch den Merker zurueckzurollen.
+     */
+    val historyImport: Boolean = false,
 ) {
     /** Touren ohne Route, fuer die Health Connect auch keine Routendaten hat. */
     val routesWithoutData: Int
@@ -358,6 +364,33 @@ data class HealthSyncReport(
             debugLines = emptyList(),
         )
     }
+}
+
+/**
+ * Einzeilige Rueckmeldung eines Import-Laufs fuer Snackbar und Health-Karte,
+ * etwa „12 Touren importiert · 3 ohne Route (Freigabe nötig)".
+ *
+ * Warum die Routen-Freigaben eigens genannt werden: Touren, deren Route
+ * Health Connect nur nach einer Einzel-Freigabe herausgibt
+ * ([HealthSyncReport.routeConsentPending]), landen ohne Karte in der Liste.
+ * Ohne diesen Hinweis saehe das wie ein Fehler von Trailscape aus — mit ihm
+ * weiss die Nutzerin, dass ein Tippen auf „Routen freigeben" genuegt.
+ * Touren, fuer die es schlicht keine Routendaten gibt (Rolle, Indoor), werden
+ * getrennt gezaehlt, weil dort keine Freigabe hilft.
+ *
+ * Nullwerte fallen weg, damit die Zeile kurz bleibt; ohne jede Aenderung
+ * heisst sie „Keine neuen Touren".
+ */
+fun HealthSyncReport.summaryLine(): String {
+    fun touren(n: Int) = if (n == 1) "1 Tour" else "$n Touren"
+    val consent = routeConsentPending.size
+    val withoutData = routesWithoutData
+    if (imported.isEmpty() && mergedRides.isEmpty()) return "Keine neuen Touren"
+    val parts = mutableListOf("${touren(imported.size)} importiert")
+    if (mergedRides.isNotEmpty()) parts.add("${mergedRides.size} mit Puls ergänzt")
+    if (consent > 0) parts.add("$consent ohne Route (Freigabe nötig)")
+    if (withoutData > 0) parts.add("$withoutData ohne GPS-Daten")
+    return parts.joinToString(" · ")
 }
 
 // ---------------------------------------------------------------------------

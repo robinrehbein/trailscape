@@ -42,6 +42,30 @@ const val healthSyncStorageKey: String = "trailscape.healthsync"
 const val healthSyncInitialWindowMs: Long = 30L * 24 * 60 * 60 * 1000
 
 /**
+ * Wie weit der einmalige Lang-Import zurueckgreift, wenn die Historien-Freigabe
+ * (`READ_HEALTH_DATA_HISTORY`) erteilt ist: 365 Tage in Millisekunden.
+ *
+ * Warum ueberhaupt: Wer Trailscape neu installiert, hat meist schon Monate an
+ * Fahrten in Samsung Health. Mit nur 30 Tagen starteten Fitness-, Form- und
+ * Belastungskurven bei null, obwohl die Daten laengst auf dem Handy liegen.
+ *
+ * Warum nicht mehr: Ein Jahr deckt eine volle Saison samt Winterpause ab und
+ * reicht fuer jede Trainingslast-Rechnung (die laengste Konstante, die
+ * Fitness, klingt nach wenigen Wochen ab). Aeltere Fahrten waeren reine
+ * Archivpflege und wuerden den ersten Sync spuerbar verlaengern — Herzfrequenz
+ * wird je Fahrt einzeln gelesen.
+ *
+ * Wann: genau einmal, siehe [HealthSyncStore.historyImportDone].
+ */
+const val healthSyncHistoryWindowMs: Long = 365L * 24 * 60 * 60 * 1000
+
+/**
+ * Speicherschluessel des Merkers „Lang-Import mit Historien-Freigabe ist
+ * gelaufen" (siehe [HealthSyncStore.historyImportDone]).
+ */
+const val healthSyncHistoryImportKey: String = "trailscape.healthsync.historyImportDone"
+
+/**
  * Wie weit der Beginn des Importfensters hinter den Zeitpunkt des letzten
  * Imports zurueckgesetzt wird: 4 Tage in Millisekunden.
  *
@@ -90,6 +114,16 @@ interface HealthGateway {
 
     /** Ob alle benoetigten Leserechte erteilt sind. */
     fun hasPermissions(): Boolean
+
+    /**
+     * Ob die Historien-Freigabe (`READ_HEALTH_DATA_HISTORY`) erteilt ist, also
+     * Daten aelter als 30 Tage vor der ersten Zustimmung lesbar sind.
+     *
+     * Die Vorgabe meldet `false`: Eine Implementierung, die das Recht nicht
+     * kennt, bekommt so das bisherige 30-Tage-Fenster und fragt nie ins
+     * Leere hinein ab.
+     */
+    fun hasHistoryPermission(): Boolean = false
 
     /** Fragt die benoetigten Leserechte an. Liefert `true` bei Zustimmung. */
     fun requestPermissions(): Boolean
@@ -168,17 +202,40 @@ interface HealthSyncStore {
 
     /** Setzt den Zeitstempel; `null` loescht ihn. */
     fun setLastImportAtMs(value: Long?)
+
+    /**
+     * Ob der einmalige Lang-Import ([healthSyncHistoryWindowMs]) schon
+     * gelaufen ist.
+     *
+     * Ein eigener Merker statt „erster Sync ja/nein": Die Historien-Freigabe
+     * kann auch erst Wochen nach dem ersten Sync kommen (zweiter Dialog,
+     * Health-Connect-Einstellungen). Dann liegt [lastImportAtMs] laengst vor,
+     * und nur dieser Merker sagt, dass das Jahr davor noch nie gelesen wurde.
+     */
+    fun historyImportDone(): Boolean
+
+    /** Setzt den Merker aus [historyImportDone]. */
+    fun setHistoryImportDone(value: Boolean)
 }
 
 /**
  * Zeitstempel nur im Arbeitsspeicher — Vorgabe fuer [HealthSyncService], wenn
  * (noch) kein persistenter Speicher angebunden ist, und Attrappe in Tests.
  */
-class InMemoryHealthSyncStore(private var value: Long? = null) : HealthSyncStore {
+class InMemoryHealthSyncStore(
+    private var value: Long? = null,
+    private var historyDone: Boolean = false,
+) : HealthSyncStore {
     override fun lastImportAtMs(): Long? = value
 
     override fun setLastImportAtMs(value: Long?) {
         this.value = value
+    }
+
+    override fun historyImportDone(): Boolean = historyDone
+
+    override fun setHistoryImportDone(value: Boolean) {
+        historyDone = value
     }
 }
 
@@ -632,7 +689,13 @@ private fun averageOrNull(values: List<Double>): Double? {
 
 /**
  * Startpunkt des Importfensters:
- * `since ?? (lastImportAt - Puffer) ?? to - 30 Tage`.
+ * `since ?? (lastImportAt - Puffer) ?? to - initialWindowMs`.
+ *
+ * [initialWindowMs] ist das Anfangsfenster, wenn es keinen Zeitstempel gibt:
+ * [healthSyncInitialWindowMs] (30 Tage) ohne Historien-Freigabe — mehr gibt
+ * Health Connect dann ohnehin nicht heraus —, [healthSyncHistoryWindowMs] mit.
+ * Welches gilt, entscheidet [HealthSyncService]; hier bleibt es eine Zahl,
+ * damit die Fensterlogik rein und ohne Gateway pruefbar bleibt.
  *
  * ## Warum der Puffer
  * Gefiltert wird nach der **Startzeit** eines Workouts, und Samsung Health
@@ -668,10 +731,11 @@ fun healthImportWindowStart(
     since: LocalDateTime?,
     lastImportAt: LocalDateTime?,
     to: LocalDateTime,
+    initialWindowMs: Long = healthSyncInitialWindowMs,
 ): LocalDateTime {
     if (since != null) return since
     if (lastImportAt != null) return dartPlusMillis(lastImportAt, -healthSyncImportBackfillMs)
-    return dartPlusMillis(to, -healthSyncInitialWindowMs)
+    return dartPlusMillis(to, -initialWindowMs)
 }
 
 // ---------------------------------------------------------------------------
@@ -720,6 +784,57 @@ class HealthSyncService(
         }
         return gateway.requestPermissions()
     }
+
+    /**
+     * Ob die Historien-Freigabe erteilt ist. Jeder Fehler beim Nachfragen
+     * zaehlt als „nein" — dann bleibt es beim 30-Tage-Fenster, das Health
+     * Connect ohnehin liefert, statt den Import scheitern zu lassen.
+     */
+    fun hasHistoryAccess(): Boolean = try {
+        gateway.hasHistoryPermission()
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
+     * Stand der Historien-Freigabe fuer die UI: `true` erteilt, `false`
+     * moeglich, aber (noch) nicht erteilt, `null` unbekannt oder vom Geraet
+     * nicht unterstuetzt.
+     *
+     * Die Unterscheidung von `false` und `null` ist der Punkt: Nur bei `false`
+     * lohnt es, die Nutzerin um die Freigabe zu bitten. Kennt Health Connect
+     * das Recht gar nicht, fuehrte ein Knopf ins Leere.
+     */
+    fun historyAccessStatus(): Boolean? {
+        if (hasHistoryAccess()) return true
+        return try {
+            gateway.readPermissionStatus()?.get(HealthReadType.HISTORIE)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Zeigt den Berechtigungsdialog erneut, um die Historien-Freigabe
+     * nachzuholen, und meldet, ob sie danach erteilt ist.
+     *
+     * Anders als [requestPermissions] ohne Abkuerzung „Pflichtrechte schon da
+     * → fertig": Genau dann fehlt ja nur noch die Historie, und der Dialog
+     * muss trotzdem erscheinen. Die Gateway-Anfrage enthaelt das Recht, wenn
+     * das Geraet es kennt.
+     */
+    fun requestHistoryAccess(): Boolean {
+        if (gateway.availability() != HealthAvailability.VERFUEGBAR) return false
+        gateway.requestPermissions()
+        return hasHistoryAccess()
+    }
+
+    /**
+     * Das volle Fenster fuer „Alles neu importieren": ein Jahr mit
+     * Historien-Freigabe, sonst 30 Tage.
+     */
+    fun fullWindowMs(): Long =
+        if (hasHistoryAccess()) healthSyncHistoryWindowMs else healthSyncInitialWindowMs
 
     /** Zeitpunkt des letzten erfolgreichen Imports, `null` wenn noch nie. */
     fun lastImportAt(): LocalDateTime? = store.lastImportAtMs()?.let { dartLocalOf(it) }
@@ -798,9 +913,28 @@ class HealthSyncService(
         }
 
         val to = now()
-        val from = healthImportWindowStart(since, lastImportAt(), to)
+        // Lang-Import: Historien-Freigabe da, das Jahr davor aber noch nie
+        // gelesen. Das trifft den ersten Sync mit Freigabe ebenso wie eine
+        // Freigabe, die erst nach Wochen nachgereicht wurde — in beiden
+        // Faellen wird der Zeitstempel ignoriert und das Jahresfenster
+        // genommen. Ein ausdrueckliches `since` (manuelles Neu-Importieren)
+        // hat Vorrang und verbraucht den Lang-Import nicht.
+        val longImport = since == null && hasHistoryAccess() && !store.historyImportDone()
+        val from = if (longImport) {
+            healthImportWindowStart(
+                since = null,
+                lastImportAt = null,
+                to = to,
+                initialWindowMs = healthSyncHistoryWindowMs,
+            )
+        } else {
+            healthImportWindowStart(since, lastImportAt(), to)
+        }
 
         val debug = mutableListOf("Zeitraum: ${healthDebugTime(from)} – ${healthDebugTime(to)}")
+        if (longImport) {
+            debug.add("Historie: freigegeben, einmaliger Import der letzten 365 Tage")
+        }
 
         val workouts: List<HealthWorkout> = try {
             gateway.readWorkouts(from, to)
@@ -947,6 +1081,7 @@ class HealthSyncService(
         }
 
         setLastImportAt(to)
+        if (longImport) store.setHistoryImportDone(true)
 
         debug.add(
             "Ergebnis: ${imported.size} importiert, ${merged.size} angereichert, " +
@@ -969,6 +1104,7 @@ class HealthSyncService(
             routesMissing = routesMissing,
             debugLines = debug.toList(),
             routeConsentPending = consentPending.toList(),
+            historyImport = longImport,
         )
     }
 

@@ -58,7 +58,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Vitalhistorie | SharedPreferences (`trailscape.vitals.v1`) | Tageswerte der letzten 400 Tage: Ruhepuls, HRV, Schlafstunden, VO₂max — lokal gehalten, weil Health Connect Daten nach 30 Tagen löscht und die Baselines längere Fenster brauchen (`core/…/VitalsHistory.kt`) |
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
 | Sync-Einstellungen (optional) | SharedPreferences (`trailscape.sync`) | Adresse **deines** Sync-Servers und dein Zugangstoken — im Klartext im privaten App-Speicher |
-| Health-Sync-Stand | SharedPreferences (`trailscape.healthsync`) | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird |
+| Health-Sync-Stand | SharedPreferences (`trailscape.healthsync`, `trailscape.healthsync.historyImportDone`) | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird, und ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist |
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
 | Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
@@ -80,7 +80,7 @@ du hast den optionalen Sync mit deinem eigenen Server eingerichtet.
 | Benachrichtigungen | die Anzeige der laufenden Aufzeichnung |
 | Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync |
 | Health Connect: Training, Trainingsrouten, Herzfrequenz, Ruhepuls, HRV, Schlaf, Distanz, Kalorien, VO₂max | **nur lesend**, für den Import von Trainings und die Erholungs-/Formberechnung. Liefert die Uhr keinen Ruhepuls, leitet die App ihn auf dem Gerät aus dem nächtlichen Puls ab |
-| Health Connect: Verlauf älter als 30 Tage (optional) | **nur lesend**, damit die Ruhepuls- und HRV-Baselines nicht erst nach Wochen stehen |
+| Health Connect: Verlauf älter als 30 Tage (optional) | **nur lesend**, damit die Ruhepuls- und HRV-Baselines nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann |
 
 Trailscape fragt **keine** Berechtigung für Kontakte, Kamera, Mikrofon,
 Telefonstatus, Aktivitätserkennung oder Werbe-ID an.
@@ -135,6 +135,16 @@ Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
 - Gelesen werden Trainingseinheiten samt Route, Herzfrequenz, Ruhepuls,
   Herzfrequenzvariabilität (rMSSD), Schlaf, Distanz, verbrannte Kalorien und
   VO₂max — nur für Zeiträume, die für einen Import in Frage kommen.
+- **Verlauf älter als 30 Tage** liest Trailscape nur, wenn du die optionale
+  Freigabe dafür erteilst (beim Verbinden oder später unter **Einstellungen →
+  Uhr & Gesundheitsdaten → Ältere Fahrten freigeben**). Dann holt der Import
+  **einmalig** die Trainingseinheiten der letzten 12 Monate; übernommen werden
+  davon nur Radfahrten, andere Sportarten werden übersprungen und nicht
+  gespeichert. Danach liest jeder Sync wieder nur die letzten Tage. Ohne die
+  Freigabe gibt Health Connect ohnehin nur die letzten 30 Tage heraus.
+- Routen, die Health Connect nur nach einer Freigabe **je Route** herausgibt,
+  liest Trailscape erst, wenn du sie über „Routen freigeben“ einzeln erlaubst.
+  Bis dahin kommt die Tour ohne GPS-Spur.
 - Die Daten werden auf dem Gerät ausgewertet (Trainingslast, Fitness,
   Erholung) und dort gespeichert. Sie werden **nicht** übertragen, nicht
   weitergegeben und nicht ausgewertet, um dir etwas zu verkaufen.

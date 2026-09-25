@@ -28,10 +28,16 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault">
 
-        <!-- Die Uhr-App laeuft OHNE installierte Telefon-App weiterhin voll
-             standalone (eigenes GPS, eigene Herzfrequenz, eigene
-             Aufzeichnung) — die Data-Layer-Kopplung an `:app` ist eine
-             Ergaenzung, keine Voraussetzung. -->
+        <!-- Ehrlich: Die Uhr-App ist eine BEGLEIT-App. Sie liefert Puls und
+             GPS live ans Telefon, und dort — nicht auf der Uhr — entsteht die
+             gespeicherte Tour (siehe RecordingJournal-KDoc: auf der Uhr
+             bleibt nur ein Ereignisprotokoll). Ohne Telefon in Reichweite ist
+             der vorgesehene Weg: die Fahrt mit Samsung Health auf der Uhr
+             aufzeichnen; Trailscape importiert sie danach ueber Health
+             Connect (mit Historien-Freigabe auch rueckwirkend).
+             `standalone="true"` heisst hier deshalb nur: Die Uhr-App laesst
+             sich ohne Telefon-App installieren und starten (Wear OS 3+
+             erwartet das), nicht „zeichnet ohne Telefon vollstaendig auf". -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="true" />

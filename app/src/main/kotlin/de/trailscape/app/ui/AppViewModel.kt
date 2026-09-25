@@ -49,7 +49,6 @@ import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
-import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
 import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
@@ -1171,11 +1170,48 @@ class AppViewModel(
     /** Zuletzt ermittelter Health-Connect-Status; `null` = noch nicht geprueft. */
     val healthConnection: StateFlow<HealthConnection?> = _healthConnection.asStateFlow()
 
-    /** Fragt den Health-Connect-Status ab und legt ihn in [healthConnection] ab. */
+    private val _healthHistoryAccess = MutableStateFlow<Boolean?>(null)
+
+    /**
+     * Stand der Historien-Freigabe (Daten aelter als 30 Tage): `true`
+     * erteilt, `false` moeglich, aber nicht erteilt, `null` unbekannt, nicht
+     * verbunden oder vom Geraet nicht unterstuetzt. Nur bei `false` bietet
+     * die Health-Karte die Freigabe an.
+     */
+    val healthHistoryAccess: StateFlow<Boolean?> = _healthHistoryAccess.asStateFlow()
+
+    /**
+     * Fragt den Health-Connect-Status ab und legt ihn in [healthConnection]
+     * (und den Stand der Historien-Freigabe in [healthHistoryAccess]) ab.
+     */
     suspend fun refreshHealthConnection(): HealthConnection {
         val connection = withContext(io) { healthSync.checkAvailability() }
         _healthConnection.value = connection
+        _healthHistoryAccess.value = if (connection.isReady) {
+            withContext(io) { healthSync.historyAccessStatus() }
+        } else {
+            null
+        }
         return connection
+    }
+
+    /**
+     * Fragt die Historien-Freigabe nach und holt, wenn sie erteilt wurde,
+     * sofort den einmaligen Lang-Import (bis zu 365 Tage Radfahrten).
+     *
+     * Direkt synchronisieren statt auf den naechsten Sync zu warten: Die
+     * Nutzerin hat gerade ausdruecklich „aeltere Fahrten holen" gewaehlt und
+     * erwartet ein Ergebnis, nicht einen stillen Zustandswechsel.
+     *
+     * @return der Bericht des Lang-Imports, `null` wenn die Freigabe
+     *   ausblieb. Wirft wie [syncHealthNow] [HealthSyncException].
+     */
+    suspend fun requestHealthHistoryAccess(): HealthSyncReport? {
+        val granted = withContext(io) { healthSync.requestHistoryAccess() }
+        refreshHealthConnection()
+        if (!granted) return null
+        syncHealthNow(reimportAll = false)
+        return _lastSyncReport.value
     }
 
     /**
@@ -1226,12 +1262,13 @@ class AppViewModel(
      * geeigneten Meldung — anders als [autoSyncHealth] wird der Fehler hier
      * bewusst nicht verschluckt.
      *
-     * @param reimportAll betrachtet wieder das volle 30-Tage-Fenster. Der
-     *   gespeicherte Zeitstempel wird dafuer **nicht** geloescht (das
-     *   Importfenster kommt ueber `since`): Wirft der Import — etwa weil
-     *   Health Connect zwischenzeitlich die Berechtigung entzogen hat —,
-     *   bleibt der bisherige Stand erhalten, statt den naechsten normalen
-     *   Sync unnoetig 30 Tage scannen zu lassen.
+     * @param reimportAll betrachtet wieder das volle Fenster (30 Tage, mit
+     *   Historien-Freigabe ein Jahr). Der gespeicherte Zeitstempel wird
+     *   dafuer **nicht** geloescht (das Importfenster kommt ueber `since`):
+     *   Wirft der Import — etwa weil Health Connect zwischenzeitlich die
+     *   Berechtigung entzogen hat —, bleibt der bisherige Stand erhalten,
+     *   statt den naechsten normalen Sync unnoetig das ganze Fenster scannen
+     *   zu lassen.
      */
     suspend fun syncHealthNow(reimportAll: Boolean = false): Int {
         val report = withContext(io) {
@@ -1282,7 +1319,16 @@ class AppViewModel(
             }
         }
         if (saved.isFailure) {
-            withContext(io) { runCatching { healthSync.setLastImportAt(report.from) } }
+            withContext(io) {
+                runCatching {
+                    healthSync.setLastImportAt(report.from)
+                    // Auch den Lang-Import-Merker zuruecknehmen: Sonst waere
+                    // das Jahr davor abgehakt, obwohl keine seiner Touren
+                    // gespeichert wurde, und der naechste Sync saehe wieder
+                    // nur die letzten Tage.
+                    if (report.historyImport) healthSync.store.setHistoryImportDone(false)
+                }
+            }
             // Die Liste trotzdem neu laden: Vielleicht ist ein Teil der Touren
             // vor dem Fehler schon auf der Platte gelandet.
             reloadRides()
@@ -1303,11 +1349,13 @@ class AppViewModel(
 
     /**
      * Beginn des vollen Importfensters („Alles neu importieren"): jetzt minus
-     * [healthSyncInitialWindowMs], gerechnet auf der absoluten Zeitachse —
-     * dieselbe Rechnung, die `:core` ohne gesetzten Zeitstempel anstellt.
+     * `HealthSyncService.fullWindowMs()` (30 Tage, mit Historien-Freigabe ein
+     * Jahr), gerechnet auf der absoluten Zeitachse — dieselbe Rechnung, die
+     * `:core` ohne gesetzten Zeitstempel anstellt. Liest die Freigabe, also
+     * nur aus dem IO-Dispatcher aufrufen.
      */
     private fun fullHealthWindowStart(): LocalDateTime = LocalDateTime.ofInstant(
-        Instant.ofEpochMilli(System.currentTimeMillis() - healthSyncInitialWindowMs),
+        Instant.ofEpochMilli(System.currentTimeMillis() - healthSync.fullWindowMs()),
         ZoneId.systemDefault(),
     )
 

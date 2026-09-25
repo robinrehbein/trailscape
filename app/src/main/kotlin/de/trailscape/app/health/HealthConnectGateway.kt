@@ -126,6 +126,17 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     }
 
     /**
+     * Ob [HealthPermissions.READ_HEALTH_DATA_HISTORY] erteilt ist. Kennt das
+     * Geraet die Funktion nicht, gilt das als „nein" — der Import bleibt dann
+     * beim 30-Tage-Fenster.
+     */
+    override fun hasHistoryPermission(): Boolean = read("Die Berechtigungen") { client ->
+        HealthPermissions.isHistoryFeatureAvailable(client) &&
+            client.permissionController.getGrantedPermissions()
+                .contains(HealthPermissions.READ_HEALTH_DATA_HISTORY)
+    }
+
+    /**
      * Zeigt den Health-Connect-Berechtigungsdialog und wartet auf das Ergebnis.
      *
      * Angefragt wird [HealthPermissions.requestSet] — Pflicht- und Zusatzrechte

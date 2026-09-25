@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import de.trailscape.core.HealthSyncStore
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.TrainingPlanStore
+import de.trailscape.core.healthSyncHistoryImportKey
 import de.trailscape.core.healthSyncStorageKey
 import de.trailscape.core.trainingPlanStorageKey
 
@@ -63,7 +64,8 @@ class PrefsKeyValueStore(private val prefs: SharedPreferences) : KeyValueStore {
 }
 
 /**
- * Persistiert den Zeitstempel des letzten Health-Connect-Imports.
+ * Persistiert den Zeitstempel des letzten Health-Connect-Imports und den
+ * Merker des einmaligen Lang-Imports (siehe `HealthSyncStore.historyImportDone`).
  *
  * `SharedPreferences` kennt kein nullable `Long` — `null` wird deshalb ueber
  * `contains(key)` abgebildet statt ueber einen Sentinel-Wert wie `-1`, damit
@@ -80,6 +82,12 @@ class PrefsHealthSyncStore(private val prefs: SharedPreferences) : HealthSyncSto
         } else {
             prefs.edit().putLong(healthSyncStorageKey, value).apply()
         }
+    }
+
+    override fun historyImportDone(): Boolean = prefs.getBoolean(healthSyncHistoryImportKey, false)
+
+    override fun setHistoryImportDone(value: Boolean) {
+        prefs.edit().putBoolean(healthSyncHistoryImportKey, value).apply()
     }
 }
 
