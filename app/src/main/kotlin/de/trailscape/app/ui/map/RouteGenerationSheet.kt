@@ -50,6 +50,8 @@ import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.ascentPreferenceLabels
 import de.trailscape.core.formatHours
 import de.trailscape.core.sessionIntensityLabels
+import de.trailscape.core.terrainLabel
+import de.trailscape.core.unpavedLabel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -403,13 +405,26 @@ private fun CandidateRow(
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
-                    text = "${candidate.ascentPerKm.roundToInt()} Hm/km · " +
-                        "${deviationLabel(candidate)} zum Ziel",
+                    text = candidateDetailLine(candidate),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
                 )
+                // Eigene Zeile statt eines weiteren „·"-Glieds: Die Zeile
+                // darueber ist auf einem schmalen Geraet schon voll, und der
+                // Belag ist fuer Gravel die Angabe, die nicht abgeschnitten
+                // werden darf. Fehlt er (keine Daten oder zu viel
+                // Unbekanntes), faellt die Zeile ganz weg statt „–" zu zeigen.
+                unpavedLabel(candidate.route)?.let { surface ->
+                    Text(
+                        text = surface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = theme.onSurfaceVariant,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -459,6 +474,19 @@ private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
 }
 
 // --------------------------------------------------------------------- Texte
+
+/**
+ * „Wellig · 12 Hm/km · +3,4 % zum Ziel" — die zweite Zeile eines Vorschlags.
+ *
+ * Die Gelaendeart steht vorn, weil sie dieselben Worte benutzt wie die
+ * Zielzeile oben im Blatt („≈ 45 km · Wellig · …", siehe [targetLine]): So
+ * sieht man ohne Rechnen, ob eine Runde zum Ziel passt. Die Hm/km bleiben
+ * dahinter fuer alle, die es genau wissen wollen; Schwellen siehe
+ * [terrainLabel].
+ */
+internal fun candidateDetailLine(candidate: RouteCandidate): String =
+    "${terrainLabel(candidate.ascentPerKm)} · ${candidate.ascentPerKm.roundToInt()} Hm/km · " +
+        "${deviationLabel(candidate)} zum Ziel"
 
 /** „+9 neu" bzw. „bekannt" — Kacheln, die die Runde neu entdecken wuerde. */
 internal fun newTilesLabel(newTileCount: Int): String =
