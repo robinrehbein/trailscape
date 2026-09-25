@@ -1582,6 +1582,57 @@ class AppViewModel(
         viewModelScope.launch { refreshExplorerTiles() }
     }
 
+    // -------------------------------------------- Karte: Aufgabe und Cockpit
+    // (Fuehrung „Klartext")
+
+    private val _mapTaskActive = MutableStateFlow(false)
+
+    /**
+     * Ob die Karte gerade eine **Aufgabe** zeigt — Ortskarte, „Runde ab hier",
+     * Vorschlaege oder Planung. Die Huelle blendet dann die Navigationskapsel
+     * samt Fahren-Knopf aus, damit die Karte Platz hat; heraus geht es ueber
+     * ✕ oder die Zurueck-Geste.
+     */
+    val mapTaskActive: StateFlow<Boolean> = _mapTaskActive.asStateFlow()
+
+    fun setMapTaskActive(active: Boolean) {
+        _mapTaskActive.value = active
+    }
+
+    private val _cockpitRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte, das Fahr-Cockpit zu oeffnen — vom Fahren-Knopf waehrend einer
+     * laufenden Aufzeichnung. Der Karten-Screen, in dem das Cockpit wohnt,
+     * loest sie nach dem Tab-Wechsel ein (dasselbe Muster wie
+     * [pendingRecordStart]).
+     */
+    val cockpitRequest: StateFlow<Boolean> = _cockpitRequest.asStateFlow()
+
+    fun requestRideCockpit() {
+        _cockpitRequest.value = true
+        requestTab(AppTab.MAP)
+    }
+
+    fun consumeCockpitRequest() {
+        _cockpitRequest.value = false
+    }
+
+    // ---------------------------------------------- Kacheln fuer die Routenwahl
+    // (Fuehrung „Klartext": „Neue Gegenden bevorzugen" im Blatt „Runde ab hier")
+
+    /**
+     * Die entdeckten Kacheln fuer die Rundkurs-Suche — auch dann, wenn der
+     * Kachel-Layer auf der Karte aus ist. Ist der Bestand noch nicht
+     * gerechnet, wird er es jetzt (der Cache in [explorerTilesStore] macht
+     * das ab dem zweiten Mal billig). Laeuft auf dem Aufrufer-Dispatcher bis
+     * auf die eigentliche Rechnung, die auf [io] wechselt.
+     */
+    suspend fun exploredTilesForPlanning(): Set<ExplorerTile> {
+        if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        return _explorerTiles.value
+    }
+
     // -------------------------------------------------------------------------
     // Suchverlauf der Ortssuche (Karten-Tab)
     // -------------------------------------------------------------------------
@@ -1895,7 +1946,7 @@ class AppViewModel(
             } ?: return@launch
             startup.noticeVersion?.let { _updateAvailable.value = it }
             startup.announceVersion?.let {
-                showMessage("Version $it ist verfügbar — im Mehr-Tab herunterladen.")
+                showMessage("Version $it ist verfügbar — in den Einstellungen herunterladen.")
             }
         }
     }

@@ -52,6 +52,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -1797,6 +1798,8 @@ fun MapScreen(appViewModel: AppViewModel) {
             fromMapCenter = false,
             onMessage = appViewModel::showMessage,
             onOfferMissingSegments = appViewModel::offerMissingSegments,
+            preferNewAreas = preferNewAreas,
+            exploredTiles = appViewModel::exploredTilesForPlanning,
         )
     }
 
@@ -1941,6 +1944,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                 fromMapCenter = position == null,
                 onMessage = appViewModel::showMessage,
                 onOfferMissingSegments = appViewModel::offerMissingSegments,
+                preferNewAreas = preferNewAreas,
+                exploredTiles = appViewModel::exploredTilesForPlanning,
             )
         }
     }
@@ -2039,7 +2044,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         navCourseUp = navCourseUpAktiviert(context)
         if (!sprachansagenAktiviert(context)) {
             appViewModel.showMessage(
-                "Sprachansagen sind aus — hier im HUD oder unter Mehr → Aufzeichnung einschalten.",
+                "Sprachansagen sind aus — hier im HUD oder unter Einstellungen → Aufzeichnung & Ansagen einschalten.",
             )
         }
         // Komoot-Muster: Eine Navigation zeichnet automatisch mit auf.
@@ -2209,6 +2214,29 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (isRecording) return@LaunchedEffect
         startRecording()
     }
+
+    // ------------------------------------------ Fahren-Knopf → Fahr-Cockpit
+    // Waehrend einer Aufzeichnung fuehrt der Fahren-Knopf direkt ins Cockpit
+    // (Datenseite) statt nur auf die Karte, wo sich sonst nichts Sichtbares
+    // taete.
+    val cockpitRequest by appViewModel.cockpitRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(cockpitRequest) {
+        if (!cockpitRequest) return@LaunchedEffect
+        appViewModel.consumeCockpitRequest()
+        if (isRecording) rideModeSeite = RideModeSeite.DATEN
+    }
+
+    // --------------------------------------- Aufgabe → Kapsel tritt zurueck
+    // Ortskarte, „Runde ab hier", Vorschlaege und Planung sind Aufgaben; die
+    // Huelle blendet solange Navigationskapsel und Fahren-Knopf aus. Beim
+    // Verlassen des Tabs wird der Zustand zurueckgesetzt, sonst fehlte die
+    // Kapsel auf dem naechsten Tab.
+    val mapTaskActive = !isRecording && navTarget == null && (
+        mode == MapMode.PLANEN || generation.target != null ||
+            selectedPlace != null || roundTripSetupOpen
+        )
+    LaunchedEffect(mapTaskActive) { appViewModel.setMapTaskActive(mapTaskActive) }
+    DisposableEffect(Unit) { onDispose { appViewModel.setMapTaskActive(false) } }
 
     // Der ausgewaehlte Vorschlag ist die Vorschau auf der Karte: Er landet in
     // demselben `plannedRoute`, das auch die Planung von Hand fuellt — also in

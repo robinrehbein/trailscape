@@ -412,11 +412,30 @@ private fun CandidateRow(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = if (rank == 1) "Beste" else "#$rank",
-                style = MaterialTheme.typography.labelSmall,
-                color = theme.onSurfaceVariant,
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = if (rank == 1) "Beste" else "#$rank",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = theme.onSurfaceVariant,
+                )
+                // Neue Kacheln der Runde (Squadrats-Idee): „+9 neu" gruen,
+                // eine Runde ganz durch Bekanntes heisst „bekannt".
+                if (candidate.totalTileCount > 0) {
+                    val novel = candidate.newTileCount > 0
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (novel) theme.primaryContainer else theme.surfaceVariant,
+                        contentColor = if (novel) theme.onPrimaryContainer else theme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        Text(
+                            text = newTilesLabel(candidate.newTileCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -440,6 +459,10 @@ private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
 }
 
 // --------------------------------------------------------------------- Texte
+
+/** „+9 neu" bzw. „bekannt" — Kacheln, die die Runde neu entdecken wuerde. */
+internal fun newTilesLabel(newTileCount: Int): String =
+    if (newTileCount > 0) "+$newTileCount neu" else "bekannt"
 
 /** „≈ 45 km · Flach · locker · ca. 2,5 h" */
 internal fun targetLine(target: RouteTarget): String {

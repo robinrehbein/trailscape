@@ -329,7 +329,7 @@ internal fun RideCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 PrimaryButton(
-                    text = if (navigating) "Navigation läuft" else "Navigieren",
+                    text = if (navigating) "Unterwegs" else "Nochmal fahren",
                     onClick = onNavigate,
                     enabled = !navigating,
                     modifier = Modifier.weight(1f),

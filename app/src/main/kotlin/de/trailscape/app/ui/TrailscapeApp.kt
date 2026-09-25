@@ -281,6 +281,13 @@ fun TrailscapeApp() {
     // verloren.
     val settingsOpen = currentDestination?.hierarchy?.any { it.route == MORE_ROUTE } == true
 
+    // Solange die Karte eine Aufgabe zeigt (Ortskarte, „Runde ab hier",
+    // Vorschlaege, Planung), traegt sie ihre Blaetter selbst bis an den Rand;
+    // Kapsel und Fahren-Knopf treten zurueck (Fuehrung „Klartext").
+    val mapTaskActive by appViewModel.mapTaskActive.collectAsStateWithLifecycle()
+    val onMap = currentDestination?.hierarchy?.any { it.route == TopLevelDestination.MAP.route } == true
+    val navHidden = settingsOpen || (onMap && mapTaskActive)
+
     // Bodenfreiheit, die jeder Bildschirm unten einplanen muss: das schwebende
     // Band aus Kapsel und Aufnahme-Knopf plus die Gestenleiste des Systems.
     //
@@ -300,7 +307,7 @@ fun TrailscapeApp() {
     val systemBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     var navigationBandHeightPx by remember { mutableIntStateOf(0) }
     val measuredBandHeight = with(LocalDensity.current) { navigationBandHeightPx.toDp() }
-    val navigationBarSpace = if (settingsOpen) {
+    val navigationBarSpace = if (navHidden) {
         systemBottomInset
     } else {
         maxOf(
@@ -391,7 +398,7 @@ fun TrailscapeApp() {
         // gemeinsame Mitte der Zeile ist damit exakt die Mitte des Kreises
         // und die Mitte der Kapsel; die Hoehe des Bandes misst
         // `onSizeChanged` weiter oben.
-        if (!settingsOpen) {
+        if (!navHidden) {
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -443,7 +450,7 @@ fun TrailscapeApp() {
                             // fragt der Bereit-Dialog, was gefahren werden
                             // soll.
                             if (isRecording) {
-                                appViewModel.requestTab(AppTab.MAP)
+                                appViewModel.requestRideCockpit()
                             } else {
                                 readyDialogOpen = true
                             }
