@@ -6,13 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Search
@@ -26,6 +22,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,12 +35,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
+import de.trailscape.app.ui.components.ForwardBackwardHost
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
@@ -71,11 +67,13 @@ import kotlinx.coroutines.Job
  * in der Liste ([VerlaufHeader]): eine Zeile Symbolknoepfe, darunter
  * „Verlauf" in `headlineLarge`. Beides scrollt mit weg.
  *
- * ## Die Detailansicht liegt in einem eigenen Fenster
- * Nur ein eigenes `Dialog`-Fenster deckt auch die schwebende
- * Navigationskapsel ab, die in `TrailscapeApp.kt` als Geschwister **ueber**
- * dem gesamten `NavHost` liegt. Das Fenster faengt zugleich die
- * Systemzurueckgeste ab — die erste Geste schliesst das Detail, nicht den Tab.
+ * ## Die Detailansicht ist eine Ebene tiefer
+ * Sie gleitet nach M3 „Forward and backward" ueber die Liste
+ * ([ForwardBackwardHost]); die Liste bleibt darunter komponiert und steht
+ * beim Zurueckgehen wieder genau da, wo sie war. Solange das Detail offen
+ * ist, blendet die Huelle die schwebende Navigationskapsel aus
+ * ([AppViewModel.rideDetailOpen]). Die Zurueckgeste schliesst zuerst das
+ * Detail, nicht den Tab (`BackHandler` in [RideDetailHost]).
  *
  * ## Meldungen und „Rückgängig"
  * [AppViewModel.messages] sammelt dieser Screen ein (Import-Erfolg, erkannte
@@ -136,96 +134,89 @@ fun RidesScreen(appViewModel: AppViewModel) {
         }
     }
 
-    Scaffold(
-        // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
-        // aufgeloest — hier duerfen sie nicht noch einmal aufschlagen.
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = {
-            // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
-            // Navigationskapsel.
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = LocalFloatingNavigationBarSpace.current),
-            )
-        },
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            TourListContent(
-                appViewModel = appViewModel,
-                query = if (searchOpen) query else "",
-                onOpenDetail = { detailRideId = it },
-                onRecord = { appViewModel.requestRecording() },
-                onImportFile = importAction.start,
-                onImportArchive = importArchive,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = screenContentPadding(),
-                header = {
-                    item(key = "kopf") {
-                        VerlaufHeader(
-                            searchOpen = searchOpen,
-                            query = query,
-                            onQueryChange = { query = it },
-                            onToggleSearch = {
-                                if (searchOpen) closeSearch() else searchOpen = true
-                            },
-                            onImportFile = importAction.start,
-                            onImportArchive = importArchive,
-                            onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
-                            onShowMap = appViewModel::requestHistoryMap,
-                        )
-                    }
-                },
-            )
-        }
+    // Das Detail ist eine Ebene tiefer: M3 „Forward and backward" im selben
+    // Screen, die Liste bleibt dabei komponiert (Scrollstand, Suche). Die
+    // Kapsel blendet die Huelle solange aus.
+    DisposableEffect(detailRideId != null) {
+        appViewModel.setRideDetailOpen(detailRideId != null)
+        onDispose { appViewModel.setRideDetailOpen(false) }
     }
 
-    detailRideId?.let { id ->
-        Dialog(
-            onDismissRequest = { detailRideId = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            // `usePlatformDefaultWidth = false` macht dieses Fenster randlos.
-            // Anders als im `NavHost` sind die Systemleisten hier NICHT schon
-            // aufgeloest; die Detailansicht nimmt das aber an. Dieselbe
-            // Aufloesung (oben und seitlich; unten bewusst nicht) wird deshalb
-            // hier wiederholt, sonst zeichnet ihr Kopf unter die Statusleiste.
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.surface,
-            ) {
+    ForwardBackwardHost(
+        key = detailRideId,
+        modifier = Modifier.fillMaxSize(),
+        base = {
+            Scaffold(
+                // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
+                // aufgeloest — hier duerfen sie nicht noch einmal aufschlagen.
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                snackbarHost = {
+                    // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
+                    // Navigationskapsel.
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier.padding(bottom = LocalFloatingNavigationBarSpace.current),
+                    )
+                },
+            ) { innerPadding ->
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .windowInsetsPadding(
-                            WindowInsets.safeDrawing.only(
-                                WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
-                            ),
-                        ),
+                        .padding(innerPadding),
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    RideDetailHost(
-                        rideId = id,
+                    TourListContent(
                         appViewModel = appViewModel,
-                        onBack = { detailRideId = null },
-                        onDelete = { rideId ->
-                            detailRideId = null
-                            undoJob = deleteRideWithUndo(
-                                rideId = rideId,
-                                appViewModel = appViewModel,
-                                scope = scope,
-                                snackbarHostState = snackbarHostState,
-                                undoJob = undoJob,
-                            )
+                        query = if (searchOpen) query else "",
+                        onOpenDetail = { detailRideId = it },
+                        onRecord = { appViewModel.requestRecording() },
+                        onImportFile = importAction.start,
+                        onImportArchive = importArchive,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = screenContentPadding(),
+                        header = {
+                            item(key = "kopf") {
+                                VerlaufHeader(
+                                    searchOpen = searchOpen,
+                                    query = query,
+                                    onQueryChange = { query = it },
+                                    onToggleSearch = {
+                                        if (searchOpen) closeSearch() else searchOpen = true
+                                    },
+                                    onImportFile = importAction.start,
+                                    onImportArchive = importArchive,
+                                    onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                                    onShowMap = appViewModel::requestHistoryMap,
+                                )
+                            }
                         },
                     )
                 }
             }
-        }
-    }
+        },
+        detail = { id ->
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.surface,
+            ) {
+                RideDetailHost(
+                    rideId = id,
+                    appViewModel = appViewModel,
+                    onBack = { detailRideId = null },
+                    onDelete = { rideId ->
+                        detailRideId = null
+                        undoJob = deleteRideWithUndo(
+                            rideId = rideId,
+                            appViewModel = appViewModel,
+                            scope = scope,
+                            snackbarHostState = snackbarHostState,
+                            undoJob = undoJob,
+                        )
+                    },
+                )
+            }
+        },
+    )
 }
 
 /**

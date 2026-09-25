@@ -1802,6 +1802,19 @@ class AppViewModel(
         _mapTaskActive.value = active
     }
 
+    private val _rideDetailOpen = MutableStateFlow(false)
+
+    /**
+     * Ob der Verlauf gerade eine Tour im Detail zeigt. Die Huelle blendet
+     * solange die Navigationskapsel aus — das Detail ist eine Ebene tiefer
+     * und hat seinen eigenen Zurueck-Weg.
+     */
+    val rideDetailOpen: StateFlow<Boolean> = _rideDetailOpen.asStateFlow()
+
+    fun setRideDetailOpen(open: Boolean) {
+        _rideDetailOpen.value = open
+    }
+
     private val _cockpitRequest = MutableStateFlow(false)
 
     /**

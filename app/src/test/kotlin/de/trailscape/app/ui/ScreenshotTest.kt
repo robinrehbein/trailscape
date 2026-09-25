@@ -125,6 +125,20 @@ class ScreenshotTest {
         shot("24-training-gross")
     }
 
+    /**
+     * Einzelbilder mitten in den Uebergaengen (M3: Top level, Forward and
+     * backward) — zeigt, dass ausgeblendet wird, bevor eingeblendet wird.
+     */
+    @Test
+    fun uebergaenge() {
+        start()
+        compose.mainClock.autoAdvance = false
+        compose.onAllNodesWithText("Verlauf")[0].performClick()
+        frames("31-tab")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        frames("32-detail")
+    }
+
     @Test
     fun karte() {
         start()
@@ -152,6 +166,13 @@ class ScreenshotTest {
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(2_000)
         compose.waitForIdle()
+    }
+
+    private fun frames(name: String) {
+        for (ms in listOf(60L, 150L, 240L, 400L)) {
+            compose.mainClock.advanceTimeBy(if (ms == 60L) 60L else if (ms == 400L) 160L else 90L)
+            shot("$name-${ms}ms")
+        }
     }
 
     private fun shot(name: String) {

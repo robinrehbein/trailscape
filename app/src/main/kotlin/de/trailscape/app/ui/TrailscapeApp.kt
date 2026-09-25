@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.animation.AnimatedVisibility
+import de.trailscape.app.ui.theme.M3Transitions
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -286,7 +288,10 @@ fun TrailscapeApp() {
     // Kapsel und Fahren-Knopf treten zurueck (Fuehrung „Klartext").
     val mapTaskActive by appViewModel.mapTaskActive.collectAsStateWithLifecycle()
     val onMap = currentDestination?.hierarchy?.any { it.route == TopLevelDestination.MAP.route } == true
-    val navHidden = settingsOpen || (onMap && mapTaskActive)
+    // Die Tour-Detailansicht ist eine Ebene tiefer und nimmt den ganzen
+    // Bildschirm ein — wie die Einstellungen ohne Kapsel.
+    val rideDetailOpen by appViewModel.rideDetailOpen.collectAsStateWithLifecycle()
+    val navHidden = settingsOpen || rideDetailOpen || (onMap && mapTaskActive)
 
     // Bodenfreiheit, die jeder Bildschirm unten einplanen muss: das schwebende
     // Band aus Kapsel und Aufnahme-Knopf plus die Gestenleiste des Systems.
@@ -344,6 +349,7 @@ fun TrailscapeApp() {
     // einem Prozesstod nicht von selbst wieder dastehen.
     var readyDialogOpen by remember { mutableStateOf(false) }
 
+    val density = LocalDensity.current
     Box(modifier = Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalFloatingNavigationBarSpace provides navigationBarSpace) {
             NavHost(
@@ -362,6 +368,39 @@ fun TrailscapeApp() {
                         ),
                     )
                     .imePadding(),
+                // Uebergaenge nach M3 (siehe [M3Transitions]): zwischen den
+                // Tabs „Top level" (Fade through), in die Einstellungen und
+                // zurueck „Forward and backward" (Shared axis X). Die
+                // Zurueckgeste des Systems spult denselben Uebergang
+                // rueckwaerts ab (Predictive back).
+                enterTransition = {
+                    if (targetState.destination.route == MORE_ROUTE) {
+                        M3Transitions.sharedAxisXEnter(forward = true, density)
+                    } else {
+                        M3Transitions.topLevelEnter()
+                    }
+                },
+                exitTransition = {
+                    if (targetState.destination.route == MORE_ROUTE) {
+                        M3Transitions.sharedAxisXExit(forward = true, density)
+                    } else {
+                        M3Transitions.topLevelExit()
+                    }
+                },
+                popEnterTransition = {
+                    if (initialState.destination.route == MORE_ROUTE) {
+                        M3Transitions.sharedAxisXEnter(forward = false, density)
+                    } else {
+                        M3Transitions.topLevelEnter()
+                    }
+                },
+                popExitTransition = {
+                    if (initialState.destination.route == MORE_ROUTE) {
+                        M3Transitions.sharedAxisXExit(forward = false, density)
+                    } else {
+                        M3Transitions.topLevelExit()
+                    }
+                },
             ) {
                 composable(TopLevelDestination.HOME.route) { TodayScreen(appViewModel) }
                 composable(TopLevelDestination.MAP.route) { MapScreen(appViewModel) }
@@ -398,10 +437,18 @@ fun TrailscapeApp() {
         // gemeinsame Mitte der Zeile ist damit exakt die Mitte des Kreises
         // und die Mitte der Kapsel; die Hoehe des Bandes misst
         // `onSizeChanged` weiter oben.
-        if (!navHidden) {
+        //
+        // Ein- und Ausblenden nach M3 „Enter and exit, beyond screen bounds":
+        // Das Band faehrt ueber den unteren Rand hinaus und wieder herein,
+        // statt schlagartig zu verschwinden.
+        AnimatedVisibility(
+            visible = !navHidden,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = M3Transitions.sheetEnter(),
+            exit = M3Transitions.sheetExit(),
+        ) {
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     // Bewusst **vor** `windowInsetsPadding`: Modifier wirken
                     // von aussen nach innen, gemessen wird hier also das ganze

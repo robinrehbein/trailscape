@@ -2,8 +2,8 @@ package de.trailscape.app.ui.more
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,7 +55,7 @@ import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.LocalSignalColors
-import de.trailscape.app.ui.theme.OneUiMotion
+import de.trailscape.app.ui.theme.M3Transitions
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -153,23 +154,12 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     }
     BackHandler(enabled = page != null) { leavePage() }
 
+    val density = LocalDensity.current
     Scaffold(
         // Siehe TourList.kt: Die aeussere Huelle (TrailscapeApp) hat die
         // System-Insets bereits aufgeloest — hier duerfen sie nicht nochmal
         // aufschlagen.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            // Dieselbe Kopfzeile wie auf den Tabs (Fuehrung „Klartext"):
-            // „‹ Zurück" bzw. „‹ Einstellungen" oben, darunter der Titel.
-            ScreenHeader(
-                title = page?.title ?: "Einstellungen",
-                backLabel = if (page != null && !arrivedDirectly) "Einstellungen" else "Zurück",
-                onBack = if (page != null) ::leavePage else onBack,
-                modifier = Modifier
-                    .widthIn(max = ContentMaxWidth)
-                    .padding(start = ScreenPadding, end = ScreenPadding, top = ScreenPadding),
-            )
-        },
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState,
@@ -185,10 +175,19 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
                 .padding(innerPadding),
             contentAlignment = Alignment.TopCenter,
         ) {
+            // M3 „Forward and backward": Liste → Seite gleitet nach links,
+            // zurueck nach rechts; die Kopfzeile gehoert zur Seite und
+            // gleitet mit. Wer direkt auf eine Seite gesprungen ist, kommt
+            // schon mit dem Uebergang des `NavHost` herein — ein zweiter
+            // Schub waere doppelte Bewegung.
             AnimatedContent(
                 targetState = page,
                 transitionSpec = {
-                    fadeIn(OneUiMotion.standard()) togetherWith fadeOut(OneUiMotion.short())
+                    if (arrivedDirectly && initialState == null) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                        M3Transitions.sharedAxisX(forward = targetState != null, density)
+                    }
                 },
                 label = "Einstellungsseite",
                 modifier = Modifier
@@ -196,17 +195,34 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
             ) { current ->
-                if (current == null) {
-                    SettingsList(
-                        appViewModel = appViewModel,
-                        listState = listState,
-                        onOpen = {
-                            arrivedDirectly = false
-                            page = it
-                        },
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Dieselbe Kopfzeile wie auf den Tabs (Fuehrung
+                    // „Klartext"): „‹ Zurück" bzw. „‹ Einstellungen" oben,
+                    // darunter der Titel.
+                    ScreenHeader(
+                        title = current?.title ?: "Einstellungen",
+                        backLabel = if (current != null && !arrivedDirectly) "Einstellungen" else "Zurück",
+                        onBack = if (current != null) ::leavePage else onBack,
+                        modifier = Modifier.padding(
+                            start = ScreenPadding,
+                            end = ScreenPadding,
+                            top = ScreenPadding,
+                        ),
                     )
-                } else {
-                    SettingsPageContent(page = current, appViewModel = appViewModel)
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (current == null) {
+                            SettingsList(
+                                appViewModel = appViewModel,
+                                listState = listState,
+                                onOpen = {
+                                    arrivedDirectly = false
+                                    page = it
+                                },
+                            )
+                        } else {
+                            SettingsPageContent(page = current, appViewModel = appViewModel)
+                        }
+                    }
                 }
             }
         }
