@@ -317,14 +317,14 @@ private enum class OnboardingPage(
                 "trägt, bekommt Ruhepuls, HRV und Schlaf zusätzlich in die Rechnung.",
             // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
             // — „unten" zeigte also auf nichts. Der Satz sagt jetzt, dass sie
-            // gleich kommt. Inhaltlich beschreibt er die Fuehrung „Eine
-            // Leiste" (siehe `ui/TrailscapeApp.kt`): vier Tabs, daneben der
-            // runde Aufnahme-Knopf, Einstellungen hinterm Zahnrad.
-            "Sobald die Einführung durch ist, führen unten vier Tabs dorthin: Heute (die " +
-                "Empfehlung), Karte (planen und navigieren), Touren (alles Gefahrene) " +
-                "und Training (Plan und Auswertung). Daneben schwebt der runde Knopf, " +
-                "mit dem jede Fahrt beginnt; Profil, Import und Einstellungen liegen " +
-                "hinter dem Zahnrad oben rechts.",
+            // gleich kommt. Inhaltlich beschreibt er die Fuehrung „Klartext"
+            // (siehe `ui/TrailscapeApp.kt`): vier Orte, daneben der runde
+            // Fahren-Knopf, Einstellungen hinterm Zahnrad.
+            "Sobald die Einführung durch ist, führen unten vier Tabs dorthin: Heute (was " +
+                "du heute fahren solltest), Karte (Routen planen), Verlauf (wo du " +
+                "gefahren bist) und Training (dein Ziel und deine Form). Daneben sitzt " +
+                "der runde Fahren-Knopf; Profil, Import und alles Weitere liegen in den " +
+                "Einstellungen hinter dem Zahnrad.",
             "Alles liegt auf deinem Gerät. Kein Konto, keine Anmeldung, keine Telemetrie. " +
                 "Ein eigener Sync-Server ist möglich, aber freiwillig.",
         ),
@@ -339,19 +339,20 @@ private enum class OnboardingPage(
             "Trailscape liest einzelne GPX- und FIT-Dateien und komplette " +
                 "Strava-, Garmin- oder Wahoo-Exporte als ZIP-Archiv auf einmal ein. " +
                 "Duplikate erkennt es dabei selbst.",
-            "Zu finden unter Mehr → Daten & Backup. Dort liegt auch der Export, mit " +
+            "Zu finden im Verlauf über das + oben rechts. Unter Einstellungen → Import & " +
+                "Backup liegt auch der Export, mit " +
                 "dem du alles auf ein neues Gerät mitnimmst.",
         ),
     ),
     PROFILE(
         eyebrow = "Schritt 2 von 3",
-        title = "Zwei Zahlen für die Auswertung",
+        title = "Ein paar Angaben für die Auswertung",
         paragraphs = listOf(
             "Aus Alter und Gewicht leitet Trailscape deine maximale Herzfrequenz, die " +
                 "Schwelle und die gefahrene Leistung ab — die Grundlage jeder " +
                 "Trainingslast.",
             "Du kannst das überspringen; wir rechnen dann mit Standardwerten weiter. " +
-                "Ändern lässt sich alles jederzeit unter Mehr → Profil, dort stehen auch " +
+                "Ändern lässt sich alles jederzeit unter Einstellungen → Profil, dort stehen auch " +
                 "die genaueren Felder (HFmax, Schwellenpuls, Zeitbudget).",
         ),
     ),
@@ -364,7 +365,7 @@ private enum class OnboardingPage(
                 "und rechnet daraus die Tagesempfehlung im Tab „Heute“.",
             "Ohne diese Werte funktioniert die App vollständig; die Empfehlung stützt " +
                 "sich dann allein auf deine Trainingslast.",
-            "Verbinden geht auch später jederzeit unter Mehr → Health Connect.",
+            "Verbinden geht auch später jederzeit unter Einstellungen → Uhr & Gesundheitsdaten.",
         ),
     ),
 }
@@ -445,7 +446,7 @@ private fun HealthConnectStep(appViewModel: AppViewModel) {
                         "Verbunden. Trailscape holt deine Werte ab jetzt automatisch."
                     } else {
                         "Keine Freigabe erteilt — du kannst das später unter " +
-                            "Mehr → Health Connect nachholen."
+                            "Einstellungen → Uhr & Gesundheitsdaten nachholen."
                     }
                 } catch (e: HealthSyncException) {
                     status = e.message
