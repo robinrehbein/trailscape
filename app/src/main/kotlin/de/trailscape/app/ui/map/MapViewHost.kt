@@ -1,5 +1,9 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.runtime.staticCompositionLocalOf
 import android.annotation.SuppressLint
 import android.content.Context
 import android.view.Gravity
@@ -94,6 +98,13 @@ internal fun MapViewHost(
      */
     onUserPan: () -> Unit = {},
 ) {
+    // Screenshot-Tests laufen auf der JVM ohne MapLibres native Bibliothek;
+    // dort steht an Stelle der Karte eine ruhige Kartenflaeche, damit alles
+    // darueber (Blaetter, Knoepfe) gerendert und geprueft werden kann.
+    if (!LocalMapRenderingAvailable.current) {
+        Box(modifier.fillMaxSize().background(Color(0xFFE6ECE6)))
+        return
+    }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentTap by rememberUpdatedState(onMapTap)
@@ -1064,3 +1075,10 @@ private const val NAV_CAMERA_EASE_MS = 900
 private const val OFF_ROUTE_FIT_PADDING_PX = 96
 
 private val DEFAULT_FIT_PADDING = MapPadding(left = 48, top = 120, right = 48, bottom = 220)
+
+/**
+ * Ob MapLibre hier rendern kann. In der App immer `true`; Screenshot-Tests
+ * (Robolectric, ohne native Bibliothek) setzen `false` und bekommen eine
+ * neutrale Kartenflaeche.
+ */
+val LocalMapRenderingAvailable = staticCompositionLocalOf { true }

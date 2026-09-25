@@ -483,13 +483,16 @@ internal fun LocateButton(
     modifier: Modifier = Modifier,
     following: Boolean = true,
 ) {
+    // Derselbe runde Kartenknopf wie der Ebenen-Knopf oben (Fuehrung
+    // „Klartext"): weiss, 48 dp, gleicher Schatten. Der Zustand „Karte folgt
+    // mir" steckt allein in der Symbolfarbe (gruen) und nicht in einer
+    // zweiten, gefuellten Knopfform.
     Surface(
         onClick = onClick,
-        modifier = modifier.size(56.dp),
+        modifier = modifier.size(MapCircleButtonSize),
         shape = CircleShape,
-        color = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = if (following) Color.White else MaterialTheme.colorScheme.primary,
-        shadowElevation = 2.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shadowElevation = MapCircleButtonElevation,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
@@ -499,7 +502,7 @@ internal fun LocateButton(
                 } else {
                     "Meine Position – die Karte folgt dir nicht mehr"
                 },
-                tint = if (following) Color.White else MaterialTheme.colorScheme.primary,
+                tint = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -594,3 +597,6 @@ internal fun DangerButton(
     }
 }
 
+/** Groesse und Schatten der runden Kartenknoepfe (Standort, Ebenen). */
+internal val MapCircleButtonSize = 48.dp
+internal val MapCircleButtonElevation = 3.dp

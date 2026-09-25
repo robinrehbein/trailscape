@@ -14,9 +14,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -29,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.RouteProfile
 import kotlin.math.roundToInt
@@ -129,16 +127,12 @@ internal fun RoundTripSetupSheet(
                     RouteProfile.ASPHALT to "Asphalt",
                     RouteProfile.SCHOTTER to "Schotter",
                 )
-                val selected = surfaceFor(profile)
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    surfaces.forEachIndexed { index, (value, label) ->
-                        SegmentedButton(
-                            selected = selected == value,
-                            onClick = { onProfileChange(value) },
-                            shape = SegmentedButtonDefaults.itemShape(index, surfaces.size),
-                        ) { Text(label) }
-                    }
-                }
+                val selected = surfaces.indexOfFirst { it.first == surfaceFor(profile) }
+                PillSegments(
+                    options = surfaces.map { it.second },
+                    selectedIndex = selected,
+                    onSelect = { onProfileChange(surfaces[it].first) },
+                )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
@@ -46,10 +46,11 @@ import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
-import de.trailscape.app.ui.components.OneUiLargeTopAppBar
-import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
+import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.LocalSignalColors
@@ -152,32 +153,21 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     }
     BackHandler(enabled = page != null) { leavePage() }
 
-    // Zweite Ebene, also eingeklappt startend: Wer das Zahnrad antippt, will
-    // die Einstellungen sehen und nicht zuerst ihren Titel in Grossschrift
-    // (siehe `oneUiTopAppBarScrollBehavior`).
-    val scrollBehavior = oneUiTopAppBarScrollBehavior(initiallyCollapsed = true)
-
     Scaffold(
         // Siehe TourList.kt: Die aeussere Huelle (TrailscapeApp) hat die
         // System-Insets bereits aufgeloest — hier duerfen sie nicht nochmal
         // aufschlagen.
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            OneUiLargeTopAppBar(
+            // Dieselbe Kopfzeile wie auf den Tabs (Fuehrung „Klartext"):
+            // „‹ Zurück" bzw. „‹ Einstellungen" oben, darunter der Titel.
+            ScreenHeader(
                 title = page?.title ?: "Einstellungen",
-                scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    val action: (() -> Unit)? = if (page != null) ::leavePage else onBack
-                    if (action != null) {
-                        IconButton(onClick = action) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Zurück",
-                            )
-                        }
-                    }
-                },
+                backLabel = if (page != null && !arrivedDirectly) "Einstellungen" else "Zurück",
+                onBack = if (page != null) ::leavePage else onBack,
+                modifier = Modifier
+                    .widthIn(max = ContentMaxWidth)
+                    .padding(start = ScreenPadding, end = ScreenPadding, top = ScreenPadding),
             )
         },
         snackbarHost = {
@@ -328,31 +318,31 @@ private fun SettingsList(
                     status = profileStatusText(profile, profileConfirmed),
                     onClick = { onOpen(SettingsPage.PROFILE) },
                 )
-                HorizontalDivider()
+                ListDivider()
                 SettingsNavRow(
                     title = SettingsPage.HEALTH.title,
                     status = healthStatusText(health, lastHealthImport),
                     onClick = { onOpen(SettingsPage.HEALTH) },
                 )
-                HorizontalDivider()
+                ListDivider()
                 SettingsNavRow(
                     title = SettingsPage.RECORDING.title,
                     status = recordingStatus,
                     onClick = { onOpen(SettingsPage.RECORDING) },
                 )
-                HorizontalDivider()
+                ListDivider()
                 SettingsNavRow(
                     title = SettingsPage.REMINDERS.title,
                     status = reminderStatusText(reminders),
                     onClick = { onOpen(SettingsPage.REMINDERS) },
                 )
-                HorizontalDivider()
+                ListDivider()
                 SettingsNavRow(
                     title = SettingsPage.OFFLINE.title,
                     status = offlineStatus,
                     onClick = { onOpen(SettingsPage.OFFLINE) },
                 )
-                HorizontalDivider()
+                ListDivider()
                 val backupStatus = backupStatusText(lastBackupAt)
                 SettingsNavRow(
                     title = SettingsPage.BACKUP.title,
@@ -376,7 +366,7 @@ private fun SettingsList(
                     status = syncStatusText(syncConfig),
                     onClick = { onOpen(SettingsPage.SYNC) },
                 )
-                HorizontalDivider()
+                ListDivider()
                 SettingsNavRow(
                     title = SettingsPage.ABOUT.title,
                     status = "Version $versionName",
@@ -425,4 +415,16 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
             }
         }
     }
+}
+
+/**
+ * Trennlinie zwischen zwei Zeilen einer Einstellungskarte — eingerueckt bis
+ * zum Text, wie in der Liste des Verlaufs, statt randlos.
+ */
+@Composable
+private fun ListDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = CardPadding),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
 }

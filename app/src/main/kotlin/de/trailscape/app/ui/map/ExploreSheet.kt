@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -40,7 +43,7 @@ import de.trailscape.core.GeoResult
  *
  *  * das **Suchfeld** (Ort, Stadt, Adresse; bei Fokus darunter Treffer bzw.
  *    der Suchverlauf, die Karte bleibt oben sichtbar),
- *  * **„Heute · 45 km"** — die Runde, die „Heute" empfiehlt (fehlt an einem
+ *  * **„Heute 45 km"** — die Runde, die „Heute" empfiehlt (fehlt an einem
  *    Ruhetag oder ohne Empfehlung),
  *  * **„Runde ab hier"** — oeffnet das Blatt, in dem Laenge und Untergrund
  *    gewaehlt werden ([RoundTripSetupSheet]).
@@ -99,7 +102,7 @@ internal fun ExploreSheet(
                 OneUiSearchField(
                     value = searchQuery,
                     onValueChange = onSearchQueryChange,
-                    placeholder = "Wohin? Suchen oder lange drücken",
+                    placeholder = "Wohin?",
                     busy = searchBusy,
                     onFocusChange = onSearchingChange,
                 )
@@ -126,10 +129,11 @@ internal fun ExploreSheet(
                             FilledTonalButton(
                                 onClick = onTodayRoute,
                                 modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                                contentPadding = ChipPadding,
                             ) {
                                 ChipContent(
                                     icon = Icons.Rounded.Star,
-                                    label = "Heute · ${todayRouteKm.toInt()} km",
+                                    label = "Heute ${todayRouteKm.toInt()} km",
                                 )
                             }
                         }
@@ -138,6 +142,7 @@ internal fun ExploreSheet(
                         FilledTonalButton(
                             onClick = onRoundTripHere,
                             modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                            contentPadding = ChipPadding,
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer,
                                 contentColor = MaterialTheme.colorScheme.onSurface,
@@ -158,11 +163,17 @@ private fun ChipContent(icon: ImageVector, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(6.dp))
+        // Schrumpft bei grosser Systemschrift, statt abgeschnitten zu werden
+        // („Runde ab h…" auf dem Geraet).
         Text(
             text = label,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
             style = MaterialTheme.typography.labelLarge,
+            autoSize = TextAutoSize.StepBased(minFontSize = 11.sp, maxFontSize = 15.sp),
         )
     }
 }
+
+/** Innenabstand der beiden Knoepfe — knapper als der Material-Standard (24 dp). */
+private val ChipPadding = PaddingValues(horizontal = 12.dp)

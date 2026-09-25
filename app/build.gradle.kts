@@ -178,6 +178,11 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Robolectric (nur Screenshot-Tests) braucht die gemergten Ressourcen.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -282,17 +287,37 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Nur Test-Klassenpfad, kein Bestandteil des APK. `:app` hat bewusst KEIN
-    // Robolectric: getestet werden hier ausschliesslich Klassen ohne
-    // Android-Imports — derzeit `record/RecordingJournal.kt`, das
-    // Absturzsicherungs-Journal der Aufzeichnung. Version identisch zum
-    // Kotlin-Plugin im Root-Build, damit kein zweiter Kotlin-Stack entsteht.
+    // Nur Test-Klassenpfad, kein Bestandteil des APK. Die normalen Unit-Tests
+    // von `:app` pruefen ausschliesslich Klassen ohne Android-Imports. Version
+    // identisch zum Kotlin-Plugin im Root-Build, damit kein zweiter
+    // Kotlin-Stack entsteht.
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.3.20")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+
+    // Screenshot-Tests der Oberflaeche (Robolectric + Roborazzi): rendern die
+    // Compose-Screens auf der JVM zu PNGs, ohne Emulator — die einzige
+    // Moeglichkeit, Layout und Typografie ohne Geraet pixelgenau zu pruefen.
+    // Robolectric braucht JUnit 4; die Vintage-Engine laesst es neben JUnit 5
+    // laufen. Im normalen Testlauf sind diese Tests uebersprungen, sie laufen
+    // nur mit `-Pscreenshots` (siehe unten und `ui/ScreenshotTest.kt`).
+    testImplementation("junit:junit:4.13.2")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.11.4")
+    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.75.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.75.0")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
 // Gleiche Test-Engine wie in `:core` (siehe core/build.gradle.kts).
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Screenshots nur auf Wunsch:
+    // `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotTest*'`
+    // schreibt die PNGs nach app/build/outputs/roborazzi/.
+    if (project.hasProperty("screenshots")) {
+        systemProperty("trailscape.screenshots", "true")
+        systemProperty("roborazzi.test.record", "true")
+    }
 }

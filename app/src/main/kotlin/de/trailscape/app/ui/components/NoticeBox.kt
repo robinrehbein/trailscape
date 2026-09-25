@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.components
 
+import de.trailscape.app.ui.theme.CardPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,9 +53,11 @@ fun NoticeBox(
         shape = MaterialTheme.shapes.medium,
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(modifier = Modifier.padding(12.dp)) {
-            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+        // Derselbe Innenabstand wie jede Karte ([CardPadding]) — ein Hinweis
+        // ist ein Kartenobjekt und sitzt buendig mit dem Text darueber.
+        Row(modifier = Modifier.padding(CardPadding)) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.padding(top = 1.dp).size(20.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 if (title != null) {
                     Text(
