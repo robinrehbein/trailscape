@@ -2037,6 +2037,32 @@ class HealthSyncTest {
     }
 
     @Test
+    fun `Historie - Jahres-Import ohne Radfahrten liest den nativen Fallback nur einmal`() {
+        // Zwoelf leere Abschnitte (etwa eine lange Pause): Der Fallback darf
+        // nicht jeden davon ein zweites Mal lesen.
+        val gateway = FakeHealthGateway(historyGranted = true, filterByWindow = true)
+
+        serviceOf(gateway, at(2026, 8, 10, 12)).importWithReport(existing = emptyList())
+
+        assertTrue(gateway.workoutWindows.size > 1)
+        assertEquals(1, gateway.nativeSessionCalls)
+    }
+
+    @Test
+    fun `Historie - hat der Fallback einmal geliefert bleibt er fuer leere Abschnitte an`() {
+        val gateway = FakeHealthGateway(
+            historyGranted = true,
+            filterByWindow = true,
+            nativeSessions = listOf(session(uid = "nativ", start = at(2026, 8, 5, 10))),
+        )
+
+        val report = serviceOf(gateway, at(2026, 8, 10, 12)).importWithReport(existing = emptyList())
+
+        assertEquals(gateway.workoutWindows.size, gateway.nativeSessionCalls)
+        assertEquals(1, report.imported.size)
+    }
+
+    @Test
     fun `Historie - spaet erteilte Freigabe loest genau einmal den Lang-Import aus`() {
         val gateway = FakeHealthGateway(historyGranted = false)
         val store = InMemoryHealthSyncStore()
@@ -2192,7 +2218,7 @@ class HealthSyncTest {
         assertTrue(report.imported.filter { it.id.contains("gesperrt") }.all { it.points.isEmpty() })
         assertEquals(3, report.routeConsentPending.size)
         assertEquals(
-            "5 Touren importiert · 3 ohne Route (Freigabe nötig) · 1 ohne GPS-Daten",
+            "5 Touren importiert · 3 ohne Route (Freigabe in Health Connect nötig) · 1 ohne GPS-Daten",
             report.summaryLine(),
         )
     }
@@ -2215,6 +2241,19 @@ class HealthSyncTest {
 
         val leer = serviceOf(FakeHealthGateway(), at(2026, 8, 10)).importWithReport(existing = emptyList())
         assertEquals("Keine neuen Touren", leer.summaryLine())
+    }
+
+    @Test
+    fun `summaryLine - nur ergaenzte Touren ohne 0-Teil`() {
+        val tag = at(2026, 8, 1, 10)
+        val basis = HealthSyncReport.empty(tag, tag)
+        val zwei = listOf(rideWithPoints(id = "a", start = tag), rideWithPoints(id = "b", start = tag))
+
+        assertEquals("2 Touren mit Puls ergänzt", basis.copy(mergedRides = zwei).summaryLine())
+        assertEquals(
+            "1 Tour importiert · 2 mit Puls ergänzt",
+            basis.copy(imported = zwei.take(1), mergedRides = zwei).summaryLine(),
+        )
     }
 
     // -----------------------------------------------------------------------

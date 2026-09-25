@@ -144,9 +144,19 @@ Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
   Ende der Einheit aus; Routen, Distanz und Kalorien fragt es gezielt nur für
   Radfahrten ab. (Health Connect liefert beim Auflisten der Einheiten deren
   Daten im Paket aus — was davon nicht zu einer Radfahrt gehört, verwirft
-  Trailscape sofort im Arbeitsspeicher.) Danach liest jeder Sync wieder nur die letzten Tage. Ohne die
-  Freigabe gibt Health Connect ohnehin nichts heraus, was mehr als 30 Tage vor
-  dem ersten Verbinden liegt.
+  Trailscape sofort im Arbeitsspeicher.) Danach liest jeder Sync wieder nur
+  die letzten Tage – außer du wählst „Alles neu importieren“ (dann erneut die
+  letzten 12 Monate) oder erteilst die Freigabe nach einem Widerruf neu (dann
+  einmal mehr der Jahres-Import; Fahrten, die du gelöscht hast, holt er nicht
+  zurück). Ohne die Freigabe gibt Health Connect ohnehin nichts heraus, was
+  mehr als 30 Tage vor dem ersten Verbinden liegt.
+- Einzige Ausnahme von „nur Art, Beginn und Ende“ sind die
+  **Diagnose-Details** der Health-Karte: Nach einem Sync über einen kurzen
+  Zeitraum listen sie zur Fehlersuche die gefundenen Einheiten mit Art,
+  Zeitraum und Quell-App auf – beim Rückgriff auf den direkten Lesezugriff
+  auch deren Titel –, und zwar auch für andere Sportarten. Das steht nur im
+  Arbeitsspeicher, wird nicht gespeichert und verlässt das Gerät nur, wenn
+  du es selbst kopierst oder im Problembericht ausdrücklich ankreuzt.
 - Routen, die Health Connect nur nach einer Freigabe **je Route** herausgibt,
   liest Trailscape erst, wenn du sie über „Routen freigeben“ einzeln erlaubst.
   Bis dahin kommt die Tour ohne GPS-Spur.

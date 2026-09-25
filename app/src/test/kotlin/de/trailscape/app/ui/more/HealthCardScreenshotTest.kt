@@ -55,7 +55,7 @@ class HealthCardScreenshotTest {
     @Test
     fun historieUndBericht() {
         show(dark = false)
-        compose.onNodeWithText("12 Touren importiert · 3 ohne Route (Freigabe nötig)").assertExists()
+        compose.onNodeWithText("12 Touren importiert · 3 ohne Route (Freigabe in Health Connect nötig)").assertExists()
         compose.onNodeWithText("Ältere Fahrten freigeben").assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/61-health-historie.png")
     }

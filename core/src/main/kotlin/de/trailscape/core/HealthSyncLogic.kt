@@ -1070,6 +1070,17 @@ class HealthSyncService(
          * Duplikat.
          */
         val seen: MutableSet<String> = mutableSetOf(),
+        /**
+         * Stand des nativen Fallbacks in diesem Lauf: `null` noch nicht
+         * versucht, `false` versucht und ohne Rad-Session, `true` hat
+         * geliefert. Beim Jahres-Import haette sonst jeder Abschnitt ohne
+         * Radfahrt (typisch: alle Wintermonate) die Sessions ein zweites Mal
+         * gelesen — Lese-Kontingent von Health Connect, das der Gateway
+         * gerade schonen will. Hat der Fallback einmal geliefert, ist die
+         * Abbildung des Hauptwegs offenbar kaputt; dann bleibt er fuer alle
+         * weiteren Abschnitte an.
+         */
+        var nativeFallbackHelped: Boolean? = null,
     )
 
     /** Ergebnis eines einzelnen Abschnitts, noch ohne Diagnosezeilen. */
@@ -1175,6 +1186,10 @@ class HealthSyncService(
             // Connect eine Session liefert, die ueber die Grenze reicht,
             // haengt an ihrer Lage zum Filter — die Ueberlappung stellt
             // sicher, dass sie in einem der beiden Abschnitte ankommt.
+            // Der erste Abschnitt eines fortgesetzten Lang-Imports (resumeAt)
+            // braucht keine Ueberlappung: Eine Session an der alten Grenze hat
+            // der abgebrochene Lauf schon gespeichert, sie steckt also in
+            // `refs` und faellt ueber knownIds als Duplikat heraus.
             val readFrom = if (index == 0) {
                 slice.first
             } else {
@@ -1297,12 +1312,16 @@ class HealthSyncService(
         log?.add("Plugin: ${cycling.size} Rad-Session(s)")
 
         var fallbackUsed = false
-        if (cycling.isEmpty()) {
+        if (cycling.isEmpty() && state.nativeFallbackHelped != false) {
             val fallback = readNativeSessions(from = from, to = to, log = log ?: mutableListOf())
             if (fallback.isNotEmpty()) {
                 fallbackUsed = true
                 cycling = fallback
             }
+            // Einmal ohne Ergebnis heisst: Der Hauptweg sieht dieselben
+            // Sessions, hier gibt es schlicht keine Radfahrt. Weitere leere
+            // Abschnitte lassen den Fallback darum aus (siehe RunState).
+            state.nativeFallbackHelped = fallbackUsed || state.nativeFallbackHelped == true
         }
         log?.add(
             if (fallbackUsed) {

@@ -386,8 +386,9 @@ internal fun HealthSyncSummary(report: HealthSyncReport) {
  * nichts heraus, was mehr als 30 Tage vor dem Verbinden liegt; mit ihr holt
  * Trailscape einmalig bis zu 12 Monate Radfahrten —, damit die Nutzerin nicht
  * blind einer weiteren Berechtigung zustimmen muss. Bewusst nicht „nur die
- * letzten 30 Tage": Was nach dem Verbinden dazukommt, bleibt ohnehin lesbar. Sonst gibt es keinen Ort, an dem diese Freigabe
- * nachzuholen waere; ohne den Knopf bliebe sie eine versteckte Funktion.
+ * letzten 30 Tage": Was nach dem Verbinden dazukommt, bleibt ohnehin lesbar.
+ * Sonst gibt es keinen Ort, an dem diese Freigabe nachzuholen waere; ohne den
+ * Knopf bliebe sie eine versteckte Funktion.
  */
 @Composable
 internal fun HealthHistoryNotice(enabled: Boolean, onRequest: () -> Unit) {

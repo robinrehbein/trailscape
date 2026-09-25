@@ -376,7 +376,7 @@ data class HealthSyncReport(
 
 /**
  * Einzeilige Rueckmeldung eines Import-Laufs fuer Snackbar und Health-Karte,
- * etwa „12 Touren importiert · 3 ohne Route (Freigabe nötig)".
+ * etwa „12 Touren importiert · 3 ohne Route (Freigabe in Health Connect nötig)".
  *
  * Warum die Routen-Freigaben eigens genannt werden: Touren, deren Route
  * Health Connect nur nach einer Einzel-Freigabe herausgibt
@@ -386,17 +386,31 @@ data class HealthSyncReport(
  * Touren, fuer die es schlicht keine Routendaten gibt (Rolle, Indoor), werden
  * getrennt gezaehlt, weil dort keine Freigabe hilft.
  *
+ * Der Ort der Freigabe steht mit in der Zeile, weil die Snackbar ohne die
+ * erklaerende Box der Health-Karte auskommen muss.
+ *
  * Nullwerte fallen weg, damit die Zeile kurz bleibt; ohne jede Aenderung
- * heisst sie „Keine neuen Touren".
+ * heisst sie „Keine neuen Touren". Hat ein Lauf nur bestehende Touren mit
+ * Puls ergaenzt, beginnt sie direkt mit „2 Touren mit Puls ergänzt" statt
+ * mit einem „0 Touren importiert".
+ *
+ * Die App spricht bei gespeicherten Fahrten durchgehend von „Touren"
+ * (Verlauf, Tour-Details); die Zeile bleibt dabei, auch wenn Health Connect
+ * selbst von Trainings spricht.
  */
 fun HealthSyncReport.summaryLine(): String {
     fun touren(n: Int) = if (n == 1) "1 Tour" else "$n Touren"
     val consent = routeConsentPending.size
     val withoutData = routesWithoutData
     if (imported.isEmpty() && mergedRides.isEmpty()) return "Keine neuen Touren"
-    val parts = mutableListOf("${touren(imported.size)} importiert")
-    if (mergedRides.isNotEmpty()) parts.add("${mergedRides.size} mit Puls ergänzt")
-    if (consent > 0) parts.add("$consent ohne Route (Freigabe nötig)")
+    val parts = mutableListOf<String>()
+    if (imported.isNotEmpty()) parts.add("${touren(imported.size)} importiert")
+    if (mergedRides.isNotEmpty()) {
+        // Steht die Ergaenzung vorn, braucht sie das Substantiv selbst.
+        val n = mergedRides.size
+        parts.add(if (parts.isEmpty()) "${touren(n)} mit Puls ergänzt" else "$n mit Puls ergänzt")
+    }
+    if (consent > 0) parts.add("$consent ohne Route (Freigabe in Health Connect nötig)")
     if (withoutData > 0) parts.add("$withoutData ohne GPS-Daten")
     return parts.joinToString(" · ")
 }

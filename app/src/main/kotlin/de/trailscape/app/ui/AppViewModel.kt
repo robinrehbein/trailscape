@@ -1317,7 +1317,11 @@ class AppViewModel(
                             // erst hier im IO-Dispatcher.
                             since = if (reimportAll) healthSync.fullWindowStart() else null,
                             // Geloeschte Touren nicht zurueckholen — der
-                            // Lang-Import liest ein ganzes Jahr.
+                            // Lang-Import liest ein ganzes Jahr, nach einer
+                            // entzogenen und neu erteilten Freigabe auch
+                            // erneut. Das traegt, weil Tombstones nicht
+                            // zeitlich verfallen: planSync verwirft einen nur,
+                            // wenn eine neuere Fassung die Tour wiederbelebt.
                             excludedRideIds = runCatching { tombstoneStore.list() }
                                 .getOrDefault(emptyList())
                                 .mapTo(HashSet()) { it.id },
@@ -1345,7 +1349,7 @@ class AppViewModel(
                 }
                 result.fold(
                     onSuccess = { report ->
-                        finishReport(report)
+                        finishReport(report, quietSegments = report.historyImport || reimportAll)
                         report
                     },
                     onFailure = { error ->
@@ -1373,8 +1377,14 @@ class AppViewModel(
      *
      * Gespeichert ist hier schon alles (siehe [runHealthImport]); der Bericht
      * traegt deshalb keine Trackpunkte mehr und wird nur noch angezeigt.
+     *
+     * @param quietSegments rechnet die neuen Touren ohne Bestzeit-Hinweis in
+     *   die Segmente ein. Fuer den Jahres-Import und „Alles neu importieren":
+     *   Dort kommen Dutzende alter Fahrten auf einmal, und eine Flut von
+     *   „Neue Bestzeit"-Meldungen fuer Fahrten vom letzten Herbst waere
+     *   Rauschen, keine Neuigkeit.
      */
-    private suspend fun finishReport(report: HealthSyncReport) {
+    private suspend fun finishReport(report: HealthSyncReport, quietSegments: Boolean) {
         _lastSyncReport.value = report
         if (report.isEmpty) return
 
@@ -1382,7 +1392,9 @@ class AppViewModel(
         // Neue Touren mit Bestzeit-Hinweis einrechnen; die nur um
         // Herzfrequenz angereicherten (mergedRides) zieht der Abgleich ueber
         // ihr neues updatedAt still nach.
-        refreshSegments(reportRideIds = report.imported.mapTo(HashSet()) { it.id })
+        refreshSegments(
+            reportRideIds = if (quietSegments) emptySet() else report.imported.mapTo(HashSet()) { it.id },
+        )
         // Still: Importierte Touren sind meist alte Fahrten — ein „+12 neue
         // Kacheln entdeckt" gehoert nur hinter eine gerade beendete Fahrt.
         refreshExplorerTilesIfEnabled()

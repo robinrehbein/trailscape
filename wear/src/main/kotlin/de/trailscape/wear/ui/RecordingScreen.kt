@@ -137,6 +137,12 @@ fun RecordingScreen() {
  * Telefon-Verbindungszeile. Kein Fliesstext — fehlende Berechtigungen fragt
  * derselbe Knopf ab (der Systemdialog erklaert sich selbst), statt dass diese
  * App es vorher in Worten ankuendigt.
+ *
+ * Einzige Ausnahme ist die Zeile unter „Telefon getrennt": Gespeichert wird
+ * eine Tour auf dem Telefon, nicht auf der Uhr. Ohne diesen Hinweis bliebe
+ * der Weg fuer Fahrten ohne Telefon (Samsung Health aufzeichnen lassen,
+ * Trailscape importiert spaeter ueber Health Connect) eine versteckte
+ * Funktion, die nur im README steht.
  */
 @Composable
 private fun StartScreen(
@@ -171,6 +177,15 @@ private fun StartScreen(
             fontSize = 13.sp,
             textAlign = TextAlign.Center,
         )
+        if (!telefonVerbunden) {
+            Text(
+                text = "Ohne Telefon: in Samsung Health aufzeichnen",
+                color = MutedText,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 28.dp),
+            )
+        }
 
         fehler?.let {
             Spacer(modifier = Modifier.height(4.dp))

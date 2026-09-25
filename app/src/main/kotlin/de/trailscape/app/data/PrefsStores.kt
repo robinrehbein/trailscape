@@ -88,6 +88,9 @@ class PrefsHealthSyncStore(private val prefs: SharedPreferences) : HealthSyncSto
 
     override fun historyImportDone(): Boolean = prefs.getBoolean(healthSyncHistoryImportKey, false)
 
+    // `apply()` genuegt auch hier: Geht der Merker verloren, laeuft der
+    // Lang-Import einmal zu viel — seine Touren tragen feste IDs und fallen
+    // als Duplikat heraus, geloeschte haelt der Tombstone-Bestand fern.
     override fun setHistoryImportDone(value: Boolean) {
         prefs.edit().putBoolean(healthSyncHistoryImportKey, value).apply()
     }

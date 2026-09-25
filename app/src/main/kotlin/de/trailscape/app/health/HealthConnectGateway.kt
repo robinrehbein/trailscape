@@ -44,7 +44,9 @@ import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.reflect.KClass
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 /**
  * Die produktive Implementierung von `:core`s [HealthGateway] — direkt gegen
@@ -517,7 +519,18 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         // Konstanten) — Ereignis und Fehlerklasse reichen, um „Health Connect
         // verweigert" von „Health Connect wirft" zu unterscheiden.
         return try {
-            runBlocking { block(client) }
+            // Obergrenze je Lesezugriff: Haengt Health Connect (Dienst
+            // eingefroren, Binder antwortet nicht), blockierte runBlocking
+            // sonst ewig — und mit ihm der Import-Mutex im AppViewModel, hinter
+            // dem „Jetzt synchronisieren" und „Ältere Fahrten freigeben" dann
+            // stumm warteten. Das Lesen selbst ist kooperativ abbrechbar
+            // (Health Connect liefert suspend-Funktionen ueber Futures).
+            runBlocking { withTimeout(READ_TIMEOUT_MS) { block(client) } }
+        } catch (error: TimeoutCancellationException) {
+            DiagLog.shared.log(DiagEvent.HEALTH_READ_FAILED, error = error)
+            throw HealthSyncException(
+                "$subject: Health Connect antwortet nicht. Bitte später erneut versuchen.",
+            )
         } catch (error: SecurityException) {
             DiagLog.shared.log(DiagEvent.HEALTH_ACCESS_DENIED)
             throw HealthSyncException(
@@ -681,6 +694,14 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     private companion object {
         /** Vorgabe von Health Connect; ausdruecklich gesetzt, siehe `readRequest`. */
         const val PAGE_SIZE = 1000
+
+        /**
+         * Obergrenze fuer einen einzelnen Lesezugriff (siehe `read`). Grosszuegig,
+         * weil ein Zugriff mehrere Seiten umfassen kann (Puls eines langen
+         * Abschnitts); ein gesunder Health-Connect-Dienst antwortet je Seite in
+         * Millisekunden, eine Minute trifft also nur echte Haenger.
+         */
+        const val READ_TIMEOUT_MS = 60_000L
 
         /**
          * Name der androidx-Konstante zu [type]; unbekannte Typen kommen als
