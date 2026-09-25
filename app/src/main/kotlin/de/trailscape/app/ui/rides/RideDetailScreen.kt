@@ -3,6 +3,7 @@ package de.trailscape.app.ui.rides
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -18,21 +20,25 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -40,29 +46,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.CoachCard
+import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
-import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
-import de.trailscape.app.ui.components.OneUiLargeTopAppBar
-import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
-import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.localOfEpochMs
@@ -99,71 +105,78 @@ import de.trailscape.core.heartRateCurve
 import de.trailscape.core.loadSourceLabels
 import de.trailscape.core.segmentEffortsForRide
 import de.trailscape.core.speedCurveKmh
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * # Detailansicht einer aufgezeichneten Tour
+ * # Detailansicht einer Tour — was hat die Fahrt gebracht?
  *
- * Was die Tourenliste in einer Zeile zusammenfasst, steht hier ausgebreitet:
- * die gefahrene Spur auf der Karte, alle Kennzahlen aus [de.trailscape.core.RideStats],
- * Hoehen-, Tempo- und Pulsverlauf und — falls die Datenlage es hergibt — die
- * Auswertung aus `:core` (Entkopplung, VO2max). Erreichbar durch Antippen eines
- * Listeneintrags in `TourList.kt`.
+ * Zieldesign `docs/design/prototyp-klartext.html`, Screen `#s-tour`, Menue
+ * `m-tourmenu` und `NOTES.tour`. Vorher standen hier zehn Abschnitte
+ * untereinander, vom Coach mit „Entkopplung Pe:Hr" bis zu den Segmenten. Jetzt
+ * zuerst nur, was man nach einer Fahrt wissen will — und alles andere einen
+ * Tipp tiefer, aber vollstaendig:
  *
- * ## Kein eigener Navigationseintrag
- * Die Ansicht ist ein **Zustand des Touren-Tabs**, kein Ziel im `NavHost`:
- * `TourList` (RideDetailHost) merkt sich die angetippte Tour-ID in einem `rememberSaveable`
- * und zeigt statt der Liste diesen Screen; die Systemzurueckgeste faengt dort
- * ein `BackHandler` ab. Die Navigationsstruktur der App (`ui/TrailscapeApp.kt`)
- * bleibt dadurch unberuehrt — und die Liste behaelt ihren Scrollzustand, weil
- * sie beim Zurueckgehen nicht neu aufgebaut wird.
+ *  1. Kopf: „‹ Verlauf" und ⋮ (Auf der Karte zeigen, Umbenennen, Als GPX
+ *     teilen, Loeschen).
+ *  2. Name gross, darunter gedaempft Wochentag, Datum, Uhrzeit — und die
+ *     Herkunft („aus Health Connect", „geplante Route") genau einmal.
+ *  3. Karte mit der Spur, darunter km · Std. · Hm · Ø Puls.
+ *  4. Ein Satz in Klartext ([rideNote]): passt die Tour zum Plan, oder wie
+ *     hart war sie?
+ *  5. Die eine Hauptaktion **„Diese Tour nochmal fahren"** — die Spur als
+ *     Route auf der Karte ([AppViewModel.requestRideAsRoute]).
+ *  6. Hoehenprofil.
+ *  7. „Alle Werte" klappt den Rest auf: Fahrzeit, Ø Tempo, Hm ↓, Max. Puls,
+ *     Tempo- und Pulskurve, die Coach-Auswertung (Trainingslast als Zahl,
+ *     Entkopplung, VO₂max samt Verlaesslichkeit) und die Segmente.
+ *
+ * „Auf der Karte öffnen" als eigener Knopf unter der Karte ist entfallen: Es
+ * gab dafuer zwei Woerter an zwei Stellen („zeigen" im Listenmenue, „öffnen"
+ * hier). Jetzt gibt es eines, hinter ⋮.
  *
  * ## Warum die Karte hier nicht bedienbar ist
- * MapLibre bringt eine eigene OpenGL-View mit eigener Gestenerkennung mit.
- * Liegt sie in einer scrollbaren Spalte, streiten sich beide um jeden
- * senkrechten Wisch: Entweder verschluckt die Karte das Scrollen der Seite oder
- * die Seite das Verschieben der Karte — je nachdem, wer zuerst zugreift.
- * Deshalb hat die Karte hier eine **feste Hoehe** und liegt unter einer
- * durchsichtigen Flaeche, die alle Beruehrungen abfaengt, ohne sie zu
- * verbrauchen: Die Karte bekommt nichts, die Seite scrollt normal weiter. Wer
- * die Tour wirklich erkunden will, kommt ueber „Auf der Karte öffnen" in den
- * Karten-Tab — dort ist sie ganzflaechig und vollstaendig bedienbar. Ein
- * verschachteltes Gesten-Ping-Pong waere die schlechtere Antwort auf dieselbe
- * Frage.
+ * MapLibre bringt eine eigene Gestenerkennung mit; in einer scrollbaren
+ * Spalte stritten sich beide um jeden senkrechten Wisch. Die Karte hat deshalb
+ * eine feste Hoehe und nimmt keine Gesten an — wer die Tour erkunden will,
+ * nimmt „Auf der Karte zeigen".
  *
  * ## Was hier NICHT gerechnet wird
- * Die Kennzahlen kommen unveraendert aus `ride.stats` (berechnet in
- * `:core`/`Stats.kt`), die Kurven aus `:core`/`RideCurves.kt`, das Hoehenprofil
- * aus `ui/map/ElevationProfile.kt` und die Auswertung aus `:core`/`RideAnalysis.kt`.
- * Diese Datei formatiert und zeichnet nur.
+ * Kennzahlen aus `ride.stats` (`:core`/`Stats.kt`), Kurven aus
+ * `:core`/`RideCurves.kt`, Hoehenprofil aus `ui/map/ElevationProfile.kt`,
+ * Auswertung aus `:core`/`RideAnalysis.kt`, Planzuordnung aus
+ * `:core`/`TrainingPlanProgress.kt`. Diese Datei formatiert und zeichnet nur.
  *
  * ## Grenzfaelle
- * Abschnitte ohne Datengrundlage entfallen **ganz**, statt leer gezeichnet zu
- * werden: keine Hoehen (haeufig bei importierten GPX-Dateien) → kein
+ * Abschnitte ohne Datengrundlage entfallen **ganz**: keine Hoehen → kein
  * Hoehenprofil, keine Zeitstempel → keine Tempokurve, keine Herzfrequenz →
- * keine Pulskurve, zu kurze/zu ungleichmaessige Tour → keine Analyse. Eine Tour
- * aus zwei, drei Punkten zeigt am Ende nur Karte und Kennzahlen — und genau das
- * ist richtig.
+ * keine Pulskurve, keine Last → kein Satz. Eine Tour aus zwei, drei Punkten
+ * zeigt am Ende nur Karte und Kennzahlen — und genau das ist richtig.
  *
- * @param snackbarHostState bewusst von der Liste hereingereicht: Meldungen aus
- *   [AppViewModel.messages] sammelt der Karten-Screen fuer beide Ansichten ein, und
- *   die „Rückgängig"-Snackbar nach dem Loeschen soll dieselbe bleiben.
+ * @param snackbarHostState vom [RideDetailHost] gehalten, der auch die
+ *   Meldungen einsammelt.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RideDetailScreen(
     ride: Ride,
     appViewModel: AppViewModel,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
+    onShowOnMap: () -> Unit,
+    onRideAgain: () -> Unit,
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
+    val plan by appViewModel.plan.collectAsStateWithLifecycle()
+    val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val load = insights.rideLoads[ride.id]
 
     // Segment-Bestleistungen dieser Tour. Der Aufruf stoesst zugleich den
@@ -175,71 +188,36 @@ internal fun RideDetailScreen(
         segmentRegistry?.let { segmentEffortsForRide(it, ride.id) }.orEmpty()
     }
 
-    var menuOpen by remember { mutableStateOf(false) }
-
     val curves by rememberRideCurves(ride)
     val analysis by rememberRideAnalysis(ride, insights.profile, insights.eftp.watts)
 
-    // Zweite Ebene: Der Leitfaden laesst die Kopfzeile hier **eingeklappt**
-    // starten, aber ausklappbar bleiben. Wer eine Tour geoeffnet hat, will die
-    // Tour sehen — nicht noch einmal deren Namen in Grossschrift. Vorher stand
-    // hier eine feste `TopAppBar`, die sich gar nicht oeffnen liess.
-    val scrollBehavior = oneUiTopAppBarScrollBehavior(initiallyCollapsed = true)
+    // Dieselbe Zuordnung wie die Haken der Planwoche im Trainings-Tab.
+    val planMatch = remember(plan, rides, insights.rideLoads, ride.id) {
+        planMatchForRide(
+            plan = plan,
+            rides = rides,
+            rideId = ride.id,
+            rideLoads = insights.rideLoads.mapValues { it.value.load },
+            now = System.currentTimeMillis(),
+        )
+    }
+    val effort = rideEffort(load, ride.stats)
+    val note = rideNote(effort, planMatch, analysis?.decoupling?.decouplingPercent)
+
+    // Aufgeklappt bleibt aufgeklappt, auch ueber eine Drehung hinweg.
+    var allValues by rememberSaveable(ride.id) { mutableStateOf(false) }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
-        // aufgeloest — genau wie in der Tourenliste duerfen sie hier kein
-        // zweites Mal aufschlagen.
+        // Die Insets hat der Wirt (Dialogfenster in `RidesScreen.kt`) oben und
+        // seitlich bereits aufgeloest.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            OneUiLargeTopAppBar(
-                title = ride.name,
-                scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Zurück zur Tourenliste",
-                        )
-                    }
-                },
-                actions = {
-                    Box {
-                        IconButton(onClick = { menuOpen = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
-                        }
-                        DropdownMenu(
-                            expanded = menuOpen,
-                            onDismissRequest = { menuOpen = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Umbenennen") },
-                                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    onRename()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Als GPX teilen") },
-                                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    onShare()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Löschen") },
-                                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    onDelete()
-                                },
-                            )
-                        }
-                    }
-                },
+            DetailTopBar(
+                onBack = onBack,
+                onShowOnMap = onShowOnMap,
+                onRename = onRename,
+                onShare = onShare,
+                onDelete = onDelete,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -255,79 +233,32 @@ internal fun RideDetailScreen(
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    // Unten die Bodenfreiheit der schwebenden Navigationskapsel
-                    // (siehe screenContentPadding), sonst endet die letzte
-                    // Karte hinter ihr.
                     .padding(screenContentPadding()),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                // Titel + Datum/Typ-Zeile (Zieldesign
-                // `docs/design/prototyp-eine-leiste.html`, Screen
-                // „Tour-Detail", `#dName`/`#dDate`): Der Titel selbst liegt in
-                // der auf-/einklappbaren [OneUiLargeTopAppBar] oben, dieser
-                // Zeile obliegt nur das gedaempfte Darunter.
-                Text(
-                    text = rideDateTypeLine(ride),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column(modifier = Modifier.padding(horizontal = CardPadding)) {
+                    Text(text = ride.name, style = MaterialTheme.typography.headlineLarge)
+                    Text(
+                        text = rideDetailDateLine(
+                            at = localOfEpochMs(ride.createdAt),
+                            today = LocalDate.now(),
+                            planned = ride.planned,
+                            fromHealthConnect = ride.id.startsWith("hc-"),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 if (ride.points.isNotEmpty()) {
-                    RideMapCard(
-                        ride = ride,
-                        style = mapStyle,
-                        onOpenOnMap = {
-                            appViewModel.select(ride.id)
-                            appViewModel.requestShowRideOnMap(ride.id)
-                        },
-                    )
+                    RideMapCard(ride = ride, style = mapStyle)
                 }
 
                 RideStatsRow(ride = ride)
 
-                val elevation = curves?.elevation.orEmpty()
-                if (elevation.size >= 2) {
-                    DetailCard {
-                        // Mono-Eyebrow „HÖHENPROFIL": bewusst nicht identisch
-                        // mit dem Zieldesign-Mockup (dessen `.p-eyebrow` dort
-                        // ohne `.mono` steht) — die Aufgabenstellung verlangt
-                        // hier ausdruecklich die Monospace-Grossschrift-
-                        // Variante, siehe [DetailEyebrow].
-                        DetailEyebrow(
-                            text = "Höhenprofil",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            mono = true,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        // Wiederverwendung statt Nachbau: dieselbe Darstellung
-                        // wie auf dem Karten-Screen. Die Linienfarbe kommt hier
-                        // aber aus dem Theme — das feste Kartengruen liegt dort
-                        // auf Kacheln, auf der dunklen Kartenflaeche waere es
-                        // kaum zu sehen.
-                        ElevationProfile(
-                            points = ride.points,
-                            lineColor = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-
-                RideAnalysisCard(
-                    load = load,
-                    decoupling = analysis?.decoupling,
-                    vo2max = analysis?.vo2max,
-                )
-
-                // Ab hier alles Weitere, das die Zielstruktur nicht mehr
-                // namentlich vorgibt, aber unveraendert erhalten bleibt: die
-                // Planungs-Ausnahme, die restlichen Kennzahlen, Tempo- und
-                // Pulskurve, Segmente.
-
-                // Eine gespeicherte Planung sieht hier aus wie eine Tour, hat
-                // aber weder Trainingslast noch Auswertung — ohne diesen Satz
-                // waere das ein Fehler statt einer Auskunft (siehe `:core`:
-                // `Ride.planned`). Die kurze Erwaehnung in der Datum/Typ-Zeile
-                // oben ersetzt diesen Hinweis nicht: Dort steht nur, *was* die
-                // Tour ist, hier *was das fuer die Auswertung bedeutet*.
+                // Eine gespeicherte Planung hat weder Last noch Plantreffer —
+                // statt eines Satzes zur Haerte steht hier, was das fuer die
+                // Auswertung bedeutet (siehe `:core`: `Ride.planned`).
                 if (ride.planned) {
                     NoticeBox(
                         icon = Icons.Filled.Route,
@@ -335,44 +266,169 @@ internal fun RideDetailScreen(
                         text = "Das ist eine gespeicherte Planung, keine gefahrene Tour. Sie " +
                             "zählt deshalb nicht für Wochenfortschritt, Fitness und Form.",
                     )
+                } else {
+                    note?.let { RideNoteBox(it) }
                 }
 
-                RideExtraFactsCard(ride = ride)
-
-                curves?.speed?.let { speed ->
-                    DetailCard {
-                        RideCurveChart(
-                            title = "Tempo",
-                            curve = speed,
-                            lineColor = LocalSignalColors.current.accentBlue,
-                            formatValue = { "${formatOneDecimalDe(it)} km/h" },
-                            filled = true,
+                if (ride.points.size >= 2) {
+                    Button(
+                        onClick = onRideAgain,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(ButtonDefaults.IconSize),
                         )
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                        Text("Diese Tour nochmal fahren")
                     }
                 }
 
-                curves?.heartRate?.let { heartRate ->
-                    DetailCard {
-                        RideCurveChart(
-                            title = "Puls",
-                            curve = heartRate,
-                            lineColor = MaterialTheme.colorScheme.primary,
-                            formatValue = { "${it.roundToInt()} bpm" },
-                        )
+                val elevation = curves?.elevation.orEmpty()
+                if (elevation.size >= 2) {
+                    DetailSection(title = "Höhenprofil") {
+                        DetailCard {
+                            // Wiederverwendung statt Nachbau: dieselbe
+                            // Darstellung wie auf dem Karten-Screen, die
+                            // Linienfarbe aus dem Theme.
+                            ElevationProfile(
+                                points = ride.points,
+                                lineColor = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
 
-                if (segmentViews.isNotEmpty()) {
-                    SegmentsCard(views = segmentViews)
+                NeutralButton(
+                    onClick = { allValues = !allValues },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (allValues) "Weniger Werte" else "Alle Werte")
                 }
 
-                // Der schwebende Knopf der Liste ist hier zwar weg, ein wenig
-                // Luft unter der letzten Karte tut dem Daumen trotzdem gut.
+                if (allValues) {
+                    AllValues(
+                        ride = ride,
+                        load = load,
+                        curves = curves,
+                        analysis = analysis,
+                        segmentViews = segmentViews,
+                    )
+                }
+
+                // Ein wenig Luft unter dem letzten Element tut dem Daumen gut.
                 Spacer(Modifier.height(ScreenPadding))
             }
         }
     }
 }
+
+/**
+ * Der Kopf der Detailansicht (Zieldesign `.head` mit `.back`): links
+ * „‹ Verlauf" als Textknopf — er sagt, wohin es zurueckgeht —, rechts ⋮ mit
+ * den vier Handgriffen, die frueher im Menue jeder Listenzeile lagen.
+ */
+@Composable
+private fun DetailTopBar(
+    onBack: () -> Unit,
+    onShowOnMap: () -> Unit,
+    onRename: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(
+            onClick = onBack,
+            colors = ButtonDefaults.textButtonColors(
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.IconSize),
+            )
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Verlauf")
+        }
+        Spacer(Modifier.weight(1f))
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DetailMenuItem("Auf der Karte zeigen", Icons.Filled.Map) {
+                    menuOpen = false
+                    onShowOnMap()
+                }
+                DetailMenuItem("Umbenennen", Icons.Filled.Edit) {
+                    menuOpen = false
+                    onRename()
+                }
+                DetailMenuItem("Als GPX teilen", Icons.Filled.Share) {
+                    menuOpen = false
+                    onShare()
+                }
+                DetailMenuItem("Löschen", Icons.Filled.Delete) {
+                    menuOpen = false
+                    onDelete()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailMenuItem(
+    text: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(text) },
+        leadingIcon = { Icon(icon, contentDescription = null) },
+        onClick = onClick,
+    )
+}
+
+/** Wochentag, Tag und Monat ausgeschrieben, z. B. `Dienstag, 23. September`. */
+private val detailDateFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMANY)
+
+/** Wie [detailDateFormat], mit Jahr — fuer Touren aus frueheren Jahren. */
+private val detailDateYearFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMANY)
+
+private val detailTimeFormat: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("HH:mm", Locale.GERMANY)
+
+/**
+ * Die gedaempfte Zeile unter dem Namen: `Dienstag, 23. September · 18:12`,
+ * aus frueheren Jahren mit Jahreszahl, und die Herkunft genau **einmal** —
+ * frueher stand „aus Health Connect" hier *und* als Pille weiter unten.
+ *
+ * „aus Health Connect", nicht „aus Samsung Health": Das `hc-`-Praefix vergibt
+ * der Health-Connect-Import (`:core`, HealthSyncLogic.kt), unabhaengig davon,
+ * welche App die Daten dort hineingeschrieben hat.
+ */
+internal fun rideDetailDateLine(
+    at: LocalDateTime,
+    today: LocalDate,
+    planned: Boolean,
+    fromHealthConnect: Boolean,
+): String = buildList {
+    add((if (at.year == today.year) detailDateFormat else detailDateYearFormat).format(at))
+    add(detailTimeFormat.format(at))
+    if (planned) add("geplante Route")
+    if (fromHealthConnect) add("aus Health Connect")
+}.joinToString(" · ")
 
 // ---------------------------------------------------------------- Karten
 
@@ -386,11 +442,7 @@ internal fun RideDetailScreen(
  * KDoc von [RideDetailScreen].
  */
 @Composable
-private fun RideMapCard(
-    ride: Ride,
-    style: MapStyle,
-    onOpenOnMap: () -> Unit,
-) {
+private fun RideMapCard(ride: Ride, style: MapStyle) {
     val controller = remember(ride.id) { MapController() }
 
     LaunchedEffect(controller, ride.id, ride.points.size) {
@@ -409,71 +461,34 @@ private fun RideMapCard(
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(MapHeight)
-                    .semantics {
-                        contentDescription = "Karte mit der gefahrenen Spur von „${ride.name}“"
-                    },
-            ) {
-                MapViewHost(
-                    controller = controller,
-                    style = style,
-                    // Der eigene Standort gehoert auf die grosse Karte, nicht in
-                    // die Rueckschau auf eine gefahrene Tour.
-                    locationEnabled = false,
-                    onMapTap = { _, _ -> },
-                    modifier = Modifier.fillMaxSize(),
-                    // Ohne das schluckt die Karte in dieser scrollbaren Seite
-                    // jeden senkrechten Wisch. Wer die Tour wirklich erkunden
-                    // will, nimmt „Auf der Karte öffnen" darunter.
-                    gesturesEnabled = false,
-                )
-            }
-
-            NeutralButton(
-                onClick = onOpenOnMap,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(CardPadding),
-            ) {
-                Text("Auf der Karte öffnen")
-            }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(MapHeight)
+                .semantics {
+                    contentDescription = "Karte mit der gefahrenen Spur von „${ride.name}“"
+                },
+        ) {
+            MapViewHost(
+                controller = controller,
+                style = style,
+                // Der eigene Standort gehoert auf die grosse Karte, nicht in
+                // die Rueckschau auf eine gefahrene Tour.
+                locationEnabled = false,
+                onMapTap = { _, _ -> },
+                modifier = Modifier.fillMaxSize(),
+                gesturesEnabled = false,
+            )
         }
     }
 }
 
 /**
- * Datum/Typ-Zeile direkt unter dem Titel — Zieldesign
- * `docs/design/prototyp-eine-leiste.html`, Screen „Tour-Detail" (`#dDate`):
- * Datum und Uhrzeit, ergaenzt um die Herkunft, falls die Tour eine
- * gespeicherte Planung ist oder aus Health Connect stammt. Der Titel selbst
- * liegt weiterhin in der auf-/einklappbaren [OneUiLargeTopAppBar] — dieser
- * Zeile obliegt nur das Darunter.
- *
- * Ersetzt nicht die ausfuehrliche Planungs-[NoticeBox] weiter unten: Dort
- * steht, was die Kennzeichnung fuer die Auswertung bedeutet, hier nur, dass
- * sie zutrifft.
- */
-private fun rideDateTypeLine(ride: Ride): String = buildList {
-    add(formatDateTime(localOfEpochMs(ride.createdAt)))
-    if (ride.planned) add("Geplante Route")
-    if (ride.id.startsWith("hc-")) add("aus Health Connect")
-}.joinToString(" · ")
-
-/**
- * Die vierteilige Statistik-Zeile (Zieldesign
- * `docs/design/prototyp-eine-leiste.html`, Klasse `.statrow4`): Distanz,
- * Gesamtdauer, Anstieg und Ø Puls als grosse, zentrierte Zahlen mit
- * Tabellenziffern ([BigStat]) — bewusst nicht ueber das gemeinsame [Fact]
- * (Label-ueber-Wert, linksbuendig, keine Tabellenziffern), sondern nach dem
- * Muster von `CompactValue` in `ui/map/RideCompactBar.kt`, das im Fahrmodus
- * bereits fette Zahlen mit Tabellenziffern zeigt. Fehlt die Herzfrequenz
- * (haeufig bei importierten GPX-Dateien), steht „–" statt die vierte Spalte
- * ausfallen zu lassen — die Zeile bleibt so immer vierteilig, wie das
- * Zieldesign es zeigt.
+ * Die vierteilige Zahlenzeile (Zieldesign `.stats3` mit vier Spalten):
+ * Distanz, Dauer, Anstieg und Ø Puls als grosse, zentrierte Zahlen mit
+ * Tabellenziffern. Die Dauer steht als `h:mm` unter „Std." — vorher stand
+ * unter „h:min" ein Wert in `h:mm:ss`. Fehlt die Herzfrequenz, steht „–",
+ * damit die Zeile immer vierteilig bleibt.
  */
 @Composable
 private fun RideStatsRow(ride: Ride) {
@@ -485,7 +500,7 @@ private fun RideStatsRow(ride: Ride) {
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
             BigStat(value = formatKmDe(stats.distanceKm), label = "km")
-            BigStat(value = formatDuration(stats.durationS), label = "h:min")
+            BigStat(value = formatHoursMinutes(stats.durationS), label = "Std.")
             BigStat(value = "${stats.ascentM.roundToInt()}", label = "Hm")
             BigStat(
                 value = stats.avgHrBpm?.toString() ?: "–",
@@ -496,9 +511,9 @@ private fun RideStatsRow(ride: Ride) {
 }
 
 /**
- * Ein Wert der vierteiligen Statistik-Zeile: grosse, zentrierte Zahl in
- * Tabellenziffern ([fontFeatureSettings] `"tnum"`, Repo-Muster fuer
- * Zahlenreihen — siehe `ui/map/RideCompactBar.kt`), kleine Einheit darunter.
+ * Ein Wert der Zahlenzeile: grosse, zentrierte Zahl in Tabellenziffern
+ * (`"tnum"`, Repo-Muster fuer Zahlenreihen — siehe `ui/map/RideCompactBar.kt`),
+ * kleine Einheit darunter.
  */
 @Composable
 private fun BigStat(value: String, label: String, modifier: Modifier = Modifier) {
@@ -522,11 +537,93 @@ private fun BigStat(value: String, label: String, modifier: Modifier = Modifier)
 }
 
 /**
- * Die restlichen Kennzahlen der Tour, die nicht in [RideStatsRow] stehen —
- * Fahrzeit (im Unterschied zur Gesamtdauer dort), Ø Tempo, Abstieg, Max-Puls
- * — plus die Health-Connect-Kennzeichnung. Unveraendert aus der fruesheren
- * `RideFactsCard`, nur um die vier Werte bereinigt, die jetzt gross oben
- * stehen (und um das Datum, das in die Datum/Typ-Zeile gewandert ist).
+ * Der Klartext-Satz (Zieldesign `.note`): Akzent-Toenung
+ * (`primaryContainer`/`onPrimaryContainer`), fetter Anfang, dann der Rest.
+ * Bewusst keine [CoachCard]: Sie traegt eine Absender-Augenbraue, dieser Satz
+ * braucht keinen Absender.
+ */
+@Composable
+private fun RideNoteBox(note: RideNote) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        shape = MaterialTheme.shapes.extraSmall,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(note.headline) }
+                append(" ")
+                append(note.body)
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+        )
+    }
+}
+
+// ---------------------------------------------------------------- Alle Werte
+
+/**
+ * Was „Alle Werte" aufklappt — alles, was vor dem Klartext-Umbau bereits auf
+ * der Seite stand, nichts davon faellt weg: weitere Kennzahlen, Tempo- und
+ * Pulskurve, die Coach-Auswertung und die Segmente. Jeder Abschnitt traegt
+ * eine [Eyebrow] und entfaellt ganz, wenn ihm die Daten fehlen.
+ */
+@Composable
+private fun AllValues(
+    ride: Ride,
+    load: RideLoad?,
+    curves: RideCurves?,
+    analysis: RideAnalysis?,
+    segmentViews: List<SegmentEffortView>,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
+        DetailSection(title = "Weitere Werte") { RideExtraFactsCard(ride) }
+
+        val speed = curves?.speed
+        val heartRate = curves?.heartRate
+        if (speed != null || heartRate != null) {
+            DetailSection(title = "Tempo und Puls") {
+                speed?.let {
+                    DetailCard {
+                        RideCurveChart(
+                            title = "Tempo",
+                            curve = it,
+                            lineColor = LocalSignalColors.current.accentBlue,
+                            formatValue = { v -> "${formatOneDecimalDe(v)} km/h" },
+                            filled = true,
+                        )
+                    }
+                }
+                heartRate?.let {
+                    DetailCard {
+                        RideCurveChart(
+                            title = "Puls",
+                            curve = it,
+                            lineColor = MaterialTheme.colorScheme.primary,
+                            formatValue = { v -> "${v.roundToInt()} bpm" },
+                        )
+                    }
+                }
+            }
+        }
+
+        RideAnalysisCard(
+            load = load,
+            decoupling = analysis?.decoupling,
+            vo2max = analysis?.vo2max,
+        )
+
+        if (segmentViews.isNotEmpty()) {
+            DetailSection(title = "Segmente") { SegmentsCard(views = segmentViews) }
+        }
+    }
+}
+
+/**
+ * Die Kennzahlen, die nicht in der Zahlenzeile stehen: Fahrzeit (im
+ * Unterschied zur Gesamtdauer dort), Ø Tempo, Abstieg und Max. Puls.
  */
 @Composable
 private fun RideExtraFactsCard(ride: Ride) {
@@ -538,45 +635,25 @@ private fun RideExtraFactsCard(ride: Ride) {
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DetailFact("Fahrzeit", formatDuration(stats.movingTimeS))
-            DetailFact(
+            Fact("Fahrzeit", "${formatHoursMinutes(stats.movingTimeS)} Std.")
+            Fact(
                 label = "Ø Tempo",
                 value = stats.avgSpeedKmh?.let { "${formatOneDecimalDe(it)} km/h" } ?: "–",
             )
-            DetailFact("Höhenmeter ↓", "${stats.descentM.roundToInt()} hm")
-            stats.maxHrBpm?.let { DetailFact("Max. Puls", "$it bpm") }
-        }
-        if (ride.id.startsWith("hc-")) {
-            Spacer(Modifier.height(12.dp))
-            // „aus Health Connect", nicht „aus Samsung Health": Das `hc-`-
-            // Praefix vergibt der Health-Connect-Import (`:core`,
-            // HealthSyncLogic.kt) — unabhaengig davon, welche App die Daten
-            // dort hineingeschrieben hat. Samsung Health ist nur eine von
-            // vielen Quellen; wer eine Garmin traegt, hielt den Chip fuer einen
-            // Fehler. Steht zusaetzlich zur kurzen Erwaehnung in der
-            // Datum/Typ-Zeile, weil dort nur der Text steht — die Pille bleibt
-            // die auffindbare Marke, wie ueberall sonst in der App.
-            TagPill(text = "aus Health Connect")
+            Fact("Hm ↓", "${stats.descentM.roundToInt()} Hm")
+            stats.maxHrBpm?.let { Fact("Max. Puls", "$it bpm") }
         }
     }
 }
 
 /**
- * Auswertung der Tour, soweit `:core` sie fuer **diese** Fahrt tragen kann:
- * Trainingslast, Pe:Hr-Entkopplung und VO2max aus gleichmaessigen Abschnitten.
+ * Die Auswertung, soweit `:core` sie fuer **diese** Fahrt tragen kann:
+ * Trainingslast (hier als Zahl samt Quelle — in der Liste steht nur das Wort),
+ * Pe:Hr-Entkopplung und VO₂max aus gleichmaessigen Abschnitten, jeweils mit
+ * ihrer Verlaesslichkeit. Faellt alles drei aus, entfaellt die Karte ganz.
  *
- * Faellt alles drei aus (kurze Tour, keine Herzfrequenz, zu ungleichmaessig
- * gefahren), entfaellt die Karte ganz. Die Gruende dafuer stehen bewusst
- * **nicht** hier: Sie sind fuer die Nutzerin nicht handlungsleitend — sie kann
- * eine gefahrene Tour nicht nachtraeglich gleichmaessiger machen.
- *
- * Zieldesign `docs/design/prototyp-eine-leiste.html` (Klasse `.coach`): eine
- * Akzent-Container-Karte ([CoachCard], `primaryContainer`/`onPrimaryContainer`
- * statt der neutralen Kartenflaeche) mit der Eyebrow „Coach" statt des
- * frueheren Titels „Analyse" — dieselbe Kennzeichnung wie die Coach-Kacheln
- * auf „Heute" und „Training". Anders als beim Hoehenprofil bewusst **nicht**
- * die Monospace-Variante: Im Zieldesign traegt `.coach .eyebrow` keine
- * `.mono`-Klasse, „Coach" bleibt dort schlichte Groteskschrift.
+ * Die geteilte [CoachCard] aus `ui/components/` bringt ihre Augenbraue
+ * „Coach" selbst mit — dieselbe Kennzeichnung wie auf „Heute" und „Training".
  */
 @Composable
 private fun RideAnalysisCard(
@@ -589,65 +666,53 @@ private fun RideAnalysisCard(
         return
     }
 
-    CoachCard {
-        DetailEyebrow(
-            text = "Coach",
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = EyebrowAlpha),
-        )
+    CoachCard(modifier = Modifier.padding(top = SectionTopGap)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            usableLoad?.let { entry ->
+                AnalysisEntry(
+                    label = "Trainingslast",
+                    value = "${entry.load.roundToInt()} " +
+                        "(${loadSourceLabels[entry.source].orEmpty()})",
+                    explanation = entry.note,
+                    confidence = entry.confidence,
+                )
+            }
 
-        usableLoad?.let { entry ->
-            Spacer(Modifier.height(12.dp))
-            AnalysisEntry(
-                label = "Trainingslast",
-                value = "${entry.load.roundToInt()} " +
-                    "(${loadSourceLabels[entry.source].orEmpty()})",
-                explanation = entry.note,
-                confidence = entry.confidence,
-            )
-        }
+            decoupling?.let { result ->
+                AnalysisEntry(
+                    label = "Entkopplung (Pe:Hr)",
+                    value = "${formatOneDecimalDe(result.decouplingPercent ?: 0.0)} %" +
+                        (result.rating?.let { " · $it" } ?: ""),
+                    explanation = "Vergleicht die zweite Tourhälfte mit der ersten: wie viel " +
+                        "Leistung dein Puls am Ende noch trägt. Unter 5 % gilt die aerobe " +
+                        "Ausdauer als gut, über 10 % lohnt sich mehr Grundlagenarbeit.",
+                    confidence = result.confidence,
+                )
+            }
 
-        decoupling?.let { result ->
-            Spacer(Modifier.height(12.dp))
-            AnalysisEntry(
-                label = "Entkopplung (Pe:Hr)",
-                value = "${formatOneDecimalDe(result.decouplingPercent ?: 0.0)} %" +
-                    (result.rating?.let { " · $it" } ?: ""),
-                explanation = "Vergleicht die zweite Tourhälfte mit der ersten: wie viel " +
-                    "Leistung dein Puls am Ende noch trägt. Unter 5 % gilt die aerobe " +
-                    "Ausdauer als gut, über 10 % lohnt sich mehr Grundlagenarbeit.",
-                confidence = result.confidence,
-            )
-        }
-
-        vo2max?.let { estimate ->
-            Spacer(Modifier.height(12.dp))
-            AnalysisEntry(
-                label = "VO2max",
-                value = estimate.text,
-                explanation = "Aus den gleichmäßigen Abschnitten dieser Tour geschätzt " +
-                    "(Herzfrequenz gegen geschätzte Leistung). Deshalb ein Band und " +
-                    "kein Messwert.",
-                confidence = estimate.confidence,
-            )
+            vo2max?.let { estimate ->
+                AnalysisEntry(
+                    label = "VO₂max",
+                    value = estimate.text,
+                    explanation = "Aus den gleichmäßigen Abschnitten dieser Tour geschätzt " +
+                        "(Herzfrequenz gegen geschätzte Leistung). Deshalb ein Band und " +
+                        "kein Messwert.",
+                    confidence = estimate.confidence,
+                )
+            }
         }
     }
 }
 
 /**
  * Die Segmente dieser Tour: je automatisch erkanntem Anstieg die Zeit dieser
- * Befahrung, die persoenliche Bestzeit, Anzahl der Befahrungen, der Platz und
- * der Rueckstand — alles aus der lokalen Registry (`:core`,
- * `RideSegments.kt`), nichts davon verlaesst das Geraet.
- *
- * Eine **neue** Bestzeit traegt eine Pille „★ Neue Bestzeit" in Signalfarbe;
- * fuhr die Tour denselben Anstieg mehrmals (Runden), erscheint je Runde ein
- * Eintrag. Ohne erkannte Segmente entfaellt die Karte ganz — dieselbe Regel
- * wie bei den Kurven: kein leerer Abschnitt mit Hinweistext.
+ * Befahrung, die persoenliche Bestzeit, Platz und Rueckstand — alles aus der
+ * lokalen Registry (`:core`, `RideSegments.kt`), nichts davon verlaesst das
+ * Geraet. Eine **neue** Bestzeit traegt eine Pille „★ Neue Bestzeit".
  */
 @Composable
 private fun SegmentsCard(views: List<SegmentEffortView>) {
     DetailCard {
-        Text(text = "Segmente", style = MaterialTheme.typography.titleMedium)
         Text(
             text = "Automatisch erkannte Anstiege, verglichen mit deinen " +
                 "früheren Fahrten über dasselbe Stück.",
@@ -677,9 +742,8 @@ private fun SegmentEffortEntry(view: SegmentEffortView) {
                 overflow = TextOverflow.Ellipsis,
             )
             if (view.isNewBest) {
-                // Bedeutung nicht allein ueber Farbe: der Stern und der Text
-                // tragen sie auch in Graustufen (siehe Leitfaden-Kommentar an
-                // [startAndFinishMarkers]).
+                // Bedeutung nicht allein ueber Farbe: Stern und Text tragen
+                // sie auch in Graustufen.
                 TagPill(
                     text = "★ Neue Bestzeit",
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -693,105 +757,51 @@ private fun SegmentEffortEntry(view: SegmentEffortView) {
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DetailFact("Zeit", formatDuration(view.timeS))
-            DetailFact("Bestzeit", formatDuration(view.bestTimeS))
-            DetailFact("Platz", "${view.rank}. von ${view.effortCount}")
-            DetailFact(
+            Fact("Zeit", formatDuration(view.timeS))
+            Fact("Bestzeit", formatDuration(view.bestTimeS))
+            Fact("Platz", "${view.rank}. von ${view.effortCount}")
+            Fact(
                 label = "Rückstand",
                 value = if (view.deltaToBestS <= 0) "–" else "+${view.deltaToBestS} s",
             )
-            view.avgHr?.let { DetailFact("Ø Puls", "$it bpm") }
+            view.avgHr?.let { Fact("Ø Puls", "$it bpm") }
         }
     }
 }
 
 // -------------------------------------------------------------- Bausteine
 
+/**
+ * Ein Abschnitt mit geteilter [Eyebrow] darueber — um [CardPadding]
+ * eingerueckt, damit sie auf der Kante des Kartentexts steht (wie die
+ * Monatsueberschriften der Liste).
+ */
+@Composable
+private fun DetailSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
+        Eyebrow(
+            text = title,
+            modifier = Modifier.padding(start = CardPadding, top = SectionTopGap),
+        )
+        content()
+    }
+}
+
+/** Luft ueber einer Abschnitts-Augenbraue — trennt Abschnitte deutlicher als [CardGap]. */
+private val SectionTopGap = 8.dp
+
 /** Eine Karte der Detailansicht — ueberall dasselbe Innenmass. */
 @Composable
-private fun DetailCard(content: @Composable () -> Unit) {
+private fun DetailCard(content: @Composable ColumnScope.() -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(CardPadding)) { content() }
+        Column(modifier = Modifier.padding(CardPadding), content = content)
     }
 }
 
 /**
- * Die Akzent-Container-Karte fuer die Coach-Einordnung ([RideAnalysisCard]) —
- * Zieldesign `docs/design/prototyp-eine-leiste.html`, Klasse `.coach`:
- * `primaryContainer`/`onPrimaryContainer` statt der neutralen Kartenflaeche
- * von [DetailCard], sonst dasselbe Innenmass. Die Vorlagen-Farben (One-UI
- * `--acc-cont`/`--on-acc-cont`) sind exakt `primaryContainer`/
- * `onPrimaryContainer` aus `theme/Color.kt`, deshalb genuegt hier
- * [CardDefaults.cardColors] statt eigener Farbwerte.
- */
-@Composable
-private fun CoachCard(content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(CardPadding)) { content() }
-    }
-}
-
-/** Eine Kennzahl der Detailansicht — dieselbe Grammatik wie ueberall ([Fact]). */
-@Composable
-private fun DetailFact(label: String, value: String) {
-    Fact(label = label, value = value)
-}
-
-/**
- * Kleine Kennzeichnung ueber einem Abschnitt oder einer Karte — Zieldesign
- * `docs/design/prototyp-eine-leiste.html`, Klasse `.eyebrow`: 12 sp/600 mit
- * leichter Spreizung, gedaempfte Farbe.
- *
- * [mono] schaltet auf die Monospace-Grossschrift-Variante um (`.eyebrow.mono`
- * im Zieldesign, siehe der Trainings-Screen „FORM · 90 TAGE") — hier fuer den
- * Hoehenprofil-Abschnitt gebraucht ([RideDetailScreen]), damit er sich von
- * der schlichten „Coach"-Kennzeichnung absetzt.
- *
- * Rein privat in dieser Datei: Ein gleichnamiger, geteilter Baustein unter
- * `ui/components/` existierte zum Zeitpunkt dieser Umstellung noch nicht.
- * Parallele Arbeit an `ui/today`/`ui/training` koennte einen anlegen — eine
- * lokale Kopie hier ist die sicherere Wahl als ein moeglicher Namenskonflikt.
- */
-@Composable
-private fun DetailEyebrow(
-    text: String,
-    color: Color,
-    modifier: Modifier = Modifier,
-    mono: Boolean = false,
-) {
-    Text(
-        text = if (mono) text.uppercase() else text,
-        style = MaterialTheme.typography.labelMedium.copy(
-            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
-            letterSpacing = if (mono) 1.2.sp else 0.4.sp,
-        ),
-        color = color,
-        modifier = modifier,
-    )
-}
-
-/** Deckkraft gedaempfter Eyebrow-/Nebentexte auf der Coach-Akzentkarte ([CoachCard]). */
-private const val EyebrowAlpha = 0.75f
-
-/**
- * Ein Eintrag der Analyse: die Zahl gross und fett im One-UI-Mass
- * (headlineSmall auf labelMedium), darunter kurze Erklaerung und wie
- * belastbar er ist.
- *
- * Liegt seit der Umstellung auf [CoachCard] auf akzentfarbenem Grund statt
- * der neutralen Kartenflaeche: Erklaerung und Verlaesslichkeit laufen deshalb
- * ueber `onPrimaryContainer` (gedaempft, [EyebrowAlpha]) statt ueber das feste
- * `onSurfaceVariant`. Das Label aus [Fact] bleibt dabei unveraendert bei
- * `onSurfaceVariant` — [Fact] ist ein geteilter Baustein unter
- * `ui/components/` und liegt ausserhalb dessen, was diese Umstellung anfassen
- * darf; der Kontrast auf der hellgruenen Flaeche bleibt ausreichend, auch
- * wenn er nicht exakt denselben Farbton traegt wie der Rest der Karte.
+ * Ein Eintrag der Coach-Auswertung: die Zahl im [Fact]-Mass, darunter kurze
+ * Erklaerung und wie belastbar sie ist — gedaempft in der Textfarbe der
+ * Akzentflaeche, genau wie die Augenbraue der [CoachCard].
  */
 @Composable
 private fun AnalysisEntry(
@@ -800,19 +810,19 @@ private fun AnalysisEntry(
     explanation: String,
     confidence: Confidence,
 ) {
-    val onContainer = MaterialTheme.colorScheme.onPrimaryContainer
+    val muted = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
     Column {
         Fact(label = label, value = value)
         Text(
             text = explanation,
             style = MaterialTheme.typography.bodySmall,
-            color = onContainer.copy(alpha = EyebrowAlpha),
+            color = muted,
         )
         if (confidence != Confidence.NONE) {
             Text(
                 text = "Verlässlichkeit: ${confidenceLabels[confidence].orEmpty()}",
                 style = MaterialTheme.typography.labelSmall,
-                color = onContainer.copy(alpha = EyebrowAlpha),
+                color = muted,
             )
         }
     }
@@ -954,7 +964,7 @@ internal fun finishMarkers(lat: Double, lon: Double): List<MapMarker> = listOf(
  * liegt (siehe KDoc von [RideDetailScreen]); hoch genug, damit auch eine
  * langgezogene Tour als Form erkennbar bleibt.
  */
-private val MapHeight = 240.dp
+private val MapHeight = 200.dp
 
 /**
  * Rand der Kamerafahrt in Pixeln. Deutlich schmaler als der Standardwert des

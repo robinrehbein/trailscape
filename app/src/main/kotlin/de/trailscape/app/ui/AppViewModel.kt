@@ -420,6 +420,36 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Verlauf (Klartext): „Diese Tour nochmal fahren" → Tour als Route
+    // -------------------------------------------------------------------------
+
+    private val _rideAsRouteRequest = MutableStateFlow<String?>(null)
+
+    /**
+     * Die Tour, deren Spur der Karten-Tab als **Route** uebernehmen soll —
+     * ausgeloest ueber „Diese Tour nochmal fahren" in der Detailansicht
+     * (`ui/rides/RideDetailScreen.kt`). Dasselbe gehaltene Muster wie
+     * [showRideOnMapRequest], aus demselben Grund (Tab-Wechsel dazwischen).
+     *
+     * Anders als dort soll die Spur nicht nur *gezeigt*, sondern als geplante
+     * Route geladen werden, mit der man losfahren kann. Was genau daraus wird
+     * (Abbiegehinweise, Neuberechnung), entscheidet der Karten-Screen, der den
+     * Wert abholt und mit [consumeRideAsRouteRequest] quittiert.
+     */
+    val rideAsRouteRequest: StateFlow<String?> = _rideAsRouteRequest.asStateFlow()
+
+    /** Bittet den Karten-Tab, die Tour [rideId] als Route zu laden, und wechselt dorthin. */
+    fun requestRideAsRoute(rideId: String) {
+        _rideAsRouteRequest.value = rideId
+        requestTab(AppTab.MAP)
+    }
+
+    /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
+    fun consumeRideAsRouteRequest() {
+        _rideAsRouteRequest.value = null
+    }
+
+    // -------------------------------------------------------------------------
     // Geplante Route → der Aufnahme-Knopf der Navigationshuelle
     // -------------------------------------------------------------------------
 
