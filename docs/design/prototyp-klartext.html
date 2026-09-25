@@ -229,7 +229,16 @@
   .mapbg{position:absolute;inset:0;background:var(--map)}
   .mapbg svg{width:100%;height:100%}
   .map-top{position:absolute;top:44px;right:14px;display:grid;gap:10px;z-index:5}
-  .map-bottom{position:absolute;left:12px;right:12px;bottom:90px;display:grid;gap:10px;z-index:6}
+  .map-bottom{position:absolute;left:0;right:0;bottom:0;display:grid;gap:10px;z-index:6}
+  .map-bottom .locate{margin-right:14px}
+  .map-bottom .sheet{border-radius:26px 26px 0 0;padding:6px 16px 22px}
+  .map-bottom .sheet[data-k=idle]{padding-bottom:94px;gap:10px}
+  .map-bottom .sheet.peek > :not(.grabbtn):not(.rowlink){display:none}
+  .grabbtn{justify-self:center;width:64px;height:18px;display:grid;place-items:center;margin-bottom:-4px}
+  .grabbtn::before{content:"";width:40px;height:4px;border-radius:2px;background:var(--hair)}
+  .chips.one{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .chips.one .chip{flex:none}
+  .cand{padding:8px 10px}
   .locate{justify-self:end}
   .sheet{background:var(--card);border-radius:26px;padding:14px 16px 16px;box-shadow:var(--elev-hi);display:grid;gap:12px}
   .search{display:flex;align-items:center;gap:10px;height:48px;border-radius:24px;background:var(--tone);padding:0 16px;color:var(--mut);font-size:15px}
@@ -542,16 +551,16 @@
 
           <!-- Zustand: Wohin? -->
           <div class="sheet" data-k="idle">
-            <button class="search" data-toast="Suche öffnet sich über der Karte, mit letzten Zielen"><svg><use href="#i-search"/></svg>Wohin?</button>
-            <div class="chips">
-              <button class="chip acc" data-act="runde-heute"><svg><use href="#i-star"/></svg>Runde für heute · 45 km</button>
+            <button class="search" data-toast="Suche öffnet sich über der Karte, mit letzten Zielen"><svg><use href="#i-search"/></svg>Wohin? Suchen oder lange drücken</button>
+            <div class="chips one">
+              <button class="chip acc" data-act="runde-heute"><svg><use href="#i-star"/></svg>Für heute · 45 km</button>
               <button class="chip" data-k-go="runde"><svg><use href="#i-loop"/></svg>Runde ab hier</button>
             </div>
-            <div class="hint">Lange auf die Karte drücken setzt einen Punkt.</div>
           </div>
 
           <!-- Zustand: Ort gewählt (lange drücken) -->
           <div class="sheet" data-k="ort" hidden>
+            <button class="grabbtn" data-peek aria-label="Blatt ein- oder ausklappen"></button>
             <div class="rowlink">
               <div class="grow"><div class="h3">Kiesweg am Wehr</div><div class="muted small">Waldkante · 6,8 km entfernt</div></div>
               <button class="iconbtn flat" data-k-go="idle" aria-label="Schließen"><svg><use href="#i-x"/></svg></button>
@@ -564,6 +573,7 @@
 
           <!-- Zustand: Runde einstellen -->
           <div class="sheet" data-k="runde" hidden>
+            <button class="grabbtn" data-peek aria-label="Blatt ein- oder ausklappen"></button>
             <div class="rowlink">
               <div class="grow h3">Runde ab hier</div>
               <button class="iconbtn flat" data-k-go="idle" aria-label="Schließen"><svg><use href="#i-x"/></svg></button>
@@ -579,6 +589,7 @@
 
           <!-- Zustand: Kandidaten -->
           <div class="sheet" data-k="kand" hidden>
+            <button class="grabbtn" data-peek aria-label="Blatt ein- oder ausklappen"></button>
             <div class="rowlink">
               <div class="grow"><div class="h3">3 Runden gefunden</div><div class="muted small" id="kandsub">Sortiert nach neuen Kacheln</div></div>
               <button class="iconbtn flat" data-k-go="runde" aria-label="Zurück"><svg><use href="#i-x"/></svg></button>
@@ -593,6 +604,7 @@
 
           <!-- Zustand: Route steht -->
           <div class="sheet" data-k="route" hidden>
+            <button class="grabbtn" data-peek aria-label="Blatt ein- oder ausklappen"></button>
             <div class="rowlink">
               <div class="grow"><div class="h3" id="rname">Runde Nord</div><div class="muted small tab-nums" id="rmeta">44,6 km · 380 Hm · ca. 1:50 h</div></div>
               <button class="iconbtn flat" data-sheet="routemenu" aria-label="Weitere Aktionen"><svg><use href="#i-more"/></svg></button>
@@ -606,6 +618,7 @@
 
           <!-- Zustand: Route anpassen -->
           <div class="sheet" data-k="edit" hidden>
+            <button class="grabbtn" data-peek aria-label="Blatt ein- oder ausklappen"></button>
             <div class="rowlink">
               <div class="grow h3">Route anpassen</div>
               <button class="link" data-k-go="route">Fertig</button>
@@ -1038,7 +1051,7 @@
     scr.scrollTop = 0;
     const tab = scr.dataset.tab;
     $$('[data-tabbtn]').forEach(b => b.classList.toggle('on', b.dataset.tabbtn === tab));
-    $('#nav').hidden = name === 'settings';
+    $('#nav').hidden = name === 'settings' || (name === 'karte' && st.k !== 'idle');
     $('.status').classList.toggle('solid', name !== 'karte');
     st.screen = name;
     closeSheets();
@@ -1047,7 +1060,8 @@
 
   function kgo(state) {
     st.k = state;
-    $$('[data-k]').forEach(el => el.hidden = el.dataset.k !== state);
+    $$('[data-k]').forEach(el => { el.hidden = el.dataset.k !== state; el.classList.remove('peek'); });
+    if (st.screen === 'karte') $('#nav').hidden = state !== 'idle';
     $('#kpin').hidden = state !== 'ort';
     if (state === 'kand') drawKarte(st.cand, ['nord','ost','sued'].filter(x => x !== st.cand));
     else if (state === 'route' || state === 'edit') { drawKarte(st.cand); setRoute(st.cand); }
@@ -1163,6 +1177,7 @@
     if (!t) return;
     if (t.dataset.go) go(t.dataset.go);
     if (t.dataset.kGo) kgo(t.dataset.kGo);
+    if (t.hasAttribute('data-peek')) t.parentElement.classList.toggle('peek');
     if (t.dataset.sheet) openSheet(t.dataset.sheet);
     if (t.dataset.act && ACT[t.dataset.act]) ACT[t.dataset.act]();
     if (t.dataset.toast) toast(t.dataset.toast);
@@ -1215,7 +1230,7 @@
       ['Gibt es heute nicht', 'Offen gelegt: eigene Fahrten, Fitness, Strecke. Mit Unsicherheit statt Scheingenauigkeit'],
     ], try: 'Tippe <b>Verstanden</b>.' },
     'karte-idle': { t: 'Karte', q: 'Wohin?', c: [
-      ['Suche im Sheet; „Route planen", „Kartenstil", „Offline" erst nach Aufziehen', 'Ein Blatt mit „Wohin?" und zwei Chips. Kein Aufziehen nötig'],
+      ['Suche im Sheet; „Route planen", „Kartenstil", „Offline" erst nach Aufziehen', 'Ein flaches Blatt am unteren Rand mit „Wohin?" und zwei Chips. Kein Aufziehen nötig'],
       ['Zwei Suchfelder mit unterschiedlichem Verhalten', 'Genau ein Suchfeld'],
       ['Kartenstil und Offline im Sheet, Offline startet ohne Vorschau', 'Ebenen-Knopf oben rechts, Offline mit Größe und Abbrechen'],
       ['Planungsmodus: Karte antippen setzt Punkte, Tippen nahe Punkt löscht still', 'Lange drücken setzt einen Punkt, in jedem Zustand gleich'],
@@ -1231,10 +1246,11 @@
       ['Runden-Generator bewertet nur Länge und Höhenmeter', 'Neu: „Neue Gegenden bevorzugen“ belohnt Runden durch unentdeckte Kacheln (wie Squadrats)'],
     ], try: 'Schieberegler bewegen, dann <b>Vorschläge zeigen</b>.' },
     'karte-kand': { t: 'Vorschläge', q: 'Welche Runde gefällt mir?', c: [
+      ['Schwebende Blätter plus Leiste verdecken die halbe Karte', 'Blatt am Rand angedockt, Leiste ausgeblendet, Griff klappt auf eine Zeile ein'],
       ['Vorschläge wissen nichts von entdeckten Kacheln', 'Jede Runde zeigt „+N neu“. Mit „Neue Gegenden bevorzugen“ steht die unbekannteste vorn'],
       ['Kandidaten mit Himmelsrichtung, „Beste", ±%; weitere nur durch Ziehen am Blatt', 'Drei Karten nebeneinander, alle Linien auf der Karte, eine hervorgehoben'],
       ['Vorschau zählte schon als „Route bereit", bevor man übernommen hatte', 'Erst „Diese Runde nehmen" macht sie zur Route'],
-    ], try: 'Zwischen <b>Nord, Ost, Süd</b> wechseln.' },
+    ], try: 'Zwischen <b>Nord, Süd, Ost</b> wechseln, oder den <b>Griff</b> antippen, um die Karte ganz zu sehen.' },
     'karte-route': { t: 'Route steht', q: 'Losfahren?', c: [
       ['Planungsblatt mit Profil, Wegpunkten, 4 Textknöpfen, Speichern und Navigieren gleichzeitig', 'Werte, Höhenprofil, „Losfahren". Anpassen und ⋮ für den Rest'],
       ['„Navigieren" startet still auch die Aufzeichnung', '„Losfahren" sagt, was passiert: fahren mit dieser Route'],
