@@ -11,9 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import de.trailscape.app.ui.theme.CardPadding
 
 /**
@@ -26,12 +24,10 @@ import de.trailscape.app.ui.theme.CardPadding
  * „RUHEPULS"). Weil daraus in der App ein knappes Dutzend Aufrufe wurden,
  * steht der Stil hier einmal statt an jeder Stelle neu.
  *
- * Warum ueberhaupt eine eigene Ueberschriftenform: Die Zielstruktur ersetzt
- * die frueheren Kartentitel („Form", „Vitalwerte", „Diese Woche") durch
- * *Abschnitte*. Ein Abschnittstitel im selben `titleMedium` wie die Kartentitel
- * darunter waere keine Ebene, sondern eine Wiederholung — die Augenbraue ist
- * bewusst kleiner, versal und gedaempft und tritt damit hinter den Inhalt
- * zurueck, den sie sortiert.
+ * Warum ueberhaupt eine eigene Ueberschriftenform: Ein Abschnittstitel im
+ * selben `titleMedium` wie die Kartentitel darunter waere keine Ebene, sondern
+ * eine Wiederholung — die Augenbraue ist bewusst kleiner und gedaempft und
+ * tritt damit hinter den Inhalt zurueck, den sie sortiert.
  *
  * Verwandt, aber nicht dasselbe: [de.trailscape.app.ui.more.MoreGroupLabel]
  * beschriftet die Gruppen der Einstellungsliste. Sie bleibt dort, weil sie an
@@ -59,60 +55,34 @@ fun Eyebrow(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    mono: Boolean = false,
 ) {
-    val base = MaterialTheme.typography.labelSmall
+    // Fuehrung „Klartext": in Satzschreibung, halbfett, ohne Sperrung und
+    // ohne Monospace. Frueher standen hier drei Stile nebeneinander
+    // (versal gesperrt, versal in Monospace, Satzschreibung) — je nach
+    // Screen, fuer dieselbe Aufgabe.
     Text(
-        text = text.uppercase(),
-        style = if (mono) {
-            base.copy(letterSpacing = EyebrowTracking, fontFamily = FontFamily.Monospace)
-        } else {
-            base.copy(letterSpacing = EyebrowTracking)
-        },
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
         color = color,
         modifier = modifier,
     )
 }
 
 /**
- * Die Kapitelmarke eines Screens — „FORM", „PLAN", „WERTE".
- *
- * Sie steht auf blankem Grund, nicht in einer Karte, und ist deshalb um
- * [CardPadding] eingerueckt: So sitzt sie auf derselben Kante wie der Text *in*
- * den Karten darunter statt weiter aussen als er — dasselbe Idiom, mit dem auch
- * die Datumszeile der Startseite und die Gruppenlabels des Mehr-Tabs gesetzt
- * sind.
- *
- * Diese drei Marken sind der ganze Ersatz fuer eine zweite Reiterleiste: Der
- * Trainings-Tab ist **ein** Scroll-Screen, seine Kapitel erkennt man beim
- * Vorbeiscrollen, nicht durch Antippen.
+ * Die Abschnittsueberschrift eines Screens („Diese Woche", „Dein Ziel",
+ * „September") — ueberall dieselbe Groesse, Farbe und derselbe Abstand, und
+ * buendig mit dem Text in den Karten darunter.
  */
 @Composable
 fun SectionEyebrow(text: String, modifier: Modifier = Modifier) {
     Eyebrow(
         text = text,
-        mono = true,
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = CardPadding, top = SectionEyebrowTopGap, bottom = 2.dp),
+            .padding(start = CardPadding, end = CardPadding, top = SectionEyebrowTopGap, bottom = 2.dp),
     )
 }
 
-/**
- * Die Karte, in der der Coach spricht: Akzentflaeche statt Kartenweiss.
- *
- * `primaryContainer`/`onPrimaryContainer` sind die einzige getoente Flaeche, die
- * das Schema fuer *Zuspruch* vorhaelt — nicht fuer Warnung (das ist
- * [NoticeBox] mit einer Ampelfarbe) und nicht fuer Neutrales (das ist die
- * normale Karte). Genau so trennt die Referenz `.card` und `.card.coach`.
- *
- * Ohne Schatten und ohne Rand, wie jede Flaeche dieser App: Die Form erbt sie
- * aus `MaterialTheme.shapes`, die Farben aus dem `colorScheme` — hier steht
- * keine eigene Zahl und kein eigener Farbwert.
- *
- * @param eyebrow Absender der Karte. Vorgabe „Coach", weil das der Fall ist,
- *   fuer den es sie gibt.
- */
 @Composable
 fun CoachCard(
     modifier: Modifier = Modifier,
@@ -145,11 +115,10 @@ fun CoachCard(
  * ein Zehntel der Schriftgroesse; auf den 11 sp des `labelSmall`-Slots sind das
  * diese 1,1 sp.
  */
-private val EyebrowTracking = 1.1.sp
 
 /**
  * Luft ueber einer Kapitelmarke — sie trennt zwei Abschnitte und braucht
  * deshalb mehr Abstand nach oben als der [de.trailscape.app.ui.theme.CardGap]
  * zwischen zwei Karten desselben Abschnitts.
  */
-private val SectionEyebrowTopGap = 12.dp
+private val SectionEyebrowTopGap = 16.dp

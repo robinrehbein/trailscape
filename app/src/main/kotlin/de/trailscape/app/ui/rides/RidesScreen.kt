@@ -20,9 +20,6 @@ import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -36,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -46,6 +44,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
+import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.components.SettingsAction
@@ -247,52 +247,37 @@ private fun VerlaufHeader(
     var importMenuOpen by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            IconButton(onClick = onToggleSearch) {
-                Icon(
-                    imageVector = if (searchOpen) Icons.Outlined.SearchOff else Icons.Outlined.Search,
-                    contentDescription = if (searchOpen) "Suche schließen" else "Touren suchen",
-                )
-            }
-            Box {
-                IconButton(onClick = { importMenuOpen = true }) {
-                    Icon(Icons.Outlined.Add, contentDescription = "Touren importieren")
+        ScreenHeader(
+            title = "Verlauf",
+            actions = {
+                IconButton(onClick = onToggleSearch) {
+                    Icon(
+                        imageVector = if (searchOpen) Icons.Outlined.SearchOff else Icons.Outlined.Search,
+                        contentDescription = if (searchOpen) "Suche schließen" else "Touren suchen",
+                    )
                 }
-                ImportMenu(
-                    expanded = importMenuOpen,
-                    onDismiss = { importMenuOpen = false },
-                    onImportFile = onImportFile,
-                    onImportArchive = onImportArchive,
-                )
-            }
-            SettingsAction(onClick = onOpenSettings)
-        }
-        Text(
-            text = "Verlauf",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.padding(start = CardPadding),
+                Box {
+                    IconButton(onClick = { importMenuOpen = true }) {
+                        Icon(Icons.Outlined.Add, contentDescription = "Touren importieren")
+                    }
+                    ImportMenu(
+                        expanded = importMenuOpen,
+                        onDismiss = { importMenuOpen = false },
+                        onImportFile = onImportFile,
+                        onImportArchive = onImportArchive,
+                    )
+                }
+                SettingsAction(onClick = onOpenSettings)
+            },
         )
         // „Liste | Karte": Die Karte aller Spuren wohnt im Karten-Tab (echte
         // Grundkarte, Kacheln); „Karte" wechselt dorthin, ✕ kommt zurueck.
-        SingleChoiceSegmentedButtonRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = CardGap),
-        ) {
-            SegmentedButton(
-                selected = true,
-                onClick = {},
-                shape = SegmentedButtonDefaults.itemShape(0, 2),
-            ) { Text("Liste") }
-            SegmentedButton(
-                selected = false,
-                onClick = onShowMap,
-                shape = SegmentedButtonDefaults.itemShape(1, 2),
-            ) { Text("Karte") }
-        }
+        PillSegments(
+            options = listOf("Liste", "Karte"),
+            selectedIndex = 0,
+            onSelect = { if (it == 1) onShowMap() },
+            modifier = Modifier.padding(top = 8.dp),
+        )
         if (searchOpen) {
             // Wer die Lupe antippt, will tippen: Fokus (und damit Tastatur)
             // gleich ins Feld.

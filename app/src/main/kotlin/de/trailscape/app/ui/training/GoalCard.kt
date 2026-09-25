@@ -3,6 +3,7 @@ package de.trailscape.app.ui.training
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -202,21 +203,25 @@ fun GoalOverviewCard(
             modifier = Modifier.padding(CardPadding),
             verticalArrangement = Arrangement.spacedBy(CardGap),
         ) {
-            Row(verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f)) {
+            // Name und „Ändern" auf einer Linie; die Abschnittsueberschrift
+            // „Dein Ziel" steht wie auf „Heute" ueber der Karte.
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Dein Ziel",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = theme.onSurfaceVariant,
+                        text = goal.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f),
                     )
-                    Text(text = goal.name, style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        text = goalSummaryLine(goal),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = theme.onSurfaceVariant,
-                    )
+                    TextButton(
+                        onClick = onEdit,
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                    ) { Text("Ändern") }
                 }
-                TextButton(onClick = onEdit) { Text("Ändern") }
+                Text(
+                    text = goalSummaryLine(goal),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = theme.onSurfaceVariant,
+                )
             }
 
             // Die beiden Zeiten nebeneinander; IntrinsicSize.Min haelt die
@@ -232,10 +237,10 @@ fun GoalOverviewCard(
                 )
                 val target = goal.targetDurationMin
                 if (target != null) {
-                    TimeTile(label = "Dein Ziel", value = formatHoursMinutes(target), accent = true)
+                    TimeTile(label = "Zielzeit", value = formatHoursMinutes(target), accent = true)
                 } else {
                     TimeTile(
-                        label = "Dein Ziel",
+                        label = "Zielzeit",
                         value = "Zielzeit eintragen",
                         accent = true,
                         small = true,

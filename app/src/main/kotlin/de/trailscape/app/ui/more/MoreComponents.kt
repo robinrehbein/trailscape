@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.more
 
+import de.trailscape.app.ui.components.Eyebrow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -65,11 +66,11 @@ import de.trailscape.app.ui.theme.OneUiMotion
  */
 @Composable
 fun MoreGroupLabel(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.padding(start = CardPadding, bottom = 4.dp),
+    // Dieselbe Abschnittsueberschrift wie auf allen Screens (Fuehrung
+    // „Klartext"): Satzschreibung, halbfett, buendig mit dem Kartentext.
+    Eyebrow(
+        text = text,
+        modifier = modifier.padding(start = CardPadding, top = 8.dp, bottom = 4.dp),
     )
 }
 

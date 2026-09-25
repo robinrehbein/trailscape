@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.components
 
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -15,7 +18,7 @@ import androidx.compose.ui.unit.dp
  *
  * „geplante Route", „aus Health Connect", Fitnesslevel, Wochentyp: Marken,
  * die etwas *einordnen*, statt etwas zu tun. Als getoente Pille aus dem
- * small-Formen-Slot mit titleSmall-Beschriftung — und ausdruecklich kein
+ * small-Formen-Slot mit labelMedium-Beschriftung (12 sp, 24 dp hoch) — und ausdruecklich kein
  * Knopf: Ein deaktiviertes Bedienelement als Etikett waere ein falsches
  * Versprechen (und spricht bei 38 % Alpha fuer niemanden mehr lesbar).
  *
@@ -32,12 +35,19 @@ fun TagPill(
 ) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleSmall,
+        style = MaterialTheme.typography.labelMedium,
         color = contentColor,
         maxLines = 1,
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
             .background(containerColor)
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .heightIn(min = TagPillHeight)
+            .wrapContentHeight(Alignment.CenterVertically)
+            .padding(horizontal = TagPillPaddingH),
     )
 }
+
+
+/** Hoehe und Innenabstand der Pille — ueberall gleich (Fuehrung „Klartext"). */
+private val TagPillHeight = 24.dp
+private val TagPillPaddingH = 10.dp

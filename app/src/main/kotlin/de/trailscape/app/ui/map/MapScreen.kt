@@ -3843,10 +3843,10 @@ private const val DEFAULT_CAMERA_ZOOM_EPSILON = 0.05
 private fun MapLayersButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
-        modifier = modifier.size(44.dp),
+        modifier = modifier.size(MapCircleButtonSize),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shadowElevation = 4.dp,
+        shadowElevation = MapCircleButtonElevation,
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(Icons.Filled.Layers, contentDescription = "Karte, Kacheln und Offline")

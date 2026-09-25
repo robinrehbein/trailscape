@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.outlined.Info
 import de.trailscape.app.ui.components.NeutralButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
@@ -289,6 +290,7 @@ fun CurrentWeekCard(
     rides: List<RideInfo>,
     onPlanRoute: (TrainingSession) -> Unit,
     rideLoads: Map<String, Double> = emptyMap(),
+    headline: String? = null,
 ) {
     val theme = MaterialTheme.colorScheme
     val progress = weekSessionProgress(week, rides, rideLoads = rideLoads).associateBy { it.session }
@@ -297,8 +299,18 @@ fun CurrentWeekCard(
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
+            // Kopf der Karte: welche Planwoche das ist („Woche 1 von 9 ·
+            // Aufbau") — steht hier statt als ueberlange Abschnittsueberschrift.
+            if (headline != null) {
+                Text(
+                    text = headline,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = CardPadding, end = CardPadding, top = 14.dp, bottom = 10.dp),
+                )
+                HorizontalDivider(color = theme.outlineVariant, modifier = Modifier.padding(horizontal = CardPadding))
+            }
             week.sessions.forEachIndexed { i, session ->
-                if (i > 0) HorizontalDivider(color = theme.outlineVariant.copy(alpha = 0.5f))
+                if (i > 0) HorizontalDivider(color = theme.outlineVariant, modifier = Modifier.padding(horizontal = CardPadding))
                 val isToday = session in todays
                 val entry = progress[session]
                 val done = entry?.status == PlanSessionStatus.ERLEDIGT ||
@@ -420,11 +432,20 @@ fun TrainingPlanFeasibilityCard(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Kein gefuellter Knopf: Der eine gefuellte Knopf dieses
-                // Screens gehoert dem Ziel bzw. dem Leerzustand.
-                NeutralButton(onClick = onAdjustGoal) { Text("Ziel anpassen") }
+            Spacer(modifier = Modifier.height(8.dp))
+            // Zwei Textknoepfe rechtsbuendig, wie in einem Dialog: kein
+            // gefuellter Knopf (der gehoert dem Ziel), und keine helle
+            // Flaeche, die auf der weissen Karte unsichtbar waere.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    onClick = onAdjustGoal,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) { Text("Ziel anpassen") }
                 TextButton(onClick = onAcknowledge) { Text("Verstanden") }
             }
         }

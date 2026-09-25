@@ -58,6 +58,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.OneUiDialog
@@ -302,16 +303,12 @@ internal fun EffortPill(effort: RideEffort, modifier: Modifier = Modifier) {
         RideEffort.MITTEL -> colors.surfaceContainerHigh to colors.onSurfaceVariant
         RideEffort.HART -> signals.warning.copy(alpha = 0.15f) to signals.warning
     }
-    Text(
+    // Dieselbe Pille wie ueberall (TagPill), nur mit Belastungsfarbe.
+    TagPill(
         text = effort.label,
-        style = MaterialTheme.typography.labelLarge,
-        color = content,
-        maxLines = 1,
-        modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(container)
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-            .semantics { contentDescription = "Belastung: ${effort.label}" },
+        containerColor = container,
+        contentColor = content,
+        modifier = modifier.semantics { contentDescription = "Belastung: ${effort.label}" },
     )
 }
 

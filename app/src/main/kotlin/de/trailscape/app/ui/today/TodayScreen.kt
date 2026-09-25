@@ -35,6 +35,7 @@ import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.SectionEyebrow
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
@@ -232,7 +233,15 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                item(key = "kopf") { TodayHeader(now) }
+                item(key = "kopf") {
+                    ScreenHeader(
+                        title = "Heute",
+                        overline = weekdayDateFormat.format(now),
+                        actions = {
+                            SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
+                        },
+                    )
+                }
 
                 item(key = "hero") {
                     HeroCard(
@@ -296,18 +305,6 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     }
                 }
             }
-
-            // Das ⚙ in den Mehr-Bereich. Diese Seite hat bewusst keine
-            // Kopfzeile, also schwebt es oben rechts auf Hoehe der
-            // Datumszeile. Innenabstand = [ScreenPadding] abzueglich der 12 dp
-            // Beruehrungsrand eines IconButton — so steht das Symbol auf der
-            // Kante des Karteninhalts und behaelt die volle Trefferflaeche.
-            SettingsAction(
-                onClick = { appViewModel.requestTab(AppTab.MORE) },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(ScreenPadding - 12.dp),
-            )
         }
     }
 
@@ -332,37 +329,6 @@ fun TodayScreen(appViewModel: AppViewModel) {
         )
     }
 }
-
-/**
- * Der Kopf: Wochentag und Datum als ruhige Zeile, darunter gross „Heute" —
- * die Reihenfolge der Vorlage. Rechts bleibt die Flaeche des schwebenden ⚙
- * frei, damit lange Uebersetzungen nicht unter dem Symbol verschwinden.
- */
-@Composable
-private fun TodayHeader(now: LocalDateTime) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = CardPadding, end = SettingsActionWidth),
-    ) {
-        Text(
-            text = weekdayDateFormat.format(now),
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = "Heute",
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.semantics { heading() },
-        )
-    }
-}
-
-/**
- * Breite, die der Kopf rechts fuer das schwebende ⚙ freihaelt — die
- * Trefferflaeche eines [androidx.compose.material3.IconButton].
- */
-private val SettingsActionWidth = 48.dp
 
 /**
  * Erststart: noch keine einzige Tour.

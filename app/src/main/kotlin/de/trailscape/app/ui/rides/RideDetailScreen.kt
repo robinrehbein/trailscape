@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
@@ -211,15 +212,6 @@ internal fun RideDetailScreen(
         // Die Insets hat der Wirt (Dialogfenster in `RidesScreen.kt`) oben und
         // seitlich bereits aufgeloest.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            DetailTopBar(
-                onBack = onBack,
-                onShowOnMap = onShowOnMap,
-                onRename = onRename,
-                onShare = onShare,
-                onDelete = onDelete,
-            )
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
         Box(
@@ -236,19 +228,27 @@ internal fun RideDetailScreen(
                     .padding(screenContentPadding()),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
-                Column(modifier = Modifier.padding(horizontal = CardPadding)) {
-                    Text(text = ride.name, style = MaterialTheme.typography.headlineLarge)
-                    Text(
-                        text = rideDetailDateLine(
-                            at = localOfEpochMs(ride.createdAt),
-                            today = LocalDate.now(),
-                            planned = ride.planned,
-                            fromHealthConnect = ride.id.startsWith("hc-"),
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                // Dieselbe Kopfzeile wie ueberall (Fuehrung „Klartext"): das
+                // Datum als ruhige Zeile ueber dem Titel, wie auf „Heute".
+                ScreenHeader(
+                    title = ride.name,
+                    overline = rideDetailDateLine(
+                        at = localOfEpochMs(ride.createdAt),
+                        today = LocalDate.now(),
+                        planned = ride.planned,
+                        fromHealthConnect = ride.id.startsWith("hc-"),
+                    ),
+                    backLabel = "Verlauf",
+                    onBack = onBack,
+                    actions = {
+                        DetailMenu(
+                            onShowOnMap = onShowOnMap,
+                            onRename = onRename,
+                            onShare = onShare,
+                            onDelete = onDelete,
+                        )
+                    },
+                )
 
                 if (ride.points.isNotEmpty()) {
                     RideMapCard(ride = ride, style = mapStyle)
@@ -287,7 +287,10 @@ internal fun RideDetailScreen(
 
                 val elevation = curves?.elevation.orEmpty()
                 if (elevation.size >= 2) {
-                    DetailSection(title = "Höhenprofil") {
+                    // Ohne eigene Abschnittsueberschrift: Das Hoehenprofil
+                    // traegt seinen Titel selbst, eine zweite „Höhenprofil"-
+                    // Zeile darueber war doppelt.
+                    run {
                         DetailCard {
                             // Wiederverwendung statt Nachbau: dieselbe
                             // Darstellung wie auf dem Karten-Screen, die
@@ -325,61 +328,37 @@ internal fun RideDetailScreen(
 }
 
 /**
- * Der Kopf der Detailansicht (Zieldesign `.head` mit `.back`): links
- * „‹ Verlauf" als Textknopf — er sagt, wohin es zurueckgeht —, rechts ⋮ mit
- * den vier Handgriffen, die frueher im Menue jeder Listenzeile lagen.
+ * Das ⋮ der Detailansicht mit den vier Handgriffen, die frueher im Menue
+ * jeder Listenzeile lagen. Steht rechts in der gemeinsamen Kopfzeile.
  */
 @Composable
-private fun DetailTopBar(
-    onBack: () -> Unit,
+private fun DetailMenu(
     onShowOnMap: () -> Unit,
     onRename: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(
-            onClick = onBack,
-            colors = ButtonDefaults.textButtonColors(
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ),
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                modifier = Modifier.size(ButtonDefaults.IconSize),
-            )
-            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Verlauf")
+    Box {
+        IconButton(onClick = { menuOpen = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
         }
-        Spacer(Modifier.weight(1f))
-        Box {
-            IconButton(onClick = { menuOpen = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DetailMenuItem("Auf der Karte zeigen", Icons.Filled.Map) {
+                menuOpen = false
+                onShowOnMap()
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                DetailMenuItem("Auf der Karte zeigen", Icons.Filled.Map) {
-                    menuOpen = false
-                    onShowOnMap()
-                }
-                DetailMenuItem("Umbenennen", Icons.Filled.Edit) {
-                    menuOpen = false
-                    onRename()
-                }
-                DetailMenuItem("Als GPX teilen", Icons.Filled.Share) {
-                    menuOpen = false
-                    onShare()
-                }
-                DetailMenuItem("Löschen", Icons.Filled.Delete) {
-                    menuOpen = false
-                    onDelete()
-                }
+            DetailMenuItem("Umbenennen", Icons.Filled.Edit) {
+                menuOpen = false
+                onRename()
+            }
+            DetailMenuItem("Als GPX teilen", Icons.Filled.Share) {
+                menuOpen = false
+                onShare()
+            }
+            DetailMenuItem("Löschen", Icons.Filled.Delete) {
+                menuOpen = false
+                onDelete()
             }
         }
     }

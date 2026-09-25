@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -28,9 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
@@ -39,10 +40,9 @@ import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
-import de.trailscape.app.ui.components.OneUiLargeTopAppBar
 import de.trailscape.app.ui.components.SectionEyebrow
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SettingsAction
-import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.planFeasibilityIdentityKey
@@ -184,7 +184,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
 
-    val scrollBehavior = oneUiTopAppBarScrollBehavior()
     // Passende Runde zu einer Einheit bauen; der Wunsch wechselt auf die Karte.
     val onPlanRoute: (TrainingSession) -> Unit = { session ->
         appViewModel.requestRouteGeneration(
@@ -199,17 +198,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     Scaffold(
         // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
         // aufgeloest und als Padding an den NavHost gegeben.
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            OneUiLargeTopAppBar(
-                title = "Training",
-                scrollBehavior = scrollBehavior,
-                actions = {
-                    SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
-                },
-            )
-        },
         snackbarHost = {
             // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
             // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).
@@ -235,6 +224,14 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 contentPadding = screenContentPadding(),
                 verticalArrangement = Arrangement.spacedBy(CardGap),
             ) {
+                item(key = "kopf") {
+                    ScreenHeader(
+                        title = "Training",
+                        actions = {
+                            SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
+                        },
+                    )
+                }
                 if (rides.isEmpty()) {
                     item(key = "empty") {
                         TrainingEmptyState(
@@ -257,6 +254,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 // ---------------------------------------------------- Dein Ziel
                 val shownPlan = displayPlan
                 if (shownPlan != null && prediction != null) {
+                    item(key = "sec-goal") { SectionEyebrow("Dein Ziel") }
                     item(key = "goal") {
                         GoalOverviewCard(
                             goal = shownPlan.goal,
@@ -292,10 +290,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 if (shownPlan != null) {
                     currentWeek?.let { week ->
                         item(key = "sec-week") {
-                            SectionEyebrow(
-                                "Diese Woche im Plan · Woche ${week.index + 1} von " +
-                                    "${shownPlan.weeks.size}, ${weekKindLabels.getValue(week.kind)}",
-                            )
+                            SectionEyebrow("Diese Woche")
                         }
                         item(key = "week-now") {
                             CurrentWeekCard(
@@ -304,6 +299,8 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                                 rides = rides,
                                 onPlanRoute = onPlanRoute,
                                 rideLoads = rideLoadValues,
+                                headline = "Woche ${week.index + 1} von ${shownPlan.weeks.size} · " +
+                                    weekKindLabels.getValue(week.kind),
                             )
                         }
                     }
@@ -404,11 +401,13 @@ private fun UnconfirmedProfileNotice(onOpenProfile: () -> Unit) {
     NoticeBox(
         icon = Icons.Filled.Info,
         color = LocalSignalColors.current.caution,
-        text = "Alter und Gewicht fehlen – bis dahin rechnen wir mit " +
+        title = "Profil eintragen",
+        text = "Ohne Alter und Gewicht rechnen wir mit " +
             "${defaultTrainingProfile.ageYears} Jahren und " +
-            "${defaultTrainingProfile.weightKg.toInt()} kg, die Zahlen hier sind grob. " +
-            "Tippe hier, um sie einzutragen.",
-        modifier = Modifier.clickable(onClick = onOpenProfile),
+            "${defaultTrainingProfile.weightKg.toInt()} kg — die Zahlen sind grob.",
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(onClick = onOpenProfile),
     )
 }
 
