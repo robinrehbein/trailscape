@@ -58,6 +58,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
@@ -151,6 +153,7 @@ import de.trailscape.app.ui.rides.historyTotals
 import java.io.File
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -2716,8 +2719,24 @@ fun MapScreen(appViewModel: AppViewModel) {
             overlayBottomInset -
             overlayHeaderHeight -
             OverlayScreenPadding * 2 -
-            OverlayGap
+            OverlayGap -
+            SheetBottomGap
         ).coerceAtLeast(MinOverlaySheetBudget)
+
+    // Das Erkunden-Blatt darf ganz aufgezogen bis oben reichen: Die Knoepfe
+    // darueber blenden dabei aus ([exploreReveal]), ihr Platz gehoert dann dem
+    // Blatt. Oben bleibt nur der Bildschirmrand frei.
+    val exploreExpandedHeight = (
+        screenHeight -
+            overlayTopInset -
+            overlayBottomInset -
+            OverlayScreenPadding -
+            OverlayGap -
+            SheetBottomGap
+        ).coerceAtLeast(MinOverlaySheetBudget)
+    // Wie weit das Erkunden-Blatt aufgezogen ist (0..1) — nur in der
+    // Layout-Phase gelesen, damit das Ziehen keine Neukomposition ausloest.
+    var exploreReveal by remember { mutableFloatStateOf(0f) }
 
     // Was der Peek der Rundenwahl unabhaengig von der Vorschlagsliste braucht —
     // Griff, Titelzeile, die beiden Zielzeilen, „Übernehmen" und die Raender.
@@ -3007,8 +3026,25 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // Eine Konstante von Hand kannte die Karte nicht, die hier
                     // je nach Zustand steht (Aufzeichnung, Tour, Ort), und lag
                     // bei grosser Schrift ohnehin daneben.
+                    // Beim Aufziehen des Erkunden-Blatts schrumpft der Kopf im
+                    // selben Mass, wie das Blatt waechst, und blendet aus —
+                    // so passt die Spalte in jedem Moment auf den Bildschirm,
+                    // und ganz oben gehoert der Platz dem Blatt.
+                    val fadeHeader = dockedSheet == DockedSheet.ERKUNDEN
                     Column(
                         modifier = Modifier
+                            .layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints)
+                                val f = if (fadeHeader) exploreReveal else 0f
+                                val height = (placeable.height * (1f - f)).roundToInt()
+                                layout(placeable.width, height) {
+                                    if (f < 0.99f) {
+                                        placeable.placeWithLayer(0, height - placeable.height) {
+                                            alpha = (1f - f * 2f).coerceIn(0f, 1f)
+                                        }
+                                    }
+                                }
+                            }
                             .fillMaxWidth()
                             .padding(horizontal = OverlayScreenPadding)
                             .padding(
@@ -3377,8 +3413,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 appViewModel.select(route.id)
                             },
                             onOpenOfflineMaps = { showStyleSheet = true },
-                            bodyMaxHeight = (overlaySheetBudget - ExplorePeekFixedHeight)
-                                .coerceAtLeast(MinSheetBodyHeight),
+                            expandedHeight = exploreExpandedHeight,
+                            onRevealFraction = { exploreReveal = it },
                             bottomInset = sheetBottomInset,
                         )
                     }
@@ -4044,7 +4080,7 @@ private const val SEARCH_RESULTS_MAX_HEIGHT_FACTOR = 0.3f
 private val OverlayFloatingButtonsHeight = 136.dp
 
 /**
- * Was die drei Blaetter jeweils **vor** ihrem Koerper verbrauchen. Das
+ * Was die Blaetter jeweils **vor** ihrem Koerper verbrauchen. Das
  * Blatt-Budget (`overlaySheetBudget` im Rumpf) minus diesen Wert ist der
  * Deckel, gegen den der Koerper gemessen wird — und damit die Hoehe, ab der er
  * zu scrollen anfaengt statt abgeschnitten zu werden.
@@ -4058,13 +4094,6 @@ private val OverlayFloatingButtonsHeight = 136.dp
  * „Übernehmen" (48) und die Raender (~20).
  */
 private val GenerationPeekFixedHeight = 184.dp
-
-/**
- * Erkunden: Griff (24), Suchfeld (~56), Abstand (12), die beiden Knoepfe (44)
- * und der untere Rand (12) — siehe `ExploreSheet.kt`. Deckelt die Liste der
- * gespeicherten Routen und Orte im hochgewischten Blatt.
- */
-private val ExplorePeekFixedHeight = 150.dp
 
 /**
  * Planung: Griff (24) und die eine Statuszeile (`heightIn(min = 48.dp)`) —
