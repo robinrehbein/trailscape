@@ -51,18 +51,21 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   wieder importieren
 
 **Karte & Planung**
-- MapLibre-Karte mit fünf Kachelstilen zur Auswahl (Straßenkarte, CyclOSM,
-  OpenStreetMap, OpenTopoMap, Satellit) — umschaltbar auf der Karte und im
-  Mehr-Tab, ohne API-Schlüssel
-- Routenplanung mit Zielsuche über Nominatim, Fahrradtyp (Gravel, Rennrad) und
+- MapLibre-Karte mit sechs Kartenstilen zur Auswahl (Straßenkarte, CyclOSM,
+  OpenStreetMap, OpenTopoMap, Satellit, Vektorkarte von OpenFreeMap) —
+  umschaltbar auf der Karte und im Mehr-Tab, ohne API-Schlüssel
+- Routenplanung mit Zielsuche über Nominatim (gesucht wird beim Absenden,
+  nicht beim Tippen), Fahrradtyp (Gravel, Rennrad) und
   Wegpräferenz (Gemischt, Asphalt, Radwege, kürzester Weg) — daraus wählt die
   App das passende BRouter-Profil
 - Höhenprofil der geplanten Route
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
 - Offline-Karten: Regionen über MapLibres Offline-Manager herunterladen
-  (max. 250 Kacheln pro Vorgang, der sichtbare Ausschnitt darf höchstens
-  150 km Kantenlänge haben) und im Mehr-Tab verwalten
+  (nur mit der Vektorkarte von OpenFreeMap — die übrigen Kachelserver
+  verbieten Vorab-Downloads; max. 250 Kacheln pro Vorgang, der sichtbare
+  Ausschnitt darf höchstens 150 km Kantenlänge haben) und im Mehr-Tab
+  verwalten
 
 **Training**
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
@@ -300,8 +303,8 @@ Abo weiterverkauft, und sie ist die üblichste Lizenz für eine spätere Aufnahm
 bei F-Droid.
 
 Die Lizenzen der verwendeten Bibliotheken und Datenquellen (MapLibre,
-AndroidX/Compose, Kotlin, OkHttp, OpenStreetMap, CARTO, CyclOSM, OpenTopoMap,
-Esri, BRouter, Nominatim) stehen in der App unter
+AndroidX/Compose, Kotlin, OkHttp, OpenStreetMap, FOSSGIS, CyclOSM, OpenTopoMap,
+Esri, OpenFreeMap/OpenMapTiles, BRouter, Nominatim) stehen in der App unter
 **Mehr → Über → Open-Source-Lizenzen** und im Quelltext in
 [`app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt`](app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt).
 

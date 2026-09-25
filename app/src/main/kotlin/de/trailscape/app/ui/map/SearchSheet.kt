@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +42,12 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.GeoResult
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import kotlinx.coroutines.CancellationException
 
 /**
  * # Das Suchblatt — die Ortssuche als **kurze Besorgung** aus einem anderen Blatt
@@ -83,6 +91,17 @@ import de.trailscape.core.GeoResult
  * steht — wer die Suchzeile antippt, will tippen, nicht erst noch das Feld selbst
  * treffen.
  *
+ * ## Gesucht wird erst beim Absenden
+ * Die Ortssuche fragt Nominatim, und dessen Nutzungsrichtlinie verbietet
+ * Autovervollstaendigung (https://operations.osmfoundation.org/policies/nominatim/:
+ * „Auto-complete search … is not yet supported … you must not implement
+ * such a service on the client side using the API"). Frueher lief die Suche
+ * nach einer kurzen Tipp-Pause von selbst los — das ist genau dieses
+ * Muster, nur entprellt. Jetzt fragt die App erst, wenn die Nutzerin
+ * absendet: Suchtaste der Tastatur ([onSearch]) oder die Zeile
+ * „„…" suchen" unter dem Feld ([PlaceResults]), damit das Absenden nicht
+ * nur auf der Tastatur zu finden ist.
+ *
  * ## „Zuletzt gesucht" statt Treffer, wenn das Feld leer ist
  * Dasselbe Muster wie Google Maps: Ein frisch geoeffnetes, leeres Suchfeld
  * zeigt die zuletzt gewaehlten Orte statt einer leeren Flaeche — sobald
@@ -95,6 +114,7 @@ import de.trailscape.core.GeoResult
 internal fun SearchSheet(
     query: String,
     onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
     busy: Boolean,
     error: String?,
     results: List<GeoResult>,
@@ -125,6 +145,7 @@ internal fun SearchSheet(
                 onValueChange = onQueryChange,
                 placeholder = "Ort, Stadt oder Straße",
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
                 trailingIcon = {
                     when {
                         busy -> CircularProgressIndicator(
@@ -142,10 +163,12 @@ internal fun SearchSheet(
 
             PlaceResults(
                 query = query,
+                busy = busy,
                 error = error,
                 results = results,
                 history = history,
                 onSelect = onSelect,
+                onSearch = onSearch,
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             )
         }
@@ -168,6 +191,11 @@ internal fun SearchSheet(
  * Der **Verlauf erscheint sofort**, sobald das Feld leer und fokussiert ist,
  * nicht erst nach dem ersten Zeichen: Wer die Suche oeffnet, hat meist ein
  * Ziel im Kopf, das er schon einmal gesucht hat. Ein Tipp statt acht.
+ *
+ * Steht Text im Feld, aber (noch) kein Treffer darunter, bietet die Liste
+ * das Absenden als eigene Zeile an („„Tübingen" suchen"): Gesucht wird nur
+ * auf Wunsch (siehe Datei-KDoc), und die Suchtaste der Tastatur allein waere
+ * ein Weg, den nicht jede Tastatur gleich deutlich zeigt.
  */
 @Composable
 internal fun PlaceResults(
@@ -176,7 +204,9 @@ internal fun PlaceResults(
     results: List<GeoResult>,
     history: List<Place>,
     onSelect: (Place) -> Unit,
+    onSearch: () -> Unit,
     modifier: Modifier = Modifier,
+    busy: Boolean = false,
 ) {
     Column(modifier = modifier) {
         if (error != null) {
@@ -211,6 +241,25 @@ internal fun PlaceResults(
                     )
                 }
             }
+
+            // Zu kurz fuer eine Suche: Statt einer Zeile, die beim Antippen
+            // nur die Mindestlaenge anmahnt, gleich der Hinweis selbst.
+            query.isNotBlank() && placeSearchQueryOrNull(query) == null -> Text(
+                text = "Mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben, dann suchen.",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Nach einer Meldung (keine Treffer, Netzfehler) steht dieselbe
+            // Aktion als „erneut" da — das sagt, dass Tippen nichts Neues
+            // ausloest, ein Tipp hier aber schon.
+            query.isNotBlank() && !busy -> SheetRow(
+                title = if (error != null) "Erneut suchen" else "„${query.trim()}“ suchen",
+                subtitle = if (error != null) "„${query.trim()}“" else "Ortssuche über OpenStreetMap",
+                icon = Icons.Filled.Search,
+                onClick = onSearch,
+            )
 
             query.isBlank() -> Text(
                 text = "Suche nach einem Ort, einer Stadt oder einer Adresse.",
@@ -288,6 +337,126 @@ internal fun SheetRow(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * So viele Zeichen braucht eine Ortssuche mindestens. Kuerzeres liefert bei
+ * Nominatim nur Rauschen und waere eine Anfrage fuer nichts.
+ */
+internal const val MIN_PLACE_SEARCH_LENGTH = 3
+
+/**
+ * Was aus dem Feldinhalt [raw] an Nominatim geht: getrimmt, oder `null`, wenn
+ * es zu kurz ist ([MIN_PLACE_SEARCH_LENGTH]).
+ */
+internal fun placeSearchQueryOrNull(raw: String): String? =
+    raw.trim().takeIf { it.length >= MIN_PLACE_SEARCH_LENGTH }
+
+/**
+ * Eine abgesendete Ortssuche. Die laufende Nummer [seq] macht jedes Absenden
+ * zu einem neuen Schluessel fuer [PlaceSearchEffect] — auch dann, wenn
+ * derselbe Text nach einem Netzfehler noch einmal geschickt wird.
+ */
+internal data class PlaceSearchSubmission(val query: String, val seq: Int)
+
+/**
+ * Zustand der Ortssuche im Karten-Screen: Feldtext, letzte Abgabe, Treffer,
+ * Meldung.
+ *
+ * Steht als eigener Halter hier (und nicht als fuenf lose Variablen im
+ * Screen), damit die Regel „Tippen fragt nie, nur Absenden" an einer Stelle
+ * haengt, die ein Test ohne den ganzen Karten-Screen erreicht
+ * (`PlaceSearchTest`). Nur [changeQuery] aendert den Text, und es setzt
+ * dabei die Abgabe zurueck; nur [submit] erzeugt eine neue.
+ */
+@Stable
+internal class PlaceSearchState(initialQuery: String = "") {
+    var query by mutableStateOf(initialQuery)
+        private set
+    var submission by mutableStateOf<PlaceSearchSubmission?>(null)
+        private set
+    var results by mutableStateOf<List<GeoResult>>(emptyList())
+        internal set
+    var busy by mutableStateOf(false)
+        internal set
+    var error by mutableStateOf<String?>(null)
+        internal set
+
+    /**
+     * Neuer Text im Suchfeld — ohne jede Anfrage. Alte Treffer und Meldungen
+     * verschwinden, weil sie zu einem anderen Text gehoeren; eine noch
+     * laufende Suche bricht ab, weil ihr Schluessel ([submission]) wegfaellt.
+     */
+    fun changeQuery(text: String) {
+        query = text
+        submission = null
+        results = emptyList()
+        error = null
+        busy = false
+    }
+
+    /**
+     * Schickt den Feldinhalt ab. Liefert `false` (mit Meldung), wenn er zu
+     * kurz ist ([MIN_PLACE_SEARCH_LENGTH]) — dann geht nichts an Nominatim.
+     */
+    fun submit(): Boolean {
+        val trimmed = placeSearchQueryOrNull(query)
+        if (trimmed == null) {
+            error = "Bitte mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben."
+            return false
+        }
+        submission = PlaceSearchSubmission(trimmed, (submission?.seq ?: 0) + 1)
+        return true
+    }
+
+    companion object {
+        /** Ueber Drehen hinweg bleibt nur der Text; Treffer holt ein neues Absenden. */
+        val Saver: Saver<PlaceSearchState, String> = Saver(
+            save = { it.query },
+            restore = { PlaceSearchState(it) },
+        )
+    }
+}
+
+/**
+ * Fuehrt die Ortssuche aus — **nur** fuer eine Abgabe
+ * ([PlaceSearchState.submission]), nie fuer den blossen Feldtext.
+ *
+ * Frueher hing dieser Effekt am Suchtext und fragte nach einer Tipp-Pause von
+ * selbst; das ist die Autovervollstaendigung, die Nominatim verbietet (siehe
+ * Datei-KDoc). Der Schluessel ist deshalb ausschliesslich die Abgabe: Wird
+ * weitergetippt, setzt [PlaceSearchState.changeQuery] sie zurueck, und der
+ * Schluesselwechsel bricht eine noch laufende Anfrage ab. `PlaceSearchTest`
+ * haelt genau das fest — wer hier den Text als Schluessel eintraegt, bekommt
+ * einen roten Test.
+ *
+ * [search] ist die eigentliche Anfrage (im Screen: Nominatim ueber
+ * `searchPlaces`); Fehler daraus landen als Meldung in [state].
+ */
+@Composable
+internal fun PlaceSearchEffect(
+    state: PlaceSearchState,
+    maxResults: Int,
+    search: suspend (String) -> List<GeoResult>,
+) {
+    val submission = state.submission
+    LaunchedEffect(state, submission) {
+        val query = submission?.query ?: return@LaunchedEffect
+        state.busy = true
+        state.error = null
+        val result = runCatching { search(query) }
+        if (result.exceptionOrNull() is CancellationException) return@LaunchedEffect
+        result
+            .onSuccess { hits ->
+                state.results = hits.take(maxResults)
+                state.error = if (hits.isEmpty()) "Keine Treffer gefunden." else null
+            }
+            .onFailure {
+                state.results = emptyList()
+                state.error = it.message?.takeIf(String::isNotBlank) ?: "Ortssuche fehlgeschlagen."
+            }
+        state.busy = false
     }
 }
 

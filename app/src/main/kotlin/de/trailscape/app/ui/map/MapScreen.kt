@@ -34,6 +34,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,12 +69,16 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
@@ -100,7 +105,7 @@ import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
-import de.trailscape.app.ui.rememberTodayRoute
+import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.M3Transitions
 import androidx.compose.animation.AnimatedContent
@@ -541,10 +546,10 @@ fun MapScreen(appViewModel: AppViewModel) {
     // `openPlaceSearch`). Die Ortssuche des Erkunden-Blatts laeuft dort an Ort
     // und Stelle und haengt an `exploreSearching`.
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<GeoResult>>(emptyList()) }
-    var searchBusy by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
+    // Suchtext, Abgabe, Treffer und Meldung in einem Halter (`SearchSheet.kt`):
+    // Nur so ist per Test gesichert, dass Tippen keine Anfrage ausloest.
+    val placeSearch = rememberSaveable(saver = PlaceSearchState.Saver) { PlaceSearchState() }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     /**
      * Ob das Suchfeld der eingeklappten Blatt-Stufe gerade den Fokus hat — und
@@ -570,7 +575,9 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
     // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
     var historyMode by rememberSaveable { mutableStateOf(false) }
-    val todayRoute = rememberTodayRoute(appViewModel)
+    // Dasselbe Angebot wie „Heute" und der Losfahren-Dialog (siehe
+    // [decideToday]): am Ruhetag die lockere Runde, nie die Trainingsrunde.
+    val todayOffer = rememberTodayDecision(appViewModel).offer
 
     // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
     // (siehe `PlaceCard.kt`). Ersetzt den fruehreren `searchMarker: Waypoint?`:
@@ -920,8 +927,33 @@ fun MapScreen(appViewModel: AppViewModel) {
         controller.moveTo(position.latitude, position.longitude, minZoom = AUTO_LOCATION_ZOOM)
     }
 
+    // Die Live-Linie folgt dem Repository direkt und nicht [livePoints]: Ihr
+    // GeoJSON waechst mit jeder Sekunde der Fahrt (bei 20.000 Punkten rund
+    // 400 KB) und wird deshalb auf Dispatchers.Default gebaut, hoechstens
+    // einmal je [LIVE_TRACK_MIN_INTERVAL_MS]. Ein StateFlow-Sammler ist von
+    // Haus aus „conflated": Wer noch baut oder wartet, bekommt danach nur den
+    // neuesten Stand, nie eine Warteschlange alter Listen. Und weil die Folge
+    // streng nacheinander laeuft, kann nach dem Stopp kein verspaeteter
+    // Aufbau die leere Liste wieder ueberschreiben — sie ist immer die letzte.
+    // Das Setzen der Quelle bleibt auf Main (nach withContext zurueck).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(controller, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            RecordingRepository.points.collect { points ->
+                if (points.size < 2) {
+                    // Leeren sofort und ohne Pause: Nach dem Stopp soll die
+                    // rote Linie nicht noch eine Sekunde stehen bleiben.
+                    controller.setLiveTrackGeoJson(EMPTY_FEATURES)
+                    return@collect
+                }
+                val json = withContext(Dispatchers.Default) { lineFeatureCollection(points) }
+                controller.setLiveTrackGeoJson(json)
+                delay(LIVE_TRACK_MIN_INTERVAL_MS)
+            }
+        }
+    }
+
     LaunchedEffect(controller, livePoints.size, followMe) {
-        controller.setLiveTrack(livePoints)
         // Wer die Karte selbst verschoben hat, will sie dort haben — auch
         // waehrend der Aufzeichnung. Der Positions-Knopf holt sie zurueck.
         if (!followMe) return@LaunchedEffect
@@ -1062,32 +1094,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // --------------------------------------------------------------- Ortssuche
-    LaunchedEffect(searchQuery) {
-        val query = searchQuery.trim()
-        if (query.length < MIN_SEARCH_LENGTH) {
-            searchResults = emptyList()
-            searchError = null
-            searchBusy = false
-            return@LaunchedEffect
-        }
-        // Entprellen: erst tippen lassen, dann fragen (Nominatim-Richtlinien).
-        delay(SEARCH_DEBOUNCE_MS)
-        searchBusy = true
-        searchError = null
-        val result = withContext(Dispatchers.IO) {
-            runCatching { searchPlaces(query, AppServices.httpClient) }
-        }
-        result
-            .onSuccess { hits ->
-                searchResults = hits.take(MAX_SEARCH_RESULTS)
-                searchError = if (hits.isEmpty()) "Keine Treffer gefunden." else null
-            }
-            .onFailure {
-                searchResults = emptyList()
-                searchError = it.message?.takeIf(String::isNotBlank) ?: "Ortssuche fehlgeschlagen."
-            }
-        searchBusy = false
-    }
+    // Laeuft nur beim Absenden ([submitSearch]); die Regeln dazu stehen an
+    // [PlaceSearchEffect] und sind dort per Test abgesichert.
+    PlaceSearchEffect(
+        state = placeSearch,
+        maxResults = MAX_SEARCH_RESULTS,
+        search = { query -> withContext(Dispatchers.IO) { searchPlaces(query, AppServices.httpClient) } },
+    )
 
     // -------------------------------------------------------------- Navigation
     LaunchedEffect(navTarget, isRecording) {
@@ -1677,6 +1690,18 @@ fun MapScreen(appViewModel: AppViewModel) {
         waypoints = waypoints + Waypoint(lat, lon)
     }
 
+    /** Neuer Text im Suchfeld — ohne jede Anfrage (siehe [PlaceSearchState.changeQuery]). */
+    fun changeSearchQuery(text: String) = placeSearch.changeQuery(text)
+
+    /**
+     * Schickt den Feldinhalt an die Ortssuche — ausgeloest von der
+     * Suchtaste der Tastatur oder der Zeile „„…" suchen" unter dem Feld.
+     * Die Tastatur geht dabei zu, damit die Treffer Platz haben.
+     */
+    fun submitSearch() {
+        if (placeSearch.submit()) keyboardController?.hide()
+    }
+
     /**
      * Oeffnet das **modale** Suchblatt als reinen Ortswaehler.
      *
@@ -1694,9 +1719,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun openPlaceSearch(onPicked: (Place) -> Unit) {
         searchPickerCallback = onPicked
-        searchQuery = ""
-        searchResults = emptyList()
-        searchError = null
+        changeSearchQuery("")
         searchOpen = true
     }
 
@@ -1717,9 +1740,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun endExploreSearch() {
         exploreSearching = false
-        searchQuery = ""
-        searchResults = emptyList()
-        searchError = null
+        changeSearchQuery("")
         focusManager.clearFocus()
     }
 
@@ -3190,24 +3211,25 @@ fun MapScreen(appViewModel: AppViewModel) {
                         Spacer(Modifier.height(OverlayGap))
                         ExploreSheet(
                             searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
-                            searchQuery = searchQuery,
-                            onSearchQueryChange = { searchQuery = it },
+                            searchQuery = placeSearch.query,
+                            onSearchQueryChange = ::changeSearchQuery,
+                            onSubmitSearch = ::submitSearch,
                             searching = exploreSearching,
                             onSearchingChange = { focused ->
                                 if (focused) exploreSearching = true
                             },
                             onEndSearch = ::endExploreSearch,
-                            searchBusy = searchBusy,
-                            searchError = searchError,
-                            searchResults = searchResults,
+                            searchBusy = placeSearch.busy,
+                            searchError = placeSearch.error,
+                            searchResults = placeSearch.results,
                             searchHistory = placeHistory,
                             onSelectPlace = { place ->
                                 endExploreSearch()
                                 onPlaceChosen(place)
                             },
-                            todayRouteKm = todayRoute.target?.distanceKm,
+                            todayOffer = todayOffer,
                             onTodayRoute = {
-                                todayRoute.target?.let { appViewModel.requestRouteGeneration(it) }
+                                todayOffer?.let { appViewModel.requestRouteGeneration(it.target) }
                             },
                             onRoundTripHere = { openRoundTripSetup(null) },
                             expanded = exploreSheetExpanded,
@@ -3235,11 +3257,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ----------------------------------------------------------------- Dialoge
     if (searchOpen) {
         SearchSheet(
-            query = searchQuery,
-            onQueryChange = { searchQuery = it },
-            busy = searchBusy,
-            error = searchError,
-            results = searchResults,
+            query = placeSearch.query,
+            onQueryChange = ::changeSearchQuery,
+            onSearch = ::submitSearch,
+            busy = placeSearch.busy,
+            error = placeSearch.error,
+            results = placeSearch.results,
             history = placeHistory,
             onSelect = ::onPlaceChosen,
             onDismiss = ::closeSearchSheet,
@@ -3262,6 +3285,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                 showStyleSheet = false
                 startDownload()
             },
+            // Ohne Schliessen: Das Blatt zeigt danach sofort den jetzt
+            // freigegebenen Speichern-Knopf, die Karte dahinter den neuen Stil.
+            onChooseOfflineStyle = { appViewModel.setMapStyle(offlineStyle()) },
             downloadEnabled = !downloadState.running,
             onDismiss = { showStyleSheet = false },
         )
@@ -3529,6 +3555,13 @@ private fun rideFromPlannedRoute(name: String, route: PlannedRoute): Ride {
  * eine Einstellung ohne sichtbares Ergebnis, drei Bildschirme von ihrer
  * Wirkung entfernt. Die Trennlinie markiert dabei den Wechsel von „welche
  * Kacheln" zu „was liegt darueber": ein Schalter, keine weitere Stil-Option.
+ *
+ * ## Offline speichern nur mit erlaubtem Stil
+ * Der Speichern-Knopf erscheint nur, wenn der gewaehlte Stil es erlaubt
+ * ([MapStyle.offlineAllowed]). Sonst steht an seiner Stelle ein Satz, warum
+ * nicht, und ein Knopf, der auf den erlaubten Stil wechselt — ein
+ * ausgegrauter Knopf ohne Begruendung waere genau die Art versteckter Regel,
+ * die diese App vermeiden will.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -3538,6 +3571,7 @@ private fun MapStyleSheet(
     explorerTilesEnabled: Boolean,
     onExplorerTilesEnabledChange: (Boolean) -> Unit,
     onDownload: () -> Unit,
+    onChooseOfflineStyle: () -> Unit,
     downloadEnabled: Boolean,
     onDismiss: () -> Unit,
 ) {
@@ -3620,17 +3654,42 @@ private fun MapStyleSheet(
 
             // Offline gehoert zur Karte selbst und wohnt deshalb hier, hinter
             // dem Ebenen-Knopf — nicht mehr als dritter Knopf im Suchblatt.
-            FilledTonalButton(
-                onClick = onDownload,
-                enabled = downloadEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = CardPadding)
-                    .heightIn(min = 48.dp),
-            ) {
-                Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Diesen Ausschnitt offline speichern")
+            if (current.offlineAllowed) {
+                FilledTonalButton(
+                    onClick = onDownload,
+                    enabled = downloadEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CardPadding)
+                        .heightIn(min = 48.dp),
+                ) {
+                    Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Diesen Ausschnitt offline speichern")
+                }
+            } else {
+                Text(
+                    text = "Offline speichern geht nur mit der ${offlineStyle().label}. Die " +
+                        "anderen Kartenserver sind nur zum Anzeigen da und erlauben keine " +
+                        "Downloads.",
+                    modifier = Modifier.padding(horizontal = CardPadding, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = onChooseOfflineStyle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CardPadding)
+                        .heightIn(min = 48.dp),
+                ) {
+                    // Wechsel-, kein Download-Symbol: Der Knopf laedt nichts
+                    // herunter, er stellt nur den Stil um.
+                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Zur Vektorkarte wechseln")
+                }
             }
         }
     }
@@ -3777,6 +3836,13 @@ private fun newRideId(): String {
  * Rechnung blockiert ihren Thread und laesst sich nicht abbrechen.
  */
 private const val PLAN_DEBOUNCE_MS = 250L
+
+/**
+ * Mindestabstand zweier Aktualisierungen der Live-Linie. Der Service liefert
+ * etwa einen Punkt je Sekunde (mit Uhr ebenso); schneller neu zu zeichnen
+ * braechte nichts, kostet bei langen Touren aber jedes Mal den ganzen Aufbau.
+ */
+private const val LIVE_TRACK_MIN_INTERVAL_MS = 1_000L
 
 /**
  * Der Fortschrittstext der Planung — oder `null`, wenn es nichts zu sagen gibt.
@@ -3947,8 +4013,6 @@ private fun planningInputsKey(
         String.format(Locale.ROOT, "%.5f,%.5f", waypoint.lat, waypoint.lon)
     }
 
-private const val MIN_SEARCH_LENGTH = 3
-private const val SEARCH_DEBOUNCE_MS = 450L
 
 /** Zoomstufe des einmaligen automatischen Erst-Zooms auf die Position. */
 private const val AUTO_LOCATION_ZOOM = 13.0

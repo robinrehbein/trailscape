@@ -10,7 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.core.RouteTarget
+import de.trailscape.app.ui.today.TodayOffer
+import de.trailscape.app.ui.today.offerDialogAction
+import de.trailscape.app.ui.today.offerHint
 
 /**
  * # Der Bereit-Dialog des schwebenden Aufnahme-Knopfs
@@ -57,9 +59,10 @@ import de.trailscape.core.RouteTarget
  * Berechtigungslogik gibt es dadurch nirgends.
  *
  * ## Warum die Tagesentscheidung hier noch einmal gerechnet wird
- * Der Hinweis auf die Tagesempfehlung braucht dasselbe [RouteTarget], das
- * `ui/today/TodayScreen.kt` seinem Knopf unterlegt — und das entsteht aus
- * `adaptPlan` → `sessionsForDay` → `decideTodayRoute`, alles `:core`. Diese
+ * Der Hinweis auf die Tagesempfehlung braucht dasselbe Angebot
+ * ([TodayOffer]), das `ui/today/TodayScreen.kt` seinem Knopf unterlegt — und
+ * das entsteht in [decideToday] aus `adaptPlan` → `sessionsForDay` →
+ * `decideTodayRoute` → `offeredTarget`. Diese
  * Kette laeuft hier ein zweites Mal, statt das Ergebnis im ViewModel zu
  * hinterlegen: Die Startseite braucht das **ganze** Ergebnis (Notiz,
  * Abwertung, Plandistanz) fuer ihre Karte, dieser Dialog nur die eine Zeile
@@ -92,16 +95,16 @@ fun ReadyToRideDialog(
 
 /**
  * „Losfahren" ohne Route: aufzeichnen — plus der dezente Hinweis auf die
- * heutige Empfehlung, solange es fuer sie ueberhaupt eine Runde zu bauen gibt
- * (an einem Ruhetag oder am Zieltag liefert `:core` kein Ziel, dann steht der
- * Hinweis auch nicht da).
+ * heutige Empfehlung. Am Zieltag gibt es keine Runde zu bauen, dann steht der
+ * Hinweis nicht da; am Ruhetag sagt er „Ruhetag" und bietet die lockere Runde
+ * an, wie „Heute" und die Karte auch.
  */
 @Composable
 private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
-    // Dieselbe Rechnung wie „Heute" und die Karte (siehe [rememberTodayRoute]).
-    val todayRoute = rememberTodayRoute(appViewModel)
-
-    val target: RouteTarget? = todayRoute.target
+    // Dieselbe Rechnung wie „Heute" und die Karte (siehe [decideToday]) —
+    // am Ruhetag also auch hier das ruhigere Angebot statt der Tagesrunde.
+    val decision = rememberTodayDecision(appViewModel)
+    val offer: TodayOffer? = decision.offer
 
     OneUiDialog(
         onDismissRequest = onDismiss,
@@ -109,22 +112,22 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Die App zeichnet auf, die Route entsteht unterwegs.")
-                if (target != null) {
+                if (offer != null) {
                     // Dezent und einen Schriftgrad kleiner: Der Hinweis ist ein
                     // Angebot, keine Aufforderung — wer den Knopf gedrueckt hat,
                     // will meistens einfach losfahren.
                     Text(
-                        text = "Heute stehen ${formatKmDe(target.distanceKm)} km an.",
+                        text = offerHint(offer, decision.restHeadline),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     TextButton(
                         onClick = {
-                            appViewModel.requestRouteGeneration(target)
+                            appViewModel.requestRouteGeneration(offer.target)
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Passende Runde bauen") }
+                    ) { Text(offerDialogAction(offer)) }
                 }
             }
         },

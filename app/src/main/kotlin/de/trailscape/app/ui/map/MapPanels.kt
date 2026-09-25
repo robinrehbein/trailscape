@@ -434,8 +434,10 @@ internal fun DownloadProgressCard(
                 vertical = OverlayCardPaddingVertical,
             ),
         ) {
+            // „Kartendaten" statt „Kacheln": Beim Vektor-Stil zaehlen Schriften
+            // und Symbole mit (siehe `OfflineDownloadProgress`).
             Text(
-                text = "Lade Kacheln … $done/$total",
+                text = "Lade Kartendaten … $done/$total",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(6.dp))

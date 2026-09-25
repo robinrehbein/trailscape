@@ -15,6 +15,11 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.hasSetTextAction
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.theme.TrailscapeTheme
@@ -171,10 +176,78 @@ class ScreenshotTest {
         shot("10-karte-tour-offen")
     }
 
-    private fun start() {
+    /**
+     * Stil-Blatt: Mit der Standard-Strassenkarte steht statt des
+     * Speichern-Knopfs die Begruendung samt Wechsel-Knopf; nach dem Wechsel
+     * auf die Vektorkarte der Speichern-Knopf.
+     */
+    @Test
+    fun karteStil() {
+        start()
+        tab("Karte")
+        compose.onAllNodesWithContentDescription("Karte, Kacheln und Offline")[0].performClick()
+        settle()
+        // Das Blatt steht erst halb offen; hochgewischt zeigt es den
+        // Offline-Abschnitt unten.
+        compose.onAllNodesWithText("OpenStreetMap")[0].performTouchInput { swipeUp() }
+        settle()
+        shot("40-karte-stil-raster")
+        compose.onAllNodesWithText("Zur Vektorkarte wechseln")[0].performClick()
+        settle()
+        shot("41-karte-stil-offline")
+    }
+
+    /**
+     * Ortssuche mit eingetipptem Text: das Angebot zum Absenden, bei zu kurzem
+     * Text stattdessen der Hinweis auf die Mindestlaenge.
+     *
+     * Nur das **Bild**. Dass Tippen keine Anfrage ausloest, sichert
+     * `map/PlaceSearchTest` an [de.trailscape.app.ui.map.PlaceSearchState]
+     * und [de.trailscape.app.ui.map.PlaceSearchEffect] ab, auf denen der
+     * Karten-Screen seine Suche aufbaut; der Screen selbst reicht nur Text und
+     * Absenden an diesen Halter durch.
+     */
+    @Test
+    fun karteSuche() {
+        start()
+        tab("Karte")
+        compose.onAllNodes(hasSetTextAction())[0].performTextInput("Tübingen")
+        settle()
+        shot("42-karte-suche-getippt")
+        compose.onAllNodes(hasSetTextAction())[0].performTextClearance()
+        compose.onAllNodes(hasSetTextAction())[0].performTextInput("Ul")
+        settle()
+        shot("43-karte-suche-zu-kurz")
+    }
+
+    /**
+     * Dunkelmodus — die Stellen, an denen eigene Farben (Karte, Vorschaubilder,
+     * Trainingsfarben) am Schema vorbei gesetzt sind, fallen nur hier auf.
+     * `+night` zusaetzlich zum Theme-Schalter, weil manche Stellen
+     * `isSystemInDarkTheme()` selbst lesen statt das Schema zu fragen.
+     */
+    @Test
+    @Config(qualifiers = "+night")
+    fun dunkel() {
+        start(dark = true)
+        shot("51-heute-dunkel")
+        tab("Verlauf")
+        shot("52-verlauf-dunkel")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        shot("56-tour-dunkel")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
+        tab("Training")
+        shot("53-training-dunkel")
+        tab("Karte")
+        shot("54-karte-dunkel")
+    }
+
+    private fun start(dark: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderingAvailable provides false) {
-                TrailscapeTheme(darkTheme = false) {
+                TrailscapeTheme(darkTheme = dark) {
                     Surface(modifier = Modifier.fillMaxSize()) { TrailscapeApp() }
                 }
             }

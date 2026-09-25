@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,8 +50,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -105,7 +111,9 @@ enum class HealthHint {
  * Ring (nur mit Gesamtwert) neben Schlagzeile und Satz, darunter der **eine**
  * volle Knopf der Seite und der Link ins „Warum?"-Blatt. Der Knopf steht jetzt
  * *in* der Karte wie in der Vorlage — er gehoert zur Empfehlung, nicht neben
- * sie. Ohne Routenziel (Ruhetag, Zieltag) entfaellt er ersatzlos.
+ * sie. Am Zieltag entfaellt er ersatzlos; am Ruhetag steht an seiner Stelle
+ * das ruhigere, neutrale „Locker rollen" ([offer] mit `restDay`) — dasselbe
+ * Angebot, das Karte und Losfahren-Dialog machen.
  *
  * Ohne Gesamtwert bleibt der Ring weg statt leer zu stehen: Ein Bogen bei 0 %
  * waere eine Aussage ueber den Nutzer, die niemand getroffen hat. Die
@@ -118,7 +126,7 @@ internal fun HeroCard(
     band: ReadinessBand?,
     headline: String,
     sentence: String,
-    showBuildRoute: Boolean,
+    offer: TodayOffer?,
     onBuildRoute: () -> Unit,
     onWhy: () -> Unit,
     healthHint: HealthHint,
@@ -166,7 +174,7 @@ internal fun HeroCard(
                 )
             }
 
-            if (showBuildRoute) {
+            if (offer != null && !offer.restDay) {
                 Button(
                     onClick = onBuildRoute,
                     modifier = Modifier
@@ -176,7 +184,24 @@ internal fun HeroCard(
                 ) {
                     Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Runde für heute bauen", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } else if (offer != null) {
+                // Am Ruhetag: dasselbe Angebot wie auf der Karte, aber ruhig
+                // (Umriss statt Akzentflaeche) — die Seite raet zur Pause und
+                // soll nicht mit dem lautesten Knopf das Gegenteil sagen. Kein
+                // NeutralButton: dessen Flaeche verschwindet auf der Karte.
+                OutlinedButton(
+                    onClick = onBuildRoute,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                ) {
+                    // Dasselbe Spa-Symbol wie der Ruhetag-Knopf auf der Karte.
+                    Icon(Icons.Rounded.Spa, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
@@ -294,12 +319,24 @@ private val RingStroke = 7.dp
  * zweimal zeigten. Der Streifen sagt auf einen Blick, was erledigt ist, was
  * heute und was noch ansteht — ohne Wochentyp, Planwoche oder
  * Schluessel-Einheit.
+ *
+ * Fuer TalkBack: Die Kopfzeile ist eine Ueberschrift (ein Satz statt zweier
+ * Schnipsel), der Streifen eine Liste mit sieben Eintraegen — so kuendigt
+ * TalkBack die Liste mit ihrer Laenge an, und jeder Tag wird als ganzer Satz
+ * vorgelesen ([StripDay.description]) statt als Kuerzel und nackte Zahl.
  */
 @Composable
 internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
+    val summarySpoken = summary.second?.let { "${summary.first}, $it" } ?: summary.first
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.clearAndSetSemantics {
+                    heading()
+                    contentDescription = summarySpoken
+                },
+            ) {
                 Text(text = summary.first, style = MaterialTheme.typography.titleMedium)
                 summary.second?.let {
                     Text(
@@ -311,9 +348,13 @@ internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                for (day in strip) {
-                    StripDayCell(day = day, modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { collectionInfo = CollectionInfo(rowCount = 1, columnCount = strip.size) },
+            ) {
+                strip.forEachIndexed { index, day ->
+                    StripDayCell(day = day, index = index, modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -325,11 +366,14 @@ internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
  * Satz aus [StripDay.description] („Donnerstag, heute: 45 km geplant").
  */
 @Composable
-private fun StripDayCell(day: StripDay, modifier: Modifier = Modifier) {
+private fun StripDayCell(day: StripDay, index: Int, modifier: Modifier = Modifier) {
     val theme = MaterialTheme.colorScheme
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.clearAndSetSemantics { contentDescription = day.description },
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = day.description
+            collectionItemInfo = CollectionItemInfo(rowIndex = 0, rowSpan = 1, columnIndex = index, columnSpan = 1)
+        },
     ) {
         Text(
             text = day.label,
