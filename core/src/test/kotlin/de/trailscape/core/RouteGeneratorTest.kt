@@ -139,6 +139,8 @@ class RouteGeneratorTest {
         profile: RouteProfile = RouteProfile.SCHOTTER,
         sleeper: suspend (Long) -> Unit = {},
         onProgress: ((Int, Int) -> Unit)? = null,
+        exploredTiles: Set<ExplorerTile> = emptySet(),
+        preferNewAreas: Boolean = false,
     ): List<RouteCandidate> = runSync {
         generateRoutes(
             backend = backend,
@@ -150,6 +152,8 @@ class RouteGeneratorTest {
             pauseMs = 0,
             sleeper = sleeper,
             onProgress = onProgress,
+            exploredTiles = exploredTiles,
+            preferNewAreas = preferNewAreas,
         )
     }
 
@@ -470,5 +474,128 @@ class RouteGeneratorTest {
         assertEquals(route.points.first().lat, route.points.last().lat, 1e-6)
         assertEquals(route.distanceKm, results[0].distanceKm, EPS)
         assertEquals(route.ascentM, results[0].ascentM, EPS)
+    }
+
+    // --- Neue Gegenden (Entdeckt-Kacheln) ---
+
+    @Test
+    fun `neue Kacheln werden gegen die entdeckte Menge gezaehlt`() {
+        // Gut 6 km nach Osten, quert mehrere Kacheln der Stufe 14.
+        val track = listOf(START, TrackPoint(lat = START.lat, lon = START.lon + 0.085))
+        val all = explorerTilesForTrack(track)
+        assertTrue(all.size >= 4, "Kacheln: ${all.size}")
+
+        val known = all.take(2).toSet()
+        assertEquals(all.size - 2 to all.size, countNewTiles(track, known))
+        // Ohne entdeckte Kacheln ist alles neu, mit allen nichts.
+        assertEquals(all.size to all.size, countNewTiles(track, emptySet()))
+        assertEquals(0 to all.size, countNewTiles(track, all))
+        assertEquals(0 to 0, countNewTiles(emptyList(), known))
+    }
+
+    @Test
+    fun `Kandidaten tragen neue und gesamte Kacheln`() {
+        val baseline = generate(FakeBackend(), target(40.0))
+        for (r in baseline) {
+            assertTrue(r.totalTileCount > 0)
+            assertEquals(r.totalTileCount, r.newTileCount, "ohne Menge ist jede Kachel neu")
+            assertEquals(explorerTilesForTrack(r.route.points).size, r.totalTileCount)
+        }
+
+        // Die Kacheln der besten Runde gelten als entdeckt.
+        val explored = explorerTilesForTrack(baseline.first().route.points)
+        val results = generate(FakeBackend(), target(40.0), exploredTiles = explored)
+        val same = results.single { it.bearingDeg == baseline.first().bearingDeg }
+        assertEquals(0, same.newTileCount)
+        assertEquals(0.0, same.newTileShare, EPS)
+        assertTrue(results.any { it.newTileCount > 0 })
+    }
+
+    @Test
+    fun `Neu-Bonus gewinnt bei aehnlicher Distanz`() {
+        // Bekannt: 2,5 % daneben. Komplett neu: 10 % daneben -> 10 − 12 = −2.
+        val bekannt = scoreRoute(41.0, 0.0, 40.0, AscentPreference.FLACH, newTileShare = 0.0)
+        val neu = scoreRoute(44.0, 0.0, 40.0, AscentPreference.FLACH, newTileShare = 1.0)
+        assertTrue(neu < bekannt, "neu=$neu bekannt=$bekannt")
+
+        // Halb neu (Bonus 6) schlaegt eine bekannte Runde, die 5 Prozentpunkte besser passt.
+        val halb = scoreRoute(42.0, 0.0, 40.0, AscentPreference.FLACH, newTileShare = 0.5)
+        val exakt = scoreRoute(40.0, 0.0, 40.0, AscentPreference.FLACH)
+        assertTrue(halb < exakt, "halb=$halb exakt=$exakt")
+    }
+
+    @Test
+    fun `Distanz dominiert den Neu-Bonus bei grosser Abweichung`() {
+        val exakt = scoreRoute(40.0, 0.0, 40.0, AscentPreference.FLACH, newTileShare = 0.0)
+        // 15 % daneben, aber komplett neu: 15 − 12 = 3 > 0.
+        val neu15 = scoreRoute(46.0, 0.0, 40.0, AscentPreference.FLACH, newTileShare = 1.0)
+        assertTrue(exakt < neu15, "exakt=$exakt neu15=$neu15")
+        val neu30 = scoreRoute(52.0, 0.0, 40.0, AscentPreference.FLACH, newTileShare = 1.0)
+        assertTrue(scoreRoute(41.0, 0.0, 40.0, AscentPreference.FLACH) < neu30)
+
+        // Der Bonus ist gedeckelt und robust gegen Unsinn.
+        assertEquals(-noveltyScoreWeight, noveltyScore(3.0), EPS)
+        assertEquals(0.0, noveltyScore(-1.0), EPS)
+        assertEquals(0.0, noveltyScore(Double.NaN), EPS)
+    }
+
+    @Test
+    fun `ohne Schalter bleiben Scores und Kurse unveraendert`() {
+        val plain = generate(FakeBackend(), target(40.0))
+        val explored = explorerTilesForTrack(plain.first().route.points)
+        val withTiles = generate(FakeBackend(), target(40.0), exploredTiles = explored)
+
+        assertEquals(plain.map { it.bearingDeg }, withTiles.map { it.bearingDeg })
+        assertEquals(plain.map { it.score }, withTiles.map { it.score })
+        // Der Score entspricht exakt der alten Formel ohne Neu-Anteil.
+        for (r in plain) {
+            assertEquals(scoreRoute(r.distanceKm, r.ascentM, r.targetKm, AscentPreference.FLACH), r.score, EPS)
+        }
+    }
+
+    @Test
+    fun `mit Schalter gewinnt die Runde durch neue Gegenden`() {
+        // Alle Runden treffen die Zieldistanz exakt -> ohne Schalter Gleichstand,
+        // sortiert nach Kurs (0°, 120°, 240°).
+        val plain = generate(FakeBackend(fixedDistanceKm = 40.0), target(40.0))
+        assertEquals(listOf(0.0, 120.0, 240.0), plain.map { it.bearingDeg })
+        // Die Runden bei 0° und 120° sind schon abgefahren.
+        val explored = explorerTilesForTrack(plain[0].route.points) + explorerTilesForTrack(plain[1].route.points)
+
+        val results = generate(
+            FakeBackend(fixedDistanceKm = 40.0),
+            target(40.0),
+            exploredTiles = explored,
+            preferNewAreas = true,
+        )
+
+        assertEquals(3, results.size)
+        val best = results.first()
+        assertTrue(results.all { best.newTileShare >= it.newTileShare }, results.map { it.newTileShare }.toString())
+        assertTrue(best.newTileShare > 0.5, "Anteil ${best.newTileShare}")
+        assertTrue(best.bearingDeg in 210.0..270.0, "Kurs ${best.bearingDeg}")
+        assertTrue(results[0].score <= results[1].score && results[1].score <= results[2].score)
+        for (r in results) {
+            val expected = scoreRoute(r.distanceKm, r.ascentM, r.targetKm, AscentPreference.FLACH, r.newTileShare)
+            assertEquals(expected, r.score, EPS)
+        }
+    }
+
+    @Test
+    fun `mit Schalter neigt sich der Startkurs zu unentdeckten Kacheln`() {
+        // Alles oestlich der Startspalte (inkl.) gilt als entdeckt.
+        val s = explorerTileAt(START.lat, START.lon)
+        val explored = buildSet {
+            for (x in s.x..s.x + 30) for (y in s.y - 30..s.y + 30) add(ExplorerTile(x, y))
+        }
+
+        val plain = generate(FakeBackend(), target(40.0), exploredTiles = explored)
+        assertEquals(setOf(0.0, 120.0, 240.0), plain.map { it.bearingDeg }.toSet())
+
+        val biased = generate(FakeBackend(), target(40.0), exploredTiles = explored, preferNewAreas = true)
+        val bearings = biased.map { it.bearingDeg }.toSet()
+        // Die Nordrunde dreht um δ = 30° nach Westen, die Suedost-Runde nach Sueden.
+        assertTrue(330.0 in bearings, "Kurse: $bearings")
+        assertTrue(150.0 in bearings, "Kurse: $bearings")
     }
 }
