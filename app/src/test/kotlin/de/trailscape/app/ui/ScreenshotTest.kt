@@ -118,6 +118,12 @@ class ScreenshotTest {
         shot("11-heute-lang")
         tab("Training")
         shot("13-training-lang")
+        tab("Verlauf")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        shot("15-tour-lang")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
         tab("Heute")
         compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
         settle()
@@ -134,8 +140,48 @@ class ScreenshotTest {
         shot("22-karte-gross")
         tab("Verlauf")
         shot("23-verlauf-gross")
+        // Die Aktionskacheln im Tourdetail brechen ab 130 % auf zwei Spalten
+        // um — hier sieht man, ob „Umbenennen" dabei ganz bleibt.
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        shot("25-tour-gross")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
         tab("Training")
         shot("24-training-gross")
+    }
+
+    /**
+     * Schmales, niedriges Geraet (360 × 640 dp) mit Samsungs erster
+     * Vergroesserungsstufe (115 %): Hier reichen vier Aktionskacheln nebeneinander
+     * nicht mehr fuer „Umbenennen" — sie muessen auf zwei Spalten umbrechen,
+     * statt das Wort zu trennen. Dazu das Karten-Tourblatt, ob ueber ihm noch
+     * Karte bleibt.
+     */
+    @Test
+    @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    fun schmal() {
+        RuntimeEnvironment.setFontScale(1.15f)
+        start()
+        // Zuerst die Karte: Nach einem Besuch im Verlauf steht dort ein
+        // anderes Blatt, und der Weg zur gespeicherten Route waere ein anderer.
+        tab("Karte")
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
+            .performSemanticsAction(SemanticsActions.Expand)
+        settle()
+        compose.onAllNodesWithText("Alb-Runde über Hayingen")[0].performClick()
+        settle()
+        shot("17-karte-tour-schmal")
+        // Mit offenem Tourblatt ist die Navigationsleiste ausgeblendet.
+        compose.onAllNodesWithContentDescription("Auswahl aufheben")[0].performClick()
+        settle()
+        tab("Verlauf")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        // Auf 640 dp liegen die Kacheln unter dem Rand — hochgewischt.
+        compose.onAllNodesWithText("Locker", substring = true)[0].performTouchInput { swipeUp() }
+        settle()
+        shot("16-tour-schmal")
     }
 
     /**

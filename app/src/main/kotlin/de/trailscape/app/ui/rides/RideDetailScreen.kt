@@ -21,17 +21,13 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -62,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.components.ActionTileRow
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.Eyebrow
@@ -69,6 +66,7 @@ import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -123,15 +121,17 @@ import kotlinx.coroutines.withContext
  * zuerst nur, was man nach einer Fahrt wissen will — und alles andere einen
  * Tipp tiefer, aber vollstaendig:
  *
- *  1. Kopf: „‹ Verlauf" und ⋮ (Auf der Karte zeigen, Umbenennen, Als GPX
- *     teilen, Loeschen).
+ *  1. Kopf: „‹ Verlauf". Kein ⋮ mehr — siehe Punkt 5.
  *  2. Name gross, darunter gedaempft Wochentag, Datum, Uhrzeit — und die
  *     Herkunft („aus Health Connect", „geplante Route") genau einmal.
  *  3. Karte mit der Spur, darunter km · Std. · Hm · Ø Puls.
  *  4. Ein Satz in Klartext ([rideNote]): passt die Tour zum Plan, oder wie
  *     hart war sie?
  *  5. Die eine Hauptaktion **„Diese Tour nochmal fahren"** — die Spur als
- *     Route auf der Karte ([AppViewModel.requestRideAsRoute]).
+ *     Route auf der Karte ([AppViewModel.requestRideAsRoute]) — und darunter
+ *     sichtbar und beschriftet: Karte zeigen, Umbenennen, Teilen, Loeschen.
+ *     Diese vier lagen frueher hinter ⋮; eine App ohne versteckte Funktionen
+ *     kann sich kein Menue leisten, dessen Inhalt man erraten muss.
  *  6. Hoehenprofil.
  *  7. „Alle Werte" klappt den Rest auf: Fahrzeit, Ø Tempo, Hm ↓, Max. Puls,
  *     Tempo- und Pulskurve, die Coach-Auswertung (Trainingslast als Zahl,
@@ -139,7 +139,7 @@ import kotlinx.coroutines.withContext
  *
  * „Auf der Karte öffnen" als eigener Knopf unter der Karte ist entfallen: Es
  * gab dafuer zwei Woerter an zwei Stellen („zeigen" im Listenmenue, „öffnen"
- * hier). Jetzt gibt es eines, hinter ⋮.
+ * hier). Jetzt gibt es eines: die Kachel „Karte zeigen".
  *
  * ## Warum die Karte hier nicht bedienbar ist
  * MapLibre bringt eine eigene Gestenerkennung mit; in einer scrollbaren
@@ -240,14 +240,6 @@ internal fun RideDetailScreen(
                     ),
                     backLabel = "Verlauf",
                     onBack = onBack,
-                    actions = {
-                        DetailMenu(
-                            onShowOnMap = onShowOnMap,
-                            onRename = onRename,
-                            onShare = onShare,
-                            onDelete = onDelete,
-                        )
-                    },
                 )
 
                 if (ride.points.isNotEmpty()) {
@@ -284,6 +276,37 @@ internal fun RideDetailScreen(
                         Text("Diese Tour nochmal fahren")
                     }
                 }
+
+                // Die vier Handgriffe, die frueher hinter ⋮ lagen — jetzt
+                // sichtbar und beschriftet, direkt unter der Hauptaktion und in
+                // derselben Ordnung wie auf dem Karten-Tourblatt
+                // (`ui/map/MapPanels.kt`, [de.trailscape.app.ui.map.RideCard]):
+                // gefuellt die eine Hauptaktion, darunter neutrale Kacheln,
+                // Loeschen mit rotem Wort und ganz aussen. Loeschen fragt nicht
+                // nach, sondern bietet im Verlauf „Rückgängig" an (siehe
+                // [deleteRideWithUndo]). Die Bildschirmlesehilfe hoert bei
+                // Teilen und Loeschen das Objekt mit — ein nacktes „Löschen"
+                // sagt nicht, *was* geloescht wird.
+                ActionTileRow(
+                    actions = listOf(
+                        TileAction("Karte zeigen", Icons.Filled.Map, onClick = onShowOnMap),
+                        TileAction("Umbenennen", Icons.Filled.Edit, onClick = onRename),
+                        TileAction(
+                            "Teilen",
+                            Icons.Filled.Share,
+                            contentDescription = "Tour als GPX teilen",
+                            onClick = onShare,
+                        ),
+                        TileAction(
+                            "Löschen",
+                            Icons.Filled.Delete,
+                            destructive = true,
+                            contentDescription = "Tour löschen",
+                            onClick = onDelete,
+                        ),
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 val elevation = curves?.elevation.orEmpty()
                 if (elevation.size >= 2) {
@@ -325,56 +348,6 @@ internal fun RideDetailScreen(
             }
         }
     }
-}
-
-/**
- * Das ⋮ der Detailansicht mit den vier Handgriffen, die frueher im Menue
- * jeder Listenzeile lagen. Steht rechts in der gemeinsamen Kopfzeile.
- */
-@Composable
-private fun DetailMenu(
-    onShowOnMap: () -> Unit,
-    onRename: () -> Unit,
-    onShare: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    var menuOpen by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { menuOpen = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
-        }
-        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-            DetailMenuItem("Auf der Karte zeigen", Icons.Filled.Map) {
-                menuOpen = false
-                onShowOnMap()
-            }
-            DetailMenuItem("Umbenennen", Icons.Filled.Edit) {
-                menuOpen = false
-                onRename()
-            }
-            DetailMenuItem("Als GPX teilen", Icons.Filled.Share) {
-                menuOpen = false
-                onShare()
-            }
-            DetailMenuItem("Löschen", Icons.Filled.Delete) {
-                menuOpen = false
-                onDelete()
-            }
-        }
-    }
-}
-
-@Composable
-private fun DetailMenuItem(
-    text: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-) {
-    DropdownMenuItem(
-        text = { Text(text) },
-        leadingIcon = { Icon(icon, contentDescription = null) },
-        onClick = onClick,
-    )
 }
 
 /** Wochentag, Tag und Monat ausgeschrieben, z. B. `Dienstag, 23. September`. */
