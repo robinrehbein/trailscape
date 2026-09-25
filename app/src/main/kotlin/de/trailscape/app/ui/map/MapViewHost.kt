@@ -709,14 +709,20 @@ internal class MapController {
             val target = runCatching {
                 map.getCameraForLatLngBounds(
                     bounds,
-                    intArrayOf(
-                        padding.left,
-                        padding.top,
-                        padding.right,
-                        max(padding.bottom, obscuredBottomPx + padding.left),
+                    fitPaddingPx(
+                        mapWidthPx = map.width.toInt(),
+                        mapHeightPx = map.height.toInt(),
+                        base = padding,
+                        obscuredBottomPx = obscuredBottomPx,
                     ),
                 )
             }.getOrNull() ?: return@run
+            // Ohne gueltiges Ergebnis lieber nicht fahren: Eine Kamera mit
+            // NaN-Zoom oder ohne Ziel legt MapLibre lahm (schwarze Karte).
+            val center = target.target ?: return@run
+            if (!target.zoom.isFinite() || !center.latitude.isFinite() || !center.longitude.isFinite()) {
+                return@run
+            }
 
             // getCameraForLatLngBounds kennt keine Obergrenze; bei sehr kurzen
             // Touren zoomt es sonst bis an den Anschlag.
@@ -724,7 +730,7 @@ internal class MapController {
             map.animateCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()
-                        .target(target.target)
+                        .target(center)
                         .zoom(zoom)
                         // Das Ziel ist fuer die ungepolsterte Karte gerechnet.
                         .padding(0.0, 0.0, 0.0, 0.0)
@@ -748,7 +754,7 @@ internal class MapController {
                 CameraPosition.Builder()
                     .target(LatLng(lat, lon))
                     .zoom(zoom)
-                    .padding(0.0, 0.0, 0.0, obscuredBottomPx.toDouble())
+                    .padding(0.0, 0.0, 0.0, clampObscuredBottom(obscuredBottomPx, map.height.toInt()).toDouble())
                     .build(),
             )
             if (animate) map.animateCamera(update, CAMERA_ANIMATION_MS) else map.moveCamera(update)
