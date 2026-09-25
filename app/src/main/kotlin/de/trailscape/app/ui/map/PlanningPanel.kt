@@ -235,6 +235,7 @@ internal fun PlanningSheet(
      */
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
 ) {
     val profileLabel = routeProfileLabels[profile] ?: "Route"
     val status = planningStatus(
@@ -249,6 +250,7 @@ internal fun PlanningSheet(
     )
 
     SwipeableSheet(
+        bottomInset = bottomInset,
         expanded = expanded,
         onExpandedChange = onExpandedChange,
         modifier = modifier,

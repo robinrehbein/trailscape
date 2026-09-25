@@ -1,5 +1,12 @@
 package de.trailscape.app.ui.map
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material3.FilledTonalButton
 import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -91,6 +98,7 @@ import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.rememberTodayRoute
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OverlayGap
@@ -354,13 +362,6 @@ fun MapScreen(appViewModel: AppViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val controller = remember { MapController() }
 
-    // Trefferradius fuer das Tippen auf einen Wegpunkt. Er stand vorher als
-    // feste Pixelzahl im Code und war damit auf einem dichten Display nur halb
-    // so gross wie auf einem groben — ausgerechnet dort, wo mit dem Daumen
-    // getroffen wird. In dp gerechnet ist er ueberall gleich gross und haelt
-    // die 48 dp der Material-Empfehlung ein (siehe
-    // [WAYPOINT_TOUCH_RADIUS_DP]).
-    val waypointTouchRadiusPx = with(LocalDensity.current) { WAYPOINT_TOUCH_RADIUS_DP.toPx() }
 
     // ------------------------------------------------------ geteilter Zustand
     val mapStyle by appViewModel.mapStyle.collectAsStateWithLifecycle()
@@ -533,6 +534,15 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     var exploreSearching by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    // „Runde ab hier" (Fuehrung „Klartext"): offen, von wo aus, wie lang, ob
+    // neue Gegenden bevorzugt werden. Der Startort ist `null` fuer „ab meinem
+    // Standort" — dann bestimmt [runGenerateRoutes] ihn wie gehabt.
+    var roundTripSetupOpen by rememberSaveable { mutableStateOf(false) }
+    var roundTripStart by remember { mutableStateOf<Place?>(null) }
+    var roundTripKm by rememberSaveable { mutableIntStateOf(DEFAULT_ROUND_TRIP_KM) }
+    var preferNewAreas by rememberSaveable { mutableStateOf(true) }
+    val todayRoute = rememberTodayRoute(appViewModel)
 
     // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
     // (siehe `PlaceCard.kt`). Ersetzt den fruehreren `searchMarker: Waypoint?`:
@@ -1586,8 +1596,31 @@ fun MapScreen(appViewModel: AppViewModel) {
         withPermissions(PendingAction.PLAN_START) { runUseMyPositionAsStart() }
     }
 
-    fun onMapTap(lat: Double, lon: Double) {
-        if (mode != MapMode.PLANEN) return
+    /**
+     * Langes Druecken auf die Karte — seit der Fuehrung „Klartext" die
+     * **einzige** Geste, die auf der Karte etwas anlegt:
+     *
+     *  * Beim Erkunden setzt sie einen Punkt und oeffnet dafuer die Ortskarte
+     *    („Route hierher", „Runde ab hier").
+     *  * In der Planung haengt sie einen Wegpunkt an.
+     *
+     * Ein gewoehnlicher Tipp tut dagegen nichts mehr: Er legte frueher in der
+     * Planung Wegpunkte an und **loeschte** still einen, wenn er zufaellig in
+     * 24 dp Naehe eines vorhandenen landete. Entfernt wird ein Wegpunkt jetzt
+     * nur noch ueber das × in der Liste.
+     */
+    fun onMapLongPress(lat: Double, lon: Double) {
+        if (isRecording || navTarget != null) return
+        if (mode != MapMode.PLANEN) {
+            if (generation.target != null) return
+            appViewModel.select(null)
+            selectedPlace = Place(
+                displayName = "Markierter Punkt",
+                lat = lat,
+                lon = lon,
+            )
+            return
+        }
         if (routeFromGenerator) {
             // Ein einziger Fehltipp machte aus der uebernommenen 48-km-Runde
             // einen einzelnen Wegpunkt — unwiederbringlich, „Letzten entfernen"
@@ -1610,22 +1643,10 @@ fun MapScreen(appViewModel: AppViewModel) {
             }
             return
         }
-        val hit = waypoints.indexOfFirst { waypoint ->
-            controller.isWithinScreenDistance(
-                TrackPoint(lat = waypoint.lat, lon = waypoint.lon),
-                lat,
-                lon,
-                waypointTouchRadiusPx,
-            )
-        }
-        waypoints = if (hit >= 0) {
-            waypoints.filterIndexed { index, _ -> index != hit }
-        } else {
-            // Wer auf die Karte tippt, arbeitet mit der Karte: Das Blatt geht
-            // beim ersten Wegpunkt zu und gibt sie frei.
-            if (waypoints.isEmpty()) planSheetExpanded = false
-            waypoints + Waypoint(lat, lon)
-        }
+        // Wer auf der Karte plant, arbeitet mit der Karte: Das Blatt geht
+        // beim ersten Wegpunkt zu und gibt sie frei.
+        if (waypoints.isEmpty()) planSheetExpanded = false
+        waypoints = waypoints + Waypoint(lat, lon)
     }
 
     /**
@@ -1738,26 +1759,29 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     /**
-     * „Runde ab hier" auf der Ortskarte ([MapMode.ERKUNDEN]): reicht den Ort
-     * direkt als Startpunkt an den Rundkurs-Generator weiter — derselbe
-     * [RouteGenerationController], den auch [startRoundTrip] und die
-     * Trainingsempfehlung fuellen.
-     *
-     * Anders als [startRoundTrip] (Distanz-Chips im Planungsblatt) fragt diese
-     * Kachel nicht erst nach einer Distanz: Der Ort ist die einzige Angabe,
-     * die die Nutzerin hier macht, also gilt [PLACE_ROUND_TRIP_DEFAULT_KM] —
-     * dieselbe Zahl wie der erste, haeufigste Distanz-Chip. Der Startpunkt ist
-     * bereits bekannt (der angetippte Ort), deshalb entfaellt auch der sonst
-     * noetige GPS-Fix samt Standortfreigabe komplett — [RouteGenerationController.start]
-     * nimmt ihn direkt entgegen (siehe dessen KDoc: der Startpunkt ist ein
-     * expliziter Parameter, keine intern ermittelte Position).
+     * „Runde ab hier" — oeffnet das eine Blatt, in dem Laenge, Untergrund und
+     * „Neue Gegenden bevorzugen" gewaehlt werden ([RoundTripSetupSheet]).
+     * [place] ist der Startort der Ortskarte, `null` heisst „ab meinem
+     * Standort". Frueher startete die Ortskarte hier ohne Rueckfrage eine
+     * 30-km-Suche; jetzt fuehren alle Karten-Einstiege durch dasselbe Blatt.
      */
-    fun runRoundTripFromPlace(place: Place) {
+    fun openRoundTripSetup(place: Place?) {
         selectedPlace = null
+        roundTripStart = place
+        roundTripSetupOpen = true
+    }
+
+    /**
+     * Startet die Rundkurs-Suche ab einem bekannten Ort: Der Startpunkt steht
+     * fest (der angetippte Ort), deshalb entfaellt der sonst noetige GPS-Fix
+     * samt Standortfreigabe — [RouteGenerationController.start] nimmt ihn
+     * direkt entgegen (siehe dessen KDoc).
+     */
+    fun startRoundTripFromPlace(place: Place, distanceKm: Double) {
         controller.moveTo(place.lat, place.lon, MIN_RECORDING_ZOOM)
         RouteGenerationController.open(
             RouteTarget(
-                distanceKm = PLACE_ROUND_TRIP_DEFAULT_KM,
+                distanceKm = distanceKm,
                 ascentPreference = AscentPreference.MODERAT,
                 durationH = null,
                 speedKmh = 0.0,
@@ -1964,6 +1988,18 @@ fun MapScreen(appViewModel: AppViewModel) {
         // Rundkurs-Panel und der Karte.
         planSheetExpanded = false
         generateRoutes()
+    }
+
+    /** „Vorschläge zeigen" im Blatt „Runde ab hier". */
+    fun confirmRoundTripSetup() {
+        roundTripSetupOpen = false
+        val place = roundTripStart
+        roundTripStart = null
+        if (place != null) {
+            startRoundTripFromPlace(place, roundTripKm.toDouble())
+        } else {
+            startRoundTrip(roundTripKm.toDouble())
+        }
     }
 
     /**
@@ -2336,11 +2372,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     // die Nutzerin selbst gegangen waere und den sie rueckwaerts wieder
     // erwarten wuerde.
     BackHandler(
-        enabled = exploreSearching || generation.target != null ||
+        enabled = exploreSearching || roundTripSetupOpen || generation.target != null ||
             mode == MapMode.PLANEN || sheetStage == MapSheetStage.AUFGEZOGEN,
     ) {
         when {
             exploreSearching -> endExploreSearch()
+            roundTripSetupOpen -> roundTripSetupOpen = false
             // Die Rundenwahl ist jetzt das unterste Blatt und damit der
             // oberste Zustand. Vorher lag sie als eigene Karte oben und die
             // Zurueck-Geste ging an ihr vorbei — sie beendete die Planung
@@ -2452,7 +2489,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                 controller = controller,
                 style = mapStyle,
                 locationEnabled = locationGranted,
-                onMapTap = ::onMapTap,
+                onMapTap = { _, _ -> },
+                onMapLongPress = ::onMapLongPress,
                 onUserPan = { followMe = false },
                 modifier = Modifier.fillMaxSize(),
                 // Hinter der Datenseite des Fahrmodus liegt die Karte
@@ -2502,13 +2540,27 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // Hinweise — und die Zahl aendert sich waehrend der Fahrt
                 // ohnehin erst beim Speichern der Tour (siehe die Snackbar im
                 // AppViewModel).
-                if (explorerTilesEnabled && explorerTiles.isNotEmpty() &&
-                    !isRecording && navTarget == null
-                ) {
-                    ExplorerTilesPill(
-                        tileCount = explorerTiles.size,
-                        square = explorerMaxSquare,
-                    )
+                // Oben: links die Kachel-Zaehler-Pille, rechts der
+                // Ebenen-Knopf (Kartenstil, Kacheln, Offline). Beide oeffnen
+                // dasselbe Blatt. Nur im ruhigen Kartenzustand — beim Fahren
+                // gehoert die Kante dem HUD und den Hinweisen.
+                if (!isRecording && navTarget == null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (explorerTilesEnabled && explorerTiles.isNotEmpty()) {
+                            ExplorerTilesPill(
+                                tileCount = explorerTiles.size,
+                                square = explorerMaxSquare,
+                                modifier = Modifier
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable { showStyleSheet = true },
+                            )
+                        }
+                        Spacer(Modifier.weight(1f))
+                        MapLayersButton(onClick = { showStyleSheet = true })
+                    }
                 }
 
                 locationDeniedAction?.let {
@@ -2646,27 +2698,32 @@ fun MapScreen(appViewModel: AppViewModel) {
                     )
                 }
             } else if (!searchOpen) {
+                // Die Blaetter (Wohin?, Runde ab hier, Vorschlaege, Planung)
+                // sind am unteren Rand angedockt (Fuehrung „Klartext") und
+                // bekommen keinen Aussenabstand; den Platz fuer die
+                // Navigationskapsel bzw. die Gestenleiste halten sie selbst
+                // frei ([sheetBottomInset]), ihre Flaeche laeuft darunter bis
+                // an den Rand. Nur der Kopf darueber — Standort-Knopf und die
+                // schwebenden Karten — steht mit Rand.
+                //
+                // Bei offener Tastatur ist die Kapsel verdeckt; der reservierte
+                // Platz waere nur Leere zwischen Blatt und Tastatur.
+                val sheetBottomInset = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current
+                val ride = selectedRide
+                val place = selectedPlace
+                val dockedSheetShown = generation.target != null || mode == MapMode.PLANEN ||
+                    roundTripSetupOpen ||
+                    (
+                        mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
+                            place == null && navTarget == null
+                        )
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .widthIn(max = ContentMaxWidth)
-                        .fillMaxWidth()
-                        .padding(OverlayScreenPadding)
-                        // Die Navigationskapsel schwebt ueber der Karte (siehe
-                        // ui/TrailscapeApp.kt). Der ganze Stapel rueckt deshalb um
-                        // ihre Hoehe nach oben — sonst laege das Planungsblatt
-                        // teilweise hinter ihr.
-                        //
-                        // Bei offener Tastatur aber NICHT: Die Kapsel sitzt dann
-                        // hinter der Tastatur und ist gar nicht sichtbar. Der
-                        // reservierte Platz waere ein gutes Stueck Leere
-                        // zwischen Blatt und Tastatur — genau die Luecke, die
-                        // beim ersten Anlauf der Suche im Blatt zu sehen war.
-                        .padding(bottom = if (imeVisible) 0.dp else LocalFloatingNavigationBarSpace.current),
+                        .fillMaxWidth(),
                     horizontalAlignment = Alignment.End,
                 ) {
-                    val ride = selectedRide
-                    val place = selectedPlace
 
                     // Alles ueber dem Blatt in einer eigenen Spalte, damit es
                     // sich in einem Stueck messen laesst — die Zahl ist das
@@ -2677,6 +2734,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(horizontal = OverlayScreenPadding)
+                            .padding(
+                                bottom = if (dockedSheetShown) 0.dp else OverlayScreenPadding + sheetBottomInset,
+                            )
                             .onSizeChanged { overlayHeaderPx = it.height },
                         horizontalAlignment = Alignment.End,
                     ) {
@@ -2741,7 +2802,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                                     ) / 1000.0
                                 },
                                 onRouteHere = { runRouteToPlace(place) },
-                                onRoundTripHere = { runRoundTripFromPlace(place) },
+                                onRoundTripHere = { openRoundTripSetup(place) },
                                 // Beide Wegpunkt-Aktionen der Ortskarte — „Als
                                 // Wegpunkt" waehrend der Planung und
                                 // „+ Als Wegpunkt" im Erkunden-Zustand — gehen
@@ -2787,6 +2848,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onApply = ::applyGeneratedRoute,
                             onDiscard = ::discardGeneratedRoute,
                             onHoverPoint = { hoverPoint = it },
+                            bottomInset = sheetBottomInset,
                         )
                     } else if (mode == MapMode.PLANEN) {
                         // Die oberste Stufe desselben Blatts
@@ -2874,6 +2936,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             // [exitPlanningWithUndo] ab, durch die
                             // [goToSheetStage] genau dafuer laeuft.
                             onClose = { goToSheetStage(MapSheetStage.AUFGEZOGEN) },
+                            bottomInset = sheetBottomInset,
                         )
                     }
 
@@ -2889,38 +2952,34 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // („Rangfolge am unteren Kartenrand"): In all diesen
                     // Faellen ist das Blatt schlicht nicht komponiert, kein
                     // eigener Versteck-Zustand noetig.
-                    if (mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
+                    if (roundTripSetupOpen && generation.target == null && mode != MapMode.PLANEN) {
+                        Spacer(Modifier.height(OverlayGap))
+                        RoundTripSetupSheet(
+                            startLabel = roundTripStart?.let { "ab ${it.displayName}" }
+                                ?: "ab deinem Standort",
+                            distanceKm = roundTripKm,
+                            onDistanceChange = { roundTripKm = it },
+                            profile = routeProfile,
+                            onProfileChange = { routeProfile = it },
+                            preferNewAreas = preferNewAreas,
+                            onPreferNewAreasChange = { preferNewAreas = it },
+                            onShowSuggestions = ::confirmRoundTripSetup,
+                            onClose = { roundTripSetupOpen = false },
+                            bottomInset = sheetBottomInset,
+                        )
+                    } else if (mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
                         place == null && navTarget == null && generation.target == null
                     ) {
                         Spacer(Modifier.height(OverlayGap))
                         ExploreSheet(
-                            expanded = sheetStage == MapSheetStage.AUFGEZOGEN,
-                            // Waehrend der Suche gibt es keinen Koerper zum
-                            // Auf- und Zuklappen; der Griff wird dann zum
-                            // Ausgang aus der Suche. Ohne das haette er im
-                            // Suchzustand gar keine Wirkung — ein Bedienelement,
-                            // das nichts tut, ist schlimmer als keins.
-                            onExpandedChange = { want ->
-                                when {
-                                    exploreSearching -> endExploreSearch()
-                                    want -> goToSheetStage(MapSheetStage.AUFGEZOGEN)
-                                    else -> goToSheetStage(MapSheetStage.EINGEKLAPPT)
-                                }
-                            },
                             searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
                             searchQuery = searchQuery,
                             onSearchQueryChange = { searchQuery = it },
                             searching = exploreSearching,
                             onSearchingChange = { focused ->
-                                // Nur das Gewinnen des Fokus schaltet um. Das
-                                // Verlieren tut es NICHT: Wer eine Trefferzeile
-                                // antippt, nimmt dem Feld kurz den Fokus — die
-                                // Liste duerfte in genau diesem Moment nicht
-                                // unter dem Finger verschwinden. Beendet wird
-                                // die Suche ausdruecklich: ueber Zurueck, ueber
-                                // das Einklappen oder mit der Auswahl.
                                 if (focused) exploreSearching = true
                             },
+                            onEndSearch = ::endExploreSearch,
                             searchBusy = searchBusy,
                             searchError = searchError,
                             searchResults = searchResults,
@@ -2929,13 +2988,12 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 endExploreSearch()
                                 onPlaceChosen(place)
                             },
-                            // „Route planen" ist der Weg auf die oberste Stufe
-                            // — derselbe Einstieg wie bisher, nur eine Stufe
-                            // hoeher statt in ein zweites Blatt.
-                            onStartPlanning = { goToSheetStage(MapSheetStage.PLANEN) },
-                            onOpenStyle = { showStyleSheet = true },
-                            onDownload = ::startDownload,
-                            downloadEnabled = !downloadState.running,
+                            todayRouteKm = todayRoute.target?.distanceKm,
+                            onTodayRoute = {
+                                todayRoute.target?.let { appViewModel.requestRouteGeneration(it) }
+                            },
+                            onRoundTripHere = { openRoundTripSetup(null) },
+                            bottomInset = sheetBottomInset,
                         )
                     }
                 }
@@ -2969,6 +3027,11 @@ fun MapScreen(appViewModel: AppViewModel) {
             // Blatt und ist beim Umlegen sofort zu sehen — wer ihn danach
             // wieder ausschalten will, muesste das Blatt sonst erneut suchen.
             onExplorerTilesEnabledChange = appViewModel::setExplorerTilesEnabled,
+            onDownload = {
+                showStyleSheet = false
+                startDownload()
+            },
+            downloadEnabled = !downloadState.running,
             onDismiss = { showStyleSheet = false },
         )
     }
@@ -3243,13 +3306,15 @@ private fun MapStyleSheet(
     onSelect: (MapStyle) -> Unit,
     explorerTilesEnabled: Boolean,
     onExplorerTilesEnabledChange: (Boolean) -> Unit,
+    onDownload: () -> Unit,
+    downloadEnabled: Boolean,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(bottom = CardPadding)) {
             Text(
-                text = "Kartenstil",
+                text = "Karte",
                 modifier = Modifier.padding(
                     start = CardPadding,
                     end = CardPadding,
@@ -3316,6 +3381,25 @@ private fun MapStyleSheet(
                 // `onCheckedChange = null`: Der Schalter ist hier nur die
                 // Anzeige des Zustands, geschaltet wird ueber die Zeile.
                 Switch(checked = explorerTilesEnabled, onCheckedChange = null)
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = CardPadding, vertical = 8.dp),
+            )
+
+            // Offline gehoert zur Karte selbst und wohnt deshalb hier, hinter
+            // dem Ebenen-Knopf — nicht mehr als dritter Knopf im Suchblatt.
+            FilledTonalButton(
+                onClick = onDownload,
+                enabled = downloadEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = CardPadding)
+                    .heightIn(min = 48.dp),
+            ) {
+                Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Diesen Ausschnitt offline speichern")
             }
         }
     }
@@ -3481,16 +3565,6 @@ private fun planProgressText(source: RoutingSource?, done: Int, total: Int): Str
 }
 
 /**
- * Trefferradius fuer das Tippen auf einen Wegpunkt.
- *
- * In **dp**, nicht in Pixeln: Als feste Pixelzahl (frueher 28) schrumpfte das
- * Ziel mit jeder Displaydichte — auf einem 3x-Geraet blieben davon rund 9 dp,
- * ein Drittel dessen, was Material fuer eine Beruehrungsflaeche verlangt. 24 dp
- * Radius sind die geforderten 48 dp im Durchmesser.
- */
-private val WAYPOINT_TOUCH_RADIUS_DP = 24.dp
-
-/**
  * Wie weit die Zaehler-Pille der Entdeckt-Kacheln vom linken Rand des oberen
  * Overlay-Stapels einrueckt (siehe [ExplorerTilesPill]).
  *
@@ -3602,16 +3676,6 @@ private const val ZIEL_ERREICHT_KM = 0.03
 private const val MY_LOCATION_WAYPOINT_NAME = "Mein Standort"
 
 /**
- * Zieldistanz der Rundkurs-Suche aus der Ortskarte ([runRoundTripFromPlace]).
- *
- * Dieselbe Zahl wie der erste, haeufigste Chip in [RoundTripEntry]
- * (`PlanningPanel.kt`) — die Kachel „Runde ab hier" auf der Ortskarte fragt
- * (anders als das Planungsblatt) nicht erst nach einer eigenen Distanz, muss
- * also selbst eine sinnvolle Vorgabe treffen.
- */
-private const val PLACE_ROUND_TRIP_DEFAULT_KM = 30.0
-
-/**
  * Ein Stand der Planung, wie ihn „Rückgängig" wieder herstellt.
  *
  * Bewusst nur die vier Werte, die zusammen die Arbeit ausmachen — der
@@ -3675,3 +3739,23 @@ private const val DEFAULT_CAMERA_POSITION_EPSILON = 0.01
 
 /** Toleranz der Zoomstufe fuer denselben Vergleich. */
 private const val DEFAULT_CAMERA_ZOOM_EPSILON = 0.05
+
+/**
+ * Der Ebenen-Knopf oben rechts: oeffnet [MapStyleSheet] mit Kartenstil,
+ * Entdeckt-Kacheln und Offline-Speichern — alles, was die Karte **selbst**
+ * betrifft, an einem Ort (Fuehrung „Klartext").
+ */
+@Composable
+private fun MapLayersButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(44.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shadowElevation = 4.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.Layers, contentDescription = "Karte, Kacheln und Offline")
+        }
+    }
+}

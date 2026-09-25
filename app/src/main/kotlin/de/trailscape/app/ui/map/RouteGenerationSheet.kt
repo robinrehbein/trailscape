@@ -125,6 +125,7 @@ internal fun RouteGenerationSheet(
     onDiscard: () -> Unit,
     onHoverPoint: (TrackPoint?) -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
 ) {
     val target = state.target ?: return
     val theme = MaterialTheme.colorScheme
@@ -132,6 +133,7 @@ internal fun RouteGenerationSheet(
     val hasCandidates = state.candidates.isNotEmpty() && !state.running && !locating
 
     SwipeableSheet(
+        bottomInset = bottomInset,
         expanded = expanded,
         onExpandedChange = onExpandedChange,
         modifier = modifier,

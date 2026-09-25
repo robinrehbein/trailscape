@@ -78,6 +78,7 @@ internal fun MapViewHost(
     style: MapStyle,
     locationEnabled: Boolean,
     onMapTap: (Double, Double) -> Unit,
+    onMapLongPress: (Double, Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     gesturesEnabled: Boolean = true,
     renderingActive: Boolean = true,
@@ -96,6 +97,7 @@ internal fun MapViewHost(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val currentTap by rememberUpdatedState(onMapTap)
+    val currentLongPress by rememberUpdatedState(onMapLongPress)
     val currentPan by rememberUpdatedState(onUserPan)
 
     // Kameraposition ueber Konfigurationsaenderungen (Drehen) hinweg merken.
@@ -230,6 +232,13 @@ internal fun MapViewHost(
                     .build()
                 map.addOnMapClickListener { latLng ->
                     currentTap(latLng.latitude, latLng.longitude)
+                    true
+                }
+                // Langes Druecken setzt einen Punkt (Fuehrung „Klartext"): in
+                // jedem Kartenzustand dieselbe Geste, damit ein normaler Tipp
+                // nie versehentlich etwas anlegt oder loescht.
+                map.addOnMapLongClickListener { latLng ->
+                    currentLongPress(latLng.latitude, latLng.longitude)
                     true
                 }
                 map.addOnCameraMoveStartedListener { reason ->
