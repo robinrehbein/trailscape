@@ -73,7 +73,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.RecordingRepository
@@ -920,8 +923,33 @@ fun MapScreen(appViewModel: AppViewModel) {
         controller.moveTo(position.latitude, position.longitude, minZoom = AUTO_LOCATION_ZOOM)
     }
 
+    // Die Live-Linie folgt dem Repository direkt und nicht [livePoints]: Ihr
+    // GeoJSON waechst mit jeder Sekunde der Fahrt (bei 20.000 Punkten rund
+    // 400 KB) und wird deshalb auf Dispatchers.Default gebaut, hoechstens
+    // einmal je [LIVE_TRACK_MIN_INTERVAL_MS]. Ein StateFlow-Sammler ist von
+    // Haus aus „conflated": Wer noch baut oder wartet, bekommt danach nur den
+    // neuesten Stand, nie eine Warteschlange alter Listen. Und weil die Folge
+    // streng nacheinander laeuft, kann nach dem Stopp kein verspaeteter
+    // Aufbau die leere Liste wieder ueberschreiben — sie ist immer die letzte.
+    // Das Setzen der Quelle bleibt auf Main (nach withContext zurueck).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(controller, lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            RecordingRepository.points.collect { points ->
+                if (points.size < 2) {
+                    // Leeren sofort und ohne Pause: Nach dem Stopp soll die
+                    // rote Linie nicht noch eine Sekunde stehen bleiben.
+                    controller.setLiveTrackGeoJson(EMPTY_FEATURES)
+                    return@collect
+                }
+                val json = withContext(Dispatchers.Default) { lineFeatureCollection(points) }
+                controller.setLiveTrackGeoJson(json)
+                delay(LIVE_TRACK_MIN_INTERVAL_MS)
+            }
+        }
+    }
+
     LaunchedEffect(controller, livePoints.size, followMe) {
-        controller.setLiveTrack(livePoints)
         // Wer die Karte selbst verschoben hat, will sie dort haben — auch
         // waehrend der Aufzeichnung. Der Positions-Knopf holt sie zurueck.
         if (!followMe) return@LaunchedEffect
@@ -3777,6 +3805,13 @@ private fun newRideId(): String {
  * Rechnung blockiert ihren Thread und laesst sich nicht abbrechen.
  */
 private const val PLAN_DEBOUNCE_MS = 250L
+
+/**
+ * Mindestabstand zweier Aktualisierungen der Live-Linie. Der Service liefert
+ * etwa einen Punkt je Sekunde (mit Uhr ebenso); schneller neu zu zeichnen
+ * braechte nichts, kostet bei langen Touren aber jedes Mal den ganzen Aufbau.
+ */
+private const val LIVE_TRACK_MIN_INTERVAL_MS = 1_000L
 
 /**
  * Der Fortschrittstext der Planung — oder `null`, wenn es nichts zu sagen gibt.
