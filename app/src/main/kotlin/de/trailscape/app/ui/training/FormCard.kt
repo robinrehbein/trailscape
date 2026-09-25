@@ -33,8 +33,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -285,7 +283,7 @@ fun FormCard(insights: TrainingInsights) {
             // geschaetzten FTP stehen, haelt sie fuer Messwerte — und einen
             // Sprung nach einer FTP-Aenderung fuer einen Fehler.
             NoticeBox(
-                icon = Icons.Filled.Info,
+                icon = TrainingInfoIcon,
                 color = theme.onSurfaceVariant,
                 text = insights.loadScaleNote,
             )
@@ -304,7 +302,7 @@ fun FormCard(insights: TrainingInsights) {
 
             if (!series.displayReady) {
                 NoticeBox(
-                    icon = Icons.Filled.Info,
+                    icon = TrainingInfoIcon,
                     color = theme.onSurfaceVariant,
                     text = "Kurve wird aufgebaut (noch " +
                         "${series.daysUntilDisplayReady} " +
@@ -356,7 +354,7 @@ fun FormCard(insights: TrainingInsights) {
             if (ratioBand == LoadRatioBand.BELASTUNGSSPRUNG) {
                 Spacer(modifier = Modifier.height(12.dp))
                 NoticeBox(
-                    icon = Icons.Filled.Warning,
+                    icon = TrainingWarningIcon,
                     color = trainingWarning,
                     text = "Belastungssprung: dein Verhältnis von akuter zu " +
                         "gewohnter Belastung liegt bei " +

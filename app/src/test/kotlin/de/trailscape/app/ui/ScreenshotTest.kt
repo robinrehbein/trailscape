@@ -138,6 +138,33 @@ class ScreenshotTest {
         shot("14-einstellungen-lang")
     }
 
+    /**
+     * Training mit allem, was um Aufmerksamkeit konkurriert: Profil fehlt,
+     * „Plan und Ziel passen nicht zusammen" und die Anpassungs-Notiz. Der Plan
+     * begann vor drei Wochen, damit abgeschlossene, zu leichte Wochen die
+     * Anpassung ausloesen; 120 km sind weit mehr, als die Beispieltouren
+     * tragen. Pruefpunkt beim Ansehen: hoechstens EINE Flaeche in
+     * Warnfarbe, der Rest ruhige Zeilen.
+     */
+    @Test
+    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    fun trainingHinweise() {
+        val goal = Goal(
+            name = "Alb-Gold",
+            distanceKm = 120.0,
+            ascentM = 700.0,
+            date = NOW + 8 * WEEK_MS,
+            targetDurationMin = 130,
+        )
+        savePlan(
+            AppServices.trainingPlanStore,
+            generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS),
+        )
+        start()
+        tab("Training")
+        shot("16-training-hinweise")
+    }
+
     /** Grosse Systemschrift (130 %) — findet abgeschnittene Beschriftungen. */
     @Test
     fun grosseSchrift() {
