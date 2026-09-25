@@ -2347,6 +2347,21 @@ fun MapScreen(appViewModel: AppViewModel) {
         appViewModel.consumeShowRideOnMapRequest()
     }
 
+    // „Diese Tour nochmal fahren" aus dem Verlauf: dieselbe Auswahl wie oben —
+    // die Tourkarte darunter traegt dann „Nochmal fahren" (Navigation auf der
+    // gefahrenen Spur). Eine laufende Aufgabe (Planung, Vorschlaege) weicht.
+    val rideAsRouteRequest by appViewModel.rideAsRouteRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(rideAsRouteRequest) {
+        val rideId = rideAsRouteRequest ?: return@LaunchedEffect
+        appViewModel.consumeRideAsRouteRequest()
+        if (isRecording) return@LaunchedEffect
+        if (mode == MapMode.PLANEN) exitPlanning()
+        if (generation.target != null) RouteGenerationController.close()
+        roundTripSetupOpen = false
+        selectedPlace = null
+        appViewModel.select(rideId)
+    }
+
     // [AppViewModel.pendingRideDetail] holt dieser Screen NICHT ab: Die
     // Detailansicht einer Tour gehoert seit der Fuehrung „Eine Leiste" in den
     // Touren-Tab (`ui/rides/RidesScreen.kt`), und `requestRideDetail`

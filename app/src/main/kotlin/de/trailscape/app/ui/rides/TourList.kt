@@ -440,11 +440,17 @@ fun RideDetailHost(
         appViewModel = appViewModel,
         snackbarHostState = snackbarHostState,
         onBack = onBack,
+        // Beide Wege fuehren auf die Karte; das Detail schliesst dabei, sonst
+        // stuende es beim Zurueckkommen in den Verlauf wieder offen da.
         onShowOnMap = {
+            onBack()
             appViewModel.select(loaded.id)
             appViewModel.requestShowRideOnMap(loaded.id)
         },
-        onRideAgain = { appViewModel.requestRideAsRoute(loaded.id) },
+        onRideAgain = {
+            onBack()
+            appViewModel.requestRideAsRoute(loaded.id)
+        },
         onRename = { renameTarget = summary },
         onShare = {
             scope.launch {
