@@ -18,6 +18,7 @@ import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
@@ -1648,6 +1649,52 @@ class AppViewModel(
         _cockpitRequest.value = false
     }
 
+    // ------------------------------------------------ Verlauf als Karte
+    // (Fuehrung „Klartext": „Liste | Karte" im Verlauf)
+
+    private val _historyMapRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte, den Verlauf als Karte zu zeigen — alle Spuren auf einmal plus die
+     * entdeckten Kacheln. Die Karte wohnt im Karten-Tab; der Verlauf schickt
+     * die Bitte und wechselt dorthin, ✕ fuehrt zurueck.
+     */
+    val historyMapRequest: StateFlow<Boolean> = _historyMapRequest.asStateFlow()
+
+    fun requestHistoryMap() {
+        _historyMapRequest.value = true
+        requestTab(AppTab.MAP)
+    }
+
+    fun consumeHistoryMapRequest() {
+        _historyMapRequest.value = false
+    }
+
+    /** Vereinfachte Spuren je Tour, gemerkt mit ihrem Stand ([RideSummary.updatedAt]). */
+    private val historyTrackCache = HashMap<String, Pair<Long, List<TrackPoint>>>()
+
+    /**
+     * Alle gefahrenen Spuren, je Tour auf hoechstens [HISTORY_TRACK_MAX_POINTS]
+     * Punkte ausgeduennt (jeder n-te Punkt, Start und Ziel bleiben) — genug
+     * fuer die Uebersicht, klein genug fuer eine einzige GeoJSON-Quelle mit
+     * hunderten Touren. Geplante Routen zaehlen nicht, nur Gefahrenes. Beim
+     * ersten Aufruf wird jede Tour einmal von der Platte gelesen, danach
+     * kommen unveraenderte Touren aus dem Speicher.
+     */
+    suspend fun historyTracks(): List<List<TrackPoint>> = withContext(io) {
+        val summaries = allSummaries.filterNot { it.planned || it.id in pendingDeletionIds }
+        historyTrackCache.keys.retainAll(summaries.map { it.id }.toSet())
+        summaries.mapNotNull { summary ->
+            val cached = historyTrackCache[summary.id]
+            if (cached != null && cached.first == summary.updatedAt) return@mapNotNull cached.second
+            val points = runCatching { rideStorage.loadRide(summary.id)?.points }.getOrNull()
+                ?: return@mapNotNull null
+            val thinned = thinTrack(points, HISTORY_TRACK_MAX_POINTS)
+            historyTrackCache[summary.id] = summary.updatedAt to thinned
+            thinned
+        }
+    }
+
     // ---------------------------------------------- Kacheln fuer die Routenwahl
     // (Fuehrung „Klartext": „Neue Gegenden bevorzugen" im Blatt „Runde ab hier")
 
@@ -2239,3 +2286,13 @@ private fun decodePlaceSearchHistory(raw: String?): List<PlaceSearchHistoryEntry
 private const val HEALTH_SAVE_FAILED_MESSAGE: String =
     "Die importierten Touren konnten nicht gespeichert werden. " +
         "Beim nächsten Sync wird es erneut versucht."
+
+/** Hoechstzahl Punkte je Spur in der Verlaufs-Karte. */
+private const val HISTORY_TRACK_MAX_POINTS = 200
+
+/** Jeder n-te Punkt, so dass hoechstens [maxPoints] bleiben; Start und Ziel bleiben immer. */
+internal fun thinTrack(points: List<TrackPoint>, maxPoints: Int): List<TrackPoint> {
+    if (points.size <= maxPoints || maxPoints < 2) return points
+    val step = (points.size - 1).toDouble() / (maxPoints - 1)
+    return List(maxPoints) { index -> points[(index * step).toInt().coerceAtMost(points.lastIndex)] }
+}

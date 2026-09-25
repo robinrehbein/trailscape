@@ -20,6 +20,9 @@ import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -173,6 +176,7 @@ fun RidesScreen(appViewModel: AppViewModel) {
                             onImportFile = importAction.start,
                             onImportArchive = importArchive,
                             onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                            onShowMap = appViewModel::requestHistoryMap,
                         )
                     }
                 },
@@ -238,6 +242,7 @@ private fun VerlaufHeader(
     onImportFile: () -> Unit,
     onImportArchive: () -> Unit,
     onOpenSettings: () -> Unit,
+    onShowMap: () -> Unit,
 ) {
     var importMenuOpen by remember { mutableStateOf(false) }
 
@@ -270,6 +275,24 @@ private fun VerlaufHeader(
             style = MaterialTheme.typography.headlineLarge,
             modifier = Modifier.padding(start = CardPadding),
         )
+        // „Liste | Karte": Die Karte aller Spuren wohnt im Karten-Tab (echte
+        // Grundkarte, Kacheln); „Karte" wechselt dorthin, ✕ kommt zurueck.
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = CardGap),
+        ) {
+            SegmentedButton(
+                selected = true,
+                onClick = {},
+                shape = SegmentedButtonDefaults.itemShape(0, 2),
+            ) { Text("Liste") }
+            SegmentedButton(
+                selected = false,
+                onClick = onShowMap,
+                shape = SegmentedButtonDefaults.itemShape(1, 2),
+            ) { Text("Karte") }
+        }
         if (searchOpen) {
             // Wer die Lupe antippt, will tippen: Fokus (und damit Tastatur)
             // gleich ins Feld.

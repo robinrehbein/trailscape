@@ -90,6 +90,7 @@ import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.voice.vibriereOffRoute
 import de.trailscape.app.routing.planRouteOfflineFirst
+import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.PlaceSearchHistoryEntry
@@ -543,6 +544,10 @@ fun MapScreen(appViewModel: AppViewModel) {
     var roundTripStart by remember { mutableStateOf<Place?>(null) }
     var roundTripKm by rememberSaveable { mutableIntStateOf(DEFAULT_ROUND_TRIP_KM) }
     var preferNewAreas by rememberSaveable { mutableStateOf(true) }
+
+    // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
+    // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
+    var historyMode by rememberSaveable { mutableStateOf(false) }
     val todayRoute = rememberTodayRoute(appViewModel)
 
     // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
@@ -825,9 +830,9 @@ fun MapScreen(appViewModel: AppViewModel) {
     // deshalb auf Dispatchers.Default; gesetzt wird erst das fertige Ergebnis.
     // Ist der Layer aus, gehen drei leere Merkmalsammlungen hinaus (siehe
     // [MapController.setExplorerTiles]) und die Ebenen zeichnen nichts.
-    LaunchedEffect(explorerTilesEnabled, explorerTiles, controller.isReady) {
+    LaunchedEffect(explorerTilesEnabled, historyMode, explorerTiles, controller.isReady) {
         if (!controller.isReady) return@LaunchedEffect
-        if (!explorerTilesEnabled) {
+        if (!explorerTilesEnabled && !historyMode) {
             explorerMaxSquare = null
             controller.setExplorerTiles(null, null, null)
             return@LaunchedEffect
@@ -2233,7 +2238,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Kapsel auf dem naechsten Tab.
     val mapTaskActive = !isRecording && navTarget == null && (
         mode == MapMode.PLANEN || generation.target != null ||
-            selectedPlace != null || roundTripSetupOpen
+            selectedPlace != null || roundTripSetupOpen || historyMode
         )
     LaunchedEffect(mapTaskActive) { appViewModel.setMapTaskActive(mapTaskActive) }
     DisposableEffect(Unit) { onDispose { appViewModel.setMapTaskActive(false) } }
@@ -2362,6 +2367,34 @@ fun MapScreen(appViewModel: AppViewModel) {
         appViewModel.select(rideId)
     }
 
+    // „Karte" im Verlauf: alle Spuren auf einmal.
+    val historyMapRequest by appViewModel.historyMapRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(historyMapRequest) {
+        if (!historyMapRequest) return@LaunchedEffect
+        appViewModel.consumeHistoryMapRequest()
+        if (isRecording) return@LaunchedEffect
+        if (mode == MapMode.PLANEN) exitPlanning()
+        if (generation.target != null) RouteGenerationController.close()
+        roundTripSetupOpen = false
+        selectedPlace = null
+        appViewModel.select(null)
+        historyMode = true
+    }
+    LaunchedEffect(historyMode, controller.isReady) {
+        if (!controller.isReady) return@LaunchedEffect
+        if (!historyMode) {
+            controller.setHistoryTracks(emptyList())
+            return@LaunchedEffect
+        }
+        val tracks = appViewModel.historyTracks()
+        controller.setHistoryTracks(tracks)
+        val all = tracks.flatten()
+        if (all.isNotEmpty()) controller.fitToPoints(all)
+        // Fuellt [explorerTiles] auch ohne eingeschalteten Kachel-Layer; der
+        // Nebel-Effekt oben zeichnet sie im Verlaufsmodus immer.
+        appViewModel.exploredTilesForPlanning()
+    }
+
     // [AppViewModel.pendingRideDetail] holt dieser Screen NICHT ab: Die
     // Detailansicht einer Tour gehoert seit der Fuehrung „Eine Leiste" in den
     // Touren-Tab (`ui/rides/RidesScreen.kt`), und `requestRideDetail`
@@ -2415,11 +2448,15 @@ fun MapScreen(appViewModel: AppViewModel) {
     // die Nutzerin selbst gegangen waere und den sie rueckwaerts wieder
     // erwarten wuerde.
     BackHandler(
-        enabled = exploreSearching || roundTripSetupOpen || generation.target != null ||
+        enabled = exploreSearching || historyMode || roundTripSetupOpen || generation.target != null ||
             mode == MapMode.PLANEN || sheetStage == MapSheetStage.AUFGEZOGEN,
     ) {
         when {
             exploreSearching -> endExploreSearch()
+            historyMode -> {
+                historyMode = false
+                appViewModel.requestTab(AppTab.RIDES)
+            }
             roundTripSetupOpen -> roundTripSetupOpen = false
             // Die Rundenwahl ist jetzt das unterste Blatt und damit der
             // oberste Zustand. Vorher lag sie als eigene Karte oben und die
@@ -2592,7 +2629,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        if (explorerTilesEnabled && explorerTiles.isNotEmpty()) {
+                        if ((explorerTilesEnabled || historyMode) && explorerTiles.isNotEmpty()) {
                             ExplorerTilesPill(
                                 tileCount = explorerTiles.size,
                                 square = explorerMaxSquare,
@@ -2755,7 +2792,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 val ride = selectedRide
                 val place = selectedPlace
                 val dockedSheetShown = generation.target != null || mode == MapMode.PLANEN ||
-                    roundTripSetupOpen ||
+                    roundTripSetupOpen || historyMode ||
                     (
                         mode == MapMode.ERKUNDEN && !isRecording && ride == null &&
                             place == null && navTarget == null
@@ -2995,7 +3032,21 @@ fun MapScreen(appViewModel: AppViewModel) {
                     // („Rangfolge am unteren Kartenrand"): In all diesen
                     // Faellen ist das Blatt schlicht nicht komponiert, kein
                     // eigener Versteck-Zustand noetig.
-                    if (roundTripSetupOpen && generation.target == null && mode != MapMode.PLANEN) {
+                    if (historyMode && generation.target == null && mode != MapMode.PLANEN) {
+                        Spacer(Modifier.height(OverlayGap))
+                        val ridden = rides.filterNot { it.planned }
+                        HistorySummarySheet(
+                            rideCount = ridden.size,
+                            totalKm = ridden.sumOf { it.stats.distanceKm },
+                            tileCount = explorerTiles.size,
+                            squareSize = explorerMaxSquare?.size,
+                            onClose = {
+                                historyMode = false
+                                appViewModel.requestTab(AppTab.RIDES)
+                            },
+                            bottomInset = sheetBottomInset,
+                        )
+                    } else if (roundTripSetupOpen && generation.target == null && mode != MapMode.PLANEN) {
                         Spacer(Modifier.height(OverlayGap))
                         RoundTripSetupSheet(
                             startLabel = roundTripStart?.let { "ab ${it.displayName}" }

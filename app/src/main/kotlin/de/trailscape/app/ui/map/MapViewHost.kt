@@ -372,6 +372,7 @@ internal class MapController {
         SOURCE_FOG to EMPTY_FEATURES,
         SOURCE_FOG_OUTLINE to EMPTY_FEATURES,
         SOURCE_MAX_SQUARE to EMPTY_FEATURES,
+        SOURCE_HISTORY to EMPTY_FEATURES,
         SOURCE_TRACK to EMPTY_FEATURES,
         SOURCE_PLANNED to EMPTY_FEATURES,
         SOURCE_LIVE to EMPTY_FEATURES,
@@ -479,6 +480,20 @@ internal class MapController {
             ),
             below = LAYER_TRACK,
         )
+        // Alle gefahrenen Spuren auf einmal (Verlauf als Karte, Fuehrung
+        // „Klartext"): ueber den Kacheln, unter der einzelnen Tour-Linie,
+        // etwas duenner und leicht durchscheinend, damit Ueberlagerungen
+        // dichter wirken statt zu einem Strich zu verschwimmen.
+        loaded.addLayerBelowIfAbsent(
+            LineLayer(LAYER_HISTORY, SOURCE_HISTORY).withProperties(
+                PropertyFactory.lineColor(TRACK_COLOR),
+                PropertyFactory.lineWidth(HISTORY_LINE_WIDTH),
+                PropertyFactory.lineOpacity(HISTORY_LINE_OPACITY),
+                PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+                PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+            ),
+            below = LAYER_TRACK,
+        )
 
         loaded.addLayerIfAbsent(
             LineLayer(LAYER_PLANNED, SOURCE_PLANNED).withProperties(
@@ -526,6 +541,10 @@ internal class MapController {
 
     /** Die ausgewaehlte Tour (gruen). */
     fun setTrack(points: List<TrackPoint>) = setLine(SOURCE_TRACK, points)
+
+    /** Alle Spuren des Verlaufs auf einmal; leere Liste raeumt die Ebene. */
+    fun setHistoryTracks(tracks: List<List<TrackPoint>>) =
+        setSource(SOURCE_HISTORY, multiLineFeatureCollection(tracks))
 
     /** Die geplante Route (blau, gestrichelt). */
     fun setPlannedRoute(points: List<TrackPoint>) = setLine(SOURCE_PLANNED, points)
@@ -855,6 +874,27 @@ internal data class MapPadding(val left: Int, val top: Int, val right: Int, val 
 internal const val EMPTY_FEATURES: String = """{"type":"FeatureCollection","features":[]}"""
 
 /** LineString-Feature aus Trackpunkten; unter zwei Punkten leer. */
+private fun multiLineFeatureCollection(tracks: List<List<TrackPoint>>): String {
+    val lines = tracks.filter { it.size >= 2 }
+    if (lines.isEmpty()) return EMPTY_FEATURES
+    val builder = StringBuilder(lines.sumOf { it.size } * 24 + 128)
+    builder.append("{\"type\":\"FeatureCollection\",\"features\":[")
+    builder.append("{\"type\":\"Feature\",\"properties\":{},")
+    builder.append("\"geometry\":{\"type\":\"MultiLineString\",\"coordinates\":[")
+    lines.forEachIndexed { lineIndex, points ->
+        if (lineIndex > 0) builder.append(',')
+        builder.append('[')
+        points.forEachIndexed { index, point ->
+            if (index > 0) builder.append(',')
+            builder.append('[').append(coordinate(point.lon)).append(',')
+                .append(coordinate(point.lat)).append(']')
+        }
+        builder.append(']')
+    }
+    builder.append("]}}]}")
+    return builder.toString()
+}
+
 private fun lineFeatureCollection(points: List<TrackPoint>): String {
     if (points.size < 2) return EMPTY_FEATURES
     val builder = StringBuilder(points.size * 24)
@@ -911,6 +951,7 @@ private fun hexColor(argb: Int): String = String.format(Locale.ROOT, "#%06X", ar
 // ------------------------------------------------------------------ Konstanten
 
 private const val SOURCE_TRACK = "ts-track-source"
+private const val SOURCE_HISTORY = "ts-history-source"
 private const val SOURCE_PLANNED = "ts-planned-source"
 private const val SOURCE_LIVE = "ts-live-source"
 private const val SOURCE_MARKERS = "ts-marker-source"
@@ -925,6 +966,7 @@ private const val SOURCE_FOG_OUTLINE = "ts-fog-outline-source"
 private const val SOURCE_MAX_SQUARE = "ts-maxsquare-source"
 
 private const val LAYER_TRACK = "ts-track-layer"
+private const val LAYER_HISTORY = "ts-history-layer"
 private const val LAYER_PLANNED = "ts-planned-layer"
 private const val LAYER_LIVE = "ts-live-layer"
 private const val LAYER_MARKERS = "ts-marker-layer"
@@ -942,6 +984,10 @@ private const val PROP_STROKE_WIDTH = "ts-strokeWidth"
 private const val PROP_STROKE_COLOR = "ts-strokeColor"
 
 private const val LINE_WIDTH = 5f
+
+/** Spuren des Verlaufs: duenner als die ausgewaehlte Tour, leicht transparent. */
+private const val HISTORY_LINE_WIDTH = 3f
+private const val HISTORY_LINE_OPACITY = 0.7f
 
 /** Randbreite eines gefuellten Punkts — unveraendert die bisherige Zahl. */
 private const val FILLED_STROKE_WIDTH = 3f
