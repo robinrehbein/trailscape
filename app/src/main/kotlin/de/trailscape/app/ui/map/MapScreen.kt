@@ -137,6 +137,7 @@ import de.trailscape.core.extractTurnHints
 import de.trailscape.core.glaetteZoom
 import de.trailscape.core.haversineM
 import de.trailscape.core.kursZwischen
+import de.trailscape.core.largestCluster
 import de.trailscape.core.largestExplorerSquare
 import de.trailscape.core.naechsteKurve
 import de.trailscape.core.zoomFuerTempo
@@ -855,6 +856,14 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     var explorerMaxSquare by remember { mutableStateOf<ExplorerSquare?>(null) }
 
+    /**
+     * Groesse der „Groessten Flaeche (Max-Cluster)" in Kacheln — aus demselben
+     * Hintergrundlauf wie [explorerMaxSquare] und aus demselben Grund: Der
+     * Flood-Fill ueber den ganzen Bestand gehoert nicht in den Main-Thread.
+     * `null`, solange noch nicht gerechnet wurde.
+     */
+    var explorerMaxClusterSize by remember { mutableStateOf<Int?>(null) }
+
     // Die drei Kachel-Ebenen fuellen. Aus tausenden Kacheln entstehen hier
     // ebenso viele GeoJSON-Rechtecke — das ist Rechenarbeit und gehoert
     // deshalb auf Dispatchers.Default; gesetzt wird erst das fertige Ergebnis.
@@ -864,6 +873,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (!controller.isReady) return@LaunchedEffect
         if (!explorerTilesEnabled && !historyMode) {
             explorerMaxSquare = null
+            explorerMaxClusterSize = null
             controller.setExplorerTiles(null, null, null)
             return@LaunchedEffect
         }
@@ -875,9 +885,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                 outline = exploredOutlineFeatureCollection(tiles),
                 maxSquare = maxSquareFeatureCollection(square),
                 square = square,
+                clusterSize = largestCluster(tiles).size,
             )
         }
         explorerMaxSquare = geoJson.square
+        explorerMaxClusterSize = geoJson.clusterSize
         controller.setExplorerTiles(geoJson.fog, geoJson.outline, geoJson.maxSquare)
     }
 
@@ -3186,6 +3198,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             totalKm = totals.totalKm,
                             tileCount = explorerTiles.size,
                             squareSize = explorerMaxSquare?.size,
+                            clusterSize = explorerMaxClusterSize,
                             onClose = {
                                 historyMode = false
                                 appViewModel.requestTab(AppTab.RIDES)
@@ -3752,9 +3765,9 @@ private fun ExplorerTilesPill(
 
 /**
  * Das fertige GeoJSON der drei Kachel-Ebenen samt dem groessten Quadrat, das
- * dabei ohnehin ermittelt wurde.
+ * dabei ohnehin ermittelt wurde, und der Groesse des Max-Clusters.
  *
- * Ein eigener Typ statt vier lose Rueckgabewerte: Alle vier entstehen in
+ * Ein eigener Typ statt fuenf lose Rueckgabewerte: Alle fuenf entstehen in
  * derselben Hintergrundrechnung und gehoeren zum selben Kachelstand — sie
  * duerfen nie aus zwei verschiedenen Laeufen stammen.
  */
@@ -3763,6 +3776,7 @@ private data class ExplorerTileGeoJson(
     val outline: String,
     val maxSquare: String,
     val square: ExplorerSquare?,
+    val clusterSize: Int,
 )
 
 /** Namensabfrage (`_askName` im Original). */

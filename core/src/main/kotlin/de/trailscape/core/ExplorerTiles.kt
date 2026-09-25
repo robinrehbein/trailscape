@@ -200,6 +200,80 @@ fun largestExplorerSquare(tiles: Set<ExplorerTile>): ExplorerSquare? {
 }
 
 /**
+ * Die „Cluster-Kacheln" eines Kachelbestands: jede entdeckte Kachel, deren
+ * **alle vier** direkten Nachbarn (oben, unten, links, rechts) ebenfalls
+ * entdeckt sind.
+ *
+ * Definition genau wie bei Squadrats und StatsHunters (dort „Cluster" bzw.
+ * „Max Cluster", siehe deren FAQ/Hilfeseiten): Eine Kachel am Rand einer
+ * entdeckten Flaeche zaehlt NICHT, nur eine vollstaendig umschlossene. Das
+ * ist bewusst strenger als „entdeckt" — ein einzelner langer Strich durchs
+ * Land ergibt viele Kacheln, aber keinen einzigen Cluster; erst flaechiges
+ * Erkunden fuellt ihn. Diagonale Nachbarn zaehlen nicht, sonst waere ein
+ * Schachbrettmuster schon „Flaeche".
+ *
+ * Linear in der Kachelzahl: je Kachel vier Hash-Nachschlagungen.
+ */
+fun clusterTiles(tiles: Set<ExplorerTile>): Set<ExplorerTile> {
+    if (tiles.size < 5) return emptySet() // Unter fuenf Kacheln kann keine umschlossen sein.
+    val result = HashSet<ExplorerTile>()
+    for (tile in tiles) {
+        if (ExplorerTile(tile.x, tile.y - 1) in tiles &&
+            ExplorerTile(tile.x, tile.y + 1) in tiles &&
+            ExplorerTile(tile.x - 1, tile.y) in tiles &&
+            ExplorerTile(tile.x + 1, tile.y) in tiles
+        ) {
+            result += tile
+        }
+    }
+    return result
+}
+
+/**
+ * Der „Max-Cluster" — in der App „Groesste Flaeche": die groesste
+ * zusammenhaengende Gruppe von [clusterTiles], wobei „zusammenhaengend"
+ * wieder nur die 4-Nachbarschaft meint (oben/unten/links/rechts, keine
+ * Diagonale), wie bei Squadrats/StatsHunters.
+ *
+ * Flood-Fill **iterativ** mit eigenem Stapel statt rekursiv: Ein Cluster aus
+ * zehntausenden Kacheln wuerde eine Rekursion so tief treiben, dass der
+ * JVM-Stack (auf Android-Hintergrund-Threads oft nur wenige hundert KB)
+ * ueberlaeuft. So bleibt die Rechnung linear in der Kachelzahl — jede
+ * Cluster-Kachel wird genau einmal besucht.
+ *
+ * Leere Menge, wenn es keine Cluster-Kachel gibt. Bei Gleichstand gewinnt
+ * irgendeiner der gleich grossen — fachlich egal, angezeigt wird die Groesse.
+ */
+fun largestCluster(tiles: Set<ExplorerTile>): Set<ExplorerTile> {
+    val cluster = clusterTiles(tiles)
+    if (cluster.isEmpty()) return emptySet()
+
+    val visited = HashSet<ExplorerTile>(cluster.size * 2)
+    var best: Set<ExplorerTile> = emptySet()
+    val stack = ArrayDeque<ExplorerTile>()
+
+    for (start in cluster) {
+        if (!visited.add(start)) continue
+        val component = HashSet<ExplorerTile>()
+        stack.addLast(start)
+        while (stack.isNotEmpty()) {
+            val tile = stack.removeLast()
+            component += tile
+            for (next in arrayOf(
+                ExplorerTile(tile.x, tile.y - 1),
+                ExplorerTile(tile.x, tile.y + 1),
+                ExplorerTile(tile.x - 1, tile.y),
+                ExplorerTile(tile.x + 1, tile.y),
+            )) {
+                if (next in cluster && visited.add(next)) stack.addLast(next)
+            }
+        }
+        if (component.size > best.size) best = component
+    }
+    return best
+}
+
+/**
  * Zwischenstand einer Tour im Kachel-Cache.
  *
  * Fingerabdruck aus [updatedAt] + [pointCount] — dasselbe Muster wie
