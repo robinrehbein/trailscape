@@ -40,21 +40,17 @@ import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.rememberNow
+import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.weekdayDateFormat
-import de.trailscape.core.adaptPlan
 import de.trailscape.core.predictGoalFinish
 import de.trailscape.core.projectedEventCtl
-import de.trailscape.core.currentWeekIndex
-import de.trailscape.core.decideTodayRoute
 import de.trailscape.core.riddenRides
-import de.trailscape.core.sessionsForDay
 import java.time.DayOfWeek
-import java.time.LocalDateTime
-import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /**
@@ -70,14 +66,15 @@ import kotlin.math.roundToInt
  * ## Was hier NICHT passiert
  * Kein Trainingswert wird hier gerechnet. Bereitschaft und Empfehlung kommen
  * aus [AppViewModel.insights], das Tagesprogramm aus [sessionsForDay], die
- * Verrechnung von Tagesform und Planeinheit aus [decideTodayRoute] — alles
+ * Verrechnung von Tagesform und Planeinheit aus [de.trailscape.core.decideTodayRoute] — alles
  * `:core`. Der Screen leitet nur ab, *welche* Tagesart das ist
  * ([todayEffort]) und was davon auf die Seite kommt.
  *
  * ## Die Reihenfolge
  *  1. **Kopf** — Datumszeile mit ⚙, darunter gross „Heute".
  *  2. **Hero** ([HeroCard]) — Ring (nur mit Gesamtwert), Schlagzeile, Satz,
- *     „Runde für heute bauen" (nicht an Ruhe- und Zieltag), „Warum diese
+ *     „Runde für heute bauen" (nicht am Zieltag; am Ruhetag stattdessen das
+ *     ruhigere „Locker rollen", siehe [offeredTarget]), „Warum diese
  *     Empfehlung?" ([WhySheet]).
  *  3. **Diese Woche** ([WeekCard]) — bzw. am Erststart „Los geht's".
  *  4. **Dein Ziel** ([GoalCard]) — ohne Plan die Einladung
@@ -107,28 +104,25 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
 
-    // Ein einmal gemerkter Zeitpunkt genuegt; wer die App ueber Mitternacht
-    // offen laesst, sieht beim naechsten Wechsel in diesen Tab den neuen Tag.
-    val now = remember { LocalDateTime.now() }
+    // Tagesgenau und beim Zurueckkehren nach Mitternacht erneuert (siehe
+    // [rememberNow]) — sonst galt nach einer Nacht im Hintergrund noch gestern.
+    val now = rememberNow()
     val today = now.toLocalDate()
-    val nowMs = remember(now) { now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }
 
-    // Der ANGEZEIGTE Plan: von `:core` (adaptPlan) an die gefahrene Realitaet
-    // angepasst. Der gespeicherte Plan bleibt unveraendert; der Trainings-Tab
-    // leitet denselben Anzeige-Plan ab.
-    val displayPlan = remember(plan, rides, insights) {
-        plan?.let {
-            adaptPlan(
-                plan = it,
-                rides = rides,
-                currentCtl = insights.latest?.ctl,
-                rideLoads = insights.rideLoads.mapValues { entry -> entry.value.load },
-            ).plan
-        }
-    }
+    // Plan, heutige Einheit, Tagesentscheidung und Angebot: dieselbe Rechnung
+    // wie auf der Karte und im Losfahren-Dialog ([decideToday]). Der ANGEZEIGTE
+    // Plan ist von `:core` (adaptPlan) an die gefahrene Realitaet angepasst;
+    // der gespeicherte bleibt unveraendert.
+    val decision = rememberTodayDecision(appViewModel, now)
+    val displayPlan = decision.displayPlan
+    val todaySession = decision.todaySession
+    val currentWeek = decision.currentWeek
+    val weekSessions = decision.weekSessions
+    val planRestDay = decision.planRestDay
+    val todayRoute = decision.route
+    val effort = decision.effort
+    val offer = decision.offer
 
-    // Hoechstens eine Einheit ist das Tagesprogramm; `:core` setzt nie zwei
-    // auf denselben Tag.
     // Prognose fuer die Ziel-Zeile — dieselbe Rechnung wie im Training-Tab.
     val goalPrediction = remember(displayPlan, rides, insights) {
         displayPlan?.takeIf { it.goal.targetDurationMin != null }?.let {
@@ -140,31 +134,6 @@ fun TodayScreen(appViewModel: AppViewModel) {
             )
         }
     }
-    val todaySession = remember(displayPlan, nowMs) {
-        displayPlan?.let { sessionsForDay(it, nowMs).firstOrNull() }
-    }
-
-    // Die laufende Planwoche — nur, wenn heute wirklich in ihr liegt. Vor
-    // Planbeginn und nach Planende gibt es keine Wochenvorgabe (dann zaehlt
-    // der Streifen nur, was gefahren wurde).
-    val currentWeek = remember(displayPlan, nowMs) {
-        displayPlan?.let { p ->
-            p.weeks.getOrNull(currentWeekIndex(p, nowMs))?.takeIf { nowMs >= it.start && nowMs < it.end }
-        }
-    }
-    val weekSessions = currentWeek?.sessions.orEmpty()
-    val planRestDay = currentWeek != null && todaySession == null
-
-    val todayRoute = remember(insights, rides, todaySession) {
-        decideTodayRoute(
-            recommendation = insights.recommendation,
-            session = todaySession,
-            profile = insights.profile,
-            recentRides = rides,
-            weeklyTarget = insights.weeklyTarget,
-        )
-    }
-    val effort = todayEffort(todayRoute, planRestDay, weekSessions)
 
     val readiness = insights.readiness
     val band = if (readiness.available) readiness.band else null
@@ -176,11 +145,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
         else -> HealthHint.COLLECTING
     }
 
-    val routeTarget = todayRoute.target
-    val showBuildRoute = routeTarget != null && effort != TodayEffort.RUHETAG && effort != TodayEffort.ZIELTAG
-    // Dieselbe Zahl in Satz, Knopf und Streifen.
+    // Dieselbe Zahl in Satz, Knopf und Streifen. Die lockere Ruhetagsrunde
+    // zaehlt nicht: Der Streifen zeigt, was ansteht, und am Ruhetag steht
+    // nichts an — sie ist ein Angebot, kein Programm.
     val todayKm = when {
-        showBuildRoute -> routeTarget?.distanceKm?.roundToInt()
+        offer != null && !offer.restDay -> offer.target.distanceKm.roundToInt()
         effort == TodayEffort.ZIELTAG -> todaySession?.targetKm
         else -> null
     }
@@ -249,8 +218,8 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         band = band,
                         headline = todayHeadline(effort, todayRoute, band, planRestDay),
                         sentence = todaySentence(effort, todayRoute),
-                        showBuildRoute = showBuildRoute,
-                        onBuildRoute = { routeTarget?.let { appViewModel.requestRouteGeneration(it) } },
+                        offer = offer,
+                        onBuildRoute = { offer?.let { appViewModel.requestRouteGeneration(it.target) } },
                         onWhy = { showWhy = true },
                         healthHint = healthHint,
                         onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },

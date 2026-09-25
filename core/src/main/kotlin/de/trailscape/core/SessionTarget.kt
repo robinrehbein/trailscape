@@ -456,3 +456,45 @@ fun routeTargetForToday(
         source = RouteTargetSource.TAGESEMPFEHLUNG,
     )
 }
+
+/** Beschriftung der lockeren Runde am Ruhetag ([restDayRideTarget]). */
+const val restDayRideLabel: String = "Ruhetag – locker rollen"
+
+/**
+ * Die lockere Runde fuer einen Ruhetag, an dem trotzdem jemand fahren will.
+ *
+ * ## Warum es das gibt
+ * [routeTargetForToday] und [decideTodayRoute] liefern an einem Ruhetag
+ * bewusst **kein** Trainingsziel — und das bleibt so: Die App empfiehlt keine
+ * Einheit, wenn Plan oder Tagesform zur Pause raten. Fahren verbieten will sie
+ * aber auch nicht. Frueher bot die Karte an einem Plan-Ruhetag stillschweigend
+ * die normale Tagesrunde an, waehrend „Heute" „Ruhetag" sagte; das war der
+ * Widerspruch. Die ehrliche Antwort ist ein ruhigeres Angebot, das sich auch
+ * so nennt: kurz, flach, locker.
+ *
+ * ## Warum genau diese Runde
+ * Laenge und Profil sind die der vorhandenen Erholungsvariante
+ * [DailyRecommendationKind.RECOVERY] („kurz und locker fahren", 1 h flach) —
+ * keine neue Zahl, sondern dieselbe, die die App an einem sehr muede
+ * gemessenen Tag ohnehin vorschlaegt. Das Wochenbudget deckelt sie wie jede
+ * andere Tagesrunde.
+ *
+ * Bei 1 h und dem Locker-Tempo sind das je nach Historie etwa 15–18 km —
+ * bewusst kuerzer als eine „kurze" Trainingsrunde von 20–25 km: Am Ruhetag
+ * soll die Runde die Pause kaum stoeren, nicht eine zweite Einheit werden.
+ *
+ * Gerechnet wird durch [routeTargetForToday] selbst (mit einer
+ * RECOVERY-Empfehlung), nicht mit einer Kopie der Rechnung: Budget-Deckel,
+ * Mindestdauer und Tempo koennen so nicht auseinanderlaufen. Nur die
+ * Beschriftung wird ersetzt.
+ */
+fun restDayRideTarget(profile: TrainingProfile, recentRides: List<RideInfo>): RouteTarget {
+    val recovery = DailyRecommendation(
+        kind = DailyRecommendationKind.RECOVERY,
+        title = restDayRideLabel,
+        detail = "",
+        reasons = emptyList(),
+    )
+    // RECOVERY hat immer eine Richtdauer, `null` gibt es nur fuer RUHETAG.
+    return checkNotNull(routeTargetForToday(recovery, profile, recentRides))
+}

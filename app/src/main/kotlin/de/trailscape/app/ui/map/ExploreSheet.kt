@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -37,6 +38,8 @@ import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.formatDateShort
 import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.today.TodayOffer
+import de.trailscape.app.ui.today.offerChipLabel
 import de.trailscape.core.GeoResult
 import de.trailscape.core.RideSummary
 import kotlin.math.roundToInt
@@ -65,8 +68,10 @@ import kotlin.math.roundToInt
  * Orte und den Weg zu den Offline-Karten. Vorher hatte das Blatt keinen
  * Koerper, und Wischen am Griff tat schlicht nichts.
  *
- * @param todayRouteKm Laenge der heutigen Runde oder `null`, wenn es heute
- *   keine gibt.
+ * @param todayOffer die heute angebotene Runde oder `null`, wenn es heute
+ *   keine gibt (Zieltag). Am Ruhetag ist es die lockere Runde; der Knopf sagt
+ *   das dann auch („Locker · 16 km", Spa-Symbol) und tritt grau statt farbig
+ *   auf — ein Angebot, keine Aufforderung.
  * @param bottomInset Platz, den das Blatt unten frei haelt (Kapsel bzw.
  *   Gestenleiste) — die Flaeche selbst laeuft bis an den Rand.
  */
@@ -83,7 +88,7 @@ internal fun ExploreSheet(
     searchResults: List<GeoResult>,
     searchHistory: List<Place>,
     onSelectPlace: (Place) -> Unit,
-    todayRouteKm: Double?,
+    todayOffer: TodayOffer?,
     onTodayRoute: () -> Unit,
     onRoundTripHere: () -> Unit,
     expanded: Boolean,
@@ -139,15 +144,23 @@ internal fun ExploreSheet(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        if (todayRouteKm != null) {
+                        if (todayOffer != null) {
                             FilledTonalButton(
                                 onClick = onTodayRoute,
                                 modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                                 contentPadding = ChipPadding,
+                                colors = if (todayOffer.restDay) {
+                                    ButtonDefaults.filledTonalButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                } else {
+                                    ButtonDefaults.filledTonalButtonColors()
+                                },
                             ) {
                                 ChipContent(
-                                    icon = Icons.Rounded.Star,
-                                    label = "Heute ${todayRouteKm.toInt()} km",
+                                    icon = if (todayOffer.restDay) Icons.Rounded.Spa else Icons.Rounded.Star,
+                                    label = offerChipLabel(todayOffer),
                                 )
                             }
                         }

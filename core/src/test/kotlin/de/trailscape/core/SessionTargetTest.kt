@@ -306,6 +306,32 @@ class SessionTargetTest {
         assertTrue(recovery.distanceKm < base.distanceKm)
     }
 
+    // --- restDayRideTarget ---
+
+    @Test
+    fun `Ruhetag-Runde ist die Erholungsvariante flach und locker`() {
+        val rides = List(3) { ride(createdAt = it.toLong(), avgSpeedKmh = 20.0) }
+
+        val target = restDayRideTarget(defaultProfile, rides)
+        val recovery = routeTargetForToday(
+            recommendation(DailyRecommendationKind.RECOVERY),
+            defaultProfile,
+            rides,
+        )!!
+
+        assertEquals(recovery.distanceKm, target.distanceKm, EPS)
+        assertEquals(1.0, target.durationH!!, EPS)
+        assertEquals(SessionIntensity.LOCKER, target.intensity)
+        assertEquals(AscentPreference.FLACH, target.ascentPreference)
+        assertEquals(restDayRideLabel, target.label)
+    }
+
+    @Test
+    fun `Ruhetag-Runde haelt das Wochenbudget ein`() {
+        val target = restDayRideTarget(TrainingProfile(ageYears = 40, weeklyHours = 1.0), emptyList())
+        assertEquals(0.5, target.durationH!!, EPS)
+    }
+
     @Test
     fun `harte Einheit will welliges Terrain und volles Tempo`() {
         val rides = List(3) { ride(createdAt = it.toLong(), avgSpeedKmh = 22.0) }
