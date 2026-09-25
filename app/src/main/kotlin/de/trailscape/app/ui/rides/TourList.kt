@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.EmptyState
@@ -417,7 +418,7 @@ internal fun EffortPill(effort: RideEffort, modifier: Modifier = Modifier) {
 
 /**
  * Das Import-Menue hinter „+" (und hinter „Touren importieren" im
- * Leerzustand): Einzeldatei oder Archiv. Ein `DropdownMenu`, das der Aufrufer
+ * Leerzustand): Dateien (Mehrfachauswahl) oder Archiv. Ein `DropdownMenu`, das der Aufrufer
  * an seinem Knopf verankert — zwei Eintraege rechtfertigen kein Blatt.
  */
 @Composable
@@ -429,7 +430,7 @@ internal fun ImportMenu(
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text("GPX-/FIT-Datei") },
+            text = { Text("GPX-/FIT-Dateien") },
             leadingIcon = { Icon(Icons.Filled.Route, contentDescription = null) },
             onClick = {
                 onDismiss()
@@ -529,6 +530,9 @@ fun RideDetailHost(
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
+    // Wird eine per Teilen importierte Tour direkt hier geoeffnet, gehoert
+    // die Ergebnismeldung hierher (siehe RidesScreen).
+    FileImportNoticeEffect(appViewModel, snackbarHostState)
 
     LaunchedEffect(summary) {
         if (summary == null) onBack()

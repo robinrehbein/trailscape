@@ -19,6 +19,9 @@ import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.ActivityFileInput
+import de.trailscape.core.bulkImportFailureText
+import de.trailscape.core.bulkImportMessage
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
@@ -70,6 +73,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -82,6 +86,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -793,15 +799,135 @@ class AppViewModel(
      */
     fun addRides(newRides: List<Ride>) {
         if (newRides.isEmpty()) return
-        viewModelScope.launch {
-            val touched = newRides.map { it.touchedNow() }
-            withContext(io) { rideStorage.saveRides(touched) }
-            val byId = touched.associateBy { it.id }
-            allSummaries = (allSummaries.filterNot { it.id in byId } + byId.values.map { it.toSummary() })
-                .sortedByDescending { it.createdAt }
-            publishRides()
-            refreshSegments(reportRideIds = byId.keys)
-            refreshExplorerTilesIfEnabled()
+        viewModelScope.launch { saveNewRides(newRides) }
+    }
+
+    /** Der eigentliche Speicherweg von [addRides] — aufrufbar, wo man auf das Ende warten muss. */
+    private suspend fun saveNewRides(newRides: List<Ride>) {
+        if (newRides.isEmpty()) return
+        val touched = newRides.map { it.touchedNow() }
+        withContext(io) { rideStorage.saveRides(touched) }
+        val byId = touched.associateBy { it.id }
+        allSummaries = (allSummaries.filterNot { it.id in byId } + byId.values.map { it.toSummary() })
+            .sortedByDescending { it.createdAt }
+        publishRides()
+        refreshSegments(reportRideIds = byId.keys)
+        refreshExplorerTilesIfEnabled()
+    }
+
+    // -------------------------------------------------------------------------
+    // Datei-Import (Teilen/Oeffnen und Mehrfachauswahl)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reiht Importe hintereinander: Zwei gleichzeitig laufende Laeufe saehen
+     * die Touren des jeweils anderen noch nicht und liessen dieselbe Datei
+     * zweimal durch die Duplikatpruefung.
+     */
+    private val fileImportMutex = Mutex()
+
+    private val _fileImportsRunning = MutableStateFlow(0)
+
+    /** Laeuft gerade ein Datei-Import? Import-Knoepfe zeigen dann einen Spinner. */
+    val fileImportRunning: StateFlow<Boolean> = _fileImportsRunning
+        .map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _fileImportFailure = MutableStateFlow<String?>(null)
+
+    /**
+     * Fehlertext, wenn sich von einem Import **keine** Datei lesen liess —
+     * fuer den stehenden Fehlerdialog (`ui/ActivityImportAction.kt`). Ein
+     * [StateFlow] statt einer Snackbar: Der Text muss stehen bleiben, bis
+     * jemand reagiert, und eine Drehung ueberleben.
+     */
+    val fileImportFailure: StateFlow<String?> = _fileImportFailure.asStateFlow()
+
+    /** Schliesst den Fehlerdialog aus [fileImportFailure]. */
+    fun dismissFileImportFailure() {
+        _fileImportFailure.value = null
+    }
+
+    private val _fileImportNotice = MutableStateFlow<FileImportNotice?>(null)
+
+    /**
+     * Die Ergebnismeldung des letzten Datei-Imports („7 importiert · 1 schon
+     * vorhanden · 1 unlesbar"), bis ein Screen sie anzeigt und mit
+     * [consumeFileImportNotice] quittiert (`FileImportNoticeEffect` in
+     * `ui/ActivityImportAction.kt`).
+     *
+     * Ein gehaltener Zustand statt [showMessage]: Beim Teilen aus einer
+     * anderen App steht die MainActivity waehrend des Imports still, der
+     * Tab-Wechsel in den Verlauf passiert erst im naechsten Frame danach. Eine
+     * einmalige Meldung fing bis dahin der Snackbar-Host des **alten** Tabs
+     * ein und verschwand mit ihm; beim Erststart (Einfuehrung davor) sammelte
+     * sie gar niemand. So wartet sie, bis der richtige Screen steht.
+     */
+    val fileImportNotice: StateFlow<FileImportNotice?> = _fileImportNotice.asStateFlow()
+
+    /** Quittiert [notice] — nur, wenn inzwischen keine neuere Meldung darueber liegt. */
+    fun consumeFileImportNotice(notice: FileImportNotice) {
+        _fileImportNotice.compareAndSet(notice, null)
+    }
+
+    /**
+     * Importiert bereits eingelesene Aktivitaetsdateien (GPX/FIT) — der eine
+     * Weg fuer „Teilen an Trailscape", „Oeffnen mit" und die Mehrfachauswahl
+     * im App-Dialog.
+     *
+     * Laeuft im `viewModelScope`, nicht im Scope eines Screens: Eine Drehung
+     * mitten im Import darf ihn weder abbrechen noch (ueber einen neu
+     * gestarteten Aufruf) verdoppeln. Die Duplikatpruefung wartet, bis der
+     * Bestand geladen ist — beim Kaltstart ueber „Teilen" kommt der Import
+     * sonst vor den Touren an und wuerde gegen eine leere Liste pruefen.
+     *
+     * Das Ergebnis steht danach in [fileImportNotice]; liess sich gar nichts
+     * lesen oder scheiterte der Lauf selbst (Speicherfehler, volles Geraet),
+     * stattdessen in [fileImportFailure] — nie nur im Log.
+     *
+     * Bei genau einer neuen Tour wird sie ausgewaehlt; mit [openInHistory]
+     * springt die App ausserdem in den Verlauf und oeffnet sie dort. Tab- und
+     * Detailwunsch sind gehaltene Zustaende: Laeuft beim Erststart noch die
+     * Einfuehrung, greifen sie erst danach (siehe `TrailscapeApp`).
+     */
+    fun importActivityFiles(
+        files: List<ActivityFileInput>,
+        openInHistory: Boolean = false,
+    ): Job {
+        if (openInHistory) requestTab(AppTab.RIDES)
+        _fileImportsRunning.update { it + 1 }
+        return viewModelScope.launch {
+            try {
+                fileImportMutex.withLock {
+                    _ridesLoading.first { loading -> !loading }
+                    val result = withContext(computation) {
+                        de.trailscape.core.importActivityFiles(files, allSummaries)
+                    }
+                    saveNewRides(result.rides)
+                    result.rides.singleOrNull()?.let { ride ->
+                        select(ride.id)
+                        if (openInHistory) requestRideDetail(ride.id)
+                    }
+                    val failure = bulkImportFailureText(result)
+                    if (failure != null) {
+                        _fileImportFailure.value = failure
+                    } else {
+                        _fileImportNotice.value = FileImportNotice(
+                            message = bulkImportMessage(result),
+                            errors = result.errors,
+                            inHistory = openInHistory,
+                        )
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _fileImportFailure.value = withCause(FILE_IMPORT_CRASH_MESSAGE, e)
+            } catch (e: OutOfMemoryError) {
+                _fileImportFailure.value = FILE_IMPORT_CRASH_MESSAGE
+            } finally {
+                _fileImportsRunning.update { it - 1 }
+            }
         }
     }
 

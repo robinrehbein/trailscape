@@ -51,6 +51,7 @@ import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.rememberActivityImportAction
+import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import kotlinx.coroutines.Job
@@ -90,9 +91,9 @@ import kotlinx.coroutines.Job
  * Detail, nicht den Tab (`BackHandler` in [RideDetailHost]).
  *
  * ## Meldungen und „Rückgängig"
- * [AppViewModel.messages] sammelt dieser Screen ein (Import-Erfolg, erkannte
- * Dublette). Auch die „Rückgängig"-Snackbar nach dem Loeschen steht hier und
- * nicht im Detail: Das Detail schliesst sich mit dem Loeschen, und mit seinem
+ * [AppViewModel.messages] sammelt dieser Screen ein, das Ergebnis eines
+ * Datei-Imports holt er ueber [FileImportNoticeEffect] ab. Auch die
+ * „Rückgängig"-Snackbar nach dem Loeschen steht hier und nicht im Detail: Das Detail schliesst sich mit dem Loeschen, und mit seinem
  * Fenster verschwaende auch eine Snackbar darin (Begruendung bei
  * [RideDetailHost]).
  */
@@ -123,7 +124,12 @@ fun RidesScreen(appViewModel: AppViewModel) {
     }
     BackHandler(enabled = searchOpen && detailRideId == null) { closeSearch() }
 
-    // Der Einzelimport (GPX/FIT) samt SAF-Launcher und Fehlerdialog — die
+    // Ergebnis eines Datei-Imports (auch per Teilen/Oeffnen, dafuer springt
+    // die App hierher). Liegt ein Detail ueber der Liste, zeigt es das Detail
+    // — der Snackbar-Host der Liste waere darunter verdeckt.
+    FileImportNoticeEffect(appViewModel, snackbarHostState, standBy = { detailRideId != null })
+
+    // Der Datei-Import (GPX/FIT, Mehrfachauswahl) samt SAF-Launcher und Fehlerdialog — die
     // geteilte Aktion aus `ui/ActivityImportAction.kt`.
     val importAction = rememberActivityImportAction(appViewModel)
     // Der Archiv-Import (ZIP mit Fortschritts- und Ergebnisdialog) wohnt in

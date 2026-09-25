@@ -339,7 +339,9 @@ private enum class OnboardingPage(
             "Trailscape liest einzelne GPX- und FIT-Dateien und komplette " +
                 "Strava-, Garmin- oder Wahoo-Exporte als ZIP-Archiv auf einmal ein. " +
                 "Duplikate erkennt es dabei selbst.",
-            "Zu finden im Verlauf über das + oben rechts. Unter Einstellungen → Import & " +
+            "Zu finden im Verlauf über das + oben rechts — oder du teilst eine Datei " +
+                "direkt aus Komoot, Strava oder dem Dateimanager an Trailscape. " +
+                "Unter Einstellungen → Import & " +
                 "Backup liegt auch der Export, mit " +
                 "dem du alles auf ein neues Gerät mitnimmst.",
         ),

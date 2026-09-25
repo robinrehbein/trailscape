@@ -69,6 +69,15 @@ werden für die Auswertung verwendet und, soweit sie zu einer Tour gehören,
 mit dieser Tour gespeichert. Auch sie verlassen das Gerät nicht — es sei denn,
 du hast den optionalen Sync mit deinem eigenen Server eingerichtet.
 
+**Importierte Dateien.** GPX- und FIT-Dateien, die du an Trailscape teilst,
+mit Trailscape öffnest oder im Verlauf bzw. unter *Import & Backup* auswählst,
+liest die App einmalig vom Gerät ein (`ImportActivity`,
+`core/…/ActivityFiles.kt`) und speichert daraus eine Tour wie oben
+beschrieben. Das geschieht vollständig lokal: Die Datei wird nirgendwohin
+hochgeladen, Trailscape behält keine Kopie der Originaldatei und liest nur
+die Dateien, die du ausdrücklich übergibst. Geteilte Weblinks (etwa ein
+Komoot-Link) ruft die App nicht ab.
+
 ---
 
 ## 3. Berechtigungen und wofür sie gebraucht werden

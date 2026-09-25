@@ -117,16 +117,81 @@ data class FitParseResult(
 // ---------------------------------------------------------------------------
 
 /**
+ * Obergrenze fuer den **entpackten** Inhalt einer `.gz`-Datei.
+ *
+ * Die Groessenpruefung beim Einlesen (`ui/ActivityFileImport.kt`) sieht nur
+ * die gepackten Bytes. Eine „GZIP-Bombe" von wenigen hundert Kilobyte
+ * entpackt sich aber zu Gigabyte — ohne diese Grenze reichte eine einzige
+ * geteilte Datei fuer einen OutOfMemoryError, und der ist ein `Error`, den
+ * kein `catch (e: Exception)` der Importwege auffaengt. Echte Tracks liegen
+ * entpackt bei hoechstens ~10 MB.
+ */
+internal const val MAX_GUNZIPPED_BYTES: Int = 32 * 1024 * 1024
+
+/** Meldung, wenn eine Datei (entpackt) ueber einer der Import-Obergrenzen liegt. */
+const val FILE_TOO_LARGE_MESSAGE: String =
+    "Die Datei ist zu groß für eine GPX- oder FIT-Datei."
+
+/**
  * Entpackt GZIP-Daten transparent (Strava exportiert `.fit.gz`/`.gpx.gz`),
  * laesst alles andere unveraendert durch.
+ *
+ * Hoechstens [maxOut] Bytes werden entpackt; darueber bricht die Funktion
+ * mit [FormatException] ab, statt den Speicher zu fluten (siehe
+ * [MAX_GUNZIPPED_BYTES]).
  */
-internal fun gunzipIfNeeded(bytes: ByteArray): ByteArray {
-    if (bytes.size < 2 || bytes[0] != 0x1F.toByte() || bytes[1] != 0x8B.toByte()) return bytes
-    return try {
-        GZIPInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
+internal fun gunzipIfNeeded(bytes: ByteArray, maxOut: Int = MAX_GUNZIPPED_BYTES): ByteArray {
+    if (!isGzip(bytes)) return bytes
+    return gunzipBounded(bytes, maxOut, truncate = false)
+}
+
+/**
+ * Nur der Anfang (hoechstens [length] Bytes) des entpackten Inhalts — fuer die
+ * Erkennung der Dateiart, die nicht mehr als den Kopf braucht. Ungepackte
+ * Daten kommen unveraendert zurueck.
+ */
+internal fun gunzipHead(bytes: ByteArray, length: Int): ByteArray {
+    if (!isGzip(bytes)) return bytes
+    return gunzipBounded(bytes, length, truncate = true)
+}
+
+private fun isGzip(bytes: ByteArray): Boolean =
+    bytes.size >= 2 && bytes[0] == 0x1F.toByte() && bytes[1] == 0x8B.toByte()
+
+/**
+ * Entpackt stueckweise und zaehlt mit. Mit [truncate] endet das Lesen still
+ * bei [maxOut] (Kopf fuer die Erkennung), sonst ist mehr als [maxOut] ein
+ * Fehler.
+ */
+private fun gunzipBounded(bytes: ByteArray, maxOut: Int, truncate: Boolean): ByteArray {
+    val out = java.io.ByteArrayOutputStream(minOf(maxOut, maxOf(bytes.size * 4, 1024)))
+    try {
+        GZIPInputStream(ByteArrayInputStream(bytes)).use { stream ->
+            val buffer = ByteArray(16 * 1024)
+            while (true) {
+                val read = stream.read(buffer)
+                if (read < 0) break
+                val room = maxOut - out.size()
+                if (read > room) {
+                    if (truncate) {
+                        out.write(buffer, 0, room)
+                        break
+                    }
+                    throw FormatException(FILE_TOO_LARGE_MESSAGE)
+                }
+                out.write(buffer, 0, read)
+            }
+        }
+    } catch (e: FormatException) {
+        throw e
     } catch (e: Exception) {
+        // Beim Kopf-Lesen darf ein abgeschnittenes oder defektes Ende nicht
+        // stoeren, solange der Anfang da ist — ob die Datei wirklich lesbar
+        // ist, entscheidet spaeter der volle Durchgang.
+        if (truncate && out.size() > 0) return out.toByteArray()
         throw FormatException("Die Datei ist GZIP-komprimiert, konnte aber nicht entpackt werden.")
     }
+    return out.toByteArray()
 }
 
 // ---------------------------------------------------------------------------
