@@ -117,18 +117,33 @@ internal val WaypointListSaver: Saver<List<Waypoint>, Any> = listSaver(
 )
 
 /**
- * Rettet die berechnete Route samt Distanz und Hoehenmetern.
+ * Rettet die berechnete Route samt Distanz, Hoehenmetern und Belag.
  *
  * Eine leere Liste heisst „nichts zu retten" — [androidx.compose.runtime.saveable.rememberSaveable]
  * faellt dann auf den Anfangswert `null` zurueck. Genau das ist auch das
  * Verhalten oberhalb von [MAX_SAVEABLE_TRACK_POINTS].
+ *
+ * ## Belag hinten angehaengt
+ * [PlannedRoute.pavedKm]/[PlannedRoute.unpavedKm] stehen als vierter und
+ * fuenfter Eintrag **hinter** den bisherigen drei, damit deren Positionen
+ * gleich bleiben: Ein Zustand von vor dieser Aenderung (nur drei Eintraege)
+ * wird weiterhin gelesen und bekommt schlicht keinen Belag. `null` geht als
+ * `NaN` ins Bundle — derselbe Kniff wie bei der Hoehe in
+ * [trackPointsToArray], weil ein `null` in der Liste nicht fuer jeden
+ * Bundle-Weg garantiert ist.
  */
 internal val PlannedRouteSaver: Saver<PlannedRoute?, Any> = listSaver(
     save = { route ->
         if (route == null || route.points.size > MAX_SAVEABLE_TRACK_POINTS) {
             emptyList()
         } else {
-            listOf(route.distanceKm, route.ascentM, trackPointsToArray(route.points))
+            listOf(
+                route.distanceKm,
+                route.ascentM,
+                trackPointsToArray(route.points),
+                route.pavedKm ?: Double.NaN,
+                route.unpavedKm ?: Double.NaN,
+            )
         }
     },
     restore = { saved ->
@@ -139,6 +154,8 @@ internal val PlannedRouteSaver: Saver<PlannedRoute?, Any> = listSaver(
                 points = trackPointsFromArray(saved[2] as? DoubleArray ?: DoubleArray(0)),
                 distanceKm = saved[0] as? Double ?: 0.0,
                 ascentM = saved[1] as? Double ?: 0.0,
+                pavedKm = (saved.getOrNull(3) as? Double)?.takeUnless { it.isNaN() },
+                unpavedKm = (saved.getOrNull(4) as? Double)?.takeUnless { it.isNaN() },
             )
         }
     },

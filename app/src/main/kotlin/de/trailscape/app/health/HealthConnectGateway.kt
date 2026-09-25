@@ -43,7 +43,10 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.reflect.KClass
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 /**
  * Die produktive Implementierung von `:core`s [HealthGateway] — direkt gegen
@@ -126,6 +129,17 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     }
 
     /**
+     * Ob [HealthPermissions.READ_HEALTH_DATA_HISTORY] erteilt ist. Kennt das
+     * Geraet die Funktion nicht, gilt das als „nein" — der Import bleibt dann
+     * beim 30-Tage-Fenster.
+     */
+    override fun hasHistoryPermission(): Boolean = read("Die Berechtigungen") { client ->
+        HealthPermissions.isHistoryFeatureAvailable(client) &&
+            client.permissionController.getGrantedPermissions()
+                .contains(HealthPermissions.READ_HEALTH_DATA_HISTORY)
+    }
+
+    /**
      * Zeigt den Health-Connect-Berechtigungsdialog und wartet auf das Ergebnis.
      *
      * Angefragt wird [HealthPermissions.requestSet] — Pflicht- und Zusatzrechte
@@ -173,6 +187,15 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * Tracking-App dazumischen. Schlaegt die Aggregation fehl (fehlende
      * Freigabe), bleibt es bei `null`; `buildRideFromWorkout` rechnet die
      * Distanz dann aus der Route.
+     *
+     * Aggregiert wird **nur fuer Radfahrten**: Jede Aggregation ist ein
+     * eigener IPC-Aufruf, und der Jahres-Import saehe sonst auch jeden
+     * automatisch erkannten Spaziergang — schnell tausend Aufrufe, die das
+     * Lese-Kontingent von Health Connect aufbrauchen koennen. Danach
+     * schluege die Aggregation fuer die Radfahrten still fehl (siehe den
+     * `catch` in [readSessionTotals]), und ihnen fehlten Distanz und kcal.
+     * Die uebrigen Sessions kommen ohne Summen in die Liste; `:core` braucht
+     * sie nur fuer Diagnose und Filter.
      */
     override fun readWorkouts(from: LocalDateTime, to: LocalDateTime): List<HealthWorkout> =
         read("Die Trainings") { client ->
@@ -185,13 +208,16 @@ class HealthConnectGateway(context: Context) : HealthGateway {
                 val typeName = exerciseTypeName(record.exerciseType)
                 activityTypes[typeName] = (activityTypes[typeName] ?: 0) + 1
 
-                val totals = client.readSessionTotals(record)
+                val kind = activityKind(record, typeName)
+                val cycling = kind == HealthActivityKind.RADFAHREN ||
+                    kind == HealthActivityKind.RADFAHREN_INDOOR
+                val totals = if (cycling) client.readSessionTotals(record) else null
                 workouts.add(
                     HealthWorkout(
                         id = record.metadata.id,
                         start = record.startTime.toLocal(),
                         end = record.endTime.toLocal(),
-                        kind = activityKind(record, typeName),
+                        kind = kind,
                         distanceM = totals?.distanceM,
                         energyKcal = totals?.energyKcal,
                         sourceName = record.metadata.dataOrigin.packageName,
@@ -270,6 +296,50 @@ class HealthConnectGateway(context: Context) : HealthGateway {
                     }
                 }
                 is ExerciseRouteResult.ConsentRequired -> consentRequired.add(record.metadata.id)
+                else -> Unit
+            }
+        }
+        HealthRouteReadResult(routes = routes, consentRequired = consentRequired)
+    }
+
+    /**
+     * Routen genau der Sessions [sessionIds], je Session einzeln gelesen.
+     *
+     * Anders als [readRoutesWithStatus] kommen so die Routen von Laeufen und
+     * Spaziergaengen im selben Zeitraum gar nicht erst in die App — beim
+     * Jahres-Import waere das sonst ein Jahr fremder GPS-Spuren. Der Preis ist
+     * ein Aufruf je Radfahrt, genauso viele, wie der Import fuer die
+     * Herzfrequenz ohnehin braucht. [from]/[to] werden nicht gebraucht.
+     *
+     * Eine einzelne Session, die sich nicht lesen laesst (inzwischen
+     * geloescht), fehlt nur in der Map; eine verweigerte Freigabe
+     * ([SecurityException]) bricht dagegen wie ueberall den Lesezugriff ab.
+     */
+    override fun readRoutesForSessions(
+        sessionIds: Set<String>,
+        from: LocalDateTime,
+        to: LocalDateTime,
+    ): HealthRouteReadResult = read("Die Routen") { client ->
+        val routes = linkedMapOf<String, List<HealthRoutePoint>>()
+        val consentRequired = linkedSetOf<String>()
+        for (id in sessionIds) {
+            val record = try {
+                client.readRecord(ExerciseSessionRecord::class, id).record
+            } catch (error: SecurityException) {
+                throw error
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                continue
+            }
+            when (val result = record.exerciseRouteResult) {
+                is ExerciseRouteResult.Data -> {
+                    val points = result.exerciseRoute.toHealthRoutePoints()
+                    if (points.isNotEmpty()) {
+                        routes[id] = points
+                    }
+                }
+                is ExerciseRouteResult.ConsentRequired -> consentRequired.add(id)
                 else -> Unit
             }
         }
@@ -449,7 +519,18 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         // Konstanten) — Ereignis und Fehlerklasse reichen, um „Health Connect
         // verweigert" von „Health Connect wirft" zu unterscheiden.
         return try {
-            runBlocking { block(client) }
+            // Obergrenze je Lesezugriff: Haengt Health Connect (Dienst
+            // eingefroren, Binder antwortet nicht), blockierte runBlocking
+            // sonst ewig — und mit ihm der Import-Mutex im AppViewModel, hinter
+            // dem „Jetzt synchronisieren" und „Ältere Fahrten freigeben" dann
+            // stumm warteten. Das Lesen selbst ist kooperativ abbrechbar
+            // (Health Connect liefert suspend-Funktionen ueber Futures).
+            runBlocking { withTimeout(READ_TIMEOUT_MS) { block(client) } }
+        } catch (error: TimeoutCancellationException) {
+            DiagLog.shared.log(DiagEvent.HEALTH_READ_FAILED, error = error)
+            throw HealthSyncException(
+                "$subject: Health Connect antwortet nicht. Bitte später erneut versuchen.",
+            )
         } catch (error: SecurityException) {
             DiagLog.shared.log(DiagEvent.HEALTH_ACCESS_DENIED)
             throw HealthSyncException(
@@ -613,6 +694,14 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     private companion object {
         /** Vorgabe von Health Connect; ausdruecklich gesetzt, siehe `readRequest`. */
         const val PAGE_SIZE = 1000
+
+        /**
+         * Obergrenze fuer einen einzelnen Lesezugriff (siehe `read`). Grosszuegig,
+         * weil ein Zugriff mehrere Seiten umfassen kann (Puls eines langen
+         * Abschnitts); ein gesunder Health-Connect-Dienst antwortet je Seite in
+         * Millisekunden, eine Minute trifft also nur echte Haenger.
+         */
+        const val READ_TIMEOUT_MS = 60_000L
 
         /**
          * Name der androidx-Konstante zu [type]; unbekannte Typen kommen als

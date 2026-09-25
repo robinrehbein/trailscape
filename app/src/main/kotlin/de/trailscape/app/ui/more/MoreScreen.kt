@@ -46,6 +46,7 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
@@ -134,6 +135,9 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
+    // Ergebnis des Datei-Imports unter Daten & Backup. Meldungen aus
+    // Teilen/Oeffnen bleiben liegen: Dafuer springt die App in den Verlauf.
+    FileImportNoticeEffect(appViewModel, snackbarHostState, acceptHistory = false)
     LaunchedEffect(Unit) {
         appViewModel.refreshHealthConnection()
     }

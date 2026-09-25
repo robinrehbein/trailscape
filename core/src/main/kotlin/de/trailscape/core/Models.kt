@@ -559,11 +559,23 @@ data class TrainingPlan(
  */
 data class Waypoint(val lat: Double, val lon: Double, val name: String? = null)
 
-/** Eine geplante Route. Rein In-Memory, siehe [Waypoint]. */
+/**
+ * Eine geplante Route. Rein In-Memory, siehe [Waypoint].
+ *
+ * [pavedKm]/[unpavedKm] sind die Kilometer auf befestigtem bzw. unbefestigtem
+ * Untergrund aus BRouters Wegmerkmalen (siehe `RouteSurface.kt`); der Rest bis
+ * [distanceKm] ist unklassifiziert. `null` heisst „keine Belagsdaten" — eine
+ * Antwort ohne verwertbare `messages` oder eine Route, die aus einer Quelle
+ * ohne Belag stammt. Beide Felder haben einen Vorgabewert, damit alle
+ * bestehenden Aufrufer (und gerettete Zustaende von vorher) unveraendert
+ * bleiben.
+ */
 data class PlannedRoute(
     val points: List<TrackPoint>,
     val distanceKm: Double,
     val ascentM: Double,
+    val pavedKm: Double? = null,
+    val unpavedKm: Double? = null,
 )
 
 /** Navigationszustand waehrend einer laufenden Fahrt. Rein In-Memory, siehe [Waypoint]. */

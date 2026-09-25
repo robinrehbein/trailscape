@@ -342,10 +342,17 @@ internal fun concatRouteLegs(parts: List<PlannedRoute>): PlannedRoute {
         }
         points.addAll(next)
     }
+    // Belag nur, wenn ihn **jedes** Teilstueck kennt: Fehlt er in einem Leg,
+    // waeren dessen Kilometer stillschweigend „unklassifiziert" — ein
+    // einzelnes kaputtes Leg koennte dann einen Anteil erzeugen, der fast
+    // nur aus den anderen Legs hochgerechnet ist. Lieber gar keine Angabe.
+    val surfaceKnown = parts.all { it.pavedKm != null && it.unpavedKm != null }
     return PlannedRoute(
         points = points,
         distanceKm = parts.sumOf { it.distanceKm },
         ascentM = parts.sumOf { it.ascentM },
+        pavedKm = if (surfaceKnown) parts.sumOf { it.pavedKm ?: 0.0 } else null,
+        unpavedKm = if (surfaceKnown) parts.sumOf { it.unpavedKm ?: 0.0 } else null,
     )
 }
 
@@ -707,10 +714,15 @@ fun parseBrouterGeoJson(body: String): PlannedRoute {
 
     val distanceM = parseNumericProperty(props["track-length"])
     val ascentM = parseNumericProperty(props["filtered ascend"])
+    // Best Effort: kaputte oder fehlende `messages` ergeben `null`, die Route
+    // selbst bleibt davon unberuehrt (siehe `RouteSurface.kt`).
+    val surface = surfaceBreakdownFromMessages(props["messages"])
 
     return PlannedRoute(
         points = points,
         distanceKm = distanceM / 1000,
         ascentM = ascentM,
+        pavedKm = surface?.pavedKm,
+        unpavedKm = surface?.unpavedKm,
     )
 }

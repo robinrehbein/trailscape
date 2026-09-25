@@ -286,8 +286,10 @@ data class HealthSleepSession(
 /**
  * Ergebnis eines Import-Laufs — fuer Diagnose und UI-Rueckmeldung.
  *
- * Wird von [HealthSyncService.importWithReport] geliefert. Weder [imported]
- * noch [mergedRides] sind gespeichert; das uebernimmt der Aufrufer.
+ * Wird von [HealthSyncService.importWithReport] geliefert. Ohne
+ * `persist`-Rueckruf sind weder [imported] noch [mergedRides] gespeichert; das
+ * uebernimmt der Aufrufer. Mit Rueckruf ist beides schon gespeichert, siehe
+ * [persisted].
  */
 data class HealthSyncReport(
     /** Betrachteter Zeitraum. */
@@ -332,6 +334,18 @@ data class HealthSyncReport(
      * nachgetragen, leer bis dahin.
      */
     val vitals: List<VitalsTypeDiagnostics> = emptyList(),
+    /**
+     * Ob dieser Lauf der einmalige Lang-Import mit Historien-Freigabe war
+     * ([healthSyncHistoryWindowMs]) — fuer Diagnose und Rueckmeldung.
+     */
+    val historyImport: Boolean = false,
+    /**
+     * Ob die Touren schon ueber den `persist`-Rueckruf gespeichert sind. Dann
+     * tragen [imported] und [mergedRides] **keine Trackpunkte** mehr — nur
+     * noch ID, Name und Kennzahlen fuer Anzeige und Nachlauf; wer sie noch
+     * einmal speicherte, ueberschriebe die Touren mit leeren Spuren.
+     */
+    val persisted: Boolean = false,
 ) {
     /** Touren ohne Route, fuer die Health Connect auch keine Routendaten hat. */
     val routesWithoutData: Int
@@ -358,6 +372,47 @@ data class HealthSyncReport(
             debugLines = emptyList(),
         )
     }
+}
+
+/**
+ * Einzeilige Rueckmeldung eines Import-Laufs fuer Snackbar und Health-Karte,
+ * etwa „12 Touren importiert · 3 ohne Route (Freigabe in Health Connect nötig)".
+ *
+ * Warum die Routen-Freigaben eigens genannt werden: Touren, deren Route
+ * Health Connect nur nach einer Einzel-Freigabe herausgibt
+ * ([HealthSyncReport.routeConsentPending]), landen ohne Karte in der Liste.
+ * Ohne diesen Hinweis saehe das wie ein Fehler von Trailscape aus — mit ihm
+ * weiss die Nutzerin, dass ein Tippen auf „Routen freigeben" genuegt.
+ * Touren, fuer die es schlicht keine Routendaten gibt (Rolle, Indoor), werden
+ * getrennt gezaehlt, weil dort keine Freigabe hilft.
+ *
+ * Der Ort der Freigabe steht mit in der Zeile, weil die Snackbar ohne die
+ * erklaerende Box der Health-Karte auskommen muss.
+ *
+ * Nullwerte fallen weg, damit die Zeile kurz bleibt; ohne jede Aenderung
+ * heisst sie „Keine neuen Touren". Hat ein Lauf nur bestehende Touren mit
+ * Puls ergaenzt, beginnt sie direkt mit „2 Touren mit Puls ergänzt" statt
+ * mit einem „0 Touren importiert".
+ *
+ * Die App spricht bei gespeicherten Fahrten durchgehend von „Touren"
+ * (Verlauf, Tour-Details); die Zeile bleibt dabei, auch wenn Health Connect
+ * selbst von Trainings spricht.
+ */
+fun HealthSyncReport.summaryLine(): String {
+    fun touren(n: Int) = if (n == 1) "1 Tour" else "$n Touren"
+    val consent = routeConsentPending.size
+    val withoutData = routesWithoutData
+    if (imported.isEmpty() && mergedRides.isEmpty()) return "Keine neuen Touren"
+    val parts = mutableListOf<String>()
+    if (imported.isNotEmpty()) parts.add("${touren(imported.size)} importiert")
+    if (mergedRides.isNotEmpty()) {
+        // Steht die Ergaenzung vorn, braucht sie das Substantiv selbst.
+        val n = mergedRides.size
+        parts.add(if (parts.isEmpty()) "${touren(n)} mit Puls ergänzt" else "$n mit Puls ergänzt")
+    }
+    if (consent > 0) parts.add("$consent ohne Route (Freigabe in Health Connect nötig)")
+    if (withoutData > 0) parts.add("$withoutData ohne GPS-Daten")
+    return parts.joinToString(" · ")
 }
 
 // ---------------------------------------------------------------------------

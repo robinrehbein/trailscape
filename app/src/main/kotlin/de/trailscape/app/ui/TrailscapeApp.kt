@@ -252,6 +252,18 @@ fun TrailscapeApp() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
+    val onboardingVisible by appViewModel.onboardingVisible.collectAsStateWithLifecycle()
+    if (onboardingVisible) {
+        OnboardingScreen(appViewModel)
+        return
+    }
+
+    // Erst unterhalb der Einfuehrung: Solange sie steht, ist der `NavHost`
+    // nicht komponiert. Ein Tab-Wunsch in dieser Zeit (etwa „Oeffnen mit
+    // Trailscape" direkt nach der Installation) liefe sonst ins Leere oder
+    // — ohne je gesetzten Graphen — in eine Exception von
+    // `findStartDestination`. So bleibt er liegen und greift, sobald die
+    // Einfuehrung vorbei ist.
     val tabRequest by appViewModel.tabRequest.collectAsStateWithLifecycle()
     LaunchedEffect(tabRequest) {
         val requested = tabRequest ?: return@LaunchedEffect
@@ -268,12 +280,6 @@ fun TrailscapeApp() {
             navController.navigateToTab(target.route)
         }
         appViewModel.consumeTabRequest()
-    }
-
-    val onboardingVisible by appViewModel.onboardingVisible.collectAsStateWithLifecycle()
-    if (onboardingVisible) {
-        OnboardingScreen(appViewModel)
-        return
     }
 
     // Ob gerade der Mehr-Bereich offen ist. Er ist die einzige zweite Ebene

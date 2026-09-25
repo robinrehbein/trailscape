@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
@@ -49,6 +50,8 @@ import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
 import de.trailscape.core.HealthSyncException
+import de.trailscape.core.HealthSyncReport
+import de.trailscape.core.summaryLine
 import de.trailscape.core.healthSyncInitialWindowMs
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +89,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
 
     val connection by appViewModel.healthConnection.collectAsStateWithLifecycle()
     val report = appViewModel.lastSyncReport.collectAsStateWithLifecycle().value
+    val historyAccess by appViewModel.healthHistoryAccess.collectAsStateWithLifecycle()
 
     var busy by remember { mutableStateOf(false) }
     var lastSyncAt by remember { mutableStateOf<LocalDateTime?>(null) }
@@ -173,14 +177,8 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         scope.launch {
                             busy = true
                             try {
-                                val count = appViewModel.syncHealthNow(reimportAll = false)
-                                appViewModel.showMessage(
-                                    if (count > 0) {
-                                        "$count ${if (count == 1) "Tour" else "Touren"} importiert"
-                                    } else {
-                                        "Keine neuen Touren"
-                                    },
-                                )
+                                appViewModel.syncHealthNow(reimportAll = false)
+                                appViewModel.showMessage(syncMessage(appViewModel.lastSyncReport.value))
                             } catch (e: HealthSyncException) {
                                 appViewModel.showMessage(e.message)
                             } finally {
@@ -211,14 +209,8 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         scope.launch {
                             busy = true
                             try {
-                                val count = appViewModel.syncHealthNow(reimportAll = true)
-                                appViewModel.showMessage(
-                                    if (count > 0) {
-                                        "$count ${if (count == 1) "Tour" else "Touren"} importiert"
-                                    } else {
-                                        "Keine neuen Touren"
-                                    },
-                                )
+                                appViewModel.syncHealthNow(reimportAll = true)
+                                appViewModel.showMessage(syncMessage(appViewModel.lastSyncReport.value))
                             } catch (e: HealthSyncException) {
                                 appViewModel.showMessage(e.message)
                             } finally {
@@ -233,6 +225,39 @@ fun HealthCardContent(appViewModel: AppViewModel) {
         }
     }
 
+    // Historien-Freigabe nur anbieten, wenn Health Connect sie kennt und sie
+    // fehlt (`false`, nicht `null`) — sonst fuehrte der Knopf ins Leere.
+    if (connection?.isReady == true && historyAccess == false) {
+        Spacer(modifier = Modifier.height(12.dp))
+        HealthHistoryNotice(
+            enabled = !busy,
+            onRequest = {
+                scope.launch {
+                    busy = true
+                    try {
+                        val longImport = appViewModel.requestHealthHistoryAccess()
+                        appViewModel.showMessage(
+                            if (longImport != null) {
+                                syncMessage(longImport)
+                            } else {
+                                // Health Connect zeigt den Dialog nach zwei
+                                // Ablehnungen nicht mehr — dann bleibt nur der
+                                // Weg ueber die Einstellungen.
+                                "Ohne Freigabe bleiben ältere Fahrten außen vor. Erlauben lässt sie " +
+                                    "sich in Health Connect unter „App-Berechtigungen → Trailscape“."
+                            },
+                        )
+                    } catch (e: HealthSyncException) {
+                        appViewModel.showMessage(e.message)
+                    } finally {
+                        busy = false
+                    }
+                    refreshLastSyncAt()
+                }
+            },
+        )
+    }
+
     lastSyncAt?.let { at ->
         Spacer(modifier = Modifier.height(12.dp))
         Text(
@@ -245,16 +270,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     val currentReport = report
     if (currentReport != null) {
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "${currentReport.workoutsFound} " +
-                "${if (currentReport.workoutsFound == 1) "Workout" else "Workouts"} gefunden · " +
-                "${currentReport.imported.size} importiert · " +
-                "${currentReport.mergedRides.size} mit Puls angereichert · " +
-                "${currentReport.duplicatesSkipped} " +
-                if (currentReport.duplicatesSkipped == 1) "Duplikat" else "Duplikate",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
+        HealthSyncSummary(currentReport)
         if (currentReport.debugLines.isNotEmpty()) {
             TextButton(onClick = { showDebugDialog = true }) {
                 Text("Diagnose-Details", style = MaterialTheme.typography.bodySmall)
@@ -294,8 +310,12 @@ fun HealthCardContent(appViewModel: AppViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
     }
 
-    val routesMissing = currentReport?.routesMissing ?: 0
-    if (routesMissing > 0) {
+    // Nur die Touren, bei denen die Freigabe tatsaechlich hilft: Fuer die
+    // uebrigen ohne Route (Rolle, Aufzeichnung ohne GPS) hat Health Connect
+    // gar keine Routendaten — die Zusammenfassung oben nennt sie getrennt
+    // „ohne GPS-Daten", und eine Freigabe-Empfehlung waere dort irrefuehrend.
+    val routesLocked = currentReport?.routeConsentPending?.size ?: 0
+    if (routesLocked > 0) {
         NoticeBox(
             icon = Icons.Filled.LocationOn,
             color = warningColor,
@@ -304,8 +324,8 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
             // ausserdem ganz, der Pfad lief ungebremst in den naechsten
             // Satzteil.
-            text = "$routesMissing " +
-                "${if (routesMissing == 1) "Tour kam" else "Touren kamen"} ohne Route. " +
+            text = "$routesLocked " +
+                "${if (routesLocked == 1) "Tour kam" else "Touren kamen"} ohne Route. " +
                 "Erlaube in Health Connect „App-Berechtigungen → Trailscape → " +
                 "Trainingsrouten“ dauerhaft.",
         )
@@ -317,8 +337,12 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     }
     Spacer(modifier = Modifier.height(8.dp))
     SettingsHint(
-        "„Alles neu importieren“ holt die letzten " +
-            "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage erneut.",
+        if (historyAccess == true) {
+            "„Alles neu importieren“ holt die Radfahrten der letzten 12 Monate erneut."
+        } else {
+            "„Alles neu importieren“ holt die letzten " +
+                "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage erneut."
+        },
     )
 
     if (showDebugDialog && report != null) {
@@ -329,6 +353,65 @@ fun HealthCardContent(appViewModel: AppViewModel) {
         )
     }
 }
+
+/**
+ * Ergebnis des letzten Imports: oben die Zeile, auf die es ankommt
+ * ([summaryLine] — importiert, ohne Route wegen fehlender Freigabe, ohne
+ * GPS-Daten), darunter klein die Rohzahlen fuer Neugierige.
+ *
+ * Die Freigabe-Zahl steht bewusst in der Hauptzeile: Touren ohne Karte sehen
+ * sonst wie ein Fehler von Trailscape aus, dabei fehlt nur ein Tippen auf
+ * „Routen freigeben".
+ */
+@Composable
+internal fun HealthSyncSummary(report: HealthSyncReport) {
+    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = report.summaryLine(),
+        style = MaterialTheme.typography.bodyMedium,
+    )
+    Text(
+        text = "${report.workoutsFound} " +
+            "${if (report.workoutsFound == 1) "Radfahrt" else "Radfahrten"} gefunden · " +
+            "${report.duplicatesSkipped} schon vorhanden",
+        style = MaterialTheme.typography.bodySmall,
+        color = hintColor,
+    )
+}
+
+/**
+ * Hinweis samt Knopf, wenn die Historien-Freigabe fehlt.
+ *
+ * Erklaert in einem Satz, was sie bringt — ohne sie gibt Health Connect
+ * nichts heraus, was mehr als 30 Tage vor dem Verbinden liegt; mit ihr holt
+ * Trailscape einmalig bis zu 12 Monate Radfahrten —, damit die Nutzerin nicht
+ * blind einer weiteren Berechtigung zustimmen muss. Bewusst nicht „nur die
+ * letzten 30 Tage": Was nach dem Verbinden dazukommt, bleibt ohnehin lesbar.
+ * Sonst gibt es keinen Ort, an dem diese Freigabe nachzuholen waere; ohne den
+ * Knopf bliebe sie eine versteckte Funktion.
+ */
+@Composable
+internal fun HealthHistoryNotice(enabled: Boolean, onRequest: () -> Unit) {
+    NoticeBox(
+        icon = Icons.Filled.History,
+        color = MaterialTheme.colorScheme.primary,
+        title = "Ältere Fahrten",
+        text = "Ohne Freigabe sieht Trailscape keine Fahrten, die mehr als 30 Tage vor " +
+            "dem Verbinden liegen. Mit Freigabe holt Trailscape einmalig deine Radfahrten " +
+            "der letzten 12 Monate — Training und Form starten dann mit deiner " +
+            "Vorgeschichte statt bei null.",
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    SettingsSecondaryButton(
+        onClick = onRequest,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Ältere Fahrten freigeben") }
+}
+
+/** Snackbar-Text nach einem Sync; `null` (kein Bericht) zaehlt als „nichts Neues". */
+private fun syncMessage(report: HealthSyncReport?): String =
+    report?.summaryLine() ?: "Keine neuen Touren"
 
 @Composable
 private fun HealthDebugDialog(lines: List<String>, onDismiss: () -> Unit, onCopied: () -> Unit) {
