@@ -12,17 +12,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -33,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -56,9 +53,8 @@ import kotlin.math.roundToInt
  * Datenseite.
  *
  * **Beenden fragt auch hier ueber Kreuz zurueck**: Es ist dieselbe
- * [StopConfirmation] wie im Fahrmodus (dort begruendet — der Fehlgriff auf
- * Schotter darf keine Tour kosten), sie ersetzt fuer die Rueckfrage die
- * ganze Knopfzeile.
+ * [de.trailscape.app.ui.components.HoldToEndButton] wie im Fahrmodus: Beenden
+ * nur durch Halten — der Fehlgriff auf Schotter darf keine Tour kosten.
  *
  * Der **Auto-Pause-Zustand** ist sichtbar: Statt des Tempos steht dann
  * „Auto-Pause" (bzw. „Pause" bei einer manuellen) — im Stand ist das Tempo
@@ -83,9 +79,6 @@ internal fun RideCompactBar(
     onShowData: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Die Rueckfrage lebt in der Leiste selbst (wie `confirmStop` im
-    // Fahrmodus-Fenster): Sie ist nur interessant, solange die Leiste steht.
-    var confirmStop by remember { mutableStateOf(false) }
 
     // Der Puls direkt aus dem Repository statt als Parameter — dasselbe
     // Muster samt Begruendung wie im Fahrmodus (`RideModeScreen.kt`):
@@ -143,54 +136,39 @@ internal fun RideCompactBar(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            if (confirmStop) {
-                StopConfirmation(
-                    onCancel = { confirmStop = false },
-                    onConfirm = {
-                        confirmStop = false
-                        onStop()
+            Row {
+                NeutralButton(
+                    onClick = onTogglePause,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (paused) "Weiter" else "Pause")
+                }
+                Spacer(Modifier.width(OverlayGap))
+                HoldToEndButton(
+                    onEnd = onStop,
+                    label = "Halten: Ende",
+                    minHeight = 40.dp,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(OverlayGap))
+                PrimaryButton(
+                    text = "Daten",
+                    onClick = onShowData,
+                    modifier = Modifier.weight(1f),
+                    leading = {
+                        Icon(
+                            Icons.Filled.Speed,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
                     },
                 )
-            } else {
-                Row {
-                    NeutralButton(
-                        onClick = onTogglePause,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (paused) "Weiter" else "Pause")
-                    }
-                    Spacer(Modifier.width(OverlayGap))
-                    DangerButton(
-                        text = "Beenden",
-                        onClick = { confirmStop = true },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            Icons.Filled.Stop,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                    Spacer(Modifier.width(OverlayGap))
-                    PrimaryButton(
-                        text = "Daten",
-                        onClick = onShowData,
-                        modifier = Modifier.weight(1f),
-                        leading = {
-                            Icon(
-                                Icons.Filled.Speed,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        },
-                    )
-                }
             }
         }
     }

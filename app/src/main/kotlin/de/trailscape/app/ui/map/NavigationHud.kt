@@ -171,7 +171,7 @@ internal fun NavigationHud(
                         },
                     )
                 }
-                TextButton(onClick = onStop) { Text("Beenden") }
+                TextButton(onClick = onStop) { Text("Ohne Route weiter") }
             }
         }
     }

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,6 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
@@ -233,17 +233,13 @@ internal fun LiveRecordingCard(
                     Text(if (paused) "Weiter" else "Pause")
                 }
                 Spacer(Modifier.width(OverlayGap))
-                DangerButton(
-                    text = "Beenden",
-                    onClick = onStop,
+                // Frueher beendete dieser Knopf die Aufzeichnung ohne jede
+                // Rueckfrage; jetzt derselbe Halte-Knopf wie im Cockpit.
+                HoldToEndButton(
+                    onEnd = onStop,
+                    minHeight = 44.dp,
                     modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        Icons.Filled.Stop,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
+                )
             }
         }
     }
