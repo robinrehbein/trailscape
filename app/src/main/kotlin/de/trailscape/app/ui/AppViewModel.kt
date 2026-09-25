@@ -102,13 +102,12 @@ import kotlinx.serialization.json.JsonObject
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
 
 /**
- * Eine einzelne Zeile des Mehr-Tabs als Sprungziel (siehe
+ * Eine Unterseite der Einstellungen als Sprungziel (siehe
  * [AppViewModel.requestMoreSection]).
  *
- * Bewusst nur die Zeilen, auf die von aussen verwiesen wird — nicht alle acht.
+ * Bewusst nur die Seiten, auf die von aussen verwiesen wird — nicht alle.
  * Ein Aufzaehlungswert ohne Verweis waere ein Versprechen ohne Einloeser; die
- * Zuordnung Wert → Gruppe steht an genau einer Stelle
- * (`ui/more/MoreScreen.kt`, `moreGroupIndex`).
+ * Zuordnung Wert → Seite steht an genau einer Stelle (`ui/more/MoreScreen.kt`).
  */
 enum class MoreSection {
     /** „Profil" — Alter, Gewicht, Zeitbudget, HFmax/FTP. */
@@ -545,15 +544,15 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
-    // Leerzustand → passende Karte im Mehr-Tab
+    // Leerzustand → passende Seite der Einstellungen
     // -------------------------------------------------------------------------
 
     private val _pendingMoreSection = MutableStateFlow<MoreSection?>(null)
 
     /**
-     * Die Karte, zu der der Mehr-Tab als Naechstes scrollen soll — dasselbe
+     * Die Seite, die die Einstellungen als Naechstes oeffnen sollen — dasselbe
      * Muster wie [pendingRideDetail], aus demselben Grund: Zwischen dem Tippen
-     * im Leerzustand und dem Erscheinen des Mehr-Screens liegt ein Tab-Wechsel,
+     * im Leerzustand und dem Erscheinen der Einstellungen liegt ein Wechsel,
      * den ein einmaliges Ereignis nicht ueberleben wuerde.
      *
      * ## Warum ueberhaupt
@@ -576,7 +575,7 @@ class AppViewModel(
      */
     val pendingMoreSection: StateFlow<MoreSection?> = _pendingMoreSection.asStateFlow()
 
-    /** Wechselt in den Mehr-Tab und scrollt dort zur Karte [section]. */
+    /** Oeffnet die Einstellungen direkt auf der Seite [section]. */
     fun requestMoreSection(section: MoreSection) {
         _pendingMoreSection.value = section
         requestTab(AppTab.MORE)
@@ -980,7 +979,7 @@ class AppViewModel(
      *
      * ## Wer es setzt
      * Jeder Weg, auf dem ein Profil bewusst uebernommen wird, laeuft ueber
-     * [setProfile]: „Profil speichern" im Mehr-Tab, die Profilseite der
+     * [setProfile]: die Profilseite der Einstellungen (speichert sofort), die Profilseite der
      * Einfuehrung und der Backup-Import (ein wiederhergestelltes Profil ist
      * ebenso das eigene). Ueberspringt die Einfuehrung, ruft niemand
      * [setProfile] — und das Kennzeichen bleibt aus.
@@ -1152,7 +1151,7 @@ class AppViewModel(
 
     private val _lastSyncReport = MutableStateFlow<HealthSyncReport?>(null)
 
-    /** Bericht des letzten Imports — Grundlage der Diagnose im Mehr-Tab. */
+    /** Bericht des letzten Imports — Grundlage der Diagnose in den Einstellungen. */
     val lastSyncReport: StateFlow<HealthSyncReport?> = _lastSyncReport.asStateFlow()
 
     private val _healthConnection = MutableStateFlow<HealthConnection?>(null)
@@ -1491,7 +1490,7 @@ class AppViewModel(
     /**
      * Einstellungen der lokalen Erinnerungen — drei Schalter und zwei
      * Uhrzeiten, ab Werk alle aus (siehe [ReminderSettings]). Gelesen wird der
-     * Wert von der Karte im Mehr-Tab; der Hintergrundlauf liest ihn
+     * Wert von der Seite in den Einstellungen; der Hintergrundlauf liest ihn
      * unabhaengig davon direkt aus dem Speicher, weil er ohne ViewModel laeuft.
      */
     val reminderSettings: StateFlow<ReminderSettings> = _reminderSettings.asStateFlow()
@@ -1501,7 +1500,7 @@ class AppViewModel(
      *
      * Den **Zeitplan** stellt diese Methode bewusst nicht um: Dafuer braucht
      * es einen `Context` (WorkManager), den das ViewModel nicht hat und nicht
-     * haben soll. Die Karte im Mehr-Tab ruft direkt im Anschluss
+     * haben soll. Die Seite in den Einstellungen ruft direkt im Anschluss
      * `ReminderScheduler.reschedule(context, settings)` mit **demselben**
      * Wert auf — dadurch haengt die Neuplanung nicht davon ab, ob dieses
      * Speichern schon durch ist.
