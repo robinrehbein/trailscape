@@ -24,6 +24,13 @@ package de.trailscape.core
  * („versehentlich zweimal dieselbe Datei gewaehlt") trennscharf genug, ohne
  * die Punktlisten Punkt fuer Punkt vergleichen zu muessen.
  *
+ * Fuer importierte **Planungen** (GPX ohne `<time>`, siehe [rideFromGpx])
+ * taugt der Startzeitpunkt nicht — er ist dort der Importzeitpunkt, also bei
+ * jedem Import ein anderer. Zwei Planungen gelten deshalb als dieselbe, wenn
+ * Punktzahl **und** Distanz uebereinstimmen: Die Distanz ist aus den Punkten
+ * berechnet und damit fuer dieselbe Datei bitgenau gleich, fuer eine
+ * abweichende Route praktisch nie.
+ *
  * Der Bestand kommt als [RideInfo] herein — die Pruefung braucht nur
  * Startzeitpunkt und [RideInfo.pointCount], laeuft also unveraendert ueber
  * die punktfreien Zusammenfassungen der Tourenliste.
@@ -31,7 +38,12 @@ package de.trailscape.core
 fun findDuplicateRide(existing: List<RideInfo>, candidate: Ride): RideInfo? =
     existing.firstOrNull { ride ->
         ride.id == candidate.id ||
-            (ride.createdAt == candidate.createdAt && ride.pointCount == candidate.points.size)
+            (ride.createdAt == candidate.createdAt && ride.pointCount == candidate.points.size) ||
+            (
+                candidate.planned && ride.planned &&
+                    ride.pointCount == candidate.points.size &&
+                    ride.stats.distanceKm == candidate.stats.distanceKm
+                )
     }
 
 /** Kurzform von [findDuplicateRide] fuer den blossen Ja/Nein-Fall. */

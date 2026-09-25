@@ -19,6 +19,10 @@ import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.ActivityFileInput
+import de.trailscape.core.BulkImportResult
+import de.trailscape.core.bulkImportFailureText
+import de.trailscape.core.bulkImportMessage
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
@@ -70,7 +74,9 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,6 +88,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -793,15 +801,101 @@ class AppViewModel(
      */
     fun addRides(newRides: List<Ride>) {
         if (newRides.isEmpty()) return
-        viewModelScope.launch {
-            val touched = newRides.map { it.touchedNow() }
-            withContext(io) { rideStorage.saveRides(touched) }
-            val byId = touched.associateBy { it.id }
-            allSummaries = (allSummaries.filterNot { it.id in byId } + byId.values.map { it.toSummary() })
-                .sortedByDescending { it.createdAt }
-            publishRides()
-            refreshSegments(reportRideIds = byId.keys)
-            refreshExplorerTilesIfEnabled()
+        viewModelScope.launch { saveNewRides(newRides) }
+    }
+
+    /** Der eigentliche Speicherweg von [addRides] — aufrufbar, wo man auf das Ende warten muss. */
+    private suspend fun saveNewRides(newRides: List<Ride>) {
+        if (newRides.isEmpty()) return
+        val touched = newRides.map { it.touchedNow() }
+        withContext(io) { rideStorage.saveRides(touched) }
+        val byId = touched.associateBy { it.id }
+        allSummaries = (allSummaries.filterNot { it.id in byId } + byId.values.map { it.toSummary() })
+            .sortedByDescending { it.createdAt }
+        publishRides()
+        refreshSegments(reportRideIds = byId.keys)
+        refreshExplorerTilesIfEnabled()
+    }
+
+    // -------------------------------------------------------------------------
+    // Datei-Import (Teilen/Oeffnen und Mehrfachauswahl)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reiht Importe hintereinander: Zwei gleichzeitig laufende Laeufe saehen
+     * die Touren des jeweils anderen noch nicht und liessen dieselbe Datei
+     * zweimal durch die Duplikatpruefung.
+     */
+    private val fileImportMutex = Mutex()
+
+    private val _fileImportsRunning = MutableStateFlow(0)
+
+    /** Laeuft gerade ein Datei-Import? Import-Knoepfe zeigen dann einen Spinner. */
+    val fileImportRunning: StateFlow<Boolean> = _fileImportsRunning
+        .map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _fileImportFailure = MutableStateFlow<String?>(null)
+
+    /**
+     * Fehlertext, wenn sich von einem Import **keine** Datei lesen liess —
+     * fuer den stehenden Fehlerdialog (`ui/ActivityImportAction.kt`). Ein
+     * [StateFlow] statt einer Snackbar: Der Text muss stehen bleiben, bis
+     * jemand reagiert, und eine Drehung ueberleben.
+     */
+    val fileImportFailure: StateFlow<String?> = _fileImportFailure.asStateFlow()
+
+    /** Schliesst den Fehlerdialog aus [fileImportFailure]. */
+    fun dismissFileImportFailure() {
+        _fileImportFailure.value = null
+    }
+
+    /**
+     * Importiert bereits eingelesene Aktivitaetsdateien (GPX/FIT) — der eine
+     * Weg fuer „Teilen an Trailscape", „Oeffnen mit" und die Mehrfachauswahl
+     * im App-Dialog.
+     *
+     * Laeuft im `viewModelScope`, nicht im Scope eines Screens: Eine Drehung
+     * mitten im Import darf ihn weder abbrechen noch (ueber einen neu
+     * gestarteten Aufruf) verdoppeln. Die Duplikatpruefung wartet, bis der
+     * Bestand geladen ist — beim Kaltstart ueber „Teilen" kommt der Import
+     * sonst vor den Touren an und wuerde gegen eine leere Liste pruefen.
+     *
+     * Das Ergebnis meldet sich per Snackbar ([bulkImportMessage]); liess sich
+     * gar nichts lesen, stattdessen ueber [fileImportFailure].
+     *
+     * Bei genau einer neuen Tour wird sie ausgewaehlt; mit [openInHistory]
+     * springt die App ausserdem in den Verlauf und oeffnet sie dort.
+     */
+    fun importActivityFiles(
+        files: List<ActivityFileInput>,
+        openInHistory: Boolean = false,
+    ): Deferred<BulkImportResult> {
+        if (openInHistory) requestTab(AppTab.RIDES)
+        _fileImportsRunning.update { it + 1 }
+        return viewModelScope.async {
+            try {
+                fileImportMutex.withLock {
+                    _ridesLoading.first { loading -> !loading }
+                    val result = withContext(computation) {
+                        de.trailscape.core.importActivityFiles(files, allSummaries)
+                    }
+                    saveNewRides(result.rides)
+                    result.rides.singleOrNull()?.let { ride ->
+                        select(ride.id)
+                        if (openInHistory) requestRideDetail(ride.id)
+                    }
+                    val failure = bulkImportFailureText(result)
+                    if (failure != null) {
+                        _fileImportFailure.value = failure
+                    } else {
+                        showMessage(bulkImportMessage(result))
+                    }
+                    result
+                }
+            } finally {
+                _fileImportsRunning.update { it - 1 }
+            }
         }
     }
 

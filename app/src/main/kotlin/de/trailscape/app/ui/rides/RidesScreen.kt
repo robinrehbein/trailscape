@@ -123,7 +123,7 @@ fun RidesScreen(appViewModel: AppViewModel) {
     }
     BackHandler(enabled = searchOpen && detailRideId == null) { closeSearch() }
 
-    // Der Einzelimport (GPX/FIT) samt SAF-Launcher und Fehlerdialog — die
+    // Der Datei-Import (GPX/FIT, Mehrfachauswahl) samt SAF-Launcher und Fehlerdialog — die
     // geteilte Aktion aus `ui/ActivityImportAction.kt`.
     val importAction = rememberActivityImportAction(appViewModel)
     // Der Archiv-Import (ZIP mit Fortschritts- und Ergebnisdialog) wohnt in

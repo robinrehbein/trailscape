@@ -43,10 +43,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.data.trailscapePrefs
 import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
-import de.trailscape.app.ui.importActivityFile
-import de.trailscape.app.ui.isDuplicateRide
+import de.trailscape.app.ui.rememberActivityImportAction
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.BulkImportResult
 import de.trailscape.core.DiagEvent
@@ -73,9 +71,9 @@ import kotlinx.coroutines.withContext
  * Nutzt das Storage Access Framework statt `file_picker`/`share_plus`: Export
  * geht ueber [ActivityResultContracts.CreateDocument] (Nutzerin waehlt den
  * Speicherort direkt, kein Zwischenschritt ueber ein Share-Sheet noetig),
- * Import ueber [ActivityResultContracts.OpenDocument]. Der Einzelimport
- * („Tour importieren") teilt seine Dateitypenerkennung mit dem
- * Import-Knopf in `ui/rides/TourList.kt` (siehe `ui/ActivityFileImport.kt`).
+ * Import ueber [ActivityResultContracts.OpenDocument]. Der Datei-Import
+ * („Touren importieren", Mehrfachauswahl) ist dieselbe Aktion wie im Verlauf
+ * (siehe `ui/ActivityImportAction.kt`).
  *
  * ## Archiv-Import
  * „Archiv importieren (ZIP)" oeffnet den ZIP-Stream zweimal: einmal fuer
@@ -195,46 +193,12 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         }
     }
 
-    // Einzelimport einer Aktivitaetsdatei (GPX oder FIT, je auch `.gz`) —
-    // Erkennung und Lesen teilt sich `importActivityFile` mit dem
-    // Import-Knopf in `ui/rides/TourList.kt` (`ui/ActivityFileImport.kt`).
-    // Bewusst `*/*`: Der MIME-Typ ist je nach Dateimanager/Anbieter
-    // uneinheitlich (siehe TourList-KDoc), ein enger Filter blendet die
-    // Datei bei manchen davon schlicht aus.
-    val importActivityLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
-            busy = true
-            try {
-                val ride = importActivityFile(context, uri)
-
-                // Inhaltsbasiert statt ueber die ID: `rideFromGpx`/`rideFromFit`
-                // vergeben beim Import jedes Mal eine neue ID (`:core`,
-                // Export.kt/Fit.kt), ein ID-Vergleich konnte deshalb nie
-                // anschlagen.
-                if (isDuplicateRide(rides, ride)) {
-                    appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
-                } else {
-                    appViewModel.addRide(ride)
-                    appViewModel.showMessage("„${ride.name}“ importiert")
-                }
-            } catch (e: FormatException) {
-                appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
-            } catch (e: Exception) {
-                appViewModel.showMessage(
-                    withCause(
-                        "Die Datei konnte nicht importiert werden. Trailscape liest " +
-                            "GPX- und FIT-Dateien, auch als .gz gepackt.",
-                        e,
-                    ),
-                )
-            } finally {
-                busy = false
-            }
-        }
-    }
+    // Import einzelner Aktivitaetsdateien (GPX oder FIT, je auch `.gz`,
+    // mehrere auf einmal) — dieselbe fertig verdrahtete Aktion wie im
+    // Verlauf (`ui/ActivityImportAction.kt`): Mehrfachauswahl, Import ueber
+    // das ViewModel, Ergebnis-Snackbar und stehender Fehlerdialog. Frueher
+    // hatte die Karte eine eigene Kopie davon, die nur eine Datei nahm.
+    val activityImport = rememberActivityImportAction(appViewModel)
 
     // Massenimport aus einem ZIP-Archiv (Strava-/Garmin-/Wahoo-Export) — siehe
     // KDoc der Karte oben fuer den Ablauf und die Abbrechbarkeits-Entscheidung.
@@ -330,8 +294,8 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             Text("Backup importieren")
         }
         SettingsSecondaryButton(
-            onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
-            enabled = !busy,
+            onClick = activityImport.start,
+            enabled = !busy && !activityImport.importing,
         ) {
             Icon(
                 Icons.Filled.Route,
@@ -339,7 +303,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 modifier = Modifier.size(ButtonDefaults.IconSize),
             )
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Tour importieren (GPX/FIT)")
+            Text("Touren importieren (GPX/FIT)")
         }
         SettingsSecondaryButton(
             onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
@@ -355,7 +319,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         }
     }
 
-    if (busy) {
+    if (busy || activityImport.importing) {
         Spacer(modifier = Modifier.height(12.dp))
         LinearProgressIndicator(
             modifier = Modifier

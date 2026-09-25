@@ -417,7 +417,7 @@ internal fun EffortPill(effort: RideEffort, modifier: Modifier = Modifier) {
 
 /**
  * Das Import-Menue hinter „+" (und hinter „Touren importieren" im
- * Leerzustand): Einzeldatei oder Archiv. Ein `DropdownMenu`, das der Aufrufer
+ * Leerzustand): Dateien (Mehrfachauswahl) oder Archiv. Ein `DropdownMenu`, das der Aufrufer
  * an seinem Knopf verankert — zwei Eintraege rechtfertigen kein Blatt.
  */
 @Composable
@@ -429,7 +429,7 @@ internal fun ImportMenu(
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text("GPX-/FIT-Datei") },
+            text = { Text("GPX-/FIT-Dateien") },
             leadingIcon = { Icon(Icons.Filled.Route, contentDescription = null) },
             onClick = {
                 onDismiss()

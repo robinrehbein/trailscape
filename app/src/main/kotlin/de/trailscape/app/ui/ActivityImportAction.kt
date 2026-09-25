@@ -17,9 +17,10 @@ import de.trailscape.app.ui.components.OneUiDialog
 import kotlinx.coroutines.launch
 
 /**
- * Der Einzelimport (GPX/FIT, je auch `.gz`) als fertig verdrahtete Aktion —
- * SAF-Auswahl, Lesen ueber [importActivityFile], Duplikatpruefung, Erfolgs-
- * meldung und der stehende Fehlerdialog in einem Stueck.
+ * Der Datei-Import (GPX/FIT, je auch `.gz`, eine oder mehrere Dateien) als
+ * fertig verdrahtete Aktion — SAF-Mehrfachauswahl, Lesen ueber
+ * [readActivityFiles], Import ueber [AppViewModel.importActivityFiles] und
+ * der stehende Fehlerdialog in einem Stueck.
  *
  * Entstanden aus dem Import-Knopf der Tourenliste (`ui/rides/TourList.kt`):
  * Der lag als Kopfzeile **in** der aufgeklappten Liste und war damit nur zu
@@ -30,8 +31,8 @@ import kotlinx.coroutines.launch
  * eingeklappten Erkunden-Blatt (`ui/map/ExploreSheet.kt`) und den
  * Leerzustand der Tourenliste. Ein zweiter, unabhaengiger Weg bleibt die
  * Backup-Karte (Mehr → Daten & Backup, `ui/more/BackupCard.kt`) — sie
- * kombiniert den Einzelimport mit Archiv und Backup und behaelt ihre eigene
- * Verdrahtung.
+ * kombiniert den Datei-Import mit Archiv und Backup, nutzt fuer ersteren
+ * aber dieselbe Aktion.
  *
  * @see rememberActivityImportAction
  */
@@ -45,86 +46,81 @@ class ActivityImportAction internal constructor(
 /**
  * Baut die Import-Aktion samt SAF-Launcher und Fehlerdialog auf.
  *
- * Der Dialog wird hier mit ausgegeben (Compose-Dialoge oeffnen ein eigenes
- * Fenster, ihr Platz im Baum ist egal): Ein gescheiterter Import ist eine
- * Entscheidung, keine Meldung — der Fehlertext bleibt stehen, bis eine andere
- * Datei gewaehlt oder geschlossen wird; eine 4-Sekunden-Snackbar waere
- * verschwunden, bevor jemand vom Dateidialog zurueckgeblickt hat. Erfolg und
- * erkannte Dublette laufen dagegen wie ueberall ueber
- * [AppViewModel.showMessage].
+ * Seit dem Sammelimport ist die Auswahl eine **Mehrfach**auswahl
+ * ([ActivityResultContracts.OpenMultipleDocuments]): Wer von Komoot oder
+ * Strava umsteigt, hat zwanzig Touren im Download-Ordner, nicht eine. Der
+ * Import selbst laeuft ueber [AppViewModel.importActivityFiles] — derselbe
+ * Weg wie „Teilen an Trailscape" — und meldet sich per Snackbar mit
+ * „7 importiert · 1 schon vorhanden · 1 unlesbar".
  *
- * [ActivityImportAction.importing] liegt bewusst in `remember`, nicht in
- * `rememberSaveable`: `true` gilt nur, solange die Import-Coroutine laeuft —
- * ein Prozesstod beendet die mit, und ein wiederhergestelltes `true` haette
- * den Knopf dauerhaft stillgelegt.
+ * Der Dialog wird hier mit ausgegeben (Compose-Dialoge oeffnen ein eigenes
+ * Fenster, ihr Platz im Baum ist egal): Liess sich **gar nichts** lesen, ist
+ * das eine Entscheidung, keine Meldung — der Fehlertext bleibt stehen, bis
+ * eine andere Datei gewaehlt oder geschlossen wird; eine 4-Sekunden-Snackbar
+ * waere verschwunden, bevor jemand vom Dateidialog zurueckgeblickt hat.
+ * Teilerfolge laufen dagegen als Snackbar, der Rest ist ja angekommen.
+ *
+ * Laufzustand und Fehlertext liegen im ViewModel
+ * ([AppViewModel.fileImportRunning], [AppViewModel.fileImportFailure]), nicht
+ * in `remember`: Der Import ueberlebt eine Drehung, und sein Ergebnis soll
+ * danach noch ankommen. Dieselbe Quelle bedient auch „Teilen an
+ * Trailscape" — scheitert dort alles, steht der Dialog im Verlauf, in den die
+ * App dabei springt.
  */
 @Composable
 fun rememberActivityImportAction(appViewModel: AppViewModel): ActivityImportAction {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    val importing by appViewModel.fileImportRunning.collectAsStateWithLifecycle()
 
-    var importing by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    // Zwischen Auswahl und Uebergabe ans ViewModel (Einlesen der Bytes)
+    // laeuft noch kein ViewModel-Import — ohne diesen Merker liesse sich der
+    // Knopf in genau diesem Moment ein zweites Mal ausloesen.
+    var reading by remember { mutableStateOf(false) }
+    val errorMessage by appViewModel.fileImportFailure.collectAsStateWithLifecycle()
 
     // Aktivitaets-Auswahl (GPX oder FIT) ueber das Storage Access Framework.
     // Bewusst `*/*`: Der MIME-Typ einer .gpx-/.fit-Datei ist je nach Anbieter
     // application/gpx+xml, application/xml, text/xml, application/octet-stream
     // oder gar nichts — ein enger Filter blendet die Datei bei manchen
-    // Dateimanagern schlicht aus.
+    // Dateimanagern schlicht aus. Was keine GPX/FIT ist, faellt spaeter an
+    // Endung und Magic Bytes heraus (`:core`, ActivityFiles.kt).
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        importing = true
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris: List<Uri> ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        reading = true
         scope.launch {
             try {
-                val ride = importActivityFile(context, uri)
-                // Inhaltsbasiert pruefen: `rideFromGpx`/`rideFromFit` vergeben
-                // bei jedem Import eine frische ID, ein ID-Vergleich ginge also
-                // immer ins Leere (siehe ui/RideImport.kt).
-                if (isDuplicateRide(rides, ride)) {
-                    appViewModel.showMessage(DUPLICATE_RIDE_MESSAGE)
-                } else {
-                    appViewModel.addRide(ride)
-                    appViewModel.showMessage("„${ride.name}“ importiert")
-                }
-            } catch (e: Exception) {
-                // Deutscher Satz mit Handlungsanweisung zuerst, technische
-                // Ursache nur in Klammern (siehe ui/ErrorText.kt).
-                errorMessage = withCause(
-                    "Die Datei konnte nicht importiert werden. Trailscape liest " +
-                        "GPX- und FIT-Dateien, auch als .gz gepackt.",
-                    e,
-                )
+                appViewModel.importActivityFiles(readActivityFiles(context, uris.distinct()))
             } finally {
-                importing = false
+                reading = false
             }
         }
     }
 
     fun start() {
-        if (!importing) launcher.launch(arrayOf("*/*"))
+        if (!importing && !reading) launcher.launch(arrayOf("*/*"))
     }
 
     errorMessage?.let { message ->
         OneUiDialog(
-            onDismissRequest = { errorMessage = null },
+            onDismissRequest = appViewModel::dismissFileImportFailure,
             title = { Text("Import fehlgeschlagen") },
             text = { Text(message) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        errorMessage = null
+                        appViewModel.dismissFileImportFailure()
                         start()
                     },
                 ) { Text("Andere Datei wählen") }
             },
             dismissButton = {
-                TextButton(onClick = { errorMessage = null }) { Text("Schließen") }
+                TextButton(onClick = appViewModel::dismissFileImportFailure) { Text("Schließen") }
             },
         )
     }
 
-    return ActivityImportAction(importing = importing, start = ::start)
+    return ActivityImportAction(importing = importing || reading, start = ::start)
 }

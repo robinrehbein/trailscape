@@ -164,6 +164,9 @@ class ExportTest {
         assertNull(r.stats.maxHrBpm)
         assertNull(r.stats.durationS)
         assertTrue(r.stats.distanceKm > 0)
+        // Ohne einen einzigen Zeitstempel ist das eine Route (Komoot & Co.),
+        // keine Aufzeichnung — sie kommt als Planung herein.
+        assertTrue(r.planned)
     }
 
     @Test

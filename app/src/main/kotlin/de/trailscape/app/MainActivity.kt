@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         showTodayIfRequested(intent)
+        importIfRequested(intent)
         setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -61,6 +62,25 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         showTodayIfRequested(intent)
+        importIfRequested(intent)
+    }
+
+    /**
+     * Die [ImportActivity] hat geteilte bzw. geoeffnete Dateien eingelesen und
+     * in [PendingImports] abgelegt — hier gehen sie an das [AppViewModel], das
+     * importiert und in den Verlauf springt.
+     *
+     * [PendingImports.take] leert die Ablage, und das Extra wird entfernt:
+     * Eine Drehung oder die Wiederherstellung nach einem Prozesstod ruft
+     * `onCreate` mit demselben Intent erneut auf und darf nicht noch einmal
+     * importieren.
+     */
+    private fun importIfRequested(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_IMPORT_PENDING, false) != true) return
+        intent.removeExtra(EXTRA_IMPORT_PENDING)
+        val files = PendingImports.take()
+        if (files.isEmpty()) return
+        ViewModelProvider(this)[AppViewModel::class.java].importActivityFiles(files, openInHistory = true)
     }
 
     /**

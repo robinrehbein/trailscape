@@ -84,6 +84,13 @@ fun backupFileName(at: LocalDate): String {
  * [fallbackName] wird verwendet, wenn die GPX-Datei selbst keinen Tracknamen
  * traegt (ueblicherweise der Dateiname ohne Endung). [id] ueberschreibt die
  * sonst aus der aktuellen Uhrzeit generierte Tour-ID — fuer Tests gedacht.
+ *
+ * ## GPX ohne Zeitstempel ist eine Planung
+ * Traegt **kein** Punkt ein `<time>`, ist die Datei eine Route und keine
+ * Aufzeichnung — so exportieren Komoot, Strava-Routen und Routenplaner.
+ * Solche Dateien kommen als [Ride.planned] herein: Als Fahrt gezaehlt,
+ * landeten ihre Kilometer im Wochenfortschritt und in Fitness/Form, obwohl
+ * niemand sie gefahren ist; und als Startzeit bliebe nur „jetzt".
  */
 fun rideFromGpx(xml: String, fallbackName: String, id: String? = null): Ride {
     val parsed = parseGpx(xml)
@@ -93,6 +100,7 @@ fun rideFromGpx(xml: String, fallbackName: String, id: String? = null): Ride {
     val parsedName = parsed.name?.trim()
     val name = if (!parsedName.isNullOrEmpty()) parsedName else fallbackName
     val createdAt = points.first().time ?: System.currentTimeMillis()
+    val planned = points.none { it.time != null }
 
     val hrValues = points.mapNotNull { it.hr }
     var avgHr: Int? = null
@@ -118,6 +126,7 @@ fun rideFromGpx(xml: String, fallbackName: String, id: String? = null): Ride {
             avgHrBpm = avgHr,
             maxHrBpm = maxHr,
         ),
+        planned = planned,
     )
 }
 

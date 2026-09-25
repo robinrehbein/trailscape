@@ -3,25 +3,21 @@ package de.trailscape.app.ui
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import de.trailscape.core.FormatException
-import de.trailscape.core.Ride
-import de.trailscape.core.rideFromFit
-import de.trailscape.core.rideFromGpx
-import java.io.ByteArrayInputStream
-import java.util.zip.GZIPInputStream
+import de.trailscape.core.ActivityFileInput
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Einzelimport einer per SAF ausgewaehlten Aktivitaetsdatei (GPX oder FIT,
- * je auch `.gz`) — geteilt zwischen dem Import-Knopf im Touren-Screen
- * (`ui/rides/TourList.kt`) und der „Aktivitaet importieren"-Schaltflaeche
- * der Backup-Karte (`ui/more/BackupCard.kt`), damit beide dieselbe
- * Dateitypenerkennung nutzen.
+ * Einlesen per URI gereichter Aktivitaetsdateien (GPX oder FIT, je auch
+ * `.gz`) — geteilt zwischen der Mehrfachauswahl im App-Dialog
+ * (`ui/ActivityImportAction.kt`, genutzt vom Verlauf und von der
+ * Backup-Karte) und dem Teilen/Oeffnen aus fremden Apps (`ImportActivity`).
  *
- * Fuer den Massenimport eines ganzen Archivs siehe stattdessen
- * `de.trailscape.core.importArchive` (`:core`, `BulkImport.kt`), das dieselbe
- * Zuordnung fuer Archiv-Eintraege bereits mitbringt.
+ * Hier passiert bewusst **nur** das Lesen in den Speicher: Welche Datei was
+ * ist, was doppelt und was unlesbar ist, entscheidet `:core`
+ * (`ActivityFiles.kt`, [de.trailscape.core.importActivityFiles]) — ohne
+ * Android und darum testbar. Fuer den Massenimport eines ganzen Archivs siehe
+ * stattdessen `de.trailscape.core.importArchive` (`BulkImport.kt`).
  */
 
 /**
@@ -37,64 +33,60 @@ const val UNREADABLE_FILE_MESSAGE =
         "erst auf das Gerät herunter und wähle sie dann erneut aus."
 
 /**
- * Liest die per SAF gewaehlte Datei komplett und baut daraus eine Tour.
- *
- * Die Dateiart wird an der Endung des SAF-`DISPLAY_NAME` entschieden: endet
- * sie (nach Abzug eines etwaigen `.gz`) auf `.fit`, geht es ueber
- * [rideFromFit] — sonst wie bisher ueber [rideFromGpx]. `.gz` wird dabei
- * generisch behandelt, also anhand der GZIP-Magic-Bytes am Inhalt erkannt und
- * nicht nur am Namen: `parseFit`/[rideFromFit] entpackt `.fit.gz` bereits
- * selbst, fuer GPX entpackt diese Funktion vorher, weil [rideFromGpx] reinen
- * Text erwartet. Ohne verwertbaren Anzeigenamen (mancher Anbieter liefert
- * keinen) faellt die Erkennung auf GPX zurueck — das bisherige Verhalten.
- *
- * Laeuft auf [Dispatchers.IO]; wirft [FormatException] bzw.
- * [IllegalStateException] mit einer fuer die UI geeigneten deutschen Meldung.
+ * Obergrenze je Datei. Aktivitaetsdateien sind einige zehn bis wenige hundert
+ * Kilobyte; wer versehentlich ein Video teilt (`application/octet-stream`
+ * nimmt alles an), soll nicht den Speicher der App fluten.
  */
-suspend fun importActivityFile(context: Context, uri: Uri): Ride = withContext(Dispatchers.IO) {
-    val rawBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-        ?: throw FormatException(UNREADABLE_FILE_MESSAGE)
-
-    val displayName = queryDisplayName(context, uri)
-    val fallbackName = displayName
-        ?.let { activityBaseName(it) }
-        ?.takeIf { it.isNotBlank() }
-        ?: "Importierte Tour"
-
-    if (isFitFileName(displayName)) {
-        rideFromFit(rawBytes, fallbackName = fallbackName)
-    } else {
-        val xml = gunzipIfNeeded(rawBytes).toString(Charsets.UTF_8)
-        rideFromGpx(xml, fallbackName = fallbackName)
-    }
-}
-
-/** true bei `.fit`/`.fit.gz` (Gross-/Kleinschreibung egal) — alles andere gilt als GPX. */
-private fun isFitFileName(name: String?): Boolean {
-    val lower = name?.lowercase()?.trim() ?: return false
-    val stem = if (lower.endsWith(".gz")) lower.removeSuffix(".gz") else lower
-    return stem.endsWith(".fit")
-}
-
-/** Dateiname ohne Verzeichnis und ohne (auch doppelte, z. B. `.fit.gz`) Endung. */
-private fun activityBaseName(name: String): String {
-    var stem = name.substringAfterLast('/')
-    if (stem.lowercase().endsWith(".gz")) stem = stem.dropLast(3)
-    val dot = stem.lastIndexOf('.')
-    return if (dot > 0) stem.substring(0, dot) else stem
-}
+private const val MAX_ACTIVITY_FILE_BYTES = 64L * 1024 * 1024
 
 /**
- * Entpackt GZIP-Daten transparent (Strava exportiert z. B. `.gpx.gz`), laesst
- * alles andere unveraendert durch. Entspricht `gunzipIfNeeded` aus `:core`
- * (`Fit.kt`) — dort `internal` und darum von hier aus nicht erreichbar.
+ * Liest jede der [uris] komplett in den Speicher — auf [Dispatchers.IO] und
+ * **sofort**: Eine per Teilen/Oeffnen gereichte Leseberechtigung gilt nur, so
+ * lange die empfangende Activity lebt. Ein Lesefehler bricht nicht ab, sondern
+ * landet als [ActivityFileInput.readError] im Ergebnis.
+ *
+ * [mimeTypes] sind die vom Intent gemeldeten Typen (je URI, falls bekannt);
+ * sonst fragt die Funktion den Anbieter.
  */
-private fun gunzipIfNeeded(bytes: ByteArray): ByteArray {
-    if (bytes.size < 2 || bytes[0] != 0x1F.toByte() || bytes[1] != 0x8B.toByte()) return bytes
-    return try {
-        GZIPInputStream(ByteArrayInputStream(bytes)).use { it.readBytes() }
-    } catch (e: Exception) {
-        throw FormatException("Die Datei ist GZIP-komprimiert, konnte aber nicht entpackt werden.")
+suspend fun readActivityFiles(
+    context: Context,
+    uris: List<Uri>,
+    mimeTypes: Map<Uri, String?> = emptyMap(),
+): List<ActivityFileInput> = withContext(Dispatchers.IO) {
+    val resolver = context.contentResolver
+    uris.map { uri ->
+        val name = runCatching { queryDisplayName(context, uri) }.getOrNull()
+            ?: uri.lastPathSegment?.substringAfterLast('/')
+        val mime = mimeTypes[uri] ?: runCatching { resolver.getType(uri) }.getOrNull()
+        try {
+            val bytes = resolver.openInputStream(uri)?.use { stream ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(16 * 1024)
+                var total = 0L
+                while (true) {
+                    val read = stream.read(buffer)
+                    if (read <= 0) break
+                    total += read
+                    if (total > MAX_ACTIVITY_FILE_BYTES) {
+                        return@map ActivityFileInput(
+                            name,
+                            mime,
+                            ByteArray(0),
+                            readError = "Die Datei ist zu groß für eine GPX- oder FIT-Datei.",
+                        )
+                    }
+                    out.write(buffer, 0, read)
+                }
+                out.toByteArray()
+            }
+            if (bytes == null) {
+                ActivityFileInput(name, mime, ByteArray(0), readError = UNREADABLE_FILE_MESSAGE)
+            } else {
+                ActivityFileInput(name, mime, bytes)
+            }
+        } catch (e: Exception) {
+            ActivityFileInput(name, mime, ByteArray(0), readError = UNREADABLE_FILE_MESSAGE)
+        }
     }
 }
 
