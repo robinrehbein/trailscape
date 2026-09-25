@@ -215,6 +215,22 @@ class ScreenshotApplication : Application() {
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
 private const val WEEK_MS = 7 * DAY_MS
+/**
+ * Bewusst die echte Uhrzeit und KEIN fester Zeitpunkt: Die App liest die Zeit
+ * an vielen Stellen selbst (`System.currentTimeMillis()`, ohne einschleusbare
+ * Uhr), und Robolectric friert nur `SystemClock` ein, nicht die Wanduhr. Ein
+ * fester Wert hier liesse Beispieldaten und App-Uhr auseinanderlaufen — der
+ * Plan laege irgendwann in der Vergangenheit, die Touren in der Zukunft.
+ *
+ * Fuer die CI trotzdem stabil, weil alle Daten RELATIV zu [NOW] liegen: Das
+ * Ziel liegt immer genau acht Wochen voraus (also immer ein Plan mit 9
+ * Wochen, weit weg von MIN_WEEKS/MAX_WEEKS), die Touren immer 2 bis 32 Tage
+ * zurueck, und jeder angetippte Text („Warum diese Empfehlung?",
+ * „Feierabendrunde", die Tab-Namen) steht unabhaengig vom Wochentag da.
+ * Was sich von Tag zu Tag aendert, ist nur der INHALT der Bilder (Datum,
+ * Tagesempfehlung) — fuer die Sichtpruefung gewollt, fuer einen spaeteren
+ * Pixelvergleich aber erst mit einer einschleusbaren App-Uhr loesbar.
+ */
 private val NOW = System.currentTimeMillis()
 
 /** Sechs gefahrene Touren der letzten Wochen, jede mit einer kleinen Schleife als Spur. */
