@@ -36,10 +36,65 @@ const val healthSyncStorageKey: String = "trailscape.healthsync"
  * Tage in Millisekunden.
  *
  * Bewusst 30 Tage: Ohne die zusaetzliche Historien-Freigabe
- * (`READ_HEALTH_DATA_HISTORY`) gibt Health Connect grundsaetzlich nur Daten der
- * letzten 30 Tage ab Zustimmung heraus.
+ * (`READ_HEALTH_DATA_HISTORY`) gibt Health Connect nichts heraus, was mehr als
+ * 30 Tage vor der ersten Zustimmung geschrieben wurde. Beim ersten Sync — also
+ * kurz nach dieser Zustimmung — ist das praktisch dasselbe wie „die letzten
+ * 30 Tage"; alles, was danach dazukommt, bleibt dauerhaft lesbar.
  */
 const val healthSyncInitialWindowMs: Long = 30L * 24 * 60 * 60 * 1000
+
+/**
+ * Wie weit der einmalige Lang-Import zurueckgreift, wenn die Historien-Freigabe
+ * (`READ_HEALTH_DATA_HISTORY`) erteilt ist: 365 Tage in Millisekunden.
+ *
+ * Warum ueberhaupt: Wer Trailscape neu installiert, hat meist schon Monate an
+ * Fahrten in Samsung Health. Mit nur 30 Tagen starteten Fitness-, Form- und
+ * Belastungskurven bei null, obwohl die Daten laengst auf dem Handy liegen.
+ *
+ * Warum nicht mehr: Ein Jahr deckt eine volle Saison samt Winterpause ab und
+ * reicht fuer jede Trainingslast-Rechnung (die laengste Konstante, die
+ * Fitness, klingt nach wenigen Wochen ab). Aeltere Fahrten waeren reine
+ * Archivpflege und wuerden den ersten Sync spuerbar verlaengern — Herzfrequenz
+ * wird je Fahrt einzeln gelesen.
+ *
+ * Wann: genau einmal, siehe [HealthSyncStore.historyImportDone].
+ */
+const val healthSyncHistoryWindowMs: Long = 365L * 24 * 60 * 60 * 1000
+
+/**
+ * Speicherschluessel des Merkers „Lang-Import mit Historien-Freigabe ist
+ * gelaufen" (siehe [HealthSyncStore.historyImportDone]).
+ */
+const val healthSyncHistoryImportKey: String = "trailscape.healthsync.historyImportDone"
+
+/**
+ * Speicherschluessel des Lang-Import-Fortschritts (siehe
+ * [HealthSyncStore.historyImportedUntilMs]).
+ */
+const val healthSyncHistoryProgressKey: String = "trailscape.healthsync.historyImportedUntil"
+
+/**
+ * Laenge eines Import-Abschnitts: 30 Tage in Millisekunden.
+ *
+ * Warum Abschnitte: Der Lang-Import liest ein ganzes Jahr. In einem Rutsch
+ * laegen alle Sessions, alle Routen und alle gebauten Touren samt Trackpunkten
+ * gleichzeitig im Speicher — bei einer Vielfahrerin weit ueber eine Million
+ * Punkte —, und ein Abbruch kurz vor Schluss verwarf die ganze Arbeit.
+ * Abschnittsweise wird jeder Teil sofort gespeichert und als erledigt
+ * vermerkt (siehe [HealthSyncService.importWithReport]).
+ *
+ * Warum 30 Tage: So bleibt der erste Sync ohne Historien-Freigabe (genau
+ * [healthSyncInitialWindowMs]) und jeder normale Folge-Sync ein einziger
+ * Abschnitt — mit genau der Diagnose, die es vorher auch gab.
+ */
+const val healthSyncSliceMs: Long = 30L * 24 * 60 * 60 * 1000
+
+/**
+ * Um so viel greift jeder weitere Abschnitt vor seinen Beginn zurueck (ein
+ * Tag), damit eine Session an der Grenze sicher in einem der beiden
+ * Abschnitte ankommt.
+ */
+private const val SLICE_OVERLAP_MS = 24L * 60 * 60 * 1000
 
 /**
  * Wie weit der Beginn des Importfensters hinter den Zeitpunkt des letzten
@@ -91,6 +146,16 @@ interface HealthGateway {
     /** Ob alle benoetigten Leserechte erteilt sind. */
     fun hasPermissions(): Boolean
 
+    /**
+     * Ob die Historien-Freigabe (`READ_HEALTH_DATA_HISTORY`) erteilt ist, also
+     * Daten aelter als 30 Tage vor der ersten Zustimmung lesbar sind.
+     *
+     * Die Vorgabe meldet `false`: Eine Implementierung, die das Recht nicht
+     * kennt, bekommt so das bisherige 30-Tage-Fenster und fragt nie ins
+     * Leere hinein ab.
+     */
+    fun hasHistoryPermission(): Boolean = false
+
     /** Fragt die benoetigten Leserechte an. Liefert `true` bei Zustimmung. */
     fun requestPermissions(): Boolean
 
@@ -131,6 +196,28 @@ interface HealthGateway {
         HealthRouteReadResult(routes = readRoutes(from, to))
 
     /**
+     * Wie [readRoutesWithStatus], aber nur fuer die Sessions [sessionIds] (die
+     * Import-Kandidaten, also Radfahrten). [from]/[to] umschliessen sie.
+     *
+     * Warum eigens: Ueber ein Zeitfenster gelesen kaemen auch die Routen von
+     * Laeufen und Spaziergaengen mit — beim Jahres-Import ein Jahr fremder
+     * GPS-Spuren, die Trailscape weder braucht noch lesen soll. Die produktive
+     * Implementierung liest deshalb je Session einzeln. Die Vorgabe filtert
+     * nur nachtraeglich und ist fuer Attrappen und alte Implementierungen da.
+     */
+    fun readRoutesForSessions(
+        sessionIds: Set<String>,
+        from: LocalDateTime,
+        to: LocalDateTime,
+    ): HealthRouteReadResult {
+        val all = readRoutesWithStatus(from, to)
+        return HealthRouteReadResult(
+            routes = all.routes.filterKeys { it in sessionIds },
+            consentRequired = all.consentRequired.filterTo(linkedSetOf()) { it in sessionIds },
+        )
+    }
+
+    /**
      * Welche Leserechte erteilt sind, soweit sie die Diagnose betreffen.
      * Fehlende Schluessel bedeuten „unbekannt" bzw. „vom Geraet nicht
      * unterstuetzt"; `null` = die Implementierung meldet es gar nicht.
@@ -168,17 +255,61 @@ interface HealthSyncStore {
 
     /** Setzt den Zeitstempel; `null` loescht ihn. */
     fun setLastImportAtMs(value: Long?)
+
+    /**
+     * Ob der einmalige Lang-Import ([healthSyncHistoryWindowMs]) schon
+     * gelaufen ist.
+     *
+     * Ein eigener Merker statt „erster Sync ja/nein": Die Historien-Freigabe
+     * kann auch erst Wochen nach dem ersten Sync kommen (zweiter Dialog,
+     * Health-Connect-Einstellungen). Dann liegt [lastImportAtMs] laengst vor,
+     * und nur dieser Merker sagt, dass das Jahr davor noch nie gelesen wurde.
+     */
+    fun historyImportDone(): Boolean
+
+    /** Setzt den Merker aus [historyImportDone]. */
+    fun setHistoryImportDone(value: Boolean)
+
+    /**
+     * Bis wohin (ms seit Epoch) ein noch nicht abgeschlossener Lang-Import
+     * schon gespeichert ist, `null` wenn keiner laeuft.
+     *
+     * Der Lang-Import laeuft in Abschnitten ([healthSyncSliceMs]); bricht er
+     * ab (Prozess beendet, Speichern gescheitert), setzt der naechste Lauf
+     * hier wieder an, statt das ganze Jahr erneut zu lesen.
+     */
+    fun historyImportedUntilMs(): Long?
+
+    /** Setzt [historyImportedUntilMs]; `null` loescht den Fortschritt. */
+    fun setHistoryImportedUntilMs(value: Long?)
 }
 
 /**
  * Zeitstempel nur im Arbeitsspeicher — Vorgabe fuer [HealthSyncService], wenn
  * (noch) kein persistenter Speicher angebunden ist, und Attrappe in Tests.
  */
-class InMemoryHealthSyncStore(private var value: Long? = null) : HealthSyncStore {
+class InMemoryHealthSyncStore(
+    private var value: Long? = null,
+    private var historyDone: Boolean = false,
+) : HealthSyncStore {
     override fun lastImportAtMs(): Long? = value
 
     override fun setLastImportAtMs(value: Long?) {
         this.value = value
+    }
+
+    override fun historyImportDone(): Boolean = historyDone
+
+    override fun setHistoryImportDone(value: Boolean) {
+        historyDone = value
+    }
+
+    private var historyUntil: Long? = null
+
+    override fun historyImportedUntilMs(): Long? = historyUntil
+
+    override fun setHistoryImportedUntilMs(value: Long?) {
+        historyUntil = value
     }
 }
 
@@ -632,7 +763,13 @@ private fun averageOrNull(values: List<Double>): Double? {
 
 /**
  * Startpunkt des Importfensters:
- * `since ?? (lastImportAt - Puffer) ?? to - 30 Tage`.
+ * `since ?? (lastImportAt - Puffer) ?? to - initialWindowMs`.
+ *
+ * [initialWindowMs] ist das Anfangsfenster, wenn es keinen Zeitstempel gibt:
+ * [healthSyncInitialWindowMs] (30 Tage) ohne Historien-Freigabe — mehr gibt
+ * Health Connect dann ohnehin nicht heraus —, [healthSyncHistoryWindowMs] mit.
+ * Welches gilt, entscheidet [HealthSyncService]; hier bleibt es eine Zahl,
+ * damit die Fensterlogik rein und ohne Gateway pruefbar bleibt.
  *
  * ## Warum der Puffer
  * Gefiltert wird nach der **Startzeit** eines Workouts, und Samsung Health
@@ -668,10 +805,42 @@ fun healthImportWindowStart(
     since: LocalDateTime?,
     lastImportAt: LocalDateTime?,
     to: LocalDateTime,
+    initialWindowMs: Long = healthSyncInitialWindowMs,
 ): LocalDateTime {
     if (since != null) return since
     if (lastImportAt != null) return dartPlusMillis(lastImportAt, -healthSyncImportBackfillMs)
-    return dartPlusMillis(to, -healthSyncInitialWindowMs)
+    return dartPlusMillis(to, -initialWindowMs)
+}
+
+/**
+ * Zerlegt das Importfenster `[from, to]` in aufeinanderfolgende Abschnitte von
+ * hoechstens [sliceMs], von alt nach neu; der letzte endet genau bei [to].
+ *
+ * Von alt nach neu, damit ein abgebrochener Lang-Import einen lueckenlosen
+ * Stand „bis hierhin erledigt" hinterlaesst. Gerechnet wird wie ueberall auf
+ * der absoluten Zeitachse ([dartPlusMillis]); ein Sommerzeitwechsel
+ * verschiebt die Grenzen also nicht gegeneinander. Ein leeres oder
+ * verkehrtes Fenster ergibt genau einen Abschnitt, damit der Aufrufer
+ * denselben Weg nimmt wie immer.
+ */
+fun healthImportSlices(
+    from: LocalDateTime,
+    to: LocalDateTime,
+    sliceMs: Long = healthSyncSliceMs,
+): List<Pair<LocalDateTime, LocalDateTime>> {
+    require(sliceMs > 0) { "sliceMs muss positiv sein" }
+    val fromMs = dartEpochMs(from)
+    val toMs = dartEpochMs(to)
+    if (toMs - fromMs <= sliceMs) return listOf(from to to)
+
+    val slices = mutableListOf<Pair<LocalDateTime, LocalDateTime>>()
+    var start = fromMs
+    while (start < toMs) {
+        val end = minOf(start + sliceMs, toMs)
+        slices.add(dartLocalOf(start) to (if (end == toMs) to else dartLocalOf(end)))
+        start = end
+    }
+    return slices
 }
 
 // ---------------------------------------------------------------------------
@@ -721,6 +890,67 @@ class HealthSyncService(
         return gateway.requestPermissions()
     }
 
+    /**
+     * Ob die Historien-Freigabe erteilt ist. Jeder Fehler beim Nachfragen
+     * zaehlt als „nein" — dann bleibt es beim 30-Tage-Fenster, das Health
+     * Connect ohnehin liefert, statt den Import scheitern zu lassen.
+     */
+    fun hasHistoryAccess(): Boolean = try {
+        gateway.hasHistoryPermission()
+    } catch (_: Throwable) {
+        false
+    }
+
+    /**
+     * Stand der Historien-Freigabe fuer die UI: `true` erteilt, `false`
+     * moeglich, aber (noch) nicht erteilt, `null` unbekannt oder vom Geraet
+     * nicht unterstuetzt.
+     *
+     * Die Unterscheidung von `false` und `null` ist der Punkt: Nur bei `false`
+     * lohnt es, die Nutzerin um die Freigabe zu bitten. Kennt Health Connect
+     * das Recht gar nicht, fuehrte ein Knopf ins Leere.
+     */
+    fun historyAccessStatus(): Boolean? {
+        if (hasHistoryAccess()) return true
+        return try {
+            gateway.readPermissionStatus()?.get(HealthReadType.HISTORIE)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Zeigt den Berechtigungsdialog erneut, um die Historien-Freigabe
+     * nachzuholen, und meldet, ob sie danach erteilt ist.
+     *
+     * Anders als [requestPermissions] ohne Abkuerzung „Pflichtrechte schon da
+     * → fertig": Genau dann fehlt ja nur noch die Historie, und der Dialog
+     * muss trotzdem erscheinen. Die Gateway-Anfrage enthaelt das Recht, wenn
+     * das Geraet es kennt.
+     */
+    fun requestHistoryAccess(): Boolean {
+        if (gateway.availability() != HealthAvailability.VERFUEGBAR) return false
+        gateway.requestPermissions()
+        return hasHistoryAccess()
+    }
+
+    /**
+     * Das volle Fenster fuer „Alles neu importieren": ein Jahr mit
+     * Historien-Freigabe, sonst 30 Tage.
+     */
+    fun fullWindowMs(): Long =
+        if (hasHistoryAccess()) healthSyncHistoryWindowMs else healthSyncInitialWindowMs
+
+    /**
+     * Beginn des vollen Fensters fuer „Alles neu importieren": jetzt minus
+     * [fullWindowMs], auf der absoluten Zeitachse — dieselbe Rechnung wie ohne
+     * Zeitstempel in [healthImportWindowStart].
+     *
+     * Blockiert: fragt die Historien-Freigabe bei Health Connect nach, also
+     * nie vom Main-Thread aufrufen.
+     */
+    fun fullWindowStart(): LocalDateTime = dartPlusMillis(now(), -fullWindowMs())
+
     /** Zeitpunkt des letzten erfolgreichen Imports, `null` wenn noch nie. */
     fun lastImportAt(): LocalDateTime? = store.lastImportAtMs()?.let { dartLocalOf(it) }
 
@@ -744,16 +974,28 @@ class HealthSyncService(
     /**
      * Importiert neue Rad-Workouts und liefert zusaetzlich eine Diagnose.
      *
+     * Ohne [persist] speichert der Aufrufer die Touren selbst — Zeitstempel
+     * und Lang-Import-Merker sind dann aber schon gesetzt, wenn der Bericht
+     * zurueckkommt. Wer speichert, sollte deshalb [persist] benutzen (siehe
+     * die zweite Ueberladung): Nur dann bestaetigt der Dienst den Fortschritt
+     * erst, wenn die Touren wirklich auf der Platte liegen.
+     *
      * Wirft [HealthSyncException], wenn Health Connect nicht verfuegbar ist
      * oder die Berechtigungen fehlen.
      */
-    fun importWithReport(existing: List<Ride>, since: LocalDateTime? = null): HealthSyncReport =
+    fun importWithReport(
+        existing: List<Ride>,
+        since: LocalDateTime? = null,
+        persist: ((HealthSyncReport) -> Unit)? = null,
+    ): HealthSyncReport =
         importWithReportInternal(
             // Zeitraum wie eh und je aus den Punkten der bereits geladenen
             // Touren; fuer den HF-Merge liegen sie ohnehin schon vor.
             refs = existing.map { ExistingRideRef(it.id, rideTimeRange(it), it) },
             loadRide = { null },
             since = since,
+            excludedRideIds = emptySet(),
+            persist = persist,
         )
 
     /**
@@ -769,15 +1011,39 @@ class HealthSyncService(
      * HF-Anreicherung infrage kommt, laedt [loadRide] die volle Tour nach;
      * liefert es `null` (Datei unlesbar/geloescht), zaehlt die Session wie
      * bisher als Duplikat und nichts geht verloren.
+     *
+     * [excludedRideIds] sind Touren, die die Nutzerin geloescht hat
+     * (Tombstones des Selfhost-Syncs). Sie gelten als vorhanden: Gerade der
+     * Lang-Import liest ein ganzes Jahr und holte sonst ungefragt zurueck, was
+     * bewusst weg sollte.
+     *
+     * ## Speichern ueber [persist]
+     * Ist [persist] gesetzt, reicht der Dienst jeden Abschnitt (siehe
+     * [healthImportSlices]) sofort dorthin weiter und bestaetigt
+     * Zeitstempel, Lang-Import-Fortschritt und Merker erst **nachdem**
+     * [persist] ohne Fehler zurueckkam. Wirft [persist], bricht der Lauf mit
+     * genau dieser Ausnahme ab; bestaetigt bleibt nur, was schon gespeichert
+     * ist. Ein abgebrochener Lang-Import (Fehler, Prozess beendet) setzt beim
+     * naechsten Lauf am letzten gespeicherten Abschnitt wieder an, statt das
+     * Jahr abzuhaken, ohne dass eine Tour davon auf der Platte liegt.
+     *
+     * Der zurueckgegebene Bericht traegt dann nur noch Touren **ohne**
+     * Trackpunkte ([HealthSyncReport.persisted]): Sie sind gespeichert, und
+     * ein Jahr voller GPS-Spuren gleichzeitig im Speicher zu halten, war
+     * genau das, was die Abschnitte verhindern sollen.
      */
     fun importWithReport(
         existing: List<RideSummary>,
         loadRide: (String) -> Ride?,
         since: LocalDateTime? = null,
+        excludedRideIds: Set<String> = emptySet(),
+        persist: ((HealthSyncReport) -> Unit)? = null,
     ): HealthSyncReport = importWithReportInternal(
         refs = existing.map { ExistingRideRef(it.id, summaryTimeRange(it), null) },
         loadRide = loadRide,
         since = since,
+        excludedRideIds = excludedRideIds,
+        persist = persist,
     )
 
     /** Eine Bestandstour, wie die Import-Logik sie braucht: ID, Zeitraum, ggf. schon geladen. */
@@ -787,10 +1053,52 @@ class HealthSyncService(
         val preloaded: Ride?,
     )
 
+    /**
+     * Was ueber alle Abschnitte eines Laufs hinweg gilt: bekannte Zeitraeume
+     * und IDs (auch die der gerade importierten Touren, damit ein spaeterer
+     * Abschnitt sie nicht noch einmal anlegt), die schon angereicherten
+     * Touren und die bereits behandelten Sessions.
+     */
+    private class RunState(
+        val ranges: MutableList<TimeRangeWithRide>,
+        val knownIds: MutableSet<String>,
+        val mergeTargets: MutableSet<String> = mutableSetOf(),
+        /**
+         * Workout-IDs, die ein frueherer Abschnitt schon gesehen hat. Die
+         * Abschnitte ueberlappen sich um [SLICE_OVERLAP_MS]; eine Session an
+         * der Grenze kaeme sonst zweimal vor und zaehlte beim zweiten Mal als
+         * Duplikat.
+         */
+        val seen: MutableSet<String> = mutableSetOf(),
+        /**
+         * Stand des nativen Fallbacks in diesem Lauf: `null` noch nicht
+         * versucht, `false` versucht und ohne Rad-Session, `true` hat
+         * geliefert. Beim Jahres-Import haette sonst jeder Abschnitt ohne
+         * Radfahrt (typisch: alle Wintermonate) die Sessions ein zweites Mal
+         * gelesen — Lese-Kontingent von Health Connect, das der Gateway
+         * gerade schonen will. Hat der Fallback einmal geliefert, ist die
+         * Abbildung des Hauptwegs offenbar kaputt; dann bleibt er fuer alle
+         * weiteren Abschnitte an.
+         */
+        var nativeFallbackHelped: Boolean? = null,
+    )
+
+    /** Ergebnis eines einzelnen Abschnitts, noch ohne Diagnosezeilen. */
+    private class SliceResult(
+        val workoutsFound: Int,
+        val imported: List<Ride>,
+        val merged: List<Ride>,
+        val duplicates: Int,
+        val routesMissing: Int,
+        val consentPending: List<RouteConsentRequest>,
+    )
+
     private fun importWithReportInternal(
         refs: List<ExistingRideRef>,
         loadRide: (String) -> Ride?,
         since: LocalDateTime?,
+        excludedRideIds: Set<String>,
+        persist: ((HealthSyncReport) -> Unit)?,
     ): HealthSyncReport {
         val connection = checkAvailability()
         if (!connection.isReady) {
@@ -798,10 +1106,187 @@ class HealthSyncService(
         }
 
         val to = now()
-        val from = healthImportWindowStart(since, lastImportAt(), to)
+        val historyStatus = historyAccessStatus()
+        val hasHistory = historyStatus == true
+        // Freigabe ausdruecklich entzogen (nicht nur „unbekannt"): Der Merker
+        // faellt, damit eine spaeter erneut erteilte Freigabe wieder den
+        // versprochenen Jahres-Import bekommt. Dank der stabilen Ride-IDs
+        // entstehen dabei keine Duplikate.
+        if (historyStatus == false && store.historyImportDone()) {
+            store.setHistoryImportDone(false)
+            store.setHistoryImportedUntilMs(null)
+        }
+
+        // Lang-Import: Historien-Freigabe da, das Jahr davor aber noch nie
+        // vollstaendig gelesen. Das trifft den ersten Sync mit Freigabe ebenso
+        // wie eine Freigabe, die erst nach Wochen nachgereicht wurde — in
+        // beiden Faellen wird der Zeitstempel ignoriert und das Jahresfenster
+        // genommen. Ein ausdrueckliches `since` (manuelles Neu-Importieren)
+        // hat Vorrang.
+        val longImport = since == null && hasHistory && !store.historyImportDone()
+        val historyStart = dartPlusMillis(to, -healthSyncHistoryWindowMs)
+        // Ein abgebrochener Lang-Import setzt am letzten gespeicherten
+        // Abschnitt wieder an. Liegt der Fortschritt ausserhalb des Jahres
+        // (Uhr verstellt, uralter Stand), gilt er nicht.
+        val resumeAt = if (longImport) {
+            store.historyImportedUntilMs()
+                ?.let { dartLocalOf(it) }
+                ?.takeIf { it.isAfter(historyStart) && it.isBefore(to) }
+        } else {
+            null
+        }
+        val from = when {
+            longImport -> resumeAt ?: healthImportWindowStart(
+                since = null,
+                lastImportAt = null,
+                to = to,
+                initialWindowMs = healthSyncHistoryWindowMs,
+            )
+            else -> healthImportWindowStart(since, lastImportAt(), to)
+        }
+        // Auch „Alles neu importieren" ueber das ganze Jahr (mit Freigabe)
+        // erledigt den Lang-Import — sonst laese der naechste normale Sync
+        // dasselbe Jahr gleich noch einmal.
+        val coversHistory = longImport || (since != null && hasHistory && !since.isAfter(historyStart))
 
         val debug = mutableListOf("Zeitraum: ${healthDebugTime(from)} – ${healthDebugTime(to)}")
+        if (longImport) {
+            debug.add(
+                if (resumeAt != null) {
+                    "Historie: freigegeben, Import der letzten 365 Tage wird fortgesetzt"
+                } else {
+                    "Historie: freigegeben, einmaliger Import der letzten 365 Tage"
+                },
+            )
+        }
 
+        val slices = healthImportSlices(from, to)
+        val verbose = slices.size == 1
+        if (!verbose) {
+            debug.add("Abschnitte: ${slices.size} zu je höchstens 30 Tagen")
+        }
+
+        // Zeitraum plus (falls bekannt) die dahinterstehende Tour. Innerhalb
+        // dieses Laufs importierte Sessions kommen ohne Tour dazu, damit zwei
+        // nahezu identische Sessions nicht doppelt landen.
+        val state = RunState(
+            ranges = refs.mapTo(mutableListOf()) { TimeRangeWithRide(it.range.start, it.range.end, it) },
+            knownIds = (refs.map { it.id } + excludedRideIds).toMutableSet(),
+        )
+
+        var workoutsFound = 0
+        var duplicates = 0
+        var routesMissing = 0
+        val imported = mutableListOf<Ride>()
+        val merged = mutableListOf<Ride>()
+        val consentPending = mutableListOf<RouteConsentRequest>()
+
+        for ((index, slice) in slices.withIndex()) {
+            // Ab dem zweiten Abschnitt einen Tag zurueckgreifen: Ob Health
+            // Connect eine Session liefert, die ueber die Grenze reicht,
+            // haengt an ihrer Lage zum Filter — die Ueberlappung stellt
+            // sicher, dass sie in einem der beiden Abschnitte ankommt.
+            // Der erste Abschnitt eines fortgesetzten Lang-Imports (resumeAt)
+            // braucht keine Ueberlappung: Eine Session an der alten Grenze hat
+            // der abgebrochene Lauf schon gespeichert, sie steckt also in
+            // `refs` und faellt ueber knownIds als Duplikat heraus.
+            val readFrom = if (index == 0) {
+                slice.first
+            } else {
+                maxOf(from, dartPlusMillis(slice.first, -SLICE_OVERLAP_MS))
+            }
+            val result = importSlice(
+                from = readFrom,
+                to = slice.second,
+                state = state,
+                loadRide = loadRide,
+                log = if (verbose) debug else null,
+            )
+            if (!verbose) {
+                debug.add(
+                    "  · ${healthDebugTime(slice.first)}–${healthDebugTime(slice.second)}: " +
+                        "${result.workoutsFound} Rad-Session(s), ${result.imported.size} importiert",
+                )
+            }
+
+            if (persist != null) {
+                val sliceReport = HealthSyncReport(
+                    from = slice.first,
+                    to = slice.second,
+                    workoutsFound = result.workoutsFound,
+                    imported = result.imported,
+                    mergedRides = result.merged,
+                    duplicatesSkipped = result.duplicates,
+                    routesMissing = result.routesMissing,
+                    routeConsentPending = result.consentPending,
+                    historyImport = longImport,
+                )
+                if (!sliceReport.isEmpty) persist(sliceReport)
+                // Erst jetzt ist der Abschnitt wirklich erledigt.
+                if (longImport) store.setHistoryImportedUntilMs(dartEpochMs(slice.second))
+            }
+
+            workoutsFound += result.workoutsFound
+            duplicates += result.duplicates
+            routesMissing += result.routesMissing
+            consentPending.addAll(result.consentPending)
+            // Gespeicherte Touren ohne ihre Punkte weitertragen: Anzeige und
+            // Aufrufer brauchen nur IDs und Zahlen, und genau die Punkte eines
+            // ganzen Jahres sollen nicht gleichzeitig im Speicher liegen.
+            if (persist != null) {
+                result.imported.mapTo(imported) { it.copy(points = emptyList()) }
+                result.merged.mapTo(merged) { it.copy(points = emptyList()) }
+            } else {
+                imported.addAll(result.imported)
+                merged.addAll(result.merged)
+            }
+        }
+
+        setLastImportAt(to)
+        if (coversHistory) store.setHistoryImportDone(true)
+        if (coversHistory || longImport) store.setHistoryImportedUntilMs(null)
+
+        debug.add(
+            "Ergebnis: ${imported.size} importiert, ${merged.size} angereichert, " +
+                "$duplicates Duplikat(e), $routesMissing ohne Route",
+        )
+        if (routesMissing > 0) {
+            debug.add(
+                "Routen: ${consentPending.size} brauchen eine Einzel-Freigabe, " +
+                    "${routesMissing - consentPending.size} ohne Routendaten in Health Connect",
+            )
+        }
+
+        return HealthSyncReport(
+            from = from,
+            to = to,
+            workoutsFound = workoutsFound,
+            imported = imported.toList(),
+            mergedRides = merged.toList(),
+            duplicatesSkipped = duplicates,
+            routesMissing = routesMissing,
+            debugLines = debug.toList(),
+            routeConsentPending = consentPending.toList(),
+            historyImport = longImport,
+            persisted = persist != null,
+        )
+    }
+
+    /**
+     * Ein Abschnitt des Imports: Workouts lesen, gegen Bestand und bisherige
+     * Abschnitte abgleichen, neue Touren bauen und Kandidaten anreichern.
+     *
+     * [log] bekommt die ausfuehrliche Diagnose (Rohdaten, Fallback) — nur bei
+     * einem Lauf aus einem einzigen Abschnitt; bei zwoelf Abschnitten wuerde
+     * sie den Dialog sprengen, dort genuegt je Abschnitt eine Zeile.
+     */
+    private fun importSlice(
+        from: LocalDateTime,
+        to: LocalDateTime,
+        state: RunState,
+        loadRide: (String) -> Ride?,
+        log: MutableList<String>?,
+    ): SliceResult {
         val workouts: List<HealthWorkout> = try {
             gateway.readWorkouts(from, to)
         } catch (error: Throwable) {
@@ -811,28 +1296,34 @@ class HealthSyncService(
             )
         }
 
-        val diagnostics = gateway.lastWorkoutDiagnostics
-        debug.add(diagnostics?.describe() ?: "Plugin: keine Rohdiagnose erhoben")
-        debug.add("Plugin: ${workouts.size} Session(s) gemappt")
-        for (workout in workouts.take(DEBUG_SESSION_LIMIT)) {
-            debug.add(
-                "  · ${workout.kind.dartName} ${healthDebugTime(workout.start)}" +
-                    "–${healthDebugTime(workout.end)} · ${workout.sourceName ?: "ohne Quelle"}",
-            )
+        if (log != null) {
+            val diagnostics = gateway.lastWorkoutDiagnostics
+            log.add(diagnostics?.describe() ?: "Plugin: keine Rohdiagnose erhoben")
+            log.add("Plugin: ${workouts.size} Session(s) gemappt")
+            for (workout in workouts.take(DEBUG_SESSION_LIMIT)) {
+                log.add(
+                    "  · ${workout.kind.dartName} ${healthDebugTime(workout.start)}" +
+                        "–${healthDebugTime(workout.end)} · ${workout.sourceName ?: "ohne Quelle"}",
+                )
+            }
         }
 
         var cycling = workouts.filter { it.isCycling }.sortedBy { dartEpochMs(it.start) }
-        debug.add("Plugin: ${cycling.size} Rad-Session(s)")
+        log?.add("Plugin: ${cycling.size} Rad-Session(s)")
 
         var fallbackUsed = false
-        if (cycling.isEmpty()) {
-            val fallback = readNativeSessions(from = from, to = to, log = debug)
+        if (cycling.isEmpty() && state.nativeFallbackHelped != false) {
+            val fallback = readNativeSessions(from = from, to = to, log = log ?: mutableListOf())
             if (fallback.isNotEmpty()) {
                 fallbackUsed = true
                 cycling = fallback
             }
+            // Einmal ohne Ergebnis heisst: Der Hauptweg sieht dieselben
+            // Sessions, hier gibt es schlicht keine Radfahrt. Weitere leere
+            // Abschnitte lassen den Fallback darum aus (siehe RunState).
+            state.nativeFallbackHelped = fallbackUsed || state.nativeFallbackHelped == true
         }
-        debug.add(
+        log?.add(
             if (fallbackUsed) {
                 "Fallback: aktiv, ${cycling.size} Rad-Session(s) aus dem nativen Reader"
             } else {
@@ -840,31 +1331,25 @@ class HealthSyncService(
             },
         )
 
-        // Zeitraum plus (falls bekannt) die dahinterstehende Tour. Innerhalb
-        // dieses Laufs importierte Sessions kommen ohne Tour dazu, damit zwei
-        // nahezu identische Sessions nicht doppelt landen.
-        val ranges = mutableListOf<TimeRangeWithRide>()
-        for (ref in refs) {
-            ranges.add(TimeRangeWithRide(ref.range.start, ref.range.end, ref))
-        }
-        val knownIds = refs.map { it.id }.toMutableSet()
-        val mergeTargets = mutableSetOf<String>()
+        // Sessions, die schon ein frueherer Abschnitt behandelt hat, zaehlen
+        // hier gar nicht — weder als gefunden noch als Duplikat.
+        cycling = cycling.filter { state.seen.add(it.id) }
 
         val candidates = mutableListOf<HealthWorkout>()
         val mergeCandidates = mutableListOf<MergeCandidate>()
         var duplicates = 0
 
         for (workout in cycling) {
-            if (knownIds.contains(healthRideId(workout.id))) {
+            if (state.knownIds.contains(healthRideId(workout.id))) {
                 duplicates++
                 continue
             }
 
-            val overlap = findOverlap(workout, ranges)
+            val overlap = findOverlap(workout, state.ranges)
             if (overlap == null) {
                 candidates.add(workout)
-                ranges.add(TimeRangeWithRide(workout.start, workout.end, null))
-                knownIds.add(healthRideId(workout.id))
+                state.ranges.add(TimeRangeWithRide(workout.start, workout.end, null))
+                state.knownIds.add(healthRideId(workout.id))
                 continue
             }
 
@@ -874,7 +1359,7 @@ class HealthSyncService(
             // also nur fuer tatsaechlich ueberlappende Sessions — geladen;
             // laesst sie sich nicht laden, bleibt die Session ein Duplikat.
             val ride = ref?.let { it.preloaded ?: loadRide(it.id) }
-            if (ride == null || rideHasHeartRate(ride) || !mergeTargets.add(ride.id)) {
+            if (ride == null || rideHasHeartRate(ride) || !state.mergeTargets.add(ride.id)) {
                 duplicates++
                 continue
             }
@@ -889,12 +1374,18 @@ class HealthSyncService(
             val windowStart = candidates.first().start
             val windowEnd = candidates.map { it.end }.reduce { a, b -> if (a.isAfter(b)) a else b }
 
-            // Routen sind pro Session wenige Datensaetze — eine Abfrage ueber das
-            // ganze Fenster reicht. Die Herzfrequenz wird dagegen je Workout
-            // gelesen: ueber 30 Tage kaemen sonst leicht sechsstellige Messreihen
-            // zusammen.
+            // Routen nur fuer die Kandidaten: Laeufe und Spaziergaenge im
+            // selben Zeitraum gehen Trailscape nichts an. Die Herzfrequenz
+            // wird dagegen je Workout gelesen: ueber 30 Tage kaemen sonst
+            // leicht sechsstellige Messreihen zusammen.
             val routeResult = readOptional(
-                { gateway.readRoutesWithStatus(windowStart, windowEnd) },
+                {
+                    gateway.readRoutesForSessions(
+                        sessionIds = candidates.mapTo(linkedSetOf()) { it.id },
+                        from = windowStart,
+                        to = windowEnd,
+                    )
+                },
                 HealthRouteReadResult(routes = emptyMap()),
             )
             val routes = routeResult.routes
@@ -946,29 +1437,13 @@ class HealthSyncService(
             merged.add(enriched)
         }
 
-        setLastImportAt(to)
-
-        debug.add(
-            "Ergebnis: ${imported.size} importiert, ${merged.size} angereichert, " +
-                "$duplicates Duplikat(e), $routesMissing ohne Route",
-        )
-        if (routesMissing > 0) {
-            debug.add(
-                "Routen: ${consentPending.size} brauchen eine Einzel-Freigabe, " +
-                    "${routesMissing - consentPending.size} ohne Routendaten in Health Connect",
-            )
-        }
-
-        return HealthSyncReport(
-            from = from,
-            to = to,
+        return SliceResult(
             workoutsFound = cycling.size,
-            imported = imported.toList(),
-            mergedRides = merged.toList(),
-            duplicatesSkipped = duplicates,
+            imported = imported,
+            merged = merged,
+            duplicates = duplicates,
             routesMissing = routesMissing,
-            debugLines = debug.toList(),
-            routeConsentPending = consentPending.toList(),
+            consentPending = consentPending,
         )
     }
 

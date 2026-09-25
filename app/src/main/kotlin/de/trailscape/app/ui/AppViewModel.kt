@@ -52,7 +52,6 @@ import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
-import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
 import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
@@ -74,6 +73,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -1297,11 +1297,47 @@ class AppViewModel(
     /** Zuletzt ermittelter Health-Connect-Status; `null` = noch nicht geprueft. */
     val healthConnection: StateFlow<HealthConnection?> = _healthConnection.asStateFlow()
 
-    /** Fragt den Health-Connect-Status ab und legt ihn in [healthConnection] ab. */
+    private val _healthHistoryAccess = MutableStateFlow<Boolean?>(null)
+
+    /**
+     * Stand der Historien-Freigabe (Daten aelter als 30 Tage): `true`
+     * erteilt, `false` moeglich, aber nicht erteilt, `null` unbekannt, nicht
+     * verbunden oder vom Geraet nicht unterstuetzt. Nur bei `false` bietet
+     * die Health-Karte die Freigabe an.
+     */
+    val healthHistoryAccess: StateFlow<Boolean?> = _healthHistoryAccess.asStateFlow()
+
+    /**
+     * Fragt den Health-Connect-Status ab und legt ihn in [healthConnection]
+     * (und den Stand der Historien-Freigabe in [healthHistoryAccess]) ab.
+     */
     suspend fun refreshHealthConnection(): HealthConnection {
         val connection = withContext(io) { healthSync.checkAvailability() }
         _healthConnection.value = connection
+        _healthHistoryAccess.value = if (connection.isReady) {
+            withContext(io) { healthSync.historyAccessStatus() }
+        } else {
+            null
+        }
         return connection
+    }
+
+    /**
+     * Fragt die Historien-Freigabe nach und holt, wenn sie erteilt wurde,
+     * sofort den einmaligen Lang-Import (bis zu 365 Tage Radfahrten).
+     *
+     * Direkt synchronisieren statt auf den naechsten Sync zu warten: Die
+     * Nutzerin hat gerade ausdruecklich „aeltere Fahrten holen" gewaehlt und
+     * erwartet ein Ergebnis, nicht einen stillen Zustandswechsel.
+     *
+     * @return der Bericht des Lang-Imports, `null` wenn die Freigabe
+     *   ausblieb. Wirft wie [syncHealthNow] [HealthSyncException].
+     */
+    suspend fun requestHealthHistoryAccess(): HealthSyncReport? {
+        val granted = withContext(io) { healthSync.requestHistoryAccess() }
+        refreshHealthConnection()
+        if (!granted) return null
+        return runHealthImport(reimportAll = false)
     }
 
     /**
@@ -1326,18 +1362,18 @@ class AppViewModel(
             runCatching {
                 val connection = refreshHealthConnection()
                 if (!connection.isReady) return@runCatching
-                val report = withContext(io) {
-                    healthSync.importWithReport(
-                        existing = _rides.value,
-                        loadRide = { rideStorage.loadRide(it) },
-                    )
+                try {
+                    runHealthImport(reimportAll = false)
+                } catch (e: HealthSyncException) {
+                    // Ein fehlgeschlagenes Speichern ist der eine Fehler, den
+                    // auch der stille Sync melden muss: Die Nutzerin sieht
+                    // sonst nie, dass Touren fehlen (bestaetigt ist zwar nur,
+                    // was gespeichert wurde, der naechste Versuch kann aber
+                    // genauso scheitern — etwa bei vollem Speicher). Jeder
+                    // andere Fehler bleibt still.
+                    if (e.message != HEALTH_SAVE_FAILED_MESSAGE) throw e
+                    showMessage(HEALTH_SAVE_FAILED_MESSAGE)
                 }
-                // Ein fehlgeschlagenes Speichern ist der eine Fehler, den auch
-                // der stille Sync melden muss: Die Nutzerin sieht sonst nie,
-                // dass Touren fehlen (der Zeitstempel ist zwar
-                // zurueckgerollt, der naechste Versuch kann aber genauso
-                // scheitern — etwa bei vollem Speicher).
-                if (!applyReport(report)) showMessage(HEALTH_SAVE_FAILED_MESSAGE)
                 syncVitals()
             }
         }
@@ -1352,94 +1388,147 @@ class AppViewModel(
      * geeigneten Meldung — anders als [autoSyncHealth] wird der Fehler hier
      * bewusst nicht verschluckt.
      *
-     * @param reimportAll betrachtet wieder das volle 30-Tage-Fenster. Der
-     *   gespeicherte Zeitstempel wird dafuer **nicht** geloescht (das
-     *   Importfenster kommt ueber `since`): Wirft der Import — etwa weil
-     *   Health Connect zwischenzeitlich die Berechtigung entzogen hat —,
-     *   bleibt der bisherige Stand erhalten, statt den naechsten normalen
-     *   Sync unnoetig 30 Tage scannen zu lassen.
+     * @param reimportAll betrachtet wieder das volle Fenster (30 Tage, mit
+     *   Historien-Freigabe ein Jahr). Der gespeicherte Zeitstempel wird
+     *   dafuer **nicht** geloescht (das Importfenster kommt ueber `since`):
+     *   Wirft der Import — etwa weil Health Connect zwischenzeitlich die
+     *   Berechtigung entzogen hat —, bleibt der bisherige Stand erhalten,
+     *   statt den naechsten normalen Sync unnoetig das ganze Fenster scannen
+     *   zu lassen.
      */
     suspend fun syncHealthNow(reimportAll: Boolean = false): Int {
-        val report = withContext(io) {
-            healthSync.importWithReport(
-                existing = _rides.value,
-                loadRide = { rideStorage.loadRide(it) },
-                since = if (reimportAll) fullHealthWindowStart() else null,
-            )
-        }
-        if (!applyReport(report)) {
-            throw HealthSyncException(HEALTH_SAVE_FAILED_MESSAGE)
-        }
+        val report = runHealthImport(reimportAll)
         syncVitals()
         refreshHealthConnection()
         return report.imported.size
     }
 
-    /**
-     * Merkt sich den Bericht und persistiert alles, was er veraendert hat:
-     * neue Touren **und** bestehende Touren, die um Watch-Herzfrequenz
-     * angereichert wurden (gleiche ID, `saveRide` ueberschreibt sie).
-     *
-     * `importWithReport` hat den Import-Zeitstempel bereits auf das Ende des
-     * betrachteten Fensters gesetzt, bevor diese Methode ueberhaupt laeuft.
-     * Scheitert das Speichern (voller Datentraeger, IO-Fehler), waeren die
-     * Workouts damit endgueltig verloren: Sie lagen im gerade abgehakten
-     * Fenster und tauchen nie wieder auf. Deshalb wird der Zeitstempel dann
-     * auf den Fensteranfang ([HealthSyncReport.from]) zurueckgerollt — der
-     * naechste Sync betrachtet exakt denselben Zeitraum erneut.
-     *
-     * @return `false`, wenn das Speichern fehlgeschlagen ist (Zeitstempel
-     *   wurde zurueckgerollt). Der Aufrufer meldet das der Nutzerin.
-     */
-    private suspend fun applyReport(report: HealthSyncReport): Boolean {
-        _lastSyncReport.value = report
-        // Hook in den Block „Health Connect: Routen-Einzelfreigabe &
-        // Vitaldiagnose" weiter unten.
-        rememberRouteConsents(report)
-        if (report.isEmpty) return true
+    /** Serialisiert alle Health-Imports, siehe [runHealthImport]. */
+    private val healthImportMutex = Mutex()
 
-        val saved = withContext(io) {
-            runCatching {
-                // touchedNow(): Auch die HF-Anreicherung bestehender Touren
-                // ist eine Bearbeitung, die der Selfhost-Sync per
-                // Last-Write-Wins zum Server tragen soll.
-                rideStorage.saveRides(report.imported.map { it.touchedNow() })
-                rideStorage.saveRides(report.mergedRides.map { it.touchedNow() })
+    /**
+     * Ein Health-Import samt Speichern und Nachlauf.
+     *
+     * **Im [viewModelScope], nicht im Scope des Aufrufers.** Die Knoepfe der
+     * Health-Karte starten den Import aus `rememberCoroutineScope()`. Verliess
+     * die Nutzerin waehrend eines langen Imports die Einstellungen, lief der
+     * blockierende Teil zwar zu Ende, das Speichern danach aber nicht mehr —
+     * mit abgehakten Zeitstempeln und ohne Touren auf der Platte. Jetzt wird
+     * der Aufrufer nur vom *Warten* befreit; die Arbeit laeuft weiter.
+     *
+     * **Unter [healthImportMutex].** Der Start-Sync ([autoSyncHealth]) und ein
+     * Tippen auf „Ältere Fahrten freigeben" sehen sonst beide „Lang-Import
+     * offen" und laesen dasselbe Jahr parallel. Duplikate entstuenden dank der
+     * festen Ride-IDs nicht, wohl aber die doppelte Last.
+     *
+     * **Speichern je Abschnitt.** Die Touren gehen ueber den
+     * `persist`-Rueckruf direkt aus `:core` auf die Platte; erst danach
+     * bestaetigt `:core` Zeitstempel und Lang-Import-Fortschritt. Scheitert das
+     * Speichern, ist also nichts abgehakt, was nicht gespeichert ist — ein
+     * Zurueckrollen wie frueher entfaellt.
+     *
+     * @throws HealthSyncException bei Lesefehlern oder, mit
+     *   [HEALTH_SAVE_FAILED_MESSAGE], wenn das Speichern scheiterte.
+     */
+    private suspend fun runHealthImport(reimportAll: Boolean): HealthSyncReport =
+        viewModelScope.async {
+            healthImportMutex.withLock {
+                var anySaved = false
+                val result = withContext(io) {
+                    runCatching {
+                        healthSync.importWithReport(
+                            existing = _rides.value,
+                            loadRide = { rideStorage.loadRide(it) },
+                            // fullWindowStart() fragt Health Connect, darum
+                            // erst hier im IO-Dispatcher.
+                            since = if (reimportAll) healthSync.fullWindowStart() else null,
+                            // Geloeschte Touren nicht zurueckholen — der
+                            // Lang-Import liest ein ganzes Jahr, nach einer
+                            // entzogenen und neu erteilten Freigabe auch
+                            // erneut. Das traegt, weil Tombstones nicht
+                            // zeitlich verfallen: planSync verwirft einen nur,
+                            // wenn eine neuere Fassung die Tour wiederbelebt.
+                            excludedRideIds = runCatching { tombstoneStore.list() }
+                                .getOrDefault(emptyList())
+                                .mapTo(HashSet()) { it.id },
+                            persist = { slice ->
+                                try {
+                                    // touchedNow(): Auch die HF-Anreicherung
+                                    // bestehender Touren ist eine Bearbeitung,
+                                    // die der Selfhost-Sync per Last-Write-Wins
+                                    // zum Server tragen soll.
+                                    rideStorage.saveRides(slice.imported.map { it.touchedNow() })
+                                    rideStorage.saveRides(slice.mergedRides.map { it.touchedNow() })
+                                } catch (e: Exception) {
+                                    throw HealthSaveFailedException(e)
+                                }
+                                anySaved = true
+                                // Hook in den Block „Health Connect:
+                                // Routen-Einzelfreigabe & Vitaldiagnose"
+                                // weiter unten — je Abschnitt, damit die
+                                // Freigaben gespeicherter Touren auch einen
+                                // spaeteren Abbruch ueberleben.
+                                rememberRouteConsents(slice)
+                            },
+                        )
+                    }
+                }
+                result.fold(
+                    onSuccess = { report ->
+                        finishReport(report, quietSegments = report.historyImport || reimportAll)
+                        report
+                    },
+                    onFailure = { error ->
+                        if (anySaved) {
+                            // Ein Teil liegt schon auf der Platte: Liste und
+                            // Bestzeiten trotzdem nachziehen.
+                            reloadRides()
+                            refreshSegments()
+                        }
+                        throw when (error) {
+                            is HealthSaveFailedException -> HealthSyncException(HEALTH_SAVE_FAILED_MESSAGE)
+                            else -> error
+                        }
+                    },
+                )
             }
-        }
-        if (saved.isFailure) {
-            withContext(io) { runCatching { healthSync.setLastImportAt(report.from) } }
-            // Die Liste trotzdem neu laden: Vielleicht ist ein Teil der Touren
-            // vor dem Fehler schon auf der Platte gelandet.
-            reloadRides()
-            refreshSegments()
-            return false
-        }
+        }.await()
+
+    /** Speichern eines Import-Abschnitts ist gescheitert (nur intern, siehe [runHealthImport]). */
+    private class HealthSaveFailedException(cause: Throwable) : Exception(cause)
+
+    /**
+     * Nachlauf eines erfolgreichen Imports: Bericht fuer die Health-Karte
+     * merken, Touren-Liste neu laden, Bestzeiten und Kacheln nachziehen.
+     *
+     * Gespeichert ist hier schon alles (siehe [runHealthImport]); der Bericht
+     * traegt deshalb keine Trackpunkte mehr und wird nur noch angezeigt.
+     *
+     * @param quietSegments rechnet die neuen Touren ohne Bestzeit-Hinweis in
+     *   die Segmente ein. Fuer den Jahres-Import und „Alles neu importieren":
+     *   Dort kommen Dutzende alter Fahrten auf einmal, und eine Flut von
+     *   „Neue Bestzeit"-Meldungen fuer Fahrten vom letzten Herbst waere
+     *   Rauschen, keine Neuigkeit.
+     */
+    private suspend fun finishReport(report: HealthSyncReport, quietSegments: Boolean) {
+        _lastSyncReport.value = report
+        if (report.isEmpty) return
 
         reloadRides()
         // Neue Touren mit Bestzeit-Hinweis einrechnen; die nur um
         // Herzfrequenz angereicherten (mergedRides) zieht der Abgleich ueber
         // ihr neues updatedAt still nach.
-        refreshSegments(reportRideIds = report.imported.mapTo(HashSet()) { it.id })
+        refreshSegments(
+            reportRideIds = if (quietSegments) emptySet() else report.imported.mapTo(HashSet()) { it.id },
+        )
         // Still: Importierte Touren sind meist alte Fahrten — ein „+12 neue
         // Kacheln entdeckt" gehoert nur hinter eine gerade beendete Fahrt.
         refreshExplorerTilesIfEnabled()
-        return true
     }
-
-    /**
-     * Beginn des vollen Importfensters („Alles neu importieren"): jetzt minus
-     * [healthSyncInitialWindowMs], gerechnet auf der absoluten Zeitachse —
-     * dieselbe Rechnung, die `:core` ohne gesetzten Zeitstempel anstellt.
-     */
-    private fun fullHealthWindowStart(): LocalDateTime = LocalDateTime.ofInstant(
-        Instant.ofEpochMilli(System.currentTimeMillis() - healthSyncInitialWindowMs),
-        ZoneId.systemDefault(),
-    )
 
     // =========================================================================
     // >>> Health Connect: Routen-Einzelfreigabe & Vitaldiagnose — BEGINN
-    // Eigener Block (plus je ein Hook-Aufruf in syncVitals und applyReport).
+    // Eigener Block (plus je ein Hook-Aufruf in syncVitals und runHealthImport).
     // Logik in :core: HealthRouteConsent.kt, HealthDiagnostics.kt,
     // HealthVitalsDerivation.kt. UI-Einstieg: ui/health/RouteConsent.kt.
     // =========================================================================
@@ -1471,7 +1560,7 @@ class AppViewModel(
         }
     }
 
-    /** Nimmt die offenen Freigaben eines Import-Berichts auf (Hook in [applyReport]). */
+    /** Nimmt die offenen Freigaben eines Import-Berichts auf (Hook in [runHealthImport]). */
     private fun rememberRouteConsents(report: HealthSyncReport) {
         if (report.routeConsentPending.isEmpty()) return
         updateRouteConsents { mergeRouteConsentRequests(it, report.routeConsentPending) }
@@ -2602,9 +2691,9 @@ private fun decodePlaceSearchHistory(raw: String?): List<PlaceSearchHistoryEntry
 
 /**
  * Meldung, wenn die aus Health Connect geholten Touren nicht gespeichert
- * werden konnten. Der Import-Zeitstempel ist dann bereits zurueckgerollt
- * (siehe `AppViewModel.applyReport`), der naechste Sync holt dieselben
- * Workouts also erneut.
+ * werden konnten. `:core` bestaetigt Zeitstempel und Lang-Import-Fortschritt
+ * erst nach dem Speichern (siehe `AppViewModel.runHealthImport`), der naechste
+ * Sync holt dieselben Workouts also erneut.
  */
 private const val HEALTH_SAVE_FAILED_MESSAGE: String =
     "Die importierten Touren konnten nicht gespeichert werden. " +

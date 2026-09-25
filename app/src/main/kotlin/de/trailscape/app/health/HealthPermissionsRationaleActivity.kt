@@ -106,7 +106,8 @@ class HealthPermissionsRationaleActivity : ComponentActivity() {
             "Ruhepuls, HRV, Schlaf und VO₂max: für die Erholungs- und " +
                 "Formberechnung (Readiness, Trainingsempfehlung).",
             "Verlauf älter als 30 Tage (optional): damit die Baselines für Ruhepuls " +
-                "und HRV nicht erst nach Wochen stehen.",
+                "und HRV nicht erst nach Wochen stehen und der erste Import einmalig " +
+                "deine Radfahrten der letzten 12 Monate übernehmen kann.",
             "Die Daten verlassen das Gerät nur, wenn du selbst den optionalen Sync " +
                 "mit deinem eigenen Server eingerichtet hast.",
         )
