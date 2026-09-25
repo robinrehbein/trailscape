@@ -2417,7 +2417,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         appViewModel.select(rideId)
     }
 
-    // „Karte" im Verlauf: alle Spuren auf einmal.
+    // „Alle Touren auf der Karte" im Verlauf: alle Spuren auf einmal.
     val historyMapRequest by appViewModel.historyMapRequest.collectAsStateWithLifecycle()
     LaunchedEffect(historyMapRequest) {
         if (!historyMapRequest) return@LaunchedEffect
