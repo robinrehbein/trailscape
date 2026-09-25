@@ -4,7 +4,6 @@ import de.trailscape.core.EXPLORER_TILE_ZOOM
 import de.trailscape.core.ExplorerSquare
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.explorerTileBounds
-import java.util.Locale
 
 /**
  * Die **reine Geometrie** hinter den „Entdeckt-Kacheln" auf der Karte: aus
@@ -122,8 +121,8 @@ private fun rowGaps(sortedExploredX: List<Int>, minX: Int, maxX: Int): List<Pair
 
 // ------------------------------------------------------------------ GeoJSON
 
-/** Zahl fuer GeoJSON, [Locale.ROOT]-formatiert — wie `coordinate()` in `MapViewHost.kt`. */
-private fun coordinate(value: Double): String = String.format(Locale.ROOT, "%.6f", value)
+/** Zahl fuer GeoJSON — dieselbe schnelle Formatierung wie die Linien (`GeoJsonFormat.kt`). */
+private fun coordinate(value: Double): String = formatCoordinate(value)
 
 /**
  * Polygon-Ring der vier Rechteckecken, geschlossen (erster = letzter Punkt)

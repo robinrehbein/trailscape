@@ -601,8 +601,16 @@ internal class MapController {
     /** Die geplante Route (blau, gestrichelt). */
     fun setPlannedRoute(points: List<TrackPoint>) = setLine(SOURCE_PLANNED, points)
 
-    /** Der laufend wachsende Aufzeichnungs-Track (rot). */
-    fun setLiveTrack(points: List<TrackPoint>) = setLine(SOURCE_LIVE, points)
+    /**
+     * Der laufend wachsende Aufzeichnungs-Track (rot) — als fertiges GeoJSON
+     * aus [lineFeatureCollection]. Anders als die uebrigen Linien baut der
+     * Aufrufer das JSON selbst, und zwar abseits des Main-Threads: Es waechst
+     * mit jeder Sekunde der Fahrt und kostet bei langen Touren Millisekunden,
+     * die hier im Bild fehlen wuerden. Nur das Setzen der Quelle bleibt auf
+     * Main (MapLibre verlangt das); gemerkt wird es wie alles in [geoJson],
+     * damit ein Stilwechsel mitten in der Aufzeichnung die Linie zurueckbringt.
+     */
+    fun setLiveTrackGeoJson(json: String) = setSource(SOURCE_LIVE, json)
 
     /** Alle runden Marker auf einmal. */
     fun setMarkers(markers: List<MapMarker>) {
@@ -953,9 +961,11 @@ internal data class MapPadding(val left: Int, val top: Int, val right: Int, val 
 
 // ------------------------------------------------------------------ GeoJSON
 
-internal const val EMPTY_FEATURES: String = """{"type":"FeatureCollection","features":[]}"""
+// EMPTY_FEATURES, lineFeatureCollection und die Koordinaten-Formatierung
+// liegen in `GeoJsonFormat.kt` — ohne Android-Import, damit die Live-Linie
+// abseits des Main-Threads gebaut und als JVM-Test geprueft werden kann.
 
-/** LineString-Feature aus Trackpunkten; unter zwei Punkten leer. */
+/** MultiLineString-Feature aus mehreren Spuren; Spuren unter zwei Punkten entfallen. */
 private fun multiLineFeatureCollection(tracks: List<List<TrackPoint>>): String {
     val lines = tracks.filter { it.size >= 2 }
     if (lines.isEmpty()) return EMPTY_FEATURES
@@ -968,25 +978,10 @@ private fun multiLineFeatureCollection(tracks: List<List<TrackPoint>>): String {
         builder.append('[')
         points.forEachIndexed { index, point ->
             if (index > 0) builder.append(',')
-            builder.append('[').append(coordinate(point.lon)).append(',')
-                .append(coordinate(point.lat)).append(']')
+            builder.append('[').appendCoordinate(point.lon).append(',')
+                .appendCoordinate(point.lat).append(']')
         }
         builder.append(']')
-    }
-    builder.append("]}}]}")
-    return builder.toString()
-}
-
-private fun lineFeatureCollection(points: List<TrackPoint>): String {
-    if (points.size < 2) return EMPTY_FEATURES
-    val builder = StringBuilder(points.size * 24)
-    builder.append("{\"type\":\"FeatureCollection\",\"features\":[")
-    builder.append("{\"type\":\"Feature\",\"properties\":{},")
-    builder.append("\"geometry\":{\"type\":\"LineString\",\"coordinates\":[")
-    points.forEachIndexed { index, point ->
-        if (index > 0) builder.append(',')
-        builder.append('[').append(coordinate(point.lon)).append(',')
-            .append(coordinate(point.lat)).append(']')
     }
     builder.append("]}}]}")
     return builder.toString()
@@ -1013,19 +1008,14 @@ private fun markerFeatureCollection(markers: List<MapMarker>): String {
             .append(",\"").append(PROP_STROKE_WIDTH).append("\":").append(number(strokeWidth))
             .append(",\"").append(PROP_STROKE_COLOR).append("\":\"").append(strokeColor).append('"')
             .append("},\"geometry\":{\"type\":\"Point\",\"coordinates\":[")
-            .append(coordinate(marker.lon)).append(',').append(coordinate(marker.lat))
+            .appendCoordinate(marker.lon).append(',').appendCoordinate(marker.lat)
             .append("]}}")
     }
     builder.append("]}")
     return builder.toString()
 }
 
-/**
- * Zahl fuer GeoJSON. Immer [Locale.ROOT] — mit deutschem Gebietsschema waere
- * das Dezimaltrennzeichen ein Komma und das JSON kaputt.
- */
-private fun coordinate(value: Double): String = String.format(Locale.ROOT, "%.6f", value)
-
+/** Zahl fuer GeoJSON, [Locale.ROOT] wie [appendCoordinate] — sonst Komma statt Punkt. */
 private fun number(value: Float): String = String.format(Locale.ROOT, "%.1f", value)
 
 private fun hexColor(argb: Int): String = String.format(Locale.ROOT, "#%06X", argb and 0xFFFFFF)
