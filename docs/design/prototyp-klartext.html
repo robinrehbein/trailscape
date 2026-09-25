@@ -99,6 +99,7 @@
   @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .phone{box-shadow:0 0 0 10px #2A2B30,0 30px 60px rgba(0,0,0,.6)}}
   :root[data-theme="dark"] .phone{box-shadow:0 0 0 10px #2A2B30,0 30px 60px rgba(0,0,0,.6)}
   .status{position:absolute;inset:0 0 auto 0;height:34px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:12px;font-weight:600;z-index:40;pointer-events:none}
+  .status.solid{background:var(--bg)}
   .screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:44px 16px 120px;scrollbar-width:none}
   .screen::-webkit-scrollbar{display:none}
   .screen.full{padding:0}
@@ -177,6 +178,31 @@
   .pday .t{font-weight:600}
   .pday .t small{display:block;font-weight:400;color:var(--mut);font-size:12px}
   .pday.today .t small{color:var(--on-acc-cont);opacity:.8}
+
+  /* Training */
+  .goal-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .times{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .times > div{background:var(--tone);border-radius:16px;padding:10px 12px}
+  .times b{display:block;font-size:24px;letter-spacing:-.01em}
+  .times span{font-size:11.5px;color:var(--mut);font-weight:600}
+  .times .goal{background:var(--acc-cont);color:var(--on-acc-cont)}
+  .times .goal span{color:var(--on-acc-cont);opacity:.8}
+  .track{position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--acc-cont),var(--tone));margin:18px 4px 6px}
+  .track i{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:3px solid var(--card)}
+  .track .now{background:var(--mut)}
+  .track .plan{background:var(--acc)}
+  .track .goalmark{position:absolute;top:-5px;bottom:-5px;width:3px;border-radius:2px;background:var(--acc)}
+  .tracklbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mut)}
+  .vitals{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .vital{background:var(--card);border-radius:20px;padding:12px 14px;box-shadow:var(--elev);display:grid;gap:2px}
+  .vital .k{font-size:12px;color:var(--mut);font-weight:700}
+  .vital b{font-size:22px;letter-spacing:-.01em}
+  .vital b small{font-size:12px;color:var(--mut);font-weight:600}
+  .vital .pill{justify-self:start;margin-top:4px}
+  .src{font-size:11.5px;color:var(--faint);margin:8px 4px 0}
+  .histmap{position:relative;height:430px;border-radius:24px;overflow:hidden;box-shadow:var(--elev)}
+  .histmap .legend{position:absolute;left:10px;bottom:10px;right:10px;background:var(--barbg);border-radius:16px;padding:10px 12px;font-size:12px;display:flex;justify-content:space-between;gap:8px}
+  .histmap .legend b{font-size:15px;display:block}
 
   /* Nav-Leiste */
   .nav{position:absolute;left:0;right:0;bottom:0;padding:0 12px 14px;display:flex;gap:10px;align-items:center;z-index:30}
@@ -346,6 +372,7 @@
     <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
     <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></symbol>
     <symbol id="i-hist" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19.5h17"/><path d="M5 15l4-5 4 3 6-7"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="7" r="2"/><circle cx="18" cy="17" r="2"/><path d="M8 6h7a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h7"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5L7 4.5Z"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
@@ -368,8 +395,8 @@
 <div class="wrap">
   <header class="intro">
     <div class="kicker">Redesign-Vorschlag</div>
-    <h1>Trailscape, aufgeräumt: drei Orte, ein Fahren-Knopf, Klartext.</h1>
-    <p>Alle Funktionen der App bleiben. Neu ist, dass jede genau einen Ort, einen Namen und ein Verhalten hat. Links der klickbare Prototyp, rechts pro Screen, was sich gegenüber der heutigen App ändert. Darunter Befund, Regeln und ein Umsetzungsplan in kleinen Etappen.</p>
+    <h1>Trailscape, aufgeräumt: vier Orte, ein Fahren-Knopf, Klartext.</h1>
+    <p>Die drei Kernpunkte der App bekommen je einen Ort: Karte (Routen planen), Verlauf (wo bin ich gefahren) und Training (schaffe ich mein Ziel). „Heute" verbindet sie jeden Morgen. Alle Funktionen bleiben, aber jede hat genau einen Ort, einen Namen und ein Verhalten. Links der klickbare Prototyp, rechts pro Screen, was sich gegenüber der heutigen App ändert. Darunter Befund, Regeln und ein Umsetzungsplan in kleinen Etappen.</p>
   </header>
 
   <div class="studio">
@@ -417,42 +444,80 @@
         </div>
 
         <div class="eyebrow">Dein Ziel</div>
-        <button class="card rowlink" data-go="plan">
+        <button class="card rowlink" data-go="training">
           <div class="grow">
-            <div class="h3">Gravel-Marathon · 120 km</div>
-            <div class="muted small">8. November · noch 6 Wochen · Woche 6 von 12</div>
-            <div class="bar" style="margin-top:10px"><i style="width:50%"></i></div>
+            <div class="h3">Rennen Hügelland · 60 km</div>
+            <div class="muted small tab-nums">Ziel 2:10 h · Stand heute ca. 2:25 h · noch 12 Wochen</div>
+            <div class="bar" style="margin-top:10px"><i style="width:40%"></i></div>
           </div>
           <svg class="chev"><use href="#i-chev"/></svg>
         </button>
       </section>
 
-      <!-- PLAN (gepusht aus Heute) -->
-      <section class="screen" id="s-plan" data-tab="heute" hidden>
-        <div class="head"><button class="back" data-go="heute"><svg><use href="#i-back"/></svg>Heute</button></div>
-        <div class="title">Dein Plan</div>
-        <div class="card stack">
-          <div>
-            <div class="h3">Gravel-Marathon · 120 km · 900 Hm</div>
-            <div class="muted small">Samstag, 8. November</div>
-          </div>
-          <div class="bar"><i style="width:50%"></i></div>
-          <div class="small muted">Woche 6 von 12 · <b style="color:var(--ink)">Aufbau</b>: Umfang langsam steigern.</div>
+      <!-- TRAINING -->
+      <section class="screen" id="s-training" data-tab="training" hidden>
+        <div class="head">
+          <span></span>
+          <div class="acts"><button class="iconbtn" data-go="settings" aria-label="Einstellungen"><svg><use href="#i-gear"/></svg></button></div>
         </div>
-        <div class="eyebrow">Diese Woche</div>
+        <div class="title">Training</div>
+
+        <div class="card stack">
+          <div class="goal-head">
+            <div>
+              <div class="muted small" style="font-weight:700">Dein Ziel</div>
+              <div class="h2">Rennen Hügelland</div>
+              <div class="muted small tab-nums">60 km · 700 Hm · Sa, 20. Dezember · noch 12 Wochen</div>
+            </div>
+            <button class="link small" data-toast="Ziel ändern: Name, Distanz, Höhenmeter, Datum, Zielzeit">Ändern</button>
+          </div>
+          <div class="times tab-nums">
+            <div><span>Stand heute</span><b>2:25 h</b></div>
+            <div class="goal"><span>Dein Ziel</span><b>2:10 h</b></div>
+          </div>
+          <div>
+            <div class="track" aria-hidden="true">
+              <i class="now" style="left:18%"></i>
+              <span class="goalmark" style="left:78%"></span>
+              <i class="plan" style="left:84%"></i>
+            </div>
+            <div class="tracklbl"><span>heute</span><span>Renntag</span></div>
+          </div>
+          <div class="note">Mit dem Plan kommst du bis zum Renntag auf <b>ca. 2:08 h</b>. Wichtigster Hebel: die langen Fahrten am Samstag.</div>
+          <button class="link small" style="justify-self:center" data-sheet="prognose">Wie wird das berechnet?</button>
+        </div>
+
+        <div class="eyebrow">Diese Woche im Plan · Woche 6 von 12, Aufbau</div>
         <div class="list">
-          <div class="pday"><span class="d">Mo</span><span class="t muted">Ruhetag</span><span></span></div>
           <div class="pday"><span class="d">Di</span><span class="t">Locker 30 km<small>gefahren: Feierabendrunde, 32 km</small></span><span class="pill ok">✓</span></div>
           <div class="pday today"><span class="d">Do</span><span class="t">Locker 45 km<small>heute · ruhig, Puls unter 140</small></span><button class="pill ok" data-act="runde-heute">Runde</button></div>
-          <div class="pday"><span class="d">Sa</span><span class="t">Lange Fahrt 80 km<small>Schlüsseltag der Woche</small></span><span></span></div>
+          <div class="pday"><span class="d">Sa</span><span class="t">Lange Fahrt 80 km<small>mit 600 Hm, wie im Rennen</small></span><span></span></div>
           <div class="pday"><span class="d">So</span><span class="t">Locker 45 km<small>gefahren: GA1 Kanalrunde, 46 km</small></span><span class="pill ok">✓</span></div>
         </div>
-        <div class="eyebrow">Als Nächstes</div>
-        <div class="note">Woche 7 ist eine <b>Erholungswoche</b>: weniger fahren, damit der Aufbau ankommt.</div>
-        <div class="stack" style="margin-top:14px">
-          <button class="btn sec" data-toast="Alle 12 Wochen als aufklappbare Liste">Alle Wochen ansehen</button>
-          <button class="btn ghost" data-toast="Ziel ändern öffnet das Formular (Name, Distanz, Datum)">Ziel ändern</button>
+        <button class="btn ghost" data-toast="Alle 12 Wochen, aufklappbar. Woche 7 ist eine Erholungswoche">Alle Wochen ansehen</button>
+
+        <div class="eyebrow">Deine Form</div>
+        <button class="card stack" style="width:100%" data-sheet="form">
+          <div class="rowlink">
+            <div class="grow h2" style="font-size:18px">Fitness steigt seit 6 Wochen</div>
+            <svg class="chev"><use href="#i-chev"/></svg>
+          </div>
+          <svg viewBox="0 0 300 60" style="width:100%;height:56px" preserveAspectRatio="none">
+            <path d="M0 50 L25 48 L50 44 L75 45 L100 38 L125 36 L150 31 L175 30 L200 24 L225 22 L250 17 L275 15 L300 10 L300 60 L0 60Z" fill="var(--acc-cont)" opacity=".7"/>
+            <path d="M0 50 L25 48 L50 44 L75 45 L100 38 L125 36 L150 31 L175 30 L200 24 L225 22 L250 17 L275 15 L300 10" fill="none" stroke="var(--acc)" stroke-width="2.5"/>
+            <circle cx="297" cy="10" r="4" fill="var(--acc)"/>
+          </svg>
+          <div class="chips"><span class="pill ok">Fitness 62 ↑</span><span class="pill warn">etwas müde</span></div>
+        </button>
+
+        <div class="eyebrow">Körperwerte</div>
+        <div class="vitals tab-nums">
+          <div class="vital"><span class="k">Ruhepuls</span><b>52 <small>bpm</small></b><span class="pill ok">normal</span></div>
+          <div class="vital"><span class="k">Erholung (HRV)</span><b>48 <small>ms</small></b><span class="pill warn">etwas niedrig</span></div>
+          <div class="vital"><span class="k">Schlaf</span><b>7:40 <small>h</small></b><span class="pill ok">gut</span></div>
+          <div class="vital"><span class="k">VO₂max</span><b>49 <small>ml/kg/min</small></b><span class="pill ok">steigt</span></div>
         </div>
+        <div class="src">Von deiner Galaxy Watch über Health Connect · heute 6:12</div>
       </section>
 
       <!-- KARTE -->
@@ -562,23 +627,19 @@
         </div>
         <div class="title">Verlauf</div>
 
-        <button class="card stack" style="width:100%" data-sheet="form">
-          <div class="rowlink">
-            <div class="grow"><div class="muted small" style="font-weight:700">Deine Form</div><div class="h2">Fitness steigt seit 6 Wochen</div></div>
-            <svg class="chev"><use href="#i-chev"/></svg>
-          </div>
-          <svg viewBox="0 0 300 60" style="width:100%;height:60px" preserveAspectRatio="none">
-            <path d="M0 50 L25 48 L50 44 L75 45 L100 38 L125 36 L150 31 L175 30 L200 24 L225 22 L250 17 L275 15 L300 10 L300 60 L0 60Z" fill="var(--acc-cont)" opacity=".7"/>
-            <path d="M0 50 L25 48 L50 44 L75 45 L100 38 L125 36 L150 31 L175 30 L200 24 L225 22 L250 17 L275 15 L300 10" fill="none" stroke="var(--acc)" stroke-width="2.5"/>
-            <circle cx="297" cy="10" r="4" fill="var(--acc)"/>
-          </svg>
-          <div class="chips"><span class="pill ok">Fitness 62 ↑</span><span class="pill warn">etwas müde</span></div>
-        </button>
-
+        <div class="seg" role="tablist" aria-label="Ansicht">
+          <button class="on" data-hv="liste">Liste</button><button data-hv="karte">Karte</button>
+        </div>
+        <div id="hv-karte" hidden style="margin-top:12px">
+          <div class="histmap" id="histmap"></div>
+          <div class="src">Tippe eine Spur, um die Tour zu öffnen.</div>
+        </div>
+        <div id="hv-liste">
         <div class="eyebrow">September</div>
         <div class="list" id="tours"></div>
         <div class="eyebrow">August</div>
         <div class="list" id="tours2"></div>
+        </div>
       </section>
 
       <!-- TOUR-DETAIL -->
@@ -618,7 +679,8 @@
         <div class="caps" role="tablist">
           <button class="tab on" data-go="heute" data-tabbtn="heute"><svg><use href="#i-sun"/></svg>Heute</button>
           <button class="tab" data-go="karte" data-tabbtn="karte"><svg><use href="#i-map"/></svg>Karte</button>
-          <button class="tab" data-go="verlauf" data-tabbtn="verlauf"><svg><use href="#i-hist"/></svg>Verlauf</button>
+          <button class="tab" data-go="verlauf" data-tabbtn="verlauf"><svg><use href="#i-list"/></svg>Verlauf</button>
+          <button class="tab" data-go="training" data-tabbtn="training"><svg><use href="#i-hist"/></svg>Training</button>
         </div>
         <button class="ride tab-nums" id="ridebtn"><svg><use href="#i-play"/></svg><span>Fahren</span></button>
       </nav>
@@ -691,7 +753,19 @@
           <div class="sig"><span class="k">Müdigkeit</span><span class="pill warn">71</span><span class="x">Was die letzten Tage gekostet haben. Fällt schnell wieder. <span style="color:var(--faint)">(ATL)</span></span></div>
           <div class="sig"><span class="k">Frische</span><span class="pill">−9</span><span class="x">Fitness minus Müdigkeit. Leicht negativ heißt: du trainierst gerade produktiv. <span style="color:var(--faint)">(TSB)</span></span></div>
         </div>
-        <button class="btn sec" data-toast="Wochenbelastung, Fitnesslevel und Körperwerte im Detail">Alle Werte & Körperdaten</button>
+        <button class="btn sec" data-toast="Wochenbelastung, Rampenrate und Belastungsverhältnis im Detail">Alle Werte</button>
+      </div>
+
+      <div class="msheet" id="m-prognose" role="dialog" aria-label="Prognose">
+        <div class="grab"></div>
+        <div class="h2">Wie die Prognose entsteht</div>
+        <div>
+          <div class="sig"><span class="k">Deine Fahrten</span><span class="pill">letzte 6 Wochen</span><span class="x">Tempo auf Strecken mit ähnlicher Länge und ähnlichen Höhenmetern, bei ähnlichem Puls.</span></div>
+          <div class="sig"><span class="k">Deine Fitness</span><span class="pill ok">62 ↑</span><span class="x">Je höher die Fitness am Renntag, desto länger hältst du dasselbe Tempo.</span></div>
+          <div class="sig"><span class="k">Die Strecke</span><span class="pill">60 km · 700 Hm</span><span class="x">Höhenmeter kosten Zeit. Mit GPX der Rennstrecke wird es genauer.</span></div>
+        </div>
+        <div class="note">Die Zahl ist eine Schätzung mit etwa ±8 Minuten. Sie wird mit jeder Fahrt genauer.</div>
+        <button class="btn sec" data-close>Verstanden</button>
       </div>
 
       <div class="msheet" id="m-ebenen" role="dialog" aria-label="Karte">
@@ -762,7 +836,7 @@
       <h2>Fünf Regeln für jeden Screen</h2>
       <p>Diese Regeln lassen sich bei jeder künftigen Funktion abfragen, damit die App nicht wieder zuwächst.</p>
       <div class="rules">
-        <div class="rule"><b>Eine Frage pro Screen</b><p>Heute: „Was fahre ich heute?" Karte: „Wohin?" Verlauf: „Wie läuft es?" Was die Frage nicht beantwortet, gehört woanders hin.</p></div>
+        <div class="rule"><b>Eine Frage pro Screen</b><p>Heute: „Was fahre ich heute?" Karte: „Wohin?" Verlauf: „Wo bin ich gefahren?" Training: „Schaffe ich mein Ziel?" Was die Frage nicht beantwortet, gehört woanders hin.</p></div>
         <div class="rule"><b>Ein gefüllter Knopf pro Blick</b><p>Jeder Zustand hat genau eine Hauptaktion. Alles andere ist grau, ein Textlink oder liegt hinter ⋮.</p></div>
         <div class="rule"><b>Klartext zuerst, Zahlen auf Nachfrage</b><p>Oben steht ein Satz, den jeder versteht. Werte und Fachbegriffe liegen eine Ebene tiefer hinter „Warum?" oder „Alle Werte".</p></div>
         <div class="rule"><b>Jede Funktion hat genau einen Ort</b><p>Andere Screens verlinken dorthin, statt sie nachzubauen. Kein zweites Suchfeld, keine zweite Planung, kein zweiter Beenden-Knopf.</p></div>
@@ -771,19 +845,19 @@
     </section>
 
     <section class="sec">
-      <h2>Neue Struktur: drei Orte und ein Fahren-Knopf</h2>
-      <p>Der Training-Tab verteilt sich auf die beiden Fragen, die er eigentlich beantwortet. Der Plan („was steht an?") zieht zu Heute, die Auswertung („wie fit bin ich?") zieht zu Verlauf. Damit verschwinden die Doppelungen zwischen Heute und Training von selbst.</p>
+      <h2>Neue Struktur: ein Ort pro Kernpunkt, und Heute verbindet sie</h2>
+      <p>Trailscape ersetzt drei Apps: Komoot zum Planen, Strava zum Nachschauen und eine Trainings-App für den Körperzustand. Jede davon bekommt genau einen Ort. „Heute" ist der vierte Ort und das, was keine der drei Apps kann: Körperzustand und Plan ergeben jeden Morgen eine passende Route.</p>
       <div class="struct">
         <div class="navdemo">
-          <span class="lbl">Heute</span>
-          <div class="mini"><span>Heute</span><span>Karte</span><span>Touren</span><span>Training</span><span class="r">●</span><span class="g">⚙ auf 3 Screens</span></div>
-          <ul><li>Tagesempfehlung auf Heute <em>und</em> Training</li><li>● ohne Beschriftung, drei Zustände</li><li>Plan, Form, Werte, Ziel-Formular in einem langen Tab</li></ul>
+          <span class="lbl">Heute in der App</span>
+          <div class="mini"><span>Heute</span><span>Karte</span><span>Touren</span><span>Training</span><span class="r">●</span></div>
+          <ul><li>Tagesempfehlung auf Heute <em>und</em> Training</li><li>Wochen-km, Planwoche, Form auf beiden Tabs</li><li>● ohne Beschriftung, drei Zustände</li></ul>
         </div>
         <div class="arrow" aria-hidden="true">→</div>
         <div class="navdemo">
           <span class="lbl">Klartext</span>
-          <div class="mini"><span>Heute</span><span>Karte</span><span>Verlauf</span><span class="r">Fahren</span></div>
-          <ul><li>Heute = Tag + Woche + Plan (eine Ebene tiefer)</li><li>Verlauf = Form + Touren, chronologisch</li><li>Fahren bleibt ein runder Knopf, klein beschriftet mit Route oder Zeit</li></ul>
+          <div class="mini"><span>Heute</span><span>Karte</span><span>Verlauf</span><span>Training</span><span class="r">Fahren</span></div>
+          <ul><li><b>Heute:</b> nur, was heute zählt</li><li><b>Karte:</b> Routen planen (statt Komoot)</li><li><b>Verlauf:</b> Liste und Karte aller Touren (statt Strava)</li><li><b>Training:</b> Ziel, Prognose, Plan, Form, Körperwerte</li></ul>
         </div>
       </div>
       <div class="tbl" style="margin-top:18px">
@@ -791,15 +865,16 @@
           <thead><tr><th>Funktion</th><th>Heute in der App</th><th>Neu</th></tr></thead>
           <tbody>
             <tr><td>Tagesempfehlung</td><td class="old">Heute-Karte mit bis zu 8 Elementen; Gründe zusätzlich als Coach-Karte und im Training-Tab</td><td>Ein Satz + Ring auf Heute. Gründe nur im „Warum?"-Blatt</td></tr>
-            <tr><td>Trainingsplan</td><td class="old">Training-Tab, alle Wochen untereinander, Ziel-Formular darunter</td><td>Heute → „Dein Ziel" → Plan-Seite mit aktueller Woche, andere Wochen aufklappbar</td></tr>
-            <tr><td>Form (CTL/ATL/TSB)</td><td class="old">Training-Tab (Chart, Chips, Coach) + „Form −9" auf Heute</td><td>Verlauf: ein Satz + Fitness-Kurve. Erklärung im Blatt</td></tr>
-            <tr><td>Körperwerte</td><td class="old">Training → „Werte" 2×2-Kacheln</td><td>Verlauf → Form → „Alle Werte & Körperdaten"</td></tr>
+            <tr><td>Ziel</td><td class="old">Formular ganz unten im Training-Tab; Name, Distanz, Hm, Datum</td><td>Ganz oben im Training, dazu <b>Zielzeit</b> und <b>Prognose</b> (neu)</td></tr>
+            <tr><td>Trainingsplan</td><td class="old">Training-Tab, alle Wochen untereinander</td><td>Training: aktuelle Woche, andere Wochen aufklappbar</td></tr>
+            <tr><td>Form (CTL/ATL/TSB)</td><td class="old">Training-Tab (Chart, Chips, Coach) + „Form −9" auf Heute</td><td>Nur im Training: ein Satz + Fitness-Kurve. Erklärung im Blatt</td></tr>
+            <tr><td>Körperwerte</td><td class="old">Training → „Werte" 2×2-Kacheln</td><td>Training → Körperwerte, mit Quelle (Galaxy Watch)</td></tr>
             <tr><td>Runde erzeugen</td><td class="old">5 Einstiege mit unterschiedlichem Verhalten</td><td>Ein Blatt „Runde ab hier" (Länge + Untergrund). Alle Einstiege öffnen genau dieses</td></tr>
             <tr><td>Route planen (A→B)</td><td class="old">Sheet aufziehen → „Route planen" → Karte antippen; Tippen nahe Punkt löscht still</td><td>„Wohin?" suchen oder lange drücken → „Route hierher". Punkte löscht nur das ×</td></tr>
             <tr><td>Kartenstil, Offline, Kacheln</td><td class="old">Nur im aufgezogenen Sheet; Offline startet ohne Vorschau</td><td>Ebenen-Knopf oben rechts. Offline zeigt vorher die Größe und hat Abbrechen</td></tr>
             <tr><td>Aufzeichnen / Navigieren</td><td class="old">Live-Karte, Fahrmodus-Dialog, Kompaktleiste, HUD: vier Oberflächen</td><td>Ein Cockpit mit „Daten | Karte". Navigation ist ein Banner darin</td></tr>
             <tr><td>Beenden</td><td class="old">Drei Knöpfe, zwei Bedeutungen, einer ohne Rückfrage</td><td>Ein Knopf: „Halten zum Beenden". Route ausblenden liegt hinter ⋮</td></tr>
-            <tr><td>Touren</td><td class="old">Eine lange Karte, Name + Zahlenzeile + „TL 68"</td><td>Nach Monat gruppiert, Mini-Karte, „locker/hart" statt TL, Suche + Import oben</td></tr>
+            <tr><td>Touren</td><td class="old">Eine lange Karte, Name + Zahlenzeile + „TL 68"</td><td>Verlauf: Liste nach Monat oder Karte aller Spuren mit Kacheln, „locker/hart" statt TL, Suche + Import oben</td></tr>
             <tr><td>Einstellungen</td><td class="old">9 Akkordeons, 4 Ebenen, Zeilen ohne Status</td><td>Flache Liste mit Status rechts, jede Zeile öffnet eine eigene Seite</td></tr>
           </tbody>
         </table>
@@ -830,7 +905,7 @@
         <div class="step"><div class="when">Etappe 3<small>mittel</small></div><div><b>Einstellungen flach machen</b><p>Akkordeons werden Unterseiten, jede Zeile zeigt ihren Status. Einheitliches Speichern (sofort) und einheitliche Schalter-Zeile.</p></div></div>
         <div class="step"><div class="when">Etappe 4<small>groß</small></div><div><b>Karte: „Wohin?"</b><p>Ein Blatt mit Suche und zwei Chips, Ebenen-Knopf oben rechts, lange drücken statt Planungsmodus, ein gemeinsames „Runde ab hier"-Blatt, Route-Karte mit genau einer Hauptaktion.</p></div></div>
         <div class="step"><div class="when">Etappe 5<small>groß</small></div><div><b>Ein Cockpit</b><p>Live-Karte, Fahrmodus-Dialog, Kompaktleiste und HUD verschmelzen zu „Daten | Karte". Beschrifteter Fahren-Knopf mit Route oder Zeit.</p></div></div>
-        <div class="step"><div class="when">Etappe 6<small>mittel</small></div><div><b>Drei Tabs</b><p>Training auflösen: Plan-Seite unter Heute, Form + Werte in Verlauf. Touren-Tab wird Verlauf (Monatsgruppen, Suche, Import).</p></div></div>
+        <div class="step"><div class="when">Etappe 6<small>groß</small></div><div><b>Training und Verlauf neu ordnen</b><p>Training: Ziel mit Zielzeit und Prognose oben, dann Woche, Form, Körperwerte. Touren-Tab wird Verlauf mit „Liste | Karte". Die Zielzeit-Prognose ist die einzige wirklich neue Funktion und braucht Logik in <code>:core</code>.</p></div></div>
       </div>
     </section>
 
@@ -838,7 +913,7 @@
       <h2>Offene Fragen</h2>
       <p>Diese Entscheidungen liegen bei dir, bevor die größeren Etappen starten.</p>
       <div class="qs">
-        <div class="qq"><b>Training-Tab wirklich auflösen?</b><p>Der größte Schnitt im Entwurf. Die Alternative ist, vier Tabs zu behalten und nur Heute und Training zu entdoppeln. Das ist weniger klar, aber auch weniger Umbau.</p></div>
+        <div class="qq"><b>Wie genau soll die Prognose sein?</b><p>Einfacher Start: Tempo aus ähnlichen eigenen Fahrten, hochgerechnet mit der Fitness-Kurve bis zum Renntag. Genauer wird es mit Leistungsdaten oder der GPX-Strecke des Rennens.</p></div>
         <div class="qq"><b>Die Zahl im Ring zeigen?</b><p>„82" ohne Einheit erklärt sich nicht. Möglich wäre nur das Wort (erholt, normal, müde) mit der Zahl im Warum-Blatt.</p></div>
         <div class="qq"><b>Wer ist die Hauptzielgruppe?</b><p>Wenn es eher Freizeit-Graveler sind als Leute mit Trainingsplan, sollte „Heute" auch ohne Plan und ohne Uhr gut aussehen. Der Entwurf zeigt den vollen Fall.</p></div>
       </div>
@@ -881,6 +956,19 @@
   drawKarte();
   $('#tourmap').innerHTML = mapSVG({ routes: ['tour'], w: 390, h: 190, seed: 3 });
   $('#cp-karte').innerHTML = mapSVG({ routes: ['nord'], seed: 2 }) + '<div class="me" style="left:42%;top:52%"></div>';
+
+  // Verlauf als Karte: alle Spuren plus entdeckte Kacheln
+  (() => {
+    let svg = mapSVG({ routes: ['nord','ost','sued','hier'], w: 390, h: 844, seed: 4 });
+    const cell = 39, seen = new Set(['3-5','4-5','4-6','5-6','3-6','4-7','5-7','2-4','3-4','4-4','5-4','6-5','6-6','6-7','3-7','2-5','4-3','5-3','2-3','3-3','6-4','5-5','3-8','4-8','5-8','2-6','2-7','6-8','7-6','7-7']);
+    let g = '';
+    for (let x = 0; x < 10; x++) for (let y = 0; y < 22; y++) {
+      const on = seen.has(x + '-' + y);
+      g += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${on ? 'transparent' : 'rgba(40,44,52,.16)'}" stroke="${on ? 'var(--acc)' : 'transparent'}" stroke-opacity=".5" stroke-width="1"/>`;
+    }
+    svg = svg.replace('</svg>', g + '</svg>');
+    $('#histmap').innerHTML = svg + '<div class="legend tab-nums"><div><b>146</b>Touren</div><div><b>5 812 km</b>gefahren</div><div><b>30</b>Kacheln entdeckt</div></div>';
+  })();
 
   /* ───── Touren-Liste ───── */
   const TOURS = [
@@ -930,6 +1018,7 @@
     const tab = scr.dataset.tab;
     $$('[data-tabbtn]').forEach(b => b.classList.toggle('on', b.dataset.tabbtn === tab));
     $('#nav').hidden = name === 'settings';
+    $('.status').classList.toggle('solid', name !== 'karte');
     st.screen = name;
     closeSheets();
     note(name === 'karte' ? 'karte-' + st.k : name);
@@ -1057,13 +1146,19 @@
     if (t.dataset.toast) toast(t.dataset.toast);
     if (t.hasAttribute('data-close')) closeSheets();
     if (t.dataset.cp) cp(t.dataset.cp);
+    if (t.dataset.hv) {
+      $$('[data-hv]').forEach(b => b.classList.toggle('on', b === t));
+      $('#hv-karte').hidden = t.dataset.hv !== 'karte';
+      $('#hv-liste').hidden = t.dataset.hv !== 'liste';
+      note(t.dataset.hv === 'karte' ? 'verlauf-karte' : 'verlauf');
+    }
     if (t.dataset.cand) {
       st.cand = t.dataset.cand;
       $$('[data-cand]').forEach(c => c.classList.toggle('on', c === t));
       drawKarte(st.cand, ['nord','ost','sued'].filter(x => x !== st.cand));
     }
     if (t.hasAttribute('data-switch')) { t.classList.toggle('off'); t.setAttribute('aria-checked', !t.classList.contains('off')); }
-    if (t.parentElement && t.parentElement.classList.contains('seg') && !t.dataset.cp) {
+    if (t.parentElement && t.parentElement.classList.contains('seg') && !t.dataset.cp && !t.dataset.hv) {
       $$('button', t.parentElement).forEach(b => b.classList.toggle('on', b === t));
     }
   });
@@ -1078,13 +1173,18 @@
       ['Wochen-km und Planwoche doppelt (Zahlenzeile + Ausblick)', 'Ein Wochenstreifen: erledigt, heute, geplant, Ruhetag auf einen Blick'],
       ['Coach-Karte wiederholt Sätze aus dem Training-Tab', 'Coach-Sätze nur noch im Warum-Blatt'],
       ['„Letzte Tour" ohne erkennbaren Tipp-Hinweis', 'Liegt im Verlauf, wo man Touren sucht'],
-      ['„Ziel anpassen" springt zum Anfang des Training-Tabs', '„Dein Ziel" öffnet die Plan-Seite direkt'],
-    ], try: 'Tippe <b>Warum diese Empfehlung?</b> oder <b>Runde für heute bauen</b>.' },
-    plan: { t: 'Plan', q: 'Was steht diese Woche an?', c: [
-      ['Alle Wochen als Karten untereinander, Ziel-Formular am Ende des Training-Tabs', 'Nur die aktuelle Woche offen, der Rest aufklappbar. Ziel ändern ist ein Link'],
-      ['„GA1 · 45 km · Last 85", Status-Icons ohne Legende', '„Locker 45 km", darunter was tatsächlich gefahren wurde'],
-      ['Routen-Icon nur als Symbol, Beschriftung nur für Screenreader', 'Beschrifteter Knopf „Runde" am heutigen Tag'],
-    ], try: 'Tippe am Donnerstag auf <b>Runde</b>.' },
+      ['Plan-Ausblick mit Woche, km und Schlüssel-Einheit', 'Eine Ziel-Zeile mit Zielzeit und Stand heute. Tippen öffnet Training'],
+    ], try: 'Tippe <b>Warum diese Empfehlung?</b>, <b>Runde für heute bauen</b> oder die Ziel-Zeile.' },
+    training: { t: 'Training', q: 'Schaffe ich mein Ziel?', c: [
+      ['Ziel-Formular (Name, Distanz, Hm, Datum) ganz unten im Tab', 'Ziel ganz oben, mit <b>Zielzeit</b> und <b>Prognose</b>. Beides ist neu, die App kennt heute keine Zielzeit'],
+      ['Alle Planwochen als Karten untereinander', 'Nur die aktuelle Woche, mit beschriftetem „Runde"-Knopf am heutigen Tag. Rest hinter „Alle Wochen"'],
+      ['Form-Karte mit zwei Hinweisboxen, Chart, drei Chips, Fußnote, Warnung; dazu Coach-Karte und Fitnesslevel', 'Ein Satz, eine Kurve, zwei Einordnungen. Erklärung im Blatt'],
+      ['Wochenbelastung mit Last, ø Woche, Zielwert, Budget, Entlastungs-Box', 'Liegt unter Form → „Alle Werte"'],
+      ['Werte-Kacheln mit „unauffällig / leicht erhöht / stark auffällig"', 'Körperwerte mit einfacher Einordnung und Quelle (Galaxy Watch, Uhrzeit)'],
+    ], try: 'Tippe <b>Wie wird das berechnet?</b>, die Form-Karte oder <b>Runde</b> am Donnerstag.' },
+    'sheet-prognose': { t: 'Prognose', q: 'Woher kommt die Zahl?', c: [
+      ['Gibt es heute nicht', 'Offen gelegt: eigene Fahrten, Fitness, Strecke. Mit Unsicherheit statt Scheingenauigkeit'],
+    ], try: 'Tippe <b>Verstanden</b>.' },
     'karte-idle': { t: 'Karte', q: 'Wohin?', c: [
       ['Suche im Sheet; „Route planen", „Kartenstil", „Offline" erst nach Aufziehen', 'Ein Blatt mit „Wohin?" und zwei Chips. Kein Aufziehen nötig'],
       ['Zwei Suchfelder mit unterschiedlichem Verhalten', 'Genau ein Suchfeld'],
@@ -1125,12 +1225,16 @@
     summary: { t: 'Zusammenfassung', q: 'Wie war’s?', c: [
       ['Snackbar „Tour gespeichert." und eine Tourkarte über der Karte', 'Ein eigener Abschluss mit Klartext zum Plan und zur Woche'],
     ], try: 'Tippe <b>Fertig</b>.' },
-    verlauf: { t: 'Verlauf', q: 'Wie läuft es?', c: [
-      ['Form, Fitnesslevel, Wochenbelastung, Werte im Training-Tab; Touren in einem eigenen Tab', 'Oben ein Satz zur Form, darunter die Touren. Details im Form-Blatt'],
+    verlauf: { t: 'Verlauf', q: 'Wo bin ich gefahren?', c: [
+      ['Nur eine Liste. Wo man gefahren ist, zeigt die Karte nur Tour für Tour', 'Umschalter „Liste | Karte". Die Karte zeigt alle Spuren und entdeckte Kacheln'],
       ['Eine lange Karte, „Letzte Touren" obwohl es alle sind', 'Nach Monaten gruppiert, mit Mini-Karte'],
       ['„TL 68" ohne Erklärung', '„locker / mittel / hart". Die Zahl in den Details'],
       ['Import nur im leeren Zustand oder tief in Mehr', '+ oben rechts, Suche daneben'],
-    ], try: 'Tippe die <b>Form-Karte</b> oder eine Tour.' },
+    ], try: 'Schalte auf <b>Karte</b> oder tippe eine Tour.' },
+    'verlauf-karte': { t: 'Verlauf als Karte', q: 'Wo war ich überall?', c: [
+      ['Kacheln-Layer als Schalter auf der Planungskarte', 'Gehört zur Historie: hier mit allen Spuren und Zählern'],
+      ['Tourspur nur „auf Zuruf" einzeln aus der Liste', 'Alle Spuren auf einmal, Tippen öffnet die Tour'],
+    ], try: 'Zurück auf <b>Liste</b>.' },
     tour: { t: 'Tour', q: 'Was hat die Fahrt gebracht?', c: [
       ['10 Abschnitte untereinander, Coach mit Entkopplung Pe:Hr und Verlässlichkeit', 'Karte, vier Zahlen, ein Satz zum Plan. „Alle Werte" klappt die Details auf'],
       ['„Auf der Karte zeigen" vs. „Auf der Karte öffnen"', 'Ein Wort, hinter ⋮'],
@@ -1152,10 +1256,10 @@
       ['„Form" auf Heute und im Training, dazu Rampenrate und Belastungsverhältnis', '„Frische" nur hier. Rampenrate etc. unter „Alle Werte"'],
     ], try: 'Tippe daneben, um zu schließen.' },
     'sheet-ebenen': { t: 'Kartenebenen', q: 'Wie soll die Karte aussehen?', c: [
-      ['Kartenstil im Sheet, Kacheln-Schalter an anderer Stelle, Offline ohne Vorschau', 'Alles, was die Karte selbst betrifft, an einem Ort'],
+      ['Kartenstil im Sheet, Offline ohne Vorschau', 'Alles, was die Planungskarte betrifft, an einem Ort. Kacheln zeigt zusätzlich der Verlauf'],
     ], try: 'Stil wechseln oder Kacheln einschalten.' },
   };
-  const JUMPS = [['heute','Heute'],['plan','Plan'],['karte','Karte'],['verlauf','Verlauf'],['tour','Tour'],['settings','Einstellungen']];
+  const JUMPS = [['heute','Heute'],['karte','Karte'],['verlauf','Verlauf'],['tour','Tour'],['training','Training'],['settings','Einstellungen']];
   $('#jump').innerHTML = JUMPS.map(([k,l]) => `<button data-jump="${k}">${l}</button>`).join('') + '<button data-jump="ride">Fahren</button>';
   $('#jump').addEventListener('click', e => {
     const b = e.target.closest('[data-jump]'); if (!b) return;
