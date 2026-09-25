@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.more
 
+import de.trailscape.app.ui.health.rememberRouteConsentLauncher
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -271,6 +272,28 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     }
 
     Spacer(modifier = Modifier.height(12.dp))
+
+    // Routen, die Health Connect nur mit einer Einzel-Freigabe herausgibt
+    // (Samsung Health ohne „Immer erlauben"): ein Knopf pro Stapel, der den
+    // Freigabe-Dialog fuer die naechste offene Tour zeigt.
+    val consentPending by appViewModel.routeConsentPending.collectAsStateWithLifecycle()
+    val requestRoute = rememberRouteConsentLauncher(appViewModel)
+    consentPending.firstOrNull()?.let { first ->
+        SettingsSecondaryButton(
+            onClick = { requestRoute(first) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (consentPending.size == 1) {
+                    "Route freigeben"
+                } else {
+                    "Routen freigeben (${consentPending.size})"
+                },
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+
     val routesMissing = currentReport?.routesMissing ?: 0
     if (routesMissing > 0) {
         NoticeBox(
