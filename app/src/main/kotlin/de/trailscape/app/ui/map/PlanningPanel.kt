@@ -76,6 +76,7 @@ import de.trailscape.core.Waypoint
 import de.trailscape.core.maxRouteTargetKm
 import de.trailscape.core.minRouteTargetKm
 import de.trailscape.core.routeProfileLabels
+import de.trailscape.core.unpavedLabel
 import kotlin.math.roundToInt
 
 /**
@@ -415,6 +416,21 @@ internal fun PlanningSheet(
                 }
 
                 if (route != null && route.points.size >= 2) {
+                    // Der Schotteranteil steht im Koerper, nicht in der
+                    // Statuszeile: Die ist einzeilig und traegt schon Start,
+                    // Ziel, km, Hm und Herkunft — ein weiteres Glied waere auf
+                    // einem schmalen Geraet das erste, das abgeschnitten wird.
+                    // Hier sitzt er direkt ueber dem Hoehenprofil, also bei der
+                    // zweiten Frage an eine Route („wie faehrt sie sich?").
+                    // Ohne verlaessliche Belagsdaten entfaellt die Zeile.
+                    unpavedLabel(route)?.let { surface ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = surface,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                     ElevationProfile(
                         points = route.points,
