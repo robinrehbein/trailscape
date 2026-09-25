@@ -6,12 +6,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_TEXT
 import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import org.junit.Assert.assertEquals
@@ -70,6 +74,10 @@ class ScreenshotTest {
     fun seed() {
         assumeTrue(System.getProperty("trailscape.screenshots") == "true")
         AppServices.keyValueStore.setString(ONBOARDING_STORAGE_KEY, "1")
+        // Der einmalige Tipp zum langen Druecken gilt als erledigt — sonst
+        // laege er je nach Wartezeit mal in einem Kartenbild, mal nicht. Sein
+        // eigenes Bild macht [karteLangDruckTipp].
+        AppServices.keyValueStore.setString(LONG_PRESS_HINT_STORAGE_KEY, "1")
         val rides = sampleRides()
         AppServices.rideStorage.saveRides(rides)
         val goal = Goal(
@@ -128,6 +136,33 @@ class ScreenshotTest {
         compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
         settle()
         shot("14-einstellungen-lang")
+    }
+
+    /**
+     * Training mit allem, was um Aufmerksamkeit konkurriert: Profil fehlt,
+     * „Plan und Ziel passen nicht zusammen" und die Anpassungs-Notiz. Der Plan
+     * begann vor drei Wochen, damit abgeschlossene, zu leichte Wochen die
+     * Anpassung ausloesen; 120 km sind weit mehr, als die Beispieltouren
+     * tragen. Pruefpunkt beim Ansehen: hoechstens EINE Flaeche in
+     * Warnfarbe, der Rest ruhige Zeilen.
+     */
+    @Test
+    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    fun trainingHinweise() {
+        val goal = Goal(
+            name = "Alb-Gold",
+            distanceKm = 120.0,
+            ascentM = 700.0,
+            date = NOW + 8 * WEEK_MS,
+            targetDurationMin = 130,
+        )
+        savePlan(
+            AppServices.trainingPlanStore,
+            generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS),
+        )
+        start()
+        tab("Training")
+        shot("16-training-hinweise")
     }
 
     /** Grosse Systemschrift (130 %) — findet abgeschnittene Beschriftungen. */
@@ -225,6 +260,36 @@ class ScreenshotTest {
             .performSemanticsAction(SemanticsActions.Expand)
         settle()
         shot("10-karte-tour-offen")
+    }
+
+    /**
+     * Der einmalige Tipp zum langen Druecken: erscheint beim ersten ruhigen
+     * Erkunden nach der Wartezeit (`LongPressHint.kt`) als Snackbar ueber der
+     * Kapsel.
+     *
+     * Gewartet wird ausdruecklich auf den Text, in kleinen Schritten und
+     * hoechstens Ruhezeit plus Reserve — nicht auf die Dauer von [settle].
+     * Wird die kuerzer oder die Ruhezeit laenger, schlaegt der Test fehl,
+     * statt still ein Bild ohne Tipp abzulegen.
+     */
+    @Test
+    fun karteLangDruckTipp() {
+        AppServices.keyValueStore.remove(LONG_PRESS_HINT_STORAGE_KEY)
+        start()
+        tab("Karte")
+        var waited = 0L
+        while (compose.onAllNodesWithText(LONG_PRESS_HINT_TEXT).fetchSemanticsNodes().isEmpty() &&
+            waited < LONG_PRESS_HINT_CALM_MS + 2_000
+        ) {
+            compose.mainClock.advanceTimeBy(100)
+            compose.waitForIdle()
+            waited += 100
+        }
+        compose.onAllNodesWithText(LONG_PRESS_HINT_TEXT)[0].assertIsDisplayed()
+        // Die Einblende-Animation der Snackbar zu Ende laufen lassen.
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        shot("44-karte-langdruck-tipp")
     }
 
     /**

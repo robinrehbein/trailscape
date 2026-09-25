@@ -103,9 +103,9 @@ import kotlin.math.roundToInt
  * Anders als im Entwurf klappt der Griff in dieser Stufe nicht zurueck auf
  * die Aktionszeile, sondern zwischen vollem Planungsinhalt und blosser
  * Statuszeile um. Der Grund steht in der Aufgabe selbst: Wegpunkte werden auf
- * die **Karte** getippt, und dafuer muss sich das Blatt wegraeumen lassen,
- * ohne die Planung zu verlieren (`onMapTap` in `MapScreen.kt` tut genau das
- * beim ersten Wegpunkt). Beide Zustaende bleiben dabei das, was der Entwurf
+ * der **Karte** gesetzt (langes Druecken), und dafuer muss sich das Blatt
+ * wegraeumen lassen, ohne die Planung zu verlieren (`onMapLongPress` in
+ * `MapScreen.kt` tut genau das beim ersten Wegpunkt). Beide Zustaende bleiben dabei das, was der Entwurf
  * verlangt: Griff plus eine Zeile, oder Griff plus eine Zeile plus Inhalt.
  *
  * ## Warum unten, und warum ueberhaupt eine eingeklappte Stufe
@@ -364,7 +364,7 @@ internal fun PlanningSheet(
                     // auflisten liessen (siehe [generated] oben) — die Liste
                     // gilt deshalb nur fuer selbst geplante Routen. Einen
                     // erklaerenden Hinweistext braucht sie nicht mehr: Setzen
-                    // sagt die gestrichelte Zeile („… oder Karte antippen"),
+                    // sagt die gestrichelte Zeile („… oder lange auf die Karte druecken"),
                     // Entfernen zeigt das X jeder Zeile.
                     //
                     // Aus demselben Grund steht auch die Streckenart nur hier:

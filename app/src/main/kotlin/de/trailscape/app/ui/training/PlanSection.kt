@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material.icons.outlined.Info
 import de.trailscape.app.ui.components.NeutralButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -27,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.formatDateShort
 import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
@@ -78,21 +75,30 @@ import kotlin.math.roundToInt
  */
 
 /**
- * Kompakte Hinweiszeile unter der laufenden Woche, wenn der angezeigte Plan von
- * [de.trailscape.core.adaptPlan] an die gefahrene Realitaet angepasst wurde.
- * Der gespeicherte Plan bleibt unveraendert — genau deshalb muss die
+ * Schlichte Hinweiszeile unter der laufenden Woche, wenn der angezeigte Plan
+ * von [de.trailscape.core.adaptPlan] an die gefahrene Realitaet angepasst
+ * wurde. Der gespeicherte Plan bleibt unveraendert — genau deshalb muss die
  * Oberflaeche sagen, warum hier andere Zahlen stehen als beim Erstellen.
+ *
+ * Bewusst eine ruhige `bodySmall`-Zeile ([QuietNoteLine]) statt einer
+ * getoenten Karte: Die Anpassung ist keine Warnung, sondern die Erklaerung
+ * einer Zahl — in Warnfarbe konkurrierte sie mit der einen echten Warnung des
+ * Screens.
  */
 @Composable
 fun PlanAdaptionNote(reason: String) {
-    // Kompakt: eine Zeile Titel im Text statt eigener Ueberschrift — der
-    // Hinweis erklaert Zahlen, er ist keine eigene Karte wert.
-    NoticeBox(
-        icon = Icons.Filled.Info,
-        color = LocalSignalColors.current.caution,
-        text = "Plan an deine letzten Wochen angepasst: $reason",
-    )
+    QuietNoteLine(text = planAdaptionText(reason))
 }
+
+/**
+ * Der Satz der Anpassungs-Notiz. Der Grund aus `:core` beginnt selbst schon
+ * mit „Plan angepasst: …" — davor noch einmal „Plan an deine letzten Wochen
+ * angepasst:" stand doppelt da. Nur ein Grund ohne diesen Anfang bekommt die
+ * Einleitung.
+ */
+internal fun planAdaptionText(reason: String): String =
+    if (reason.startsWith("Plan angepasst")) reason else "Plan an deine letzten Wochen angepasst: $reason"
+
 
 /**
  * @param onPlanRoute sucht zu einer Einheit eine passende Runde (siehe
@@ -400,8 +406,10 @@ fun TrainingPlanFeasibilityCard(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Echte Warnung: das Umriss-Warndreieck in Warnfarbe (einheitlicher
+                // Icon-Stil, siehe TrainingNotices.kt).
                 Icon(
-                    Icons.Outlined.Info,
+                    TrainingWarningIcon,
                     contentDescription = null,
                     tint = cautionColor,
                     modifier = Modifier.size(20.dp),

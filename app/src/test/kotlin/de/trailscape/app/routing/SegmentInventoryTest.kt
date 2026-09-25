@@ -1,5 +1,6 @@
 package de.trailscape.app.routing
 
+import de.trailscape.app.testing.MemoryKeyValueStore
 import de.trailscape.core.KeyValueStore
 import java.io.File
 import kotlin.test.Test
@@ -150,20 +151,5 @@ class SegmentInventoryTest {
         check(dir.delete() && dir.mkdirs())
         dir.deleteOnExit()
         return dir
-    }
-}
-
-/** [KeyValueStore] im Speicher — der Ersatz fuer `SharedPreferences` im Test. */
-internal class MemoryKeyValueStore : KeyValueStore {
-    private val values = mutableMapOf<String, String>()
-
-    override fun getString(key: String): String? = values[key]
-
-    override fun setString(key: String, value: String) {
-        values[key] = value
-    }
-
-    override fun remove(key: String) {
-        values.remove(key)
     }
 }

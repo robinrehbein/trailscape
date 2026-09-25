@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material3.FilledTonalButton
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,6 +80,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
@@ -137,6 +140,7 @@ import de.trailscape.core.extractTurnHints
 import de.trailscape.core.glaetteZoom
 import de.trailscape.core.haversineM
 import de.trailscape.core.kursZwischen
+import de.trailscape.core.largestCluster
 import de.trailscape.core.largestExplorerSquare
 import de.trailscape.core.naechsteKurve
 import de.trailscape.core.zoomFuerTempo
@@ -149,6 +153,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterNotNull
@@ -180,7 +185,7 @@ import kotlinx.coroutines.withContext
  *  * die Karte selbst im [MapController] (siehe `MapViewHost.kt`).
  *
  * ## Der Kartenmodus
- * Ob ein Kartentipp einen Wegpunkt setzt, ob die Zurueck-Geste die Planung
+ * Ob langes Druecken einen Wegpunkt setzt, ob die Zurueck-Geste die Planung
  * verlaesst, welche Stufe das untere Blatt zeigt — all das entschied bis vor
  * Kurzem eine eigene Kombination aus `planning: Boolean` und
  * `navTarget != null`, an jeder Stelle neu zusammengesetzt. [MapMode]
@@ -282,7 +287,7 @@ import kotlinx.coroutines.withContext
  *    aufgezogen der volle Inhalt, eingeklappt nur ihre Statuszeile. Vorher
  *    stapelten sich alle Panels oben und liessen auf einem 360×800-dp-Geraet
  *    einen Kartenstreifen von rund 80 dp uebrig — ausgerechnet dort, wo
- *    Wegpunkte hingetippt werden.
+ *    Wegpunkte per langem Druck gesetzt werden.
  *  * **Wegpunkte, Route und Navigationsziel ueberleben** Tabwechsel und
  *    Drehung (siehe `PlanningStateSavers.kt`), und die **Aufzeichnung loescht
  *    die geplante Route nicht mehr** — planen, „Navigieren", losfahren ist die
@@ -488,7 +493,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     // Ob das Planungsblatt aufgeklappt ist (siehe `PlanningSheet`). Es startet
     // offen — dort stehen der Rundkurs-Einstieg und die Anleitung — und geht
-    // beim ersten selbst gesetzten Wegpunkt zu: Wer auf die Karte tippt, will
+    // beim ersten selbst gesetzten Wegpunkt zu: Wer auf der Karte setzt, will
     // die Karte sehen.
     var planSheetExpanded by rememberSaveable { mutableStateOf(true) }
 
@@ -617,6 +622,18 @@ fun MapScreen(appViewModel: AppViewModel) {
     // das eigene Verschieben der Karte das Folgen ab und der Positions-Knopf es
     // wieder ein.
     var followMe by rememberSaveable { mutableStateOf(true) }
+
+    // Der einmalige Tipp zum langen Druecken (siehe `LongPressHint.kt`):
+    // Merker aus dem Speicher, ob die Hand die Karte gerade bewegt, und der
+    // Zeitpunkt, zu dem die letzte eigene Bewegung zur Ruhe kam. Der zaehlt
+    // als `SystemClock.elapsedRealtime()`, damit eine umgestellte Wanduhr den
+    // Tipp weder verschluckt noch vorzieht. `longPressHintJob` ist die
+    // Coroutine der gerade stehenden Tipp-Snackbar — echte Meldungen brechen
+    // sie ab, statt sich hinter ihr anzustellen (siehe „Meldungen").
+    var longPressHintDone by remember { mutableStateOf(langDrueckHinweisErledigt(AppServices.keyValueStore)) }
+    var userPanning by remember { mutableStateOf(false) }
+    var lastUserPanAt by remember { mutableLongStateOf(0L) }
+    var longPressHintJob by remember { mutableStateOf<Job?>(null) }
 
     // Kurvenpunkte der navigierten Route — einmal je Ziel aus der Geometrie
     // extrahiert (`extractTurnHints`, `:core`). Dieselbe Liste fuettert den
@@ -801,8 +818,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ------------------------------------------------------------- Meldungen
+    // Eine echte Meldung raeumt den Tipp zum langen Druecken sofort ab: Sonst
+    // wartete sie am Mutex des `SnackbarHostState`, bis er ausgelaufen ist.
+    // Der abgebrochene Tipp gilt nicht als gesehen und kommt spaeter wieder.
     LaunchedEffect(appViewModel) {
-        appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+        appViewModel.messages.collect {
+            longPressHintJob?.cancel()
+            snackbarHostState.showSnackbar(it)
+        }
     }
 
     // Erst anzeigen, dann quittieren: `clearError()` schreibt den StateFlow auf
@@ -811,6 +834,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // dann abgebrochen, bevor die Meldung je zu sehen war.
     LaunchedEffect(recordingError) {
         val message = recordingError ?: return@LaunchedEffect
+        longPressHintJob?.cancel()
         snackbarHostState.showSnackbar(message)
         RecordingRepository.clearError()
     }
@@ -855,6 +879,14 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     var explorerMaxSquare by remember { mutableStateOf<ExplorerSquare?>(null) }
 
+    /**
+     * Groesse der „Groessten Flaeche (Max-Cluster)" in Kacheln — aus demselben
+     * Hintergrundlauf wie [explorerMaxSquare] und aus demselben Grund: Der
+     * Flood-Fill ueber den ganzen Bestand gehoert nicht in den Main-Thread.
+     * `null`, solange noch nicht gerechnet wurde.
+     */
+    var explorerMaxClusterSize by remember { mutableStateOf<Int?>(null) }
+
     // Die drei Kachel-Ebenen fuellen. Aus tausenden Kacheln entstehen hier
     // ebenso viele GeoJSON-Rechtecke — das ist Rechenarbeit und gehoert
     // deshalb auf Dispatchers.Default; gesetzt wird erst das fertige Ergebnis.
@@ -864,6 +896,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (!controller.isReady) return@LaunchedEffect
         if (!explorerTilesEnabled && !historyMode) {
             explorerMaxSquare = null
+            explorerMaxClusterSize = null
             controller.setExplorerTiles(null, null, null)
             return@LaunchedEffect
         }
@@ -875,9 +908,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                 outline = exploredOutlineFeatureCollection(tiles),
                 maxSquare = maxSquareFeatureCollection(square),
                 square = square,
+                clusterSize = largestCluster(tiles).size,
             )
         }
         explorerMaxSquare = geoJson.square
+        explorerMaxClusterSize = geoJson.clusterSize
         controller.setExplorerTiles(geoJson.fog, geoJson.outline, geoJson.maxSquare)
     }
 
@@ -1411,8 +1446,9 @@ fun MapScreen(appViewModel: AppViewModel) {
      *
      * Waehrend [MapMode.PLANEN] entscheidet `planSheetExpanded`, ob der
      * Planungsinhalt steht ([MapSheetStage.PLANEN]) oder nur dessen
-     * Statuszeile ([MapSheetStage.EINGEKLAPPT]) — Letzteres stellt `onMapTap`
-     * beim ersten Wegpunkt her, damit die Karte zum Tippen frei wird. Sonst
+     * Statuszeile ([MapSheetStage.EINGEKLAPPT]) — Letzteres stellt
+     * [onMapLongPress] beim ersten Wegpunkt her, damit die Karte zum Setzen
+     * frei wird. Sonst
      * entscheidet `exploreExpanded` ueber die Aktionszeile.
      */
     val sheetStage = when {
@@ -1650,11 +1686,22 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Planung Wegpunkte an und **loeschte** still einen, wenn er zufaellig in
      * 24 dp Naehe eines vorhandenen landete. Entfernt wird ein Wegpunkt jetzt
      * nur noch ueber das × in der Liste.
+     *
+     * Waehrend Aufzeichnung und Navigation tut die Geste nichts. Jeder andere
+     * lange Druck erledigt zugleich den einmaligen Tipp (`LongPressHint.kt`):
+     * Wer die Geste gefunden hat, muss sie nicht mehr erklaert bekommen.
      */
     fun onMapLongPress(lat: Double, lon: Double) {
         if (isRecording || navTarget != null) return
+        if (mode != MapMode.PLANEN && generation.target != null) return
+        // Wer die Geste von selbst gefunden hat, braucht den Tipp nicht mehr.
+        // Erst hier, nach den Faellen, in denen der Druck nichts bewirkt: Ein
+        // wirkungsloser Druck ist kein Beleg, dass die Geste verstanden ist.
+        if (!longPressHintDone) {
+            longPressHintDone = true
+            merkeLangDrueckHinweisErledigt(AppServices.keyValueStore)
+        }
         if (mode != MapMode.PLANEN) {
-            if (generation.target != null) return
             appViewModel.select(null)
             selectedPlace = Place(
                 displayName = "Markierter Punkt",
@@ -1855,7 +1902,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     /**
      * „Als Wegpunkt" auf der Ortskarte ([MapMode.PLANEN]): haengt den
      * benannten Ort ans Ende der Wegpunktliste — dieselbe Stelle, an die auch
-     * ein Kartentipp einen namenlosen Wegpunkt haengt (siehe [onMapTap]),
+     * ein langer Druck einen namenlosen Wegpunkt haengt (siehe [onMapLongPress]),
      * samt derselben Sonderregel fuer eine noch nicht bestaetigte
      * uebernommene Runde.
      */
@@ -2293,6 +2340,86 @@ fun MapScreen(appViewModel: AppViewModel) {
     LaunchedEffect(sheetUnderNav) { appViewModel.setMapSheetUnderNav(sheetUnderNav) }
     DisposableEffect(Unit) { onDispose { appViewModel.setMapSheetUnderNav(false) } }
 
+    // ------------------------------------------ Tipp: lange auf die Karte
+    // Einmal, beim ruhigen Erkunden, erklaert eine Snackbar die einzige Geste,
+    // die auf der Karte etwas anlegt (Entscheidung in `LongPressHint.kt`).
+    // Jede eigene Bewegung der Karte startet die Wartezeit neu (Schluessel
+    // `userPanning` und `lastUserPanAt`, gesetzt erst beim Stillstand — ein
+    // langer Wischer mit Nachgleiten zaehlt also ganz); eine fremde Snackbar
+    // ebenso — erst wenn sie weg ist und die Karte danach
+    // [LONG_PRESS_HINT_CALM_MS] ruhig stand, kommt der Tipp.
+    //
+    // Als offene Aufgabe zaehlt alles, was ueber oder vor der Karte liegt:
+    // Unter dem Scrim eines Kartenstil-Blatts oder eines Dialogs saehe
+    // niemand den Tipp. Das hochgewischte „Wohin?"-Blatt zaehlt mit, weil es
+    // die Geste in seiner eigenen Hinweiszeile schon erklaert und die
+    // Snackbar genau diesen Inhalt verdeckte.
+    val longPressLage = langDrueckLage(
+        mode = mode,
+        aufzeichnung = isRecording,
+        navigation = navTarget != null,
+        aufgabeOffen = mapTaskActive || searchOpen || exploreSearching || exploreExpanded ||
+            showStyleSheet || segmentOffer != null || saveRouteDialog || showBatteryNotice ||
+            deleteDialogRide != null,
+    )
+    val snackbarVisible = snackbarHostState.currentSnackbarData != null
+    // Nur im Vordergrund: Liegt die App im Hintergrund oder ist der
+    // Bildschirm aus, verstriche die Wartezeit ungesehen — und der Tipp mit.
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
+    val imVordergrund = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    // Der Tipp gilt nur fuer das ruhige Erkunden im Vordergrund: Beginnt eine
+    // Aufgabe, eine Planung oder eine Fahrt, oder geht die App weg, solange er
+    // noch steht, verschwindet er sofort — das Abbrechen der wartenden
+    // `showSnackbar`-Coroutine blendet ihn aus.
+    LaunchedEffect(longPressLage, imVordergrund) {
+        if (longPressLage != LangDrueckLage.ERKUNDEN || !imVordergrund) longPressHintJob?.cancel()
+    }
+    LaunchedEffect(longPressLage, imVordergrund, longPressHintDone, userPanning, lastUserPanAt, snackbarVisible) {
+        if (longPressLage != LangDrueckLage.ERKUNDEN || !imVordergrund || longPressHintDone ||
+            userPanning || snackbarVisible || longPressHintJob?.isActive == true
+        ) {
+            return@LaunchedEffect
+        }
+        delay(LONG_PRESS_HINT_CALM_MS)
+        val show = sollLangDrueckHinweisZeigen(
+            lage = longPressLage,
+            imVordergrund = imVordergrund,
+            hinweisErledigt = longPressHintDone,
+            geradeGeschwenkt = userPanning || (
+                lastUserPanAt != 0L &&
+                    SystemClock.elapsedRealtime() - lastUserPanAt < LONG_PRESS_HINT_CALM_MS
+                ),
+            andereSnackbarSichtbar = snackbarHostState.currentSnackbarData != null,
+        )
+        if (!show) return@LaunchedEffect
+        // Im Screen-Scope, nicht in diesem Effekt: Die eigene Snackbar
+        // aendert `snackbarVisible` und damit den Schluessel — der Effekt
+        // startet neu, und eine darin wartende Snackbar verschwaende sofort
+        // wieder.
+        longPressHintJob = scope.launch {
+            val shownAt = SystemClock.elapsedRealtime()
+            var regulaerBeendet = false
+            try {
+                snackbarHostState.showSnackbar(
+                    message = LONG_PRESS_HINT_TEXT,
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Short,
+                )
+                regulaerBeendet = true
+            } finally {
+                // Gemerkt wird erst hier, nicht schon beim Zeigen: Ein Tipp,
+                // den eine Aufgabe, eine Meldung oder der Weg in den
+                // Hintergrund nach einem Wimpernschlag wieder abraeumt, soll
+                // spaeter noch einmal kommen duerfen (siehe
+                // [langDrueckHinweisGesehen]).
+                if (langDrueckHinweisGesehen(regulaerBeendet, SystemClock.elapsedRealtime() - shownAt)) {
+                    longPressHintDone = true
+                    merkeLangDrueckHinweisErledigt(AppServices.keyValueStore)
+                }
+            }
+        }
+    }
+
     // Der ausgewaehlte Vorschlag ist die Vorschau auf der Karte: Er landet in
     // demselben `plannedRoute`, das auch die Planung von Hand fuellt — also in
     // der blauen, gestrichelten Routenebene aus `MapViewHost.kt`.
@@ -2331,7 +2458,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Bewusst EIN abgeleiteter Effekt statt eines Aufrufs an jeder der elf
     // Stellen, an denen `plannedRoute` entsteht oder verschwindet (Berechnung,
     // Fehlschlag, Generator, `exitPlanning`, `restorePlanning`,
-    // `discardGeneratedRoute`, `runRecording`, Kartentipp …): Elf Aufrufe
+    // `discardGeneratedRoute`, `runRecording`, langer Druck …): Elf Aufrufe
     // waeren elf Gelegenheiten, einen zu vergessen — und ein vergessener
     // liesse den Knopf eine Route anbieten, die es nicht mehr gibt. So kann
     // die Meldung per Konstruktion nicht von der Wahrheit abweichen.
@@ -2493,8 +2620,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     // zuklappen.
     //
     // Aus der Planung fuehrt **eine** Geste heraus, auch wenn deren Inhalt
-    // gerade eingeklappt ist: Diese eingeklappte Stufe stellt `onMapTap` beim
-    // Wegpunktsetzen her (siehe [sheetStage]), sie ist also kein Schritt, den
+    // gerade eingeklappt ist: Diese eingeklappte Stufe stellt `onMapLongPress`
+    // beim Wegpunktsetzen her (siehe [sheetStage]), sie ist also kein Schritt, den
     // die Nutzerin selbst gegangen waere und den sie rueckwaerts wieder
     // erwarten wuerde.
     BackHandler(
@@ -2621,7 +2748,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                 locationEnabled = locationGranted,
                 onMapTap = { _, _ -> },
                 onMapLongPress = ::onMapLongPress,
-                onUserPan = { followMe = false },
+                onUserPan = {
+                    followMe = false
+                    userPanning = true
+                },
+                onUserPanEnd = {
+                    userPanning = false
+                    lastUserPanAt = SystemClock.elapsedRealtime()
+                },
                 modifier = Modifier.fillMaxSize(),
                 // Hinter der Datenseite des Fahrmodus liegt die Karte
                 // vollstaendig verdeckt. Sie dann weiterzeichnen zu lassen
@@ -3186,6 +3320,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             totalKm = totals.totalKm,
                             tileCount = explorerTiles.size,
                             squareSize = explorerMaxSquare?.size,
+                            clusterSize = explorerMaxClusterSize,
                             onClose = {
                                 historyMode = false
                                 appViewModel.requestTab(AppTab.RIDES)
@@ -3752,9 +3887,9 @@ private fun ExplorerTilesPill(
 
 /**
  * Das fertige GeoJSON der drei Kachel-Ebenen samt dem groessten Quadrat, das
- * dabei ohnehin ermittelt wurde.
+ * dabei ohnehin ermittelt wurde, und der Groesse des Max-Clusters.
  *
- * Ein eigener Typ statt vier lose Rueckgabewerte: Alle vier entstehen in
+ * Ein eigener Typ statt fuenf lose Rueckgabewerte: Alle fuenf entstehen in
  * derselben Hintergrundrechnung und gehoeren zum selben Kachelstand — sie
  * duerfen nie aus zwei verschiedenen Laeufen stammen.
  */
@@ -3763,6 +3898,7 @@ private data class ExplorerTileGeoJson(
     val outline: String,
     val maxSquare: String,
     val square: ExplorerSquare?,
+    val clusterSize: Int,
 )
 
 /** Namensabfrage (`_askName` im Original). */

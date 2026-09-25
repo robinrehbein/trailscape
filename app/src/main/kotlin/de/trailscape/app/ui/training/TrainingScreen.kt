@@ -1,6 +1,5 @@
 package de.trailscape.app.ui.training
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -11,9 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -29,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,16 +34,13 @@ import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NeutralButton
-import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
-import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.planFeasibilityIdentityKey
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
-import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.adaptPlan
 import de.trailscape.core.assessFitness
@@ -78,7 +70,7 @@ import kotlinx.coroutines.launch
  *  2. **Diese Woche im Plan** — nur die laufende Woche ([CurrentWeekCard]) mit
  *     beschriftetem „Runde"-Knopf am heutigen Tag; alle Wochen
  *     ([PlanWeekCard]) erst hinter „Alle Wochen ansehen". Die
- *     Anpassungs-Notiz ([PlanAdaptionNote]) bleibt, kompakt.
+ *     Anpassungs-Notiz ([PlanAdaptionNote]) ist eine schlichte Textzeile.
  *  3. **Deine Form** — eine antippbare Karte ([FormSummaryCard]); alles
  *     Weitere (Kurven, Rampenrate, Belastungsverhaeltnis, Wochenlast,
  *     Fitnesslevel) liegt eine Ebene tiefer in [FormSheet] unter „Alle Werte".
@@ -104,10 +96,12 @@ import kotlinx.coroutines.launch
  * kommen koennen) bleiben. Einen gefuellten Knopf hat dann nur der
  * Leerzustand; „Ziel festlegen" tritt neutral zurueck.
  *
- * ## Hinweis zum Profil
- * Solange [AppViewModel.profileConfirmed] aus ist, steht oben ein kompakter,
- * antippbarer Hinweis ([UnconfirmedProfileNotice]), dass die Zahlen auf
- * Standardwerten beruhen.
+ * ## Hinweise und Warnungen
+ * Solange [AppViewModel.profileConfirmed] aus ist, steht oben ein Hinweis
+ * ([UnconfirmedProfileNotice]) mit der Aktion „Profil öffnen", dass die
+ * Zahlen auf Standardwerten beruhen. Pro Screen gibt es hoechstens EINE
+ * Flaeche in Warnfarbe: Steht zugleich [TrainingPlanFeasibilityCard] an,
+ * wird der Profil-Hinweis zur ruhigen Zeile ([trainingNoticeLayout]).
  *
  * ## Kopfzeile und Bodenfreiheit
  * Die grosse One-UI-Kopfzeile ([OneUiLargeTopAppBar]) traegt den Titel
@@ -160,6 +154,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     // quittiert wird ueber den Schluessel des gespeicherten Plans.
     val feasibility = remember(displayPlan) { displayPlan?.let { assessPlanFeasibility(it) } }
     val planKey = remember(plan) { plan?.let { planFeasibilityIdentityKey(it) } }
+    val openFeasibility = feasibility?.takeIf { !it.feasible && planKey != planFeasibilityAckKey }
     val currentWeek = remember(displayPlan) {
         displayPlan?.let { p -> p.weeks.getOrNull(currentWeekIndex(p)) }
     }
@@ -171,6 +166,12 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     // (`shouldShowShortSleeperHint`), entschieden im ViewModel.
     val showShortSleeperHint by appViewModel.shortSleeperHintVisible
         .collectAsStateWithLifecycle()
+    // Hoechstens eine Warnflaeche: Stehen Tragfaehigkeit und Profil zugleich
+    // an, bekommt nur die wichtigere die Karte (siehe TrainingNotices.kt).
+    val notices = trainingNoticeLayout(
+        feasibilityOpen = openFeasibility != null,
+        profileMissing = !profileConfirmed,
+    )
 
     var showGoalEditor by rememberSaveable { mutableStateOf(false) }
     var showPrognosis by rememberSaveable { mutableStateOf(false) }
@@ -244,6 +245,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 if (!profileConfirmed) {
                     item(key = "profil-hinweis") {
                         UnconfirmedProfileNotice(
+                            asCard = notices.card == TrainingWarning.PROFILE,
                             onOpenProfile = {
                                 appViewModel.requestMoreSection(MoreSection.PROFILE)
                             },
@@ -272,19 +274,19 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     }
                 }
 
-                feasibility
-                    ?.takeIf { !it.feasible && planKey != planFeasibilityAckKey }
-                    ?.let { verdict ->
-                        item(key = "plan-tragfaehigkeit") {
-                            TrainingPlanFeasibilityCard(
-                                feasibility = verdict,
-                                onAdjustGoal = { showGoalEditor = true },
-                                onAcknowledge = {
-                                    planKey?.let { appViewModel.acknowledgePlanFeasibility(it) }
-                                },
-                            )
-                        }
+                // Die Tragfaehigkeit ist die wichtigste Warnung
+                // (trainingNoticeLayout) und steht deshalb immer als Karte.
+                openFeasibility?.let { verdict ->
+                    item(key = "plan-tragfaehigkeit") {
+                        TrainingPlanFeasibilityCard(
+                            feasibility = verdict,
+                            onAdjustGoal = { showGoalEditor = true },
+                            onAcknowledge = {
+                                planKey?.let { appViewModel.acknowledgePlanFeasibility(it) }
+                            },
+                        )
                     }
+                }
 
                 // ------------------------------------------ Diese Woche im Plan
                 if (shownPlan != null) {
@@ -386,29 +388,6 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     if (showVitals) {
         VitalsSheet(insights = insights, onDismiss = { showVitals = false })
     }
-}
-
-/**
- * Der kompakte Hinweis, dass die Zahlen dieses Tabs auf Standardwerten
- * beruhen.
- *
- * Antippbar, weil ein Hinweis ohne Weg zur Loesung nur aergert: Der Tipp
- * springt in die Profilkarte der Einstellungen — genau dorthin, wo Alter und
- * Gewicht hingehoeren.
- */
-@Composable
-private fun UnconfirmedProfileNotice(onOpenProfile: () -> Unit) {
-    NoticeBox(
-        icon = Icons.Filled.Info,
-        color = LocalSignalColors.current.caution,
-        title = "Profil eintragen",
-        text = "Ohne Alter und Gewicht rechnen wir mit " +
-            "${defaultTrainingProfile.ageYears} Jahren und " +
-            "${defaultTrainingProfile.weightKg.toInt()} kg — die Zahlen sind grob.",
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onOpenProfile),
-    )
 }
 
 /**

@@ -2,6 +2,7 @@ package de.trailscape.app.ui.training
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -45,6 +49,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -328,9 +334,38 @@ private fun RowScope.TimeTile(
 }
 
 /**
+ * Die Markierungen der Prognose-Skala, in der Reihenfolge der Legende.
+ * [label] steht in der Legendenzeile unter der Skala.
+ */
+internal enum class PrognosisMarker(val label: String) {
+    TODAY("heute"),
+    EVENT("am Renntag"),
+    TARGET("Ziel"),
+}
+
+/**
+ * Welche Markierungen die Skala zeigt — und damit, was die Legende nennt.
+ * „heute" steht immer; Renntag und Ziel nur, wenn es sie gibt. Eine Legende,
+ * die einen fehlenden Punkt erklaert, liesse suchen.
+ */
+internal fun prognosisMarkers(targetMin: Int?, atEventMin: Int?): List<PrognosisMarker> =
+    buildList {
+        add(PrognosisMarker.TODAY)
+        if (atEventMin != null) add(PrognosisMarker.EVENT)
+        if (targetMin != null) add(PrognosisMarker.TARGET)
+    }
+
+/**
  * Die kleine Skala unter den Zeiten: links langsamer, rechts schneller. Der
- * graue Punkt ist „heute", der Strich die Zielzeit, der Akzentpunkt die
- * Prognose mit Plan am Renntag.
+ * graue Ring ist „heute", der Strich die Zielzeit, der gefuellte Punkt in
+ * `tertiary` die Prognose mit Plan am Renntag.
+ *
+ * Darunter eine kurze Legende („● heute · ● am Renntag · | Ziel") in genau
+ * den Farben und Formen der Skala: Ohne sie waren die zwei Punkte nicht
+ * zuzuordnen — man musste raten, welcher heute und welcher der Renntag ist.
+ * Die Prognose traegt `tertiary` statt `primary`, damit sie sich vom
+ * Zielstrich (`primary`) unterscheidet: Punkt und Strich in derselben Farbe
+ * lasen sich als ein Ding.
  *
  * Bewusst **Zeit** auf der Achse, nicht das Datum: Der Prototyp beschriftet
  * die Enden mit „heute" und „Renntag", die Punkte stehen aber nach Zeit —
@@ -358,7 +393,8 @@ private fun PrognosisTrack(
     val startColor = theme.primaryContainer
     val endColor = theme.surfaceVariant
     val nowColor = theme.onSurfaceVariant
-    val accent = theme.primary
+    val eventColor = theme.tertiary
+    val targetColor = theme.primary
     val ring = theme.surface
 
     Column(modifier = Modifier.clearAndSetSemantics { contentDescription = description }) {
@@ -378,22 +414,35 @@ private fun PrognosisTrack(
             )
             val cy = size.height / 2
             val r = 7.dp.toPx()
-            fun dot(t: Int, color: androidx.compose.ui.graphics.Color) {
+            fun dot(t: Int, color: Color, hollow: Boolean = false) {
                 val x = size.width * pos(t)
                 drawCircle(ring, radius = r, center = Offset(x, cy))
-                drawCircle(color, radius = r - 3.dp.toPx(), center = Offset(x, cy))
+                if (hollow) {
+                    val stroke = 2.dp.toPx()
+                    drawCircle(
+                        color,
+                        radius = r - 3.dp.toPx() - stroke / 2 + 1.dp.toPx(),
+                        center = Offset(x, cy),
+                        style = Stroke(width = stroke),
+                    )
+                } else {
+                    drawCircle(color, radius = r - 3.dp.toPx(), center = Offset(x, cy))
+                }
             }
-            dot(currentMin, nowColor)
+            // „heute" als Ring, der Renntag gefuellt: Die beiden Punkte
+            // unterscheiden sich so in der Form, nicht nur im Farbton — der
+            // allein reicht bei grau gegen petrol nicht.
+            dot(currentMin, nowColor, hollow = true)
             targetMin?.let {
                 val x = size.width * pos(it)
                 drawRoundRect(
-                    color = accent,
+                    color = targetColor,
                     topLeft = Offset(x - 1.5.dp.toPx(), 0f),
                     size = Size(3.dp.toPx(), size.height),
                     cornerRadius = CornerRadius(1.5.dp.toPx()),
                 )
             }
-            atEventMin?.let { dot(it, accent) }
+            atEventMin?.let { dot(it, eventColor) }
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -404,7 +453,52 @@ private fun PrognosisTrack(
             )
             Text("schneller", style = MaterialTheme.typography.labelSmall, color = theme.onSurfaceVariant)
         }
+        // Legende: dieselben Formen wie auf der Skala, klein und mittig.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            prognosisMarkers(targetMin, atEventMin).forEachIndexed { index, marker ->
+                if (index > 0) {
+                    Text(
+                        " · ",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = theme.onSurfaceVariant,
+                    )
+                }
+                when (marker) {
+                    PrognosisMarker.TODAY -> LegendDot(nowColor, hollow = true)
+                    PrognosisMarker.EVENT -> LegendDot(eventColor)
+                    PrognosisMarker.TARGET -> Box(
+                        modifier = Modifier
+                            .size(width = 3.dp, height = 12.dp)
+                            .background(targetColor, RoundedCornerShape(1.5.dp)),
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(marker.label, style = MaterialTheme.typography.labelSmall, color = theme.onSurfaceVariant)
+            }
+        }
     }
+}
+
+/** Ein Legendenpunkt in der Groesse des Punktkerns auf der Skala, gefuellt oder als Ring. */
+@Composable
+private fun LegendDot(color: Color, hollow: Boolean = false) {
+    Box(
+        modifier = Modifier
+            .size(8.dp)
+            .then(
+                if (hollow) {
+                    Modifier.border(2.dp, color, CircleShape)
+                } else {
+                    Modifier.background(color, CircleShape)
+                },
+            ),
+    )
 }
 
 /**

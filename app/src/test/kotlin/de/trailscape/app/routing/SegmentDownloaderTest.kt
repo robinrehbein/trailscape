@@ -1,5 +1,6 @@
 package de.trailscape.app.routing
 
+import de.trailscape.app.testing.MemoryKeyValueStore
 import java.io.BufferedInputStream
 import java.io.Closeable
 import java.io.File

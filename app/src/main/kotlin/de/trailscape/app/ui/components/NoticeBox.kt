@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.components
 
 import de.trailscape.app.ui.theme.CardPadding
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -36,6 +38,9 @@ import androidx.compose.ui.unit.dp
  * erbt der Block aus dem Theme (`shapes.medium`, 26 dp) statt aus einer
  * eigenen Zahl.
  *
+ * @param action optionale Aktion (ein `TextButton`) unter dem Text,
+ *   rechtsbuendig. Ein Hinweis mit Weg zur Loesung zeigt diesen Weg sichtbar —
+ *   eine nur antippbare Flaeche waere eine versteckte Funktion.
  * @param color die Signalfarbe. Kommt aus
  *   [de.trailscape.app.ui.theme.LocalSignalColors] oder dem `colorScheme` —
  *   nie als Literal.
@@ -47,6 +52,7 @@ fun NoticeBox(
     text: String,
     modifier: Modifier = Modifier,
     title: String? = null,
+    action: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         color = color.copy(alpha = 0.12f),
@@ -67,6 +73,11 @@ fun NoticeBox(
                     )
                 }
                 Text(text = text, style = MaterialTheme.typography.bodyMedium)
+                if (action != null) {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        action()
+                    }
+                }
             }
         }
     }

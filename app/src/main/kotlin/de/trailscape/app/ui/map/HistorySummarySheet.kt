@@ -24,6 +24,11 @@ import de.trailscape.app.ui.theme.CardPadding
  * Die Zusammenfassung unter dem Verlauf als Karte (Fuehrung „Klartext",
  * `docs/design/prototyp-klartext.html`, Verlauf → Karte): wie viele Touren,
  * wie viele Kilometer, wie viele Kacheln entdeckt, das groesste Quadrat.
+ * Darunter die „Groesste Flaeche (Max-Cluster)" ([clusterSize], siehe
+ * `largestCluster` in `:core`) als eigene Zeile: Eine fuenfte Spalte waere
+ * auf schmalen Geraeten zu gedraengt, und der Satz „Größte Fläche: 37
+ * Kacheln" braucht keine Erklaerung. `null` = noch nicht gerechnet, dann
+ * fehlt die Zeile, statt kurz eine falsche 0 zu zeigen.
  * ✕ fuehrt zurueck in den Verlauf.
  */
 @Composable
@@ -32,6 +37,7 @@ internal fun HistorySummarySheet(
     totalKm: Double,
     tileCount: Int,
     squareSize: Int?,
+    clusterSize: Int?,
     onClose: () -> Unit,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
@@ -67,9 +73,23 @@ internal fun HistorySummarySheet(
                     Modifier.weight(1f),
                 )
             }
+            // Ohne Cluster (noch keine Kachel mit allen vier Nachbarn) keine
+            // Zeile „0 Kacheln" — eine Null ohne Erklaerung wirkt wie ein Fehler.
+            if (clusterSize != null && clusterSize > 0) {
+                Text(
+                    "Größte Fläche: ${formatTileCount(clusterSize)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
+
+/** „1 Kachel" / „37 Kacheln" — Einzahl sauber statt „1 Kacheln". */
+internal fun formatTileCount(count: Int): String = if (count == 1) "1 Kachel" else "$count Kacheln"
 
 @Composable
 private fun SummaryValue(value: String, label: String, modifier: Modifier = Modifier) {

@@ -10,6 +10,7 @@ import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Reine Textlogik des Trainings-Tabs (Zielzeile, Prognose-Satz, Quellzeile,
@@ -84,5 +85,52 @@ class TrainingTextTest {
         assertEquals("normal", restingHrWord(RecoveryFlag.GRUEN))
         assertEquals("gut", sleepWord(RecoveryFlag.GRUEN))
         assertEquals("7:40", formatSleep(7 + 40 / 60.0))
+    }
+
+    @Test
+    fun `hoechstens eine Warnflaeche - Tragfaehigkeit geht vor Profil`() {
+        assertEquals(
+            TrainingNoticeLayout(card = TrainingWarning.PLAN_FEASIBILITY, quiet = setOf(TrainingWarning.PROFILE)),
+            trainingNoticeLayout(feasibilityOpen = true, profileMissing = true),
+        )
+        assertEquals(
+            TrainingNoticeLayout(card = TrainingWarning.PROFILE, quiet = emptySet()),
+            trainingNoticeLayout(feasibilityOpen = false, profileMissing = true),
+        )
+        assertEquals(
+            TrainingNoticeLayout(card = TrainingWarning.PLAN_FEASIBILITY, quiet = emptySet()),
+            trainingNoticeLayout(feasibilityOpen = true, profileMissing = false),
+        )
+        assertEquals(
+            TrainingNoticeLayout(card = null, quiet = emptySet()),
+            trainingNoticeLayout(feasibilityOpen = false, profileMissing = false),
+        )
+    }
+
+    @Test
+    fun `Legende nennt nur die Markierungen auf der Skala`() {
+        assertEquals(
+            listOf("heute", "am Renntag", "Ziel"),
+            prognosisMarkers(targetMin = 130, atEventMin = 128).map { it.label },
+        )
+        assertEquals(listOf("heute", "Ziel"), prognosisMarkers(targetMin = 130, atEventMin = null).map { it.label })
+        assertEquals(listOf("heute", "am Renntag"), prognosisMarkers(targetMin = null, atEventMin = 128).map { it.label })
+        assertEquals(listOf("heute"), prognosisMarkers(targetMin = null, atEventMin = null).map { it.label })
+    }
+
+    @Test
+    fun `Hinweistexte`() {
+        assertEquals(
+            "Plan an deine letzten Wochen angepasst: weniger gefahren als geplant.",
+            planAdaptionText("weniger gefahren als geplant."),
+        )
+        // Der Grund aus `:core` bringt seine Einleitung selbst mit — nicht doppeln.
+        assertEquals(
+            "Plan angepasst: In Woche 3 hast du nur 0 % des Wochen-Solls erreicht.",
+            planAdaptionText("Plan angepasst: In Woche 3 hast du nur 0 % des Wochen-Solls erreicht."),
+        )
+        assertTrue(unconfirmedProfileText.startsWith("Ohne Alter und Gewicht rechnen wir mit "))
+        assertTrue(unconfirmedProfileText.endsWith("die Zahlen sind grob."))
+        assertEquals("Profil öffnen", PROFILE_ACTION_LABEL)
     }
 }
