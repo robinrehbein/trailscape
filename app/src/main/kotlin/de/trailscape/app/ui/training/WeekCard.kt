@@ -9,8 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -129,7 +128,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
 
             Spacer(modifier = Modifier.height(12.dp))
             NoticeBox(
-                icon = if (deload.recommended) Icons.Filled.Warning else Icons.Filled.CheckCircle,
+                icon = if (deload.recommended) TrainingWarningIcon else Icons.Outlined.CheckCircle,
                 color = if (deload.recommended) trainingWarning else trainingGood,
                 // `deload.title` kommt aus `:core` und sagt im Nicht-Fall noch
                 // „Kein Deload nötig" — ein Anglizismus, den `:core` (Tests,
