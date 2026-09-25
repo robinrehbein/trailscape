@@ -1,5 +1,7 @@
 package de.trailscape.app.record
 
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.TrackPoint
 import java.io.File
 import java.io.FileOutputStream
@@ -378,6 +380,9 @@ internal class RecordingJournal(
             val lines = try {
                 source.readLines(Charsets.UTF_8)
             } catch (e: Exception) {
+                // Die Datei ist da, aber nicht lesbar: Hier geht eine Fahrt
+                // verloren, ohne dass der Nutzer davon erfaehrt.
+                DiagLog.shared.log(DiagEvent.JOURNAL_UNREADABLE, error = e)
                 return null
             }
             if (lines.isEmpty()) return null

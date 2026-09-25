@@ -1,6 +1,8 @@
 package de.trailscape.app.health
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.os.Looper
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.permission.HealthPermission
@@ -19,6 +21,8 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.HealthActivityKind
 import de.trailscape.core.HealthAvailability
 import de.trailscape.core.HealthGateway
@@ -32,6 +36,7 @@ import de.trailscape.core.HealthSleepSession
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthWorkout
 import de.trailscape.core.HealthWorkoutReadDiagnostics
+import de.trailscape.core.MainThreadGuard
 import de.trailscape.core.mapNativeSessionKind
 import java.time.Instant
 import java.time.LocalDateTime
@@ -59,7 +64,10 @@ import kotlinx.coroutines.runBlocking
  * wird** (siehe `AppServices.appScope`) — dort ist Blockieren der
  * vorgesehene Betriebsmodus. Vom Main-Thread darf keine der Methoden
  * aufgerufen werden; [requestPermissions] wuerde dort sogar verklemmen, weil
- * es auf einen Dialog wartet, den derselbe Thread anzeigen muesste.
+ * es auf einen Dialog wartet, den derselbe Thread anzeigen muesste. Diese
+ * Regel stand frueher nur hier im Kommentar; jetzt prueft sie
+ * [MainThreadGuard] an beiden `runBlocking`-Stellen — im Debug-Build mit
+ * einer Ausnahme, im Release-Build mit einem Diagnose-Eintrag.
  *
  * **Fehlersemantik.** `HealthSyncService` faengt Fehler an den richtigen
  * Stellen selbst ab (`readOptional`, `checkAvailability`) und uebersetzt sie in
@@ -71,6 +79,23 @@ import kotlinx.coroutines.runBlocking
 class HealthConnectGateway(context: Context) : HealthGateway {
 
     private val appContext: Context = context.applicationContext
+
+    /**
+     * Ob ein blockierender Aufruf vom Main-Thread werfen soll (Debug-Build)
+     * oder nur protokolliert wird (Release). Ueber das Manifest-Flag statt
+     * `BuildConfig.DEBUG`, weil `:app` das `buildConfig`-Feature nicht
+     * aktiviert (siehe `feedback/CrashReporter.kt`).
+     */
+    private val strictThreading: Boolean =
+        (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    private fun checkNotMainThread(event: DiagEvent) {
+        MainThreadGuard.check(
+            onMainThread = Looper.myLooper() == Looper.getMainLooper(),
+            strict = strictThreading,
+            event = event,
+        )
+    }
 
     @Volatile
     private var cachedClient: HealthConnectClient? = null
@@ -112,6 +137,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * Blockiert bis zur Antwort der Nutzerin — siehe Klassendoc zum Threading.
      */
     override fun requestPermissions(): Boolean {
+        checkNotMainThread(DiagEvent.HEALTH_PERMISSION_ON_MAIN_THREAD)
         val client = requireClient()
         return runBlocking {
             HealthPermissionHub.request(HealthPermissions.requestSet(client))
@@ -397,6 +423,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         val created = try {
             HealthConnectClient.getOrCreate(appContext)
         } catch (error: Throwable) {
+            DiagLog.shared.log(DiagEvent.HEALTH_CLIENT_FAILED, error = error)
             throw HealthSyncException(
                 "Die Verbindung zu Health Connect konnte nicht aufgebaut werden: " +
                     describe(error),
@@ -416,10 +443,15 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * `HealthSyncReport.debugLines` bzw. `HealthSyncException` in der UI.
      */
     private fun <T> read(subject: String, block: suspend (HealthConnectClient) -> T): T {
+        checkNotMainThread(DiagEvent.HEALTH_READ_ON_MAIN_THREAD)
         val client = requireClient()
+        // [subject] kommt bewusst NICHT ins Diagnose-Log (siehe DiagLog: nur
+        // Konstanten) — Ereignis und Fehlerklasse reichen, um „Health Connect
+        // verweigert" von „Health Connect wirft" zu unterscheiden.
         return try {
             runBlocking { block(client) }
         } catch (error: SecurityException) {
+            DiagLog.shared.log(DiagEvent.HEALTH_ACCESS_DENIED)
             throw HealthSyncException(
                 "$subject: Health Connect verweigert den Zugriff. Bitte die Freigabe " +
                     "in den Health-Connect-Einstellungen erteilen.",
@@ -427,6 +459,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         } catch (error: HealthSyncException) {
             throw error
         } catch (error: Throwable) {
+            DiagLog.shared.log(DiagEvent.HEALTH_READ_FAILED, error = error)
             throw HealthSyncException(
                 "$subject konnte nicht aus Health Connect gelesen werden: ${describe(error)}",
             )

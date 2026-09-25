@@ -23,12 +23,19 @@ import kotlinx.coroutines.withContext
  * Unaufdringlich heisst hier: einmal fragen, jeder Ausgang ist erlaubt. Wer
  * „Schließen" tippt oder neben den Dialog, behaelt den Bericht — er kommt beim
  * naechsten Start wieder. Wer „Verwerfen" tippt, ist ihn los.
+ *
+ * Enthaelt der Bericht einen Diagnose-Abschnitt (siehe [CrashReporter]),
+ * erscheint dieselbe vorausgewaehlte Checkbox wie im Problembericht. Der
+ * Bericht wurde im Absturz schon fertig geschrieben; abgewaehlt wird der
+ * Abschnitt deshalb nachtraeglich abgeschnitten ([withoutDiagSection]) — der
+ * Titel haengt nur am Stacktrace und bleibt gleich.
  */
 @Composable
 fun CrashReportPrompt() {
     val context = LocalContext.current
     var report by remember { mutableStateOf<String?>(null) }
     var dismissed by remember { mutableStateOf(false) }
+    var attachDiag by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         // Datei-I/O gehoert nicht auf den Main-Thread, auch wenn es hier um
@@ -45,7 +52,7 @@ fun CrashReportPrompt() {
             "GitHub melden? Der Bericht wurde nur auf diesem Gerät gespeichert und " +
             "bisher nirgendwohin gesendet — er enthält keine Standort-, Touren- oder " +
             "Gesundheitsdaten.",
-        reportText = pending,
+        reportText = if (attachDiag) pending else withoutDiagSection(pending),
         issueTitle = crashIssueTitleFromReport(pending),
         reportHeading = "Absturzbericht",
         shareSubject = "Trailscape-Absturzbericht",
@@ -54,6 +61,11 @@ fun CrashReportPrompt() {
             CrashReporter.clearPendingReport(context)
             dismissed = true
             showFeedbackToast(context, "Absturzbericht gelöscht.")
+        },
+        extraContent = {
+            if (hasDiagSection(pending)) {
+                DiagAttachmentCheckbox(checked = attachDiag, onCheckedChange = { attachDiag = it })
+            }
         },
     )
 }

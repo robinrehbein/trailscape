@@ -2,13 +2,14 @@ package de.trailscape.app.wear
 
 import android.content.Context
 import android.os.SystemClock
-import android.util.Log
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.CapabilityInfo
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.core.AufzeichnungsZustand
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.FAEHIGKEIT_UHR
 import de.trailscape.core.PFAD_ZUSTAND
 import de.trailscape.core.kodiereAufzeichnungsZustand
@@ -50,8 +51,6 @@ import de.trailscape.core.kodiereAufzeichnungsZustand
  * in `record/` gegenueber Notifications und Journal-IO.
  */
 object WearBridge {
-
-    private const val TAG = "WearBridge"
 
     @Volatile
     private var appContext: Context? = null
@@ -110,12 +109,14 @@ object WearBridge {
                 attached = true
                 client.getCapability(FAEHIGKEIT_UHR, CapabilityClient.FILTER_REACHABLE)
                     .addOnSuccessListener { info -> aktualisiereErreichbareKnoten(info) }
-                    .addOnFailureListener { e -> Log.d(TAG, "Erreichbarkeit der Uhr nicht ermittelbar: $e") }
+                    .addOnFailureListener { e ->
+                        DiagLog.shared.log(DiagEvent.WEAR_CAPABILITY_FAILED, error = e)
+                    }
             } catch (e: Exception) {
                 // Kein Play-Services-Geraet (z. B. AOSP/F-Droid-Referenzgeraet ohne
                 // GMS) — die App bleibt ohne Uhr-Kopplung voll nutzbar.
                 letzterFehlversuchMs = jetzt
-                Log.d(TAG, "Wear-Bruecke nicht verfuegbar: $e")
+                DiagLog.shared.log(DiagEvent.WEAR_BRIDGE_UNAVAILABLE, error = e)
             }
         }
     }
@@ -142,7 +143,9 @@ object WearBridge {
         } catch (e: Exception) {
             // Fire-and-forget: Der naechste Takt (siehe Klassendoc) versucht es
             // ohnehin in wenigen Sekunden erneut.
-            Log.d(TAG, "Zustand konnte nicht an die Uhr gesendet werden: $e")
+            // Die Wiederholungsbremse des DiagLog verhindert, dass der Takt
+            // das Log mit identischen Eintraegen flutet.
+            DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
         }
     }
 }

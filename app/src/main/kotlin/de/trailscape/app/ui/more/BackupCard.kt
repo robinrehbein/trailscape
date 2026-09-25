@@ -49,6 +49,8 @@ import de.trailscape.app.ui.importActivityFile
 import de.trailscape.app.ui.isDuplicateRide
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.BulkImportResult
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.FormatException
 import de.trailscape.core.backupFileName
 import de.trailscape.core.importArchive
@@ -166,6 +168,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
 
                 appViewModel.addRides(newRides)
                 data.profile?.let { appViewModel.setProfile(it) }
+                DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 
                 val rideWord = if (newRides.size == 1) "Tour" else "Touren"
                 appViewModel.showMessage(
@@ -174,8 +177,10 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                         (if (data.profile != null) " · Profil übernommen" else ""),
                 )
             } catch (e: FormatException) {
+                DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_FAILED, error = e)
                 appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
             } catch (e: Exception) {
+                DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_FAILED, error = e)
                 appViewModel.showMessage(
                     withCause(
                         "Die Backup-Datei konnte nicht gelesen werden. Wähle die " +

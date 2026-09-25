@@ -33,6 +33,8 @@ import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
 import de.trailscape.core.AufzeichnungsZustand
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.LocationFusion
 import de.trailscape.core.PointFilter
 import de.trailscape.core.PointFilterResult
@@ -313,6 +315,7 @@ class RecordingService : Service() {
          */
         override fun onProviderDisabled(provider: String) {
             if (!active) return
+            DiagLog.shared.log(DiagEvent.GPS_PROVIDER_OFF)
             val message = getString(R.string.recording_error_location_off_during_ride)
             RecordingRepository.publishError(message)
             notifyError(message)
@@ -320,6 +323,7 @@ class RecordingService : Service() {
 
         override fun onProviderEnabled(provider: String) {
             if (!active) return
+            DiagLog.shared.log(DiagEvent.GPS_PROVIDER_ON)
             // Die Meldung von oben ist erledigt; sie soll weder in der
             // Oberflaeche noch als Notification stehen bleiben.
             RecordingRepository.clearError()
@@ -556,6 +560,7 @@ class RecordingService : Service() {
             // ohne jede Meldung, und der Nutzer fuhr zwei Stunden weiter, ohne
             // zu ahnen, dass nichts mehr aufgezeichnet wird.
             if (systemNeustart) {
+                DiagLog.shared.log(DiagEvent.JOURNAL_CONTINUE_LOST)
                 val message = getString(R.string.recording_error_continue_lost)
                 RecordingRepository.publishError(message)
                 notifyError(message)
@@ -866,12 +871,14 @@ class RecordingService : Service() {
         if (updatesRequested) return true
 
         if (!hasLocationPermission()) {
+            DiagLog.shared.log(DiagEvent.GPS_PERMISSION_MISSING)
             failAndStop(getString(R.string.recording_error_permission))
             return false
         }
 
         val manager = locationManager
         if (manager == null) {
+            DiagLog.shared.log(DiagEvent.GPS_START_FAILED)
             failAndStop(getString(R.string.recording_error_start_failed))
             return false
         }
@@ -888,6 +895,7 @@ class RecordingService : Service() {
             false
         }
         if (!gpsBereit) {
+            DiagLog.shared.log(DiagEvent.GPS_PROVIDER_OFF)
             if (neueAufzeichnung) {
                 failAndStop(getString(R.string.recording_error_location_disabled))
                 return false
@@ -910,11 +918,14 @@ class RecordingService : Service() {
                 )
             }
             updatesRequested = true
+            DiagLog.shared.log(DiagEvent.GPS_START_OK)
             true
         } catch (e: SecurityException) {
+            DiagLog.shared.log(DiagEvent.GPS_PERMISSION_MISSING, error = e)
             failAndStop(getString(R.string.recording_error_permission))
             false
         } catch (e: Exception) {
+            DiagLog.shared.log(DiagEvent.GPS_START_FAILED, error = e)
             failAndStop(getString(R.string.recording_error_start_failed))
             false
         }
@@ -1128,6 +1139,9 @@ class RecordingService : Service() {
             block()
         } catch (e: Exception) {
             journalSchreibfehler = true
+            // Bei vollem Speicher scheitert jeder Punkt — die Wiederholungs-
+            // bremse des DiagLog fasst das zu einem Eintrag pro Minute zusammen.
+            DiagLog.shared.log(DiagEvent.JOURNAL_WRITE_FAILED, error = e)
             val message = getString(R.string.recording_error_journal_write)
             RecordingRepository.publishError(message)
             if (!schreibfehlerGemeldet) {
@@ -1238,6 +1252,9 @@ class RecordingService : Service() {
         if (nowMs - letzterResubscribeMs < GPS_RESUBSCRIBE_MS) return
 
         letzterResubscribeMs = nowMs
+        // Sekunden Stille, bevor neu abonniert wurde — zeigt im Feld, ob der
+        // Wachhund bei bestimmten Geraeten regelmaessig anspringen muss.
+        DiagLog.shared.log(DiagEvent.GPS_RESUBSCRIBE, count = stilleMs / 1000L)
         stopUpdates()
         requestUpdates(neueAufzeichnung = false)
     }
@@ -1799,6 +1816,10 @@ class RecordingService : Service() {
             if (ride == null) {
                 // Kein verwertbarer Inhalt (weniger als zwei Punkte) — wie im
                 // Dart-Original gibt es daraus keine Tour.
+                DiagLog.shared.log(
+                    DiagEvent.JOURNAL_RECOVERY_EMPTY,
+                    count = snapshot?.points?.size?.toLong(),
+                )
                 file.delete()
                 return null
             }
@@ -1807,8 +1828,18 @@ class RecordingService : Service() {
                 rideStorage.saveRide(ride)
                 file.delete()
                 RecordingRepository.publishFinishedRide(ride.id)
+                // Nur die Punktzahl — die Tour selbst gehoert nicht ins Log.
+                DiagLog.shared.log(
+                    if (snapshot.hadUnreadableLines) {
+                        DiagEvent.JOURNAL_RECOVERED_WITH_GAPS
+                    } else {
+                        DiagEvent.JOURNAL_RECOVERED
+                    },
+                    count = snapshot.points.size.toLong(),
+                )
                 ride
             } catch (e: Exception) {
+                DiagLog.shared.log(DiagEvent.JOURNAL_RECOVERY_SAVE_FAILED, error = e)
                 // Datei bleibt liegen: naechster Versuch beim naechsten Start.
                 RecordingRepository.publishError(
                     context.getString(R.string.recording_error_save_failed),

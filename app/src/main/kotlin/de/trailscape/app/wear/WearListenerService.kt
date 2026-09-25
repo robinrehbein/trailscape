@@ -1,10 +1,11 @@
 package de.trailscape.app.wear
 
-import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.core.Befehl
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.PFAD_BEFEHL_AN_TELEFON
 import de.trailscape.core.PFAD_SENSOR
 import de.trailscape.core.dekodiereBefehl
@@ -31,8 +32,6 @@ import de.trailscape.core.dekodiereSensorBatch
  */
 class WearListenerService : WearableListenerService() {
 
-    private val tag = "WearListenerService"
-
     override fun onCreate() {
         super.onCreate()
         WearBridge.attach(this)
@@ -49,7 +48,7 @@ class WearListenerService : WearableListenerService() {
         val batch = try {
             dekodiereSensorBatch(bytes)
         } catch (e: Exception) {
-            Log.w(tag, "Kaputtes Sensor-Paket von der Uhr verworfen: $e")
+            DiagLog.shared.log(DiagEvent.WEAR_BAD_SENSOR_PACKET, error = e)
             return
         }
         batch.samples.forEach { RecordingRepository.offerWatchSample(it) }
@@ -70,7 +69,7 @@ class WearListenerService : WearableListenerService() {
         val befehl = try {
             dekodiereBefehl(bytes)
         } catch (e: Exception) {
-            Log.w(tag, "Kaputter Befehl von der Uhr verworfen: $e")
+            DiagLog.shared.log(DiagEvent.WEAR_BAD_COMMAND, error = e)
             return
         }
         when (befehl.cmd) {
