@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -24,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -35,7 +35,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collapse
+import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -83,21 +85,58 @@ internal fun SwipeableSheet(
     bottomInset: Dp = 0.dp,
     body: @Composable () -> Unit,
 ) {
+    SwipeableSheet(
+        stop = if (expanded) SheetStop.Full else SheetStop.Peek,
+        onStopChange = { onExpandedChange(it != SheetStop.Peek) },
+        peek = peek,
+        modifier = modifier,
+        bottomInset = bottomInset,
+        halfStop = false,
+        body = body,
+    )
+}
+
+/**
+ * Die drei Stufen eines Blatts (One UI / Google Maps): nur der Kopf, halb
+ * aufgezogen, ganz aufgezogen.
+ */
+internal enum class SheetStop { Peek, Half, Full }
+
+/**
+ * Das Blatt mit bis zu drei Rastpunkten. Mit [halfStop] rastet es zusaetzlich
+ * auf halber Koerperhoehe ein — aber nur, wenn der Koerper hoch genug ist,
+ * dass die Mitte etwas anderes zeigt als eines der Enden
+ * ([MinHalfStopBody]). Sonst verhaelt es sich wie das Zwei-Stufen-Blatt.
+ */
+@Composable
+internal fun SwipeableSheet(
+    stop: SheetStop,
+    onStopChange: (SheetStop) -> Unit,
+    peek: @Composable ColumnScope.() -> Unit,
+    modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
+    halfStop: Boolean = false,
+    body: @Composable () -> Unit,
+) {
     val density = LocalDensity.current
     var bodyHeightPx by remember { mutableIntStateOf(0) }
+    val withHalf = halfStop && with(density) { bodyHeightPx.toDp() } >= MinHalfStopBody
+    // Ohne Mittelstufe gibt es sie auch als Zustand nicht: aus „halb" wird
+    // dann „ganz", damit das Blatt nicht auf einem fehlenden Anker haengt.
+    val target = if (stop == SheetStop.Half && !withHalf) SheetStop.Full else stop
 
     val haptics = LocalHapticFeedback.current
 
     // Von Anfang an MIT Ankern: Ohne Anker findet `anchoredDraggable` beim
     // Loslassen keinen Rastpunkt und stuerzt ab (NPE in `computeTarget`,
-    // Absturzbericht 2.0.160). Bis der Koerper gemessen ist, liegen beide
+    // Absturzbericht 2.0.160). Bis der Koerper gemessen ist, liegen alle
     // Zustaende auf 0 — das Blatt laesst sich dann schlicht nicht aufziehen.
     val drag = remember {
         AnchoredDraggableState(
-            initialValue = expanded,
+            initialValue = target,
             anchors = DraggableAnchors {
-                false at 0f
-                true at 0f
+                SheetStop.Peek at 0f
+                SheetStop.Full at 0f
             },
         )
     }
@@ -116,13 +155,16 @@ internal fun SwipeableSheet(
     // den aktuellen Wert und setzt den Offset passend um — beim allerersten
     // Messen springt ein wiederhergestelltes „aufgeklappt" damit ohne
     // Animation an seinen Platz, genau richtig nach einer Drehung.
-    LaunchedEffect(bodyHeightPx) {
+    LaunchedEffect(bodyHeightPx, withHalf) {
         if (bodyHeightPx <= 0) return@LaunchedEffect
+        val full = bodyHeightPx.toFloat()
         drag.updateAnchors(
             DraggableAnchors {
-                false at 0f
-                true at bodyHeightPx.toFloat()
+                SheetStop.Peek at 0f
+                if (withHalf) SheetStop.Half at full / 2f
+                SheetStop.Full at full
             },
+            newTarget = if (drag.anchors.hasPositionFor(drag.targetValue)) drag.targetValue else target,
         )
     }
 
@@ -130,70 +172,74 @@ internal fun SwipeableSheet(
     // Tab oder die Zurueck-Geste): animiert nachziehen, aber nur bei echter
     // Abweichung — sonst wuerde jede Einrast-Meldung sofort eine zweite,
     // leere Animation anstossen.
-    LaunchedEffect(expanded, bodyHeightPx) {
-        if (bodyHeightPx > 0 && drag.settledValue != expanded) drag.animateTo(expanded)
+    LaunchedEffect(target, bodyHeightPx, withHalf) {
+        if (bodyHeightPx > 0 && drag.settledValue != target && drag.anchors.hasPositionFor(target)) {
+            drag.animateTo(target)
+        }
     }
 
     // Blatt -> Aussenzustand: erst beim Einrasten, nicht waehrend des Ziehens.
+    val currentStop by rememberUpdatedState(target)
+    val currentOnStopChange by rememberUpdatedState(onStopChange)
     LaunchedEffect(drag) {
         snapshotFlow { drag.settledValue }.collect { settled ->
-            if (settled != expanded) {
+            if (settled != currentStop) {
                 // Der Rastpunkt ist genau die Stelle, an der One UI ein
                 // fuehlbares Echo setzt: Die Bewegung endet, und die Hand
                 // erfaehrt das, ohne hinzusehen.
                 haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                onExpandedChange(settled)
+                currentOnStopChange(settled)
             }
         }
     }
 
     val revealed = drag.offset.takeIf { !it.isNaN() } ?: 0f
     val revealedDp = with(density) { revealed.coerceAtLeast(0f).toDp() }
+    val canExpand = bodyHeightPx > 0
+    // Tippen auf den Griff: eine Stufe weiter, ganz oben wieder zu.
+    val next = when (target) {
+        SheetStop.Peek -> if (withHalf) SheetStop.Half else SheetStop.Full
+        SheetStop.Half -> SheetStop.Full
+        SheetStop.Full -> SheetStop.Peek
+    }
 
-    // Am unteren Bildschirmrand angedockt (Fuehrung „Klartext"): nur die
-    // oberen Ecken rund, unten buendig mit dem Rand. [bottomInset] haelt den
-    // Inhalt ueber der Navigationskapsel bzw. der Gestenleiste, die Flaeche
-    // selbst laeuft darunter bis an den Rand.
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = DockedSheetShape,
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-    ) {
+    DockedSheetSurface(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(bottom = bottomInset).anchoredDraggable(
-                state = drag,
-                orientation = Orientation.Vertical,
-                // Erst ziehbar, wenn es etwas aufzuziehen gibt.
-                enabled = bodyHeightPx > 0,
-                flingBehavior = fling,
-                // Hochziehen (negatives dy) soll den Offset — die sichtbare
-                // Koerperhoehe — VERGROESSERN.
-                reverseDirection = true,
-            ),
+            modifier = Modifier
+                .padding(bottom = bottomInset)
+                .anchoredDraggable(
+                    state = drag,
+                    orientation = Orientation.Vertical,
+                    // Erst ziehbar, wenn es etwas aufzuziehen gibt.
+                    enabled = canExpand,
+                    flingBehavior = fling,
+                    // Hochziehen (negatives dy) soll den Offset — die
+                    // sichtbare Koerperhoehe — VERGROESSERN.
+                    reverseDirection = true,
+                )
+                // TalkBack bekommt Auf- und Zuklappen als Aktionen am ganzen
+                // Blatt; der schmale Griff muss dafuer nicht getroffen werden.
+                .semantics {
+                    if (canExpand) {
+                        if (target != SheetStop.Full) {
+                            expand { onStopChange(SheetStop.Full); true }
+                        }
+                        if (target != SheetStop.Peek) {
+                            collapse { onStopChange(SheetStop.Peek); true }
+                        }
+                    }
+                },
         ) {
             // Der Griff: One UIs stehende Einladung zum Ziehen. Tippen
-            // klappt weiterhin um — fuer alle, die nicht wischen moegen,
-            // und fuer Bedienhilfen.
-            //
-            // `heightIn(min = 48.dp)` ist hier keine Kosmetik. Der Griff ist
-            // laut Absatz oben ausdruecklich die **Alternative zur Wischgeste**
-            // — und war mit 4 dp Strich plus 10 dp Rand ganze 14 dp hoch.
-            // Eine Alternative, die man kaum trifft, ist keine. Anders als bei
-            // einem Material-`IconButton` gibt es hier keine automatische
-            // Mindestflaeche, weil der Griff aus blanken Bausteinen gebaut
-            // ist; sie muss also von Hand stehen.
+            // schaltet eine Stufe weiter — fuer alle, die nicht wischen
+            // moegen. Die Zeile ist bildschirmbreit und 24 dp hoch; die
+            // Bedienhilfen nehmen die Aktionen des Blatts oben.
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .clickable { onExpandedChange(!expanded) }
-                    .semantics {
-                        contentDescription = if (expanded) {
-                            "Blatt einklappen"
-                        } else {
-                            "Blatt aufklappen"
-                        }
-                    },
+                    .height(SheetHandleHeight)
+                    .clickable(enabled = canExpand, onClickLabel = null) { onStopChange(next) }
+                    .clearAndSetSemantics {},
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
@@ -227,6 +273,53 @@ internal fun SwipeableSheet(
         }
     }
 }
+
+/**
+ * Ein Blatt ohne aufziehbaren Teil (Ort, Rundenwahl, Verlauf): dieselbe
+ * angedockte Flaeche, aber **ohne Griff** — ein Griff, der nichts tut, waere
+ * ein Versprechen ohne Einloesung. Statt des Griffs haelt ein Rand oben
+ * denselben Abstand zum Inhalt.
+ */
+@Composable
+internal fun StaticSheet(
+    modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    DockedSheetSurface(modifier = modifier) {
+        Column(
+            modifier = Modifier.padding(top = SheetHandleHeight, bottom = bottomInset),
+            content = content,
+        )
+    }
+}
+
+/**
+ * Die gemeinsame Flaeche aller Kartenblaetter: am unteren Bildschirmrand
+ * angedockt (Fuehrung „Klartext"), nur die oberen Ecken rund, unten buendig
+ * mit dem Rand. Der Inhalt haelt ueber `bottomInset` Abstand zur
+ * Navigationskapsel bzw. Gestenleiste, die Flaeche selbst laeuft bis an den
+ * Rand.
+ */
+@Composable
+private fun DockedSheetSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = DockedSheetShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+    ) {
+        content()
+    }
+}
+
+/** Hoehe der Griffzeile — auch der obere Rand eines Blatts ohne Griff. */
+internal val SheetHandleHeight = 24.dp
+
+/** Ab dieser Koerperhoehe lohnt eine Mittelstufe. */
+private val MinHalfStopBody = 240.dp
 
 /** Form eines am unteren Rand angedockten Kartenblatts: oben rund, unten buendig. */
 internal val DockedSheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)

@@ -292,6 +292,7 @@ fun TrailscapeApp() {
     // Bildschirm ein — wie die Einstellungen ohne Kapsel.
     val rideDetailOpen by appViewModel.rideDetailOpen.collectAsStateWithLifecycle()
     val navHidden = settingsOpen || rideDetailOpen || (onMap && mapTaskActive)
+    val mapSheetUnderNav by appViewModel.mapSheetUnderNav.collectAsStateWithLifecycle()
 
     // Bodenfreiheit, die jeder Bildschirm unten einplanen muss: das schwebende
     // Band aus Kapsel und Aufnahme-Knopf plus die Gestenleiste des Systems.
@@ -468,6 +469,7 @@ fun TrailscapeApp() {
                 OneUiNavigationBar(
                     modifier = Modifier.weight(1f),
                     horizontalMargin = 14.dp,
+                    floating = !(onMap && mapSheetUnderNav),
                 ) {
                     TopLevelDestination.entries.forEach { destination ->
                         val selected = currentDestination?.hierarchy?.any {

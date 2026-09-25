@@ -48,6 +48,7 @@ import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
@@ -246,8 +247,15 @@ internal fun LiveRecordingCard(
 }
 
 /**
- * Statistik-Karte der ausgewaehlten Tour, inklusive Hoehenprofil.
+ * Das Blatt der ausgewaehlten Tour — angedockt wie alle Kartenblaetter.
  *
+ * Eingeklappt: Name, Datum, die vier Kennzahlen und die Aktionen — alles,
+ * was man fuer „nochmal fahren, teilen, loeschen" braucht. Hochgewischt
+ * kommen Hoehenprofil und die uebrigen Werte (Abstieg, Bewegungszeit,
+ * Puls) dazu. Frueher stand das Profil immer offen auf einer schwebenden
+ * Karte und nahm der Strecke auf der Karte ein Drittel des Bildes.
+ *
+ * @param expanded Stufe des Blatts — bleibt beim Aufrufer.
  * @param onHoverPoint meldet den im Hoehenprofil abgelesenen Punkt nach oben,
  *   damit der Screen ihn auf der Karte markieren kann.
  */
@@ -260,88 +268,148 @@ internal fun RideCard(
     onDelete: () -> Unit,
     onClose: () -> Unit,
     onHoverPoint: (TrackPoint?) -> Unit,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
 ) {
     val stats = ride.stats
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-    ) {
-        // Rechts 8 dp statt [CardPadding]: der Schliessen-IconButton bringt
-        // seinen eigenen Beruehrungsrand mit — dasselbe Zugestaendnis wie in
-        // der Tourenkarte des Touren-Tabs.
-        Column(
-            modifier = Modifier.padding(
-                start = CardPadding,
-                top = OverlayCardPaddingVertical,
-                end = 8.dp,
-                bottom = OverlayCardPaddingVertical,
-            ),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = ride.name,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Auswahl aufheben")
-                }
-            }
-            Row(modifier = Modifier.padding(end = 8.dp)) {
-                Metric(
-                    modifier = Modifier.weight(1f),
-                    value = formatKmDe(stats.distanceKm),
-                    label = "km",
-                )
-                Metric(
-                    modifier = Modifier.weight(1f),
-                    value = formatDuration(stats.durationS),
-                    label = "Dauer",
-                )
-                Metric(
-                    modifier = Modifier.weight(1f),
-                    value = stats.avgSpeedKmh?.let { formatOneDecimalDe(it) } ?: "–",
-                    label = "Ø km/h",
-                )
-                Metric(
-                    modifier = Modifier.weight(1f),
-                    value = "${stats.ascentM.roundToInt()}",
-                    label = "Hm ↑",
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            ElevationProfile(
-                points = ride.points,
-                modifier = Modifier.padding(end = 8.dp),
-                lineColor = MaterialTheme.colorScheme.primary,
-                onHover = onHoverPoint,
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.padding(end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    // Eine Planung hat weder Dauer noch Tempo oder Puls — statt vier Striche
+    // zeigt ihr Blatt, was eine Route ausmacht: Laenge und Hoehenmeter.
+    val headMetrics = if (ride.planned) {
+        listOf(
+            formatKmDe(stats.distanceKm) to "km",
+            "${stats.ascentM.roundToInt()}" to "Hm ↑",
+            "${stats.descentM.roundToInt()}" to "Hm ↓",
+        )
+    } else {
+        listOf(
+            formatKmDe(stats.distanceKm) to "km",
+            formatDuration(stats.durationS) to "Dauer",
+            (stats.avgSpeedKmh?.let { formatOneDecimalDe(it) } ?: "–") to "Ø km/h",
+            "${stats.ascentM.roundToInt()}" to "Hm ↑",
+        )
+    }
+    // Hochgewischt nur Werte, die es gibt.
+    val moreMetrics = if (ride.planned) {
+        emptyList()
+    } else {
+        listOfNotNull(
+            "${stats.descentM.roundToInt()}" to "Hm ↓",
+            stats.movingTimeS?.let { formatDuration(it) to "In Bewegung" },
+            stats.avgHrBpm?.let { "$it" to "Ø Puls" },
+            stats.maxHrBpm?.let { "$it" to "Max. Puls" },
+        )
+    }
+    SwipeableSheet(
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
+        modifier = modifier,
+        bottomInset = bottomInset,
+        peek = {
+            // Rechts 8 dp statt [CardPadding]: der Schliessen-IconButton
+            // bringt seinen eigenen Beruehrungsrand mit — dasselbe
+            // Zugestaendnis wie in der Tourenkarte des Touren-Tabs.
+            Column(
+                modifier = Modifier.padding(
+                    start = CardPadding,
+                    end = 8.dp,
+                    bottom = OverlayCardPaddingVertical,
+                ),
             ) {
-                PrimaryButton(
-                    text = if (navigating) "Unterwegs" else "Nochmal fahren",
-                    onClick = onNavigate,
-                    enabled = !navigating,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                FilledTonalIconButton(onClick = onShare) {
-                    Icon(Icons.Filled.Share, contentDescription = "Als GPX teilen")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = ride.name,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = if (ride.planned) {
+                                "Geplant · ${formatDate(ride.createdAt)}"
+                            } else {
+                                formatDate(ride.createdAt)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Filled.Close, contentDescription = "Auswahl aufheben")
+                    }
                 }
-                // 8 statt 4 dp: Rechts steht die destruktive Aktion, links
-                // eine harmlose — Fehlgriffe sind hier nicht symmetrisch.
-                Spacer(Modifier.width(8.dp))
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Tour löschen", tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.height(4.dp))
+                MetricRow(
+                    metrics = headMetrics,
+                    modifier = Modifier.padding(end = 8.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PrimaryButton(
+                        text = when {
+                            navigating -> "Unterwegs"
+                            ride.planned -> "Losfahren"
+                            else -> "Nochmal fahren"
+                        },
+                        onClick = onNavigate,
+                        enabled = !navigating,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    FilledTonalIconButton(onClick = onShare) {
+                        Icon(Icons.Filled.Share, contentDescription = "Als GPX teilen")
+                    }
+                    // 8 statt 4 dp: Rechts steht die destruktive Aktion, links
+                    // eine harmlose — Fehlgriffe sind hier nicht symmetrisch.
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = "Tour löschen",
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             }
+        },
+        body = {
+            Column(
+                modifier = Modifier.padding(
+                    start = CardPadding,
+                    end = CardPadding,
+                    bottom = OverlayCardPaddingVertical,
+                ),
+            ) {
+                if (ride.points.size >= 2) {
+                    ElevationProfile(
+                        points = ride.points,
+                        lineColor = MaterialTheme.colorScheme.primary,
+                        onHover = onHoverPoint,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                }
+                if (moreMetrics.isNotEmpty()) MetricRow(metrics = moreMetrics)
+            }
+        },
+    )
+}
+
+/** Kennzahlen gleich breit nebeneinander (Wert, Beschriftung). */
+@Composable
+private fun MetricRow(metrics: List<Pair<String, String>>, modifier: Modifier = Modifier) {
+    Row(modifier = modifier) {
+        metrics.forEach { (value, label) ->
+            Metric(modifier = Modifier.weight(1f), value = value, label = label)
         }
+        // Weniger als vier Werte: Die Spalten bleiben so breit wie in der
+        // vollen Zeile, damit alle Blaetter auf derselben Flucht stehen.
+        repeat(4 - metrics.size) { Spacer(Modifier.weight(1f)) }
     }
 }
 
@@ -483,7 +551,7 @@ internal fun LocateButton(
     modifier: Modifier = Modifier,
     following: Boolean = true,
 ) {
-    // Derselbe runde Kartenknopf wie der Ebenen-Knopf oben (Fuehrung
+    // Derselbe runde Kartenknopf wie der Ebenen-Knopf darueber (Fuehrung
     // „Klartext"): weiss, 48 dp, gleicher Schatten. Der Zustand „Karte folgt
     // mir" steckt allein in der Symbolfarbe (gruen) und nicht in einer
     // zweiten, gefuellten Knopfform.

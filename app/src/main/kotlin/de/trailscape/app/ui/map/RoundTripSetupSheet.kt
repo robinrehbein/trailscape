@@ -71,89 +71,85 @@ internal fun RoundTripSetupSheet(
     bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
-    SwipeableSheet(
-        expanded = false,
-        onExpandedChange = {},
+    StaticSheet(
         modifier = modifier,
         bottomInset = bottomInset,
-        peek = {
-            Column(
-                modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Runde ab hier", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            startLabel,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.Close, contentDescription = "Schließen")
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
+    ) {
+        Column(
+            modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Runde ab hier", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "$distanceKm",
-                        fontSize = 44.sp,
-                        fontWeight = FontWeight.Bold,
-                        lineHeight = 44.sp,
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "km",
-                        style = MaterialTheme.typography.titleMedium,
+                        startLabel,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 6.dp),
                     )
                 }
-                Slider(
-                    value = distanceKm.toFloat(),
-                    onValueChange = { onDistanceChange(snapDistance(it)) },
-                    valueRange = MIN_ROUND_TRIP_KM.toFloat()..MAX_ROUND_TRIP_KM.toFloat(),
-                    steps = (MAX_ROUND_TRIP_KM - MIN_ROUND_TRIP_KM) / ROUND_TRIP_STEP_KM - 1,
-                    modifier = Modifier.semantics { contentDescription = "Länge der Runde" },
-                )
-
-                val surfaces = listOf(
-                    RouteProfile.GRAVEL to "Gemischt",
-                    RouteProfile.ASPHALT to "Asphalt",
-                    RouteProfile.SCHOTTER to "Schotter",
-                )
-                val selected = surfaces.indexOfFirst { it.first == surfaceFor(profile) }
-                PillSegments(
-                    options = surfaces.map { it.second },
-                    selectedIndex = selected,
-                    onSelect = { onProfileChange(surfaces[it].first) },
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Neue Gegenden bevorzugen", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "Führt durch Kacheln, die du noch nicht kennst",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = preferNewAreas, onCheckedChange = onPreferNewAreasChange)
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Filled.Close, contentDescription = "Schließen")
                 }
-
-                Button(
-                    onClick = onShowSuggestions,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                ) { Text("Vorschläge zeigen") }
             }
-        },
-        body = {},
-    )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Text(
+                    text = "$distanceKm",
+                    fontSize = 44.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 44.sp,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "km",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
+            Slider(
+                value = distanceKm.toFloat(),
+                onValueChange = { onDistanceChange(snapDistance(it)) },
+                valueRange = MIN_ROUND_TRIP_KM.toFloat()..MAX_ROUND_TRIP_KM.toFloat(),
+                steps = (MAX_ROUND_TRIP_KM - MIN_ROUND_TRIP_KM) / ROUND_TRIP_STEP_KM - 1,
+                modifier = Modifier.semantics { contentDescription = "Länge der Runde" },
+            )
+
+            val surfaces = listOf(
+                RouteProfile.GRAVEL to "Gemischt",
+                RouteProfile.ASPHALT to "Asphalt",
+                RouteProfile.SCHOTTER to "Schotter",
+            )
+            val selected = surfaces.indexOfFirst { it.first == surfaceFor(profile) }
+            PillSegments(
+                options = surfaces.map { it.second },
+                selectedIndex = selected,
+                onSelect = { onProfileChange(surfaces[it].first) },
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Neue Gegenden bevorzugen", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Führt durch Kacheln, die du noch nicht kennst",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = preferNewAreas, onCheckedChange = onPreferNewAreasChange)
+            }
+
+            Button(
+                onClick = onShowSuggestions,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
+            ) { Text("Vorschläge zeigen") }
+        }
+    }
 }
 
 /** Untergrund-Segment zu einem Profil — Sonderprofile zaehlen als „Gemischt". */
