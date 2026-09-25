@@ -68,6 +68,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
 - Trainingsplan mit progressiver Steigerung, Erholungswochen und
   Fortschrittsverfolgung
+- Ziel mit optionaler Zielzeit und Prognose der Zielzeit aus den eigenen
+  Touren der letzten sechs Wochen, heute und mit dem Plan am Renntag
 - Performance-Management-Chart (Fitness, Ermüdung, Form) über die Trainingslast
 - Tagesempfehlung („Readiness") aus Ruhepuls, HRV (rMSSD) und Schlaf
 

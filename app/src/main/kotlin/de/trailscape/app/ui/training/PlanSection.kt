@@ -1,6 +1,19 @@
 package de.trailscape.app.ui.training
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.outlined.Info
+import de.trailscape.app.ui.components.NeutralButton
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
+import de.trailscape.app.ui.components.Fact
+import de.trailscape.core.PlanFeasibility
+import de.trailscape.core.plainSessionHint
+import de.trailscape.core.plainSessionTitle
+import de.trailscape.core.sessionsForDay
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.formatDateShort
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.components.NoticeBox
@@ -49,43 +61,35 @@ import de.trailscape.core.weekSessionProgress
 import kotlin.math.roundToInt
 
 /**
- * Titelzeile plus eine Karte je Trainingswoche — der Hauptteil des Kapitels
- * „Plan" im Trainings-Tab (siehe KDoc von
- * [de.trailscape.app.ui.training.TrainingScreen]).
+ * Der Plan im Trainings-Tab (Redesign „Klartext",
+ * `docs/design/prototyp-klartext.html`): oben nur die **laufende Woche** als
+ * Liste ([CurrentWeekCard]) mit beschriftetem „Runde"-Knopf am heutigen Tag,
+ * alle Wochen erst hinter „Alle Wochen ansehen" ([PlanWeekCard]).
  *
- * Die Zeile traegt **keine** eigene Ueberschrift „Plan" mehr: Die steht seit
- * dem Umbau auf die drei Kapitel als Mono-Kapitelmarke
- * ([de.trailscape.app.ui.components.SectionEyebrow]) darueber. Was hier steht,
- * ist das Ziel selbst — Name, Distanz, Datum.
+ * Die fruehere Titelzeile (`PlanHeader`: Zielname, Distanz, Datum) ist
+ * entfallen — genau das steht jetzt gross in der Zielkarte
+ * ([GoalOverviewCard]) darueber.
  *
- * Port von `_buildPlanWeeks` (`lib/screens/training_screen.dart`). Bewusst
- * ohne `_EntranceFade`-Aequivalent: die Wochenliste steht in derselben
- * `LazyColumn` wie die uebrigen Karten von [de.trailscape.app.ui.training.TrainingScreen]
- * und wuerde beim Scrollen recycelt — dieselbe Begruendung, mit der
- * `ui/rides/TourList.kt` das gestaffelte Einblenden bereits wegliess.
+ * [PlanWeekCard] ist Port von `_buildPlanWeeks`
+ * (`lib/screens/training_screen.dart`), bewusst ohne
+ * `_EntranceFade`-Aequivalent: die Wochenliste steht in derselben
+ * `LazyColumn` wie die uebrigen Karten und wuerde beim Scrollen recycelt.
  */
-@Composable
-fun PlanHeader(plan: TrainingPlan) {
-    Text(
-        text = "${plan.goal.name} – ${formatKmDe(plan.goal.distanceKm)} km am " +
-            formatDate(plan.goal.date),
-        style = MaterialTheme.typography.titleMedium,
-    )
-}
 
 /**
- * Hinweiszeile ueber den Wochenkarten, wenn der angezeigte Plan von
+ * Kompakte Hinweiszeile unter der laufenden Woche, wenn der angezeigte Plan von
  * [de.trailscape.core.adaptPlan] an die gefahrene Realitaet angepasst wurde.
  * Der gespeicherte Plan bleibt unveraendert — genau deshalb muss die
  * Oberflaeche sagen, warum hier andere Zahlen stehen als beim Erstellen.
  */
 @Composable
 fun PlanAdaptionNote(reason: String) {
+    // Kompakt: eine Zeile Titel im Text statt eigener Ueberschrift — der
+    // Hinweis erklaert Zahlen, er ist keine eigene Karte wert.
     NoticeBox(
         icon = Icons.Filled.Info,
         color = LocalSignalColors.current.caution,
-        title = "Plan an deine letzten Wochen angepasst",
-        text = reason,
+        text = "Plan an deine letzten Wochen angepasst: $reason",
     )
 }
 
@@ -262,4 +266,167 @@ private fun SessionStatusIcon(status: PlanSessionStatus) {
         tint = tint,
         modifier = Modifier.size(16.dp),
     )
+}
+
+/**
+ * „Diese Woche im Plan": nur die Einheiten der **laufenden** Woche als Liste —
+ * Tag, Klartext-Titel („Locker 45 km", [plainSessionTitle]) und darunter eine
+ * gedaempfte Zeile, was tatsaechlich gefahren wurde oder wie die Einheit
+ * gemeint ist ([plainSessionHint]). Erledigte Einheiten tragen ein ✓, die
+ * heutige ist getoent und hat einen **beschrifteten** Knopf „Runde".
+ *
+ * Vorlage ist `.pday` im Prototyp `docs/design/prototyp-klartext.html`. Keine
+ * GA1/Last-Begriffe im Titel: Die stehen weiter in den Wochenkarten hinter
+ * „Alle Wochen ansehen" ([PlanWeekCard]).
+ *
+ * @param onPlanRoute baut zur Einheit eine passende Runde und wechselt auf die
+ *   Karte (`AppViewModel.requestRouteGeneration`).
+ */
+@Composable
+fun CurrentWeekCard(
+    week: TrainingWeek,
+    plan: TrainingPlan,
+    rides: List<RideInfo>,
+    onPlanRoute: (TrainingSession) -> Unit,
+    rideLoads: Map<String, Double> = emptyMap(),
+) {
+    val theme = MaterialTheme.colorScheme
+    val progress = weekSessionProgress(week, rides, rideLoads = rideLoads).associateBy { it.session }
+    val todays = sessionsForDay(plan).toSet()
+    val ridesById = rides.associateBy { it.id }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column {
+            week.sessions.forEachIndexed { i, session ->
+                if (i > 0) HorizontalDivider(color = theme.outlineVariant.copy(alpha = 0.5f))
+                val isToday = session in todays
+                val entry = progress[session]
+                val done = entry?.status == PlanSessionStatus.ERLEDIGT ||
+                    entry?.status == PlanSessionStatus.TEILWEISE
+                val ridden = entry?.rideId?.let { ridesById[it] }
+                val subline = when {
+                    done && ridden != null ->
+                        "gefahren: ${ridden.name}, ${formatKmDe(ridden.stats.distanceKm)} km"
+                    isToday -> "heute · ${plainSessionHint(session, plan.goal)}"
+                    entry?.status == PlanSessionStatus.VERPASST -> "ausgelassen"
+                    else -> plainSessionHint(session, plan.goal)
+                }
+                val rowColor = if (isToday) theme.primaryContainer else theme.surface.copy(alpha = 0f)
+                val textColor = if (isToday) theme.onPrimaryContainer else theme.onSurface
+                val mutedColor = if (isToday) theme.onPrimaryContainer.copy(alpha = 0.8f) else theme.onSurfaceVariant
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(rowColor)
+                        .padding(horizontal = CardPadding, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = session.day,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = mutedColor,
+                        modifier = Modifier.width(34.dp),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(plainSessionTitle(session), style = MaterialTheme.typography.titleSmall, color = textColor)
+                        Text(subline, style = MaterialTheme.typography.bodySmall, color = mutedColor)
+                    }
+                    when {
+                        done -> {
+                            val c = if (entry?.status == PlanSessionStatus.ERLEDIGT) trainingGood else trainingCaution
+                            TagPill(
+                                text = "✓",
+                                containerColor = c.copy(alpha = 0.15f),
+                                contentColor = c,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        isToday && canGenerateRouteFor(session) -> {
+                            // Beschriftet statt nur Symbol: „Runde" ist im
+                            // Woerterbuch des Redesigns der generierte
+                            // Rundkurs — genau das, was hier entsteht.
+                            FilledTonalButton(
+                                onClick = { onPlanRoute(session) },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(start = 8.dp).height(36.dp),
+                            ) {
+                                Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Runde")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * „Plan und Ziel passen nicht zusammen" — die Tragfaehigkeitskarte, seit dem
+ * Redesign „Klartext" im Trainings-Tab direkt unter der Zielkarte statt auf
+ * der Startseite.
+ *
+ * **Bewusst eine Kopie** von `PlanFeasibilityCard` aus
+ * `ui/today/TodayCards.kt` (dort `internal`, Paket `today`): Die Startseite
+ * wurde parallel umgebaut und hoert auf, die Karte zu zeigen; ihr Original
+ * faellt dort mit weg. Inhalt und Gestaltung sind unveraendert — Feststellung
+ * statt Frage, `caution`-Farbe, Zahlenzeile statt Fliesstext —, nur fuehrt
+ * „Ziel anpassen" hier direkt ins Zielblatt statt in diesen Tab.
+ *
+ * Quittiert wird mit demselben Schluessel wie bisher
+ * (`AppViewModel.acknowledgePlanFeasibility`): Ein neuer oder veraenderter
+ * Plan zeigt sie automatisch wieder.
+ */
+@Composable
+fun TrainingPlanFeasibilityCard(
+    feasibility: PlanFeasibility,
+    onAdjustGoal: () -> Unit,
+    onAcknowledge: () -> Unit,
+) {
+    val cautionColor = LocalSignalColors.current.caution
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(CardPadding)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = cautionColor,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Plan und Ziel passen nicht zusammen",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Fact(label = "Längste Fahrt", value = "${feasibility.longestRideKm} km", compact = true)
+                Fact(
+                    label = "Ziel",
+                    value = "${formatKmDe(feasibility.goalDistanceKm)} km",
+                    compact = true,
+                )
+                feasibility.suggestedDistanceKm?.let { suggested ->
+                    Fact(
+                        label = "Trägt bis",
+                        value = "$suggested km",
+                        compact = true,
+                        valueColor = cautionColor,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Kein gefuellter Knopf: Der eine gefuellte Knopf dieses
+                // Screens gehoert dem Ziel bzw. dem Leerzustand.
+                NeutralButton(onClick = onAdjustGoal) { Text("Ziel anpassen") }
+                TextButton(onClick = onAcknowledge) { Text("Verstanden") }
+            }
+        }
+    }
 }

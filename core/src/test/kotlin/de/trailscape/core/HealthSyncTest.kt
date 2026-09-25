@@ -55,6 +55,8 @@ class HealthSyncTest {
         var nativeSessions: List<HealthSessionInfo> = emptyList(),
         var failNativeSessions: Boolean = false,
         var workoutDiagnostics: HealthWorkoutReadDiagnostics? = null,
+        var consentRequired: Set<String> = emptySet(),
+        var permissionStatus: Map<HealthReadType, Boolean>? = null,
     ) : HealthGateway {
         var requestCount = 0
         var nativeSessionCalls = 0
@@ -98,6 +100,13 @@ class HealthSyncTest {
             if (failRoutes) throw IllegalStateException("routen kaputt")
             return routes
         }
+
+        override fun readRoutesWithStatus(
+            from: LocalDateTime,
+            to: LocalDateTime,
+        ): HealthRouteReadResult = HealthRouteReadResult(readRoutes(from, to), consentRequired)
+
+        override fun readPermissionStatus(): Map<HealthReadType, Boolean>? = permissionStatus
 
         override fun readHeartRate(
             from: LocalDateTime,
@@ -1780,5 +1789,156 @@ class HealthSyncTest {
             .importWithReport(existing = emptyList())
         assertTrue(report.debugLines.contains("Plugin: keine Rohdiagnose erhoben"))
         assertTrue(report.debugLines.contains("Plugin: 0 Rad-Session(s)"))
+    }
+
+    // -----------------------------------------------------------------------
+    // Ruhepuls-Ersatz, Schlaf-Zusammenfuehrung, Diagnose, Routen-Freigabe
+    // -----------------------------------------------------------------------
+
+    /** Puls alle 5 min von [from] bis [to] (exklusiv): [base], im Tief [low]. */
+    private fun nightHr(
+        from: LocalDateTime,
+        to: LocalDateTime,
+        base: Double = 60.0,
+        low: Double = 50.0,
+        lowFrom: LocalDateTime? = null,
+        lowTo: LocalDateTime? = null,
+    ): List<HealthHeartRateSample> {
+        val out = mutableListOf<HealthHeartRateSample>()
+        var t = from
+        while (t.isBefore(to)) {
+            val inLow = lowFrom != null && lowTo != null && !t.isBefore(lowFrom) && t.isBefore(lowTo)
+            out.add(HealthHeartRateSample(t, if (inLow) low else base, "com.sec.android.app.shealth"))
+            t = t.plusMinutes(5)
+        }
+        return out
+    }
+
+    @Test
+    fun `readVitals - leitet den Ruhepuls aus dem Nacht-Puls ab, wenn kein Datensatz existiert`() {
+        val gateway = FakeHealthGateway(
+            sleep = listOf(HealthSleepSession(at(2026, 8, 8, 23), at(2026, 8, 9, 7))),
+            heartRate = nightHr(
+                from = at(2026, 8, 8, 22),
+                to = at(2026, 8, 9, 8),
+                lowFrom = at(2026, 8, 9, 3),
+                lowTo = at(2026, 8, 9, 4),
+            ),
+        )
+
+        val vitals = serviceOf(gateway, vitalsNow).readVitals(days = 3)
+        val series = vitals.restingHeartRate.series
+        assertEquals(listOf(at(2026, 8, 9)), series.map { it.day })
+        assertEquals(50.0, series.single().value)
+        assertEquals(setOf(at(2026, 8, 9)), vitals.restingHeartRateDerivedDays)
+        assertFalse(vitals.unavailable.contains(VitalsDataKind.RUHEPULS))
+        val rhr = vitals.diagnostics.first { it.type == HealthReadType.RUHEPULS }
+        assertEquals(0, rhr.recordCount)
+        assertEquals(1, rhr.derivedDays)
+        assertTrue(rhr.fallbackAttempted)
+    }
+
+    @Test
+    fun `readVitals - ein vorhandener Ruhepuls-Datensatz gewinnt gegen den Nacht-Puls`() {
+        val gateway = FakeHealthGateway(
+            restingHeartRate = listOf(HealthNumericSample(at(2026, 8, 9, 8), 57.0)),
+            heartRate = nightHr(from = at(2026, 8, 8, 22), to = at(2026, 8, 10, 8), base = 45.0),
+        )
+
+        val vitals = serviceOf(gateway, vitalsNow).readVitals(days = 2)
+        val byDay = vitals.restingHeartRate.series.associate { it.day to it.value }
+        // 09.08.: Datensatz; 10.08.: ohne Datensatz -> aus dem Nacht-Puls.
+        assertEquals(57.0, byDay[at(2026, 8, 9)])
+        assertEquals(45.0, byDay[at(2026, 8, 10)])
+        assertEquals(setOf(at(2026, 8, 10)), vitals.restingHeartRateDerivedDays)
+    }
+
+    @Test
+    fun `readVitals - ohne Herzfrequenz-Freigabe bleibt es beim fehlenden Ruhepuls`() {
+        val gateway = FakeHealthGateway(failRestingHeartRate = true, failHeartRate = true)
+
+        val vitals = serviceOf(gateway, vitalsNow).readVitals(days = 7)
+        assertFalse(vitals.restingHeartRate.hasData)
+        assertTrue(vitals.unavailable.contains(VitalsDataKind.RUHEPULS))
+        // Nach dem ersten Fehlschlag wird nicht jede Nacht erneut gefragt.
+        assertEquals(1, gateway.heartRateWindows.size)
+        val night = vitals.diagnostics.first { it.type == HealthReadType.HERZFREQUENZ }
+        assertNotNull(night.error)
+    }
+
+    @Test
+    fun `readVitals - ueberlappender Schlaf zweier Apps zaehlt nur einmal`() {
+        val gateway = FakeHealthGateway(
+            sleep = listOf(
+                HealthSleepSession(at(2026, 8, 8, 23), at(2026, 8, 9, 7), "com.sec.android.app.shealth"),
+                HealthSleepSession(at(2026, 8, 8, 23, 30), at(2026, 8, 9, 6, 30), "com.example.sleep"),
+            ),
+        )
+
+        val vitals = serviceOf(gateway, vitalsNow).readVitals()
+        assertEquals(8.0, vitals.sleepHours.series.single().value)
+        val sleep = vitals.diagnostics.first { it.type == HealthReadType.SCHLAF }
+        assertEquals(2, sleep.recordCount)
+        assertEquals(1, sleep.mergedOverlaps)
+        assertEquals(listOf("com.example.sleep", "com.sec.android.app.shealth"), sleep.origins)
+    }
+
+    @Test
+    fun `readVitals - Diagnose unterscheidet leer von nicht freigegeben`() {
+        val gateway = FakeHealthGateway(
+            failHrv = true,
+            permissionStatus = mapOf(
+                HealthReadType.RUHEPULS to true,
+                HealthReadType.SCHLAF to true,
+                HealthReadType.HRV to false,
+                HealthReadType.VO2MAX to true,
+                HealthReadType.HERZFREQUENZ to true,
+                HealthReadType.HISTORIE to false,
+            ),
+        )
+
+        val vitals = serviceOf(gateway, vitalsNow).readVitals(days = 2)
+        val lines = describeVitalsDiagnostics(vitals)
+        assertEquals("Vitalwerte (2 Tage ab 09.08. 00:00)", lines.first())
+        assertTrue(
+            lines.contains(
+                "  · Ruhepuls: 0 Einträge (Freigabe ja) — Samsung Health schreibt diesen Wert " +
+                    "vermutlich nicht; Ersatz aus Nacht-Puls nicht möglich (zu wenige Nachtmessungen)",
+            ),
+            lines.joinToString("\n"),
+        )
+        assertTrue(
+            lines.any { it.startsWith("  · HRV: Lesefehler (Freigabe nein) — ") && it.endsWith("Freigabe in Health Connect erteilen") },
+            lines.joinToString("\n"),
+        )
+        assertTrue(lines.last().startsWith("  · Verlauf > 30 Tage: Freigabe nein"))
+    }
+
+    @Test
+    fun `importWithReport - unterscheidet Routen mit Freigabebedarf von fehlenden Routen`() {
+        val start = at(2026, 8, 1, 10)
+        val gateway = FakeHealthGateway(
+            workouts = listOf(
+                cycling(id = "frei", start = start, end = start.plusMs(hours(1))),
+                cycling(id = "gesperrt", start = start.plusMs(days(1)), end = start.plusMs(days(1) + hours(1))),
+                cycling(id = "leer", start = start.plusMs(days(2)), end = start.plusMs(days(2) + hours(1))),
+            ),
+            routes = mapOf(
+                "frei" to listOf(
+                    HealthRoutePoint(50.0, 8.0, start),
+                    HealthRoutePoint(50.01, 8.0, start.plusMs(minutes(10))),
+                ),
+            ),
+            consentRequired = setOf("gesperrt"),
+        )
+
+        val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(existing = emptyList())
+        assertEquals(2, report.routesMissing)
+        assertEquals(1, report.routesWithoutData)
+        val pending = report.routeConsentPending.single()
+        assertEquals("gesperrt", pending.sessionId)
+        assertEquals(healthRideId("gesperrt"), pending.rideId)
+        assertEquals("com.sec.android.app.shealth", pending.source)
+        assertTrue(report.debugLines.contains("Routen: 1 brauchen eine Einzel-Freigabe, 1 ohne Routendaten in Health Connect"))
     }
 }

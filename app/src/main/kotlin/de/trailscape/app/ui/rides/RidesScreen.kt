@@ -1,106 +1,120 @@
 package de.trailscape.app.ui.rides
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
-import de.trailscape.app.ui.components.OneUiLargeTopAppBar
+import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.components.SettingsAction
-import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.rememberActivityImportAction
+import de.trailscape.app.ui.theme.CardGap
+import de.trailscape.app.ui.theme.CardPadding
+import kotlinx.coroutines.Job
 
 /**
- * # Der Touren-Tab — die chronologische Sicht auf den Bestand
+ * # Der Verlauf-Tab — was bin ich gefahren?
  *
- * Vierter Platz der Navigationskapsel und der Hauptzugang zu den eigenen
- * Touren (siehe `ui/TrailscapeApp.kt`, „Die Fuehrung ‚Eine Leiste‘").
+ * Dritter Platz der Navigationskapsel. Zieldesign
+ * `docs/design/prototyp-klartext.html`, Screen `#s-verlauf` (Listenansicht)
+ * und `NOTES.verlauf`: Touren nach Monaten gruppiert, je mit Mini-Karte und
+ * einem Wort fuer die Haerte statt „TL 68"; Suche und Import oben rechts neben
+ * dem Zahnrad statt nur im Leerzustand oder tief in den Einstellungen.
  *
- * ## Warum es diesen Bildschirm wieder gibt
- * Die Tourenliste lag zwischenzeitlich ausschliesslich als aufziehbares Blatt
- * ueber der Karte (`ui/map/ExploreSheet.kt`) — mit dem Argument, eine Tour sei
- * zuerst eine Linie auf der Karte und eine Liste daneben nur dieselbe
- * Information in Textform. Das Argument stimmt fuer *eine* Tour und geht fuer
- * den *Bestand* daneben: Karte und Liste beantworten zwei verschiedene Fragen
- * — „wo war ich?" gegen „was habe ich gefahren, wie lang, wie hart, wann?".
- * Vor allem aber war der Zugang unauffindbar: ein Griff am unteren
- * Kartenrand, den man erst aufziehen muss. Wer die App nicht kannte, fand
- * seine Touren nicht.
- *
- * Das Blatt ueber der Karte bleibt trotzdem bestehen und unveraendert — es ist
- * die **raeumliche** Sicht und der Weg, eine Tour dort auszuwaehlen, wo man
- * gerade plant. Beide teilen sich denselben Baustein ([TourListContent]), es
- * gibt also nur eine Tourenliste, in zwei Behaeltern.
- *
- * ## Was dieser Bildschirm selbst tut
- * Wenig, und das ist Absicht: Kopfzeile, Bodenfreiheit fuer die schwebende
- * Kapsel, das Zahnrad in den Mehr-Bereich, die Detailansicht als eigenes
- * Fenster und die drei Callbacks, die [TourListContent] braucht. Karten,
- * Menues, Umbenennen, Loeschen mit „Rückgängig", Teilen und der Leerzustand
- * liegen unveraendert im Baustein.
+ * ## Titel im Inhalt statt einklappender Kopfzeile
+ * Hier stand eine `OneUiLargeTopAppBar`, ausgeklappt rund 40 % der
+ * Bildschirmhoehe — fuer eine Liste, die man oeffnet, um etwas zu finden,
+ * verschenkter Platz. Wie auf „Heute" steht der Titel jetzt als Inhalt oben
+ * in der Liste ([VerlaufHeader]): eine Zeile Symbolknoepfe, darunter
+ * „Verlauf" in `headlineLarge`. Beides scrollt mit weg.
  *
  * ## Die Detailansicht liegt in einem eigenen Fenster
- * Genau wie auf dem Karten-Screen: Nur ein eigenes `Dialog`-Fenster deckt auch
- * die schwebende Navigationskapsel ab, die in `TrailscapeApp.kt` als
- * Geschwister-`Box` **ueber** dem gesamten `NavHost` liegt. Ein Vollbild
- * innerhalb dieses Screens haette die Kapsel und den Aufnahme-Knopf ueber der
- * Tourdetailansicht stehen lassen. Das Fenster faengt zugleich die
- * Systemzurueckgeste ab, bevor sie den `NavHost` erreicht — die erste Geste
- * schliesst also das Detail und nicht den Tab.
+ * Nur ein eigenes `Dialog`-Fenster deckt auch die schwebende
+ * Navigationskapsel ab, die in `TrailscapeApp.kt` als Geschwister **ueber**
+ * dem gesamten `NavHost` liegt. Das Fenster faengt zugleich die
+ * Systemzurueckgeste ab — die erste Geste schliesst das Detail, nicht den Tab.
  *
- * ## Meldungen
- * [AppViewModel.messages] sammelt dieser Screen ein: [TourListContent] tut es
- * bewusst nicht (es ist ein Baustein, kein Bildschirm), und ein Import-Erfolg
- * oder eine erkannte Dublette muss sichtbar werden. Die „Rückgängig"-Snackbar
- * des Loeschens bringt der Baustein selbst mit — Begruendung in dessen KDoc.
+ * ## Meldungen und „Rückgängig"
+ * [AppViewModel.messages] sammelt dieser Screen ein (Import-Erfolg, erkannte
+ * Dublette). Auch die „Rückgängig"-Snackbar nach dem Loeschen steht hier und
+ * nicht im Detail: Das Detail schliesst sich mit dem Loeschen, und mit seinem
+ * Fenster verschwaende auch eine Snackbar darin (Begruendung bei
+ * [RideDetailHost]).
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RidesScreen(appViewModel: AppViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
+    val scope = rememberCoroutineScope()
+    var undoJob by remember { mutableStateOf<Job?>(null) }
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
 
-    // Die in der Detailansicht geoeffnete Tour — die ID, nicht das `Ride`:
-    // Nach einem Umbenennen oder einem HF-Merge aus Health Connect liefert
-    // `appViewModel.rides` ein neues Objekt, ueber die ID zeigt die Ansicht
-    // immer auf den aktuellen Stand (wortgleiche Begruendung wie im
-    // Karten-Screen).
+    // Die geoeffnete Tour als ID, nicht als `Ride`: Nach einem Umbenennen oder
+    // HF-Merge liefert `appViewModel.rides` ein neues Objekt, ueber die ID
+    // zeigt die Ansicht immer auf den aktuellen Stand.
     var detailRideId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Der Einzelimport (GPX/FIT) samt SAF-Launcher und Fehlerdialog — dieselbe
-    // geteilte Aktion, die auch der Karten-Screen haelt. Hier gebraucht fuer
-    // den Knopf „GPX-/FIT-Datei öffnen" im Leerzustand der Liste.
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    fun closeSearch() {
+        searchOpen = false
+        query = ""
+    }
+    BackHandler(enabled = searchOpen && detailRideId == null) { closeSearch() }
+
+    // Der Einzelimport (GPX/FIT) samt SAF-Launcher und Fehlerdialog — die
+    // geteilte Aktion aus `ui/ActivityImportAction.kt`.
     val importAction = rememberActivityImportAction(appViewModel)
+    // Der Archiv-Import (ZIP mit Fortschritts- und Ergebnisdialog) wohnt in
+    // Einstellungen → Daten & Backup; der Sprung dorthin ist der eine Weg,
+    // ihn nicht ein zweites Mal zu verdrahten.
+    val importArchive = { appViewModel.requestMoreSection(MoreSection.BACKUP) }
 
     // Von der Startseite („Letzte Tour") angeforderte Detailansicht. Erst
     // quittieren, wenn die Tour wirklich in [rides] vorliegt, sonst ginge eine
@@ -114,40 +128,24 @@ fun RidesScreen(appViewModel: AppViewModel) {
         }
     }
 
-    // Verschwindet die geoeffnete Tour aus der Liste (Sync, Loeschen
-    // anderswo), schliesst sich die Ansicht von selbst statt eine nicht mehr
-    // existierende Tour anzuzeigen.
+    // Verschwindet die geoeffnete Tour aus der Liste (Sync, Loeschen), schliesst
+    // sich die Ansicht von selbst.
     LaunchedEffect(rides) {
         if (detailRideId != null && rides.none { it.id == detailRideId }) {
             detailRideId = null
         }
     }
 
-    val scrollBehavior = oneUiTopAppBarScrollBehavior()
-
     Scaffold(
         // Die aeussere Huelle (TrailscapeApp) hat die System-Insets bereits
-        // aufgeloest und als Padding an den NavHost gegeben — hier duerfen sie
-        // nicht noch einmal aufschlagen.
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        // aufgeloest — hier duerfen sie nicht noch einmal aufschlagen.
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            OneUiLargeTopAppBar(
-                title = "Touren",
-                scrollBehavior = scrollBehavior,
-                actions = {
-                    SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
-                },
-            )
-        },
         snackbarHost = {
             // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
-            // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).
+            // Navigationskapsel.
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.padding(
-                    bottom = LocalFloatingNavigationBarSpace.current,
-                ),
+                modifier = Modifier.padding(bottom = LocalFloatingNavigationBarSpace.current),
             )
         },
     ) { innerPadding ->
@@ -159,23 +157,29 @@ fun RidesScreen(appViewModel: AppViewModel) {
         ) {
             TourListContent(
                 appViewModel = appViewModel,
+                query = if (searchOpen) query else "",
                 onOpenDetail = { detailRideId = it },
-                // „Auf der Karte zeigen": die Tour auswaehlen (fuer die
-                // Hervorhebung der Zeile hier) und ihre Spur „auf Zuruf" beim
-                // Karten-Tab anfordern — der Karten-Screen wechselt dorthin
-                // und zeigt sie, holt sich die ID aber selbst ab (siehe
-                // [AppViewModel.showRideOnMapRequest]).
-                onShowOnMap = { ride ->
-                    appViewModel.select(ride.id)
-                    appViewModel.requestShowRideOnMap(ride.id)
-                },
+                onRecord = { appViewModel.requestRecording() },
                 onImportFile = importAction.start,
+                onImportArchive = importArchive,
                 modifier = Modifier.fillMaxSize(),
-                // Anders als im Blatt ueber der Karte ist dies ein
-                // eigenstaendiger Bildschirm: Der Rand kommt aus der
-                // App-Konvention und traegt die Bodenfreiheit der Kapsel
-                // gleich mit.
                 contentPadding = screenContentPadding(),
+                header = {
+                    item(key = "kopf") {
+                        VerlaufHeader(
+                            searchOpen = searchOpen,
+                            query = query,
+                            onQueryChange = { query = it },
+                            onToggleSearch = {
+                                if (searchOpen) closeSearch() else searchOpen = true
+                            },
+                            onImportFile = importAction.start,
+                            onImportArchive = importArchive,
+                            onOpenSettings = { appViewModel.requestTab(AppTab.MORE) },
+                            onShowMap = appViewModel::requestHistoryMap,
+                        )
+                    }
+                },
             )
         }
     }
@@ -186,14 +190,10 @@ fun RidesScreen(appViewModel: AppViewModel) {
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
             // `usePlatformDefaultWidth = false` macht dieses Fenster randlos.
-            // Anders als im `NavHost` von `TrailscapeApp.kt` sind die
-            // Systemleisten hier NICHT schon aufgeloest: [RideDetailHost] (und
-            // mit ihm `RideDetailScreen.kt`) setzt `contentWindowInsets =
-            // WindowInsets(0, 0, 0, 0)` in der Annahme, dass genau das laengst
-            // geschehen ist. Dieselbe Aufloesung (oben und seitlich; unten
-            // bewusst nicht) wird deshalb hier wiederholt, sonst zeichnet die
-            // Kopfzeile der Detailansicht unter die Statusleiste. Wortgleich
-            // zum Karten-Screen, aus wortgleichem Grund.
+            // Anders als im `NavHost` sind die Systemleisten hier NICHT schon
+            // aufgeloest; die Detailansicht nimmt das aber an. Dieselbe
+            // Aufloesung (oben und seitlich; unten bewusst nicht) wird deshalb
+            // hier wiederholt, sonst zeichnet ihr Kopf unter die Statusleiste.
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.surface,
@@ -211,9 +211,101 @@ fun RidesScreen(appViewModel: AppViewModel) {
                         rideId = id,
                         appViewModel = appViewModel,
                         onBack = { detailRideId = null },
+                        onDelete = { rideId ->
+                            detailRideId = null
+                            undoJob = deleteRideWithUndo(
+                                rideId = rideId,
+                                appViewModel = appViewModel,
+                                scope = scope,
+                                snackbarHostState = snackbarHostState,
+                                undoJob = undoJob,
+                            )
+                        },
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Der Kopf des Verlaufs (Zieldesign `.head` + `.title`): rechts oben Suche,
+ * Import und Zahnrad, darunter der Titel. Ist die Suche offen, steht das
+ * Suchfeld unter dem Titel; die Lupe wird dann zum Schliessen-Knopf.
+ */
+@Composable
+private fun VerlaufHeader(
+    searchOpen: Boolean,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    onImportFile: () -> Unit,
+    onImportArchive: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onShowMap: () -> Unit,
+) {
+    var importMenuOpen by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            IconButton(onClick = onToggleSearch) {
+                Icon(
+                    imageVector = if (searchOpen) Icons.Outlined.SearchOff else Icons.Outlined.Search,
+                    contentDescription = if (searchOpen) "Suche schließen" else "Touren suchen",
+                )
+            }
+            Box {
+                IconButton(onClick = { importMenuOpen = true }) {
+                    Icon(Icons.Outlined.Add, contentDescription = "Touren importieren")
+                }
+                ImportMenu(
+                    expanded = importMenuOpen,
+                    onDismiss = { importMenuOpen = false },
+                    onImportFile = onImportFile,
+                    onImportArchive = onImportArchive,
+                )
+            }
+            SettingsAction(onClick = onOpenSettings)
+        }
+        Text(
+            text = "Verlauf",
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.padding(start = CardPadding),
+        )
+        // „Liste | Karte": Die Karte aller Spuren wohnt im Karten-Tab (echte
+        // Grundkarte, Kacheln); „Karte" wechselt dorthin, ✕ kommt zurueck.
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = CardGap),
+        ) {
+            SegmentedButton(
+                selected = true,
+                onClick = {},
+                shape = SegmentedButtonDefaults.itemShape(0, 2),
+            ) { Text("Liste") }
+            SegmentedButton(
+                selected = false,
+                onClick = onShowMap,
+                shape = SegmentedButtonDefaults.itemShape(1, 2),
+            ) { Text("Karte") }
+        }
+        if (searchOpen) {
+            // Wer die Lupe antippt, will tippen: Fokus (und damit Tastatur)
+            // gleich ins Feld.
+            val focusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+            OneUiSearchField(
+                value = query,
+                onValueChange = onQueryChange,
+                placeholder = "Tour nach Namen suchen",
+                modifier = Modifier
+                    .padding(top = CardGap)
+                    .focusRequester(focusRequester),
+            )
         }
     }
 }

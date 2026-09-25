@@ -1,7 +1,13 @@
 package de.trailscape.app.ui.more
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,7 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,11 +33,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.data.AppServices
+import de.trailscape.app.record.autoPauseAktiviert
+import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
@@ -37,117 +52,82 @@ import de.trailscape.app.ui.components.oneUiTopAppBarScrollBehavior
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.app.ui.theme.OneUiMotion
+import java.time.LocalDateTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * Der „Mehr"-Bereich — Port von `lib/screens/more_screen.dart`.
+ * Die Einstellungen — die Route „mehr" hinter dem ⚙ in den Kopfzeilen von
+ * Heute, Verlauf und Training (`ui/components/SettingsAction.kt`), verlassen
+ * ueber den Zurueck-Pfeil oder die Systemzurueckgeste. Urspruenglich ein Port
+ * von `lib/screens/more_screen.dart`, seit der Ueberarbeitung „Klartext"
+ * (`docs/design/prototyp-klartext.html`, `#s-settings`) aber anders gebaut.
  *
- * ## Kein Tab mehr, sondern die zweite Ebene hinterm Zahnrad
- * Dieser Bildschirm war einmal der vierte Reiter der Navigationskapsel. Seit
- * der Fuehrung „Eine Leiste" (siehe `ui/TrailscapeApp.kt`) ist er ein
- * **gepushtes Ziel** der Route „mehr": Erreichbar ueber das ⚙ rechts in den
- * Kopfzeilen von Heute, Touren und Training
- * (`ui/components/SettingsAction.kt`), verlassen ueber den Zurueck-Pfeil oder
- * die Systemzurueckgeste.
+ * ## Zwei Ebenen: Liste → Seite
+ * Die fruehere Fassung hatte neun Akkordeon-Zeilen in drei Gruppen und bis zu
+ * vier Ebenen (Zahnrad → Liste → Akkordeon → „Erweitert"); zugeklappt zeigte
+ * keine Zeile, wie es um sie steht. Jetzt:
  *
- * Der Grund ist eine Platzrechnung: „Mehr" ist kein Ort, an den man geht,
- * sondern eine Schublade, in der man etwas nachschlaegt — Profil, Import,
- * Offline-Karten, Sync. Ein Viertel der immer sichtbaren Hauptnavigation war
- * dafuer der teuerste Platz der App fuer den seltensten Handgriff; „Touren"
- * hat ihn bekommen.
+ *  * **Liste** — eine flache Karte mit sechs Zeilen und die Gruppe „App" mit
+ *    zwei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
+ *    einer Statuszeile („Auto-Pause an · Ansagen an", „Noch nie gesichert"),
+ *    siehe `SettingsStatus.kt`.
+ *  * **Seite** — Antippen oeffnet die Seite der Zeile ([SettingsPage]) im
+ *    selben Bildschirm; die Kopfzeile traegt dann deren Titel. Was darunter
+ *    noch aufklappt („Erweitert" im Profil, Lizenzen), ist ein Abschnitt der
+ *    Seite, keine dritte Ebene.
  *
- * Praktisch aendert das an dieser Datei zweierlei: Die Kopfzeile traegt einen
- * Zurueck-Pfeil ([onBack]) und startet eingeklappt — beides die Konvention des
- * Leitfadens fuer die zweite Ebene (siehe
- * `ui/components/OneUiTopAppBar.kt`, `initiallyCollapsed`). Auf der Route
- * „mehr" gibt es ausserdem weder Navigationskapsel noch Aufnahme-Knopf; die
- * Bodenfreiheit ([LocalFloatingNavigationBarSpace]) meldet dort nur noch die
- * Gestenleiste, ohne dass diese Datei etwas davon wissen muesste.
+ * Die Seiten sind **kein** eigener Navigationsgraph, sondern ein
+ * [rememberSaveable]-Zustand dieses Bildschirms samt [BackHandler]: Die Route
+ * „mehr" gehoert der Huelle (`ui/TrailscapeApp.kt`), und eine zweite
+ * Navigationsebene darin waere mehr Maschinerie als ein Aufzaehlungswert.
+ * Zurueck (Pfeil oder Geste) fuehrt von einer Seite in die Liste, von der
+ * Liste hinaus — mit einer Ausnahme, siehe „Sprungziele".
  *
- * ## Gruppen statt neun Vollkarten
- * Der Screen zeigte frueher neun vollstaendig ausgeklappte Themenkarten
- * untereinander — eine Schublade mit neun Faechern, alle gleichzeitig offen.
- * Er ist jetzt nach dem Muster der One-UI-Einstellungsliste gebaut: drei
- * versal beschriftete Gruppen ([MoreGroup]), jede eine einzige Karte
- * ([MoreGroupCard]) mit flachen, einzeln aufklappbaren Zeilen ([MoreRow]).
- * Tiefe entsteht erst beim Antippen einer Zeile — vorher sieht man nur den
- * Titel und, wo vorhanden, eine Statuszeile.
- *
- *  * **„Profil & Daten"** — Profil, Daten & Backup, Health Connect. Alle drei
- *    drehen sich um dieselbe Frage: Woher kommen die Zahlen, mit denen die
- *    App rechnet?
- *  * **„Karte"** — Offline-Karten, Karten fuer Offline-Routing. Beide laden
- *    etwas fuers netzlose Fahren herunter (siehe `OfflineRoutingCard.kt` fuer
- *    die Abgrenzung).
- *  * **„App"** — Aufzeichnung, Erinnerungen, Sync (Selfhost), Ueber.
- *    Verhalten und Rahmendaten der App selbst, ohne Bezug zu einer
- *    bestimmten Tour.
- *
- * Jede Zeile ruft eine `…Content()`-Funktion aus der jeweiligen Datei dieses
- * Pakets auf — das unveraenderte Innenleben (Formulare, Dialoge, Launcher)
- * der frueheren Vollkarte, nur ohne deren eigene Karten-Huelle und
- * Titel-Text (das uebernimmt jetzt [MoreRow]). Details und bewusste
- * Abweichungen vom Dart-Original stehen weiterhin im KDoc der jeweiligen
- * Datei.
- *
- * Die **Reihenfolge** der Gruppen und Zeilen ist auf den Erstnutzer hin
- * sortiert (Begruendung im Rumpf), nicht mehr die des Dart-Originals.
- *
- * Darueber liegt — nur wenn es etwas zu melden gibt — die Update-Karte
- * (`UpdateCard.kt`), ausserhalb jeder Gruppe.
- *
- * ## Kartenstil ist umgezogen
- * Die Kartenstil-Auswahl hatte zwei Wohnorte: als Bottom-Sheet auf der Karte
- * *und* als eigene Karte hier. Dieselbe Entscheidung an zwei Stellen zu
- * treffen ist keine Bequemlichkeit, sondern eine offene Frage, welche der
- * beiden gerade gilt. Die Auswahl lebt jetzt ausschliesslich dort, wo ihre
- * Wirkung sofort sichtbar ist — auf der Karte, ueber dem Ebenen-Knopf
- * (`ui/map/MapScreen.kt`). `MapStyleCard.kt` ist ersatzlos entfallen.
+ * ## Alles speichert sofort
+ * Es gibt keinen Speichern-Knopf mehr, auf keiner Seite. Das Profil prueft
+ * jedes Feld fuer sich und uebernimmt gueltige Werte waehrend der Eingabe
+ * (`ProfileCard.kt`), der Sync schreibt Server-URL und Token beim Tippen
+ * (`SyncCard.kt`); der Knopf dort gleicht nur noch ab.
  *
  * ## Sprungziele von aussen
- * [AppViewModel.pendingMoreSection] nennt eine Zeile, zu der dieser Screen
- * von aussen springen soll (siehe [moreGroupIndex] fuer die Zuordnung zur
- * Gruppe). Der Screen scrollt beim Eintreffen zur Gruppe **und** klappt die
- * gemeinte Zeile auf ([MoreRow.expandOnArrival]) — das Aufklappen selbst
- * zeigt, wo man gelandet ist. Einen zusaetzlichen Leuchtrahmen braucht es
- * dafuer nicht mehr: Der fruehere Rahmen war das Eingestaendnis, dass sich
- * neun gleich aussehende Vollkarten sonst nicht unterscheiden liessen: eine
- * aufgeklappte Zeile neben eingeklappten braucht diese Krücke nicht.
+ * [AppViewModel.pendingMoreSection] nennt eine Seite, auf der dieser
+ * Bildschirm oeffnen soll (Heute, Training und Verlauf verweisen so etwa auf
+ * den Import oder das Profil). Er oeffnet dann direkt diese Seite. Zurueck
+ * fuehrt in diesem Fall dorthin, **woher man kam** — nicht in eine Liste, die
+ * man nie gesehen hat.
  *
- * ## Weitere bewusste Abweichungen vom Original
- *  * **Offline-Karten-Verwaltung** ersetzt die Kachel-Cache-Karte des
- *    Originals (`TileCache`): Die native App nutzt MapLibres eigene
- *    Offline-Regionen statt eines selbstgebauten Tile-Caches. Der Download
- *    neuer Regionen gehoert dem Karten-Screen; diese Karte verwaltet nur
- *    (Auflisten, Loeschen).
- *  * **Erinnerungen** (neu, kein Dart-Vorbild): Die Flutter-App hatte
- *    keinerlei geplante Hintergrundarbeit; siehe `ReminderCard.kt` und
- *    `reminder/ReminderScheduler.kt`.
- *  * **Kein gestaffeltes Einblenden** (`_EntranceFade` im Original): rein
- *    kosmetisch, verzichtbar fuer die Kernfunktion — siehe Report des Agents.
- *  * **Kein Animations-Toggle fuer „Erweitert"** im Profil (`AnimatedSize`
- *    im Original): einfacher Sichtbarkeits-Umschalter statt Groessen-
- *    Animation, gleiches Ergebnis ohne zusaetzliche Animations-API.
- */
-/**
- * @param onBack fuehrt aus dem Mehr-Bereich zurueck dorthin, von wo das
+ * ## Update-Hinweis
+ * Ueber der Liste steht — nur wenn es etwas zu melden gibt — die Update-Karte
+ * (`UpdateCard.kt`).
+ *
+ * ## Kartenstil ist umgezogen
+ * Die Kartenstil-Auswahl lebt ausschliesslich auf der Karte, ueber dem
+ * Ebenen-Knopf (`ui/map/MapScreen.kt`) — dort, wo ihre Wirkung sofort
+ * sichtbar ist.
+ *
+ * @param onBack fuehrt aus den Einstellungen zurueck dorthin, von wo das
  *   Zahnrad angetippt wurde (in der App `navController.popBackStack()`).
  *   Optional, damit Vorschauen und Tests den Bildschirm ohne Navigationsgraph
- *   zeigen koennen — ohne Rueckweg entfaellt schlicht der Pfeil.
+ *   zeigen koennen — ohne Rueckweg entfaellt auf der Liste schlicht der Pfeil.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     val snackbarHostState = remember { SnackbarHostState() }
-    val updateVersion by appViewModel.updateAvailable.collectAsStateWithLifecycle()
     val requestedSection by appViewModel.pendingMoreSection.collectAsStateWithLifecycle()
 
     val listState = rememberLazyListState()
-
-    // Welche Zeile beim Eintreffen aufklappen soll; `null` = keine. Eigener
-    // Zustand und nicht `requestedSection` direkt, weil die Bitte sofort
-    // quittiert wird (siehe unten) — das Aufklapp-Signal soll den
-    // Tab-Wechsel aber ueberdauern, bis [MoreRow] es uebernimmt.
-    var expandTarget by remember { mutableStateOf<MoreSection?>(null) }
+    // Ein anstehendes Sprungziel gilt schon fuer das erste Bild — sonst
+    // blitzte vor der gemeinten Seite kurz die Liste auf.
+    var page by rememberSaveable {
+        mutableStateOf(appViewModel.pendingMoreSection.value?.toPage())
+    }
+    // Ob die aktuelle Seite per Sprungziel geoeffnet wurde — dann fuehrt
+    // Zurueck aus den Einstellungen hinaus statt in die Liste.
+    var arrivedDirectly by rememberSaveable { mutableStateOf(page != null) }
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -155,22 +135,26 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
     LaunchedEffect(Unit) {
         appViewModel.refreshHealthConnection()
     }
-
-    // Die Update-Karte steht ueber allem und verschiebt damit jeden Index um
-    // eins — deshalb wird sie hier mitgezaehlt statt in [moreGroupIndex].
-    val updateCardShown = updateVersion != null
-    LaunchedEffect(requestedSection, updateCardShown) {
+    LaunchedEffect(requestedSection) {
         val wanted = requestedSection ?: return@LaunchedEffect
-        val index = moreGroupIndex(wanted)
-        listState.animateScrollToItem(index + if (updateCardShown) 1 else 0)
+        page = wanted.toPage()
+        arrivedDirectly = true
         appViewModel.consumeMoreSectionRequest()
-        expandTarget = wanted
     }
 
+    fun leavePage() {
+        if (arrivedDirectly && onBack != null) {
+            onBack()
+        } else {
+            page = null
+        }
+        arrivedDirectly = false
+    }
+    BackHandler(enabled = page != null) { leavePage() }
+
     // Zweite Ebene, also eingeklappt startend: Wer das Zahnrad antippt, will
-    // die Einstellungen sehen und nicht zuerst das Wort „Mehr" in Grossschrift
-    // (siehe `oneUiTopAppBarScrollBehavior`). Aufziehen laesst sie sich
-    // trotzdem, die Leiste bleibt dieselbe.
+    // die Einstellungen sehen und nicht zuerst ihren Titel in Grossschrift
+    // (siehe `oneUiTopAppBarScrollBehavior`).
     val scrollBehavior = oneUiTopAppBarScrollBehavior(initiallyCollapsed = true)
 
     Scaffold(
@@ -181,11 +165,12 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             OneUiLargeTopAppBar(
-                title = "Mehr",
+                title = page?.title ?: "Einstellungen",
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
+                    val action: (() -> Unit)? = if (page != null) ::leavePage else onBack
+                    if (action != null) {
+                        IconButton(onClick = action) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Zurück",
@@ -196,8 +181,6 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
             )
         },
         snackbarHost = {
-            // Ohne dieses Padding erschiene die Meldung hinter der schwebenden
-            // Navigationskapsel (siehe LocalFloatingNavigationBarSpace).
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.padding(
@@ -212,78 +195,28 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
                 .padding(innerPadding),
             contentAlignment = Alignment.TopCenter,
         ) {
-            LazyColumn(
-                state = listState,
+            AnimatedContent(
+                targetState = page,
+                transitionSpec = {
+                    fadeIn(OneUiMotion.standard()) togetherWith fadeOut(OneUiMotion.short())
+                },
+                label = "Einstellungsseite",
                 modifier = Modifier
                     .fillMaxHeight()
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth(),
-                contentPadding = screenContentPadding(),
-                verticalArrangement = Arrangement.spacedBy(CardGap),
-            ) {
-                // Ganz oben und nur, wenn es wirklich etwas Neues gibt: Die
-                // App aktualisiert sich nicht von selbst (Sideload), der
-                // Hinweis ist also die einzige Nachricht darueber — und
-                // verschwindet dauerhaft, sobald er weggewischt wird.
-                updateVersion?.let { version ->
-                    item {
-                        UpdateNoticeCard(
-                            versionName = version,
-                            onDismiss = appViewModel::dismissUpdateNotice,
-                        )
-                    }
-                }
-                // Gruppe 1 von 3, Index 0 in [moreGroupIndex]: erst das
-                // Profil (ohne Alter und Gewicht rechnet nichts richtig),
-                // dann die beiden Wege, auf denen Daten hereinkommen — der
-                // Import und Health Connect.
-                item {
-                    MoreGroup(label = "Profil & Daten") {
-                        MoreRow(
-                            title = "Profil",
-                            expandOnArrival = expandTarget == MoreSection.PROFILE,
-                        ) { ProfileCardContent(appViewModel) }
-                        HorizontalDivider()
-                        MoreRow(
-                            title = "Daten & Backup",
-                            expandOnArrival = expandTarget == MoreSection.BACKUP,
-                        ) { BackupCardContent(appViewModel) }
-                        HorizontalDivider()
-                        MoreRow(
-                            title = "Health Connect",
-                            expandOnArrival = expandTarget == MoreSection.HEALTH,
-                        ) { HealthCardContent(appViewModel) }
-                    }
-                }
-                // Gruppe 2 von 3: Beide Zeilen laden etwas fuer die netzlose
-                // Fahrt herunter, meinen aber Verschiedenes (Kartenbild gegen
-                // Wegedaten) — nebeneinander ist der Unterschied eine Frage
-                // von zwei Zeilen Text (siehe OfflineRoutingCard.kt).
-                item {
-                    MoreGroup(label = "Karte") {
-                        MoreRow(
-                            title = "Offline-Karten",
-                        ) { OfflineMapsCardContent(onMessage = appViewModel::showMessage) }
-                        HorizontalDivider()
-                        MoreRow(
-                            title = "Karten für Offline-Routing",
-                        ) { OfflineRoutingCardContent(appViewModel) }
-                    }
-                }
-                // Gruppe 3 von 3: Verhalten und Rahmendaten der App selbst.
-                // Die Erinnerungen stehen zuerst, weil sie entscheiden, ob
-                // die App von sich aus etwas sagt — das wiegt schwerer als
-                // Sync-Zugangsdaten oder die Über-Karte.
-                item {
-                    MoreGroup(label = "App") {
-                        MoreRow(title = "Aufzeichnung") { RecordingCardContent() }
-                        HorizontalDivider()
-                        MoreRow(title = "Erinnerungen") { ReminderCardContent(appViewModel) }
-                        HorizontalDivider()
-                        MoreRow(title = "Sync (Selfhost)") { SyncCardContent(appViewModel) }
-                        HorizontalDivider()
-                        MoreRow(title = "Über") { AboutCardContent(appViewModel) }
-                    }
+            ) { current ->
+                if (current == null) {
+                    SettingsList(
+                        appViewModel = appViewModel,
+                        listState = listState,
+                        onOpen = {
+                            arrivedDirectly = false
+                            page = it
+                        },
+                    )
+                } else {
+                    SettingsPageContent(page = current, appViewModel = appViewModel)
                 }
             }
         }
@@ -291,15 +224,205 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
 }
 
 /**
- * Zu welcher Gruppe (Index in der `LazyColumn`, ohne die vorgeschaltete
- * Update-Karte — siehe Aufrufstelle) ein Sprungziel gehoert. Alle drei
- * moeglichen Werte liegen heute in derselben Gruppe „Profil & Daten"
- * (Index 0); ein Sprung faehrt dorthin, [MoreRow.expandOnArrival] klappt
- * dann die passende Zeile auf.
- *
- * Wird die Gruppierung im Rumpf geaendert, muss diese Zuordnung mitgehen;
- * deshalb stehen beide in derselben Datei und unmittelbar untereinander.
+ * Die Seiten der Einstellungen, in der Reihenfolge der Liste. [title] steht
+ * in der Listenzeile und in der Kopfzeile der Seite.
  */
-private fun moreGroupIndex(section: MoreSection): Int = when (section) {
-    MoreSection.PROFILE, MoreSection.BACKUP, MoreSection.HEALTH -> 0
+internal enum class SettingsPage(val title: String) {
+    PROFILE("Profil"),
+    HEALTH("Uhr & Gesundheitsdaten"),
+    RECORDING("Aufzeichnung & Ansagen"),
+    REMINDERS("Erinnerungen"),
+    OFFLINE("Karten offline"),
+    BACKUP("Import & Backup"),
+    SYNC("Sync mit eigenem Server"),
+    ABOUT("Über Trailscape"),
+}
+
+/** Welche Seite ein Sprungziel von aussen meint. */
+private fun MoreSection.toPage(): SettingsPage = when (this) {
+    MoreSection.PROFILE -> SettingsPage.PROFILE
+    MoreSection.BACKUP -> SettingsPage.BACKUP
+    MoreSection.HEALTH -> SettingsPage.HEALTH
+}
+
+/**
+ * Die Liste: Update-Hinweis (falls vorhanden), sechs Zeilen ohne
+ * Gruppenlabel, dann die Gruppe „App".
+ *
+ * Die Reihenfolge folgt dem Erstnutzer: erst das Profil (ohne Alter und
+ * Gewicht rechnet nichts richtig), dann die Uhr als Datenquelle, dann das
+ * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Sync und „Über"
+ * betreffen die App selbst und stehen deshalb abgesetzt.
+ *
+ * Die Zustaende, die nicht als `StateFlow` vorliegen (Einstellungen in den
+ * `SharedPreferences`, Offline-Bestand, letzter Import), liest die Liste bei
+ * jedem Erscheinen neu — also auch nach der Rueckkehr von einer Seite, auf
+ * der sie sich gerade geaendert haben.
+ */
+@Composable
+private fun SettingsList(
+    appViewModel: AppViewModel,
+    listState: LazyListState,
+    onOpen: (SettingsPage) -> Unit,
+) {
+    val context = LocalContext.current
+    val updateVersion by appViewModel.updateAvailable.collectAsStateWithLifecycle()
+    val profile by appViewModel.profile.collectAsStateWithLifecycle()
+    val profileConfirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
+    val health by appViewModel.healthConnection.collectAsStateWithLifecycle()
+    val reminders by appViewModel.reminderSettings.collectAsStateWithLifecycle()
+    val syncConfig by appViewModel.syncConfig.collectAsStateWithLifecycle()
+
+    val recordingStatus = remember {
+        recordingStatusText(autoPauseAktiviert(context), sprachansagenAktiviert(context))
+    }
+    val lastBackupAt = remember { lastBackupAt(context) }
+    var lastHealthImport by remember { mutableStateOf<LocalDateTime?>(null) }
+    var offlineStatus by remember { mutableStateOf(offlineStatusText(null, null, 0L)) }
+    val versionName = remember {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "unbekannt"
+    }
+
+    LaunchedEffect(Unit) {
+        lastHealthImport = runCatching {
+            withContext(Dispatchers.IO) { appViewModel.healthSync.lastImportAt() }
+        }.getOrNull()
+    }
+    LaunchedEffect(Unit) {
+        // Beide Bestaende getrennt abfragen: Ist der Kartenspeicher gerade
+        // nicht lesbar, soll die Zahl der Routing-Kacheln trotzdem erscheinen.
+        val maps = runCatching { offlineMapsSummary(context) }.getOrNull()
+        val routing = runCatching {
+            withContext(Dispatchers.IO) { AppServices.segmentInventory.list() }
+        }.getOrNull()
+        offlineStatus = offlineStatusText(
+            mapRegions = maps?.first ?: 0,
+            routingTiles = routing?.size ?: 0,
+            totalBytes = (maps?.second ?: 0L) + (routing?.sumOf { it.sizeBytes } ?: 0L),
+        )
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = screenContentPadding(),
+        verticalArrangement = Arrangement.spacedBy(CardGap),
+    ) {
+        // Ganz oben und nur, wenn es wirklich etwas Neues gibt: Die App
+        // aktualisiert sich nicht von selbst (Sideload), der Hinweis ist also
+        // die einzige Nachricht darueber.
+        updateVersion?.let { version ->
+            item {
+                UpdateNoticeCard(
+                    versionName = version,
+                    onDismiss = appViewModel::dismissUpdateNotice,
+                )
+            }
+        }
+        item {
+            MoreGroup(label = null) {
+                SettingsNavRow(
+                    title = SettingsPage.PROFILE.title,
+                    status = profileStatusText(profile, profileConfirmed),
+                    onClick = { onOpen(SettingsPage.PROFILE) },
+                )
+                HorizontalDivider()
+                SettingsNavRow(
+                    title = SettingsPage.HEALTH.title,
+                    status = healthStatusText(health, lastHealthImport),
+                    onClick = { onOpen(SettingsPage.HEALTH) },
+                )
+                HorizontalDivider()
+                SettingsNavRow(
+                    title = SettingsPage.RECORDING.title,
+                    status = recordingStatus,
+                    onClick = { onOpen(SettingsPage.RECORDING) },
+                )
+                HorizontalDivider()
+                SettingsNavRow(
+                    title = SettingsPage.REMINDERS.title,
+                    status = reminderStatusText(reminders),
+                    onClick = { onOpen(SettingsPage.REMINDERS) },
+                )
+                HorizontalDivider()
+                SettingsNavRow(
+                    title = SettingsPage.OFFLINE.title,
+                    status = offlineStatus,
+                    onClick = { onOpen(SettingsPage.OFFLINE) },
+                )
+                HorizontalDivider()
+                val backupStatus = backupStatusText(lastBackupAt)
+                SettingsNavRow(
+                    title = SettingsPage.BACKUP.title,
+                    status = backupStatus ?: BACKUP_NEVER_TEXT,
+                    // Eine Sicherung, die es nie gab, ist der eine Zustand in
+                    // dieser Liste, der Handeln verlangt — deshalb in der
+                    // Warnfarbe statt im ruhigen Grau.
+                    statusColor = if (backupStatus == null) {
+                        LocalSignalColors.current.warning
+                    } else {
+                        Color.Unspecified
+                    },
+                    onClick = { onOpen(SettingsPage.BACKUP) },
+                )
+            }
+        }
+        item {
+            MoreGroup(label = "App") {
+                SettingsNavRow(
+                    title = SettingsPage.SYNC.title,
+                    status = syncStatusText(syncConfig),
+                    onClick = { onOpen(SettingsPage.SYNC) },
+                )
+                HorizontalDivider()
+                SettingsNavRow(
+                    title = SettingsPage.ABOUT.title,
+                    status = "Version $versionName",
+                    onClick = { onOpen(SettingsPage.ABOUT) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Eine Seite: die Inhalte der jeweiligen Datei dieses Pakets, in Abschnitte
+ * ([SettingsSection]) gefasst. Die Seite scrollt als Ganzes.
+ */
+@Composable
+private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(screenContentPadding()),
+        verticalArrangement = Arrangement.spacedBy(CardGap),
+    ) {
+        when (page) {
+            SettingsPage.PROFILE -> SettingsSection { ProfileCardContent(appViewModel) }
+            SettingsPage.HEALTH -> SettingsSection { HealthCardContent(appViewModel) }
+            SettingsPage.RECORDING -> {
+                SettingsSection(label = "Aufzeichnung") { RecordingCardContent() }
+                SettingsSection(label = "Ansagen") { AnnouncementsCardContent() }
+            }
+            SettingsPage.REMINDERS -> SettingsSection { ReminderCardContent(appViewModel) }
+            // Kartenbild und Routingdaten auf einer Seite: Beide laden etwas
+            // fuers netzlose Fahren herunter, meinen aber Verschiedenes — die
+            // beiden Abschnittstitel sagen den Unterschied.
+            SettingsPage.OFFLINE -> {
+                SettingsSection(label = "Kartenbild") {
+                    OfflineMapsCardContent(onMessage = appViewModel::showMessage)
+                }
+                SettingsSection(label = "Routingdaten") { OfflineRoutingCardContent(appViewModel) }
+            }
+            SettingsPage.BACKUP -> SettingsSection { BackupCardContent(appViewModel) }
+            SettingsPage.SYNC -> SettingsSection { SyncCardContent(appViewModel) }
+            SettingsPage.ABOUT -> {
+                SettingsSection { AboutCardContent(appViewModel) }
+                SettingsSection(label = "Open-Source-Lizenzen") { OpenSourceLicensesContent() }
+            }
+        }
+    }
 }

@@ -35,7 +35,7 @@ internal fun BatteryNoticeDialog(
                     "länger aus ist — die Tour bricht dann unbemerkt ab. Eine Ausnahme " +
                     "von der Batterieoptimierung verhindert das. Die Aufzeichnung läuft " +
                     "jetzt trotzdem los; ändern lässt sich das jederzeit unter " +
-                    "„Mehr → Aufzeichnung“.",
+                    "„Einstellungen → Aufzeichnung & Ansagen“.",
             )
         },
         confirmButton = {

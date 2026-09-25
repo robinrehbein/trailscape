@@ -1,6 +1,7 @@
 package de.trailscape.app.health
 
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -70,8 +71,10 @@ object HealthPermissions {
      *    gibt sie je nach Provider-Version nur ueber einen eigenen Dialog pro
      *    Route heraus (`ExerciseRouteRequestContract`). Faellt die Freigabe aus,
      *    liefert `ExerciseSessionRecord.exerciseRouteResult` schlicht
-     *    `ConsentRequired`/`NoData`; der Import laeuft weiter und
-     *    `HealthSyncReport.routesMissing` zaehlt die betroffenen Touren.
+     *    `ConsentRequired`/`NoData`; der Import laeuft weiter,
+     *    `HealthSyncReport.routesMissing` zaehlt die betroffenen Touren und
+     *    `HealthSyncReport.routeConsentPending` merkt sich die, deren Route per
+     *    Einzel-Freigabe nachgeholt werden kann (`ui/health/RouteConsent.kt`).
      */
     val optional: Set<String> = setOf(
         READ_EXERCISE_ROUTES,
@@ -79,8 +82,37 @@ object HealthPermissions {
         HealthPermission.getReadPermission(Vo2MaxRecord::class),
     )
 
+    /**
+     * Zugriff auf Daten, die aelter sind als 30 Tage vor der ersten Freigabe.
+     *
+     * Ohne dieses Recht liefert Health Connect grundsaetzlich nur die letzten
+     * 30 Tage vor dem Zeitpunkt der Zustimmung — die Vitalhistorie und die
+     * Ruhepuls-Baseline wollen aber bis zu 120 Tage. Optional, weil nicht
+     * jede Health-Connect-Version das Recht kennt: Angefragt wird es nur,
+     * wenn [HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY] verfuegbar
+     * ist (siehe [requestSet]); die Verbindung gilt auch ohne als hergestellt.
+     */
+    const val READ_HEALTH_DATA_HISTORY: String = HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY
+
     /** Was der Berechtigungsdialog anfragt: Pflicht- und Zusatzrechte in einem Rutsch. */
     val all: Set<String> = required + optional
+
+    /**
+     * Die tatsaechlich anzufragende Menge: [all], plus
+     * [READ_HEALTH_DATA_HISTORY], sofern das Geraet die Funktion kennt. Ein
+     * Recht anzufragen, das der Provider nicht kennt, ist bestenfalls
+     * wirkungslos — deshalb die Pruefung vorab.
+     */
+    fun requestSet(client: HealthConnectClient): Set<String> =
+        if (isHistoryFeatureAvailable(client)) all + READ_HEALTH_DATA_HISTORY else all
+
+    /** Ob Health Connect auf diesem Geraet die Historien-Freigabe kennt. */
+    fun isHistoryFeatureAvailable(client: HealthConnectClient): Boolean = try {
+        client.features.getFeatureStatus(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY) ==
+            HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+    } catch (_: Throwable) {
+        false
+    }
 
     /** Ob [granted] alle Pflichtrechte enthaelt. */
     fun hasAllRequired(granted: Set<String>): Boolean = granted.containsAll(required)

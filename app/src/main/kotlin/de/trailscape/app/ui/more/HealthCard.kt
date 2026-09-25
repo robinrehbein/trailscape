@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.more
 
+import de.trailscape.app.ui.health.rememberRouteConsentLauncher
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -20,10 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,7 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
@@ -75,11 +74,11 @@ private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
  * (das es auf Android nativ nicht mehr gibt, siehe `HealthTypes.kt`-KDoc)
  * oeffnet der Installations-Button hier direkt den Play Store per Intent.
  *
- * Der Inhalt der Zeile „Health Connect" in der Gruppe „Profil & Daten" des
- * Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
- * stellt Titel und Aufklapp-Rahmen.
+ * Der Inhalt der Seite „Uhr & Gesundheitsdaten" der Einstellungen (siehe
+ * `MoreScreen.kt`). Die Seite heisst nach dem, was die Nutzerin hat — eine
+ * Uhr —, nicht nach der Android-Schnittstelle dazwischen; Health Connect
+ * nennt erst der Text auf der Seite.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HealthCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
@@ -107,6 +106,9 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     // nicht mit aufgehellt wurde.
     val warningColor = LocalSignalColors.current.warning
 
+    SettingsHint("Workouts und Vitalwerte deiner Uhr kommen über Health Connect.")
+    Spacer(modifier = Modifier.height(12.dp))
+
     when (val current = connection) {
         null -> Text("Prüfe Verbindung …", style = MaterialTheme.typography.bodyMedium)
         else -> Row(verticalAlignment = Alignment.Top) {
@@ -126,7 +128,10 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     }
     Spacer(modifier = Modifier.height(12.dp))
 
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         when {
             connection?.availability == HealthAvailability.NICHT_INSTALLIERT -> {
                 Button(
@@ -201,7 +206,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         Text("Neue Touren holen")
                     }
                 }
-                NeutralButton(
+                SettingsSecondaryButton(
                     onClick = {
                         scope.launch {
                             busy = true
@@ -260,14 +265,35 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             NoticeBox(
                 icon = Icons.Filled.Info,
                 color = hintColor,
-                text = "Keine Workouts im Zeitraum — prüfe in der App deiner Uhr " +
-                    "(Samsung Health, Garmin Connect, Fitbit …), ob sie ihre " +
-                    "Trainings nach Health Connect schreibt.",
+                text = "Keine Workouts gefunden — schreibt die App deiner Uhr " +
+                    "(Samsung Health, Garmin Connect, Fitbit …) nach Health Connect?",
             )
         }
     }
 
     Spacer(modifier = Modifier.height(12.dp))
+
+    // Routen, die Health Connect nur mit einer Einzel-Freigabe herausgibt
+    // (Samsung Health ohne „Immer erlauben"): ein Knopf pro Stapel, der den
+    // Freigabe-Dialog fuer die naechste offene Tour zeigt.
+    val consentPending by appViewModel.routeConsentPending.collectAsStateWithLifecycle()
+    val requestRoute = rememberRouteConsentLauncher(appViewModel)
+    consentPending.firstOrNull()?.let { first ->
+        SettingsSecondaryButton(
+            onClick = { requestRoute(first) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                if (consentPending.size == 1) {
+                    "Route freigeben"
+                } else {
+                    "Routen freigeben (${consentPending.size})"
+                },
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+    }
+
     val routesMissing = currentReport?.routesMissing ?: 0
     if (routesMissing > 0) {
         NoticeBox(
@@ -278,28 +304,21 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
             // ausserdem ganz, der Pfad lief ungebremst in den naechsten
             // Satzteil.
-            text = "Für $routesMissing " +
-                "${if (routesMissing == 1) "importierte Tour" else "importierte Touren"} hat " +
-                "Health Connect keine Route geliefert. Erlaube in Health Connect unter " +
-                "„App-Berechtigungen → Trailscape → Trainingsrouten“ den dauerhaften " +
-                "Zugriff, damit die aufgezeichnete Strecke mitkommt.",
+            text = "$routesMissing " +
+                "${if (routesMissing == 1) "Tour kam" else "Touren kamen"} ohne Route. " +
+                "Erlaube in Health Connect „App-Berechtigungen → Trailscape → " +
+                "Trainingsrouten“ dauerhaft.",
         )
     } else {
-        Text(
-            text = "Damit auch die aufgezeichnete Route mit importiert wird, erlaube in " +
-                "Health Connect unter „App-Berechtigungen → Trailscape → Trainingsrouten“ " +
-                "den dauerhaften Zugriff. Ohne diese Freigabe werden Distanz, Dauer und " +
-                "Herzfrequenz trotzdem übernommen.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
+        SettingsHint(
+            "Für die Route: in Health Connect „App-Berechtigungen → Trailscape → " +
+                "Trainingsrouten“ dauerhaft erlauben.",
         )
     }
     Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = "„Alles neu importieren“ betrachtet wieder die letzten " +
-            "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
+    SettingsHint(
+        "„Alles neu importieren“ holt die letzten " +
+            "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage erneut.",
     )
 
     if (showDebugDialog && report != null) {
@@ -316,7 +335,7 @@ private fun HealthDebugDialog(lines: List<String>, onDismiss: () -> Unit, onCopi
     val clipboard = LocalClipboardManager.current
     val text = lines.joinToString("\n")
 
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text("Diagnose-Details") },
         text = {

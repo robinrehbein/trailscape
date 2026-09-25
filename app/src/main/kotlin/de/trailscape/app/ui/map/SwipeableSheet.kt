@@ -37,7 +37,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import de.trailscape.app.ui.theme.OneUiMotion
 
 /**
@@ -78,6 +80,7 @@ internal fun SwipeableSheet(
     onExpandedChange: (Boolean) -> Unit,
     peek: @Composable ColumnScope.() -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
     body: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -135,12 +138,17 @@ internal fun SwipeableSheet(
     val revealed = drag.offset.takeIf { !it.isNaN() } ?: 0f
     val revealedDp = with(density) { revealed.coerceAtLeast(0f).toDp() }
 
+    // Am unteren Bildschirmrand angedockt (Fuehrung „Klartext"): nur die
+    // oberen Ecken rund, unten buendig mit dem Rand. [bottomInset] haelt den
+    // Inhalt ueber der Navigationskapsel bzw. der Gestenleiste, die Flaeche
+    // selbst laeuft darunter bis an den Rand.
     Card(
         modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        shape = DockedSheetShape,
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
     ) {
         Column(
-            modifier = Modifier.anchoredDraggable(
+            modifier = Modifier.padding(bottom = bottomInset).anchoredDraggable(
                 state = drag,
                 orientation = Orientation.Vertical,
                 flingBehavior = fling,
@@ -205,3 +213,6 @@ internal fun SwipeableSheet(
         }
     }
 }
+
+/** Form eines am unteren Rand angedockten Kartenblatts: oben rund, unten buendig. */
+internal val DockedSheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)

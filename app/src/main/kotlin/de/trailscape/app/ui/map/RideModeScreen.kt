@@ -23,17 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -54,6 +50,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
+import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
@@ -122,8 +119,9 @@ import kotlin.math.roundToInt
  * ## Bedienung
  * Zwei Flaechen ueber je die halbe Breite, [RideModeActionHeight] hoch.
  * **Pause/Weiter** wirkt sofort — ein versehentlicher Griff dorthin kostet ein
- * paar Sekunden Fahrzeit und sonst nichts. **Beenden** dagegen fragt zurueck
- * (siehe [StopConfirmation]), denn dieser Fehlgriff kostet die ganze Tour.
+ * paar Sekunden Fahrzeit und sonst nichts. **Beenden** geht nur durch Halten
+ * ([de.trailscape.app.ui.components.HoldToEndButton]), denn dieser Fehlgriff
+ * kostet die ganze Tour.
  * Der beschriftete Knopf „Karte" in der Kopfzeile und ein horizontales
  * Wischen wechseln zur **Kartenseite des Fahrmodus** (NAVI_KARTE in
  * `MapScreen.kt`: Karte mit Kompaktleiste, KeepScreenOn bleibt an); die
@@ -181,9 +179,7 @@ internal fun RideModeScreen(
         properties = DialogProperties(
             // Volle Fensterbreite und -hoehe statt der Dialog-Standardbreite.
             usePlatformDefaultWidth = false,
-            // Zurueck wird unten selbst behandelt: Steht die Beenden-Rueckfrage
-            // offen, soll die erste Zurueck-Geste nur sie zuruecknehmen und
-            // nicht gleich den ganzen Fahrmodus schliessen.
+            // Zurueck wird unten selbst behandelt (BackHandler).
             dismissOnBackPress = false,
             dismissOnClickOutside = false,
         ),
@@ -202,14 +198,7 @@ internal fun RideModeScreen(
         val watchConnected by RecordingRepository.watchConnected.collectAsStateWithLifecycle()
         val pulsBpm = heartRateBpm.takeIf { watchConnected }
 
-        // Die Rueckfrage vor dem Beenden. Bewusst Zustand *dieses* Fensters und
-        // nicht des Screens: Sie ist nur so lange interessant, wie der
-        // Fahrmodus offen ist.
-        var confirmStop by remember { mutableStateOf(false) }
-
-        BackHandler {
-            if (confirmStop) confirmStop = false else onClose()
-        }
+        BackHandler { onClose() }
 
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -317,16 +306,7 @@ internal fun RideModeScreen(
 
                 Spacer(Modifier.height(CardGap))
 
-                if (confirmStop) {
-                    StopConfirmation(
-                        onCancel = { confirmStop = false },
-                        onConfirm = {
-                            confirmStop = false
-                            onStop()
-                        },
-                    )
-                } else {
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                         RideModeAction(
                             modifier = Modifier.weight(1f),
                             label = if (paused) "Weiter" else "Pause",
@@ -344,16 +324,13 @@ internal fun RideModeScreen(
                             onClick = onTogglePause,
                         )
                         Spacer(Modifier.width(CardGap))
-                        RideModeAction(
+                        // Beenden nur durch Halten — derselbe Knopf wie auf
+                        // der Karte und in der Kompaktleiste.
+                        HoldToEndButton(
+                            onEnd = onStop,
                             modifier = Modifier.weight(1f),
-                            label = "Beenden",
-                            description = "Aufzeichnung beenden, mit Rückfrage",
-                            icon = Icons.Filled.Stop,
-                            container = MaterialTheme.colorScheme.error,
-                            content = MaterialTheme.colorScheme.onError,
-                            onClick = { confirmStop = true },
+                            minHeight = RideModeActionHeight,
                         )
-                    }
                 }
             }
         }
@@ -565,57 +542,6 @@ private fun OffRouteWarning() {
             lineHeight = SmallValueSize * 1.1f,
             fontWeight = FontWeight.Bold,
         )
-    }
-}
-
-/**
- * Die Rueckfrage vor dem Beenden.
- *
- * Ein Fehlgriff auf Schotter darf keine laufende Aufzeichnung beenden — die
- * ist zu teuer, um sie noch einmal zu fahren. Die Rueckfrage ersetzt deshalb
- * die gesamte Knopfzeile, und zwar **ueber Kreuz**: „Ja, beenden" steht links,
- * wo eben noch „Pause" lag, „Abbrechen" rechts, wo der Finger gerade
- * „Beenden" getroffen hat. Wer beim Ruettelfehlgriff ein zweites Mal auf
- * dieselbe Stelle tippt, bricht damit ab, statt zu bestaetigen — genau der
- * Fall, den ein Dialog mit gleicher Knopfreihenfolge nicht abfaengt.
- *
- * Bewusst kein `AlertDialog`: dessen Textknoepfe sind genau die kleinen Ziele,
- * die dieser Modus vermeiden soll.
- *
- * `internal`, weil dieselbe Rueckfrage auch das „Beenden" der Kompaktleiste
- * auf der Kartenseite absichert (`RideCompactBar.kt`) — eine zweite,
- * abweichende Rueckfrage fuer denselben Fehlgriff waere die schlechtere Kopie.
- */
-@Composable
-internal fun StopConfirmation(onCancel: () -> Unit, onConfirm: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Aufzeichnung wirklich beenden?",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth()) {
-            RideModeAction(
-                modifier = Modifier.weight(1f),
-                label = "Ja, beenden",
-                description = "Ja, Aufzeichnung jetzt beenden und speichern",
-                icon = Icons.Filled.Stop,
-                container = MaterialTheme.colorScheme.error,
-                content = MaterialTheme.colorScheme.onError,
-                onClick = onConfirm,
-            )
-            Spacer(Modifier.width(CardGap))
-            RideModeAction(
-                modifier = Modifier.weight(1f),
-                label = "Abbrechen",
-                description = "Abbrechen, Aufzeichnung läuft weiter",
-                icon = null,
-                container = MaterialTheme.colorScheme.secondaryContainer,
-                content = MaterialTheme.colorScheme.onSecondaryContainer,
-                onClick = onCancel,
-            )
-        }
     }
 }
 

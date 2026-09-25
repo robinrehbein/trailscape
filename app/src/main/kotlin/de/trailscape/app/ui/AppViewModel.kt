@@ -18,9 +18,11 @@ import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
+import de.trailscape.core.HealthRoutePoint
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
@@ -30,6 +32,7 @@ import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
+import de.trailscape.core.RouteConsentRequest
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.SegmentNewBest
 import de.trailscape.core.SegmentRegistry
@@ -40,19 +43,25 @@ import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
+import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.collectExplorerTiles
+import de.trailscape.core.decodeRouteConsentRequests
+import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
+import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.retainRidesInSegmentRegistry
 import de.trailscape.core.ridesNeedingSegmentUpdate
+import de.trailscape.core.routeConsentStorageKey
 import de.trailscape.core.savePlan
 import de.trailscape.core.shouldShowShortSleeperHint
 import de.trailscape.core.syncRides
 import de.trailscape.core.toLocalRideSummary
 import de.trailscape.core.updateSegmentRegistry
+import de.trailscape.core.withVitalsDiagnostics
 import de.trailscape.core.writeBackupJson
 import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
@@ -76,6 +85,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -101,13 +111,12 @@ import kotlinx.serialization.json.JsonObject
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
 
 /**
- * Eine einzelne Zeile des Mehr-Tabs als Sprungziel (siehe
+ * Eine Unterseite der Einstellungen als Sprungziel (siehe
  * [AppViewModel.requestMoreSection]).
  *
- * Bewusst nur die Zeilen, auf die von aussen verwiesen wird — nicht alle acht.
+ * Bewusst nur die Seiten, auf die von aussen verwiesen wird — nicht alle.
  * Ein Aufzaehlungswert ohne Verweis waere ein Versprechen ohne Einloeser; die
- * Zuordnung Wert → Gruppe steht an genau einer Stelle
- * (`ui/more/MoreScreen.kt`, `moreGroupIndex`).
+ * Zuordnung Wert → Seite steht an genau einer Stelle (`ui/more/MoreScreen.kt`).
  */
 enum class MoreSection {
     /** „Profil" — Alter, Gewicht, Zeitbudget, HFmax/FTP. */
@@ -420,6 +429,36 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
+    // Verlauf (Klartext): „Diese Tour nochmal fahren" → Tour als Route
+    // -------------------------------------------------------------------------
+
+    private val _rideAsRouteRequest = MutableStateFlow<String?>(null)
+
+    /**
+     * Die Tour, deren Spur der Karten-Tab als **Route** uebernehmen soll —
+     * ausgeloest ueber „Diese Tour nochmal fahren" in der Detailansicht
+     * (`ui/rides/RideDetailScreen.kt`). Dasselbe gehaltene Muster wie
+     * [showRideOnMapRequest], aus demselben Grund (Tab-Wechsel dazwischen).
+     *
+     * Anders als dort soll die Spur nicht nur *gezeigt*, sondern als geplante
+     * Route geladen werden, mit der man losfahren kann. Was genau daraus wird
+     * (Abbiegehinweise, Neuberechnung), entscheidet der Karten-Screen, der den
+     * Wert abholt und mit [consumeRideAsRouteRequest] quittiert.
+     */
+    val rideAsRouteRequest: StateFlow<String?> = _rideAsRouteRequest.asStateFlow()
+
+    /** Bittet den Karten-Tab, die Tour [rideId] als Route zu laden, und wechselt dorthin. */
+    fun requestRideAsRoute(rideId: String) {
+        _rideAsRouteRequest.value = rideId
+        requestTab(AppTab.MAP)
+    }
+
+    /** Quittiert die abgeholte Bitte (ruft der Karten-Screen). */
+    fun consumeRideAsRouteRequest() {
+        _rideAsRouteRequest.value = null
+    }
+
+    // -------------------------------------------------------------------------
     // Geplante Route → der Aufnahme-Knopf der Navigationshuelle
     // -------------------------------------------------------------------------
 
@@ -514,15 +553,15 @@ class AppViewModel(
     }
 
     // -------------------------------------------------------------------------
-    // Leerzustand → passende Karte im Mehr-Tab
+    // Leerzustand → passende Seite der Einstellungen
     // -------------------------------------------------------------------------
 
     private val _pendingMoreSection = MutableStateFlow<MoreSection?>(null)
 
     /**
-     * Die Karte, zu der der Mehr-Tab als Naechstes scrollen soll — dasselbe
+     * Die Seite, die die Einstellungen als Naechstes oeffnen sollen — dasselbe
      * Muster wie [pendingRideDetail], aus demselben Grund: Zwischen dem Tippen
-     * im Leerzustand und dem Erscheinen des Mehr-Screens liegt ein Tab-Wechsel,
+     * im Leerzustand und dem Erscheinen der Einstellungen liegt ein Wechsel,
      * den ein einmaliges Ereignis nicht ueberleben wuerde.
      *
      * ## Warum ueberhaupt
@@ -545,7 +584,7 @@ class AppViewModel(
      */
     val pendingMoreSection: StateFlow<MoreSection?> = _pendingMoreSection.asStateFlow()
 
-    /** Wechselt in den Mehr-Tab und scrollt dort zur Karte [section]. */
+    /** Oeffnet die Einstellungen direkt auf der Seite [section]. */
     fun requestMoreSection(section: MoreSection) {
         _pendingMoreSection.value = section
         requestTab(AppTab.MORE)
@@ -949,7 +988,7 @@ class AppViewModel(
      *
      * ## Wer es setzt
      * Jeder Weg, auf dem ein Profil bewusst uebernommen wird, laeuft ueber
-     * [setProfile]: „Profil speichern" im Mehr-Tab, die Profilseite der
+     * [setProfile]: die Profilseite der Einstellungen (speichert sofort), die Profilseite der
      * Einfuehrung und der Backup-Import (ein wiederhergestelltes Profil ist
      * ebenso das eigene). Ueberspringt die Einfuehrung, ruft niemand
      * [setProfile] — und das Kennzeichen bleibt aus.
@@ -1087,8 +1126,11 @@ class AppViewModel(
      */
     private suspend fun syncVitals() {
         val now = LocalDateTime.now()
-        val days = vitalsHistory.daysToFetch(now, VITALS_WINDOW_DAYS)
+        // Hooks in den Block „Health Connect: Routen-Einzelfreigabe &
+        // Vitaldiagnose" weiter unten.
+        val days = vitalsDaysToFetch(now)
         val fresh = withContext(io) { healthSync.readVitals(days = days) }
+        attachVitalsDiagnostics(fresh)
         val merged = vitalsHistory.merge(fresh, now = now)
         vitalsHistory = merged
         _vitals.value = merged.toSummary(
@@ -1097,11 +1139,31 @@ class AppViewModel(
             unavailable = fresh.unavailable,
         )
         withContext(io) { runCatching { writeVitalsHistory(keyValueStore, merged) } }
+        // --- Klartext/Training: Zeitpunkt des letzten Vitalwerte-Syncs ---
+        _vitalsSyncedAt.value = now
     }
+
+    // -------------------------------------------------------------------------
+    // Klartext/Training (Anfang): Zeitpunkt des letzten Vitalwerte-Syncs
+    // -------------------------------------------------------------------------
+
+    private val _vitalsSyncedAt = MutableStateFlow<LocalDateTime?>(null)
+
+    /**
+     * Wann [syncVitals] in dieser Sitzung zuletzt erfolgreich durchlief —
+     * Grundlage der Quellzeile „Von deiner Uhr über Health Connect · heute
+     * 6:12" unter den Körperwerten des Trainings-Tabs. `null`, solange in
+     * dieser Sitzung noch kein Sync lief; die Zeile nennt dann keine Uhrzeit.
+     * Bewusst nicht gespeichert: Eine alte Uhrzeit von gestern waere eine
+     * Auskunft ueber einen Zustand, den niemand mehr geprueft hat.
+     */
+    val vitalsSyncedAt: StateFlow<LocalDateTime?> = _vitalsSyncedAt.asStateFlow()
+
+    // Klartext/Training (Ende)
 
     private val _lastSyncReport = MutableStateFlow<HealthSyncReport?>(null)
 
-    /** Bericht des letzten Imports — Grundlage der Diagnose im Mehr-Tab. */
+    /** Bericht des letzten Imports — Grundlage der Diagnose in den Einstellungen. */
     val lastSyncReport: StateFlow<HealthSyncReport?> = _lastSyncReport.asStateFlow()
 
     private val _healthConnection = MutableStateFlow<HealthConnection?>(null)
@@ -1205,6 +1267,9 @@ class AppViewModel(
      */
     private suspend fun applyReport(report: HealthSyncReport): Boolean {
         _lastSyncReport.value = report
+        // Hook in den Block „Health Connect: Routen-Einzelfreigabe &
+        // Vitaldiagnose" weiter unten.
+        rememberRouteConsents(report)
         if (report.isEmpty) return true
 
         val saved = withContext(io) {
@@ -1245,6 +1310,144 @@ class AppViewModel(
         Instant.ofEpochMilli(System.currentTimeMillis() - healthSyncInitialWindowMs),
         ZoneId.systemDefault(),
     )
+
+    // =========================================================================
+    // >>> Health Connect: Routen-Einzelfreigabe & Vitaldiagnose — BEGINN
+    // Eigener Block (plus je ein Hook-Aufruf in syncVitals und applyReport).
+    // Logik in :core: HealthRouteConsent.kt, HealthDiagnostics.kt,
+    // HealthVitalsDerivation.kt. UI-Einstieg: ui/health/RouteConsent.kt.
+    // =========================================================================
+
+    private val _routeConsentPending = MutableStateFlow<List<RouteConsentRequest>>(emptyList())
+
+    /**
+     * Importierte Touren, deren GPS-Route Health Connect nur nach einer
+     * Einzel-Freigabe herausgibt (`ExerciseRouteResult.ConsentRequired`),
+     * neueste zuerst.
+     *
+     * Ueberlebt App-Neustarts (gespeichert unter [routeConsentStorageKey]):
+     * Der Import sieht eine Session nur einmal — beim naechsten Lauf ist sie
+     * ein Duplikat und wuerde nie wieder gemeldet. Abarbeiten per
+     * `rememberRouteConsentLauncher(appViewModel)` (ui/health/RouteConsent.kt),
+     * das den Freigabedialog zeigt und [applyConsentedRoute] aufruft.
+     */
+    val routeConsentPending: StateFlow<List<RouteConsentRequest>> = _routeConsentPending.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val stored = withContext(io) {
+                runCatching { decodeRouteConsentRequests(keyValueStore.getString(routeConsentStorageKey)) }
+                    .getOrDefault(emptyList())
+            }
+            if (stored.isNotEmpty()) {
+                _routeConsentPending.update { mergeRouteConsentRequests(stored, it) }
+            }
+        }
+    }
+
+    /** Nimmt die offenen Freigaben eines Import-Berichts auf (Hook in [applyReport]). */
+    private fun rememberRouteConsents(report: HealthSyncReport) {
+        if (report.routeConsentPending.isEmpty()) return
+        updateRouteConsents { mergeRouteConsentRequests(it, report.routeConsentPending) }
+    }
+
+    private fun updateRouteConsents(transform: (List<RouteConsentRequest>) -> List<RouteConsentRequest>) {
+        _routeConsentPending.update(transform)
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    // Den dann aktuellen Stand schreiben: Zwei schnelle
+                    // Aenderungen sollen sich nicht ueberholen.
+                    val current = _routeConsentPending.value
+                    if (current.isEmpty()) {
+                        keyValueStore.remove(routeConsentStorageKey)
+                    } else {
+                        keyValueStore.setString(routeConsentStorageKey, encodeRouteConsentRequests(current))
+                    }
+                }
+            }
+        }
+    }
+
+    /** Verwirft eine offene Freigabe, ohne die Route zu holen. */
+    fun dismissRouteConsent(request: RouteConsentRequest) {
+        updateRouteConsents { list -> list.filterNot { it.sessionId == request.sessionId } }
+    }
+
+    /**
+     * Traegt eine per Einzel-Freigabe erhaltene Route in die importierte Tour
+     * ein und speichert sie.
+     *
+     * @param route Ergebnis von `ExerciseRouteRequestContract`, schon in
+     *   `:core`-Punkte umgewandelt. `null` = Dialog abgebrochen oder abgelehnt
+     *   — die Freigabe bleibt offen. Leer = Health Connect hat doch keine
+     *   Route; die Freigabe wird verworfen.
+     * @return `true`, wenn die Tour jetzt eine Route hat.
+     */
+    suspend fun applyConsentedRoute(request: RouteConsentRequest, route: List<HealthRoutePoint>?): Boolean {
+        if (route == null) return false
+        if (route.isEmpty()) {
+            dismissRouteConsent(request)
+            showMessage("Health Connect hat für diese Tour keine Route.")
+            return false
+        }
+        val ride = withContext(io) { runCatching { rideStorage.loadRide(request.rideId) }.getOrNull() }
+        if (ride == null || ride.points.isNotEmpty()) {
+            // Tour geloescht oder schon mit Route: nichts mehr zu tun.
+            dismissRouteConsent(request)
+            return ride != null
+        }
+        val heartRate = withContext(io) {
+            runCatching { healthSync.gateway.readHeartRate(request.start, request.end) }
+                .getOrDefault(emptyList())
+        }
+        val updated = attachRouteToRide(ride, route, heartRate).touchedNow()
+        val saved = withContext(io) { runCatching { rideStorage.saveRides(listOf(updated)) } }
+        if (saved.isFailure) {
+            showMessage("Die Route konnte nicht gespeichert werden.")
+            return false
+        }
+        dismissRouteConsent(request)
+        reloadRides()
+        refreshSegments(reportRideIds = setOf(updated.id))
+        refreshExplorerTilesIfEnabled()
+        showMessage("Route für „${ride.name}“ ergänzt.")
+        return true
+    }
+
+    /**
+     * Traegt die Vitaldaten-Diagnose in den letzten Import-Bericht ein
+     * (Hook in [syncVitals]) — sie erscheint damit unter „Diagnose-Details"
+     * und im Problembericht.
+     */
+    private fun attachVitalsDiagnostics(fresh: VitalsSummary) {
+        _lastSyncReport.update { it?.withVitalsDiagnostics(fresh) }
+    }
+
+    /**
+     * Wie viele Tage [syncVitals] liest. Normalerweise nur die Luecke seit dem
+     * letzten Lauf; **einmalig** nach diesem Update aber das volle Fenster,
+     * damit der Ruhepuls-Ersatz aus dem Nacht-Puls und die korrigierte
+     * Schlafsumme (ueberlappende Sitzungen) auch die bereits gespeicherte
+     * Historie nachtraeglich fuellen bzw. berichtigen.
+     */
+    private val vitalsDerivationBackfillKey = "trailscape.vitals.derivationBackfill.v1"
+
+    private suspend fun vitalsDaysToFetch(now: LocalDateTime): Int {
+        val regular = vitalsHistory.daysToFetch(now, VITALS_WINDOW_DAYS)
+        if (regular >= VITALS_WINDOW_DAYS) return regular
+        val done = withContext(io) {
+            runCatching { keyValueStore.getString(vitalsDerivationBackfillKey) != null }
+                .getOrDefault(true)
+        }
+        if (done) return regular
+        withContext(io) { runCatching { keyValueStore.setString(vitalsDerivationBackfillKey, "1") } }
+        return VITALS_WINDOW_DAYS
+    }
+
+    // =========================================================================
+    // <<< Health Connect: Routen-Einzelfreigabe & Vitaldiagnose — ENDE
+    // =========================================================================
 
     // -------------------------------------------------------------------------
     // Abgeleitete Trainingsauswertung
@@ -1440,7 +1643,7 @@ class AppViewModel(
     /**
      * Einstellungen der lokalen Erinnerungen — drei Schalter und zwei
      * Uhrzeiten, ab Werk alle aus (siehe [ReminderSettings]). Gelesen wird der
-     * Wert von der Karte im Mehr-Tab; der Hintergrundlauf liest ihn
+     * Wert von der Seite in den Einstellungen; der Hintergrundlauf liest ihn
      * unabhaengig davon direkt aus dem Speicher, weil er ohne ViewModel laeuft.
      */
     val reminderSettings: StateFlow<ReminderSettings> = _reminderSettings.asStateFlow()
@@ -1450,7 +1653,7 @@ class AppViewModel(
      *
      * Den **Zeitplan** stellt diese Methode bewusst nicht um: Dafuer braucht
      * es einen `Context` (WorkManager), den das ViewModel nicht hat und nicht
-     * haben soll. Die Karte im Mehr-Tab ruft direkt im Anschluss
+     * haben soll. Die Seite in den Einstellungen ruft direkt im Anschluss
      * `ReminderScheduler.reschedule(context, settings)` mit **demselben**
      * Wert auf — dadurch haengt die Neuplanung nicht davon ab, ob dieses
      * Speichern schon durch ist.
@@ -1580,6 +1783,103 @@ class AppViewModel(
     private fun refreshExplorerTilesIfEnabled() {
         if (!_explorerTilesEnabled.value) return
         viewModelScope.launch { refreshExplorerTiles() }
+    }
+
+    // -------------------------------------------- Karte: Aufgabe und Cockpit
+    // (Fuehrung „Klartext")
+
+    private val _mapTaskActive = MutableStateFlow(false)
+
+    /**
+     * Ob die Karte gerade eine **Aufgabe** zeigt — Ortskarte, „Runde ab hier",
+     * Vorschlaege oder Planung. Die Huelle blendet dann die Navigationskapsel
+     * samt Fahren-Knopf aus, damit die Karte Platz hat; heraus geht es ueber
+     * ✕ oder die Zurueck-Geste.
+     */
+    val mapTaskActive: StateFlow<Boolean> = _mapTaskActive.asStateFlow()
+
+    fun setMapTaskActive(active: Boolean) {
+        _mapTaskActive.value = active
+    }
+
+    private val _cockpitRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte, das Fahr-Cockpit zu oeffnen — vom Fahren-Knopf waehrend einer
+     * laufenden Aufzeichnung. Der Karten-Screen, in dem das Cockpit wohnt,
+     * loest sie nach dem Tab-Wechsel ein (dasselbe Muster wie
+     * [pendingRecordStart]).
+     */
+    val cockpitRequest: StateFlow<Boolean> = _cockpitRequest.asStateFlow()
+
+    fun requestRideCockpit() {
+        _cockpitRequest.value = true
+        requestTab(AppTab.MAP)
+    }
+
+    fun consumeCockpitRequest() {
+        _cockpitRequest.value = false
+    }
+
+    // ------------------------------------------------ Verlauf als Karte
+    // (Fuehrung „Klartext": „Liste | Karte" im Verlauf)
+
+    private val _historyMapRequest = MutableStateFlow(false)
+
+    /**
+     * Bitte, den Verlauf als Karte zu zeigen — alle Spuren auf einmal plus die
+     * entdeckten Kacheln. Die Karte wohnt im Karten-Tab; der Verlauf schickt
+     * die Bitte und wechselt dorthin, ✕ fuehrt zurueck.
+     */
+    val historyMapRequest: StateFlow<Boolean> = _historyMapRequest.asStateFlow()
+
+    fun requestHistoryMap() {
+        _historyMapRequest.value = true
+        requestTab(AppTab.MAP)
+    }
+
+    fun consumeHistoryMapRequest() {
+        _historyMapRequest.value = false
+    }
+
+    /** Vereinfachte Spuren je Tour, gemerkt mit ihrem Stand ([RideSummary.updatedAt]). */
+    private val historyTrackCache = HashMap<String, Pair<Long, List<TrackPoint>>>()
+
+    /**
+     * Alle gefahrenen Spuren, je Tour auf hoechstens [HISTORY_TRACK_MAX_POINTS]
+     * Punkte ausgeduennt (jeder n-te Punkt, Start und Ziel bleiben) — genug
+     * fuer die Uebersicht, klein genug fuer eine einzige GeoJSON-Quelle mit
+     * hunderten Touren. Geplante Routen zaehlen nicht, nur Gefahrenes. Beim
+     * ersten Aufruf wird jede Tour einmal von der Platte gelesen, danach
+     * kommen unveraenderte Touren aus dem Speicher.
+     */
+    suspend fun historyTracks(): List<List<TrackPoint>> = withContext(io) {
+        val summaries = allSummaries.filterNot { it.planned || it.id in pendingDeletionIds }
+        historyTrackCache.keys.retainAll(summaries.map { it.id }.toSet())
+        summaries.mapNotNull { summary ->
+            val cached = historyTrackCache[summary.id]
+            if (cached != null && cached.first == summary.updatedAt) return@mapNotNull cached.second
+            val points = runCatching { rideStorage.loadRide(summary.id)?.points }.getOrNull()
+                ?: return@mapNotNull null
+            val thinned = thinTrack(points, HISTORY_TRACK_MAX_POINTS)
+            historyTrackCache[summary.id] = summary.updatedAt to thinned
+            thinned
+        }
+    }
+
+    // ---------------------------------------------- Kacheln fuer die Routenwahl
+    // (Fuehrung „Klartext": „Neue Gegenden bevorzugen" im Blatt „Runde ab hier")
+
+    /**
+     * Die entdeckten Kacheln fuer die Rundkurs-Suche — auch dann, wenn der
+     * Kachel-Layer auf der Karte aus ist. Ist der Bestand noch nicht
+     * gerechnet, wird er es jetzt (der Cache in [explorerTilesStore] macht
+     * das ab dem zweiten Mal billig). Laeuft auf dem Aufrufer-Dispatcher bis
+     * auf die eigentliche Rechnung, die auf [io] wechselt.
+     */
+    suspend fun exploredTilesForPlanning(): Set<ExplorerTile> {
+        if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        return _explorerTiles.value
     }
 
     // -------------------------------------------------------------------------
@@ -1895,7 +2195,7 @@ class AppViewModel(
             } ?: return@launch
             startup.noticeVersion?.let { _updateAvailable.value = it }
             startup.announceVersion?.let {
-                showMessage("Version $it ist verfügbar — im Mehr-Tab herunterladen.")
+                showMessage("Version $it ist verfügbar — in den Einstellungen herunterladen.")
             }
         }
     }
@@ -2158,3 +2458,13 @@ private fun decodePlaceSearchHistory(raw: String?): List<PlaceSearchHistoryEntry
 private const val HEALTH_SAVE_FAILED_MESSAGE: String =
     "Die importierten Touren konnten nicht gespeichert werden. " +
         "Beim nächsten Sync wird es erneut versucht."
+
+/** Hoechstzahl Punkte je Spur in der Verlaufs-Karte. */
+private const val HISTORY_TRACK_MAX_POINTS = 200
+
+/** Jeder n-te Punkt, so dass hoechstens [maxPoints] bleiben; Start und Ziel bleiben immer. */
+internal fun thinTrack(points: List<TrackPoint>, maxPoints: Int): List<TrackPoint> {
+    if (points.size <= maxPoints || maxPoints < 2) return points
+    val step = (points.size - 1).toDouble() / (maxPoints - 1)
+    return List(maxPoints) { index -> points[(index * step).toInt().coerceAtMost(points.lastIndex)] }
+}

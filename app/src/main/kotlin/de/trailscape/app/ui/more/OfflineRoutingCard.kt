@@ -27,8 +27,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,7 +53,6 @@ import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentPhase
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.AppViewModel
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.map.currentLocation
@@ -74,16 +71,15 @@ import kotlinx.coroutines.withContext
 /**
  * Verwaltung der **Routingdaten** fuer das Rechnen ohne Netz.
  *
- * ## Warum eine eigene Zeile neben „Offline-Karten"
- * Beide Zeilen der Gruppe „Karte" laden „Karten" herunter, und genau deshalb
- * muessen sie unterscheidbar bleiben: [OfflineMapsCardContent] speichert das
+ * ## Warum ein eigener Abschnitt neben „Kartenbild"
+ * Beide Abschnitte der Seite „Karten offline" laden „Karten" herunter, und
+ * genau deshalb muessen sie unterscheidbar bleiben: [OfflineMapsCardContent] speichert das
  * **Kartenbild** (MapLibre-Kacheln, damit man auf dem Berg etwas sieht), diese
  * hier speichert die **Wegedaten**, mit denen die App Routen berechnet
  * (BRouter-Kacheln). Wer das eine hat, hat das andere nicht — und wer glaubt,
  * es sei dasselbe, wundert sich, warum die Karte zu sehen ist, das Routing
- * aber trotzdem ins Netz will. Der Einleitungstext sagt den Unterschied
- * deshalb ausdruecklich, und die Reihenfolge in der Gruppe stellt die beiden
- * nebeneinander.
+ * aber trotzdem ins Netz will. Die Abschnittstitel und der Einleitungssatz
+ * sagen den Unterschied deshalb ausdruecklich.
  *
  * ## Warum es hier keine Weltkarte mit Kachelraster gibt
  * Eine 5°-Kachel ist bei uns rund 350 × 550 km gross; es gibt 72 × 36 davon.
@@ -121,9 +117,8 @@ import kotlinx.coroutines.withContext
  * verwechselt, wundert sich, warum der eigene Server keine Kacheln anbietet
  * — deshalb der Hinweistext direkt am Feld.
  *
- * Der Inhalt der Zeile „Karten für Offline-Routing" in der Gruppe „Karte"
- * des Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
- * stellt Titel und Aufklapp-Rahmen.
+ * Der Abschnitt „Routingdaten" der Seite „Karten offline" der Einstellungen
+ * (siehe `MoreScreen.kt`).
  */
 @Composable
 fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
@@ -261,13 +256,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     }
 
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        text = "Mit diesen Daten berechnet die App Routen direkt auf dem Gerät — ohne " +
-            "Netz und meist schneller als über den Server. Das ist nicht das Kartenbild: " +
-            "Für die Ansicht offline sind die „Offline-Karten“ zuständig.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
-    )
+    SettingsHint("Damit Routen offline auf dem Gerät berechnet werden — nicht das Kartenbild.")
     Spacer(Modifier.height(12.dp))
 
     // ------------------------------------------------------- laufender Lauf
@@ -298,8 +287,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
 
         segments.isEmpty() -> Text(
-            text = "Noch keine Routingdaten gespeichert. Routen werden bis dahin über " +
-                "den Server berechnet.",
+            text = "Keine gespeichert — Routen rechnet bis dahin der Server.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -346,7 +334,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        NeutralButton(
+        SettingsSecondaryButton(
             enabled = !busy && running == null,
             onClick = {
                 val missing = missingPermissions(context, forRecording = false)
@@ -363,7 +351,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         }
 
         if (segments.isNotEmpty()) {
-            NeutralButton(
+            SettingsSecondaryButton(
                 enabled = !busy && running == null,
                 onClick = {
                     busy = true
@@ -401,15 +389,12 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
 
     // -------------------------------------------------------- Ortssuche
     Spacer(Modifier.height(12.dp))
-    OutlinedTextField(
+    OneUiTextField(
+        label = "Gegend suchen",
         value = query,
         onValueChange = { query = it },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
+        placeholder = "Ort oder Region, z. B. Innsbruck",
         enabled = !busy && running == null,
-        label = { Text("Gegend suchen") },
-        placeholder = { Text("Ort oder Region, z. B. Innsbruck") },
-        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         // Der Knopf zusaetzlich zur Eingabetaste: Wer die Tastatur wegwischt,
         // statt „Suchen" zu druecken, steht sonst vor einem Feld ohne Wirkung.
         trailingIcon = {
@@ -422,6 +407,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+        modifier = Modifier.fillMaxWidth(),
     )
 
     results.forEach { hit ->
@@ -449,21 +435,12 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
 
     // ------------------------------------------------------- Einstellung
     Spacer(Modifier.height(12.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text("Nur über WLAN laden", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = "Eine Kachel ist 120–240 MB. Ist der Schalter aus, lädt sie auch " +
-                    "über Mobilfunk.",
-                style = MaterialTheme.typography.bodySmall,
-                color = hintColor,
-            )
-        }
-        Switch(
-            checked = unmeteredOnly,
-            onCheckedChange = appViewModel::setSegmentUnmeteredOnly,
-        )
-    }
+    SettingsSwitchRow(
+        title = "Nur über WLAN laden",
+        subtitle = "Eine Kachel ist 120–240 MB groß.",
+        checked = unmeteredOnly,
+        onCheckedChange = appViewModel::setSegmentUnmeteredOnly,
+    )
 
     // ------------------------------------------------- Eigener Routing-Server
     Spacer(Modifier.height(12.dp))
@@ -474,11 +451,9 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         placeholder = defaultBrouterServerUrl,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
     )
-    Text(
-        text = "Betrifft nur die Routenberechnung, nicht die Routingdaten oben — die " +
-            "kommen weiterhin von brouter.de. Leer lassen für den öffentlichen Server.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
+    SettingsHint(
+        "Nur für die Berechnung online; die Routingdaten oben kommen immer von brouter.de. " +
+            "Leer = öffentlicher Server.",
         modifier = Modifier.padding(top = 4.dp),
     )
 

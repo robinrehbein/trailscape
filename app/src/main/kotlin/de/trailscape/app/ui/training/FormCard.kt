@@ -1,6 +1,31 @@
 package de.trailscape.app.ui.training
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.core.FitnessAssessment
+import de.trailscape.core.FitnessDirection
+import de.trailscape.core.FitnessTrend
+import de.trailscape.core.describeFitnessTrend
+import de.trailscape.core.freshnessWord
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
@@ -31,33 +56,201 @@ import de.trailscape.core.tsbBandMessages
 import kotlin.math.roundToInt
 
 /**
- * Der Abschnitt „Form" des Trainings-Tabs, aufgeteilt in **Bild** und
- * **Deutung**: [FormCard] zeigt die Kurve und die drei Kennzahlen,
- * [FormCoachCard] sagt, was sie bedeuten.
+ * # „Deine Form" — ein Satz vorn, alle Werte eine Ebene tiefer
  *
- * ## Warum zwei Karten statt einer
- * Bis hierher war das eine einzige, sehr lange Karte: Ueberschrift „Form",
- * Lastskala-Hinweis, Kurve, drei Kennzahlen, Kuerzel-Fussnote und darunter drei
- * bis vier Saetze Auswertung. Die Zielgestaltung
- * (`docs/design/prototyp-eine-leiste.html`, Screen „Training") trennt beides:
- * eine weisse Karte mit Kurve und Chips, darunter eine **Akzentkarte**, in der
- * der Coach spricht. Das ist kein Layout-Geschmack, sondern die Trennung von
- * Messwert und Urteil — und sie macht die Saetze ueberhaupt erst auffindbar,
- * die vorher am Fuss einer Karte verschwanden, durch die man schon
- * hindurchgescrollt war.
- *
- * ## Die Ueberschrift ist weg — und das ist der Punkt
- * „Form" stand als Kartentitel darin; jetzt steht es als Kapitelmarke
- * ([de.trailscape.app.ui.components.SectionEyebrow]) darueber. Beides zugleich
- * waere dasselbe Wort zweimal untereinander.
+ * Im Redesign „Klartext" (`docs/design/prototyp-klartext.html`, Screen
+ * `#s-training` und Blatt `#m-form`) steht im Tab nur noch **eine** antippbare
+ * Karte ([FormSummaryCard]): ein Satz („Fitness steigt seit 6 Wochen", aus
+ * `:core` [describeFitnessTrend]), eine Kurve und zwei Einordnungen (Fitness
+ * mit Pfeil, Frische als Wort). Der Tipp oeffnet [FormSheet]: die drei Linien
+ * Fitness / Muedigkeit / Frische je in einem Satz, die Fachbegriffe
+ * (CTL/ATL/TSB) klein dahinter, und unter „Alle Werte" alles, was vorher im
+ * Tab stand — [FormCard] (Lastskala, beide Kurven, Belastungssprung),
+ * [FormCoachCard] (Formband, Rampenrate, Belastungsverhaeltnis),
+ * [WeekCard] („Belastung dieser Woche") und [FitnessCard]. Verloren geht
+ * nichts; es liegt nur eine Ebene tiefer.
  *
  * ## Klartext statt Kuerzel
- * Unveraendert: Die drei Kennzahlen heissen Fitness, Ermuedung und Form — nicht
- * CTL, ATL, TSB. Wer aus einem anderen Trainingstool umsteigt, bekommt die
- * Kuerzel trotzdem: einmal, gebuendelt, als kleine Fussnote unter der
- * Chip-Zeile — nicht an jeder einzelnen Kennzahl, denn dann waere die
- * Uebersetzung nur Dekoration neben dem eigentlich gemeinten Kuerzel.
+ * Die drei Kennzahlen heissen Fitness, Muedigkeit und Frische. Wer aus einem
+ * anderen Trainingstool umsteigt, findet die Kuerzel im Blatt klein hinter
+ * jedem Satz und in [FormCard] als Fussnote.
  */
+
+private fun trendArrow(trend: FitnessTrend?): String = when (trend?.direction) {
+    FitnessDirection.STEIGT -> " ↑"
+    FitnessDirection.SINKT -> " ↓"
+    FitnessDirection.STABIL -> " →"
+    null -> ""
+}
+
+/**
+ * Die eine Formkarte im Tab: Satz, Fitness-Kurve (Flaeche), zwei Pillen. Die
+ * ganze Karte ist der Knopf zu [FormSheet].
+ */
+@Composable
+fun FormSummaryCard(insights: TrainingInsights, onClick: () -> Unit) {
+    val theme = MaterialTheme.colorScheme
+    val series = insights.fitness
+    val latest = series.latest
+    val trend = describeFitnessTrend(series.points)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClickLabel = "Form erklärt öffnen", onClick = onClick),
+    ) {
+        Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = when {
+                        latest == null -> "Deine Fitnesskurve entsteht mit der ersten Tour"
+                        !series.displayReady ->
+                            "Kurve wird aufgebaut (noch ${series.daysUntilDisplayReady} " +
+                                "${if (series.daysUntilDisplayReady == 1) "Tag" else "Tage"})"
+                        else -> trend?.sentence ?: "Fitness stabil"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = theme.onSurfaceVariant,
+                )
+            }
+            if (latest != null && series.displayReady) {
+                FitnessAreaSparkline(
+                    values = series.lastDays(60).map { it.ctl },
+                    lineColor = theme.primary,
+                    fillColor = theme.primaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                )
+            }
+            if (latest != null) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetricChip(
+                        "Fitness ${latest.ctl.roundToInt()}${trendArrow(trend)}",
+                        when (trend?.direction) {
+                            FitnessDirection.STEIGT -> trainingGood
+                            FitnessDirection.SINKT -> trainingCaution
+                            else -> Color.Unspecified
+                        },
+                    )
+                    MetricChip(freshnessWord(latest.tsb), tsbBandColor(latest.tsb))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Fitness als gefuellte Flaeche mit Linie und Endpunkt — das Kurvenbild der
+ * Formkarte im Prototyp. Beide Kurven (Fitness und Muedigkeit) zeigt weiter
+ * [PmcSparkline] unter „Alle Werte".
+ */
+@Composable
+private fun FitnessAreaSparkline(
+    values: List<Double>,
+    lineColor: Color,
+    fillColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        if (values.size < 2) return@Canvas
+        val maxV = values.max().coerceAtLeast(1.0)
+        val minV = (values.min() * 0.85).coerceAtMost(maxV - 1)
+        val span = maxV - minV
+        val pad = 4.dp.toPx()
+        val h = size.height - pad
+        fun y(v: Double) = pad + (h - pad) * (1 - ((v - minV) / span).toFloat())
+        val last = values.size - 1
+        val line = Path()
+        values.forEachIndexed { i, v ->
+            val x = size.width * i / last
+            if (i == 0) line.moveTo(x, y(v)) else line.lineTo(x, y(v))
+        }
+        val area = Path().apply {
+            addPath(line)
+            lineTo(size.width, size.height)
+            lineTo(0f, size.height)
+            close()
+        }
+        drawPath(area, color = fillColor.copy(alpha = 0.7f))
+        drawPath(line, color = lineColor, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        drawCircle(lineColor, radius = 4.dp.toPx(), center = Offset(size.width - 2.dp.toPx(), y(values[last])))
+    }
+}
+
+/**
+ * Blatt „Deine Form" — Vorlage `#m-form` im Prototyp: drei Saetze, die
+ * Fachbegriffe klein dahinter, und unter „Alle Werte" die komplette bisherige
+ * Auswertung.
+ *
+ * @param showDetails ob die Detailkarten (Wochenlast, Fitnesslevel) Sinn
+ *   haben — ohne Touren behaupteten sie etwas ohne Grundlage (siehe KDoc von
+ *   [TrainingScreen]).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FormSheet(
+    insights: TrainingInsights,
+    assessment: FitnessAssessment,
+    showDetails: Boolean,
+    onOpenProfile: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val latest = insights.fitness.latest
+    val trend = describeFitnessTrend(insights.fitness.points)
+    var allValues by rememberSaveable { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        SheetColumn {
+            Text("Deine Form", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Drei Linien, einfach erklärt. Die Fachbegriffe aus anderen Apps stehen klein dahinter.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ExplainRow(
+                label = "Fitness",
+                pill = latest?.let { "${it.ctl.roundToInt()}${trendArrow(trend)}" },
+                pillColor = trainingGood,
+                text = "Was du über Wochen aufgebaut hast. Steigt langsam.",
+                jargon = "CTL",
+            )
+            ExplainRow(
+                label = "Müdigkeit",
+                pill = latest?.let { "${it.atl.roundToInt()}" },
+                pillColor = trainingWarning,
+                text = "Was die letzten Tage gekostet haben. Fällt schnell wieder.",
+                jargon = "ATL",
+            )
+            ExplainRow(
+                label = "Frische",
+                pill = latest?.let { "${formatSigned(it.tsb)} · ${freshnessWord(it.tsb)}" },
+                pillColor = latest?.let { tsbBandColor(it.tsb) } ?: Color.Unspecified,
+                text = "Fitness minus Müdigkeit. Leicht negativ heißt: du trainierst gerade produktiv.",
+                jargon = "TSB",
+            )
+            NeutralButton(onClick = { allValues = !allValues }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (allValues) "Weniger anzeigen" else "Alle Werte")
+            }
+            if (allValues) {
+                FormCard(insights)
+                if (latest != null) FormCoachCard(insights)
+                if (showDetails) {
+                    WeekCard(insights, onOpenMore = onOpenProfile)
+                    FitnessCard(assessment)
+                }
+            }
+        }
+    }
+}
 
 /**
  * Bild der Form: Lastskala-Hinweis, PMC-Kurve und die drei Kennzahlen als

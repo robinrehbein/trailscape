@@ -4,6 +4,7 @@ import android.content.Context
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
+import de.trailscape.core.ExplorerTile
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.RouteTarget
@@ -85,6 +86,8 @@ object RouteGenerationController {
 
     /** Kachel-Angebots-Kanal des letzten Durchlaufs (fuer [nextSuggestions]). */
     private var lastOfferMissingSegments: (List<String>) -> Unit = {}
+    private var lastPreferNewAreas: Boolean = false
+    private var lastExploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() }
 
     /**
      * Oeffnet das Panel fuer ein neues Ziel und verwirft alles Bisherige
@@ -137,6 +140,8 @@ object RouteGenerationController {
         fromMapCenter: Boolean,
         onMessage: (String) -> Unit,
         onOfferMissingSegments: (List<String>) -> Unit = {},
+        preferNewAreas: Boolean = false,
+        exploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() },
     ) {
         val current = _state.value
         val target = current.target ?: return
@@ -147,6 +152,8 @@ object RouteGenerationController {
         lastContext = appContext
         lastProfile = profile
         lastOfferMissingSegments = onOfferMissingSegments
+        lastPreferNewAreas = preferNewAreas
+        lastExploredTiles = exploredTiles
         val flag = AtomicBoolean(false)
         cancelFlag = flag
 
@@ -180,6 +187,10 @@ object RouteGenerationController {
                 outcome.route
             }
             try {
+                // Immer holen, auch ohne „Neue Gegenden bevorzugen": Jeder
+                // Vorschlag zeigt „+N neu", und das stimmt nur gegen den
+                // echten Bestand. Bevorzugt wird nur mit Schalter.
+                val explored = runCatching { exploredTiles() }.getOrDefault(emptySet())
                 val result = generateRoutes(
                     backend = backend,
                     start = start,
@@ -198,6 +209,8 @@ object RouteGenerationController {
                             _state.update { it.copy(done = done, total = total) }
                         }
                     },
+                    exploredTiles = explored,
+                    preferNewAreas = preferNewAreas && explored.isNotEmpty(),
                 )
                 if (flag.get()) return@launch
                 _state.update {
@@ -304,6 +317,8 @@ object RouteGenerationController {
             fromMapCenter = fromMapCenter,
             onMessage = onMessage,
             onOfferMissingSegments = lastOfferMissingSegments,
+            preferNewAreas = lastPreferNewAreas,
+            exploredTiles = lastExploredTiles,
         )
     }
 

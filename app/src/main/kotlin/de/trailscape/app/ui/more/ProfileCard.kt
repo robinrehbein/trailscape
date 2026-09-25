@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.more
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,22 +10,23 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,158 +41,160 @@ import de.trailscape.core.defaultSetupMassKg
 import de.trailscape.core.maxEftpW
 import de.trailscape.core.minEftpW
 import kotlin.math.round
+import kotlinx.coroutines.delay
 
 /**
- * Trainingsprofil-Formular — Port von `_buildProfileCard()` aus
+ * Trainingsprofil — Inhalt der Seite „Profil" der Einstellungen (siehe
+ * `MoreScreen.kt`). Urspruenglich ein Port von `_buildProfileCard()` aus
  * `lib/screens/more_screen.dart`. Alter, Geschlecht und Gewicht sind Pflicht,
  * alle anderen Felder optional.
  *
- * Der Inhalt der Zeile „Profil" in der Gruppe „Profil & Daten" des
- * Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
- * stellt Titel und Aufklapp-Rahmen.
+ * ## Kein Speichern-Knopf
+ * Jedes Feld wird fuer sich geprueft ([profileFieldError]); gueltige Werte
+ * uebernimmt die Seite kurz nach der Eingabe ([PERSIST_DELAY_MS]) und noch
+ * einmal beim Verlassen ([buildProfileFromForm] entscheidet, was davon
+ * gespeichert wird). Ein ungueltiges Feld haelt die uebrigen nicht auf: Es
+ * behaelt schlicht seinen gespeicherten Wert, und die Fehlermeldung
+ * erscheint darunter, sobald man das Feld verlaesst — nicht schon beim
+ * ersten Tastendruck, wenn „1" auf dem Weg zu „15" noch kein Fehler ist.
+ * Frueher sammelte ein Knopf „Profil speichern" alle Felder ein und meldete
+ * nur den ersten Fehler; wer die Seite ohne ihn verliess, verlor alles.
  *
  * Uebernimmt ein von aussen (Backup-Import, initialer Ladevorgang) neu
  * gesetztes [AppViewModel.profile] in die Eingabefelder — aber nur, wenn sich
- * die Signatur wirklich geaendert hat, damit eigene Tastatureingaben nicht
- * durch einen Rebuild ueberschrieben werden (Aequivalent zu `_adoptProfile`
- * im Original).
+ * die Signatur wirklich geaendert hat. Eigene Speichervorgaenge setzen die
+ * Signatur vorher selbst, damit das Speichern die gerade getippten Felder
+ * nicht umformatiert (Aequivalent zu `_adoptProfile` im Original).
  *
  * ## Leere Felder statt fremder Zahlen
  * Solange [AppViewModel.profileConfirmed] aus ist, bleiben Alter, Gewicht und
- * „Rad + Gepäck" **leer**; die Standardwerte stehen nur als Platzhalter darin
- * und darunter als Satz. Vorher waren die Felder mit Alter 40 und 75 kg
- * vorbelegt — den Werten aus [de.trailscape.app.ui.defaultTrainingProfile] —
- * und sahen damit aus wie eine eigene, bereits getaetigte Eingabe. Wer die
- * Einfuehrung uebersprungen hatte, hatte keinen Anlass, sie zu korrigieren, und
- * bekam Trainingslast, HFmax und Schwelle aus den Massen eines fremden Koerpers
- * als „deine Werte" ausgegeben.
+ * „Rad + Gepäck" **leer**; die Standardwerte stehen nur als Platzhalter darin.
+ * Vorher waren die Felder mit Alter 40 und 75 kg vorbelegt — den Werten aus
+ * [de.trailscape.app.ui.defaultTrainingProfile] — und sahen damit aus wie eine
+ * eigene, bereits getaetigte Eingabe. Gespeichert (und damit bestaetigt) wird
+ * erst, wenn Alter **und** Gewicht gueltig eingetragen sind.
  */
 @Composable
 fun ProfileCardContent(appViewModel: AppViewModel) {
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
     val confirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
-    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
 
-    var ageText by remember { mutableStateOf("") }
-    var weightText by remember { mutableStateOf("") }
-    var setupMassText by remember { mutableStateOf("") }
-    var weeklyHoursText by remember { mutableStateOf("") }
-    var hrMaxText by remember { mutableStateOf("") }
-    var lthrText by remember { mutableStateOf("") }
-    var restingHrText by remember { mutableStateOf("") }
-    var ftpText by remember { mutableStateOf("") }
-    var sex by remember { mutableStateOf(Sex.UNBEKANNT) }
+    var form by remember { mutableStateOf(ProfileForm()) }
+    var edited by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf<ProfileField?>(null) }
     var advancedOpen by rememberSaveable { mutableStateOf(false) }
-    var statusText by remember { mutableStateOf<String?>(null) }
     var appliedSignature by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(profile, confirmed) {
         val signature = profile.toJson().toString()
         if (signature == appliedSignature) return@LaunchedEffect
         appliedSignature = signature
-        // Die drei Pflicht-/Standardfelder bleiben leer, solange nichts
-        // bestaetigt ist — siehe KDoc der Karte.
-        ageText = if (confirmed) profile.ageYears.toString() else ""
-        weightText = if (confirmed) formatProfileNumber(profile.weightKg) else ""
-        setupMassText = if (confirmed) formatProfileNumber(profile.setupMassKg) else ""
-        weeklyHoursText = profile.weeklyHours?.let { formatProfileNumber(it) } ?: ""
-        hrMaxText = profile.hrMaxOverride?.let { formatProfileNumber(it) } ?: ""
-        lthrText = profile.lthrOverride?.let { formatProfileNumber(it) } ?: ""
-        restingHrText = profile.restingHrOverride?.let { formatProfileNumber(it) } ?: ""
-        ftpText = profile.eftpOverrideW?.let { formatProfileNumber(it) } ?: ""
-        sex = profile.sex
+        form = ProfileForm.of(profile, confirmed)
     }
 
-    Text(
-        text = "Alter, Geschlecht und Gewicht sind die Grundlage für Trainingslast, " +
-            "Fitness-Kurve und Erholungswerte.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
-    )
+    // Speichert, was gueltig ist und sich vom gespeicherten Profil
+    // unterscheidet. Die Signatur wird vor dem Speichern gesetzt, damit das
+    // zurueckkommende Profil die Felder nicht ueberschreibt (siehe KDoc).
+    fun persist() {
+        val next = buildProfileFromForm(profile, confirmed, form) ?: return
+        if (confirmed && next == profile) return
+        appliedSignature = next.toJson().toString()
+        appViewModel.setProfile(next)
+    }
+
+    LaunchedEffect(form) {
+        if (!edited) return@LaunchedEffect
+        delay(PERSIST_DELAY_MS)
+        persist()
+    }
+    val latestPersist by rememberUpdatedState(::persist)
+    val latestEdited by rememberUpdatedState(edited)
+    DisposableEffect(Unit) {
+        onDispose { if (latestEdited) latestPersist() }
+    }
+
+    fun update(next: ProfileForm) {
+        edited = true
+        form = next
+    }
+
+    /** Fehlertext eines Felds — erst, wenn es nicht (mehr) den Fokus hat. */
+    fun shownError(field: ProfileField): String? =
+        if (focused == field) null else profileFieldError(field, form.text(field), confirmed)
+
+    @Composable
+    fun NumberField(field: ProfileField, label: String, modifier: Modifier, placeholder: String? = null) {
+        ProfileNumberField(
+            label = label,
+            value = form.text(field),
+            onValueChange = { update(form.with(field, it)) },
+            error = shownError(field),
+            placeholder = placeholder,
+            decimal = field.decimal,
+            onFocus = { hasFocus ->
+                if (hasFocus) focused = field else if (focused == field) focused = null
+            },
+            modifier = modifier,
+        )
+    }
+
+    SettingsHint("Grundlage für Trainingslast, Fitness-Kurve und Erholungswerte.")
     Spacer(modifier = Modifier.height(12.dp))
 
     Row {
-        OneUiTextField(
-            label = "Alter",
-            value = ageText,
-            onValueChange = { ageText = it },
-            // Der Platzhalter nennt genau die Zahl, mit der bis zur
-            // Eingabe gerechnet wird — sichtbar als Vorschlag (grau, im
-            // leeren Feld) statt als scheinbar eigene Angabe.
+        // Der Platzhalter nennt genau die Zahl, mit der bis zur Eingabe
+        // gerechnet wird — sichtbar als Vorschlag (grau, im leeren Feld)
+        // statt als scheinbar eigene Angabe.
+        NumberField(
+            ProfileField.AGE,
+            "Alter",
+            Modifier.weight(1f),
             placeholder = defaultTrainingProfile.ageYears.toString(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.weight(1f),
         )
         Spacer(modifier = Modifier.width(12.dp))
         OneUiDropdownField(
             label = "Geschlecht",
-            value = sex,
+            value = form.sex,
             options = sexOptions,
-            onChange = { sex = it },
+            onChange = { update(form.copy(sex = it)) },
             modifier = Modifier.weight(1f),
         )
     }
     Spacer(modifier = Modifier.height(12.dp))
 
     Row {
-        OneUiTextField(
-            label = "Gewicht (kg)",
-            value = weightText,
-            onValueChange = { weightText = it },
+        NumberField(
+            ProfileField.WEIGHT,
+            "Gewicht (kg)",
+            Modifier.weight(1f),
             placeholder = formatProfileNumber(defaultTrainingProfile.weightKg),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.weight(1f),
         )
         Spacer(modifier = Modifier.width(12.dp))
-        OneUiTextField(
-            label = "Rad + Gepäck (kg)",
-            value = setupMassText,
-            onValueChange = { setupMassText = it },
+        NumberField(
+            ProfileField.SETUP_MASS,
+            "Rad + Gepäck (kg)",
+            Modifier.weight(1f),
             placeholder = formatProfileNumber(defaultSetupMassKg),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.weight(1f),
         )
     }
-    Spacer(modifier = Modifier.height(4.dp))
     if (!confirmed) {
-        Text(
-            text = "Noch nicht eingetragen — wir rechnen bis dahin mit Standardwerten " +
-                "(${defaultTrainingProfile.ageYears} Jahre, " +
-                "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg). " +
-                "Trainingslast, HFmax, Schwelle und geschätzte Leistung sind deshalb " +
-                "nur grobe Schätzungen.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
         Spacer(modifier = Modifier.height(4.dp))
+        SettingsHint(
+            "Noch nicht eingetragen — bis dahin rechnen wir grob mit " +
+                "${defaultTrainingProfile.ageYears} Jahren und " +
+                "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg.",
+        )
     }
-    Text(
-        text = "Ohne Angabe rechnen wir mit ${formatProfileNumber(defaultSetupMassKg)} kg " +
-            "für Rad und Gepäck.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
-    )
     Spacer(modifier = Modifier.height(12.dp))
 
-    OneUiTextField(
-        label = "Zeit pro Woche (Stunden, optional)",
-        value = weeklyHoursText,
-        onValueChange = { weeklyHoursText = it },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = Modifier.fillMaxWidth(),
-    )
+    NumberField(ProfileField.WEEKLY_HOURS, "Zeit pro Woche (Stunden, optional)", Modifier.fillMaxWidth())
     Spacer(modifier = Modifier.height(4.dp))
-    Text(
-        text = "Mit deinem Zeitbudget deckeln wir das Wochenziel auf das, was sich in " +
-            "dieser Zeit realistisch fahren lässt.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
-    )
+    SettingsHint("Deckelt das Wochenziel auf das, was in dieser Zeit machbar ist.")
     Spacer(modifier = Modifier.height(8.dp))
 
     // Der Text „Erweitert" bleibt in beiden Zustaenden gleich und das Icon
-    // traegt keinen Alternativtext — eine Bildschirmvorlesung meldete deshalb
-    // auf- wie zugeklappt exakt dasselbe. Dieselbe Loesung wie in `MoreRow`.
+    // traegt keinen Alternativtext — deshalb meldet die Semantik den Zustand
+    // eigens.
     TextButton(
         onClick = { advancedOpen = !advancedOpen },
         modifier = Modifier.semantics {
@@ -200,110 +204,83 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
         Icon(
             imageVector = if (advancedOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = null,
-            tint = hintColor,
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text("Erweitert", style = MaterialTheme.typography.titleSmall)
+        Text("Erweitert: Puls und FTP", style = MaterialTheme.typography.titleSmall)
     }
 
     if (advancedOpen) {
-        Text(
-            text = "Ohne eigene Werte schätzen wir die maximale Herzfrequenz aus deinem " +
-                "Alter (208 − 0,7 × Alter) und die Schwelle daraus. Ein HFmax-Feldtest — " +
-                "nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten mit maximalem " +
-                "Endspurt — verbessert die Genauigkeit aller Auswertungen deutlich.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OneUiTextField(
-            label = "HFmax (bpm, optional)",
-            value = hrMaxText,
-            onValueChange = { hrMaxText = it },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OneUiTextField(
-            label = "Schwellenpuls LTHR (bpm, optional)",
-            value = lthrText,
-            onValueChange = { lthrText = it },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        OneUiTextField(
-            label = "Ruhepuls (bpm, optional)",
-            value = restingHrText,
-            onValueChange = { restingHrText = it },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Ohne eigenen Ruhepuls nehmen wir den aus deinen Vitaldaten gemessenen Wert.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-        OneUiTextField(
-            label = "Schwellenleistung FTP (Watt, optional)",
-            value = ftpText,
-            onValueChange = { ftpText = it },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten " +
-                "kannst. Sie ist der Massstab für jede Trainingslast: An ihr hängen " +
-                "Fitness (CTL), Ermüdung (ATL), Form (TSB) und dein Wochenziel — " +
-                "änderst du sie, verschieben sich auch alle bisherigen Werte.\n\n" +
-                "Ohne Eintrag schätzen wir: zuerst aus deinem besten " +
-                "20-Minuten-Abschnitt (× 0,95), dann aus dem Abgleich mit deiner " +
-                "gemessenen Herzfrequenz, notfalls grob mit " +
-                "${formatProfileNumber(defaultEftpWPerKg)} W/kg — für ambitionierte " +
-                "Fahrer:innen deutlich zu niedrig. Ein eigener Wert ist deshalb die " +
-                "wirksamste Einzelangabe in diesem Formular. Für eine belastbare Zahl " +
-                "fährst du nach gutem Aufwärmen 20 Minuten am Anschlag und trägst " +
-                "95 % deiner Durchschnittsleistung ein; ohne Leistungsmesser bleibt " +
-                "es auch hier ein Schätzwert.",
-            style = MaterialTheme.typography.bodySmall,
-            color = hintColor,
-        )
-    }
-
-    Spacer(modifier = Modifier.height(12.dp))
-    statusText?.let { status ->
-        Text(
-            text = status,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+        SettingsHint("Ohne eigene Werte schätzen wir HFmax und Schwelle aus deinem Alter.")
+        LearnMore(
+            "Die Schätzung ist 208 − 0,7 × Alter. Genauer wird es mit einem " +
+                "HFmax-Feldtest: nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten " +
+                "mit maximalem Endspurt.",
         )
         Spacer(modifier = Modifier.height(8.dp))
-    }
+        NumberField(ProfileField.HR_MAX, "HFmax (bpm, optional)", Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(12.dp))
+        NumberField(ProfileField.LTHR, "Schwellenpuls LTHR (bpm, optional)", Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(12.dp))
+        NumberField(ProfileField.RESTING_HR, "Ruhepuls (bpm, optional)", Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsHint("Leer: der aus deinen Vitaldaten gemessene Wert.")
 
-    Button(
-        onClick = {
-            statusText = saveProfile(
-                current = profile,
-                ageText = ageText,
-                sex = sex,
-                weightText = weightText,
-                setupMassText = setupMassText,
-                weeklyHoursText = weeklyHoursText,
-                hrMaxText = hrMaxText,
-                lthrText = lthrText,
-                restingHrText = restingHrText,
-                ftpText = ftpText,
-                onSave = appViewModel::setProfile,
-            )
-        },
-    ) {
-        Text("Profil speichern")
+        Spacer(modifier = Modifier.height(12.dp))
+        NumberField(ProfileField.FTP, "Schwellenleistung FTP (Watt, optional)", Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(4.dp))
+        SettingsHint("Die wirksamste Einzelangabe: An der FTP hängt jede Trainingslast.")
+        LearnMore(
+            "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten kannst. " +
+                "An ihr hängen Fitness, Ermüdung, Form und dein Wochenziel — änderst du " +
+                "sie, verschieben sich auch alle bisherigen Werte. Ohne Eintrag schätzen " +
+                "wir sie aus deinem besten 20-Minuten-Abschnitt (× 0,95), dann aus deiner " +
+                "Herzfrequenz, notfalls grob mit ${formatProfileNumber(defaultEftpWPerKg)} " +
+                "W/kg. Für eine belastbare Zahl fährst du nach gutem Aufwärmen 20 Minuten " +
+                "am Anschlag und trägst 95 % deiner Durchschnittsleistung ein.",
+        )
     }
 }
+
+/** Ein Zahlenfeld mit Fehlerzeile darunter. */
+@Composable
+private fun ProfileNumberField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    error: String?,
+    placeholder: String?,
+    decimal: Boolean,
+    onFocus: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        OneUiTextField(
+            label = label,
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = placeholder,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number,
+            ),
+            fieldModifier = Modifier.onFocusChanged { onFocus(it.isFocused) },
+        )
+        error?.let {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+/**
+ * Wie lange nach dem letzten Tastendruck gespeichert wird. Kurz genug, dass
+ * nichts verloren geht, lang genug, dass nicht jede Ziffer die ganze
+ * Trainingsauswertung neu anstoesst.
+ */
+private const val PERSIST_DELAY_MS = 600L
 
 /**
  * Die Auswahl des Geschlechts — als geordnete Liste, weil die Reihenfolge im
@@ -315,6 +292,141 @@ private val sexOptions: List<Pair<Sex, String>> = listOf(
     Sex.UNBEKANNT to "keine Angabe",
 )
 
+/** Die Textfelder des Profils. */
+internal enum class ProfileField(val decimal: Boolean) {
+    AGE(false),
+    WEIGHT(true),
+    SETUP_MASS(true),
+    WEEKLY_HOURS(true),
+    HR_MAX(false),
+    LTHR(false),
+    RESTING_HR(false),
+    FTP(false),
+}
+
+/** Der Rohzustand des Formulars: die Texte, wie getippt, plus das Geschlecht. */
+internal data class ProfileForm(
+    val texts: Map<ProfileField, String> = emptyMap(),
+    val sex: Sex = Sex.UNBEKANNT,
+) {
+    fun text(field: ProfileField): String = texts[field].orEmpty()
+
+    fun with(field: ProfileField, value: String): ProfileForm = copy(texts = texts + (field to value))
+
+    companion object {
+        /**
+         * Die Felder zu einem gespeicherten Profil. Die drei Pflicht- bzw.
+         * Standardfelder bleiben leer, solange nichts bestaetigt ist — siehe
+         * KDoc von [ProfileCardContent].
+         */
+        fun of(profile: TrainingProfile, confirmed: Boolean): ProfileForm = ProfileForm(
+            texts = mapOf(
+                ProfileField.AGE to if (confirmed) profile.ageYears.toString() else "",
+                ProfileField.WEIGHT to if (confirmed) formatProfileNumber(profile.weightKg) else "",
+                ProfileField.SETUP_MASS to
+                    if (confirmed) formatProfileNumber(profile.setupMassKg) else "",
+                ProfileField.WEEKLY_HOURS to profile.weeklyHours?.let(::formatProfileNumber).orEmpty(),
+                ProfileField.HR_MAX to profile.hrMaxOverride?.let(::formatProfileNumber).orEmpty(),
+                ProfileField.LTHR to profile.lthrOverride?.let(::formatProfileNumber).orEmpty(),
+                ProfileField.RESTING_HR to
+                    profile.restingHrOverride?.let(::formatProfileNumber).orEmpty(),
+                ProfileField.FTP to profile.eftpOverrideW?.let(::formatProfileNumber).orEmpty(),
+            ),
+            sex = profile.sex,
+        )
+    }
+}
+
+/**
+ * Prueft ein einzelnes Feld; `null` = in Ordnung. Dieselben Grenzen wie
+ * frueher `_saveProfile()` im Original.
+ *
+ * @param confirmed Ob schon ein Profil gespeichert ist. Nur dann ist ein
+ *   **leeres** Pflichtfeld ein Fehler — vorher ist leer schlicht „noch nicht
+ *   eingetragen".
+ */
+internal fun profileFieldError(field: ProfileField, text: String, confirmed: Boolean): String? {
+    val empty = text.isBlank()
+    return when (field) {
+        ProfileField.AGE -> when {
+            empty -> if (confirmed) "Bitte ein Alter angeben." else null
+            text.trim().toIntOrNull()?.let { it in 10..100 } != true -> "Zwischen 10 und 100 Jahren."
+            else -> null
+        }
+        ProfileField.WEIGHT -> when {
+            empty -> if (confirmed) "Bitte ein Gewicht angeben." else null
+            parseProfileNumber(text)?.let { it in 30.0..250.0 } != true -> "Zwischen 30 und 250 kg."
+            else -> null
+        }
+        ProfileField.SETUP_MASS -> when {
+            empty -> null
+            parseProfileNumber(text)?.let { it in 0.0..60.0 } != true -> "Höchstens 60 kg."
+            else -> null
+        }
+        ProfileField.WEEKLY_HOURS -> when {
+            empty -> null
+            parseProfileNumber(text)?.let { it > 0 && it <= 40 } != true -> "Zwischen 1 und 40 Stunden."
+            else -> null
+        }
+        ProfileField.HR_MAX, ProfileField.LTHR, ProfileField.RESTING_HR -> when {
+            empty -> null
+            parseProfileNumber(text) == null -> "Bitte eine Zahl eingeben."
+            else -> null
+        }
+        // Dieselben Grenzen wie im Rechenkern (`minEftpW`/`maxEftpW`): Ein
+        // Wert ausserhalb wuerde dort ohnehin geklemmt — dann sagen wir es
+        // lieber hier.
+        ProfileField.FTP -> when {
+            empty -> null
+            parseProfileNumber(text)?.let { it in minEftpW..maxEftpW } != true ->
+                "Zwischen ${formatProfileNumber(minEftpW)} und ${formatProfileNumber(maxEftpW)} Watt."
+            else -> null
+        }
+    }
+}
+
+/**
+ * Das Profil, das aus dem Formular gespeichert wird — oder `null`, wenn
+ * (noch) nichts zu speichern ist.
+ *
+ * Gueltige Felder gehen ein; ein ungueltiges Feld behaelt den Wert aus
+ * [current]. Ein leeres optionales Feld heisst „keine Angabe" (bzw. beim
+ * Rad-Gewicht: der Standardwert). Solange kein Profil bestaetigt ist, braucht
+ * es gueltiges Alter **und** Gewicht — sonst wuerde der Standardkoerper aus
+ * [current] als eigene Angabe bestaetigt.
+ */
+internal fun buildProfileFromForm(
+    current: TrainingProfile,
+    confirmed: Boolean,
+    form: ProfileForm,
+): TrainingProfile? {
+    fun valid(field: ProfileField) = profileFieldError(field, form.text(field), confirmed) == null
+    fun number(field: ProfileField) = parseProfileNumber(form.text(field))
+
+    val ageValid = valid(ProfileField.AGE) && form.text(ProfileField.AGE).isNotBlank()
+    val weightValid = valid(ProfileField.WEIGHT) && form.text(ProfileField.WEIGHT).isNotBlank()
+    if (!confirmed && !(ageValid && weightValid)) return null
+
+    fun optional(field: ProfileField, fallback: Double?): Double? =
+        if (valid(field)) number(field) else fallback
+
+    return current.copy(
+        ageYears = if (ageValid) form.text(ProfileField.AGE).trim().toInt() else current.ageYears,
+        sex = form.sex,
+        weightKg = if (weightValid) number(ProfileField.WEIGHT)!! else current.weightKg,
+        setupMassKg = if (valid(ProfileField.SETUP_MASS)) {
+            number(ProfileField.SETUP_MASS) ?: defaultSetupMassKg
+        } else {
+            current.setupMassKg
+        },
+        weeklyHours = optional(ProfileField.WEEKLY_HOURS, current.weeklyHours),
+        hrMaxOverride = optional(ProfileField.HR_MAX, current.hrMaxOverride),
+        lthrOverride = optional(ProfileField.LTHR, current.lthrOverride),
+        restingHrOverride = optional(ProfileField.RESTING_HR, current.restingHrOverride),
+        eftpOverrideW = optional(ProfileField.FTP, current.eftpOverrideW),
+    )
+}
+
 /** Entspricht Darts `_formatNumber`: ganze Werte ohne Nachkommastellen. */
 internal fun formatProfileNumber(value: Double): String =
     if (value == round(value)) value.toLong().toString() else value.toString()
@@ -324,65 +436,4 @@ internal fun parseProfileNumber(raw: String): Double? {
     val trimmed = raw.trim().replace(',', '.')
     if (trimmed.isEmpty()) return null
     return trimmed.toDoubleOrNull()
-}
-
-/**
- * Validiert die Eingabefelder wie `_saveProfile()` im Original und speichert
- * bei Erfolg ueber [onSave]. Liefert den anzuzeigenden Statustext (Fehler
- * oder Erfolgsmeldung).
- */
-private fun saveProfile(
-    current: TrainingProfile,
-    ageText: String,
-    sex: Sex,
-    weightText: String,
-    setupMassText: String,
-    weeklyHoursText: String,
-    hrMaxText: String,
-    lthrText: String,
-    restingHrText: String,
-    ftpText: String,
-    onSave: (TrainingProfile) -> Unit,
-): String {
-    val age = ageText.trim().toIntOrNull()
-    if (age == null || age < 10 || age > 100) {
-        return "Bitte ein Alter zwischen 10 und 100 Jahren angeben."
-    }
-    val weight = parseProfileNumber(weightText)
-    if (weight == null || weight < 30 || weight > 250) {
-        return "Bitte ein Gewicht zwischen 30 und 250 kg angeben."
-    }
-    val setupMass = parseProfileNumber(setupMassText)
-    if (setupMass != null && (setupMass < 0 || setupMass > 60)) {
-        return "Das Gewicht von Rad und Gepäck sollte unter 60 kg liegen."
-    }
-    val weeklyHours = parseProfileNumber(weeklyHoursText)
-    if (weeklyHours != null && (weeklyHours <= 0 || weeklyHours > 40)) {
-        return "Bitte eine Wochenzeit zwischen 1 und 40 Stunden angeben."
-    }
-    // Dieselben Grenzen wie im Rechenkern (`minEftpW`/`maxEftpW`): Ein Wert
-    // ausserhalb wuerde dort ohnehin geklemmt — dann sagen wir es lieber hier.
-    val ftp = parseProfileNumber(ftpText)
-    if (ftp != null && (ftp < minEftpW || ftp > maxEftpW)) {
-        return "Bitte eine FTP zwischen ${formatProfileNumber(minEftpW)} und " +
-            "${formatProfileNumber(maxEftpW)} Watt angeben."
-    }
-
-    onSave(
-        TrainingProfile(
-            ageYears = age,
-            sex = sex,
-            weightKg = weight,
-            setupMassKg = setupMass ?: defaultSetupMassKg,
-            hrMaxOverride = parseProfileNumber(hrMaxText),
-            lthrOverride = parseProfileNumber(lthrText),
-            restingHrOverride = parseProfileNumber(restingHrText),
-            cda = current.cda,
-            crr = current.crr,
-            driveEfficiency = current.driveEfficiency,
-            eftpOverrideW = ftp,
-            weeklyHours = weeklyHours,
-        ),
-    )
-    return "Profil gespeichert."
 }

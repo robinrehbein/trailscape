@@ -10,16 +10,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,13 +23,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
@@ -94,16 +85,14 @@ private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
  *  * **Problem melden** — der einzige Meldeweg dieser App (siehe
  *    `feedback/ProblemReportDialog.kt`). Es gibt keine Telemetrie, die von
  *    selbst berichtet; ohne diesen Knopf erfaehrt niemand von einem Fehler.
- *  * **Open-Source-Lizenzen** — aufklappbare, handgepflegte Liste aus
- *    `OpenSourceNotices.kt` samt Daten-Attributionen (OSM, Kachelserver,
- *    Routing, Ortssuche). Kein Lizenz-Plugin, Begruendung dort.
+ *  * **Open-Source-Lizenzen** — eigener Abschnitt darunter
+ *    ([OpenSourceLicensesContent]).
  *
  * Braucht das [AppViewModel] fuer die `debugLines` des letzten Health-Syncs —
  * den optionalen Anhang im Problem-Bericht.
  *
- * Der Inhalt der Zeile „Über" in der Gruppe „App" des Mehr-Tabs (siehe
- * `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel und
- * Aufklapp-Rahmen.
+ * Der erste Abschnitt der Seite „Über Trailscape" der Einstellungen (siehe
+ * `MoreScreen.kt`).
  */
 @Composable
 fun AboutCardContent(appViewModel: AppViewModel) {
@@ -120,13 +109,11 @@ fun AboutCardContent(appViewModel: AppViewModel) {
     }
 
     var showProblemDialog by remember { mutableStateOf(false) }
-    var licensesExpanded by remember { mutableStateOf(false) }
     var updateStatus by remember { mutableStateOf<String?>(null) }
 
     Text(
-        text = "Trailscape ist kostenlos und local-first: deine Touren bleiben auf " +
-            "deinem Gerät, ein Sync-Server ist optional. Kartendaten © " +
-            "OpenStreetMap-Mitwirkende, Routing über BRouter.",
+        text = "Kostenlos und local-first: Deine Touren bleiben auf deinem Gerät. " +
+            "Kartendaten © OpenStreetMap-Mitwirkende, Routing über BRouter.",
         style = MaterialTheme.typography.bodyMedium,
     )
     Spacer(modifier = Modifier.height(12.dp))
@@ -194,47 +181,6 @@ fun AboutCardContent(appViewModel: AppViewModel) {
 
     AutoUpdateCheckRow()
 
-    HorizontalDivider(
-        modifier = Modifier.padding(vertical = 4.dp),
-        color = MaterialTheme.colorScheme.outlineVariant,
-    )
-
-    TextButton(
-        onClick = { licensesExpanded = !licensesExpanded },
-        contentPadding = PaddingValues(0.dp),
-    ) {
-        Text(if (licensesExpanded) "Open-Source-Lizenzen ausblenden" else "Open-Source-Lizenzen")
-    }
-
-    AnimatedVisibility(
-            visible = licensesExpanded,
-            // Ohne Spec greift der Compose-Vorgabewert — eine Kurve, die im
-            // Code nicht steht und sich mit dem naechsten BOM-Update lautlos
-            // aendern kann. Der Leitfaden verlangt eine Dauer zwischen 100
-            // und 500 ms auf der One-UI-Kurve.
-            enter = expandVertically(OneUiMotion.standard()) + fadeIn(OneUiMotion.standard()),
-            exit = shrinkVertically(OneUiMotion.standard()) + fadeOut(OneUiMotion.standard()),
-        ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            NoticeGroup(title = "Verwendete Bibliotheken", notices = libraryNotices)
-            Spacer(modifier = Modifier.height(12.dp))
-            NoticeGroup(title = "Daten und Dienste", notices = dataNotices)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Trailscape selbst steht unter der GNU General Public License, " +
-                    "Version 3 oder später. Du darfst die App benutzen, weitergeben und " +
-                    "verändern — abgeleitete Versionen müssen ihrerseits quelloffen " +
-                    "unter der GPL stehen.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(
-                onClick = { uriHandler.openUri(LICENSE_URL) },
-                contentPadding = PaddingValues(0.dp),
-            ) { Text("Lizenztext lesen") }
-        }
-    }
-
     if (showProblemDialog) {
         ProblemReportDialog(
             healthDiagnostics = syncReport?.debugLines.orEmpty(),
@@ -244,54 +190,71 @@ fun AboutCardContent(appViewModel: AppViewModel) {
 }
 
 /**
- * Zeile mit Schalter fuer den stillen Update-Check beim App-Start (siehe
- * Karten-KDoc oben). Aufbau wie `ReminderSwitchRow` in `ReminderCard.kt`:
- * Die ganze Zeile schaltet (`toggleable` mit [Role.Switch]), der Schalter
- * selbst meldet nicht (`onCheckedChange = null`), sonst kaeme das Ereignis
- * doppelt.
+ * Schalter fuer den stillen Update-Check beim App-Start (siehe Karten-KDoc
+ * oben) — die gemeinsame [SettingsSwitchRow].
  *
  * Der Zustand lebt direkt im [de.trailscape.app.update.UpdateChecker]
  * (SharedPreferences); das `remember` haelt nur die Anzeige synchron. Lesen
  * und Schreiben eines einzelnen Preference-Werts ist auf dem Main-Thread in
  * Ordnung (`apply()` schreibt asynchron) — dieselbe Abwaegung wie bei den
- * uebrigen Einstellungs-Schaltern im Mehr-Tab.
+ * uebrigen Schaltern der Einstellungen.
  */
 @Composable
 private fun AutoUpdateCheckRow() {
-    val haptics = LocalHapticFeedback.current
     var enabled by remember { mutableStateOf(AppServices.updateChecker.isAutoCheckEnabled()) }
+    SettingsSwitchRow(
+        title = "Täglich still nach Updates suchen",
+        subtitle = "Fragt höchstens einmal am Tag bei github.com nach — GitHub sieht dabei " +
+            "deine IP-Adresse.",
+        checked = enabled,
+        onCheckedChange = {
+            AppServices.updateChecker.setAutoCheckEnabled(it)
+            enabled = it
+        },
+    )
+}
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = enabled,
-                role = Role.Switch,
-                onValueChange = {
-                    haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
-                    AppServices.updateChecker.setAutoCheckEnabled(it)
-                    enabled = it
-                },
-            )
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+/**
+ * Open-Source-Lizenzen — der zweite Abschnitt der Seite „Über Trailscape":
+ * handgepflegte Liste aus `OpenSourceNotices.kt` samt Daten-Attributionen
+ * (OSM, Kachelserver, Routing, Ortssuche), kein Lizenz-Plugin (Begruendung
+ * dort). Die Liste ist lang und selten gesucht, deshalb klappt sie erst auf
+ * Wunsch auf — innerhalb der Seite, keine weitere Ebene.
+ */
+@Composable
+fun OpenSourceLicensesContent() {
+    val uriHandler = LocalUriHandler.current
+    var expanded by remember { mutableStateOf(false) }
+
+    SettingsHint("Trailscape ist freie Software unter der GNU GPL v3 oder später.")
+    TextButton(
+        onClick = { uriHandler.openUri(LICENSE_URL) },
+        contentPadding = PaddingValues(0.dp),
+    ) { Text("Lizenztext lesen") }
+    TextButton(
+        onClick = { expanded = !expanded },
+        contentPadding = PaddingValues(0.dp),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Täglich still nach Updates suchen",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Text(
-                text = "Fragt beim App-Start höchstens einmal am Tag die Release-Liste auf " +
-                    "github.com ab — GitHub sieht dabei deine IP-Adresse. Ausgeschaltet " +
-                    "bleibt die Prüfung über „Nach Updates suchen“ jederzeit von Hand " +
-                    "möglich.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text(if (expanded) "Bibliotheken und Datenquellen ausblenden" else "Bibliotheken und Datenquellen")
+    }
+
+    AnimatedVisibility(
+        visible = expanded,
+        // Der Leitfaden verlangt eine Dauer zwischen 100 und 500 ms auf der
+        // One-UI-Kurve — ohne Spec griffe der Compose-Vorgabewert.
+        enter = expandVertically(OneUiMotion.standard()) + fadeIn(OneUiMotion.standard()),
+        exit = shrinkVertically(OneUiMotion.standard()) + fadeOut(OneUiMotion.standard()),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            NoticeGroup(title = "Verwendete Bibliotheken", notices = libraryNotices)
+            Spacer(modifier = Modifier.height(12.dp))
+            NoticeGroup(title = "Daten und Dienste", notices = dataNotices)
+            Spacer(modifier = Modifier.height(12.dp))
+            SettingsHint(
+                "Du darfst die App benutzen, weitergeben und verändern — abgeleitete " +
+                    "Versionen müssen ihrerseits quelloffen unter der GPL stehen.",
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
-        Switch(checked = enabled, onCheckedChange = null)
     }
 }
 

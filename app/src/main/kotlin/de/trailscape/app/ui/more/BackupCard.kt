@@ -21,7 +21,7 @@ import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -41,7 +41,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
-import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.data.trailscapePrefs
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.DUPLICATE_RIDE_MESSAGE
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
 import de.trailscape.app.ui.importActivityFile
@@ -53,7 +54,10 @@ import de.trailscape.core.backupFileName
 import de.trailscape.core.importArchive
 import de.trailscape.core.parseBackupJson
 import de.trailscape.core.scanArchive
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -96,9 +100,14 @@ import kotlinx.coroutines.withContext
  * Save- noch ein Routen-Symbol enthielt). Seit `material-icons-extended`
  * eingebunden ist, stehen beide zur Verfuegung.
  *
- * Der Inhalt der Zeile „Daten & Backup" in der Gruppe „Profil & Daten" des
- * Mehr-Tabs (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow`
- * stellt Titel und Aufklapp-Rahmen.
+ * Der Inhalt der Seite „Import & Backup" der Einstellungen (siehe
+ * `MoreScreen.kt`).
+ *
+ * ## Letzte Sicherung
+ * Ein erfolgreicher Export merkt sich seinen Zeitpunkt ([lastBackupAt]); die
+ * Listenzeile zeigt daraus „Zuletzt: 12.9." oder — in der Warnfarbe — „Noch
+ * nie gesichert". Die App ist local-first: Ohne Sync-Server ist diese Datei
+ * die einzige Kopie der Touren ausserhalb des Telefons.
  */
 @Composable
 fun BackupCardContent(appViewModel: AppViewModel) {
@@ -123,6 +132,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             busy = true
             try {
                 writeBackupFile(context, uri, appViewModel)
+                setLastBackupAt(context, System.currentTimeMillis())
                 appViewModel.showMessage("Backup exportiert.")
             } catch (e: Exception) {
                 // Deutscher Satz zuerst, technische Ursache nur in Klammern —
@@ -271,29 +281,18 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         }
     }
 
-    Text(
-        text = "Sichere alle Touren und dein Trainingsprofil in einer Datei — zum " +
-            "Übertragen auf ein neues Gerät oder als Backup vor einer Neuinstallation. " +
-            "Einzelne GPX- oder FIT-Dateien (z. B. aus Komoot oder Strava) lassen sich " +
-            "ebenfalls importieren — oder gleich ein ganzer Strava-/Garmin-Export als " +
-            "ZIP-Archiv.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    SettingsHint(
+        "Sichere Touren und Profil in einer Datei — oder hole GPX, FIT und ganze " +
+            "Strava-/Garmin-Exporte (ZIP) herein.",
     )
     Spacer(modifier = Modifier.height(8.dp))
     // Ehrlicher Hinweis statt Modal-Dialog: Die Export-Datei ist bewusst
     // unverschluesseltes Klartext-JSON (lesbar, importierbar, zukunftssicher) —
     // aber genau deshalb muss hier stehen, was drinsteckt, BEVOR jemand sie
     // per Mail oder Cloud weiterreicht. Siehe PRIVACY.md, Abschnitt 7.
-    Text(
-        text = "Die exportierte Datei ist unverschlüsseltes Klartext-JSON und enthält " +
-            "deine vollständige Ortshistorie (jeden GPS-Punkt aller Touren, mit " +
-            "Zeitstempeln und ggf. Puls) sowie dein Trainingsprofil mit " +
-            "Gesundheitsdaten (Alter, Geschlecht, Gewicht, Ruhepuls, LTHR, FTP). " +
-            "Behandle sie entsprechend vertraulich, wenn du sie per Mail oder Cloud " +
-            "weitergibst.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    SettingsHint(
+        "Das Backup ist unverschlüsselt und enthält jeden GPS-Punkt und deine " +
+            "Gesundheitsdaten — gib es nur vertraulich weiter.",
     )
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -313,7 +312,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text("Backup exportieren")
         }
-        NeutralButton(
+        SettingsSecondaryButton(
             onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
             enabled = !busy,
         ) {
@@ -325,7 +324,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text("Backup importieren")
         }
-        NeutralButton(
+        SettingsSecondaryButton(
             onClick = { importActivityLauncher.launch(arrayOf("*/*")) },
             enabled = !busy,
         ) {
@@ -337,7 +336,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text("Tour importieren (GPX/FIT)")
         }
-        NeutralButton(
+        SettingsSecondaryButton(
             onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
             enabled = !busy && !archiveBusy,
         ) {
@@ -386,8 +385,9 @@ private fun tryScanArchiveTotal(context: Context, uri: Uri): Int? =
 /** Nicht schliessbarer Fortschritts-Dialog fuer den Archiv-Import — siehe Karten-KDoc. */
 @Composable
 private fun ArchiveImportProgressDialog(done: Int, total: Int?) {
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
         title = { Text("Archiv wird importiert …") },
         text = {
             Column {
@@ -415,7 +415,7 @@ private fun ArchiveImportProgressDialog(done: Int, total: Int?) {
 private fun ArchiveImportResultDialog(result: BulkImportResult, onDismiss: () -> Unit) {
     var showErrors by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    OneUiDialog(
         onDismissRequest = onDismiss,
         title = { Text("Archiv importiert") },
         text = {
@@ -494,4 +494,22 @@ private suspend fun writeBackupFile(
             appViewModel.writeBackup(writer)
         }
     } ?: throw IllegalStateException("Die Datei konnte nicht geschrieben werden.")
+}
+
+/** Schluessel des Zeitpunkts der letzten erfolgreichen Sicherung (Long, Epoch-ms). */
+private const val PREF_LAST_BACKUP_AT = "trailscape.backup.lastExportAtMs"
+
+/** Wann zuletzt erfolgreich ein Backup exportiert wurde, oder `null` = noch nie. */
+internal fun lastBackupAt(context: Context): LocalDateTime? {
+    val prefs = trailscapePrefs(context)
+    if (!prefs.contains(PREF_LAST_BACKUP_AT)) return null
+    return LocalDateTime.ofInstant(
+        Instant.ofEpochMilli(prefs.getLong(PREF_LAST_BACKUP_AT, 0L)),
+        ZoneId.systemDefault(),
+    )
+}
+
+/** Merkt sich den Zeitpunkt einer erfolgreichen Sicherung (siehe Karten-KDoc). */
+private fun setLastBackupAt(context: Context, epochMs: Long) {
+    trailscapePrefs(context).edit().putLong(PREF_LAST_BACKUP_AT, epochMs).apply()
 }

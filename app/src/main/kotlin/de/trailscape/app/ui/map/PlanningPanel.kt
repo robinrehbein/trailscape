@@ -22,7 +22,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Clear
@@ -235,6 +234,7 @@ internal fun PlanningSheet(
      */
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
 ) {
     val profileLabel = routeProfileLabels[profile] ?: "Route"
     val status = planningStatus(
@@ -249,6 +249,7 @@ internal fun PlanningSheet(
     )
 
     SwipeableSheet(
+        bottomInset = bottomInset,
         expanded = expanded,
         onExpandedChange = onExpandedChange,
         modifier = modifier,
@@ -295,19 +296,14 @@ internal fun PlanningSheet(
                 // unabhaengig vom Ziehen/Tippen des restlichen Blatts — zwei
                 // verschiedene Folgen, zwei getrennte Flaechen.
                 //
-                // Frueher stand hier ein X „Planung beenden". Es tut dasselbe
-                // wie heute, aber es log ueber die Struktur: Die Planung ist
-                // seit dem Umbau kein eigenes Blatt mehr, das man schliesst,
-                // sondern die oberste Stufe des einen Kartenblatts (siehe
-                // `MapMode.kt`, [MapSheetStage]) — und was von dort wegfuehrt,
-                // fuehrt eine Stufe zurueck auf die Aktionszeile. Genau so
-                // steht es auch im freigegebenen Entwurf
-                // (`docs/design/prototyp-eine-leiste.html`, „‹ Zurück zu den
-                // Kartenaktionen").
+                // ✕ wie an jedem Aufgaben-Blatt der Karte (Fuehrung
+                // „Klartext"). Der fruehere Zurueck-Pfeil hiess „Zurück zu
+                // den Kartenaktionen", beendete aber die Planung — das ✕ sagt,
+                // was passiert; die Rueckhol-Snackbar bleibt.
                 IconButton(onClick = onClose) {
                     Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Zurück zu den Kartenaktionen",
+                        Icons.Filled.Close,
+                        contentDescription = "Planung beenden",
                     )
                 }
             }
@@ -467,10 +463,10 @@ internal fun PlanningSheet(
                         onClick = onSave,
                         enabled = route != null,
                         modifier = Modifier.weight(1f),
-                    ) { Text("Als Tour speichern") }
+                    ) { Text("Route speichern") }
                     Spacer(Modifier.width(8.dp))
                     PrimaryButton(
-                        text = "Navigieren",
+                        text = "Losfahren",
                         onClick = onNavigate,
                         enabled = route != null && route.points.size >= 2,
                         modifier = Modifier.weight(1f),
@@ -527,7 +523,7 @@ private fun RouteShapeSegments(
             modifier = Modifier.weight(1f),
         )
         RouteShapeSegment(
-            text = "Rundweg",
+            text = "Zurück zum Start",
             selected = roundTrip,
             onSelect = { onRoundTripChange(true) },
             modifier = Modifier.weight(1f),
@@ -681,7 +677,7 @@ private fun AddWaypointRow(onClick: () -> Unit) {
         )
         Spacer(Modifier.width(12.dp))
         Text(
-            text = "Ort suchen oder Karte antippen",
+            text = "Ort suchen oder lange auf die Karte drücken",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

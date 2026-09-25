@@ -1,6 +1,7 @@
 package de.trailscape.app.wear
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.CapabilityInfo
@@ -62,25 +63,60 @@ object WearBridge {
         aktualisiereErreichbareKnoten(info)
     }
 
+    /** Ob der Capability-Listener erfolgreich angehaengt ist. */
+    @Volatile
+    private var attached = false
+
+    /** Zeitpunkt (elapsedRealtime) des letzten gescheiterten Versuchs. */
+    @Volatile
+    private var letzterFehlversuchMs: Long = 0
+
+    private val attachLock = Any()
+
+    /**
+     * Mindestabstand zwischen zwei Anlaufversuchen nach einem Fehlschlag.
+     * [sendZustand] ruft [attach] im 5-Sekunden-Takt; auf einem Geraet ohne
+     * Play Services soll nicht jeder Takt erneut eine Ausnahme erzeugen.
+     */
+    private const val WIEDERHOLUNG_NACH_MS = 60_000L
+
     /**
      * Registriert die Bruecke fuer den Prozess. Idempotent — ein zweiter
      * Aufruf (aus einer zweiten Einstiegsstelle, siehe Klassendoc) haengt
      * keinen zweiten Listener an.
+     *
+     * Als erledigt gilt der Aufruf erst, wenn der Listener wirklich haengt.
+     * Frueher wurde der Kontext schon **vor** dem Versuch gesetzt und diente
+     * zugleich als Guard — ein einziger Fehlschlag (Play Services gerade im
+     * Update) hat die Uhr-Kopplung damit bis zum Prozessende abgeschaltet.
+     * Jetzt wird nach einem Fehlschlag fruehestens nach
+     * [WIEDERHOLUNG_NACH_MS] erneut versucht.
      */
     fun attach(context: Context) {
-        if (appContext != null) return
+        if (attached) return
         val ctx = context.applicationContext
-        appContext = ctx
-        try {
-            val client = Wearable.getCapabilityClient(ctx)
-            client.addListener(capabilityListener, FAEHIGKEIT_UHR)
-            client.getCapability(FAEHIGKEIT_UHR, CapabilityClient.FILTER_REACHABLE)
-                .addOnSuccessListener { info -> aktualisiereErreichbareKnoten(info) }
-                .addOnFailureListener { e -> Log.d(TAG, "Erreichbarkeit der Uhr nicht ermittelbar: $e") }
-        } catch (e: Exception) {
-            // Kein Play-Services-Geraet (z. B. AOSP/F-Droid-Referenzgeraet ohne
-            // GMS) — die App bleibt ohne Uhr-Kopplung voll nutzbar.
-            Log.d(TAG, "Wear-Bruecke nicht verfuegbar: $e")
+        synchronized(attachLock) {
+            if (attached) return
+            appContext = ctx
+            val jetzt = SystemClock.elapsedRealtime()
+            if (letzterFehlversuchMs != 0L && jetzt - letzterFehlversuchMs < WIEDERHOLUNG_NACH_MS) {
+                return
+            }
+            try {
+                val client = Wearable.getCapabilityClient(ctx)
+                client.addListener(capabilityListener, FAEHIGKEIT_UHR)
+                // Ab hier haengt der Listener; ein zweiter addListener waere
+                // ein Duplikat, egal wie die Abfrage unten ausgeht.
+                attached = true
+                client.getCapability(FAEHIGKEIT_UHR, CapabilityClient.FILTER_REACHABLE)
+                    .addOnSuccessListener { info -> aktualisiereErreichbareKnoten(info) }
+                    .addOnFailureListener { e -> Log.d(TAG, "Erreichbarkeit der Uhr nicht ermittelbar: $e") }
+            } catch (e: Exception) {
+                // Kein Play-Services-Geraet (z. B. AOSP/F-Droid-Referenzgeraet ohne
+                // GMS) — die App bleibt ohne Uhr-Kopplung voll nutzbar.
+                letzterFehlversuchMs = jetzt
+                Log.d(TAG, "Wear-Bruecke nicht verfuegbar: $e")
+            }
         }
     }
 

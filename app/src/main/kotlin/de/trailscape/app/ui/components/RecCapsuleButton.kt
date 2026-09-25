@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,7 +41,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.theme.LocalNavigationBarColors
 import de.trailscape.core.formatDuration
 
 /**
@@ -48,29 +50,26 @@ import de.trailscape.core.formatDuration
  * Kapitel „Eine Leiste"; Prototyp `docs/design/prototyp-eine-leiste.html`)
  * loest ein Problem, das jede fruehere Fassung der Navigation hatte: Eine
  * Fahrt starten ist keine Navigation zwischen gleichrangigen Bereichen
- * (Heute, Karte, Touren, Training) — es ist die **eine** Handlung, wegen der
+ * (Heute, Karte, Verlauf, Training) — es ist die **eine** Handlung, wegen der
  * die App ueberhaupt existiert. Steckt der Aufzeichnen-Knopf als fuenftes
  * Ziel *in* der [OneUiNavigationBar], sieht er wie ein Reiter unter vieren
  * aus und verliert genau dieses Gewicht; Samsung Health loest dasselbe
  * Problem, indem die runde Aktion **neben** der Pille schwebt, sichtbar
- * abgesetzt, aber im selben Atemzug aus derselben Flaeche gebaut. Dieser
- * Knopf ist dieser Nachbar: dieselbe Flaechenfarbe wie die Kapsel im Ruhe-
- * zustand ([LocalNavigationBarColors]), dieselbe Randlicht-plus-Schatten-
- * Schichtung ([OneUiNavigationBar]) — beide wirken dadurch als **ein**
- * Ensemble, nicht als zwei zufaellig benachbarte Bauteile.
+ * abgesetzt. Dieser Knopf ist dieser Nachbar: gleich hoch wie die Kapsel und
+ * mit demselben Schatten, aber in der satten Akzentfarbe — er ist die eine
+ * Handlung, die Kapsel die vier Orte.
  *
- * ## Die drei Zustaende
- * [RecButtonState.Idle] — keine Route geladen, keine Aufzeichnung: neutrale
- * Kapselflaeche, mittig ein Punkt in der Akzentfarbe. [RecButtonState
- * .RouteReady] — der Karten-Tab hat eine Route vorbereitet: dieselbe Flaeche,
- * zusaetzlich ein duenner Akzent-Ring und darunter die Kilometerzahl, damit
- * die Bereitschaft schon aus der Ferne ablesbar ist, ohne den Knopf zu
- * beruehren. [RecButtonState.Recording] — die Aufzeichnung laeuft: Die
- * Flaeche kippt auf die Akzentfarbe (dieselbe Umkehrung, die eine gefuellte
- * Kachel im Fahrmodus zeigt), der Ring pulsiert weich, solange wirklich
- * aufgezeichnet wird, und wird bei einer Pause bewusst **starr** — ein
- * stehender statt eines laufenden Rings ist hier die Auskunft "angehalten",
- * nicht nur eine Nebenwirkung der Animation.
+ * ## Die drei Zustaende (Fuehrung „Klartext", `docs/design/prototyp-klartext.html`)
+ * Der Knopf ist **beschriftet**, bleibt dabei aber ein Kreis: Ein unbeschrifteter
+ * Punkt verriet nicht, dass er das Fahren startet.
+ *
+ * [RecButtonState.Idle] — grüne Akzentflaeche, ▶ und darunter klein „Fahren".
+ * [RecButtonState.RouteReady] — dieselbe Flaeche, statt „Fahren" die
+ * Kilometerzahl der vorbereiteten Route. [RecButtonState.Recording] — die
+ * Flaeche kippt auf Rot (Fehler-/Aufnahmefarbe), statt ▶ ein Punkt, darunter
+ * die Fahrzeit; der Ring pulsiert, solange wirklich aufgezeichnet wird, und
+ * steht bei einer Pause bewusst **still** — ein stehender Ring ist die
+ * Auskunft „angehalten".
  *
  * ## Warum das Label IM Kreis wohnt
  * Das Mini-Label (Kilometer bzw. Fahrzeit) stand zuerst unter dem Knopf —
@@ -96,17 +95,16 @@ fun RecCapsuleButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val navColors = LocalNavigationBarColors.current
     val haptics = LocalHapticFeedback.current
     val isRecording = state is RecButtonState.Recording
     val paused = (state as? RecButtonState.Recording)?.paused == true
 
-    val containerColor = if (isRecording) MaterialTheme.colorScheme.primary else navColors.container
-    val dotColor = if (isRecording) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
-    val ringColor = MaterialTheme.colorScheme.primary
+    val containerColor = if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val dotColor = if (isRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+    val ringColor = MaterialTheme.colorScheme.error
 
     val label = when (state) {
-        is RecButtonState.Idle -> null
+        is RecButtonState.Idle -> "Fahren"
         is RecButtonState.RouteReady -> recRouteLabel(state.distanceKm)
         is RecButtonState.Recording -> recElapsedLabel(state.elapsedMs)
     }
@@ -120,7 +118,7 @@ fun RecCapsuleButton(
         }
     }
 
-    val showStaticRing = state is RecButtonState.RouteReady || (isRecording && paused)
+    val showStaticRing = isRecording && paused
     val showPulseRing = isRecording && !paused
 
     // Die Transition laeuft immer mit — nur ihr Ergebnis wird bei Bedarf
@@ -191,10 +189,9 @@ fun RecCapsuleButton(
                     .semantics { contentDescription = contentDescriptionText },
                 shape = CircleShape,
                 color = containerColor,
-                // Das Randlicht der Kapsel bleibt der Ruheflaeche vorbehalten
-                // — auf der satten Akzentflaeche des Aufzeichnungszustands
-                // wuerde ein zusaetzlicher heller Saum nur unruhig wirken.
-                border = if (isRecording) null else BorderStroke(1.dp, navColors.rim),
+                // Satte Akzentflaeche in allen Zustaenden — ein heller Saum
+                // wie bei der Kapsel wuerde darauf nur unruhig wirken.
+                border = null,
                 shadowElevation = RecButtonElevation,
             ) {
                 Column(
@@ -202,37 +199,44 @@ fun RecCapsuleButton(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(if (label == null) RecDotSize else RecDotSmallSize)
-                            .clip(CircleShape)
-                            .background(dotColor),
-                    )
-                    if (label != null) {
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = RecLabelFontSize,
-                                lineHeight = RecLabelLineHeight,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = if (isRecording) {
-                                    FontFamily.Monospace
-                                } else {
-                                    FontFamily.Default
-                                },
-                            ),
-                            color = dotColor,
-                            maxLines = 1,
+                    if (isRecording) {
+                        Box(
                             modifier = Modifier
-                                .padding(top = 2.dp)
-                                // Die Auskunft steckt schon im
-                                // `contentDescription` des Knopfs; ein
-                                // tickendes Zweitlabel wuerde die
-                                // Bildschirmlesehilfe bei jeder Sekunde
-                                // erneut ansagen lassen.
-                                .clearAndSetSemantics {},
+                                .size(RecDotSmallSize)
+                                .clip(CircleShape)
+                                .background(dotColor),
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            tint = dotColor,
+                            modifier = Modifier.size(RecPlayIconSize),
                         )
                     }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = RecLabelFontSize,
+                            lineHeight = RecLabelLineHeight,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = if (isRecording) {
+                                FontFamily.Monospace
+                            } else {
+                                FontFamily.Default
+                            },
+                        ),
+                        color = dotColor,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .padding(top = 2.dp)
+                            // Die Auskunft steckt schon im
+                            // `contentDescription` des Knopfs; ein
+                            // tickendes Zweitlabel wuerde die
+                            // Bildschirmlesehilfe bei jeder Sekunde
+                            // erneut ansagen lassen.
+                            .clearAndSetSemantics {},
+                    )
                 }
             }
         }
@@ -254,8 +258,8 @@ private val RecButtonSlotSize = 64.dp
 /** Schatten der Kapselflaeche — dieselbe Zahl wie [OneUiNavigationBar]. */
 private val RecButtonElevation = 8.dp
 
-/** Durchmesser des Punkts in der Mitte des Knopfs. */
-private val RecDotSize = 14.dp
+/** Groesse des ▶ im Ruhe- und Bereit-Zustand. */
+private val RecPlayIconSize = 22.dp
 
 /** Grundgroesse des Rings — knapp groesser als der Knopf, wie ein Halo. */
 private val RecRingSize = 62.dp
@@ -276,12 +280,12 @@ private const val PulseMaxScale = 1.3f
 /** Deckkraft, mit der der Puls startet, bevor er auf 0 auslaeuft. */
 private const val PulseMaxAlpha = 0.85f
 
-/** Kleinerer Punkt, wenn darunter im Kreis noch das Mini-Label steht. */
+/** Punkt waehrend der Aufzeichnung, ueber der Fahrzeit. */
 private val RecDotSmallSize = 10.dp
 
 /** Schriftmasse des Mini-Labels im Kreis — klein, aber lesbar. */
-private val RecLabelFontSize = 9.sp
-private val RecLabelLineHeight = 10.sp
+private val RecLabelFontSize = 10.sp
+private val RecLabelLineHeight = 11.sp
 
 /**
  * Masse, die die Navigationshuelle fuer die Ausrichtung des Knopfs neben der
