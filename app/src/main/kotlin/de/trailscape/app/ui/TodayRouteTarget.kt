@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,6 +24,8 @@ import de.trailscape.core.restDayRideTarget
 import de.trailscape.core.sessionsForDay
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Alles, was „heute" ausmacht — einmal gerechnet fuer jede Stelle, die davon
@@ -30,8 +33,8 @@ import java.time.ZoneId
  * Losfahren-Dialog des Aufnahme-Knopfs.
  *
  * ## Warum ein gemeinsames Ergebnis
- * Bisher rechneten die Karte und der Dialog eine verkuerzte Kette
- * (`rememberTodayRoute`): angepasster Plan → heutige Einheit →
+ * Bisher rechneten die Karte und der Dialog eine verkuerzte Kette (die
+ * inzwischen entfernte Funktion `rememberTodayRoute`): angepasster Plan → heutige Einheit →
  * [decideTodayRoute]. Was fehlte, war der **Plan-Ruhetag** — den kannte nur
  * `today/TodayScreen.kt`. An einem planfreien Tag stand deshalb oben „Heute
  * ist Ruhetag" und auf der Karte die volle Tagesrunde. Jetzt gibt es genau
@@ -54,6 +57,12 @@ data class TodayDecision(
 ) {
     /** Einheiten der laufenden Planwoche (leer ohne Plan). */
     val weekSessions: List<TrainingSession> get() = currentWeek?.sessions.orEmpty()
+
+    /**
+     * Der Ruhetag-Grund, wie ihn die Schlagzeile in „Heute" nennt — fuer den
+     * Losfahren-Dialog, damit beide dasselbe sagen ([restHeadline]).
+     */
+    val restHeadline: String get() = de.trailscape.app.ui.today.restHeadline(route, planRestDay)
 }
 
 /**
@@ -103,23 +112,46 @@ fun decideToday(
 /**
  * „Jetzt", aber mit dem Kalendertag als Takt: beim Zurueckkehren in die App
  * ([LifecycleResumeEffect]) neu gelesen und nur dann uebernommen, wenn ein
- * neuer Tag begonnen hat.
+ * neuer Tag begonnen hat — und, solange die Stelle sichtbar ist, zusaetzlich
+ * puenktlich zum naechsten Tagesanfang.
  *
  * Vorher stand hier ein schlichtes `remember { LocalDateTime.now() }`. Wer die
  * App abends offen liess und morgens wieder hervorholte, sah den Vortag —
  * samt dessen Einheit und dessen Ruhetag. Nur beim Tageswechsel neu zu setzen
  * haelt die davon abhaengigen Rechnungen (Plan anpassen, Tagesentscheidung)
  * ruhig: ein gewoehnliches Zurueckkehren am selben Tag aendert nichts.
+ *
+ * Der Wecker zum Tagesanfang deckt den Fall ab, in dem kein Pause/Resume
+ * kommt: die Karte bleibt ueber Mitternacht offen (Navigation, Nachtfahrt).
+ * Er laeuft nur zwischen Resume und Pause, im Hintergrund wartet also nichts;
+ * nach dem Zurueckkehren uebernimmt das Resume.
  */
 @Composable
 fun rememberNow(): LocalDateTime {
     var now by remember { mutableStateOf(LocalDateTime.now()) }
-    LifecycleResumeEffect(Unit) {
+    val scope = rememberCoroutineScope()
+    LifecycleResumeEffect(now.toLocalDate()) {
         val fresh = LocalDateTime.now()
         if (fresh.toLocalDate() != now.toLocalDate()) now = fresh
-        onPauseOrDispose { }
+        val alarm = scope.launch {
+            // Eine Sekunde Luft, damit `now()` sicher schon im neuen Tag liegt.
+            delay(millisUntilNextDay(LocalDateTime.now()) + 1_000)
+            now = LocalDateTime.now()
+        }
+        onPauseOrDispose { alarm.cancel() }
     }
     return now
+}
+
+/**
+ * Millisekunden von [from] bis zum naechsten Tagesanfang in der
+ * Systemzeitzone — ueber [ZoneId] gerechnet, damit Sommer-/Winterzeit-Naechte
+ * (23 bzw. 25 h) stimmen.
+ */
+internal fun millisUntilNextDay(from: LocalDateTime, zone: ZoneId = ZoneId.systemDefault()): Long {
+    val start = from.atZone(zone)
+    val next = from.toLocalDate().plusDays(1).atStartOfDay(zone)
+    return (next.toInstant().toEpochMilli() - start.toInstant().toEpochMilli()).coerceAtLeast(0)
 }
 
 /**

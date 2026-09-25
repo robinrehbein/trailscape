@@ -478,25 +478,23 @@ const val restDayRideLabel: String = "Ruhetag – locker rollen"
  * keine neue Zahl, sondern dieselbe, die die App an einem sehr muede
  * gemessenen Tag ohnehin vorschlaegt. Das Wochenbudget deckelt sie wie jede
  * andere Tagesrunde.
+ *
+ * Bei 1 h und dem Locker-Tempo sind das je nach Historie etwa 15–18 km —
+ * bewusst kuerzer als eine „kurze" Trainingsrunde von 20–25 km: Am Ruhetag
+ * soll die Runde die Pause kaum stoeren, nicht eine zweite Einheit werden.
+ *
+ * Gerechnet wird durch [routeTargetForToday] selbst (mit einer
+ * RECOVERY-Empfehlung), nicht mit einer Kopie der Rechnung: Budget-Deckel,
+ * Mindestdauer und Tempo koennen so nicht auseinanderlaufen. Nur die
+ * Beschriftung wird ersetzt.
  */
 fun restDayRideTarget(profile: TrainingProfile, recentRides: List<RideInfo>): RouteTarget {
-    val kind = DailyRecommendationKind.RECOVERY
-    var hours = baseDurationForRecommendation(kind) ?: 1.0
-    val budget = profile.weeklyHours
-    if (budget != null && budget > 0) {
-        hours = kotlin.math.min(hours, budget * MAX_WEEK_HOURS_SHARE)
-    }
-    hours = max(hours, 0.25)
-
-    val intensity = intensityForRecommendation(kind)
-    val speed = planningSpeedKmh(intensity, profile, recentRides)
-    return RouteTarget(
-        distanceKm = hours * speed,
-        ascentPreference = ascentPreferenceForRecommendation(kind),
-        durationH = hours,
-        speedKmh = speed,
-        intensity = intensity,
-        label = restDayRideLabel,
-        source = RouteTargetSource.TAGESEMPFEHLUNG,
+    val recovery = DailyRecommendation(
+        kind = DailyRecommendationKind.RECOVERY,
+        title = restDayRideLabel,
+        detail = "",
+        reasons = emptyList(),
     )
+    // RECOVERY hat immer eine Richtdauer, `null` gibt es nur fuer RUHETAG.
+    return checkNotNull(routeTargetForToday(recovery, profile, recentRides))
 }

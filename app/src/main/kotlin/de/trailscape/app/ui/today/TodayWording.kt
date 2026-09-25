@@ -132,16 +132,28 @@ fun offeredTarget(route: TodayRoute, effort: TodayEffort, restDayRide: RouteTarg
 
 /**
  * Beschriftung des Knopfs auf der Karte: „Heute 45 km" bzw. am Ruhetag
- * „Ruhetag – locker rollen?". Die Frage ist Absicht — es ist ein Angebot,
- * keine Aufforderung.
+ * „Locker · 16 km".
+ *
+ * Der Knopf bekommt nur die halbe Blattbreite (auf 360-dp-Geraeten rund
+ * 110 dp fuer Text). Ein Satz wie „Ruhetag – locker rollen?" wurde dort hart
+ * abgeschnitten; den Ruhetag tragen schon Spa-Symbol und graue Flaeche, der
+ * ausfuehrliche Satz steht im Losfahren-Dialog. Die Kilometer bleiben, damit
+ * man vor dem Tippen weiss, wie lang die Runde wird.
+ *
+ * Gerundet wie in „Heute" und im Dialog: Die Tagesrunde ist Stunden × Tempo
+ * und hat fast immer Nachkommastellen — abgeschnitten stand hier „21 km",
+ * dort „22 km".
  */
-fun offerChipLabel(offer: TodayOffer): String = if (offer.restDay) {
-    "Ruhetag – locker rollen?"
-} else {
-    "Heute ${offer.target.distanceKm.toInt()} km"
+fun offerChipLabel(offer: TodayOffer): String {
+    val km = offer.target.distanceKm.roundToInt()
+    return if (offer.restDay) "Locker · $km km" else "Heute $km km"
 }
 
-/** Beschriftung des Knopfs in der Hero-Karte von „Heute". */
+/**
+ * Beschriftung des Knopfs in der Hero-Karte von „Heute". Am Ruhetag dasselbe
+ * „Locker rollen" wie im Losfahren-Dialog, hier mit Kilometern, weil der Knopf
+ * die volle Breite hat.
+ */
 fun offerButtonLabel(offer: TodayOffer): String = if (offer.restDay) {
     "Locker rollen · ${offer.target.distanceKm.roundToInt()} km"
 } else {
@@ -149,22 +161,25 @@ fun offerButtonLabel(offer: TodayOffer): String = if (offer.restDay) {
 }
 
 /**
- * Der dezente Satz im Losfahren-Dialog — am Ruhetag mit demselben Wort, das
- * auch „Heute" als Schlagzeile traegt. Ganze Kilometer wie in „Heute": Vorher
- * stand hier „45,0 km", oben „45 km" — dieselbe Zahl, zwei Schreibweisen.
+ * Der dezente Satz im Losfahren-Dialog — am Ruhetag mit derselben Schlagzeile,
+ * die auch „Heute" traegt ([restHeadline], ohne den Readiness-Vorsatz):
+ * „Heute ist Ruhetag." am Plan-Ruhetag, „Heute lieber Pause statt Training."
+ * an einem Tagesform-Ruhetag mit Planeinheit. Ganze Kilometer wie in „Heute":
+ * Vorher stand hier „45,0 km", oben „45 km" — dieselbe Zahl, zwei
+ * Schreibweisen.
  */
-fun offerHint(offer: TodayOffer): String {
+fun offerHint(offer: TodayOffer, restHeadline: String = "Heute ist Ruhetag."): String {
     val km = offer.target.distanceKm.roundToInt()
     return if (offer.restDay) {
-        "Heute ist Ruhetag. Wenn du trotzdem fahren magst: $km km locker rollen."
+        "$restHeadline Wenn du trotzdem fahren magst: $km km locker rollen."
     } else {
         "Heute stehen $km km an."
     }
 }
 
-/** Beschriftung des Bau-Knopfs im Losfahren-Dialog. */
+/** Beschriftung des Bau-Knopfs im Losfahren-Dialog — am Ruhetag wie in „Heute". */
 fun offerDialogAction(offer: TodayOffer): String =
-    if (offer.restDay) "Lockere Runde bauen" else "Passende Runde bauen"
+    if (offer.restDay) "Locker rollen" else "Passende Runde bauen"
 
 /** Die laengste Einheit einer Woche mit mindestens zwei Einheiten. */
 private fun isLongestOfWeek(session: TrainingSession, weekSessions: List<TrainingSession>): Boolean {
@@ -203,6 +218,17 @@ private fun effortPhrase(effort: TodayEffort): String = when (effort) {
 }
 
 /**
+ * Die Ruhetag-Schlagzeile ohne Readiness-Vorsatz — geteilt von [todayHeadline]
+ * und dem Losfahren-Dialog ([offerHint]), damit beide denselben Grund nennen:
+ * Plan-Ruhetag, Tagesform statt Planeinheit oder Tagesform ohne Plan.
+ */
+fun restHeadline(route: TodayRoute, planRestDay: Boolean): String = when {
+    route.session != null -> "Heute lieber Pause statt Training."
+    planRestDay -> "Heute ist Ruhetag."
+    else -> "Heute lieber ein Ruhetag."
+}
+
+/**
  * Die Schlagzeile der Hero-Karte: „Gut erholt. Heute eine lockere Runde."
  *
  * Ruhetag, Zieltag und Herunterstufung sagen das **ausdruecklich** — eine
@@ -220,11 +246,7 @@ fun todayHeadline(
 ): String {
     val body = when (effort) {
         TodayEffort.ZIELTAG -> "Heute ist dein großer Tag."
-        TodayEffort.RUHETAG -> when {
-            route.session != null -> "Heute lieber Pause statt Training."
-            planRestDay -> "Heute ist Ruhetag."
-            else -> "Heute lieber ein Ruhetag."
-        }
+        TodayEffort.RUHETAG -> restHeadline(route, planRestDay)
 
         TodayEffort.LANG -> "Heute steht die lange Fahrt an."
         TodayEffort.HART -> "Heute darf es hart werden."
@@ -259,9 +281,12 @@ fun todaySentence(effort: TodayEffort, route: TodayRoute): String {
         TodayEffort.MITTEL -> "$kmText in gleichmäßigem Tempo, ohne Sprints."
         TodayEffort.HART -> "$kmText mit ein paar kräftigen Abschnitten, dazwischen locker rollen."
         TodayEffort.LANG -> "$kmText in ruhigem Tempo. Iss und trink unterwegs genug."
+        // Unter dem Satz steht am Ruhetag der Knopf „Locker rollen" (siehe
+        // [offeredTarget]); der Satz sagt deshalb, wofuer er da ist, statt
+        // mit „Spaziergang" gegen ihn zu reden.
         TodayEffort.RUHETAG -> route.session?.let {
-            "Im Plan standen ${it.targetKm} km. Schieb die Fahrt lieber um einen Tag."
-        } ?: "Kein Training heute. Ein Spaziergang tut trotzdem gut."
+            "Im Plan standen ${it.targetKm} km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker."
+        } ?: "Kein Training heute. Wenn du trotzdem aufs Rad willst: kurz und locker."
 
         TodayEffort.ZIELTAG -> "${route.session?.targetKm ?: km ?: 0} km, die Strecke steht schon. Viel Erfolg!"
     }

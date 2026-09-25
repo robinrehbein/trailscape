@@ -103,7 +103,8 @@ fun ReadyToRideDialog(
 private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
     // Dieselbe Rechnung wie „Heute" und die Karte (siehe [decideToday]) —
     // am Ruhetag also auch hier das ruhigere Angebot statt der Tagesrunde.
-    val offer: TodayOffer? = rememberTodayDecision(appViewModel).offer
+    val decision = rememberTodayDecision(appViewModel)
+    val offer: TodayOffer? = decision.offer
 
     OneUiDialog(
         onDismissRequest = onDismiss,
@@ -116,7 +117,7 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
                     // Angebot, keine Aufforderung — wer den Knopf gedrueckt hat,
                     // will meistens einfach losfahren.
                     Text(
-                        text = offerHint(offer),
+                        text = offerHint(offer, decision.restHeadline),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

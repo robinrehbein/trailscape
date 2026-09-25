@@ -120,7 +120,15 @@ class TodayWordingTest {
         val effort = todayEffort(skipped, false, week)
         assertEquals(TodayEffort.RUHETAG, effort)
         assertEquals("Heute lieber Pause statt Training.", todayHeadline(effort, skipped, null, false))
-        assertEquals("Im Plan standen 45 km. Schieb die Fahrt lieber um einen Tag.", todaySentence(effort, skipped))
+        assertEquals(
+            "Im Plan standen 45 km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker.",
+            todaySentence(effort, skipped),
+        )
+        // Ohne Planeinheit: kein Widerspruch zum Knopf „Locker rollen" darunter.
+        assertEquals(
+            "Kein Training heute. Wenn du trotzdem aufs Rad willst: kurz und locker.",
+            todaySentence(TodayEffort.RUHETAG, route(null, null)),
+        )
 
         // Planfreier Tag mitten im Plan: kein Angebot, auch wenn die
         // Tagesempfehlung eines haette.
@@ -230,15 +238,26 @@ class TodayWordingTest {
         val free = route(target(21.0, SessionIntensity.GRUNDLAGE), null)
         val o = offer(free, planRestDay = true, weekSessions = week)
         assertEquals(TodayOffer(easy, restDay = true), o)
-        assertEquals("Ruhetag – locker rollen?", offerChipLabel(o!!))
+        // Kurz genug fuer den halbbreiten Knopf auf der Karte, mit Kilometern.
+        assertEquals("Locker · 16 km", offerChipLabel(o!!))
         assertEquals("Locker rollen · 16 km", offerButtonLabel(o))
-        assertEquals("Heute ist Ruhetag. Wenn du trotzdem fahren magst: 16 km locker rollen.", offerHint(o))
+        assertEquals("Locker rollen", offerDialogAction(o))
+        assertEquals(
+            "Heute ist Ruhetag. Wenn du trotzdem fahren magst: 16 km locker rollen.",
+            offerHint(o, restHeadline(free, planRestDay = true)),
+        )
     }
 
     @Test
     fun `Tagesform-Ruhetag bietet die lockere Runde, auch mit Planeinheit`() {
         val skipped = route(null, week[1], downgraded = true)
-        assertEquals(TodayOffer(easy, restDay = true), offer(skipped, false, week))
+        val o = offer(skipped, false, week)
+        assertEquals(TodayOffer(easy, restDay = true), o)
+        // Der Dialog nennt denselben Grund wie die Schlagzeile in „Heute".
+        assertEquals(
+            "Heute lieber Pause statt Training. Wenn du trotzdem fahren magst: 16 km locker rollen.",
+            offerHint(o!!, restHeadline(skipped, planRestDay = false)),
+        )
         // Ohne Plan genauso.
         assertEquals(TodayOffer(easy, restDay = true), offer(route(null, null), false, emptyList()))
     }
@@ -257,6 +276,18 @@ class TodayWordingTest {
         assertEquals("Heute 45 km", offerChipLabel(o!!))
         assertEquals("Runde für heute bauen", offerButtonLabel(o))
         assertEquals("Heute stehen 45 km an.", offerHint(o))
+    }
+
+    @Test
+    fun `Karte, Heute und Dialog runden dieselbe Zahl`() {
+        // Stunden × Tempo hat fast immer Nachkommastellen. Frueher schnitt die
+        // Karte ab („Heute 44 km"), waehrend „Heute" und der Dialog rundeten.
+        val o = TodayOffer(target(44.6, SessionIntensity.GRUNDLAGE), restDay = false)
+        assertEquals("Heute 45 km", offerChipLabel(o))
+        assertEquals("Heute stehen 45 km an.", offerHint(o))
+        val rest = TodayOffer(target(16.7, SessionIntensity.LOCKER), restDay = true)
+        assertEquals("Locker · 17 km", offerChipLabel(rest))
+        assertEquals("Locker rollen · 17 km", offerButtonLabel(rest))
     }
 
     @Test

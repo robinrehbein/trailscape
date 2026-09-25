@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -193,6 +194,9 @@ internal fun HeroCard(
                         .heightIn(min = 48.dp),
                     contentPadding = PaddingValues(horizontal = 20.dp),
                 ) {
+                    // Dasselbe Spa-Symbol wie der Ruhetag-Knopf auf der Karte.
+                    Icon(Icons.Rounded.Spa, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }

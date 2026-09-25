@@ -70,7 +70,7 @@ import kotlin.math.roundToInt
  *
  * @param todayOffer die heute angebotene Runde oder `null`, wenn es heute
  *   keine gibt (Zieltag). Am Ruhetag ist es die lockere Runde; der Knopf sagt
- *   das dann auch („Ruhetag – locker rollen?") und tritt grau statt farbig
+ *   das dann auch („Locker · 16 km", Spa-Symbol) und tritt grau statt farbig
  *   auf — ein Angebot, keine Aufforderung.
  * @param bottomInset Platz, den das Blatt unten frei haelt (Kapsel bzw.
  *   Gestenleiste) — die Flaeche selbst laeuft bis an den Rand.
