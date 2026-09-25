@@ -106,11 +106,22 @@ import kotlinx.coroutines.withTimeoutOrNull
  * Detailansicht; Umbenennen, Teilen, Loeschen und „Auf der Karte zeigen"
  * wohnen seit dem Klartext-Umbau nur noch dort hinter ⋮ — ein Ueberlaufmenue
  * je Zeile machte die Liste unruhig und bot dieselben vier Handgriffe zweimal
- * an. „geplante Route" und „aus Health Connect" stehen ebenfalls nur noch im
- * Detail: In der Zeile waren sie eine zweite Textzeile fuer eine Auskunft, die
- * man beim Ueberfliegen nicht braucht.
+ * an. „aus Health Connect" steht ebenfalls nur noch im Detail: In der Zeile
+ * war es eine zweite Textzeile fuer eine Auskunft, die man beim Ueberfliegen
+ * nicht braucht.
  *
- * @param query Suchtext; filtert nach Namen ([filterRidesByName]).
+ * ## Planungen oben, fuer sich
+ * Gespeicherte Planungen ([RideSummary.planned]) standen frueher ohne
+ * Kennzeichen zwischen den Fahrten, einsortiert nach ihrem Erstelldatum — in
+ * einer Liste, die „Was bin ich gefahren?" beantwortet, sah eine nie
+ * gefahrene Route aus wie eine Fahrt. Jetzt stehen sie in einem eigenen
+ * Abschnitt „Geplant" ganz oben ([splitHistory]), immer offen (Einklappen
+ * waere eine versteckte Funktion), jede Zeile mit der Pille „Geplant" und
+ * Laenge, Hoehenmetern und Erstelldatum statt Dauer ([PlannedRow]). Darunter
+ * die gefahrenen Touren wie gehabt nach Monaten; gibt es nur Planungen, sagt
+ * der gefahrene Teil ehrlich „Noch keine Fahrt".
+ *
+ * @param query Suchtext; filtert beide Abschnitte nach Namen ([filterRidesByName]).
  * @param onRecord / [onImportFile] / [onImportArchive] tragen den Leerzustand.
  * @param contentPadding wird an die `LazyColumn` durchgereicht und traegt die
  *   Bodenfreiheit der schwebenden Navigationskapsel.
@@ -134,8 +145,8 @@ fun TourListContent(
     // Das heutige Datum nur fuer die Jahresfrage der Monatsueberschrift —
     // einmal gemerkt genuegt, ein Jahreswechsel bei offener App ist egal.
     val today = remember { LocalDate.now() }
-    val groups = remember(rides, query, today) {
-        groupRidesByMonth(filterRidesByName(rides, query), today, ::localOfEpochMs)
+    val sections = remember(rides, query, today) {
+        splitHistory(rides, query, today, ::localOfEpochMs)
     }
 
     LazyColumn(
@@ -158,53 +169,94 @@ fun TourListContent(
 
             rides.isEmpty() -> item(key = "leer") {
                 RidesEmptyState(
+                    title = "Noch keine Touren",
                     onRecord = onRecord,
                     onImportFile = onImportFile,
                     onImportArchive = onImportArchive,
                 )
             }
 
-            groups.isEmpty() -> item(key = "keine-treffer") {
-                Text(
-                    text = "Keine Tour heißt „${query.trim()}“.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = CardPadding, vertical = CardGap),
-                )
+            sections.noMatch -> item(key = "keine-treffer") {
+                NoMatchText("Keine Tour heißt „${query.trim()}“.")
             }
 
-            else -> groups.forEach { group ->
-                item(key = "monat-${group.month}") {
-                    // Dieselbe Einrueckung wie der Text in der Karte darunter.
-                    Eyebrow(
-                        text = group.label,
-                        modifier = Modifier.padding(
-                            start = CardPadding,
-                            top = MonthEyebrowTop,
-                            bottom = 8.dp,
-                        ),
-                    )
+            else -> {
+                if (sections.planned.isNotEmpty()) {
+                    item(key = "sec-geplant") { SectionEyebrow("Geplant") }
+                    // Eigener Schluesselraum: Die IDs sind zwar eindeutig, aber
+                    // ein Praefix haelt die Zeilen beider Abschnitte auch dann
+                    // auseinander, wenn eine Planung einmal zur Fahrt wuerde.
+                    itemsIndexed(sections.planned, key = { _, ride -> "geplant-${ride.id}" }) { index, ride ->
+                        PlannedRow(
+                            ride = ride,
+                            loadRide = appViewModel::loadRide,
+                            first = index == 0,
+                            last = index == sections.planned.lastIndex,
+                            onClick = { onOpenDetail(ride.id) },
+                        )
+                    }
                 }
-                itemsIndexed(group.rides, key = { _, ride -> ride.id }) { index, ride ->
-                    RideRow(
-                        ride = ride,
-                        load = insights.rideLoads[ride.id],
-                        loadRide = appViewModel::loadRide,
-                        first = index == 0,
-                        last = index == group.rides.lastIndex,
-                        onClick = { onOpenDetail(ride.id) },
-                    )
+                when (sections.ridden) {
+                    RiddenPart.NOCH_KEINE_FAHRT -> item(key = "noch-keine-fahrt") {
+                        // Nur Planungen: Der gefahrene Teil sagt ehrlich, dass
+                        // es noch keine Fahrt gibt, statt leer zu bleiben.
+                        RidesEmptyState(
+                            title = "Noch keine Fahrt",
+                            onRecord = onRecord,
+                            onImportFile = onImportFile,
+                            onImportArchive = onImportArchive,
+                            modifier = Modifier.padding(top = SectionEyebrowTop),
+                        )
+                    }
+
+                    RiddenPart.KEIN_TREFFER -> item(key = "keine-fahrt-treffer") {
+                        NoMatchText("Keine gefahrene Tour heißt „${query.trim()}“.")
+                    }
+
+                    RiddenPart.LISTE -> sections.months.forEach { group ->
+                        item(key = "monat-${group.month}") { SectionEyebrow(group.label) }
+                        itemsIndexed(group.rides, key = { _, ride -> ride.id }) { index, ride ->
+                            RideRow(
+                                ride = ride,
+                                load = insights.rideLoads[ride.id],
+                                loadRide = appViewModel::loadRide,
+                                first = index == 0,
+                                last = index == group.rides.lastIndex,
+                                onClick = { onOpenDetail(ride.id) },
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+/** Abschnittsueberschrift („Geplant", „September") — dieselbe Einrueckung wie der Text in der Karte darunter. */
+@Composable
+private fun SectionEyebrow(text: String) {
+    Eyebrow(
+        text = text,
+        modifier = Modifier.padding(start = CardPadding, top = SectionEyebrowTop, bottom = 8.dp),
+    )
+}
+
+/** Gedaempfter Satz, wenn die Suche nichts trifft. */
+@Composable
+private fun NoMatchText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = CardPadding, vertical = CardGap),
+    )
+}
+
 /** Hoehe der Ladeanzeige, solange die Liste noch geladen wird. */
 private val LoadingRowHeight = 96.dp
 
-/** Luft ueber einer Monatsueberschrift — trennt zwei Monatskarten. */
-private val MonthEyebrowTop = 16.dp
+/** Luft ueber einer Abschnittsueberschrift — trennt zwei Gruppen-Karten. */
+private val SectionEyebrowTop = 16.dp
 
 /**
  * Die Form einer Zeile innerhalb ihrer Monatskarte: oben rund, wenn sie die
@@ -226,9 +278,7 @@ private fun groupShape(first: Boolean, last: Boolean): Shape {
 
 /**
  * Eine Zeile der Verlaufsliste (Zieldesign `.li`): Mini-Karte, Name in einer
- * Zeile, darunter [rideListMeta], rechts [EffortPill]. Der Name bleibt
- * einzeilig — nur so bleiben die Zeilen gleich hoch und die Liste
- * ueberfliegbar; der volle Name steht im Detail.
+ * Zeile, darunter [rideListMeta], rechts [EffortPill].
  */
 @Composable
 private fun RideRow(
@@ -239,8 +289,61 @@ private fun RideRow(
     last: Boolean,
     onClick: () -> Unit,
 ) {
-    val colors = MaterialTheme.colorScheme
     val effort = rideEffort(load, ride.stats)
+    HistoryRow(
+        ride = ride,
+        meta = rideListMeta(localOfEpochMs(ride.createdAt), ride.stats),
+        loadRide = loadRide,
+        first = first,
+        last = last,
+        onClick = onClick,
+        trailing = { effort?.let { EffortPill(it) } },
+    )
+}
+
+/**
+ * Eine Zeile im Abschnitt „Geplant": dieselbe Form wie [RideRow], aber mit
+ * [plannedRouteMeta] („58 km · 640 Hm · erstellt 24.09.") statt Dauer und
+ * Tempo, die es fuer eine nie gefahrene Route nicht gibt, und rechts der
+ * Pille „Geplant" statt eines Haerte-Worts. Die Pille wiederholt die
+ * Abschnittsueberschrift bewusst: Wer nach unten gescrollt hat und zurueck-
+ * kommt, sieht die Ueberschrift nicht mehr, die Pille aber in jeder Zeile.
+ */
+@Composable
+private fun PlannedRow(
+    ride: RideSummary,
+    loadRide: suspend (String) -> Ride?,
+    first: Boolean,
+    last: Boolean,
+    onClick: () -> Unit,
+) {
+    HistoryRow(
+        ride = ride,
+        meta = plannedRouteMeta(localOfEpochMs(ride.createdAt), ride.stats),
+        loadRide = loadRide,
+        first = first,
+        last = last,
+        onClick = onClick,
+        trailing = { TagPill(text = "Geplant") },
+    )
+}
+
+/**
+ * Die gemeinsame Form von [RideRow] und [PlannedRow]. Der Name bleibt
+ * einzeilig — nur so bleiben die Zeilen gleich hoch und die Liste
+ * ueberfliegbar; der volle Name steht im Detail.
+ */
+@Composable
+private fun HistoryRow(
+    ride: RideSummary,
+    meta: String,
+    loadRide: suspend (String) -> Ride?,
+    first: Boolean,
+    last: Boolean,
+    onClick: () -> Unit,
+    trailing: @Composable () -> Unit,
+) {
+    val colors = MaterialTheme.colorScheme
 
     Column(
         modifier = Modifier
@@ -271,7 +374,7 @@ private fun RideRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = rideListMeta(localOfEpochMs(ride.createdAt), ride.stats),
+                    text = meta,
                     // Tabellenziffern, damit Datum und km untereinander ruhig
                     // stehen (Repo-Muster, siehe `ui/map/RideCompactBar.kt`).
                     style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
@@ -280,12 +383,12 @@ private fun RideRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            effort?.let { EffortPill(it) }
+            trailing()
         }
     }
 }
 
-/** Senkrechter Innenabstand einer [RideRow] — kompakter als eine volle [CardPadding]. */
+/** Senkrechter Innenabstand einer [HistoryRow] — kompakter als eine volle [CardPadding]. */
 private val RideRowVerticalPadding = 12.dp
 
 /**
@@ -351,14 +454,17 @@ internal fun ImportMenu(
  */
 @Composable
 private fun RidesEmptyState(
+    title: String,
     onRecord: () -> Unit,
     onImportFile: () -> Unit,
     onImportArchive: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var importMenuOpen by remember { mutableStateOf(false) }
     EmptyState(
-        title = "Noch keine Touren",
+        title = title,
         body = "Jede aufgezeichnete oder importierte Tour landet hier, nach Monaten sortiert.",
+        modifier = modifier,
         actions = {
             Button(onClick = onRecord) { Text("Tour aufzeichnen") }
             Box {

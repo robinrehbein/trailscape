@@ -157,6 +157,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val monday = today.with(DayOfWeek.MONDAY)
     val riddenByDate = remember(rides, monday) { riddenKmByDate(rides, monday, monday.plusDays(6)) }
     val strip = weekStrip(today, weekSessions, riddenByDate, todayKm)
+    val hasRiddenRide = remember(rides) { riddenRides(rides).isNotEmpty() }
     val rideCount = remember(rides, monday) {
         riddenRides(rides).count {
             val date = localOfEpochMs(it.createdAt).toLocalDate()
@@ -226,9 +227,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     )
                 }
 
-                if (rides.isEmpty()) {
+                if (!hasRiddenRide) {
                     // Erststart: Ein Streifen aus lauter „–" sagte nichts —
-                    // hier steht stattdessen der Weg zur ersten Tour.
+                    // hier steht stattdessen der Weg zur ersten Tour. Nur
+                    // gespeicherte Planungen zaehlen dabei nicht als Tour: Der
+                    // Streifen waere sonst genauso leer.
                     item(key = "erste-tour") {
                         FirstRideState(
                             onRecord = appViewModel::requestRecording,

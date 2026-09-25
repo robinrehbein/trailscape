@@ -36,13 +36,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.theme.CardPadding
-import de.trailscape.app.ui.formatDateShort
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.rides.plannedRouteMeta
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offerChipLabel
 import de.trailscape.core.GeoResult
 import de.trailscape.core.RideSummary
-import kotlin.math.roundToInt
 
 /**
  * Das „Wohin?"-Blatt der Karte (Fuehrung „Klartext",
@@ -215,8 +214,9 @@ private fun ExploreSheetBody(
             savedRoutes.take(MAX_ROWS).forEach { ride ->
                 SheetRow(
                     title = ride.name,
-                    subtitle = "${formatKmDe(ride.stats.distanceKm)} km · " +
-                        "${ride.stats.ascentM.roundToInt()} Hm · ${formatDateShort(ride.createdAt)}",
+                    // Dieselbe Zeile wie im Abschnitt „Geplant" des Verlaufs —
+                    // mit „erstellt", damit das Datum nicht als Fahrtag gilt.
+                    subtitle = plannedRouteMeta(localOfEpochMs(ride.createdAt), ride.stats),
                     icon = Icons.Rounded.Route,
                     onClick = { onSelectRoute(ride) },
                 )
