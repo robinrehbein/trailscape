@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -545,6 +546,10 @@ fun MapScreen(appViewModel: AppViewModel) {
     var searchResults by remember { mutableStateOf<List<GeoResult>>(emptyList()) }
     var searchBusy by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
+    // Die zuletzt **abgesendete** Suche — nur sie loest eine Anfrage aus, nie
+    // das Tippen selbst (Nominatim-Richtlinie, siehe `SearchSheet.kt`).
+    var searchSubmission by remember { mutableStateOf<PlaceSearchSubmission?>(null) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     /**
      * Ob das Suchfeld der eingeklappten Blatt-Stufe gerade den Fokus hat — und
@@ -1062,16 +1067,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // --------------------------------------------------------------- Ortssuche
-    LaunchedEffect(searchQuery) {
-        val query = searchQuery.trim()
-        if (query.length < MIN_SEARCH_LENGTH) {
-            searchResults = emptyList()
-            searchError = null
-            searchBusy = false
-            return@LaunchedEffect
-        }
-        // Entprellen: erst tippen lassen, dann fragen (Nominatim-Richtlinien).
-        delay(SEARCH_DEBOUNCE_MS)
+    // Laeuft nur beim Absenden ([submitSearch]). Frueher hing dieser Effekt
+    // am Suchtext und fragte nach einer Tipp-Pause von selbst — das ist die
+    // Autovervollstaendigung, die Nominatim ausdruecklich verbietet. Wird
+    // weitergetippt, setzt [changeSearchQuery] die Abgabe zurueck; der
+    // Schluesselwechsel bricht eine noch laufende Anfrage dann ab.
+    LaunchedEffect(searchSubmission) {
+        val query = searchSubmission?.query ?: return@LaunchedEffect
         searchBusy = true
         searchError = null
         val result = withContext(Dispatchers.IO) {
@@ -1678,6 +1680,34 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     /**
+     * Neuer Text im Suchfeld — ohne jede Anfrage. Alte Treffer und Meldungen
+     * verschwinden, weil sie zu einem anderen Text gehoeren; eine noch
+     * laufende Suche wird abgebrochen (siehe den Effekt „Ortssuche" oben).
+     */
+    fun changeSearchQuery(text: String) {
+        searchQuery = text
+        searchSubmission = null
+        searchResults = emptyList()
+        searchError = null
+        searchBusy = false
+    }
+
+    /**
+     * Schickt den Feldinhalt an die Ortssuche — ausgeloest von der
+     * Suchtaste der Tastatur oder der Zeile „„…" suchen" unter dem Feld.
+     * Die Tastatur geht dabei zu, damit die Treffer Platz haben.
+     */
+    fun submitSearch() {
+        val query = placeSearchQueryOrNull(searchQuery)
+        if (query == null) {
+            searchError = "Bitte mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben."
+            return
+        }
+        keyboardController?.hide()
+        searchSubmission = PlaceSearchSubmission(query, (searchSubmission?.seq ?: 0) + 1)
+    }
+
+    /**
      * Oeffnet das **modale** Suchblatt als reinen Ortswaehler.
      *
      * Die Auswahl geht ausschliesslich an [onPicked]; [selectedPlace] bleibt
@@ -1694,9 +1724,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun openPlaceSearch(onPicked: (Place) -> Unit) {
         searchPickerCallback = onPicked
-        searchQuery = ""
-        searchResults = emptyList()
-        searchError = null
+        changeSearchQuery("")
         searchOpen = true
     }
 
@@ -1717,9 +1745,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun endExploreSearch() {
         exploreSearching = false
-        searchQuery = ""
-        searchResults = emptyList()
-        searchError = null
+        changeSearchQuery("")
         focusManager.clearFocus()
     }
 
@@ -3191,7 +3217,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                         ExploreSheet(
                             searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
                             searchQuery = searchQuery,
-                            onSearchQueryChange = { searchQuery = it },
+                            onSearchQueryChange = ::changeSearchQuery,
+                            onSubmitSearch = ::submitSearch,
                             searching = exploreSearching,
                             onSearchingChange = { focused ->
                                 if (focused) exploreSearching = true
@@ -3236,7 +3263,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     if (searchOpen) {
         SearchSheet(
             query = searchQuery,
-            onQueryChange = { searchQuery = it },
+            onQueryChange = ::changeSearchQuery,
+            onSearch = ::submitSearch,
             busy = searchBusy,
             error = searchError,
             results = searchResults,
@@ -3262,6 +3290,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                 showStyleSheet = false
                 startDownload()
             },
+            // Ohne Schliessen: Das Blatt zeigt danach sofort den jetzt
+            // freigegebenen Speichern-Knopf, die Karte dahinter den neuen Stil.
+            onChooseOfflineStyle = { appViewModel.setMapStyle(offlineStyle()) },
             downloadEnabled = !downloadState.running,
             onDismiss = { showStyleSheet = false },
         )
@@ -3529,6 +3560,13 @@ private fun rideFromPlannedRoute(name: String, route: PlannedRoute): Ride {
  * eine Einstellung ohne sichtbares Ergebnis, drei Bildschirme von ihrer
  * Wirkung entfernt. Die Trennlinie markiert dabei den Wechsel von „welche
  * Kacheln" zu „was liegt darueber": ein Schalter, keine weitere Stil-Option.
+ *
+ * ## Offline speichern nur mit erlaubtem Stil
+ * Der Speichern-Knopf erscheint nur, wenn der gewaehlte Stil es erlaubt
+ * ([MapStyle.offlineAllowed]). Sonst steht an seiner Stelle ein Satz, warum
+ * nicht, und ein Knopf, der auf den erlaubten Stil wechselt — ein
+ * ausgegrauter Knopf ohne Begruendung waere genau die Art versteckter Regel,
+ * die diese App vermeiden will.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -3538,6 +3576,7 @@ private fun MapStyleSheet(
     explorerTilesEnabled: Boolean,
     onExplorerTilesEnabledChange: (Boolean) -> Unit,
     onDownload: () -> Unit,
+    onChooseOfflineStyle: () -> Unit,
     downloadEnabled: Boolean,
     onDismiss: () -> Unit,
 ) {
@@ -3620,17 +3659,39 @@ private fun MapStyleSheet(
 
             // Offline gehoert zur Karte selbst und wohnt deshalb hier, hinter
             // dem Ebenen-Knopf — nicht mehr als dritter Knopf im Suchblatt.
-            FilledTonalButton(
-                onClick = onDownload,
-                enabled = downloadEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = CardPadding)
-                    .heightIn(min = 48.dp),
-            ) {
-                Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Diesen Ausschnitt offline speichern")
+            if (current.offlineAllowed) {
+                FilledTonalButton(
+                    onClick = onDownload,
+                    enabled = downloadEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CardPadding)
+                        .heightIn(min = 48.dp),
+                ) {
+                    Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Diesen Ausschnitt offline speichern")
+                }
+            } else {
+                Text(
+                    text = "Offline speichern geht nur mit der Offline-Karte. Die anderen " +
+                        "Kartenserver sind nur zum Anzeigen da und erlauben keine Downloads.",
+                    modifier = Modifier.padding(horizontal = CardPadding, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                FilledTonalButton(
+                    onClick = onChooseOfflineStyle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CardPadding)
+                        .heightIn(min = 48.dp),
+                ) {
+                    Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Zur Offline-Karte wechseln")
+                }
             }
         }
     }
@@ -3947,8 +4008,6 @@ private fun planningInputsKey(
         String.format(Locale.ROOT, "%.5f,%.5f", waypoint.lat, waypoint.lon)
     }
 
-private const val MIN_SEARCH_LENGTH = 3
-private const val SEARCH_DEBOUNCE_MS = 450L
 
 /** Zoomstufe des einmaligen automatischen Erst-Zooms auf die Position. */
 private const val AUTO_LOCATION_ZOOM = 13.0

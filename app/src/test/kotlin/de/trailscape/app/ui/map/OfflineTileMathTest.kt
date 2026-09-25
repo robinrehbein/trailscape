@@ -26,6 +26,12 @@ class OfflineTileMathTest {
      * Zoom-Bereiche unten sind gegen diese Obergrenze gerechnet und sollen
      * nicht mitwandern, wenn der Katalog seinen Standardstil wechselt (wie
      * beim Abschied von CARTO, siehe `MapStyles.kt`).
+     *
+     * Ein 256er-**Raster** mit `offlineAllowed = true` — das gibt es im
+     * Katalog seit der Kartenquellen-Pruefung nicht mehr (kein Rasteranbieter
+     * erlaubt Vorab-Downloads). Die Fixture haelt die Raster-Rechnung (Versatz
+     * +1) trotzdem unter Test, denn [offlineZoomRange] und
+     * [offlineTileZoomRange] muessen fuer beide Bauarten stimmen.
      */
     private val voyager = MapStyle(
         id = "test-strasse",
@@ -33,7 +39,9 @@ class OfflineTileMathTest {
         urlTemplate = "https://tiles.example/{z}/{x}/{y}.png",
         maxZoom = 20,
         attribution = "Test",
+        offlineAllowed = true,
     )
+    private val openFreeMap = mapStyleById("openfreemap")
     private val opentopo = mapStyleById("opentopo")
 
     /** Sichtbarer Ausschnitt eines 360 × 800 dp grossen Telefons um [lat]/[lon]. */
@@ -105,6 +113,55 @@ class OfflineTileMathTest {
                 assertTrue(tiles.last <= style.maxZoom, "${style.id}@$zoom laedt ueber maxZoom: $tiles")
             }
         }
+    }
+
+    @Test
+    fun `beim Vektor-Stil ist die Kachelstufe gleich der Kamerazoomstufe`() {
+        // Vektorkacheln sind 512 Punkt gross — kein Versatz. Die Quelle endet
+        // bei 14; darueber vergroessert MapLibre, geladen wird nichts mehr.
+        assertEquals(0, openFreeMap.tileZoomOffset)
+        val definition = offlineZoomRange(13.0, openFreeMap)
+        assertEquals(13..14, definition)
+        assertEquals(13..14, offlineTileZoomRange(definition, openFreeMap))
+        assertEquals(14..14, offlineZoomRange(16.0, openFreeMap))
+    }
+
+    // ------------------------------------------------------ Erlaubnis je Stil
+
+    @Test
+    fun `nur OpenFreeMap ist offline speicherbar, alle Rasterstile sind gesperrt`() {
+        assertEquals(listOf("openfreemap"), mapStyles.filter { it.offlineAllowed }.map { it.id })
+        assertTrue(mapStyles.filter { !it.isVector }.none { it.offlineAllowed })
+        assertEquals(openFreeMap, offlineStyle())
+        assertTrue(openFreeMap.isVector)
+    }
+
+    @Test
+    fun `ein gesperrter Stil wird abgelehnt, egal wie klein der Ausschnitt ist`() {
+        val munich = phoneView(lat = 48.14, lon = 11.58, zoom = 13.0)
+        for (style in mapStyles.filter { !it.offlineAllowed }) {
+            val rejected = assertIs<OfflineDownloadPlan.Rejected>(plan(munich, 13.0, style), style.id)
+            // Ehrlich und mit Ausweg: warum nicht, und womit es geht.
+            assertContains(rejected.message, style.label)
+            assertContains(rejected.message, "erlaubt keine Vorab-Downloads")
+            assertContains(rejected.message, openFreeMap.label)
+        }
+    }
+
+    @Test
+    fun `mit OpenFreeMap wird ein Stadtausschnitt angenommen`() {
+        val munich = phoneView(lat = 48.14, lon = 11.58, zoom = 13.0)
+        val ready = assertIs<OfflineDownloadPlan.Ready>(plan(munich, 13.0, openFreeMap))
+        assertEquals(13..14, ready.tileZooms)
+        assertTrue(ready.tileCount in 1..MAX_TILES_PER_DOWNLOAD, "Kachelzahl: ${ready.tileCount}")
+    }
+
+    @Test
+    fun `der Vektor-Stil fuehrt seine echte Style-URL als Offline-Adresse`() {
+        // Keine erfundene `.invalid`-Adresse: MapLibre muss Style, Sprites und
+        // Schriften beim Download selbst holen koennen.
+        assertEquals("https://tiles.openfreemap.org/styles/liberty", offlineStyleUrl(openFreeMap))
+        assertContains(offlineStyleUrl(mapStyleById("osmde")), ".invalid/")
     }
 
     // ------------------------------------------------------------ Kantenlaenge

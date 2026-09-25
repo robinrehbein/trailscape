@@ -195,7 +195,7 @@ internal fun MapViewHost(
         factory = {
             mapView.getMapAsync { map ->
                 map.uiSettings.apply {
-                    // Attribution ist Pflicht (OSM/CARTO/Esri) — sie bleibt an.
+                    // Attribution ist Pflicht (OSM/OpenFreeMap/Esri …) — sie bleibt an.
                     // Das MapLibre-Logo daneben ist rechtlich nicht noetig und
                     // wuerde die Ecke unnoetig fuellen.
                     isLogoEnabled = false
@@ -419,23 +419,35 @@ internal class MapController {
         isReady = false
     }
 
-    /** Setzt den Rasterstil und baut danach Quellen, Ebenen und Standort neu auf. */
+    /**
+     * Setzt den Kartenstil und baut danach Quellen, Ebenen und Standort neu auf.
+     *
+     * Rasterstile kommen als zur Laufzeit gebaute JSON, der Vektor-Stil als
+     * URL (MapLibre laedt Style, Sprites und Schriften dann selbst — und
+     * findet sie offline in derselben Datenbank, in die der Offline-Download
+     * sie gelegt hat). Die eigenen Ebenen haengen sich in beiden Faellen
+     * gleich ein, weil [onStyleLoaded] nur oben auf den Stapel legt.
+     */
     internal fun applyStyle(context: Context, mapStyle: MapStyle) {
         wantedStyle = mapStyle
         styleContext = context.applicationContext
         val map = map ?: return
         isReady = false
         style = null
-        map.setStyle(Style.Builder().fromJson(mapStyle.toRasterStyleJson())) { loaded ->
+        val builder = mapStyle.vectorStyleUrl
+            ?.let { Style.Builder().fromUri(it) }
+            ?: Style.Builder().fromJson(mapStyle.toRasterStyleJson())
+        map.setStyle(builder) { loaded ->
             onStyleLoaded(context.applicationContext, loaded, mapStyle)
         }
     }
 
     private fun onStyleLoaded(context: Context, loaded: Style, mapStyle: MapStyle) {
         style = loaded
-        // Rasterkacheln enden bei der hoechsten Stufe des Anbieters; darueber
-        // hinaus darf die Kamera trotzdem (MapLibre skaliert die letzte Stufe).
-        map?.setMaxZoomPreference(min(MAX_CAMERA_ZOOM, mapStyle.maxZoom + 2.0))
+        // Kacheln enden bei der hoechsten Stufe des Anbieters; darueber
+        // hinaus darf die Kamera trotzdem (MapLibre skaliert die letzte Stufe,
+        // bei Vektorkacheln ohne Unschaerfe — siehe [MapStyle.maxCameraZoom]).
+        map?.setMaxZoomPreference(min(MAX_CAMERA_ZOOM, mapStyle.maxCameraZoom))
 
         // Idempotent: Sollte derselbe Stil (etwa durch zwei schnell
         // aufeinanderfolgende setStyle-Aufrufe) zweimal gemeldet werden, wirft

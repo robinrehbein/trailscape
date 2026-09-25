@@ -366,7 +366,9 @@ private fun deleteAllOfflineRegionsAsync(
  * aus [de.trailscape.app.ui.map.offlineStyleUrl]
  * (`https://offline-style.trailscape.invalid/voyager.json`) als auch die
  * `file://`-Adresse aelterer Regionen (`…/map-styles/voyager.json`). Das
- * schlichte `contains` erkennt deshalb beide.
+ * schlichte `contains` erkennt deshalb beide — und auch die echte
+ * Style-URL des Vektor-Stils (`tiles.openfreemap.org/…` enthaelt dessen
+ * Kennung `openfreemap`).
  */
 private fun fallbackRegionName(region: OfflineRegion): String {
     val definition = region.definition

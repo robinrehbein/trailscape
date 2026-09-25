@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.map
 
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.mapStyles
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.floor
@@ -26,7 +27,7 @@ import kotlinx.serialization.json.put
  * steht nebenan in `OfflineRegions.kt` (siehe [downloadOfflineRegion]).
  *
  * ## Warum die Kachelstufe NICHT die Kamerazoomstufe ist
- * MapLibre rechnet intern mit 512-Punkt-Kacheln; unsere Stile sind
+ * MapLibre rechnet intern mit 512-Punkt-Kacheln; unsere Rasterstile sind
  * 256-Punkt-Raster (`"tileSize": 256`, siehe [MapStyle.toRasterStyleJson]).
  * Der Kern rechnet deshalb bei jeder Rasterquelle um:
  *
@@ -45,6 +46,11 @@ import kotlinx.serialization.json.put
  * aber `z+1 … z+3`, also rund das Vierfache. Die Obergrenze von
  * [MAX_TILES_PER_DOWNLOAD] Kacheln war damit wirkungslos.
  * [offlineTileZoomRange] macht diese Umrechnung explizit.
+ *
+ * Seit Offline nur noch mit dem Vektor-Stil geht (siehe
+ * [MapStyle.offlineAllowed]), ist der Versatz dort 0: Vektorkacheln sind
+ * 512 Punkt gross ([MapStyle.tileZoomOffset]). Die Rechnung bleibt fuer
+ * beide Bauarten gueltig, damit die Tests die Raster-Faelle weiter pruefen.
  */
 
 /** Wie in `lib/tile_cache.dart`: mehr als so viele Kacheln laedt die App nicht am Stueck. */
@@ -55,13 +61,6 @@ const val MAX_OFFLINE_ZOOM: Int = 17
 
 /** Wie viele Zoomstufen ueber der aktuellen mitgeladen werden. */
 const val OFFLINE_ZOOM_SPAN: Int = 2
-
-/**
- * Um so viele Stufen liegt das Kachelraster ueber der Kamerazoomstufe —
- * `log2(512 / 256) = 1` fuer die 256-Punkt-Rasterstile dieser App (siehe
- * Datei-KDoc). Waeren die Stile `"tileSize": 512`, waere der Versatz 0.
- */
-const val RASTER_TILE_ZOOM_OFFSET: Int = 1
 
 /**
  * Groesste Kantenlaenge des sichtbaren Ausschnitts, die noch heruntergeladen
@@ -132,14 +131,14 @@ fun estimateTileCount(
  * `z … z+2`, begrenzt durch [MAX_OFFLINE_ZOOM] und die hoechste vom Anbieter
  * unterstuetzte Stufe.
  *
- * Die Obergrenze beruecksichtigt den [RASTER_TILE_ZOOM_OFFSET]: Eine
+ * Die Obergrenze beruecksichtigt den [MapStyle.tileZoomOffset]: Eine
  * Definition bis `style.maxZoom` wuerde Kacheln *ueber* der hoechsten
  * vorhandenen Stufe verlangen (die MapLibre dann still abschneidet). Deshalb
  * endet die Definition eine Stufe darunter — die tatsaechlich geladene
  * Kachelstufe ist dann genau `style.maxZoom`.
  */
 fun offlineZoomRange(cameraZoom: Double, style: MapStyle): IntRange {
-    val highest = min(MAX_OFFLINE_ZOOM, style.maxZoom - RASTER_TILE_ZOOM_OFFSET)
+    val highest = min(MAX_OFFLINE_ZOOM, style.maxZoom - style.tileZoomOffset)
     val minZoom = max(0, cameraZoom.roundToInt()).coerceAtMost(max(0, highest))
     val maxZoom = min(minZoom + OFFLINE_ZOOM_SPAN, highest)
     return minZoom..max(minZoom, maxZoom)
@@ -147,13 +146,13 @@ fun offlineZoomRange(cameraZoom: Double, style: MapStyle): IntRange {
 
 /**
  * Die Kachelstufen, die MapLibre fuer eine Definition mit [definitionZooms]
- * tatsaechlich herunterlaedt: um [RASTER_TILE_ZOOM_OFFSET] versetzt und oben
+ * tatsaechlich herunterlaedt: um [MapStyle.tileZoomOffset] versetzt und oben
  * durch die hoechste Stufe des Anbieters begrenzt (`"maxzoom"` der Quelle in
  * [MapStyle.toRasterStyleJson], das MapLibre in `coveringZoomRange` anwendet).
  */
 fun offlineTileZoomRange(definitionZooms: IntRange, style: MapStyle): IntRange {
-    val first = min(definitionZooms.first + RASTER_TILE_ZOOM_OFFSET, style.maxZoom)
-    val last = min(definitionZooms.last + RASTER_TILE_ZOOM_OFFSET, style.maxZoom)
+    val first = min(definitionZooms.first + style.tileZoomOffset, style.maxZoom)
+    val last = min(definitionZooms.last + style.tileZoomOffset, style.maxZoom)
     return first..max(first, last)
 }
 
@@ -200,7 +199,12 @@ sealed interface OfflineDownloadPlan {
 /**
  * Entscheidet, ob und wie der sichtbare Ausschnitt heruntergeladen wird.
  *
- * Zwei Grenzen, die verschiedene Dinge schuetzen:
+ * Vorweg die Erlaubnis: Stile, deren Anbieter das Vorab-Laden nicht
+ * gestattet ([MapStyle.offlineAllowed] `false`), lehnt die Planung immer ab —
+ * die Oberflaeche bietet den Knopf dann zwar gar nicht erst an, aber die
+ * Sperre soll nicht an einer einzelnen UI-Stelle haengen.
+ *
+ * Danach zwei Grenzen, die verschiedene Dinge schuetzen:
  *  1. [MAX_OFFLINE_EDGE_KM] — gegen *sinnlose* Downloads (weit herausgezoomt).
  *     Diese Grenze fehlte bisher: Ein Bild von halb Europa bei Kamerazoom 4
  *     ergibt nur rund 200 Kacheln und lief deshalb glatt durch die
@@ -215,6 +219,9 @@ fun planOfflineDownload(
     cameraZoom: Double,
     style: MapStyle,
 ): OfflineDownloadPlan {
+    if (!style.offlineAllowed) {
+        return OfflineDownloadPlan.Rejected(offlineNotAllowedMessage(style))
+    }
     if (east < west || north < south) {
         return OfflineDownloadPlan.Rejected("Dieser Ausschnitt lässt sich nicht speichern.")
     }
@@ -249,6 +256,18 @@ fun planOfflineDownload(
     )
 }
 
+/**
+ * Warum sich [style] nicht speichern laesst — kurz und ohne Juristendeutsch,
+ * mit dem Ausweg im selben Satz. Steht hier (und nicht im Screen), damit
+ * Snackbar und Stil-Blatt dieselbe Begruendung geben.
+ */
+fun offlineNotAllowedMessage(style: MapStyle): String =
+    "„${style.label}“ lässt sich nicht offline speichern: Der Kartenserver erlaubt " +
+        "keine Vorab-Downloads. Wähle dafür „${offlineStyle().label}“."
+
+/** Der (einzige) Stil, dessen Anbieter Offline-Downloads erlaubt. */
+fun offlineStyle(): MapStyle = mapStyles.first { it.offlineAllowed }
+
 // ------------------------------------------------------------------ Aufsicht
 
 /**
@@ -279,8 +298,15 @@ fun stalledMessage(lastError: String?): String {
 // ------------------------------------------------------------------- Style
 
 /**
- * Die Adresse, unter der eine Offline-Region den Rasterstil fuehrt.
+ * Die Adresse, unter der eine Offline-Region ihren Stil fuehrt.
  *
+ * Beim Vektor-Stil ist das schlicht seine echte Style-URL: MapLibre laedt
+ * Style, TileJSON, Sprites, Schriften und Kacheln beim Download selbst und
+ * findet sie offline unter denselben Adressen wieder. Alles Folgende gilt
+ * nur fuer Rasterstile (die heute nicht mehr neu geladen werden, deren alte
+ * Regionen aber unter dieser Adresse in der Datenbank liegen).
+ *
+ * Rasterstile: *
  * [org.maplibre.android.offline.OfflineTilePyramidRegionDefinition] verlangt
  * eine Style-**URL**, keine JSON-Zeichenkette. Abgerufen wird diese Adresse
  * nie: [downloadOfflineRegion] legt die JSON vorher unter genau diesem
@@ -296,7 +322,7 @@ fun stalledMessage(lastError: String?): String {
  * damit in eine sichtbare Fehlermeldung statt in einen haengenden Balken.
  */
 fun offlineStyleUrl(style: MapStyle): String =
-    "https://offline-style.trailscape.invalid/${style.id}.json"
+    style.vectorStyleUrl ?: "https://offline-style.trailscape.invalid/${style.id}.json"
 
 // ---------------------------------------------------------------- Metadaten
 

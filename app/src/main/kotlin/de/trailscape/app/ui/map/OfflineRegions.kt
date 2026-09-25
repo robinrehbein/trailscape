@@ -39,9 +39,19 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * Metadaten) steht nebenan in `OfflineTileMath.kt` (siehe
  * [planOfflineDownload]) und ist dort als JVM-Test geprueft.
  *
- * ## Wie der Rasterstil zur Region kommt — und warum das mal haengen blieb
+ * ## Welcher Stil ueberhaupt geladen wird
+ * Nur einer: der Vektor-Stil von OpenFreeMap ([MapStyle.offlineAllowed],
+ * Begruendung samt Quellen an `mapStyles` in `ui/MapStyles.kt`). Die
+ * Rasterserver verbieten Vorab-Downloads; [downloadOfflineRegion] prueft das
+ * deshalb selbst noch einmal, statt sich auf die Planung zu verlassen. Fuer
+ * den Vektor-Stil ist die Region-Definition schlicht seine echte Style-URL —
+ * MapLibre holt Style, TileJSON, Sprites, Schriften und Kacheln selbst.
+ *
+ * ## Wie ein Rasterstil zur Region kam — und warum das mal haengen blieb
+ * (Stand der alten Raster-Downloads; die Regionen liegen noch auf manchem
+ * Geraet und werden weiter angezeigt.)
  * [OfflineTilePyramidRegionDefinition] verlangt eine Style-**URL**; unsere
- * Stile entstehen aber zur Laufzeit als JSON ([MapStyle.toRasterStyleJson]).
+ * Rasterstile entstehen aber zur Laufzeit als JSON ([MapStyle.toRasterStyleJson]).
  * Der erste Anlauf legte die JSON als Datei ab und uebergab eine
  * `file://`-Adresse. Das kann nicht funktionieren, und zwar still:
  *
@@ -96,6 +106,15 @@ data class OfflineDownloadProgress(
      */
     val requiredTiles: Long,
     val completedBytes: Long,
+    /**
+     * Alle geladenen Ressourcen, nicht nur Kacheln. Beim Vektor-Stil kommen
+     * zu den Kacheln Style, TileJSON, Sprites und einige Hundert kleine
+     * Schrift-Pakete — der Fortschrittsbalken rechnet deshalb in Ressourcen,
+     * sonst stuende er bei „fertig" erst bei einem Bruchteil.
+     */
+    val completedResources: Long = completedTiles,
+    /** Vom Kern erwartete Ressourcen; `0`, solange die Zahl nicht genau ist. */
+    val requiredResources: Long = requiredTiles,
 )
 
 /** Verzeichnis der frueheren `file://`-Stildateien; wird nur noch aufgeraeumt. */
@@ -152,6 +171,9 @@ suspend fun downloadOfflineRegion(
     name: String,
     onProgress: (OfflineDownloadProgress) -> Unit,
 ): OfflineDownloadProgress = coroutineScope {
+    // Zweite Sperre neben `planOfflineDownload`: Wer diese Funktion je an der
+    // Planung vorbei aufruft, soll trotzdem keinen Rasterserver abgrasen.
+    check(style.offlineAllowed) { offlineNotAllowedMessage(style) }
     val appContext = context.applicationContext
     val manager = OfflineManager.getInstance(appContext)
     val styleUrl = offlineStyleUrl(style)
@@ -162,18 +184,23 @@ suspend fun downloadOfflineRegion(
         runCatching { File(appContext.filesDir, LEGACY_STYLE_DIR_NAME).deleteRecursively() }
     }
 
-    val nowS = System.currentTimeMillis() / 1000
-    runCatching {
-        manager.putResourceWithUrl(
-            styleUrl,
-            style.toRasterStyleJson().toByteArray(Charsets.UTF_8),
-            nowS,
-            nowS + STYLE_CACHE_TTL_S,
-            "",
-            false,
-        )
-    }.getOrElse {
-        throw IllegalStateException("Der Kartenstil konnte nicht abgelegt werden.")
+    // Nur ein Rasterstil muss vorab unter seiner Wunschadresse liegen (siehe
+    // Datei-KDoc); ein Vektor-Stil hat eine echte URL, die MapLibre selbst
+    // abruft.
+    if (!style.isVector) {
+        val nowS = System.currentTimeMillis() / 1000
+        runCatching {
+            manager.putResourceWithUrl(
+                styleUrl,
+                style.toRasterStyleJson().toByteArray(Charsets.UTF_8),
+                nowS,
+                nowS + STYLE_CACHE_TTL_S,
+                "",
+                false,
+            )
+        }.getOrElse {
+            throw IllegalStateException("Der Kartenstil konnte nicht abgelegt werden.")
+        }
     }
 
     val definition = OfflineTilePyramidRegionDefinition(
@@ -251,6 +278,12 @@ suspend fun downloadOfflineRegion(
                                         0L
                                     },
                                     completedBytes = status.completedResourceSize,
+                                    completedResources = status.completedResourceCount,
+                                    requiredResources = if (status.isRequiredResourceCountPrecise) {
+                                        status.requiredResourceCount
+                                    } else {
+                                        0L
+                                    },
                                 )
                                 onProgress(progress)
                                 if (status.isComplete) {
@@ -384,14 +417,16 @@ object OfflineDownloadController {
                     maxZoom = plan.maxZoom,
                     name = name,
                 ) { progress ->
+                    // Gezaehlt wird in Ressourcen (siehe
+                    // [OfflineDownloadProgress.completedResources]). Die
+                    // Schaetzung bleibt stehen, bis MapLibre die Zahl wirklich
+                    // kennt — sonst spraenge der Balken auf die „1" des Stils
+                    // zurueck.
                     _state.value = OfflineDownloadState(
                         running = true,
-                        completedTiles = progress.completedTiles,
-                        // Die Schaetzung bleibt stehen, bis MapLibre die
-                        // Kachelzahl wirklich kennt — sonst spraenge der
-                        // Balken auf die „1" des Stils zurueck.
-                        totalTiles = if (progress.requiredTiles > 0) {
-                            progress.requiredTiles
+                        completedTiles = progress.completedResources,
+                        totalTiles = if (progress.requiredResources > 1) {
+                            progress.requiredResources
                         } else {
                             _state.value.totalTiles
                         },

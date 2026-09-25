@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -83,6 +85,17 @@ import de.trailscape.core.GeoResult
  * steht — wer die Suchzeile antippt, will tippen, nicht erst noch das Feld selbst
  * treffen.
  *
+ * ## Gesucht wird erst beim Absenden
+ * Die Ortssuche fragt Nominatim, und dessen Nutzungsrichtlinie verbietet
+ * Autovervollstaendigung (https://operations.osmfoundation.org/policies/nominatim/:
+ * „Auto-complete search … is not yet supported … you must not implement
+ * such a service on the client side using the API"). Frueher lief die Suche
+ * nach einer kurzen Tipp-Pause von selbst los — das ist genau dieses
+ * Muster, nur entprellt. Jetzt fragt die App erst, wenn die Nutzerin
+ * absendet: Suchtaste der Tastatur ([onSearch]) oder die Zeile
+ * „„…" suchen" unter dem Feld ([PlaceResults]), damit das Absenden nicht
+ * nur auf der Tastatur zu finden ist.
+ *
  * ## „Zuletzt gesucht" statt Treffer, wenn das Feld leer ist
  * Dasselbe Muster wie Google Maps: Ein frisch geoeffnetes, leeres Suchfeld
  * zeigt die zuletzt gewaehlten Orte statt einer leeren Flaeche — sobald
@@ -95,6 +108,7 @@ import de.trailscape.core.GeoResult
 internal fun SearchSheet(
     query: String,
     onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
     busy: Boolean,
     error: String?,
     results: List<GeoResult>,
@@ -125,6 +139,7 @@ internal fun SearchSheet(
                 onValueChange = onQueryChange,
                 placeholder = "Ort, Stadt oder Straße",
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
                 trailingIcon = {
                     when {
                         busy -> CircularProgressIndicator(
@@ -142,10 +157,12 @@ internal fun SearchSheet(
 
             PlaceResults(
                 query = query,
+                busy = busy,
                 error = error,
                 results = results,
                 history = history,
                 onSelect = onSelect,
+                onSearch = onSearch,
                 modifier = Modifier.verticalScroll(rememberScrollState()),
             )
         }
@@ -168,6 +185,11 @@ internal fun SearchSheet(
  * Der **Verlauf erscheint sofort**, sobald das Feld leer und fokussiert ist,
  * nicht erst nach dem ersten Zeichen: Wer die Suche oeffnet, hat meist ein
  * Ziel im Kopf, das er schon einmal gesucht hat. Ein Tipp statt acht.
+ *
+ * Steht Text im Feld, aber (noch) kein Treffer darunter, bietet die Liste
+ * das Absenden als eigene Zeile an („„Tübingen" suchen"): Gesucht wird nur
+ * auf Wunsch (siehe Datei-KDoc), und die Suchtaste der Tastatur allein waere
+ * ein Weg, den nicht jede Tastatur gleich deutlich zeigt.
  */
 @Composable
 internal fun PlaceResults(
@@ -176,7 +198,9 @@ internal fun PlaceResults(
     results: List<GeoResult>,
     history: List<Place>,
     onSelect: (Place) -> Unit,
+    onSearch: () -> Unit,
     modifier: Modifier = Modifier,
+    busy: Boolean = false,
 ) {
     Column(modifier = modifier) {
         if (error != null) {
@@ -211,6 +235,13 @@ internal fun PlaceResults(
                     )
                 }
             }
+
+            query.isNotBlank() && !busy -> SheetRow(
+                title = "„${query.trim()}“ suchen",
+                subtitle = "Ortssuche über OpenStreetMap",
+                icon = Icons.Filled.Search,
+                onClick = onSearch,
+            )
 
             query.isBlank() -> Text(
                 text = "Suche nach einem Ort, einer Stadt oder einer Adresse.",
@@ -290,6 +321,27 @@ internal fun SheetRow(
         )
     }
 }
+
+/**
+ * So viele Zeichen braucht eine Ortssuche mindestens. Kuerzeres liefert bei
+ * Nominatim nur Rauschen und waere eine Anfrage fuer nichts.
+ */
+internal const val MIN_PLACE_SEARCH_LENGTH = 3
+
+/**
+ * Was aus dem Feldinhalt [raw] an Nominatim geht: getrimmt, oder `null`, wenn
+ * es zu kurz ist ([MIN_PLACE_SEARCH_LENGTH]).
+ */
+internal fun placeSearchQueryOrNull(raw: String): String? =
+    raw.trim().takeIf { it.length >= MIN_PLACE_SEARCH_LENGTH }
+
+/**
+ * Eine abgesendete Ortssuche. Die laufende Nummer [seq] macht jedes Absenden
+ * zu einem neuen Schluessel fuer den `LaunchedEffect` im Karten-Screen —
+ * auch dann, wenn derselbe Text nach einem Netzfehler noch einmal geschickt
+ * wird.
+ */
+internal data class PlaceSearchSubmission(val query: String, val seq: Int)
 
 /** Anteil der Bildschirmhoehe, den das aufgeklappte Suchblatt hoechstens einnimmt. */
 private const val SEARCH_SHEET_MAX_HEIGHT_FACTOR = 0.7f

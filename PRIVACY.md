@@ -99,17 +99,21 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 
 | Empfänger | Wann | Was mitgeht |
 |---|---|---|
-| Der gewählte **Kachel-Server** — je nach Kartenstil `basemaps.cartocdn.com` (CARTO), `tile-cyclosm.openstreetmap.fr`, `tile.openstreetmap.org`, `tile.opentopomap.org` oder `server.arcgisonline.com` (Esri) | sobald die Karte einen Ausschnitt zeichnet oder eine Offline-Region geladen wird | Kachelkoordinaten (`z/x/y`). Daraus ergibt sich, **welchen Kartenausschnitt du dir ansiehst** — zusammen mit der IP-Adresse also ein Hinweis darauf, wo du dich aufhältst oder hin willst |
+| Der gewählte **Kachel-Server** — je nach Kartenstil `tile.openstreetmap.de` (FOSSGIS e. V.), `tile-cyclosm.openstreetmap.fr`, `tile.openstreetmap.org`, `tile.opentopomap.org`, `server.arcgisonline.com` (Esri) oder `tiles.openfreemap.org` (OpenFreeMap, Stil „Offline-Karte“) | sobald die Karte einen Ausschnitt zeichnet; beim Offline-Speichern (nur mit der „Offline-Karte“ möglich) ausschließlich `tiles.openfreemap.org` | Kachelkoordinaten (`z/x/y`), bei OpenFreeMap zusätzlich der Abruf von Kartenstil, Symbolen und Schriften (ohne Bezug zu dir). Daraus ergibt sich, **welchen Kartenausschnitt du dir ansiehst** — zusammen mit der IP-Adresse also ein Hinweis darauf, wo du dich aufhältst oder hin willst. OpenFreeMap arbeitet nach eigener Angabe ohne Registrierung, API-Schlüssel und Cookies |
 | **brouter.de** | wenn du eine Route berechnen lässt | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
 | **brouter.de** | wenn du unter *Mehr → Offline-Routing* Routing-Kacheln herunterlädst oder aktualisierst (`https://brouter.de/brouter/segments4/…`, siehe `app/…/routing/SegmentDownloader.kt` und `core/…/RoutingSegments.kt`) | der Name der gewählten **5°×5°-Kachel** (z. B. `E10_N45.rd5`) — daraus ergibt sich die grobe Region, für die du Routing willst, typischerweise also deine Wohn- oder Urlaubsgegend. Bei einer Delta-Aktualisierung steht zusätzlich die **MD5-Prüfsumme deines lokalen Kachelstands** in der URL; sie verrät dem Server, welchen Tagesstand du zuletzt geladen hattest, aber nichts über deine Touren |
-| **nominatim.openstreetmap.org** | wenn du in der Routenplanung nach einem Ort suchst | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
+| **nominatim.openstreetmap.org** | wenn du eine Ortssuche **absendest** (Suchtaste der Tastatur oder „„…“ suchen“) — nicht schon beim Tippen | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
 | **api.github.com** (Update-Prüfung) | beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
 
 Zu den Kartenkacheln: Wer nur ungern seinen Kartenausschnitt an einen Anbieter
-gibt, lädt die Region einmal als **Offline-Karte** herunter (*Mehr →
-Offline-Karten*) — danach kommen die Kacheln aus dem Gerät.
+gibt, wählt die **Offline-Karte** und speichert die Region einmal (*Karte →
+Ebenen-Knopf → „Diesen Ausschnitt offline speichern“*) — danach kommen die
+Kacheln aus dem Gerät. Die übrigen Kartenstile lassen sich nicht offline
+speichern, weil ihre Server Vorab-Downloads nicht erlauben; früher damit
+gespeicherte Regionen bleiben erhalten (verwalten unter *Mehr →
+Offline-Karten*).
 
 Zur Update-Prüfung: Die App wird als APK per Sideload verteilt, kein Store
 aktualisiert sie — ohne diese Prüfung erführe niemand von einer neuen Version
@@ -254,8 +258,9 @@ Anfrage an jemanden:
 - **Berichtigung** — Touren lassen sich umbenennen, das Trainingsprofil
   jederzeit ändern.
 
-Rechte gegenüber den in Abschnitt 4 genannten Dritten (CARTO, OpenStreetMap
-Foundation, OpenTopoMap, Esri, brouter.de, GitHub, Google) machst du direkt
+Rechte gegenüber den in Abschnitt 4 genannten Dritten (FOSSGIS, CyclOSM,
+OpenStreetMap Foundation, OpenTopoMap, Esri, OpenFreeMap, brouter.de, GitHub,
+Google) machst du direkt
 dort geltend; wir geben ihnen nichts über dich weiter, was über die dort
 genannten Anfragen hinausgeht.
 
