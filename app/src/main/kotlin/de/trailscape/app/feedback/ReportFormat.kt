@@ -24,10 +24,12 @@ import java.util.Locale
  *
  * ## Was in einem Bericht steht — und was nicht
  * Ausschliesslich Technik: App-Version, Android-Version, Geraetemodell,
- * Speicherstand, Zeitstempel und der Stacktrace. **Keine** Standortpunkte,
- * keine Touren, keine Gesundheitsdaten, keine Sync-Zugangsdaten. Der einzige
- * Text, den Trailscape nicht selbst zusammensetzt, ist der Stacktrace; die
- * App traegt dort keine Nutzerdaten hinein.
+ * Speicherstand, Zeitstempel, der Stacktrace und — solange der Nutzer den
+ * Haken nicht entfernt — das Diagnose-Log (`core/DiagLog.kt`: feste
+ * Ereignisnamen, Zahlen, Fehlerklassen). **Keine** Standortpunkte, keine
+ * Touren, keine Gesundheitsdaten, keine Sync-Zugangsdaten. Der einzige Text,
+ * den Trailscape nicht selbst zusammensetzt, ist der Stacktrace; die App
+ * traegt dort keine Nutzerdaten hinein.
  */
 
 /** GitHub-Repository, in dem Fehler gemeldet werden. */
@@ -162,6 +164,7 @@ fun buildCrashReport(
     threadName: String,
     stackTrace: String,
     memory: MemoryInfo,
+    diagLines: List<String>? = null,
 ): String = buildString {
     appendLine("Trailscape-Absturzbericht")
     appendLine("=========================")
@@ -173,7 +176,63 @@ fun buildCrashReport(
     append(STACK_TRACE_MARKER)
     append(stackTrace.trimEnd())
     appendLine()
+    // Die Diagnose steht HINTER dem Stacktrace: [crashIssueTitleFromReport]
+    // liest nur dessen erste Zeile, der Titel bleibt also unveraendert, und
+    // [withoutDiagSection] kann den Abschnitt spurlos wieder abschneiden.
+    if (diagLines != null) appendDiagSection(diagLines)
 }
+
+/**
+ * Kopfzeile des Diagnose-Abschnitts. Konstante, weil [withoutDiagSection]
+ * den Bericht daran wieder aufteilt.
+ */
+const val DIAG_SECTION_MARKER: String =
+    "Technische Diagnose (neueste zuerst)\n------------------------------------\n"
+
+/** Platzhalter, wenn der Anhang gewaehlt, das Log aber leer ist. */
+const val DIAG_EMPTY_NOTE: String = "(keine Einträge)"
+
+/**
+ * Hoechstzahl der Diagnose-Zeilen in einem Bericht. Eine Zeile sind rund
+ * 60-100 Zeichen; 150 Zeilen bleiben gut lesbar und passen zusammen mit
+ * dem Kopf in eine Mail. Das vollstaendige Log (bis 128 KB) waere fuer einen
+ * Menschen ohnehin nicht mehr zu ueberblicken.
+ */
+const val DIAG_REPORT_MAX_LINES: Int = 150
+
+/**
+ * Waehlt die Diagnose-Zeilen fuer einen Bericht: die juengsten [maxLines],
+ * **neueste zuerst**. Die Reihenfolge ist Absicht: Der GitHub-Link kuerzt
+ * den Bericht am Ende ([truncateForIssueBody]) — dort sollen die aeltesten
+ * Eintraege wegfallen, nicht die zum Problem gehoerenden.
+ *
+ * @param lines alle Zeilen, aelteste zuerst (so liefert sie `DiagLog`).
+ */
+fun selectDiagLines(lines: List<String>, maxLines: Int = DIAG_REPORT_MAX_LINES): List<String> =
+    lines.takeLast(maxLines).asReversed()
+
+private fun StringBuilder.appendDiagSection(diagLines: List<String>) {
+    appendLine()
+    append(DIAG_SECTION_MARKER)
+    if (diagLines.isEmpty()) {
+        appendLine(DIAG_EMPTY_NOTE)
+    } else {
+        diagLines.forEach { appendLine(it) }
+    }
+}
+
+/**
+ * Der Bericht ohne Diagnose-Abschnitt — fuer die abgewaehlte Checkbox im
+ * Absturz-Dialog, dessen Bericht schon im Absturz fertig geschrieben wurde.
+ * Ohne Abschnitt geht der Bericht unveraendert durch.
+ */
+fun withoutDiagSection(report: String): String {
+    val index = report.indexOf("\n\n$DIAG_SECTION_MARKER")
+    return if (index < 0) report else report.substring(0, index + 1)
+}
+
+/** Ob der Bericht einen Diagnose-Abschnitt enthaelt. */
+fun hasDiagSection(report: String): Boolean = report.contains("\n\n$DIAG_SECTION_MARKER")
 
 /**
  * Trennzeile vor dem Stacktrace. Steht als Konstante da, weil
@@ -188,11 +247,16 @@ const val STACK_TRACE_MARKER: String = "Stacktrace\n----------\n"
  * @param healthDiagnostics die `debugLines` des letzten Health-Sync-Reports —
  *   leer, wenn der Nutzer den Anhang nicht angehakt hat oder es keinen Report
  *   gibt. Die Zeilen enthalten Zaehler und Zeitraeume, keine Messwerte.
+ * @param diagLines Zeilen des Diagnose-Logs (bereits per [selectDiagLines]
+ *   ausgewaehlt), oder `null`, wenn der Nutzer den Anhang abgewaehlt hat.
+ *   Eine leere Liste erscheint als [DIAG_EMPTY_NOTE] — damit sichtbar ist,
+ *   dass der Anhang gewaehlt, aber nichts protokolliert war.
  */
 fun buildProblemReport(
     info: DeviceInfo,
     timestamp: String,
     healthDiagnostics: List<String> = emptyList(),
+    diagLines: List<String>? = null,
 ): String = buildString {
     appendLine("Trailscape-Problembericht")
     appendLine("=========================")
@@ -205,6 +269,7 @@ fun buildProblemReport(
         appendLine("--------------------")
         healthDiagnostics.forEach { appendLine(it) }
     }
+    if (diagLines != null) appendDiagSection(diagLines)
 }
 
 /**

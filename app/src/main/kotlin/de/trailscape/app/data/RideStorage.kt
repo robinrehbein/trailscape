@@ -1,5 +1,7 @@
 package de.trailscape.app.data
 
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import de.trailscape.core.Ride
 import de.trailscape.core.RideSummary
 import java.io.File
@@ -240,13 +242,16 @@ class RideStorage(private val ridesDir: File) {
                 // machen statt die aeltere Quarantaene-Datei zu ueberschreiben.
                 target = File(dir, "${file.name.removeSuffix(".json")}-${System.currentTimeMillis()}.json")
             }
+            // Frueher `println` — das landete auf Android im Nirgendwo. Der
+            // Dateiname (= Tour-ID) bleibt bewusst draussen: Fuer die
+            // Fehlersuche zaehlt, DASS eine Tour defekt war, nicht welche.
             if (file.renameTo(target)) {
-                println("RideStorage: unlesbare Tour-Datei ${file.name} nach ${QUARANTINE_DIR_NAME}/ verschoben.")
+                DiagLog.shared.log(DiagEvent.RIDE_FILE_QUARANTINED)
             } else {
-                println("RideStorage: unlesbare Tour-Datei ${file.name} konnte nicht verschoben werden.")
+                DiagLog.shared.log(DiagEvent.RIDE_FILE_QUARANTINE_FAILED)
             }
         } catch (e: Exception) {
-            println("RideStorage: Quarantaene fuer ${file.name} fehlgeschlagen: $e")
+            DiagLog.shared.log(DiagEvent.RIDE_FILE_QUARANTINE_FAILED, error = e)
         }
     }
 
