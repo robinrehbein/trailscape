@@ -52,7 +52,7 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 **Karte & Planung**
 - MapLibre-Karte mit sechs Kartenstilen zur Auswahl (Straßenkarte, CyclOSM,
-  OpenStreetMap, OpenTopoMap, Satellit, Offline-Karte von OpenFreeMap) —
+  OpenStreetMap, OpenTopoMap, Satellit, Vektorkarte von OpenFreeMap) —
   umschaltbar auf der Karte und im Mehr-Tab, ohne API-Schlüssel
 - Routenplanung mit Zielsuche über Nominatim (gesucht wird beim Absenden,
   nicht beim Tippen), Fahrradtyp (Gravel, Rennrad) und
@@ -62,7 +62,7 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
 - Offline-Karten: Regionen über MapLibres Offline-Manager herunterladen
-  (nur mit der Offline-Karte von OpenFreeMap — die übrigen Kachelserver
+  (nur mit der Vektorkarte von OpenFreeMap — die übrigen Kachelserver
   verbieten Vorab-Downloads; max. 250 Kacheln pro Vorgang, der sichtbare
   Ausschnitt darf höchstens 150 km Kantenlänge haben) und im Mehr-Tab
   verwalten

@@ -95,14 +95,19 @@ val dataNotices: List<LicenseNotice> = listOf(
     // `mapStyles`) nicht mehr im Spiel und steht deshalb hier nicht mehr.
     LicenseNotice(
         name = "Kacheln „Straßenkarte“: FOSSGIS e. V. (tile.openstreetmap.de)",
-        license = "Daten ODbL, Nutzung nach FOSSGIS-Nutzungsbedingungen",
+        // Stil: openstreetmap-carto-de, wie sein Vorbild openstreetmap-carto
+        // unter CC0 (LICENSE.txt in github.com/giggls/openstreetmap-carto-de) —
+        // nicht CC BY-SA; das gilt nur fuer die Texte der FOSSGIS-Webseite.
+        license = "Daten ODbL, Stil openstreetmap-carto-de CC0 1.0, " +
+            "Nutzung nach FOSSGIS-Nutzungsbedingungen",
         url = "https://www.openstreetmap.de/germanstyle/",
     ),
     // Der offline speicherbare Vektor-Stil. Die Pflicht-Attribution
     // („OpenFreeMap © OpenMapTiles Data from OpenStreetMap") blendet MapLibre
-    // aus der TileJSON selbst ein; hier stehen die Lizenzen dahinter.
+    // aus der Quelle selbst ein (TileJSON bzw. festgeschriebene Stil-Kopie);
+    // hier stehen die Lizenzen dahinter.
     LicenseNotice(
-        name = "Karte „Offline-Karte“: OpenFreeMap (tiles.openfreemap.org)",
+        name = "Karte „Vektorkarte“: OpenFreeMap (tiles.openfreemap.org)",
         license = "Dienst MIT; Stil „Liberty“: Code BSD 3-Clause, Design CC BY 4.0; " +
             "Schrift Noto Sans (OFL 1.1)",
         url = "https://openfreemap.org/",

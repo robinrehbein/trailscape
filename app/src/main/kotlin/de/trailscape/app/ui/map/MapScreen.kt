@@ -34,6 +34,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -542,13 +543,9 @@ fun MapScreen(appViewModel: AppViewModel) {
     // `openPlaceSearch`). Die Ortssuche des Erkunden-Blatts laeuft dort an Ort
     // und Stelle und haengt an `exploreSearching`.
     var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<GeoResult>>(emptyList()) }
-    var searchBusy by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
-    // Die zuletzt **abgesendete** Suche — nur sie loest eine Anfrage aus, nie
-    // das Tippen selbst (Nominatim-Richtlinie, siehe `SearchSheet.kt`).
-    var searchSubmission by remember { mutableStateOf<PlaceSearchSubmission?>(null) }
+    // Suchtext, Abgabe, Treffer und Meldung in einem Halter (`SearchSheet.kt`):
+    // Nur so ist per Test gesichert, dass Tippen keine Anfrage ausloest.
+    val placeSearch = rememberSaveable(saver = PlaceSearchState.Saver) { PlaceSearchState() }
     val keyboardController = LocalSoftwareKeyboardController.current
 
     /**
@@ -1067,29 +1064,13 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // --------------------------------------------------------------- Ortssuche
-    // Laeuft nur beim Absenden ([submitSearch]). Frueher hing dieser Effekt
-    // am Suchtext und fragte nach einer Tipp-Pause von selbst — das ist die
-    // Autovervollstaendigung, die Nominatim ausdruecklich verbietet. Wird
-    // weitergetippt, setzt [changeSearchQuery] die Abgabe zurueck; der
-    // Schluesselwechsel bricht eine noch laufende Anfrage dann ab.
-    LaunchedEffect(searchSubmission) {
-        val query = searchSubmission?.query ?: return@LaunchedEffect
-        searchBusy = true
-        searchError = null
-        val result = withContext(Dispatchers.IO) {
-            runCatching { searchPlaces(query, AppServices.httpClient) }
-        }
-        result
-            .onSuccess { hits ->
-                searchResults = hits.take(MAX_SEARCH_RESULTS)
-                searchError = if (hits.isEmpty()) "Keine Treffer gefunden." else null
-            }
-            .onFailure {
-                searchResults = emptyList()
-                searchError = it.message?.takeIf(String::isNotBlank) ?: "Ortssuche fehlgeschlagen."
-            }
-        searchBusy = false
-    }
+    // Laeuft nur beim Absenden ([submitSearch]); die Regeln dazu stehen an
+    // [PlaceSearchEffect] und sind dort per Test abgesichert.
+    PlaceSearchEffect(
+        state = placeSearch,
+        maxResults = MAX_SEARCH_RESULTS,
+        search = { query -> withContext(Dispatchers.IO) { searchPlaces(query, AppServices.httpClient) } },
+    )
 
     // -------------------------------------------------------------- Navigation
     LaunchedEffect(navTarget, isRecording) {
@@ -1679,18 +1660,8 @@ fun MapScreen(appViewModel: AppViewModel) {
         waypoints = waypoints + Waypoint(lat, lon)
     }
 
-    /**
-     * Neuer Text im Suchfeld — ohne jede Anfrage. Alte Treffer und Meldungen
-     * verschwinden, weil sie zu einem anderen Text gehoeren; eine noch
-     * laufende Suche wird abgebrochen (siehe den Effekt „Ortssuche" oben).
-     */
-    fun changeSearchQuery(text: String) {
-        searchQuery = text
-        searchSubmission = null
-        searchResults = emptyList()
-        searchError = null
-        searchBusy = false
-    }
+    /** Neuer Text im Suchfeld — ohne jede Anfrage (siehe [PlaceSearchState.changeQuery]). */
+    fun changeSearchQuery(text: String) = placeSearch.changeQuery(text)
 
     /**
      * Schickt den Feldinhalt an die Ortssuche — ausgeloest von der
@@ -1698,13 +1669,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Die Tastatur geht dabei zu, damit die Treffer Platz haben.
      */
     fun submitSearch() {
-        val query = placeSearchQueryOrNull(searchQuery)
-        if (query == null) {
-            searchError = "Bitte mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben."
-            return
-        }
-        keyboardController?.hide()
-        searchSubmission = PlaceSearchSubmission(query, (searchSubmission?.seq ?: 0) + 1)
+        if (placeSearch.submit()) keyboardController?.hide()
     }
 
     /**
@@ -3216,7 +3181,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                         Spacer(Modifier.height(OverlayGap))
                         ExploreSheet(
                             searchMaxHeight = screenHeight * SEARCH_RESULTS_MAX_HEIGHT_FACTOR,
-                            searchQuery = searchQuery,
+                            searchQuery = placeSearch.query,
                             onSearchQueryChange = ::changeSearchQuery,
                             onSubmitSearch = ::submitSearch,
                             searching = exploreSearching,
@@ -3224,9 +3189,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 if (focused) exploreSearching = true
                             },
                             onEndSearch = ::endExploreSearch,
-                            searchBusy = searchBusy,
-                            searchError = searchError,
-                            searchResults = searchResults,
+                            searchBusy = placeSearch.busy,
+                            searchError = placeSearch.error,
+                            searchResults = placeSearch.results,
                             searchHistory = placeHistory,
                             onSelectPlace = { place ->
                                 endExploreSearch()
@@ -3262,12 +3227,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ----------------------------------------------------------------- Dialoge
     if (searchOpen) {
         SearchSheet(
-            query = searchQuery,
+            query = placeSearch.query,
             onQueryChange = ::changeSearchQuery,
             onSearch = ::submitSearch,
-            busy = searchBusy,
-            error = searchError,
-            results = searchResults,
+            busy = placeSearch.busy,
+            error = placeSearch.error,
+            results = placeSearch.results,
             history = placeHistory,
             onSelect = ::onPlaceChosen,
             onDismiss = ::closeSearchSheet,
@@ -3674,8 +3639,9 @@ private fun MapStyleSheet(
                 }
             } else {
                 Text(
-                    text = "Offline speichern geht nur mit der Offline-Karte. Die anderen " +
-                        "Kartenserver sind nur zum Anzeigen da und erlauben keine Downloads.",
+                    text = "Offline speichern geht nur mit der ${offlineStyle().label}. Die " +
+                        "anderen Kartenserver sind nur zum Anzeigen da und erlauben keine " +
+                        "Downloads.",
                     modifier = Modifier.padding(horizontal = CardPadding, vertical = 4.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -3688,9 +3654,11 @@ private fun MapStyleSheet(
                         .padding(horizontal = CardPadding)
                         .heightIn(min = 48.dp),
                 ) {
-                    Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    // Wechsel-, kein Download-Symbol: Der Knopf laedt nichts
+                    // herunter, er stellt nur den Stil um.
+                    Icon(Icons.Filled.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Zur Offline-Karte wechseln")
+                    Text("Zur Vektorkarte wechseln")
                 }
             }
         }

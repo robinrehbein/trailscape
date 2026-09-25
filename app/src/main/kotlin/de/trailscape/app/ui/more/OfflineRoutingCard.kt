@@ -204,7 +204,15 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         offerDownload(listOf(tile.fileName))
     }
 
-    /** Die Ortssuche losschicken (Nominatim, wie im Karten-Tab). */
+    /**
+     * Die Ortssuche losschicken (Nominatim, wie im Karten-Tab).
+     *
+     * Nur auf ausdruecklichen Wunsch — Suchtaste der Tastatur oder Lupe im
+     * Feld —, nie beim Tippen: Die Nominatim-Richtlinie verbietet
+     * Autovervollstaendigung (Quelle und Begruendung im Datei-KDoc von
+     * `ui/map/SearchSheet.kt`). `onValueChange` des Feldes setzt deshalb nur
+     * den Text.
+     */
     fun runSearch() {
         val text = query.trim()
         if (text.length < MIN_QUERY_LENGTH) return

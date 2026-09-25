@@ -42,6 +42,12 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.GeoResult
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.Saver
+import kotlinx.coroutines.CancellationException
 
 /**
  * # Das Suchblatt — die Ortssuche als **kurze Besorgung** aus einem anderen Blatt
@@ -236,9 +242,21 @@ internal fun PlaceResults(
                 }
             }
 
+            // Zu kurz fuer eine Suche: Statt einer Zeile, die beim Antippen
+            // nur die Mindestlaenge anmahnt, gleich der Hinweis selbst.
+            query.isNotBlank() && placeSearchQueryOrNull(query) == null -> Text(
+                text = "Mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben, dann suchen.",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Nach einer Meldung (keine Treffer, Netzfehler) steht dieselbe
+            // Aktion als „erneut" da — das sagt, dass Tippen nichts Neues
+            // ausloest, ein Tipp hier aber schon.
             query.isNotBlank() && !busy -> SheetRow(
-                title = "„${query.trim()}“ suchen",
-                subtitle = "Ortssuche über OpenStreetMap",
+                title = if (error != null) "Erneut suchen" else "„${query.trim()}“ suchen",
+                subtitle = if (error != null) "„${query.trim()}“" else "Ortssuche über OpenStreetMap",
                 icon = Icons.Filled.Search,
                 onClick = onSearch,
             )
@@ -337,11 +355,110 @@ internal fun placeSearchQueryOrNull(raw: String): String? =
 
 /**
  * Eine abgesendete Ortssuche. Die laufende Nummer [seq] macht jedes Absenden
- * zu einem neuen Schluessel fuer den `LaunchedEffect` im Karten-Screen —
- * auch dann, wenn derselbe Text nach einem Netzfehler noch einmal geschickt
- * wird.
+ * zu einem neuen Schluessel fuer [PlaceSearchEffect] — auch dann, wenn
+ * derselbe Text nach einem Netzfehler noch einmal geschickt wird.
  */
 internal data class PlaceSearchSubmission(val query: String, val seq: Int)
+
+/**
+ * Zustand der Ortssuche im Karten-Screen: Feldtext, letzte Abgabe, Treffer,
+ * Meldung.
+ *
+ * Steht als eigener Halter hier (und nicht als fuenf lose Variablen im
+ * Screen), damit die Regel „Tippen fragt nie, nur Absenden" an einer Stelle
+ * haengt, die ein Test ohne den ganzen Karten-Screen erreicht
+ * (`PlaceSearchTest`). Nur [changeQuery] aendert den Text, und es setzt
+ * dabei die Abgabe zurueck; nur [submit] erzeugt eine neue.
+ */
+@Stable
+internal class PlaceSearchState(initialQuery: String = "") {
+    var query by mutableStateOf(initialQuery)
+        private set
+    var submission by mutableStateOf<PlaceSearchSubmission?>(null)
+        private set
+    var results by mutableStateOf<List<GeoResult>>(emptyList())
+        internal set
+    var busy by mutableStateOf(false)
+        internal set
+    var error by mutableStateOf<String?>(null)
+        internal set
+
+    /**
+     * Neuer Text im Suchfeld — ohne jede Anfrage. Alte Treffer und Meldungen
+     * verschwinden, weil sie zu einem anderen Text gehoeren; eine noch
+     * laufende Suche bricht ab, weil ihr Schluessel ([submission]) wegfaellt.
+     */
+    fun changeQuery(text: String) {
+        query = text
+        submission = null
+        results = emptyList()
+        error = null
+        busy = false
+    }
+
+    /**
+     * Schickt den Feldinhalt ab. Liefert `false` (mit Meldung), wenn er zu
+     * kurz ist ([MIN_PLACE_SEARCH_LENGTH]) — dann geht nichts an Nominatim.
+     */
+    fun submit(): Boolean {
+        val trimmed = placeSearchQueryOrNull(query)
+        if (trimmed == null) {
+            error = "Bitte mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben."
+            return false
+        }
+        submission = PlaceSearchSubmission(trimmed, (submission?.seq ?: 0) + 1)
+        return true
+    }
+
+    companion object {
+        /** Ueber Drehen hinweg bleibt nur der Text; Treffer holt ein neues Absenden. */
+        val Saver: Saver<PlaceSearchState, String> = Saver(
+            save = { it.query },
+            restore = { PlaceSearchState(it) },
+        )
+    }
+}
+
+/**
+ * Fuehrt die Ortssuche aus — **nur** fuer eine Abgabe
+ * ([PlaceSearchState.submission]), nie fuer den blossen Feldtext.
+ *
+ * Frueher hing dieser Effekt am Suchtext und fragte nach einer Tipp-Pause von
+ * selbst; das ist die Autovervollstaendigung, die Nominatim verbietet (siehe
+ * Datei-KDoc). Der Schluessel ist deshalb ausschliesslich die Abgabe: Wird
+ * weitergetippt, setzt [PlaceSearchState.changeQuery] sie zurueck, und der
+ * Schluesselwechsel bricht eine noch laufende Anfrage ab. `PlaceSearchTest`
+ * haelt genau das fest — wer hier den Text als Schluessel eintraegt, bekommt
+ * einen roten Test.
+ *
+ * [search] ist die eigentliche Anfrage (im Screen: Nominatim ueber
+ * `searchPlaces`); Fehler daraus landen als Meldung in [state].
+ */
+@Composable
+internal fun PlaceSearchEffect(
+    state: PlaceSearchState,
+    maxResults: Int,
+    search: suspend (String) -> List<GeoResult>,
+) {
+    val submission = state.submission
+    LaunchedEffect(state, submission) {
+        val query = submission?.query ?: return@LaunchedEffect
+        state.busy = true
+        state.error = null
+        val result = runCatching { search(query) }
+        if (result.exceptionOrNull() is CancellationException) return@LaunchedEffect
+        result
+            .onSuccess { hits ->
+                state.results = hits.take(maxResults)
+                state.error = if (hits.isEmpty()) "Keine Treffer gefunden." else null
+            }
+            .onFailure {
+                state.results = emptyList()
+                state.error = it.message?.takeIf(String::isNotBlank) ?: "Ortssuche fehlgeschlagen."
+            }
+        state.busy = false
+    }
+}
 
 /** Anteil der Bildschirmhoehe, den das aufgeklappte Suchblatt hoechstens einnimmt. */
 private const val SEARCH_SHEET_MAX_HEIGHT_FACTOR = 0.7f

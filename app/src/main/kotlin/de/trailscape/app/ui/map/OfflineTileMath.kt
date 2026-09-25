@@ -11,6 +11,7 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.tan
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -53,7 +54,25 @@ import kotlinx.serialization.json.put
  * beide Bauarten gueltig, damit die Tests die Raster-Faelle weiter pruefen.
  */
 
-/** Wie in `lib/tile_cache.dart`: mehr als so viele Kacheln laedt die App nicht am Stueck. */
+/**
+ * Wie in `lib/tile_cache.dart`: mehr als so viele Kacheln laedt die App nicht
+ * am Stueck.
+ *
+ * Gezaehlt werden nur die Kacheln der Hauptquelle ([estimateTileCount]), und
+ * das ist **keine** Obergrenze fuer die Anfragen eines Downloads. Beim
+ * Vektor-Stil von OpenFreeMap kommen hinzu:
+ *  * die zweite Quelle des Liberty-Stils, `ne2_shaded` (Natural-Earth-Relief,
+ *    Raster, `tileSize` 256, `maxzoom` 6) — fuer einen Stadtausschnitt eine
+ *    Handvoll Kacheln der Stufe 6;
+ *  * Style, Sprites (je zwei Aufloesungen, Bild und JSON) und die Schriften:
+ *    MapLibre laedt fuer jeden Fontstack des Stils (Noto Sans Regular, Bold,
+ *    Italic) **alle** 256 Glyph-Bereiche, beim ersten Download also rund 770
+ *    kleine Pakete.
+ * Alles davon kommt vom selben Server; Sprites und Schriften sind nicht an
+ * den Ausschnitt gebunden und liegen danach fuer alle Regionen gemeinsam in
+ * der Offline-Datenbank. Deshalb zaehlt der Fortschrittsbalken Ressourcen, nicht Kacheln
+ * (siehe `OfflineDownloadProgress.completedResources`).
+ */
 const val MAX_TILES_PER_DOWNLOAD: Int = 250
 
 /** Obergrenze der Kachelstufe eines Downloads (Original: `math.min(minZoom + 2, 17)`). */
@@ -300,13 +319,6 @@ fun stalledMessage(lastError: String?): String {
 /**
  * Die Adresse, unter der eine Offline-Region ihren Stil fuehrt.
  *
- * Beim Vektor-Stil ist das schlicht seine echte Style-URL: MapLibre laedt
- * Style, TileJSON, Sprites, Schriften und Kacheln beim Download selbst und
- * findet sie offline unter denselben Adressen wieder. Alles Folgende gilt
- * nur fuer Rasterstile (die heute nicht mehr neu geladen werden, deren alte
- * Regionen aber unter dieser Adresse in der Datenbank liegen).
- *
- * Rasterstile: *
  * [org.maplibre.android.offline.OfflineTilePyramidRegionDefinition] verlangt
  * eine Style-**URL**, keine JSON-Zeichenkette. Abgerufen wird diese Adresse
  * nie: [downloadOfflineRegion] legt die JSON vorher unter genau diesem
@@ -316,13 +328,119 @@ fun stalledMessage(lastError: String?): String {
  * [de.trailscape.app.ui.more.OfflineMapsCardContent] auch bei fehlenden
  * Metadaten noch erkennt, um welchen Stil es geht.
  *
+ * Das gilt fuer beide Bauarten: Rasterstile legen ihre zur Laufzeit gebaute
+ * JSON ab ([MapStyle.toRasterStyleJson]), der Vektor-Stil eine
+ * **festgeschriebene** Kopie seiner Style-JSON (siehe [pinStyleSources] —
+ * warum nicht einfach seine echte Style-URL, steht dort).
+ *
  * Die Wunsch-Domain endet bewusst auf `.invalid` (RFC 2606): Sollte der
  * Cache-Eintrag wider Erwarten fehlen, laeuft der Download nicht in einen
  * echten Server, sondern in einen sofortigen Namensaufloesungsfehler — und
  * damit in eine sichtbare Fehlermeldung statt in einen haengenden Balken.
  */
 fun offlineStyleUrl(style: MapStyle): String =
-    style.vectorStyleUrl ?: "https://offline-style.trailscape.invalid/${style.id}.json"
+    "https://offline-style.trailscape.invalid/${style.id}.json"
+
+/**
+ * Die Quellen einer Style-JSON, die ihre Kacheladressen erst ueber eine
+ * TileJSON nachladen (`"url": …` statt `"tiles": […]`), als Quellname →
+ * TileJSON-Adresse. Beim Liberty-Stil von OpenFreeMap ist das genau
+ * `openmaptiles` → `https://tiles.openfreemap.org/planet`; die Rasterquelle
+ * `ne2_shaded` nennt ihre Kacheln direkt und taucht hier nicht auf.
+ *
+ * @throws IllegalArgumentException wenn [styleJson] keine Style-JSON ist.
+ */
+fun tileJsonSources(styleJson: String): Map<String, String> {
+    val sources = parseStyle(styleJson)["sources"] as? JsonObject ?: return emptyMap()
+    return sources.mapNotNull { (id, source) ->
+        val url = (source as? JsonObject)?.get("url")?.jsonPrimitive?.contentOrNull
+        url?.let { id to it }
+    }.toMap()
+}
+
+/**
+ * Schreibt jede per TileJSON eingebundene Quelle von [styleJson] auf die
+ * Kacheladressen fest, die in [tileJsons] (Quellname → TileJSON-Text) stehen.
+ *
+ * ## Warum das noetig ist
+ * OpenFreeMap bindet seine Vektorquelle ueber
+ * `"url": "https://tiles.openfreemap.org/planet"` ein. Diese TileJSON
+ * (`Cache-Control: max-age=86400`) zeigt auf **versionierte** Kachelpfade
+ * (`/planet/20260913_164504_pt/{z}/{x}/{y}.pbf`), und die Version wechselt
+ * mit jedem Planet-Update, also etwa woechentlich. MapLibre fuehrt jede
+ * Ressource in der Offline-Datenbank unter ihrer URL. Wer die Karte nach einem
+ * Update online ansieht, bekommt die neue TileJSON — und dieselbe URL
+ * ueberschreibt den Eintrag, den die Region beim Download abgelegt hat.
+ * Offline fragt MapLibre danach die **neuen** Kachelpfade ab, die nie geladen
+ * wurden: Die Karte bliebe leer, obwohl die Region als fertig dasteht —
+ * ausgerechnet im Funkloch, fuer das der Download gedacht ist.
+ *
+ * Mit festgeschriebenen `tiles` gibt es keine TileJSON mehr, die sich
+ * aendern koennte; Style und Kacheln haengen dann an Adressen, die sich nie
+ * aendern. Online bleibt das tragfaehig: Laut OpenFreeMap werden „non-existing
+ * versions … automatically served as the latest version"
+ * (https://github.com/hyperknot/openfreemap#tile-versions, abgerufen
+ * 25.09.2026, live geprueft) — eine alte Version liefert also nie 404.
+ *
+ * Uebernommen werden neben `tiles` die Angaben, die sonst aus der TileJSON
+ * kaemen: `minzoom`, `maxzoom`, `bounds` und vor allem `attribution` — ohne
+ * sie fehlte der Pflichthinweis hinter dem Info-Knopf der Karte.
+ *
+ * @throws IllegalArgumentException wenn eine TileJSON fehlt oder keine
+ *   Kacheladresse nennt; die Region waere sonst leer.
+ */
+fun pinStyleSources(styleJson: String, tileJsons: Map<String, String>): String {
+    val style = parseStyle(styleJson)
+    val sources = style["sources"] as? JsonObject ?: return styleJson
+    val pinnedSources = buildJsonObject {
+        for ((id, source) in sources) {
+            val obj = source as? JsonObject
+            if (obj?.get("url") == null) {
+                put(id, source)
+                continue
+            }
+            val tileJsonText = requireNotNull(tileJsons[id]) { "TileJSON fuer Quelle $id fehlt" }
+            val tileJson = Json.parseToJsonElement(tileJsonText) as? JsonObject
+                ?: throw IllegalArgumentException("TileJSON fuer Quelle $id ist kein Objekt")
+            val tiles = tileJson["tiles"] as? JsonArray
+            require(!tiles.isNullOrEmpty()) { "TileJSON fuer Quelle $id nennt keine Kacheln" }
+            put(
+                id,
+                buildJsonObject {
+                    obj.forEach { (key, value) -> if (key != "url") put(key, value) }
+                    put("tiles", tiles)
+                    for (key in PINNED_TILEJSON_KEYS) {
+                        tileJson[key]?.let { put(key, it) }
+                    }
+                },
+            )
+        }
+    }
+    return JsonObject(style + ("sources" to pinnedSources)).toString()
+}
+
+/**
+ * Die erste festgeschriebene Kacheladresse eines mit [pinStyleSources]
+ * bearbeiteten Stils — sie traegt den Datenstand (bei OpenFreeMap die
+ * Planet-Version) und landet deshalb in den Regions-Metadaten.
+ */
+fun pinnedTileTemplate(pinnedStyleJson: String): String? =
+    runCatching {
+        val sources = parseStyle(pinnedStyleJson)["sources"] as? JsonObject
+        sources?.values
+            ?.firstNotNullOfOrNull { source ->
+                val obj = source as? JsonObject
+                if (obj?.get("type")?.jsonPrimitive?.contentOrNull != "vector") return@firstNotNullOfOrNull null
+                (obj["tiles"] as? JsonArray)?.firstOrNull()?.jsonPrimitive?.contentOrNull
+            }
+    }.getOrNull()
+
+/** Was [pinStyleSources] ausser `tiles` aus der TileJSON uebernimmt. */
+private val PINNED_TILEJSON_KEYS = listOf("minzoom", "maxzoom", "bounds", "attribution")
+
+private fun parseStyle(styleJson: String): JsonObject =
+    Json.parseToJsonElement(styleJson) as? JsonObject
+        ?: throw IllegalArgumentException("Keine Style-JSON")
 
 // ---------------------------------------------------------------- Metadaten
 
@@ -331,23 +449,37 @@ data class OfflineRegionInfo(
     val name: String,
     val styleId: String,
     val createdAtMs: Long,
+    /**
+     * Festgeschriebene Kacheladresse des Vektor-Stils samt Datenstand (siehe
+     * [pinnedTileTemplate]); `null` bei Rasterregionen und aelteren Regionen.
+     */
+    val tileTemplate: String? = null,
 )
 
-/** Baut die Metadaten einer Region (Name, Stil, Zeitpunkt) als UTF-8-JSON. */
-fun offlineRegionMetadata(name: String, styleId: String, createdAtMs: Long): ByteArray =
+/**
+ * Baut die Metadaten einer Region (Name, Stil, Zeitpunkt, beim Vektor-Stil
+ * die festgeschriebene Kacheladresse) als UTF-8-JSON.
+ */
+fun offlineRegionMetadata(
+    name: String,
+    styleId: String,
+    createdAtMs: Long,
+    tileTemplate: String? = null,
+): ByteArray =
     buildJsonObject {
         put("name", name)
         put("styleId", styleId)
         put("createdAt", createdAtMs)
+        tileTemplate?.let { put("tiles", it) }
     }.toString().toByteArray(Charsets.UTF_8)
 
 /**
  * Liest die von [offlineRegionMetadata] geschriebenen Angaben zurueck.
  * Liefert `null`, wenn die Region von einer anderen Stelle angelegt wurde.
  *
- * Das Format ist seit der ersten Fassung unveraendert — Regionen aus
- * aelteren App-Staenden (die den Stil noch ueber eine `file://`-Adresse
- * fuehrten) bleiben also lesbar.
+ * Das Format ist seit der ersten Fassung nur um das optionale Feld `tiles`
+ * gewachsen — Regionen aus aelteren App-Staenden (die den Stil noch ueber
+ * eine `file://`-Adresse fuehrten) bleiben also lesbar.
  */
 fun readOfflineRegionInfo(metadata: ByteArray?): OfflineRegionInfo? {
     val raw = metadata ?: return null
@@ -358,6 +490,7 @@ fun readOfflineRegionInfo(metadata: ByteArray?): OfflineRegionInfo? {
             name = json["name"]?.jsonPrimitive?.contentOrNull ?: return null,
             styleId = json["styleId"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             createdAtMs = json["createdAt"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L,
+            tileTemplate = json["tiles"]?.jsonPrimitive?.contentOrNull,
         )
     }.getOrNull()
 }

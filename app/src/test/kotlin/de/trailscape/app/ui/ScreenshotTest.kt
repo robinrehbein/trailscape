@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
@@ -178,7 +179,7 @@ class ScreenshotTest {
     /**
      * Stil-Blatt: Mit der Standard-Strassenkarte steht statt des
      * Speichern-Knopfs die Begruendung samt Wechsel-Knopf; nach dem Wechsel
-     * auf die Offline-Karte der Speichern-Knopf.
+     * auf die Vektorkarte der Speichern-Knopf.
      */
     @Test
     fun karteStil() {
@@ -191,12 +192,21 @@ class ScreenshotTest {
         compose.onAllNodesWithText("OpenStreetMap")[0].performTouchInput { swipeUp() }
         settle()
         shot("40-karte-stil-raster")
-        compose.onAllNodesWithText("Zur Offline-Karte wechseln")[0].performClick()
+        compose.onAllNodesWithText("Zur Vektorkarte wechseln")[0].performClick()
         settle()
         shot("41-karte-stil-offline")
     }
 
-    /** Ortssuche mit eingetipptem Text: keine Anfrage, nur das Angebot zum Absenden. */
+    /**
+     * Ortssuche mit eingetipptem Text: das Angebot zum Absenden, bei zu kurzem
+     * Text stattdessen der Hinweis auf die Mindestlaenge.
+     *
+     * Nur das **Bild**. Dass Tippen keine Anfrage ausloest, sichert
+     * `map/PlaceSearchTest` an [de.trailscape.app.ui.map.PlaceSearchState]
+     * und [de.trailscape.app.ui.map.PlaceSearchEffect] ab, auf denen der
+     * Karten-Screen seine Suche aufbaut; der Screen selbst reicht nur Text und
+     * Absenden an diesen Halter durch.
+     */
     @Test
     fun karteSuche() {
         start()
@@ -204,6 +214,10 @@ class ScreenshotTest {
         compose.onAllNodes(hasSetTextAction())[0].performTextInput("Tübingen")
         settle()
         shot("42-karte-suche-getippt")
+        compose.onAllNodes(hasSetTextAction())[0].performTextClearance()
+        compose.onAllNodes(hasSetTextAction())[0].performTextInput("Ul")
+        settle()
+        shot("43-karte-suche-zu-kurz")
     }
 
     private fun start() {

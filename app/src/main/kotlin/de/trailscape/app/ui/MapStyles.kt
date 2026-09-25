@@ -16,7 +16,9 @@ package de.trailscape.app.ui
  *  * Ein **Vektor**-Stil, den MapLibre fertig von einer Style-URL laedt
  *    ([vectorStyleUrl]). Den gibt es nur, weil er sich — anders als alle
  *    Rasterquellen — offline speichern laesst (siehe [offlineAllowed] und
- *    den KDoc an [mapStyles]).
+ *    den KDoc an [mapStyles]). Sobald eine Region gespeichert ist, zeichnet
+ *    die Karte ihn aus einer festgeschriebenen Kopie (siehe
+ *    `OfflineRegions.kt`).
  *
  * Keine der Quellen braucht einen API-Schluessel.
  */
@@ -139,19 +141,47 @@ data class MapStyle(
  *    and apps for free"; die oeffentliche Instanz hat „no limits on the
  *    number of map views or requests", keine Registrierung, keine
  *    API-Schluessel, keine Cookies. Kommerzielle Nutzung: „Yes."
- *  * Offline-Caching wird weder erlaubt noch verboten erwaehnt; mangels
- *    Anfragelimit ist ein kleiner, vom Nutzer angestossener Ausschnitt
- *    (hoechstens [de.trailscape.app.ui.map.MAX_TILES_PER_DOWNLOAD] Kacheln,
- *    siehe `OfflineTileMath.kt`) gedeckt. Fuer Grosses verweist das Projekt
- *    selbst auf seine woechentlichen Planet-Downloads (MBTiles) statt auf
- *    den Kachelserver — daran haelt sich die Obergrenze.
  *  * https://openfreemap.org/quick_start/ — Style-URL
  *    `https://tiles.openfreemap.org/styles/liberty`, fuer Apps ausdruecklich
  *    „with MapLibre Native".
+ *  * **Verbindlich sind die Nutzungsbedingungen**
+ *    (https://openfreemap.org/tos/, „Last Updated: September 9, 2026",
+ *    abgerufen 25.09.2026). Unter „User Conduct" steht: „You will not: …
+ *    Attempt to collect data from the service in automated ways without
+ *    permission". Ein Offline-Speicher-Knopf erlaubt oder verbietet die
+ *    Seite nirgends ausdruecklich; an dieser Klausel muss er sich messen.
+ *
+ * Warum der Download hier trotzdem angeboten wird — und wo die Begruendung
+ * endet: Gemeint ist mit der Klausel erkennbar das Abgrasen des Dienstes
+ * (Scraper, Massen-Downloads; fuer ganze Gebiete verweist das Projekt selbst
+ * auf seine woechentlichen Planet-Dateien als MBTiles). Der Download dieser
+ * App ist das Gegenteil davon: Er startet nur auf ausdruecklichen Knopfdruck,
+ * nimmt genau den Ausschnitt, den die Nutzerin gerade ansieht, und ist auf
+ * [de.trailscape.app.ui.map.MAX_TILES_PER_DOWNLOAD] Kacheln und hoechstens
+ * [de.trailscape.app.ui.map.MAX_OFFLINE_EDGE_KM] Kantenlaenge begrenzt
+ * (siehe `OfflineTileMath.kt`) — das sind die Kacheln, die sie beim Hin- und
+ * Herschieben ueber dieselbe Stelle ohnehin laden wuerde, nur vorab. Das ist
+ * eine Auslegung, keine Erlaubnis. **Offen vor dem Release:** eine kurze
+ * schriftliche Bestaetigung von info@openfreemap.org einholen und hier mit
+ * Datum und Wortlaut vermerken; faellt sie negativ aus, bekommt dieser Stil
+ * `offlineAllowed = false`, und die Oberflaeche bietet den Download dann bei
+ * keinem Stil mehr an.
+ *
+ * Weitere Punkte der Bedingungen:
+ *  * „You must be at least 18 years old … to integrate our public service
+ *    into a website or application" — das betrifft die Person, die die App
+ *    veroeffentlicht, nicht die Nutzerinnen („This age requirement does not
+ *    apply to end users who merely view or interact with embedded maps").
+ *  * „We may use Cloudflare as a CDN … By using the Site, you consent to
+ *    Cloudflare's processing of your requests." Die Kacheln kommen live
+ *    ueber Cloudflare (Antwort-Header `server: cloudflare`, `cf-ray`); das
+ *    steht deshalb in `PRIVACY.md` bei den Empfaengern.
  *  * Attribution ist Pflicht: „OpenFreeMap © OpenMapTiles Data from
- *    OpenStreetMap" — MapLibre blendet sie aus der TileJSON der Quelle
- *    selbst ein (Info-Knopf der Karte), der Text unten ist fuer die
- *    Lizenzseite.
+ *    OpenStreetMap". MapLibre blendet sie hinter dem Info-Knopf der Karte
+ *    ein — aus der TileJSON bzw. aus der festgeschriebenen Kopie des Stils,
+ *    die sie mit uebernimmt (`pinStyleSources` in `OfflineTileMath.kt`).
+ *    Der Info-Knopf sitzt oben links, wo ihn kein Blatt verdeckt (siehe
+ *    `MapViewHost.kt`). Der Text unten ist fuer die Lizenzseite.
  */
 val mapStyles: List<MapStyle> = listOf(
     MapStyle(
@@ -192,7 +222,9 @@ val mapStyles: List<MapStyle> = listOf(
     ),
     MapStyle(
         id = "openfreemap",
-        label = "Offline-Karte (OpenFreeMap)",
+        // Nicht „Offline-Karte": Der Stil wird live geladen, solange nichts
+        // gespeichert ist — offline ist er erst nach dem Speichern.
+        label = "Vektorkarte (OpenFreeMap)",
         urlTemplate = "",
         // `maxzoom` der Vektorquelle `https://tiles.openfreemap.org/planet`.
         maxZoom = 14,

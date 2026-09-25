@@ -59,7 +59,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
 | Sync-Einstellungen (optional) | SharedPreferences (`trailscape.sync`) | Adresse **deines** Sync-Servers und dein Zugangstoken — im Klartext im privaten App-Speicher |
 | Health-Sync-Stand | SharedPreferences (`trailscape.healthsync`) | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird |
-| Offline-Karten | `<filesDir>/mbgl-offline.db` | heruntergeladene Kartenkacheln der von dir gewählten Regionen |
+| Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
 | Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
 | Zum Teilen erzeugte GPX-Dateien | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
@@ -99,7 +99,7 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 
 | Empfänger | Wann | Was mitgeht |
 |---|---|---|
-| Der gewählte **Kachel-Server** — je nach Kartenstil `tile.openstreetmap.de` (FOSSGIS e. V.), `tile-cyclosm.openstreetmap.fr`, `tile.openstreetmap.org`, `tile.opentopomap.org`, `server.arcgisonline.com` (Esri) oder `tiles.openfreemap.org` (OpenFreeMap, Stil „Offline-Karte“) | sobald die Karte einen Ausschnitt zeichnet; beim Offline-Speichern (nur mit der „Offline-Karte“ möglich) ausschließlich `tiles.openfreemap.org` | Kachelkoordinaten (`z/x/y`), bei OpenFreeMap zusätzlich der Abruf von Kartenstil, Symbolen und Schriften (ohne Bezug zu dir). Daraus ergibt sich, **welchen Kartenausschnitt du dir ansiehst** — zusammen mit der IP-Adresse also ein Hinweis darauf, wo du dich aufhältst oder hin willst. OpenFreeMap arbeitet nach eigener Angabe ohne Registrierung, API-Schlüssel und Cookies |
+| Der gewählte **Kachel-Server** — je nach Kartenstil `tile.openstreetmap.de` (FOSSGIS e. V.), `tile-cyclosm.openstreetmap.fr`, `tile.openstreetmap.org`, `tile.opentopomap.org`, `server.arcgisonline.com` (Esri) oder `tiles.openfreemap.org` (OpenFreeMap, Stil „Vektorkarte“) | sobald die Karte einen Ausschnitt zeichnet; beim Offline-Speichern (nur mit der „Vektorkarte“ möglich) ausschließlich `tiles.openfreemap.org` | Kachelkoordinaten (`z/x/y`), bei OpenFreeMap zusätzlich der Abruf von Kartenstil, Symbolen und Schriften (ohne Bezug zu dir). Daraus ergibt sich, **welchen Kartenausschnitt du dir ansiehst** — zusammen mit der IP-Adresse also ein Hinweis darauf, wo du dich aufhältst oder hin willst. **OpenFreeMap** (Hyperknot Software Kft., Ungarn) arbeitet ohne Registrierung, API-Schlüssel und Cookies; laut seiner [Datenschutzerklärung](https://openfreemap.org/privacy/) protokolliert es im Regelbetrieb Browser/User-Agent und Zeitpunkt, aber keine IP-Adresse, und schaltet ein IP-Protokoll nur bei Missbrauch oder Angriffen für höchstens 30 Tage zu. Ausgeliefert werden die Kacheln über das CDN **Cloudflare, Inc. (USA)**: Cloudflare sieht deine IP-Adresse und die abgerufenen Kachel-URLs, also ebenfalls den Kartenausschnitt — das ist eine Übermittlung in ein Drittland ([Datenschutzerklärung von Cloudflare](https://www.cloudflare.com/privacypolicy/)) |
 | **brouter.de** | wenn du eine Route berechnen lässt | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
 | **brouter.de** | wenn du unter *Mehr → Offline-Routing* Routing-Kacheln herunterlädst oder aktualisierst (`https://brouter.de/brouter/segments4/…`, siehe `app/…/routing/SegmentDownloader.kt` und `core/…/RoutingSegments.kt`) | der Name der gewählten **5°×5°-Kachel** (z. B. `E10_N45.rd5`) — daraus ergibt sich die grobe Region, für die du Routing willst, typischerweise also deine Wohn- oder Urlaubsgegend. Bei einer Delta-Aktualisierung steht zusätzlich die **MD5-Prüfsumme deines lokalen Kachelstands** in der URL; sie verrät dem Server, welchen Tagesstand du zuletzt geladen hattest, aber nichts über deine Touren |
 | **nominatim.openstreetmap.org** | wenn du eine Ortssuche **absendest** (Suchtaste der Tastatur oder „„…“ suchen“) — nicht schon beim Tippen | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
@@ -108,7 +108,7 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | **api.github.com** (Update-Prüfung) | beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
 
 Zu den Kartenkacheln: Wer nur ungern seinen Kartenausschnitt an einen Anbieter
-gibt, wählt die **Offline-Karte** und speichert die Region einmal (*Karte →
+gibt, wählt die **Vektorkarte** und speichert die Region einmal (*Karte →
 Ebenen-Knopf → „Diesen Ausschnitt offline speichern“*) — danach kommen die
 Kacheln aus dem Gerät. Die übrigen Kartenstile lassen sich nicht offline
 speichern, weil ihre Server Vorab-Downloads nicht erlauben; früher damit
@@ -259,9 +259,8 @@ Anfrage an jemanden:
   jederzeit ändern.
 
 Rechte gegenüber den in Abschnitt 4 genannten Dritten (FOSSGIS, CyclOSM,
-OpenStreetMap Foundation, OpenTopoMap, Esri, OpenFreeMap, brouter.de, GitHub,
-Google) machst du direkt
-dort geltend; wir geben ihnen nichts über dich weiter, was über die dort
+OpenStreetMap Foundation, OpenTopoMap, Esri, OpenFreeMap, Cloudflare,
+brouter.de, GitHub, Google) machst du direkt dort geltend; wir geben ihnen nichts über dich weiter, was über die dort
 genannten Anfragen hinausgeht.
 
 ---

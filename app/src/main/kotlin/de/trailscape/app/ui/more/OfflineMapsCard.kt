@@ -29,14 +29,13 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.formatDate
+import de.trailscape.app.ui.map.listOfflineRegions
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.withCause
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
-import org.maplibre.android.MapLibre
-import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.offline.OfflineRegion
 import org.maplibre.android.offline.OfflineRegionStatus
 import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
@@ -250,26 +249,12 @@ private const val DELETE_FAILED_MESSAGE =
 
 /**
  * Laedt alle gespeicherten Offline-Regionen samt Downloadstatus (fuer die
- * Groessenanzeige). `MapLibre.getInstance(context)` ist idempotent und wird
- * hier vorsorglich aufgerufen, falls der Karten-Screen (der die Kartenansicht
- * selbst initialisiert) noch nicht sichtbar war.
+ * Groessenanzeige). Die Liste selbst kommt aus
+ * [de.trailscape.app.ui.map.listOfflineRegions], das MapLibre auch dann
+ * initialisiert, wenn der Karten-Screen noch nicht sichtbar war.
  */
 private suspend fun listOfflineRegionsWithStatus(context: Context): List<OfflineRegionRow> {
-    val appContext = context.applicationContext
-    MapLibre.getInstance(appContext)
-    val manager = OfflineManager.getInstance(appContext)
-
-    val rawRegions = suspendCancellableCoroutine<List<OfflineRegion>> { cont ->
-        manager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
-            override fun onList(offlineRegions: Array<OfflineRegion>?) {
-                if (cont.isActive) cont.resume(offlineRegions?.toList() ?: emptyList())
-            }
-
-            override fun onError(error: String) {
-                if (cont.isActive) cont.resumeWithException(IllegalStateException(error))
-            }
-        })
-    }
+    val rawRegions = listOfflineRegions(context)
 
     return rawRegions.map { region ->
         val status = runCatching { offlineRegionStatus(region) }.getOrNull()
@@ -364,11 +349,9 @@ private fun deleteAllOfflineRegionsAsync(
  *
  * Die Style-URL traegt die Stilkennung im Pfad — sowohl die heutige Adresse
  * aus [de.trailscape.app.ui.map.offlineStyleUrl]
- * (`https://offline-style.trailscape.invalid/voyager.json`) als auch die
+ * (`https://offline-style.trailscape.invalid/openfreemap.json`) als auch die
  * `file://`-Adresse aelterer Regionen (`…/map-styles/voyager.json`). Das
- * schlichte `contains` erkennt deshalb beide — und auch die echte
- * Style-URL des Vektor-Stils (`tiles.openfreemap.org/…` enthaelt dessen
- * Kennung `openfreemap`).
+ * schlichte `contains` erkennt deshalb beide.
  */
 private fun fallbackRegionName(region: OfflineRegion): String {
     val definition = region.definition
