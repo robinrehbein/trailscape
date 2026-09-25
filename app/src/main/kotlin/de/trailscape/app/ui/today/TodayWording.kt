@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.today
 
 import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.core.formatGoalDuration
 import de.trailscape.core.HrvAssessment
 import de.trailscape.core.HrvStatus
 import de.trailscape.core.ReadinessBand
@@ -636,6 +637,18 @@ fun goalLine(today: LocalDate, goalDate: LocalDate, weekIndex: Int, weekCount: I
         add(formatGoalDate(today, goalDate))
         add(goalCountdown(today, goalDate))
         if (weekIndex >= 0 && weekCount > 0) add("Woche ${weekIndex + 1} von $weekCount")
+    }.joinToString(" · ")
+
+/**
+ * Die Ziel-Zeile, wenn eine Zielzeit eingetragen ist (Fuehrung „Klartext"):
+ * „Ziel 2:10 h · Stand heute ca. 2:25 h · noch 12 Wochen". Ohne Prognose
+ * (zu wenige passende Touren) entfaellt der mittlere Teil.
+ */
+fun goalTimeLine(today: LocalDate, goalDate: LocalDate, targetMin: Int, currentMin: Int?): String =
+    buildList {
+        add("Ziel ${formatGoalDuration(targetMin)} h")
+        currentMin?.let { add("Stand heute ca. ${formatGoalDuration(it)} h") }
+        add(goalCountdown(today, goalDate))
     }.joinToString(" · ")
 
 /** Anteil der Zeit von Planbeginn bis Zieltag, der schon hinter uns liegt (0…1). */

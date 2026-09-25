@@ -45,6 +45,8 @@ import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
 import de.trailscape.app.ui.weekdayDateFormat
 import de.trailscape.core.adaptPlan
+import de.trailscape.core.predictGoalFinish
+import de.trailscape.core.projectedEventCtl
 import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.decideTodayRoute
 import de.trailscape.core.riddenRides
@@ -126,6 +128,17 @@ fun TodayScreen(appViewModel: AppViewModel) {
 
     // Hoechstens eine Einheit ist das Tagesprogramm; `:core` setzt nie zwei
     // auf denselben Tag.
+    // Prognose fuer die Ziel-Zeile — dieselbe Rechnung wie im Training-Tab.
+    val goalPrediction = remember(displayPlan, rides, insights) {
+        displayPlan?.takeIf { it.goal.targetDurationMin != null }?.let {
+            predictGoalFinish(
+                goal = it.goal,
+                rides = rides,
+                currentCtl = insights.latest?.ctl,
+                projectedCtl = projectedEventCtl(it, insights.latest?.ctl),
+            )
+        }
+    }
     val todaySession = remember(displayPlan, nowMs) {
         displayPlan?.let { sessionsForDay(it, nowMs).firstOrNull() }
     }
@@ -259,14 +272,24 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         val goal = shownPlan.goal
                         val goalDate = localOfEpochMs(goal.date).toLocalDate()
                         val planStart = shownPlan.weeks.firstOrNull()?.start ?: shownPlan.createdAt
+                        val targetMin = goal.targetDurationMin
                         GoalCard(
                             title = "${goal.name} · ${formatKmDe(goal.distanceKm)} km",
-                            line = goalLine(
-                                today = today,
-                                goalDate = goalDate,
-                                weekIndex = currentWeek?.index ?: -1,
-                                weekCount = shownPlan.weeks.size,
-                            ),
+                            line = if (targetMin != null) {
+                                goalTimeLine(
+                                    today = today,
+                                    goalDate = goalDate,
+                                    targetMin = targetMin,
+                                    currentMin = goalPrediction?.prognosis?.currentMin,
+                                )
+                            } else {
+                                goalLine(
+                                    today = today,
+                                    goalDate = goalDate,
+                                    weekIndex = currentWeek?.index ?: -1,
+                                    weekCount = shownPlan.weeks.size,
+                                )
+                            },
                             progress = goalProgress(localOfEpochMs(planStart).toLocalDate(), goalDate, today),
                             onOpenTraining = openTraining,
                         )
