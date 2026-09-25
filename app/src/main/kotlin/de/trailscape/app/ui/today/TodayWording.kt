@@ -8,6 +8,7 @@ import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RecoveryFlag
 import de.trailscape.core.RestingHrAssessment
 import de.trailscape.core.RideInfo
+import de.trailscape.core.RouteTarget
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.SleepAssessment
 import de.trailscape.core.TodayRoute
@@ -93,6 +94,77 @@ fun todayEffort(
         }
     }
 }
+
+/**
+ * Was die App heute zum Fahren anbietet: eine Runde samt der Angabe, ob es die
+ * Trainingsrunde oder das ruhigere Angebot eines Ruhetags ist.
+ *
+ * @param restDay `true`, wenn [target] die lockere Ruhetagsrunde ist
+ *   ([de.trailscape.core.restDayRideTarget]) und nicht die Tagesrunde.
+ */
+data class TodayOffer(val target: RouteTarget, val restDay: Boolean)
+
+/**
+ * Welche Runde „Heute", die Karte und der Losfahren-Dialog anbieten.
+ *
+ * ## Warum eine einzige Funktion
+ * Die drei Stellen rechneten bisher je fuer sich: „Heute" kannte den
+ * Plan-Ruhetag ([todayEffort] mit `planRestDay`), die Karte und der Dialog
+ * nahmen nur [TodayRoute.target] — und das ist an einem planfreien Tag die
+ * normale Tagesempfehlung. So stand oben „Heute ist Ruhetag" und auf der
+ * Karte „★ Heute 21 km". Jetzt entscheidet die Tagesart ([TodayEffort]), und
+ * alle drei lesen dasselbe Ergebnis.
+ *
+ * ## Die Regeln
+ *  * **Zieltag** — kein Angebot; die Strecke des Events steht schon.
+ *  * **Ruhetag** (aus dem Plan oder aus der Tagesform) — die lockere
+ *    [restDayRide], ausdruecklich als solche markiert. Fahren bleibt erlaubt,
+ *    nur nicht die geplante Trainingsrunde: Wer am Ruhetag aufs Rad will,
+ *    bekommt das, was einem Ruhetag am wenigsten schadet.
+ *  * **Sonst** — die Tagesrunde aus [decideTodayRoute][de.trailscape.core.decideTodayRoute].
+ */
+fun offeredTarget(route: TodayRoute, effort: TodayEffort, restDayRide: RouteTarget): TodayOffer? =
+    when (effort) {
+        TodayEffort.ZIELTAG -> null
+        TodayEffort.RUHETAG -> TodayOffer(restDayRide, restDay = true)
+        else -> route.target?.let { TodayOffer(it, restDay = false) }
+    }
+
+/**
+ * Beschriftung des Knopfs auf der Karte: „Heute 45 km" bzw. am Ruhetag
+ * „Ruhetag – locker rollen?". Die Frage ist Absicht — es ist ein Angebot,
+ * keine Aufforderung.
+ */
+fun offerChipLabel(offer: TodayOffer): String = if (offer.restDay) {
+    "Ruhetag – locker rollen?"
+} else {
+    "Heute ${offer.target.distanceKm.toInt()} km"
+}
+
+/** Beschriftung des Knopfs in der Hero-Karte von „Heute". */
+fun offerButtonLabel(offer: TodayOffer): String = if (offer.restDay) {
+    "Locker rollen · ${offer.target.distanceKm.roundToInt()} km"
+} else {
+    "Runde für heute bauen"
+}
+
+/**
+ * Der dezente Satz im Losfahren-Dialog — am Ruhetag mit demselben Wort, das
+ * auch „Heute" als Schlagzeile traegt. Ganze Kilometer wie in „Heute": Vorher
+ * stand hier „45,0 km", oben „45 km" — dieselbe Zahl, zwei Schreibweisen.
+ */
+fun offerHint(offer: TodayOffer): String {
+    val km = offer.target.distanceKm.roundToInt()
+    return if (offer.restDay) {
+        "Heute ist Ruhetag. Wenn du trotzdem fahren magst: $km km locker rollen."
+    } else {
+        "Heute stehen $km km an."
+    }
+}
+
+/** Beschriftung des Bau-Knopfs im Losfahren-Dialog. */
+fun offerDialogAction(offer: TodayOffer): String =
+    if (offer.restDay) "Lockere Runde bauen" else "Passende Runde bauen"
 
 /** Die laengste Einheit einer Woche mit mindestens zwei Einheiten. */
 private fun isLongestOfWeek(session: TrainingSession, weekSessions: List<TrainingSession>): Boolean {
@@ -589,10 +661,14 @@ fun weekSummary(
     val open = strip.count {
         it.state == StripState.PLANNED || (it.state == StripState.TODAY && it.km != null)
     }
+    // Erreicht schlaegt offen: „79 von 40 km · noch 1 Fahrt" las sich wie ein
+    // Rueckstand, obwohl das Ziel doppelt erfuellt war. Verglichen wird die
+    // gerundete Zahl — dieselbe, die davor steht; „40 von 40 km" ohne
+    // „geschafft" waere derselbe Widerspruch in klein.
     val extra = when {
+        km >= targetKm -> "Wochenziel geschafft"
         open == 1 -> "noch 1 Fahrt"
         open > 1 -> "noch $open Fahrten"
-        km >= targetKm -> "Wochenziel geschafft"
         else -> null
     }
     return "$km von $targetKm km" to extra

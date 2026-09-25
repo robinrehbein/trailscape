@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -105,7 +106,9 @@ enum class HealthHint {
  * Ring (nur mit Gesamtwert) neben Schlagzeile und Satz, darunter der **eine**
  * volle Knopf der Seite und der Link ins „Warum?"-Blatt. Der Knopf steht jetzt
  * *in* der Karte wie in der Vorlage — er gehoert zur Empfehlung, nicht neben
- * sie. Ohne Routenziel (Ruhetag, Zieltag) entfaellt er ersatzlos.
+ * sie. Am Zieltag entfaellt er ersatzlos; am Ruhetag steht an seiner Stelle
+ * das ruhigere, neutrale „Locker rollen" ([offer] mit `restDay`) — dasselbe
+ * Angebot, das Karte und Losfahren-Dialog machen.
  *
  * Ohne Gesamtwert bleibt der Ring weg statt leer zu stehen: Ein Bogen bei 0 %
  * waere eine Aussage ueber den Nutzer, die niemand getroffen hat. Die
@@ -118,7 +121,7 @@ internal fun HeroCard(
     band: ReadinessBand?,
     headline: String,
     sentence: String,
-    showBuildRoute: Boolean,
+    offer: TodayOffer?,
     onBuildRoute: () -> Unit,
     onWhy: () -> Unit,
     healthHint: HealthHint,
@@ -166,7 +169,7 @@ internal fun HeroCard(
                 )
             }
 
-            if (showBuildRoute) {
+            if (offer != null && !offer.restDay) {
                 Button(
                     onClick = onBuildRoute,
                     modifier = Modifier
@@ -176,7 +179,21 @@ internal fun HeroCard(
                 ) {
                     Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Runde für heute bauen", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            } else if (offer != null) {
+                // Am Ruhetag: dasselbe Angebot wie auf der Karte, aber ruhig
+                // (Umriss statt Akzentflaeche) — die Seite raet zur Pause und
+                // soll nicht mit dem lautesten Knopf das Gegenteil sagen. Kein
+                // NeutralButton: dessen Flaeche verschwindet auf der Karte.
+                OutlinedButton(
+                    onClick = onBuildRoute,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                ) {
+                    Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 

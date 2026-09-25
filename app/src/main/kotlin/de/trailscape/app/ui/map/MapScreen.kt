@@ -100,7 +100,7 @@ import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
-import de.trailscape.app.ui.rememberTodayRoute
+import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.M3Transitions
 import androidx.compose.animation.AnimatedContent
@@ -570,7 +570,9 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
     // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
     var historyMode by rememberSaveable { mutableStateOf(false) }
-    val todayRoute = rememberTodayRoute(appViewModel)
+    // Dasselbe Angebot wie „Heute" und der Losfahren-Dialog (siehe
+    // [decideToday]): am Ruhetag die lockere Runde, nie die Trainingsrunde.
+    val todayOffer = rememberTodayDecision(appViewModel).offer
 
     // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
     // (siehe `PlaceCard.kt`). Ersetzt den fruehreren `searchMarker: Waypoint?`:
@@ -3205,9 +3207,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 endExploreSearch()
                                 onPlaceChosen(place)
                             },
-                            todayRouteKm = todayRoute.target?.distanceKm,
+                            todayOffer = todayOffer,
                             onTodayRoute = {
-                                todayRoute.target?.let { appViewModel.requestRouteGeneration(it) }
+                                todayOffer?.let { appViewModel.requestRouteGeneration(it.target) }
                             },
                             onRoundTripHere = { openRoundTripSetup(null) },
                             expanded = exploreSheetExpanded,

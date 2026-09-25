@@ -456,3 +456,47 @@ fun routeTargetForToday(
         source = RouteTargetSource.TAGESEMPFEHLUNG,
     )
 }
+
+/** Beschriftung der lockeren Runde am Ruhetag ([restDayRideTarget]). */
+const val restDayRideLabel: String = "Ruhetag – locker rollen"
+
+/**
+ * Die lockere Runde fuer einen Ruhetag, an dem trotzdem jemand fahren will.
+ *
+ * ## Warum es das gibt
+ * [routeTargetForToday] und [decideTodayRoute] liefern an einem Ruhetag
+ * bewusst **kein** Trainingsziel — und das bleibt so: Die App empfiehlt keine
+ * Einheit, wenn Plan oder Tagesform zur Pause raten. Fahren verbieten will sie
+ * aber auch nicht. Frueher bot die Karte an einem Plan-Ruhetag stillschweigend
+ * die normale Tagesrunde an, waehrend „Heute" „Ruhetag" sagte; das war der
+ * Widerspruch. Die ehrliche Antwort ist ein ruhigeres Angebot, das sich auch
+ * so nennt: kurz, flach, locker.
+ *
+ * ## Warum genau diese Runde
+ * Laenge und Profil sind die der vorhandenen Erholungsvariante
+ * [DailyRecommendationKind.RECOVERY] („kurz und locker fahren", 1 h flach) —
+ * keine neue Zahl, sondern dieselbe, die die App an einem sehr muede
+ * gemessenen Tag ohnehin vorschlaegt. Das Wochenbudget deckelt sie wie jede
+ * andere Tagesrunde.
+ */
+fun restDayRideTarget(profile: TrainingProfile, recentRides: List<RideInfo>): RouteTarget {
+    val kind = DailyRecommendationKind.RECOVERY
+    var hours = baseDurationForRecommendation(kind) ?: 1.0
+    val budget = profile.weeklyHours
+    if (budget != null && budget > 0) {
+        hours = kotlin.math.min(hours, budget * MAX_WEEK_HOURS_SHARE)
+    }
+    hours = max(hours, 0.25)
+
+    val intensity = intensityForRecommendation(kind)
+    val speed = planningSpeedKmh(intensity, profile, recentRides)
+    return RouteTarget(
+        distanceKm = hours * speed,
+        ascentPreference = ascentPreferenceForRecommendation(kind),
+        durationH = hours,
+        speedKmh = speed,
+        intensity = intensity,
+        label = restDayRideLabel,
+        source = RouteTargetSource.TAGESEMPFEHLUNG,
+    )
+}

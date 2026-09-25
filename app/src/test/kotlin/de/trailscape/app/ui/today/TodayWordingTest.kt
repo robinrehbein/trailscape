@@ -214,6 +214,60 @@ class TodayWordingTest {
         assertNull(upcomingKeySession(week, todayIndex = 5, todayKm = 80))
     }
 
+    // ------------------------------------------------------------ Angebot
+
+    /** Die lockere Ruhetagsrunde, wie `restDayRideTarget` sie liefern koennte. */
+    private val easy = target(16.0, SessionIntensity.LOCKER)
+
+    /** Tagesart und Angebot in einem Zug — dieselbe Kette wie `decideToday`. */
+    private fun offer(r: TodayRoute, planRestDay: Boolean, weekSessions: List<TrainingSession>) =
+        offeredTarget(r, todayEffort(r, planRestDay, weekSessions), easy)
+
+    @Test
+    fun `Plan-Ruhetag bietet die lockere Runde statt der Tagesempfehlung`() {
+        // Die Tagesempfehlung haette 21 km — genau die stand frueher als
+        // „Heute 21 km" auf der Karte, waehrend „Heute" Ruhetag sagte.
+        val free = route(target(21.0, SessionIntensity.GRUNDLAGE), null)
+        val o = offer(free, planRestDay = true, weekSessions = week)
+        assertEquals(TodayOffer(easy, restDay = true), o)
+        assertEquals("Ruhetag – locker rollen?", offerChipLabel(o!!))
+        assertEquals("Locker rollen · 16 km", offerButtonLabel(o))
+        assertEquals("Heute ist Ruhetag. Wenn du trotzdem fahren magst: 16 km locker rollen.", offerHint(o))
+    }
+
+    @Test
+    fun `Tagesform-Ruhetag bietet die lockere Runde, auch mit Planeinheit`() {
+        val skipped = route(null, week[1], downgraded = true)
+        assertEquals(TodayOffer(easy, restDay = true), offer(skipped, false, week))
+        // Ohne Plan genauso.
+        assertEquals(TodayOffer(easy, restDay = true), offer(route(null, null), false, emptyList()))
+    }
+
+    @Test
+    fun `Zieltag bietet keine Runde`() {
+        val event = session("Sa", 120, SessionIntensity.HART, isEvent = true)
+        assertNull(offer(route(null, event), false, week))
+    }
+
+    @Test
+    fun `Fahrtag im Plan bietet die Tagesrunde`() {
+        val planned = target(45.0, SessionIntensity.GRUNDLAGE)
+        val o = offer(route(planned, week[1]), false, week)
+        assertEquals(TodayOffer(planned, restDay = false), o)
+        assertEquals("Heute 45 km", offerChipLabel(o!!))
+        assertEquals("Runde für heute bauen", offerButtonLabel(o))
+        assertEquals("Heute stehen 45 km an.", offerHint(o))
+    }
+
+    @Test
+    fun `ohne Plan und ausserhalb der Planwochen gilt die Tagesempfehlung`() {
+        // Ausserhalb der Planwochen gibt es keine laufende Woche, also auch
+        // keinen Plan-Ruhetag — genau wie ganz ohne Plan.
+        val fromRecommendation = target(21.0, SessionIntensity.GRUNDLAGE)
+        val o = offer(route(fromRecommendation, null), planRestDay = false, weekSessions = emptyList())
+        assertEquals(TodayOffer(fromRecommendation, restDay = false), o)
+    }
+
     // ----------------------------------------------------- Wochenstreifen
 
     @Test
@@ -235,6 +289,25 @@ class TodayWordingTest {
 
         assertEquals("32 von 120 km" to "noch 2 Fahrten", weekSummary(31.6, 120, strip, rideCount = 1))
         assertEquals("32 km diese Woche" to "1 Fahrt", weekSummary(31.6, null, strip, rideCount = 1))
+    }
+
+    @Test
+    fun `erreichtes Wochenziel schlaegt offene Fahrten`() {
+        val thursday = LocalDate.of(2026, 9, 24)
+        // Noch eine Fahrt geplant (Samstag) — trotzdem kein Rueckstand.
+        val strip = weekStrip(thursday, week, emptyMap(), todayKm = null)
+        assertEquals("79 von 40 km" to "Wochenziel geschafft", weekSummary(79.0, 40, strip, rideCount = 3))
+        // Angezeigt wird die gerundete Zahl — „40 von 40 km" ist geschafft.
+        assertEquals("40 von 40 km" to "Wochenziel geschafft", weekSummary(39.6, 40, strip, rideCount = 2))
+        // Knapp darunter bleibt es beim Offenen.
+        assertEquals("39 von 40 km" to "noch 1 Fahrt", weekSummary(39.4, 40, strip, rideCount = 2))
+    }
+
+    @Test
+    fun `unter Ziel ohne offene Fahrt bleibt der Zusatz leer`() {
+        val sunday = LocalDate.of(2026, 9, 27)
+        val strip = weekStrip(sunday, week, emptyMap(), todayKm = null)
+        assertEquals("30 von 40 km" to null, weekSummary(30.0, 40, strip, rideCount = 2))
     }
 
     @Test
