@@ -204,6 +204,13 @@
   .histmap .legend{position:absolute;left:10px;bottom:10px;right:10px;background:var(--barbg);border-radius:16px;padding:10px 12px;font-size:12px;display:flex;justify-content:space-between;gap:8px}
   .histmap .legend b{font-size:15px;display:block}
 
+  .newtag{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:10px;background:var(--acc-cont);color:var(--on-acc-cont);font-size:11px;font-weight:800;justify-self:start;margin-top:3px}
+  .newtag.none{background:var(--tone);color:var(--mut)}
+  .tilepop{position:absolute;left:50%;top:190px;transform:translate(-50%,-50%) scale(.8);background:var(--acc);color:var(--on-acc);padding:10px 16px;border-radius:18px;font-weight:800;opacity:0;transition:.25s;pointer-events:none;z-index:5;white-space:nowrap}
+  .tilepop.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  .tilechip{position:absolute;top:44px;left:14px;z-index:5;background:var(--barbg);border-radius:18px;height:36px;padding:0 12px;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;box-shadow:var(--elev)}
+  .tilechip i{width:12px;height:12px;border:1.5px solid var(--acc);border-radius:2px}
+
   /* Nav-Leiste */
   .nav{position:absolute;left:0;right:0;bottom:0;padding:0 12px 14px;display:flex;gap:10px;align-items:center;z-index:30}
   .caps{flex:1;display:flex;height:62px;border-radius:31px;background:var(--barbg);box-shadow:var(--elev-hi);padding:5px;backdrop-filter:blur(14px)}
@@ -525,6 +532,7 @@
         <div class="mapbg" id="kmap"></div>
         <div class="me" style="left:50%;top:66%"></div>
         <svg class="pin" id="kpin" hidden><use href="#i-pin"/></svg>
+        <button class="tilechip tab-nums" id="tilechip" data-sheet="ebenen"><i></i>47 Kacheln · Quadrat 5×5</button>
         <div class="map-top">
           <button class="iconbtn" data-sheet="ebenen" aria-label="Karte und Ebenen"><svg><use href="#i-layers"/></svg></button>
         </div>
@@ -565,19 +573,20 @@
             <div class="seg" role="group" aria-label="Untergrund">
               <button class="on">Gemischt</button><button>Asphalt</button><button>Schotter</button>
             </div>
+            <div class="rowlink"><span class="grow"><b>Neue Gegenden bevorzugen</b><br><span class="muted small">Führt durch Kacheln, die du noch nicht kennst</span></span><span class="switch" role="switch" aria-checked="true" tabindex="0" data-switch data-novel></span></div>
             <button class="btn pri" data-k-go="kand">Vorschläge zeigen</button>
           </div>
 
           <!-- Zustand: Kandidaten -->
           <div class="sheet" data-k="kand" hidden>
             <div class="rowlink">
-              <div class="grow"><div class="h3">3 Runden gefunden</div><div class="muted small">Tippe zum Vergleichen</div></div>
+              <div class="grow"><div class="h3">3 Runden gefunden</div><div class="muted small" id="kandsub">Sortiert nach neuen Kacheln</div></div>
               <button class="iconbtn flat" data-k-go="runde" aria-label="Zurück"><svg><use href="#i-x"/></svg></button>
             </div>
             <div class="cands tab-nums">
-              <button class="cand on" data-cand="nord"><b>Nord</b><span>44,6 km</span><span>380 Hm</span></button>
-              <button class="cand" data-cand="ost"><b>Ost</b><span>46,1 km</span><span>290 Hm</span></button>
-              <button class="cand" data-cand="sued"><b>Süd</b><span>45,3 km</span><span>510 Hm</span></button>
+              <button class="cand on" data-cand="nord"><b>Nord</b><span>44,6 km</span><span>380 Hm</span><span class="newtag">+9 neu</span></button>
+              <button class="cand" data-cand="sued"><b>Süd</b><span>45,3 km</span><span>510 Hm</span><span class="newtag">+4 neu</span></button>
+              <button class="cand" data-cand="ost"><b>Ost</b><span>46,1 km</span><span>290 Hm</span><span class="newtag none">bekannt</span></button>
             </div>
             <button class="btn pri" data-k-go="route">Diese Runde nehmen</button>
           </div>
@@ -695,6 +704,7 @@
           <svg><use href="#i-left"/></svg>
           <div><b>In 220 m links</b><span>Kiesweg am Wehr · noch 32,2 km</span></div>
         </div>
+        <div class="tilepop" id="tilepop">Neue Kachel! · 3 heute</div>
         <div class="cp-data" id="cp-daten">
           <div class="speed tab-nums"><b id="spd">23,8</b><span>km/h</span></div>
           <div class="cpgrid tab-nums">
@@ -722,6 +732,7 @@
           <div><b>44,6</b><span>km</span></div><div><b>1:52</b><span>Std.</span></div><div><b>380</b><span>Hm</span></div><div><b>134</b><span>Ø Puls</span></div>
         </div>
         <div class="note"><b>Tagesziel erledigt ✓</b><br>Lockere 45 km wie geplant. Diese Woche jetzt 123 von 120 km.</div>
+        <div class="card rowlink" style="box-shadow:none;background:var(--tone)"><span class="grow"><b>+9 neue Kacheln</b><br><span class="muted small">Jetzt 56 entdeckt · größtes Quadrat 5×5</span></span><span class="pill ok">Neu</span></div>
         <div class="stack">
           <button class="btn pri" data-act="fertig">Fertig</button>
           <button class="btn ghost" data-toast="Name ändern">Umbenennen</button>
@@ -772,7 +783,8 @@
         <div class="grab"></div>
         <div class="h2">Karte</div>
         <div class="seg" role="group" aria-label="Kartenstil"><button class="on">Straße</button><button>Rad</button><button>Topo</button><button>Satellit</button></div>
-        <div class="rowlink"><span class="grow">Entdeckte Kacheln zeigen</span><span class="switch off" role="switch" aria-checked="false" tabindex="0" data-switch></span></div>
+        <div class="rowlink"><span class="grow"><b>Entdeckte Kacheln</b><br><span class="muted small">Grau = noch nie gefahren</span></span><span class="switch" role="switch" aria-checked="true" tabindex="0" data-switch data-tiles></span></div>
+        <div class="seg" role="group" aria-label="Kachelgröße"><button class="on">Groß · 1,5 km</button><button>Klein · 190 m</button></div>
         <button class="btn sec" data-toast="Zeigt vorher die Größe: 2 Regionen, ca. 90 MB · mit Abbrechen">Diesen Ausschnitt offline speichern</button>
       </div>
 
@@ -871,6 +883,7 @@
             <tr><td>Körperwerte</td><td class="old">Training → „Werte" 2×2-Kacheln</td><td>Training → Körperwerte, mit Quelle (Galaxy Watch)</td></tr>
             <tr><td>Runde erzeugen</td><td class="old">5 Einstiege mit unterschiedlichem Verhalten</td><td>Ein Blatt „Runde ab hier" (Länge + Untergrund). Alle Einstiege öffnen genau dieses</td></tr>
             <tr><td>Route planen (A→B)</td><td class="old">Sheet aufziehen → „Route planen" → Karte antippen; Tippen nahe Punkt löscht still</td><td>„Wohin?" suchen oder lange drücken → „Route hierher". Punkte löscht nur das ×</td></tr>
+            <tr><td>Entdecken (Kacheln)</td><td class="old">Nebel-Layer als Schalter; Routenvorschläge ignorieren ihn</td><td>Kacheln sichtbar auf Karte und im Verlauf, „+N neu“ an jeder Runde, Schalter „Neue Gegenden bevorzugen“, Hinweis beim Fahren</td></tr>
             <tr><td>Kartenstil, Offline, Kacheln</td><td class="old">Nur im aufgezogenen Sheet; Offline startet ohne Vorschau</td><td>Ebenen-Knopf oben rechts. Offline zeigt vorher die Größe und hat Abbrechen</td></tr>
             <tr><td>Aufzeichnen / Navigieren</td><td class="old">Live-Karte, Fahrmodus-Dialog, Kompaktleiste, HUD: vier Oberflächen</td><td>Ein Cockpit mit „Daten | Karte". Navigation ist ein Banner darin</td></tr>
             <tr><td>Beenden</td><td class="old">Drei Knöpfe, zwei Bedeutungen, einer ohne Rückfrage</td><td>Ein Knopf: „Halten zum Beenden". Route ausblenden liegt hinter ⋮</td></tr>
@@ -904,6 +917,7 @@
         <div class="step"><div class="when">Etappe 2<small>mittel</small></div><div><b>Heute entschlacken</b><p>Empfehlung auf Satz + Ring + ein Knopf, „Warum?"-Blatt, Wochenstreifen statt Zahlenzeile und Ausblick, Ziel-Zeile. Coach-Karte, Machbarkeitskarte und „Letzte Tour" ziehen um.</p></div></div>
         <div class="step"><div class="when">Etappe 3<small>mittel</small></div><div><b>Einstellungen flach machen</b><p>Akkordeons werden Unterseiten, jede Zeile zeigt ihren Status. Einheitliches Speichern (sofort) und einheitliche Schalter-Zeile.</p></div></div>
         <div class="step"><div class="when">Etappe 4<small>groß</small></div><div><b>Karte: „Wohin?"</b><p>Ein Blatt mit Suche und zwei Chips, Ebenen-Knopf oben rechts, lange drücken statt Planungsmodus, ein gemeinsames „Runde ab hier"-Blatt, Route-Karte mit genau einer Hauptaktion.</p></div></div>
+        <div class="step"><div class="when">Etappe 4b<small>mittel</small></div><div><b>Neue Gegenden entdecken</b><p>In <code>:core</code> bekommt <code>scoreRoute</code> einen Bonus für unentdeckte Kacheln (<code>explorerTilesForTrack</code> auf die Kandidatenroute), die Kandidaten tragen „+N neu“. Dazu kleine Kacheln auf Stufe 17 und „+N neue Kacheln“ in der Zusammenfassung. Rein in <code>:core</code> testbar.</p></div></div>
         <div class="step"><div class="when">Etappe 5<small>groß</small></div><div><b>Ein Cockpit</b><p>Live-Karte, Fahrmodus-Dialog, Kompaktleiste und HUD verschmelzen zu „Daten | Karte". Beschrifteter Fahren-Knopf mit Route oder Zeit.</p></div></div>
         <div class="step"><div class="when">Etappe 6<small>groß</small></div><div><b>Training und Verlauf neu ordnen</b><p>Training: Ziel mit Zielzeit und Prognose oben, dann Woche, Form, Körperwerte. Touren-Tab wird Verlauf mit „Liste | Karte". Die Zielzeit-Prognose ist die einzige wirklich neue Funktion und braucht Logik in <code>:core</code>.</p></div></div>
       </div>
@@ -934,7 +948,22 @@
     hier: 'M195 560 C 180 500, 120 420, 128 330 S 190 220, 250 200',
     tour: 'M60 150 C 90 90, 160 70, 200 110 S 300 160, 330 90',
   };
-  function mapSVG({ routes = [], alt = [], w = 390, h = 844, seed = 1, pinAt = null } = {}) {
+  // Entdeckte Kacheln (Demo): Rasterzellen rund um „zu Hause" und im Osten.
+  const SEEN = new Set();
+  for (let x = 3; x <= 7; x++) for (let y = 12; y <= 17; y++) SEEN.add(x + '-' + y);
+  for (let x = 6; x <= 8; x++) for (let y = 8; y <= 13; y++) SEEN.add(x + '-' + y);
+  ['2-13','2-14','4-18','5-18','8-14','3-11','4-11'].forEach(k => SEEN.add(k));
+  function tileLayer(w, h, cell) {
+    let g = '';
+    for (let x = 0; x * cell < w; x++) for (let y = 0; y * cell < h; y++) {
+      const on = SEEN.has(x + '-' + y);
+      g += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${on ? 'transparent' : 'rgba(40,44,52,.17)'}" stroke="${on ? 'var(--acc)' : 'rgba(40,44,52,.08)'}" stroke-opacity="${on ? .55 : 1}" stroke-width="1"/>`;
+    }
+    // größtes Quadrat 5×5
+    g += `<rect x="${3*cell}" y="${12*cell}" width="${5*cell}" height="${5*cell}" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-dasharray="6 4"/>`;
+    return g;
+  }
+  function mapSVG({ routes = [], alt = [], w = 390, h = 844, seed = 1, tiles = false } = {}) {
     let s = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">`;
     s += `<rect width="${w}" height="${h}" fill="var(--map)"/>`;
     s += `<path d="M-20 ${h*.18} C ${w*.3} ${h*.12}, ${w*.5} ${h*.3}, ${w+20} ${h*.24}" stroke="var(--water)" stroke-width="16" fill="none"/>`;
@@ -947,28 +976,19 @@
     });
     s += `<path d="M0 ${h*.64} C ${w*.35} ${h*.6}, ${w*.6} ${h*.72}, ${w} ${h*.66}" stroke="var(--road)" stroke-width="6" fill="none"/>`;
     s += `<path d="M${w*.52} 0 C ${w*.45} ${h*.35}, ${w*.6} ${h*.6}, ${w*.48} ${h}" stroke="var(--road)" stroke-width="5" fill="none"/>`;
+    if (tiles) s += tileLayer(w, h, 39);
     alt.forEach(d => s += `<path d="${ROUTES[d]}" stroke="var(--route-alt)" stroke-width="5" fill="none" stroke-linecap="round"/>`);
     routes.forEach(d => s += `<path d="${ROUTES[d]}" stroke="var(--card)" stroke-width="9" fill="none" stroke-linecap="round"/><path d="${ROUTES[d]}" stroke="var(--route)" stroke-width="5" fill="none" stroke-linecap="round"/>`);
     return s + '</svg>';
   }
   const kmap = $('#kmap');
-  function drawKarte(sel, alts) { kmap.innerHTML = mapSVG({ routes: sel ? [sel] : [], alt: alts || [] }); }
-  drawKarte();
+  function drawKarte(sel, alts) { kmap.innerHTML = mapSVG({ routes: sel ? [sel] : [], alt: alts || [], tiles: st.tiles }); $('#tilechip').hidden = !st.tiles; }
   $('#tourmap').innerHTML = mapSVG({ routes: ['tour'], w: 390, h: 190, seed: 3 });
   $('#cp-karte').innerHTML = mapSVG({ routes: ['nord'], seed: 2 }) + '<div class="me" style="left:42%;top:52%"></div>';
 
   // Verlauf als Karte: alle Spuren plus entdeckte Kacheln
-  (() => {
-    let svg = mapSVG({ routes: ['nord','ost','sued','hier'], w: 390, h: 844, seed: 4 });
-    const cell = 39, seen = new Set(['3-5','4-5','4-6','5-6','3-6','4-7','5-7','2-4','3-4','4-4','5-4','6-5','6-6','6-7','3-7','2-5','4-3','5-3','2-3','3-3','6-4','5-5','3-8','4-8','5-8','2-6','2-7','6-8','7-6','7-7']);
-    let g = '';
-    for (let x = 0; x < 10; x++) for (let y = 0; y < 22; y++) {
-      const on = seen.has(x + '-' + y);
-      g += `<rect x="${x*cell}" y="${y*cell}" width="${cell}" height="${cell}" fill="${on ? 'transparent' : 'rgba(40,44,52,.16)'}" stroke="${on ? 'var(--acc)' : 'transparent'}" stroke-opacity=".5" stroke-width="1"/>`;
-    }
-    svg = svg.replace('</svg>', g + '</svg>');
-    $('#histmap').innerHTML = svg + '<div class="legend tab-nums"><div><b>146</b>Touren</div><div><b>5 812 km</b>gefahren</div><div><b>30</b>Kacheln entdeckt</div></div>';
-  })();
+  $('#histmap').innerHTML = mapSVG({ routes: ['ost','sued','hier'], w: 390, h: 844, seed: 1, tiles: true }) +
+    '<div class="legend tab-nums"><div><b>146</b>Touren</div><div><b>47</b>Kacheln</div><div><b>5×5</b>größtes Quadrat</div></div>';
 
   /* ───── Touren-Liste ───── */
   const TOURS = [
@@ -1001,8 +1021,9 @@
   renderSet($('#setlist'), SET1); renderSet($('#setlist2'), SET2);
 
   /* ───── Zustand ───── */
-  const st = { screen: 'heute', prev: 'heute', k: 'idle', route: null, rec: false, paused: false, t0: 0, cand: 'nord' };
-  const CANDS = { nord:['Runde Nord','44,6 km · 380 Hm · ca. 1:50 h','44,6 km'], ost:['Runde Ost','46,1 km · 290 Hm · ca. 1:52 h','46,1 km'], sued:['Runde Süd','45,3 km · 510 Hm · ca. 2:00 h','45,3 km'], hier:['Kiesweg am Wehr','6,8 km · 60 Hm · ca. 0:20 h','6,8 km'] };
+  const st = { screen: 'heute', prev: 'heute', k: 'idle', route: null, rec: false, paused: false, t0: 0, cand: 'nord', tiles: true, novel: true };
+  drawKarte();
+  const CANDS = { nord:['Runde Nord','44,6 km · 380 Hm · ca. 1:50 h · +9 neue Kacheln','44,6 km'], ost:['Runde Ost','46,1 km · 290 Hm · ca. 1:52 h · keine neuen Kacheln','46,1 km'], sued:['Runde Süd','45,3 km · 510 Hm · ca. 2:00 h · +4 neue Kacheln','45,3 km'], hier:['Kiesweg am Wehr','6,8 km · 60 Hm · ca. 0:20 h · +1 neue Kachel','6,8 km'] };
 
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.classList.add('show');
@@ -1074,8 +1095,9 @@
     if (!withRoute) { st.route = null; drawKarte(); }
     st.rec = true; st.paused = false; st.t0 = Date.now();
     $('#navban').hidden = !withRoute;
-    $('#cp-karte').innerHTML = mapSVG({ routes: withRoute ? [st.route || 'nord'] : [], seed: 2 }) + '<div class="me" style="left:42%;top:52%"></div>';
+    $('#cp-karte').innerHTML = mapSVG({ routes: withRoute ? [st.route || 'nord'] : [], seed: 2, tiles: st.tiles }) + '<div class="me" style="left:42%;top:52%"></div>';
     $('#cockpit').hidden = false; cp('daten'); updateRide();
+    clearTimeout(startRide.h); startRide.h = setTimeout(() => { const t = $('#tilepop'); t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800); }, 1600);
     note('cockpit');
   }
   function cp(page) {
@@ -1158,6 +1180,13 @@
       drawKarte(st.cand, ['nord','ost','sued'].filter(x => x !== st.cand));
     }
     if (t.hasAttribute('data-switch')) { t.classList.toggle('off'); t.setAttribute('aria-checked', !t.classList.contains('off')); }
+    if (t.hasAttribute('data-novel')) {
+      st.novel = !t.classList.contains('off');
+      $('#kandsub').textContent = st.novel ? 'Sortiert nach neuen Kacheln' : 'Sortiert nach passender Länge';
+      const c = $('.cands'), [n, su, o] = ['nord','sued','ost'].map(k => $(`[data-cand=${k}]`));
+      (st.novel ? [n, su, o] : [n, o, su]).forEach(el => c.appendChild(el));
+    }
+    if (t.hasAttribute('data-tiles')) { st.tiles = !t.classList.contains('off'); drawKarte(st.k === 'kand' || st.k === 'route' || st.k === 'edit' ? st.cand : (st.route || null), st.k === 'kand' ? ['nord','ost','sued'].filter(x => x !== st.cand) : []); }
     if (t.parentElement && t.parentElement.classList.contains('seg') && !t.dataset.cp && !t.dataset.hv) {
       $$('button', t.parentElement).forEach(b => b.classList.toggle('on', b === t));
     }
@@ -1190,6 +1219,7 @@
       ['Zwei Suchfelder mit unterschiedlichem Verhalten', 'Genau ein Suchfeld'],
       ['Kartenstil und Offline im Sheet, Offline startet ohne Vorschau', 'Ebenen-Knopf oben rechts, Offline mit Größe und Abbrechen'],
       ['Planungsmodus: Karte antippen setzt Punkte, Tippen nahe Punkt löscht still', 'Lange drücken setzt einen Punkt, in jedem Zustand gleich'],
+      ['Kacheln-Layer versteckt als Schalter, Zähler-Pille nicht antippbar', 'Kacheln standardmäßig sichtbar, Zähler oben links öffnet die Einstellungen'],
     ], try: '<b>Lange auf die Karte drücken</b>, oder <b>Runde ab hier</b> tippen.' },
     'karte-ort': { t: 'Ort gewählt', q: 'Was will ich mit diesem Ort?', c: [
       ['Drei Aktionen, „Runde ab hier" nimmt still immer 30 km', 'Zwei Aktionen. „Runde ab hier" öffnet dasselbe Blatt wie überall'],
@@ -1198,8 +1228,10 @@
     'karte-runde': { t: 'Runde ab hier', q: 'Wie lang, auf welchem Untergrund?', c: [
       ['Fünf Einstiege mit eigenem UI: Chips, Freitextfeld, Heute-Knopf, Training-Icon, Bereit-Dialog', 'Ein Blatt. Alle Einstiege öffnen dieses, vorbelegt mit der Plan-Distanz'],
       ['Fahrradtyp + Wegpräferenz als Profil-Dropdown mit Hinweiszeilen', 'Ein Schalter „Untergrund". Das BRouter-Profil wählt die App dahinter'],
+      ['Runden-Generator bewertet nur Länge und Höhenmeter', 'Neu: „Neue Gegenden bevorzugen“ belohnt Runden durch unentdeckte Kacheln (wie Squadrats)'],
     ], try: 'Schieberegler bewegen, dann <b>Vorschläge zeigen</b>.' },
     'karte-kand': { t: 'Vorschläge', q: 'Welche Runde gefällt mir?', c: [
+      ['Vorschläge wissen nichts von entdeckten Kacheln', 'Jede Runde zeigt „+N neu“. Mit „Neue Gegenden bevorzugen“ steht die unbekannteste vorn'],
       ['Kandidaten mit Himmelsrichtung, „Beste", ±%; weitere nur durch Ziehen am Blatt', 'Drei Karten nebeneinander, alle Linien auf der Karte, eine hervorgehoben'],
       ['Vorschau zählte schon als „Route bereit", bevor man übernommen hatte', 'Erst „Diese Runde nehmen" macht sie zur Route'],
     ], try: 'Zwischen <b>Nord, Ost, Süd</b> wechseln.' },
@@ -1221,9 +1253,11 @@
       ['„Beenden" im HUD beendet Navigation, auf der Live-Karte die Aufzeichnung ohne Rückfrage', '„Halten zum Beenden" ist der einzige Weg, die Aufzeichnung zu beenden'],
       ['●-Knopf während der Fahrt wechselt nur den Tab', 'Fahren-Knopf zeigt die Zeit und öffnet direkt dieses Cockpit'],
       ['„bpm · Puls" ohne Einordnung', '„Puls · locker ✓" sagt, ob es zum Plan passt'],
+      ['Keine Rückmeldung beim Betreten neuer Kacheln', 'Kurzer Hinweis „Neue Kachel!“, dazu ein leichter Vibrationsimpuls'],
     ], try: '<b>Beenden gedrückt halten</b>. Oder mit ⌄ zur App und über den roten Knopf zurück.' },
     summary: { t: 'Zusammenfassung', q: 'Wie war’s?', c: [
       ['Snackbar „Tour gespeichert." und eine Tourkarte über der Karte', 'Ein eigener Abschluss mit Klartext zum Plan und zur Woche'],
+      ['Keine Rückmeldung zu entdeckten Kacheln', '„+9 neue Kacheln“ und das größte Quadrat'],
     ], try: 'Tippe <b>Fertig</b>.' },
     verlauf: { t: 'Verlauf', q: 'Wo bin ich gefahren?', c: [
       ['Nur eine Liste. Wo man gefahren ist, zeigt die Karte nur Tour für Tour', 'Umschalter „Liste | Karte". Die Karte zeigt alle Spuren und entdeckte Kacheln'],
@@ -1257,6 +1291,7 @@
     ], try: 'Tippe daneben, um zu schließen.' },
     'sheet-ebenen': { t: 'Kartenebenen', q: 'Wie soll die Karte aussehen?', c: [
       ['Kartenstil im Sheet, Offline ohne Vorschau', 'Alles, was die Planungskarte betrifft, an einem Ort. Kacheln zeigt zusätzlich der Verlauf'],
+      ['Nur Kacheln auf Stufe 14 (ca. 1,5 km)', 'Zusätzlich kleine Kacheln (Stufe 17, ca. 190 m) wie Squadratinhos'],
     ], try: 'Stil wechseln oder Kacheln einschalten.' },
   };
   const JUMPS = [['heute','Heute'],['karte','Karte'],['verlauf','Verlauf'],['tour','Tour'],['training','Training'],['settings','Einstellungen']];
