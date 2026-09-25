@@ -185,4 +185,84 @@ class ActivityFilesTest {
         assertTrue(bulkImportFailureText(allBroken)!!.startsWith("Keine der 2 Dateien"))
         assertEquals("2 unlesbar", bulkImportMessage(allBroken))
     }
+
+    @Test
+    fun `Sammelmeldung nennt Planungen`() {
+        val allPlanned = importActivityFiles(
+            listOf(
+                file("a.gpx", gpxBytes("A", startMs = null, count = 3)),
+                file("b.gpx", gpxBytes("B", startMs = null, count = 4)),
+            ),
+        )
+        assertEquals("2 als Planung importiert", bulkImportMessage(allPlanned))
+
+        val mixed = importActivityFiles(
+            listOf(
+                file("a.gpx", gpxBytes("A", startMs = null)),
+                file("f.gpx", gpxBytes("F", 1_000L)),
+                file("g.gpx", gpxBytes("G", 2_000_000L)),
+            ),
+        )
+        assertEquals("3 importiert (1 als Planung)", bulkImportMessage(mixed))
+    }
+
+    // -----------------------------------------------------------------------
+    // Groessengrenzen und Zeichensaetze
+    // -----------------------------------------------------------------------
+
+    /** Gueltiger GPX-Kopf, dahinter [padding] Leerzeichen — gepackt winzig. */
+    private fun gzipBomb(padding: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        GZIPOutputStream(out).use { gz ->
+            gz.write("<?xml version=\"1.0\"?><gpx version=\"1.1\">".toByteArray())
+            val chunk = ByteArray(1024 * 1024) { ' '.code.toByte() }
+            repeat(padding / chunk.size) { gz.write(chunk) }
+            gz.write("</gpx>".toByteArray())
+        }
+        return out.toByteArray()
+    }
+
+    @Test
+    fun `GZIP-Bombe wird als zu gross abgewiesen statt den Speicher zu fluten`() {
+        val bomb = gzipBomb(padding = 40 * 1024 * 1024)
+        assertTrue(bomb.size < 1024 * 1024, "gepackt ${bomb.size} Bytes")
+        // Die Erkennung entpackt nur den Kopf und sieht eine GPX-Datei.
+        assertEquals(ActivityFileKind.GPX, sniffActivityFileKind(bomb))
+
+        val result = importActivityFiles(listOf(file("bombe.gpx.gz", bomb)))
+
+        assertEquals(0, result.importedCount)
+        assertEquals(listOf(FILE_TOO_LARGE_MESSAGE), result.errors.map { it.message })
+    }
+
+    @Test
+    fun `GPX in UTF-16 und mit BOM wird erkannt und gelesen`() {
+        val xml = gpxBytes("Fenster", 1_000L).decodeToString()
+        for (bytes in listOf(
+            byteArrayOf(0xFF.toByte(), 0xFE.toByte()) + xml.toByteArray(Charsets.UTF_16LE),
+            xml.toByteArray(Charsets.UTF_16BE),
+            byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + xml.toByteArray(Charsets.UTF_8),
+        )) {
+            assertEquals(ActivityFileKind.GPX, sniffActivityFileKind(bytes))
+            assertEquals("Fenster", rideFromActivityFile(file("w.gpx", bytes)).name)
+        }
+    }
+
+    @Test
+    fun `Planungen mit minimal abweichender Distanz gelten als Duplikat`() {
+        val route = rideFromActivityFile(file("r.gpx", gpxBytes("Route", startMs = null)), id = "1")
+        // Frueher importiert: anderer Importzeitpunkt, also andere Startzeit.
+        val summary = route.toSummary().copy(createdAt = route.createdAt - 86_400_000L)
+        val rounded = summary.copy(
+            id = "gespeichert",
+            stats = summary.stats.copy(distanceKm = summary.stats.distanceKm + 0.0004),
+        )
+        assertTrue(findDuplicateRide(listOf(rounded), route.copy(id = "neu")) != null)
+
+        val other = summary.copy(
+            id = "andere",
+            stats = summary.stats.copy(distanceKm = summary.stats.distanceKm + 0.01),
+        )
+        assertNull(findDuplicateRide(listOf(other), route.copy(id = "neu")))
+    }
 }

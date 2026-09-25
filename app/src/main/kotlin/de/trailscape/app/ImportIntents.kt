@@ -24,17 +24,32 @@ data class ImportSource(val uri: Uri, val mimeType: String?)
  * die geteilten URIs dort ab, weil nur so die Leseberechtigung mitreist —
  * manche Apps fuellen **ausschliesslich** `clipData`.
  *
- * Nur `content://` und `file://` gelten; ein `http(s)`-Link (Komoot teilt
- * gern Links statt Dateien) waere eine Netzanfrage, die hier niemand
- * erwartet.
+ * Nur `content://` gilt, und nur von **fremden** Anbietern:
+ *  * Ein `http(s)`-Link (Komoot teilt gern Links statt Dateien) waere eine
+ *    Netzanfrage, die hier niemand erwartet.
+ *  * `file://` und Trailscapes eigene Anbieter (`<ownPackage>.fileprovider`
+ *    usw.) fallen heraus, weil die [ImportActivity] exportiert ist: Sonst
+ *    koennte jede App ohne Berechtigung Trailscape bitten, eine seiner
+ *    **eigenen** privaten Dateien (`/data/data/<paket>/…`) mit Trailscapes
+ *    Rechten zu oeffnen — das klassische „Confused Deputy"-Muster. Seit
+ *    Android 7 verschickt ohnehin keine ordentliche App mehr `file://`
+ *    (FileUriExposedException), und ohne Speicherberechtigung scheiterte
+ *    das Lesen dort mit einer irrefuehrenden Cloud-Meldung.
+ *
+ * [ownPackage] ist der Paketname der App (`context.packageName`); als
+ * Parameter, damit der Test ihn setzen kann.
  */
-fun importSourcesFromIntent(intent: Intent?): List<ImportSource> {
+fun importSourcesFromIntent(intent: Intent?, ownPackage: String): List<ImportSource> {
     if (intent == null) return emptyList()
     val found = LinkedHashMap<Uri, String?>()
     fun add(uri: Uri?, mimeType: String? = intent.type) {
         if (uri == null) return
-        val scheme = uri.scheme?.lowercase()
-        if (scheme != "content" && scheme != "file") return
+        if (uri.scheme?.lowercase() != "content") return
+        // `substringAfterLast('@')`: Mehrbenutzer-URIs tragen die Nutzer-ID
+        // vorn in der Authority (`content://10@paket.fileprovider/…`).
+        val authority = uri.authority?.substringAfterLast('@')?.lowercase() ?: return
+        val own = ownPackage.lowercase()
+        if (authority == own || authority.startsWith("$own.")) return
         if (uri !in found || found[uri] == null) found[uri] = mimeType
     }
     when (intent.action) {

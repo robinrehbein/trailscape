@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.EmptyState
@@ -529,6 +530,9 @@ fun RideDetailHost(
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
+    // Wird eine per Teilen importierte Tour direkt hier geoeffnet, gehoert
+    // die Ergebnismeldung hierher (siehe RidesScreen).
+    FileImportNoticeEffect(appViewModel, snackbarHostState)
 
     LaunchedEffect(summary) {
         if (summary == null) onBack()

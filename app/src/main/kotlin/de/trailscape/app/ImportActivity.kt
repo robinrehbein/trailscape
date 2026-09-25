@@ -6,6 +6,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import de.trailscape.app.ui.readActivityFiles
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -15,7 +17,7 @@ import kotlinx.coroutines.launch
  * Durchsichtig und ohne eigenes UI: Sie liest die gereichten Dateien ein,
  * legt sie in [PendingImports] ab, holt die [MainActivity] nach vorn und ist
  * wieder weg. Den eigentlichen Import (Erkennung, Duplikatpruefung,
- * Speichern, Snackbar) macht das `AppViewModel` — derselbe Weg wie die
+ * Speichern, Rueckmeldung) macht das `AppViewModel` — derselbe Weg wie die
  * Mehrfachauswahl im App-Dialog.
  *
  * ## Warum eine eigene Activity statt Filter an der MainActivity
@@ -26,6 +28,23 @@ import kotlinx.coroutines.launch
  *    zweites Mal zu starten ergaebe eine zweite App-Instanz neben der
  *    laufenden; das Trampolin springt stattdessen in den Trailscape-Task.
  *
+ * ## Rueckmeldung, obwohl durchsichtig
+ * Eine Cloud-Datei (Drive, WhatsApp) kann Sekunden zum Lesen brauchen. Dauert
+ * es laenger als [SLOW_READ_HINT_MS], erscheint „Wird importiert …" — bei
+ * einer lokalen Datei ist die App vorher da, und ein Toast wuerde nur ueber
+ * ihr nachflackern. Verlaesst man das Trampolin mitten im Lesen (Home,
+ * Bildschirm aus), beendet das System es wegen `noHistory`; die Coroutine
+ * wird abgebrochen und die Berechtigung ist ohnehin weg. Das ist als Grenze
+ * hingenommen, meldet sich aber mit „Import abgebrochen", statt still zu
+ * verschwinden.
+ *
+ * ## Was nicht angenommen wird
+ * ZIP-Archive (Garmin „Original exportieren", Strava-Gesamtexport) nimmt das
+ * Trampolin bewusst **nicht** an: Ein Archiv kann Hunderte Touren enthalten
+ * und braucht den Import mit Fortschritt und Abbrechen unter Einstellungen →
+ * Daten & Backup. Einzelne `.gpx.gz`/`.fit.gz` dagegen schon (MIME-Typ
+ * `application/gzip`), sie laufen denselben Weg wie ungepackte Dateien.
+ *
  * ## Schutz gegen Doppelimport
  *  * `configChanges` im Manifest: Eine Drehung erzeugt die Activity nicht
  *    neu, das Lesen laeuft einfach weiter.
@@ -33,8 +52,10 @@ import kotlinx.coroutines.launch
  *    nicht erneut — die Dateien sind entweder schon uebergeben oder die
  *    Berechtigung ohnehin verfallen.
  *  * Dieselben URIs zweimal kurz hintereinander (Doppeltipp auf „Oeffnen")
- *    laufen nur einmal durch ([inFlight]); ein spaeteres erneutes Teilen
- *    faengt die Duplikatpruefung ab.
+ *    laufen nur einmal durch ([inFlight]). Der Schluessel ist der **genaue**
+ *    URI-Satz: Eine teilweise ueberlappende zweite Auswahl laeuft also
+ *    durch — das faengt dann der Mutex im ViewModel samt Duplikatpruefung
+ *    ab, ebenso ein spaeteres erneutes Teilen.
  */
 class ImportActivity : ComponentActivity() {
 
@@ -46,7 +67,7 @@ class ImportActivity : ComponentActivity() {
             return
         }
 
-        val sources = importSourcesFromIntent(intent)
+        val sources = importSourcesFromIntent(intent, ownPackage = packageName)
         if (sources.isEmpty()) {
             Toast.makeText(this, "Keine Datei zum Importieren gefunden.", Toast.LENGTH_SHORT).show()
             finish()
@@ -58,6 +79,13 @@ class ImportActivity : ComponentActivity() {
             return
         }
 
+        // Toasts ueber den Anwendungskontext: Sie sollen auch dann noch
+        // erscheinen, wenn diese Activity gerade beendet wird.
+        val appContext = applicationContext
+        val slowHint = lifecycleScope.launch {
+            delay(SLOW_READ_HINT_MS)
+            Toast.makeText(appContext, "Wird importiert …", Toast.LENGTH_SHORT).show()
+        }
         lifecycleScope.launch {
             try {
                 val files = readActivityFiles(
@@ -78,7 +106,15 @@ class ImportActivity : ComponentActivity() {
                                 Intent.FLAG_ACTIVITY_SINGLE_TOP,
                         ),
                 )
+            } catch (e: CancellationException) {
+                Toast.makeText(
+                    appContext,
+                    "Import abgebrochen. Teile oder öffne die Datei erneut und warte, bis Trailscape erscheint.",
+                    Toast.LENGTH_LONG,
+                ).show()
+                throw e
             } finally {
+                slowHint.cancel()
                 leave(key)
                 finish()
             }
@@ -86,6 +122,9 @@ class ImportActivity : ComponentActivity() {
     }
 
     private companion object {
+        /** Ab wann das Lesen als „langsam" gilt und einen Hinweis bekommt. */
+        const val SLOW_READ_HINT_MS = 400L
+
         /** URI-Saetze, die gerade gelesen werden — siehe Klassen-KDoc. */
         private val inFlight = mutableSetOf<Set<String>>()
 

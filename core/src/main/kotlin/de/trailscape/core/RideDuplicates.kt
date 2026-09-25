@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import kotlin.math.abs
+
 /**
  * Duplikatpruefung fuer importierte Touren.
  *
@@ -28,8 +30,18 @@ package de.trailscape.core
  * taugt der Startzeitpunkt nicht — er ist dort der Importzeitpunkt, also bei
  * jedem Import ein anderer. Zwei Planungen gelten deshalb als dieselbe, wenn
  * Punktzahl **und** Distanz uebereinstimmen: Die Distanz ist aus den Punkten
- * berechnet und damit fuer dieselbe Datei bitgenau gleich, fuer eine
- * abweichende Route praktisch nie.
+ * berechnet und damit fuer dieselbe Datei gleich, fuer eine abweichende Route
+ * praktisch nie. Verglichen wird mit einer Toleranz von
+ * [PLANNED_DISTANCE_TOLERANCE_KM] statt bitgenau, damit Rundungen (etwa beim
+ * Speichern oder Synchronisieren der Zusammenfassung) nicht stoeren.
+ *
+ * Grenzen, bewusst in Kauf genommen: Eine auf anderem Weg entstandene Fassung
+ * derselben Route (neu abgetastet, andere Punktzahl) gilt als neu, und aendert
+ * sich einmal die Distanzberechnung des Parsers um mehr als die Toleranz,
+ * erkennt die Pruefung frueher importierte Planungen nicht mehr. Ebenso
+ * zaehlen Planungen, die **vor** der Erkennung „GPX ohne Zeit = Planung"
+ * als Fahrt importiert wurden (Startzeit = damaliger Importzeitpunkt), nicht
+ * als Dublette einer neu importierten Planung.
  *
  * Der Bestand kommt als [RideInfo] herein — die Pruefung braucht nur
  * Startzeitpunkt und [RideInfo.pointCount], laeuft also unveraendert ueber
@@ -42,9 +54,12 @@ fun findDuplicateRide(existing: List<RideInfo>, candidate: Ride): RideInfo? =
             (
                 candidate.planned && ride.planned &&
                     ride.pointCount == candidate.points.size &&
-                    ride.stats.distanceKm == candidate.stats.distanceKm
+                    abs(ride.stats.distanceKm - candidate.stats.distanceKm) < PLANNED_DISTANCE_TOLERANCE_KM
                 )
     }
+
+/** Toleranz des Distanzvergleichs fuer Planungen in [findDuplicateRide]: ein Meter. */
+internal const val PLANNED_DISTANCE_TOLERANCE_KM: Double = 0.001
 
 /** Kurzform von [findDuplicateRide] fuer den blossen Ja/Nein-Fall. */
 fun isDuplicateRide(existing: List<RideInfo>, candidate: Ride): Boolean =

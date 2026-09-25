@@ -123,7 +123,16 @@
              meldet meist application/octet-stream — ohne diesen Filter
              tauchte Trailscape bei vielen Dateimanagern gar nicht auf. Ob
              die Datei wirklich GPX/FIT ist, pruefen Endung und Magic Bytes
-             (core/…/ActivityFiles.kt). -->
+             (core/…/ActivityFiles.kt). Aus demselben Grund text/xml und
+             application/xml: So liefern Gmail, Outlook, Drive und Dropbox
+             GPX-Anhaenge oft aus; fremdes XML faellt an der Inhaltspruefung
+             heraus. application/gzip fuer einzelne .gpx.gz/.fit.gz (Strava).
+             ZIP-Archive bewusst nicht, siehe KDoc der ImportActivity.
+
+             Nur das Schema content: — kein file:, denn die Activity ist
+             exportiert und wuerde sonst im Auftrag fremder Apps Trailscapes
+             eigene private Dateien oeffnen (siehe importSourcesFromIntent,
+             das zusaetzlich die eigenen Anbieter abweist). -->
         <activity
             android:name=".ImportActivity"
             android:exported="true"
@@ -137,11 +146,14 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="content" />
-                <data android:scheme="file" />
                 <data android:mimeType="application/gpx+xml" />
                 <data android:mimeType="application/x-gpx+xml" />
                 <data android:mimeType="application/vnd.ant.fit" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/gzip" />
+                <data android:mimeType="application/x-gzip" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -151,6 +163,10 @@
                 <data android:mimeType="application/x-gpx+xml" />
                 <data android:mimeType="application/vnd.ant.fit" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/gzip" />
+                <data android:mimeType="application/x-gzip" />
             </intent-filter>
         </activity>
 

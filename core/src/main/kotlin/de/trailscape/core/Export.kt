@@ -91,6 +91,11 @@ fun backupFileName(at: LocalDate): String {
  * Solche Dateien kommen als [Ride.planned] herein: Als Fahrt gezaehlt,
  * landeten ihre Kilometer im Wochenfortschritt und in Fitness/Form, obwohl
  * niemand sie gefahren ist; und als Startzeit bliebe nur „jetzt".
+ *
+ * Das gilt fuer **jeden** GPX-Weg, also auch fuer den Archiv-Import
+ * ([importArchive]). Touren, die vor dieser Regel als Fahrt ankamen, bleiben
+ * Fahrten; die Duplikatpruefung erkennt sie beim erneuten Import nicht als
+ * dieselbe Planung (Grenzen siehe [findDuplicateRide]).
  */
 fun rideFromGpx(xml: String, fallbackName: String, id: String? = null): Ride {
     val parsed = parseGpx(xml)

@@ -20,7 +20,6 @@ import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.ActivityFileInput
-import de.trailscape.core.BulkImportResult
 import de.trailscape.core.bulkImportFailureText
 import de.trailscape.core.bulkImportMessage
 import de.trailscape.core.ExplorerTile
@@ -74,9 +73,8 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -850,6 +848,28 @@ class AppViewModel(
         _fileImportFailure.value = null
     }
 
+    private val _fileImportNotice = MutableStateFlow<FileImportNotice?>(null)
+
+    /**
+     * Die Ergebnismeldung des letzten Datei-Imports („7 importiert · 1 schon
+     * vorhanden · 1 unlesbar"), bis ein Screen sie anzeigt und mit
+     * [consumeFileImportNotice] quittiert (`FileImportNoticeEffect` in
+     * `ui/ActivityImportAction.kt`).
+     *
+     * Ein gehaltener Zustand statt [showMessage]: Beim Teilen aus einer
+     * anderen App steht die MainActivity waehrend des Imports still, der
+     * Tab-Wechsel in den Verlauf passiert erst im naechsten Frame danach. Eine
+     * einmalige Meldung fing bis dahin der Snackbar-Host des **alten** Tabs
+     * ein und verschwand mit ihm; beim Erststart (Einfuehrung davor) sammelte
+     * sie gar niemand. So wartet sie, bis der richtige Screen steht.
+     */
+    val fileImportNotice: StateFlow<FileImportNotice?> = _fileImportNotice.asStateFlow()
+
+    /** Quittiert [notice] — nur, wenn inzwischen keine neuere Meldung darueber liegt. */
+    fun consumeFileImportNotice(notice: FileImportNotice) {
+        _fileImportNotice.compareAndSet(notice, null)
+    }
+
     /**
      * Importiert bereits eingelesene Aktivitaetsdateien (GPX/FIT) — der eine
      * Weg fuer „Teilen an Trailscape", „Oeffnen mit" und die Mehrfachauswahl
@@ -861,19 +881,22 @@ class AppViewModel(
      * Bestand geladen ist — beim Kaltstart ueber „Teilen" kommt der Import
      * sonst vor den Touren an und wuerde gegen eine leere Liste pruefen.
      *
-     * Das Ergebnis meldet sich per Snackbar ([bulkImportMessage]); liess sich
-     * gar nichts lesen, stattdessen ueber [fileImportFailure].
+     * Das Ergebnis steht danach in [fileImportNotice]; liess sich gar nichts
+     * lesen oder scheiterte der Lauf selbst (Speicherfehler, volles Geraet),
+     * stattdessen in [fileImportFailure] — nie nur im Log.
      *
      * Bei genau einer neuen Tour wird sie ausgewaehlt; mit [openInHistory]
-     * springt die App ausserdem in den Verlauf und oeffnet sie dort.
+     * springt die App ausserdem in den Verlauf und oeffnet sie dort. Tab- und
+     * Detailwunsch sind gehaltene Zustaende: Laeuft beim Erststart noch die
+     * Einfuehrung, greifen sie erst danach (siehe `TrailscapeApp`).
      */
     fun importActivityFiles(
         files: List<ActivityFileInput>,
         openInHistory: Boolean = false,
-    ): Deferred<BulkImportResult> {
+    ): Job {
         if (openInHistory) requestTab(AppTab.RIDES)
         _fileImportsRunning.update { it + 1 }
-        return viewModelScope.async {
+        return viewModelScope.launch {
             try {
                 fileImportMutex.withLock {
                     _ridesLoading.first { loading -> !loading }
@@ -889,10 +912,19 @@ class AppViewModel(
                     if (failure != null) {
                         _fileImportFailure.value = failure
                     } else {
-                        showMessage(bulkImportMessage(result))
+                        _fileImportNotice.value = FileImportNotice(
+                            message = bulkImportMessage(result),
+                            errors = result.errors,
+                            inHistory = openInHistory,
+                        )
                     }
-                    result
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _fileImportFailure.value = withCause(FILE_IMPORT_CRASH_MESSAGE, e)
+            } catch (e: OutOfMemoryError) {
+                _fileImportFailure.value = FILE_IMPORT_CRASH_MESSAGE
             } finally {
                 _fileImportsRunning.update { it - 1 }
             }

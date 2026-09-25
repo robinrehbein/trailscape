@@ -3,17 +3,33 @@ package de.trailscape.app.ui
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.core.BulkImportError
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /**
@@ -123,4 +139,98 @@ fun rememberActivityImportAction(appViewModel: AppViewModel): ActivityImportActi
     }
 
     return ActivityImportAction(importing = importing || reading, start = ::start)
+}
+
+/**
+ * Ergebnis eines Datei-Imports fuer die Snackbar — siehe
+ * [AppViewModel.fileImportNotice].
+ */
+data class FileImportNotice(
+    /** Die eine Zeile, z. B. „7 importiert · 1 schon vorhanden · 1 unlesbar". */
+    val message: String,
+    /** Unlesbare Dateien samt Grund — hinter „Details" an der Snackbar. */
+    val errors: List<BulkImportError>,
+    /**
+     * true beim Import per Teilen/Oeffnen: Die App springt dabei in den
+     * Verlauf, nur dort (Liste oder Detail) soll die Meldung erscheinen.
+     */
+    val inHistory: Boolean,
+)
+
+/** Fehlertext, wenn der Import-Lauf selbst scheitert (Speicherfehler, volles Geraet). */
+internal const val FILE_IMPORT_CRASH_MESSAGE =
+    "Der Import ist fehlgeschlagen. Es wurden möglicherweise nicht alle Touren gespeichert — " +
+        "versuche es mit weniger Dateien auf einmal erneut."
+
+/**
+ * Zeigt [AppViewModel.fileImportNotice] in [snackbarHostState] an und
+ * quittiert sie — samt Aktion „Details", wenn Dateien unlesbar waren. Ein
+ * blosses „1 unlesbar" ohne Weg zu Name und Grund waere genau die Art
+ * versteckter Information, die die App vermeiden will; der Dialog dahinter
+ * listet jede Datei mit ihrem Grund.
+ *
+ * Abgeholt wird erst, wenn der Screen wirklich der richtige ist: kein
+ * Tab-Wechsel und keine Tour-Detailansicht stehen noch an (sonst naehme ein
+ * Screen die Meldung mit, der im naechsten Frame verschwindet), und
+ * [standBy] ist `false` — der Verlauf setzt es, solange ein Detail ueber der
+ * Liste liegt, dann zeigt das Detail die Meldung. Mit [acceptHistory] =
+ * `false` laesst ein Screen Meldungen aus Teilen/Oeffnen liegen, weil die App
+ * dafuer ohnehin in den Verlauf springt.
+ */
+@Composable
+fun FileImportNoticeEffect(
+    appViewModel: AppViewModel,
+    snackbarHostState: SnackbarHostState,
+    acceptHistory: Boolean = true,
+    standBy: () -> Boolean = { false },
+) {
+    var details by remember { mutableStateOf<List<BulkImportError>?>(null) }
+    val currentStandBy by rememberUpdatedState(standBy)
+
+    LaunchedEffect(appViewModel, snackbarHostState, acceptHistory) {
+        combine(
+            appViewModel.fileImportNotice,
+            appViewModel.tabRequest,
+            appViewModel.pendingRideDetail,
+            snapshotFlow { currentStandBy() },
+        ) { notice, tab, pendingDetail, waiting ->
+            notice?.takeIf {
+                tab == null && pendingDetail == null && !waiting && (acceptHistory || !it.inHistory)
+            }
+        }
+            .filterNotNull()
+            .collect { notice ->
+                appViewModel.consumeFileImportNotice(notice)
+                val result = snackbarHostState.showSnackbar(
+                    message = notice.message,
+                    actionLabel = if (notice.errors.isNotEmpty()) "Details" else null,
+                    // Mit Aktion lange genug stehen lassen, um sie zu treffen.
+                    duration = if (notice.errors.isNotEmpty()) SnackbarDuration.Long else SnackbarDuration.Short,
+                )
+                if (result == SnackbarResult.ActionPerformed) details = notice.errors
+            }
+    }
+
+    details?.let { errors ->
+        OneUiDialog(
+            onDismissRequest = { details = null },
+            title = { Text(if (errors.size == 1) "Nicht importiert" else "${errors.size} Dateien nicht importiert") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    errors.forEach { error ->
+                        Column {
+                            Text(error.path, style = MaterialTheme.typography.titleSmall)
+                            Text(error.message, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { details = null }) { Text("OK") }
+            },
+        )
+    }
 }

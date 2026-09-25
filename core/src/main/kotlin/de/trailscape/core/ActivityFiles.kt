@@ -61,10 +61,16 @@ private val FIT_MIME_TYPES = setOf("application/vnd.ant.fit", "application/fit",
  *  * **GPX:** Text, der (nach BOM und Leerraum) mit `<` beginnt und in den
  *    ersten Kilobytes ein `<gpx`-Element enthaelt. Nur der Anfang wird
  *    angesehen, weil davor hoechstens XML-Deklaration und Kommentare stehen.
+ *    UTF-8 und UTF-16 (manche Windows-Werkzeuge) werden erkannt, siehe
+ *    [decodeXmlText].
+ *
+ * Von einer `.gz`-Datei wird nur der Kopf entpackt, nicht das Ganze: Die
+ * Erkennung laeuft vor jeder Pruefung des entpackten Inhalts und darf
+ * deshalb selbst keinen Speicher fluten (GZIP-Bombe).
  */
 fun sniffActivityFileKind(bytes: ByteArray): ActivityFileKind? {
     val data = try {
-        gunzipIfNeeded(bytes)
+        gunzipHead(bytes, GPX_SNIFF_BYTES)
     } catch (e: FormatException) {
         return null
     }
@@ -77,9 +83,7 @@ fun sniffActivityFileKind(bytes: ByteArray): ActivityFileKind? {
             return ActivityFileKind.FIT
         }
     }
-    val head = String(data, 0, minOf(data.size, GPX_SNIFF_BYTES), Charsets.UTF_8)
-        .removePrefix("﻿")
-        .trimStart()
+    val head = decodeXmlText(data.copyOf(minOf(data.size, GPX_SNIFF_BYTES))).trimStart()
     if (head.startsWith("<") && head.contains("<gpx", ignoreCase = true)) {
         return ActivityFileKind.GPX
     }
@@ -88,6 +92,28 @@ fun sniffActivityFileKind(bytes: ByteArray): ActivityFileKind? {
 
 /** Wie weit [sniffActivityFileKind] nach `<gpx` sucht — grosszuegig fuer lange Kopfkommentare. */
 private const val GPX_SNIFF_BYTES = 4096
+
+/**
+ * Dekodiert den Text einer XML-Datei (GPX) — UTF-8 oder UTF-16, ohne BOM.
+ *
+ * UTF-16 wird am BOM erkannt oder, ohne BOM, am Nullbyte neben dem ersten
+ * `<` (so beginnt jede UTF-16-XML-Datei ohne BOM). Frueher galt stur UTF-8:
+ * Eine UTF-16-GPX aus einem Windows-Werkzeug fiel dann als „weder GPX noch
+ * FIT" durch, obwohl sie gueltig ist. Der BOM wird entfernt, weil der
+ * DOM-Parser einen Text, der mit U+FEFF beginnt, als ungueltiges XML ablehnt.
+ */
+internal fun decodeXmlText(data: ByteArray): String {
+    val b0 = data.getOrNull(0)?.toInt()?.and(0xFF)
+    val b1 = data.getOrNull(1)?.toInt()?.and(0xFF)
+    val charset = when {
+        b0 == 0xFE && b1 == 0xFF -> Charsets.UTF_16BE
+        b0 == 0xFF && b1 == 0xFE -> Charsets.UTF_16LE
+        b0 == 0x00 && b1 == '<'.code -> Charsets.UTF_16BE
+        b0 == '<'.code && b1 == 0x00 -> Charsets.UTF_16LE
+        else -> Charsets.UTF_8
+    }
+    return String(data, charset).removePrefix("﻿")
+}
 
 /**
  * Dateiart anhand der Endung (`.gpx`, `.fit`, je auch `.gz`); `null` ohne
@@ -156,10 +182,13 @@ fun rideFromActivityFile(input: ActivityFileInput, id: String? = null): Ride {
         ?.let { archiveBaseName(it) }
         ?.takeIf { it.isNotBlank() }
         ?: "Importierte Tour"
+    // Genau einmal (begrenzt, siehe [MAX_GUNZIPPED_BYTES]) entpacken und das
+    // Ergebnis weiterreichen — `parseFit` findet dann nichts Gepacktes mehr
+    // vor und entpackt nicht ein zweites Mal.
+    val data = gunzipIfNeeded(input.bytes)
     return when (kind) {
-        ActivityFileKind.GPX ->
-            rideFromGpx(gunzipIfNeeded(input.bytes).toString(Charsets.UTF_8), fallbackName, id)
-        ActivityFileKind.FIT -> rideFromFit(input.bytes, fallbackName, id)
+        ActivityFileKind.GPX -> rideFromGpx(decodeXmlText(data), fallbackName, id)
+        ActivityFileKind.FIT -> rideFromFit(data, fallbackName, id)
     }
 }
 
@@ -197,6 +226,13 @@ fun importActivityFiles(
             errors.add(BulkImportError(file.label, e.message ?: "Die Datei konnte nicht gelesen werden."))
         } catch (e: Exception) {
             errors.add(BulkImportError(file.label, "Die Datei konnte nicht gelesen werden."))
+        } catch (e: OutOfMemoryError) {
+            // Letzte Linie hinter den Groessengrenzen: Eine grosse GPX waechst
+            // als String (UTF-16) plus DOM auf ein Vielfaches der Datei. Auf
+            // einem knappen Heap soll daran nur diese eine Datei scheitern,
+            // nicht der ganze Prozess — der Speicher des DOM ist mit dem
+            // Verlassen von `rideFromActivityFile` wieder frei.
+            errors.add(BulkImportError(file.label, FILE_TOO_LARGE_MESSAGE))
         }
     }
     return BulkImportResult(rides = rides, duplicates = duplicates, errors = errors)
@@ -210,6 +246,11 @@ fun importActivityFiles(
  * wenn sie als Planung angekommen ist — sonst wundert man sich, warum sie
  * nicht in den Wochenkilometern auftaucht), die Duplikatmeldung oder der
  * eigentliche Fehlergrund statt eines blossen „1 unlesbar".
+ *
+ * Planungen (GPX ohne `<time>`) werden auch bei mehreren Dateien genannt:
+ * Wer zehn Komoot-Routen importiert und nur „10 importiert" liest, sucht sie
+ * in den Monaten des Verlaufs, dabei stehen sie oben unter den Planungen.
+ * Deshalb „10 als Planung importiert" bzw. „7 importiert (3 als Planung)".
  */
 fun bulkImportMessage(result: BulkImportResult): String {
     if (result.totalCount == 1) {
@@ -221,7 +262,13 @@ fun bulkImportMessage(result: BulkImportResult): String {
     }
     if (result.totalCount == 0) return "Keine Datei zum Importieren gefunden."
     return buildList {
-        if (result.importedCount > 0) add("${result.importedCount} importiert")
+        val planned = result.rides.count { it.planned }
+        when {
+            result.importedCount == 0 -> Unit
+            planned == result.importedCount -> add("$planned als Planung importiert")
+            planned > 0 -> add("${result.importedCount} importiert ($planned als Planung)")
+            else -> add("${result.importedCount} importiert")
+        }
         if (result.duplicateCount > 0) add("${result.duplicateCount} schon vorhanden")
         if (result.errorCount > 0) add("${result.errorCount} unlesbar")
     }.joinToString(" · ")
