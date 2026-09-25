@@ -232,20 +232,24 @@
   .map-bottom{position:absolute;left:0;right:0;bottom:0;display:grid;gap:10px;z-index:6}
   .map-bottom .locate{margin-right:14px}
   .map-bottom .sheet{border-radius:26px 26px 0 0;padding:6px 16px 22px}
+  .map-bottom .sheet{grid-template-columns:minmax(0,1fr)}
+  .map-bottom .sheet > *{min-width:0}
   .map-bottom .sheet[data-k=idle]{padding-bottom:94px;gap:10px}
   .map-bottom .sheet.peek > :not(.grabbtn):not(.rowlink){display:none}
   .grabbtn{justify-self:center;width:64px;height:18px;display:grid;place-items:center;margin-bottom:-4px}
   .grabbtn::before{content:"";width:40px;height:4px;border-radius:2px;background:var(--hair)}
   .chips.one{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-  .chips.one .chip{flex:none}
+  .chips.one{display:grid;grid-template-columns:1fr 1fr}
+  .chips.one .chip{justify-content:center;padding:0 8px;font-size:13px;min-width:0;white-space:nowrap;overflow:hidden}
   .cand{padding:8px 10px}
   .locate{justify-self:end}
   .sheet{background:var(--card);border-radius:26px;padding:14px 16px 16px;box-shadow:var(--elev-hi);display:grid;gap:12px}
   .search{display:flex;align-items:center;gap:10px;height:48px;border-radius:24px;background:var(--tone);padding:0 16px;color:var(--mut);font-size:15px}
-  .search svg{width:18px;height:18px}
+  .search svg{width:18px;height:18px;flex:none}
+  .search span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chips{display:flex;gap:8px;flex-wrap:wrap}
   .chip{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:19px;background:var(--tone);font-weight:700;font-size:13.5px}
-  .chip svg{width:16px;height:16px}
+  .chip svg{width:16px;height:16px;flex:none}
   .chip.acc{background:var(--acc-cont);color:var(--on-acc-cont)}
   .chip.sel{background:var(--acc);color:var(--on-acc)}
   .hint{font-size:12px;color:var(--faint);text-align:center}
@@ -551,9 +555,9 @@
 
           <!-- Zustand: Wohin? -->
           <div class="sheet" data-k="idle">
-            <button class="search" data-toast="Suche öffnet sich über der Karte, mit letzten Zielen"><svg><use href="#i-search"/></svg>Wohin? Suchen oder lange drücken</button>
+            <button class="search" data-toast="Suche öffnet sich über der Karte, mit letzten Zielen"><svg><use href="#i-search"/></svg><span>Wohin? Suchen oder lange drücken</span></button>
             <div class="chips one">
-              <button class="chip acc" data-act="runde-heute"><svg><use href="#i-star"/></svg>Für heute · 45 km</button>
+              <button class="chip acc" data-act="runde-heute"><svg><use href="#i-star"/></svg>Heute · 45 km</button>
               <button class="chip" data-k-go="runde"><svg><use href="#i-loop"/></svg>Runde ab hier</button>
             </div>
           </div>
