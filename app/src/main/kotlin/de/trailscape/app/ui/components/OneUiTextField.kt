@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -73,6 +74,7 @@ fun OneUiTextField(
     enabled: Boolean = true,
     trailingIcon: @Composable (() -> Unit)? = null,
     fieldModifier: Modifier = Modifier,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     Column(modifier = modifier) {
         OneUiFieldLabel(label)
@@ -81,6 +83,7 @@ fun OneUiTextField(
             onValueChange = onValueChange,
             placeholder = placeholder?.let { { Text(it, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
             keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions,
             visualTransformation = visualTransformation,
             readOnly = readOnly,
             enabled = enabled,

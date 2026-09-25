@@ -31,27 +31,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Selfhost-Sync-Karte — Port von der `Sync (Selfhost)`-Karte in
- * `lib/screens/more_screen.dart` (`_runSync`, `_loadSyncConfig`).
+ * Selfhost-Sync — Inhalt der Seite „Sync mit eigenem Server" der
+ * Einstellungen (siehe `MoreScreen.kt`). Urspruenglich ein Port der
+ * `Sync (Selfhost)`-Karte in `lib/screens/more_screen.dart` (`_runSync`,
+ * `_loadSyncConfig`).
+ *
+ * ## Speichert beim Tippen
+ * Server-URL und Token gehen bei jeder Aenderung an
+ * [AppViewModel.setSyncConfig] — sobald beide ausgefuellt sind; sind beide
+ * leer, wird die Konfiguration entfernt (Listenzeile: „Aus"). Frueher wurde
+ * erst beim Abgleich gespeichert, und wer die Seite ohne Abgleich verliess,
+ * verlor die Eingabe. Der Knopf gleicht jetzt nur noch ab.
  *
  * **Abweichung/Workaround.** [AppViewModel.setSyncConfig] persistiert
  * fire-and-forget auf [kotlinx.coroutines.Dispatchers.IO] (siehe dessen
- * KDoc) — anders als im Dart-Original, wo `await setSyncConfig(...)` die
- * Schreiboperation abwartet, bevor synchronisiert wird. Ein direktes
- * `appViewModel.setSyncConfig(config)` gefolgt von `appViewModel.syncNow()`
- * koennte daher — rein theoretisch — noch die alte (oder gar keine)
- * Konfiguration lesen. Da `AppViewModel` keinen suspend-Setter anbietet und
- * diese Datei `AppViewModel` nicht aendern darf, schreibt diese Karte die
- * Konfiguration stattdessen selbst *synchron abgewartet* ueber
- * [de.trailscape.core.setSyncConfig] auf denselben, von [AppServices]
- * bereitgestellten [de.trailscape.core.KeyValueStore] — erst danach beginnt
- * der eigentliche Sync. Der zusaetzliche `appViewModel.setSyncConfig(config)`-
- * Aufruf haelt nur den beobachtbaren [AppViewModel.syncConfig]-Zustand
- * konsistent (derselbe Wert wird doppelt, aber unschaedlich geschrieben).
- *
- * Der Inhalt der Zeile „Sync (Selfhost)" in der Gruppe „App" des Mehr-Tabs
- * (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel
- * und Aufklapp-Rahmen.
+ * KDoc). Damit [AppViewModel.syncNow] garantiert die aktuelle Konfiguration
+ * liest, schreibt der Abgleich-Knopf sie vorher noch einmal selbst und
+ * *abgewartet* ueber [de.trailscape.core.setSyncConfig] auf denselben, von
+ * [AppServices] bereitgestellten [de.trailscape.core.KeyValueStore] —
+ * derselbe Wert, doppelt, aber unschaedlich geschrieben.
  */
 @Composable
 fun SyncCardContent(appViewModel: AppViewModel) {
@@ -71,10 +69,32 @@ fun SyncCardContent(appViewModel: AppViewModel) {
         tokenText = syncConfig?.token ?: tokenText
     }
 
+    // Sofort speichern (siehe KDoc). `appliedConfig` wird vorher gesetzt,
+    // damit der zurueckkommende Wert die Felder nicht (getrimmt) ueberschreibt.
+    fun persist(url: String, token: String) {
+        val config = if (url.isBlank() && token.isBlank()) {
+            null
+        } else if (url.isBlank() || token.isBlank()) {
+            // Halb ausgefuellt: nichts anfassen, bis beides dasteht.
+            return
+        } else {
+            SyncConfig(url = url.trim(), token = token.trim())
+        }
+        if (config == syncConfig) return
+        appliedConfig = config
+        appViewModel.setSyncConfig(config)
+    }
+
+    SettingsHint("Gleicht deine Touren mit einem selbst betriebenen Trailscape-Server ab.")
+    Spacer(modifier = Modifier.height(12.dp))
+
     OneUiTextField(
         label = "Server-URL",
         value = urlText,
-        onValueChange = { urlText = it },
+        onValueChange = {
+            urlText = it
+            persist(urlText, tokenText)
+        },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
         modifier = Modifier.fillMaxWidth(),
     )
@@ -82,7 +102,10 @@ fun SyncCardContent(appViewModel: AppViewModel) {
     OneUiTextField(
         label = "Token",
         value = tokenText,
-        onValueChange = { tokenText = it },
+        onValueChange = {
+            tokenText = it
+            persist(urlText, tokenText)
+        },
         visualTransformation = PasswordVisualTransformation(),
         modifier = Modifier.fillMaxWidth(),
     )
@@ -156,10 +179,5 @@ fun SyncCardContent(appViewModel: AppViewModel) {
     }
 
     Spacer(modifier = Modifier.height(12.dp))
-    Text(
-        text = "Details zum Aufsetzen eines eigenen Sync-Servers findest du im " +
-            "Repository unter server/README.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    SettingsHint("Anleitung zum eigenen Server: server/README im Repository.")
 }
