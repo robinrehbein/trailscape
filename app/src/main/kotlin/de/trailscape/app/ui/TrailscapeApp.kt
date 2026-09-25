@@ -229,7 +229,7 @@ private enum class TopLevelDestination(
 ) {
     HOME(AppTab.HOME, "heute", "Heute", Icons.Outlined.Today),
     MAP(AppTab.MAP, "karte", "Karte", Icons.Outlined.Map),
-    RIDES(AppTab.RIDES, "touren", "Touren", Icons.Outlined.Route),
+    RIDES(AppTab.RIDES, "touren", "Verlauf", Icons.Outlined.Route),
     TRAINING(AppTab.TRAINING, "training", "Training", Icons.AutoMirrored.Outlined.ShowChart),
 }
 
