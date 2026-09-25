@@ -22,6 +22,7 @@ import de.trailscape.core.TrackPoint
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
+import de.trailscape.core.HealthRoutePoint
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
@@ -31,6 +32,7 @@ import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
+import de.trailscape.core.RouteConsentRequest
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.SegmentNewBest
 import de.trailscape.core.SegmentRegistry
@@ -41,19 +43,25 @@ import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
+import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.collectExplorerTiles
+import de.trailscape.core.decodeRouteConsentRequests
+import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.healthSyncInitialWindowMs
 import de.trailscape.core.loadPlan
+import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.retainRidesInSegmentRegistry
 import de.trailscape.core.ridesNeedingSegmentUpdate
+import de.trailscape.core.routeConsentStorageKey
 import de.trailscape.core.savePlan
 import de.trailscape.core.shouldShowShortSleeperHint
 import de.trailscape.core.syncRides
 import de.trailscape.core.toLocalRideSummary
 import de.trailscape.core.updateSegmentRegistry
+import de.trailscape.core.withVitalsDiagnostics
 import de.trailscape.core.writeBackupJson
 import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
@@ -77,6 +85,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -1117,8 +1126,11 @@ class AppViewModel(
      */
     private suspend fun syncVitals() {
         val now = LocalDateTime.now()
-        val days = vitalsHistory.daysToFetch(now, VITALS_WINDOW_DAYS)
+        // Hooks in den Block „Health Connect: Routen-Einzelfreigabe &
+        // Vitaldiagnose" weiter unten.
+        val days = vitalsDaysToFetch(now)
         val fresh = withContext(io) { healthSync.readVitals(days = days) }
+        attachVitalsDiagnostics(fresh)
         val merged = vitalsHistory.merge(fresh, now = now)
         vitalsHistory = merged
         _vitals.value = merged.toSummary(
@@ -1255,6 +1267,9 @@ class AppViewModel(
      */
     private suspend fun applyReport(report: HealthSyncReport): Boolean {
         _lastSyncReport.value = report
+        // Hook in den Block „Health Connect: Routen-Einzelfreigabe &
+        // Vitaldiagnose" weiter unten.
+        rememberRouteConsents(report)
         if (report.isEmpty) return true
 
         val saved = withContext(io) {
@@ -1295,6 +1310,144 @@ class AppViewModel(
         Instant.ofEpochMilli(System.currentTimeMillis() - healthSyncInitialWindowMs),
         ZoneId.systemDefault(),
     )
+
+    // =========================================================================
+    // >>> Health Connect: Routen-Einzelfreigabe & Vitaldiagnose — BEGINN
+    // Eigener Block (plus je ein Hook-Aufruf in syncVitals und applyReport).
+    // Logik in :core: HealthRouteConsent.kt, HealthDiagnostics.kt,
+    // HealthVitalsDerivation.kt. UI-Einstieg: ui/health/RouteConsent.kt.
+    // =========================================================================
+
+    private val _routeConsentPending = MutableStateFlow<List<RouteConsentRequest>>(emptyList())
+
+    /**
+     * Importierte Touren, deren GPS-Route Health Connect nur nach einer
+     * Einzel-Freigabe herausgibt (`ExerciseRouteResult.ConsentRequired`),
+     * neueste zuerst.
+     *
+     * Ueberlebt App-Neustarts (gespeichert unter [routeConsentStorageKey]):
+     * Der Import sieht eine Session nur einmal — beim naechsten Lauf ist sie
+     * ein Duplikat und wuerde nie wieder gemeldet. Abarbeiten per
+     * `rememberRouteConsentLauncher(appViewModel)` (ui/health/RouteConsent.kt),
+     * das den Freigabedialog zeigt und [applyConsentedRoute] aufruft.
+     */
+    val routeConsentPending: StateFlow<List<RouteConsentRequest>> = _routeConsentPending.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val stored = withContext(io) {
+                runCatching { decodeRouteConsentRequests(keyValueStore.getString(routeConsentStorageKey)) }
+                    .getOrDefault(emptyList())
+            }
+            if (stored.isNotEmpty()) {
+                _routeConsentPending.update { mergeRouteConsentRequests(stored, it) }
+            }
+        }
+    }
+
+    /** Nimmt die offenen Freigaben eines Import-Berichts auf (Hook in [applyReport]). */
+    private fun rememberRouteConsents(report: HealthSyncReport) {
+        if (report.routeConsentPending.isEmpty()) return
+        updateRouteConsents { mergeRouteConsentRequests(it, report.routeConsentPending) }
+    }
+
+    private fun updateRouteConsents(transform: (List<RouteConsentRequest>) -> List<RouteConsentRequest>) {
+        _routeConsentPending.update(transform)
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    // Den dann aktuellen Stand schreiben: Zwei schnelle
+                    // Aenderungen sollen sich nicht ueberholen.
+                    val current = _routeConsentPending.value
+                    if (current.isEmpty()) {
+                        keyValueStore.remove(routeConsentStorageKey)
+                    } else {
+                        keyValueStore.setString(routeConsentStorageKey, encodeRouteConsentRequests(current))
+                    }
+                }
+            }
+        }
+    }
+
+    /** Verwirft eine offene Freigabe, ohne die Route zu holen. */
+    fun dismissRouteConsent(request: RouteConsentRequest) {
+        updateRouteConsents { list -> list.filterNot { it.sessionId == request.sessionId } }
+    }
+
+    /**
+     * Traegt eine per Einzel-Freigabe erhaltene Route in die importierte Tour
+     * ein und speichert sie.
+     *
+     * @param route Ergebnis von `ExerciseRouteRequestContract`, schon in
+     *   `:core`-Punkte umgewandelt. `null` = Dialog abgebrochen oder abgelehnt
+     *   — die Freigabe bleibt offen. Leer = Health Connect hat doch keine
+     *   Route; die Freigabe wird verworfen.
+     * @return `true`, wenn die Tour jetzt eine Route hat.
+     */
+    suspend fun applyConsentedRoute(request: RouteConsentRequest, route: List<HealthRoutePoint>?): Boolean {
+        if (route == null) return false
+        if (route.isEmpty()) {
+            dismissRouteConsent(request)
+            showMessage("Health Connect hat für diese Tour keine Route.")
+            return false
+        }
+        val ride = withContext(io) { runCatching { rideStorage.loadRide(request.rideId) }.getOrNull() }
+        if (ride == null || ride.points.isNotEmpty()) {
+            // Tour geloescht oder schon mit Route: nichts mehr zu tun.
+            dismissRouteConsent(request)
+            return ride != null
+        }
+        val heartRate = withContext(io) {
+            runCatching { healthSync.gateway.readHeartRate(request.start, request.end) }
+                .getOrDefault(emptyList())
+        }
+        val updated = attachRouteToRide(ride, route, heartRate).touchedNow()
+        val saved = withContext(io) { runCatching { rideStorage.saveRides(listOf(updated)) } }
+        if (saved.isFailure) {
+            showMessage("Die Route konnte nicht gespeichert werden.")
+            return false
+        }
+        dismissRouteConsent(request)
+        reloadRides()
+        refreshSegments(reportRideIds = setOf(updated.id))
+        refreshExplorerTilesIfEnabled()
+        showMessage("Route für „${ride.name}“ ergänzt.")
+        return true
+    }
+
+    /**
+     * Traegt die Vitaldaten-Diagnose in den letzten Import-Bericht ein
+     * (Hook in [syncVitals]) — sie erscheint damit unter „Diagnose-Details"
+     * und im Problembericht.
+     */
+    private fun attachVitalsDiagnostics(fresh: VitalsSummary) {
+        _lastSyncReport.update { it?.withVitalsDiagnostics(fresh) }
+    }
+
+    /**
+     * Wie viele Tage [syncVitals] liest. Normalerweise nur die Luecke seit dem
+     * letzten Lauf; **einmalig** nach diesem Update aber das volle Fenster,
+     * damit der Ruhepuls-Ersatz aus dem Nacht-Puls und die korrigierte
+     * Schlafsumme (ueberlappende Sitzungen) auch die bereits gespeicherte
+     * Historie nachtraeglich fuellen bzw. berichtigen.
+     */
+    private val vitalsDerivationBackfillKey = "trailscape.vitals.derivationBackfill.v1"
+
+    private suspend fun vitalsDaysToFetch(now: LocalDateTime): Int {
+        val regular = vitalsHistory.daysToFetch(now, VITALS_WINDOW_DAYS)
+        if (regular >= VITALS_WINDOW_DAYS) return regular
+        val done = withContext(io) {
+            runCatching { keyValueStore.getString(vitalsDerivationBackfillKey) != null }
+                .getOrDefault(true)
+        }
+        if (done) return regular
+        withContext(io) { runCatching { keyValueStore.setString(vitalsDerivationBackfillKey, "1") } }
+        return VITALS_WINDOW_DAYS
+    }
+
+    // =========================================================================
+    // <<< Health Connect: Routen-Einzelfreigabe & Vitaldiagnose — ENDE
+    // =========================================================================
 
     // -------------------------------------------------------------------------
     // Abgeleitete Trainingsauswertung
