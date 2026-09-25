@@ -1097,7 +1097,27 @@ class AppViewModel(
             unavailable = fresh.unavailable,
         )
         withContext(io) { runCatching { writeVitalsHistory(keyValueStore, merged) } }
+        // --- Klartext/Training: Zeitpunkt des letzten Vitalwerte-Syncs ---
+        _vitalsSyncedAt.value = now
     }
+
+    // -------------------------------------------------------------------------
+    // Klartext/Training (Anfang): Zeitpunkt des letzten Vitalwerte-Syncs
+    // -------------------------------------------------------------------------
+
+    private val _vitalsSyncedAt = MutableStateFlow<LocalDateTime?>(null)
+
+    /**
+     * Wann [syncVitals] in dieser Sitzung zuletzt erfolgreich durchlief —
+     * Grundlage der Quellzeile „Von deiner Uhr über Health Connect · heute
+     * 6:12" unter den Körperwerten des Trainings-Tabs. `null`, solange in
+     * dieser Sitzung noch kein Sync lief; die Zeile nennt dann keine Uhrzeit.
+     * Bewusst nicht gespeichert: Eine alte Uhrzeit von gestern waere eine
+     * Auskunft ueber einen Zustand, den niemand mehr geprueft hat.
+     */
+    val vitalsSyncedAt: StateFlow<LocalDateTime?> = _vitalsSyncedAt.asStateFlow()
+
+    // Klartext/Training (Ende)
 
     private val _lastSyncReport = MutableStateFlow<HealthSyncReport?>(null)
 
