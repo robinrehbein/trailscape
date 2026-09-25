@@ -30,7 +30,7 @@ import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.update.RELEASE_PAGE_URL
 
 /**
- * Der Update-Hinweis oben im Mehr-Tab.
+ * Der Update-Hinweis oben in den Einstellungen.
  *
  * Die App verteilt sich als APK ueber GitHub-Releases; es gibt keinen Store,
  * der von selbst aktualisiert. Diese Karte ist — neben der einmaligen
@@ -74,9 +74,8 @@ fun UpdateNoticeCard(
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = "Die neue APK liegt auf der Release-Seite — herunterladen und " +
-                            "über die bestehende Installation legen. Deine Touren bleiben " +
-                            "erhalten.",
+                        text = "Herunterladen und über die bestehende Installation legen — " +
+                            "deine Touren bleiben erhalten.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }

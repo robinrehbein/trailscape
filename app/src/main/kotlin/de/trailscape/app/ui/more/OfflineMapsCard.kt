@@ -28,7 +28,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.formatBytes
-import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
@@ -60,12 +59,14 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * JSON-Decoder an dieser Stelle hat frueher Stil und Zeitpunkt schlicht
  * verworfen.
  *
- * Der Inhalt der Zeile „Offline-Karten" in der Gruppe „Karte" des Mehr-Tabs
- * (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel
- * und Aufklapp-Rahmen.
+ * Der Abschnitt „Kartenbild" der Seite „Karten offline" der Einstellungen
+ * (siehe `MoreScreen.kt`); darunter steht der Abschnitt „Routingdaten"
+ * ([OfflineRoutingCardContent]). Die Listenzeile zaehlt beide zusammen
+ * ([offlineMapsSummary]).
  *
- * @param onMessage Kanal fuer kurze Rueckmeldungen (Loeschfehler); im Mehr-Tab
- *   `AppViewModel::showMessage`, damit die Snackbar dieselbe ist wie ueberall.
+ * @param onMessage Kanal fuer kurze Rueckmeldungen (Loeschfehler); in den
+ *   Einstellungen `AppViewModel::showMessage`, damit die Snackbar dieselbe
+ *   ist wie ueberall.
  */
 @Composable
 fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
@@ -100,12 +101,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
     }
 
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
-    Text(
-        text = "Für die Offline-Nutzung heruntergeladene Kartenausschnitte. Der Download " +
-            "neuer Ausschnitte läuft über die Karte.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
-    )
+    SettingsHint("Damit du offline etwas siehst. Neue Ausschnitte lädst du auf der Karte.")
     Spacer(modifier = Modifier.height(12.dp))
 
     when {
@@ -152,7 +148,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            NeutralButton(
+            SettingsSecondaryButton(
                 onClick = { confirmDeleteAll = true },
                 enabled = !deleteAllBusy,
                 destructive = true,
@@ -222,12 +218,23 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
     }
 }
 
+/**
+ * Anzahl und Gesamtgroesse der gespeicherten Offline-Kartenausschnitte — fuer
+ * die Statuszeile „Karten offline" der Einstellungsliste.
+ */
+internal suspend fun offlineMapsSummary(context: Context): Pair<Int, Long> {
+    val regions = listOfflineRegionsWithStatus(context)
+    return regions.size to regions.sumOf { it.sizeBytes }
+}
+
 /** Eine gelistete MapLibre-Offline-Region mit den fuer die UI aufbereiteten Feldern. */
 private data class OfflineRegionRow(
     val id: Long,
     val name: String,
     /** Untertitel: Kartenstil · Datum · Groesse, soweit bekannt. */
     val details: String,
+    /** Geladene Bytes laut MapLibre, 0 = unbekannt. */
+    val sizeBytes: Long,
     val region: OfflineRegion,
 )
 
@@ -285,6 +292,7 @@ private suspend fun listOfflineRegionsWithStatus(context: Context): List<Offline
                     add("unvollständig – bitte löschen")
                 }
             }.joinToString(" · "),
+            sizeBytes = status?.completedResourceSize ?: 0L,
             region = region,
         )
     }

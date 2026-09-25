@@ -4,21 +4,16 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimeInput
@@ -30,10 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
@@ -79,15 +71,13 @@ import java.time.LocalTime
  * „Speichern"-Knopf: Ein Schalter, der erst nach einer Bestaetigung gilt, ist
  * in einer Einstellungsliste eine Falle.
  *
- * Der Inhalt der Zeile „Erinnerungen" in der Gruppe „App" des Mehr-Tabs
- * (siehe `MoreScreen.kt`) — keine eigene Karte mehr, `MoreRow` stellt Titel
- * und Aufklapp-Rahmen.
+ * Der Inhalt der Seite „Erinnerungen" der Einstellungen (siehe
+ * `MoreScreen.kt`); deren Listenzeile nennt, was gerade eingeschaltet ist.
  */
 @Composable
 fun ReminderCardContent(appViewModel: AppViewModel) {
     val context = LocalContext.current
     val settings by appViewModel.reminderSettings.collectAsStateWithLifecycle()
-    val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     // Welche der beiden Uhrzeiten gerade im Dialog steht; `null` = kein Dialog.
     var editing by remember { mutableStateOf<ReminderTime?>(null) }
@@ -114,17 +104,11 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
         ReminderScheduler.reschedule(context, next)
     }
 
-    Text(
-        text = "Trailscape kann dich an die heutige Einheit, den Wochenabschluss und " +
-            "längere Pausen erinnern. Die Meldungen entstehen auf dem Gerät — es gibt " +
-            "keinen Push-Dienst und kein Konto dahinter.",
-        style = MaterialTheme.typography.bodySmall,
-        color = hintColor,
-    )
-    Spacer(modifier = Modifier.height(12.dp))
+    SettingsHint("Die Meldungen entstehen auf dem Gerät — ohne Push-Dienst und ohne Konto.")
+    Spacer(modifier = Modifier.height(8.dp))
 
-    ReminderSwitchRow(
-        title = "Tageseinheit",
+    SettingsSwitchRow(
+        title = "Tagesplan",
         subtitle = "Morgens, was heute ansteht. Nur mit Trainingsplan.",
         checked = settings.dailySessionEnabled,
         onCheckedChange = { apply(settings.copy(dailySessionEnabled = it)) },
@@ -141,7 +125,7 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
     // ungetrennt.
     HorizontalDivider()
 
-    ReminderSwitchRow(
+    SettingsSwitchRow(
         title = "Wochenrückblick",
         subtitle = "Sonntagabends: gefahrene gegen geplante Kilometer.",
         checked = settings.weeklyReviewEnabled,
@@ -156,10 +140,9 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
 
     HorizontalDivider()
 
-    ReminderSwitchRow(
+    SettingsSwitchRow(
         title = "Anstupser",
-        subtitle = "Nach $reminderNudgeAfterDays Tagen ohne Aufzeichnung, höchstens " +
-            "einmal pro Woche. Nutzt die Uhrzeit morgens.",
+        subtitle = "Nach $reminderNudgeAfterDays Tagen ohne Fahrt, höchstens einmal pro Woche.",
         checked = settings.nudgeEnabled,
         onCheckedChange = { apply(settings.copy(nudgeEnabled = it)) },
     )
@@ -175,10 +158,7 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
         NoticeBox(
             icon = Icons.Filled.Info,
             color = LocalSignalColors.current.warning,
-            text = "Trailscape darf keine Benachrichtigungen anzeigen — die Erinnerungen " +
-                "bleiben deshalb still. Erlaube sie hier; nachträglich geht es auch " +
-                "in den Android-Einstellungen unter " +
-                "„Apps → Trailscape → Benachrichtigungen“.",
+            text = "Benachrichtigungen sind nicht erlaubt — die Erinnerungen bleiben still.",
         )
         Spacer(modifier = Modifier.height(8.dp))
         Button(
@@ -218,50 +198,6 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
 /** Welche der beiden Uhrzeiten gerade bearbeitet wird. */
 private enum class ReminderTime { DAILY, WEEKLY }
 
-/**
- * Eine Zeile mit Titel, Erklaerung und Schalter. Die ganze Zeile schaltet
- * (`toggleable` mit [Role.Switch]) — ein 32 dp breiter Schalter ist ein
- * unnoetig kleines Ziel, wenn daneben ohnehin nichts anderes liegt.
- */
-@Composable
-private fun ReminderSwitchRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    val haptics = LocalHapticFeedback.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(
-                value = checked,
-                role = Role.Switch,
-                onValueChange = {
-                    // One UI bildet die Bewegung eines Schalters haptisch nach —
-                    // der Leitfaden nennt Schalter ausdruecklich als Ort dafuer.
-                    haptics.performHapticFeedback(HapticFeedbackType.ToggleOn)
-                    onCheckedChange(it)
-                },
-            )
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        // onCheckedChange = null: Der Schalter meldet nicht selbst, die Zeile
-        // tut es (sonst kaeme das Ereignis doppelt).
-        Switch(checked = checked, onCheckedChange = null)
-    }
-}
-
 /** Zeile „Uhrzeit … 07:00" — die Zeit selbst ist der Knopf zum Dialog. */
 @Composable
 private fun ReminderTimeRow(
@@ -289,7 +225,7 @@ private fun ReminderTimeRow(
 /**
  * Uhrzeit-Dialog. Bewusst [TimeInput] (Ziffernfelder) statt der runden
  * Uhr-Auswahl: Der Dialog steht in einer Liste von Einstellungen, und die
- * Uhr braucht in einem `AlertDialog` mehr Hoehe, als auf kleinen Geraeten
+ * Uhr braucht im Dialog mehr Hoehe, als auf kleinen Geraeten
  * uebrig ist.
  */
 @OptIn(ExperimentalMaterial3Api::class)

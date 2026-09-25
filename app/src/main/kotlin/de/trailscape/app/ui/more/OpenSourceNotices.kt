@@ -1,7 +1,7 @@
 package de.trailscape.app.ui.more
 
 /**
- * Handgepflegte Liste der Lizenzen und Datenquellen, die in der „Über"-Karte
+ * Handgepflegte Liste der Lizenzen und Datenquellen, die auf der Seite „Über Trailscape"
  * aufklappbar ist.
  *
  * **Bewusst ohne Lizenz-Plugin** (`com.mikepenz.aboutlibraries` o. ae.): Ein
