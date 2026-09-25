@@ -10,6 +10,7 @@ import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -195,7 +196,7 @@ internal fun MapViewHost(
         factory = {
             mapView.getMapAsync { map ->
                 map.uiSettings.apply {
-                    // Attribution ist Pflicht (OSM/CARTO/Esri) — sie bleibt an.
+                    // Attribution ist Pflicht (OSM/OpenFreeMap/Esri …) — sie bleibt an.
                     // Das MapLibre-Logo daneben ist rechtlich nicht noetig und
                     // wuerde die Ecke unnoetig fuellen.
                     isLogoEnabled = false
@@ -232,8 +233,10 @@ internal fun MapViewHost(
                     // in MapLibre unterschiedlich (setCompassFadeFacingNorth /
                     // isCompassFadeWhenFacingNorth).
                     setCompassFadeFacingNorth(true)
-                    // Neigen bringt auf einer Rasterkarte nichts und stoert
-                    // beim Zwei-Finger-Zoom.
+                    // Neigen bleibt aus: Die Rasterstile sind reine
+                    // Draufsichten, und die 3D-Gebaeude des Vektor-Stils
+                    // braucht beim Radfahren niemand schraeg — die Geste
+                    // stoert dagegen beim Zwei-Finger-Zoom.
                     isTiltGesturesEnabled = false
                 }
                 setzeGesten(map, gesturesEnabled)
@@ -266,8 +269,13 @@ internal fun MapViewHost(
 
     // Stil laden und bei jeder Auswahl neu setzen. Der Callback baut Quellen
     // und Ebenen wieder auf — nach einem Stilwechsel sind sie sonst weg.
-    LaunchedEffect(controller, style.id) {
-        controller.applyStyle(context, style)
+    // Nach jedem fertigen Offline-Download wird nachgesehen, ob der
+    // Vektor-Stil jetzt aus seiner festgeschriebenen Kopie kommen muss
+    // (`applyStyle` laedt nur neu, wenn sich daran etwas aendert).
+    val savedRegions by OfflineDownloadController.savedRegions.collectAsState()
+    LaunchedEffect(controller, style.id, savedRegions) {
+        val pinned = pinnedOfflineStyleJson(context, style)
+        controller.applyStyle(context, style, pinned)
     }
 
     LaunchedEffect(controller, locationEnabled) {
@@ -372,7 +380,16 @@ internal class MapController {
 
     /** Zuletzt gewuenschter Stil — gemerkt, falls die Karte noch nicht da war. */
     private var wantedStyle: MapStyle? = null
+    private var wantedPinnedJson: String? = null
     private var styleContext: Context? = null
+
+    /**
+     * Was zuletzt wirklich an `setStyle` ging (Stil + festgeschriebene JSON).
+     * Ein erneuter Ruf mit denselben Angaben — etwa weil nach einem Download
+     * nachgesehen wird, ob es jetzt eine feste Kopie gibt — laedt den Stil
+     * nicht neu; ein Neuladen liesse die Karte kurz aufblitzen.
+     */
+    private var appliedStyleKey: Pair<String, Int>? = null
 
     /** GeoJSON je Quelle — die Wahrheit, aus der der Stil wieder aufgebaut wird. */
     private val geoJson: MutableMap<String, String> = linkedMapOf(
@@ -409,33 +426,56 @@ internal class MapController {
         val pendingStyle = wantedStyle
         val context = styleContext
         if (pendingStyle != null && context != null) {
-            applyStyle(context, pendingStyle)
+            applyStyle(context, pendingStyle, wantedPinnedJson)
         }
     }
 
     internal fun detach() {
         map = null
         style = null
+        appliedStyleKey = null
         isReady = false
     }
 
-    /** Setzt den Rasterstil und baut danach Quellen, Ebenen und Standort neu auf. */
-    internal fun applyStyle(context: Context, mapStyle: MapStyle) {
+    /**
+     * Setzt den Kartenstil und baut danach Quellen, Ebenen und Standort neu auf.
+     *
+     * Rasterstile kommen als zur Laufzeit gebaute JSON. Der Vektor-Stil kommt
+     * als [pinnedJson], sobald es eine Offline-Region von ihm gibt — die
+     * festgeschriebene Kopie, deren Kachelpfade zu den gespeicherten Kacheln
+     * passen (siehe `pinnedOfflineStyleJson` in `OfflineRegions.kt`). Ohne
+     * Region laedt MapLibre ihn von seiner echten URL. Sprites, Schriften und
+     * Kacheln findet MapLibre in beiden Faellen ueber ihre URL in derselben
+     * Datenbank, in die der Offline-Download sie gelegt hat. Die eigenen
+     * Ebenen haengen sich immer gleich ein, weil [onStyleLoaded] nur oben auf
+     * den Stapel legt.
+     */
+    internal fun applyStyle(context: Context, mapStyle: MapStyle, pinnedJson: String? = null) {
         wantedStyle = mapStyle
+        wantedPinnedJson = pinnedJson
         styleContext = context.applicationContext
         val map = map ?: return
+        val key = mapStyle.id to (pinnedJson?.hashCode() ?: 0)
+        if (key == appliedStyleKey) return
+        appliedStyleKey = key
         isReady = false
         style = null
-        map.setStyle(Style.Builder().fromJson(mapStyle.toRasterStyleJson())) { loaded ->
+        val builder = when {
+            pinnedJson != null -> Style.Builder().fromJson(pinnedJson)
+            mapStyle.vectorStyleUrl != null -> Style.Builder().fromUri(mapStyle.vectorStyleUrl)
+            else -> Style.Builder().fromJson(mapStyle.toRasterStyleJson())
+        }
+        map.setStyle(builder) { loaded ->
             onStyleLoaded(context.applicationContext, loaded, mapStyle)
         }
     }
 
     private fun onStyleLoaded(context: Context, loaded: Style, mapStyle: MapStyle) {
         style = loaded
-        // Rasterkacheln enden bei der hoechsten Stufe des Anbieters; darueber
-        // hinaus darf die Kamera trotzdem (MapLibre skaliert die letzte Stufe).
-        map?.setMaxZoomPreference(min(MAX_CAMERA_ZOOM, mapStyle.maxZoom + 2.0))
+        // Kacheln enden bei der hoechsten Stufe des Anbieters; darueber
+        // hinaus darf die Kamera trotzdem (MapLibre skaliert die letzte Stufe,
+        // bei Vektorkacheln ohne Unschaerfe — siehe [MapStyle.maxCameraZoom]).
+        map?.setMaxZoomPreference(min(MAX_CAMERA_ZOOM, mapStyle.maxCameraZoom))
 
         // Idempotent: Sollte derselbe Stil (etwa durch zwei schnell
         // aufeinanderfolgende setStyle-Aufrufe) zweimal gemeldet werden, wirft

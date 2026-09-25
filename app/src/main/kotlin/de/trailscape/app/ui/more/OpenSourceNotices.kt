@@ -12,7 +12,7 @@ package de.trailscape.app.ui.more
  * Quellcodes und wird gepflegt, wenn sich `app/build.gradle.kts` aendert.
  *
  * Die Angaben sind gegen die jeweiligen Projekt-Repositories geprueft (Stand:
- * August 2026). Die Kachel-Attributionen stammen aus dem Stil-Katalog
+ * August 2026, Kartenquellen September 2026). Die Kachel-Attributionen stammen aus dem Stil-Katalog
  * (`ui/MapStyles.kt`) und muessen zu dem passen, was die Karte einblendet.
  *
  * ## Copyright-Vermerke
@@ -91,10 +91,31 @@ val dataNotices: List<LicenseNotice> = listOf(
         license = "ODbL 1.0",
         url = "https://www.openstreetmap.org/copyright",
     ),
+    // CARTO ist seit dem Wechsel der Straßenkarte auf FOSSGIS (siehe
+    // `mapStyles`) nicht mehr im Spiel und steht deshalb hier nicht mehr.
     LicenseNotice(
-        name = "Kacheln „Straßenkarte“: CARTO Voyager",
-        license = "CC BY 3.0 (Stil), Daten ODbL",
-        url = "https://carto.com/attributions",
+        name = "Kacheln „Straßenkarte“: FOSSGIS e. V. (tile.openstreetmap.de)",
+        // Stil: openstreetmap-carto-de, wie sein Vorbild openstreetmap-carto
+        // unter CC0 (LICENSE.txt in github.com/giggls/openstreetmap-carto-de) —
+        // nicht CC BY-SA; das gilt nur fuer die Texte der FOSSGIS-Webseite.
+        license = "Daten ODbL, Stil openstreetmap-carto-de CC0 1.0, " +
+            "Nutzung nach FOSSGIS-Nutzungsbedingungen",
+        url = "https://www.openstreetmap.de/germanstyle/",
+    ),
+    // Der offline speicherbare Vektor-Stil. Die Pflicht-Attribution
+    // („OpenFreeMap © OpenMapTiles Data from OpenStreetMap") blendet MapLibre
+    // aus der Quelle selbst ein (TileJSON bzw. festgeschriebene Stil-Kopie);
+    // hier stehen die Lizenzen dahinter.
+    LicenseNotice(
+        name = "Karte „Vektorkarte“: OpenFreeMap (tiles.openfreemap.org)",
+        license = "Dienst MIT; Stil „Liberty“: Code BSD 3-Clause, Design CC BY 4.0; " +
+            "Schrift Noto Sans (OFL 1.1)",
+        url = "https://openfreemap.org/",
+    ),
+    LicenseNotice(
+        name = "Vektorkachel-Schema: © OpenMapTiles",
+        license = "BSD 3-Clause (Code), CC BY 4.0 (Schema)",
+        url = "https://www.openmaptiles.org/",
     ),
     LicenseNotice(
         name = "Kacheln „CyclOSM“",

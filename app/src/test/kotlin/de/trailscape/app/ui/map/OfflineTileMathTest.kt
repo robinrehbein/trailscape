@@ -6,8 +6,13 @@ import de.trailscape.app.ui.mapStyles
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Tests der reinen Rechnung hinter dem Offline-Download (`OfflineTileMath.kt`).
@@ -26,6 +31,12 @@ class OfflineTileMathTest {
      * Zoom-Bereiche unten sind gegen diese Obergrenze gerechnet und sollen
      * nicht mitwandern, wenn der Katalog seinen Standardstil wechselt (wie
      * beim Abschied von CARTO, siehe `MapStyles.kt`).
+     *
+     * Ein 256er-**Raster** mit `offlineAllowed = true` — das gibt es im
+     * Katalog seit der Kartenquellen-Pruefung nicht mehr (kein Rasteranbieter
+     * erlaubt Vorab-Downloads). Die Fixture haelt die Raster-Rechnung (Versatz
+     * +1) trotzdem unter Test, denn [offlineZoomRange] und
+     * [offlineTileZoomRange] muessen fuer beide Bauarten stimmen.
      */
     private val voyager = MapStyle(
         id = "test-strasse",
@@ -33,7 +44,9 @@ class OfflineTileMathTest {
         urlTemplate = "https://tiles.example/{z}/{x}/{y}.png",
         maxZoom = 20,
         attribution = "Test",
+        offlineAllowed = true,
     )
+    private val openFreeMap = mapStyleById("openfreemap")
     private val opentopo = mapStyleById("opentopo")
 
     /** Sichtbarer Ausschnitt eines 360 × 800 dp grossen Telefons um [lat]/[lon]. */
@@ -105,6 +118,142 @@ class OfflineTileMathTest {
                 assertTrue(tiles.last <= style.maxZoom, "${style.id}@$zoom laedt ueber maxZoom: $tiles")
             }
         }
+    }
+
+    @Test
+    fun `beim Vektor-Stil ist die Kachelstufe gleich der Kamerazoomstufe`() {
+        // Vektorkacheln sind 512 Punkt gross — kein Versatz. Die Quelle endet
+        // bei 14; darueber vergroessert MapLibre, geladen wird nichts mehr.
+        assertEquals(0, openFreeMap.tileZoomOffset)
+        val definition = offlineZoomRange(13.0, openFreeMap)
+        assertEquals(13..14, definition)
+        assertEquals(13..14, offlineTileZoomRange(definition, openFreeMap))
+        assertEquals(14..14, offlineZoomRange(16.0, openFreeMap))
+    }
+
+    // ------------------------------------------------------ Erlaubnis je Stil
+
+    @Test
+    fun `nur OpenFreeMap ist offline speicherbar, alle Rasterstile sind gesperrt`() {
+        assertEquals(listOf("openfreemap"), mapStyles.filter { it.offlineAllowed }.map { it.id })
+        assertTrue(mapStyles.filter { !it.isVector }.none { it.offlineAllowed })
+        assertEquals(openFreeMap, offlineStyle())
+        assertTrue(openFreeMap.isVector)
+    }
+
+    @Test
+    fun `ein gesperrter Stil wird abgelehnt, egal wie klein der Ausschnitt ist`() {
+        val munich = phoneView(lat = 48.14, lon = 11.58, zoom = 13.0)
+        for (style in mapStyles.filter { !it.offlineAllowed }) {
+            val rejected = assertIs<OfflineDownloadPlan.Rejected>(plan(munich, 13.0, style), style.id)
+            // Ehrlich und mit Ausweg: warum nicht, und womit es geht.
+            assertContains(rejected.message, style.label)
+            assertContains(rejected.message, "erlaubt keine Vorab-Downloads")
+            assertContains(rejected.message, openFreeMap.label)
+        }
+    }
+
+    @Test
+    fun `mit OpenFreeMap wird ein Stadtausschnitt angenommen`() {
+        val munich = phoneView(lat = 48.14, lon = 11.58, zoom = 13.0)
+        val ready = assertIs<OfflineDownloadPlan.Ready>(plan(munich, 13.0, openFreeMap))
+        assertEquals(13..14, ready.tileZooms)
+        assertTrue(ready.tileCount in 1..MAX_TILES_PER_DOWNLOAD, "Kachelzahl: ${ready.tileCount}")
+    }
+
+    @Test
+    fun `auch der Vektor-Stil fuehrt eine eigene Offline-Adresse statt der Live-URL`() {
+        // Die Live-URL zeigt ueber eine TileJSON auf wechselnde Kachelpfade;
+        // die Region braucht die festgeschriebene Kopie (siehe pinStyleSources).
+        assertEquals("https://offline-style.trailscape.invalid/openfreemap.json", offlineStyleUrl(openFreeMap))
+        assertContains(offlineStyleUrl(mapStyleById("osmde")), ".invalid/")
+    }
+
+    // ---------------------------------------------------- Stil festschreiben
+
+    /** Verkuerzter Liberty-Stil von OpenFreeMap (Stand 25.09.2026). */
+    private val libertyStyle = """
+        {"version":8,"name":"Liberty",
+         "sources":{
+           "ne2_shaded":{"maxzoom":6,"tileSize":256,
+             "tiles":["https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png"],"type":"raster"},
+           "openmaptiles":{"type":"vector","url":"https://tiles.openfreemap.org/planet"}},
+         "sprite":"https://tiles.openfreemap.org/sprites/ofm_f384/ofm",
+         "glyphs":"https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
+         "layers":[{"id":"background","type":"background"},
+           {"id":"road","type":"line","source":"openmaptiles","source-layer":"transportation"}]}
+    """.trimIndent()
+
+    /** Die TileJSON dazu, gekuerzt um die `vector_layers`. */
+    private val planetTileJson = """
+        {"tilejson":"3.0.0",
+         "tiles":["https://tiles.openfreemap.org/planet/20260913_164504_pt/{z}/{x}/{y}.pbf"],
+         "attribution":"<a href=\"https://openfreemap.org\">OpenFreeMap</a> © OpenMapTiles Data from OpenStreetMap",
+         "bounds":[-180.0,-85.05113,180.0,85.05113],"minzoom":0,"maxzoom":14,"name":"OpenFreeMap"}
+    """.trimIndent()
+
+    @Test
+    fun `nur die per TileJSON eingebundene Quelle muss nachgeladen werden`() {
+        assertEquals(
+            mapOf("openmaptiles" to "https://tiles.openfreemap.org/planet"),
+            tileJsonSources(libertyStyle),
+        )
+    }
+
+    @Test
+    fun `festgeschrieben zeigt die Vektorquelle auf die versionierten Kachelpfade`() {
+        val pinned = pinStyleSources(libertyStyle, mapOf("openmaptiles" to planetTileJson))
+        val sources = Json.parseToJsonElement(pinned).jsonObject["sources"]!!.jsonObject
+        val omt = sources["openmaptiles"]!!.jsonObject
+
+        // Keine TileJSON mehr, die sich nach dem naechsten Planet-Update
+        // aendern koennte — genau daran wurden Offline-Regionen still leer.
+        assertEquals(null, omt["url"])
+        assertEquals(
+            "https://tiles.openfreemap.org/planet/20260913_164504_pt/{z}/{x}/{y}.pbf",
+            omt["tiles"]!!.jsonArray.single().jsonPrimitive.content,
+        )
+        assertEquals("vector", omt["type"]!!.jsonPrimitive.content)
+        assertEquals(14, omt["maxzoom"]!!.jsonPrimitive.content.toInt())
+        assertEquals(0, omt["minzoom"]!!.jsonPrimitive.content.toInt())
+        // Ohne sie fehlte der Pflichthinweis hinter dem Info-Knopf.
+        assertContains(omt["attribution"]!!.jsonPrimitive.content, "OpenMapTiles")
+        assertContains(omt["attribution"]!!.jsonPrimitive.content, "OpenStreetMap")
+
+        // Alles andere bleibt, wie es war.
+        assertEquals(
+            Json.parseToJsonElement(libertyStyle).jsonObject["sources"]!!.jsonObject["ne2_shaded"],
+            sources["ne2_shaded"],
+        )
+        val original = Json.parseToJsonElement(libertyStyle).jsonObject
+        val result = Json.parseToJsonElement(pinned).jsonObject
+        for (key in listOf("version", "sprite", "glyphs", "layers")) {
+            assertEquals(original[key], result[key], key)
+        }
+        assertEquals(emptyMap(), tileJsonSources(pinned))
+        assertEquals(
+            "https://tiles.openfreemap.org/planet/20260913_164504_pt/{z}/{x}/{y}.pbf",
+            pinnedTileTemplate(pinned),
+        )
+    }
+
+    @Test
+    fun `ohne brauchbare TileJSON wird nichts festgeschrieben`() {
+        // Eine Region ohne Kacheladresse waere leer — lieber gleich ein Fehler.
+        assertFailsWith<IllegalArgumentException> { pinStyleSources(libertyStyle, emptyMap()) }
+        assertFailsWith<IllegalArgumentException> {
+            pinStyleSources(libertyStyle, mapOf("openmaptiles" to """{"tiles":[]}"""))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            pinStyleSources(libertyStyle, mapOf("openmaptiles" to "<html>Fehler</html>"))
+        }
+    }
+
+    @Test
+    fun `ein Rasterstil hat nichts festzuschreiben`() {
+        val raster = mapStyleById("osmde").toRasterStyleJson()
+        assertEquals(emptyMap(), tileJsonSources(raster))
+        assertEquals(null, pinnedTileTemplate(raster))
     }
 
     // ------------------------------------------------------------ Kantenlaenge
@@ -222,6 +371,15 @@ class OfflineTileMathTest {
         val raw = offlineRegionMetadata("Straßenkarte · 09.08.2026", "voyager", 1_754_700_000_000L)
         val info = readOfflineRegionInfo(raw)
         assertEquals(OfflineRegionInfo("Straßenkarte · 09.08.2026", "voyager", 1_754_700_000_000L), info)
+    }
+
+    @Test
+    fun `die festgeschriebene Kacheladresse ueberlebt den Weg durch die Datenbank`() {
+        val template = "https://tiles.openfreemap.org/planet/20260913_164504_pt/{z}/{x}/{y}.pbf"
+        val raw = offlineRegionMetadata("Vektorkarte · 25.09.2026", "openfreemap", 1L, template)
+        assertEquals(template, readOfflineRegionInfo(raw)?.tileTemplate)
+        // Rasterregionen und aeltere Regionen tragen das Feld nicht.
+        assertEquals(null, readOfflineRegionInfo(offlineRegionMetadata("Alt", "osmde", 1L))?.tileTemplate)
     }
 
     @Test

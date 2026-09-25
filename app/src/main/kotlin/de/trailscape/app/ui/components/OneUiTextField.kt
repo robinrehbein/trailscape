@@ -123,6 +123,11 @@ fun OneUiTextField(
  *   Suchverlauf statt der Tourenliste.
  * @param busy Zeigt statt des Loeschkreuzes einen Ring. Beides zugleich waere
  *   ein Ziel, das unter dem Finger die Bedeutung wechselt.
+ * @param onSearch Die Suchtaste der Tastatur. Fuer Suchen, die einen
+ *   fremden Dienst fragen (Ortssuche ueber Nominatim), ist das der **einzige**
+ *   Ausloeser — nicht [onValueChange], siehe `MapScreen.kt`. Ein reiner
+ *   Filter ueber lokale Daten (Tourenliste) darf dagegen live mitlaufen und
+ *   braucht ihn nicht.
  */
 @Composable
 fun OneUiSearchField(
@@ -132,6 +137,7 @@ fun OneUiSearchField(
     modifier: Modifier = Modifier,
     busy: Boolean = false,
     onFocusChange: (Boolean) -> Unit = {},
+    onSearch: () -> Unit = {},
 ) {
     TextField(
         value = value,
@@ -160,6 +166,7 @@ fun OneUiSearchField(
         },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
         // Volle Pille statt der 18 dp der Formularfelder — so sieht Suche in
         // One UI aus, von den Einstellungen bis zur App-Uebersicht.
         shape = MaterialTheme.shapes.small,

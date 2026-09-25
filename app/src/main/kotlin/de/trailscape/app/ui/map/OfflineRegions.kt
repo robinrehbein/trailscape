@@ -4,6 +4,8 @@ import android.content.Context
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.formatOneDecimalDe
+import de.trailscape.core.HttpMethod
+import de.trailscape.core.HttpRequest
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.maplibre.android.MapLibre
 import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.offline.OfflineManager
 import org.maplibre.android.offline.OfflineRegion
@@ -39,9 +42,41 @@ import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
  * Metadaten) steht nebenan in `OfflineTileMath.kt` (siehe
  * [planOfflineDownload]) und ist dort als JVM-Test geprueft.
  *
- * ## Wie der Rasterstil zur Region kommt — und warum das mal haengen blieb
+ * ## Welcher Stil ueberhaupt geladen wird
+ * Nur einer: der Vektor-Stil von OpenFreeMap ([MapStyle.offlineAllowed],
+ * Begruendung samt Quellen an `mapStyles` in `ui/MapStyles.kt`). Die
+ * Rasterserver verbieten Vorab-Downloads; [downloadOfflineRegion] prueft das
+ * deshalb selbst noch einmal, statt sich auf die Planung zu verlassen.
+ *
+ * ## Warum der Vektor-Stil festgeschrieben wird
+ * Die Region fuehrt nicht die echte Style-URL von OpenFreeMap, sondern eine
+ * Kopie des Stils, deren Vektorquelle auf die Kachelpfade des Datenstands
+ * beim ersten Download festgelegt ist ([pinStyleSources], dort die
+ * ausfuehrliche Begruendung: Die TileJSON dahinter wechselt woechentlich die
+ * Version, und eine offline gespeicherte Region wuerde danach still leer).
+ * Diese Kopie liegt an zwei Stellen:
+ *  * in MapLibres Datenbank unter [offlineStyleUrl] — nur so findet der
+ *    Download den Stil (derselbe Weg wie bei den Rasterstilen unten);
+ *  * als Datei im app-eigenen Speicher ([PINNED_STYLE_DIR_NAME]) — daraus
+ *    zeichnet die Karte den Stil, solange es eine solche Region gibt
+ *    ([pinnedOfflineStyleJson]). Aus der Datenbank laesst sich eine Ressource
+ *    nicht zuruecklesen.
+ *
+ * Alle Regionen teilen sich **eine** Kopie: Solange noch eine Region des
+ * Stils existiert, nimmt ein neuer Download die vorhandene Kopie wieder,
+ * statt einen neueren Datenstand festzuschreiben. Sonst laegen zwei Regionen
+ * mit verschiedenen Kachelpfaden auf dem Geraet, und offline koennte die Karte
+ * immer nur eine davon zeigen. Die Daten eines spaeteren Downloads sind
+ * trotzdem aktuell, sobald OpenFreeMap die alte Version abgeraeumt hat (dann
+ * liefert der Server unter dem alten Pfad den neuesten Stand, siehe
+ * [pinStyleSources]). Erst wenn die letzte Region geloescht ist, schreibt der
+ * naechste Download einen frischen Stil fest.
+ *
+ * ## Wie ein Rasterstil zur Region kam — und warum das mal haengen blieb
+ * (Stand der alten Raster-Downloads; die Regionen liegen noch auf manchem
+ * Geraet und werden weiter angezeigt.)
  * [OfflineTilePyramidRegionDefinition] verlangt eine Style-**URL**; unsere
- * Stile entstehen aber zur Laufzeit als JSON ([MapStyle.toRasterStyleJson]).
+ * Rasterstile entstehen aber zur Laufzeit als JSON ([MapStyle.toRasterStyleJson]).
  * Der erste Anlauf legte die JSON als Datei ab und uebergab eine
  * `file://`-Adresse. Das kann nicht funktionieren, und zwar still:
  *
@@ -96,10 +131,113 @@ data class OfflineDownloadProgress(
      */
     val requiredTiles: Long,
     val completedBytes: Long,
+    /**
+     * Alle geladenen Ressourcen, nicht nur Kacheln. Beim Vektor-Stil kommen
+     * zu den Kacheln Style, TileJSON, Sprites und einige Hundert kleine
+     * Schrift-Pakete — der Fortschrittsbalken rechnet deshalb in Ressourcen,
+     * sonst stuende er bei „fertig" erst bei einem Bruchteil.
+     */
+    val completedResources: Long = completedTiles,
+    /** Vom Kern erwartete Ressourcen; `0`, solange die Zahl nicht genau ist. */
+    val requiredResources: Long = requiredTiles,
 )
 
 /** Verzeichnis der frueheren `file://`-Stildateien; wird nur noch aufgeraeumt. */
 private const val LEGACY_STYLE_DIR_NAME = "map-styles"
+
+/**
+ * Verzeichnis der festgeschriebenen Vektor-Stile (siehe Datei-KDoc). Bewusst
+ * ein anderer Name als [LEGACY_STYLE_DIR_NAME], das jeder Download aufraeumt.
+ */
+private const val PINNED_STYLE_DIR_NAME = "offline-styles"
+
+private fun pinnedStyleFile(context: Context, style: MapStyle): File =
+    File(File(context.applicationContext.filesDir, PINNED_STYLE_DIR_NAME), "${style.id}.json")
+
+/**
+ * Alle Offline-Regionen, die MapLibre kennt. `MapLibre.getInstance` ist
+ * idempotent und steht hier, weil der Aufruf auch ohne sichtbare Karte kommen
+ * kann (Mehr-Tab). Muss auf dem Main-Thread laufen (Rueckruf ueber den
+ * Main-Looper).
+ */
+internal suspend fun listOfflineRegions(context: Context): List<OfflineRegion> {
+    val appContext = context.applicationContext
+    MapLibre.getInstance(appContext)
+    val manager = OfflineManager.getInstance(appContext)
+    return suspendCancellableCoroutine { cont ->
+        manager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
+            override fun onList(offlineRegions: Array<OfflineRegion>?) {
+                if (cont.isActive) cont.resume(offlineRegions?.toList() ?: emptyList())
+            }
+
+            override fun onError(error: String) {
+                if (cont.isActive) cont.resumeWithException(IllegalStateException(error))
+            }
+        })
+    }
+}
+
+/** Ob es mindestens eine Region gibt, die [style] ueber [offlineStyleUrl] fuehrt. */
+private suspend fun hasRegionFor(context: Context, style: MapStyle): Boolean {
+    val url = offlineStyleUrl(style)
+    return listOfflineRegions(context).any { region ->
+        (region.definition as? OfflineTilePyramidRegionDefinition)?.styleURL == url
+    }
+}
+
+/**
+ * Die festgeschriebene Style-JSON, aus der die Karte einen Vektor-Stil
+ * zeichnen soll — oder `null`, dann gilt die echte Style-URL.
+ *
+ * Gesetzt nur, solange es eine Region des Stils gibt: Ohne gespeicherte
+ * Region braucht niemand den festen Datenstand, und die Live-URL bringt
+ * Stil-Aenderungen von OpenFreeMap mit. Fehler (Datenbank, Datei) ergeben
+ * `null` — die Karte laedt dann eben live, statt gar nicht.
+ */
+internal suspend fun pinnedOfflineStyleJson(context: Context, style: MapStyle): String? {
+    if (!style.isVector) return null
+    return runCatching {
+        if (!hasRegionFor(context, style)) return null
+        withContext(Dispatchers.IO) {
+            pinnedStyleFile(context, style).takeIf { it.isFile }?.readText()
+        }
+    }.getOrNull()
+}
+
+/**
+ * Liefert die festgeschriebene Style-JSON fuer einen neuen Download (siehe
+ * Datei-KDoc): die vorhandene, solange eine Region sie nutzt, sonst eine
+ * frisch von OpenFreeMap geholte und mit [pinStyleSources] festgelegte.
+ */
+private suspend fun preparePinnedVectorStyle(context: Context, style: MapStyle): String {
+    val file = pinnedStyleFile(context, style)
+    if (runCatching { hasRegionFor(context, style) }.getOrDefault(false)) {
+        withContext(Dispatchers.IO) { runCatching { file.takeIf { it.isFile }?.readText() }.getOrNull() }
+            ?.let { return it }
+    }
+    val styleUrl = checkNotNull(style.vectorStyleUrl)
+    return withContext(Dispatchers.IO) {
+        val pinned = runCatching {
+            val styleJson = fetchText(styleUrl)
+            val tileJsons = tileJsonSources(styleJson).mapValues { (_, url) -> fetchText(url) }
+            pinStyleSources(styleJson, tileJsons)
+        }.getOrElse {
+            throw IllegalStateException(
+                "Der Kartenstil ließ sich nicht laden. Bitte Internetverbindung prüfen.",
+            )
+        }
+        file.parentFile?.mkdirs()
+        file.writeText(pinned)
+        pinned
+    }
+}
+
+/** Ein schlichter GET ueber den App-weiten HTTP-Client; wirft bei Fehlstatus. */
+private fun fetchText(url: String): String {
+    val response = AppServices.httpClient.execute(HttpRequest(HttpMethod.GET, url))
+    check(response.statusCode in 200..299) { "HTTP ${response.statusCode} fuer $url" }
+    return response.body
+}
 
 /**
  * Wie lange der abgelegte Stil im Ressourcen-Cache als frisch gilt. Grosszuegig,
@@ -152,6 +290,9 @@ suspend fun downloadOfflineRegion(
     name: String,
     onProgress: (OfflineDownloadProgress) -> Unit,
 ): OfflineDownloadProgress = coroutineScope {
+    // Zweite Sperre neben `planOfflineDownload`: Wer diese Funktion je an der
+    // Planung vorbei aufruft, soll trotzdem keinen Rasterserver abgrasen.
+    check(style.offlineAllowed) { offlineNotAllowedMessage(style) }
     val appContext = context.applicationContext
     val manager = OfflineManager.getInstance(appContext)
     val styleUrl = offlineStyleUrl(style)
@@ -162,11 +303,19 @@ suspend fun downloadOfflineRegion(
         runCatching { File(appContext.filesDir, LEGACY_STYLE_DIR_NAME).deleteRecursively() }
     }
 
+    // Der Stil muss vorab unter seiner Wunschadresse liegen (siehe
+    // Datei-KDoc) — beim Rasterstil die zur Laufzeit gebaute JSON, beim
+    // Vektor-Stil die festgeschriebene Kopie.
+    val styleJson = if (style.isVector) {
+        preparePinnedVectorStyle(appContext, style)
+    } else {
+        style.toRasterStyleJson()
+    }
     val nowS = System.currentTimeMillis() / 1000
     runCatching {
         manager.putResourceWithUrl(
             styleUrl,
-            style.toRasterStyleJson().toByteArray(Charsets.UTF_8),
+            styleJson.toByteArray(Charsets.UTF_8),
             nowS,
             nowS + STYLE_CACHE_TTL_S,
             "",
@@ -183,7 +332,12 @@ suspend fun downloadOfflineRegion(
         maxZoom.toDouble(),
         appContext.resources.displayMetrics.density,
     )
-    val metadata = offlineRegionMetadata(name, style.id, System.currentTimeMillis())
+    val metadata = offlineRegionMetadata(
+        name = name,
+        styleId = style.id,
+        createdAtMs = System.currentTimeMillis(),
+        tileTemplate = if (style.isVector) pinnedTileTemplate(styleJson) else null,
+    )
     val watchdogScope = this
 
     suspendCancellableCoroutine { continuation ->
@@ -251,6 +405,12 @@ suspend fun downloadOfflineRegion(
                                         0L
                                     },
                                     completedBytes = status.completedResourceSize,
+                                    completedResources = status.completedResourceCount,
+                                    requiredResources = if (status.isRequiredResourceCountPrecise) {
+                                        status.requiredResourceCount
+                                    } else {
+                                        0L
+                                    },
                                 )
                                 onProgress(progress)
                                 if (status.isComplete) {
@@ -350,6 +510,16 @@ object OfflineDownloadController {
     /** Fortschritt des laufenden Downloads; `running == false`, wenn keiner laeuft. */
     val state: StateFlow<OfflineDownloadState> = _state.asStateFlow()
 
+    private val _savedRegions = MutableStateFlow(0)
+
+    /**
+     * Zaehlt die in diesem Prozess fertig gespeicherten Regionen. Die Karte
+     * haengt ihren Stil daran: Nach dem ersten Download eines Vektor-Stils
+     * soll sie sofort aus der festgeschriebenen Kopie zeichnen (siehe
+     * [pinnedOfflineStyleJson]), nicht erst nach dem naechsten Start.
+     */
+    val savedRegions: StateFlow<Int> = _savedRegions.asStateFlow()
+
     /**
      * Startet einen Download nach dem geprueften [plan], sofern nicht schon
      * einer laeuft (dann passiert nichts). Alle Meldungen — Beginn, Erfolg,
@@ -384,19 +554,26 @@ object OfflineDownloadController {
                     maxZoom = plan.maxZoom,
                     name = name,
                 ) { progress ->
+                    // Gezaehlt wird in Ressourcen (siehe
+                    // [OfflineDownloadProgress.completedResources]). Die
+                    // Schaetzung bleibt stehen, bis MapLibre die Zahl wirklich
+                    // kennt — sonst spraenge der Balken auf die „1" des Stils
+                    // zurueck.
+                    val total = if (progress.requiredResources > 1) {
+                        progress.requiredResources
+                    } else {
+                        _state.value.totalTiles
+                    }
                     _state.value = OfflineDownloadState(
                         running = true,
-                        completedTiles = progress.completedTiles,
-                        // Die Schaetzung bleibt stehen, bis MapLibre die
-                        // Kachelzahl wirklich kennt — sonst spraenge der
-                        // Balken auf die „1" des Stils zurueck.
-                        totalTiles = if (progress.requiredTiles > 0) {
-                            progress.requiredTiles
-                        } else {
-                            _state.value.totalTiles
-                        },
+                        // Solange der Nenner noch die Kachelschaetzung ist,
+                        // zaehlen oben schon Style, Sprites und Schriften mit —
+                        // ohne Deckel stuende kurz „300/180" da.
+                        completedTiles = progress.completedResources.coerceAtMost(total),
+                        totalTiles = total,
                     )
                 }
+                _savedRegions.value += 1
                 onMessage(
                     "Ausschnitt gespeichert: ${result.completedTiles} Kacheln " +
                         "(${formatMegabytes(result.completedBytes)} MB).",

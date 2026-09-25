@@ -80,6 +80,7 @@ internal fun ExploreSheet(
     searchMaxHeight: Dp,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    onSubmitSearch: () -> Unit,
     searching: Boolean,
     onSearchingChange: (Boolean) -> Unit,
     onEndSearch: () -> Unit,
@@ -124,16 +125,19 @@ internal fun ExploreSheet(
                     placeholder = "Wohin?",
                     busy = searchBusy,
                     onFocusChange = onSearchingChange,
+                    onSearch = onSubmitSearch,
                 )
 
                 if (searching) {
                     Spacer(Modifier.height(4.dp))
                     PlaceResults(
                         query = searchQuery,
+                        busy = searchBusy,
                         error = searchError,
                         results = searchResults,
                         history = searchHistory,
                         onSelect = onSelectPlace,
+                        onSearch = onSubmitSearch,
                         modifier = Modifier
                             .heightIn(max = searchMaxHeight)
                             .verticalScroll(rememberScrollState()),
