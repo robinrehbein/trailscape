@@ -73,7 +73,9 @@ internal fun HistorySummarySheet(
                     Modifier.weight(1f),
                 )
             }
-            if (clusterSize != null) {
+            // Ohne Cluster (noch keine Kachel mit allen vier Nachbarn) keine
+            // Zeile „0 Kacheln" — eine Null ohne Erklaerung wirkt wie ein Fehler.
+            if (clusterSize != null && clusterSize > 0) {
                 Text(
                     "Größte Fläche: ${formatTileCount(clusterSize)}",
                     style = MaterialTheme.typography.bodyMedium,
