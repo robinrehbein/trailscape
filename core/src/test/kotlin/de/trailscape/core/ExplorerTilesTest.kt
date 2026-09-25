@@ -136,6 +136,81 @@ class ExplorerTilesTest {
         assertEquals(2, square?.size)
     }
 
+    // ------------------------------------------------ Groesste Flaeche (Max-Cluster)
+
+    /** Vollstaendiger Block `size×size` ab linker oberer Ecke `(x0, y0)`. */
+    private fun block(x0: Int, y0: Int, size: Int): Set<ExplorerTile> =
+        (x0 until x0 + size).flatMap { x -> (y0 until y0 + size).map { y -> ExplorerTile(x, y) } }.toSet()
+
+    @Test
+    fun `leere Menge hat weder Cluster-Kacheln noch Max-Cluster`() {
+        assertEquals(emptySet(), clusterTiles(emptySet()))
+        assertEquals(emptySet(), largestCluster(emptySet()))
+    }
+
+    @Test
+    fun `im 3x3-Block ist nur die Mitte umschlossen`() {
+        val tiles = block(10, 20, 3)
+        assertEquals(setOf(ExplorerTile(11, 21)), clusterTiles(tiles))
+        assertEquals(setOf(ExplorerTile(11, 21)), largestCluster(tiles))
+    }
+
+    @Test
+    fun `im 5x5-Block bilden die inneren 3x3 den Max-Cluster`() {
+        val tiles = block(0, 0, 5)
+        assertEquals(block(1, 1, 3), largestCluster(tiles))
+        assertEquals(9, largestCluster(tiles).size)
+    }
+
+    @Test
+    fun `zwei getrennte Bloecke ergeben den groesseren als Max-Cluster`() {
+        val small = block(0, 0, 4) // innen 2x2 = 4
+        val large = block(100, 100, 6) // innen 4x4 = 16
+        val tiles = small + large
+        assertEquals(20, clusterTiles(tiles).size)
+        assertEquals(block(101, 101, 4), largestCluster(tiles))
+    }
+
+    @Test
+    fun `diagonal beruehrende Cluster-Kacheln haengen nicht zusammen`() {
+        // Zwei „Plus"-Formen um (1,1) und (2,2): Beide Mitten sind
+        // Cluster-Kacheln und liegen diagonal nebeneinander — das ist KEIN
+        // Zusammenhang, also zwei Cluster zu je einer Kachel.
+        fun plus(x: Int, y: Int) = setOf(
+            ExplorerTile(x, y),
+            ExplorerTile(x, y - 1), ExplorerTile(x, y + 1),
+            ExplorerTile(x - 1, y), ExplorerTile(x + 1, y),
+        )
+        val tiles = plus(1, 1) + plus(2, 2)
+        assertEquals(setOf(ExplorerTile(1, 1), ExplorerTile(2, 2)), clusterTiles(tiles))
+        assertEquals(1, largestCluster(tiles).size)
+
+        // Und eine Kachel, die nur diagonal umgeben ist, zaehlt selbst nicht.
+        val diagonalOnly = setOf(
+            ExplorerTile(5, 5),
+            ExplorerTile(4, 4), ExplorerTile(6, 4), ExplorerTile(4, 6), ExplorerTile(6, 6),
+        )
+        assertEquals(emptySet(), clusterTiles(diagonalOnly))
+    }
+
+    @Test
+    fun `ein Strich ohne Flaeche hat keinen Cluster`() {
+        val line = (0 until 50).map { ExplorerTile(it, 7) }.toSet()
+        assertEquals(emptySet(), largestCluster(line))
+    }
+
+    @Test
+    fun `grosser Bestand wird schnell und ohne Stackueberlauf gerechnet`() {
+        // 200x200 = 40.000 Kacheln, ein einziger Cluster aus 198x198 Kacheln —
+        // ein rekursiver Flood-Fill liefe hier sicher in einen StackOverflowError.
+        val tiles = block(8000, 5000, 200)
+        val start = System.nanoTime()
+        val cluster = largestCluster(tiles)
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+        assertEquals(198 * 198, cluster.size)
+        assertTrue(elapsedMs < 2_000, "Max-Cluster brauchte $elapsedMs ms")
+    }
+
     // ------------------------------------------------------------- Sammeln (Cache)
 
     /** Einfacher Map-basierter Fake-Store fuer die Tests, mit Zaehlern fuer Aufrufe. */
