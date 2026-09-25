@@ -1,0 +1,1175 @@
+<title>Trailscape Klartext</title>
+<!--
+  Redesign-Vorschlag „Klartext" — klickbarer Prototyp plus Konzept.
+
+  Ausgangslage: Bestandsaufnahme der echten App (Heute, Karte, Touren, Training, Mehr) aus dem
+  Code. Die Funktionen sind stark, aber jede taucht an mehreren Orten, unter mehreren Namen und
+  mit unterschiedlichem Verhalten auf. Dieser Entwurf ordnet dieselben Funktionen neu:
+
+    * drei Ziele (Heute · Karte · Verlauf) plus ein beschrifteter Fahren-Knopf
+    * eine Frage pro Screen, ein gefüllter Knopf pro Blick
+    * Klartext vor Zahlen — Fachwerte liegen hinter „Warum?"
+    * jede Funktion hat genau einen Ort, jedes Wort genau eine Bedeutung
+
+  Der Prototyp ist Demo-Daten, keine echte Logik. Die Notizspalte rechts erklärt pro Screen,
+  was sich gegenüber der heutigen App ändert.
+-->
+<style>
+  :root{
+    color-scheme:light;
+    --stage:#E4E6E9;
+    --paper:#F7F7F8;
+    --bg:#F4F4F6;
+    --card:#FFFFFF;
+    --tone:#EFEFF2;
+    --tone2:#E4E6EA;
+    --ink:#1A1B1E;
+    --mut:#545B63;
+    --faint:#80868F;
+    --hair:#DDDEE3;
+    --acc:#0D7A42;
+    --on-acc:#FFFFFF;
+    --acc-cont:#C3F0D4;
+    --on-acc-cont:#002411;
+    --warn:#B45100;
+    --warn-cont:#FFE3CC;
+    --err:#BB2016;
+    --err-cont:#FFDAD4;
+    --map:#E6ECE6;
+    --topo:rgba(45,90,60,.13);
+    --road:rgba(255,255,255,.85);
+    --water:#CFE0EA;
+    --route:#0D7A42;
+    --route-alt:rgba(13,122,66,.32);
+    --scrim:rgba(0,0,0,.40);
+    --barbg:rgba(255,255,255,.94);
+    --elev:0 1px 2px rgba(0,0,0,.05),0 3px 12px rgba(0,0,0,.06);
+    --elev-hi:0 4px 10px rgba(0,0,0,.08),0 12px 30px rgba(0,0,0,.14);
+    --sans:system-ui,-apple-system,'Roboto','Segoe UI',sans-serif;
+    --mono:ui-monospace,'SFMono-Regular','Roboto Mono',monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --stage:#050506;--paper:#0E0F11;--bg:#0A0A0C;--card:#1C1D21;--tone:#26272C;--tone2:#303138;
+      --ink:#E3E3E7;--mut:#BFC3C9;--faint:#8A8F98;--hair:#34353B;
+      --acc:#6BD69C;--on-acc:#00391D;--acc-cont:#155F38;--on-acc-cont:#A7F2C6;
+      --warn:#FFB77A;--warn-cont:#4A2A0E;--err:#FFB4A9;--err-cont:#5C1510;
+      --map:#161B20;--topo:rgba(255,255,255,.06);--road:rgba(255,255,255,.10);--water:#1B2A36;
+      --route:#6BD69C;--route-alt:rgba(107,214,156,.30);
+      --scrim:rgba(0,0,0,.6);--barbg:rgba(28,29,33,.95);
+      --elev:0 1px 2px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.3);
+      --elev-hi:0 4px 10px rgba(0,0,0,.45),0 14px 34px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --stage:#050506;--paper:#0E0F11;--bg:#0A0A0C;--card:#1C1D21;--tone:#26272C;--tone2:#303138;
+    --ink:#E3E3E7;--mut:#BFC3C9;--faint:#8A8F98;--hair:#34353B;
+    --acc:#6BD69C;--on-acc:#00391D;--acc-cont:#155F38;--on-acc-cont:#A7F2C6;
+    --warn:#FFB77A;--warn-cont:#4A2A0E;--err:#FFB4A9;--err-cont:#5C1510;
+    --map:#161B20;--topo:rgba(255,255,255,.06);--road:rgba(255,255,255,.10);--water:#1B2A36;
+    --route:#6BD69C;--route-alt:rgba(107,214,156,.30);
+    --scrim:rgba(0,0,0,.6);--barbg:rgba(28,29,33,.95);
+    --elev:0 1px 2px rgba(0,0,0,.35),0 4px 14px rgba(0,0,0,.3);
+    --elev-hi:0 4px 10px rgba(0,0,0,.45),0 14px 34px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{background:var(--stage)}
+  body{margin:0;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-inline:16px}
+  button{font-family:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;font-size:inherit;text-align:inherit}
+  button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:14px}
+  svg{display:block}
+  .tab-nums{font-variant-numeric:tabular-nums}
+
+  /* ───────────────────────── Seite ───────────────────────── */
+  .wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px}
+  .intro{display:grid;gap:10px;max-width:760px;margin-bottom:32px}
+  .kicker{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--acc)}
+  .intro h1{margin:0;font-size:clamp(30px,5vw,44px);line-height:1.08;letter-spacing:-.02em;text-wrap:balance}
+  .intro p{margin:0;color:var(--mut);font-size:16px;max-width:64ch}
+
+  .studio{display:grid;grid-template-columns:390px minmax(0,1fr);gap:48px;align-items:start}
+  @media (max-width:900px){.studio{grid-template-columns:minmax(0,1fr);justify-items:center}}
+
+  /* ───────────────────────── Telefon ───────────────────────── */
+  .phone{position:relative;width:100%;max-width:390px;height:clamp(640px,88svh,844px);background:var(--bg);border-radius:38px;overflow:hidden;box-shadow:0 0 0 10px var(--ink),0 30px 60px rgba(0,0,0,.25);isolation:isolate}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .phone{box-shadow:0 0 0 10px #2A2B30,0 30px 60px rgba(0,0,0,.6)}}
+  :root[data-theme="dark"] .phone{box-shadow:0 0 0 10px #2A2B30,0 30px 60px rgba(0,0,0,.6)}
+  .status{position:absolute;inset:0 0 auto 0;height:34px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:12px;font-weight:600;z-index:40;pointer-events:none}
+  .screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:44px 16px 120px;scrollbar-width:none}
+  .screen::-webkit-scrollbar{display:none}
+  .screen.full{padding:0}
+
+  /* Kopfzeile */
+  .head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px}
+  .head .acts{display:flex;gap:6px}
+  .iconbtn{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--card);box-shadow:var(--elev);color:var(--ink)}
+  .iconbtn.flat{background:transparent;box-shadow:none}
+  .iconbtn svg{width:20px;height:20px}
+  .date{font-size:13px;color:var(--mut);font-weight:600}
+  .title{font-size:32px;font-weight:700;letter-spacing:-.015em;margin:2px 0 14px}
+  .back{display:inline-flex;align-items:center;gap:4px;font-weight:600;color:var(--ink);height:40px}
+  .back svg{width:18px;height:18px}
+
+  /* Karten & Typo im Telefon */
+  .card{background:var(--card);border-radius:24px;padding:16px;box-shadow:var(--elev)}
+  .stack{display:grid;gap:12px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--mut);margin:18px 4px 8px}
+  .muted{color:var(--mut)}
+  .small{font-size:12.5px}
+  .h2{font-size:20px;font-weight:700;line-height:1.25;letter-spacing:-.01em;text-wrap:balance}
+  .h3{font-size:16px;font-weight:700}
+  .btn{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:26px;font-weight:700;font-size:15.5px;width:100%;transition:transform .12s}
+  .btn:active{transform:scale(.98)}
+  .btn.pri{background:var(--acc);color:var(--on-acc)}
+  .btn.sec{background:var(--tone);color:var(--ink)}
+  .btn.ghost{background:transparent;color:var(--acc);height:40px}
+  .btn svg{width:18px;height:18px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .link{color:var(--acc);font-weight:700}
+  .chev{width:16px;height:16px;color:var(--faint);flex:none}
+  .pill{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:13px;font-size:12px;font-weight:700;background:var(--tone);color:var(--mut)}
+  .pill.ok{background:var(--acc-cont);color:var(--on-acc-cont)}
+  .pill.warn{background:var(--warn-cont);color:var(--warn)}
+
+  /* Heute: Empfehlung */
+  .hero{display:grid;gap:14px}
+  .hero-top{display:flex;gap:14px;align-items:center}
+  .ring{position:relative;width:74px;flex:none;display:grid;justify-items:center;gap:2px}
+  .ring svg{width:74px;height:74px;transform:rotate(-90deg)}
+  .ring b{position:absolute;left:0;right:0;top:0;height:74px;display:grid;place-items:center;font-size:24px;line-height:1}
+  .ring .ringword{font-size:12px;font-weight:700;color:var(--acc)}
+  .hero .why{display:flex;justify-content:center}
+
+  /* Heute: Woche */
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;margin-top:12px}
+  .day{display:grid;gap:5px;justify-items:center;font-size:11px;color:var(--mut);font-weight:600}
+  .dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;border:2px dashed var(--hair);color:var(--mut)}
+  .dot.done{background:var(--acc);border:0;color:var(--on-acc)}
+  .dot.today{border:2.5px solid var(--acc);color:var(--acc)}
+  .dot.rest{border:0;background:transparent;color:var(--faint)}
+  .day.is-today{color:var(--acc)}
+  .bar{height:6px;border-radius:3px;background:var(--tone);overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--acc);border-radius:3px}
+  .rowlink{display:flex;align-items:center;gap:12px;width:100%}
+  .rowlink .grow{flex:1;min-width:0}
+
+  /* Listen */
+  .list{background:var(--card);border-radius:24px;box-shadow:var(--elev);overflow:hidden}
+  .li{display:flex;align-items:center;gap:12px;padding:13px 16px;width:100%;border-top:1px solid var(--hair)}
+  .li:first-child{border-top:0}
+  .li .grow{flex:1;min-width:0}
+  .li .t{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .li .s{font-size:12.5px;color:var(--mut)}
+  .li .v{font-size:12.5px;color:var(--mut);text-align:right}
+  .thumb{width:44px;height:44px;border-radius:12px;background:var(--map);flex:none;overflow:hidden}
+  .thumb svg{width:44px;height:44px}
+
+  /* Plan */
+  .pday{display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:11px 16px;border-top:1px solid var(--hair)}
+  .pday:first-child{border-top:0}
+  .pday .d{font-weight:700;color:var(--mut);font-size:13px}
+  .pday.today{background:var(--acc-cont);color:var(--on-acc-cont)}
+  .pday.today .d{color:var(--on-acc-cont)}
+  .pday .t{font-weight:600}
+  .pday .t small{display:block;font-weight:400;color:var(--mut);font-size:12px}
+  .pday.today .t small{color:var(--on-acc-cont);opacity:.8}
+
+  /* Nav-Leiste */
+  .nav{position:absolute;left:0;right:0;bottom:0;padding:0 12px 14px;display:flex;gap:10px;align-items:center;z-index:30}
+  .caps{flex:1;display:flex;height:62px;border-radius:31px;background:var(--barbg);box-shadow:var(--elev-hi);padding:5px;backdrop-filter:blur(14px)}
+  .tab{flex:1;display:grid;justify-items:center;align-content:center;gap:2px;border-radius:26px;font-size:11.5px;font-weight:600;color:var(--mut)}
+  .tab svg{width:21px;height:21px}
+  .tab.on{background:var(--acc-cont);color:var(--on-acc-cont)}
+  .ride{height:62px;min-width:108px;padding:0 20px;border-radius:31px;background:var(--acc);color:var(--on-acc);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:15px;box-shadow:0 6px 16px rgba(13,122,66,.35)}
+  .ride svg{width:18px;height:18px}
+  .ride.rec{background:var(--err);color:#fff;box-shadow:0 6px 16px rgba(187,32,22,.35)}
+  .ride.rec .pulse{width:10px;height:10px;border-radius:50%;background:#fff;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  @media (prefers-reduced-motion:reduce){.ride.rec .pulse{animation:none}}
+
+  /* Karte */
+  .mapbg{position:absolute;inset:0;background:var(--map)}
+  .mapbg svg{width:100%;height:100%}
+  .map-top{position:absolute;top:44px;right:14px;display:grid;gap:10px;z-index:5}
+  .map-bottom{position:absolute;left:12px;right:12px;bottom:90px;display:grid;gap:10px;z-index:6}
+  .locate{justify-self:end}
+  .sheet{background:var(--card);border-radius:26px;padding:14px 16px 16px;box-shadow:var(--elev-hi);display:grid;gap:12px}
+  .search{display:flex;align-items:center;gap:10px;height:48px;border-radius:24px;background:var(--tone);padding:0 16px;color:var(--mut);font-size:15px}
+  .search svg{width:18px;height:18px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:19px;background:var(--tone);font-weight:700;font-size:13.5px}
+  .chip svg{width:16px;height:16px}
+  .chip.acc{background:var(--acc-cont);color:var(--on-acc-cont)}
+  .chip.sel{background:var(--acc);color:var(--on-acc)}
+  .hint{font-size:12px;color:var(--faint);text-align:center}
+  .seg{display:flex;background:var(--tone);border-radius:20px;padding:3px}
+  .seg button{flex:1;text-align:center;height:34px;border-radius:17px;font-weight:700;font-size:13px;color:var(--mut)}
+  .seg button.on{background:var(--card);color:var(--ink);box-shadow:var(--elev)}
+  .dist{display:flex;align-items:baseline;justify-content:center;gap:6px}
+  .dist b{font-size:44px;letter-spacing:-.02em;line-height:1}
+  input[type=range]{width:100%;accent-color:var(--acc)}
+  .cands{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .cand{border-radius:18px;background:var(--tone);padding:10px;display:grid;gap:2px;border:2px solid transparent}
+  .cand.on{border-color:var(--acc);background:var(--card)}
+  .cand b{font-size:14px}
+  .cand span{font-size:11.5px;color:var(--mut)}
+  .stats3{display:grid;grid-template-columns:repeat(3,1fr);text-align:center}
+  .stats3 b{display:block;font-size:19px}
+  .stats3 span{font-size:11.5px;color:var(--mut)}
+  .elev{height:44px;width:100%}
+  .wp{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--hair)}
+  .wp:first-child{border-top:0}
+  .wp .n{width:24px;height:24px;border-radius:50%;background:var(--acc);color:var(--on-acc);display:grid;place-items:center;font-size:12px;font-weight:800;flex:none}
+  .wp .n.add{background:var(--tone);color:var(--mut)}
+  .wp .grow{flex:1}
+  .switch{width:46px;height:28px;border-radius:14px;background:var(--acc);position:relative;flex:none}
+  .switch::after{content:"";position:absolute;right:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff}
+  .switch.off{background:var(--tone2)}
+  .switch.off::after{right:auto;left:3px}
+  .pin{position:absolute;width:26px;height:26px;margin:-26px 0 0 -13px;z-index:4;pointer-events:none}
+  .me{position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;background:#2B7BD6;border:3px solid #fff;box-shadow:0 0 0 6px rgba(43,123,214,.2);z-index:3}
+
+  /* Modale Sheets im Telefon */
+  .scrim{position:absolute;inset:0;background:var(--scrim);z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .msheet{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-radius:28px 28px 0 0;padding:10px 18px 26px;z-index:60;transform:translateY(105%);transition:transform .28s cubic-bezier(.22,.25,0,1);display:grid;gap:14px;max-height:88%;overflow-y:auto}
+  .msheet.open{transform:none}
+  .grab{width:40px;height:4px;border-radius:2px;background:var(--hair);justify-self:center}
+  @media (prefers-reduced-motion:reduce){.msheet,.scrim{transition:none}}
+  .sig{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:10px 0;border-top:1px solid var(--hair)}
+  .sig:first-of-type{border-top:0}
+  .sig .k{font-weight:700}
+  .sig .x{grid-column:1/-1;font-size:12.5px;color:var(--mut)}
+  .note{background:var(--acc-cont);color:var(--on-acc-cont);border-radius:18px;padding:12px 14px;font-size:13.5px}
+
+  /* Cockpit */
+  .cockpit{position:absolute;inset:0;background:var(--bg);z-index:70;display:flex;flex-direction:column;padding:40px 14px 18px}
+  .cp-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .cp-head .seg{flex:1}
+  .navban{background:var(--acc);color:var(--on-acc);border-radius:22px;padding:12px 16px;display:flex;gap:12px;align-items:center}
+  .navban svg{width:30px;height:30px;flex:none}
+  .navban b{font-size:18px;display:block}
+  .navban span{font-size:12.5px;opacity:.85}
+  .cp-data{flex:1;display:grid;align-content:center;gap:18px;text-align:center}
+  .speed b{font-size:96px;line-height:.95;letter-spacing:-.04em;font-weight:800}
+  .speed span{display:block;color:var(--mut);font-weight:600}
+  .cpgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cpgrid .card{padding:12px}
+  .cpgrid b{font-size:26px;display:block;letter-spacing:-.01em}
+  .cpgrid span{font-size:12px;color:var(--mut)}
+  .cp-map{flex:1;position:relative;border-radius:24px;overflow:hidden;margin:10px 0}
+  .cp-actions{display:grid;grid-template-columns:1fr 1.3fr;gap:10px}
+  .hold{position:relative;overflow:hidden;background:var(--err-cont);color:var(--err)}
+  .hold::before{content:"";position:absolute;inset:0;background:var(--err);transform:scaleX(0);transform-origin:left;transition:transform .15s}
+  .hold.holding::before{transform:scaleX(1);transition:transform 1.1s linear}
+  .hold span{position:relative}
+  .hold.holding span{color:#fff}
+
+  .toast{position:absolute;left:50%;bottom:98px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:.2s;z-index:90;white-space:nowrap;pointer-events:none;max-width:90%}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+
+  /* ───────────────────────── Notizspalte ───────────────────────── */
+  .notes{position:sticky;top:24px;display:grid;gap:18px;width:100%}
+  .jump{display:flex;flex-wrap:wrap;gap:6px}
+  .jump button{height:32px;padding:0 12px;border-radius:16px;background:var(--paper);border:1px solid var(--hair);font-size:13px;font-weight:600;color:var(--mut)}
+  .jump button.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+  .panel{background:var(--paper);border:1px solid var(--hair);border-radius:20px;padding:22px}
+  .panel h2{margin:0 0 4px;font-size:22px;letter-spacing:-.01em}
+  .q{font-size:15px;color:var(--acc);font-weight:700;margin-bottom:14px}
+  .cmp{display:grid;gap:10px;margin:0;padding:0;list-style:none}
+  .cmp li{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:10px;border-top:1px solid var(--hair);font-size:13.5px}
+  .cmp li:first-child{border-top:0;padding-top:0}
+  .cmp .was{color:var(--mut)}
+  .cmp .was::before{content:"Heute";display:block;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:2px}
+  .cmp .neu::before{content:"Neu";display:block;font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--acc);margin-bottom:2px}
+  .try{margin-top:14px;font-size:13px;color:var(--mut);background:var(--card);border-radius:12px;padding:10px 12px}
+  .try b{color:var(--ink)}
+
+  /* ───────────────────────── Konzept ───────────────────────── */
+  .concept{margin-top:72px;display:grid;gap:56px}
+  .concept > *, .studio > *{min-width:0}
+  .sec h2{font-size:clamp(24px,3.4vw,32px);margin:0 0 6px;letter-spacing:-.015em;text-wrap:balance}
+  .sec > p{margin:0 0 20px;color:var(--mut);max-width:68ch;font-size:15px}
+  .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+  .fact{background:var(--paper);border:1px solid var(--hair);border-radius:18px;padding:18px;display:grid;gap:6px;align-content:start}
+  .fact .big{font-size:34px;font-weight:800;letter-spacing:-.02em;color:var(--err);line-height:1}
+  .fact .big.acc{color:var(--acc)}
+  .fact b{font-size:15px}
+  .fact p{margin:0;color:var(--mut);font-size:13.5px}
+  .rules{counter-reset:r;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .rule{background:var(--paper);border:1px solid var(--hair);border-radius:18px;padding:18px 18px 18px 60px;position:relative}
+  .rule::before{counter-increment:r;content:counter(r);position:absolute;left:18px;top:16px;width:28px;height:28px;border-radius:50%;background:var(--acc);color:var(--on-acc);display:grid;place-items:center;font-weight:800;font-size:14px}
+  .rule b{display:block;font-size:16px;margin-bottom:4px}
+  .rule p{margin:0;color:var(--mut);font-size:13.5px}
+  .tbl{overflow-x:auto;border:1px solid var(--hair);border-radius:18px;background:var(--paper)}
+  table{border-collapse:collapse;width:100%;min-width:620px;font-size:13.5px}
+  th,td{text-align:left;padding:11px 16px;border-top:1px solid var(--hair);vertical-align:top}
+  thead th{border-top:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  td:first-child{font-weight:700}
+  td.old{color:var(--mut)}
+  .struct{display:grid;grid-template-columns:1fr auto 1fr;gap:18px;align-items:center}
+  @media (max-width:760px){.struct{grid-template-columns:1fr}.struct .arrow{transform:rotate(90deg);justify-self:center}}
+  .navdemo{background:var(--paper);border:1px solid var(--hair);border-radius:18px;padding:18px;display:grid;gap:12px}
+  .navdemo .lbl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+  .mini{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .mini span{height:34px;padding:0 12px;border-radius:17px;background:var(--tone);display:inline-flex;align-items:center;font-weight:700;font-size:13px}
+  .mini span.r{background:var(--acc);color:var(--on-acc)}
+  .mini span.g{background:transparent;border:1.5px dashed var(--hair);color:var(--mut)}
+  .navdemo ul{margin:0;padding-left:18px;color:var(--mut);font-size:13px}
+  .arrow{font-size:28px;color:var(--acc);font-weight:800}
+  .words{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .word{background:var(--paper);border:1px solid var(--hair);border-radius:16px;padding:14px 16px}
+  .word b{font-size:17px}
+  .word p{margin:4px 0 0;font-size:13px;color:var(--mut)}
+  .word s{color:var(--faint)}
+  .steps{display:grid;gap:10px}
+  .step{display:grid;grid-template-columns:110px 1fr;gap:18px;background:var(--paper);border:1px solid var(--hair);border-radius:18px;padding:16px 18px}
+  @media (max-width:600px){.step{grid-template-columns:1fr;gap:6px}}
+  .step .when{font-weight:800;color:var(--acc);font-size:13px}
+  .step .when small{display:block;color:var(--faint);font-weight:600}
+  .step b{font-size:15.5px}
+  .step p{margin:4px 0 0;color:var(--mut);font-size:13.5px}
+  .qs{display:grid;gap:10px}
+  .qq{background:var(--paper);border:1px solid var(--hair);border-left:4px solid var(--warn);border-radius:14px;padding:14px 16px}
+  .qq b{display:block}
+  .qq p{margin:4px 0 0;color:var(--mut);font-size:13.5px}
+</style>
+
+<!-- ─────────────── Icon-Sprite ─────────────── -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.5 12h-2M21.5 12h-2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4Z"/><path d="M9 4v14M15 6v14"/></symbol>
+    <symbol id="i-hist" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 19.5h17"/><path d="M5 15l4-5 4 3 6-7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l12.5-7.5L7 4.5Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+    <symbol id="i-loc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3"/></symbol>
+    <symbol id="i-loop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1L3.2 9.4l6.1-.8L12 3Z"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7 7 7-7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5.5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="18.5" r="1.8"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M17 20v-7a3 3 0 0 0-3-3H6"/><path d="m10 6-4 4 4 4"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.3 7-12a7 7 0 1 0-14 0c0 5.7 7 12 7 12Z" fill="#BB2016"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="intro">
+    <div class="kicker">Redesign-Vorschlag</div>
+    <h1>Trailscape, aufgeräumt: drei Orte, ein Fahren-Knopf, Klartext.</h1>
+    <p>Alle Funktionen der App bleiben. Neu ist, dass jede genau einen Ort, einen Namen und ein Verhalten hat. Links der klickbare Prototyp, rechts pro Screen, was sich gegenüber der heutigen App ändert. Darunter Befund, Regeln und ein Umsetzungsplan in kleinen Etappen.</p>
+  </header>
+
+  <div class="studio">
+    <!-- ═══════════════════════ TELEFON ═══════════════════════ -->
+    <div class="phone" id="phone">
+      <div class="status tab-nums"><span>9:41</span><span>●●● 82 %</span></div>
+
+      <!-- HEUTE -->
+      <section class="screen" id="s-heute" data-tab="heute">
+        <div class="head">
+          <div class="date">Donnerstag, 25. September</div>
+          <div class="acts"><button class="iconbtn" data-go="settings" aria-label="Einstellungen"><svg><use href="#i-gear"/></svg></button></div>
+        </div>
+        <div class="title">Heute</div>
+
+        <div class="card hero">
+          <div class="hero-top">
+            <div class="ring" aria-label="Erholung 82 von 100">
+              <svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--tone)" stroke-width="3.5"/><circle cx="18" cy="18" r="15.5" fill="none" stroke="var(--acc)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="80 100" pathLength="100"/></svg>
+              <b class="tab-nums">82</b><span class="ringword">erholt</span>
+            </div>
+            <div>
+              <div class="h2">Gut erholt. Heute eine lockere Runde.</div>
+              <div class="muted small" style="margin-top:4px">45 km ruhig fahren, so dass du dich noch unterhalten kannst.</div>
+            </div>
+          </div>
+          <button class="btn pri" data-act="runde-heute"><svg><use href="#i-loop"/></svg>Runde für heute bauen</button>
+          <div class="why"><button class="link small" data-sheet="warum">Warum diese Empfehlung?</button></div>
+        </div>
+
+        <div class="eyebrow">Diese Woche</div>
+        <div class="card">
+          <div class="rowlink">
+            <div class="grow"><span class="h3 tab-nums">78 von 120 km</span> <span class="muted small">· noch 2 Fahrten</span></div>
+          </div>
+          <div class="week tab-nums">
+            <div class="day">Mo<span class="dot rest">–</span></div>
+            <div class="day">Di<span class="dot done">32</span></div>
+            <div class="day">Mi<span class="dot rest">–</span></div>
+            <div class="day is-today">Do<span class="dot today">45</span></div>
+            <div class="day">Fr<span class="dot rest">–</span></div>
+            <div class="day">Sa<span class="dot">80</span></div>
+            <div class="day">So<span class="dot done">46</span></div>
+          </div>
+        </div>
+
+        <div class="eyebrow">Dein Ziel</div>
+        <button class="card rowlink" data-go="plan">
+          <div class="grow">
+            <div class="h3">Gravel-Marathon · 120 km</div>
+            <div class="muted small">8. November · noch 6 Wochen · Woche 6 von 12</div>
+            <div class="bar" style="margin-top:10px"><i style="width:50%"></i></div>
+          </div>
+          <svg class="chev"><use href="#i-chev"/></svg>
+        </button>
+      </section>
+
+      <!-- PLAN (gepusht aus Heute) -->
+      <section class="screen" id="s-plan" data-tab="heute" hidden>
+        <div class="head"><button class="back" data-go="heute"><svg><use href="#i-back"/></svg>Heute</button></div>
+        <div class="title">Dein Plan</div>
+        <div class="card stack">
+          <div>
+            <div class="h3">Gravel-Marathon · 120 km · 900 Hm</div>
+            <div class="muted small">Samstag, 8. November</div>
+          </div>
+          <div class="bar"><i style="width:50%"></i></div>
+          <div class="small muted">Woche 6 von 12 · <b style="color:var(--ink)">Aufbau</b>: Umfang langsam steigern.</div>
+        </div>
+        <div class="eyebrow">Diese Woche</div>
+        <div class="list">
+          <div class="pday"><span class="d">Mo</span><span class="t muted">Ruhetag</span><span></span></div>
+          <div class="pday"><span class="d">Di</span><span class="t">Locker 30 km<small>gefahren: Feierabendrunde, 32 km</small></span><span class="pill ok">✓</span></div>
+          <div class="pday today"><span class="d">Do</span><span class="t">Locker 45 km<small>heute · ruhig, Puls unter 140</small></span><button class="pill ok" data-act="runde-heute">Runde</button></div>
+          <div class="pday"><span class="d">Sa</span><span class="t">Lange Fahrt 80 km<small>Schlüsseltag der Woche</small></span><span></span></div>
+          <div class="pday"><span class="d">So</span><span class="t">Locker 45 km<small>gefahren: GA1 Kanalrunde, 46 km</small></span><span class="pill ok">✓</span></div>
+        </div>
+        <div class="eyebrow">Als Nächstes</div>
+        <div class="note">Woche 7 ist eine <b>Erholungswoche</b>: weniger fahren, damit der Aufbau ankommt.</div>
+        <div class="stack" style="margin-top:14px">
+          <button class="btn sec" data-toast="Alle 12 Wochen als aufklappbare Liste">Alle Wochen ansehen</button>
+          <button class="btn ghost" data-toast="Ziel ändern öffnet das Formular (Name, Distanz, Datum)">Ziel ändern</button>
+        </div>
+      </section>
+
+      <!-- KARTE -->
+      <section class="screen full" id="s-karte" data-tab="karte" hidden>
+        <div class="mapbg" id="kmap"></div>
+        <div class="me" style="left:50%;top:66%"></div>
+        <svg class="pin" id="kpin" hidden><use href="#i-pin"/></svg>
+        <div class="map-top">
+          <button class="iconbtn" data-sheet="ebenen" aria-label="Karte und Ebenen"><svg><use href="#i-layers"/></svg></button>
+        </div>
+
+        <div class="map-bottom">
+          <button class="iconbtn locate" aria-label="Auf meine Position" data-toast="Karte folgt deiner Position"><svg><use href="#i-loc"/></svg></button>
+
+          <!-- Zustand: Wohin? -->
+          <div class="sheet" data-k="idle">
+            <button class="search" data-toast="Suche öffnet sich über der Karte, mit letzten Zielen"><svg><use href="#i-search"/></svg>Wohin?</button>
+            <div class="chips">
+              <button class="chip acc" data-act="runde-heute"><svg><use href="#i-star"/></svg>Runde für heute · 45 km</button>
+              <button class="chip" data-k-go="runde"><svg><use href="#i-loop"/></svg>Runde ab hier</button>
+            </div>
+            <div class="hint">Lange auf die Karte drücken setzt einen Punkt.</div>
+          </div>
+
+          <!-- Zustand: Ort gewählt (lange drücken) -->
+          <div class="sheet" data-k="ort" hidden>
+            <div class="rowlink">
+              <div class="grow"><div class="h3">Kiesweg am Wehr</div><div class="muted small">Waldkante · 6,8 km entfernt</div></div>
+              <button class="iconbtn flat" data-k-go="idle" aria-label="Schließen"><svg><use href="#i-x"/></svg></button>
+            </div>
+            <div class="row2">
+              <button class="btn pri" data-act="route-hier">Route hierher</button>
+              <button class="btn sec" data-act="runde-hier">Runde ab hier</button>
+            </div>
+          </div>
+
+          <!-- Zustand: Runde einstellen -->
+          <div class="sheet" data-k="runde" hidden>
+            <div class="rowlink">
+              <div class="grow h3">Runde ab hier</div>
+              <button class="iconbtn flat" data-k-go="idle" aria-label="Schließen"><svg><use href="#i-x"/></svg></button>
+            </div>
+            <div class="dist tab-nums"><b id="distv">45</b><span class="muted">km</span></div>
+            <input type="range" id="dist" min="15" max="150" step="5" value="45" aria-label="Länge der Runde">
+            <div class="seg" role="group" aria-label="Untergrund">
+              <button class="on">Gemischt</button><button>Asphalt</button><button>Schotter</button>
+            </div>
+            <button class="btn pri" data-k-go="kand">Vorschläge zeigen</button>
+          </div>
+
+          <!-- Zustand: Kandidaten -->
+          <div class="sheet" data-k="kand" hidden>
+            <div class="rowlink">
+              <div class="grow"><div class="h3">3 Runden gefunden</div><div class="muted small">Tippe zum Vergleichen</div></div>
+              <button class="iconbtn flat" data-k-go="runde" aria-label="Zurück"><svg><use href="#i-x"/></svg></button>
+            </div>
+            <div class="cands tab-nums">
+              <button class="cand on" data-cand="nord"><b>Nord</b><span>44,6 km</span><span>380 Hm</span></button>
+              <button class="cand" data-cand="ost"><b>Ost</b><span>46,1 km</span><span>290 Hm</span></button>
+              <button class="cand" data-cand="sued"><b>Süd</b><span>45,3 km</span><span>510 Hm</span></button>
+            </div>
+            <button class="btn pri" data-k-go="route">Diese Runde nehmen</button>
+          </div>
+
+          <!-- Zustand: Route steht -->
+          <div class="sheet" data-k="route" hidden>
+            <div class="rowlink">
+              <div class="grow"><div class="h3" id="rname">Runde Nord</div><div class="muted small tab-nums" id="rmeta">44,6 km · 380 Hm · ca. 1:50 h</div></div>
+              <button class="iconbtn flat" data-sheet="routemenu" aria-label="Weitere Aktionen"><svg><use href="#i-more"/></svg></button>
+            </div>
+            <svg class="elev" viewBox="0 0 300 44" preserveAspectRatio="none"><path d="M0 36 L30 30 L55 33 L80 20 L110 24 L140 10 L170 18 L200 14 L230 26 L260 22 L300 34 L300 44 L0 44Z" fill="var(--acc-cont)"/><path d="M0 36 L30 30 L55 33 L80 20 L110 24 L140 10 L170 18 L200 14 L230 26 L260 22 L300 34" fill="none" stroke="var(--acc)" stroke-width="2"/></svg>
+            <div class="row2" style="grid-template-columns:1fr 1.4fr">
+              <button class="btn sec" data-k-go="edit">Anpassen</button>
+              <button class="btn pri" data-act="start-route"><svg><use href="#i-play"/></svg>Losfahren</button>
+            </div>
+          </div>
+
+          <!-- Zustand: Route anpassen -->
+          <div class="sheet" data-k="edit" hidden>
+            <div class="rowlink">
+              <div class="grow h3">Route anpassen</div>
+              <button class="link" data-k-go="route">Fertig</button>
+            </div>
+            <div>
+              <div class="wp"><span class="n">1</span><span class="grow">Start · mein Standort</span></div>
+              <div class="wp"><span class="n">2</span><span class="grow">Kiesweg am Wehr</span><button class="iconbtn flat" aria-label="Entfernen" data-toast="Punkt entfernt · Rückgängig"><svg><use href="#i-x"/></svg></button></div>
+              <div class="wp"><span class="n">3</span><span class="grow">Aussichtsturm Hohe Warte</span><button class="iconbtn flat" aria-label="Entfernen" data-toast="Punkt entfernt · Rückgängig"><svg><use href="#i-x"/></svg></button></div>
+              <button class="wp" style="width:100%" data-toast="Suche oder lange auf die Karte drücken"><span class="n add">+</span><span class="grow muted">Punkt hinzufügen</span></button>
+            </div>
+            <div class="rowlink"><span class="grow">Zurück zum Start</span><span class="switch" role="switch" aria-checked="true" tabindex="0" data-switch></span></div>
+            <div class="seg" role="group" aria-label="Untergrund">
+              <button class="on">Gemischt</button><button>Asphalt</button><button>Schotter</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VERLAUF -->
+      <section class="screen" id="s-verlauf" data-tab="verlauf" hidden>
+        <div class="head">
+          <span></span>
+          <div class="acts">
+            <button class="iconbtn" aria-label="Touren suchen" data-toast="Suche in Namen und Orten"><svg><use href="#i-search"/></svg></button>
+            <button class="iconbtn" aria-label="Tour importieren" data-toast="Import: GPX, FIT oder Strava-/Garmin-Archiv"><svg><use href="#i-plus"/></svg></button>
+            <button class="iconbtn" data-go="settings" aria-label="Einstellungen"><svg><use href="#i-gear"/></svg></button>
+          </div>
+        </div>
+        <div class="title">Verlauf</div>
+
+        <button class="card stack" style="width:100%" data-sheet="form">
+          <div class="rowlink">
+            <div class="grow"><div class="muted small" style="font-weight:700">Deine Form</div><div class="h2">Fitness steigt seit 6 Wochen</div></div>
+            <svg class="chev"><use href="#i-chev"/></svg>
+          </div>
+          <svg viewBox="0 0 300 60" style="width:100%;height:60px" preserveAspectRatio="none">
+            <path d="M0 50 L25 48 L50 44 L75 45 L100 38 L125 36 L150 31 L175 30 L200 24 L225 22 L250 17 L275 15 L300 10 L300 60 L0 60Z" fill="var(--acc-cont)" opacity=".7"/>
+            <path d="M0 50 L25 48 L50 44 L75 45 L100 38 L125 36 L150 31 L175 30 L200 24 L225 22 L250 17 L275 15 L300 10" fill="none" stroke="var(--acc)" stroke-width="2.5"/>
+            <circle cx="297" cy="10" r="4" fill="var(--acc)"/>
+          </svg>
+          <div class="chips"><span class="pill ok">Fitness 62 ↑</span><span class="pill warn">etwas müde</span></div>
+        </button>
+
+        <div class="eyebrow">September</div>
+        <div class="list" id="tours"></div>
+        <div class="eyebrow">August</div>
+        <div class="list" id="tours2"></div>
+      </section>
+
+      <!-- TOUR-DETAIL -->
+      <section class="screen" id="s-tour" data-tab="verlauf" hidden>
+        <div class="head">
+          <button class="back" data-go="verlauf"><svg><use href="#i-back"/></svg>Verlauf</button>
+          <button class="iconbtn flat" aria-label="Weitere Aktionen" data-sheet="tourmenu"><svg><use href="#i-more"/></svg></button>
+        </div>
+        <div class="title" style="margin-bottom:2px">Feierabendrunde</div>
+        <div class="muted small" style="margin-bottom:14px">Dienstag, 23. September · 18:12</div>
+        <div class="card" style="padding:0;overflow:hidden;height:190px;position:relative" id="tourmap"></div>
+        <div class="card stats3 tab-nums" style="margin-top:12px;grid-template-columns:repeat(4,1fr)">
+          <div><b>32,4</b><span>km</span></div><div><b>1:24</b><span>Std.</span></div><div><b>410</b><span>Hm</span></div><div><b>138</b><span>Ø Puls</span></div>
+        </div>
+        <div class="note" style="margin-top:12px"><b>Passt zum Plan.</b> Lockere Einheit erledigt, dein Puls blieb bis zum Schluss ruhig.</div>
+        <div class="stack" style="margin-top:12px">
+          <button class="btn pri" data-act="nochmal"><svg><use href="#i-play"/></svg>Diese Tour nochmal fahren</button>
+        </div>
+        <div class="eyebrow">Höhenprofil</div>
+        <div class="card"><svg class="elev" viewBox="0 0 300 44" preserveAspectRatio="none" style="height:60px"><path d="M0 34 L40 26 L70 30 L110 16 L150 24 L190 18 L230 28 L270 22 L300 30 L300 44 L0 44Z" fill="var(--acc-cont)"/><path d="M0 34 L40 26 L70 30 L110 16 L150 24 L190 18 L230 28 L270 22 L300 30" fill="none" stroke="var(--acc)" stroke-width="2"/></svg></div>
+        <div class="stack" style="margin-top:12px">
+          <button class="btn sec" data-toast="Klappt auf: Tempo- und Pulskurve, Entkopplung, VO₂max, Segmente">Alle Werte</button>
+        </div>
+      </section>
+
+      <!-- EINSTELLUNGEN -->
+      <section class="screen" id="s-settings" hidden>
+        <div class="head"><button class="back" data-go="back"><svg><use href="#i-back"/></svg>Zurück</button></div>
+        <div class="title">Einstellungen</div>
+        <div class="list" id="setlist"></div>
+        <div class="eyebrow">App</div>
+        <div class="list" id="setlist2"></div>
+      </section>
+
+      <!-- NAV -->
+      <nav class="nav" id="nav">
+        <div class="caps" role="tablist">
+          <button class="tab on" data-go="heute" data-tabbtn="heute"><svg><use href="#i-sun"/></svg>Heute</button>
+          <button class="tab" data-go="karte" data-tabbtn="karte"><svg><use href="#i-map"/></svg>Karte</button>
+          <button class="tab" data-go="verlauf" data-tabbtn="verlauf"><svg><use href="#i-hist"/></svg>Verlauf</button>
+        </div>
+        <button class="ride tab-nums" id="ridebtn"><svg><use href="#i-play"/></svg><span>Fahren</span></button>
+      </nav>
+
+      <!-- COCKPIT -->
+      <section class="cockpit" id="cockpit" hidden>
+        <div class="cp-head">
+          <button class="iconbtn" data-act="minimize" aria-label="Zur App, Aufzeichnung läuft weiter"><svg><use href="#i-down"/></svg></button>
+          <div class="seg" role="tablist"><button class="on" data-cp="daten">Daten</button><button data-cp="karte">Karte</button></div>
+        </div>
+        <div class="navban" id="navban">
+          <svg><use href="#i-left"/></svg>
+          <div><b>In 220 m links</b><span>Kiesweg am Wehr · noch 32,2 km</span></div>
+        </div>
+        <div class="cp-data" id="cp-daten">
+          <div class="speed tab-nums"><b id="spd">23,8</b><span>km/h</span></div>
+          <div class="cpgrid tab-nums">
+            <div class="card"><b>12,4</b><span>km gefahren</span></div>
+            <div class="card"><b id="cptime">0:31</b><span>Fahrzeit</span></div>
+            <div class="card"><b style="color:var(--acc)">132</b><span>Puls · locker ✓</span></div>
+            <div class="card"><b>180</b><span>Hm bergauf</span></div>
+          </div>
+        </div>
+        <div class="cp-map" id="cp-karte" hidden></div>
+        <div class="cp-actions">
+          <button class="btn sec" id="pausebtn"><svg><use href="#i-pause"/></svg><span>Pause</span></button>
+          <button class="btn hold" id="holdbtn"><span>Halten zum Beenden</span></button>
+        </div>
+      </section>
+
+      <!-- ZUSAMMENFASSUNG -->
+      <section class="cockpit" id="summary" hidden style="justify-content:center;gap:16px">
+        <div style="text-align:center">
+          <div class="pill ok" style="margin-bottom:10px">Tour gespeichert</div>
+          <div class="title" style="margin:0">Geschafft!</div>
+          <div class="muted">Runde Nord</div>
+        </div>
+        <div class="card stats3 tab-nums" style="grid-template-columns:repeat(4,1fr)">
+          <div><b>44,6</b><span>km</span></div><div><b>1:52</b><span>Std.</span></div><div><b>380</b><span>Hm</span></div><div><b>134</b><span>Ø Puls</span></div>
+        </div>
+        <div class="note"><b>Tagesziel erledigt ✓</b><br>Lockere 45 km wie geplant. Diese Woche jetzt 123 von 120 km.</div>
+        <div class="stack">
+          <button class="btn pri" data-act="fertig">Fertig</button>
+          <button class="btn ghost" data-toast="Name ändern">Umbenennen</button>
+        </div>
+      </section>
+
+      <!-- MODALE SHEETS -->
+      <div class="scrim" id="scrim"></div>
+
+      <div class="msheet" id="m-warum" role="dialog" aria-label="Warum diese Empfehlung">
+        <div class="grab"></div>
+        <div class="h2">Warum eine lockere Runde?</div>
+        <div>
+          <div class="sig"><span class="k">Schlaf</span><span class="pill ok">gut</span><span class="x">7 h 40 min, etwas mehr als dein Schnitt.</span></div>
+          <div class="sig"><span class="k">Ruhepuls</span><span class="pill ok">normal</span><span class="x">52 Schläge pro Minute, wie sonst auch.</span></div>
+          <div class="sig"><span class="k">Erholung (HRV)</span><span class="pill warn">etwas niedrig</span><span class="x">48 ms, leicht unter deinem Normalbereich von 52–64 ms.</span></div>
+          <div class="sig"><span class="k">Belastung</span><span class="pill warn">etwas müde</span><span class="x">Die letzten Tage waren intensiv. Der Körper baut gerade auf.</span></div>
+        </div>
+        <div class="note">Samstag steht die lange Fahrt mit 80 km an. Heute nicht überziehen, dann hast du am Wochenende genug Kraft.</div>
+        <button class="btn sec" data-close>Verstanden</button>
+      </div>
+
+      <div class="msheet" id="m-form" role="dialog" aria-label="Deine Form">
+        <div class="grab"></div>
+        <div class="h2">Deine Form</div>
+        <div class="muted small">Drei Linien, einfach erklärt. Die Fachbegriffe aus anderen Apps stehen klein dahinter.</div>
+        <div>
+          <div class="sig"><span class="k">Fitness</span><span class="pill ok">62 ↑</span><span class="x">Was du über Wochen aufgebaut hast. Steigt langsam. <span style="color:var(--faint)">(CTL)</span></span></div>
+          <div class="sig"><span class="k">Müdigkeit</span><span class="pill warn">71</span><span class="x">Was die letzten Tage gekostet haben. Fällt schnell wieder. <span style="color:var(--faint)">(ATL)</span></span></div>
+          <div class="sig"><span class="k">Frische</span><span class="pill">−9</span><span class="x">Fitness minus Müdigkeit. Leicht negativ heißt: du trainierst gerade produktiv. <span style="color:var(--faint)">(TSB)</span></span></div>
+        </div>
+        <button class="btn sec" data-toast="Wochenbelastung, Fitnesslevel und Körperwerte im Detail">Alle Werte & Körperdaten</button>
+      </div>
+
+      <div class="msheet" id="m-ebenen" role="dialog" aria-label="Karte">
+        <div class="grab"></div>
+        <div class="h2">Karte</div>
+        <div class="seg" role="group" aria-label="Kartenstil"><button class="on">Straße</button><button>Rad</button><button>Topo</button><button>Satellit</button></div>
+        <div class="rowlink"><span class="grow">Entdeckte Kacheln zeigen</span><span class="switch off" role="switch" aria-checked="false" tabindex="0" data-switch></span></div>
+        <button class="btn sec" data-toast="Zeigt vorher die Größe: 2 Regionen, ca. 90 MB · mit Abbrechen">Diesen Ausschnitt offline speichern</button>
+      </div>
+
+      <div class="msheet" id="m-routemenu" role="dialog" aria-label="Route">
+        <div class="grab"></div>
+        <button class="btn sec" data-toast="Route gespeichert · im Verlauf unter ‚Geplant'">Route speichern</button>
+        <button class="btn sec" data-toast="Teilen als GPX">Als GPX teilen</button>
+        <button class="btn sec" style="color:var(--err)" data-act="discard">Route verwerfen</button>
+      </div>
+
+      <div class="msheet" id="m-tourmenu" role="dialog" aria-label="Tour">
+        <div class="grab"></div>
+        <button class="btn sec" data-act="tour-map">Auf der Karte zeigen</button>
+        <button class="btn sec" data-toast="Tour umbenennen">Umbenennen</button>
+        <button class="btn sec" data-toast="Teilen als GPX">Als GPX teilen</button>
+        <button class="btn sec" style="color:var(--err)" data-toast="Tour gelöscht · Rückgängig">Löschen</button>
+      </div>
+
+      <div class="msheet" id="m-start" role="dialog" aria-label="Losfahren">
+        <div class="grab"></div>
+        <div class="h2">Losfahren</div>
+        <div id="start-route" class="stack">
+          <div class="card" style="box-shadow:none;background:var(--tone)"><div class="h3">Runde Nord</div><div class="muted small tab-nums">44,6 km · mit Abbiegehinweisen</div></div>
+          <button class="btn pri" data-act="go-route"><svg><use href="#i-play"/></svg>Mit Route starten</button>
+          <button class="btn sec" data-act="go-free">Ohne Route starten</button>
+        </div>
+        <div id="start-free" class="stack">
+          <div class="muted">Die App zeichnet auf, die Route entsteht unterwegs.</div>
+          <button class="btn pri" data-act="go-free"><svg><use href="#i-play"/></svg>Aufzeichnung starten</button>
+          <button class="note" style="text-align:left" data-act="runde-heute"><b>Heute stehen 45 km locker an.</b><br>Passende Runde bauen ›</button>
+        </div>
+        <div class="hint">GPS bereit ✓</div>
+      </div>
+
+      <div class="toast" id="toast"></div>
+    </div>
+
+    <!-- ═══════════════════════ NOTIZEN ═══════════════════════ -->
+    <aside class="notes" aria-live="polite">
+      <div class="jump" id="jump"></div>
+      <div class="panel" id="panel"></div>
+    </aside>
+  </div>
+
+  <!-- ═══════════════════════ KONZEPT ═══════════════════════ -->
+  <div class="concept">
+    <section class="sec">
+      <h2>Befund: die Funktionen sind da, sie sind nur zu oft da</h2>
+      <p>Die Bestandsaufnahme im Code zeigt kein Problem mit zu wenigen Funktionen. Jede Funktion taucht an mehreren Orten auf, mit anderem Namen und anderem Verhalten. Genau das fühlt sich überladen an.</p>
+      <div class="grid3">
+        <div class="fact"><span class="big tab-nums">23</span><b>Bedienelemente gleichzeitig</b><p>in der aufgezogenen Planung mit Route: Profil, Segmente, Wegpunkte, vier Textknöpfe, Speichern, Navigieren, Tabs, ●-Knopf.</p></div>
+        <div class="fact"><span class="big tab-nums">5</span><b>Wege zur selben Runde</b><p>Heute-Knopf, Training-Icon, Bereit-Dialog, Planungs-Chips und „Runde ab hier" auf der Ortskarte, die ohne Rückfrage immer 30 km nimmt.</p></div>
+        <div class="fact"><span class="big tab-nums">3</span><b>„Beenden" mit drei Bedeutungen</b><p>Im HUD beendet es nur die Navigation. Auf der Live-Karte beendet es die Aufzeichnung ohne Rückfrage, im Cockpit mit Rückfrage.</p></div>
+        <div class="fact"><span class="big tab-nums">2×</span><b>Dieselbe Zahl auf „Heute"</b><p>Wochen-km und Planwoche stehen in der Zahlenzeile und im Plan-Ausblick. Die Coach-Sätze wiederholen sich im Training-Tab.</p></div>
+        <div class="fact"><span class="big tab-nums">20+</span><b>Fachbegriffe ohne Erklärung</b><p>GA1, TSB, Last, Rampenrate, Belastungsverhältnis, Taper, Schwelle, FTP, Baseline, Normalband, Z4/Z5 …</p></div>
+        <div class="fact"><span class="big tab-nums">4</span><b>Ebenen tief in „Mehr"</b><p>Zahnrad → Liste → Akkordeon → „Erweitert". Zugeklappt zeigt keine Zeile ihren Zustand, gespeichert wird mal sofort, mal per Knopf.</p></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Fünf Regeln für jeden Screen</h2>
+      <p>Diese Regeln lassen sich bei jeder künftigen Funktion abfragen, damit die App nicht wieder zuwächst.</p>
+      <div class="rules">
+        <div class="rule"><b>Eine Frage pro Screen</b><p>Heute: „Was fahre ich heute?" Karte: „Wohin?" Verlauf: „Wie läuft es?" Was die Frage nicht beantwortet, gehört woanders hin.</p></div>
+        <div class="rule"><b>Ein gefüllter Knopf pro Blick</b><p>Jeder Zustand hat genau eine Hauptaktion. Alles andere ist grau, ein Textlink oder liegt hinter ⋮.</p></div>
+        <div class="rule"><b>Klartext zuerst, Zahlen auf Nachfrage</b><p>Oben steht ein Satz, den jeder versteht. Werte und Fachbegriffe liegen eine Ebene tiefer hinter „Warum?" oder „Alle Werte".</p></div>
+        <div class="rule"><b>Jede Funktion hat genau einen Ort</b><p>Andere Screens verlinken dorthin, statt sie nachzubauen. Kein zweites Suchfeld, keine zweite Planung, kein zweiter Beenden-Knopf.</p></div>
+        <div class="rule"><b>Jedes Wort hat genau eine Bedeutung</b><p>Tour, Route, Runde, Beenden und Fahren sind fest vergeben (siehe Wörterbuch). Gleiche Aktion, gleiches Wort, gleiches Verhalten.</p></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Neue Struktur: drei Orte und ein Fahren-Knopf</h2>
+      <p>Der Training-Tab verteilt sich auf die beiden Fragen, die er eigentlich beantwortet. Der Plan („was steht an?") zieht zu Heute, die Auswertung („wie fit bin ich?") zieht zu Verlauf. Damit verschwinden die Doppelungen zwischen Heute und Training von selbst.</p>
+      <div class="struct">
+        <div class="navdemo">
+          <span class="lbl">Heute</span>
+          <div class="mini"><span>Heute</span><span>Karte</span><span>Touren</span><span>Training</span><span class="r">●</span><span class="g">⚙ auf 3 Screens</span></div>
+          <ul><li>Tagesempfehlung auf Heute <em>und</em> Training</li><li>● ohne Beschriftung, drei Zustände</li><li>Plan, Form, Werte, Ziel-Formular in einem langen Tab</li></ul>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="navdemo">
+          <span class="lbl">Klartext</span>
+          <div class="mini"><span>Heute</span><span>Karte</span><span>Verlauf</span><span class="r">▶ Fahren</span></div>
+          <ul><li>Heute = Tag + Woche + Plan (eine Ebene tiefer)</li><li>Verlauf = Form + Touren, chronologisch</li><li>Fahren ist beschriftet und zeigt Route oder Zeit</li></ul>
+        </div>
+      </div>
+      <div class="tbl" style="margin-top:18px">
+        <table>
+          <thead><tr><th>Funktion</th><th>Heute in der App</th><th>Neu</th></tr></thead>
+          <tbody>
+            <tr><td>Tagesempfehlung</td><td class="old">Heute-Karte mit bis zu 8 Elementen; Gründe zusätzlich als Coach-Karte und im Training-Tab</td><td>Ein Satz + Ring auf Heute. Gründe nur im „Warum?"-Blatt</td></tr>
+            <tr><td>Trainingsplan</td><td class="old">Training-Tab, alle Wochen untereinander, Ziel-Formular darunter</td><td>Heute → „Dein Ziel" → Plan-Seite mit aktueller Woche, andere Wochen aufklappbar</td></tr>
+            <tr><td>Form (CTL/ATL/TSB)</td><td class="old">Training-Tab (Chart, Chips, Coach) + „Form −9" auf Heute</td><td>Verlauf: ein Satz + Fitness-Kurve. Erklärung im Blatt</td></tr>
+            <tr><td>Körperwerte</td><td class="old">Training → „Werte" 2×2-Kacheln</td><td>Verlauf → Form → „Alle Werte & Körperdaten"</td></tr>
+            <tr><td>Runde erzeugen</td><td class="old">5 Einstiege mit unterschiedlichem Verhalten</td><td>Ein Blatt „Runde ab hier" (Länge + Untergrund). Alle Einstiege öffnen genau dieses</td></tr>
+            <tr><td>Route planen (A→B)</td><td class="old">Sheet aufziehen → „Route planen" → Karte antippen; Tippen nahe Punkt löscht still</td><td>„Wohin?" suchen oder lange drücken → „Route hierher". Punkte löscht nur das ×</td></tr>
+            <tr><td>Kartenstil, Offline, Kacheln</td><td class="old">Nur im aufgezogenen Sheet; Offline startet ohne Vorschau</td><td>Ebenen-Knopf oben rechts. Offline zeigt vorher die Größe und hat Abbrechen</td></tr>
+            <tr><td>Aufzeichnen / Navigieren</td><td class="old">Live-Karte, Fahrmodus-Dialog, Kompaktleiste, HUD: vier Oberflächen</td><td>Ein Cockpit mit „Daten | Karte". Navigation ist ein Banner darin</td></tr>
+            <tr><td>Beenden</td><td class="old">Drei Knöpfe, zwei Bedeutungen, einer ohne Rückfrage</td><td>Ein Knopf: „Halten zum Beenden". Route ausblenden liegt hinter ⋮</td></tr>
+            <tr><td>Touren</td><td class="old">Eine lange Karte, Name + Zahlenzeile + „TL 68"</td><td>Nach Monat gruppiert, Mini-Karte, „locker/hart" statt TL, Suche + Import oben</td></tr>
+            <tr><td>Einstellungen</td><td class="old">9 Akkordeons, 4 Ebenen, Zeilen ohne Status</td><td>Flache Liste mit Status rechts, jede Zeile öffnet eine eigene Seite</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Wörterbuch</h2>
+      <p>Heute stehen Tour, Route, Runde, Rundkurs, „Geplante Tour" und „Geplante Route" nebeneinander. Künftig ist jedes Wort fest vergeben.</p>
+      <div class="words">
+        <div class="word"><b>Tour</b><p>Etwas, das du <em>gefahren</em> bist. Liegt im Verlauf.</p></div>
+        <div class="word"><b>Route</b><p>Etwas, das du fahren <em>willst</em>. Entsteht auf der Karte. <s>„Als Tour speichern"</s> → „Route speichern".</p></div>
+        <div class="word"><b>Runde</b><p>Eine Route, die zum Start zurückführt. <s>Rundweg, Rundkurs</s></p></div>
+        <div class="word"><b>Fahren</b><p>Aufzeichnen, mit oder ohne Route. <s>Fahrmodus, Cockpit, Aufnahme</s></p></div>
+        <div class="word"><b>Beenden</b><p>Beendet immer die Aufzeichnung, immer durch Halten. Nie etwas anderes.</p></div>
+        <div class="word"><b>Erholt / Frische / Müdigkeit</b><p>Statt „bereit", „Form", TSB und ATL. Fachbegriffe nur klein in Klammern.</p></div>
+        <div class="word"><b>Locker · Mittel · Hart</b><p>Statt GA1, Z2, Z4/Z5 und „TL 68". Die Zahl bleibt in den Details.</p></div>
+        <div class="word"><b>Einstellungen</b><p>Statt „Mehr" und „Mehr-Tab", das es nicht mehr gibt, aber noch in Texten steht.</p></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Umsetzung in sechs Etappen</h2>
+      <p>Jede Etappe ist ein eigener PR, lässt die App lauffähig und bringt sofort etwas. Die Reihenfolge fängt beim geringsten Risiko an.</p>
+      <div class="steps">
+        <div class="step"><div class="when">Etappe 1<small>klein</small></div><div><b>Wörter und Stolpersteine</b><p>Wörterbuch durchziehen, „Mehr-Tab"-Texte korrigieren, jedes Beenden der Aufzeichnung mit Rückfrage, ●-Knopf öffnet beim Fahren direkt das Cockpit, „h:min"-Label reparieren, stilles Löschen von Wegpunkten per Tippen entfernen.</p></div></div>
+        <div class="step"><div class="when">Etappe 2<small>mittel</small></div><div><b>Heute entschlacken</b><p>Empfehlung auf Satz + Ring + ein Knopf, „Warum?"-Blatt, Wochenstreifen statt Zahlenzeile und Ausblick, Ziel-Zeile. Coach-Karte, Machbarkeitskarte und „Letzte Tour" ziehen um.</p></div></div>
+        <div class="step"><div class="when">Etappe 3<small>mittel</small></div><div><b>Einstellungen flach machen</b><p>Akkordeons werden Unterseiten, jede Zeile zeigt ihren Status. Einheitliches Speichern (sofort) und einheitliche Schalter-Zeile.</p></div></div>
+        <div class="step"><div class="when">Etappe 4<small>groß</small></div><div><b>Karte: „Wohin?"</b><p>Ein Blatt mit Suche und zwei Chips, Ebenen-Knopf oben rechts, lange drücken statt Planungsmodus, ein gemeinsames „Runde ab hier"-Blatt, Route-Karte mit genau einer Hauptaktion.</p></div></div>
+        <div class="step"><div class="when">Etappe 5<small>groß</small></div><div><b>Ein Cockpit</b><p>Live-Karte, Fahrmodus-Dialog, Kompaktleiste und HUD verschmelzen zu „Daten | Karte". Beschrifteter Fahren-Knopf mit Route oder Zeit.</p></div></div>
+        <div class="step"><div class="when">Etappe 6<small>mittel</small></div><div><b>Drei Tabs</b><p>Training auflösen: Plan-Seite unter Heute, Form + Werte in Verlauf. Touren-Tab wird Verlauf (Monatsgruppen, Suche, Import).</p></div></div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>Offene Fragen</h2>
+      <p>Diese Entscheidungen liegen bei dir, bevor die größeren Etappen starten.</p>
+      <div class="qs">
+        <div class="qq"><b>Training-Tab wirklich auflösen?</b><p>Der größte Schnitt im Entwurf. Die Alternative ist, vier Tabs zu behalten und nur Heute und Training zu entdoppeln. Das ist weniger klar, aber auch weniger Umbau.</p></div>
+        <div class="qq"><b>Die Zahl im Ring zeigen?</b><p>„82" ohne Einheit erklärt sich nicht. Möglich wäre nur das Wort (erholt, normal, müde) mit der Zahl im Warum-Blatt.</p></div>
+        <div class="qq"><b>Wer ist die Hauptzielgruppe?</b><p>Wenn es eher Freizeit-Graveler sind als Leute mit Trainingsplan, sollte „Heute" auch ohne Plan und ohne Uhr gut aussehen. Der Entwurf zeigt den vollen Fall.</p></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  /* ───── Kartengrafik ───── */
+  const ROUTES = {
+    nord: 'M195 560 C 150 470, 110 360, 160 250 S 300 140, 315 260 S 262 470, 195 560',
+    ost:  'M195 560 C 262 545, 350 470, 336 380 S 250 300, 232 385 S 212 505, 195 560',
+    sued: 'M195 560 C 118 600, 72 700, 148 745 S 305 765, 292 680 S 242 580, 195 560',
+    hier: 'M195 560 C 180 500, 120 420, 128 330 S 190 220, 250 200',
+    tour: 'M60 150 C 90 90, 160 70, 200 110 S 300 160, 330 90',
+  };
+  function mapSVG({ routes = [], alt = [], w = 390, h = 844, seed = 1, pinAt = null } = {}) {
+    let s = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid slice" aria-hidden="true">`;
+    s += `<rect width="${w}" height="${h}" fill="var(--map)"/>`;
+    s += `<path d="M-20 ${h*.18} C ${w*.3} ${h*.12}, ${w*.5} ${h*.3}, ${w+20} ${h*.24}" stroke="var(--water)" stroke-width="16" fill="none"/>`;
+    const centers = [[w*.25,h*.3],[w*.78,h*.55],[w*.4,h*.82],[w*.9,h*.12]];
+    centers.forEach(([cx,cy],k) => {
+      for (let i = 1; i <= 7; i++) {
+        const rx = 22*i + ((seed+k)%3)*6, ry = rx*(.62 + ((k+seed)%4)*.08);
+        s += `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${(k*37+seed*11)%180} ${cx} ${cy})" fill="none" stroke="var(--topo)" stroke-width="1.2"/>`;
+      }
+    });
+    s += `<path d="M0 ${h*.64} C ${w*.35} ${h*.6}, ${w*.6} ${h*.72}, ${w} ${h*.66}" stroke="var(--road)" stroke-width="6" fill="none"/>`;
+    s += `<path d="M${w*.52} 0 C ${w*.45} ${h*.35}, ${w*.6} ${h*.6}, ${w*.48} ${h}" stroke="var(--road)" stroke-width="5" fill="none"/>`;
+    alt.forEach(d => s += `<path d="${ROUTES[d]}" stroke="var(--route-alt)" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+    routes.forEach(d => s += `<path d="${ROUTES[d]}" stroke="var(--card)" stroke-width="9" fill="none" stroke-linecap="round"/><path d="${ROUTES[d]}" stroke="var(--route)" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+    return s + '</svg>';
+  }
+  const kmap = $('#kmap');
+  function drawKarte(sel, alts) { kmap.innerHTML = mapSVG({ routes: sel ? [sel] : [], alt: alts || [] }); }
+  drawKarte();
+  $('#tourmap').innerHTML = mapSVG({ routes: ['tour'], w: 390, h: 190, seed: 3 });
+  $('#cp-karte').innerHTML = mapSVG({ routes: ['nord'], seed: 2 }) + '<div class="me" style="left:42%;top:52%"></div>';
+
+  /* ───── Touren-Liste ───── */
+  const TOURS = [
+    ['Feierabendrunde','Di 23.9. · 32,4 km · 1:24 h','locker','ok'],
+    ['GA1 Kanalrunde','So 21.9. · 46,1 km · 1:52 h','locker','ok'],
+    ['Schotterschleife Nord','Sa 13.9. · 61,0 km · 2:48 h','hart','warn'],
+    ['Waldkante West','Di 9.9. · 28,7 km · 1:12 h','mittel',''],
+  ];
+  const TOURS2 = [
+    ['Intervalle am Deich','Do 28.8. · 38,9 km · 1:31 h','hart','warn'],
+    ['Sonntagsrunde','So 24.8. · 55,2 km · 2:21 h','locker','ok'],
+  ];
+  const thumb = i => `<span class="thumb">${mapSVG({ routes:['tour'], w:390, h:260, seed:i })}</span>`;
+  const renderTours = (el, arr, off) => el.innerHTML = arr.map((t,i) =>
+    `<button class="li" data-go="tour">${thumb(i+off)}<span class="grow"><span class="t" style="display:block">${t[0]}</span><span class="s tab-nums">${t[1]}</span></span><span class="pill ${t[3]}">${t[2]}</span></button>`).join('');
+  renderTours($('#tours'), TOURS, 1); renderTours($('#tours2'), TOURS2, 5);
+
+  /* ───── Einstellungen ───── */
+  const SET1 = [
+    ['Profil','40 J · 75 kg · Rad 11 kg'],
+    ['Uhr & Gesundheitsdaten','Verbunden · heute 6:12'],
+    ['Aufzeichnung & Ansagen','Auto-Pause an · Ansagen an'],
+    ['Erinnerungen','Tagesplan um 7:00'],
+    ['Karten offline','2 Regionen · 184 MB'],
+    ['Import & Backup','<span style="color:var(--warn);font-weight:700">Noch nie gesichert</span>'],
+  ];
+  const SET2 = [['Sync mit eigenem Server','Aus'],['Über Trailscape','Version 2.0.184']];
+  const renderSet = (el, arr) => el.innerHTML = arr.map(r =>
+    `<button class="li" data-toast="${r[0]}: eigene Seite, speichert sofort"><span class="grow"><span class="t" style="display:block">${r[0]}</span><span class="s">${r[1]}</span></span><svg class="chev"><use href="#i-chev"/></svg></button>`).join('');
+  renderSet($('#setlist'), SET1); renderSet($('#setlist2'), SET2);
+
+  /* ───── Zustand ───── */
+  const st = { screen: 'heute', prev: 'heute', k: 'idle', route: null, rec: false, paused: false, t0: 0, cand: 'nord' };
+  const CANDS = { nord:['Runde Nord','44,6 km · 380 Hm · ca. 1:50 h','44,6 km'], ost:['Runde Ost','46,1 km · 290 Hm · ca. 1:52 h','46,1 km'], sued:['Runde Süd','45,3 km · 510 Hm · ca. 2:00 h','45,3 km'], hier:['Kiesweg am Wehr','6,8 km · 60 Hm · ca. 0:20 h','6,8 km'] };
+
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function go(name) {
+    if (name === 'back') name = st.prev;
+    if (name !== 'settings') st.prev = name;
+    $$('.screen').forEach(s => s.hidden = s.id !== 's-' + name);
+    const scr = $('#s-' + name);
+    scr.scrollTop = 0;
+    const tab = scr.dataset.tab;
+    $$('[data-tabbtn]').forEach(b => b.classList.toggle('on', b.dataset.tabbtn === tab));
+    $('#nav').hidden = name === 'settings';
+    st.screen = name;
+    closeSheets();
+    note(name === 'karte' ? 'karte-' + st.k : name);
+  }
+
+  function kgo(state) {
+    st.k = state;
+    $$('[data-k]').forEach(el => el.hidden = el.dataset.k !== state);
+    $('#kpin').hidden = state !== 'ort';
+    if (state === 'kand') drawKarte(st.cand, ['nord','ost','sued'].filter(x => x !== st.cand));
+    else if (state === 'route' || state === 'edit') { drawKarte(st.cand); setRoute(st.cand); }
+    else if (state === 'idle' || state === 'runde' || state === 'ort') { if (!st.route) drawKarte(); }
+    note('karte-' + state);
+  }
+
+  function setRoute(key) {
+    st.route = key;
+    const [n, m] = CANDS[key];
+    $('#rname').textContent = n; $('#rmeta').textContent = m;
+    $('#start-route .h3').textContent = n;
+    updateRide();
+  }
+  function clearRoute() { st.route = null; updateRide(); drawKarte(); kgo('idle'); }
+
+  function updateRide() {
+    const b = $('#ridebtn');
+    b.classList.toggle('rec', st.rec);
+    if (st.rec) {
+      b.innerHTML = `<span class="pulse"></span><span>${fmt(Date.now() - st.t0 + 31*60000)}</span>`;
+    } else if (st.route) {
+      b.innerHTML = `<svg><use href="#i-play"/></svg><span>${CANDS[st.route][2]}</span>`;
+    } else {
+      b.innerHTML = `<svg><use href="#i-play"/></svg><span>Fahren</span>`;
+    }
+  }
+  const fmt = ms => { const m = Math.floor(ms/60000); return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
+
+  /* ───── Sheets ───── */
+  function openSheet(id) {
+    closeSheets(true);
+    if (id === 'start') { $('#start-route').hidden = !st.route; $('#start-free').hidden = !!st.route; }
+    $('#m-' + id).classList.add('open'); $('#scrim').classList.add('open');
+    if (NOTES['sheet-' + id]) note('sheet-' + id);
+  }
+  function closeSheets(silent) {
+    $$('.msheet').forEach(s => s.classList.remove('open')); $('#scrim').classList.remove('open');
+  }
+  $('#scrim').addEventListener('click', () => closeSheets());
+
+  /* ───── Cockpit ───── */
+  function startRide(withRoute) {
+    closeSheets();
+    if (!withRoute) { st.route = null; drawKarte(); }
+    st.rec = true; st.paused = false; st.t0 = Date.now();
+    $('#navban').hidden = !withRoute;
+    $('#cp-karte').innerHTML = mapSVG({ routes: withRoute ? [st.route || 'nord'] : [], seed: 2 }) + '<div class="me" style="left:42%;top:52%"></div>';
+    $('#cockpit').hidden = false; cp('daten'); updateRide();
+    note('cockpit');
+  }
+  function cp(page) {
+    $$('[data-cp]').forEach(b => b.classList.toggle('on', b.dataset.cp === page));
+    $('#cp-daten').hidden = page !== 'daten';
+    $('#cp-karte').hidden = page !== 'karte';
+  }
+  setInterval(() => { if (st.rec) { updateRide(); $('#cptime').textContent = fmt(Date.now() - st.t0 + 31*60000); } }, 1000);
+
+  $('#pausebtn').addEventListener('click', () => {
+    st.paused = !st.paused;
+    $('#pausebtn').innerHTML = st.paused ? '<svg><use href="#i-play"/></svg><span>Weiter</span>' : '<svg><use href="#i-pause"/></svg><span>Pause</span>';
+    toast(st.paused ? 'Pausiert' : 'Weiter geht’s');
+  });
+  const hold = $('#holdbtn'); let holdT;
+  const holdStart = e => { e.preventDefault(); hold.classList.add('holding'); holdT = setTimeout(endRide, 1100); };
+  const holdStop = () => { if (hold.classList.contains('holding')) { hold.classList.remove('holding'); clearTimeout(holdT); } };
+  hold.addEventListener('pointerdown', holdStart);
+  ['pointerup','pointerleave','pointercancel'].forEach(ev => hold.addEventListener(ev, holdStop));
+  hold.addEventListener('click', () => { if (!hold.classList.contains('holding')) toast('Gedrückt halten, um zu beenden'); });
+  hold.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); endRide(); } });
+  function endRide() {
+    hold.classList.remove('holding');
+    st.rec = false; st.route = null; updateRide(); drawKarte();
+    $('#cockpit').hidden = true; $('#summary').hidden = false;
+    note('summary');
+  }
+
+  /* ───── Karte: lange drücken ───── */
+  let lpT, lpPos;
+  const kscr = $('#s-karte');
+  kmap.addEventListener('pointerdown', e => {
+    if (st.k !== 'idle' && st.k !== 'ort') return;
+    const r = kscr.getBoundingClientRect();
+    lpPos = [e.clientX - r.left, e.clientY - r.top];
+    lpT = setTimeout(() => {
+      const p = $('#kpin'); p.style.left = lpPos[0] + 'px'; p.style.top = lpPos[1] + 'px';
+      kgo('ort'); lpT = null;
+    }, 480);
+  });
+  kmap.addEventListener('pointerup', () => { if (lpT) { clearTimeout(lpT); lpT = null; if (st.k === 'idle') toast('Lange drücken setzt einen Punkt'); } });
+  kmap.addEventListener('pointerleave', () => { clearTimeout(lpT); lpT = null; });
+
+  $('#dist').addEventListener('input', e => $('#distv').textContent = e.target.value);
+
+  /* ───── Aktionen ───── */
+  const ACT = {
+    'runde-heute': () => { $('#dist').value = 45; $('#distv').textContent = '45'; go('karte'); kgo('runde'); },
+    'runde-hier': () => { kgo('runde'); },
+    'route-hier': () => { st.cand = 'hier'; kgo('route'); },
+    'start-route': () => startRide(true),
+    'go-route': () => startRide(true),
+    'go-free': () => startRide(false),
+    'minimize': () => { $('#cockpit').hidden = true; go('heute'); toast('Aufzeichnung läuft weiter'); },
+    'fertig': () => { $('#summary').hidden = true; go('verlauf'); toast('Tour im Verlauf gespeichert'); },
+    'discard': () => { closeSheets(); clearRoute(); toast('Route verworfen · Rückgängig'); },
+    'nochmal': () => { st.cand = 'nord'; go('karte'); kgo('route'); toast('Tour als Route geladen'); },
+    'tour-map': () => { closeSheets(); go('karte'); kgo('idle'); kmap.innerHTML = mapSVG({ routes:['nord'] }); toast('Tour auf der Karte'); },
+  };
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest('button,[data-switch]');
+    if (!t) return;
+    if (t.dataset.go) go(t.dataset.go);
+    if (t.dataset.kGo) kgo(t.dataset.kGo);
+    if (t.dataset.sheet) openSheet(t.dataset.sheet);
+    if (t.dataset.act && ACT[t.dataset.act]) ACT[t.dataset.act]();
+    if (t.dataset.toast) toast(t.dataset.toast);
+    if (t.hasAttribute('data-close')) closeSheets();
+    if (t.dataset.cp) cp(t.dataset.cp);
+    if (t.dataset.cand) {
+      st.cand = t.dataset.cand;
+      $$('[data-cand]').forEach(c => c.classList.toggle('on', c === t));
+      drawKarte(st.cand, ['nord','ost','sued'].filter(x => x !== st.cand));
+    }
+    if (t.hasAttribute('data-switch')) { t.classList.toggle('off'); t.setAttribute('aria-checked', !t.classList.contains('off')); }
+    if (t.parentElement && t.parentElement.classList.contains('seg') && !t.dataset.cp) {
+      $$('button', t.parentElement).forEach(b => b.classList.toggle('on', b === t));
+    }
+  });
+  $('#ridebtn').addEventListener('click', () => {
+    if (st.rec) { $('#cockpit').hidden = false; note('cockpit'); } else openSheet('start');
+  });
+
+  /* ───── Notizen ───── */
+  const NOTES = {
+    heute: { t: 'Heute', q: 'Was fahre ich heute?', c: [
+      ['Empfehlungskarte mit bis zu 8 Elementen: Ring „bereit", Titel, Band, Planzeile, Begründung, Plan-Eyebrow, Uhr-Hinweis', 'Ein Satz, ein Ring mit dem passenden Wort, ein Knopf. Gründe hinter „Warum?"'],
+      ['Wochen-km und Planwoche doppelt (Zahlenzeile + Ausblick)', 'Ein Wochenstreifen: erledigt, heute, geplant, Ruhetag auf einen Blick'],
+      ['Coach-Karte wiederholt Sätze aus dem Training-Tab', 'Coach-Sätze nur noch im Warum-Blatt'],
+      ['„Letzte Tour" ohne erkennbaren Tipp-Hinweis', 'Liegt im Verlauf, wo man Touren sucht'],
+      ['„Ziel anpassen" springt zum Anfang des Training-Tabs', '„Dein Ziel" öffnet die Plan-Seite direkt'],
+    ], try: 'Tippe <b>Warum diese Empfehlung?</b> oder <b>Runde für heute bauen</b>.' },
+    plan: { t: 'Plan', q: 'Was steht diese Woche an?', c: [
+      ['Alle Wochen als Karten untereinander, Ziel-Formular am Ende des Training-Tabs', 'Nur die aktuelle Woche offen, der Rest aufklappbar. Ziel ändern ist ein Link'],
+      ['„GA1 · 45 km · Last 85", Status-Icons ohne Legende', '„Locker 45 km", darunter was tatsächlich gefahren wurde'],
+      ['Routen-Icon nur als Symbol, Beschriftung nur für Screenreader', 'Beschrifteter Knopf „Runde" am heutigen Tag'],
+    ], try: 'Tippe am Donnerstag auf <b>Runde</b>.' },
+    'karte-idle': { t: 'Karte', q: 'Wohin?', c: [
+      ['Suche im Sheet; „Route planen", „Kartenstil", „Offline" erst nach Aufziehen', 'Ein Blatt mit „Wohin?" und zwei Chips. Kein Aufziehen nötig'],
+      ['Zwei Suchfelder mit unterschiedlichem Verhalten', 'Genau ein Suchfeld'],
+      ['Kartenstil und Offline im Sheet, Offline startet ohne Vorschau', 'Ebenen-Knopf oben rechts, Offline mit Größe und Abbrechen'],
+      ['Planungsmodus: Karte antippen setzt Punkte, Tippen nahe Punkt löscht still', 'Lange drücken setzt einen Punkt, in jedem Zustand gleich'],
+    ], try: '<b>Lange auf die Karte drücken</b>, oder <b>Runde ab hier</b> tippen.' },
+    'karte-ort': { t: 'Ort gewählt', q: 'Was will ich mit diesem Ort?', c: [
+      ['Drei Aktionen, „Runde ab hier" nimmt still immer 30 km', 'Zwei Aktionen. „Runde ab hier" öffnet dasselbe Blatt wie überall'],
+      ['„Als Wegpunkt" und „+ Als Wegpunkt" tun dasselbe', 'Zwischenziele fügt man in „Anpassen" hinzu'],
+    ], try: 'Tippe <b>Route hierher</b>.' },
+    'karte-runde': { t: 'Runde ab hier', q: 'Wie lang, auf welchem Untergrund?', c: [
+      ['Fünf Einstiege mit eigenem UI: Chips, Freitextfeld, Heute-Knopf, Training-Icon, Bereit-Dialog', 'Ein Blatt. Alle Einstiege öffnen dieses, vorbelegt mit der Plan-Distanz'],
+      ['Fahrradtyp + Wegpräferenz als Profil-Dropdown mit Hinweiszeilen', 'Ein Schalter „Untergrund". Das BRouter-Profil wählt die App dahinter'],
+    ], try: 'Schieberegler bewegen, dann <b>Vorschläge zeigen</b>.' },
+    'karte-kand': { t: 'Vorschläge', q: 'Welche Runde gefällt mir?', c: [
+      ['Kandidaten mit Himmelsrichtung, „Beste", ±%; weitere nur durch Ziehen am Blatt', 'Drei Karten nebeneinander, alle Linien auf der Karte, eine hervorgehoben'],
+      ['Vorschau zählte schon als „Route bereit", bevor man übernommen hatte', 'Erst „Diese Runde nehmen" macht sie zur Route'],
+    ], try: 'Zwischen <b>Nord, Ost, Süd</b> wechseln.' },
+    'karte-route': { t: 'Route steht', q: 'Losfahren?', c: [
+      ['Planungsblatt mit Profil, Wegpunkten, 4 Textknöpfen, Speichern und Navigieren gleichzeitig', 'Werte, Höhenprofil, „Losfahren". Anpassen und ⋮ für den Rest'],
+      ['„Navigieren" startet still auch die Aufzeichnung', '„Losfahren" sagt, was passiert: fahren mit dieser Route'],
+      ['„Als Tour speichern" speichert eine geplante Route', '„Route speichern" hinter ⋮'],
+    ], try: 'Der Fahren-Knopf unten zeigt jetzt die Länge. Tippe <b>Losfahren</b> oder <b>Anpassen</b>.' },
+    'karte-edit': { t: 'Route anpassen', q: 'Welche Punkte, zurück zum Start?', c: [
+      ['„Einfach | Rundweg" neben „Runde ab hier": zwei ähnliche Begriffe', 'Ein Schalter „Zurück zum Start"'],
+      ['Punkte löschen durch Tippen in 24 dp Nähe, ohne Hinweis', 'Löschen nur über ×, mit Rückgängig'],
+    ], try: 'Schalter umlegen, dann <b>Fertig</b>.' },
+    'sheet-start': { t: 'Fahren-Knopf', q: 'Losfahren, mit oder ohne Route?', c: [
+      ['Runder ●-Knopf ohne Beschriftung, drei Zustände', 'Beschrifteter Knopf: „Fahren", die Routenlänge oder die laufende Zeit'],
+      ['„Route verwerfen" im Bereit-Dialog ohne Rückgängig', 'Verwerfen nur an der Route selbst, mit Rückgängig'],
+    ], try: 'Tippe <b>Aufzeichnung starten</b>.' },
+    cockpit: { t: 'Fahren', q: 'Wie schnell, wie weit, wohin?', c: [
+      ['Vier Oberflächen: Live-Karte, Fahrmodus-Dialog, Kompaktleiste, HUD', 'Ein Cockpit mit „Daten | Karte". Navigation ist ein Banner darin'],
+      ['„Beenden" im HUD beendet Navigation, auf der Live-Karte die Aufzeichnung ohne Rückfrage', '„Halten zum Beenden" ist der einzige Weg, die Aufzeichnung zu beenden'],
+      ['●-Knopf während der Fahrt wechselt nur den Tab', 'Fahren-Knopf zeigt die Zeit und öffnet direkt dieses Cockpit'],
+      ['„bpm · Puls" ohne Einordnung', '„Puls · locker ✓" sagt, ob es zum Plan passt'],
+    ], try: '<b>Beenden gedrückt halten</b>. Oder mit ⌄ zur App und über den roten Knopf zurück.' },
+    summary: { t: 'Zusammenfassung', q: 'Wie war’s?', c: [
+      ['Snackbar „Tour gespeichert." und eine Tourkarte über der Karte', 'Ein eigener Abschluss mit Klartext zum Plan und zur Woche'],
+    ], try: 'Tippe <b>Fertig</b>.' },
+    verlauf: { t: 'Verlauf', q: 'Wie läuft es?', c: [
+      ['Form, Fitnesslevel, Wochenbelastung, Werte im Training-Tab; Touren in einem eigenen Tab', 'Oben ein Satz zur Form, darunter die Touren. Details im Form-Blatt'],
+      ['Eine lange Karte, „Letzte Touren" obwohl es alle sind', 'Nach Monaten gruppiert, mit Mini-Karte'],
+      ['„TL 68" ohne Erklärung', '„locker / mittel / hart". Die Zahl in den Details'],
+      ['Import nur im leeren Zustand oder tief in Mehr', '+ oben rechts, Suche daneben'],
+    ], try: 'Tippe die <b>Form-Karte</b> oder eine Tour.' },
+    tour: { t: 'Tour', q: 'Was hat die Fahrt gebracht?', c: [
+      ['10 Abschnitte untereinander, Coach mit Entkopplung Pe:Hr und Verlässlichkeit', 'Karte, vier Zahlen, ein Satz zum Plan. „Alle Werte" klappt die Details auf'],
+      ['„Auf der Karte zeigen" vs. „Auf der Karte öffnen"', 'Ein Wort, hinter ⋮'],
+      ['Keine Möglichkeit, eine Tour erneut zu fahren', '„Diese Tour nochmal fahren" als Hauptaktion'],
+      ['Label „h:min" bei Werten im Format h:mm:ss', '„Std." mit h:mm'],
+    ], try: 'Tippe <b>⋮</b> oder <b>nochmal fahren</b>.' },
+    settings: { t: 'Einstellungen', q: 'Wo stelle ich das ein?', c: [
+      ['„Mehr" mit 9 Akkordeons, zugeklappt ohne Status', 'Flache Liste, jede Zeile zeigt rechts ihren Zustand'],
+      ['4 Ebenen: Zahnrad → Liste → Akkordeon → „Erweitert"', '2 Ebenen: Liste → eigene Seite'],
+      ['Profil mit Speichern-Knopf, Sync speichert erst beim Abgleich, Rest sofort', 'Alles speichert sofort'],
+      ['Vier Bauarten von Schalter-Zeilen', 'Eine Schalter-Zeile für alle'],
+    ], try: 'Tippe eine Zeile. <b>Zurück</b> führt dorthin, wo du herkamst.' },
+    'sheet-warum': { t: 'Warum?', q: 'Wie kommt die Empfehlung zustande?', c: [
+      ['Gründe als Coach-Karte auf Heute und noch einmal als Werte-Kacheln im Training', 'Nur hier, ein Satz pro Signal mit Wort-Einordnung'],
+      ['„HRV 7-Tage-Mittel … Normalband", „Baseline"', '„Erholung (HRV)" mit Zahl und Normalbereich in einem Satz'],
+    ], try: 'Tippe <b>Verstanden</b> oder daneben.' },
+    'sheet-form': { t: 'Form erklärt', q: 'Was bedeuten die Zahlen?', c: [
+      ['Fitness/Ermüdung/Form nur über Chart-Legende, Fußnote „CTL, ATL, TSB"', 'Jede Linie mit einem Satz erklärt, Fachbegriff klein dahinter'],
+      ['„Form" auf Heute und im Training, dazu Rampenrate und Belastungsverhältnis', '„Frische" nur hier. Rampenrate etc. unter „Alle Werte"'],
+    ], try: 'Tippe daneben, um zu schließen.' },
+    'sheet-ebenen': { t: 'Kartenebenen', q: 'Wie soll die Karte aussehen?', c: [
+      ['Kartenstil im Sheet, Kacheln-Schalter an anderer Stelle, Offline ohne Vorschau', 'Alles, was die Karte selbst betrifft, an einem Ort'],
+    ], try: 'Stil wechseln oder Kacheln einschalten.' },
+  };
+  const JUMPS = [['heute','Heute'],['plan','Plan'],['karte','Karte'],['verlauf','Verlauf'],['tour','Tour'],['settings','Einstellungen']];
+  $('#jump').innerHTML = JUMPS.map(([k,l]) => `<button data-jump="${k}">${l}</button>`).join('') + '<button data-jump="ride">Fahren</button>';
+  $('#jump').addEventListener('click', e => {
+    const b = e.target.closest('[data-jump]'); if (!b) return;
+    $('#cockpit').hidden = true; $('#summary').hidden = true;
+    if (b.dataset.jump === 'ride') { go('karte'); st.cand = 'nord'; kgo('route'); startRide(true); }
+    else { go(b.dataset.jump); if (b.dataset.jump === 'karte') kgo(st.route ? 'route' : 'idle'); }
+  });
+
+  function note(key) {
+    const n = NOTES[key]; if (!n) return;
+    $('#panel').innerHTML = `<h2>${n.t}</h2><div class="q">„${n.q}"</div><ul class="cmp">${n.c.map(([a,b]) => `<li><span class="was">${a}</span><span class="neu">${b}</span></li>`).join('')}</ul>${n.try ? `<div class="try">Ausprobieren: ${n.try}</div>` : ''}`;
+    const base = key.startsWith('karte') ? 'karte' : key;
+    $$('#jump [data-jump]').forEach(b => b.classList.toggle('on', b.dataset.jump === base || (key === 'cockpit' && b.dataset.jump === 'ride')));
+  }
+
+  go('heute');
+})();
+</script>
