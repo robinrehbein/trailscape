@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,6 +32,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -193,6 +201,23 @@ internal fun SwipeableSheet(
         }
     }
 
+    // Listen im Blatt (Vorschlaege, Planungskoerper) scrollen selbst — ohne
+    // diese Verbindung schluckten sie jedes Wischen, und das Blatt liess sich
+    // ueber ihnen weder auf- noch zuziehen. Jetzt wie bei One UI und Google
+    // Maps: Hochwischen zieht erst das Blatt ganz auf und scrollt dann den
+    // Inhalt; Runterwischen scrollt den Inhalt an den Anfang und zieht dann
+    // das Blatt zu. Beim Loslassen rastet es wie beim Ziehen am Griff ein.
+    val scope = rememberCoroutineScope()
+    val velocityThresholdPx = with(density) { SettleVelocity.toPx() }
+    val nestedScroll = remember(drag) {
+        SheetNestedScrollConnection(
+            state = drag,
+            settle = { velocity ->
+                scope.launch { drag.settleWith(velocity, velocityThresholdPx) }
+            },
+        )
+    }
+
     val revealed = drag.offset.takeIf { !it.isNaN() } ?: 0f
     val revealedDp = with(density) { revealed.coerceAtLeast(0f).toDp() }
     val canExpand = bodyHeightPx > 0
@@ -207,6 +232,7 @@ internal fun SwipeableSheet(
         Column(
             modifier = Modifier
                 .padding(bottom = bottomInset)
+                .nestedScroll(nestedScroll)
                 .anchoredDraggable(
                     state = drag,
                     orientation = Orientation.Vertical,
@@ -314,6 +340,74 @@ private fun DockedSheetSurface(
         content()
     }
 }
+
+/**
+ * Verbindet scrollende Inhalte mit dem Blatt (siehe Kommentar im Blatt).
+ * Offset des Blatts = sichtbare Koerperhoehe; ein Finger nach oben (negatives
+ * `y`) vergroessert ihn.
+ */
+private class SheetNestedScrollConnection(
+    private val state: AnchoredDraggableState<SheetStop>,
+    private val settle: (velocity: Float) -> Unit,
+) : NestedScrollConnection {
+
+    private val canMove: Boolean
+        get() = state.anchors.size > 1 && state.anchors.maxPosition() > state.anchors.minPosition()
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // Hoch: zuerst das Blatt aufziehen, der Inhalt scrollt erst danach.
+        if (available.y < 0f && source == NestedScrollSource.UserInput && canMove) {
+            val consumed = state.dispatchRawDelta(-available.y)
+            return Offset(0f, -consumed)
+        }
+        return Offset.Zero
+    }
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        // Runter, und der Inhalt steht schon oben: das Blatt zuziehen.
+        if (available.y > 0f && source == NestedScrollSource.UserInput && canMove) {
+            val used = state.dispatchRawDelta(-available.y)
+            return Offset(0f, -used)
+        }
+        return Offset.Zero
+    }
+
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        // Ein Schwung nach oben, solange das Blatt noch nicht ganz offen ist,
+        // gehoert dem Blatt — nicht dem Inhalt.
+        if (available.y < 0f && canMove && state.requireOffset() < state.anchors.maxPosition()) {
+            settle(-available.y)
+            return available
+        }
+        return Velocity.Zero
+    }
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+        if (!canMove) return Velocity.Zero
+        // Zwischen zwei Rastpunkten losgelassen: einrasten.
+        val offset = state.requireOffset()
+        val atAnchor = state.anchors.closestAnchor(offset)?.let { state.anchors.positionOf(it) == offset } == true
+        if (!atAnchor) settle(-available.y)
+        return available
+    }
+}
+
+/**
+ * Rastet nach einem Wischen im Inhalt ein: bei Schwung eine Stufe in dessen
+ * Richtung, sonst am naechsten Rastpunkt. [velocity] positiv = aufziehen.
+ */
+private suspend fun AnchoredDraggableState<SheetStop>.settleWith(velocity: Float, thresholdPx: Float) {
+    val offset = requireOffset()
+    val target = if (abs(velocity) >= thresholdPx) {
+        anchors.closestAnchor(offset, searchUpwards = velocity > 0f)
+    } else {
+        null
+    } ?: anchors.closestAnchor(offset) ?: return
+    animateTo(target, OneUiMotion.standard())
+}
+
+/** Ab diesem Schwung rastet das Blatt eine Stufe weiter statt am naechsten Punkt. */
+private val SettleVelocity = 125.dp
 
 /** Hoehe der Griffzeile — auch der obere Rand eines Blatts ohne Griff. */
 internal val SheetHandleHeight = 24.dp
