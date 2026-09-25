@@ -9,6 +9,7 @@ import java.time.YearMonth
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -24,13 +25,23 @@ class RideListLogicTest {
 
     private fun ms(at: LocalDateTime) = at.toEpochSecond(ZoneOffset.UTC) * 1000
 
-    private fun summary(id: String, at: LocalDateTime, name: String = "Tour $id") = RideSummary(
+    private fun summary(
+        id: String,
+        at: LocalDateTime,
+        name: String = "Tour $id",
+        planned: Boolean = false,
+        km: Double = 10.0,
+    ) = RideSummary(
         id = id,
         name = name,
         createdAt = ms(at),
         updatedAt = ms(at),
-        stats = RideStats(distanceKm = 10.0, ascentM = 0.0, descentM = 0.0),
+        stats = RideStats(distanceKm = km, ascentM = 0.0, descentM = 0.0),
+        planned = planned,
     )
+
+    private fun plan(id: String, at: LocalDateTime, name: String = "Plan $id") =
+        summary(id, at, name = name, planned = true, km = 58.0)
 
     @Test
     fun `Touren werden nach Monat gruppiert, Reihenfolge bleibt`() {
@@ -128,5 +139,112 @@ class RideListLogicTest {
     fun `zu wenige Punkte ergeben keine Linie`() {
         assertEquals(0, thumbnailPolyline(emptyList()).size)
         assertEquals(0, thumbnailPolyline(listOf(TrackPoint(52.0, 13.0))).size)
+    }
+
+    // -----------------------------------------------------------------------
+    // Planungen getrennt von gefahrenen Touren (splitHistory)
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `gemischte Liste - Planungen oben, gefahrene Touren nach Monaten ohne Planungen`() {
+        val rides = listOf(
+            summary("a", LocalDateTime.of(2026, 9, 23, 18, 0)),
+            // Zwischen zwei Fahrten desselben Monats erstellt — frueher stand
+            // sie genau dort, als waere sie gefahren worden.
+            plan("p1", LocalDateTime.of(2026, 9, 20, 9, 0)),
+            summary("b", LocalDateTime.of(2026, 9, 2, 8, 0)),
+            plan("p2", LocalDateTime.of(2026, 8, 30, 9, 0)),
+            summary("c", LocalDateTime.of(2026, 8, 28, 8, 0)),
+        )
+        val sections = splitHistory(rides, "", today, utc)
+
+        assertEquals(listOf("p1", "p2"), sections.planned.map { it.id })
+        assertEquals(listOf("September", "August"), sections.months.map { it.label })
+        assertEquals(listOf("a", "b"), sections.months[0].rides.map { it.id })
+        assertEquals(listOf("c"), sections.months[1].rides.map { it.id })
+        assertTrue(sections.months.flatMap { it.rides }.none { it.planned })
+        assertEquals(RiddenPart.LISTE, sections.ridden)
+        assertFalse(sections.noMatch)
+    }
+
+    @Test
+    fun `Suche trifft nur Planungen - gefahrener Teil meldet keinen Treffer`() {
+        val rides = listOf(
+            summary("a", LocalDateTime.of(2026, 9, 23, 18, 0), name = "Feierabendrunde"),
+            plan("p", LocalDateTime.of(2026, 9, 20, 9, 0), name = "Alb-Runde über Hayingen"),
+        )
+        val sections = splitHistory(rides, "hayingen", today, utc)
+
+        assertEquals(listOf("p"), sections.planned.map { it.id })
+        assertTrue(sections.months.isEmpty())
+        assertEquals(RiddenPart.KEIN_TREFFER, sections.ridden)
+        assertFalse(sections.noMatch)
+    }
+
+    @Test
+    fun `nur Planungen - der gefahrene Teil sagt ehrlich noch keine Fahrt`() {
+        val rides = listOf(
+            plan("p1", LocalDateTime.of(2026, 9, 20, 9, 0)),
+            plan("p2", LocalDateTime.of(2026, 9, 10, 9, 0)),
+        )
+        val sections = splitHistory(rides, "", today, utc)
+
+        assertEquals(listOf("p1", "p2"), sections.planned.map { it.id })
+        assertTrue(sections.months.isEmpty())
+        assertEquals(RiddenPart.NOCH_KEINE_FAHRT, sections.ridden)
+        // Auch waehrend einer Suche: Es gibt keine Fahrt, nicht nur keinen Treffer.
+        assertEquals(RiddenPart.NOCH_KEINE_FAHRT, splitHistory(rides, "p1", today, utc).ridden)
+    }
+
+    @Test
+    fun `keine Planungen - Liste wie bisher, kein Abschnitt Geplant`() {
+        val rides = listOf(
+            summary("a", LocalDateTime.of(2026, 9, 23, 18, 0)),
+            summary("b", LocalDateTime.of(2026, 8, 2, 8, 0)),
+        )
+        val sections = splitHistory(rides, "", today, utc)
+
+        assertTrue(sections.planned.isEmpty())
+        assertEquals(groupRidesByMonth(rides, today, utc), sections.months)
+        assertEquals(RiddenPart.LISTE, sections.ridden)
+    }
+
+    @Test
+    fun `Suche ohne jeden Treffer ist ein einziger Fall`() {
+        val rides = listOf(
+            summary("a", LocalDateTime.of(2026, 9, 23, 18, 0)),
+            plan("p", LocalDateTime.of(2026, 9, 20, 9, 0)),
+        )
+        val sections = splitHistory(rides, "gibtsnicht", today, utc)
+
+        assertTrue(sections.noMatch)
+        assertTrue(sections.planned.isEmpty())
+        // Ohne Touren ist es kein Such-, sondern der Erststart-Fall.
+        assertFalse(splitHistory(emptyList<RideSummary>(), "x", today, utc).noMatch)
+    }
+
+    @Test
+    fun `Planungszeile zeigt Laenge, Hoehenmeter und Erstelldatum statt Dauer`() {
+        val stats = RideStats(distanceKm = 58.3, ascentM = 640.4, descentM = 640.0, durationS = 3600)
+        assertEquals(
+            "58 km · 640 Hm · erstellt 24.09.",
+            plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats),
+        )
+        // Kurze Runden behalten die Nachkommastelle.
+        assertEquals(
+            "2,4 km · 12 Hm · erstellt 01.03.",
+            plannedRouteMeta(LocalDateTime.of(2026, 3, 1, 8, 0), stats.copy(distanceKm = 2.4, ascentM = 12.0)),
+        )
+    }
+
+    @Test
+    fun `Verlauf-Summen zaehlen nur gefahrene Touren`() {
+        val rides = listOf(
+            summary("a", LocalDateTime.of(2026, 9, 23, 18, 0), km = 30.0),
+            plan("p", LocalDateTime.of(2026, 9, 20, 9, 0)),
+            summary("b", LocalDateTime.of(2026, 9, 2, 8, 0), km = 12.5),
+        )
+        assertEquals(HistoryTotals(rideCount = 2, totalKm = 42.5), historyTotals(rides))
+        assertEquals(HistoryTotals(0, 0.0), historyTotals(listOf(plan("p", LocalDateTime.of(2026, 9, 20, 9, 0)))))
     }
 }

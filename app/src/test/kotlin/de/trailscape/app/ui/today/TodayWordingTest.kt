@@ -3,6 +3,8 @@ package de.trailscape.app.ui.today
 import de.trailscape.core.AscentPreference
 import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RecoveryFlag
+import de.trailscape.core.RideStats
+import de.trailscape.core.RideSummary
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
@@ -10,6 +12,7 @@ import de.trailscape.core.SleepAssessment
 import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingSession
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -378,5 +381,28 @@ class TodayWordingTest {
         assertEquals("7 h 40 min", formatHoursMinutes(7.0 + 40.0 / 60))
         assertEquals("8 h", formatHoursMinutes(7.999))
         assertEquals("45 min", formatHoursMinutes(0.75))
+    }
+
+    @Test
+    fun `Wochen-km zaehlen gespeicherte Planungen nicht mit`() {
+        val monday = LocalDate.of(2026, 9, 21)
+        fun at(day: LocalDate) = day.atTime(10, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        fun summary(id: String, day: LocalDate, km: Double, planned: Boolean = false) = RideSummary(
+            id = id,
+            name = id,
+            createdAt = at(day),
+            updatedAt = at(day),
+            stats = RideStats(distanceKm = km, ascentM = 0.0, descentM = 0.0),
+            planned = planned,
+        )
+        val rides = listOf(
+            summary("a", monday.plusDays(1), 30.0),
+            summary("p", monday.plusDays(1), 90.0, planned = true),
+            summary("q", monday.plusDays(3), 58.0, planned = true),
+        )
+
+        val byDate = riddenKmByDate(rides, monday, monday.plusDays(6))
+
+        assertEquals(mapOf(monday.plusDays(1) to 30.0), byDate)
     }
 }

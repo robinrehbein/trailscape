@@ -1,14 +1,17 @@
 package de.trailscape.app.ui.rides
 
+import de.trailscape.app.ui.dateFormatShort
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.core.RideInfo
 import de.trailscape.core.RideStats
+import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * # Die reine Rechnung hinter der Verlaufsliste
@@ -119,3 +122,95 @@ internal fun rideListMeta(at: LocalDateTime, stats: RideStats): String = buildLi
     add("${formatKmDe(stats.distanceKm)} km")
     stats.durationS?.let { add("${formatHoursMinutes(it)} h") }
 }.joinToString(" · ")
+
+/**
+ * Was der gefahrene Teil des Verlaufs unter dem Abschnitt „Geplant" zeigt.
+ *
+ * Drei Faelle, weil ein leerer Teil zweierlei bedeuten kann: Es gibt noch gar
+ * keine gefahrene Tour ([NOCH_KEINE_FAHRT] — auch waehrend einer Suche, denn
+ * „keine gefahrene Tour heisst so" waere dann eine halbe Wahrheit), oder es
+ * gibt welche, aber die Suche trifft keine ([KEIN_TREFFER]).
+ */
+internal enum class RiddenPart { LISTE, NOCH_KEINE_FAHRT, KEIN_TREFFER }
+
+/**
+ * Der Verlauf, aufgeteilt in gespeicherte Planungen und gefahrene Touren.
+ *
+ * @property planned Planungen in Listenreihenfolge (neueste zuerst) — sie
+ *   stehen oben in einem eigenen Abschnitt, nicht nach Monaten gruppiert:
+ *   Eine Planung hat kein Fahrtdatum, ihr Erstelldatum als Monat einzusortieren
+ *   hiesse, sie zwischen echte Fahrten zu mischen.
+ * @property months die gefahrenen Touren, wie bisher nach Monaten gruppiert.
+ * @property ridden was der gefahrene Teil zeigt (siehe [RiddenPart]).
+ * @property noMatch die Suche trifft weder eine Planung noch eine gefahrene
+ *   Tour — dann steht nur ein Satz da, keine zwei halben Leermeldungen.
+ */
+internal data class HistorySections<T : RideInfo>(
+    val planned: List<T>,
+    val months: List<RideMonthGroup<T>>,
+    val ridden: RiddenPart,
+    val noMatch: Boolean,
+)
+
+/**
+ * Teilt [rides] in den Abschnitt „Geplant" und die gefahrenen Touren.
+ *
+ * Bis hierher standen gespeicherte Planungen ([RideInfo.planned]) ohne
+ * Kennzeichen zwischen den Fahrten, einsortiert nach ihrem Erstelldatum —
+ * im Verlauf, der die Frage „Was bin ich gefahren?" beantwortet, sah eine
+ * nie gefahrene Route aus wie eine Fahrt. Die Trennung laeuft ueber
+ * [riddenRides], dieselbe eine Stelle, ueber die auch jede Statistik
+ * „gefahren" von „geplant" unterscheidet; die Planungen sind genau der Rest.
+ *
+ * Die Suche ([filterRidesByName]) wirkt auf beide Teile gleich.
+ */
+internal fun <T : RideInfo> splitHistory(
+    rides: List<T>,
+    query: String,
+    today: LocalDate,
+    localOf: (Long) -> LocalDateTime,
+): HistorySections<T> {
+    val ridden = riddenRides(rides)
+    val planned = rides.filter { it.planned }
+
+    val plannedHits = filterRidesByName(planned, query)
+    val riddenHits = filterRidesByName(ridden, query)
+    val months = groupRidesByMonth(riddenHits, today, localOf)
+
+    val part = when {
+        ridden.isEmpty() -> RiddenPart.NOCH_KEINE_FAHRT
+        months.isEmpty() -> RiddenPart.KEIN_TREFFER
+        else -> RiddenPart.LISTE
+    }
+    val noMatch = rides.isNotEmpty() && query.isNotBlank() && plannedHits.isEmpty() && riddenHits.isEmpty()
+    return HistorySections(plannedHits, months, part, noMatch)
+}
+
+/**
+ * Die Kennzahlen-Zeile einer gespeicherten Planung: `58 km · 640 Hm ·
+ * erstellt 24.09.` — im Verlauf (Abschnitt „Geplant") und im hochgewischten
+ * „Wohin?"-Blatt (Abschnitt „Gespeicherte Routen") dieselbe.
+ *
+ * Statt Dauer und Tempo, die es fuer eine nie gefahrene Route nicht gibt, steht
+ * hier, was man beim Aussuchen einer Route wissen will: Laenge und Hoehenmeter.
+ * Das Datum heisst ausdruecklich „erstellt", damit es nicht als Fahrtag
+ * gelesen wird. Kilometer ganzzahlig wie die Hoehenmeter — eine Planung ist
+ * eine Absicht, keine Messung; erst unter 10 km zaehlt die Nachkommastelle
+ * wieder (sonst stuende eine 2,4-km-Runde als „2 km" da).
+ */
+internal fun plannedRouteMeta(createdAt: LocalDateTime, stats: RideStats): String {
+    val km = if (stats.distanceKm < 10.0) formatKmDe(stats.distanceKm) else "${stats.distanceKm.roundToInt()}"
+    return "$km km · ${stats.ascentM.roundToInt()} Hm · erstellt ${dateFormatShort.format(createdAt)}"
+}
+
+/**
+ * Anzahl und Kilometer der **gefahrenen** Touren — die Zahlen unter der
+ * Verlaufskarte (`HistorySummarySheet`). Planungen zaehlen nicht ([riddenRides]).
+ */
+internal data class HistoryTotals(val rideCount: Int, val totalKm: Double)
+
+/** Siehe [HistoryTotals]. */
+internal fun historyTotals(rides: List<RideInfo>): HistoryTotals {
+    val ridden = riddenRides(rides)
+    return HistoryTotals(ridden.size, ridden.sumOf { it.stats.distanceKm })
+}
