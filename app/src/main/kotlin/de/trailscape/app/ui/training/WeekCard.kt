@@ -35,12 +35,12 @@ import kotlin.math.roundToInt
  * Titel nennt deshalb, worum es geht, statt eine Zeitspanne zu benennen, die
  * beide teilen.
  *
- * ## Ihr Platz: das Kapitel „Plan"
- * Sie eroeffnet den Plan-Abschnitt des Trainings-Tabs (siehe KDoc von
- * [TrainingScreen]): Bevor die einzelnen Wochen des Trainingsplans kommen,
- * steht hier, was die **laufende** Woche an Last verlangt und ob sie
- * tragfaehig ist. Im Kapitel „Form" waere sie falsch — sie beschreibt keine
- * Fitness, sondern ein Pensum.
+ * ## Ihr Platz: eine Ebene tiefer, unter „Alle Werte"
+ * Seit dem Redesign „Klartext" (`docs/design/prototyp-klartext.html`) steht
+ * sie nicht mehr im Trainings-Tab selbst, sondern im Blatt „Deine Form"
+ * ([FormSheet]) hinter „Alle Werte": Wochenlast, Zielwert und
+ * Entlastungswoche sind Detailwerte, die man nachschlaegt, nicht die
+ * Tagesauskunft. Verloren geht nichts.
  *
  * Port von `_buildWeekCard` (`lib/screens/training_screen.dart`).
  *

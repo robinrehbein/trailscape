@@ -323,19 +323,38 @@ data class FitnessAssessment(
     val rideCount: Int,
 )
 
-/** Trainingsziel: Zieldistanz zu einem bestimmten Datum. */
+/**
+ * Trainingsziel: Zieldistanz zu einem bestimmten Datum, optional mit
+ * Hoehenmetern und einer Zielzeit.
+ *
+ * ## Rueckwaertskompatibilitaet des Formats
+ * [ascentM] steht — wie im Dart-Original — **immer** im JSON, notfalls als
+ * explizites `null`. [targetDurationMin] ist spaeter dazugekommen und folgt der
+ * Konvention der angehaengten Felder von [TrainingSession]: Der Schluessel wird
+ * **hinten angehaengt** und **nur geschrieben, wenn es einen Wert gibt**. Ein
+ * Ziel ohne Zielzeit ergibt damit byteidentisch dasselbe JSON wie vorher, und
+ * ein altes Ziel ohne den Schluessel liest sich als „keine Zielzeit".
+ */
 data class Goal(
     val name: String,
     val distanceKm: Double,
     val ascentM: Double? = null,
     /** ms seit Epoch. */
     val date: Long,
+    /**
+     * Angestrebte Zielzeit in Minuten (z. B. 130 fuer „2:10 h"); `null`, wenn
+     * keine eingetragen ist. Grundlage des Vergleichs mit der Prognose aus
+     * [predictGoalFinish] — auf den Plan selbst wirkt sie nicht.
+     */
+    val targetDurationMin: Int? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("name", name)
         put("distanceKm", distanceKm)
         put("ascentM", ascentM)
         put("date", date)
+        // Angehaengt und nur mit Wert (siehe Klassen-KDoc).
+        targetDurationMin?.let { put("targetDurationMin", it) }
     }
 
     companion object {
@@ -344,6 +363,7 @@ data class Goal(
             distanceKm = json.requiredDouble("distanceKm"),
             ascentM = json.optionalDouble("ascentM"),
             date = json.requiredLong("date"),
+            targetDurationMin = json.optionalInt("targetDurationMin")?.takeIf { it > 0 },
         )
     }
 }
