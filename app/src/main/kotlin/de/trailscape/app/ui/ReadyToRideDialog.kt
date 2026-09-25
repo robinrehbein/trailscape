@@ -1,15 +1,20 @@
 package de.trailscape.app.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.map.PrimaryButton
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offerDialogAction
 import de.trailscape.app.ui.today.offerHint
@@ -121,25 +126,24 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    TextButton(
-                        onClick = {
-                            appViewModel.requestRouteGeneration(offer.target)
-                            onDismiss()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(offerDialogAction(offer)) }
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
+            DialogButtonStack(
+                primaryLabel = "Aufzeichnung starten",
+                onPrimary = {
                     appViewModel.requestRecording()
                     onDismiss()
                 },
-            ) { Text("Aufzeichnung starten") }
+                secondaryLabel = offer?.let { offerDialogAction(it) },
+                onSecondary = {
+                    offer?.let { appViewModel.requestRouteGeneration(it.target) }
+                    onDismiss()
+                },
+                onDismiss = onDismiss,
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
     )
 }
 
@@ -163,23 +167,65 @@ private fun PlannedRideDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Route · ${formatKmDe(distanceKm)} km, mit Abbiegehinweisen.")
-                TextButton(
-                    onClick = {
-                        appViewModel.requestRecording()
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Ohne Route starten") }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
+            DialogButtonStack(
+                primaryLabel = "Mit Route starten",
+                onPrimary = {
                     appViewModel.requestNavigatePlanned()
                     onDismiss()
                 },
-            ) { Text("Mit Route starten") }
+                secondaryLabel = "Ohne Route starten",
+                onSecondary = {
+                    appViewModel.requestRecording()
+                    onDismiss()
+                },
+                onDismiss = onDismiss,
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
     )
+}
+
+/**
+ * Die Knoepfe des Losfahren-Dialogs untereinander, in klarer Rangfolge:
+ * oben die Hauptaktion gefuellt, darunter die Alternative nur umrandet, ganz
+ * unten „Abbrechen" als blosser Text. Nebeneinander passten drei Aktionen
+ * nicht gleichwertig in eine Zeile, und drei gleich aussehende Textknoepfe
+ * liessen offen, was der naheliegende Weg ist.
+ */
+@Composable
+private fun DialogButtonStack(
+    primaryLabel: String,
+    onPrimary: () -> Unit,
+    secondaryLabel: String?,
+    onSecondary: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        PrimaryButton(
+            text = primaryLabel,
+            onClick = onPrimary,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (secondaryLabel != null) {
+            OutlinedButton(
+                onClick = onSecondary,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                // Kraeftigere Kante als die Vorgabe: Auf der hellen
+                // Dialogflaeche verschwand der Rahmen sonst fast.
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                ),
+            ) { Text(secondaryLabel, style = MaterialTheme.typography.labelLarge) }
+        }
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+        ) { Text("Abbrechen", style = MaterialTheme.typography.labelLarge) }
+    }
 }

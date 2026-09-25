@@ -401,6 +401,15 @@ class ScreenshotTest {
         return hasText("Karte", substring = true) and !navTab and !hasAnyAncestor(navTab)
     }
 
+    /** Losfahren-Dialog: Hauptaktion gefuellt, Alternative umrandet, Abbrechen als Text. */
+    @Test
+    fun losfahren() {
+        start()
+        compose.onAllNodesWithContentDescription("Aufzeichnung starten")[0].performClick()
+        settle()
+        shot("18-losfahren")
+    }
+
     private fun start(dark: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderingAvailable provides false) {
