@@ -78,7 +78,15 @@
          Touren beim Geraetewechsel weg — es sei denn, jemand denkt an den
          manuellen Backup-Export. Was NICHT mitgesichert wird, steht in den
          beiden Regeldateien: res/xml/backup_rules.xml (API 23-30) und
-         res/xml/data_extraction_rules.xml (ab API 31). -->
+         res/xml/data_extraction_rules.xml (ab API 31).
+
+         enableOnBackInvokedCallback: Schaltet die vorausschauende
+         Zurueck-Geste (Android 13+) ein — beim Wischen vom Rand zeigt das
+         System vorab, wohin es geht. Sicher, weil alle Zurueck-Behandlung
+         ueber den AndroidX-OnBackPressedDispatcher laeuft (Compose
+         BackHandler); kein Activity.onBackPressed()/KEYCODE_BACK, das damit
+         nicht mehr aufgerufen wuerde. tools:targetApi, weil das Attribut
+         unter API 33 unbekannt ist und dort ignoriert wird. -->
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -87,7 +95,9 @@
         android:label="@string/app_name"
         android:name=".TrailscapeApplication"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Trailscape">
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/Theme.Trailscape"
+        tools:targetApi="33">
 
         <activity
             android:name=".MainActivity"

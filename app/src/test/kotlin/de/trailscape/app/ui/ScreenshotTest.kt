@@ -220,10 +220,34 @@ class ScreenshotTest {
         shot("43-karte-suche-zu-kurz")
     }
 
-    private fun start() {
+    /**
+     * Dunkelmodus — die Stellen, an denen eigene Farben (Karte, Vorschaubilder,
+     * Trainingsfarben) am Schema vorbei gesetzt sind, fallen nur hier auf.
+     * `+night` zusaetzlich zum Theme-Schalter, weil manche Stellen
+     * `isSystemInDarkTheme()` selbst lesen statt das Schema zu fragen.
+     */
+    @Test
+    @Config(qualifiers = "+night")
+    fun dunkel() {
+        start(dark = true)
+        shot("51-heute-dunkel")
+        tab("Verlauf")
+        shot("52-verlauf-dunkel")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        shot("56-tour-dunkel")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
+        tab("Training")
+        shot("53-training-dunkel")
+        tab("Karte")
+        shot("54-karte-dunkel")
+    }
+
+    private fun start(dark: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderingAvailable provides false) {
-                TrailscapeTheme(darkTheme = false) {
+                TrailscapeTheme(darkTheme = dark) {
                     Surface(modifier = Modifier.fillMaxSize()) { TrailscapeApp() }
                 }
             }

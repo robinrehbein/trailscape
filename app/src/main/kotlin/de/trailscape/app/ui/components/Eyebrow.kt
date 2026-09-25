@@ -11,6 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.theme.CardPadding
 
@@ -72,12 +74,17 @@ fun Eyebrow(
  * Die Abschnittsueberschrift eines Screens („Diese Woche", „Dein Ziel",
  * „September") — ueberall dieselbe Groesse, Farbe und derselbe Abstand, und
  * buendig mit dem Text in den Karten darunter.
+ *
+ * Fuer TalkBack eine Ueberschrift: Wer mit der Ueberschriften-Navigation
+ * wischt, springt so von Abschnitt zu Abschnitt, statt jede Karte einzeln
+ * durchzugehen.
  */
 @Composable
 fun SectionEyebrow(text: String, modifier: Modifier = Modifier) {
     Eyebrow(
         text = text,
         modifier = modifier
+            .semantics { heading() }
             .fillMaxWidth()
             .padding(start = CardPadding, end = CardPadding, top = SectionEyebrowTopGap, bottom = 2.dp),
     )
