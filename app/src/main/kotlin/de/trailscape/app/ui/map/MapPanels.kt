@@ -27,7 +27,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -44,7 +43,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.components.ActionTileRow
 import de.trailscape.app.ui.components.HoldToEndButton
+import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
@@ -347,10 +348,17 @@ internal fun RideCard(
                     modifier = Modifier.padding(end = 8.dp),
                 )
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.padding(end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                // Dieselbe Ordnung wie im Tourdetail (`ui/rides/RideDetailScreen.kt`):
+                // oben die Hauptaktion gefuellt ueber die volle Breite, darunter
+                // die Nebenaktionen als beschriftete Kacheln in derselben
+                // Reihenfolge — Teilen vor Loeschen, das Destruktive ganz
+                // aussen. Frueher standen hier zwei nackte Symbole neben dem
+                // Knopf; ein Muelleimer ohne Wort ist genau die Art versteckter
+                // Funktion, die die App nicht haben will. „Auf der Karte
+                // zeigen" fehlt hier naturgemaess, „Umbenennen" bleibt dem
+                // Detail vorbehalten: Das Blatt soll niedrig bleiben, damit die
+                // Karte darueber sichtbar ist.
+                Column(modifier = Modifier.padding(end = 8.dp)) {
                     PrimaryButton(
                         text = when {
                             navigating -> "Unterwegs"
@@ -359,22 +367,22 @@ internal fun RideCard(
                         },
                         onClick = onNavigate,
                         enabled = !navigating,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalIconButton(onClick = onShare) {
-                        Icon(Icons.Filled.Share, contentDescription = "Als GPX teilen")
-                    }
-                    // 8 statt 4 dp: Rechts steht die destruktive Aktion, links
-                    // eine harmlose — Fehlgriffe sind hier nicht symmetrisch.
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            Icons.Filled.Delete,
-                            contentDescription = "Tour löschen",
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    ActionTileRow(
+                        actions = listOf(
+                            TileAction("Teilen", Icons.Filled.Share, onClick = onShare),
+                            TileAction(
+                                "Löschen",
+                                Icons.Filled.Delete,
+                                destructive = true,
+                                onClick = onDelete,
+                            ),
+                        ),
+                        // Das Blatt ist selbst eine Karte — siehe [ActionTile].
+                        onCard = true,
+                    )
                 }
             }
         },

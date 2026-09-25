@@ -103,10 +103,10 @@ import kotlinx.coroutines.withTimeoutOrNull
  * ## Eine Zeile, eine Handlung
  * Mini-Karte, Name, darunter gedaempft „Di 23.9. · 32,4 km · 1:24 h", rechts
  * das Wort fuer die Haerte ([EffortPill]). Ein Tipp oeffnet die
- * Detailansicht; Umbenennen, Teilen, Loeschen und „Auf der Karte zeigen"
- * wohnen seit dem Klartext-Umbau nur noch dort hinter ⋮ — ein Ueberlaufmenue
- * je Zeile machte die Liste unruhig und bot dieselben vier Handgriffe zweimal
- * an. „geplante Route" und „aus Health Connect" stehen ebenfalls nur noch im
+ * Detailansicht; Umbenennen, Teilen, Loeschen und „Karte zeigen" wohnen
+ * seit dem Klartext-Umbau nur noch dort, als beschriftete Kacheln — ein
+ * Ueberlaufmenue je Zeile machte die Liste unruhig und bot dieselben vier
+ * Handgriffe zweimal an. „geplante Route" und „aus Health Connect" stehen ebenfalls nur noch im
  * Detail: In der Zeile waren sie eine zweite Textzeile fuer eine Auskunft, die
  * man beim Ueberfliegen nicht braucht.
  *

@@ -113,6 +113,12 @@ class ScreenshotTest {
         shot("11-heute-lang")
         tab("Training")
         shot("13-training-lang")
+        tab("Verlauf")
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        shot("15-tour-lang")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
         tab("Heute")
         compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
         settle()
@@ -129,6 +135,13 @@ class ScreenshotTest {
         shot("22-karte-gross")
         tab("Verlauf")
         shot("23-verlauf-gross")
+        // Die Aktionskacheln im Tourdetail brechen ab 130 % auf zwei Spalten
+        // um — hier sieht man, ob „Umbenennen" dabei ganz bleibt.
+        compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
+        settle()
+        shot("25-tour-gross")
+        compose.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+        settle()
         tab("Training")
         shot("24-training-gross")
     }
