@@ -10,6 +10,11 @@ import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import org.junit.Assert.assertEquals
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onAllNodesWithText
@@ -242,6 +247,47 @@ class ScreenshotTest {
         shot("53-training-dunkel")
         tab("Karte")
         shot("54-karte-dunkel")
+    }
+
+    /**
+     * „Karte" gibt es im Verlauf genau einmal — als Knopf „Alle Touren auf der
+     * Karte". Frueher stand dort zusaetzlich das Segment „Liste | Karte",
+     * gleichnamig mit dem Tab in der Navigationskapsel. Die Kapsel selbst
+     * zaehlt nicht mit (Knoten mit [Role.Tab] und ihre Kinder).
+     */
+    @Test
+    fun verlaufNenntKarteNurEinmal() {
+        start()
+        tab("Verlauf")
+        shot("25-verlauf-kartenknopf")
+        val karteImInhalt = compose.onAllNodes(karteAusserhalbDerNavigation()).fetchSemanticsNodes()
+        assertEquals(
+            listOf("Alle Touren auf der Karte"),
+            karteImInhalt.map { it.config[SemanticsProperties.Text].joinToString("") },
+        )
+        compose.onAllNodesWithText("Alle Touren auf der Karte")[0].performClick()
+        settle()
+        shot("26-verlauf-karte")
+    }
+
+    /**
+     * Ohne gefahrene Tour gibt es nichts auf die Verlaufskarte zu zeichnen —
+     * eine gespeicherte Planung allein blendet den Knopf nicht ein.
+     */
+    @Test
+    fun ohneGefahreneTourKeinKartenknopf() {
+        // `saveRides` ergaenzt nur — die gefahrenen Beispieltouren aus
+        // [seed] einzeln wieder loeschen, die Planung bleibt.
+        sampleRides().filterNot { it.planned }.forEach { AppServices.rideStorage.deleteRide(it.id) }
+        start()
+        tab("Verlauf")
+        shot("27-verlauf-nur-geplant")
+        assertEquals(0, compose.onAllNodes(karteAusserhalbDerNavigation()).fetchSemanticsNodes().size)
+    }
+
+    private fun karteAusserhalbDerNavigation(): SemanticsMatcher {
+        val navTab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
+        return hasText("Karte", substring = true) and !navTab and !hasAnyAncestor(navTab)
     }
 
     private fun start(dark: Boolean = false) {

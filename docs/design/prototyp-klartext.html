@@ -655,9 +655,9 @@
         </div>
         <div class="title">Verlauf</div>
 
-        <div class="seg" role="tablist" aria-label="Ansicht">
-          <button class="on" data-hv="liste">Liste</button><button data-hv="karte">Karte</button>
-        </div>
+        <!-- Kein Segment „Liste | Karte": „Karte" heißt schon der Tab in der Leiste.
+             Der Knopf sagt, was passiert, und erscheint nur, wenn es gefahrene Touren gibt. -->
+        <button class="btn sec" id="hvbtn" data-hv="karte"><svg><use href="#i-map"/></svg><span>Alle Touren auf der Karte</span></button>
         <div id="hv-karte" hidden style="margin-top:12px">
           <div class="histmap" id="histmap"></div>
           <div class="src">Tippe eine Spur, um die Tour zu öffnen.</div>
@@ -938,7 +938,7 @@
         <div class="step"><div class="when">Etappe 4<small>groß</small></div><div><b>Karte: „Wohin?"</b><p>Ein Blatt mit Suche und zwei Chips, Ebenen-Knopf oben rechts, lange drücken statt Planungsmodus, ein gemeinsames „Runde ab hier"-Blatt, Route-Karte mit genau einer Hauptaktion.</p></div></div>
         <div class="step"><div class="when">Etappe 4b<small>mittel</small></div><div><b>Neue Gegenden entdecken</b><p>In <code>:core</code> bekommt <code>scoreRoute</code> einen Bonus für unentdeckte Kacheln (<code>explorerTilesForTrack</code> auf die Kandidatenroute), die Kandidaten tragen „+N neu“. Dazu kleine Kacheln auf Stufe 17 und „+N neue Kacheln“ in der Zusammenfassung. Rein in <code>:core</code> testbar.</p></div></div>
         <div class="step"><div class="when">Etappe 5<small>groß</small></div><div><b>Ein Cockpit</b><p>Live-Karte, Fahrmodus-Dialog, Kompaktleiste und HUD verschmelzen zu „Daten | Karte". Beschrifteter Fahren-Knopf mit Route oder Zeit.</p></div></div>
-        <div class="step"><div class="when">Etappe 6<small>groß</small></div><div><b>Training und Verlauf neu ordnen</b><p>Training: Ziel mit Zielzeit und Prognose oben, dann Woche, Form, Körperwerte. Touren-Tab wird Verlauf mit „Liste | Karte". Die Zielzeit-Prognose ist die einzige wirklich neue Funktion und braucht Logik in <code>:core</code>.</p></div></div>
+        <div class="step"><div class="when">Etappe 6<small>groß</small></div><div><b>Training und Verlauf neu ordnen</b><p>Training: Ziel mit Zielzeit und Prognose oben, dann Woche, Form, Körperwerte. Touren-Tab wird Verlauf mit „Alle Touren auf der Karte". Die Zielzeit-Prognose ist die einzige wirklich neue Funktion und braucht Logik in <code>:core</code>.</p></div></div>
       </div>
     </section>
 
@@ -1190,10 +1190,12 @@
     if (t.hasAttribute('data-close')) closeSheets();
     if (t.dataset.cp) cp(t.dataset.cp);
     if (t.dataset.hv) {
-      $$('[data-hv]').forEach(b => b.classList.toggle('on', b === t));
-      $('#hv-karte').hidden = t.dataset.hv !== 'karte';
-      $('#hv-liste').hidden = t.dataset.hv !== 'liste';
-      note(t.dataset.hv === 'karte' ? 'verlauf-karte' : 'verlauf');
+      const zurKarte = t.dataset.hv === 'karte';
+      $('#hv-karte').hidden = !zurKarte;
+      $('#hv-liste').hidden = zurKarte;
+      t.dataset.hv = zurKarte ? 'liste' : 'karte';
+      $('span', t).textContent = zurKarte ? 'Zurück zur Liste' : 'Alle Touren auf der Karte';
+      note(zurKarte ? 'verlauf-karte' : 'verlauf');
     }
     if (t.dataset.cand) {
       st.cand = t.dataset.cand;
@@ -1282,15 +1284,15 @@
       ['Keine Rückmeldung zu entdeckten Kacheln', '„+9 neue Kacheln“ und das größte Quadrat'],
     ], try: 'Tippe <b>Fertig</b>.' },
     verlauf: { t: 'Verlauf', q: 'Wo bin ich gefahren?', c: [
-      ['Nur eine Liste. Wo man gefahren ist, zeigt die Karte nur Tour für Tour', 'Umschalter „Liste | Karte". Die Karte zeigt alle Spuren und entdeckte Kacheln'],
+      ['Nur eine Liste. Wo man gefahren ist, zeigt die Karte nur Tour für Tour', 'Knopf „Alle Touren auf der Karte". Die Karte zeigt alle Spuren und entdeckte Kacheln'],
       ['Eine lange Karte, „Letzte Touren" obwohl es alle sind', 'Nach Monaten gruppiert, mit Mini-Karte'],
       ['„TL 68" ohne Erklärung', '„locker / mittel / hart". Die Zahl in den Details'],
       ['Import nur im leeren Zustand oder tief in Mehr', '+ oben rechts, Suche daneben'],
-    ], try: 'Schalte auf <b>Karte</b> oder tippe eine Tour.' },
+    ], try: 'Tippe <b>Alle Touren auf der Karte</b> oder eine Tour.' },
     'verlauf-karte': { t: 'Verlauf als Karte', q: 'Wo war ich überall?', c: [
       ['Kacheln-Layer als Schalter auf der Planungskarte', 'Gehört zur Historie: hier mit allen Spuren und Zählern'],
       ['Tourspur nur „auf Zuruf" einzeln aus der Liste', 'Alle Spuren auf einmal, Tippen öffnet die Tour'],
-    ], try: 'Zurück auf <b>Liste</b>.' },
+    ], try: 'Tippe <b>Zurück zur Liste</b>.' },
     tour: { t: 'Tour', q: 'Was hat die Fahrt gebracht?', c: [
       ['10 Abschnitte untereinander, Coach mit Entkopplung Pe:Hr und Verlässlichkeit', 'Karte, vier Zahlen, ein Satz zum Plan. „Alle Werte" klappt die Details auf'],
       ['„Auf der Karte zeigen" vs. „Auf der Karte öffnen"', 'Ein Wort, hinter ⋮'],
