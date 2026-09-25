@@ -374,10 +374,12 @@ fun TrailscapeApp() {
                 // Zurueckgeste des Systems spult denselben Uebergang
                 // rueckwaerts ab (Predictive back).
                 enterTransition = {
-                    if (targetState.destination.route == MORE_ROUTE) {
-                        M3Transitions.sharedAxisXEnter(forward = true, density)
-                    } else {
-                        M3Transitions.topLevelEnter()
+                    when (targetState.destination.route) {
+                        MORE_ROUTE -> M3Transitions.sharedAxisXEnter(forward = true, density)
+                        // Die Karte blendet nur ein; ihr Blatt faehrt selbst
+                        // von unten herauf (siehe `MapScreen.kt`).
+                        TopLevelDestination.MAP.route -> M3Transitions.topLevelEnter(scale = false)
+                        else -> M3Transitions.topLevelEnter()
                     }
                 },
                 exitTransition = {
@@ -388,10 +390,12 @@ fun TrailscapeApp() {
                     }
                 },
                 popEnterTransition = {
-                    if (initialState.destination.route == MORE_ROUTE) {
-                        M3Transitions.sharedAxisXEnter(forward = false, density)
-                    } else {
-                        M3Transitions.topLevelEnter()
+                    when {
+                        initialState.destination.route == MORE_ROUTE ->
+                            M3Transitions.sharedAxisXEnter(forward = false, density)
+                        targetState.destination.route == TopLevelDestination.MAP.route ->
+                            M3Transitions.topLevelEnter(scale = false)
+                        else -> M3Transitions.topLevelEnter()
                     }
                 },
                 popExitTransition = {

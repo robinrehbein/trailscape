@@ -145,13 +145,21 @@ object M3Transitions {
 
     // ------------------------------------------------------------ Top level
 
-    /** Tabwechsel: das neue Ziel blendet ein und wächst von 92 % auf 100 %. */
-    fun topLevelEnter(): EnterTransition =
-        fadeIn(tween(IncomingMillis, delayMillis = OutgoingMillis, easing = LinearOutSlowInEasing)) +
+    /**
+     * Tabwechsel: das neue Ziel blendet ein und wächst von 92 % auf 100 %.
+     * Mit [scale] = false nur das Einblenden — für die Karte, deren Blatt
+     * selbst über den unteren Rand hereinfährt; eine wachsende Karte
+     * darunter wäre eine zweite, widersprechende Bewegung.
+     */
+    fun topLevelEnter(scale: Boolean = true): EnterTransition {
+        val fade = fadeIn(tween(IncomingMillis, delayMillis = OutgoingMillis, easing = LinearOutSlowInEasing))
+        if (!scale) return fade
+        return fade +
             scaleIn(
                 tween(IncomingMillis, delayMillis = OutgoingMillis, easing = LinearOutSlowInEasing),
                 initialScale = FadeThroughScale,
             )
+    }
 
     /** Tabwechsel: das alte Ziel blendet schnell und vollständig aus. */
     fun topLevelExit(): ExitTransition =
