@@ -1,6 +1,6 @@
 # Datenschutzerklärung — Trailscape
 
-**Stand: 19. August 2026** · gilt für die Android-App Trailscape
+**Stand: 25. September 2026** · gilt für die Android-App Trailscape
 (`io.github.robinrehbein.trailscape`), verteilt als APK über die
 [GitHub-Releases](https://github.com/robinrehbein/trailscape/releases) dieses
 Projekts.
@@ -61,6 +61,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Health-Sync-Stand | SharedPreferences (`trailscape.healthsync`) | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird |
 | Offline-Karten | `<filesDir>/mbgl-offline.db` | heruntergeladene Kartenkacheln der von dir gewählten Regionen |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
+| Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
 | Zum Teilen erzeugte GPX-Dateien | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
 
 Gesundheitsdaten aus Health Connect (Puls, Ruhepuls, HRV, Schlaf, VO₂max)
@@ -155,9 +156,38 @@ Teilen-Menü weitergeben oder verwerfen (löscht die Datei). **Automatisch
 gesendet wird nichts.** Wer nichts tut, behält den Bericht auf dem Gerät.
 
 Dasselbe gilt für *Mehr → Über → Problem melden*: Der Text (App-Version,
-Gerät, Android-Version und, nur wenn du es ankreuzt, die Diagnose des letzten
-Health-Syncs) wird dir vorher gezeigt, und du entscheidest, ob und wohin er
-geht.
+Gerät, Android-Version, die technische Diagnose — siehe unten — und, nur wenn
+du es ankreuzt, die Diagnose des letzten Health-Syncs) wird dir vorher
+gezeigt, und du entscheidest, ob und wohin er geht.
+
+### Diagnose-Log
+
+Damit sich Fehler wie „die Aufzeichnung hat unterwegs aufgehört" überhaupt
+nachvollziehen lassen, führt die App ein kleines technisches Protokoll im
+privaten App-Verzeichnis (`<filesDir>/diag/`, zwei Dateien zu je höchstens
+64 KB — ist die Grenze erreicht, fallen die ältesten Einträge weg;
+`core/…/DiagLog.kt`, `app/…/feedback/AppDiagnostics.kt`).
+
+- **Was drinsteht:** Zeitpunkt, ein fester Ereignisname (z. B.
+  `GPS_START_FAILED`, `SYNC_PUSH_FAILED`, `JOURNAL_RECOVERED`), Zahlen
+  (HTTP-Statuscode, Anzahl Punkte oder Touren, Android-Version) und bei
+  Fehlern der Name der Fehlerklasse (z. B. `java.net.SocketTimeoutException`).
+  Beim Start trägt die App zusätzlich ein, wie Android frühere App-Prozesse
+  beendet hat (ab Android 11, `ApplicationExitInfo`: Grund, Wichtigkeit,
+  Zeitpunkt).
+- **Was nicht drinsteht:** keine Standorte, keine Touren oder Tourennamen,
+  keine Gesundheitswerte, keine Server-Adressen, Dateipfade, Zugangsdaten oder
+  Fehlermeldungstexte. Das ist nicht nur Vorsatz, sondern Bauart: Die
+  Protokoll-Funktion nimmt gar keinen Freitext entgegen, nur feste
+  Ereignisnamen und Zahlen.
+- **Wohin es geht:** nirgendwohin von selbst. Im Problembericht ist
+  „Technische Diagnose anhängen" **vorausgewählt** — du siehst die Einträge im
+  Bericht, bevor du ihn abschickst, und kannst den Haken entfernen. Ein
+  Absturzbericht enthält die letzten Einträge ebenfalls, mit demselben
+  abwählbaren Haken.
+- **Löschen:** im Problembericht über „Diagnose-Protokoll löschen", sonst wie
+  alle App-Daten über *Daten löschen* in den Android-Einstellungen oder die
+  Deinstallation.
 
 ---
 
@@ -184,10 +214,11 @@ Was du dazu wissen solltest:
   Gerätewechsel **nicht** automatisch mit — dafür ist der manuelle
   Backup-Export da (*Mehr → Daten & Backup*).
 - Ebenfalls ausgenommen sind die laufende Aufzeichnung, die heruntergeladenen
-  Offline-Karten und -Routing-Kacheln und die Absturzberichte (siehe
-  `res/xml/backup_rules.xml` und `res/xml/data_extraction_rules.xml`).
-  Absturzberichte stehen ausdrücklich auf dieser Ausschlussliste, damit sie
-  das Gerät wirklich nur dann verlassen, wenn du sie selbst verschickst.
+  Offline-Karten und -Routing-Kacheln, die Absturzberichte und das
+  Diagnose-Log (siehe `res/xml/backup_rules.xml` und
+  `res/xml/data_extraction_rules.xml`). Absturzberichte und Diagnose-Log
+  stehen ausdrücklich auf dieser Ausschlussliste, damit sie das Gerät wirklich
+  nur dann verlassen, wenn du sie selbst verschickst.
 - Du kannst das Backup vollständig abschalten: in den Android-Einstellungen
   unter *System → Sicherung* (Bezeichnung je nach Hersteller). Dann bleibt
   alles ausschließlich lokal — dann aber bitte an den manuellen
@@ -211,8 +242,8 @@ Anfrage an jemanden:
   JSON-Datei. Einzelne Touren lassen sich zusätzlich als GPX teilen.
 - **Löschung** — einzelne Touren in der Tourenliste löschen; alles auf einmal
   über die Android-Einstellungen (*Apps → Trailscape → Speicher → Daten
-  löschen*) oder durch Deinstallation der App. Damit ist auch der letzte
-  Absturzbericht weg. Ist der optionale Selfhost-Sync eingerichtet, wird das
+  löschen*) oder durch Deinstallation der App. Damit sind auch der letzte
+  Absturzbericht und das Diagnose-Log weg. Ist der optionale Selfhost-Sync eingerichtet, wird das
   Löschen einer Tour beim nächsten Abgleich an **deinen** Server weitergegeben
   (als Löschvermerk, sog. Tombstone), damit die Tour nicht beim übernächsten
   Sync von dort zurückkehrt — der Server ist deiner, gelöscht wird also

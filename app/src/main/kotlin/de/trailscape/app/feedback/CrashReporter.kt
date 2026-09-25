@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.core.content.pm.PackageInfoCompat
+import de.trailscape.core.DiagEvent
+import de.trailscape.core.DiagLog
 import java.io.File
 import java.time.ZoneId
 
@@ -29,6 +31,12 @@ import java.time.ZoneId
  *    Schreiben des Berichts darf den urspruenglichen Absturz nicht verdecken.
  *  * am Ende **immer** an den vorherigen Handler weiterreichen — Android soll
  *    den Prozess wie gewohnt beenden. Kein „App am Leben halten"-Trick.
+ *  * **nie auf eine Sperre warten**: Der Absturz notiert sich im
+ *    Diagnose-Log und nimmt dessen juengste Eintraege in den Bericht mit —
+ *    beides nur per `tryLock` mit kurzer Frist ([DiagLog.tryLog],
+ *    [DiagLog.snapshotForCrash]). Haelt ein anderer Thread die Sperre (oder
+ *    ist er mitten im Schreiben gestorben), entsteht der Bericht eben ohne
+ *    Diagnose statt gar nicht.
  *
  * ## Datenschutz
  * Der Bericht enthaelt ausschliesslich Technik (siehe `ReportFormat.kt`):
@@ -97,6 +105,8 @@ object CrashReporter {
         thread: Thread,
         throwable: Throwable,
     ) {
+        DiagLog.shared.tryLog(DiagEvent.CRASH, error = throwable)
+        val diagLines = DiagLog.shared.snapshotForCrash()?.let { selectDiagLines(it) }
         val runtime = Runtime.getRuntime()
         val report = buildCrashReport(
             info = deviceInfo,
@@ -108,6 +118,7 @@ object CrashReporter {
                 totalBytes = runtime.totalMemory(),
                 maxBytes = runtime.maxMemory(),
             ),
+            diagLines = diagLines,
         )
         file.parentFile?.mkdirs()
         file.writeText(report, Charsets.UTF_8)

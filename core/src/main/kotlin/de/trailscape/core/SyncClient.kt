@@ -286,10 +286,14 @@ private fun fetchRemoteRides(client: HttpClient, config: SyncConfig): List<Remot
             ),
         )
     } catch (e: Exception) {
+        DiagLog.shared.log(DiagEvent.SYNC_LIST_FAILED, error = e)
         throw Exception("Sync-Server nicht erreichbar.")
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+        // Nur der Statuscode — die Meldung unten nennt keine Daten, aber die
+        // URL des eigenen Servers gehoert ebenso wenig ins Diagnose-Log.
+        DiagLog.shared.log(DiagEvent.SYNC_LIST_FAILED, code = response.statusCode)
         if (response.statusCode == 401) {
             throw Exception("Token wird vom Server abgelehnt.")
         }
@@ -326,12 +330,14 @@ private fun pushRide(client: HttpClient, config: SyncConfig, ride: Ride) {
             ),
         )
     } catch (e: Exception) {
+        DiagLog.shared.log(DiagEvent.SYNC_PUSH_FAILED, error = e)
         throw Exception(
             "Hochladen der Tour \"${ride.name}\" fehlgeschlagen: Sync-Server nicht erreichbar.",
         )
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+        DiagLog.shared.log(DiagEvent.SYNC_PUSH_FAILED, code = response.statusCode)
         throw Exception(
             "Hochladen der Tour \"${ride.name}\" fehlgeschlagen (HTTP ${response.statusCode}).",
         )
@@ -348,12 +354,14 @@ private fun deleteRemoteRide(client: HttpClient, config: SyncConfig, id: String)
             ),
         )
     } catch (e: Exception) {
+        DiagLog.shared.log(DiagEvent.SYNC_DELETE_FAILED, error = e)
         throw Exception("Löschen einer Tour auf dem Server fehlgeschlagen: Sync-Server nicht erreichbar.")
     }
 
     // 404 gilt als Erfolg: Die Tour ist auf dem Server bereits weg — genau
     // das sollte die Loeschung erreichen.
     if ((response.statusCode < 200 || response.statusCode >= 300) && response.statusCode != 404) {
+        DiagLog.shared.log(DiagEvent.SYNC_DELETE_FAILED, code = response.statusCode)
         throw Exception("Löschen einer Tour auf dem Server fehlgeschlagen (HTTP ${response.statusCode}).")
     }
 }
@@ -376,12 +384,14 @@ private fun pullRide(client: HttpClient, config: SyncConfig, entry: RemoteRideSu
             ),
         )
     } catch (e: Exception) {
+        DiagLog.shared.log(DiagEvent.SYNC_PULL_FAILED, error = e)
         throw Exception(
             "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen: Sync-Server nicht erreichbar.",
         )
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+        DiagLog.shared.log(DiagEvent.SYNC_PULL_FAILED, code = response.statusCode)
         throw Exception(
             "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen (HTTP ${response.statusCode}).",
         )
@@ -390,6 +400,7 @@ private fun pullRide(client: HttpClient, config: SyncConfig, entry: RemoteRideSu
     val data = try {
         Json.parseToJsonElement(response.body)
     } catch (e: Exception) {
+        DiagLog.shared.log(DiagEvent.SYNC_PULL_FAILED, error = e)
         throw Exception(
             "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen: ungültige Daten vom Server.",
         )
@@ -469,6 +480,12 @@ fun syncRides(
     }
 
     replaceTombstones(plan.tombstonesAfterSync)
+
+    // Nur Zaehler: Hilft bei „Sync meldet Erfolg, aber es kommt nichts an".
+    DiagLog.shared.log(
+        DiagEvent.SYNC_DONE,
+        count = (plan.pushNew.size + plan.pushUpdated.size + plan.pullNew.size + plan.pullUpdated.size).toLong(),
+    )
 
     return SyncResult(
         pushed = plan.pushNew.size + plan.pushUpdated.size,

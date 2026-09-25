@@ -5,12 +5,27 @@ name: Build
 # deshalb ohne Pfadfilter: es gibt keinen zweiten Quellbaum mehr, der einen
 # separaten Lauf ausloesen koennte.
 #
-# Nur push-Trigger (kein pull_request): Push-Laeufe erscheinen ueber die
-# Commit-SHA trotzdem als Checks am PR, und der doppelte Lauf pro Push auf
-# den Entwicklungs-Branch entfaellt. Fork-PRs gibt es in diesem Solo-Repo nicht.
+# Trigger:
+#  * push auf main und claude/** — main veroeffentlicht (Job `release`),
+#    claude/** baut und testet nur. Ein claude/**-Branch ohne PR wird so
+#    trotzdem geprueft.
+#  * pull_request gegen main — damit auch PRs von Branches ausserhalb von
+#    claude/** (z. B. welle1/*) Tests bekommen, bevor sie auf main landen.
+#  * workflow_dispatch — manueller Lauf; baut und testet, veroeffentlicht
+#    aber nicht (siehe `release`).
+#
+# SICHERHEITSREGEL: Alles, was Secrets anfasst (Release-Signierung) oder
+# etwas veroeffentlicht (Releases, Tag `latest`), laeuft AUSSCHLIESSLICH bei
+# einem push auf main. Die Bedingung steht an jeder betroffenen Stelle
+# einzeln (`github.event_name == 'push' && github.ref == 'refs/heads/main'`),
+# nicht nur am Job: Ein PR-Lauf soll nie mit dem echten Schluessel signierte
+# APKs als Artefakt erzeugen, und ein manueller Lauf auf main soll keine
+# debug-signierte APK nach `latest` schieben.
 on:
   push:
     branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +33,19 @@ permissions:
 
 jobs:
   build:
+    # Doppelte Laeufe vermeiden: Ein PR von einem claude/**-Branch dieses
+    # Repos wird bereits vom push-Lauf auf denselben Commit gebaut, und
+    # dieser Lauf erscheint ueber die Commit-SHA als Check am PR. Der
+    # pull_request-Lauf wird dann uebersprungen. Bewusst per Bedingung und
+    # nicht per `concurrency`: Eine Concurrency-Gruppe wuerde einen der
+    # beiden Laeufe abbrechen (roter/grauer Haken am PR) und koennte auf
+    # main wartende Laeufe verwerfen — und damit ein versioniertes Release.
+    # PRs aus Forks (gibt es hier nicht, aber sicher ist sicher) laufen
+    # immer, weil fuer sie kein push-Lauf existiert.
+    if: >-
+      github.event_name != 'pull_request'
+      || !startsWith(github.head_ref, 'claude/')
+      || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       # `submodules: true` ist Pflicht, nicht Bequemlichkeit: Das Modul
@@ -37,10 +65,16 @@ jobs:
           java-version: "21"
           cache: gradle
 
+      # Nur bei push auf main (siehe SICHERHEITSREGEL oben): PR-, Branch- und
+      # manuelle Laeufe bekommen den Schluessel gar nicht erst zu sehen und
+      # bauen mit der Debug-Signierung — gruen, aber als Update fuer die
+      # verteilte App nicht installierbar, und genau so soll es sein.
+      #
       # `if: ${{ secrets.* }}` ist in GitHub Actions nicht erlaubt, darum die
-      # Pruefung im Skript. Ohne Secret (z. B. PRs aus Forks) faellt der Build
-      # bewusst auf die Debug-Signierung zurueck und bleibt gruen.
+      # Pruefung auf ein fehlendes Secret im Skript. Ohne Secret faellt auch
+      # ein main-Lauf bewusst auf die Debug-Signierung zurueck und bleibt gruen.
       - name: Signierschluessel bereitstellen
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
@@ -52,9 +86,13 @@ jobs:
             echo "Kein RELEASE_KEYSTORE_BASE64 hinterlegt — Build nutzt die Debug-Signierung."
           fi
 
-      - name: Tests, Release-APKs und Release-AABs
+      - name: Tests, Screenshots, Release-APKs und Release-AABs
         env:
-          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          # Das Passwort nur bei push auf main — sonst leer. Ohne
+          # RELEASE_KEYSTORE_PATH (Schritt oben uebersprungen) wuerde Gradle es
+          # zwar ohnehin ignorieren, aber ein Secret gehoert gar nicht erst in
+          # die Umgebung eines PR-Laufs.
+          RELEASE_KEYSTORE_PASSWORD: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && secrets.RELEASE_KEYSTORE_PASSWORD || '' }}
         # :app:testDebugUnitTest deckt die plattformfreien Teile von :app ab
         # (Aufzeichnungs-Journal); AGP legt Unit-Test-Tasks nur fuer die
         # Debug-Variante an, ein `:app:test` gaebe es sonst nicht.
@@ -81,11 +119,34 @@ jobs:
         # dieses Projekts ist und bleibt der direkte APK-Download von der
         # Releases-Seite. Ein .aab ist auf einem Geraet nicht installierbar,
         # es ist ausschliesslich ein Upload-Artefakt fuer die Play Console.
+        #
+        # `-Pscreenshots` schaltet die Roborazzi-Screenshot-Tests
+        # (app/src/test/.../ui/ScreenshotTest.kt) im selben Testlauf zu, statt
+        # sie in einem zweiten Gradle-Aufruf nachzuholen: Die Eigenschaft
+        # aendert die System-Properties der Test-Task, ein zweiter Aufruf
+        # wuerde also ALLE Unit-Tests von :app noch einmal ausfuehren. Die
+        # Tests nehmen nur auf (record), sie vergleichen noch nicht mit
+        # Referenzbildern — ein Fehlschlag heisst hier "Screen stuerzt beim
+        # Rendern ab oder ein angetippter Knopf fehlt", nicht "Pixel anders".
         run: >-
           ./gradlew --no-daemon
-          :core:test :app:testDebugUnitTest
+          :core:test :app:testDebugUnitTest -Pscreenshots
           :app:assembleRelease :app:bundleRelease
           :wear:assembleRelease :wear:bundleRelease
+
+      # Die Screenshots zur Sichtpruefung, bei jedem Lauf — `always()`, weil
+      # gerade ein roter Lauf die Bilder bis zum Absturz braucht. `warn`
+      # statt `error`: Scheitert der Build vor den Tests (z. B. beim
+      # Kompilieren), gibt es keine Bilder, und das soll nicht den
+      # eigentlichen Fehler ueberdecken. 14 Tage genuegen fuer einen
+      # Blick darauf; die Bilder entstehen bei jedem Lauf neu.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trailscape-screenshots
+          path: app/build/outputs/roborazzi/
+          if-no-files-found: warn
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:
@@ -145,7 +206,11 @@ jobs:
   #    keine Versionsnummer, und ein blosser Dateivergleich ist nicht
   #    moeglich.
   #
-  # Branch-Pushes bauen und testen zwar, veroeffentlichen aber nichts.
+  # Branch-Pushes, Pull Requests und manuelle Laeufe bauen und testen zwar,
+  # veroeffentlichen aber nichts. Die Bedingung prueft deshalb auch das
+  # Ereignis und nicht nur den Ref: Ein workflow_dispatch auf main traegt
+  # ebenfalls `refs/heads/main`, baut aber ohne Release-Signierung (siehe
+  # `build`) — dessen debug-signierte APK darf nie nach `latest`.
   #
   # Absichtlich OHNE das Wear-Artefakt `trailscape-wear-apk`: Der Wear-OS-
   # Spike (Modul :wear, siehe docs/wear-spike.md) wird nur per `adb install`
@@ -179,7 +244,7 @@ jobs:
   # hochzuladen (nur EINMALIG bei der Erstanlage moeglich, danach nie wieder).
   release:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

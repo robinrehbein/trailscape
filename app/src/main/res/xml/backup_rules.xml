@@ -36,6 +36,11 @@
       (`PRIVACY.md`), dass Absturzberichte das Geraet nur verlassen, wenn der
       Nutzer sie selbst verschickt — ueber Auto Backup taeten sie es sonst
       stillschweigend.
+    * `diag/` — das Diagnose-Log (`core/DiagLog.kt`, `feedback/AppDiagnostics.kt`).
+      Dieselbe Begruendung wie bei `crash/`: eine Momentaufnahme dieses
+      Geraets, die es laut `PRIVACY.md` nur verlaesst, wenn der Nutzer einen
+      Bericht selbst verschickt. Auf einem anderen Geraet waere es zudem
+      irrefuehrend (fremde Ereignisse im naechsten Problembericht).
     * `trailscape_prefs.xml` (SharedPreferences) — darin liegen das
       Sync-Zugangstoken im Klartext (`trailscape.sync`, siehe
       `core/SyncClient.kt`) und die lokale Vitalhistorie mit 400 Tagen
@@ -51,6 +56,7 @@
 <full-backup-content>
     <exclude domain="file" path="recording" />
     <exclude domain="file" path="crash" />
+    <exclude domain="file" path="diag" />
     <exclude domain="file" path="mbgl-offline.db" />
     <exclude domain="file" path="mbgl-offline.db-wal" />
     <exclude domain="file" path="mbgl-offline.db-shm" />

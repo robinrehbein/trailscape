@@ -172,4 +172,88 @@ class ReportFormatTest {
         assertEquals("2026-08-09 12:00:00", formatReportTimestamp(epochMs, ZoneId.of("UTC")))
         assertEquals("2026-08-09 14:00:00", formatReportTimestamp(epochMs, ZoneId.of("Europe/Berlin")))
     }
+
+    // ------------------------------------------------------------------
+    // Diagnose-Log im Bericht
+    // ------------------------------------------------------------------
+
+    private val diag = listOf(
+        "2026-08-09T12:00:00Z APP_START code=35",
+        "2026-08-09T12:05:00Z GPS_START_OK",
+        "2026-08-09T12:40:00Z GPS_RESUBSCRIBE n=95",
+    )
+
+    @Test
+    fun `Diagnose-Zeilen stehen neueste zuerst und werden auf die Hoechstzahl gekuerzt`() {
+        assertEquals(diag.reversed(), selectDiagLines(diag))
+        val many = (1..500).map { "line $it" }
+        val selected = selectDiagLines(many, maxLines = 10)
+        assertEquals(10, selected.size)
+        assertEquals("line 500", selected.first())
+        assertEquals("line 491", selected.last())
+    }
+
+    @Test
+    fun `Problembericht haengt die Diagnose nur an wenn sie gewaehlt ist`() {
+        val without = buildProblemReport(info, "2026-08-09 14:03:11", diagLines = null)
+        assertFalse(without.contains(DIAG_SECTION_MARKER))
+
+        val with = buildProblemReport(info, "2026-08-09 14:03:11", diagLines = selectDiagLines(diag))
+        assertContains(with, DIAG_SECTION_MARKER + diag[2] + "\n" + diag[1] + "\n" + diag[0] + "\n")
+        // Die Diagnose steht am Ende — hinter der Health-Diagnose.
+        val both = buildProblemReport(
+            info,
+            "2026-08-09 14:03:11",
+            healthDiagnostics = listOf("Health: 3 Trainings"),
+            diagLines = diag,
+        )
+        assertTrue(both.indexOf("Health-Sync-Diagnose") < both.indexOf(DIAG_SECTION_MARKER))
+    }
+
+    @Test
+    fun `gewaehlte aber leere Diagnose sagt das ausdruecklich`() {
+        val report = buildProblemReport(info, "2026-08-09 14:03:11", diagLines = emptyList())
+        assertContains(report, DIAG_SECTION_MARKER + DIAG_EMPTY_NOTE)
+    }
+
+    @Test
+    fun `Absturzbericht mit Diagnose behaelt seinen Titel`() {
+        val plain = crashReport()
+        val withDiag = buildCrashReport(
+            info = info,
+            timestamp = "2026-08-09 14:03:11",
+            threadName = "main",
+            stackTrace = "java.lang.IllegalStateException: kaputt\n\tat A.b(A.kt:1)",
+            memory = memory,
+            diagLines = selectDiagLines(diag),
+        )
+        assertTrue(hasDiagSection(withDiag))
+        assertFalse(hasDiagSection(plain))
+        assertEquals(crashIssueTitleFromReport(plain), crashIssueTitleFromReport(withDiag))
+        assertEquals("Absturz: IllegalStateException: kaputt", crashIssueTitleFromReport(withDiag))
+    }
+
+    @Test
+    fun `abgewaehlte Diagnose schneidet den Abschnitt spurlos ab`() {
+        val plain = crashReport()
+        val withDiag = buildCrashReport(
+            info = info,
+            timestamp = "2026-08-09 14:03:11",
+            threadName = "main",
+            stackTrace = "java.lang.IllegalStateException: kaputt\n\tat A.b(A.kt:1)",
+            memory = memory,
+            diagLines = diag,
+        )
+        assertEquals(plain, withoutDiagSection(withDiag))
+        assertEquals(plain, withoutDiagSection(plain))
+    }
+
+    @Test
+    fun `im gekuerzten GitHub-Link fallen die aeltesten Diagnose-Zeilen weg`() {
+        val lines = (1..300).map { i -> "2026-08-09T12:00:00Z GPS_RESUBSCRIBE n=$i" }
+        val report = buildProblemReport(info, "2026-08-09 14:03:11", diagLines = selectDiagLines(lines))
+        val body = buildIssueBody(report, "Technische Angaben", maxChars = 2_000)
+        assertContains(body, "n=300\n")
+        assertFalse(body.contains("n=151\n"))
+    }
 }
