@@ -243,8 +243,8 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                                 // Health Connect zeigt den Dialog nach zwei
                                 // Ablehnungen nicht mehr — dann bleibt nur der
                                 // Weg ueber die Einstellungen.
-                                "Ohne Freigabe bleibt es bei 30 Tagen. Erlauben lässt sie sich " +
-                                    "in Health Connect unter „App-Berechtigungen → Trailscape“."
+                                "Ohne Freigabe bleiben ältere Fahrten außen vor. Erlauben lässt sie " +
+                                    "sich in Health Connect unter „App-Berechtigungen → Trailscape“."
                             },
                         )
                     } catch (e: HealthSyncException) {
@@ -310,8 +310,12 @@ fun HealthCardContent(appViewModel: AppViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
     }
 
-    val routesMissing = currentReport?.routesMissing ?: 0
-    if (routesMissing > 0) {
+    // Nur die Touren, bei denen die Freigabe tatsaechlich hilft: Fuer die
+    // uebrigen ohne Route (Rolle, Aufzeichnung ohne GPS) hat Health Connect
+    // gar keine Routendaten — die Zusammenfassung oben nennt sie getrennt
+    // „ohne GPS-Daten", und eine Freigabe-Empfehlung waere dort irrefuehrend.
+    val routesLocked = currentReport?.routeConsentPending?.size ?: 0
+    if (routesLocked > 0) {
         NoticeBox(
             icon = Icons.Filled.LocationOn,
             color = warningColor,
@@ -320,8 +324,8 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
             // ausserdem ganz, der Pfad lief ungebremst in den naechsten
             // Satzteil.
-            text = "$routesMissing " +
-                "${if (routesMissing == 1) "Tour kam" else "Touren kamen"} ohne Route. " +
+            text = "$routesLocked " +
+                "${if (routesLocked == 1) "Tour kam" else "Touren kamen"} ohne Route. " +
                 "Erlaube in Health Connect „App-Berechtigungen → Trailscape → " +
                 "Trainingsrouten“ dauerhaft.",
         )
@@ -378,10 +382,11 @@ internal fun HealthSyncSummary(report: HealthSyncReport) {
 /**
  * Hinweis samt Knopf, wenn die Historien-Freigabe fehlt.
  *
- * Erklaert in einem Satz, was sie bringt — ohne sie gibt Health Connect nur
- * 30 Tage heraus, mit ihr holt Trailscape einmalig bis zu 12 Monate
- * Radfahrten —, damit die Nutzerin nicht blind einer weiteren Berechtigung
- * zustimmen muss. Sonst gibt es keinen Ort, an dem diese Freigabe
+ * Erklaert in einem Satz, was sie bringt — ohne sie gibt Health Connect
+ * nichts heraus, was mehr als 30 Tage vor dem Verbinden liegt; mit ihr holt
+ * Trailscape einmalig bis zu 12 Monate Radfahrten —, damit die Nutzerin nicht
+ * blind einer weiteren Berechtigung zustimmen muss. Bewusst nicht „nur die
+ * letzten 30 Tage": Was nach dem Verbinden dazukommt, bleibt ohnehin lesbar. Sonst gibt es keinen Ort, an dem diese Freigabe
  * nachzuholen waere; ohne den Knopf bliebe sie eine versteckte Funktion.
  */
 @Composable
@@ -390,9 +395,10 @@ internal fun HealthHistoryNotice(enabled: Boolean, onRequest: () -> Unit) {
         icon = Icons.Filled.History,
         color = MaterialTheme.colorScheme.primary,
         title = "Ältere Fahrten",
-        text = "Ohne Freigabe gibt Health Connect nur die letzten 30 Tage heraus. " +
-            "Mit Freigabe holt Trailscape einmalig deine Radfahrten der letzten " +
-            "12 Monate — Training und Form stimmen dann vom ersten Tag an.",
+        text = "Ohne Freigabe sieht Trailscape keine Fahrten, die mehr als 30 Tage vor " +
+            "dem Verbinden liegen. Mit Freigabe holt Trailscape einmalig deine Radfahrten " +
+            "der letzten 12 Monate — Training und Form starten dann mit deiner " +
+            "Vorgeschichte statt bei null.",
     )
     Spacer(modifier = Modifier.height(8.dp))
     SettingsSecondaryButton(

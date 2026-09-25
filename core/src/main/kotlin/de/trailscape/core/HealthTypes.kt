@@ -286,8 +286,10 @@ data class HealthSleepSession(
 /**
  * Ergebnis eines Import-Laufs — fuer Diagnose und UI-Rueckmeldung.
  *
- * Wird von [HealthSyncService.importWithReport] geliefert. Weder [imported]
- * noch [mergedRides] sind gespeichert; das uebernimmt der Aufrufer.
+ * Wird von [HealthSyncService.importWithReport] geliefert. Ohne
+ * `persist`-Rueckruf sind weder [imported] noch [mergedRides] gespeichert; das
+ * uebernimmt der Aufrufer. Mit Rueckruf ist beides schon gespeichert, siehe
+ * [persisted].
  */
 data class HealthSyncReport(
     /** Betrachteter Zeitraum. */
@@ -334,10 +336,16 @@ data class HealthSyncReport(
     val vitals: List<VitalsTypeDiagnostics> = emptyList(),
     /**
      * Ob dieser Lauf der einmalige Lang-Import mit Historien-Freigabe war
-     * ([healthSyncHistoryWindowMs]). Der Aufrufer braucht das, um bei einem
-     * gescheiterten Speichern auch den Merker zurueckzurollen.
+     * ([healthSyncHistoryWindowMs]) — fuer Diagnose und Rueckmeldung.
      */
     val historyImport: Boolean = false,
+    /**
+     * Ob die Touren schon ueber den `persist`-Rueckruf gespeichert sind. Dann
+     * tragen [imported] und [mergedRides] **keine Trackpunkte** mehr — nur
+     * noch ID, Name und Kennzahlen fuer Anzeige und Nachlauf; wer sie noch
+     * einmal speicherte, ueberschriebe die Touren mit leeren Spuren.
+     */
+    val persisted: Boolean = false,
 ) {
     /** Touren ohne Route, fuer die Health Connect auch keine Routendaten hat. */
     val routesWithoutData: Int

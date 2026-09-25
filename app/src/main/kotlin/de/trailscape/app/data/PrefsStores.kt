@@ -6,6 +6,7 @@ import de.trailscape.core.HealthSyncStore
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.healthSyncHistoryImportKey
+import de.trailscape.core.healthSyncHistoryProgressKey
 import de.trailscape.core.healthSyncStorageKey
 import de.trailscape.core.trainingPlanStorageKey
 
@@ -64,8 +65,9 @@ class PrefsKeyValueStore(private val prefs: SharedPreferences) : KeyValueStore {
 }
 
 /**
- * Persistiert den Zeitstempel des letzten Health-Connect-Imports und den
- * Merker des einmaligen Lang-Imports (siehe `HealthSyncStore.historyImportDone`).
+ * Persistiert den Zeitstempel des letzten Health-Connect-Imports, den
+ * Merker des einmaligen Lang-Imports (siehe `HealthSyncStore.historyImportDone`)
+ * und dessen Fortschritt (`HealthSyncStore.historyImportedUntilMs`).
  *
  * `SharedPreferences` kennt kein nullable `Long` — `null` wird deshalb ueber
  * `contains(key)` abgebildet statt ueber einen Sentinel-Wert wie `-1`, damit
@@ -88,6 +90,24 @@ class PrefsHealthSyncStore(private val prefs: SharedPreferences) : HealthSyncSto
 
     override fun setHistoryImportDone(value: Boolean) {
         prefs.edit().putBoolean(healthSyncHistoryImportKey, value).apply()
+    }
+
+    override fun historyImportedUntilMs(): Long? =
+        if (prefs.contains(healthSyncHistoryProgressKey)) {
+            prefs.getLong(healthSyncHistoryProgressKey, 0L)
+        } else {
+            null
+        }
+
+    // `apply()` genuegt: Geht der letzte Stand bei einem harten Abbruch
+    // verloren, wird nur ein Abschnitt erneut gelesen — dessen Touren liegen
+    // dann schon auf der Platte und fallen als Duplikat heraus.
+    override fun setHistoryImportedUntilMs(value: Long?) {
+        if (value == null) {
+            prefs.edit().remove(healthSyncHistoryProgressKey).apply()
+        } else {
+            prefs.edit().putLong(healthSyncHistoryProgressKey, value).apply()
+        }
     }
 }
 

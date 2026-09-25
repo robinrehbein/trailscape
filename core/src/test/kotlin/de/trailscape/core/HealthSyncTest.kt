@@ -2,6 +2,7 @@ package de.trailscape.core
 
 import kotlinx.serialization.json.JsonArray
 import java.time.LocalDateTime
+import java.util.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -59,7 +60,18 @@ class HealthSyncTest {
         var permissionStatus: Map<HealthReadType, Boolean>? = null,
         var historyGranted: Boolean = false,
         var failHistory: Boolean = false,
+        /**
+         * Liefert [readWorkouts] nur die Workouts, deren Start im gefragten
+         * Fenster liegt (wie Health Connect)? Aus, damit die aelteren Tests
+         * unveraendert bleiben; die Abschnitts-Tests schalten es ein.
+         */
+        var filterByWindow: Boolean = false,
     ) : HealthGateway {
+        /** Alle Fenster, fuer die [readWorkouts] gefragt wurde, in Reihenfolge. */
+        val workoutWindows = mutableListOf<Pair<LocalDateTime, LocalDateTime>>()
+
+        /** Die Session-IDs jedes [readRoutesForSessions]-Aufrufs. */
+        val routeRequests = mutableListOf<Set<String>>()
         var requestCount = 0
         var nativeSessionCalls = 0
         var lastWorkoutFrom: LocalDateTime? = null
@@ -87,8 +99,10 @@ class HealthSyncTest {
         override fun readWorkouts(from: LocalDateTime, to: LocalDateTime): List<HealthWorkout> {
             lastWorkoutFrom = from
             lastWorkoutTo = to
+            workoutWindows.add(from to to)
             if (failWorkouts) throw IllegalStateException("workouts kaputt")
-            return workouts
+            if (!filterByWindow) return workouts
+            return workouts.filter { !it.start.isBefore(from) && !it.start.isAfter(to) }
         }
 
         override fun readExerciseSessionsNative(
@@ -112,6 +126,15 @@ class HealthSyncTest {
             from: LocalDateTime,
             to: LocalDateTime,
         ): HealthRouteReadResult = HealthRouteReadResult(readRoutes(from, to), consentRequired)
+
+        override fun readRoutesForSessions(
+            sessionIds: Set<String>,
+            from: LocalDateTime,
+            to: LocalDateTime,
+        ): HealthRouteReadResult {
+            routeRequests.add(sessionIds)
+            return super.readRoutesForSessions(sessionIds, from, to)
+        }
 
         override fun readPermissionStatus(): Map<HealthReadType, Boolean>? = permissionStatus
 
@@ -2000,7 +2023,8 @@ class HealthSyncTest {
 
         val report = serviceOf(gateway, now, store).importWithReport(existing = emptyList())
 
-        assertEquals(now.plusMs(-healthSyncHistoryWindowMs), gateway.lastWorkoutFrom)
+        assertEquals(now.plusMs(-healthSyncHistoryWindowMs), gateway.workoutWindows.first().first)
+        assertEquals(now, gateway.workoutWindows.last().second)
         assertTrue(report.historyImport)
         assertTrue(store.historyImportDone())
         assertTrue(report.debugLines.any { it.startsWith("Historie: freigegeben") })
@@ -2026,8 +2050,9 @@ class HealthSyncTest {
         gateway.historyGranted = true
         val mitFreigabe = at(2026, 8, 20, 12)
         val lang = serviceOf(gateway, mitFreigabe, store).importWithReport(existing = emptyList())
-        assertEquals(mitFreigabe.plusMs(-healthSyncHistoryWindowMs), gateway.lastWorkoutFrom)
+        assertEquals(mitFreigabe.plusMs(-healthSyncHistoryWindowMs), gateway.workoutWindows[1].first)
         assertTrue(lang.historyImport)
+        assertTrue(store.historyImportDone())
 
         // Danach nie wieder: Folge-Syncs laufen ab dem Zeitstempel.
         val danach = at(2026, 8, 21, 12)
@@ -2190,5 +2215,282 @@ class HealthSyncTest {
 
         val leer = serviceOf(FakeHealthGateway(), at(2026, 8, 10)).importWithReport(existing = emptyList())
         assertEquals("Keine neuen Touren", leer.summaryLine())
+    }
+
+    // -----------------------------------------------------------------------
+    // Lang-Import in Abschnitten: Speichern, Abbruch, Wiederaufnahme
+    // -----------------------------------------------------------------------
+
+    /** Eine Radfahrt von zwei Stunden, die um [start] beginnt. */
+    private fun fahrt(id: String, start: LocalDateTime): HealthWorkout =
+        cycling(id = id, start = start, end = start.plusMs(hours(2)))
+
+    /** Stellt die Standard-Zeitzone fuer [block] um (Sommerzeit-Tests). */
+    private fun <T> inZone(zone: String, block: () -> T): T {
+        val previous = TimeZone.getDefault()
+        TimeZone.setDefault(TimeZone.getTimeZone(zone))
+        try {
+            return block()
+        } finally {
+            TimeZone.setDefault(previous)
+        }
+    }
+
+    @Test
+    fun `Lang-Import - liest in Abschnitten von alt nach neu und speichert jeden sofort`() {
+        val now = at(2026, 8, 10, 12)
+        val slices = healthImportSlices(now.plusMs(-healthSyncHistoryWindowMs), now)
+        // Eine Fahrt je Abschnitt, jeweils in dessen Mitte.
+        val fahrten = slices.mapIndexed { i, (a, b) -> fahrt("alt$i", a.plusMs((dartEpochMs(b) - dartEpochMs(a)) / 2)) }
+        val gateway = FakeHealthGateway(historyGranted = true, filterByWindow = true, workouts = fahrten)
+        val store = InMemoryHealthSyncStore()
+        val gespeichert = mutableListOf<HealthSyncReport>()
+
+        val report = serviceOf(gateway, now, store).importWithReport(
+            existing = emptyList(),
+            loadRide = { null },
+            persist = { gespeichert.add(it) },
+        )
+
+        assertEquals(13, slices.size)
+        assertEquals(slices.size, gateway.workoutWindows.size)
+        for ((a, b) in slices.zipWithNext()) assertEquals(a.second, b.first)
+        assertEquals(now, slices.last().second)
+        // Ab dem zweiten Abschnitt einen Tag Rueckgriff ueber die Grenze.
+        assertEquals(slices[0].first, gateway.workoutWindows[0].first)
+        assertEquals(slices[1].first.plusMs(-days(1)), gateway.workoutWindows[1].first)
+
+        // Jeder Abschnitt ging einzeln zum Speichern, mit vollen Punkten.
+        assertEquals(slices.size, gespeichert.size)
+        assertTrue(gespeichert.all { it.imported.size == 1 && it.historyImport })
+
+        // Der Gesamtbericht zaehlt richtig, traegt aber keine Punkte mehr.
+        assertEquals(13, report.imported.size)
+        assertEquals(13, report.workoutsFound)
+        assertEquals(0, report.duplicatesSkipped)
+        assertTrue(report.persisted)
+        assertTrue(report.imported.all { it.points.isEmpty() })
+
+        assertTrue(store.historyImportDone())
+        assertNull(store.historyImportedUntilMs())
+        assertEquals(dartEpochMs(now), store.lastImportAtMs())
+    }
+
+    @Test
+    fun `Lang-Import - Session an der Abschnittsgrenze zaehlt nur einmal`() {
+        val now = at(2026, 8, 10, 12)
+        val slices = healthImportSlices(now.plusMs(-healthSyncHistoryWindowMs), now)
+        // Beginnt kurz vor der Grenze: Abschnitt 1 und (ueber den Rueckgriff)
+        // Abschnitt 2 sehen sie beide.
+        val grenze = fahrt("grenze", slices[1].first.plusMs(-hours(3)))
+        val gateway = FakeHealthGateway(historyGranted = true, filterByWindow = true, workouts = listOf(grenze))
+
+        val report = serviceOf(gateway, now).importWithReport(existing = emptyList(), loadRide = { null }, persist = {})
+
+        assertEquals(1, report.imported.size)
+        assertEquals(1, report.workoutsFound)
+        assertEquals(0, report.duplicatesSkipped)
+    }
+
+    @Test
+    fun `Lang-Import - Abbruch beim Speichern hakt nichts ab und wird fortgesetzt`() {
+        val now = at(2026, 8, 10, 12)
+        val slices = healthImportSlices(now.plusMs(-healthSyncHistoryWindowMs), now)
+        val fahrten = slices.mapIndexed { i, (a, b) -> fahrt("alt$i", a.plusMs((dartEpochMs(b) - dartEpochMs(a)) / 2)) }
+        val gateway = FakeHealthGateway(historyGranted = true, filterByWindow = true, workouts = fahrten)
+        val store = InMemoryHealthSyncStore()
+        val gesichert = mutableListOf<Ride>()
+
+        // Der dritte Abschnitt laesst sich nicht speichern (Speicher voll).
+        assertFailsWith<IllegalStateException> {
+            serviceOf(gateway, now, store).importWithReport(
+                existing = emptyList<Ride>(),
+                persist = { slice ->
+                    if (gesichert.size == 2) throw IllegalStateException("Speicher voll")
+                    gesichert.addAll(slice.imported)
+                },
+            )
+        }
+
+        // Der Bericht war da, gespeichert ist aber nicht alles: kein Merker,
+        // kein Zeitstempel — nur der Fortschritt bis zum letzten Gespeicherten.
+        assertFalse(store.historyImportDone())
+        assertNull(store.lastImportAtMs())
+        assertEquals(dartEpochMs(slices[1].second), store.historyImportedUntilMs())
+
+        // Naechster Lauf (eine Stunde spaeter) setzt dort an statt beim Jahr.
+        gateway.workoutWindows.clear()
+        val spaeter = now.plusMs(hours(1))
+        val rest = serviceOf(gateway, spaeter, store).importWithReport(
+            existing = gesichert.toList(),
+            persist = { slice -> gesichert.addAll(slice.imported) },
+        )
+
+        assertEquals(slices[1].second, gateway.workoutWindows.first().first)
+        assertTrue(rest.historyImport)
+        assertEquals(fahrten.size - 2, rest.imported.size)
+        assertEquals(fahrten.map { healthRideId(it.id) }.toSet(), gesichert.map { it.id }.toSet())
+        assertTrue(store.historyImportDone())
+        assertNull(store.historyImportedUntilMs())
+        assertEquals(dartEpochMs(spaeter), store.lastImportAtMs())
+    }
+
+    @Test
+    fun `persist - gescheitertes Speichern laesst den Zeitstempel unberuehrt`() {
+        val start = at(2026, 8, 5, 10)
+        val gateway = FakeHealthGateway(workouts = listOf(fahrt("neu", start)))
+        val store = InMemoryHealthSyncStore(value = dartEpochMs(at(2026, 8, 4)))
+
+        assertFailsWith<IllegalStateException> {
+            serviceOf(gateway, at(2026, 8, 10), store).importWithReport(
+                existing = emptyList<Ride>(),
+                persist = { throw IllegalStateException("kaputt") },
+            )
+        }
+
+        assertEquals(dartEpochMs(at(2026, 8, 4)), store.lastImportAtMs())
+        assertFalse(store.historyImportDone())
+    }
+
+    @Test
+    fun `Alles neu importieren ueber das ganze Jahr erledigt auch den Lang-Import`() {
+        val now = at(2026, 8, 10, 12)
+        val gateway = FakeHealthGateway(historyGranted = true)
+        val store = InMemoryHealthSyncStore()
+        val service = serviceOf(gateway, now, store)
+
+        assertEquals(now.plusMs(-healthSyncHistoryWindowMs), service.fullWindowStart())
+        val report = service.importWithReport(existing = emptyList(), since = service.fullWindowStart())
+
+        // Kein Lang-Import im engeren Sinn (ausdrueckliches since) — aber das
+        // Jahr ist gelesen, der naechste Sync muss es nicht noch einmal tun.
+        assertFalse(report.historyImport)
+        assertTrue(store.historyImportDone())
+
+        gateway.workoutWindows.clear()
+        service.importWithReport(existing = emptyList())
+        assertEquals(now.plusMs(-healthSyncImportBackfillMs), gateway.workoutWindows.single().first)
+    }
+
+    @Test
+    fun `fullWindowStart - ohne Freigabe 30 Tage`() {
+        val now = at(2026, 8, 10, 12)
+        assertEquals(
+            now.plusMs(-healthSyncInitialWindowMs),
+            serviceOf(FakeHealthGateway(), now).fullWindowStart(),
+        )
+    }
+
+    @Test
+    fun `Import - geloeschte Touren kommen nicht zurueck`() {
+        val start = at(2026, 8, 5, 10)
+        val gateway = FakeHealthGateway(workouts = listOf(fahrt("weg", start), fahrt("neu", start.plusMs(days(1)))))
+
+        val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(
+            existing = emptyList(),
+            loadRide = { null },
+            excludedRideIds = setOf(healthRideId("weg")),
+        )
+
+        assertEquals(listOf(healthRideId("neu")), report.imported.map { it.id })
+        assertEquals(1, report.duplicatesSkipped)
+    }
+
+    @Test
+    fun `Historie - entzogene Freigabe setzt den Merker zurueck`() {
+        val gateway = FakeHealthGateway(
+            historyGranted = false,
+            permissionStatus = mapOf(HealthReadType.HISTORIE to false),
+        )
+        val store = InMemoryHealthSyncStore(value = dartEpochMs(at(2026, 8, 1)), historyDone = true)
+
+        serviceOf(gateway, at(2026, 8, 10), store).importWithReport(existing = emptyList())
+        assertFalse(store.historyImportDone())
+
+        // Erneut erteilt: Der versprochene Jahres-Import laeuft wieder.
+        gateway.historyGranted = true
+        val wieder = serviceOf(gateway, at(2026, 8, 11), store).importWithReport(existing = emptyList())
+        assertTrue(wieder.historyImport)
+        assertTrue(store.historyImportDone())
+    }
+
+    @Test
+    fun `Historie - unbekannter Freigabestand laesst den Merker stehen`() {
+        // Nachfragen scheitert, der Status ist unbekannt (null): kein Grund,
+        // ein erledigtes Jahr noch einmal zu lesen.
+        val gateway = FakeHealthGateway(failHistory = true)
+        val store = InMemoryHealthSyncStore(value = dartEpochMs(at(2026, 8, 1)), historyDone = true)
+
+        serviceOf(gateway, at(2026, 8, 10), store).importWithReport(existing = emptyList())
+        assertTrue(store.historyImportDone())
+    }
+
+    @Test
+    fun `requestHistoryAccess - ohne Health Connect sofort false`() {
+        val gateway = FakeHealthGateway(
+            availabilityValue = HealthAvailability.NICHT_INSTALLIERT,
+            historyGranted = true,
+        )
+
+        assertFalse(serviceOf(gateway, at(2026, 8, 10)).requestHistoryAccess())
+        assertEquals(0, gateway.requestCount)
+    }
+
+    @Test
+    fun `Routen - nur fuer die Import-Kandidaten angefragt`() {
+        val start = at(2026, 8, 5, 10)
+        val gateway = FakeHealthGateway(
+            workouts = listOf(
+                fahrt("rad", start),
+                fahrt("bekannt", start.plusMs(days(1))),
+                cycling(
+                    id = "lauf",
+                    start = start.plusMs(days(2)),
+                    end = start.plusMs(days(2) + hours(1)),
+                    kind = HealthActivityKind.SONSTIGES,
+                ),
+            ),
+        )
+
+        serviceOf(gateway, at(2026, 8, 10)).importWithReport(
+            existing = emptyList(),
+            loadRide = { null },
+            excludedRideIds = setOf(healthRideId("bekannt")),
+        )
+
+        assertEquals(listOf(setOf("rad")), gateway.routeRequests)
+    }
+
+    @Test
+    fun `healthImportSlices - kurzes Fenster bleibt ein Abschnitt`() {
+        val to = at(2026, 8, 10, 12)
+        assertEquals(listOf(to.plusMs(-days(30)) to to), healthImportSlices(to.plusMs(-days(30)), to))
+        assertEquals(listOf(to to to), healthImportSlices(to, to))
+    }
+
+    @Test
+    fun `Sommerzeit - Jahresfenster und Abschnitte rechnen auf der absoluten Zeitachse`() = inZone("Europe/Berlin") {
+        // 2026 beginnt die Sommerzeit am 29.03., 2025 erst am 30.03.: Der
+        // 29.03.2025 lag also noch in der Winterzeit. 365 x 24 Stunden vor
+        // 12 Uhr MESZ sind dort 11 Uhr MEZ — nicht 12 Uhr Wanduhr.
+        val to = at(2026, 3, 29, 12)
+        val from = healthImportWindowStart(
+            since = null,
+            lastImportAt = null,
+            to = to,
+            initialWindowMs = healthSyncHistoryWindowMs,
+        )
+        assertEquals(at(2025, 3, 29, 11), from)
+        assertEquals(healthSyncHistoryWindowMs, dartEpochMs(to) - dartEpochMs(from))
+
+        // Die Abschnitte schliessen lueckenlos aneinander, jeder volle ist
+        // genau 30 x 24 Stunden lang — auch ueber beide Umstellungen hinweg.
+        val slices = healthImportSlices(from, to)
+        assertEquals(from, slices.first().first)
+        assertEquals(to, slices.last().second)
+        for ((a, b) in slices.zipWithNext()) assertEquals(a.second, b.first)
+        for (slice in slices.dropLast(1)) {
+            assertEquals(healthSyncSliceMs, dartEpochMs(slice.second) - dartEpochMs(slice.first))
+        }
     }
 }

@@ -93,7 +93,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Ruhepuls, HRV, Schlaf, VO₂max
 - Nur Radfahrten werden als Touren übernommen. Mit der optionalen
   Historien-Freigabe holt der erste Import einmalig die Radfahrten der letzten
-  12 Monate, sonst gibt Health Connect nur 30 Tage heraus
+  12 Monate (abschnittsweise gespeichert, ein Abbruch setzt dort wieder an);
+  ohne sie gibt Health Connect nichts heraus, was mehr als 30 Tage vor dem
+  Verbinden liegt
 - Touren, deren Route Health Connect nur nach einer Einzel-Freigabe
   herausgibt, kommen zunächst ohne Karte; die Einstellungen zeigen, wie viele
   es sind, und holen die Routen per Knopf nach

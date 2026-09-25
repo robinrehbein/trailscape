@@ -217,8 +217,12 @@ object AppServices {
      * selbst — `HealthSyncService` kennt weder [RideStorage] noch das
      * Dateisystem. Der uebliche Ablauf ist deshalb:
      * `rideStorage.listSummaries()` → `healthSyncService.importWithReport(
-     * existing = summaries, loadRide = rideStorage::loadRide)` → die Touren
-     * aus `imported` und `mergedRides` ueber [rideStorage] zurueckschreiben.
+     * existing = summaries, loadRide = rideStorage::loadRide, persist = …)`,
+     * wobei `persist` die Touren aus `imported` und `mergedRides` je Abschnitt
+     * ueber [rideStorage] schreibt. Nur mit `persist` bestaetigt der Dienst
+     * Zeitstempel und Lang-Import-Merker erst nach dem Speichern — wer ohne
+     * speichert, muss beides bei einem Fehler selbst zurueckrollen (siehe
+     * `AppViewModel.runHealthImport`).
      *
      * Der dritte Konstruktorparameter (`now`) bleibt auf seiner Vorgabe
      * `LocalDateTime.now()`; er existiert nur, damit die `:core`-Tests die Uhr

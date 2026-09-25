@@ -58,7 +58,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Vitalhistorie | SharedPreferences (`trailscape.vitals.v1`) | Tageswerte der letzten 400 Tage: Ruhepuls, HRV, Schlafstunden, VO₂max — lokal gehalten, weil Health Connect Daten nach 30 Tagen löscht und die Baselines längere Fenster brauchen (`core/…/VitalsHistory.kt`) |
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
 | Sync-Einstellungen (optional) | SharedPreferences (`trailscape.sync`) | Adresse **deines** Sync-Servers und dein Zugangstoken — im Klartext im privaten App-Speicher |
-| Health-Sync-Stand | SharedPreferences (`trailscape.healthsync`, `trailscape.healthsync.historyImportDone`) | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird, und ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist |
+| Health-Sync-Stand | SharedPreferences, Schlüssel `trailscape.healthsync`, `trailscape.healthsync.historyImportDone` und `trailscape.healthsync.historyImportedUntil` | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird; ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist; solange dieser Import noch nicht fertig ist, der Zeitpunkt, bis zu dem er schon gespeichert hat |
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
 | Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
@@ -140,8 +140,13 @@ Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
   Uhr & Gesundheitsdaten → Ältere Fahrten freigeben**). Dann holt der Import
   **einmalig** die Trainingseinheiten der letzten 12 Monate; übernommen werden
   davon nur Radfahrten, andere Sportarten werden übersprungen und nicht
-  gespeichert. Danach liest jeder Sync wieder nur die letzten Tage. Ohne die
-  Freigabe gibt Health Connect ohnehin nur die letzten 30 Tage heraus.
+  gespeichert. Von anderen Sportarten wertet Trailscape nur Art, Beginn und
+  Ende der Einheit aus; Routen, Distanz und Kalorien fragt es gezielt nur für
+  Radfahrten ab. (Health Connect liefert beim Auflisten der Einheiten deren
+  Daten im Paket aus — was davon nicht zu einer Radfahrt gehört, verwirft
+  Trailscape sofort im Arbeitsspeicher.) Danach liest jeder Sync wieder nur die letzten Tage. Ohne die
+  Freigabe gibt Health Connect ohnehin nichts heraus, was mehr als 30 Tage vor
+  dem ersten Verbinden liegt.
 - Routen, die Health Connect nur nach einer Freigabe **je Route** herausgibt,
   liest Trailscape erst, wenn du sie über „Routen freigeben“ einzeln erlaubst.
   Bis dahin kommt die Tour ohne GPS-Spur.

@@ -43,6 +43,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlin.reflect.KClass
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -184,6 +185,15 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * Tracking-App dazumischen. Schlaegt die Aggregation fehl (fehlende
      * Freigabe), bleibt es bei `null`; `buildRideFromWorkout` rechnet die
      * Distanz dann aus der Route.
+     *
+     * Aggregiert wird **nur fuer Radfahrten**: Jede Aggregation ist ein
+     * eigener IPC-Aufruf, und der Jahres-Import saehe sonst auch jeden
+     * automatisch erkannten Spaziergang — schnell tausend Aufrufe, die das
+     * Lese-Kontingent von Health Connect aufbrauchen koennen. Danach
+     * schluege die Aggregation fuer die Radfahrten still fehl (siehe den
+     * `catch` in [readSessionTotals]), und ihnen fehlten Distanz und kcal.
+     * Die uebrigen Sessions kommen ohne Summen in die Liste; `:core` braucht
+     * sie nur fuer Diagnose und Filter.
      */
     override fun readWorkouts(from: LocalDateTime, to: LocalDateTime): List<HealthWorkout> =
         read("Die Trainings") { client ->
@@ -196,13 +206,16 @@ class HealthConnectGateway(context: Context) : HealthGateway {
                 val typeName = exerciseTypeName(record.exerciseType)
                 activityTypes[typeName] = (activityTypes[typeName] ?: 0) + 1
 
-                val totals = client.readSessionTotals(record)
+                val kind = activityKind(record, typeName)
+                val cycling = kind == HealthActivityKind.RADFAHREN ||
+                    kind == HealthActivityKind.RADFAHREN_INDOOR
+                val totals = if (cycling) client.readSessionTotals(record) else null
                 workouts.add(
                     HealthWorkout(
                         id = record.metadata.id,
                         start = record.startTime.toLocal(),
                         end = record.endTime.toLocal(),
-                        kind = activityKind(record, typeName),
+                        kind = kind,
                         distanceM = totals?.distanceM,
                         energyKcal = totals?.energyKcal,
                         sourceName = record.metadata.dataOrigin.packageName,
@@ -281,6 +294,50 @@ class HealthConnectGateway(context: Context) : HealthGateway {
                     }
                 }
                 is ExerciseRouteResult.ConsentRequired -> consentRequired.add(record.metadata.id)
+                else -> Unit
+            }
+        }
+        HealthRouteReadResult(routes = routes, consentRequired = consentRequired)
+    }
+
+    /**
+     * Routen genau der Sessions [sessionIds], je Session einzeln gelesen.
+     *
+     * Anders als [readRoutesWithStatus] kommen so die Routen von Laeufen und
+     * Spaziergaengen im selben Zeitraum gar nicht erst in die App — beim
+     * Jahres-Import waere das sonst ein Jahr fremder GPS-Spuren. Der Preis ist
+     * ein Aufruf je Radfahrt, genauso viele, wie der Import fuer die
+     * Herzfrequenz ohnehin braucht. [from]/[to] werden nicht gebraucht.
+     *
+     * Eine einzelne Session, die sich nicht lesen laesst (inzwischen
+     * geloescht), fehlt nur in der Map; eine verweigerte Freigabe
+     * ([SecurityException]) bricht dagegen wie ueberall den Lesezugriff ab.
+     */
+    override fun readRoutesForSessions(
+        sessionIds: Set<String>,
+        from: LocalDateTime,
+        to: LocalDateTime,
+    ): HealthRouteReadResult = read("Die Routen") { client ->
+        val routes = linkedMapOf<String, List<HealthRoutePoint>>()
+        val consentRequired = linkedSetOf<String>()
+        for (id in sessionIds) {
+            val record = try {
+                client.readRecord(ExerciseSessionRecord::class, id).record
+            } catch (error: SecurityException) {
+                throw error
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                continue
+            }
+            when (val result = record.exerciseRouteResult) {
+                is ExerciseRouteResult.Data -> {
+                    val points = result.exerciseRoute.toHealthRoutePoints()
+                    if (points.isNotEmpty()) {
+                        routes[id] = points
+                    }
+                }
+                is ExerciseRouteResult.ConsentRequired -> consentRequired.add(id)
                 else -> Unit
             }
         }
