@@ -258,7 +258,7 @@ private fun ExploreSheetBody(
 @Composable
 private fun LongPressHintLine() {
     Row(
-        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(

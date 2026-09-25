@@ -111,6 +111,14 @@ internal fun MapViewHost(
      * wegzuziehen.
      */
     onUserPan: () -> Unit = {},
+    /**
+     * Die Karte steht nach einer eigenen Bewegung ([onUserPan]) wieder still,
+     * samt Nachgleiten eines Wischers. [onUserPan] meldet nur den **Beginn**;
+     * wer wissen will, ob die Nutzerin gerade noch wischt (der einmalige Tipp
+     * zum langen Druecken, `LongPressHint.kt`), braucht auch das Ende.
+     * Kamerafahrten des Programms melden hier nichts.
+     */
+    onUserPanEnd: () -> Unit = {},
 ) {
     // Screenshot-Tests laufen auf der JVM ohne MapLibres native Bibliothek;
     // dort steht an Stelle der Karte eine ruhige Kartenflaeche, damit alles
@@ -124,6 +132,7 @@ internal fun MapViewHost(
     val currentTap by rememberUpdatedState(onMapTap)
     val currentLongPress by rememberUpdatedState(onMapLongPress)
     val currentPan by rememberUpdatedState(onUserPan)
+    val currentPanEnd by rememberUpdatedState(onUserPanEnd)
 
     // Kameraposition ueber Konfigurationsaenderungen (Drehen) hinweg merken.
     // MapView.onSaveInstanceState/onCreate(Bundle) waere der View-Weg, in einem
@@ -269,9 +278,21 @@ internal fun MapViewHost(
                     currentLongPress(latLng.latitude, latLng.longitude)
                     true
                 }
+                // Ob die laufende Kamerabewegung von der Hand kommt: Der
+                // Idle-Listener meldet jedes Stillstehen, auch nach
+                // Programmfahrten — weitergereicht wird nur das Ende einer
+                // eigenen Bewegung.
+                var userMoving = false
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        userMoving = true
                         currentPan()
+                    }
+                }
+                map.addOnCameraIdleListener {
+                    if (userMoving) {
+                        userMoving = false
+                        currentPanEnd()
                     }
                 }
                 controller.attach(map)

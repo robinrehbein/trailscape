@@ -80,6 +80,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
@@ -622,11 +623,16 @@ fun MapScreen(appViewModel: AppViewModel) {
     var followMe by rememberSaveable { mutableStateOf(true) }
 
     // Der einmalige Tipp zum langen Druecken (siehe `LongPressHint.kt`):
-    // Merker aus dem Speicher und der Zeitpunkt des letzten eigenen Schwenks.
-    // Der Schwenk zaehlt als `SystemClock.elapsedRealtime()`, damit eine
-    // umgestellte Wanduhr den Tipp weder verschluckt noch vorzieht.
+    // Merker aus dem Speicher, ob die Hand die Karte gerade bewegt, und der
+    // Zeitpunkt, zu dem die letzte eigene Bewegung zur Ruhe kam. Der zaehlt
+    // als `SystemClock.elapsedRealtime()`, damit eine umgestellte Wanduhr den
+    // Tipp weder verschluckt noch vorzieht. `longPressHintJob` ist die
+    // Coroutine der gerade stehenden Tipp-Snackbar — echte Meldungen brechen
+    // sie ab, statt sich hinter ihr anzustellen (siehe „Meldungen").
     var longPressHintDone by remember { mutableStateOf(langDrueckHinweisErledigt(AppServices.keyValueStore)) }
+    var userPanning by remember { mutableStateOf(false) }
     var lastUserPanAt by remember { mutableLongStateOf(0L) }
+    var longPressHintJob by remember { mutableStateOf<Job?>(null) }
 
     // Kurvenpunkte der navigierten Route — einmal je Ziel aus der Geometrie
     // extrahiert (`extractTurnHints`, `:core`). Dieselbe Liste fuettert den
@@ -811,8 +817,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     }
 
     // ------------------------------------------------------------- Meldungen
+    // Eine echte Meldung raeumt den Tipp zum langen Druecken sofort ab: Sonst
+    // wartete sie am Mutex des `SnackbarHostState`, bis er ausgelaufen ist.
+    // Der abgebrochene Tipp gilt nicht als gesehen und kommt spaeter wieder.
     LaunchedEffect(appViewModel) {
-        appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+        appViewModel.messages.collect {
+            longPressHintJob?.cancel()
+            snackbarHostState.showSnackbar(it)
+        }
     }
 
     // Erst anzeigen, dann quittieren: `clearError()` schreibt den StateFlow auf
@@ -821,6 +833,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // dann abgebrochen, bevor die Meldung je zu sehen war.
     LaunchedEffect(recordingError) {
         val message = recordingError ?: return@LaunchedEffect
+        longPressHintJob?.cancel()
         snackbarHostState.showSnackbar(message)
         RecordingRepository.clearError()
     }
@@ -1668,13 +1681,15 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun onMapLongPress(lat: Double, lon: Double) {
         if (isRecording || navTarget != null) return
+        if (mode != MapMode.PLANEN && generation.target != null) return
         // Wer die Geste von selbst gefunden hat, braucht den Tipp nicht mehr.
+        // Erst hier, nach den Faellen, in denen der Druck nichts bewirkt: Ein
+        // wirkungsloser Druck ist kein Beleg, dass die Geste verstanden ist.
         if (!longPressHintDone) {
             longPressHintDone = true
             merkeLangDrueckHinweisErledigt(AppServices.keyValueStore)
         }
         if (mode != MapMode.PLANEN) {
-            if (generation.target != null) return
             appViewModel.select(null)
             selectedPlace = Place(
                 displayName = "Markierter Punkt",
@@ -2316,51 +2331,80 @@ fun MapScreen(appViewModel: AppViewModel) {
     // ------------------------------------------ Tipp: lange auf die Karte
     // Einmal, beim ruhigen Erkunden, erklaert eine Snackbar die einzige Geste,
     // die auf der Karte etwas anlegt (Entscheidung in `LongPressHint.kt`).
-    // Jeder eigene Schwenk startet die Wartezeit neu (Schluessel
-    // `lastUserPanAt`); eine fremde Snackbar ebenso — erst wenn sie weg ist
-    // und die Karte danach [LONG_PRESS_HINT_CALM_MS] ruhig stand, kommt der
-    // Tipp.
+    // Jede eigene Bewegung der Karte startet die Wartezeit neu (Schluessel
+    // `userPanning` und `lastUserPanAt`, gesetzt erst beim Stillstand — ein
+    // langer Wischer mit Nachgleiten zaehlt also ganz); eine fremde Snackbar
+    // ebenso — erst wenn sie weg ist und die Karte danach
+    // [LONG_PRESS_HINT_CALM_MS] ruhig stand, kommt der Tipp.
+    //
+    // Als offene Aufgabe zaehlt alles, was ueber oder vor der Karte liegt:
+    // Unter dem Scrim eines Kartenstil-Blatts oder eines Dialogs saehe
+    // niemand den Tipp. Das hochgewischte „Wohin?"-Blatt zaehlt mit, weil es
+    // die Geste in seiner eigenen Hinweiszeile schon erklaert und die
+    // Snackbar genau diesen Inhalt verdeckte.
     val longPressLage = langDrueckLage(
         mode = mode,
         aufzeichnung = isRecording,
         navigation = navTarget != null,
-        aufgabeOffen = mapTaskActive || searchOpen || exploreSearching,
+        aufgabeOffen = mapTaskActive || searchOpen || exploreSearching || exploreExpanded ||
+            showStyleSheet || segmentOffer != null || saveRouteDialog || showBatteryNotice ||
+            deleteDialogRide != null,
     )
     val snackbarVisible = snackbarHostState.currentSnackbarData != null
-    // Der Tipp gilt nur fuer das ruhige Erkunden: Beginnt eine Aufgabe, eine
-    // Planung oder eine Fahrt, solange er noch steht, geht er sofort — das
-    // Abbrechen der wartenden `showSnackbar`-Coroutine blendet ihn aus.
-    var longPressHintJob by remember { mutableStateOf<Job?>(null) }
-    LaunchedEffect(longPressLage) {
-        if (longPressLage != LangDrueckLage.ERKUNDEN) longPressHintJob?.cancel()
+    // Nur im Vordergrund: Liegt die App im Hintergrund oder ist der
+    // Bildschirm aus, verstriche die Wartezeit ungesehen — und der Tipp mit.
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
+    val imVordergrund = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    // Der Tipp gilt nur fuer das ruhige Erkunden im Vordergrund: Beginnt eine
+    // Aufgabe, eine Planung oder eine Fahrt, oder geht die App weg, solange er
+    // noch steht, verschwindet er sofort — das Abbrechen der wartenden
+    // `showSnackbar`-Coroutine blendet ihn aus.
+    LaunchedEffect(longPressLage, imVordergrund) {
+        if (longPressLage != LangDrueckLage.ERKUNDEN || !imVordergrund) longPressHintJob?.cancel()
     }
-    LaunchedEffect(longPressLage, longPressHintDone, lastUserPanAt, snackbarVisible) {
-        if (longPressLage != LangDrueckLage.ERKUNDEN || longPressHintDone || snackbarVisible) {
+    LaunchedEffect(longPressLage, imVordergrund, longPressHintDone, userPanning, lastUserPanAt, snackbarVisible) {
+        if (longPressLage != LangDrueckLage.ERKUNDEN || !imVordergrund || longPressHintDone ||
+            userPanning || snackbarVisible || longPressHintJob?.isActive == true
+        ) {
             return@LaunchedEffect
         }
         delay(LONG_PRESS_HINT_CALM_MS)
         val show = sollLangDrueckHinweisZeigen(
             lage = longPressLage,
+            imVordergrund = imVordergrund,
             hinweisErledigt = longPressHintDone,
-            geradeGeschwenkt = SystemClock.elapsedRealtime() - lastUserPanAt < LONG_PRESS_HINT_CALM_MS &&
-                lastUserPanAt != 0L,
+            geradeGeschwenkt = userPanning || (
+                lastUserPanAt != 0L &&
+                    SystemClock.elapsedRealtime() - lastUserPanAt < LONG_PRESS_HINT_CALM_MS
+                ),
             andereSnackbarSichtbar = snackbarHostState.currentSnackbarData != null,
         )
         if (!show) return@LaunchedEffect
-        // Erst merken, dann zeigen: Der Tipp gilt als gezeigt, sobald er
-        // erscheint — auch wenn die App gleich danach beendet wird.
-        longPressHintDone = true
-        merkeLangDrueckHinweisErledigt(AppServices.keyValueStore)
         // Im Screen-Scope, nicht in diesem Effekt: Die eigene Snackbar
         // aendert `snackbarVisible` und damit den Schluessel — der Effekt
         // startet neu, und eine darin wartende Snackbar verschwaende sofort
         // wieder.
         longPressHintJob = scope.launch {
-            snackbarHostState.showSnackbar(
-                message = LONG_PRESS_HINT_TEXT,
-                withDismissAction = true,
-                duration = SnackbarDuration.Long,
-            )
+            val shownAt = SystemClock.elapsedRealtime()
+            var regulaerBeendet = false
+            try {
+                snackbarHostState.showSnackbar(
+                    message = LONG_PRESS_HINT_TEXT,
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Short,
+                )
+                regulaerBeendet = true
+            } finally {
+                // Gemerkt wird erst hier, nicht schon beim Zeigen: Ein Tipp,
+                // den eine Aufgabe, eine Meldung oder der Weg in den
+                // Hintergrund nach einem Wimpernschlag wieder abraeumt, soll
+                // spaeter noch einmal kommen duerfen (siehe
+                // [langDrueckHinweisGesehen]).
+                if (langDrueckHinweisGesehen(regulaerBeendet, SystemClock.elapsedRealtime() - shownAt)) {
+                    longPressHintDone = true
+                    merkeLangDrueckHinweisErledigt(AppServices.keyValueStore)
+                }
+            }
         }
     }
 
@@ -2694,6 +2738,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 onMapLongPress = ::onMapLongPress,
                 onUserPan = {
                     followMe = false
+                    userPanning = true
+                },
+                onUserPanEnd = {
+                    userPanning = false
                     lastUserPanAt = SystemClock.elapsedRealtime()
                 },
                 modifier = Modifier.fillMaxSize(),

@@ -1,5 +1,6 @@
 package de.trailscape.app.routing
 
+import de.trailscape.app.testing.MemoryKeyValueStore
 import de.trailscape.core.checkSegmentIntegrity
 import de.trailscape.core.segmentDeltaUrl
 import de.trailscape.core.segmentMd5

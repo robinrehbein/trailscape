@@ -23,9 +23,13 @@ import de.trailscape.core.KeyValueStore
  * (`LongPressHintTest`).
  */
 
-/** Text der einmaligen Snackbar — sagt, was die Geste beim Erkunden wirklich tut. */
+/**
+ * Text der einmaligen Snackbar — sagt, was die Geste beim Erkunden wirklich
+ * tut: einen Punkt setzen, dessen Ortskarte „Route hierher" und „Runde ab
+ * hier" anbietet. Bewusst kurz; die Ortskarte erklaert den Rest selbst.
+ */
 internal const val LONG_PRESS_HINT_TEXT =
-    "Tipp: Lange auf die Karte drücken, um einen Punkt zu setzen – für eine Route dorthin oder eine Runde ab dort."
+    "Tipp: Lange auf die Karte drücken setzt einen Punkt – als Ziel oder Start einer Runde."
 
 /** Die dauerhafte Zeile im hochgewischten „Wohin?"-Blatt. */
 internal const val LONG_PRESS_HINT_LINE = "Lange auf die Karte drücken: Punkt setzen"
@@ -39,9 +43,18 @@ internal const val LONG_PRESS_HINT_LINE = "Lange auf die Karte drücken: Punkt s
 internal const val LONG_PRESS_HINT_CALM_MS = 3_000L
 
 /**
+ * So lange muss der Tipp mindestens gestanden haben, damit er als gesehen
+ * gilt, wenn ihn etwas vorzeitig abraeumt (Aufgabe, Meldung, App im
+ * Hintergrund). Zwei Sekunden reichen, um den kurzen Satz zu lesen; was
+ * kuerzer stand, war nur ein Aufblitzen.
+ */
+internal const val LONG_PRESS_HINT_SEEN_MS = 2_000L
+
+/**
  * Schluessel des Merkers (im gemeinsamen [KeyValueStore], wie der
- * Onboarding-Merker). Gesetzt wird er, sobald der Tipp einmal erschienen ist
- * **oder** die Nutzerin die Geste von selbst gefunden hat — wer lange drueckt,
+ * Onboarding-Merker). Gesetzt wird er, sobald der Tipp einmal gesehen wurde
+ * ([langDrueckHinweisGesehen]) **oder** die Nutzerin die Geste von selbst
+ * gefunden hat — wer lange drueckt,
  * braucht den Tipp nicht mehr.
  */
 internal const val LONG_PRESS_HINT_STORAGE_KEY = "trailscape.hint.longPress"
@@ -61,10 +74,14 @@ internal fun merkeLangDrueckHinweisErledigt(store: KeyValueStore) {
  * [MapMode] nicht kennt (Aufzeichnung laeuft in jedem Modus).
  */
 internal enum class LangDrueckLage {
-    /** Ruhige Karte, kein Blatt ausser „Wohin?" — der einzige Zustand fuer den Tipp. */
+    /** Ruhige Karte, nur das eingeklappte „Wohin?"-Blatt — der einzige Zustand fuer den Tipp. */
     ERKUNDEN,
 
-    /** Ort, Tour, Suche, Rundenwahl, Generator oder Verlauf offen: Die Nutzerin ist beschaeftigt. */
+    /**
+     * Ort, Tour, Suche, Rundenwahl, Generator, Verlauf, hochgewischtes
+     * „Wohin?"-Blatt, Kartenstil-Blatt oder ein Dialog offen: Die Nutzerin ist
+     * beschaeftigt, oder ein Scrim laege ueber dem Tipp.
+     */
     AUFGABE,
 
     /** Routenplanung: Die Planung erklaert das Setzen selbst (Platzhalterzeile im Blatt). */
@@ -102,8 +119,10 @@ internal fun langDrueckLage(
  *
  * Nur, wenn alles zusammenkommt:
  *  * die Karte ist im ruhigen Erkunden ([LangDrueckLage.ERKUNDEN]),
+ *  * die App steht im Vordergrund (sonst verstriche der Tipp ungesehen),
  *  * der Merker ist noch nicht gesetzt,
- *  * die Nutzerin hat die Karte nicht gerade selbst verschoben,
+ *  * die Nutzerin bewegt die Karte nicht gerade selbst und hat es auch in
+ *    den letzten [LONG_PRESS_HINT_CALM_MS] nicht getan,
  *  * und keine andere Snackbar steht — der Tipp soll keine echte Meldung
  *    verdraengen und sich auch nicht hinter ihr anstellen (die
  *    `SnackbarHostState`-Warteschlange wuerde ihn sonst spaeter in einem
@@ -111,11 +130,24 @@ internal fun langDrueckLage(
  */
 internal fun sollLangDrueckHinweisZeigen(
     lage: LangDrueckLage,
+    imVordergrund: Boolean,
     hinweisErledigt: Boolean,
     geradeGeschwenkt: Boolean,
     andereSnackbarSichtbar: Boolean,
 ): Boolean =
     lage == LangDrueckLage.ERKUNDEN &&
+        imVordergrund &&
         !hinweisErledigt &&
         !geradeGeschwenkt &&
         !andereSnackbarSichtbar
+
+/**
+ * Gilt der Tipp nach seinem Ende als gesehen?
+ *
+ * Ja, wenn er regulaer endete (weggetippt oder ausgelaufen) oder vor dem
+ * Abraeumen mindestens [LONG_PRESS_HINT_SEEN_MS] stand. Sonst bleibt der
+ * Merker leer und der Tipp kommt beim naechsten ruhigen Erkunden wieder —
+ * sein Versprechen ist „einmal gesehen", nicht „einmal aufgeblitzt".
+ */
+internal fun langDrueckHinweisGesehen(regulaerBeendet: Boolean, sichtbarMs: Long): Boolean =
+    regulaerBeendet || sichtbarMs >= LONG_PRESS_HINT_SEEN_MS

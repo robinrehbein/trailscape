@@ -1,6 +1,6 @@
 package de.trailscape.app.ui.map
 
-import de.trailscape.app.routing.MemoryKeyValueStore
+import de.trailscape.app.testing.MemoryKeyValueStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,17 +17,21 @@ class LongPressHintTest {
     // ------------------------------------------------------------ Matrix
 
     @Test
-    fun `die ganze Matrix – nur ruhiges Erkunden ohne Merker, Schwenk und Snackbar zeigt den Tipp`() {
+    fun `die ganze Matrix – nur ruhiges Erkunden im Vordergrund ohne Merker, Schwenk und Snackbar zeigt den Tipp`() {
+        val jaNein = listOf(false, true)
         for (lage in LangDrueckLage.entries) {
-            for (erledigt in listOf(false, true)) {
-                for (geschwenkt in listOf(false, true)) {
-                    for (snackbar in listOf(false, true)) {
-                        val erwartet = lage == LangDrueckLage.ERKUNDEN && !erledigt && !geschwenkt && !snackbar
-                        assertEquals(
-                            erwartet,
-                            sollLangDrueckHinweisZeigen(lage, erledigt, geschwenkt, snackbar),
-                            "lage=$lage erledigt=$erledigt geschwenkt=$geschwenkt snackbar=$snackbar",
-                        )
+            for (vorne in jaNein) {
+                for (erledigt in jaNein) {
+                    for (geschwenkt in jaNein) {
+                        for (snackbar in jaNein) {
+                            val erwartet = lage == LangDrueckLage.ERKUNDEN && vorne && !erledigt &&
+                                !geschwenkt && !snackbar
+                            assertEquals(
+                                erwartet,
+                                sollLangDrueckHinweisZeigen(lage, vorne, erledigt, geschwenkt, snackbar),
+                                "lage=$lage vorne=$vorne erledigt=$erledigt geschwenkt=$geschwenkt snackbar=$snackbar",
+                            )
+                        }
                     }
                 }
             }
@@ -36,34 +40,53 @@ class LongPressHintTest {
 
     @Test
     fun `erkunden auf ruhiger Karte zeigt den Tipp`() {
-        assertTrue(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, false, false, false))
+        assertTrue(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, true, false, false, false))
     }
 
     @Test
     fun `planung, aufzeichnung und navigation zeigen ihn nie`() {
         for (lage in listOf(LangDrueckLage.PLANUNG, LangDrueckLage.AUFZEICHNUNG, LangDrueckLage.NAVIGATION)) {
-            assertFalse(sollLangDrueckHinweisZeigen(lage, false, false, false), "$lage")
+            assertFalse(sollLangDrueckHinweisZeigen(lage, true, false, false, false), "$lage")
         }
     }
 
     @Test
     fun `offene Aufgabe beim Erkunden zeigt ihn nicht`() {
-        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.AUFGABE, false, false, false))
+        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.AUFGABE, true, false, false, false))
+    }
+
+    @Test
+    fun `im Hintergrund kommt er nicht`() {
+        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, false, false, false, false))
     }
 
     @Test
     fun `gesetzter Merker verhindert ihn fuer immer`() {
-        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, true, false, false))
+        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, true, true, false, false))
     }
 
     @Test
     fun `direkt nach einem Schwenk kommt er nicht`() {
-        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, false, true, false))
+        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, true, false, true, false))
     }
 
     @Test
     fun `eine andere Snackbar wird nicht verdraengt`() {
-        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, false, false, true))
+        assertFalse(sollLangDrueckHinweisZeigen(LangDrueckLage.ERKUNDEN, true, false, false, true))
+    }
+
+    // ---------------------------------------------------------- Gesehen
+
+    @Test
+    fun `regulaer beendeter Tipp gilt immer als gesehen`() {
+        assertTrue(langDrueckHinweisGesehen(regulaerBeendet = true, sichtbarMs = 0L))
+    }
+
+    @Test
+    fun `vorzeitig abgeraeumter Tipp gilt erst ab der Lesezeit als gesehen`() {
+        assertFalse(langDrueckHinweisGesehen(regulaerBeendet = false, sichtbarMs = 300L))
+        assertFalse(langDrueckHinweisGesehen(regulaerBeendet = false, sichtbarMs = LONG_PRESS_HINT_SEEN_MS - 1))
+        assertTrue(langDrueckHinweisGesehen(regulaerBeendet = false, sichtbarMs = LONG_PRESS_HINT_SEEN_MS))
     }
 
     // ------------------------------------------------------------- Lage
@@ -126,10 +149,11 @@ class LongPressHintTest {
     @Test
     fun `tipp beschreibt die tatsaechliche Wirkung`() {
         // Beim Erkunden setzt der lange Druck einen Punkt und oeffnet die
-        // Ortskarte mit „Route hierher" und „Runde ab hier" — genau das muss
-        // der Tipp versprechen, nicht etwa einen Wegpunkt.
+        // Ortskarte mit „Route hierher" (Ziel) und „Runde ab hier" (Start) —
+        // genau das muss der Tipp versprechen, nicht etwa einen Wegpunkt.
         assertTrue("Punkt" in LONG_PRESS_HINT_TEXT)
-        assertTrue("Route" in LONG_PRESS_HINT_TEXT)
+        assertTrue("Ziel" in LONG_PRESS_HINT_TEXT)
         assertTrue("Runde" in LONG_PRESS_HINT_TEXT)
+        assertFalse("Wegpunkt" in LONG_PRESS_HINT_TEXT)
     }
 }
