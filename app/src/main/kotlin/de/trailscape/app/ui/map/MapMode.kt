@@ -9,7 +9,7 @@ package de.trailscape.app.ui.map
  * [MapMode] ersetzt weder [de.trailscape.core.NavState] noch `navTarget`
  * selbst — die Punktliste, das Navigationsziel und der Live-Fortschritt der
  * Navigation bleiben eigene Zustaende in `MapScreen.kt`. Der Modus sagt nur,
- * **welche Bedienflaeche gerade gilt**: ob ein Kartentipp einen Wegpunkt
+ * **welche Bedienflaeche gerade gilt**: ob langes Druecken einen Wegpunkt
  * setzt, ob die Zurueck-Geste die Planung verlaesst, welche Stufe das
  * Kartenblatt zeigt. `searchOpen` gehoert bewusst nicht zu diesem Modus — die
  * Ortssuche ist in jedem der drei Modi erreichbar (siehe Klassen-KDoc von
@@ -83,11 +83,11 @@ enum class MapMode {
  * weiterreicht.
  *
  * ## Warum die Stufe nicht dasselbe ist wie [MapMode]
- * [MapMode] sagt, **welche Bedienflaeche gilt** (setzt ein Kartentipp einen
+ * [MapMode] sagt, **welche Bedienflaeche gilt** (setzt langes Druecken einen
  * Wegpunkt? verlaesst die Zurueck-Geste die Planung?). Die Stufe sagt nur, wie
  * viel vom Blatt zu sehen ist. Deshalb hat [MapMode.PLANEN] zwei Stufen:
  * [PLANEN] mit vollem Planungsinhalt und [EINGEKLAPPT], sobald die Nutzerin
- * mit der Karte arbeitet und Wegpunkte hintippt (siehe `onMapTap` in
+ * mit der Karte arbeitet und Wegpunkte setzt (siehe `onMapLongPress` in
  * `MapScreen.kt`) — die Planung laeuft dann unveraendert weiter, das Blatt
  * gibt nur die Karte frei. Und [MapMode.NAVIGIEREN] hat gar keine: Waehrend
  * Navigation, Aufzeichnung, gewaehlter Tour, gewaehltem Ort oder offener

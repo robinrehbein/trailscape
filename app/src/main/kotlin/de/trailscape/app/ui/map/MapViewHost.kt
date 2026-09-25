@@ -82,7 +82,20 @@ internal fun MapViewHost(
     controller: MapController,
     style: MapStyle,
     locationEnabled: Boolean,
+    /**
+     * Gewoehnlicher Tipp auf die Karte. Die Karte des Hauptscreens reicht hier
+     * bewusst nichts durch (Fuehrung „Klartext"): Ein Tipp legt nirgends etwas
+     * an und loescht nichts — er bleibt frei fuer Marker, Linien und das
+     * blosse Anfassen der Karte.
+     */
     onMapTap: (Double, Double) -> Unit,
+    /**
+     * Langer Druck auf die Karte — die **einzige** Geste, die auf der Karte
+     * etwas anlegt: beim Erkunden einen Punkt samt Ortskarte, in der Planung
+     * einen Wegpunkt (siehe `onMapLongPress` in `MapScreen.kt`). Weil man sie
+     * nicht sieht, erklaeren sie ein einmaliger Tipp und eine Zeile im
+     * „Wohin?"-Blatt (`LongPressHint.kt`).
+     */
     onMapLongPress: (Double, Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     gesturesEnabled: Boolean = true,
@@ -98,6 +111,14 @@ internal fun MapViewHost(
      * wegzuziehen.
      */
     onUserPan: () -> Unit = {},
+    /**
+     * Die Karte steht nach einer eigenen Bewegung ([onUserPan]) wieder still,
+     * samt Nachgleiten eines Wischers. [onUserPan] meldet nur den **Beginn**;
+     * wer wissen will, ob die Nutzerin gerade noch wischt (der einmalige Tipp
+     * zum langen Druecken, `LongPressHint.kt`), braucht auch das Ende.
+     * Kamerafahrten des Programms melden hier nichts.
+     */
+    onUserPanEnd: () -> Unit = {},
 ) {
     // Screenshot-Tests laufen auf der JVM ohne MapLibres native Bibliothek;
     // dort steht an Stelle der Karte eine ruhige Kartenflaeche, damit alles
@@ -111,6 +132,7 @@ internal fun MapViewHost(
     val currentTap by rememberUpdatedState(onMapTap)
     val currentLongPress by rememberUpdatedState(onMapLongPress)
     val currentPan by rememberUpdatedState(onUserPan)
+    val currentPanEnd by rememberUpdatedState(onUserPanEnd)
 
     // Kameraposition ueber Konfigurationsaenderungen (Drehen) hinweg merken.
     // MapView.onSaveInstanceState/onCreate(Bundle) waere der View-Weg, in einem
@@ -256,9 +278,21 @@ internal fun MapViewHost(
                     currentLongPress(latLng.latitude, latLng.longitude)
                     true
                 }
+                // Ob die laufende Kamerabewegung von der Hand kommt: Der
+                // Idle-Listener meldet jedes Stillstehen, auch nach
+                // Programmfahrten — weitergereicht wird nur das Ende einer
+                // eigenen Bewegung.
+                var userMoving = false
                 map.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                        userMoving = true
                         currentPan()
+                    }
+                }
+                map.addOnCameraIdleListener {
+                    if (userMoving) {
+                        userMoving = false
+                        currentPanEnd()
                     }
                 }
                 controller.attach(map)

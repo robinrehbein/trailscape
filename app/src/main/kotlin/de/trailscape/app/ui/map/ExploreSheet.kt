@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -65,7 +66,9 @@ import de.trailscape.core.RideSummary
  * Der Griff haelt, was er verspricht: Hochgewischt zeigt das Blatt die
  * gespeicherten Routen (Planungen, neueste zuerst), die zuletzt gesuchten
  * Orte und den Weg zu den Offline-Karten. Vorher hatte das Blatt keinen
- * Koerper, und Wischen am Griff tat schlicht nichts.
+ * Koerper, und Wischen am Griff tat schlicht nichts. Ganz oben steht eine
+ * kleine Zeile zum langen Druck auf die Karte — der einzigen Geste, die man
+ * sonst nirgends sieht (siehe `LongPressHint.kt`).
  *
  * @param todayOffer die heute angebotene Runde oder `null`, wenn es heute
  *   keine gibt (Zieltag). Am Ruhetag ist es die lockere Runde; der Knopf sagt
@@ -209,6 +212,7 @@ private fun ExploreSheetBody(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.padding(start = CardPadding, end = CardPadding, bottom = 12.dp)) {
+        LongPressHintLine()
         if (savedRoutes.isNotEmpty()) {
             SectionLabel("Gespeicherte Routen")
             savedRoutes.take(MAX_ROWS).forEach { ride ->
@@ -240,6 +244,34 @@ private fun ExploreSheetBody(
             subtitle = "Gegenden für unterwegs ohne Netz laden",
             icon = Icons.Rounded.DownloadForOffline,
             onClick = onOpenOfflineMaps,
+        )
+    }
+}
+
+/**
+ * Die leise, dauerhafte Erklaerung des langen Drucks (Massnahme U6, siehe
+ * `LongPressHint.kt`): Die Geste hat keinen Knopf, und die einmalige Snackbar
+ * ist nach dem ersten Mal weg. Hier, wo man ohnehin nach dem „Wohin?" sucht,
+ * steht sie deshalb immer — klein und in `onSurfaceVariant`, damit sie
+ * erklaert, ohne mit den Eintraegen darunter zu konkurrieren.
+ */
+@Composable
+private fun LongPressHintLine() {
+    Row(
+        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Rounded.TouchApp,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = LONG_PRESS_HINT_LINE,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
