@@ -487,7 +487,13 @@ enum class StripState {
     REST,
 }
 
-/** Ein Tag im Streifen samt fertigem Vorlesetext. */
+/**
+ * Ein Tag im Streifen samt fertigem Vorlesetext.
+ *
+ * [description] ist der ganze Satz, den TalkBack statt Kuerzel und Zahl
+ * vorliest („Dienstag: 32 km gefahren", „Mittwoch: Ruhetag") — sonst hoerte
+ * man nur „Di", „32" und muesste die Bedeutung des Kreises erraten.
+ */
 data class StripDay(
     val label: String,
     val state: StripState,
@@ -547,7 +553,7 @@ fun weekStrip(
                 StripState.TODAY,
                 todayKm,
                 true,
-                if (todayKm != null) "$name: $todayKm km geplant" else "$name: frei",
+                if (todayKm != null) "$name: $todayKm km geplant" else "$name: Ruhetag",
             )
 
             date.isAfter(today) && plannedKm != null -> StripDay(
@@ -558,7 +564,17 @@ fun weekStrip(
                 "$name: $plannedKm km geplant",
             )
 
-            else -> StripDay(WEEKDAY_SHORT[index], StripState.REST, null, false, "$name: frei")
+            // Vorgelesen wird zwischen Vergangenheit und Zukunft unterschieden,
+            // obwohl beide gleich aussehen („–"): Ein vergangener Tag ohne Fahrt
+            // war nicht zwingend ein Ruhetag (auch ein verpasster Plantag landet
+            // hier), ein kommender ohne Einheit ist es.
+            else -> StripDay(
+                WEEKDAY_SHORT[index],
+                StripState.REST,
+                null,
+                false,
+                if (date.isBefore(today)) "$name: keine Fahrt" else "$name: Ruhetag",
+            )
         }
     }
 }

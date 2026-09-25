@@ -232,6 +232,9 @@ class TodayWordingTest {
         assertEquals(32, strip[1].km)
         assertEquals("Donnerstag, heute: 45 km geplant", strip[3].description)
         assertEquals("Samstag: 80 km geplant", strip[5].description)
+        assertEquals("Dienstag: 32 km gefahren", strip[1].description)
+        assertEquals("Mittwoch: keine Fahrt", strip[2].description)
+        assertEquals("Freitag: Ruhetag", strip[4].description)
 
         assertEquals("32 von 120 km" to "noch 2 Fahrten", weekSummary(31.6, 120, strip, rideCount = 1))
         assertEquals("32 km diese Woche" to "1 Fahrt", weekSummary(31.6, null, strip, rideCount = 1))

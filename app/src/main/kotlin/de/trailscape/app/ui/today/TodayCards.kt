@@ -48,8 +48,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -294,12 +298,24 @@ private val RingStroke = 7.dp
  * zweimal zeigten. Der Streifen sagt auf einen Blick, was erledigt ist, was
  * heute und was noch ansteht — ohne Wochentyp, Planwoche oder
  * Schluessel-Einheit.
+ *
+ * Fuer TalkBack: Die Kopfzeile ist eine Ueberschrift (ein Satz statt zweier
+ * Schnipsel), der Streifen eine Liste mit sieben Eintraegen — so kuendigt
+ * TalkBack die Liste mit ihrer Laenge an, und jeder Tag wird als ganzer Satz
+ * vorgelesen ([StripDay.description]) statt als Kuerzel und nackte Zahl.
  */
 @Composable
 internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
+    val summarySpoken = summary.second?.let { "${summary.first}, $it" } ?: summary.first
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
-            Row(verticalAlignment = Alignment.Bottom) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.clearAndSetSemantics {
+                    heading()
+                    contentDescription = summarySpoken
+                },
+            ) {
                 Text(text = summary.first, style = MaterialTheme.typography.titleMedium)
                 summary.second?.let {
                     Text(
@@ -311,9 +327,13 @@ internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                for (day in strip) {
-                    StripDayCell(day = day, modifier = Modifier.weight(1f))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { collectionInfo = CollectionInfo(rowCount = 1, columnCount = strip.size) },
+            ) {
+                strip.forEachIndexed { index, day ->
+                    StripDayCell(day = day, index = index, modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -325,11 +345,14 @@ internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
  * Satz aus [StripDay.description] („Donnerstag, heute: 45 km geplant").
  */
 @Composable
-private fun StripDayCell(day: StripDay, modifier: Modifier = Modifier) {
+private fun StripDayCell(day: StripDay, index: Int, modifier: Modifier = Modifier) {
     val theme = MaterialTheme.colorScheme
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.clearAndSetSemantics { contentDescription = day.description },
+        modifier = modifier.clearAndSetSemantics {
+            contentDescription = day.description
+            collectionItemInfo = CollectionItemInfo(rowIndex = 0, rowSpan = 1, columnIndex = index, columnSpan = 1)
+        },
     ) {
         Text(
             text = day.label,
