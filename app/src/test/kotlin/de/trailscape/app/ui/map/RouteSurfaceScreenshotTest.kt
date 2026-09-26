@@ -19,6 +19,7 @@ import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.Waypoint
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -144,11 +145,9 @@ class RouteSurfaceScreenshotTest {
                             error = null,
                             maxHeight = 600.dp,
                             generated = true,
-                            onRoundTrip = {},
                             onUseMyPosition = {},
                             onRemoveWaypoint = {},
                             onAddWaypointViaSearch = {},
-                            onUndo = {},
                             onClear = {},
                             onSave = {},
                             onShare = {},
@@ -162,5 +161,67 @@ class RouteSurfaceScreenshotTest {
         }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/61-planung-belag.png")
+    }
+
+    /** Das Planungsblatt mit genau einem Punkt — der Zustand nach „+ Als Wegpunkt". */
+    @Test
+    fun planungEinPunkt() {
+        planning(
+            waypoints = listOf(Waypoint(48.4, 9.4, name = "Bärenschlössle, 14, Mahdental")),
+            route = null,
+            file = "62-planung-ein-punkt.png",
+        )
+    }
+
+    /** Das Planungsblatt mit fertiger Route von Hand. */
+    @Test
+    fun planungRouteSteht() {
+        planning(
+            waypoints = listOf(
+                Waypoint(48.4, 9.4, name = "Mein Standort"),
+                Waypoint(48.5, 9.45),
+                Waypoint(48.6, 9.5, name = "Bärenschlössle"),
+            ),
+            route = route(38.4, 420.0, paved = 20.0, unpaved = 18.4),
+            file = "63-planung-route.png",
+        )
+    }
+
+    private fun planning(waypoints: List<Waypoint>, route: PlannedRoute?, file: String) {
+        compose.setContent {
+            TrailscapeTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    Box(contentAlignment = Alignment.BottomCenter) {
+                        PlanningSheet(
+                            expanded = true,
+                            onExpandedChange = {},
+                            half = false,
+                            onHalfChange = {},
+                            profile = de.trailscape.core.RouteProfile.GRAVEL,
+                            onProfileChange = {},
+                            roundTrip = false,
+                            onRoundTripChange = {},
+                            waypoints = waypoints,
+                            route = route,
+                            busy = false,
+                            error = null,
+                            maxHeight = 700.dp,
+                            source = de.trailscape.core.RoutingSource.SERVER,
+                            onUseMyPosition = {},
+                            onRemoveWaypoint = {},
+                            onAddWaypointViaSearch = {},
+                            onClear = {},
+                            onSave = {},
+                            onShare = {},
+                            onNavigate = {},
+                            onHoverPoint = {},
+                            onClose = {},
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/$file")
     }
 }
