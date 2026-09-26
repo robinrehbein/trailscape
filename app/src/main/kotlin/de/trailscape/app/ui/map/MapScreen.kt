@@ -1668,7 +1668,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                 appViewModel.showMessage("Position konnte nicht ermittelt werden.")
                 return@launch
             }
-            waypoints = listOf(Waypoint(position.latitude, position.longitude)) + waypoints
+            waypoints = listOf(
+                Waypoint(position.latitude, position.longitude, name = MY_POSITION_NAME),
+            ) + waypoints
             controller.moveTo(position.latitude, position.longitude, MIN_RECORDING_ZOOM)
         }
     }
@@ -3215,7 +3217,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onExpandedChange = { planSheetExpanded = it },
                             profile = routeProfile,
                             onProfileChange = { routeProfile = it },
-                            // Der Segmentschalter „Einfach | Rundweg": Er
+                            // Der Schalter „Zurück zum Start": Er
                             // aendert keinen Wegpunkt, nur die Art, wie sie
                             // verbunden werden — nachgerechnet wird ueber
                             // `roundTrip` im Schluessel des Planungs-Effekts.
@@ -3231,16 +3233,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                             generated = routeFromGenerator,
                             source = routeSource,
                             locating = locating,
-                            onRoundTrip = ::startRoundTrip,
                             onUseMyPosition = ::useMyPositionAsStart,
                             onRemoveWaypoint = { index ->
                                 waypoints = waypoints.filterIndexed { i, _ -> i != index }
                             },
                             onAddWaypointViaSearch = { openPlaceSearch { place -> addPlaceAsWaypoint(place) } },
-                            onUndo = {
-                                routeFromGenerator = false
-                                waypoints = waypoints.dropLast(1)
-                            },
                             onClear = {
                                 // Wie „Planung beenden": Der Fehlgriff darf nicht
                                 // das Ende der Arbeit sein (siehe
@@ -4096,10 +4093,11 @@ private val OverlayFloatingButtonsHeight = 136.dp
 private val GenerationPeekFixedHeight = 184.dp
 
 /**
- * Planung: Griff (24) und die eine Statuszeile (`heightIn(min = 48.dp)`) —
- * siehe `PlanningSheet` in `PlanningPanel.kt`.
+ * Planung: Griff (24) und der Kopf aus Titel und grauer Zeile
+ * (`heightIn(min = 56.dp)` plus 4 dp) — siehe `PlanningHeader` in
+ * `PlanningPanel.kt`.
  */
-private val PlanningPeekFixedHeight = 72.dp
+private val PlanningPeekFixedHeight = 84.dp
 
 /** Untergrenze, damit die Rechnung auf sehr flachen Fenstern nicht negativ wird. */
 private val MinOverlaySheetBudget = 240.dp
