@@ -4,17 +4,26 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.R
+import de.trailscape.app.i18n.AppFormats
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.coreTexts
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -56,29 +65,43 @@ class HistorySummaryScreenshotTest {
     @Config(qualifiers = "+en-rGB")
     fun verlaufGroessteFlaecheEnglisch() {
         render()
+        TestLocales.assertTestLocale(AppLanguage.EN)
         val context = compose.activity
         val title = context.getString(R.string.rides_summary_title)
         assertEquals("Everywhere you’ve been", title)
         compose.onNodeWithText(title).assertExists()
         compose.onNodeWithText("Largest area: 37 tiles").assertExists()
+        // 2345.6 km: Englisch mit Punkt — abgeschnitten bleibt dieselbe ganze Zahl.
         compose.onNodeWithText("2345 km").assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/63-verlauf-groesste-flaeche-en.png")
     }
 
+    /**
+     * Setzt Sprache, Formate und `:core`-Texte aus der Konfiguration wie
+     * `TrailscapeApp()` — sonst fielen die CompositionLocals auf Deutsch
+     * zurueck, und die englische Fassung zeigte deutsche Zahlen.
+     */
     private fun render() {
         compose.setContent {
-            TrailscapeTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Box(contentAlignment = Alignment.BottomCenter) {
-                        HistorySummarySheet(
-                            rideCount = 42,
-                            totalKm = 2345.6,
-                            tileCount = 812,
-                            squareSize = 7,
-                            clusterSize = 37,
-                            onClose = {},
-                            bottomInset = 0.dp,
-                        )
+            val language = languageOf(LocalConfiguration.current)
+            CompositionLocalProvider(
+                LocalAppLanguage provides language,
+                LocalCoreTexts provides coreTexts(language),
+                LocalAppFormats provides AppFormats(language),
+            ) {
+                TrailscapeTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Box(contentAlignment = Alignment.BottomCenter) {
+                            HistorySummarySheet(
+                                rideCount = 42,
+                                totalKm = 2345.6,
+                                tileCount = 812,
+                                squareSize = 7,
+                                clusterSize = 37,
+                                onClose = {},
+                                bottomInset = 0.dp,
+                            )
+                        }
                     }
                 }
             }

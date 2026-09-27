@@ -69,23 +69,39 @@ class RidesScreenshotTest {
 
     private val now = System.currentTimeMillis()
 
+    /** Touren, die vor diesem Test im Speicher lagen — nach dem Test zurueck. */
+    private var saved: List<Ride> = emptyList()
+
+    /**
+     * Nur die eigenen Beispieltouren im Verlauf: [AppServices] lebt ueber die
+     * Testklasse hinaus, und Touren anderer Screenshot-Klassen (etwa aus
+     * `ScreenshotTest`) doppelten sonst die Liste und verfaelschten Wochenziel
+     * und Belastung — die Bilder hingen von der Testreihenfolge ab. Deshalb
+     * erst sichern und leeren, dann die eigenen Touren speichern.
+     */
     @Before
     fun seed() {
         assumeTrue(System.getProperty("trailscape.screenshots") == "true")
         AppServices.keyValueStore.setString(ONBOARDING_STORAGE_KEY, "1")
         AppServices.keyValueStore.setString(LONG_PRESS_HINT_STORAGE_KEY, "1")
-        AppServices.rideStorage.saveRides(sampleRides())
+        val storage = AppServices.rideStorage
+        val ids = storage.listSummaries().summaries.map { it.id }
+        saved = ids.mapNotNull { storage.loadRide(it) }
+        ids.forEach { storage.deleteRide(it) }
+        storage.saveRides(sampleRides())
     }
 
     /**
-     * Die eigenen Touren wieder weg: [AppServices] lebt ueber die Testklasse
-     * hinaus, und `ScreenshotTest.ohneGefahreneTourKeinKartenknopf` erwartet
-     * einen Verlauf ohne fremde gefahrene Touren.
+     * Den Speicher wiederherstellen: eigene Touren weg (auch fuer
+     * `ScreenshotTest.ohneGefahreneTourKeinKartenknopf`, das einen Verlauf
+     * ohne fremde gefahrene Touren erwartet), gesicherte zurueck.
      */
     @After
     fun cleanUp() {
         if (System.getProperty("trailscape.screenshots") != "true") return
-        sampleRides().forEach { AppServices.rideStorage.deleteRide(it.id) }
+        val storage = AppServices.rideStorage
+        storage.listSummaries().summaries.forEach { storage.deleteRide(it.id) }
+        if (saved.isNotEmpty()) storage.saveRides(saved)
     }
 
     /** Liste mit Abschnitt „Planned", Monatsgruppen und Haerte-Pillen; danach das Import-Menue. */
@@ -147,6 +163,21 @@ class RidesScreenshotTest {
         compose.onAllNodesWithContentDescription(string(R.string.rides_detail_share_cd))[0].performClick()
         settle()
         compose.onAllNodesWithText(string(R.string.rides_share_square_option)).onFirst().assertExists()
+        // Inhalt und Vorschau entstehen abseits des Hauptthreads (produceState);
+        // ohne Warten zeigte das Bild nur die leere Flaeche und keinen Hinweis.
+        val hint = string(R.string.rides_share_image_track_hint)
+        assertEquals(
+            "The image shows the shape of your route without a map – anyone who knows the area " +
+                "can still spot the start and finish.",
+            hint,
+        )
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText(hint).fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithContentDescription(string(R.string.rides_share_preview_cd))
+                    .fetchSemanticsNodes().isNotEmpty()
+        }
+        settle()
+        compose.onAllNodesWithText(hint).onFirst().assertExists()
         compose.onNode(isDialog()).captureRoboImage("build/outputs/roborazzi/75-teilen-en.png")
 
         val ride = sampleRides().first()
@@ -162,14 +193,13 @@ class RidesScreenshotTest {
         val noHr = ride.copy(stats = ride.stats.copy(avgHrBpm = null))
         val square = shareCardContent(noHr, 84.0, AppLanguage.EN, resolve = { it.resolve(compose.activity) })
         assertTrue(square.stats.any { it.label == "Training load" })
-        saveBitmap(renderShareCard(square, ShareCardFormat.SQUARE), "77-tourbild-quadrat-en")
+        saveBitmap(renderShareCard(square, ShareCardFormat.SQUARE), "77-tourbild-square-en")
     }
 
     /** Leerer Verlauf: Satz und die zwei Wege zu Daten. */
     @Test
     fun leerEnglisch() {
-        // Alle Touren, nicht nur die eigenen: Im selben Testlauf koennen
-        // andere Screenshot-Klassen Beispieltouren hinterlassen haben.
+        // Fremde Touren hat seed() schon beiseitegelegt; hier auch die eigenen weg.
         AppServices.rideStorage.listSummaries().summaries.forEach { AppServices.rideStorage.deleteRide(it.id) }
         startInHistory()
         compose.onAllNodesWithText(string(R.string.rides_list_empty_title)).onFirst().assertExists()

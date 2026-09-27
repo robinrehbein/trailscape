@@ -48,10 +48,16 @@ import kotlin.math.roundToInt
  * dieselben Koordinaten nur verkleinert.
  */
 
-/** Die zwei Bildformate: Story (9:16) und Quadrat (1:1), beide 1080 px breit. */
+/**
+ * Die zwei Bildformate: Story (9:16) und Quadrat (1:1), beide 1080 px breit.
+ *
+ * [fileSuffix] ist bewusst sprachneutral („story", „square"): Der Dateiname
+ * erreicht die Empfaenger, deren Sprache die App nicht kennt, und haengt so
+ * nicht an der Spracheinstellung des Absenders.
+ */
 enum class ShareCardFormat(val widthPx: Int, val heightPx: Int, val fileSuffix: String) {
     STORY(1080, 1920, "story"),
-    SQUARE(1080, 1080, "quadrat"),
+    SQUARE(1080, 1080, "square"),
 }
 
 /** Ein achsenparalleles Rechteck in Bildpixeln. */

@@ -62,9 +62,9 @@
     <string name="rides_note_unit_easy">Easy session</string>
     <string name="rides_note_unit_endurance">Endurance session</string>
     <string name="rides_note_unit_hard">Hard session</string>
-    <string name="rides_note_partial_title">Partly to plan.</string>
+    <string name="rides_note_partial_title">Partly as planned.</string>
     <string name="rides_note_partial_body">%1$s started, %2$d km were planned.</string>
-    <string name="rides_note_plan_title">On plan.</string>
+    <string name="rides_note_plan_title">As planned.</string>
     <string name="rides_note_plan_done">%1$s done.</string>
     <string name="rides_note_plan_done_harder">%1$s done, but harder than planned.</string>
     <string name="rides_note_plan_done_easier">%1$s done, but easier than planned.</string>

@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.i18n.AppFormats
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
@@ -76,13 +77,7 @@ internal fun HistorySummarySheet(
                     Modifier.weight(1f),
                 )
                 SummaryValue(
-                    // Ganze Kilometer wie bisher: auf eine Stelle gerundet, dann die
-                    // Nachkommastelle abgeschnitten (2345,6 → 2345). Beide Sprachen
-                    // schreiben ohne Tausendertrennzeichen, also genuegt ',' / '.'.
-                    stringResource(
-                        R.string.common_value_km,
-                        LocalAppFormats.current.km(totalKm).substringBefore(',').substringBefore('.'),
-                    ),
+                    stringResource(R.string.common_value_km, summaryWholeKm(totalKm, LocalAppFormats.current)),
                     stringResource(R.string.rides_summary_ridden_label),
                     Modifier.weight(1f),
                 )
@@ -111,6 +106,14 @@ internal fun HistorySummarySheet(
         }
     }
 }
+
+/**
+ * Ganze Kilometer wie bisher: auf eine Stelle gerundet, dann die
+ * Nachkommastelle abgeschnitten (2345,6 → „2345"). Beide Sprachen schreiben
+ * ohne Tausendertrennzeichen, also genuegt es, am ',' bzw. '.' zu schneiden.
+ */
+internal fun summaryWholeKm(totalKm: Double, formats: AppFormats): String =
+    formats.km(totalKm).substringBefore(',').substringBefore('.')
 
 /** „1 Kachel" / „37 Kacheln" — Einzahl sauber statt „1 Kacheln" (Plural-Ressource). */
 internal fun formatTileCount(count: Int): UiText = UiText.Plural(R.plurals.rides_summary_tile_count, count)

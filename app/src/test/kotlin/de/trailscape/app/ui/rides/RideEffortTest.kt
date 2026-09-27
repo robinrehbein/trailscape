@@ -193,11 +193,11 @@ class RideEffortTest {
     fun `der Satz auf Englisch`() {
         val en = RidesXmlStrings.EN
         val calm = rideNote(RideEffort.LOCKER, RidePlanMatch(lockerSession, PlanSessionStatus.ERLEDIGT), 3.2, en)
-        assertEquals(NoteText("On plan.", "Easy session done, your heart rate stayed calm to the end."), calm)
+        assertEquals(NoteText("As planned.", "Easy session done, your heart rate stayed calm to the end."), calm)
         val harder = rideNote(RideEffort.HART, RidePlanMatch(lockerSession, PlanSessionStatus.ERLEDIGT), 2.0, en)
         assertEquals("Easy session done, but harder than planned.", harder?.body)
         val partial = rideNote(null, RidePlanMatch(lockerSession, PlanSessionStatus.TEILWEISE), null, en)
-        assertEquals(NoteText("Partly to plan.", "Easy session started, 30 km were planned."), partial)
+        assertEquals(NoteText("Partly as planned.", "Easy session started, 30 km were planned."), partial)
         assertEquals("Hard ride.", rideNote(RideEffort.HART, null, null, en)?.headline)
     }
 

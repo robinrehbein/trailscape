@@ -328,7 +328,7 @@ class ShareCardTest {
     @Test
     fun `Dateiname traegt das Format`() {
         assertEquals("Feierabendrunde-story.png", shareCardFileName("Feierabendrunde", ShareCardFormat.STORY))
-        assertEquals("tour-quadrat.png", shareCardFileName("  ", ShareCardFormat.SQUARE))
+        assertEquals("tour-square.png", shareCardFileName("  ", ShareCardFormat.SQUARE))
         assertNotEquals(
             shareCardFileName("Runde", ShareCardFormat.STORY),
             shareCardFileName("Runde", ShareCardFormat.SQUARE),
