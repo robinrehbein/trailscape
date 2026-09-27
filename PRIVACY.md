@@ -105,7 +105,8 @@ Telefonstatus, Aktivitätserkennung oder Werbe-ID an.
 Anfragen entstehen als Folge einer Aktion — Karte anzeigen, Route berechnen,
 Ort suchen, Kacheln herunterladen, synchronisieren — mit **einer** Ausnahme:
 der täglichen Update-Prüfung beim App-Start (letzte Tabellenzeile), die sich
-abschalten lässt und bei Installation über Google Play ganz entfällt. Bei jeder dieser Anfragen sieht der jeweilige Betreiber
+abschalten lässt und bei Installation über Google Play ganz entfällt.
+Bei jeder dieser Anfragen sieht der jeweilige Betreiber
 technisch bedingt deine **IP-Adresse** und den Zeitpunkt; welche Daten darüber
 hinaus mitgehen, steht in der Tabelle. Für die Verarbeitung dort gelten die
 Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
@@ -131,7 +132,7 @@ Offline-Karten*).
 
 Zur Update-Prüfung: Die App ist über Google Play und als APK über GitHub
 erhältlich. Stammt die Installation aus Google Play (die App liest dazu beim
-Start aus, welcher Installer sie installiert hat – das bleibt auf dem Gerät),
+Start aus, welcher Installer sie installiert hat — das bleibt auf dem Gerät),
 fragt sie GitHub nie nach Updates und zeigt keine Update-Hinweise; Updates
 kommen dann über Google Play. Bei der APK von GitHub ist die Prüfung die
 einzige Anfrage, die nicht unmittelbar aus einer Nutzeraktion folgt. Wer sie
