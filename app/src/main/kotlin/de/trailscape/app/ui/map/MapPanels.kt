@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -240,7 +241,10 @@ internal fun LiveRecordingCard(
                 // Rueckfrage; jetzt derselbe Halte-Knopf wie im Cockpit.
                 HoldToEndButton(
                     onEnd = onStop,
-                    minHeight = 44.dp,
+                    label = "Beenden",
+                    holdHint = "gedrückt halten",
+                    icon = Icons.Filled.Stop,
+                    minHeight = 48.dp,
                     modifier = Modifier.weight(1f),
                 )
             }

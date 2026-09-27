@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.haversineM
+import de.trailscape.core.NAV_KAMERA_NEIGUNG_GRAD
 import de.trailscape.core.klemmeOffRouteZoom
 import java.util.Locale
 import kotlin.math.max
@@ -216,6 +217,12 @@ internal fun MapViewHost(
     AndroidView(
         modifier = modifier,
         factory = {
+            // Wird die Karte kleiner (Tastatur der Suche, Splitscreen), passt
+            // der in der Kamera gespeicherte Rand womoeglich nicht mehr —
+            // gleich wieder begrenzen, bevor MapLibre damit rechnet.
+            mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                if (bottom - top != oldBottom - oldTop) controller.reclampPadding()
+            }
             mapView.getMapAsync { map ->
                 map.uiSettings.apply {
                     // Attribution ist Pflicht (OSM/OpenFreeMap/Esri …) — sie bleibt an.
@@ -781,6 +788,9 @@ internal class MapController {
      * wuerde springen, `animateCamera` mit seiner Beschleunigungskurve pumpen.
      * Eine `ease`-Fahrt meldet sich ausserdem nicht als Geste, loest also
      * nicht das „Nutzerin hat selbst verschoben"-Signal aus.
+     *
+     * Mit [versatz] (also „Fahrtrichtung oben") kippt die Kamera zusaetzlich
+     * um [NAV_KAMERA_NEIGUNG_GRAD] in die Schraegsicht; ohne bleibt sie flach.
      */
     fun moveToNavCamera(
         lat: Double,
@@ -797,6 +807,7 @@ internal class MapController {
                         .target(LatLng(lat, lon))
                         .zoom(zoom)
                         .bearing(bearingGrad)
+                        .tilt(if (versatz) NAV_KAMERA_NEIGUNG_GRAD else 0.0)
                         .padding(0.0, topPad, 0.0, 0.0)
                         .build(),
                 ),
@@ -806,7 +817,7 @@ internal class MapController {
     }
 
     /**
-     * Nimmt die Navi-Kamera zurueck: Kurs wieder Nord, Padding null, Position
+     * Nimmt die Navi-Kamera zurueck: Kurs wieder Nord, Neigung und Padding null, Position
      * und Zoom bleiben, wo sie sind. Gerufen beim Ende der Navigation und
      * beim Umschalten auf „Nord oben" — danach verhaelt sich die Kamera exakt
      * wie vor der Navigation.
@@ -821,6 +832,7 @@ internal class MapController {
                         .target(target)
                         .zoom(position.zoom)
                         .bearing(0.0)
+                        .tilt(0.0)
                         .padding(0.0, 0.0, 0.0, 0.0)
                         .build(),
                 ),
@@ -850,12 +862,20 @@ internal class MapController {
                 // die Kamera kann in diesem Moment noch course-up gedreht sein.
                 map.getCameraForLatLngBounds(bounds, intArrayOf(pad, pad, pad, pad), 0.0, 0.0)
             }.getOrNull() ?: return@run
+            // Dieselbe Sperre wie beim Einpassen: Auf einer sehr flachen
+            // Karte (Tastatur, Splitscreen) liefert die Rechnung mit festem
+            // Rand NaN — eine solche Kamera legt MapLibre lahm.
+            val center = target.target ?: return@run
+            if (!target.zoom.isFinite() || !center.latitude.isFinite() || !center.longitude.isFinite()) {
+                return@run
+            }
             map.easeCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()
-                        .target(target.target)
+                        .target(center)
                         .zoom(klemmeOffRouteZoom(target.zoom))
                         .bearing(0.0)
+                        .tilt(0.0)
                         .padding(0.0, 0.0, 0.0, 0.0)
                         .build(),
                 ),
@@ -894,6 +914,35 @@ internal class MapController {
         if (metersPerPixel <= 0 || metersPerPixel.isNaN()) return false
         val distanceM = haversineM(a, TrackPoint(lat = bLat, lon = bLon))
         return distanceM <= metersPerPixel * tolerancePx
+    }
+
+    /**
+     * Verwirft eine noch wartende Kamerafahrt. Gerufen, sobald die Nutzerin
+     * selbst schiebt: Eine Einpass-Fahrt, die auf das Fertigwerden des Stils
+     * gewartet hat, soll nicht Sekunden spaeter die Karte unter dem Finger
+     * wegreissen.
+     */
+    fun cancelPendingCamera() {
+        pendingCamera = null
+    }
+
+    /**
+     * Begrenzt den in der Kamera gespeicherten Rand auf die aktuelle
+     * Kartenhoehe (siehe [reclampedCameraPadding]) — nach jeder
+     * Groessenaenderung der Karte, Tastatur und Splitscreen eingeschlossen.
+     */
+    fun reclampPadding() {
+        val map = map ?: return
+        val position = map.cameraPosition
+        val padding = position.padding ?: return
+        val clamped = reclampedCameraPadding(padding, map.height.toInt()) ?: return
+        map.moveCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(position)
+                    .padding(clamped[0], clamped[1], clamped[2], clamped[3])
+                    .build(),
+            ),
+        )
     }
 
     private fun run(afterReady: Boolean, action: (MapLibreMap) -> Unit) {

@@ -2468,6 +2468,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Punktlisten, ein Vergleich davon liefe bei jeder Rekomposition mit.
     // (Ziel, Seed, Zahl der Vorschlaege, Auswahl) benennt den Vorschlag genauso
     // eindeutig.
+    var fittedGenerationKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(
         generation.target,
         generation.seed,
@@ -2485,6 +2486,14 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         routeFromGenerator = true
         plannedRoute = candidate.route
+        // Nur einmal je Vorschlag einpassen: Der Generatorzustand lebt
+        // ausserhalb dieses Screens, der Effekt laeuft also bei jeder
+        // Rueckkehr auf die Karte (Tabwechsel, Drehen) erneut an — und riss
+        // die Karte dann unter dem Finger zurueck auf die Runde.
+        val key = "${generation.target.hashCode()}-${generation.seed}-" +
+            "${generation.candidates.size}-${generation.selectedIndex}"
+        if (key == fittedGenerationKey) return@LaunchedEffect
+        fittedGenerationKey = key
         controller.fitToPoints(candidate.route.points)
     }
 
@@ -2808,6 +2817,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 onUserPan = {
                     followMe = false
                     userPanning = true
+                    controller.cancelPendingCamera()
                 },
                 onUserPanEnd = {
                     userPanning = false
@@ -2820,7 +2830,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // mehrstuendige Touren gedacht ist — und der ohnehin schon
                 // den Bildschirm anlaesst. Auf der NAVI_KARTE-Seite ist die
                 // Karte dagegen die Hauptdarstellerin und zeichnet natuerlich.
-                renderingActive = rideModeSeite != RideModeSeite.DATEN,
+                //
+                // Dieselbe Bedingung wie beim Anzeigen der Datenseite (unten,
+                // `rideModeSeite == DATEN && isRecording`): `runRecording()`
+                // setzt die Seite schon vor dem Start des Dienstes. Startet
+                // der nicht (oder endet sofort), blieb die Karte vorher
+                // angehalten — das letzte Bild stand, keine Geste bewegte sie.
+                renderingActive = !(rideModeSeite == RideModeSeite.DATEN && isRecording),
             )
 
             // Auch die Kartenseite des Fahrmodus haelt den Bildschirm an —
