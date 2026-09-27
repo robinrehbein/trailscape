@@ -15,13 +15,10 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   `offlineAllowed = false` setzen und eine eigene Kachelquelle (z. B.
   selbst gehostete PMTiles) aushandeln bzw. aufbauen.
 
-- **Play-Build: Paketname und Update-Prüfung.** `PRIVACY.md` nennt für Google
-  Play `de.robinrehbein.trailscape`, der Build setzt aber nur
-  `io.github.robinrehbein.trailscape` (`app/build.gradle.kts`). Vor dem
-  Play-Release den Play-Build bewusst auf die neue Kennung stellen (etwa als
-  eigener Flavor — ein Wechsel der bestehenden Kennung würde Sideload-Installationen
-  vom Update abschneiden) und für Play-Installationen die GitHub-Update-Prüfung
-  abschalten (`installingPackageName == "com.android.vending"` über
+- **Play-Build: Update-Prüfung.** Der Build trägt seit #65
+  `de.robinrehbein.trailscape` (`app/build.gradle.kts`). Offen ist noch, für
+  Play-Installationen die GitHub-Update-Prüfung abzuschalten
+  (`installingPackageName == "com.android.vending"` über
   `getInstallSourceInfo`, API 30+; darunter `getInstallerPackageName`), damit
   die App dort nicht auf eine APK außerhalb von Play verweist. Den Absatz zur
   Update-Prüfung in `PRIVACY.md` dann entsprechend anpassen.
