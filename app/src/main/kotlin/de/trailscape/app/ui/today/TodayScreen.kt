@@ -24,11 +24,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
@@ -39,7 +43,6 @@ import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberNow
 import de.trailscape.app.ui.rememberTodayDecision
@@ -47,7 +50,6 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
-import de.trailscape.app.ui.weekdayDateFormat
 import de.trailscape.core.predictGoalFinish
 import de.trailscape.core.projectedEventCtl
 import de.trailscape.core.riddenRides
@@ -102,6 +104,7 @@ import kotlin.math.roundToInt
 @Composable
 fun TodayScreen(appViewModel: AppViewModel) {
     val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -160,7 +163,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
 
     val monday = today.with(DayOfWeek.MONDAY)
     val riddenByDate = remember(rides, monday) { riddenKmByDate(rides, monday, monday.plusDays(6)) }
-    val strip = weekStrip(today, weekSessions, riddenByDate, todayKm)
+    val strip = weekStrip(today, weekSessions, riddenByDate, todayKm, coreTexts)
     val hasRiddenRide = remember(rides) { riddenRides(rides).isNotEmpty() }
     val rideCount = remember(rides, monday) {
         riddenRides(rides).count {
@@ -209,8 +212,8 @@ fun TodayScreen(appViewModel: AppViewModel) {
             ) {
                 item(key = "kopf") {
                     ScreenHeader(
-                        title = "Heute",
-                        overline = weekdayDateFormat.format(now),
+                        title = stringResource(R.string.today_screen_title),
+                        overline = formats.weekdayDate(today),
                         actions = {
                             SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
                         },
@@ -254,11 +257,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         )
                     }
                 } else {
-                    item(key = "sec-woche") { SectionEyebrow("Diese Woche") }
+                    item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
                     item(key = "woche") { WeekCard(summary = weekSummaryText, strip = strip) }
                 }
 
-                item(key = "sec-ziel") { SectionEyebrow("Dein Ziel") }
+                item(key = "sec-ziel") { SectionEyebrow(stringResource(R.string.today_goal_eyebrow)) }
                 item(key = "ziel") {
                     val openTraining = { appViewModel.requestTab(AppTab.TRAINING) }
                     val shownPlan = displayPlan
@@ -269,23 +272,27 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         val goalDate = localOfEpochMs(goal.date).toLocalDate()
                         val planStart = shownPlan.weeks.firstOrNull()?.start ?: shownPlan.createdAt
                         val targetMin = goal.targetDurationMin
+                        val lineParts = if (targetMin != null) {
+                            goalTimeLine(
+                                today = today,
+                                goalDate = goalDate,
+                                targetMin = targetMin,
+                                currentMin = goalPrediction?.prognosis?.currentMin,
+                            )
+                        } else {
+                            goalLine(
+                                today = today,
+                                goalDate = goalDate,
+                                weekIndex = currentWeek?.index ?: -1,
+                                weekCount = shownPlan.weeks.size,
+                                texts = coreTexts,
+                            )
+                        }
+                        val goalKm = stringResource(R.string.common_value_km, formats.km(goal.distanceKm))
                         GoalCard(
-                            title = "${goal.name} · ${formatKmDe(goal.distanceKm)} km",
-                            line = if (targetMin != null) {
-                                goalTimeLine(
-                                    today = today,
-                                    goalDate = goalDate,
-                                    targetMin = targetMin,
-                                    currentMin = goalPrediction?.prognosis?.currentMin,
-                                )
-                            } else {
-                                goalLine(
-                                    today = today,
-                                    goalDate = goalDate,
-                                    weekIndex = currentWeek?.index ?: -1,
-                                    weekCount = shownPlan.weeks.size,
-                                )
-                            },
+                            title = "${goal.name} · $goalKm",
+                            // Erst aufloesen, dann mit dem sprachneutralen „ · " verbinden.
+                            line = lineParts.map { it.asString() }.joinToString(" · "),
                             progress = goalProgress(localOfEpochMs(planStart).toLocalDate(), goalDate, today),
                             onOpenTraining = openTraining,
                         )
@@ -334,16 +341,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
 @Composable
 private fun FirstRideState(onRecord: () -> Unit, onImport: () -> Unit, hasOffer: Boolean) {
     EmptyState(
-        title = "Noch keine Touren",
-        body = if (hasOffer) {
-            "Bau dir oben eine Runde und fahr los — oder hol deine bisherigen Touren aus " +
-                "Strava, Garmin oder Wahoo. Danach siehst du hier deine Woche."
-        } else {
-            "Sobald die erste Tour gefahren oder importiert ist, siehst du hier deine Woche."
-        },
+        title = stringResource(R.string.today_first_ride_title),
+        body = stringResource(if (hasOffer) R.string.today_first_ride_offer_body else R.string.today_first_ride_body),
         actions = {
-            NeutralButton(onClick = onImport) { Text("Touren importieren") }
-            NeutralButton(onClick = onRecord) { Text("Tour aufzeichnen") }
+            NeutralButton(onClick = onImport) { Text(stringResource(R.string.today_first_ride_import_action)) }
+            NeutralButton(onClick = onRecord) { Text(stringResource(R.string.today_first_ride_record_action)) }
         },
     )
 }

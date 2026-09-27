@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -413,16 +414,14 @@ class ScreenshotTest {
     }
 
     /**
-     * Der Heute-Tab auf Englisch — das Beispielbild des i18n-Fundaments.
+     * Der Heute-Tab auf Englisch (`01-heute-en`), danach die Sprachseite
+     * (`45-einstellungen-sprache-en`).
      *
-     * Stand Fundament: Der Heute-Tab zeigt noch keinen Satz aus `:core` und
-     * keine umgezogene Beschriftung — `01-heute-en` sieht deshalb aus wie
-     * `01-heute`; die sichtbaren Texte zieht erst i18n-today um. Das Bild
-     * belegt, dass der Test englisch laeuft. Was die Oberflaeche wirklich
-     * englisch liest, pruefen die Knoten: das Zahnrad des Heute-Tabs
-     * („Settings" aus `strings_common.xml`) und danach die Sprachseite
-     * (`45-einstellungen-sprache-en`), deren Texte schon aus
-     * `values-en/strings_more.xml` kommen.
+     * Das Bild allein beweist nichts; die Knoten pruefen, dass wirklich
+     * englisch gezeichnet wird: Titel und „Warum"-Link aus
+     * `values-en/strings_today.xml`, das Zahnrad („Settings" aus
+     * `strings_common.xml`) und die Texte der Sprachseite aus
+     * `values-en/strings_more.xml`.
      */
     @Test
     @Config(qualifiers = "+en-rGB")
@@ -441,6 +440,10 @@ class ScreenshotTest {
         val settings = context.getString(R.string.common_settings_cd)
         assertEquals("Settings", settings)
         compose.onAllNodesWithContentDescription(settings)[0].assertExists()
+        assertEquals("Today", context.getString(R.string.today_screen_title))
+        compose.onAllNodesWithText(context.getString(R.string.today_screen_title))[0].assertExists()
+        compose.onAllNodesWithText(context.getString(R.string.today_hero_why_action))[0].assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.today_week_eyebrow))[0].assertExists()
         shot("01-heute-en")
 
         compose.onAllNodesWithContentDescription(settings)[0].performClick()
@@ -483,6 +486,72 @@ class ScreenshotTest {
         settle()
         shot("18-losfahren")
     }
+
+    /**
+     * „Warum?"-Blatt und Losfahren-Dialog auf Englisch — die beiden Stellen
+     * mit den laengsten Saetzen von „Heute" (`05-warum-en`, `18-losfahren-en`).
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteEnglischDetails() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        start()
+        val context = compose.activity
+        compose.onAllNodesWithText(context.getString(R.string.today_hero_why_action))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.today_signal_sleep_label))[0].assertExists()
+        compose.onAllNodesWithText(context.getString(R.string.today_signal_load_label))[0].assertExists()
+        shot("05-warum-en")
+        compose.onAllNodesWithText(context.getString(R.string.today_why_sheet_dismiss_action))[0].performClick()
+        settle()
+
+        recordButton().performClick()
+        settle()
+        assertEquals("Start riding", context.getString(R.string.today_ready_title))
+        compose.onAllNodesWithText(context.getString(R.string.today_ready_title))[0].assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.today_ready_free_body))[0].assertIsDisplayed()
+        shot("18-losfahren-en")
+    }
+
+    /**
+     * „Heute" auf Englisch auf einem schmalen Geraet (360 dp) mit Samsungs
+     * erster Vergroesserungsstufe — findet abgeschnittene englische
+     * Beschriftungen im Hero-Knopf, im Wochenstreifen und in der Zielzeile.
+     */
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w360dp-h1400dp-xxhdpi")
+    fun heuteEnglischSchmal() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        RuntimeEnvironment.setFontScale(1.15f)
+        start()
+        compose.onAllNodesWithText(compose.activity.getString(R.string.today_goal_eyebrow))[0].assertIsDisplayed()
+        shot("12-heute-schmal-en")
+    }
+
+    /**
+     * Erststart auf Englisch: keine gefahrene Tour — die erste Runde im
+     * Hero-Knopf („Build loop · 26 km") und die Einladung zum Import.
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteEnglischErststart() {
+        sampleRides().filterNot { it.planned }.forEach { AppServices.rideStorage.deleteRide(it.id) }
+        start()
+        val context = compose.activity
+        compose.onAllNodesWithText(context.getString(R.string.today_first_ride_title))[0].assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.today_first_ride_import_action))[0].assertExists()
+        shot("19-heute-erststart-en")
+    }
+
+    /**
+     * Der schwebende Aufnahme-Knopf. Seine Beschreibung gehoert dem Bereich
+     * der App-Huelle (`RecCapsuleButton.kt`) und ist vielleicht noch deutsch —
+     * gesucht wird deshalb nach beiden Fassungen.
+     */
+    private fun recordButton() = compose.onAllNodes(
+        hasContentDescription("Aufzeichnung starten") or
+            hasContentDescription(compose.activity.getString(R.string.today_ready_start_recording_action)),
+    )[0]
 
     private fun start(dark: Boolean = false) {
         compose.setContent {

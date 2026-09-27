@@ -19,7 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.map.PrimaryButton
 import de.trailscape.app.ui.today.TodayOffer
@@ -124,13 +128,13 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
         contentPadding = 24.dp,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Die App zeichnet auf, die Route entsteht unterwegs.")
+                Text(stringResource(R.string.today_ready_free_body))
                 if (offer != null) {
                     // Dezent und einen Schriftgrad kleiner: Der Hinweis ist ein
                     // Angebot, keine Aufforderung — wer den Knopf gedrueckt hat,
                     // will meistens einfach losfahren.
                     Text(
-                        text = offerHint(offer, decision.restHeadline),
+                        text = offerHint(offer, decision.restHeadline).asString(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -139,12 +143,12 @@ private fun FreeRideDialog(appViewModel: AppViewModel, onDismiss: () -> Unit) {
         },
         confirmButton = {
             DialogButtonStack(
-                primaryLabel = "Aufzeichnung starten",
+                primaryLabel = stringResource(R.string.today_ready_start_recording_action),
                 onPrimary = {
                     appViewModel.requestRecording()
                     onDismiss()
                 },
-                secondaryLabel = offer?.let { offerDialogAction(it) },
+                secondaryLabel = offer?.let { offerDialogAction(it).asString() },
                 onSecondary = {
                     offer?.let { appViewModel.requestRouteGeneration(it.target) }
                     onDismiss()
@@ -174,17 +178,17 @@ private fun PlannedRideDialog(
         contentPadding = 24.dp,
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Route · ${formatKmDe(distanceKm)} km, mit Abbiegehinweisen.")
+                Text(stringResource(R.string.today_ready_planned_body, LocalAppFormats.current.km(distanceKm)))
             }
         },
         confirmButton = {
             DialogButtonStack(
-                primaryLabel = "Mit Route starten",
+                primaryLabel = stringResource(R.string.today_ready_with_route_action),
                 onPrimary = {
                     appViewModel.requestNavigatePlanned()
                     onDismiss()
                 },
-                secondaryLabel = "Ohne Route starten",
+                secondaryLabel = stringResource(R.string.today_ready_without_route_action),
                 onSecondary = {
                     appViewModel.requestRecording()
                     onDismiss()
@@ -236,9 +240,9 @@ private fun DialogButtonStack(
 @Composable
 private fun DialogTitleWithClose(onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Losfahren", modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.today_ready_title), modifier = Modifier.weight(1f))
         IconButton(onClick = onClose, modifier = Modifier.offset(x = 12.dp)) {
-            Icon(Icons.Rounded.Close, contentDescription = "Schließen")
+            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.common_action_close))
         }
     }
 }

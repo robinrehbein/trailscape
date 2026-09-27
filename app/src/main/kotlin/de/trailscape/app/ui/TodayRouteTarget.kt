@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.today.TodayEffort
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offeredTarget
@@ -64,7 +65,7 @@ data class TodayDecision(
      * Der Ruhetag-Grund, wie ihn die Schlagzeile in „Heute" nennt — fuer den
      * Losfahren-Dialog, damit beide dasselbe sagen ([restHeadline]).
      */
-    val restHeadline: String get() = de.trailscape.app.ui.today.restHeadline(route, planRestDay)
+    val restHeadline: UiText get() = de.trailscape.app.ui.today.restHeadline(route, planRestDay)
 }
 
 /**
