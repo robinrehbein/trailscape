@@ -7,4 +7,229 @@
     Gegenstueck in values-en/strings_training.xml — gleiche Schluessel, gleiche Reihenfolge.
 -->
 <resources>
+    <!-- TrainingInsights.kt: Lastskala-Hinweis, je Herkunft der FTP ein ganzer Satz. -->
+    <string name="training_insights_load_scale_entered">Alle Lastwerte rechnen mit %1$d W Schwelle (%2$s W/kg), von dir eingetragen. Änderst du den Wert im Profil, verschiebt sich die Skala — auch rückwirkend für alle bisherigen Touren.</string>
+    <string name="training_insights_load_scale_estimated">Alle Lastwerte rechnen mit %1$d W Schwelle (%2$s W/kg), nur aus deinem Gewicht geschätzt. Das ist eine grobe Annahme (2,4 W/kg). Trage im Profil deine FTP ein oder fahre eine Tour mit Puls und Höhenprofil — beides macht die Skala belastbarer und verschiebt dann alle bisherigen Werte.</string>
+    <string name="training_insights_load_scale_twenty_min">Alle Lastwerte rechnen mit %1$d W Schwelle (%2$s W/kg), geschätzt aus deinen Touren. Grundlage ist dein bester 20-Minuten-Abschnitt aus der GPS-Leistungsschätzung (±15–25 %%). Eine eingetragene FTP wäre genauer.</string>
+    <string name="training_insights_load_scale_calibrated">Alle Lastwerte rechnen mit %1$d W Schwelle (%2$s W/kg), aus deinem Puls nachgeführt. Grundlage ist der Abgleich mit deiner gemessenen Herzfrequenz. Der Wert kann sich mit neuen Touren verschieben — und mit ihm die Lastwerte der Vergangenheit.</string>
+
+    <!-- TrainingFormat.kt -->
+    <string name="training_format_hrv_trend">Tendenz: %1$s %% gegenüber deinem Normalwert (%2$d ms).</string>
+
+    <!-- TrainingNotices.kt -->
+    <string name="training_notice_profile_title">Profil eintragen</string>
+    <string name="training_notice_profile_body">Ohne Alter und Gewicht rechnen wir mit %1$d&#160;Jahren und %2$d&#160;kg — die Zahlen sind grob.</string>
+    <string name="training_notice_profile_action">Profil öffnen</string>
+
+    <!-- TrainingScreen.kt -->
+    <string name="training_screen_title">Training</string>
+    <string name="training_screen_goal_eyebrow">Dein Ziel</string>
+    <string name="training_screen_week_eyebrow">Diese Woche</string>
+    <string name="training_screen_form_eyebrow">Deine Form</string>
+    <string name="training_screen_vitals_eyebrow">Körperwerte</string>
+    <string name="training_screen_week_headline">Woche %1$d von %2$d · %3$s</string>
+    <string name="training_screen_all_weeks_action">Alle Wochen ansehen</string>
+    <string name="training_screen_show_less_action">Weniger anzeigen</string>
+    <string name="training_screen_empty_title">Hier entsteht dein Trainingsbild</string>
+    <string name="training_screen_empty_body">Trailscape baut aus deinen Touren dein Trainingsbild auf. Belastbar wird es erst mit rund zwei Wochen Historie — am schnellsten bist du dort mit importierten Touren.</string>
+    <string name="training_screen_empty_record_action">Tour aufzeichnen</string>
+    <string name="training_screen_empty_import_action">Alte Touren importieren</string>
+
+    <!-- GoalCard.kt: Zielkarte -->
+    <!-- Bewusst eigene Hoehen-Einheit statt common_value_elevation: Der Trainings-Tab schreibt im Deutschen seit jeher „Hm“ (gross), die übrige App „hm“; Deutsch bleibt wörtlich. Zahl und Einheit mit geschütztem Leerzeichen, damit sie nicht getrennt umbrechen. -->
+    <string name="training_goal_ascent">%1$d&#160;Hm</string>
+    <string name="training_goal_date_passed">vorbei</string>
+    <string name="training_goal_date_today">heute</string>
+    <string name="training_goal_date_tomorrow">morgen</string>
+    <plurals name="training_goal_days_left_count">
+        <item quantity="one">noch %1$d&#160;Tag</item>
+        <item quantity="other">noch %1$d&#160;Tage</item>
+    </plurals>
+    <plurals name="training_goal_weeks_left_count">
+        <item quantity="one">noch %1$d&#160;Woche</item>
+        <item quantity="other">noch %1$d&#160;Wochen</item>
+    </plurals>
+    <string name="training_goal_no_prognosis">Noch keine Prognose.</string>
+    <string name="training_goal_hint_long_rides">Wichtigster Hebel: die langen Fahrten. Das Rennen ist länger als deine längste Tour der letzten Wochen.</string>
+    <string name="training_goal_hint_short">Für deine Zielzeit fehlen noch etwa %1$d Min. Am meisten bringen die langen Fahrten.</string>
+    <string name="training_goal_hint_on_track">Das reicht für deine Zielzeit. Bleib bei den langen Fahrten dran.</string>
+    <string name="training_goal_hint_no_target">Trag eine Zielzeit ein, dann siehst du, ob es reicht.</string>
+    <string name="training_goal_prognosis_event">Mit dem Plan kommst du bis zum Renntag auf %1$s.</string>
+    <string name="training_goal_prognosis_event_value">ca. %1$s</string>
+    <string name="training_goal_prognosis_pending">Sobald deine Fitnesskurve steht, rechnen wir auch den Renntag aus.</string>
+    <string name="training_goal_edit_action">Ändern</string>
+    <string name="training_goal_current_label">Stand heute</string>
+    <string name="training_goal_target_label">Zielzeit</string>
+    <string name="training_goal_target_add_action">Zielzeit eintragen</string>
+    <string name="training_goal_explain_action">Wie wird das berechnet?</string>
+    <string name="training_goal_marker_today">heute</string>
+    <string name="training_goal_marker_event">am Renntag</string>
+    <string name="training_goal_marker_target">Ziel</string>
+    <string name="training_goal_track_slower">langsamer</string>
+    <string name="training_goal_track_faster">schneller</string>
+    <string name="training_goal_track_cd">Heute %1$s</string>
+    <string name="training_goal_track_target_cd">Heute %1$s, Ziel %2$s</string>
+    <string name="training_goal_track_event_cd">Heute %1$s, mit Plan %2$s</string>
+    <string name="training_goal_track_target_event_cd">Heute %1$s, Ziel %2$s, mit Plan %3$s</string>
+    <string name="training_goal_setup_title">Ziel festlegen</string>
+    <string name="training_goal_setup_body">Trag ein Rennen oder eine Tour ein, auf die du hinfährst – mit Distanz, Höhenmetern, Datum und gern einer Zielzeit. Daraus entsteht dein Plan, und wir sagen dir, ob die Zeit drin ist.</string>
+    <string name="training_goal_setup_action">Ziel festlegen</string>
+
+    <!-- GoalCard.kt: Blatt „Wie die Prognose entsteht" -->
+    <string name="training_prognosis_title">Wie die Prognose entsteht</string>
+    <string name="training_prognosis_rides_label">Deine Touren</string>
+    <plurals name="training_prognosis_rides_weeks_count">
+        <item quantity="one">letzte %1$d Woche</item>
+        <item quantity="other">letzte %1$d Wochen</item>
+    </plurals>
+    <string name="training_prognosis_rides_body" formatted="false">Dein Tempo auf Touren ab etwa 40 % der Zieldistanz. Längere und jüngere Touren zählen mehr.</string>
+    <plurals name="training_prognosis_rides_body_used_count">
+        <item quantity="one">Dein Tempo auf Touren ab etwa 40 %% der Zieldistanz. Längere und jüngere Touren zählen mehr. Eingeflossen: %1$d Tour.</item>
+        <item quantity="other">Dein Tempo auf Touren ab etwa 40 %% der Zieldistanz. Längere und jüngere Touren zählen mehr. Eingeflossen: %1$d Touren.</item>
+    </plurals>
+    <string name="training_prognosis_fitness_label">Deine Fitness</string>
+    <string name="training_prognosis_fitness_body" formatted="false">Je höher die Fitness am Renntag, desto länger hältst du dasselbe Tempo. Wir rechnen mit der Fitness, die dein Plan bis dahin aufbaut – höchstens 8 % schneller als heute.</string>
+    <string name="training_prognosis_route_label">Die Strecke</string>
+    <string name="training_prognosis_route_ascent_pill">%1$s&#160;km · %2$d&#160;Hm</string>
+    <string name="training_prognosis_route_body">Höhenmeter kosten Zeit: Jeder Höhenmeter zählt wie 9 m flache Strecke. Ist das Rennen länger als deine längste Tour, rechnen wir etwas Zeit dazu.</string>
+    <plurals name="training_prognosis_uncertainty_count">
+        <item quantity="one">Die Zahl ist eine Schätzung mit etwa ±%1$d Minute. Sie wird mit jeder Tour genauer. Puls, Wind und Untergrund kennt sie nicht.</item>
+        <item quantity="other">Die Zahl ist eine Schätzung mit etwa ±%1$d Minuten. Sie wird mit jeder Tour genauer. Puls, Wind und Untergrund kennt sie nicht.</item>
+    </plurals>
+    <string name="training_prognosis_done_action">Verstanden</string>
+
+    <!-- GoalCard.kt: Zielformular -->
+    <string name="training_goal_editor_title_new">Ziel festlegen</string>
+    <string name="training_goal_editor_title_edit">Ziel ändern</string>
+    <string name="training_goal_editor_name_label">Name</string>
+    <string name="training_goal_editor_name_placeholder">z. B. Rennen Hügelland</string>
+    <string name="training_goal_editor_distance_label">Distanz (km)</string>
+    <string name="training_goal_editor_ascent_label">Höhenmeter (optional)</string>
+    <string name="training_goal_editor_date_label">Zieldatum</string>
+    <string name="training_goal_editor_date_placeholder">Datum wählen</string>
+    <string name="training_goal_editor_date_cd">Zieldatum, %1$s. Datum ändern</string>
+    <string name="training_goal_editor_date_choose_cd">Zieldatum wählen</string>
+    <string name="training_goal_editor_target_label">Zielzeit (h:mm)</string>
+    <string name="training_goal_editor_target_placeholder">optional</string>
+    <string name="training_goal_editor_name_error">Bitte einen Namen für das Ziel angeben.</string>
+    <string name="training_goal_editor_distance_error">Bitte eine gültige Distanz angeben.</string>
+    <string name="training_goal_editor_date_error">Bitte ein Zieldatum angeben.</string>
+    <string name="training_goal_editor_target_error">Die Zielzeit bitte als Stunden:Minuten angeben, z. B. 2:10.</string>
+    <string name="training_goal_editor_invalid_error">Ungültiges Ziel.</string>
+    <string name="training_goal_editor_saved_status">Ziel gespeichert.</string>
+    <plurals name="training_goal_editor_plan_created_count">
+        <item quantity="one">Plan mit %1$d Woche erstellt.</item>
+        <item quantity="other">Plan mit %1$d Wochen erstellt.</item>
+    </plurals>
+    <string name="training_goal_editor_create_action">Plan erstellen</string>
+    <string name="training_goal_editor_delete_action">Plan löschen</string>
+    <string name="training_goal_editor_date_confirm_action">Übernehmen</string>
+    <string name="training_goal_editor_delete_confirm_title">Trainingsplan löschen</string>
+    <string name="training_goal_editor_delete_confirm_body">Soll der Trainingsplan wirklich gelöscht werden?</string>
+    <string name="training_goal_editor_deleted_status">Plan gelöscht.</string>
+
+    <!-- FormCard.kt -->
+    <string name="training_form_open_cd">Form erklärt öffnen</string>
+    <string name="training_form_summary_empty">Deine Fitnesskurve entsteht mit der ersten Tour</string>
+    <plurals name="training_form_summary_building_count">
+        <item quantity="one">Kurve wird aufgebaut (noch %1$d Tag)</item>
+        <item quantity="other">Kurve wird aufgebaut (noch %1$d Tage)</item>
+    </plurals>
+    <string name="training_form_summary_stable">Fitness stabil</string>
+    <string name="training_form_fitness_chip">Fitness %1$s</string>
+    <string name="training_form_sheet_title">Deine Form</string>
+    <string name="training_form_sheet_intro">Drei Linien, einfach erklärt. Die Fachbegriffe aus anderen Apps stehen klein dahinter.</string>
+    <string name="training_form_fitness_label">Fitness</string>
+    <string name="training_form_fitness_body">Was du über Wochen aufgebaut hast. Steigt langsam.</string>
+    <string name="training_form_fatigue_label">Müdigkeit</string>
+    <string name="training_form_fatigue_body">Was die letzten Tage gekostet haben. Fällt schnell wieder.</string>
+    <string name="training_form_freshness_label">Frische</string>
+    <string name="training_form_freshness_body">Fitness minus Müdigkeit. Leicht negativ heißt: du trainierst gerade produktiv.</string>
+    <string name="training_form_all_values_action">Alle Werte</string>
+    <string name="training_form_show_less_action">Weniger anzeigen</string>
+    <string name="training_form_empty">Sobald die erste Tour ausgewertet ist, entsteht hier deine Fitness-Kurve.</string>
+    <plurals name="training_form_building_count">
+        <item quantity="one">Kurve wird aufgebaut (noch %1$d Tag).</item>
+        <item quantity="other">Kurve wird aufgebaut (noch %1$d Tage).</item>
+    </plurals>
+    <plurals name="training_form_legend_count">
+        <item quantity="one">Letzte %1$d Tag · grün: Fitness, orange: Ermüdung</item>
+        <item quantity="other">Letzte %1$d Tage · grün: Fitness, orange: Ermüdung</item>
+    </plurals>
+    <string name="training_form_fatigue_chip">Ermüdung %1$d</string>
+    <string name="training_form_form_chip">Form %1$s</string>
+    <string name="training_form_jargon">In anderen Trainings-Apps: CTL, ATL, TSB.</string>
+    <string name="training_form_load_jump">Belastungssprung: dein Verhältnis von akuter zu gewohnter Belastung liegt bei %1$s — außerhalb des Bandes 0,8–1,5.</string>
+    <string name="training_form_ramp_unknown">Rampenrate: noch keine Aussage möglich (weniger als 7 Tage Historie).</string>
+    <string name="training_form_ramp">Rampenrate: %1$s Fitness-Punkte pro Woche — %2$s.</string>
+    <string name="training_form_load_ratio">Belastungsverhältnis: %1$s.</string>
+    <string name="training_form_load_ratio_value">Belastungsverhältnis: %1$s (%2$s).</string>
+
+    <!-- FitnessCard.kt -->
+    <string name="training_fitness_title">Dein Fitnesslevel</string>
+    <string name="training_fitness_weekly_km_label">km/Woche</string>
+    <string name="training_fitness_weekly_elevation_label">Hm/Woche</string>
+    <string name="training_fitness_weekly_rides_label">Touren/Woche</string>
+    <string name="training_fitness_longest_ride_label">km längste Tour</string>
+    <string name="training_fitness_no_rides_hint">Noch keine Touren der letzten 8 Wochen vorhanden – die Einstufung ist daher konservativ.</string>
+
+    <!-- WeekCard.kt -->
+    <string name="training_week_title">Belastung dieser Woche</string>
+    <string name="training_week_budget_hint">Zielwert entspricht ≈ %1$s h Fahrzeit bei gemischter Woche und deinem Budget von %2$s h pro Woche. Fährst du härter, brauchst du weniger Zeit für denselben Zielwert.</string>
+    <string name="training_week_budget_missing_hint">Zielwert entspricht ≈ %1$s h Fahrzeit bei gemischter Woche. Trage im Mehr-Tab dein Zeitbudget ein, dann rechnen wir es mit ein.</string>
+    <string name="training_week_load_label">Last (7 Tage)</string>
+    <string name="training_week_average_label">ø Woche (4 Wochen)</string>
+    <string name="training_week_target_label">Zielwert</string>
+    <string name="training_week_time_budget_label">Fahrzeit (Budget %1$s h)</string>
+    <string name="training_week_time_estimated_label">Fahrzeit (geschätzt)</string>
+    <string name="training_week_no_deload_title">Keine Entlastungswoche nötig</string>
+    <string name="training_week_deload_range">%1$s Richtwert: %2$d–%3$d Last statt zuletzt %4$d.</string>
+
+    <!-- PlanSection.kt -->
+    <string name="training_plan_week_title">Woche %1$d · %2$s–%3$s</string>
+    <string name="training_plan_week_progress">%1$s von %2$d km</string>
+    <string name="training_plan_week_target">Ziel: %1$d km</string>
+    <string name="training_plan_session_km_load">%1$d km · Last %2$d</string>
+    <string name="training_plan_route_cd">Passende Runde für „%1$s“ planen</string>
+    <string name="training_plan_session_ridden">gefahren: %1$s, %2$s km</string>
+    <string name="training_plan_session_today">heute · %1$s</string>
+    <string name="training_plan_session_skipped">ausgelassen</string>
+    <string name="training_plan_loop_action">Runde</string>
+    <string name="training_plan_feasibility_title">Plan und Ziel passen nicht zusammen</string>
+    <string name="training_plan_feasibility_longest_label">Längste Fahrt</string>
+    <string name="training_plan_feasibility_goal_label">Ziel</string>
+    <string name="training_plan_feasibility_supports_label">Trägt bis</string>
+    <string name="training_plan_feasibility_adjust_action">Ziel anpassen</string>
+    <string name="training_plan_feasibility_ack_action">Verstanden</string>
+
+    <!-- VitalsTiles.kt -->
+    <string name="training_vitals_resting_hr_label">Ruhepuls</string>
+    <string name="training_vitals_hrv_label">Erholung (HRV)</string>
+    <string name="training_vitals_sleep_label">Schlaf</string>
+    <string name="training_vitals_estimated">geschätzt</string>
+    <string name="training_vitals_no_data">Noch keine Daten</string>
+    <string name="training_vitals_open_cd">Körperwerte erklärt öffnen</string>
+    <string name="training_vitals_source_none">Noch keine Werte von deiner Uhr. Health Connect verbindest du in den Einstellungen.</string>
+    <string name="training_vitals_source">Von deiner Uhr über Health Connect</string>
+    <string name="training_vitals_source_today">Von deiner Uhr über Health Connect · heute %1$s</string>
+    <string name="training_vitals_source_yesterday">Von deiner Uhr über Health Connect · gestern %1$s</string>
+    <string name="training_vitals_source_date">Von deiner Uhr über Health Connect · %1$s %2$s</string>
+    <string name="training_vitals_word_pending">noch offen</string>
+    <string name="training_vitals_word_normal">normal</string>
+    <string name="training_vitals_word_slightly_elevated">etwas erhöht</string>
+    <string name="training_vitals_word_elevated">erhöht</string>
+    <string name="training_vitals_word_very_elevated">stark erhöht</string>
+    <string name="training_vitals_word_slightly_low">etwas niedrig</string>
+    <string name="training_vitals_word_low">niedrig</string>
+    <string name="training_vitals_word_very_low">sehr niedrig</string>
+    <string name="training_vitals_word_good">gut</string>
+    <string name="training_vitals_word_slightly_short">etwas kurz</string>
+    <string name="training_vitals_word_short">kurz</string>
+    <string name="training_vitals_word_very_short">sehr kurz</string>
+    <string name="training_vitals_sheet_title">Körperwerte</string>
+    <string name="training_vitals_recovery_label">Erholung</string>
+    <string name="training_vitals_no_statement">Keine Aussage möglich.</string>
+    <string name="training_vitals_vo2_body">Deine maximale Sauerstoffaufnahme unter Volllast, geschätzt aus Touren mit Puls und Höhenprofil – deshalb ein Bereich, keine Messung.</string>
+    <string name="training_vitals_vo2_unavailable">Noch nicht schätzbar.</string>
+    <string name="training_vitals_done_action">Verstanden</string>
 </resources>

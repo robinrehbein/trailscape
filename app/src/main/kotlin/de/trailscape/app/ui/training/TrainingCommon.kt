@@ -131,6 +131,9 @@ fun SignalRow(color: Color, headline: String, detail: String) {
  * `Color(0xFF4CAF50)`-Literal (das dritte Exemplar desselben Werts in der App)
  * und gar keine Typografie-Angabe, wodurch das Kuerzel in `bodyLarge` neben
  * `bodyMedium`-Text stand.
+ *
+ * 40 dp breit: Das englische Kuerzel („Tue", „Wed") ist eine Stelle laenger
+ * als das deutsche und stiess bei grosser Schrift an den Titel.
  */
 @Composable
 fun RowScope.WeekdayLabel(day: String) {
@@ -139,7 +142,7 @@ fun RowScope.WeekdayLabel(day: String) {
         style = MaterialTheme.typography.titleSmall,
         color = LocalSignalColors.current.accentGreen,
         modifier = Modifier
-            .width(32.dp)
+            .width(40.dp)
             .align(Alignment.Top),
     )
 }
