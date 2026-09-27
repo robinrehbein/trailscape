@@ -411,3 +411,66 @@ jobs:
           # eingefrorene alte Version laedt. `|| true`, weil das Asset nach dem
           # ersten Lauf nicht mehr existiert.
           gh release delete-asset latest app-release.apk --yes --repo "$GITHUB_REPOSITORY" || true
+
+  # Google Play bekommt ein separat mit dem Play-Upload-Schluessel signiertes
+  # Bundle. Die GitHub-APK behaelt ihren bisherigen Schluessel und bleibt fuer
+  # bestehende Installationen updatefaehig. Nur main nach erfolgreichem Build
+  # und GitHub-Release darf den internen Test-Track aktualisieren.
+  play_internal:
+    needs: [build, release]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: trailscape-play-internal
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Play-Zugang pruefen und Upload-Schluessel bereitstellen
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+          PLAY_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "$PLAY_UPLOAD_KEYSTORE_BASE64" || { echo "PLAY_UPLOAD_KEYSTORE_BASE64 fehlt"; exit 1; }
+          test -n "$PLAY_UPLOAD_KEYSTORE_PASSWORD" || { echo "PLAY_UPLOAD_KEYSTORE_PASSWORD fehlt"; exit 1; }
+          test -n "$PLAY_SERVICE_ACCOUNT_JSON" || { echo "PLAY_SERVICE_ACCOUNT_JSON fehlt"; exit 1; }
+          printf '%s' "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/trailscape-play-upload.jks"
+          chmod 600 "$RUNNER_TEMP/trailscape-play-upload.jks"
+
+      - name: Play-Bundle bauen
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/trailscape-play-upload.jks
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+        run: ./gradlew --no-daemon :app:bundleRelease
+
+      - name: Im internen Play-Test veroeffentlichen
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          python -m pip install 'google-auth>=2.30,<3' 'requests>=2.31,<3'
+          summary="$(git log -1 --format=%s | cut -c1-300)"
+          python tool/publish_play_internal.py \
+            app/build/outputs/bundle/release/app-release.aab \
+            --run-number "$GITHUB_RUN_NUMBER" \
+            --notes "Version 2.0.${GITHUB_RUN_NUMBER}: ${summary}"
+
+      - name: Upload-Schluessel entfernen
+        if: always()
+        run: rm -f "$RUNNER_TEMP/trailscape-play-upload.jks"
