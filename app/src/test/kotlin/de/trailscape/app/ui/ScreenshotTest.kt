@@ -213,8 +213,11 @@ class ScreenshotTest {
         tab("Verlauf")
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
-        // Auf 640 dp liegen die Kacheln unter dem Rand — hochgewischt.
-        compose.onAllNodesWithText("Locker", substring = true)[0].performTouchInput { swipeUp() }
+        // Auf 640 dp liegen die Kacheln unter dem Rand — hochgewischt, ueber
+        // den ganzen Bildschirm. Frueher auf dem Plan-Urteil der Tour: Das
+        // haengt vom heutigen Wochentag ab („Locker gefahren." vs. „Passt zum
+        // Plan."), und der Test fiel dann je nach Kalendertag um.
+        compose.onRoot().performTouchInput { swipeUp() }
         settle()
         shot("16-tour-schmal")
     }
