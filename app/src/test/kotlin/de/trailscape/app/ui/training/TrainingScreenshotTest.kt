@@ -16,6 +16,8 @@ import androidx.compose.ui.test.performScrollTo
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.ui.PROFILE_CONFIRMED_STORAGE_KEY
+import de.trailscape.app.ui.PROFILE_STORAGE_KEY
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ONBOARDING_STORAGE_KEY
 import de.trailscape.app.ui.ScreenshotApplication
@@ -75,6 +77,12 @@ class TrainingScreenshotTest {
     fun seed() {
         assumeTrue(System.getProperty("trailscape.screenshots") == "true")
         AppServices.keyValueStore.setString(ONBOARDING_STORAGE_KEY, "1")
+        // `AppServices` ist ein Singleton und haelt seinen Speicher ueber
+        // Testklassen hinweg. Hat eine fruehere Klasse ein Profil gespeichert,
+        // gilt es als bestaetigt, und der Profil-Hinweis fehlt — je nach
+        // Reihenfolge der Klassen. Deshalb hier ausdruecklich ohne Profil.
+        AppServices.keyValueStore.remove(PROFILE_STORAGE_KEY)
+        AppServices.keyValueStore.remove(PROFILE_CONFIRMED_STORAGE_KEY)
     }
 
     /** Der ganze Tab auf einem hohen Bildschirm: Ziel, Woche, Form, Koerperwerte, Profil-Hinweis. */
