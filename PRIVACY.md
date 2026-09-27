@@ -1,9 +1,10 @@
 # Datenschutzerklärung — Trailscape
 
 **Stand: 27. September 2026** · gilt für die Android-App Trailscape
-(`de.robinrehbein.trailscape`), verteilt über Google Play und als APK über die
+(`de.robinrehbein.trailscape` über Google Play, `io.github.robinrehbein.trailscape`
+als APK über die
 [GitHub-Releases](https://github.com/robinrehbein/trailscape/releases) dieses
-Projekts.
+Projekts).
 
 Diese Erklärung beschreibt die App so, wie sie tatsächlich gebaut ist. Jede
 Aussage darin lässt sich am Quellcode nachprüfen — die Datei-, Klassen- und
@@ -88,7 +89,7 @@ Komoot-Link) ruft die App nicht ab.
 | Standort (genau/ungefähr) | Aufzeichnung der Tour, Anzeige der eigenen Position auf der Karte und Startpunkt der Rundkurs-Suche („Runde bauen“ am Ende der Einführung, auf „Heute“, „Routen suchen“). Außerhalb einer Aufzeichnung liest die App die Position nur, wenn du sie ausdrücklich anforderst: Standort-Knopf auf der Karte, Rundkurs-Suche ab deinem Standort. „Während der Nutzung erlauben" genügt: Die Aufzeichnung läuft als Vordergrunddienst weiter, auch bei gesperrtem Display — eine Hintergrund-Standortberechtigung (`ACCESS_BACKGROUND_LOCATION`) fragt die App nicht an und deklariert sie auch nicht |
 | Vordergrunddienst (Standort) | damit die Aufzeichnung bei gesperrtem Display und nach dem Wegwischen der App weiterläuft |
 | Benachrichtigungen | die Anzeige der laufenden Aufzeichnung |
-| Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync |
+| Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync, Wind am Startpunkt (nur mit Schalter „Wind berücksichtigen“), Update-Prüfung – Details in Abschnitt 4 |
 | Health Connect: Training, Trainingsrouten, Herzfrequenz, Ruhepuls, HRV, Schlaf, Distanz, Kalorien, VO₂max | **nur lesend**, für den Import von Trainings und die Erholungs-/Formberechnung. Liefert die Uhr keinen Ruhepuls, leitet die App ihn auf dem Gerät aus dem nächtlichen Puls ab |
 | Health Connect: Verlauf älter als 30 Tage (optional) | **nur lesend**, damit die Ruhepuls- und HRV-Baselines nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann |
 

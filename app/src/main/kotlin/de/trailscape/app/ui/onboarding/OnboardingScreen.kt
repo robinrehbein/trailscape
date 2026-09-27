@@ -47,6 +47,7 @@ import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.map.RouteGenerationController
 import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OneUiMotion
@@ -479,10 +480,23 @@ private fun FirstRoundStep(
         Spacer(modifier = Modifier.height(8.dp))
         // Den Hinweis auf die Abfrage gibt es nur, wenn sie auch kommt.
         val askLocation = !hasLocationPermission(LocalContext.current)
+        // Wer die Einfuehrung erneut ansieht, hat „Wind berücksichtigen"
+        // vielleicht schon an — dann fragt dieselbe Suche auch Open-Meteo,
+        // und das gehoert in denselben Hinweis.
+        LaunchedEffect(Unit) { RouteGenerationController.restoreWindSetting() }
+        val windEnabled by RouteGenerationController.windEnabled.collectAsStateWithLifecycle()
         Text(
             text = (if (askLocation) "Gleich fragt Trailscape nach deinem Standort. " else "") +
                 "Für die Berechnung gehen die Wegpunkte der Runde — also auch dein " +
-                "Startpunkt — an den Routing-Server.",
+                "Startpunkt — an den Routing-Server." +
+                (
+                    if (windEnabled) {
+                        " Mit „Wind berücksichtigen“ geht der Startpunkt, auf etwa 1 km " +
+                            "gerundet, außerdem an Open-Meteo."
+                    } else {
+                        ""
+                    }
+                    ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

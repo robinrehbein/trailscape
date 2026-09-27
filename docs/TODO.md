@@ -15,6 +15,17 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   `offlineAllowed = false` setzen und eine eigene Kachelquelle (z. B.
   selbst gehostete PMTiles) aushandeln bzw. aufbauen.
 
+- **Play-Build: Paketname und Update-Prüfung.** `PRIVACY.md` nennt für Google
+  Play `de.robinrehbein.trailscape`, der Build setzt aber nur
+  `io.github.robinrehbein.trailscape` (`app/build.gradle.kts`). Vor dem
+  Play-Release den Play-Build bewusst auf die neue Kennung stellen (etwa als
+  eigener Flavor — ein Wechsel der bestehenden Kennung würde Sideload-Installationen
+  vom Update abschneiden) und für Play-Installationen die GitHub-Update-Prüfung
+  abschalten (`installingPackageName == "com.android.vending"` über
+  `getInstallSourceInfo`, API 30+; darunter `getInstallerPackageName`), damit
+  die App dort nicht auf eine APK außerhalb von Play verweist. Den Absatz zur
+  Update-Prüfung in `PRIVACY.md` dann entsprechend anpassen.
+
 ## Ideen
 
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und
@@ -22,10 +33,6 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   damit Trainer, Vereine und Foren Pläne ohne Plattform und ohne Konto
   tauschen können. Baut auf dem vorhandenen formatstabilen JSON
   (`core/.../JsonSupport.kt`) und dem Datei-Ein-/Ausgang der Backup-Karte auf.
-- **Tour-Bild auch vom Tourblatt der Karte teilen** — das Karten-Tourblatt
-  (`ui/map/MapPanels.kt`, `shareRoute` in `MapScreen.kt`) teilt heute nur GPX.
-  Der Dialog `ui/rides/ShareRideDialog.kt` liesse sich dort wiederverwenden;
-  beim Tour-Bild bewusst ausgelassen, um `MapScreen.kt` nicht anzufassen.
 - **Start und Ziel im Tour-Bild ausblenden** — die ersten und letzten ~300 m
   der Spur kappen (optional), damit ein geteiltes Bild die Haustuer nicht
   verraet. Heute sagt nur ein Hinweis im Teilen-Dialog, dass man Start und

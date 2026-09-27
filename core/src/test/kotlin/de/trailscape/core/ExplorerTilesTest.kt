@@ -409,4 +409,24 @@ class ExplorerTilesTest {
         store.putTiles(target, 1)
         assertNull(explorerTilesNewInRide("gibt-es-nicht", listOf(target), store))
     }
+
+    @Test
+    fun `explorerTilesCacheGaps zaehlt fehlende und veraltete Eintraege gefahrener Touren`() {
+        val earlier = summary("frueher", createdAt = 100L)
+        val stale = summary("veraltet", createdAt = 150L)
+        val fresh = summary("neu", createdAt = 200L)
+        val planned = summary("plan", createdAt = 250L, planned = true)
+        val store = FakeExplorerTilesStore().apply {
+            putTiles(earlier, 1)
+            putTiles(stale.copy(pointCount = 3), 2)
+        }
+        assertEquals(2, explorerTilesCacheGaps(listOf(earlier, stale, fresh, planned), store))
+        assertEquals(0, explorerTilesCacheGaps(listOf(earlier, planned), store))
+    }
+
+    @Test
+    fun `erste Tour ohne Cache - genau eine Luecke`() {
+        val only = summary("erste", createdAt = 100L)
+        assertEquals(1, explorerTilesCacheGaps(listOf(only), FakeExplorerTilesStore()))
+    }
 }

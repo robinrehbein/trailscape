@@ -51,6 +51,8 @@ import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.collectExplorerTiles
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
+import de.trailscape.core.EXPLORER_TILES_CHEAP_REFRESH_MAX
+import de.trailscape.core.explorerTilesCacheGaps
 import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
@@ -2150,19 +2152,36 @@ class AppViewModel(
      *
      * Nachgeschlagen wird immer, auch bei ausgeschaltetem Kachel-Layer: der
      * Blick in den Cache ist billig und liefert `null`, wenn er unvollstaendig
-     * oder veraltet ist. Nur die teure Neuberechnung ([refreshExplorerTiles],
-     * ein Lauf ueber den ganzen Tourbestand) gibt es allein bei
-     * eingeschaltetem Layer — wer ihn nie einschaltet, bezahlt dafuer nichts,
-     * sieht die Zeile aber, sobald der Cache (etwa aus der Rundkurs-Suche)
-     * vollstaendig ist.
+     * oder veraltet ist.
+     *
+     * ## Wann nachgerechnet wird
+     * Bei eingeschaltetem Layer ohne Bestand: voll ([refreshExplorerTiles]).
+     * Bei ausgeschaltetem Layer nur, wenn der Cache hoechstens
+     * [EXPLORER_TILES_CHEAP_REFRESH_MAX] Luecken hat
+     * ([explorerTilesCacheGaps]) — typisch direkt nach einer Aufzeichnung,
+     * wenn allein die neue Tour fehlt, oder bei der allerersten Tour.
+     * `collectExplorerTiles` laedt dann nur diese paar Touren. Sonst bliebe
+     * die Zeile „N neue Kacheln" gerade nach der Fahrt leer, obwohl sie dort
+     * am meisten sagt. Einen nie gecachten Bestand rechnet diese Ansicht
+     * dagegen nicht durch — wer den Layer nie einschaltet, bezahlt dafuer
+     * nichts.
      */
     suspend fun explorerTilesGainedBy(rideId: String): Int? {
         if (_explorerTilesEnabled.value && _explorerTiles.value.isEmpty()) refreshExplorerTiles()
         // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
         val summaries = allSummaries
-        return withContext(io) {
-            runCatching { explorerTilesNewInRide(rideId, summaries, explorerTilesStore) }.getOrNull()
+        val lookup = suspend {
+            withContext(io) {
+                runCatching { explorerTilesNewInRide(rideId, summaries, explorerTilesStore) }.getOrNull()
+            }
         }
+        lookup()?.let { return it }
+        val gaps = withContext(io) {
+            runCatching { explorerTilesCacheGaps(summaries, explorerTilesStore) }.getOrNull()
+        } ?: return null
+        if (gaps == 0 || gaps > EXPLORER_TILES_CHEAP_REFRESH_MAX) return null
+        refreshExplorerTiles()
+        return lookup()
     }
 
     // -------------------------------------------------------------------------

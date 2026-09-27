@@ -149,6 +149,7 @@ import de.trailscape.core.zoomFuerTempo
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import de.trailscape.app.ui.rides.finishMarkers
+import de.trailscape.app.ui.rides.RideShareDialog
 import de.trailscape.app.ui.rides.historyTotals
 import java.io.File
 import java.util.Locale
@@ -739,6 +740,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     var showStyleSheet by remember { mutableStateOf(false) }
     var saveRouteDialog by remember { mutableStateOf(false) }
     var deleteDialogRide by remember { mutableStateOf<Ride?>(null) }
+    // Gefahrene Tour, deren Teilen-Dialog (Bild oder GPX) gerade offen ist.
+    var shareDialogRide by remember { mutableStateOf<Ride?>(null) }
 
     // Die Absicht hinter einer Berechtigungsanfrage — bewusst ein
     // `rememberSaveable`-faehiger Wert und kein Lambda: Waehrend des
@@ -3366,7 +3369,17 @@ fun MapScreen(appViewModel: AppViewModel) {
                             ride = card,
                             navigating = navTarget?.rideId == card.id,
                             onNavigate = { navigateRide(card) },
-                            onShare = { shareRoute(card.name, card.points) },
+                            // Gefahrene Touren fragen wie in der Detailansicht
+                            // nach Bild oder GPX — direkt nach der Fahrt ist
+                            // dieses Blatt der naechste Weg zum Tour-Bild.
+                            // Geplante Routen haben nichts zu zeigen: GPX.
+                            onShare = {
+                                if (card.planned) {
+                                    shareRoute(card.name, card.points)
+                                } else {
+                                    shareDialogRide = card
+                                }
+                            },
                             onDelete = { deleteDialogRide = card },
                             onOpenDetails = { appViewModel.requestRideDetail(card.id) },
                             onClose = {
@@ -3612,6 +3625,16 @@ fun MapScreen(appViewModel: AppViewModel) {
             dismissButton = {
                 TextButton(onClick = appViewModel::dismissSegmentOffer) { Text("Nicht jetzt") }
             },
+        )
+    }
+
+    shareDialogRide?.let { ride ->
+        val insights by appViewModel.insights.collectAsStateWithLifecycle()
+        RideShareDialog(
+            ride = ride,
+            load = insights.rideLoads[ride.id]?.takeIf { it.available }?.load,
+            appViewModel = appViewModel,
+            onDismiss = { shareDialogRide = null },
         )
     }
 

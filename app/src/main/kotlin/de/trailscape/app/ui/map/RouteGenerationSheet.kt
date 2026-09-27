@@ -43,6 +43,7 @@ import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
+import de.trailscape.core.FIRST_ROUND_LABEL
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteTarget
@@ -211,9 +212,7 @@ internal fun RouteGenerationSheet(
                             )
                         }
                     }
-                    val offerWindTip = state.wind == null && !windEnabled &&
-                        target.source != RouteTargetSource.SELBST_GEWAEHLT
-                    if (offerWindTip) {
+                    if (shouldOfferWindTip(target, windUsed = state.wind != null, windEnabled = windEnabled)) {
                         Text(
                             text = WIND_TIP,
                             modifier = Modifier.padding(end = 8.dp, top = 2.dp),
@@ -572,12 +571,27 @@ internal fun targetLine(target: RouteTarget): String {
     return parts.joinToString(" · ")
 }
 
-/** „aus: GA1-Einheit (Trainingsplan)" */
 /** Leiser Hinweis auf den Wind-Schalter fuer Einstiege ohne ihn (siehe KDoc des Blatts). */
 internal const val WIND_TIP =
     "Tipp: Mit „Wind berücksichtigen“ unter „Runde ab hier“ auf der Karte bevorzugt die Suche " +
         "Runden mit Rückenwind auf dem Heimweg."
 
+/**
+ * Ob unter den Vorschlaegen [WIND_TIP] steht: nur, wenn ohne Wind gesucht
+ * wurde ([windUsed] `false`), der Schalter aus ist und das Ziel nicht aus
+ * „Runde ab hier" kommt — dort steht der Schalter ja schon im Blatt davor.
+ *
+ * Nie bei der **ersten Runde** ([FIRST_ROUND_LABEL]): Sie startet direkt nach
+ * der Einfuehrung bzw. von „Heute" und soll ruhig bleiben — ein Tipp, der auf
+ * ein anderes Blatt und eine Open-Meteo-Freigabe verweist, von denen dort
+ * noch keine Rede war, waere in der ersten Minute nur Rauschen.
+ */
+internal fun shouldOfferWindTip(target: RouteTarget, windUsed: Boolean, windEnabled: Boolean): Boolean =
+    !windUsed && !windEnabled &&
+        target.source != RouteTargetSource.SELBST_GEWAEHLT &&
+        target.label != FIRST_ROUND_LABEL
+
+/** „aus: GA1-Einheit (Trainingsplan)" */
 internal fun sourceLine(target: RouteTarget): String {
     // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. Frueher fehlte
     // `:core` dafuer ein Wert und die Beschriftung erkannte sie notduerftig an
