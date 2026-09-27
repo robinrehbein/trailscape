@@ -53,11 +53,11 @@ class TrainingTextTest {
     @Test
     fun `Zielzeile wie im Prototyp`() {
         assertEquals(
-            "60 km · 700 Hm · Sa, 19. Dezember · noch 12 Wochen",
+            "60 km · 700\u00A0Hm · Sa, 19. Dezember · noch 12\u00A0Wochen",
             summary(goalOn(LocalDate.of(2026, 12, 19)), AppLanguage.DE),
         )
         assertEquals(
-            "60 km · 700 Hm · Do, 1. Oktober · noch 6 Tage",
+            "60 km · 700\u00A0Hm · Do, 1. Oktober · noch 6\u00A0Tage",
             summary(goalOn(LocalDate.of(2026, 10, 1)), AppLanguage.DE),
         )
     }
@@ -65,19 +65,19 @@ class TrainingTextTest {
     @Test
     fun `Zielzeile auf Englisch`() {
         assertEquals(
-            "60 km · 700 m · Sat 19 December · 12 weeks to go",
+            "60 km · 700\u00A0m · Sat 19 December · 12\u00A0weeks to go",
             summary(goalOn(LocalDate.of(2026, 12, 19)), AppLanguage.EN),
         )
         assertEquals(
-            "60 km · 700 m · Thu 1 October · 6 days to go",
+            "60 km · 700\u00A0m · Thu 1 October · 6\u00A0days to go",
             summary(goalOn(LocalDate.of(2026, 10, 1)), AppLanguage.EN),
         )
         assertEquals(
-            "60 km · 700 m · Sat 26 September · tomorrow",
+            "60 km · 700\u00A0m · Sat 26 September · tomorrow",
             summary(goalOn(LocalDate.of(2026, 9, 26)), AppLanguage.EN),
         )
         assertEquals(
-            "60 km · 700 m · Thu 24 September · over",
+            "60 km · 700\u00A0m · Thu 24 September · past",
             summary(goalOn(LocalDate.of(2026, 9, 24)), AppLanguage.EN),
         )
         // Nachkommastelle der Zieldistanz im Format der Sprache.
@@ -89,13 +89,13 @@ class TrainingTextTest {
     @Test
     fun `Prognose-Satz mit Plan und Zielzeit`() {
         val note = prognosisNote(goalOn(today.plusWeeks(12)), prognosis(145, 128))
-        assertEquals("Mit dem Plan kommst du bis zum Renntag auf ca. 2:08 h.", de(note.sentence))
-        assertEquals("ca. 2:08 h", de(note.bold!!))
+        assertEquals("Mit dem Plan kommst du bis zum Renntag auf ca. 2:08\u00A0h.", de(note.sentence))
+        assertEquals("ca. 2:08\u00A0h", de(note.bold!!))
         assertEquals("Das reicht für deine Zielzeit. Bleib bei den langen Fahrten dran.", de(note.hint!!))
         // Die fette Zeit steht woertlich im Satz — sonst fande die Anzeige sie nicht.
         assertTrue(de(note.sentence).contains(de(note.bold!!)))
         assertTrue(en(note.sentence).contains(en(note.bold!!)))
-        assertEquals("With the plan, you’ll reach about 2:08 h by race day.", en(note.sentence))
+        assertEquals("With the plan, you’ll reach about 2:08\u00A0h by race day.", en(note.sentence))
 
         val short = prognosisNote(goalOn(today.plusWeeks(12)), prognosis(150, 140))
         assertEquals(
@@ -245,6 +245,13 @@ class TrainingTextTest {
         assertEquals("Profil öffnen", XmlStrings.string(PROFILE_ACTION_LABEL, AppLanguage.DE))
         assertTrue(en(unconfirmedProfileText).startsWith("Without your age and weight we assume "))
         assertEquals("Open profile", XmlStrings.string(PROFILE_ACTION_LABEL, AppLanguage.EN))
+    }
+
+    @Test
+    fun `Entlastungs-Richtwert liest sich in beiden Sprachen`() {
+        val text = UiText.Res(R.string.training_week_deload_range, listOf("Zeit fuer eine leichte Woche.", 12, 20, 30))
+        assertEquals("Zeit fuer eine leichte Woche. Richtwert: 12–20 Last statt zuletzt 30.", de(text))
+        assertEquals("Zeit fuer eine leichte Woche. Guideline: 12–20 load instead of the recent 30.", en(text))
     }
 
     @Test

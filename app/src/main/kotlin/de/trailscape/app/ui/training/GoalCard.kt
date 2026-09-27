@@ -118,8 +118,12 @@ import kotlin.math.roundToInt
  * Ohne Ziel steht an derselben Stelle [GoalSetupCard].
  */
 
-/** Formatiert Minuten als „2:10 h". */
-internal fun formatHoursMinutes(minutes: Int): String = "${formatGoalDuration(minutes)} h"
+/**
+ * Formatiert Minuten als „2:10 h". Zwischen Zahl und Einheit steht ein
+ * geschuetztes Leerzeichen (U+00A0): Bei grosser Schrift brach die fette
+ * Prognose sonst als „ca. 2:31" / „h" um.
+ */
+internal fun formatHoursMinutes(minutes: Int): String = "${formatGoalDuration(minutes)}\u00A0h"
 
 /** Zieldistanz ohne „,0" bei ganzen Kilometern („60", aber „42,2" / „42.2"). */
 internal fun formatGoalKm(km: Double, language: AppLanguage): String =
@@ -144,6 +148,10 @@ internal fun formatGoalDate(date: LocalDate, language: AppLanguage): String {
  * „60 km · 700 Hm · Sa, 20. Dezember · noch 12 Wochen" — die Kopfzeile des
  * Ziels, als Teile, die die Anzeige mit „ · " verbindet. Unter zwei Wochen
  * zaehlt sie Tage; nach dem Renntag sagt sie das.
+ *
+ * Die Hoehe kommt bewusst aus `training_goal_ascent` statt aus
+ * `common_value_elevation`: Der Trainings-Tab schreibt im Deutschen „Hm"
+ * (gross), die uebrige App „hm" — und das Deutsche bleibt woertlich.
  */
 internal fun goalSummaryParts(
     goal: Goal,

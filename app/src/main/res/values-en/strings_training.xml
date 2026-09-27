@@ -18,7 +18,7 @@
 
     <!-- TrainingNotices.kt -->
     <string name="training_notice_profile_title">Add your profile</string>
-    <string name="training_notice_profile_body">Without your age and weight we assume %1$d years and %2$d kg — the numbers are rough.</string>
+    <string name="training_notice_profile_body">Without your age and weight we assume %1$d&#160;years and %2$d&#160;kg — the numbers are rough.</string>
     <string name="training_notice_profile_action">Open profile</string>
 
     <!-- TrainingScreen.kt -->
@@ -36,17 +36,18 @@
     <string name="training_screen_empty_import_action">Import past rides</string>
 
     <!-- GoalCard.kt: Zielkarte -->
-    <string name="training_goal_ascent">%1$d m</string>
-    <string name="training_goal_date_passed">over</string>
+    <!-- Deliberately separate from common_value_elevation: German keeps its capitalised „Hm“ here (see values/). Non-breaking space keeps number and unit together. -->
+    <string name="training_goal_ascent">%1$d&#160;m</string>
+    <string name="training_goal_date_passed">past</string>
     <string name="training_goal_date_today">today</string>
     <string name="training_goal_date_tomorrow">tomorrow</string>
     <plurals name="training_goal_days_left_count">
-        <item quantity="one">%1$d day to go</item>
-        <item quantity="other">%1$d days to go</item>
+        <item quantity="one">%1$d&#160;day to go</item>
+        <item quantity="other">%1$d&#160;days to go</item>
     </plurals>
     <plurals name="training_goal_weeks_left_count">
-        <item quantity="one">%1$d week to go</item>
-        <item quantity="other">%1$d weeks to go</item>
+        <item quantity="one">%1$d&#160;week to go</item>
+        <item quantity="other">%1$d&#160;weeks to go</item>
     </plurals>
     <string name="training_goal_no_prognosis">No prediction yet.</string>
     <string name="training_goal_hint_long_rides">Biggest lever: the long rides. The race is longer than your longest ride of recent weeks.</string>
@@ -89,7 +90,7 @@
     <string name="training_prognosis_fitness_label">Your fitness</string>
     <string name="training_prognosis_fitness_body" formatted="false">The higher your fitness on race day, the longer you can hold the same pace. We use the fitness your plan builds by then — at most 8 % faster than today.</string>
     <string name="training_prognosis_route_label">The course</string>
-    <string name="training_prognosis_route_ascent_pill">%1$s km · %2$d m</string>
+    <string name="training_prognosis_route_ascent_pill">%1$s&#160;km · %2$d&#160;m</string>
     <string name="training_prognosis_route_body">Climbing costs time: every metre of elevation gain counts like 9 m of flat road. If the race is longer than your longest ride, we add a little time.</string>
     <plurals name="training_prognosis_uncertainty_count">
         <item quantity="one">The figure is an estimate, give or take about %1$d minute. It gets more accurate with every ride. It knows nothing about heart rate, wind or surface.</item>
@@ -128,7 +129,7 @@
     <string name="training_goal_editor_deleted_status">Plan deleted.</string>
 
     <!-- FormCard.kt -->
-    <string name="training_form_open_cd">Open form explained</string>
+    <string name="training_form_open_cd">Explain form</string>
     <string name="training_form_summary_empty">Your fitness curve starts with your first ride</string>
     <plurals name="training_form_summary_building_count">
         <item quantity="one">Building your curve (%1$d more day)</item>
@@ -182,7 +183,7 @@
     <string name="training_week_time_budget_label">Riding time (budget %1$s h)</string>
     <string name="training_week_time_estimated_label">Riding time (estimated)</string>
     <string name="training_week_no_deload_title">No recovery week needed</string>
-    <string name="training_week_deload_range">%1$s Guide: %2$d–%3$d load instead of %4$d recently.</string>
+    <string name="training_week_deload_range">%1$s Guideline: %2$d–%3$d load instead of the recent %4$d.</string>
 
     <!-- PlanSection.kt -->
     <string name="training_plan_week_title">Week %1$d · %2$s–%3$s</string>
@@ -207,7 +208,7 @@
     <string name="training_vitals_sleep_label">Sleep</string>
     <string name="training_vitals_estimated">estimated</string>
     <string name="training_vitals_no_data">No data yet</string>
-    <string name="training_vitals_open_cd">Open body metrics explained</string>
+    <string name="training_vitals_open_cd">Explain body metrics</string>
     <string name="training_vitals_source_none">No values from your watch yet. You can connect Health Connect in Settings.</string>
     <string name="training_vitals_source">From your watch via Health Connect</string>
     <string name="training_vitals_source_today">From your watch via Health Connect · today %1$s</string>

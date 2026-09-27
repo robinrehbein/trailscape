@@ -18,7 +18,7 @@
 
     <!-- TrainingNotices.kt -->
     <string name="training_notice_profile_title">Profil eintragen</string>
-    <string name="training_notice_profile_body">Ohne Alter und Gewicht rechnen wir mit %1$d Jahren und %2$d kg — die Zahlen sind grob.</string>
+    <string name="training_notice_profile_body">Ohne Alter und Gewicht rechnen wir mit %1$d&#160;Jahren und %2$d&#160;kg — die Zahlen sind grob.</string>
     <string name="training_notice_profile_action">Profil öffnen</string>
 
     <!-- TrainingScreen.kt -->
@@ -36,17 +36,18 @@
     <string name="training_screen_empty_import_action">Alte Touren importieren</string>
 
     <!-- GoalCard.kt: Zielkarte -->
-    <string name="training_goal_ascent">%1$d Hm</string>
+    <!-- Bewusst eigene Hoehen-Einheit statt common_value_elevation: Der Trainings-Tab schreibt im Deutschen seit jeher „Hm“ (gross), die übrige App „hm“; Deutsch bleibt wörtlich. Zahl und Einheit mit geschütztem Leerzeichen, damit sie nicht getrennt umbrechen. -->
+    <string name="training_goal_ascent">%1$d&#160;Hm</string>
     <string name="training_goal_date_passed">vorbei</string>
     <string name="training_goal_date_today">heute</string>
     <string name="training_goal_date_tomorrow">morgen</string>
     <plurals name="training_goal_days_left_count">
-        <item quantity="one">noch %1$d Tag</item>
-        <item quantity="other">noch %1$d Tage</item>
+        <item quantity="one">noch %1$d&#160;Tag</item>
+        <item quantity="other">noch %1$d&#160;Tage</item>
     </plurals>
     <plurals name="training_goal_weeks_left_count">
-        <item quantity="one">noch %1$d Woche</item>
-        <item quantity="other">noch %1$d Wochen</item>
+        <item quantity="one">noch %1$d&#160;Woche</item>
+        <item quantity="other">noch %1$d&#160;Wochen</item>
     </plurals>
     <string name="training_goal_no_prognosis">Noch keine Prognose.</string>
     <string name="training_goal_hint_long_rides">Wichtigster Hebel: die langen Fahrten. Das Rennen ist länger als deine längste Tour der letzten Wochen.</string>
@@ -89,7 +90,7 @@
     <string name="training_prognosis_fitness_label">Deine Fitness</string>
     <string name="training_prognosis_fitness_body" formatted="false">Je höher die Fitness am Renntag, desto länger hältst du dasselbe Tempo. Wir rechnen mit der Fitness, die dein Plan bis dahin aufbaut – höchstens 8 % schneller als heute.</string>
     <string name="training_prognosis_route_label">Die Strecke</string>
-    <string name="training_prognosis_route_ascent_pill">%1$s km · %2$d Hm</string>
+    <string name="training_prognosis_route_ascent_pill">%1$s&#160;km · %2$d&#160;Hm</string>
     <string name="training_prognosis_route_body">Höhenmeter kosten Zeit: Jeder Höhenmeter zählt wie 9 m flache Strecke. Ist das Rennen länger als deine längste Tour, rechnen wir etwas Zeit dazu.</string>
     <plurals name="training_prognosis_uncertainty_count">
         <item quantity="one">Die Zahl ist eine Schätzung mit etwa ±%1$d Minute. Sie wird mit jeder Tour genauer. Puls, Wind und Untergrund kennt sie nicht.</item>
