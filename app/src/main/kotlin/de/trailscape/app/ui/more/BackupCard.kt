@@ -37,11 +37,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.data.trailscapePrefs
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
 import de.trailscape.app.ui.components.OneUiDialog
@@ -136,16 +140,12 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             try {
                 writeBackupFile(context, uri, appViewModel)
                 setLastBackupAt(context, System.currentTimeMillis())
-                appViewModel.showMessage("Backup exportiert.")
+                appViewModel.showMessage(UiText.Res(R.string.more_backup_exported_status))
             } catch (e: Exception) {
-                // Deutscher Satz zuerst, technische Ursache nur in Klammern —
-                // siehe ui/ErrorText.kt.
+                // Verstaendlicher Satz zuerst, technische Ursache nur in
+                // Klammern — siehe ui/ErrorText.kt.
                 appViewModel.showMessage(
-                    withCause(
-                        "Das Backup konnte nicht geschrieben werden. Wähle einen anderen " +
-                            "Speicherort oder gib Speicherplatz frei.",
-                        e,
-                    ),
+                    withCause(context.getString(R.string.more_backup_write_error), e),
                 )
             } finally {
                 busy = false
@@ -171,24 +171,14 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 data.profile?.let { appViewModel.setProfile(it) }
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_OK, count = newRides.size.toLong())
 
-                val rideWord = if (newRides.size == 1) "Tour" else "Touren"
-                appViewModel.showMessage(
-                    "${newRides.size} $rideWord importiert" +
-                        (if (skipped > 0) ", $skipped übersprungen" else "") +
-                        (if (data.profile != null) " · Profil übernommen" else ""),
-                )
+                appViewModel.showMessage(backupImportMessage(newRides.size, skipped, data.profile != null))
             } catch (e: FormatException) {
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_FAILED, error = e)
                 appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
             } catch (e: Exception) {
                 DiagLog.shared.log(DiagEvent.BACKUP_IMPORT_FAILED, error = e)
                 appViewModel.showMessage(
-                    withCause(
-                        "Die Backup-Datei konnte nicht gelesen werden. Wähle die " +
-                            "JSON-Datei aus, die Trailscape unter „Backup exportieren“ " +
-                            "angelegt hat.",
-                        e,
-                    ),
+                    withCause(context.getString(R.string.more_backup_read_error), e),
                 )
             } finally {
                 busy = false
@@ -241,12 +231,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 appViewModel.showMessage(e.message ?: UNREADABLE_FILE_MESSAGE)
             } catch (e: Exception) {
                 appViewModel.showMessage(
-                    withCause(
-                        "Das Archiv konnte nicht gelesen werden. Erwartet wird eine " +
-                            "ZIP-Datei mit GPX- oder FIT-Dateien darin, etwa der " +
-                            "Strava- oder Garmin-Export.",
-                        e,
-                    ),
+                    withCause(context.getString(R.string.more_backup_archive_read_error), e),
                 )
             } finally {
                 archiveBusy = false
@@ -254,19 +239,13 @@ fun BackupCardContent(appViewModel: AppViewModel) {
         }
     }
 
-    SettingsHint(
-        "Sichere Touren und Profil in einer Datei — oder hole GPX, FIT und ganze " +
-            "Strava-/Garmin-Exporte (ZIP) herein.",
-    )
+    SettingsHint(stringResource(R.string.more_backup_hint))
     Spacer(modifier = Modifier.height(8.dp))
     // Ehrlicher Hinweis statt Modal-Dialog: Die Export-Datei ist bewusst
     // unverschluesseltes Klartext-JSON (lesbar, importierbar, zukunftssicher) —
     // aber genau deshalb muss hier stehen, was drinsteckt, BEVOR jemand sie
     // per Mail oder Cloud weiterreicht. Siehe PRIVACY.md, Abschnitt 7.
-    SettingsHint(
-        "Das Backup ist unverschlüsselt und enthält jeden GPS-Punkt und deine " +
-            "Gesundheitsdaten — gib es nur vertraulich weiter.",
-    )
+    SettingsHint(stringResource(R.string.more_backup_privacy_hint))
     Spacer(modifier = Modifier.height(12.dp))
 
     FlowRow(
@@ -283,7 +262,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 modifier = Modifier.size(ButtonDefaults.IconSize),
             )
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Backup exportieren")
+            Text(stringResource(R.string.more_backup_export_action))
         }
         SettingsSecondaryButton(
             onClick = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
@@ -295,7 +274,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 modifier = Modifier.size(ButtonDefaults.IconSize),
             )
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Backup importieren")
+            Text(stringResource(R.string.more_backup_import_action))
         }
         SettingsSecondaryButton(
             onClick = activityImport.start,
@@ -307,7 +286,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 modifier = Modifier.size(ButtonDefaults.IconSize),
             )
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Touren importieren (GPX/FIT)")
+            Text(stringResource(R.string.more_backup_import_rides_action))
         }
         SettingsSecondaryButton(
             onClick = { importArchiveLauncher.launch(arrayOf("application/zip", "*/*")) },
@@ -319,7 +298,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                 modifier = Modifier.size(ButtonDefaults.IconSize),
             )
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Archiv importieren (ZIP)")
+            Text(stringResource(R.string.more_backup_import_archive_action))
         }
     }
 
@@ -361,7 +340,7 @@ private fun ArchiveImportProgressDialog(done: Int, total: Int?) {
     OneUiDialog(
         onDismissRequest = {},
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-        title = { Text("Archiv wird importiert …") },
+        title = { Text(stringResource(R.string.more_backup_archive_progress_title)) },
         text = {
             Column {
                 val knownTotal = total?.takeIf { it > 0 }
@@ -371,11 +350,11 @@ private fun ArchiveImportProgressDialog(done: Int, total: Int?) {
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("$done von $knownTotal importiert …")
+                    Text(stringResource(R.string.more_backup_archive_progress_known, done, knownTotal))
                 } else {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text("$done importiert …")
+                    Text(stringResource(R.string.more_backup_archive_progress_unknown, done))
                 }
             }
         },
@@ -390,25 +369,46 @@ private fun ArchiveImportResultDialog(result: BulkImportResult, onDismiss: () ->
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Archiv importiert") },
+        title = { Text(stringResource(R.string.more_backup_archive_done_title)) },
         text = {
             Column {
-                val rideWord = if (result.importedCount == 1) "Tour" else "Touren"
-                Text("${result.importedCount} $rideWord importiert")
+                Text(
+                    pluralStringResource(
+                        R.plurals.more_backup_archive_imported_count,
+                        result.importedCount,
+                        result.importedCount,
+                    ),
+                )
 
                 if (result.duplicateCount > 0) {
-                    val dupWord = if (result.duplicateCount == 1) "Duplikat" else "Duplikate"
-                    Text("${result.duplicateCount} $dupWord übersprungen")
+                    Text(
+                        pluralStringResource(
+                            R.plurals.more_backup_archive_duplicates_count,
+                            result.duplicateCount,
+                            result.duplicateCount,
+                        ),
+                    )
                 }
 
                 if (result.errorCount > 0) {
-                    val errorWord = if (result.errorCount == 1) "Datei" else "Dateien"
                     Text(
-                        text = "${result.errorCount} $errorWord mit Fehler",
+                        text = pluralStringResource(
+                            R.plurals.more_backup_archive_errors_count,
+                            result.errorCount,
+                            result.errorCount,
+                        ),
                         color = MaterialTheme.colorScheme.error,
                     )
                     TextButton(onClick = { showErrors = !showErrors }) {
-                        Text(if (showErrors) "Fehler ausblenden" else "Fehler anzeigen")
+                        Text(
+                            stringResource(
+                                if (showErrors) {
+                                    R.string.more_backup_archive_errors_hide_action
+                                } else {
+                                    R.string.more_backup_archive_errors_show_action
+                                },
+                            ),
+                        )
                     }
                     if (showErrors) {
                         Box(modifier = Modifier.heightIn(max = 240.dp)) {
@@ -430,7 +430,7 @@ private fun ArchiveImportResultDialog(result: BulkImportResult, onDismiss: () ->
                 if (result.totalCount == 0) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "Keine GPX- oder FIT-Dateien im Archiv gefunden.",
+                        stringResource(R.string.more_backup_archive_empty_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -438,9 +438,23 @@ private fun ArchiveImportResultDialog(result: BulkImportResult, onDismiss: () ->
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Schließen") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_close)) }
         },
     )
+}
+
+/**
+ * Die Meldung nach einem Backup-Import: „3 Touren importiert, 1 übersprungen
+ * · Profil übernommen". Die Zahl der Touren bestimmt die Pluralform; das
+ * uebernommene Profil haengt als eigener Teil hinten an.
+ */
+internal fun backupImportMessage(imported: Int, skipped: Int, profileRestored: Boolean): UiText {
+    val count = if (skipped > 0) {
+        UiText.Plural(R.plurals.more_backup_imported_skipped_count, imported, listOf(imported, skipped))
+    } else {
+        UiText.Plural(R.plurals.more_backup_imported_count, imported)
+    }
+    return if (profileRestored) UiText.Res(R.string.more_backup_imported_with_profile, listOf(count)) else count
 }
 
 /** Liest die gewaehlte Datei komplett als UTF-8-Text. Laeuft auf [Dispatchers.IO]. */
@@ -466,7 +480,7 @@ private suspend fun writeBackupFile(
         java.io.BufferedWriter(java.io.OutputStreamWriter(stream, Charsets.UTF_8)).use { writer ->
             appViewModel.writeBackup(writer)
         }
-    } ?: throw IllegalStateException("Die Datei konnte nicht geschrieben werden.")
+    } ?: throw IllegalStateException(context.getString(R.string.more_backup_file_write_error))
 }
 
 /** Schluessel des Zeitpunkts der letzten erfolgreichen Sicherung (Long, Epoch-ms). */

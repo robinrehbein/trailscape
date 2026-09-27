@@ -25,7 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.update.RELEASE_PAGE_URL
 
@@ -70,12 +72,11 @@ fun UpdateNoticeCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Version $versionName ist verfügbar",
+                        text = stringResource(R.string.more_update_card_title, versionName),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
-                        text = "Herunterladen und über die bestehende Installation legen — " +
-                            "deine Touren bleiben erhalten.",
+                        text = stringResource(R.string.more_update_card_body),
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -88,7 +89,7 @@ fun UpdateNoticeCard(
                 IconButton(onClick = onDismiss) {
                     Icon(
                         Icons.Filled.Close,
-                        contentDescription = "Hinweis ausblenden",
+                        contentDescription = stringResource(R.string.more_update_card_dismiss_cd),
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -102,7 +103,7 @@ fun UpdateNoticeCard(
                         modifier = Modifier.size(ButtonDefaults.IconSize),
                     )
                     Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Herunterladen")
+                    Text(stringResource(R.string.more_update_card_download_action))
                 }
             }
         }

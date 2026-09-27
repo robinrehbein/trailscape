@@ -21,11 +21,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.SyncConfig
+import de.trailscape.core.SyncResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,12 +60,13 @@ import kotlinx.coroutines.withContext
 @Composable
 fun SyncCardContent(appViewModel: AppViewModel) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val syncConfig by appViewModel.syncConfig.collectAsStateWithLifecycle()
 
     var urlText by remember { mutableStateOf("") }
     var tokenText by remember { mutableStateOf("") }
     var syncing by remember { mutableStateOf(false) }
-    var statusText by remember { mutableStateOf<String?>(null) }
+    var statusText by remember { mutableStateOf<UiText?>(null) }
     var appliedConfig by remember { mutableStateOf<SyncConfig?>(null) }
 
     LaunchedEffect(syncConfig) {
@@ -85,11 +92,11 @@ fun SyncCardContent(appViewModel: AppViewModel) {
         appViewModel.setSyncConfig(config)
     }
 
-    SettingsHint("Gleicht deine Touren mit einem selbst betriebenen Trailscape-Server ab.")
+    SettingsHint(stringResource(R.string.more_sync_hint))
     Spacer(modifier = Modifier.height(12.dp))
 
     OneUiTextField(
-        label = "Server-URL",
+        label = stringResource(R.string.more_sync_url_label),
         value = urlText,
         onValueChange = {
             urlText = it
@@ -100,7 +107,7 @@ fun SyncCardContent(appViewModel: AppViewModel) {
     )
     Spacer(modifier = Modifier.height(8.dp))
     OneUiTextField(
-        label = "Token",
+        label = stringResource(R.string.more_sync_token_label),
         value = tokenText,
         onValueChange = {
             tokenText = it
@@ -116,12 +123,12 @@ fun SyncCardContent(appViewModel: AppViewModel) {
             val url = urlText.trim()
             val token = tokenText.trim()
             if (url.isEmpty() || token.isEmpty()) {
-                statusText = "Bitte Server-URL und Token eintragen."
+                statusText = UiText.Res(R.string.more_sync_missing_error)
                 return@Button
             }
             scope.launch {
                 syncing = true
-                statusText = "Synchronisiere …"
+                statusText = UiText.Res(R.string.more_sync_running_status)
                 try {
                     val config = SyncConfig(url = url, token = token)
                     // Siehe Klassen-KDoc: bewusst selbst geschrieben und
@@ -132,25 +139,12 @@ fun SyncCardContent(appViewModel: AppViewModel) {
                     }
                     appViewModel.setSyncConfig(config)
                     val result = appViewModel.syncNow()
-                    // Kompakter Ergebnissatz: Loeschungen und Aktualisierungen
-                    // nur nennen, wenn es welche gab — der haeufigste Fall
-                    // bleibt so kurz wie bisher.
-                    val deleted = result.deletedLocal + result.deletedRemote
-                    statusText = buildString {
-                        append("${result.pushed} hochgeladen, ${result.pulled} geladen")
-                        if (result.updated > 0) append(" (davon ${result.updated} aktualisiert)")
-                        if (deleted > 0) append(", $deleted gelöscht")
-                        append(", ${result.total} Touren")
-                    }
+                    statusText = syncResultText(result)
                 } catch (e: Exception) {
                     // Vorher gewann die technische Meldung („Failed to
-                    // connect to …"); der deutsche Satz kam nur zum
+                    // connect to …"); der eigene Satz kam nur zum
                     // Vorschein, wenn die Ausnahme gar keinen Text trug.
-                    statusText = withCause(
-                        "Der Abgleich ist fehlgeschlagen. Prüfe Server-URL und Token " +
-                            "und ob der Server erreichbar ist.",
-                        e,
-                    )
+                    statusText = UiText.Plain(withCause(context.getString(R.string.more_sync_failed_error), e))
                 } finally {
                     syncing = false
                 }
@@ -169,15 +163,42 @@ fun SyncCardContent(appViewModel: AppViewModel) {
             // Health-Connect-Karte, der Touren aus Health Connect holt.
             // Hier geht es in beide Richtungen und gegen einen eigenen
             // Server — das sagt die Beschriftung jetzt.
-            Text("Mit Server abgleichen")
+            Text(stringResource(R.string.more_sync_action))
         }
     }
 
     statusText?.let { status ->
         Spacer(modifier = Modifier.height(12.dp))
-        Text(text = status, style = MaterialTheme.typography.bodyMedium)
+        Text(text = status.asString(), style = MaterialTheme.typography.bodyMedium)
     }
 
     Spacer(modifier = Modifier.height(12.dp))
-    SettingsHint("Anleitung zum eigenen Server: server/README im Repository.")
+    SettingsHint(stringResource(R.string.more_sync_guide_hint))
 }
+
+/**
+ * Der kompakte Ergebnissatz eines Abgleichs: „3 hochgeladen, 2 geladen
+ * (davon 1 aktualisiert), 1 gelöscht, 42 Touren". Loeschungen und
+ * Aktualisierungen stehen nur da, wenn es welche gab — der haeufigste Fall
+ * bleibt so kurz wie bisher. Die Teile sind je ein eigener Schluessel und
+ * werden mit „, " verbunden ([UiText.Res] mit [SYNC_RESULT_JOIN]).
+ */
+internal fun syncResultText(result: SyncResult): UiText {
+    val deleted = result.deletedLocal + result.deletedRemote
+    val parts = buildList {
+        add(UiText.Res(R.string.more_sync_result_pushed, listOf(result.pushed)))
+        add(
+            if (result.updated > 0) {
+                UiText.Res(R.string.more_sync_result_pulled_updated, listOf(result.pulled, result.updated))
+            } else {
+                UiText.Res(R.string.more_sync_result_pulled, listOf(result.pulled))
+            },
+        )
+        if (deleted > 0) add(UiText.Res(R.string.more_sync_result_deleted, listOf(deleted)))
+        add(UiText.Plural(R.plurals.more_sync_result_total_count, result.total))
+    }
+    return parts.reduce { joined, part -> UiText.Res(SYNC_RESULT_JOIN, listOf(joined, part)) }
+}
+
+/** „%1$s, %2$s" — verbindet die Teile von [syncResultText]. */
+private val SYNC_RESULT_JOIN = R.string.more_sync_result_join
