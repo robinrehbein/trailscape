@@ -51,6 +51,10 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
      hochladen“ abwählen, Upload von Hand, Auto-Upload im Flugmodus, Duplikat,
      Trennen, Sportart auf Strava = Radfahrt (sonst nach dem Upload
      `PUT /activities/{id}` mit `sport_type=Ride`).
+  8. Englische Texte (`values-en/strings_strava.xml`) erst zusammen mit der
+     Übersetzung der ganzen App ergänzen — allein ergäben sie auf englischen
+     Geräten eine Mischoberfläche. Englische Auslassungspunkte ohne
+     Leerzeichen („Uploading to Strava…“).
   Später denkbar: verifizierte App Links statt `trailscape://` (braucht eine
   eigene Domain mit `/.well-known/assetlinks.json`), FIT statt GPX.
 

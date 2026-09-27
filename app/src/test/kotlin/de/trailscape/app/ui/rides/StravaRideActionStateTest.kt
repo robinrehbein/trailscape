@@ -5,6 +5,8 @@ import de.trailscape.core.StravaUploadRecord
 import de.trailscape.core.StravaUploadState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class StravaRideActionStateTest {
 
@@ -50,11 +52,36 @@ class StravaRideActionStateTest {
     }
 
     @Test
-    fun `fehlgeschlagen traegt Fehlerklasse und Detail`() {
+    fun `fehlgeschlagen traegt die Fehlerklasse`() {
         assertEquals(
-            StravaRideActionState.Failed(StravaError.RATE_LIMITED, "d"),
+            StravaRideActionState.Failed(StravaError.RATE_LIMITED),
             stravaRideActionState(record(StravaUploadState.FAILED, error = StravaError.RATE_LIMITED), now),
         )
-        assertEquals(StravaRideActionState.Failed(null, "d"), stravaRideActionState(record(StravaUploadState.FAILED), now))
+        assertEquals(StravaRideActionState.Failed(null), stravaRideActionState(record(StravaUploadState.FAILED), now))
+    }
+
+    @Test
+    fun `verbunden ist die Zeile immer sichtbar`() {
+        listOf(
+            StravaRideActionState.NotUploaded,
+            StravaRideActionState.Uploading,
+            StravaRideActionState.Stale,
+            StravaRideActionState.Duplicate(null),
+            StravaRideActionState.Failed(StravaError.NETWORK),
+        ).forEach { assertTrue(stravaRideActionVisible(it, connected = true), it.toString()) }
+    }
+
+    @Test
+    fun `ohne Verbindung nur mit Link oder nach abgewiesenem Zugang`() {
+        assertTrue(stravaRideActionVisible(StravaRideActionState.Uploaded("u"), connected = false))
+        assertTrue(stravaRideActionVisible(StravaRideActionState.Duplicate("u"), connected = false))
+        // Strava hat den Zugang beendet: Die Tour sagt, warum sie nicht angekommen ist.
+        assertTrue(stravaRideActionVisible(StravaRideActionState.Failed(StravaError.UNAUTHORIZED), connected = false))
+
+        assertFalse(stravaRideActionVisible(StravaRideActionState.NotUploaded, connected = false))
+        assertFalse(stravaRideActionVisible(StravaRideActionState.Uploaded(null), connected = false))
+        assertFalse(stravaRideActionVisible(StravaRideActionState.Duplicate(null), connected = false))
+        assertFalse(stravaRideActionVisible(StravaRideActionState.Failed(StravaError.NETWORK), connected = false))
+        assertFalse(stravaRideActionVisible(StravaRideActionState.Stale, connected = false))
     }
 }

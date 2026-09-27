@@ -281,6 +281,69 @@ class StravaClientTest {
     }
 
     @Test
+    fun `Fehler beim Erneuern oder unlesbare Antwort waehrend der Abfrage behalten die Upload-ID`() {
+        // Upload angenommen, dann laeuft der Token ab: Die Erneuerung wird
+        // gedrosselt bzw. scheitert am Server — die ID muss erhalten bleiben.
+        for (refreshStatus in listOf(429, 500)) {
+            var clock = now
+            val store = MemoryTokens(freshTokens().copy(expiresAtS = now + 3600))
+            val http = ScriptedHttp(
+                { clock = now + 7200; HttpResponse(201, """{"id":7}""") },
+                respond(refreshStatus),
+            )
+            val client = StravaClient(http, credentials, store, nowS = { clock }, sleep = {})
+            assertEquals(StravaUploadOutcome.Processing(7L), client.upload(ride()), "Erneuerung mit $refreshStatus")
+            http.assertDone()
+            // Der Zugang bleibt — nur 400/401 beim Erneuern vergisst ihn.
+            assertEquals("ref", store.tokens?.refreshToken)
+        }
+
+        val kaputt = ScriptedHttp(respond(201, """{"id":7}"""), respond(200, "<html>"))
+        assertEquals(StravaUploadOutcome.Processing(7L), client(kaputt, MemoryTokens(freshTokens())).upload(ride()))
+    }
+
+    @Test
+    fun `entzogener Zugang waehrend der Abfrage ist UNAUTHORIZED`() {
+        val http = ScriptedHttp(
+            respond(201, """{"id":7}"""),
+            respond(401),
+            respond(401, "{}"),
+        )
+        val store = MemoryTokens(freshTokens())
+        val outcome = client(http, store).upload(ride())
+        assertEquals(StravaError.UNAUTHORIZED, (outcome as StravaUploadOutcome.Failed).error)
+        assertNull(store.tokens)
+    }
+
+    @Test
+    fun `disconnect wartet auf eine laufende Erneuerung und loescht danach`() {
+        val store = MemoryTokens(freshTokens().copy(expiresAtS = now - 10))
+        val refreshStarted = java.util.concurrent.CountDownLatch(1)
+        val releaseRefresh = java.util.concurrent.CountDownLatch(1)
+        val http = ScriptedHttp(
+            {
+                refreshStarted.countDown()
+                releaseRefresh.await()
+                HttpResponse(200, """{"access_token":"A2","refresh_token":"R2","expires_at":1021600}""")
+            },
+            respond(200), // Deauthorize
+        )
+        val client = client(http, store)
+        val refresher = Thread { runCatching { client.validAccessToken() } }
+        refresher.start()
+        refreshStarted.await()
+        val disconnecter = Thread { client.disconnect() }
+        disconnecter.start()
+        Thread.sleep(100)
+        releaseRefresh.countDown()
+        refresher.join(5000)
+        disconnecter.join(5000)
+
+        assertNull(store.tokens)
+        http.assertDone()
+    }
+
+    @Test
     fun `resumePolling fragt nur ab und laedt nicht erneut hoch`() {
         val http = ScriptedHttp(respond(200, """{"id":7,"activity_id":70}"""))
 

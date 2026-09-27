@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,8 +63,11 @@ internal sealed interface StravaRideActionState {
     /** Strava kannte die Fahrt schon; [url] nur, wenn Strava die Aktivitaet genannt hat. */
     data class Duplicate(val url: String?) : StravaRideActionState
 
-    /** @param error `null` = unbekannter Fehler. */
-    data class Failed(val error: StravaError?, val detail: String?) : StravaRideActionState
+    /**
+     * @param error `null` = unbekannter Fehler. Stravas eigener Fehlertext
+     *   (englisch, technisch) bleibt bewusst im Vermerk und erscheint nicht.
+     */
+    data class Failed(val error: StravaError?) : StravaRideActionState
 }
 
 /** Reine Zustandsableitung — getestet in `StravaRideActionStateTest`. */
@@ -75,7 +79,21 @@ internal fun stravaRideActionState(record: StravaUploadRecord?, nowMs: Long): St
         StravaRideActionState.Uploaded(record.activityId?.let(::stravaActivityUrl))
     record.state == StravaUploadState.DUPLICATE ->
         StravaRideActionState.Duplicate(record.activityId?.let(::stravaActivityUrl))
-    else -> StravaRideActionState.Failed(record.error, record.detail)
+    else -> StravaRideActionState.Failed(record.error)
+}
+
+/**
+ * Ob die Strava-Zeile ueberhaupt erscheint — verbunden immer; ohne
+ * Verbindung nur mit Link auf die Aktivitaet oder wenn Strava den Zugang
+ * abgewiesen hat. Getrennt von Hand heisst dagegen: keine Zeile (die
+ * Fehlschlaege raeumt das Trennen ab).
+ */
+internal fun stravaRideActionVisible(state: StravaRideActionState, connected: Boolean): Boolean = when {
+    connected -> true
+    state is StravaRideActionState.Uploaded -> state.url != null
+    state is StravaRideActionState.Duplicate -> state.url != null
+    state is StravaRideActionState.Failed -> state.error == StravaError.UNAUTHORIZED
+    else -> false
 }
 
 /**
@@ -86,8 +104,13 @@ internal fun stravaRideActionState(record: StravaUploadRecord?, nowMs: Long): St
  *
  * Sichtbar nur, wenn der Build Strava kann, die Tour sich eignet (gefahren,
  * mit Zeitstempeln) und ein Konto verbunden ist — ohne Verbindung sieht die
- * Tour aus wie immer. Einzige Ausnahme: Eine schon hochgeladene Tour zeigt
- * „Auf Strava ansehen" auch nach dem Trennen weiter.
+ * Tour aus wie immer. Zwei Ausnahmen:
+ *  * Eine schon hochgeladene Tour zeigt „Auf Strava ansehen" auch nach dem
+ *    Trennen weiter.
+ *  * Hat Strava den Zugang beim Hochladen abgewiesen (entzogen, abgelaufen),
+ *    ist die App danach nicht mehr verbunden — die Tour sagt trotzdem, dass
+ *    sie nicht angekommen ist und warum, statt die Zeile still verschwinden
+ *    zu lassen ([stravaRideActionVisible]).
  */
 @Composable
 internal fun StravaRideAction(ride: Ride, modifier: Modifier = Modifier) {
@@ -96,9 +119,7 @@ internal fun StravaRideAction(ride: Ride, modifier: Modifier = Modifier) {
     val records by StravaServices.records.collectAsStateWithLifecycle()
     val state = stravaRideActionState(records[ride.id], System.currentTimeMillis())
     val connected = connection is StravaConnection.Connected
-    val viewable = (state as? StravaRideActionState.Uploaded)?.url != null ||
-        (state as? StravaRideActionState.Duplicate)?.url != null
-    if (!connected && !viewable) return
+    if (!stravaRideActionVisible(state, connected)) return
 
     val uriHandler = LocalUriHandler.current
     StravaRideActionContent(
@@ -145,10 +166,25 @@ internal fun StravaRideActionContent(
                     Text(stringResource(R.string.strava_upload_action))
                 }
             }
-            StravaRideActionState.Uploading, StravaRideActionState.Stale -> StatusLine(
+            StravaRideActionState.Uploading -> StatusLine(
                 leading = { CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp)) },
                 text = stringResource(R.string.strava_uploading),
-                action = if (state == StravaRideActionState.Stale && canUpload) {
+                action = null,
+            )
+            // Kein Kreisel: Hinter einem veralteten Vermerk laeuft nichts
+            // mehr, und ein drehender Kreisel neben „Erneut versuchen"
+            // widerspraeche sich.
+            StravaRideActionState.Stale -> StatusLine(
+                leading = {
+                    Icon(
+                        Icons.Filled.Schedule,
+                        contentDescription = null,
+                        tint = LocalSignalColors.current.warning,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
+                text = stringResource(R.string.strava_stale),
+                action = if (canUpload) {
                     { TextButton(onClick = onRetry) { Text(stringResource(R.string.strava_retry)) } }
                 } else {
                     null

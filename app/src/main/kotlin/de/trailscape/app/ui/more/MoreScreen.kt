@@ -76,7 +76,7 @@ import kotlinx.coroutines.withContext
  * keine Zeile, wie es um sie steht. Jetzt:
  *
  *  * **Liste** — eine flache Karte mit sechs Zeilen und die Gruppe „App" mit
- *    zwei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
+ *    zwei, in Builds mit Strava-Zugangsdaten drei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
  *    einer Statuszeile („Auto-Pause an · Ansagen an", „Noch nie gesichert"),
  *    siehe `SettingsStatus.kt`.
  *  * **Seite** — Antippen oeffnet die Seite der Zeile ([SettingsPage]) im
@@ -265,8 +265,10 @@ private fun MoreSection.toPage(): SettingsPage = when (this) {
  *
  * Die Reihenfolge folgt dem Erstnutzer: erst das Profil (ohne Alter und
  * Gewicht rechnet nichts richtig), dann die Uhr als Datenquelle, dann das
- * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Sync und „Über"
- * betreffen die App selbst und stehen deshalb abgesetzt.
+ * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Strava, Sync und
+ * „Über" betreffen die App selbst und stehen deshalb abgesetzt — Strava und
+ * Sync als Verbindungen der App nach aussen, beide freiwillig; Strava gibt es
+ * nur in Builds mit Zugangsdaten.
  *
  * Die Zustaende, die nicht als `StateFlow` vorliegen (Einstellungen in den
  * `SharedPreferences`, Offline-Bestand, letzter Import), liest die Liste bei
@@ -390,9 +392,15 @@ private fun SettingsList(
                 if (StravaConfig.available) {
                     val stravaConnection by StravaServices.connection.collectAsStateWithLifecycle()
                     val stravaAutoUpload by StravaServices.autoUpload.collectAsStateWithLifecycle()
+                    val stravaMessage by StravaServices.authMessage.collectAsStateWithLifecycle()
                     SettingsNavRow(
                         title = SettingsPage.STRAVA.title,
-                        status = stravaStatusText(stravaConnection, stravaAutoUpload),
+                        status = stravaStatusText(stravaConnection, stravaAutoUpload, stravaMessage),
+                        statusColor = if (stravaNeedsReconnect(stravaConnection, stravaMessage)) {
+                            LocalSignalColors.current.warning
+                        } else {
+                            Color.Unspecified
+                        },
                         onClick = { onOpen(SettingsPage.STRAVA) },
                     )
                     ListDivider()

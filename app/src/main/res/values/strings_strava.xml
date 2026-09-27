@@ -6,11 +6,14 @@
     Bewusst eine eigene Datei statt eines Anbaus an strings.xml: Android fuehrt
     alle values/*.xml zusammen, und so bleiben die Strava-Texte als Einheit
     lesbar. `:core` liefert fuer Fehler nur eine Klasse (StravaError), die
-    Saetze stehen hier — deutsch als Vorgabe, englisch in values-en.
+    Saetze stehen hier. Eine englische Fassung kommt mit der Uebersetzung der
+    ganzen App (i18n-Zweig) — vorher gaebe es auf englischen Geraeten eine
+    Mischoberflaeche aus deutscher App und englischer Strava-Seite.
 -->
 <resources>
     <string name="strava_settings_title" translatable="false">Strava</string>
     <string name="strava_status_off">Nicht verbunden</string>
+    <string name="strava_status_revoked">Zugang beendet – neu verbinden</string>
     <string name="strava_status_connected">Verbunden</string>
     <string name="strava_status_connected_auto">Verbunden · Auto-Upload an</string>
     <string name="strava_intro">Lädt fertige Touren in dein eigenes Strava-Konto hoch – nur, wenn du es hier verbindest. Ohne Verbindung bleibt alles auf dem Gerät.</string>
@@ -26,6 +29,7 @@
     <string name="strava_disconnect_text">Trailscape lädt dann nichts mehr hoch und vergisst den Zugang. Bereits hochgeladene Touren bleiben auf Strava.</string>
     <string name="strava_cancel">Abbrechen</string>
     <string name="strava_disconnected">Strava ist getrennt.</string>
+    <string name="strava_error_revoked">Strava hat den Zugang beendet. Touren werden nicht mehr hochgeladen – verbinde erneut, um weiterzumachen.</string>
     <string name="strava_error_denied">Strava hat keinen Zugriff erteilt. Es wurde nichts verbunden.</string>
     <string name="strava_error_missing_scope">Ohne die Erlaubnis „Aktivitäten hochladen“ kann Trailscape nichts hochladen. Verbinde erneut und lass das Häkchen gesetzt.</string>
     <string name="strava_error_invalid">Die Anmeldung bei Strava ist abgelaufen oder passt nicht. Bitte verbinde erneut.</string>
@@ -35,6 +39,7 @@
     <string name="strava_upload_action">Zu Strava hochladen</string>
     <string name="strava_upload_action_cd">Tour zu Strava hochladen</string>
     <string name="strava_uploading">Wird zu Strava hochgeladen …</string>
+    <string name="strava_stale">Das Hochladen ist nicht fertig geworden.</string>
     <string name="strava_uploaded">Auf Strava hochgeladen.</string>
     <string name="strava_view">Auf Strava ansehen</string>
     <string name="strava_duplicate">Diese Tour ist schon auf Strava.</string>

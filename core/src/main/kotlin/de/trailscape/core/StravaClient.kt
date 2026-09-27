@@ -25,7 +25,7 @@ import kotlinx.serialization.json.JsonObject
  *
  * ## Fehler
  * Alle Methoden bilden Fehler auf [StravaError] ab und liefern keine Saetze;
- * die Texte (deutsch und englisch) kommen aus den Ressourcen der App.
+ * die Texte kommen aus den Ressourcen der App.
  * Blockiert (Netz, [sleep]) — nur von einem Hintergrund-Thread aufrufen.
  *
  * @param nowS Uhr in Sekunden seit Epoch (injizierbar fuer Tests).
@@ -127,7 +127,14 @@ class StravaClient(
      * Trennt die Verbindung: Strava den Zugang entziehen (so gut es geht) und
      * lokal **immer** vergessen — auch ohne Netz. Wer „Trennen" tippt, muss
      * sich darauf verlassen koennen, dass danach nichts mehr hochgeladen wird.
+     *
+     * `@Synchronized` (derselbe Monitor wie [validAccessToken]): Laeuft
+     * gerade eine Erneuerung, wartet das Trennen, bis sie fertig ist, und
+     * loescht danach. Sonst schriebe die Erneuerung den frischen Zugang nach
+     * dem Loeschen wieder in den Speicher — und nach dem naechsten Start
+     * waere die App wieder verbunden, obwohl jemand „Trennen" getippt hat.
      */
+    @Synchronized
     fun disconnect() {
         val current = tokens.read()
         try {
@@ -215,32 +222,41 @@ class StravaClient(
      */
     fun resumePolling(uploadId: Long): StravaUploadOutcome = catchingFailure { poll(uploadId) }
 
+    /**
+     * Fragt den Status von [uploadId] ab, bis Strava fertig ist.
+     *
+     * Der Upload ist hier schon angenommen. Jeder voruebergehende Fehler
+     * (Netz, Drosselung, Serverfehler — auch beim Erneuern des Zugangs oder
+     * bei einer unlesbaren Antwort) heisst deshalb „spaeter weiterfragen"
+     * ([StravaUploadOutcome.Processing] mit der ID), nie „fehlgeschlagen":
+     * Sonst ginge die Upload-ID verloren, der naechste Versuch luede die Tour
+     * erneut hoch, und Strava meldete die eigene Fahrt als Duplikat. Nur ein
+     * entzogener Zugang ([StravaError.UNAUTHORIZED]) bricht ab.
+     */
     private fun poll(uploadId: Long): StravaUploadOutcome {
         for (delayS in POLL_DELAYS_S) {
             sleep(delayS * 1000)
-            val response = try {
-                authorized { token ->
+            try {
+                val response = authorized { token ->
                     HttpRequest(
                         method = HttpMethod.GET,
                         url = "$STRAVA_API_BASE/uploads/$uploadId",
                         headers = mapOf("Authorization" to "Bearer $token"),
                     )
                 }
-            } catch (e: StravaException) {
-                // Der Upload ist angenommen; ein Netzaussetzer beim Abfragen
-                // ist kein Fehlschlag, sondern „spaeter weiterfragen".
-                if (e.error == StravaError.NETWORK) return StravaUploadOutcome.Processing(uploadId)
-                throw e
-            }
-            when {
-                response.statusCode in 200..299 -> {
-                    val status = UploadStatus.from(parseObject(response.body))
-                    status.outcome()?.let { return it }
+                when {
+                    response.statusCode in 200..299 -> {
+                        val status = UploadStatus.from(parseObject(response.body))
+                        status.outcome()?.let { return it }
+                    }
+                    response.statusCode == 429 || response.statusCode >= 500 ->
+                        return StravaUploadOutcome.Processing(uploadId)
+                    else ->
+                        return StravaUploadOutcome.Failed(uploadErrorForStatus(response.statusCode), response.snippet())
                 }
-                response.statusCode == 429 || response.statusCode >= 500 ->
-                    return StravaUploadOutcome.Processing(uploadId)
-                else ->
-                    return StravaUploadOutcome.Failed(uploadErrorForStatus(response.statusCode), response.snippet())
+            } catch (e: StravaException) {
+                if (e.error == StravaError.UNAUTHORIZED) throw e
+                return StravaUploadOutcome.Processing(uploadId)
             }
         }
         return StravaUploadOutcome.Processing(uploadId)

@@ -21,6 +21,7 @@ import de.trailscape.core.parseStravaCallback
 import de.trailscape.core.stravaAuthorizeUrl
 import java.security.SecureRandom
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +49,9 @@ enum class StravaAuthMessage {
     NO_BROWSER,
     KEYSTORE,
     DISCONNECTED,
+
+    /** Strava hat den Zugang beendet (entzogen oder abgelaufen) — neu verbinden. */
+    REVOKED,
 }
 
 /**
@@ -133,6 +137,20 @@ object StravaServices {
         }
     }
 
+    /**
+     * Strava hat den Zugang beim Hochladen abgewiesen und der Client hat ihn
+     * vergessen. Die Einstellungsseite soll sagen, warum sie „nicht
+     * verbunden" zeigt — sonst stuende der Auto-Upload still. Nur wenn der
+     * Speicher wirklich leer ist: Ein 401 wegen fehlender Rechte laesst den
+     * Zugang sonst stehen.
+     */
+    internal fun onAccessRevoked() {
+        refreshConnection()
+        if (_connection.value == StravaConnection.Disconnected) {
+            _authMessage.value = StravaAuthMessage.REVOKED
+        }
+    }
+
     // ---------------------------------------------------------------- Verbinden
 
     /**
@@ -200,6 +218,10 @@ object StravaServices {
      * den es nicht mehr gibt.
      */
     suspend fun disconnect() = withContext(Dispatchers.IO) {
+        // Erst die Generation weiterzaehlen, dann abbrechen: Ein Worker, der
+        // schon laeuft, bricht nur kooperativ ab (er blockiert im Netz) und
+        // prueft vor jedem Vermerk, ob inzwischen getrennt wurde.
+        disconnectGeneration.incrementAndGet()
         WorkManager.getInstance(context).cancelAllWorkByTag(StravaUploadScheduler.TAG)
         client?.disconnect() ?: tokenStore.clear()
         setAutoUploadBlocking(false)
@@ -208,6 +230,15 @@ object StravaServices {
         _connection.value = StravaConnection.Disconnected
         _authMessage.value = StravaAuthMessage.DISCONNECTED
     }
+
+    /**
+     * Zaehlt jedes Trennen. Ein Worker merkt sich den Wert beim Start und
+     * schreibt keinen Vermerk mehr, wenn er sich seitdem geaendert hat — sonst
+     * bliebe nach dem Trennen ein verwaistes „wird hochgeladen" stehen.
+     */
+    private val disconnectGeneration = AtomicInteger(0)
+
+    internal fun currentDisconnectGeneration(): Int = disconnectGeneration.get()
 
     fun setAutoUpload(enabled: Boolean) {
         _autoUpload.value = enabled

@@ -162,6 +162,7 @@ private fun stravaAuthMessageText(message: StravaAuthMessage): String = stringRe
         StravaAuthMessage.NO_BROWSER -> R.string.strava_error_no_browser
         StravaAuthMessage.KEYSTORE -> R.string.strava_error_keystore
         StravaAuthMessage.DISCONNECTED -> R.string.strava_disconnected
+        StravaAuthMessage.REVOKED -> R.string.strava_error_revoked
     },
 )
 
@@ -171,10 +172,20 @@ private fun stravaAuthMessageText(message: StravaAuthMessage): String = stringRe
  * beisammen bleiben.
  */
 @Composable
-internal fun stravaStatusText(connection: StravaConnection, autoUpload: Boolean): String = stringResource(
-    when {
-        connection !is StravaConnection.Connected -> R.string.strava_status_off
-        autoUpload -> R.string.strava_status_connected_auto
-        else -> R.string.strava_status_connected
-    },
-)
+internal fun stravaStatusText(connection: StravaConnection, autoUpload: Boolean, message: StravaAuthMessage?): String =
+    stringResource(
+        when {
+            stravaNeedsReconnect(connection, message) -> R.string.strava_status_revoked
+            connection !is StravaConnection.Connected -> R.string.strava_status_off
+            autoUpload -> R.string.strava_status_connected_auto
+            else -> R.string.strava_status_connected
+        },
+    )
+
+/**
+ * Strava hat den Zugang beendet, ohne dass jemand „Trennen" getippt hat —
+ * der eine Strava-Zustand, der Handeln verlangt; die Liste zeigt ihn deshalb
+ * in der Warnfarbe (wie eine nie angelegte Sicherung).
+ */
+internal fun stravaNeedsReconnect(connection: StravaConnection, message: StravaAuthMessage?): Boolean =
+    connection == StravaConnection.Disconnected && message == StravaAuthMessage.REVOKED

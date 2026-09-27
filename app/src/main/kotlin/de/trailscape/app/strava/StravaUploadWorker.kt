@@ -45,11 +45,15 @@ class StravaUploadWorker(
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
 
+    /** Stand von [StravaServices.currentDisconnectGeneration] beim Start. */
+    private var generation = 0
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         // Der Worker kann in einem frischen Prozess starten; beide init sind
         // idempotent.
         AppServices.init(applicationContext)
         StravaServices.init(applicationContext)
+        generation = StravaServices.currentDisconnectGeneration()
         val rideId = inputData.getString(KEY_RIDE_ID) ?: return@withContext Result.failure()
         val client = StravaServices.client ?: return@withContext Result.failure()
 
@@ -92,17 +96,33 @@ class StravaUploadWorker(
                     finish(rideId, StravaUploadState.FAILED, error = outcome.error, detail = outcome.detail)
                     // Der Client hat einen ungueltigen Zugang womoeglich
                     // vergessen — die Oberflaeche soll das sehen.
-                    if (outcome.error == StravaError.UNAUTHORIZED) StravaServices.refreshConnection()
+                    if (outcome.error == StravaError.UNAUTHORIZED && !superseded(evenIfStopped = true)) StravaServices.onAccessRevoked()
                     Result.failure()
                 }
             }
         }
     }
 
+    /**
+     * Ob diese Arbeit keinen Vermerk mehr schreiben darf.
+     *
+     *  * Inzwischen getrennt ([StravaServices.currentDisconnectGeneration]
+     *    hat sich geaendert): nie — sonst bliebe nach dem Trennen ein
+     *    verwaistes „wird hochgeladen" oder „fehlgeschlagen" stehen.
+     *  * Abgebrochen ([isStopped], etwa weil „Erneut versuchen" die Arbeit
+     *    ersetzt hat): nur kein Fehlschlag, der den Vermerk der neuen Arbeit
+     *    ueberschriebe. Ein fertiges Ergebnis und ein Zwischenstand mit
+     *    Upload-ID ([evenIfStopped]) werden trotzdem vermerkt — sie stimmen,
+     *    und ohne sie luede der naechste Versuch die Tour ein zweites Mal hoch.
+     */
+    private fun superseded(evenIfStopped: Boolean = false): Boolean =
+        generation != StravaServices.currentDisconnectGeneration() || (isStopped && !evenIfStopped)
+
     private fun retryOrFail(rideId: String, uploadId: Long?, error: StravaError?, detail: String?): Result {
         return if (runAttemptCount + 1 < MAX_ATTEMPTS) {
             // Vermerk auffrischen: Er bleibt „wird hochgeladen" (nicht
             // veraltet) und behaelt die Upload-ID fuer den naechsten Versuch.
+            if (superseded(evenIfStopped = true)) return Result.failure()
             StravaServices.record(
                 StravaUploadRecord(
                     rideId = rideId,
@@ -127,6 +147,7 @@ class StravaUploadWorker(
         error: StravaError? = null,
         detail: String? = null,
     ) {
+        if (superseded(evenIfStopped = state == StravaUploadState.DONE || state == StravaUploadState.DUPLICATE)) return
         StravaServices.record(
             StravaUploadRecord(
                 rideId = rideId,

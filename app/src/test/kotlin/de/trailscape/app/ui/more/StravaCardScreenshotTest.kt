@@ -39,8 +39,8 @@ import org.robolectric.annotation.GraphicsMode
  * Eigene Klasse mit den zustandslosen Bausteinen: In der echten App sind
  * beide nur in Builds mit Strava-Zugangsdaten sichtbar, die Test- und
  * CI-Builds nicht haben — die bestehenden Screenshots bleiben dadurch
- * unveraendert. Locale `de`, weil es fuer die Strava-Texte eine englische
- * Fassung gibt und Robolectric sonst Englisch zeigte.
+ * unveraendert. Locale `de` vorsorglich: Kommt mit der Uebersetzung eine
+ * englische Fassung hinzu, bleiben diese Bilder deutsch.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -93,11 +93,40 @@ class StravaCardScreenshotTest {
     }
 
     @Test
+    fun einstellungenZugangBeendet() {
+        show(dark = false) {
+            SettingsSection {
+                StravaCardBody(
+                    connection = StravaConnection.Disconnected,
+                    autoUpload = false,
+                    message = StravaAuthMessage.REVOKED,
+                    onConnect = {},
+                    onDisconnect = {},
+                    onAutoUploadChange = {},
+                )
+            }
+            // Die Tour nach abgewiesenem Zugang: Hinweis ohne Aktion.
+            StravaRideActionContent(
+                state = StravaRideActionState.Failed(StravaError.UNAUTHORIZED),
+                onUpload = {},
+                onOpen = {},
+                onRetry = {},
+                canUpload = false,
+            )
+        }
+        compose.onNodeWithText("Strava hat den Zugang beendet.", substring = true).assertExists()
+        compose.onNodeWithText("Einstellungen → Strava", substring = true).assertExists()
+        compose.onNodeWithText("Erneut versuchen").assertDoesNotExist()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/75-strava-zugang-beendet.png")
+    }
+
+    @Test
     fun tourZeilen() {
         showRideStates(dark = false)
         compose.onNodeWithText("Zu Strava hochladen").assertExists()
         compose.onNodeWithText("Auf Strava hochgeladen.").assertExists()
         compose.onNodeWithText("Hochladen zu Strava fehlgeschlagen").assertExists()
+        compose.onNodeWithText("Das Hochladen ist nicht fertig geworden.").assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/73-strava-tour.png")
     }
 
@@ -116,7 +145,7 @@ class StravaCardScreenshotTest {
                 StravaRideActionState.Stale,
                 StravaRideActionState.Uploaded("https://www.strava.com/activities/1"),
                 StravaRideActionState.Duplicate(null),
-                StravaRideActionState.Failed(StravaError.RATE_LIMITED, null),
+                StravaRideActionState.Failed(StravaError.RATE_LIMITED),
             ).forEach { state ->
                 StravaRideActionContent(state = state, onUpload = {}, onOpen = {}, onRetry = {})
             }
