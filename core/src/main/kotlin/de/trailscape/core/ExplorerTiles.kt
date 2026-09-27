@@ -353,3 +353,66 @@ fun collectExplorerTiles(
     store.flush()
     return allTiles
 }
+
+/**
+ * Wie viele Kacheln die Tour [rideId] **zum ersten Mal** befahren hat — neu
+ * zum Zeitpunkt der Fahrt, dieselbe Lesart wie [SegmentEffortView.isNewBest]:
+ * die eigenen Kacheln minus alle Kacheln frueherer gefahrener Touren. Spaetere
+ * Touren ziehen nichts ab; geplante Touren zaehlen nie als befahren.
+ *
+ * ## Warum nur aus dem Cache
+ * Die Funktion laedt keine einzige Tour. [collectExplorerTiles] hat den
+ * [store] gerade erst gefuellt; hier wird nur noch nachgeschlagen — billig
+ * genug, um bei jeder Aenderung der Eingaben neu zu rechnen. Fehlt ein
+ * Eintrag oder passt sein Fingerabdruck ([StoredExplorerTiles.updatedAt] +
+ * [StoredExplorerTiles.pointCount], dieselbe Regel wie in
+ * [collectExplorerTiles]) nicht mehr — fuer die Tour selbst oder fuer eine
+ * fruehere —, kommt `null` zurueck: lieber keine Zahl als eine falsche.
+ *
+ * `null` auch, wenn [rideId] keine gefahrene Tour aus [rides] ist.
+ */
+fun explorerTilesNewInRide(rideId: String, rides: List<RideInfo>, store: ExplorerTilesStore): Int? {
+    val ridden = riddenRides(rides)
+    val target = ridden.firstOrNull { it.id == rideId } ?: return null
+
+    fun validTiles(ride: RideInfo): List<ExplorerTile>? {
+        val entry = store.get(ride.id) ?: return null
+        if (entry.updatedAt != ride.updatedAt || entry.pointCount != ride.pointCount) return null
+        return entry.tiles
+    }
+
+    val own = validTiles(target) ?: return null
+    val earlierTiles = HashSet<ExplorerTile>()
+    for (ride in ridden) {
+        if (ride.id == target.id || ride.createdAt >= target.createdAt) continue
+        earlierTiles += validTiles(ride) ?: return null
+    }
+    return own.toSet().count { it !in earlierTiles }
+}
+
+/**
+ * Bis zu wie vielen fehlenden oder veralteten Cache-Eintraegen die
+ * Detailansicht den Kachel-Cache auch bei ausgeschaltetem Layer selbst
+ * nachzieht (siehe [explorerTilesCacheGaps]). Drei deckt den Normalfall ab —
+ * die gerade gespeicherte Tour, dazu vielleicht ein, zwei Importe —, ohne
+ * dass je ein Lauf ueber einen ganzen, nie gecachten Bestand daraus wird.
+ */
+const val EXPLORER_TILES_CHEAP_REFRESH_MAX: Int = 3
+
+/**
+ * Wie viele **gefahrene** Touren aus [rides] im [store] keinen gueltigen
+ * Eintrag haben — fehlend oder mit abweichendem Fingerabdruck, dieselbe Regel
+ * wie in [collectExplorerTiles] und [explorerTilesNewInRide].
+ *
+ * ## Wozu
+ * [explorerTilesNewInRide] liefert `null`, sobald auch nur ein Eintrag fehlt
+ * — und direkt nach einer Aufzeichnung fehlt bei ausgeschaltetem Kachel-Layer
+ * genau einer: der der neuen Tour. Die Zahl hier sagt dem Aufrufer, ob ein
+ * [collectExplorerTiles]-Lauf billig waere (er laedt nur die fehlenden
+ * Touren) oder einen ganzen Bestand durchliefe. Laedt selbst nichts.
+ */
+fun explorerTilesCacheGaps(rides: List<RideInfo>, store: ExplorerTilesStore): Int =
+    riddenRides(rides).count { ride ->
+        val entry = store.get(ride.id)
+        entry == null || entry.updatedAt != ride.updatedAt || entry.pointCount != ride.pointCount
+    }

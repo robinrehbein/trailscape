@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -100,12 +102,14 @@ import kotlin.math.roundToInt
  * Fahrwert) und jedes Beiwerk der Leiste (Rahmen, Karten, Symbole). Vier Zahlen
  * sind schon die Obergrenze dessen, was ein Blick erfasst.
  *
- * Laeuft zusaetzlich eine **Navigation**, kommen Restdistanz (in derselben
- * Groesse wie Distanz und Fahrzeit), die naechste Kurve (Pfeil plus Distanz,
- * siehe [NextTurnRow]) und die Abweichungswarnung dazu — alles Werte, nach
- * denen man im Fahren wirklich handelt. Die Navigationslogik selbst bleibt,
- * wo sie ist: `RouteNavigator` und `TurnHints` in `:core`, ausgewertet in
- * `MapScreen.kt`. Hier wird nur angezeigt, was dort schon berechnet ist.
+ * Laeuft zusaetzlich eine **Navigation**, steht die Fuehrung abgesetzt
+ * ganz oben als farbige Flaeche ([NavigationPanel]): naechste Kurve (Pfeil
+ * plus Distanz) gross, Restdistanz klein darunter, abseits der Route die
+ * Warnflaeche an ihrer Stelle — die Werte, nach denen man im Fahren wirklich
+ * handelt, sollen nicht zwischen den Zahlen untergehen. Die Navigationslogik
+ * selbst bleibt, wo sie ist: `RouteNavigator` und `TurnHints` in `:core`,
+ * ausgewertet in `MapScreen.kt`. Hier wird nur angezeigt, was dort schon
+ * berechnet ist.
  *
  * Liefert eine gekoppelte Uhr live Werte (Handy-Bruecke, siehe
  * `de.trailscape.app.record.RecordingRepository.heartRateBpm`/
@@ -117,7 +121,8 @@ import kotlin.math.roundToInt
  * oder veraltete Pulsanzeige waere eine Falschmeldung, kein Informationsverlust.
  *
  * ## Bedienung
- * Zwei Flaechen ueber je die halbe Breite, [RideModeActionHeight] hoch.
+ * Zwei gleich gebaute Flaechen ueber je die halbe Breite,
+ * [RideModeActionHeight] hoch, Symbol und Wort in derselben Groesse.
  * **Pause/Weiter** wirkt sofort — ein versehentlicher Griff dorthin kostet ein
  * paar Sekunden Fahrzeit und sonst nichts. **Beenden** geht nur durch Halten
  * ([de.trailscape.app.ui.components.HoldToEndButton]), denn dieser Fehlgriff
@@ -231,6 +236,14 @@ internal fun RideModeScreen(
             ) {
                 RideModeHeader(paused = paused, autoPaused = autoPaused, onShowMap = onShowMap)
 
+                // Die Fuehrung steht abgesetzt ganz oben, als farbige Flaeche:
+                // Sie ist das, wonach man im Fahren handelt, und darf nicht
+                // zwischen den Zahlen untergehen (siehe [NavigationPanel]).
+                if (navigation != null) {
+                    Spacer(Modifier.height(CardGap))
+                    NavigationPanel(navigation)
+                }
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -276,25 +289,6 @@ internal fun RideModeScreen(
                             spoken = "Puls $pulsBpm Schläge pro Minute",
                         )
                     }
-                    if (navigation != null) {
-                        Spacer(Modifier.height(CardGap))
-                        BigValue(
-                            value = formatKmDe(navigation.remainingKm),
-                            label = "km übrig · ${navigation.label}",
-                            size = SecondaryValueSize,
-                            spoken = "Noch ${formatKmDe(navigation.remainingKm)} Kilometer " +
-                                "bis zum Ziel der Route ${navigation.label}",
-                        )
-                        Spacer(Modifier.height(CardGap))
-                        NextTurnRow(
-                            richtung = navigation.naechsteKurve,
-                            abstandM = navigation.naechsteKurveM,
-                        )
-                        if (navigation.offRoute) {
-                            Spacer(Modifier.height(CardGap))
-                            OffRouteWarning()
-                        }
-                    }
                     Spacer(Modifier.height(CardGap))
                     BigValue(
                         value = "${ascentM.roundToInt()}",
@@ -330,6 +324,11 @@ internal fun RideModeScreen(
                             onEnd = onStop,
                             modifier = Modifier.weight(1f),
                             minHeight = RideModeActionHeight,
+                            label = "Beenden",
+                            holdHint = "gedrückt halten",
+                            icon = Icons.Filled.Stop,
+                            iconSize = RideModeActionIconSize,
+                            textStyle = MaterialTheme.typography.headlineSmall,
                         )
                 }
             }
@@ -366,7 +365,11 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Status-Chip und „Karte" sind gleich hoch und gleich gebaut (Symbol
+        // plus Wort in `titleMedium`) — nur der Karte-Knopf ist antippbar
+        // und traegt deshalb die Knopf-Farbe `secondaryContainer`.
         Surface(
+            modifier = Modifier.height(RideModeExitHeight),
             shape = MaterialTheme.shapes.small,
             color = if (paused) {
                 MaterialTheme.colorScheme.tertiaryContainer
@@ -379,15 +382,26 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
                 MaterialTheme.colorScheme.onPrimaryContainer
             },
         ) {
-            Text(
-                text = when {
-                    paused && autoPaused -> "Auto-Pause"
-                    paused -> "Pausiert"
-                    else -> "Aufzeichnung läuft"
-                },
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = if (paused) Icons.Filled.Pause else Icons.Filled.FiberManualRecord,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (paused) 28.dp else 16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = when {
+                        paused && autoPaused -> "Auto-Pause"
+                        paused -> "Pausiert"
+                        else -> "Aufzeichnung"
+                    },
+                    maxLines = 1,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
         }
         Spacer(Modifier.weight(1f))
         Surface(
@@ -410,6 +424,7 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = "Karte",
+                    maxLines = 1,
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -464,59 +479,87 @@ private fun BigValue(
 }
 
 /**
- * Die naechste Kurve als eigene Zeile: Pfeil plus gerundete Distanz — dieselbe
- * Auskunft wie im Navigations-HUD auf der Karte (`NavigationHud.kt`), nur in
- * Fahr-Groesse. Die Zeile steht an FESTER Position (immer, wenn navigiert
- * wird): Ohne Kurve in Sicht zeigt sie den Geradeaus-Pfeil, statt zu
- * verschwinden — die uebrigen Kacheln sollen beim Naeherkommen einer Kurve
- * nicht springen (dieselbe Regel wie bei der Puls-Kachel, siehe Klassen-KDoc).
+ * Die Fuehrung des Fahrmodus als eigene, farbige Flaeche direkt unter der
+ * Kopfzeile: gross die naechste Kurve (Pfeil plus gerundete Distanz — dieselbe
+ * Auskunft wie im Navigations-HUD auf der Karte, `NavigationHud.kt`), darunter
+ * klein Restdistanz und Routenname. Abgesetzt in `primary`, weil man danach im
+ * Fahren handelt; die uebrigen Werte darunter sind Auskunft.
+ *
+ * Die Flaeche steht an FESTER Position (immer, wenn navigiert wird): Ohne
+ * Kurve in Sicht zeigt sie den Geradeaus-Pfeil, statt zu verschwinden — die
+ * Werte darunter sollen beim Naeherkommen einer Kurve nicht springen (dieselbe
+ * Regel wie bei der Puls-Kachel, siehe Klassen-KDoc). Abseits der Route tritt
+ * die Warnflaeche an ihre Stelle: Eine Kurvenauskunft auf fremdem Weg waere
+ * eine Falschauskunft.
  */
 @Composable
-private fun NextTurnRow(richtung: TurnRichtung?, abstandM: Double?) {
-    val spoken = if (richtung != null && abstandM != null) {
-        "Nächste Kurve: ${turnAnsageText(richtung, abstandM)}"
-    } else {
-        "Keine Kurve in Sicht, dem Routenverlauf folgen."
+private fun NavigationPanel(navigation: RideModeNavigation) {
+    if (navigation.offRoute) {
+        OffRouteWarning(navigation)
+        return
     }
-    Row(
-        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
-        verticalAlignment = Alignment.CenterVertically,
+    val richtung = navigation.naechsteKurve
+    val abstandM = navigation.naechsteKurveM
+    val spoken = (
+        if (richtung != null && abstandM != null) {
+            "Nächste Kurve: ${turnAnsageText(richtung, abstandM)}"
+        } else {
+            "Keine Kurve in Sicht, dem Routenverlauf folgen."
+        }
+        ) + " Noch ${formatKmDe(navigation.remainingKm)} Kilometer auf ${navigation.label}."
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics { contentDescription = spoken },
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
     ) {
-        Icon(
-            imageVector = turnRichtungIcon(richtung),
-            contentDescription = null,
-            modifier = Modifier.size(52.dp),
-            tint = MaterialTheme.colorScheme.onSurface,
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(
-                text = if (richtung != null && abstandM != null) {
-                    kurveAbstandKurzText(abstandM)
-                } else {
-                    "Geradeaus"
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontSize = SecondaryValueSize,
-                lineHeight = SecondaryValueSize * 1.1f,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = if (richtung != null) {
-                    kurveAnzeigeWort(richtung)
-                } else {
-                    "nächste Kurve"
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = turnRichtungIcon(richtung),
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                )
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = if (richtung != null && abstandM != null) {
+                            kurveAbstandKurzText(abstandM)
+                        } else {
+                            "Geradeaus"
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontSize = SecondaryValueSize,
+                        lineHeight = SecondaryValueSize * 1.1f,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = if (richtung != null) kurveAnzeigeWort(richtung) else "dem Weg folgen",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            RemainingLine(navigation)
         }
     }
+}
+
+/** „14,0 km übrig · Geplante Route" — die Fusszeile der Fuehrungsflaeche. */
+@Composable
+private fun RemainingLine(navigation: RideModeNavigation) {
+    Text(
+        text = "${formatKmDe(navigation.remainingKm)} km übrig · ${navigation.label}",
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = MaterialTheme.typography.titleMedium,
+    )
 }
 
 /**
@@ -528,20 +571,28 @@ private fun NextTurnRow(richtung: TurnRichtung?, abstandM: Double?) {
  * (`:core`) — hier wird das Ergebnis nur gezeigt.
  */
 @Composable
-private fun OffRouteWarning() {
+private fun OffRouteWarning(navigation: RideModeNavigation) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clearAndSetSemantics {
+                contentDescription = "Abseits der Route. Noch ${formatKmDe(navigation.remainingKm)} " +
+                    "Kilometer auf ${navigation.label}."
+            },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
-        Text(
-            text = "Abseits der Route",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            fontSize = SmallValueSize,
-            lineHeight = SmallValueSize * 1.1f,
-            fontWeight = FontWeight.Bold,
-        )
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                text = "Abseits der Route",
+                fontSize = SmallValueSize,
+                lineHeight = SmallValueSize * 1.1f,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            RemainingLine(navigation)
+        }
     }
 }
 
@@ -576,7 +627,7 @@ private fun RideModeAction(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (icon != null) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(36.dp))
+                Icon(icon, contentDescription = null, modifier = Modifier.size(RideModeActionIconSize))
                 Spacer(Modifier.width(8.dp))
             }
             Text(
@@ -584,6 +635,7 @@ private fun RideModeAction(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
@@ -646,6 +698,9 @@ private fun Context.findActivity(): Activity? {
 private val SpeedValueSize = 96.sp
 private val SecondaryValueSize = 52.sp
 private val SmallValueSize = 30.sp
+
+/** Symbolgroesse beider Bedienflaechen — Pause/Weiter und Beenden gleich. */
+private val RideModeActionIconSize = 36.dp
 
 /**
  * Mindest-Wischstrecke fuer den Wechsel zur Kartenseite. Deutlich ueber dem

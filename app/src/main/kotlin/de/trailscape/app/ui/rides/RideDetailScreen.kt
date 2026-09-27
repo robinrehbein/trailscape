@@ -71,6 +71,7 @@ import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
 import de.trailscape.app.ui.map.GravelGreen
@@ -96,6 +97,7 @@ import de.trailscape.core.Vo2MaxEstimate
 import de.trailscape.core.buildRideSeries
 import de.trailscape.core.computeDecoupling
 import de.trailscape.core.computePhysicsEstimate
+import de.trailscape.core.computeRideImpact
 import de.trailscape.core.confidenceLabels
 import de.trailscape.core.estimateVo2MaxFromSegments
 import de.trailscape.core.extractSteadySegments
@@ -127,11 +129,15 @@ import kotlinx.coroutines.withContext
  *  3. Karte mit der Spur, darunter km · Std. · Hm · Ø Puls.
  *  4. Ein Satz in Klartext ([rideNote]): passt die Tour zum Plan, oder wie
  *     hart war sie?
+ *  4b. Was die Tour gebracht hat ([RideImpactCard]) — Fitness/Frische,
+ *     Wochenziel, neue Kacheln, neue Bestzeiten; entfaellt ganz ohne Daten.
  *  5. Die eine Hauptaktion **„Diese Tour nochmal fahren"** — die Spur als
  *     Route auf der Karte ([AppViewModel.requestRideAsRoute]) — und darunter
  *     sichtbar und beschriftet: Karte zeigen, Umbenennen, Teilen, Loeschen.
  *     Diese vier lagen frueher hinter ⋮; eine App ohne versteckte Funktionen
  *     kann sich kein Menue leisten, dessen Inhalt man erraten muss.
+ *     „Teilen" fragt nach dem Was: Tour-Bild (Story oder Quadrat) oder GPX
+ *     (`ShareRideDialog.kt`) — eine fuenfte Kachel haette die Reihe umbrochen.
  *  6. Hoehenprofil.
  *  7. „Alle Werte" klappt den Rest auf: Fahrzeit, Ø Tempo, Hm ↓, Max. Puls,
  *     Tempo- und Pulskurve, die Coach-Auswertung (Trainingslast als Zahl,
@@ -151,7 +157,8 @@ import kotlinx.coroutines.withContext
  * Kennzahlen aus `ride.stats` (`:core`/`Stats.kt`), Kurven aus
  * `:core`/`RideCurves.kt`, Hoehenprofil aus `ui/map/ElevationProfile.kt`,
  * Auswertung aus `:core`/`RideAnalysis.kt`, Planzuordnung aus
- * `:core`/`TrainingPlanProgress.kt`. Diese Datei formatiert und zeichnet nur.
+ * `:core`/`TrainingPlanProgress.kt`, Wirkung aus `:core`/`RideImpact.kt`.
+ * Diese Datei formatiert und zeichnet nur.
  *
  * ## Grenzfaelle
  * Abschnitte ohne Datengrundlage entfallen **ganz**: keine Hoehen → kein
@@ -204,6 +211,28 @@ internal fun RideDetailScreen(
     }
     val effort = rideEffort(load, ride.stats)
     val note = rideNote(effort, planMatch, analysis?.decoupling?.decouplingPercent)
+
+    // Was die Tour gebracht hat — Wochenziel aus demselben Anzeigeplan wie auf
+    // „Heute"; die Kachelzahl kommt nach, sobald der Kachelbestand steht.
+    val decision = rememberTodayDecision(appViewModel)
+    val explorerTiles by appViewModel.explorerTiles.collectAsStateWithLifecycle()
+    val newTiles by produceState<Int?>(null, ride.id, ride.updatedAt, explorerTiles) {
+        value = appViewModel.explorerTilesGainedBy(ride.id)
+    }
+    val impact = remember(
+        ride.id, ride.updatedAt, load, insights.fitness, decision.displayPlan, rides, newTiles, segmentViews,
+    ) {
+        computeRideImpact(
+            ride = ride,
+            rideAt = localOfEpochMs(ride.createdAt),
+            rideLoad = load?.takeIf { it.available }?.load,
+            fitness = insights.fitness,
+            plan = decision.displayPlan,
+            rides = rides,
+            newTiles = newTiles,
+            segmentViews = segmentViews,
+        )
+    }
 
     // Aufgeklappt bleibt aufgeklappt, auch ueber eine Drehung hinweg.
     var allValues by rememberSaveable(ride.id) { mutableStateOf(false) }
@@ -260,6 +289,7 @@ internal fun RideDetailScreen(
                     )
                 } else {
                     note?.let { RideNoteBox(it) }
+                    impact?.let { RideImpactCard(rideImpactLines(it)) }
                 }
 
                 if (ride.points.size >= 2) {
@@ -294,7 +324,7 @@ internal fun RideDetailScreen(
                         TileAction(
                             "Teilen",
                             Icons.Filled.Share,
-                            contentDescription = "Tour als GPX teilen",
+                            contentDescription = "Tour teilen",
                             onClick = onShare,
                         ),
                         TileAction(

@@ -1,7 +1,5 @@
 package de.trailscape.app.ui.rides
 
-import android.content.Context
-import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,7 +39,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,12 +46,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
@@ -64,18 +59,13 @@ import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.localOfEpochMs
-import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.LocalSignalColors
-import de.trailscape.app.ui.withCause
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
-import de.trailscape.core.rideToGpx
-import de.trailscape.core.safeFileName
-import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -499,6 +489,12 @@ private fun RidesEmptyState(
  * Loeschen, und eine Snackbar in ihrem Fenster (samt der Coroutine, die auf
  * „Rückgängig" wartet) verschwaende mit ihr, bevor jemand tippen kann.
  *
+ * ## Teilen: Bild oder GPX
+ * „Teilen" oeffnet [RideShareDialog]: das Tour-Bild als Story oder Quadrat
+ * ([shareRideImage]) oder die Spur als GPX ([shareRideGpx]). Die Trainingslast
+ * fuer das Bild kommt aus [AppViewModel.insights] — nur gelesen, keine neue
+ * Rechnung.
+ *
  * ## Meldungen
  * [AppViewModel.messages] sammelt diese Ansicht selbst ein: Ihr Fenster
  * verdeckt den Verlauf-Tab, ein Teilen-Fehler muss also hier erscheinen.
@@ -510,8 +506,6 @@ fun RideDetailHost(
     onBack: () -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val summary = rides.firstOrNull { it.id == rideId }
@@ -526,6 +520,9 @@ fun RideDetailHost(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var renameTarget by remember { mutableStateOf<RideSummary?>(null) }
+    var shareOpen by rememberSaveable { mutableStateOf(false) }
+    // Die Trainingslast kann auf dem Tour-Bild stehen (ohne Puls als vierte Zahl).
+    val insights by appViewModel.insights.collectAsStateWithLifecycle()
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -541,6 +538,7 @@ fun RideDetailHost(
     BackHandler(onBack = onBack)
 
     val loaded = ride ?: return
+    val load = insights.rideLoads[loaded.id]?.takeIf { it.available }?.load
 
     RideDetailScreen(
         ride = loaded,
@@ -559,21 +557,7 @@ fun RideDetailHost(
             appViewModel.requestRideAsRoute(loaded.id)
         },
         onRename = { renameTarget = summary },
-        onShare = {
-            scope.launch {
-                try {
-                    shareGpx(context, loaded)
-                } catch (e: Exception) {
-                    appViewModel.showMessage(
-                        withCause(
-                            "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
-                                "Speicher frei ist, und versuche es erneut.",
-                            e,
-                        ),
-                    )
-                }
-            }
-        },
+        onShare = { shareOpen = true },
         onDelete = { onDelete(loaded.id) },
     )
 
@@ -585,6 +569,15 @@ fun RideDetailHost(
                 appViewModel.renameRide(target.id, newName)
                 renameTarget = null
             },
+        )
+    }
+
+    if (shareOpen) {
+        RideShareDialog(
+            ride = loaded,
+            load = load,
+            appViewModel = appViewModel,
+            onDismiss = { shareOpen = false },
         )
     }
 }
@@ -661,32 +654,4 @@ private fun RenameDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
     )
-}
-
-/**
- * Teilt eine Tour als GPX-Datei ueber das System-Share-Sheet (z. B. fuer
- * Komoot, Strava oder eine andere Trainings-App).
- *
- * Die Datei landet unter `<cacheDir>/geteilte-touren` — genau der Pfad, den
- * `res/xml/file_paths.xml` fuer den FileProvider freigibt. Dabei werden **alte**
- * Exporte aufgeraeumt (siehe `ui/ShareFiles.kt`), damit der Cache nicht
- * mitwaechst; frische bleiben liegen, weil die Empfaenger-App sie erst nach
- * dem Chooser liest.
- */
-private suspend fun shareGpx(context: Context, ride: Ride) {
-    val uri = withContext(Dispatchers.IO) {
-        val dir = prepareShareDirectory(context.cacheDir)
-        val file = File(dir, "${safeFileName(ride.name)}.gpx")
-        file.writeText(rideToGpx(ride), Charsets.UTF_8)
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-    }
-
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "application/gpx+xml"
-        putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_SUBJECT, ride.name)
-        putExtra(Intent.EXTRA_TITLE, ride.name)
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    context.startActivity(Intent.createChooser(send, "Tour teilen"))
 }

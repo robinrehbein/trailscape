@@ -26,6 +26,12 @@ import kotlin.math.max
  * zusammenkommen, und sie liefert **beides**: das Routenziel und den Satz, der
  * die Abweichung erklaert. Ein Text, der die Zahl nicht erklaert, waere
  * derselbe Widerspruch von der anderen Seite.
+ *
+ * ## Ohne jede gefahrene Tour
+ * Hier entsteht auch die erste Runde ([firstRoundTarget]). Ohne Historie ist
+ * „Grundlage, 2 h, mittleres Tempo" geraten und wurde trotzdem wie eine
+ * Tagesform angesagt. Weil „Heute", der Karten-Chip und der Losfahren-Dialog
+ * alle aus dieser einen Entscheidung lesen, sagen sie damit auch alle dasselbe.
  */
 
 /**
@@ -112,6 +118,9 @@ private fun downgradeReason(kind: DailyRecommendationKind): String = when (kind)
  *   zurueckgenommen wurden. Genau dann **muss** [note] auf der Karte stehen.
  * @param note der fertige deutsche Satz zur Abweichung; `null`, wenn es keine
  *   gibt.
+ * @param firstRound `true`, wenn [target] die ruhige erste Runde fuer
+ *   jemanden ohne gefahrene Tour ist ([firstRoundTarget]) und nicht die
+ *   Empfehlung aus der Tagesform.
  */
 data class TodayRoute(
     val target: RouteTarget?,
@@ -120,6 +129,7 @@ data class TodayRoute(
     val factor: Double,
     val downgraded: Boolean,
     val note: String?,
+    val firstRound: Boolean = false,
 )
 
 /**
@@ -136,6 +146,15 @@ data class TodayRoute(
  *     damit passiert.
  *  3. **Keine Planeinheit.** Dann ist die Tagesempfehlung die ganze Auskunft,
  *     unveraendert wie bisher.
+ *  3a. **Noch keine gefahrene Tour** (und keine Planeinheit) — geprueft
+ *     vor Fall 3. Dann gibt es die erste Runde ([firstRoundTarget] ueber
+ *     [defaultFirstRoundDuration]): ruhig, flach, nach Zeit bemessen. Die Tagesempfehlung waere hier
+ *     „Grundlage 2 h" — geraten, denn ohne Historie gibt es weder Form noch
+ *     Tempo. Eine [DailyRecommendationKind.HARTE_EINHEIT] ohne eine einzige
+ *     Tour waere erst recht ein Fehlgriff und wird mit abgefangen.
+ *     [DailyRecommendationKind.LOCKER_Z2] und [DailyRecommendationKind.RECOVERY]
+ *     bleiben, wie sie sind: Die sind schon ruhig, und wenn sie aus den Werten
+ *     der Uhr kommen, haben diese Vorrang vor einer Erststart-Annahme.
  *  4. **Planeinheit an einem Fahrtag.** Die Kilometer des Plans sind der
  *     Ausgangspunkt, [readinessDistanceFactor] und [readinessAscentCap] die
  *     Korrektur. Auch die **Intensitaet** wird mitgezogen: Wenn die Empfehlung
@@ -186,6 +205,24 @@ fun decideTodayRoute(
                 "Im Plan steht heute „${it.title}“ über ${it.targetKm} km – ausgesetzt, weil " +
                     "${downgradeReason(kind)}. Schieb die Einheit lieber um einen Tag."
             },
+        )
+    }
+
+    // 3a. Noch keine gefahrene Tour: die ruhige erste Runde statt einer
+    // geratenen Tagesform.
+    if (
+        session == null &&
+        riddenRides(recentRides).isEmpty() &&
+        (kind == DailyRecommendationKind.GRUNDLAGE || kind == DailyRecommendationKind.HARTE_EINHEIT)
+    ) {
+        return TodayRoute(
+            target = firstRoundTarget(defaultFirstRoundDuration(profile).hours, profile, recentRides),
+            session = null,
+            plannedKm = null,
+            factor = factor,
+            downgraded = false,
+            note = null,
+            firstRound = true,
         )
     }
 

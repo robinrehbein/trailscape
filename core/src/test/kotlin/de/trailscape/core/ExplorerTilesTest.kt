@@ -319,4 +319,114 @@ class ExplorerTilesTest {
         val tiles = collectExplorerTiles(listOf(missing.toSummary()), store, loadRide = { null })
         assertEquals(emptySet(), tiles)
     }
+
+    // ------------------------------------------------------- Neu in einer Tour
+
+    private fun summary(id: String, createdAt: Long, planned: Boolean = false, updatedAt: Long = createdAt, pointCount: Int = 10): RideSummary =
+        RideSummary(
+            id = id,
+            name = id,
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            stats = RideStats.empty,
+            planned = planned,
+            pointCount = pointCount,
+        )
+
+    private fun FakeExplorerTilesStore.putTiles(ride: RideSummary, vararg xs: Int) {
+        put(ride.id, StoredExplorerTiles(ride.updatedAt, ride.pointCount, xs.map { ExplorerTile(it, 0) }))
+    }
+
+    @Test
+    fun `explorerTilesNewInRide zieht nur fruehere Touren ab`() {
+        val store = FakeExplorerTilesStore()
+        val earlier = summary("frueher", createdAt = 100L)
+        val target = summary("diese", createdAt = 200L)
+        val later = summary("spaeter", createdAt = 300L)
+        store.putTiles(earlier, 1, 2, 9)
+        store.putTiles(target, 1, 2, 3, 4, 5)
+        store.putTiles(later, 3, 4, 5)
+
+        val rides = listOf(later, target, earlier)
+        assertEquals(3, explorerTilesNewInRide("diese", rides, store))
+        assertEquals(0, explorerTilesNewInRide("spaeter", rides, store))
+    }
+
+    @Test
+    fun `erste Tour ueberhaupt - alle Kacheln neu`() {
+        val store = FakeExplorerTilesStore()
+        val only = summary("erste", createdAt = 100L)
+        store.putTiles(only, 1, 2, 3)
+        assertEquals(3, explorerTilesNewInRide("erste", listOf(only), store))
+    }
+
+    @Test
+    fun `geplante Touren zaehlen nicht als frueher befahren`() {
+        val store = FakeExplorerTilesStore()
+        val planned = summary("plan", createdAt = 100L, planned = true)
+        val target = summary("diese", createdAt = 200L)
+        // Ein (veralteter) Eintrag der Planung darf weder abziehen noch
+        // das Ergebnis auf null kippen.
+        store.putTiles(planned, 1, 2)
+        store.putTiles(target, 1, 2, 3)
+        assertEquals(3, explorerTilesNewInRide("diese", listOf(planned, target), store))
+        assertNull(explorerTilesNewInRide("plan", listOf(planned, target), store))
+    }
+
+    @Test
+    fun `fehlender oder veralteter Cache-Eintrag ergibt null statt einer geratenen Zahl`() {
+        val earlier = summary("frueher", createdAt = 100L)
+        val target = summary("diese", createdAt = 200L)
+        val rides = listOf(earlier, target)
+
+        // Eigener Eintrag fehlt.
+        val missingOwn = FakeExplorerTilesStore().apply { putTiles(earlier, 1) }
+        assertNull(explorerTilesNewInRide("diese", rides, missingOwn))
+
+        // Eigener Eintrag veraltet (updatedAt passt nicht mehr).
+        val staleOwn = FakeExplorerTilesStore().apply {
+            putTiles(earlier, 1)
+            putTiles(target.copy(updatedAt = 999L), 1, 2)
+        }
+        assertNull(explorerTilesNewInRide("diese", rides, staleOwn))
+
+        // Eintrag einer frueheren Tour veraltet.
+        val staleEarlier = FakeExplorerTilesStore().apply {
+            putTiles(earlier.copy(updatedAt = 999L), 1)
+            putTiles(target, 1, 2)
+        }
+        assertNull(explorerTilesNewInRide("diese", rides, staleEarlier))
+
+        // Eintrag einer frueheren Tour fehlt ganz.
+        val missingEarlier = FakeExplorerTilesStore().apply { putTiles(target, 1, 2) }
+        assertNull(explorerTilesNewInRide("diese", rides, missingEarlier))
+    }
+
+    @Test
+    fun `unbekannte Tour-ID ergibt null`() {
+        val store = FakeExplorerTilesStore()
+        val target = summary("diese", createdAt = 200L)
+        store.putTiles(target, 1)
+        assertNull(explorerTilesNewInRide("gibt-es-nicht", listOf(target), store))
+    }
+
+    @Test
+    fun `explorerTilesCacheGaps zaehlt fehlende und veraltete Eintraege gefahrener Touren`() {
+        val earlier = summary("frueher", createdAt = 100L)
+        val stale = summary("veraltet", createdAt = 150L)
+        val fresh = summary("neu", createdAt = 200L)
+        val planned = summary("plan", createdAt = 250L, planned = true)
+        val store = FakeExplorerTilesStore().apply {
+            putTiles(earlier, 1)
+            putTiles(stale.copy(pointCount = 3), 2)
+        }
+        assertEquals(2, explorerTilesCacheGaps(listOf(earlier, stale, fresh, planned), store))
+        assertEquals(0, explorerTilesCacheGaps(listOf(earlier, planned), store))
+    }
+
+    @Test
+    fun `erste Tour ohne Cache - genau eine Luecke`() {
+        val only = summary("erste", createdAt = 100L)
+        assertEquals(1, explorerTilesCacheGaps(listOf(only), FakeExplorerTilesStore()))
+    }
 }

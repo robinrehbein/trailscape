@@ -31,6 +31,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
   dafür eine passende Rundstrecke generiert
 - Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
+- Ohne eine einzige Tour eine ruhige erste Runde nach Zeit (1 h / 1½ h / 2 h),
+  die „Runde bauen" direkt ab deinem Standort sucht — auch als letzter Schritt
+  der Einführung
 
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
@@ -44,8 +47,13 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 **Touren**
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
-  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben
-- Umbenennen, Löschen, als GPX teilen, GPX importieren (z. B. aus Komoot oder
+  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben —
+  und oben „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
+  neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
+  Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
+  Tourblatt der Karte genau diese Ansicht
+- Umbenennen, Löschen, als GPX oder als Bild teilen (Story 9:16 oder Quadrat,
+  mit Spur, Höhenprofil und Kennzahlen), GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
   wieder importieren
@@ -58,6 +66,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   nicht beim Tippen), Fahrradtyp (Gravel, Rennrad) und
   Wegpräferenz (Gemischt, Asphalt, Radwege, kürzester Weg) — daraus wählt die
   App das passende BRouter-Profil
+- Rundkurs-Generator ab Standort oder angetipptem Ort: Länge, Untergrund,
+  optional „Neue Gegenden bevorzugen“ und „Wind berücksichtigen“ — dann
+  bevorzugt die Suche als empfohlene Runde eine, die gegen den Wind hinaus und
+  mit Rückenwind nach Hause führt
+  (aktueller Wind von Open-Meteo, nur mit Schalter, Startpunkt auf etwa 1 km
+  gerundet)
 - Höhenprofil der geplanten Route
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
@@ -116,7 +130,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 662 Unit-Tests hängen hier |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1151 Unit-Tests hängen hier |
 | `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Training, Mehr; die Tourenliste liegt als Blatt auf der Karte), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
@@ -172,8 +186,8 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 786 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # 147 Tests der plattformfreien :app-Teile
+./gradlew :core:test              # 1151 Tests des Domänenmodells
+./gradlew :app:testDebugUnitTest  # 467 Tests der plattformfreien :app-Teile
 ```
 
 Was die CI vor jedem Release ausführt:

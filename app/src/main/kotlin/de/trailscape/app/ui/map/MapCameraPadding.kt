@@ -47,3 +47,26 @@ internal fun fitPaddingPx(
     val (top, bottom) = shrink(base.top, bottomWanted, mapHeightPx)
     return intArrayOf(left, top, right, bottom)
 }
+
+/**
+ * Passt einen in der Kamera **gespeicherten** Rand an eine neue Kartenhoehe
+ * an — `null`, wenn er schon passt.
+ *
+ * [MapController.moveTo] und die Navi-Kamera legen ihren Rand in die
+ * `CameraPosition`, und dort bleibt er, auch wenn die Karte danach kleiner
+ * wird (Tastatur der Wegpunkt-Suche, Splitscreen, Drehen). Dann ist der
+ * gespeicherte Rand ploetzlich hoeher als die Karte selbst — dieselbe Lage,
+ * in der MapLibre mit NaN rechnet und die Karte schwarz oder starr stehen
+ * bleibt. Deshalb nach jeder Groessenaenderung: unten hoechstens
+ * [MAX_OBSCURED_SHARE] der Hoehe, oben so viel, dass mindestens
+ * [MIN_FIT_AREA_PX] frei bleiben.
+ *
+ * @param padding links, oben, rechts, unten in Pixeln (MapLibre-Reihenfolge).
+ */
+internal fun reclampedCameraPadding(padding: DoubleArray, mapHeightPx: Int): DoubleArray? {
+    if (padding.size < 4 || mapHeightPx <= 0) return null
+    val bottom = padding[3].coerceIn(0.0, mapHeightPx * MAX_OBSCURED_SHARE)
+    val top = padding[1].coerceIn(0.0, max(0.0, mapHeightPx - MIN_FIT_AREA_PX - bottom))
+    if (bottom == padding[3] && top == padding[1]) return null
+    return doubleArrayOf(padding[0], top, padding[2], bottom)
+}

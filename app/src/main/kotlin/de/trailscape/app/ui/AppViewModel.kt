@@ -16,6 +16,7 @@ import de.trailscape.app.routing.SegmentDownloads
 import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.routing.describeSegmentOffer
+import de.trailscape.app.ui.rides.formatImprovementDe
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.TrackPoint
@@ -50,6 +51,9 @@ import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.collectExplorerTiles
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
+import de.trailscape.core.EXPLORER_TILES_CHEAP_REFRESH_MAX
+import de.trailscape.core.explorerTilesCacheGaps
+import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.loadPlan
@@ -316,18 +320,41 @@ class AppViewModel(
     val pendingRouteTarget: StateFlow<RouteTarget?> = _pendingRouteTarget.asStateFlow()
 
     /**
+     * Ob der Karten-Tab die Suche zum [pendingRouteTarget] sofort starten soll,
+     * statt nur das Panel mit „Routen suchen" zu oeffnen. Eine einfache `var`:
+     * Sie wird immer vor dem Ziel gesetzt und mit ihm zusammen abgeholt, beides
+     * auf dem Main-Thread.
+     */
+    private var pendingRouteAutoStart = false
+
+    /**
      * Uebergibt ein aus einer Einheit oder der Tagesempfehlung abgeleitetes
      * Ziel an den Karten-Tab und wechselt dorthin
-     * (`:core`: `routeTargetForSession` / `routeTargetForToday`).
+     * (`:core`: `routeTargetForSession` / `routeTargetForToday` /
+     * `firstRoundTarget`).
+     *
+     * @param autoStart `true` startet die Suche direkt (nur ab echtem
+     *   Standort, siehe MapScreen). Das gibt es nur nach einer ausdruecklichen
+     *   „Runde bauen"-Handlung — am Ende der Einfuehrung und bei der ersten
+     *   Runde auf „Heute". Die uebrigen Aufrufer (Training, Heute-Normalfall)
+     *   oeffnen weiterhin nur das Panel; dort entscheidet erst „Routen suchen".
      */
-    fun requestRouteGeneration(target: RouteTarget) {
+    fun requestRouteGeneration(target: RouteTarget, autoStart: Boolean = false) {
+        pendingRouteAutoStart = autoStart
         _pendingRouteTarget.value = target
         requestTab(AppTab.MAP)
     }
 
-    /** Quittiert das abgeholte Ziel (ruft der Karten-Screen). */
-    fun consumeRouteTarget() {
+    /**
+     * Quittiert das abgeholte Ziel (ruft der Karten-Screen).
+     *
+     * @return ob die Suche sofort starten soll (siehe [requestRouteGeneration]).
+     */
+    fun consumeRouteTarget(): Boolean {
+        val autoStart = pendingRouteAutoStart
+        pendingRouteAutoStart = false
         _pendingRouteTarget.value = null
+        return autoStart
     }
 
     // -------------------------------------------------------------------------
@@ -1784,7 +1811,7 @@ class AppViewModel(
                 val best = newBests.first()
                 showMessage(
                     "Neue Bestzeit auf „${best.segmentName}“: ${formatDuration(best.timeS)}, " +
-                        "${formatImprovement(best.improvementS)} schneller.",
+                        "${formatImprovementDe(best.improvementS)} schneller.",
                 )
             }
             // Mehrere auf einmal (z. B. Runden-Tour ueber mehrere Anstiege):
@@ -1792,10 +1819,6 @@ class AppViewModel(
             else -> showMessage("Neue Bestzeiten auf ${newBests.size} Segmenten.")
         }
     }
-
-    /** „14 s" unter einer Minute, sonst „1:15 min" — fuer die Bestzeit-Meldung. */
-    private fun formatImprovement(seconds: Int): String =
-        if (seconds < 60) "$seconds s" else "${formatDuration(seconds)} min"
 
     // -------------------------------------------------------------------------
     // Trainingsplan
@@ -2120,6 +2143,45 @@ class AppViewModel(
     suspend fun exploredTilesForPlanning(): Set<ExplorerTile> {
         if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
         return _explorerTiles.value
+    }
+
+    /**
+     * Wie viele Kacheln die Tour [rideId] zum ersten Mal befahren hat — fuer
+     * „Was die Tour gebracht hat" in der Detailansicht
+     * (`:core`/[explorerTilesNewInRide]).
+     *
+     * Nachgeschlagen wird immer, auch bei ausgeschaltetem Kachel-Layer: der
+     * Blick in den Cache ist billig und liefert `null`, wenn er unvollstaendig
+     * oder veraltet ist.
+     *
+     * ## Wann nachgerechnet wird
+     * Bei eingeschaltetem Layer ohne Bestand: voll ([refreshExplorerTiles]).
+     * Bei ausgeschaltetem Layer nur, wenn der Cache hoechstens
+     * [EXPLORER_TILES_CHEAP_REFRESH_MAX] Luecken hat
+     * ([explorerTilesCacheGaps]) — typisch direkt nach einer Aufzeichnung,
+     * wenn allein die neue Tour fehlt, oder bei der allerersten Tour.
+     * `collectExplorerTiles` laedt dann nur diese paar Touren. Sonst bliebe
+     * die Zeile „N neue Kacheln" gerade nach der Fahrt leer, obwohl sie dort
+     * am meisten sagt. Einen nie gecachten Bestand rechnet diese Ansicht
+     * dagegen nicht durch — wer den Layer nie einschaltet, bezahlt dafuer
+     * nichts.
+     */
+    suspend fun explorerTilesGainedBy(rideId: String): Int? {
+        if (_explorerTilesEnabled.value && _explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
+        val summaries = allSummaries
+        val lookup = suspend {
+            withContext(io) {
+                runCatching { explorerTilesNewInRide(rideId, summaries, explorerTilesStore) }.getOrNull()
+            }
+        }
+        lookup()?.let { return it }
+        val gaps = withContext(io) {
+            runCatching { explorerTilesCacheGaps(summaries, explorerTilesStore) }.getOrNull()
+        } ?: return null
+        if (gaps == 0 || gaps > EXPLORER_TILES_CHEAP_REFRESH_MAX) return null
+        refreshExplorerTiles()
+        return lookup()
     }
 
     // -------------------------------------------------------------------------

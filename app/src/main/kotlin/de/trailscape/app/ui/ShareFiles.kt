@@ -6,9 +6,11 @@ import java.io.File
  * Gemeinsame Verwaltung des Cache-Verzeichnisses, aus dem der FileProvider
  * geteilte GPX-Dateien ausliefert (`res/xml/file_paths.xml`).
  *
- * Geteilt von der Tourenliste (`ui/rides/TourList.kt`) und der Karte
- * (`ui/map/MapScreen.kt`), weil beide dieselbe Datei-Uebergabe benutzen und
- * sich vorher genau nicht in die Quere kommen duerfen:
+ * Geteilt aus der Detailansicht und vom Karten-Tourblatt (`ui/rides/RideShare.kt`, GPX), dem Tour-Bild
+ * (`ui/rides/ShareCardRenderer.kt`, PNG) und der Karte (`ui/map/MapScreen.kt`),
+ * weil alle dieselbe Datei-Uebergabe benutzen und sich genau nicht in die
+ * Quere kommen duerfen. Fuer die PNG-Bilder gilt dasselbe Aufraeumen nach
+ * einer Stunde wie fuer GPX. Vorher lief es so:
  *
  *  * Die Tourenliste hat frueher **alle** Dateien im Verzeichnis geloescht,
  *    bevor sie die neue schrieb. Die Empfaenger-App liest die Datei aber erst,

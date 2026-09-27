@@ -1,9 +1,10 @@
 # Datenschutzerklärung — Trailscape
 
 **Stand: 27. September 2026** · gilt für die Android-App Trailscape
-(`de.robinrehbein.trailscape`), verteilt über Google Play und als APK über die
+(`de.robinrehbein.trailscape` über Google Play, `io.github.robinrehbein.trailscape`
+als APK über die
 [GitHub-Releases](https://github.com/robinrehbein/trailscape/releases) dieses
-Projekts.
+Projekts).
 
 Diese Erklärung beschreibt die App so, wie sie tatsächlich gebaut ist. Jede
 Aussage darin lässt sich am Quellcode nachprüfen — die Datei-, Klassen- und
@@ -28,7 +29,8 @@ Servernamen sind bewusst mit angegeben.
   nichts nach Health Connect zurück.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
-  Sync-Server) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
+  Sync-Server und, nur mit Schalter, der aktuelle Wind am Startpunkt einer
+  Runde bei Open-Meteo) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
   GitHub, höchstens einmal am Tag, abschaltbar unter *Mehr → Über*. Diese
   Dienste sehen dabei deine IP-Adresse — siehe unten, Abschnitt „Was das
   Gerät nach außen sendet".
@@ -63,7 +65,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
 | Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
-| Zum Teilen erzeugte GPX-Dateien | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
+| Zum Teilen erzeugte GPX-Dateien und Tour-Bilder | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
 
 Gesundheitsdaten aus Health Connect (Puls, Ruhepuls, HRV, Schlaf, VO₂max)
 werden für die Auswertung verwendet und, soweit sie zu einer Tour gehören,
@@ -85,10 +87,10 @@ Komoot-Link) ruft die App nicht ab.
 
 | Berechtigung | Wofür |
 |---|---|
-| Standort (genau/ungefähr) | Aufzeichnung der Tour und Anzeige der eigenen Position auf der Karte. Ohne laufende Aufzeichnung fragt die App keine Positionen ab. „Während der Nutzung erlauben" genügt: Die Aufzeichnung läuft als Vordergrunddienst weiter, auch bei gesperrtem Display — eine Hintergrund-Standortberechtigung (`ACCESS_BACKGROUND_LOCATION`) fragt die App nicht an und deklariert sie auch nicht |
+| Standort (genau/ungefähr) | Aufzeichnung der Tour, Anzeige der eigenen Position auf der Karte und Startpunkt der Rundkurs-Suche („Runde bauen“ am Ende der Einführung, auf „Heute“, „Routen suchen“). Außerhalb einer Aufzeichnung liest die App die Position nur, wenn du sie ausdrücklich anforderst: Standort-Knopf auf der Karte, Rundkurs-Suche ab deinem Standort. „Während der Nutzung erlauben" genügt: Die Aufzeichnung läuft als Vordergrunddienst weiter, auch bei gesperrtem Display — eine Hintergrund-Standortberechtigung (`ACCESS_BACKGROUND_LOCATION`) fragt die App nicht an und deklariert sie auch nicht |
 | Vordergrunddienst (Standort) | damit die Aufzeichnung bei gesperrtem Display und nach dem Wegwischen der App weiterläuft |
 | Benachrichtigungen | die Anzeige der laufenden Aufzeichnung |
-| Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync |
+| Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync, Wind am Startpunkt (nur mit Schalter „Wind berücksichtigen“), Update-Prüfung – Details in Abschnitt 4 |
 | Health Connect: Training, Trainingsrouten, Herzfrequenz, Ruhepuls, HRV, Schlaf, Distanz, Kalorien, VO₂max | **nur lesend**, für den Import von Trainings und die Erholungs-/Formberechnung. Liefert die Uhr keinen Ruhepuls, leitet die App ihn auf dem Gerät aus dem nächtlichen Puls ab |
 | Health Connect: Verlauf älter als 30 Tage (optional) | **nur lesend**, damit die Ruhepuls- und HRV-Baselines nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann |
 
@@ -110,8 +112,9 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | Empfänger | Wann | Was mitgeht |
 |---|---|---|
 | Der gewählte **Kachel-Server** — je nach Kartenstil `tile.openstreetmap.de` (FOSSGIS e. V.), `tile-cyclosm.openstreetmap.fr`, `tile.openstreetmap.org`, `tile.opentopomap.org`, `server.arcgisonline.com` (Esri) oder `tiles.openfreemap.org` (OpenFreeMap, Stil „Vektorkarte“) | sobald die Karte einen Ausschnitt zeichnet; beim Offline-Speichern (nur mit der „Vektorkarte“ möglich) ausschließlich `tiles.openfreemap.org` | Kachelkoordinaten (`z/x/y`), bei OpenFreeMap zusätzlich der Abruf von Kartenstil, Symbolen und Schriften (ohne Bezug zu dir). Daraus ergibt sich, **welchen Kartenausschnitt du dir ansiehst** — zusammen mit der IP-Adresse also ein Hinweis darauf, wo du dich aufhältst oder hin willst. **OpenFreeMap** (Hyperknot Software Kft., Ungarn) arbeitet ohne Registrierung, API-Schlüssel und Cookies; laut seiner [Datenschutzerklärung](https://openfreemap.org/privacy/) protokolliert es im Regelbetrieb Browser/User-Agent und Zeitpunkt, aber keine IP-Adresse, und schaltet ein IP-Protokoll nur bei Missbrauch oder Angriffen für höchstens 30 Tage zu. Ausgeliefert werden die Kacheln über das CDN **Cloudflare, Inc. (USA)**: Cloudflare sieht deine IP-Adresse und die abgerufenen Kachel-URLs, also ebenfalls den Kartenausschnitt — das ist eine Übermittlung in ein Drittland ([Datenschutzerklärung von Cloudflare](https://www.cloudflare.com/privacypolicy/)) |
-| **brouter.de** | wenn du eine Route berechnen lässt | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
+| **brouter.de** | wenn du eine Route berechnen lässt — auch mit „Runde bauen“ am Ende der Einführung oder auf „Heute“ | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
 | **brouter.de** | wenn du unter *Mehr → Offline-Routing* Routing-Kacheln herunterlädst oder aktualisierst (`https://brouter.de/brouter/segments4/…`, siehe `app/…/routing/SegmentDownloader.kt` und `core/…/RoutingSegments.kt`) | der Name der gewählten **5°×5°-Kachel** (z. B. `E10_N45.rd5`) — daraus ergibt sich die grobe Region, für die du Routing willst, typischerweise also deine Wohn- oder Urlaubsgegend. Bei einer Delta-Aktualisierung steht zusätzlich die **MD5-Prüfsumme deines lokalen Kachelstands** in der URL; sie verrät dem Server, welchen Tagesstand du zuletzt geladen hattest, aber nichts über deine Touren |
+| **api.open-meteo.com** (Open-Meteo) | nur wenn im Blatt *Runde ab hier* „Wind berücksichtigen“ eingeschaltet ist (ab Werk aus) — gilt dann für jede Rundkurs-Suche, auch aus *Heute* und *Training*; ausschalten nur im Blatt *Runde ab hier* —, beim Start einer Rundkurs-Suche — höchstens eine Anfrage je Suche; „Andere Vorschläge“ und „Neu suchen“ am selben Ort fragen innerhalb von 30 Minuten nicht erneut | der Startpunkt der Runde, **auf zwei Nachkommastellen gerundet** (in Mitteleuropa etwa 1 km Genauigkeit), und die Namen der abgefragten Werte (Windgeschwindigkeit, Windrichtung, Böen). Kein API-Schlüssel, keine Kennung, keine eigenen Header; der User-Agent ist der Standard der HTTP-Bibliothek (`okhttp/…`). Scheitert die Anfrage, rechnet die App ohne Wind weiter ([Nutzungsbedingungen und Datenschutz von Open-Meteo](https://open-meteo.com/en/terms); `core/…/WeatherClient.kt`) |
 | **nominatim.openstreetmap.org** | wenn du eine Ortssuche **absendest** (Suchtaste der Tastatur oder „„…“ suchen“) — nicht schon beim Tippen | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
@@ -279,7 +282,11 @@ Anfrage an jemanden:
 
 - **Auskunft und Datenübertragbarkeit** — *Mehr → Daten & Backup → Backup
   exportieren* schreibt alle Touren und das Trainingsprofil in eine lesbare
-  JSON-Datei. Einzelne Touren lassen sich zusätzlich als GPX teilen.
+  JSON-Datei. Einzelne Touren lassen sich zusätzlich als GPX oder als Bild
+  teilen. Ein Tour-Bild entsteht vollständig auf dem Gerät; es zeigt die Form
+  der Strecke ohne Karte, aber wer die Gegend kennt, kann Start und Ziel
+  erkennen. Weitergegeben wird es nur über das Teilen-Menü an die App, die du
+  auswählst.
 - **Löschung** — einzelne Touren in der Tourenliste löschen; alles auf einmal
   über die Android-Einstellungen (*Apps → Trailscape → Speicher → Daten
   löschen*) oder durch Deinstallation der App. Damit sind auch der letzte

@@ -26,6 +26,7 @@ import kotlin.math.sin
  *    (Aufzeichnungspunkte tragen keinen GPS-Kurs).
  *  * [klemmeOffRouteZoom]: Zoomgrenzen fuer die Abseits-Ansicht, in der
  *    Position und Route gemeinsam im Bild stehen.
+ *  * [NAV_KAMERA_NEIGUNG_GRAD]: die leichte Schraegsicht des Fahr-Blicks.
  *
  * Getestet in `NavCameraTest`.
  */
@@ -65,6 +66,17 @@ const val NAV_ZOOM_TEMPO_SCHNELL_KMH = 35.0
  * der mit jedem GPS-Tempozacken pumpt, macht die Karte unlesbar.
  */
 const val NAV_ZOOM_GLAETTUNG_FAKTOR = 0.15
+
+/**
+ * Neigung der Navi-Kamera in Grad (0 = senkrecht von oben), nur im Fahr-Blick
+ * „Fahrtrichtung oben". Die Schraegsicht staucht das Stueck hinter einem
+ * und gibt dem Weg voraus mehr Bildhoehe — genau der Teil, auf den man beim
+ * Fahren schaut (das Muster der aktiven Navigation bei Google Maps). Bewusst
+ * nur leicht: Ab etwa 55 Grad werden Wegnamen und Kacheln am oberen Rand
+ * unleserlich, und MapLibre laedt dort deutlich mehr Kacheln nach. Nord oben,
+ * die Abseits-Ansicht und jede Kamera ausserhalb der Navigation bleiben flach.
+ */
+const val NAV_KAMERA_NEIGUNG_GRAD = 45.0
 
 /** Obergrenze des Zooms der Abseits-Ansicht (nicht naeher heranzoomen). */
 const val NAV_OFFROUTE_ZOOM_MAX = 16.0

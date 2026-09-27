@@ -19,9 +19,11 @@ import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.TrainingPlanStore
 import java.io.File
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.OkHttpClient
 
 /**
  * Zentrale, einfache manuelle Dependency-Injection fuer `:app`.
@@ -44,7 +46,7 @@ import kotlinx.coroutines.SupervisorJob
  * `AppServices.explorerTilesCacheStore`,
  * `AppServices.appScope`, `AppServices.segmentInventory`,
  * `AppServices.segmentDownloader`, `AppServices.segmentSettings`,
- * `AppServices.routingServerSettings`.
+ * `AppServices.routingServerSettings`, `AppServices.weatherHttpClient`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -129,8 +131,31 @@ object AppServices {
      */
     val reminderStore: ReminderStore by lazy { ReminderStore(keyValueStore) }
 
-    /** Implementierung von `:core`s [HttpClient] (BRouter-Routing, Geocoding, Selfhost-Sync). */
+    /**
+     * Implementierung von `:core`s [HttpClient] (BRouter-Routing, Geocoding,
+     * Selfhost-Sync). Wind (Open-Meteo) laeuft ueber [weatherHttpClient].
+     */
     val httpClient: HttpClient by lazy { OkHttpClientAdapter() }
+
+    /**
+     * Eigener, knapp bemessener Client fuer die Windabfrage der Rundkurs-Suche
+     * (`core/.../WeatherClient.kt`, nur mit Schalter „Wind berücksichtigen").
+     *
+     * Warum nicht [httpClient]: Der Wind ist eine Zugabe vor einer 20–40 s
+     * langen Suche und darf sie bei schlechtem Netz nicht um die
+     * 15-Sekunden-Timeouts des Standard-Clients verlaengern. Nach hoechstens
+     * 4 s ist Schluss; ein Fehlschlag faellt still auf die Suche ohne Wind
+     * zurueck.
+     */
+    val weatherHttpClient: HttpClient by lazy {
+        OkHttpClientAdapter(
+            OkHttpClient.Builder()
+                .connectTimeout(4, TimeUnit.SECONDS)
+                .readTimeout(4, TimeUnit.SECONDS)
+                .callTimeout(4, TimeUnit.SECONDS)
+                .build(),
+        )
+    }
 
     /**
      * Der Bestand an Offline-Routing-Kacheln unter `<filesDir>/segments`

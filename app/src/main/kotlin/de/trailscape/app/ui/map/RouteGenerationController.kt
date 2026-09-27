@@ -11,7 +11,13 @@ import de.trailscape.core.RouteTarget
 import de.trailscape.core.RoutingBackend
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
+import de.trailscape.core.WindConditions
+import de.trailscape.core.fetchCurrentWind
 import de.trailscape.core.generateRoutes
+import de.trailscape.core.readRouteWindEnabled
+import de.trailscape.core.shouldReuseWind
+import de.trailscape.core.windCacheKey
+import de.trailscape.core.writeRouteWindEnabled
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +67,21 @@ import kotlinx.coroutines.launch
  * sofort wieder frei — der Zustand geht bei [cancel] unmittelbar auf
  * `running = false`, und die abgebrochene Coroutine schreibt danach nichts
  * mehr in [state] (jeder Schreibzugriff prueft ihr eigenes Abbruch-Flag).
+ *
+ * ## Wind (Opt-in)
+ * Mit dem Schalter „Wind berücksichtigen" (Blatt *Runde ab hier*, ab Werk
+ * aus) holt [start] vor dem ersten Routing einmal den aktuellen Wind am
+ * gerundeten Startpunkt bei Open-Meteo (`core/.../WeatherClient.kt`) und
+ * reicht ihn an `generateRoutes` weiter, das die Runden danach umsortiert.
+ * Ohne Schalter geht keine Anfrage raus. Scheitert sie (offline, Timeout,
+ * kaputte Antwort), rechnet die Suche **still** ohne Wind weiter — keine
+ * Meldung, denn der Wind ist eine Zugabe. „Andere Vorschläge" und „Neu
+ * suchen" am selben gerundeten Ort fragen 30 Minuten lang nicht erneut.
+ *
+ * Den Schalter liest der Controller bei jedem Start selbst aus dem Speicher,
+ * statt ihn als Parameter zu bekommen: So behandelt jeder Einstieg (Karte,
+ * Heute, Training) den Wind gleich, ohne dass jede Aufrufstelle davon wissen
+ * muss. [windEnabled] ist nur der Spiegel fuer die Oberflaeche.
  */
 object RouteGenerationController {
 
@@ -88,6 +109,86 @@ object RouteGenerationController {
     private var lastOfferMissingSegments: (List<String>) -> Unit = {}
     private var lastPreferNewAreas: Boolean = false
     private var lastExploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() }
+
+    private val _windEnabled = MutableStateFlow(false)
+
+    /** Spiegel des Schalters „Wind berücksichtigen" fuer das Setup-Blatt. */
+    val windEnabled: StateFlow<Boolean> = _windEnabled.asStateFlow()
+
+    @Volatile
+    private var windRestored = false
+
+    /** Ob die Nutzerin den Schalter schon selbst gesetzt hat (gewinnt gegen [restoreWindSetting]). */
+    @Volatile
+    private var windSetByUser = false
+
+    /**
+     * Ob [windEnabled] den gueltigen Stand traegt — gespeichert gelesen oder
+     * von der Nutzerin gesetzt. Erst dann ist der Speicher nicht mehr die
+     * Quelle fuer [start]: Das Schreiben in [setWindEnabled] laeuft auf IO und
+     * koennte sonst gegen das Lesen der Suche verlieren (Schalter aus, sofort
+     * „Vorschläge zeigen" — und die Anfrage ginge trotzdem raus).
+     */
+    @Volatile
+    private var windKnown = false
+
+    /** Zuletzt geholter Wind samt gerundetem Ort und Zeitpunkt (siehe „Wind"). */
+    @Volatile
+    private var cachedWind: WindConditions? = null
+
+    @Volatile
+    private var cachedWindKey: String? = null
+
+    @Volatile
+    private var cachedWindAtMs: Long = 0L
+
+    /**
+     * Laedt den gespeicherten Schalter einmal in [windEnabled]. Idempotent;
+     * liest auf IO, weil die Prefs beim ersten Zugriff von der Platte kommen.
+     */
+    fun restoreWindSetting() {
+        if (windRestored) return
+        windRestored = true
+        AppServices.appScope.launch(Dispatchers.IO) {
+            val stored = runCatching { readRouteWindEnabled(AppServices.keyValueStore) }.getOrDefault(false)
+            // Hat die Nutzerin waehrend des Lesens schon umgeschaltet, gilt ihr Wert.
+            if (!windSetByUser) {
+                _windEnabled.value = stored
+                windKnown = true
+            }
+        }
+    }
+
+    /** Setzt den Schalter „Wind berücksichtigen" und merkt ihn. */
+    fun setWindEnabled(enabled: Boolean) {
+        windRestored = true
+        windSetByUser = true
+        _windEnabled.value = enabled
+        windKnown = true
+        AppServices.appScope.launch(Dispatchers.IO) {
+            runCatching { writeRouteWindEnabled(AppServices.keyValueStore, enabled) }
+        }
+    }
+
+    /**
+     * Wind fuer [start] — aus dem Cache oder mit genau einer Anfrage. Nur
+     * aufrufen, wenn der Schalter an ist. `null` bei jedem Fehler; ein
+     * Fehlschlag landet nicht im Cache.
+     */
+    private fun windFor(start: TrackPoint): WindConditions? {
+        val key = windCacheKey(start)
+        val cached = cachedWind
+        if (cached != null && shouldReuseWind(cachedWindKey, cachedWindAtMs, key, System.currentTimeMillis())) {
+            return cached
+        }
+        val fresh = runCatching { fetchCurrentWind(start, AppServices.weatherHttpClient) }.getOrNull()
+        if (fresh != null) {
+            cachedWind = fresh
+            cachedWindKey = key
+            cachedWindAtMs = System.currentTimeMillis()
+        }
+        return fresh
+    }
 
     /**
      * Oeffnet das Panel fuer ein neues Ziel und verwirft alles Bisherige
@@ -156,6 +257,11 @@ object RouteGenerationController {
         lastExploredTiles = exploredTiles
         val flag = AtomicBoolean(false)
         cancelFlag = flag
+        // Schalterstand jetzt, auf dem Aufruf-Thread, festhalten — nicht erst
+        // im IO-Coroutine aus dem Speicher (siehe [windKnown]). Nur wenn er
+        // noch nie geladen wurde (Einstieg aus Heute/Training, Blatt nie
+        // offen), gilt der gespeicherte Wert; dann schreibt auch niemand.
+        val windSnapshot: Boolean? = if (windKnown) _windEnabled.value else null
 
         _state.value = current.copy(
             running = true,
@@ -166,6 +272,7 @@ object RouteGenerationController {
             error = null,
             hints = emptyList(),
             fromMapCenter = fromMapCenter,
+            wind = null,
         )
 
         AppServices.appScope.launch(Dispatchers.IO) {
@@ -191,6 +298,16 @@ object RouteGenerationController {
                 // Vorschlag zeigt „+N neu", und das stimmt nur gegen den
                 // echten Bestand. Bevorzugt wird nur mit Schalter.
                 val explored = runCatching { exploredTiles() }.getOrDefault(emptySet())
+                // Wind nur mit Schalter (siehe „Wind (Opt-in)"): der beim
+                // Start festgehaltene Stand, sonst der gespeicherte — so wird
+                // jeder Einstieg gleich behandelt.
+                val considerWind = windSnapshot
+                    ?: runCatching { readRouteWindEnabled(AppServices.keyValueStore) }.getOrDefault(false)
+                val wind = if (considerWind) windFor(start) else null
+                // Die Windabfrage blockiert bis zu 4 s — ein Abbruch in dieser
+                // Zeit soll nicht erst noch eine Suche starten. Derselbe Weg
+                // wie ueber den `sleeper`, samt Meldung.
+                if (flag.get()) throw GenerationCancelled()
                 val result = generateRoutes(
                     backend = backend,
                     start = start,
@@ -211,6 +328,7 @@ object RouteGenerationController {
                     },
                     exploredTiles = explored,
                     preferNewAreas = preferNewAreas && explored.isNotEmpty(),
+                    wind = wind,
                 )
                 if (flag.get()) return@launch
                 _state.update {
@@ -223,6 +341,7 @@ object RouteGenerationController {
                         selectedIndex = 0,
                         hints = result.firstOrNull()?.hints.orEmpty(),
                         error = null,
+                        wind = wind,
                     )
                 }
                 if (missingFromFallbacks.isNotEmpty()) {
@@ -350,6 +469,8 @@ data class RouteGenerationState(
     val hints: List<String> = emptyList(),
     /** Ob der Startpunkt die Kartenmitte war statt der echten Position. */
     val fromMapCenter: Boolean = false,
+    /** Wind, mit dem sortiert wurde; `null` = aus, offline oder fehlgeschlagen. */
+    val wind: WindConditions? = null,
 ) {
     /** Der ausgewaehlte Vorschlag, oder `null`. */
     val selected: RouteCandidate? get() = candidates.getOrNull(selectedIndex)

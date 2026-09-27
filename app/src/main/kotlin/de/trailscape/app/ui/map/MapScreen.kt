@@ -149,6 +149,7 @@ import de.trailscape.core.zoomFuerTempo
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import de.trailscape.app.ui.rides.finishMarkers
+import de.trailscape.app.ui.rides.RideShareDialog
 import de.trailscape.app.ui.rides.historyTotals
 import java.io.File
 import java.util.Locale
@@ -580,6 +581,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     var roundTripStart by remember { mutableStateOf<Place?>(null) }
     var roundTripKm by rememberSaveable { mutableIntStateOf(DEFAULT_ROUND_TRIP_KM) }
     var preferNewAreas by rememberSaveable { mutableStateOf(true) }
+    // „Wind berücksichtigen": gemerkt im Controller — hier nur der Spiegel
+    // fuer den Schalter im Setup-Blatt und den Tipp im Vorschlagsblatt.
+    // Einmal laden genuegt (idempotent, liest nur die Prefs, kein Netz).
+    val considerWind by RouteGenerationController.windEnabled.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { RouteGenerationController.restoreWindSetting() }
 
     // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
     // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
@@ -734,6 +740,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     var showStyleSheet by remember { mutableStateOf(false) }
     var saveRouteDialog by remember { mutableStateOf(false) }
     var deleteDialogRide by remember { mutableStateOf<Ride?>(null) }
+    // Gefahrene Tour, deren Teilen-Dialog (Bild oder GPX) gerade offen ist.
+    var shareDialogRide by remember { mutableStateOf<Ride?>(null) }
 
     // Die Absicht hinter einer Berechtigungsanfrage — bewusst ein
     // `rememberSaveable`-faehiger Wert und kein Lambda: Waehrend des
@@ -785,6 +793,15 @@ fun MapScreen(appViewModel: AppViewModel) {
             return@rememberLauncherForActivityResult
         }
         impreciseLocationNotice = false
+        if (action == PendingAction.GENERATE_ROUTES_AT_POSITION && !locationGranted) {
+            // Die automatisch gestartete erste Runde rechnet nie ab der
+            // Kartenmitte (siehe [runGenerateRoutes]). Kein
+            // [LocationPermissionNotice]: Dessen „ohne sie geht es hier nicht
+            // weiter" stimmt hier nicht — „Routen suchen" im offenen Panel
+            // funktioniert weiterhin, eben ab der Kartenmitte.
+            appViewModel.showMessage(FIRST_ROUND_NO_POSITION_TEXT)
+            return@rememberLauncherForActivityResult
+        }
         if (locationGranted || action == PendingAction.GENERATE_ROUTES) {
             // Die Rundkurs-Suche braucht die Freigabe nicht zwingend: Ohne sie
             // startet die Runde eben in der Kartenmitte. Sie hier trotzdem
@@ -2017,8 +2034,15 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Fix (oder ohne Freigabe) die Kartenmitte — das Panel weist darauf hin.
      * Die Suche selbst laeuft im [RouteGenerationController] und ueberlebt
      * damit den Tab-Wechsel.
+     *
+     * @param requirePosition `true` beim automatischen Start der ersten Runde
+     *   ([AppViewModel.requestRouteGeneration] mit `autoStart`). Dann gibt es
+     *   ohne echten Standort **keinen** Start: Nach einer Neuinstallation zeigt
+     *   die Karte die Deutschland-Uebersicht, eine Runde ab deren Mitte waere
+     *   sinnlos. Das Panel bleibt offen, die Snackbar erklaert den Weg ueber
+     *   „Routen suchen".
      */
-    fun runGenerateRoutes() {
+    fun runGenerateRoutes(requirePosition: Boolean = false) {
         locationGranted = hasLocationPermission(context)
         scope.launch {
             locating = true
@@ -2026,6 +2050,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 currentLocation(context)
             } finally {
                 locating = false
+            }
+            if (position == null && requirePosition) {
+                appViewModel.showMessage(FIRST_ROUND_NO_POSITION_TEXT)
+                return@launch
             }
             val start = if (position != null) {
                 TrackPoint(lat = position.latitude, lon = position.longitude)
@@ -2246,6 +2274,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             PendingAction.PLAN_START -> runUseMyPositionAsStart()
             PendingAction.NAVIGATE_ROUTE -> runNavigatePlannedRoute()
             PendingAction.GENERATE_ROUTES -> runGenerateRoutes()
+            PendingAction.GENERATE_ROUTES_AT_POSITION -> runGenerateRoutes(requirePosition = true)
             PendingAction.NAVIGATE_RIDE -> {
                 val rideId = pendingNavigateRideId
                 pendingNavigateRideId = null
@@ -2290,10 +2319,17 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Tab-Wechsel wirklich in der Komposition ist (siehe dessen KDoc).
     LaunchedEffect(pendingRouteTarget) {
         val target = pendingRouteTarget ?: return@LaunchedEffect
-        appViewModel.consumeRouteTarget()
+        val autoStart = appViewModel.consumeRouteTarget()
         if (mode == MapMode.PLANEN) exitPlanning()
         appViewModel.select(null)
         RouteGenerationController.open(target)
+        // „Runde bauen" (Einfuehrung, erste Runde auf „Heute") meint: jetzt
+        // suchen — aber nur ab echtem Standort, siehe [runGenerateRoutes].
+        if (autoStart) {
+            withPermissions(PendingAction.GENERATE_ROUTES_AT_POSITION) {
+                runGenerateRoutes(requirePosition = true)
+            }
+        }
     }
 
     // -------------------------------------- Startseite → Aufzeichnung starten
@@ -2432,6 +2468,7 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Punktlisten, ein Vergleich davon liefe bei jeder Rekomposition mit.
     // (Ziel, Seed, Zahl der Vorschlaege, Auswahl) benennt den Vorschlag genauso
     // eindeutig.
+    var fittedGenerationKey by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(
         generation.target,
         generation.seed,
@@ -2449,6 +2486,14 @@ fun MapScreen(appViewModel: AppViewModel) {
         }
         routeFromGenerator = true
         plannedRoute = candidate.route
+        // Nur einmal je Vorschlag einpassen: Der Generatorzustand lebt
+        // ausserhalb dieses Screens, der Effekt laeuft also bei jeder
+        // Rueckkehr auf die Karte (Tabwechsel, Drehen) erneut an — und riss
+        // die Karte dann unter dem Finger zurueck auf die Runde.
+        val key = "${generation.target.hashCode()}-${generation.seed}-" +
+            "${generation.candidates.size}-${generation.selectedIndex}"
+        if (key == fittedGenerationKey) return@LaunchedEffect
+        fittedGenerationKey = key
         controller.fitToPoints(candidate.route.points)
     }
 
@@ -2772,6 +2817,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 onUserPan = {
                     followMe = false
                     userPanning = true
+                    controller.cancelPendingCamera()
                 },
                 onUserPanEnd = {
                     userPanning = false
@@ -2784,7 +2830,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // mehrstuendige Touren gedacht ist — und der ohnehin schon
                 // den Bildschirm anlaesst. Auf der NAVI_KARTE-Seite ist die
                 // Karte dagegen die Hauptdarstellerin und zeichnet natuerlich.
-                renderingActive = rideModeSeite != RideModeSeite.DATEN,
+                //
+                // Dieselbe Bedingung wie beim Anzeigen der Datenseite (unten,
+                // `rideModeSeite == DATEN && isRecording`): `runRecording()`
+                // setzt die Seite schon vor dem Start des Dienstes. Startet
+                // der nicht (oder endet sofort), blieb die Karte vorher
+                // angehalten — das letzte Bild stand, keine Geste bewegte sie.
+                renderingActive = !(rideModeSeite == RideModeSeite.DATEN && isRecording),
             )
 
             // Auch die Kartenseite des Fahrmodus haelt den Bildschirm an —
@@ -3196,6 +3248,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onDiscard = ::discardGeneratedRoute,
                             onHoverPoint = { hoverPoint = it },
                             bottomInset = sheetBottomInset,
+                            windEnabled = considerWind,
                         )
                     }
                     DockedSheet.PLANUNG -> {
@@ -3332,8 +3385,19 @@ fun MapScreen(appViewModel: AppViewModel) {
                             ride = card,
                             navigating = navTarget?.rideId == card.id,
                             onNavigate = { navigateRide(card) },
-                            onShare = { shareRoute(card.name, card.points) },
+                            // Gefahrene Touren fragen wie in der Detailansicht
+                            // nach Bild oder GPX — direkt nach der Fahrt ist
+                            // dieses Blatt der naechste Weg zum Tour-Bild.
+                            // Geplante Routen haben nichts zu zeigen: GPX.
+                            onShare = {
+                                if (card.planned) {
+                                    shareRoute(card.name, card.points)
+                                } else {
+                                    shareDialogRide = card
+                                }
+                            },
                             onDelete = { deleteDialogRide = card },
+                            onOpenDetails = { appViewModel.requestRideDetail(card.id) },
                             onClose = {
                                 hoverPoint = null
                                 appViewModel.select(null)
@@ -3372,6 +3436,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onProfileChange = { routeProfile = it },
                             preferNewAreas = preferNewAreas,
                             onPreferNewAreasChange = { preferNewAreas = it },
+                            considerWind = considerWind,
+                            onConsiderWindChange = RouteGenerationController::setWindEnabled,
                             onShowSuggestions = ::confirmRoundTripSetup,
                             onClose = { roundTripSetupOpen = false },
                             bottomInset = sheetBottomInset,
@@ -3578,6 +3644,16 @@ fun MapScreen(appViewModel: AppViewModel) {
         )
     }
 
+    shareDialogRide?.let { ride ->
+        val insights by appViewModel.insights.collectAsStateWithLifecycle()
+        RideShareDialog(
+            ride = ride,
+            load = insights.rideLoads[ride.id]?.takeIf { it.available }?.load,
+            appViewModel = appViewModel,
+            onDismiss = { shareDialogRide = null },
+        )
+    }
+
     deleteDialogRide?.let { ride ->
         OneUiDialog(
             onDismissRequest = { deleteDialogRide = null },
@@ -3616,6 +3692,13 @@ private enum class PendingAction {
     NAVIGATE_RIDE,
     NAVIGATE_ROUTE,
     GENERATE_ROUTES,
+
+    /**
+     * Rundkurs-Suche, die nur ab echtem Standort startet — der automatische
+     * Start der ersten Runde. Anders als [GENERATE_ROUTES] faellt sie nie auf
+     * die Kartenmitte zurueck.
+     */
+    GENERATE_ROUTES_AT_POSITION,
 }
 
 /**

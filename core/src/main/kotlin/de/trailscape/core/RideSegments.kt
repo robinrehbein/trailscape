@@ -354,6 +354,12 @@ data class SegmentEffortView(
      */
     val isNewBest: Boolean,
     val avgHr: Int? = null,
+    /**
+     * Schnellste Zeit ueber alle Befahrungen, die zeitlich **vor** dieser
+     * lagen, in Sekunden; `null` bei der allerersten Befahrung. Die Referenz
+     * fuer „x s schneller" in der Wirkung nach der Fahrt ([computeRideImpact]).
+     */
+    val previousBestTimeS: Int? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -823,6 +829,7 @@ fun segmentEffortsForRide(registry: SegmentRegistry, rideId: String): List<Segme
                 deltaToBestS = effort.timeS - bestTimeS,
                 isNewBest = earlierBest != null && effort.timeS < earlierBest,
                 avgHr = effort.avgHr,
+                previousBestTimeS = earlierBest,
             )
         }
     }

@@ -6,8 +6,15 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -31,7 +39,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -50,6 +60,13 @@ import kotlinx.coroutines.launch
  * kurzer Tipp zeigt „Gedrückt halten". Das klappt auch mit Handschuhen und
  * braucht kein zweites Ziel.
  *
+ * Aussehen: Mit [icon], [textStyle] und [holdHint] passt sich der Knopf dem
+ * Nachbarknopf an (Fahrmodus: grosses Symbol und `headlineSmall` wie
+ * „Pause/Weiter", Kompaktleiste: kleine Pille wie „Daten") — so stehen im
+ * Fahren zwei gleich gebaute Knoepfe nebeneinander, die sich nur in Farbe
+ * und Wirkung unterscheiden. [holdHint] steht klein unter der Beschriftung
+ * und sagt schon vor dem ersten Tipp, dass gehalten werden muss.
+ *
  * Bedienhilfen: Fuer TalkBack ist der Knopf ein gewoehnlicher Knopf mit der
  * Aktion „Aufzeichnung beenden" — dort ist das Doppeltippen bereits die
  * bewusste Bestaetigung.
@@ -60,6 +77,10 @@ fun HoldToEndButton(
     modifier: Modifier = Modifier,
     label: String = "Halten zum Beenden",
     minHeight: Dp = 52.dp,
+    icon: ImageVector? = null,
+    iconSize: Dp = 18.dp,
+    textStyle: TextStyle = MaterialTheme.typography.labelLarge,
+    holdHint: String? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -121,12 +142,35 @@ fun HoldToEndButton(
             },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = if (showHint) "Gedrückt halten" else label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = if (filled) colors.onError else colors.onErrorContainer,
-        )
+        val contentColor = if (filled) colors.onError else colors.onErrorContainer
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize), tint = contentColor)
+                Spacer(Modifier.width(8.dp))
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (showHint) "Gedrückt halten" else label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = textStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = contentColor,
+                )
+                if (holdHint != null && !showHint) {
+                    Text(
+                        text = holdHint,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = contentColor,
+                    )
+                }
+            }
+        }
     }
 }
 

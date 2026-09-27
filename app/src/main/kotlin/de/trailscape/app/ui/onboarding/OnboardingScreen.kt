@@ -39,51 +39,73 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
+import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.map.RouteGenerationController
+import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OneUiMotion
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.core.FirstRoundDuration
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.Sex
 import de.trailscape.core.TrainingProfile
+import de.trailscape.core.firstRoundTarget
+import de.trailscape.core.onboardingFirstRoundPreselect
+import de.trailscape.core.riddenRides
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * # Erststart-Einfuehrung
  *
- * Vier Seiten, die genau einmal laufen — beim allerersten Start, bevor die
+ * Fuenf Seiten, die genau einmal laufen — beim allerersten Start, bevor die
  * Navigationsleiste ueberhaupt sichtbar wird. Danach merkt sich
  * [AppViewModel.completeOnboarding] das dauerhaft; erneut aufrufbar ist die
  * Einfuehrung ueber „Mehr → Über → Einführung erneut ansehen".
  *
  * ## Warum so kurz
- * Vier Seiten, davon zwei reine Erklaerseiten und zwei mit *je einer* Aufgabe.
- * Kein Assistent, der Einstellungen abfragt, die es auch spaeter noch gibt:
- * Alles hier ist ueberspringbar, und die App laeuft auch ohne jede Eingabe
- * vollstaendig. Die Einfuehrung erklaert, was der Nutzer sonst nirgends
- * erfahren wuerde:
+ * Eine Erklaerseite und vier Schritte mit *je einer* Aufgabe. Kein
+ * Assistent, der Einstellungen abfragt, die es auch spaeter noch gibt: Alles
+ * hier ist ueberspringbar, und die App laeuft auch ohne jede Eingabe
+ * vollstaendig. Die Texte sind knapp gehalten — wenige Saetze je Seite, jeder
+ * davon wahr; was Details braucht, steht in README und PRIVACY.
  *
- *  1. **Was Trailscape ist** — die drei Faehigkeiten und dass alles lokal
- *     bleibt (kein Konto, keine Anmeldung — das erwartet 2026 niemand mehr).
- *  2. **Daten mitbringen** — der wichtigste Handgriff ueberhaupt, weil die
- *     Trainingsauswertung sonst wochenlang leer bleibt.
+ *  1. **Was Trailscape ist** — Empfehlung plus passende Runde, und dass alles
+ *     lokal bleibt (kein Konto, keine Telemetrie).
+ *  2. **Daten mitbringen** — der wichtigste Handgriff fuer die Auswertung,
+ *     weil sie sonst wochenlang leer bleibt.
  *  3. **Trainingsprofil** — Alter und Gewicht sind die einzigen zwei Werte,
  *     ohne die `:core` gar nicht rechnen kann (siehe [TrainingProfile]); alles
  *     Uebrige schaetzt es selbst. Genau diese beiden stehen hier, mehr nicht.
  *  4. **Health Connect** — optional, mit prominentem „Später".
+ *  5. **Deine erste Runde** — wie viel Zeit heute ist (1 h / 1½ h / 2 h oder
+ *     „Später").
+ *
+ * ## Warum die letzte Seite die Runde ist
+ * Der Kernnutzen der App ist der Weg von „was fahre ich heute" zur passenden
+ * Runde. Frueher endete die Einfuehrung bei Health Connect, und wer noch keine
+ * Tour hatte, sah danach eine leere Auswertung. Jetzt fuehrt „Runde bauen"
+ * direkt in die Karte, und die Suche startet sofort — in der ersten Minute,
+ * ganz ohne Historie. Das Ziel kommt aus [firstRoundTarget]; gebaut wird es
+ * vom bestehenden Rundkurs-Generator ([AppViewModel.requestRouteGeneration]
+ * mit `autoStart`). Die Suche rechnet nur ab echtem Standort; ohne Freigabe
+ * bleibt das Panel offen und erklaert den Weg von Hand. Die gewaehlte Dauer
+ * wird nicht gespeichert — sie gilt fuer heute, nicht als Einstellung.
  *
  * ## Bedienung
  * Wischen oder „Weiter"; „Überspringen" oben rechts beendet die Einfuehrung
- * sofort. Die Systemzurueckgeste blaettert eine Seite zurueck (siehe
- * `BackHandler` im Rumpf) — vorher war der einzige Weg nach vorn. Auf der
- * Profilseite speichert „Weiter" die Eingabe mit — leere Felder sind erlaubt
- * und werden stillschweigend uebergangen, fehlerhafte Eingaben melden sich
- * unter dem Feld und halten die Seite fest.
+ * sofort (ohne Runde). Die Systemzurueckgeste blaettert eine Seite zurueck
+ * (siehe `BackHandler` im Rumpf). Auf der Profilseite speichert „Weiter" die
+ * Eingabe mit — leere Felder sind erlaubt und werden stillschweigend
+ * uebergangen, fehlerhafte Eingaben melden sich unter dem Feld und halten die
+ * Seite fest.
  *
  * ## One-UI-Anmutung
  * Jede Seite eroeffnet eine grosse, fette Headline (headlineLarge, fett direkt
@@ -106,6 +128,27 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
     var weightText by rememberSaveable { mutableStateOf("") }
     var sex by rememberSaveable { mutableStateOf(Sex.UNBEKANNT) }
     var profileError by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    // Mit gefahrenen Touren (Einfuehrung erneut angesehen) ist es keine
+    // „erste" Runde mehr — Titel neutral, Vorauswahl „Später".
+    val hasHistory = remember(rides) { riddenRides(rides).isNotEmpty() }
+
+    // Die Dauer der ersten Runde; `null` steht fuer „Später". Vorauswahl beim
+    // ersten Komponieren aus [onboardingFirstRoundPreselect] — nur ohne
+    // gefahrene Tour eine Dauer, sonst „Später". Das Profil wird nicht
+    // nachgezogen, es aendert sich in der Einfuehrung nur ueber Alter und
+    // Gewicht.
+    var firstRound by rememberSaveable {
+        mutableStateOf(onboardingFirstRoundPreselect(profile, rides))
+    }
+    var firstRoundTouched by rememberSaveable { mutableStateOf(false) }
+    // Kommen die Touren erst nach dem ersten Komponieren aus der Datenbank,
+    // wird die Vorauswahl nachtraeglich auf „Später" gestellt — solange noch
+    // niemand selbst gewaehlt hat.
+    LaunchedEffect(hasHistory) {
+        if (hasHistory && !firstRoundTouched) firstRound = null
+    }
 
     // „Mehr → Über → Einführung erneut ansehen" zeigt dieselben Seiten noch
     // einmal — bisher mit leeren Profilfeldern, als haette der Nutzer nie etwas
@@ -148,10 +191,23 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
         return true
     }
 
-    fun finish() {
+    /**
+     * Beendet die Einfuehrung. Mit [buildRound] und gewaehlter Dauer liegt
+     * danach das Ziel der ersten Runde samt Auto-Start bereit, und die
+     * Navigationshuelle wechselt ueber die gehaltene Tab-Bitte in die Karte.
+     * „Überspringen" und „Später" beenden ohne Routenanfrage.
+     */
+    fun finish(buildRound: Boolean) {
         // Auch beim Abschluss ueber die letzte Seite oder „Überspringen" soll
         // eine bereits getippte Profilangabe nicht verloren gehen.
         applyProfile()
+        val duration = firstRound
+        if (buildRound && duration != null) {
+            appViewModel.requestRouteGeneration(
+                firstRoundTarget(duration.hours, appViewModel.profile.value, appViewModel.rides.value),
+                autoStart = true,
+            )
+        }
         appViewModel.completeOnboarding()
     }
 
@@ -171,7 +227,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
         val page = OnboardingPage.entries[pagerState.currentPage]
         if (page == OnboardingPage.PROFILE && !applyProfile()) return
         if (pagerState.currentPage >= OnboardingPage.entries.lastIndex) {
-            finish()
+            finish(buildRound = true)
             return
         }
         scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
@@ -198,7 +254,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                         .padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    TextButton(onClick = ::finish) { Text("Überspringen") }
+                    TextButton(onClick = { finish(buildRound = false) }) { Text("Überspringen") }
                 }
 
                 HorizontalPager(
@@ -215,12 +271,19 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                             .padding(horizontal = ScreenPadding, vertical = 8.dp),
                     ) {
                         Text(
-                            text = page.eyebrow,
+                            text = onboardingEyebrow(index, OnboardingPage.entries.size),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = page.title, style = MaterialTheme.typography.headlineLarge)
+                        Text(
+                            text = if (page == OnboardingPage.FIRST_ROUND && hasHistory) {
+                                FIRST_ROUND_TITLE_WITH_HISTORY
+                            } else {
+                                page.title
+                            },
+                            style = MaterialTheme.typography.headlineLarge,
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         page.paragraphs.forEach { paragraph ->
                             Text(
@@ -251,6 +314,17 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                             )
 
                             OnboardingPage.HEALTH -> HealthConnectStep(appViewModel)
+
+                            OnboardingPage.FIRST_ROUND -> FirstRoundStep(
+                                selected = firstRound,
+                                onSelect = {
+                                    firstRound = it
+                                    firstRoundTouched = true
+                                },
+                                previewKm = firstRound?.let {
+                                    firstRoundTarget(it.hours, profile, rides).distanceKm.roundToInt()
+                                },
+                            )
                         }
                     }
                 }
@@ -261,11 +335,11 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                         .padding(horizontal = ScreenPadding, vertical = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Drei Punkte fuer drei Schritte — nicht vier fuer vier
+                    // Vier Punkte fuer vier Schritte — nicht fuenf fuer fuenf
                     // Seiten. Die Willkommensseite ist kein Schritt (sie traegt
-                    // auch keine Nummer), vier Punkte gegen „Schritt 1 von 3"
+                    // auch keine Nummer), fuenf Punkte gegen „Schritt 1 von 4"
                     // waren aber genau der Widerspruch, den man beim ersten Blick
-                    // sieht. Auf Seite 0 ist `current` damit -1: drei Punkte,
+                    // sieht. Auf Seite 0 ist `current` damit -1: vier Punkte,
                     // keiner aktiv — es geht gleich los.
                     PageDots(
                         count = OnboardingPage.entries.size - 1,
@@ -278,10 +352,10 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                     }
                     Button(onClick = ::goForward) {
                         Text(
-                            if (pagerState.currentPage == OnboardingPage.entries.lastIndex) {
-                                "Los geht's"
-                            } else {
-                                "Weiter"
+                            when {
+                                pagerState.currentPage != OnboardingPage.entries.lastIndex -> "Weiter"
+                                firstRound != null -> "Runde bauen"
+                                else -> "Los geht's"
                             },
                         )
                     }
@@ -292,84 +366,147 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
 }
 
 /**
- * Die vier Seiten samt Text. Als Aufzaehlung, damit Reihenfolge, Anzahl der
+ * Die Kopfzeile ueber dem Titel: „Willkommen" auf der ersten Seite, danach
+ * „Schritt n von m". Die Willkommensseite ist kein Schritt, deshalb zaehlt
+ * [pageCount] − 1. Abgeleitet statt je Seite fest geschrieben — eine neue
+ * Seite hat die Zaehlung sonst an jeder Seite einzeln verstellt.
+ */
+internal fun onboardingEyebrow(index: Int, pageCount: Int): String =
+    if (index <= 0) "Willkommen" else "Schritt $index von ${pageCount - 1}"
+
+/**
+ * Die fuenf Seiten samt Text. Als Aufzaehlung, damit Reihenfolge, Anzahl der
  * Punkte unten und die Fallunterscheidung im Rumpf nicht auseinanderlaufen
  * koennen.
  */
 private enum class OnboardingPage(
-    val eyebrow: String,
     val title: String,
     val paragraphs: List<String>,
 ) {
     WELCOME(
-        eyebrow = "Willkommen",
         title = "Trailscape",
         paragraphs = listOf(
             // Bewusst die Schleife statt einer Merkmalsliste: Aufzeichnen,
             // Planen und Auswerten kann jede Konkurrenz einzeln auch. Was
             // sonst niemand verbindet, ist der Weg von der Tagesempfehlung
-            // zur passenden Runde — und wenn der ersten Seite das nicht
-            // gelingt, findet der Nutzer die Funktion nie.
-            "Trailscape sagt dir, was du heute fahren solltest — und baut dir die Runde " +
-                "dazu. Aus deinen Fahrten entsteht ein Trainingsbild, daraus die " +
-                "Empfehlung für heute, und daraus auf Wunsch eine passende Rundstrecke " +
-                "über Schotter und Nebenwege, die wieder zu Hause endet. Wer eine Uhr " +
-                "trägt, bekommt Ruhepuls, HRV und Schlaf zusätzlich in die Rechnung.",
+            // zur passenden Runde.
+            "Trailscape sagt dir, was du heute fahren solltest — und baut dir die passende " +
+                "Runde dazu, über Schotter und Nebenwege, die dort endet, wo sie beginnt.",
             // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
-            // — „unten" zeigte also auf nichts. Der Satz sagt jetzt, dass sie
-            // gleich kommt. Inhaltlich beschreibt er die Fuehrung „Klartext"
-            // (siehe `ui/TrailscapeApp.kt`): vier Orte, daneben der runde
-            // Fahren-Knopf, Einstellungen hinterm Zahnrad.
-            "Sobald die Einführung durch ist, führen unten vier Tabs dorthin: Heute (was " +
-                "du heute fahren solltest), Karte (Routen planen), Verlauf (wo du " +
-                "gefahren bist) und Training (dein Ziel und deine Form). Daneben sitzt " +
-                "der runde Fahren-Knopf; Profil, Import und alles Weitere liegen in den " +
-                "Einstellungen hinter dem Zahnrad.",
-            "Alles liegt auf deinem Gerät. Kein Konto, keine Anmeldung, keine Telemetrie. " +
-                "Ein eigener Sync-Server ist möglich, aber freiwillig.",
+            // — der Satz sagt deshalb, dass sie gleich kommt. Inhaltlich die
+            // Fuehrung „Klartext" (siehe `ui/TrailscapeApp.kt`).
+            "Gleich findest du unten Heute, Karte, Verlauf und Training, daneben den runden " +
+                "Fahren-Knopf. Alles Weitere liegt hinter dem Zahnrad.",
+            "Deine Daten liegen auf deinem Gerät. Kein Konto, keine Telemetrie.",
         ),
     ),
     DATA(
-        eyebrow = "Schritt 1 von 3",
-        title = "Bring deine bisherigen Touren mit",
+        title = "Bring deine Touren mit",
         paragraphs = listOf(
-            "Die Trainingsauswertung braucht Historie. Wenn du schon woanders " +
-                "aufgezeichnet hast, ist der Import der schnellste Weg zu einem " +
-                "belastbaren Bild — sonst dauert es rund zwei Wochen.",
-            "Trailscape liest einzelne GPX- und FIT-Dateien und komplette " +
-                "Strava-, Garmin- oder Wahoo-Exporte als ZIP-Archiv auf einmal ein. " +
-                "Duplikate erkennt es dabei selbst.",
-            "Zu finden im Verlauf über das + oben rechts — oder du teilst eine Datei " +
-                "direkt aus Komoot, Strava oder dem Dateimanager an Trailscape. " +
-                "Unter Einstellungen → Import & " +
-                "Backup liegt auch der Export, mit " +
-                "dem du alles auf ein neues Gerät mitnimmst.",
+            "Mit deinen bisherigen Fahrten ist die Auswertung sofort aussagekräftig — ohne " +
+                "dauert es rund zwei Wochen.",
+            "GPX, FIT oder komplette Exporte aus Strava, Garmin und Wahoo als ZIP. Duplikate " +
+                "erkennt Trailscape selbst.",
+            "Import über das + oben rechts im Verlauf — oder teil eine Datei direkt an Trailscape.",
         ),
     ),
     PROFILE(
-        eyebrow = "Schritt 2 von 3",
         title = "Ein paar Angaben für die Auswertung",
         paragraphs = listOf(
-            "Aus Alter und Gewicht leitet Trailscape deine maximale Herzfrequenz, die " +
-                "Schwelle und die gefahrene Leistung ab — die Grundlage jeder " +
+            "Aus Alter und Gewicht schätzt Trailscape Puls und Leistung — die Grundlage jeder " +
                 "Trainingslast.",
-            "Du kannst das überspringen; wir rechnen dann mit Standardwerten weiter. " +
-                "Ändern lässt sich alles jederzeit unter Einstellungen → Profil, dort stehen auch " +
-                "die genaueren Felder (HFmax, Schwellenpuls, Zeitbudget).",
+            "Leer lassen geht auch. Genauere Werte trägst du später unter Einstellungen → " +
+                "Profil ein.",
         ),
     ),
     HEALTH(
-        eyebrow = "Schritt 3 von 3",
         title = "Erholungswerte aus deiner Uhr",
         paragraphs = listOf(
-            "Wenn deine Uhr nach Health Connect schreibt (Samsung Health, Garmin, " +
-                "Fitbit und andere), holt Trailscape von dort Ruhepuls, HRV und Schlaf — " +
-                "und rechnet daraus die Tagesempfehlung im Tab „Heute“.",
-            "Ohne diese Werte funktioniert die App vollständig; die Empfehlung stützt " +
-                "sich dann allein auf deine Trainingslast.",
-            "Verbinden geht auch später jederzeit unter Einstellungen → Uhr & Gesundheitsdaten.",
+            "Schreibt deine Uhr nach Health Connect (Samsung Health, Garmin, Fitbit und " +
+                "andere), fließen Ruhepuls, HRV und Schlaf in die Tagesempfehlung ein.",
+            "Ohne Uhr funktioniert alles genauso. Verbinden geht auch später unter " +
+                "Einstellungen → Uhr & Gesundheitsdaten.",
         ),
     ),
+    FIRST_ROUND(
+        title = "Deine erste Runde",
+        paragraphs = listOf(
+            "Wie viel Zeit hast du heute? Trailscape baut dir eine ruhige Runde ab deinem " +
+                "Standort, die dort wieder endet.",
+        ),
+    ),
+}
+
+/**
+ * Titel der letzten Seite fuer jemanden mit gefahrenen Touren — „Deine erste
+ * Runde" waere dort schlicht falsch.
+ */
+private const val FIRST_ROUND_TITLE_WITH_HISTORY = "Eine Runde für heute"
+
+/** Die Beschriftung der „Später"-Option neben den Dauern. */
+private const val FIRST_ROUND_LATER = "Später"
+
+/**
+ * Auswahl der Dauer fuer die erste Runde — drei Dauern und „Später" als ein
+ * Segmentknopf.
+ *
+ * Darunter steht bei gewaehlter Dauer, was daraus wird (≈ km, flach, ruhig),
+ * und ausdruecklich, dass gleich die Standortabfrage kommt und was dabei das
+ * Geraet verlaesst. Die Abfrage kaeme sonst unangekuendigt direkt nach der
+ * Einfuehrung. Der Servername fehlt bewusst: Der Routing-Server ist unter
+ * Einstellungen konfigurierbar.
+ *
+ * @param selected die gewaehlte Dauer, `null` fuer „Später".
+ * @param previewKm die gerundete Distanz zur gewaehlten Dauer.
+ */
+@Composable
+private fun FirstRoundStep(
+    selected: FirstRoundDuration?,
+    onSelect: (FirstRoundDuration?) -> Unit,
+    previewKm: Int?,
+) {
+    val durations = FirstRoundDuration.entries
+    PillSegments(
+        options = durations.map { it.label } + FIRST_ROUND_LATER,
+        selectedIndex = selected?.ordinal ?: durations.size,
+        onSelect = { index -> onSelect(durations.getOrNull(index)) },
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    if (selected != null && previewKm != null) {
+        Text(
+            text = "≈ $previewKm km · flach · ruhiges Tempo",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        // Den Hinweis auf die Abfrage gibt es nur, wenn sie auch kommt.
+        val askLocation = !hasLocationPermission(LocalContext.current)
+        // Wer die Einfuehrung erneut ansieht, hat „Wind berücksichtigen"
+        // vielleicht schon an — dann fragt dieselbe Suche auch Open-Meteo,
+        // und das gehoert in denselben Hinweis.
+        LaunchedEffect(Unit) { RouteGenerationController.restoreWindSetting() }
+        val windEnabled by RouteGenerationController.windEnabled.collectAsStateWithLifecycle()
+        Text(
+            text = (if (askLocation) "Gleich fragt Trailscape nach deinem Standort. " else "") +
+                "Für die Berechnung gehen die Wegpunkte der Runde — also auch dein " +
+                "Startpunkt — an den Routing-Server." +
+                (
+                    if (windEnabled) {
+                        " Mit „Wind berücksichtigen“ geht der Startpunkt, auf etwa 1 km " +
+                            "gerundet, außerdem an Open-Meteo."
+                    } else {
+                        ""
+                    }
+                    ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    } else {
+        Text(
+            text = "Kein Problem — auf „Heute“ wartet jederzeit eine passende Runde.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /** Die drei Pflichtangaben des Profils — mehr braucht `:core` nicht. */

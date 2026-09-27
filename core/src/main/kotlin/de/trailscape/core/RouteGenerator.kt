@@ -87,6 +87,22 @@ import kotlin.math.sin
  * dass sich benachbarte Kandidaten nie ueberholen und "Neu wuerfeln" weiterhin
  * andere Runden liefert; bei Gleichstand bleibt es bei `β`.
  *
+ * **7. Wind** (nur mit `wind`, siehe `WindScore.kt`). Kommt der aktuelle Wind
+ * mit, soll die empfohlene Runde gegen den Wind hinaus- und mit Rueckenwind
+ * heimfuehren. Gemessen wird das ueber die Windform [windShape] (−1…1,
+ * +1 = hin gegen den Wind, heim mit Rueckenwind) — laengengewichtet ueber die
+ * beiden Distanzhaelften. Sie geht mit dem Staerkefaktor [windStrengthFactor]
+ * (0 unter 10 km/h, 1 ab 25 km/h Mittelwind) in den Score ein:
+ * `−`[windScoreWeight]` × Staerke × Form`, bei 8 Punkten Gewicht realistisch
+ * hoechstens etwa 5 Punkte. Das ist bewusst **schwaecher als Distanz und
+ * Neuheit**: Der Wind sortiert annaehernd gleichwertige Runden um, macht aber
+ * nie eine 20 % zu lange Runde zur Empfehlung. Wie in Schritt 6 neigt sich
+ * ausserdem der Kurs ohne zusaetzlichen Routing-Aufruf: von `β` und `β ± δ`
+ * gewinnt der Kurs, dessen Luftlinien-Polygon die beste Windform hat. Ist
+ * „Neue Gegenden" aktiv, bleiben die unentdeckten Kacheln erstes Kriterium,
+ * der Wind entscheidet nur deren Gleichstand. Ohne Wind (oder unter
+ * 10 km/h) bleiben Kurse und Scores exakt wie ohne diesen Schritt.
+ *
  * ## Betrieb
  *
  * **Streng sequenziell** — laeuft das Routing ueber den oeffentlichen
@@ -162,6 +178,12 @@ data class RouteCandidate(
     val newTileCount: Int = 0,
     /** Alle Entdeckt-Kacheln, durch die die Route fuehrt (neue wie bekannte). */
     val totalTileCount: Int = 0,
+    /**
+     * Windform der Runde, −1…1 ([windShape]): +1 = hin gegen den Wind, heim
+     * mit Rueckenwind. `null` = Wind nicht beruecksichtigt oder unter
+     * [windMinKmh].
+     */
+    val windShape: Double? = null,
 ) {
     /** Anteil neuer Kacheln an allen Kacheln der Route (0…1, 0 ohne Kacheln). */
     val newTileShare: Double get() = if (totalTileCount > 0) newTileCount.toDouble() / totalTileCount else 0.0
@@ -287,8 +309,10 @@ fun noveltyScore(newTileShare: Double): Double {
 /**
  * Gesamtstrafe eines Kandidaten: Distanzabweichung (stark gewichtet) plus
  * [ascentScore] plus — nur wenn uebergeben — [noveltyScore] fuer den Anteil
- * neuer Kacheln. Mit dem Vorgabewert `newTileShare = 0` ist das Ergebnis
- * identisch mit der Bewertung ohne Entdecker-Modus.
+ * neuer Kacheln und der [windBonus] aus [windScore]. Mit den Vorgabewerten
+ * `newTileShare = 0` und `windBonus = 0` ist das Ergebnis identisch mit der
+ * Bewertung ohne Entdecker-Modus und ohne Wind. Ein nicht endlicher
+ * [windBonus] zaehlt als 0 — er darf nie die Sortierung kippen.
  */
 fun scoreRoute(
     distanceKm: Double,
@@ -296,10 +320,12 @@ fun scoreRoute(
     targetKm: Double,
     preference: AscentPreference,
     newTileShare: Double = 0.0,
+    windBonus: Double = 0.0,
 ): Double {
     val deviation = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 1.0
     val perKm = if (distanceKm > 0) ascentM / distanceKm else 0.0
-    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare)
+    val wind = if (windBonus.isFinite()) windBonus else 0.0
+    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind
 }
 
 /**
@@ -375,6 +401,9 @@ private class Attempt(val route: PlannedRoute, val deviation: Double)
  * @param preferNewAreas Schalter „Neue Gegenden bevorzugen": Bonus fuer neue
  *   Kacheln im Score (Schritt 5) und Kursneigung (Schritt 6). Aus (Vorgabe),
  *   bleiben Bearings und Scores unveraendert.
+ * @param wind Aktueller Wind am Start (Schritt 7), z. B. aus
+ *   [fetchCurrentWind]. `null` (Vorgabe) oder unter [windMinKmh]: Kurse und
+ *   Scores bleiben exakt wie ohne Wind, [RouteCandidate.windShape] ist `null`.
  */
 suspend fun generateRoutes(
     backend: RoutingBackend,
@@ -388,6 +417,7 @@ suspend fun generateRoutes(
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
     exploredTiles: Set<ExplorerTile> = emptySet(),
     preferNewAreas: Boolean = false,
+    wind: WindConditions? = null,
 ): List<RouteCandidate> {
     val hints = mutableListOf<String>()
     val rawKm = if (target.distanceKm.isFinite()) target.distanceKm else 0.0
@@ -415,6 +445,10 @@ suspend fun generateRoutes(
     val results = mutableListOf<RouteCandidate>()
     var requestsMade = 0
 
+    // Windherkunft nur, wenn der Wind stark genug ist, um zu zaehlen (Schritt 7).
+    val windFrom = wind?.takeIf { windStrengthFactor(it.speedKmh) > 0 && it.fromDeg.isFinite() }?.fromDeg
+    val noveltyTilt = preferNewAreas && exploredTiles.isNotEmpty()
+
     // Die letzte Backend-Ausnahme — scheitern ALLE Kandidaten, ist sie die
     // konkreteste Auskunft ueber das Warum und gehoert in die Fehlermeldung.
     var lastFailure: Exception? = null
@@ -428,16 +462,27 @@ suspend fun generateRoutes(
 
         var radiusM = targetKm * 1000 / (2 * PI * circuitDetourFactor)
 
-        // Kursneigung zu unentdeckten Kacheln (Schritt 6): nur Geometrie, kein Routing.
-        val bearing = if (preferNewAreas && exploredTiles.isNotEmpty()) {
+        // Kursneigung zu unentdeckten Kacheln (Schritt 6) und in den Wind
+        // (Schritt 7): nur Geometrie, kein Routing.
+        val bearing = if (noveltyTilt || windFrom != null) {
             val delta = 360.0 / (4 * total)
-            // Reihenfolge = Tie-Break: maxBy nimmt das erste Maximum, bei
-            // Gleichstand bleibt es also beim regulaeren Kurs.
+            fun polygon(b: Double) = loopWaypoints(start, radiusM, b, viaCount, clockwise)
+            // Reihenfolge = Tie-Break: maxWith behaelt das erste Maximum, bei
+            // Gleichstand bleibt es also beim regulaeren Kurs. Erstes
+            // Kriterium sind die unentdeckten Kacheln, der Wind entscheidet
+            // nur deren Gleichstand.
             listOf(0.0, -delta, delta)
                 .map { (baseBearing + it).mod(360.0) }
-                .maxBy { b ->
-                    unexploredTilesAlong(loopWaypoints(start, radiusM, b, viaCount, clockwise), exploredTiles)
+                .map { b ->
+                    val wps = polygon(b)
+                    val unexplored = if (noveltyTilt) unexploredTilesAlong(wps, exploredTiles) else 0
+                    val shape = windFrom?.let { from ->
+                        windShape(wps.map { TrackPoint(lat = it.lat, lon = it.lon) }, from)
+                    } ?: 0.0
+                    Triple(b, unexplored, shape)
                 }
+                .maxWith(compareBy({ it.second }, { it.third }))
+                .first
         } else {
             baseBearing
         }
@@ -482,6 +527,8 @@ suspend fun generateRoutes(
         if (found != null) {
             val (newTiles, totalTiles) = countNewTiles(found.route.points, exploredTiles)
             val share = if (totalTiles > 0) newTiles.toDouble() / totalTiles else 0.0
+            val shape = windFrom?.let { windShape(found.route.points, it) }
+            val windBonus = if (windFrom != null && wind != null) windScore(found.route.points, wind) else 0.0
             results.add(
                 RouteCandidate(
                     route = found.route,
@@ -493,12 +540,14 @@ suspend fun generateRoutes(
                         targetKm = targetKm,
                         preference = target.ascentPreference,
                         newTileShare = if (preferNewAreas) share else 0.0,
+                        windBonus = windBonus,
                     ),
                     bearingDeg = bearing,
                     targetKm = targetKm,
                     hints = hints.toList(),
                     newTileCount = newTiles,
                     totalTileCount = totalTiles,
+                    windShape = shape,
                 ),
             )
         }

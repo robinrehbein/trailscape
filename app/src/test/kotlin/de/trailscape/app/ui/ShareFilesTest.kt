@@ -74,6 +74,17 @@ class ShareFilesTest {
     }
 
     @Test
+    fun `Tour-Bilder werden wie GPX nach einer Stunde weggeraeumt`() {
+        val dir = prepareShareDirectory(cacheDir)
+        val oldImage = fileIn(dir, "runde-story.png", ageMs = 2 * SHARE_FILE_MAX_AGE_MS)
+        val freshImage = fileIn(dir, "runde-quadrat.png", ageMs = 0L)
+
+        assertEquals(1, pruneShareDirectory(dir))
+        assertFalse(oldImage.exists())
+        assertTrue(freshImage.exists())
+    }
+
+    @Test
     fun `ein nicht existierendes Verzeichnis ist kein Fehler`() {
         assertEquals(0, pruneShareDirectory(File(cacheDir, "gibt-es-nicht")))
     }
