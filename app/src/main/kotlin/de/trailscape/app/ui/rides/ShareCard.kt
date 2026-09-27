@@ -7,6 +7,7 @@ import de.trailscape.app.ui.map.buildElevationSamples
 import de.trailscape.core.Ride
 import de.trailscape.core.RideStats
 import de.trailscape.core.safeFileName
+import de.trailscape.core.trimTrackEnds
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -38,6 +39,16 @@ import kotlin.math.roundToInt
  * liegt in `:app` statt in `:core`, weil sie [thumbnailPolyline] und
  * [buildElevationSamples] wiederverwendet, die ebenfalls hier wohnen.
  *
+ * ## Start und Ziel ausblenden
+ * Ab Werk kuerzt der Teilen-Dialog die Spur an beiden Enden um einen Kreis
+ * von 300 m ([trimTrackEnds] in `:core`), damit das Bild die Haustuer nicht
+ * verraet; Start- und Zielmarke entfallen dann (siehe `ShareCardRenderer.kt`).
+ * Kennzahlen und Hoehenprofil beschreiben trotzdem die **ganze** Tour: Sie
+ * verraten keinen Ort, und ein Bild, das 41 statt 42 km behauptet, waere
+ * unehrlich zur gefahrenen Strecke. Ist die Tour fuer die Kuerzung zu kurz,
+ * bleibt keine Spur — das Layout schaltet dann wie bei einer Tour ohne Punkte
+ * auf „nur Kennzahlen" ([ShareTrackNote.TOO_SHORT]).
+ *
  * Alle Masse sind Pixel eines 1080 px breiten Bildes; die Vorschau zeichnet
  * dieselben Koordinaten nur verkleinert.
  */
@@ -54,6 +65,24 @@ internal data class CardRect(val left: Float, val top: Float, val right: Float, 
     val height: Float get() = bottom - top
 }
 
+/**
+ * Was das Bild von der Strecke zeigt — bestimmt den Hinweis im Teilen-Dialog
+ * und, ob Start- und Zielmarke gezeichnet werden.
+ */
+internal enum class ShareTrackNote {
+    /** Die ganze Spur samt Start und Ziel. */
+    FULL,
+
+    /** Die Spur, an beiden Enden gekuerzt; ohne Start- und Zielmarke. */
+    ENDS_HIDDEN,
+
+    /** Es gaebe eine Spur, sie ist aber zu kurz zum Kuerzen: nur Kennzahlen. */
+    TOO_SHORT,
+
+    /** Die Tour hat keine zeigbare Spur (keine Punkte, alle an einer Stelle). */
+    NONE,
+}
+
 /** Eine Kennzahl auf dem Bild: gross die Zahl, klein darunter ihre Einheit. */
 internal data class ShareStat(val value: String, val label: String)
 
@@ -66,6 +95,7 @@ internal data class ShareStat(val value: String, val label: String)
  * @property trackUnit die Spur im Einheitsquadrat, abwechselnd x, y (siehe
  *   [thumbnailPolyline]); leer, wenn die Tour keine Punkte hat.
  * @property profile Hoehen-Stuetzstellen; leer ohne Hoehendaten.
+ * @property trackNote was von der Strecke zu sehen ist (siehe [ShareTrackNote]).
  */
 internal class ShareCardContent(
     val title: String,
@@ -73,13 +103,17 @@ internal class ShareCardContent(
     val stats: List<ShareStat>,
     val trackUnit: FloatArray,
     val profile: List<ElevationSample>,
+    val trackNote: ShareTrackNote,
 ) {
+    /** Start und Ziel sind ausgeblendet: keine Marken an den gekuerzten Enden. */
+    val endsHidden: Boolean get() = trackNote == ShareTrackNote.ENDS_HIDDEN
+
     /**
      * Mindestens zwei Punkte **und** eine Ausdehnung: Liegen alle Punkte auf
      * einer Stelle, liefert [thumbnailPolyline] einen Punkt in der Mitte —
      * das ist keine Spur, die man zeigen koennte.
      */
-    val hasTrack: Boolean get() = trackUnit.size >= 4 && unitExtent(trackUnit) > 0f
+    val hasTrack: Boolean get() = hasDrawableTrack(trackUnit)
 
     /**
      * Wie bei [hasTrack]: Ohne zurueckgelegte Strecke (etwa eine Aufzeichnung
@@ -106,24 +140,42 @@ internal const val SHARE_TRACK_MAX_POINTS = 600
  * Punkt wie bei der Mini-Spur in der Liste, damit eine Runde auf dem Bild so
  * aussieht wie in der App.
  *
+ * @param endRadiusM `null`: die ganze Spur. Sonst wird sie vorher an beiden
+ *   Enden um einen Kreis mit diesem Radius gekuerzt ([trimTrackEnds]) — nur die
+ *   Linie, nicht Kennzahlen und Profil (siehe Datei-KDoc).
  * @param toLocal Umrechnung des Zeitstempels in Ortszeit; im Test fest.
  */
 internal fun shareCardContent(
     ride: Ride,
     load: Double?,
+    endRadiusM: Double? = null,
     toLocal: (Long) -> LocalDateTime = ::localOfEpochMs,
-): ShareCardContent = ShareCardContent(
-    title = ride.name.trim().ifEmpty { "Tour" },
-    dateLine = shareCardDateLine(toLocal(ride.createdAt), ride.planned),
-    stats = shareCardStats(
-        stats = ride.stats,
-        load = load,
-        planned = ride.planned,
-        hasElevation = ride.points.any { it.ele != null },
-    ),
-    trackUnit = thumbnailPolyline(ride.points, SHARE_TRACK_MAX_POINTS),
-    profile = buildElevationSamples(ride.points),
-)
+): ShareCardContent {
+    val trackPoints = if (endRadiusM == null) ride.points else trimTrackEnds(ride.points, endRadiusM)
+    val trackUnit = thumbnailPolyline(trackPoints, SHARE_TRACK_MAX_POINTS)
+    val hasTrack = hasDrawableTrack(trackUnit)
+    val trackNote = when {
+        endRadiusM == null -> if (hasTrack) ShareTrackNote.FULL else ShareTrackNote.NONE
+        hasTrack -> ShareTrackNote.ENDS_HIDDEN
+        // Ohne Kuerzung haette es eine Spur gegeben: Das Bild zeigt nur Zahlen,
+        // weil die Tour zu kurz ist — das soll der Hinweis sagen.
+        hasDrawableTrack(thumbnailPolyline(ride.points, SHARE_TRACK_MAX_POINTS)) -> ShareTrackNote.TOO_SHORT
+        else -> ShareTrackNote.NONE
+    }
+    return ShareCardContent(
+        title = ride.name.trim().ifEmpty { "Tour" },
+        dateLine = shareCardDateLine(toLocal(ride.createdAt), ride.planned),
+        stats = shareCardStats(
+            stats = ride.stats,
+            load = load,
+            planned = ride.planned,
+            hasElevation = ride.points.any { it.ele != null },
+        ),
+        trackUnit = trackUnit,
+        profile = buildElevationSamples(ride.points),
+        trackNote = trackNote,
+    )
+}
 
 /**
  * Die Zahlen auf dem Bild, in fester Reihenfolge: km, Dauer, Hoehenmeter und
@@ -336,6 +388,9 @@ internal fun shareCardLayout(format: ShareCardFormat, hasTrack: Boolean, hasProf
         wordmarkRight = spec.wordmarkRight,
     )
 }
+
+/** Siehe [ShareCardContent.hasTrack]. */
+private fun hasDrawableTrack(unit: FloatArray): Boolean = unit.size >= 4 && unitExtent(unit) > 0f
 
 /** Die groessere der beiden Ausdehnungen einer x/y-Punktfolge. */
 private fun unitExtent(coords: FloatArray): Float {

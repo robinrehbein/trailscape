@@ -409,7 +409,7 @@ internal fun RideCard(
                             TileAction(
                                 "Teilen",
                                 Icons.Filled.Share,
-                                contentDescription = "Tour als GPX teilen",
+                                contentDescription = if (ride.planned) "Route als GPX teilen" else "Tour teilen",
                                 onClick = onShare,
                             ),
                             TileAction(

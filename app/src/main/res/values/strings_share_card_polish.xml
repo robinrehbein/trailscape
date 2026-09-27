@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Schalters „Start und Ziel ausblenden" im Teilen-Dialog des
+    Tour-Bilds (ui/rides/ShareRideDialog.kt).
+
+    Wie bei strings_segments.xml eine eigene Datei; Android fuehrt alle
+    values/*.xml zusammen. Die Kuerzung selbst rechnet `:core`
+    (`TrackPrivacy.kt`); der Radius (300 m) kommt als %1$d aus
+    `SHARE_END_RADIUS_M`, damit Text und Rechnung nicht auseinanderlaufen.
+-->
+<resources>
+    <string name="share_hide_ends_title">Start und Ziel ausblenden</string>
+    <string name="share_hide_ends_subtitle">Die Linie beginnt und endet erst %1$d m von Start und Ziel entfernt.</string>
+    <string name="share_hint_ends_hidden">Das Bild zeigt die Form deiner Strecke ohne Karte und ohne Start und Ziel – wer die Gegend kennt, erkennt die übrige Strecke trotzdem.</string>
+    <string name="share_hint_too_short">Die Tour ist zu kurz, um Start und Ziel auszublenden – das Bild zeigt deshalb nur die Kennzahlen.</string>
+</resources>
