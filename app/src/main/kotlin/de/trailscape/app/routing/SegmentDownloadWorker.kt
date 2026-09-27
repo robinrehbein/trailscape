@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
+import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.Data
@@ -90,7 +91,7 @@ internal class SegmentDownloadWorker(
             ?.distinct()
             .orEmpty()
         if (names.isEmpty()) {
-            return@withContext Result.failure(errorData("Keine gültige Kachel angegeben."))
+            return@withContext Result.failure(errorData(text(R.string.map_segment_no_tile_error)))
         }
 
         // Der Vordergrund-Wechsel darf scheitern (siehe Klassendoc) — dann
@@ -117,9 +118,7 @@ internal class SegmentDownloadWorker(
             } catch (e: Exception) {
                 // Alles Uebrige (kaputtes Delta, voller Speicher) ist kein
                 // Netzproblem und wird nicht wiederholt.
-                return@withContext Result.failure(
-                    errorData(e.message ?: "Die Karte konnte nicht geladen werden."),
-                )
+                return@withContext Result.failure(errorData(errorText(e)))
             }
 
             when (result) {
@@ -182,7 +181,7 @@ internal class SegmentDownloadWorker(
     private fun downloadLabel(fileName: String, index: Int, count: Int): String {
         val tile = parseSegmentTile(fileName)
         val name = tile?.title(AppLocale.coreTexts(applicationContext)) ?: fileName
-        return if (count > 1) "$name (${index + 1} von $count)" else name
+        return if (count > 1) text(R.string.map_segment_notification_progress, name, index + 1, count) else name
     }
 
     private fun notificationManager(): NotificationManager? =
@@ -196,10 +195,24 @@ internal class SegmentDownloadWorker(
         if (runAttemptCount + 1 < MAX_ATTEMPTS) {
             Result.retry()
         } else {
-            Result.failure(errorData(e.message ?: "Die Karte konnte nicht geladen werden."))
+            Result.failure(errorData(errorText(e)))
         }
 
     private fun errorData(message: String): Data = workDataOf(KEY_OUTPUT_ERROR to message)
+
+    /** Ein Text in der App-Sprache — je Aufruf neu, wie alle Dienste (docs/i18n.md). */
+    private fun text(@StringRes id: Int, vararg args: Any): String =
+        applicationContext.localized().getString(id, *args)
+
+    /**
+     * Die Meldung fuer die Oberflaeche: bei einer [SegmentDownloadException]
+     * ihr [SegmentDownloadException.text] in der App-Sprache, sonst die
+     * Meldung der Ausnahme (Netzfehler) bzw. ein allgemeiner Satz.
+     */
+    private fun errorText(e: Exception): String =
+        (e as? SegmentDownloadException)?.text?.resolve(applicationContext.localized())
+            ?: e.message
+            ?: text(R.string.map_segment_load_error)
 
     private fun summary(updated: Int, transferred: Long, cancelled: Boolean): Data = workDataOf(
         KEY_OUTPUT_UPDATED to updated,

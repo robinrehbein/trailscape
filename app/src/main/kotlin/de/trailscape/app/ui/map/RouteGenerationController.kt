@@ -1,7 +1,9 @@
 package de.trailscape.app.ui.map
 
 import android.content.Context
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.core.ExplorerTile
@@ -350,7 +352,7 @@ object RouteGenerationController {
                 }
             } catch (_: GenerationCancelled) {
                 // [cancel] hat den Zustand bereits freigegeben.
-                onMessage("Routensuche abgebrochen.")
+                onMessage(AppServices.localizedContext().getString(R.string.map_generation_cancelled_status))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -360,8 +362,8 @@ object RouteGenerationController {
                         running = false,
                         done = 0,
                         total = 0,
-                        error = e.message?.takeIf(String::isNotBlank)
-                            ?: "Die Routensuche ist fehlgeschlagen.",
+                        error = e.message?.takeIf(String::isNotBlank)?.let(UiText::Plain)
+                            ?: UiText.Res(R.string.map_generation_failed_error),
                     )
                 }
                 // Derselbe Ausweg wie im Fehlerzweig der manuellen Planung
@@ -465,7 +467,11 @@ data class RouteGenerationState(
     val candidates: List<RouteCandidate> = emptyList(),
     /** Index in [candidates], oder −1. */
     val selectedIndex: Int = -1,
-    val error: String? = null,
+    /**
+     * Die Fehlermeldung als [UiText]: Der Zustand liegt im ViewModel und
+     * ueberlebt den Sprachwechsel — aufgeloest wird erst im Blatt.
+     */
+    val error: UiText? = null,
     /** Hinweise aus `:core`, z. B. „Zieldistanz auf 5 km angehoben". */
     val hints: List<String> = emptyList(),
     /** Ob der Startpunkt die Kartenmitte war statt der echten Position. */

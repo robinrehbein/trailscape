@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,14 +39,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.app.ui.components.HoldToEndButton
-import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.core.formatDuration
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDecimal
 import kotlin.math.roundToInt
 
 /**
@@ -96,6 +101,9 @@ internal fun RideCompactBar(
     sensoren: LiveSensorAnzeige = rememberLiveSensorAnzeige(),
 ) {
 
+    val language = LocalAppLanguage.current
+    val formats = LocalAppFormats.current
+
     Card(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -109,30 +117,30 @@ internal fun RideCompactBar(
             Row(verticalAlignment = Alignment.Bottom) {
                 CompactValue(
                     modifier = Modifier.weight(1.2f),
-                    value = kompaktTempoWert(speedKmh, paused, autoPaused),
-                    label = kompaktTempoLabel(paused, autoPaused),
-                    spoken = kompaktTempoSpoken(speedKmh, paused, autoPaused),
+                    value = kompaktTempoWert(speedKmh, paused, autoPaused, language).asString(),
+                    label = kompaktTempoLabel(paused, autoPaused).asString(),
+                    spoken = kompaktTempoSpoken(speedKmh, paused, autoPaused, language).asString(),
                     // Der Pausen-Zustand traegt ein Wort statt Ziffern —
                     // eine Stufe kleiner, damit es neben den Zahlen nicht laut wird.
                     kleiner = paused,
                 )
                 CompactValue(
                     modifier = Modifier.weight(1f),
-                    value = formatKmDe(distanceKm),
+                    value = formats.km(distanceKm),
                     label = "km",
-                    spoken = "Distanz ${formatKmDe(distanceKm)} Kilometer",
+                    spoken = stringResource(R.string.map_compact_distance_cd, formats.km(distanceKm)),
                 )
                 CompactValue(
                     modifier = Modifier.weight(1f),
                     value = "${ascentM.roundToInt()}",
-                    label = "Hm ↑",
-                    spoken = "${ascentM.roundToInt()} Höhenmeter bergauf",
+                    label = stringResource(R.string.map_compact_ascent_label),
+                    spoken = stringResource(R.string.map_compact_ascent_cd, ascentM.roundToInt()),
                 )
                 CompactValue(
                     modifier = Modifier.weight(1.2f),
                     value = formatDuration(elapsedS),
-                    label = "Fahrzeit",
-                    spoken = "Fahrzeit ${formatDuration(elapsedS)}",
+                    label = stringResource(R.string.map_compact_time_label),
+                    spoken = stringResource(R.string.map_compact_time_cd, formatDuration(elapsedS)),
                 )
                 sensoren.puls?.let { kachel ->
                     val t = sensorKachelText(SensorKachelArt.PULS, kachel, label = "bpm", stillLabelKurz = true)
@@ -166,8 +174,16 @@ internal fun RideCompactBar(
             Row {
                 KompaktAktion(
                     icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                    label = if (paused) "Weiter" else "Pause",
-                    description = if (paused) "Aufzeichnung fortsetzen" else "Aufzeichnung pausieren",
+                    label = if (paused) {
+                        stringResource(R.string.map_compact_resume_action)
+                    } else {
+                        stringResource(R.string.map_compact_pause_action)
+                    },
+                    description = if (paused) {
+                        stringResource(R.string.map_compact_resume_cd)
+                    } else {
+                        stringResource(R.string.map_compact_pause_cd)
+                    },
                     // `secondaryContainer` wie der „Karte"-Knopf des Fahrmodus —
                     // die Kartenflaeche selbst ist schon hell, ein graues
                     // Neutral verschwand darauf.
@@ -179,8 +195,8 @@ internal fun RideCompactBar(
                 Spacer(Modifier.width(OverlayGap))
                 HoldToEndButton(
                     onEnd = onStop,
-                    label = "Beenden",
-                    holdHint = "halten",
+                    label = stringResource(R.string.map_compact_end_action),
+                    holdHint = stringResource(R.string.map_compact_end_hold_hint),
                     icon = Icons.Filled.Stop,
                     minHeight = KompaktAktionHoehe,
                     modifier = Modifier.weight(1f),
@@ -188,8 +204,8 @@ internal fun RideCompactBar(
                 Spacer(Modifier.width(OverlayGap))
                 KompaktAktion(
                     icon = Icons.Filled.Speed,
-                    label = "Daten",
-                    description = "Zur Datenseite des Fahrmodus",
+                    label = stringResource(R.string.map_compact_data_action),
+                    description = stringResource(R.string.map_compact_data_cd),
                     container = MaterialTheme.colorScheme.primary,
                     content = MaterialTheme.colorScheme.onPrimary,
                     onClick = onShowData,
@@ -301,32 +317,44 @@ private fun CompactValue(
  * bzw. „Pause") statt einer Null — im Stand ist der Zustand die Auskunft.
  * Unbekanntes Tempo bei laufender Aufzeichnung bleibt der Strich.
  */
-internal fun kompaktTempoWert(speedKmh: Double?, paused: Boolean, autoPaused: Boolean): String =
+internal fun kompaktTempoWert(
+    speedKmh: Double?,
+    paused: Boolean,
+    autoPaused: Boolean,
+    language: AppLanguage,
+): UiText =
     when {
-        paused -> "Pause"
-        else -> speedKmh?.let { formatOneDecimalDe(it) } ?: "–"
+        paused -> UiText.Res(R.string.map_compact_speed_paused_value)
+        else -> UiText.Plain(speedKmh?.let { formatDecimal(it, 1, language) } ?: "–")
     }
 
 /**
  * Beschriftung unter dem Tempo-Platz — pausiert traegt der Wert selbst den
  * Zustand, die Beschriftung sagt, ob automatisch. „Auto-Pause" als Wert
  * passte auf normal breiten Telefonen nicht in die Spalte („Auto-Pau…").
+ * Von Hand pausiert lautet das Paar „Pause / Aufzeichnung" (Englisch
+ * „Paused / recording") — die Aufzeichnung ruht, kein Moduswechsel.
  */
-internal fun kompaktTempoLabel(paused: Boolean, autoPaused: Boolean = false): String =
+internal fun kompaktTempoLabel(paused: Boolean, autoPaused: Boolean = false): UiText =
     when {
-        paused && autoPaused -> "automatisch"
-        paused -> "Aufzeichnung"
-        else -> "km/h"
+        paused && autoPaused -> UiText.Res(R.string.map_compact_speed_auto_label)
+        paused -> UiText.Res(R.string.map_compact_speed_manual_label)
+        else -> UiText.Plain("km/h")
     }
 
 /** Vorlesesatz des Tempo-Platzes (dasselbe Muster wie `BigValue.spoken`). */
-internal fun kompaktTempoSpoken(speedKmh: Double?, paused: Boolean, autoPaused: Boolean): String =
+internal fun kompaktTempoSpoken(
+    speedKmh: Double?,
+    paused: Boolean,
+    autoPaused: Boolean,
+    language: AppLanguage,
+): UiText =
     when {
-        paused && autoPaused -> "Aufzeichnung in Auto-Pause"
-        paused -> "Aufzeichnung pausiert"
+        paused && autoPaused -> UiText.Res(R.string.map_compact_speed_auto_cd)
+        paused -> UiText.Res(R.string.map_compact_speed_paused_cd)
         else -> speedKmh
-            ?.let { "Tempo ${formatOneDecimalDe(it)} Kilometer pro Stunde" }
-            ?: "Tempo unbekannt"
+            ?.let { UiText.Res(R.string.map_compact_speed_cd, listOf(formatDecimal(it, 1, language))) }
+            ?: UiText.Res(R.string.map_compact_speed_unknown_cd)
     }
 
 /** Schriftgroesse der Kompaktwerte — gross genug fuer den Lenker-Blick, flach genug fuer die Karte. */

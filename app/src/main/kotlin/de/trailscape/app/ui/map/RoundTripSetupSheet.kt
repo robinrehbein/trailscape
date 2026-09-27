@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.trailscape.app.R
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.RouteProfile
@@ -90,7 +92,7 @@ internal fun RoundTripSetupSheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Runde ab hier", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.map_round_trip_title), style = MaterialTheme.typography.titleMedium)
                     Text(
                         startLabel,
                         style = MaterialTheme.typography.bodySmall,
@@ -98,7 +100,7 @@ internal fun RoundTripSetupSheet(
                     )
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Schließen")
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_round_trip_close_cd))
                 }
             }
 
@@ -121,18 +123,19 @@ internal fun RoundTripSetupSheet(
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
             }
+            val sliderCd = stringResource(R.string.map_round_trip_length_cd)
             Slider(
                 value = distanceKm.toFloat(),
                 onValueChange = { onDistanceChange(snapDistance(it)) },
                 valueRange = MIN_ROUND_TRIP_KM.toFloat()..MAX_ROUND_TRIP_KM.toFloat(),
                 steps = (MAX_ROUND_TRIP_KM - MIN_ROUND_TRIP_KM) / ROUND_TRIP_STEP_KM - 1,
-                modifier = Modifier.semantics { contentDescription = "Länge der Runde" },
+                modifier = Modifier.semantics { contentDescription = sliderCd },
             )
 
             val surfaces = listOf(
-                RouteProfile.GRAVEL to "Gemischt",
-                RouteProfile.ASPHALT to "Asphalt",
-                RouteProfile.SCHOTTER to "Schotter",
+                RouteProfile.GRAVEL to stringResource(R.string.map_round_trip_surface_mixed),
+                RouteProfile.ASPHALT to stringResource(R.string.map_round_trip_surface_paved),
+                RouteProfile.SCHOTTER to stringResource(R.string.map_round_trip_surface_gravel),
             )
             val selected = surfaces.indexOfFirst { it.first == surfaceFor(profile) }
             PillSegments(
@@ -142,16 +145,15 @@ internal fun RoundTripSetupSheet(
             )
 
             SetupSwitchRow(
-                title = "Neue Gegenden bevorzugen",
-                note = "Führt durch Kacheln, die du noch nicht kennst",
+                title = stringResource(R.string.map_round_trip_new_areas_title),
+                note = stringResource(R.string.map_round_trip_new_areas_body),
                 checked = preferNewAreas,
                 onCheckedChange = onPreferNewAreasChange,
             )
 
             SetupSwitchRow(
-                title = "Wind berücksichtigen",
-                note = "Bevorzugt Runden, die gegen den aktuellen Wind hinaus- und mit Rückenwind " +
-                    "heimführen. Dafür geht dein Startpunkt, auf etwa 1 km gerundet, an Open-Meteo.",
+                title = stringResource(R.string.map_round_trip_wind_title),
+                note = stringResource(R.string.map_round_trip_wind_body),
                 checked = considerWind,
                 onCheckedChange = onConsiderWindChange,
             )
@@ -159,7 +161,7 @@ internal fun RoundTripSetupSheet(
             Button(
                 onClick = onShowSuggestions,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            ) { Text("Vorschläge zeigen") }
+            ) { Text(stringResource(R.string.map_round_trip_show_action)) }
         }
     }
 }

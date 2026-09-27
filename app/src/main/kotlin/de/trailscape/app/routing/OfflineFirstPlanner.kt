@@ -1,9 +1,11 @@
 package de.trailscape.app.routing
 
 import android.content.Context
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.OfflineRoutingFiles
 import de.trailscape.app.i18n.AppLocale
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.OfflineRoutingSetup
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.RoutingResult
@@ -12,6 +14,7 @@ import de.trailscape.core.SegmentTile
 import de.trailscape.core.Waypoint
 import de.trailscape.core.brouterProfile
 import de.trailscape.core.chooseRoutingSource
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.parseSegmentTile
 import de.trailscape.core.routeOfflineFirst
 import kotlinx.coroutines.CoroutineDispatcher
@@ -165,10 +168,26 @@ suspend fun missingSegmentsFor(
  */
 data class SegmentOffer(
     val fileNames: List<String>,
-    /** Die Kacheln in lesbarer Form, z. B. „Berlin, Dresden, Prag u. a.". */
-    val title: String,
+    /**
+     * Die Kacheln selbst, nicht ihr fertiger Titel: Das Angebot liegt im
+     * `AppViewModel` und ueberlebt den Sprachwechsel (die Activity wird neu
+     * erstellt, das ViewModel nicht). Ein beim Anlegen aufgeloester Titel
+     * stuende danach halb in der alten Sprache da („A und B (+ 2 weitere)"
+     * im englischen Dialog) — daher erst beim Anzeigen, siehe [titleText].
+     */
+    val tiles: List<SegmentTile>,
     val totalBytes: Long,
-)
+) {
+    /** Die Kacheln in lesbarer Form, z. B. „Berlin, Dresden, Prag u. a.". */
+    fun titleText(texts: CoreTexts): UiText = segmentOfferTitle(tiles, texts)
+
+    /**
+     * [titleText] in der gerade gueltigen App-Sprache — fuer Aufrufer ohne
+     * Komposition. Wird bei jedem Lesen neu aufgeloest, folgt also der Sprache.
+     */
+    val title: String
+        get() = titleText(AppServices.coreTexts()).resolve(AppServices.localizedContext())
+}
 
 /**
  * Fragt fuer [fileNames] die Groessen beim Server ab und baut daraus das
@@ -190,7 +209,7 @@ suspend fun describeSegmentOffer(fileNames: List<String>): SegmentOffer? {
         }
         SegmentOffer(
             fileNames = tiles.map { it.first },
-            title = segmentOfferTitle(tiles.map { it.second }),
+            tiles = tiles.map { it.second },
             totalBytes = total,
         )
     }
@@ -204,14 +223,17 @@ suspend fun describeSegmentOffer(fileNames: List<String>): SegmentOffer? {
  * Namen genannt: Eine Route quer durch Europa braucht ein halbes Dutzend
  * Kacheln, und eine Aufzaehlung von zwanzig Staedten liest niemand.
  */
-private fun segmentOfferTitle(tiles: List<SegmentTile>): String {
-    val named = tiles.take(MAX_NAMED_TILES).map { it.title(AppServices.coreTexts()) }
+internal fun segmentOfferTitle(tiles: List<SegmentTile>, texts: CoreTexts): UiText {
+    val named = tiles.take(MAX_NAMED_TILES).map { it.title(texts) }
     val rest = tiles.size - named.size
-    val joined = when (named.size) {
-        1 -> named.first()
-        else -> named.dropLast(1).joinToString(", ") + " und " + named.last()
+    val joined: UiText = when (named.size) {
+        1 -> UiText.Plain(named.first())
+        else -> UiText.Res(
+            R.string.map_segment_offer_and,
+            listOf(named.dropLast(1).joinToString(", "), named.last()),
+        )
     }
-    return if (rest > 0) "$joined (+ $rest weitere)" else joined
+    return if (rest > 0) UiText.Res(R.string.map_segment_offer_more, listOf(joined, rest)) else joined
 }
 
 /** Wie viele Kacheln in einem Angebot beim Namen genannt werden. */

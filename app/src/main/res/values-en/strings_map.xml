@@ -16,4 +16,402 @@
         <item quantity="one">⊞ +%1$d new tile discovered.</item>
         <item quantity="other">⊞ +%1$d new tiles discovered.</item>
     </plurals>
+
+    <!-- BatteryNoticeDialog.kt -->
+    <string name="map_battery_title">Protect background recording</string>
+    <string name="map_battery_body">Some devices stop GPS recording once the screen has been off for a while — the ride then ends without you noticing. An exception from battery optimisation prevents this. Recording starts now either way; you can change this any time under “Settings → Recording &amp; voice prompts”.</string>
+    <string name="map_battery_allow_action">Allow exception</string>
+    <string name="map_battery_later_action">Later</string>
+
+    <!-- ElevationProfile.kt -->
+    <string name="map_elevation_empty">No elevation data for this ride.</string>
+    <string name="map_elevation_title">Elevation profile</string>
+
+    <!-- ExploreSheet.kt -->
+    <string name="map_explore_search_placeholder">Where to?</string>
+    <string name="map_explore_round_trip_action">Loop from here</string>
+    <string name="map_explore_saved_routes_label">Saved routes</string>
+    <string name="map_explore_recent_label">Recent searches</string>
+    <string name="map_explore_map_label">Map</string>
+    <string name="map_explore_offline_title">Offline maps</string>
+    <string name="map_explore_offline_body">Download areas for riding without signal</string>
+
+    <!-- LongPressHint.kt -->
+    <string name="map_long_press_hint_snackbar">Tip: Long-press the map to drop a pin – as a destination or the start of a loop.</string>
+    <string name="map_long_press_hint_line">Long-press the map: drop a pin</string>
+
+    <!-- PlaceCard.kt -->
+    <string name="map_place_close_cd">Close place</string>
+    <string name="map_place_waypoint_action">As waypoint</string>
+    <string name="map_place_route_here_action">Route here</string>
+    <string name="map_place_round_trip_action">Loop from here</string>
+    <string name="map_place_add_waypoint_cd">Add place to the route as a waypoint</string>
+    <string name="map_place_add_waypoint_action">+ Waypoint</string>
+    <string name="map_place_distance_away">%1$s km away</string>
+
+    <!-- SearchSheet.kt -->
+    <string name="map_search_label">Search for a place</string>
+    <string name="map_search_placeholder">Place, town or street</string>
+    <string name="map_search_clear_cd">Clear search</string>
+    <string name="map_search_recent_label">Recent searches</string>
+    <string name="map_search_too_short_hint">Enter at least %1$d characters, then search.</string>
+    <string name="map_search_retry_action">Search again</string>
+    <string name="map_search_query_action">Search for “%1$s”</string>
+    <string name="map_search_query_quoted">“%1$s”</string>
+    <string name="map_search_osm_hint">Place search via OpenStreetMap</string>
+    <string name="map_search_empty_hint">Search for a place, town or address.</string>
+    <string name="map_search_too_short_error">Please enter at least %1$d characters.</string>
+    <string name="map_search_no_results_error">No results found.</string>
+    <string name="map_search_failed_error">Place search failed.</string>
+
+    <!-- RoundTripSetupSheet.kt -->
+    <string name="map_round_trip_title">Loop from here</string>
+    <string name="map_round_trip_close_cd">Close</string>
+    <string name="map_round_trip_length_cd">Loop length</string>
+    <string name="map_round_trip_surface_mixed">Mixed</string>
+    <string name="map_round_trip_surface_paved">Paved</string>
+    <string name="map_round_trip_surface_gravel">Gravel</string>
+    <string name="map_round_trip_new_areas_title">Prefer new areas</string>
+    <string name="map_round_trip_new_areas_body">Leads through tiles you haven’t explored yet</string>
+    <string name="map_round_trip_wind_title">Consider wind</string>
+    <string name="map_round_trip_wind_body">Prefers loops that head out into the current wind and bring you home with a tailwind. For this, your starting point, rounded to about 1 km, is sent to Open-Meteo.</string>
+    <string name="map_round_trip_show_action">Show suggestions</string>
+
+    <!-- RouteGenerationController.kt -->
+    <string name="map_generation_cancelled_status">Route search cancelled.</string>
+    <string name="map_generation_failed_error">The route search failed.</string>
+
+    <!-- RouteGenerationSheet.kt -->
+    <string name="map_generation_title">Matching loop</string>
+    <string name="map_generation_discard_cd">Discard route suggestion</string>
+    <string name="map_generation_wind_tip">Tip: With “Consider wind” under “Loop from here” on the map, the search prefers loops with a tailwind on the way home.</string>
+    <string name="map_generation_map_center_hint">Your location wasn’t available – the loop starts at the centre of the map. “Search again” picks up the starting point afresh.</string>
+    <string name="map_generation_offline_hint">Without signal, Trailscape also calculates on the device once the routing maps for this area are downloaded.</string>
+    <string name="map_generation_locating_status">Finding your location …</string>
+    <string name="map_generation_search_action">Find routes</string>
+    <string name="map_generation_retry_action">Try again</string>
+    <string name="map_generation_apply_action">Use route</string>
+    <string name="map_generation_other_action">Other suggestions</string>
+    <string name="map_generation_research_action">Search again</string>
+    <string name="map_generation_intro_body">Trailscape looks for %1$d loops from your current location – without a location, from the centre of the map. This takes about half a minute; feel free to switch tabs in the meantime.</string>
+    <string name="map_generation_running_status">Searching …</string>
+    <string name="map_generation_progress_status">Candidate %1$d of %2$d …</string>
+    <string name="map_generation_cancel_action">Cancel</string>
+    <string name="map_generation_candidate_headline">%1$s km · %2$d m ↑</string>
+    <string name="map_generation_best_label">Best</string>
+    <string name="map_generation_candidate_detail">%1$s · %2$d m/km · %3$s vs. target</string>
+    <string name="map_generation_new_tiles_label">+%1$d new</string>
+    <string name="map_generation_known_tiles_label">known</string>
+    <string name="map_generation_target_line">≈ %1$s km · %2$s · %3$s</string>
+    <string name="map_generation_target_line_duration">≈ %1$s km · %2$s · %3$s · approx. %4$s h</string>
+    <string name="map_generation_source_self">from: your input on the map</string>
+    <string name="map_generation_source_line">from: %1$s (%2$s)</string>
+    <string name="map_generation_source_plan">training plan</string>
+    <string name="map_generation_source_today">today’s recommendation</string>
+    <string name="map_generation_source_own">your own input</string>
+    <string name="map_generation_self_target_label">Distance of your choice</string>
+    <string name="map_generation_first_round_no_position">Without your location, Trailscape doesn’t know where your loop starts. Move the map to your starting point and tap “Find routes”.</string>
+    <string name="map_generation_deviation_zero" formatted="false">±0%</string>
+    <string name="map_generation_deviation">%1$s%2$s%%</string>
+    <string name="map_generation_compass_n">N</string>
+    <string name="map_generation_compass_ne">NE</string>
+    <string name="map_generation_compass_e">E</string>
+    <string name="map_generation_compass_se">SE</string>
+    <string name="map_generation_compass_s">S</string>
+    <string name="map_generation_compass_sw">SW</string>
+    <string name="map_generation_compass_w">W</string>
+    <string name="map_generation_compass_nw">NW</string>
+
+    <!-- NavigationHud.kt -->
+    <string name="map_nav_remaining_cd">%1$s kilometres left on %2$s, estimated time remaining %3$s</string>
+    <string name="map_nav_done_line">%1$s · %2$s km done</string>
+    <string name="map_nav_voice_off_cd">Turn off voice prompts</string>
+    <string name="map_nav_voice_on_cd">Turn on voice prompts</string>
+    <string name="map_nav_stop_cd">End navigation, keep riding without a route</string>
+    <string name="map_nav_next_turn_cd">Next turn: %1$s</string>
+    <string name="map_nav_no_turn_cd">No turn ahead, follow the route.</string>
+    <string name="map_nav_straight_label">Straight on</string>
+    <string name="map_nav_follow_label">follow the road</string>
+    <string name="map_nav_off_route_title">Off route</string>
+    <string name="map_nav_course_up_cd">Direction of travel up, tilted – switch to north up</string>
+    <string name="map_nav_north_up_cd">North up – switch to direction of travel up</string>
+    <string name="map_nav_recenter_action">Re-centre</string>
+    <string name="map_nav_turn_now_label">Now</string>
+    <string name="map_nav_turn_in_label">In %1$d m</string>
+    <string name="map_nav_turn_left_label">Left</string>
+    <string name="map_nav_turn_right_label">Right</string>
+    <string name="map_nav_turn_sharp_left_label">Sharp left</string>
+    <string name="map_nav_turn_sharp_right_label">Sharp right</string>
+    <string name="map_nav_duration_minutes">%1$d min</string>
+    <string name="map_nav_duration_hours">%1$d h</string>
+    <string name="map_nav_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="map_nav_eta_approx">approx. %1$s</string>
+    <string name="map_nav_remaining_line">%1$s km · %2$s</string>
+
+    <!-- RideCompactBar.kt -->
+    <string name="map_compact_distance_cd">Distance %1$s kilometres</string>
+    <string name="map_compact_ascent_label">m ↑</string>
+    <string name="map_compact_ascent_cd">%1$d metres climbed</string>
+    <string name="map_compact_time_label">Ride time</string>
+    <string name="map_compact_time_cd">Ride time %1$s</string>
+    <string name="map_compact_heart_rate_cd">Heart rate %1$d beats per minute</string>
+    <string name="map_compact_resume_action">Resume</string>
+    <string name="map_compact_pause_action">Pause</string>
+    <string name="map_compact_resume_cd">Resume recording</string>
+    <string name="map_compact_pause_cd">Pause recording</string>
+    <string name="map_compact_end_action">End</string>
+    <string name="map_compact_end_hold_hint">hold</string>
+    <string name="map_compact_data_action">Data</string>
+    <string name="map_compact_data_cd">To the ride mode data page</string>
+    <string name="map_compact_speed_paused_value">Paused</string>
+    <string name="map_compact_speed_auto_label">automatic</string>
+    <string name="map_compact_speed_manual_label">recording</string>
+    <string name="map_compact_speed_auto_cd">Recording on auto-pause</string>
+    <string name="map_compact_speed_paused_cd">Recording paused</string>
+    <string name="map_compact_speed_cd">Speed %1$s kilometres per hour</string>
+    <string name="map_compact_speed_unknown_cd">Speed unknown</string>
+
+    <!-- RideModeScreen.kt -->
+    <string name="map_ride_speed_cd">Speed %1$s kilometres per hour</string>
+    <string name="map_ride_speed_unknown_cd">Speed unknown</string>
+    <string name="map_ride_distance_label">km ridden</string>
+    <string name="map_ride_distance_cd">Distance %1$s kilometres</string>
+    <string name="map_ride_time_label">Ride time</string>
+    <string name="map_ride_time_cd">Ride time %1$s</string>
+    <string name="map_ride_heart_rate_label">bpm · heart rate</string>
+    <string name="map_ride_heart_rate_cd">Heart rate %1$d beats per minute</string>
+    <string name="map_ride_ascent_label">Elevation gain ↑</string>
+    <string name="map_ride_ascent_cd">%1$d metres climbed</string>
+    <string name="map_ride_resume_action">Resume</string>
+    <string name="map_ride_pause_action">Pause</string>
+    <string name="map_ride_resume_cd">Resume recording</string>
+    <string name="map_ride_pause_cd">Pause recording</string>
+    <string name="map_ride_end_action">End</string>
+    <string name="map_ride_end_hold_hint">press and hold</string>
+    <string name="map_ride_status_auto_paused">Auto-pause</string>
+    <string name="map_ride_status_paused">Paused</string>
+    <string name="map_ride_status_recording">Recording</string>
+    <string name="map_ride_show_map_cd">Switch to the ride mode map page, recording continues</string>
+    <string name="map_ride_show_map_action">Map</string>
+    <string name="map_ride_nav_turn_cd">Next turn: %1$s %2$s kilometres left on %3$s.</string>
+    <string name="map_ride_nav_no_turn_cd">No turn ahead, follow the route. %1$s kilometres left on %2$s.</string>
+    <string name="map_ride_nav_remaining_line">%1$s km left · %2$s</string>
+    <string name="map_ride_nav_off_route_cd">Off route. %1$s kilometres left on %2$s.</string>
+
+    <!-- PlanningPanel.kt -->
+    <string name="map_planning_generated_hint">A suggested loop. Long-press the map to keep planning with your own points.</string>
+    <string name="map_planning_my_position_name">My location</string>
+    <string name="map_planning_round_trip_title">Back to start</string>
+    <string name="map_planning_round_trip_body">The route ends back at the first point</string>
+    <string name="map_planning_offline_hint">Without signal, Trailscape also calculates on the device once the routing maps for this area are downloaded.</string>
+    <string name="map_planning_save_action">Save</string>
+    <string name="map_planning_start_action">Start riding</string>
+    <string name="map_planning_close_cd">Stop planning</string>
+    <string name="map_planning_more_cd">More actions</string>
+    <string name="map_planning_share_action">Share</string>
+    <string name="map_planning_clear_action">Remove all points</string>
+    <string name="map_planning_point_label">Point %1$d</string>
+    <string name="map_planning_remove_point_cd">Remove %1$s</string>
+    <string name="map_planning_add_start_action">Add start</string>
+    <string name="map_planning_add_point_action">Add point</string>
+    <string name="map_planning_add_point_hint">Search or long-press the map</string>
+    <string name="map_planning_locating_status">Getting your location …</string>
+    <string name="map_planning_use_position_action">My location as start</string>
+    <string name="map_planning_surface_mixed">Mixed</string>
+    <string name="map_planning_surface_paved">Paved</string>
+    <string name="map_planning_surface_gravel">Gravel</string>
+    <string name="map_planning_surface_cd">Surface</string>
+    <string name="map_planning_profile_cd">Route profile: %1$s. Change</string>
+    <string name="map_planning_more_profiles_cd">More route profiles</string>
+    <string name="map_planning_more_profiles_action">More profiles</string>
+    <string name="map_planning_generated_title">Suggested loop</string>
+    <string name="map_planning_title">Plan a route</string>
+    <string name="map_planning_locating_subtitle">Finding your location …</string>
+    <string name="map_planning_calculating_status">Calculating route …</string>
+    <string name="map_planning_failed_status">Route couldn’t be calculated</string>
+    <string name="map_planning_route_summary">%1$s km · %2$d m ↑</string>
+    <string name="map_planning_route_summary_source">%1$s km · %2$d m ↑ · %3$s</string>
+    <string name="map_planning_need_destination_status">Start set – now add a destination</string>
+    <string name="map_planning_choose_status">Choose start and destination</string>
+    <string name="map_planning_source_device">Device</string>
+    <string name="map_planning_source_server">Server</string>
+    <string name="map_planning_loop_from">Loop from %1$s</string>
+    <plurals name="map_planning_loop_points_count">
+        <item quantity="one">Loop · %1$d point</item>
+        <item quantity="other">Loop · %1$d points</item>
+    </plurals>
+    <plurals name="map_planning_points_count">
+        <item quantity="one">%1$d point</item>
+        <item quantity="other">%1$d points</item>
+    </plurals>
+    <string name="map_planning_from_to">%1$s → %2$s</string>
+    <string name="map_planning_profile_hint_gravel">Trekking: a mix of tarmac and firm paths</string>
+    <string name="map_planning_profile_hint_schotter">The actual gravel profile: prefers unpaved paths</string>
+    <string name="map_planning_profile_hint_asphalt">Avoids unpaved paths</string>
+    <string name="map_planning_profile_hint_radwege">Prefers signposted cycle paths</string>
+    <string name="map_planning_profile_hint_kuerzester">Shortest route, regardless of surface</string>
+
+    <!-- MapPanels.kt -->
+    <string name="map_live_status_auto_paused">Auto-pause</string>
+    <string name="map_live_status_paused">Paused</string>
+    <string name="map_live_status_recording">Recording</string>
+    <plurals name="map_live_points_count">
+        <item quantity="one">%1$d point</item>
+        <item quantity="other">%1$d points</item>
+    </plurals>
+    <string name="map_live_time_label">Time</string>
+    <string name="map_live_ascent_label">m ↑</string>
+    <string name="map_live_ride_mode_action">Ride mode</string>
+    <string name="map_live_resume_action">Resume</string>
+    <string name="map_live_pause_action">Pause</string>
+    <string name="map_live_end_action">End</string>
+    <string name="map_live_end_hold_hint">press and hold</string>
+    <string name="map_ride_card_ascent_label">m ↑</string>
+    <string name="map_ride_card_descent_label">m ↓</string>
+    <string name="map_ride_card_duration_label">Duration</string>
+    <string name="map_ride_card_avg_speed_label">Avg km/h</string>
+    <string name="map_ride_card_moving_label">Moving</string>
+    <string name="map_ride_card_avg_hr_label">Avg HR</string>
+    <string name="map_ride_card_max_hr_label">Max HR</string>
+    <string name="map_ride_card_planned_date">Planned · %1$s</string>
+    <string name="map_ride_card_close_cd">Clear selection</string>
+    <string name="map_ride_card_navigating_label">On the way</string>
+    <string name="map_ride_card_start_action">Start riding</string>
+    <string name="map_ride_card_ride_again_action">Ride again</string>
+    <string name="map_ride_card_details_action">Analysis</string>
+    <string name="map_ride_card_details_cd">Open analysis of this ride</string>
+    <string name="map_ride_card_share_action">Share</string>
+    <string name="map_ride_card_share_cd">Share ride as GPX</string>
+    <string name="map_ride_card_share_route_cd">Share route as GPX</string>
+    <string name="map_ride_card_delete_action">Delete</string>
+    <string name="map_ride_card_delete_cd">Delete ride</string>
+    <string name="map_download_progress_status">Downloading map data … %1$s</string>
+    <string name="map_notice_close_cd">Close notice</string>
+    <string name="map_notice_retry_action">Ask again</string>
+    <string name="map_locate_following_cd">My location – the map follows you</string>
+    <string name="map_locate_not_following_cd">My location – the map no longer follows you</string>
+
+    <!-- OfflineTileMath.kt -->
+    <string name="map_offline_zoom_level">zoom level %1$d</string>
+    <string name="map_offline_zoom_levels">zoom levels %1$d–%2$d</string>
+    <string name="map_offline_invalid_area_error">This area can’t be saved.</string>
+    <string name="map_offline_area_too_wide_error">The visible area is %1$d km across and has no useful detail offline. Zoom in further to download an area (at most %2$d km).</string>
+    <string name="map_offline_too_many_tiles_error">Area too large: approx. %1$d tiles (at most %2$d). Zoom in further.</string>
+    <string name="map_offline_not_allowed_error">“%1$s” can’t be saved offline: the map server doesn’t allow downloads in advance. Choose “%2$s” instead.</string>
+    <string name="map_offline_stalled_error">Download cancelled: no progress for %1$d seconds. Please check your internet connection and try again.</string>
+    <string name="map_offline_stalled_detail_error">Download cancelled: no progress for %1$d seconds (%2$s).</string>
+
+    <!-- OfflineRegions.kt -->
+    <string name="map_offline_style_load_error">The map style couldn’t be loaded. Please check your internet connection.</string>
+    <string name="map_offline_style_store_error">The map style couldn’t be stored.</string>
+    <string name="map_offline_tile_limit_error">Too many tiles: MapLibre downloads at most %1$d. Zoom in further.</string>
+    <string name="map_offline_region_create_error">Region couldn’t be created: %1$s</string>
+    <string name="map_offline_error_not_found">tile not found</string>
+    <string name="map_offline_error_server">server error</string>
+    <string name="map_offline_error_connection">no connection</string>
+    <string name="map_offline_error_other">error</string>
+    <string name="map_offline_error_detail">%1$s: %2$s</string>
+    <plurals name="map_offline_start_status_count">
+        <item quantity="one">Downloading map area: approx. %1$d tile, %2$s.</item>
+        <item quantity="other">Downloading map area: approx. %1$d tiles, %2$s.</item>
+    </plurals>
+    <plurals name="map_offline_saved_status_count">
+        <item quantity="one">Area saved: %1$d tile (%2$s MB).</item>
+        <item quantity="other">Area saved: %1$d tiles (%2$s MB).</item>
+    </plurals>
+    <string name="map_offline_failed_error">Download failed.</string>
+
+    <!-- MapStyles.kt -->
+    <string name="map_style_osmde_label">Street map</string>
+    <string name="map_style_cyclosm_label">CyclOSM (cycling)</string>
+    <string name="map_style_osm_label">OpenStreetMap</string>
+    <string name="map_style_opentopo_label">OpenTopoMap (terrain)</string>
+    <string name="map_style_esri_sat_label">Satellite (Esri)</string>
+    <string name="map_style_openfreemap_label">Vector map (OpenFreeMap)</string>
+    <string name="map_style_osmde_subtitle">Clear and uncluttered (default)</string>
+    <string name="map_style_cyclosm_subtitle">Cycle paths &amp; surfaces highlighted</string>
+    <string name="map_style_openfreemap_subtitle">Can be saved offline</string>
+
+    <!-- routing/SegmentDownloader.kt -->
+    <string name="map_segment_missing_error">The tile %1$s doesn’t exist on the server.</string>
+    <string name="map_segment_rejected_error">The server rejected the tile %1$s (HTTP %2$d).</string>
+    <string name="map_segment_empty_error">The server delivered %1$s without content.</string>
+    <string name="map_segment_incomplete_error">The tile %1$s arrived incomplete (%2$d of %3$d bytes).</string>
+    <string name="map_segment_head_error">The server answered the request with HTTP %1$d.</string>
+    <string name="map_segment_update_load_error">The update couldn’t be downloaded (HTTP %1$d).</string>
+    <string name="map_segment_update_empty_error">The update arrived without content.</string>
+    <string name="map_segment_update_incomplete_error">The update arrived incomplete (%1$d of %2$d bytes).</string>
+    <string name="map_segment_replace_error">The old tile %1$s couldn’t be replaced.</string>
+    <string name="map_segment_store_error">The tile %1$s couldn’t be saved.</string>
+    <string name="map_segment_invalid_name_error">“%1$s” isn’t a tile name.</string>
+
+    <!-- routing/SegmentDownloadWorker.kt -->
+    <string name="map_segment_no_tile_error">No valid tile specified.</string>
+    <string name="map_segment_notification_progress">%1$s (%2$d of %3$d)</string>
+    <string name="map_segment_load_error">The map couldn’t be downloaded.</string>
+
+    <!-- routing/OfflineFirstPlanner.kt -->
+    <string name="map_segment_offer_and">%1$s and %2$s</string>
+    <string name="map_segment_offer_more">%1$s (+ %2$d more)</string>
+
+    <!-- MapScreen.kt -->
+    <string name="map_screen_route_failed_error">The route couldn’t be calculated.</string>
+    <string name="map_screen_navigation_failed_error">Navigation isn’t possible.</string>
+    <string name="map_screen_off_route_status">Heads up: you’re off route.</string>
+    <string name="map_screen_undo_action">Undo</string>
+    <string name="map_screen_stop_recording_first_status">End the recording first.</string>
+    <string name="map_screen_planning_ended_status">Planning ended.</string>
+    <string name="map_screen_loop_applied_status">Loop applied – you can save it or navigate it.</string>
+    <string name="map_screen_location_off_error">Location services are turned off.</string>
+    <string name="map_screen_position_failed_error">Your location couldn’t be determined.</string>
+    <string name="map_screen_marked_point_name">Dropped pin</string>
+    <string name="map_screen_loop_kept_status">The applied loop stays in place.</string>
+    <string name="map_screen_plan_yourself_action">Plan it yourself</string>
+    <string name="map_screen_share_empty_error">No points to share.</string>
+    <string name="map_screen_share_failed_error">Sharing failed: %1$s</string>
+    <string name="map_screen_map_not_ready_error">The map isn’t ready yet.</string>
+    <string name="map_screen_offline_region_name">%1$s · %2$s</string>
+    <string name="map_screen_no_start_error">No starting point: location unknown and the map isn’t ready yet.</string>
+    <string name="map_screen_voice_off_status">Voice prompts are off — turn them on here in the HUD or under Settings → Recording &amp; voice prompts.</string>
+    <string name="map_screen_too_few_points_error">The ride has too few points for navigation.</string>
+    <string name="map_screen_planned_route_label">Planned route</string>
+    <string name="map_screen_location_denied_notice">Location access was denied – you can’t continue here without it.</string>
+    <string name="map_screen_location_imprecise_notice">Recording needs your precise location. In the prompt, choose “Precise” instead of “Approximate”.</string>
+    <string name="map_screen_planning_cleared_status">Planning cleared.</string>
+    <string name="map_screen_round_trip_from_place">from %1$s</string>
+    <string name="map_screen_round_trip_from_position">from your location</string>
+    <string name="map_screen_route_name_title">Route name</string>
+    <string name="map_screen_route_name_suggestion">Route %1$s</string>
+    <string name="map_screen_route_name_save_action">Save</string>
+    <string name="map_screen_battery_dialog_error">The system dialog couldn’t be opened. You can grant the exception in the Android settings under “Battery”.</string>
+    <string name="map_screen_segment_offer_title">Maps for offline routing</string>
+    <string name="map_screen_segment_offer_body">Map data for this area is missing: %1$s, %2$s. After that, the app calculates routes here without signal — usually faster than via the server.</string>
+    <string name="map_screen_segment_offer_size_unknown">size unknown</string>
+    <string name="map_screen_segment_offer_accept_action">Download now</string>
+    <string name="map_screen_segment_offer_later_action">Not now</string>
+    <string name="map_screen_delete_title">Delete ride</string>
+    <string name="map_screen_delete_body">Really delete “%1$s”?</string>
+    <string name="map_screen_delete_action">Delete</string>
+    <string name="map_screen_delete_cancel_action">Cancel</string>
+    <string name="map_screen_progress_device_leg">On the device: leg %1$d of %2$d …</string>
+    <string name="map_screen_progress_device">Calculating on the device …</string>
+    <string name="map_screen_progress_leg">Leg %1$d of %2$d …</string>
+    <string name="map_style_sheet_title">Map</string>
+    <string name="map_style_sheet_explorer_title">Explorer tiles</string>
+    <string name="map_style_sheet_explorer_body">Areas you’ve ridden stay clear, the rest lies under fog</string>
+    <string name="map_style_sheet_download_action">Save this area offline</string>
+    <string name="map_style_sheet_offline_only_hint">Saving offline only works with the %1$s. The other map servers are for display only and don’t allow downloads.</string>
+    <string name="map_style_sheet_switch_action">Switch to the vector map</string>
+    <plurals name="map_explorer_pill_count">
+        <item quantity="one">%1$d tile</item>
+        <item quantity="other">%1$d tiles</item>
+    </plurals>
+    <plurals name="map_explorer_pill_square_count">
+        <item quantity="one">%1$d tile · Largest square %2$d×%2$d</item>
+        <item quantity="other">%1$d tiles · Largest square %2$d×%2$d</item>
+    </plurals>
+    <string name="map_name_dialog_label">Name</string>
+    <string name="map_name_dialog_cancel_action">Cancel</string>
+    <string name="map_share_chooser_title">Share route</string>
+    <string name="map_layers_cd">Map, tiles and offline</string>
 </resources>

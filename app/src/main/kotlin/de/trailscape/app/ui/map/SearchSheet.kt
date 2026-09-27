@@ -36,9 +36,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.GeoResult
@@ -140,10 +143,10 @@ internal fun SearchSheet(
                 .padding(bottom = CardPadding),
         ) {
             OneUiTextField(
-                label = "Ort suchen",
+                label = stringResource(R.string.map_search_label),
                 value = query,
                 onValueChange = onQueryChange,
-                placeholder = "Ort, Stadt oder Straße",
+                placeholder = stringResource(R.string.map_search_placeholder),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { onSearch() }),
                 trailingIcon = {
@@ -154,7 +157,7 @@ internal fun SearchSheet(
                         )
 
                         query.isNotEmpty() -> IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Suche leeren")
+                            Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.map_search_clear_cd))
                         }
                     }
                 },
@@ -228,7 +231,7 @@ internal fun PlaceResults(
 
             query.isBlank() && history.isNotEmpty() -> {
                 Text(
-                    text = "Zuletzt gesucht",
+                    text = stringResource(R.string.map_search_recent_label),
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -245,7 +248,7 @@ internal fun PlaceResults(
             // Zu kurz fuer eine Suche: Statt einer Zeile, die beim Antippen
             // nur die Mindestlaenge anmahnt, gleich der Hinweis selbst.
             query.isNotBlank() && placeSearchQueryOrNull(query) == null -> Text(
-                text = "Mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben, dann suchen.",
+                text = stringResource(R.string.map_search_too_short_hint, MIN_PLACE_SEARCH_LENGTH),
                 modifier = Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -255,14 +258,22 @@ internal fun PlaceResults(
             // Aktion als „erneut" da — das sagt, dass Tippen nichts Neues
             // ausloest, ein Tipp hier aber schon.
             query.isNotBlank() && !busy -> SheetRow(
-                title = if (error != null) "Erneut suchen" else "„${query.trim()}“ suchen",
-                subtitle = if (error != null) "„${query.trim()}“" else "Ortssuche über OpenStreetMap",
+                title = if (error != null) {
+                    stringResource(R.string.map_search_retry_action)
+                } else {
+                    stringResource(R.string.map_search_query_action, query.trim())
+                },
+                subtitle = if (error != null) {
+                    stringResource(R.string.map_search_query_quoted, query.trim())
+                } else {
+                    stringResource(R.string.map_search_osm_hint)
+                },
                 icon = Icons.Filled.Search,
                 onClick = onSearch,
             )
 
             query.isBlank() -> Text(
-                text = "Suche nach einem Ort, einer Stadt oder einer Adresse.",
+                text = stringResource(R.string.map_search_empty_hint),
                 modifier = Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -380,7 +391,8 @@ internal class PlaceSearchState(initialQuery: String = "") {
         internal set
     var busy by mutableStateOf(false)
         internal set
-    var error by mutableStateOf<String?>(null)
+    /** Meldung unter dem Feld — erst die Anzeige loest sie in der App-Sprache auf. */
+    var error by mutableStateOf<UiText?>(null)
         internal set
 
     /**
@@ -403,7 +415,7 @@ internal class PlaceSearchState(initialQuery: String = "") {
     fun submit(): Boolean {
         val trimmed = placeSearchQueryOrNull(query)
         if (trimmed == null) {
-            error = "Bitte mindestens $MIN_PLACE_SEARCH_LENGTH Zeichen eingeben."
+            error = UiText.Res(R.string.map_search_too_short_error, listOf(MIN_PLACE_SEARCH_LENGTH))
             return false
         }
         submission = PlaceSearchSubmission(trimmed, (submission?.seq ?: 0) + 1)
@@ -450,11 +462,12 @@ internal fun PlaceSearchEffect(
         result
             .onSuccess { hits ->
                 state.results = hits.take(maxResults)
-                state.error = if (hits.isEmpty()) "Keine Treffer gefunden." else null
+                state.error = if (hits.isEmpty()) UiText.Res(R.string.map_search_no_results_error) else null
             }
             .onFailure {
                 state.results = emptyList()
-                state.error = it.message?.takeIf(String::isNotBlank) ?: "Ortssuche fehlgeschlagen."
+                state.error = it.message?.takeIf(String::isNotBlank)?.let(UiText::Plain)
+                    ?: UiText.Res(R.string.map_search_failed_error)
             }
         state.busy = false
     }

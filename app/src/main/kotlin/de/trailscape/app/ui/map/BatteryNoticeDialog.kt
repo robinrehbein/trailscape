@@ -3,6 +3,8 @@ package de.trailscape.app.ui.map
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
 import de.trailscape.app.ui.components.OneUiDialog
 
 /**
@@ -28,21 +30,15 @@ internal fun BatteryNoticeDialog(
 ) {
     OneUiDialog(
         onDismissRequest = onLater,
-        title = { Text("Aufzeichnung im Hintergrund schützen") },
+        title = { Text(stringResource(R.string.map_battery_title)) },
         text = {
-            Text(
-                "Manche Geräte beenden die GPS-Aufzeichnung, sobald der Bildschirm " +
-                    "länger aus ist — die Tour bricht dann unbemerkt ab. Eine Ausnahme " +
-                    "von der Batterieoptimierung verhindert das. Die Aufzeichnung läuft " +
-                    "jetzt trotzdem los; ändern lässt sich das jederzeit unter " +
-                    "„Einstellungen → Aufzeichnung & Ansagen“.",
-            )
+            Text(stringResource(R.string.map_battery_body))
         },
         confirmButton = {
-            TextButton(onClick = onAllow) { Text("Ausnahme erlauben") }
+            TextButton(onClick = onAllow) { Text(stringResource(R.string.map_battery_allow_action)) }
         },
         dismissButton = {
-            TextButton(onClick = onLater) { Text("Später") }
+            TextButton(onClick = onLater) { Text(stringResource(R.string.map_battery_later_action)) }
         },
     )
 }

@@ -1,6 +1,9 @@
 package de.trailscape.app.ui.map
 
+import de.trailscape.app.R
 import de.trailscape.app.ui.MapStyle
+import de.trailscape.app.ui.map.MapTestStrings.de
+import de.trailscape.app.ui.map.MapTestStrings.en
 import de.trailscape.app.ui.mapStyleById
 import de.trailscape.app.ui.mapStyles
 import kotlin.test.Test
@@ -41,6 +44,7 @@ class OfflineTileMathTest {
     private val voyager = MapStyle(
         id = "test-strasse",
         label = "Straßenkarte (Test)",
+        labelRes = R.string.map_style_osmde_label,
         urlTemplate = "https://tiles.example/{z}/{x}/{y}.png",
         maxZoom = 20,
         attribution = "Test",
@@ -147,9 +151,12 @@ class OfflineTileMathTest {
         for (style in mapStyles.filter { !it.offlineAllowed }) {
             val rejected = assertIs<OfflineDownloadPlan.Rejected>(plan(munich, 13.0, style), style.id)
             // Ehrlich und mit Ausweg: warum nicht, und womit es geht.
-            assertContains(rejected.message, style.label)
-            assertContains(rejected.message, "erlaubt keine Vorab-Downloads")
-            assertContains(rejected.message, openFreeMap.label)
+            assertContains(de(rejected.message), style.label)
+            assertContains(de(rejected.message), "erlaubt keine Vorab-Downloads")
+            assertContains(de(rejected.message), openFreeMap.label)
+            // Auf Englisch mit den englischen Stilnamen.
+            assertContains(en(rejected.message), "can’t be saved offline")
+            assertContains(en(rejected.message), "Vector map (OpenFreeMap)")
         }
     }
 
@@ -274,7 +281,8 @@ class OfflineTileMathTest {
         val europe = phoneView(lat = 50.0, lon = 10.0, zoom = 4.0)
         val plan = plan(europe, 4.0, voyager)
         val rejected = assertIs<OfflineDownloadPlan.Rejected>(plan)
-        assertContains(rejected.message, "Zoome näher heran")
+        assertContains(de(rejected.message), "Zoome näher heran")
+        assertContains(en(rejected.message), "Zoom in further")
     }
 
     @Test
@@ -298,7 +306,8 @@ class OfflineTileMathTest {
         assertEquals(15, ready.maxZoom)
         assertEquals(14..16, ready.tileZooms)
         assertTrue(ready.tileCount in 1..MAX_TILES_PER_DOWNLOAD, "Kachelzahl: ${ready.tileCount}")
-        assertEquals("Zoomstufen 14–16", ready.zoomLabel)
+        assertEquals("Zoomstufen 14–16", de(ready.zoomLabel))
+        assertEquals("zoom levels 14–16", en(ready.zoomLabel))
     }
 
     @Test
@@ -314,8 +323,9 @@ class OfflineTileMathTest {
             style = voyager,
         )
         val rejected = assertIs<OfflineDownloadPlan.Rejected>(plan)
-        assertContains(rejected.message, "Kacheln")
-        assertContains(rejected.message, "$MAX_TILES_PER_DOWNLOAD")
+        assertContains(de(rejected.message), "Kacheln")
+        assertContains(de(rejected.message), "$MAX_TILES_PER_DOWNLOAD")
+        assertContains(en(rejected.message), "tiles")
     }
 
     @Test
@@ -338,16 +348,17 @@ class OfflineTileMathTest {
 
     @Test
     fun `die Abbruchmeldung nennt die Wartezeit und die letzte Ursache`() {
-        val ohne = stalledMessage(null)
+        val ohne = de(stalledMessage(null))
         assertContains(ohne, "${STALL_TIMEOUT_MS / 1000} Sekunden")
         assertContains(ohne, "Internetverbindung")
 
-        val mit = stalledMessage("keine Verbindung: Unable to resolve host")
+        val mit = de(stalledMessage("keine Verbindung: Unable to resolve host"))
         assertContains(mit, "keine Verbindung")
         assertContains(mit, "${STALL_TIMEOUT_MS / 1000} Sekunden")
+        assertContains(en(stalledMessage(null)), "${STALL_TIMEOUT_MS / 1000} seconds")
 
         // Leere Ursachen sollen nicht als „()" durchschlagen.
-        assertEquals(ohne, stalledMessage("   "))
+        assertEquals(ohne, de(stalledMessage("   ")))
     }
 
     // ------------------------------------------------------------- Style-URL

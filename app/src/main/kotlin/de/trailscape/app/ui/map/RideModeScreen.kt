@@ -38,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,12 +52,12 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.core.LiveSensorAnzeige
-import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
@@ -262,29 +263,30 @@ internal fun RideModeScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.Center,
                 ) {
+                    val formats = LocalAppFormats.current
                     BigValue(
-                        value = speedKmh?.let { formatOneDecimalDe(it) } ?: "–",
+                        value = speedKmh?.let { formats.decimal(it, 1) } ?: "–",
                         label = "km/h",
                         size = SpeedValueSize,
                         spoken = speedKmh
-                            ?.let { "Tempo ${formatOneDecimalDe(it)} Kilometer pro Stunde" }
-                            ?: "Tempo unbekannt",
+                            ?.let { stringResource(R.string.map_ride_speed_cd, formats.decimal(it, 1)) }
+                            ?: stringResource(R.string.map_ride_speed_unknown_cd),
                     )
                     Spacer(Modifier.height(CardGap))
                     Row(modifier = Modifier.fillMaxWidth()) {
                         BigValue(
                             modifier = Modifier.weight(1f),
-                            value = formatKmDe(distanceKm),
-                            label = "km gefahren",
+                            value = formats.km(distanceKm),
+                            label = stringResource(R.string.map_ride_distance_label),
                             size = SecondaryValueSize,
-                            spoken = "Distanz ${formatKmDe(distanceKm)} Kilometer",
+                            spoken = stringResource(R.string.map_ride_distance_cd, formats.km(distanceKm)),
                         )
                         BigValue(
                             modifier = Modifier.weight(1f),
                             value = formatDuration(elapsedS),
-                            label = "Fahrzeit",
+                            label = stringResource(R.string.map_ride_time_label),
                             size = SecondaryValueSize,
-                            spoken = "Fahrzeit ${formatDuration(elapsedS)}",
+                            spoken = stringResource(R.string.map_ride_time_cd, formatDuration(elapsedS)),
                         )
                     }
                     // Feste Stelle der Sensorzeile (siehe Klassendoc): nach
@@ -299,9 +301,9 @@ internal fun RideModeScreen(
                     Spacer(Modifier.height(CardGap))
                     BigValue(
                         value = "${ascentM.roundToInt()}",
-                        label = "Höhenmeter ↑",
+                        label = stringResource(R.string.map_ride_ascent_label),
                         size = SmallValueSize,
-                        spoken = "${ascentM.roundToInt()} Höhenmeter bergauf",
+                        spoken = stringResource(R.string.map_ride_ascent_cd, ascentM.roundToInt()),
                     )
                 }
 
@@ -310,14 +312,18 @@ internal fun RideModeScreen(
                 Row(modifier = Modifier.fillMaxWidth()) {
                         RideModeAction(
                             modifier = Modifier.weight(1f),
-                            label = if (paused) "Weiter" else "Pause",
+                            label = if (paused) {
+                                stringResource(R.string.map_ride_resume_action)
+                            } else {
+                                stringResource(R.string.map_ride_pause_action)
+                            },
                             // Pause ist folgenlos und wirkt deshalb sofort —
                             // anders als das Beenden daneben, das erst noch
                             // durch die Rueckfrage muss.
                             description = if (paused) {
-                                "Aufzeichnung fortsetzen"
+                                stringResource(R.string.map_ride_resume_cd)
                             } else {
-                                "Aufzeichnung pausieren"
+                                stringResource(R.string.map_ride_pause_cd)
                             },
                             icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
                             container = MaterialTheme.colorScheme.primary,
@@ -331,8 +337,8 @@ internal fun RideModeScreen(
                             onEnd = onStop,
                             modifier = Modifier.weight(1f),
                             minHeight = RideModeActionHeight,
-                            label = "Beenden",
-                            holdHint = "gedrückt halten",
+                            label = stringResource(R.string.map_ride_end_action),
+                            holdHint = stringResource(R.string.map_ride_end_hold_hint),
                             icon = Icons.Filled.Stop,
                             iconSize = RideModeActionIconSize,
                             textStyle = MaterialTheme.typography.headlineSmall,
@@ -401,9 +407,9 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = when {
-                        paused && autoPaused -> "Auto-Pause"
-                        paused -> "Pausiert"
-                        else -> "Aufzeichnung"
+                        paused && autoPaused -> stringResource(R.string.map_ride_status_auto_paused)
+                        paused -> stringResource(R.string.map_ride_status_paused)
+                        else -> stringResource(R.string.map_ride_status_recording)
                     },
                     maxLines = 1,
                     style = MaterialTheme.typography.titleMedium,
@@ -411,14 +417,12 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
             }
         }
         Spacer(Modifier.weight(1f))
+        val showMapCd = stringResource(R.string.map_ride_show_map_cd)
         Surface(
             onClick = onShowMap,
             modifier = Modifier
                 .height(RideModeExitHeight)
-                .semantics {
-                    contentDescription = "Zur Kartenseite des Fahrmodus wechseln, " +
-                        "Aufzeichnung läuft weiter"
-                },
+                .semantics { contentDescription = showMapCd },
             shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -430,7 +434,7 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
                 Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Karte",
+                    text = stringResource(R.string.map_ride_show_map_action),
                     maxLines = 1,
                     style = MaterialTheme.typography.titleMedium,
                 )
@@ -540,13 +544,17 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
     }
     val richtung = navigation.naechsteKurve
     val abstandM = navigation.naechsteKurveM
-    val spoken = (
-        if (richtung != null && abstandM != null) {
-            "Nächste Kurve: ${turnAnsageText(richtung, abstandM, LocalCoreTexts.current)}"
-        } else {
-            "Keine Kurve in Sicht, dem Routenverlauf folgen."
-        }
-        ) + " Noch ${formatKmDe(navigation.remainingKm)} Kilometer auf ${navigation.label}."
+    val remainingKm = LocalAppFormats.current.km(navigation.remainingKm)
+    val spoken = if (richtung != null && abstandM != null) {
+        stringResource(
+            R.string.map_ride_nav_turn_cd,
+            turnAnsageText(richtung, abstandM, LocalCoreTexts.current),
+            remainingKm,
+            navigation.label,
+        )
+    } else {
+        stringResource(R.string.map_ride_nav_no_turn_cd, remainingKm, navigation.label)
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -566,9 +574,9 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
                 Column {
                     Text(
                         text = if (richtung != null && abstandM != null) {
-                            kurveAbstandKurzText(abstandM)
+                            kurveAbstandKurzText(abstandM).asString()
                         } else {
-                            "Geradeaus"
+                            stringResource(R.string.map_nav_straight_label)
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -577,7 +585,11 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = if (richtung != null) kurveAnzeigeWort(richtung) else "dem Weg folgen",
+                        text = if (richtung != null) {
+                            kurveAnzeigeWort(richtung).asString()
+                        } else {
+                            stringResource(R.string.map_nav_follow_label)
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleLarge,
@@ -595,7 +607,11 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
 @Composable
 private fun RemainingLine(navigation: RideModeNavigation) {
     Text(
-        text = "${formatKmDe(navigation.remainingKm)} km übrig · ${navigation.label}",
+        text = stringResource(
+            R.string.map_ride_nav_remaining_line,
+            LocalAppFormats.current.km(navigation.remainingKm),
+            navigation.label,
+        ),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.titleMedium,
@@ -612,20 +628,22 @@ private fun RemainingLine(navigation: RideModeNavigation) {
  */
 @Composable
 private fun OffRouteWarning(navigation: RideModeNavigation) {
+    val spoken = stringResource(
+        R.string.map_ride_nav_off_route_cd,
+        LocalAppFormats.current.km(navigation.remainingKm),
+        navigation.label,
+    )
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clearAndSetSemantics {
-                contentDescription = "Abseits der Route. Noch ${formatKmDe(navigation.remainingKm)} " +
-                    "Kilometer auf ${navigation.label}."
-            },
+            .clearAndSetSemantics { contentDescription = spoken },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(
-                text = "Abseits der Route",
+                text = stringResource(R.string.map_nav_off_route_title),
                 fontSize = SmallValueSize,
                 lineHeight = SmallValueSize * 1.1f,
                 fontWeight = FontWeight.Bold,
