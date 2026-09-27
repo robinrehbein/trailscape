@@ -1,12 +1,7 @@
 package de.trailscape.app.ui.more
 
-import android.app.Application
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import de.trailscape.app.R
 import de.trailscape.app.i18n.UiText
-import de.trailscape.app.i18n.localizedFor
-import de.trailscape.app.testing.TestLocales
 import de.trailscape.core.HealthAvailability
 import de.trailscape.core.HealthConnection
 import de.trailscape.core.ReminderSettings
@@ -15,7 +10,6 @@ import de.trailscape.core.SyncConfig
 import de.trailscape.core.SyncResult
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.defaultSetupMassKg
-import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.AppLanguage.DE
 import de.trailscape.core.i18n.AppLanguage.EN
 import de.trailscape.core.i18n.formatDateFull
@@ -23,226 +17,210 @@ import de.trailscape.core.i18n.formatDateShort
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 /**
  * Statuszeilen der Einstellungsliste, die zusammengesetzten Meldungen der
- * Einstellungsseiten und die Sofort-Speicherung des Profils.
+ * Einstellungsseiten und die Sofort-Speicherung des Profils — als reiner
+ * JVM-Test (docs/i18n.md, D).
  *
- * Die Formulierungslogik liefert [UiText]; aufgeloest wird hier gegen die
- * echten Ressourcen (Robolectric) — die deutschen Erwartungen sind dieselben
- * wie vor dem Umzug in `strings_more.xml`, die englischen kommen dazu.
+ * Die Formulierungslogik liefert [UiText]; hier wird verglichen, welche
+ * Ressource mit welchen Argumenten herauskommt. Zahlen- und Datumsformat
+ * stehen schon in den Argumenten fest und sind deshalb je Sprache pruefbar.
+ * Die fertigen Saetze gegen die echten Ressourcen prueft
+ * [SettingsStatusResourcesTest].
  */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class, qualifiers = TestLocales.DE)
 class SettingsStatusTest {
 
     private val today = LocalDate.of(2026, 9, 25)
 
-    private fun UiText.de(): String = resolve(context(DE))
-    private fun UiText.en(): String = resolve(context(EN))
-    private fun List<UiText>.de(): String = joinToString(" · ") { it.de() }
-    private fun List<UiText>.en(): String = joinToString(" · ") { it.en() }
-
-    private fun context(language: AppLanguage): Context =
-        ApplicationProvider.getApplicationContext<Application>().localizedFor(language)
+    private fun res(id: Int, vararg args: Any) = UiText.Res(id, args.toList())
 
     @Test
     fun profilStatusNenntAlterGewichtUndRad() {
         val profile = TrainingProfile(ageYears = 40, weightKg = 75.0, setupMassKg = 11.0)
-        assertEquals("40 J · 75 kg · Rad 11 kg", profileStatusText(profile, confirmed = true, DE).de())
-        assertEquals("Noch nicht eingetragen", profileStatusText(profile, confirmed = false, DE).de())
+        assertEquals(res(R.string.more_status_profile, 40, "75", "11"), profileStatusText(profile, true, DE))
+        assertEquals(res(R.string.more_status_profile_missing), profileStatusText(profile, false, DE))
+        // Das Dezimalzeichen folgt der Sprache.
         assertEquals(
-            "40 J · 72,5 kg · Rad 11 kg",
-            profileStatusText(profile.copy(weightKg = 72.5), confirmed = true, DE).de(),
+            res(R.string.more_status_profile, 40, "72,5", "11"),
+            profileStatusText(profile.copy(weightKg = 72.5), true, DE),
         )
-    }
-
-    @Test
-    fun profilStatusEnglisch() {
-        val profile = TrainingProfile(ageYears = 40, weightKg = 72.5, setupMassKg = 11.0)
-        assertEquals("Age 40 · 72.5 kg · bike 11 kg", profileStatusText(profile, confirmed = true, EN).en())
-        assertEquals("Not entered yet", profileStatusText(profile, confirmed = false, EN).en())
+        assertEquals(
+            res(R.string.more_status_profile, 40, "72.5", "11"),
+            profileStatusText(profile.copy(weightKg = 72.5), true, EN),
+        )
     }
 
     @Test
     fun gesundheitsStatusZeigtLetztenImport() {
         val ready = HealthConnection(HealthAvailability.VERFUEGBAR, hasPermissions = true)
         assertEquals(
-            "Verbunden · zuletzt 6:12",
-            healthStatusText(ready, LocalDateTime.of(today, LocalTime.of(6, 12)), DE, today).de(),
+            res(R.string.more_status_health_connected_last, "6:12"),
+            healthStatusText(ready, LocalDateTime.of(today, LocalTime.of(6, 12)), DE, today),
         )
         assertEquals(
-            "Verbunden · zuletzt gestern",
-            healthStatusText(ready, LocalDateTime.of(today.minusDays(1), LocalTime.NOON), DE, today).de(),
-        )
-        assertEquals("Verbunden", healthStatusText(ready, null, DE, today).de())
-        assertEquals(
-            "Nicht verbunden",
-            healthStatusText(HealthConnection(HealthAvailability.VERFUEGBAR, false), null, DE, today).de(),
+            res(R.string.more_status_health_connected_last, res(R.string.more_status_yesterday)),
+            healthStatusText(ready, LocalDateTime.of(today.minusDays(1), LocalTime.NOON), DE, today),
         )
         assertEquals(
-            "Nicht installiert",
-            healthStatusText(HealthConnection(HealthAvailability.NICHT_INSTALLIERT, false), null, DE, today).de(),
-        )
-    }
-
-    @Test
-    fun gesundheitsStatusEnglisch() {
-        val ready = HealthConnection(HealthAvailability.VERFUEGBAR, hasPermissions = true)
-        assertEquals(
-            "Connected · updated 6:12",
-            healthStatusText(ready, LocalDateTime.of(today, LocalTime.of(6, 12)), EN, today).en(),
+            res(R.string.more_status_health_connected_last, "12.9."),
+            healthStatusText(ready, LocalDateTime.of(2026, 9, 12, 8, 0), DE, today),
         )
         assertEquals(
-            "Connected · updated yesterday",
-            healthStatusText(ready, LocalDateTime.of(today.minusDays(1), LocalTime.NOON), EN, today).en(),
+            res(R.string.more_status_health_connected_last, formatDateShort(LocalDate.of(2026, 9, 12), EN)),
+            healthStatusText(ready, LocalDateTime.of(2026, 9, 12, 8, 0), EN, today),
+        )
+        assertEquals(res(R.string.more_status_health_connected), healthStatusText(ready, null, DE, today))
+        assertEquals(res(R.string.more_status_checking), healthStatusText(null, null, DE, today))
+        assertEquals(
+            res(R.string.more_status_health_not_connected),
+            healthStatusText(HealthConnection(HealthAvailability.VERFUEGBAR, false), null, DE, today),
         )
         assertEquals(
-            "Connected · updated ${formatDateShort(LocalDate.of(2026, 9, 12), EN)}",
-            healthStatusText(ready, LocalDateTime.of(2026, 9, 12, 8, 0), EN, today).en(),
+            res(R.string.more_status_health_not_installed),
+            healthStatusText(HealthConnection(HealthAvailability.NICHT_INSTALLIERT, false), null, DE, today),
         )
-        assertEquals("Checking…", healthStatusText(null, null, EN, today).en())
         assertEquals(
-            "Update needed",
-            healthStatusText(HealthConnection(HealthAvailability.UPDATE_NOETIG, false), null, EN, today).en(),
+            res(R.string.more_status_health_update_needed),
+            healthStatusText(HealthConnection(HealthAvailability.UPDATE_NOETIG, false), null, DE, today),
         )
     }
 
     @Test
     fun erinnerungsStatus() {
-        assertEquals("Aus", reminderStatusText(ReminderSettings()).de())
+        assertEquals(listOf(res(R.string.more_status_reminder_off)), reminderStatusText(ReminderSettings()))
         assertEquals(
-            "Tagesplan um 7:00",
-            reminderStatusText(ReminderSettings(dailySessionEnabled = true)).de(),
-        )
-        assertEquals(
-            "Wochenrückblick · Anstupser",
-            reminderStatusText(ReminderSettings(weeklyReviewEnabled = true, nudgeEnabled = true)).de(),
-        )
-    }
-
-    @Test
-    fun erinnerungsStatusEnglisch() {
-        assertEquals("Off", reminderStatusText(ReminderSettings()).en())
-        assertEquals(
-            "Daily plan at 7:00 · Weekly review · Nudges",
+            listOf(
+                res(R.string.more_status_reminder_daily, "7:00"),
+                res(R.string.more_status_reminder_weekly),
+                res(R.string.more_status_reminder_nudge),
+            ),
             reminderStatusText(
                 ReminderSettings(dailySessionEnabled = true, weeklyReviewEnabled = true, nudgeEnabled = true),
-            ).en(),
+            ),
         )
     }
 
     @Test
     fun aufzeichnungsStatus() {
-        assertEquals("Auto-Pause an · Ansagen aus", recordingStatusText(autoPause = true, voice = false).de())
         assertEquals(
-            "Auto-pause on · voice prompts off",
-            recordingStatusText(autoPause = true, voice = false).en(),
+            res(R.string.more_status_recording, res(R.string.more_status_on), res(R.string.more_status_off)),
+            recordingStatusText(autoPause = true, voice = false),
         )
     }
 
     @Test
     fun offlineStatus() {
-        assertEquals("Nichts gespeichert", offlineStatusText(0, 0, 0L, DE).de())
-        assertEquals("2 Regionen · 184,0 MB", offlineStatusText(2, 0, 184L * 1024 * 1024, DE).de())
-        assertEquals("1 Region · 1 Routing-Kachel", offlineStatusText(1, 1, 0L, DE).de())
-        assertEquals("Wird geprüft …", offlineStatusText(null, null, 0L, DE).de())
-    }
-
-    @Test
-    fun offlineStatusEnglisch() {
-        assertEquals("Nothing saved", offlineStatusText(0, 0, 0L, EN).en())
-        assertEquals("2 regions · 184.0 MB", offlineStatusText(2, 0, 184L * 1024 * 1024, EN).en())
-        assertEquals("1 region · 3 routing tiles", offlineStatusText(1, 3, 0L, EN).en())
+        assertEquals(listOf(res(R.string.more_status_checking)), offlineStatusText(null, null, 0L, DE))
+        assertEquals(listOf(res(R.string.more_status_offline_empty)), offlineStatusText(0, 0, 0L, DE))
+        assertEquals(
+            listOf(UiText.Plural(R.plurals.more_status_offline_regions_count, 2), UiText.Plain("184,0 MB")),
+            offlineStatusText(2, 0, 184L * 1024 * 1024, DE),
+        )
+        assertEquals(
+            listOf(UiText.Plural(R.plurals.more_status_offline_regions_count, 2), UiText.Plain("184.0 MB")),
+            offlineStatusText(2, 0, 184L * 1024 * 1024, EN),
+        )
+        assertEquals(
+            listOf(
+                UiText.Plural(R.plurals.more_status_offline_regions_count, 1),
+                UiText.Plural(R.plurals.more_status_offline_tiles_count, 3),
+            ),
+            offlineStatusText(1, 3, 0L, EN),
+        )
     }
 
     @Test
     fun backupStatus() {
         assertNull(backupStatusText(null, DE, today))
         assertEquals(
-            "Zuletzt: 12.9.",
-            backupStatusText(LocalDateTime.of(2026, 9, 12, 20, 0), DE, today)?.de(),
+            res(R.string.more_status_backup_last, res(R.string.more_status_today)),
+            backupStatusText(LocalDateTime.of(today, LocalTime.NOON), EN, today),
         )
         assertEquals(
-            "Zuletzt: 3.1.2025",
-            backupStatusText(LocalDateTime.of(2025, 1, 3, 20, 0), DE, today)?.de(),
+            res(R.string.more_status_backup_last, "12.9."),
+            backupStatusText(LocalDateTime.of(2026, 9, 12, 20, 0), DE, today),
         )
-        assertEquals("Noch nie gesichert", BACKUP_NEVER_TEXT.de())
-    }
-
-    @Test
-    fun backupStatusEnglisch() {
-        assertEquals("Last: today", backupStatusText(LocalDateTime.of(today, LocalTime.NOON), EN, today)?.en())
+        assertEquals(
+            res(R.string.more_status_backup_last, "3.1.2025"),
+            backupStatusText(LocalDateTime.of(2025, 1, 3, 20, 0), DE, today),
+        )
         // Die englischen Muster kommen aus `:core` (DateFormats, dort getestet).
         assertEquals(
-            "Last: ${formatDateShort(LocalDate.of(2026, 9, 12), EN)}",
-            backupStatusText(LocalDateTime.of(2026, 9, 12, 20, 0), EN, today)?.en(),
+            res(R.string.more_status_backup_last, formatDateShort(LocalDate.of(2026, 9, 12), EN)),
+            backupStatusText(LocalDateTime.of(2026, 9, 12, 20, 0), EN, today),
         )
         assertEquals(
-            "Last: ${formatDateFull(LocalDate.of(2025, 1, 3), EN)}",
-            backupStatusText(LocalDateTime.of(2025, 1, 3, 20, 0), EN, today)?.en(),
+            res(R.string.more_status_backup_last, formatDateFull(LocalDate.of(2025, 1, 3), EN)),
+            backupStatusText(LocalDateTime.of(2025, 1, 3, 20, 0), EN, today),
         )
-        assertEquals("Never backed up", BACKUP_NEVER_TEXT.en())
+        assertEquals(res(R.string.more_status_backup_never), BACKUP_NEVER_TEXT)
     }
 
     @Test
     fun syncStatus() {
-        assertEquals("Aus", syncStatusText(null).de())
+        assertEquals(res(R.string.more_status_sync_off), syncStatusText(null))
         assertEquals(
-            "Eingerichtet · sync.example.org",
-            syncStatusText(SyncConfig(url = "https://sync.example.org/api", token = "x")).de(),
+            res(R.string.more_status_sync_configured_host, "sync.example.org"),
+            syncStatusText(SyncConfig(url = "https://sync.example.org/api", token = "x")),
         )
         assertEquals(
-            "Set up · sync.example.org",
-            syncStatusText(SyncConfig(url = "https://sync.example.org/api", token = "x")).en(),
+            res(R.string.more_status_sync_configured),
+            syncStatusText(SyncConfig(url = "kein host", token = "x")),
         )
     }
 
     @Test
     fun syncErgebnisNenntNurWasPassiertIst() {
+        val join = R.string.more_sync_result_join
         assertEquals(
-            "3 hochgeladen, 2 geladen, 42 Touren",
-            syncResultText(SyncResult(pushed = 3, pulled = 2, total = 42)).de(),
+            res(
+                join,
+                res(join, res(R.string.more_sync_result_pushed, 3), res(R.string.more_sync_result_pulled, 2)),
+                UiText.Plural(R.plurals.more_sync_result_total_count, 42),
+            ),
+            syncResultText(SyncResult(pushed = 3, pulled = 2, total = 42)),
         )
         assertEquals(
-            "0 hochgeladen, 2 geladen (davon 1 aktualisiert), 3 gelöscht, 1 Tour",
-            syncResultText(SyncResult(pushed = 0, pulled = 2, total = 1, updated = 1, deletedLocal = 1, deletedRemote = 2))
-                .de(),
+            res(
+                join,
+                res(
+                    join,
+                    res(join, res(R.string.more_sync_result_pushed, 0), res(R.string.more_sync_result_pulled_updated, 2, 1)),
+                    res(R.string.more_sync_result_deleted, 3),
+                ),
+                UiText.Plural(R.plurals.more_sync_result_total_count, 1),
+            ),
+            syncResultText(SyncResult(pushed = 0, pulled = 2, total = 1, updated = 1, deletedLocal = 1, deletedRemote = 2)),
         )
-        assertEquals(
-            "3 uploaded, 2 downloaded (1 of them updated), 1 deleted, 42 rides",
-            syncResultText(SyncResult(pushed = 3, pulled = 2, total = 42, updated = 1, deletedRemote = 1)).en(),
-        )
-        assertEquals("0 uploaded, 0 downloaded, 1 ride", syncResultText(SyncResult(0, 0, 1)).en())
     }
 
     @Test
     fun backupImportMeldung() {
-        assertEquals("3 Touren importiert", backupImportMessage(3, 0, profileRestored = false).de())
         assertEquals(
-            "1 Tour importiert, 2 übersprungen · Profil übernommen",
-            backupImportMessage(1, 2, profileRestored = true).de(),
+            UiText.Plural(R.plurals.more_backup_imported_count, 3),
+            backupImportMessage(3, 0, profileRestored = false),
         )
-        assertEquals("1 ride imported", backupImportMessage(1, 0, profileRestored = false).en())
         assertEquals(
-            "3 rides imported, 2 skipped · profile restored",
-            backupImportMessage(3, 2, profileRestored = true).en(),
+            res(
+                R.string.more_backup_imported_with_profile,
+                UiText.Plural(R.plurals.more_backup_imported_skipped_count, 1, listOf(1, 2)),
+            ),
+            backupImportMessage(1, 2, profileRestored = true),
         )
     }
 
     @Test
-    fun profilFehlerInBeidenSprachen() {
-        val error = assertNotNull(profileFieldError(ProfileField.FTP, "50", confirmed = true))
-        assertEquals(UiText.Res(R.string.more_profile_ftp_range_error, listOf("100", "400")), error)
-        assertEquals("Zwischen 100 und 400 Watt.", error.de())
-        assertEquals("Between 100 and 400 watts.", error.en())
+    fun profilFehlerNenntDenBereich() {
+        assertEquals(
+            res(R.string.more_profile_ftp_range_error, "100", "400"),
+            profileFieldError(ProfileField.FTP, "50", confirmed = true),
+        )
+        assertNull(profileFieldError(ProfileField.FTP, "250", confirmed = true))
     }
 
     @Test

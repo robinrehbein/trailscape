@@ -494,24 +494,16 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
                 )
             },
             text = {
-                // Zwei Saetze, je ein Schluessel: Groesse, dann der Netzweg.
-                val size = stringResource(
-                    if (pendingIsUpdate) {
-                        R.string.more_offline_routing_offer_update_body
-                    } else {
-                        R.string.more_offline_routing_offer_download_body
-                    },
-                    offer.title,
-                    sizeText(offer.totalBytes),
-                )
-                val network = stringResource(
-                    if (unmeteredOnly) {
-                        R.string.more_offline_routing_offer_wifi_body
-                    } else {
-                        R.string.more_offline_routing_offer_mobile_body
-                    },
-                )
-                Text("$size $network")
+                // Ein Schluessel je Fall (Laden/Aktualisieren × WLAN/Mobilfunk):
+                // Groesse und Netzweg stehen zusammen im uebersetzten Text,
+                // nicht als zwei im Code verbundene Saetze (docs/i18n.md, C).
+                val body = when {
+                    pendingIsUpdate && unmeteredOnly -> R.string.more_offline_routing_offer_update_wifi_body
+                    pendingIsUpdate -> R.string.more_offline_routing_offer_update_mobile_body
+                    unmeteredOnly -> R.string.more_offline_routing_offer_download_wifi_body
+                    else -> R.string.more_offline_routing_offer_download_mobile_body
+                }
+                Text(stringResource(body, offer.title, sizeText(offer.totalBytes)))
             },
             confirmButton = {
                 TextButton(

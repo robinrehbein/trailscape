@@ -222,7 +222,7 @@
 
     <!-- OfflineMapsCard.kt -->
     <string name="more_offline_maps_list_error">The saved offline maps couldn’t be listed. Restart the app; if that doesn’t help, open the map, which opens the map storage itself.</string>
-    <string name="more_offline_maps_hint">So you can see something offline. Download new areas on the map.</string>
+    <string name="more_offline_maps_hint">Lets you see the map without a connection. Download new areas on the map.</string>
     <string name="more_offline_maps_loading">Loading…</string>
     <string name="more_offline_maps_empty">No offline maps saved.</string>
     <string name="more_offline_maps_delete_all_action">Delete all</string>
@@ -247,7 +247,7 @@
     <string name="more_offline_routing_no_place_error">No place found. Try just the place name, without street or postcode — the tiles are 5° × 5° anyway.</string>
     <string name="more_offline_routing_no_location_error">Location not available. Is location turned on?</string>
     <string name="more_offline_routing_permission_error">Without location access we don’t know which tile you need. Use the place search below — or grant access under “Settings → Apps → Trailscape → Permissions”.</string>
-    <string name="more_offline_routing_hint">So routes are calculated offline on your device — not the map imagery.</string>
+    <string name="more_offline_routing_hint">For calculating routes offline on your device — this isn’t the map imagery.</string>
     <string name="more_offline_routing_loading">Loading…</string>
     <string name="more_offline_routing_empty">None saved — until then, the server calculates routes.</string>
     <!-- %1$s = Speicherplatz -->
@@ -268,12 +268,12 @@
     <string name="more_offline_routing_busy_status">One moment…</string>
     <string name="more_offline_routing_update_confirm_title">Update routing data</string>
     <string name="more_offline_routing_download_confirm_title">Download routing data</string>
-    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse im schlechtesten Fall -->
-    <string name="more_offline_routing_offer_update_body">%1$s — usually just one or two MB, at most %2$s.</string>
-    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse -->
-    <string name="more_offline_routing_offer_download_body">%1$s — %2$s.</string>
-    <string name="more_offline_routing_offer_wifi_body">The download starts as soon as Wi-Fi is available.</string>
-    <string name="more_offline_routing_offer_mobile_body">The download also runs over mobile data.</string>
+    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse im schlechtesten Fall; ein Satz zur Groesse, einer zum Netzweg -->
+    <string name="more_offline_routing_offer_update_wifi_body">%1$s — usually just one or two MB, at most %2$s. The download starts as soon as Wi-Fi is available.</string>
+    <string name="more_offline_routing_offer_update_mobile_body">%1$s — usually just one or two MB, at most %2$s. The download also runs over mobile data.</string>
+    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse; ein Satz zur Groesse, einer zum Netzweg -->
+    <string name="more_offline_routing_offer_download_wifi_body">%1$s — %2$s. The download starts as soon as Wi-Fi is available.</string>
+    <string name="more_offline_routing_offer_download_mobile_body">%1$s — %2$s. The download also runs over mobile data.</string>
     <string name="more_offline_routing_download_action">Download</string>
     <string name="more_offline_routing_delete_confirm_title">Delete routing data</string>
     <!-- %1$s = Name der Kachel, %2$s = Groesse -->
@@ -313,10 +313,10 @@
     <string name="more_profile_advanced_hint">Without your own values, we estimate max HR and threshold from your age.</string>
     <string name="more_profile_hr_max_learn_more">The estimate is 208 − 0.7 × age. A max HR field test is more accurate: after a good warm-up, a hard 3–5 minute climb with an all-out finish.</string>
     <string name="more_profile_hr_max_label">Max HR (bpm, optional)</string>
-    <string name="more_profile_lthr_label">Threshold heart rate LTHR (bpm, optional)</string>
+    <string name="more_profile_lthr_label">Threshold heart rate (LTHR, bpm, optional)</string>
     <string name="more_profile_resting_hr_label">Resting heart rate (bpm, optional)</string>
     <string name="more_profile_resting_hr_hint">Empty: the value measured from your vitals.</string>
-    <string name="more_profile_ftp_label">Threshold power FTP (watts, optional)</string>
+    <string name="more_profile_ftp_label">Threshold power (FTP, watts, optional)</string>
     <string name="more_profile_ftp_hint">The single most effective value: every training load depends on your FTP.</string>
     <!-- %1$s = grobe Schaetzung in W/kg -->
     <string name="more_profile_ftp_learn_more">FTP is the power you can hold for about an hour. Fitness, fatigue, form and your weekly target all depend on it — change it and all previous values shift too. Without an entry, we estimate it from your best 20-minute effort (× 0.95), then from your heart rate, and as a last resort roughly at %1$s W/kg. For a reliable number, ride 20 minutes flat out after a good warm-up and enter 95%% of your average power.</string>
@@ -425,7 +425,7 @@
     <string name="more_health_gateway_subject_hrv">Heart rate variability</string>
 
     <!-- CrashReportPrompt.kt -->
-    <string name="more_crash_title">Crash last time</string>
+    <string name="more_crash_title">Trailscape crashed last time</string>
     <string name="more_crash_intro">Trailscape crashed last time. View the report and send it on GitHub? The report was only saved on this device and hasn’t been sent anywhere — it contains no location, ride or health data.</string>
     <string name="more_crash_discarded_status">Crash report deleted.</string>
 
@@ -436,7 +436,7 @@
     <string name="more_report_diag_clear_action">Delete diagnostic log</string>
     <string name="more_report_health_attach_label">Attach Health sync diagnostics</string>
     <string name="more_report_diag_attach_label">Attach technical diagnostics</string>
-    <string name="more_report_diag_explanation">Contains fixed event names (e.g. “GPS-Start fehlgeschlagen”), times, counters, error codes and the names of error classes from the last few days. Not included: locations, rides and their names, health values, server addresses or credentials.</string>
+    <string name="more_report_diag_explanation">Contains fixed event names (in German, e.g. “GPS-Start fehlgeschlagen”), times, counters, error codes and the names of error classes from the last few days. Not included: locations, rides and their names, health values, server addresses or credentials.</string>
 
     <!-- ReportDialog.kt -->
     <string name="more_report_show_action">Show report</string>

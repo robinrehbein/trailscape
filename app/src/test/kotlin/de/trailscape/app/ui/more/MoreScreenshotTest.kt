@@ -146,6 +146,9 @@ class MoreScreenshotTest {
     @Test
     @Config(qualifiers = "+en-rGB")
     fun updateHinweisEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        // Ein Literal dazu: `getString` allein bestuende auch in stillem Deutsch.
+        assertEquals("Download", context.getString(R.string.more_update_card_download_action))
         compose.setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {

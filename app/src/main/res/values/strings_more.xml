@@ -268,12 +268,12 @@
     <string name="more_offline_routing_busy_status">Einen Moment …</string>
     <string name="more_offline_routing_update_confirm_title">Routingdaten aktualisieren</string>
     <string name="more_offline_routing_download_confirm_title">Routingdaten laden</string>
-    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse im schlechtesten Fall -->
-    <string name="more_offline_routing_offer_update_body">%1$s — meist nur ein bis zwei MB, im schlechtesten Fall %2$s.</string>
-    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse -->
-    <string name="more_offline_routing_offer_download_body">%1$s — %2$s.</string>
-    <string name="more_offline_routing_offer_wifi_body">Der Download startet, sobald WLAN da ist.</string>
-    <string name="more_offline_routing_offer_mobile_body">Der Download läuft auch über Mobilfunk.</string>
+    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse im schlechtesten Fall; ein Satz zur Groesse, einer zum Netzweg -->
+    <string name="more_offline_routing_offer_update_wifi_body">%1$s — meist nur ein bis zwei MB, im schlechtesten Fall %2$s. Der Download startet, sobald WLAN da ist.</string>
+    <string name="more_offline_routing_offer_update_mobile_body">%1$s — meist nur ein bis zwei MB, im schlechtesten Fall %2$s. Der Download läuft auch über Mobilfunk.</string>
+    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse; ein Satz zur Groesse, einer zum Netzweg -->
+    <string name="more_offline_routing_offer_download_wifi_body">%1$s — %2$s. Der Download startet, sobald WLAN da ist.</string>
+    <string name="more_offline_routing_offer_download_mobile_body">%1$s — %2$s. Der Download läuft auch über Mobilfunk.</string>
     <string name="more_offline_routing_download_action">Laden</string>
     <string name="more_offline_routing_delete_confirm_title">Routingdaten löschen</string>
     <!-- %1$s = Name der Kachel, %2$s = Groesse -->
