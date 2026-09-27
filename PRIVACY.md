@@ -62,7 +62,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
 | Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
-| Zum Teilen erzeugte GPX-Dateien | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
+| Zum Teilen erzeugte GPX-Dateien und Tour-Bilder | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
 
 Gesundheitsdaten aus Health Connect (Puls, Ruhepuls, HRV, Schlaf, VO₂max)
 werden für die Auswertung verwendet und, soweit sie zu einer Tour gehören,
@@ -275,7 +275,11 @@ Anfrage an jemanden:
 
 - **Auskunft und Datenübertragbarkeit** — *Mehr → Daten & Backup → Backup
   exportieren* schreibt alle Touren und das Trainingsprofil in eine lesbare
-  JSON-Datei. Einzelne Touren lassen sich zusätzlich als GPX teilen.
+  JSON-Datei. Einzelne Touren lassen sich zusätzlich als GPX oder als Bild
+  teilen. Ein Tour-Bild entsteht vollständig auf dem Gerät; es zeigt die Form
+  der Strecke ohne Karte, aber wer die Gegend kennt, kann Start und Ziel
+  erkennen. Weitergegeben wird es nur über das Teilen-Menü an die App, die du
+  auswählst.
 - **Löschung** — einzelne Touren in der Tourenliste löschen; alles auf einmal
   über die Android-Einstellungen (*Apps → Trailscape → Speicher → Daten
   löschen*) oder durch Deinstallation der App. Damit sind auch der letzte

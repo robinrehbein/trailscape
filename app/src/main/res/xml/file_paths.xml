@@ -4,12 +4,13 @@
     "${applicationId}.fileprovider").
 
     Bewusst NUR ein Unterverzeichnis des Caches: Geteilt werden ausschliesslich
-    frisch erzeugte Export-Dateien (GPX einer Tour, spaeter Backup-JSON). Das
+    frisch erzeugte Export-Dateien (GPX einer Tour, das Tour-Bild als PNG,
+    spaeter Backup-JSON). Das
     eigentliche Tour-Verzeichnis (<filesDir>/rides) bleibt aussen vor — es soll
     nie ueber einen Content-Uri erreichbar sein.
 
     "path" ist ein Praefix relativ zu getCacheDir(); der Name muss zu dem
-    Verzeichnis passen, in das RidesScreen.kt schreibt (SHARE_DIR_NAME).
+    Verzeichnis passen, das ui/ShareFiles.kt vorgibt (SHARE_DIR_NAME).
 -->
 <paths>
     <cache-path

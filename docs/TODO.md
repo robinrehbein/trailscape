@@ -22,3 +22,11 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   damit Trainer, Vereine und Foren Pläne ohne Plattform und ohne Konto
   tauschen können. Baut auf dem vorhandenen formatstabilen JSON
   (`core/.../JsonSupport.kt`) und dem Datei-Ein-/Ausgang der Backup-Karte auf.
+- **Tour-Bild auch vom Tourblatt der Karte teilen** — das Karten-Tourblatt
+  (`ui/map/MapPanels.kt`, `shareRoute` in `MapScreen.kt`) teilt heute nur GPX.
+  Der Dialog `ui/rides/ShareRideDialog.kt` liesse sich dort wiederverwenden;
+  beim Tour-Bild bewusst ausgelassen, um `MapScreen.kt` nicht anzufassen.
+- **Start und Ziel im Tour-Bild ausblenden** — die ersten und letzten ~300 m
+  der Spur kappen (optional), damit ein geteiltes Bild die Haustuer nicht
+  verraet. Heute sagt nur ein Hinweis im Teilen-Dialog, dass man Start und
+  Ziel erkennen kann.

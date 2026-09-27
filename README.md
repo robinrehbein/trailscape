@@ -48,7 +48,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
   Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben
-- Umbenennen, Löschen, als GPX teilen, GPX importieren (z. B. aus Komoot oder
+- Umbenennen, Löschen, als GPX oder als Bild teilen (Story 9:16 oder Quadrat,
+  mit Spur, Höhenprofil und Kennzahlen), GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
   wieder importieren
