@@ -81,6 +81,12 @@ class RecButtonStateTest {
     }
 
     @Test
+    fun `12 35 rundet wie die uebrigen Kilometerzahlen auf 12 4`() {
+        assertEquals("12,4 km", recRouteLabel(12.35, AppLanguage.DE))
+        assertEquals("12.4 km", recRouteLabel(12.35, AppLanguage.EN))
+    }
+
+    @Test
     fun `englisch mit Dezimalpunkt und derselben Rundung`() {
         assertEquals("0.0 km", recRouteLabel(0.0, AppLanguage.EN))
         assertEquals("44.8 km", recRouteLabel(44.75, AppLanguage.EN))

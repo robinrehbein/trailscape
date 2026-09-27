@@ -25,8 +25,22 @@ fun formatDecimal(value: Double, digits: Int, language: AppLanguage): String {
     return if (language == AppLanguage.DE) text.replace('.', ',') else text
 }
 
-/** Kilometer mit einer Nachkommastelle, z. B. „42,3" / „42.3" (ohne Einheit). */
-fun formatDistanceKm(km: Double, language: AppLanguage): String = formatDecimal(km, 1, language)
+/**
+ * Kilometer mit einer Nachkommastelle, z. B. „42,3" / „42.3" (ohne Einheit).
+ *
+ * Gerundet wird wie in [de.trailscape.core.formatKm] ueber die Dezimaldarstellung
+ * (`BigDecimal.valueOf`), NICHT ueber den exakten Binaerwert: Sonst zeigte z. B.
+ * 12,35 km an einer Stelle „12,3" und an einer anderen (noch ueber `formatKm`)
+ * „12,4". Alle Kilometerzahlen der App sollen fuer dieselbe Strecke gleich sein.
+ */
+fun formatDistanceKm(km: Double, language: AppLanguage): String {
+    if (!km.isFinite()) return "–"
+    var text = BigDecimal.valueOf(km).setScale(1, RoundingMode.HALF_UP).toPlainString()
+    if (text.startsWith("-") && text.drop(1).all { it == '0' || it == '.' }) {
+        text = text.drop(1)
+    }
+    return if (language == AppLanguage.DE) text.replace('.', ',') else text
+}
 
 /** Ganze Zahl, kaufmaennisch gerundet, ohne Tausendertrennzeichen. */
 fun formatInt(value: Double): String = formatDecimal(value, 0, AppLanguage.EN)

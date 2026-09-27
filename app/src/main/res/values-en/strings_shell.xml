@@ -49,7 +49,7 @@
     <string name="shell_onboarding_sex_unknown">not specified</string>
     <string name="shell_onboarding_age_error">Please enter an age between 10 and 100 years.</string>
     <string name="shell_onboarding_weight_error">Please enter a weight between 30 and 250 kg.</string>
-    <string name="shell_onboarding_health_connect_action">Connect Health Connect</string>
+    <string name="shell_onboarding_health_connect_action">Connect to Health Connect</string>
     <string name="shell_onboarding_health_connected_status">Connected. From now on Trailscape fetches your data automatically.</string>
     <string name="shell_onboarding_health_denied_status">No access granted — you can do this later under Settings → Watch &amp; health data.</string>
 

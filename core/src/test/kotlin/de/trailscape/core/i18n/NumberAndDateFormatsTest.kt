@@ -27,6 +27,16 @@ class NumberAndDateFormatsTest {
     }
 
     @Test
+    fun `Kilometer runden wie formatKm ueber die Dezimaldarstellung`() {
+        // 12.35 und 0.15 liegen binaer knapp unter ,x5 — gerundet wird trotzdem auf.
+        assertEquals("12,4", formatDistanceKm(12.35, AppLanguage.DE))
+        assertEquals("0.2", formatDistanceKm(0.15, AppLanguage.EN))
+        assertEquals(de.trailscape.core.formatKm(12.35), formatDistanceKm(12.35, AppLanguage.EN))
+        assertEquals("0,0", formatDistanceKm(-0.04, AppLanguage.DE))
+        assertEquals("–", formatDistanceKm(Double.NaN, AppLanguage.EN))
+    }
+
+    @Test
     fun `kompakte Zahl ohne ueberfluessige Nachkommastelle`() {
         assertEquals("5", formatCompactDecimal(5.0, AppLanguage.DE))
         assertEquals("4,5", formatCompactDecimal(4.47, AppLanguage.DE))
