@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Englische Fassung von values/strings.xml der Uhr. app_name ist nicht uebersetzbar. -->
+<resources>
+    <string name="notification_channel_name">Recording</string>
+    <string name="notification_channel_description">Active while the watch is recording a ride.</string>
+</resources>

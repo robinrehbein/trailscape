@@ -32,6 +32,7 @@ import de.trailscape.core.VitalsSummary
 import de.trailscape.core.Vo2MaxEstimate
 import de.trailscape.core.WeeklyLoadTarget
 import de.trailscape.core.assessDeload
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.assessHrv
 import de.trailscape.core.assessRestingHeartRate
 import de.trailscape.core.assessSleep
@@ -407,6 +408,7 @@ fun computeInsights(
     now: LocalDateTime = LocalDateTime.now(),
     factsStore: RideLoadFactsStore = InMemoryRideLoadFactsStore(),
     loadRide: (String) -> Ride? = { null },
+    texts: CoreTexts,
 ): TrainingInsights {
     val effective = effectiveProfile(profile, vitals)
     val restingHrSeries = vitals?.restingHeartRate?.series ?: emptyList()
@@ -444,7 +446,7 @@ fun computeInsights(
         } else {
             val full = loadRide(summary.id)
             if (full != null) {
-                val computed = computeRideLoadFacts(full, rideProfile)
+                val computed = computeRideLoadFacts(full, rideProfile, texts)
                 factsStore.put(
                     summary.id,
                     StoredRideLoadFacts(
@@ -455,7 +457,7 @@ fun computeInsights(
                 )
                 computed
             } else {
-                rideLoadFactsFromSummary(summary)
+                rideLoadFactsFromSummary(summary, texts)
             }
         }
         factsById[summary.id] = facts
@@ -469,6 +471,7 @@ fun computeInsights(
         facts = factsById.getValue(summary.id),
         profile = rideProfiles.getValue(summary.id),
         eftpW = eftpW,
+        texts = texts,
     )
 
     // --- Durchgang 1: Profil-FTP. Liefert die Kennzahlen fuer α und FTP.
@@ -551,11 +554,11 @@ fun computeInsights(
     val sleepSeries = vitals?.sleepHours?.series ?: emptyList()
     val hrvSeries = vitals?.heartRateVariability?.series ?: emptyList()
 
-    val restingHr = assessRestingHeartRate(restingHrSeries, today = now)
+    val restingHr = assessRestingHeartRate(restingHrSeries, today = now, texts = texts)
     // Reihenfolge ist verbindlich: HRV- und Schlafampel kennen die
     // Ruhepuls-Ampel (Saettigungsfall bzw. rote Schlafstufe).
-    val hrv = assessHrv(hrvSeries, today = now, restingHrFlag = restingHr.flag)
-    val sleep = assessSleep(sleepSeries, today = now, restingHrFlag = restingHr.flag)
+    val hrv = assessHrv(hrvSeries, today = now, restingHrFlag = restingHr.flag, texts = texts)
+    val sleep = assessSleep(sleepSeries, today = now, restingHrFlag = restingHr.flag, texts = texts)
 
     val tsb = fitness.latest?.tsb
     val readiness = computeReadiness(
@@ -564,6 +567,7 @@ fun computeInsights(
         hrv = hrv,
         tsb = tsb,
         trainingHistoryDays = fitness.historyDays,
+        texts = texts,
     )
     // HIT-Budget: Wie viele harte Tage stecken schon in den letzten 7 Tagen?
     // Vorher blieb `hitBudgetLeft` auf seinem Default `true` — bei
@@ -573,6 +577,7 @@ fun computeInsights(
         readiness = readiness,
         tsb = tsb,
         hitBudgetLeft = hardDaysLast7 < MAX_HARD_DAYS_PER_7D,
+        texts = texts,
     )
 
     val weeklyLoad = sumLastDays(fitness, 7)
@@ -589,6 +594,7 @@ fun computeInsights(
             hrvSeries = hrvSeries,
             fitness = fitness,
             today = now,
+            texts = texts,
         ),
     )
 
@@ -597,6 +603,7 @@ fun computeInsights(
         readinessLast7 = readinessLast7,
         weeklyLoad = if (fitness.points.isEmpty()) null else weeklyLoad,
         fourWeekMeanWeeklyLoad = fourWeekMean,
+        texts = texts,
     )
 
     val latest = fitness.latest
@@ -624,7 +631,7 @@ fun computeInsights(
         recommendation = recommendation,
         deload = deload,
         weeklyTarget = weeklyTarget,
-        vo2max = estimateVo2max(ordered, factsById, effective, vitals),
+        vo2max = estimateVo2max(ordered, factsById, effective, vitals, texts),
         weeklyLoad = weeklyLoad,
         fourWeekMeanWeeklyLoad = fourWeekMean,
     )
@@ -725,6 +732,7 @@ private fun estimateVo2max(
     facts: Map<String, RideLoadFacts>,
     profile: TrainingProfile,
     vitals: VitalsSummary?,
+    texts: CoreTexts,
 ): Vo2MaxEstimate {
     val segments = mutableListOf<SteadySegment>()
     if (vitals?.vo2max == null) {
@@ -747,6 +755,7 @@ private fun estimateVo2max(
         profile = profile,
         segments = segments,
         platformValue = vitals?.vo2max,
+        texts = texts,
     )
 }
 
@@ -758,11 +767,13 @@ private fun estimateVo2max(
 fun emptyTrainingInsights(
     profile: TrainingProfile = defaultTrainingProfile,
     now: LocalDateTime = LocalDateTime.now(),
+    texts: CoreTexts,
 ): TrainingInsights = computeInsights(
     rides = emptyList(),
     vitals = null,
     profile = profile,
     now = now,
+    texts = texts,
 )
 
 /** Ob eine Auswertung mangels Confidence gar nichts hergibt. */

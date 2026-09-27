@@ -6,31 +6,33 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_TEXT
-import de.trailscape.app.ui.map.LocalMapRenderingAvailable
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
-import org.junit.Assert.assertEquals
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
-import androidx.compose.ui.test.hasSetTextAction
+import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.testing.TestLocales
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_TEXT
+import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.Goal
 import de.trailscape.core.Ride
@@ -38,7 +40,13 @@ import de.trailscape.core.RideStats
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.assessFitness
 import de.trailscape.core.generatePlan
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import de.trailscape.core.savePlan
+import kotlin.math.cos
+import kotlin.math.sin
+import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -48,8 +56,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Screenshots der vier Tabs und der Einstellungen — das Werkzeug fuer den
@@ -60,11 +66,13 @@ import kotlin.math.sin
  * `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotTest*'`.
  * Die PNGs landen in `app/build/outputs/roborazzi/`.
  *
- * Geraet: Galaxy S25 (1080 × 2340 px, rund 411 × 891 dp).
+ * Geraet: Galaxy S25 (1080 × 2340 px, rund 411 × 891 dp). Sprache: fest
+ * Deutsch ([TestLocales.S25_DE]) — die Tests klicken auf deutsche Texte.
+ * Englische Bilder tragen „-en" im Namen und laufen mit „+en-rGB".
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class ScreenshotTest {
 
     @get:Rule
@@ -87,7 +95,7 @@ class ScreenshotTest {
             date = NOW + 8 * WEEK_MS,
             targetDurationMin = 130,
         )
-        savePlan(AppServices.trainingPlanStore, generatePlan(goal, assessFitness(rides), now = NOW))
+        savePlan(AppServices.trainingPlanStore, generatePlan(goal, assessFitness(rides), now = NOW, texts = CoreTextsDe))
     }
 
     @Test
@@ -120,7 +128,7 @@ class ScreenshotTest {
 
     /** Ganze Seiten auf einem sehr hohen Bildschirm — zeigt, was sonst unter dem Rand liegt. */
     @Test
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
     fun tall() {
         start()
         shot("11-heute-lang")
@@ -147,7 +155,7 @@ class ScreenshotTest {
      * Warnfarbe, der Rest ruhige Zeilen.
      */
     @Test
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
     fun trainingHinweise() {
         val goal = Goal(
             name = "Alb-Gold",
@@ -158,7 +166,7 @@ class ScreenshotTest {
         )
         savePlan(
             AppServices.trainingPlanStore,
-            generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS),
+            generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS, texts = CoreTextsDe),
         )
         start()
         tab("Training")
@@ -194,7 +202,7 @@ class ScreenshotTest {
      * Karte bleibt.
      */
     @Test
-    @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h640dp-xxhdpi")
     fun schmal() {
         RuntimeEnvironment.setFontScale(1.15f)
         start()
@@ -402,6 +410,69 @@ class ScreenshotTest {
     private fun karteAusserhalbDerNavigation(): SemanticsMatcher {
         val navTab = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)
         return hasText("Karte", substring = true) and !navTab and !hasAnyAncestor(navTab)
+    }
+
+    /**
+     * Der Heute-Tab auf Englisch — das Beispielbild des i18n-Fundaments.
+     *
+     * Stand Fundament: Der Heute-Tab zeigt noch keinen Satz aus `:core` und
+     * keine umgezogene Beschriftung — `01-heute-en` sieht deshalb aus wie
+     * `01-heute`; die sichtbaren Texte zieht erst i18n-today um. Das Bild
+     * belegt, dass der Test englisch laeuft. Was die Oberflaeche wirklich
+     * englisch liest, pruefen die Knoten: das Zahnrad des Heute-Tabs
+     * („Settings" aus `strings_common.xml`) und danach die Sprachseite
+     * (`45-einstellungen-sprache-en`), deren Texte schon aus
+     * `values-en/strings_more.xml` kommen.
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        start()
+        assertEquals(AppLanguage.EN, AppServices.appLanguage.value)
+        // Die Auswertung rechnet ihre `:core`-Saetze in der Sprache der
+        // Oberflaeche neu (AppViewModel.insights kombiniert appLanguage).
+        val viewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
+        compose.waitUntil(timeoutMillis = 10_000) {
+            val recommendation = viewModel.insights.value.recommendation
+            recommendation.title == CoreTextsEn.readiness.recommendationTitle(recommendation.kind)
+        }
+        val context = compose.activity
+        val settings = context.getString(R.string.common_settings_cd)
+        assertEquals("Settings", settings)
+        compose.onAllNodesWithContentDescription(settings)[0].assertExists()
+        shot("01-heute-en")
+
+        compose.onAllNodesWithContentDescription(settings)[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.more_language_title))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.more_language_hint))[0].assertExists()
+        assertEquals(
+            1,
+            compose.onAllNodesWithText("If you don’t choose a language", substring = true)
+                .fetchSemanticsNodes().size,
+        )
+        shot("45-einstellungen-sprache-en")
+    }
+
+    /** Mehr → Sprache: Auswahl System/Deutsch/English und die beiden Hinweise. */
+    @Test
+    fun spracheSeite() {
+        start()
+        compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
+        settle()
+        compose.onAllNodesWithText("Sprache")[0].performClick()
+        settle()
+        shot("45-einstellungen-sprache")
+    }
+
+    /** Die deutschen Bilder laufen wirklich deutsch — sonst braechen die Klicks auf Texte. */
+    @Test
+    fun spracheIstDeutsch() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        start()
+        assertEquals(AppLanguage.DE, AppServices.appLanguage.value)
     }
 
     /** Losfahren-Dialog: Hauptaktion gefuellt, Alternative umrandet, Abbrechen als Text. */

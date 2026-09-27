@@ -1,11 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import de.trailscape.core.i18n.CoreTexts
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDateTime
@@ -16,6 +11,12 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Sportwissenschaftlicher Rechenkern fuer Trainingslast, Fitness/Form,
@@ -459,13 +460,6 @@ enum class Confidence(
 /** Woher ein HF-Grundwert stammt (§1.1/§1.3). */
 enum class ValueSource { TEST, BEOBACHTET, GESCHAETZT }
 
-val confidenceLabels: Map<Confidence, String> = mapOf(
-    Confidence.NONE to "nicht berechenbar",
-    Confidence.LOW to "grobe Schätzung",
-    Confidence.MEDIUM to "Schätzung",
-    Confidence.HIGH to "belastbar",
-)
-
 internal fun downgrade(c: Confidence): Confidence = when (c) {
     Confidence.HIGH -> Confidence.MEDIUM
     Confidence.MEDIUM -> Confidence.LOW
@@ -653,6 +647,11 @@ data class TrainingProfile(
 // Zonenmodelle (§1.4)
 // ---------------------------------------------------------------------------
 
+/*
+ * Die Zonenbezeichnungen sind Schluessel im Datenmodell ([ZoneDistribution]
+ * wird mit ihnen gespeichert), keine Anzeigetexte — sie laufen deshalb
+ * bewusst NICHT ueber `CoreTexts` und bleiben in allen Sprachen gleich.
+ */
 val frielZoneLabels: List<String> = listOf(
     "Z1 Regeneration",
     "Z2 Grundlage",
@@ -1156,16 +1155,17 @@ fun normalizeTrimp(trimp: Double, profile: TrainingProfile): Double {
 }
 
 /** HF-basierte Tourlast inklusive Zonenverteilung. */
-fun computeHeartRateLoad(series: RideSeries, profile: TrainingProfile): HeartRateLoad {
+fun computeHeartRateLoad(
+    series: RideSeries,
+    profile: TrainingProfile,
+    texts: CoreTexts,
+): HeartRateLoad {
     val zones = profile.zones
     if (series.isEmpty) {
-        return HeartRateLoad.unavailable(
-            "Keine auswertbaren Trackpunkte mit Zeitstempel.",
-            zones,
-        )
+        return HeartRateLoad.unavailable(texts.load.noTimedPoints(), zones)
     }
     if (series.movingTimeS <= 0) {
-        return HeartRateLoad.unavailable("Keine Bewegungszeit erkannt.", zones)
+        return HeartRateLoad.unavailable(texts.load.noMovingTime(), zones)
     }
 
     var trimp = 0.0
@@ -1193,10 +1193,7 @@ fun computeHeartRateLoad(series: RideSeries, profile: TrainingProfile): HeartRat
 
     val coverage = series.hrCoverage
     if (series.movingTimeWithHrS <= 0) {
-        return HeartRateLoad.unavailable(
-            "Für diese Tour liegt keine Herzfrequenz vor.",
-            zones,
-        )
+        return HeartRateLoad.unavailable(texts.load.noHeartRateForRide(), zones)
     }
 
     var confidence = if (coverage >= 0.9) Confidence.HIGH else Confidence.MEDIUM
@@ -1214,9 +1211,10 @@ fun computeHeartRateLoad(series: RideSeries, profile: TrainingProfile): HeartRat
         unavailableReason = if (available) {
             null
         } else {
-            "Herzfrequenz deckt nur " +
-                "${dartRound(coverage * 100).toInt()} % der Bewegungszeit ab " +
-                "(mindestens ${dartRound(minHrCoverage * 100).toInt()} % nötig)."
+            texts.load.heartRateCoverageTooLow(
+                dartRound(coverage * 100).toInt(),
+                dartRound(minHrCoverage * 100).toInt(),
+            )
         },
         trimpBanister = trimp,
         trimpEdwards = edwardsZones.weightedMinutes,
@@ -1475,15 +1473,13 @@ data class PhysicsEstimate(
     val measured: Boolean = false,
 ) {
     /** Textbaustein ohne Overclaim (§8.5). */
-    val powerText: String
-        get() = if (available && measured) {
-            "Gemessene Leistung ≈ ${dartRound(avgPowerW).toInt()} W (Leistungsmesser)"
-        } else if (available) {
-            "Geschätzte Leistung ≈ ${dartRound(avgPowerW).toInt()} W " +
-                "(aus GPS & Profil, ±15–25 %)"
-        } else {
-            "Leistung nicht schätzbar"
-        }
+    fun powerText(texts: CoreTexts): String = if (available && measured) {
+        texts.load.measuredPowerText(dartRound(avgPowerW).toInt())
+    } else if (available) {
+        texts.load.powerText(dartRound(avgPowerW).toInt())
+    } else {
+        texts.load.powerNotEstimable()
+    }
 
     companion object {
         fun unavailable(reason: String): PhysicsEstimate = PhysicsEstimate(
@@ -1518,35 +1514,26 @@ fun computePhysicsEstimate(
     series: RideSeries,
     profile: TrainingProfile,
     eftpW: Double? = null,
+    texts: CoreTexts,
 ): PhysicsEstimate {
     if (series.isEmpty) {
-        return PhysicsEstimate.unavailable(
-            "Keine auswertbaren Trackpunkte mit Zeitstempel.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.noTimedPoints())
     }
     val power = buildPowerSeries(series, profile)
     // Gemessene Leistung braucht weder Hoehenprofil noch Gewicht — beides
     // ist nur Eingabe des Physikmodells.
     val measured = power.measuredCoverage >= MEASURED_POWER_MIN_COVERAGE
     if (!measured && !series.hasElevation) {
-        return PhysicsEstimate.unavailable(
-            "Ohne Höhenprofil lässt sich die Leistung nicht schätzen.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.powerNoElevation())
     }
     if (!measured && profile.weightKg <= 0) {
-        return PhysicsEstimate.unavailable(
-            "Ohne Gewichtsangabe lässt sich die Leistung nicht schätzen.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.powerNoWeight())
     }
     if (power.isEmpty || power.movingTimeS < 60) {
-        return PhysicsEstimate.unavailable(
-            "Zu wenig Bewegungszeit für eine Leistungsschätzung.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.powerTooLittleMovingTime())
     }
     if (series.distanceM < 200) {
-        return PhysicsEstimate.unavailable(
-            "Zu kurze Strecke für eine Leistungsschätzung.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.powerTooShort())
     }
 
     val avg = power.avgPowerW
@@ -1678,13 +1665,6 @@ enum class EftpSource {
     GESCHAETZT,
 }
 
-val eftpSourceLabels: Map<EftpSource, String> = mapOf(
-    EftpSource.EINGETRAGEN to "von dir eingetragen",
-    EftpSource.ZWANZIG_MINUTEN to "aus deinem besten 20-Minuten-Abschnitt geschätzt",
-    EftpSource.KALIBRIERT to "aus dem Vergleich mit deiner Herzfrequenz nachgeführt",
-    EftpSource.GESCHAETZT to "grob aus deinem Gewicht geschätzt",
-)
-
 /**
  * Die FTP, mit der die Lastskala tatsaechlich rechnet — samt Herkunft.
  *
@@ -1705,8 +1685,7 @@ data class EftpEstimate(
     fun perKg(weightKg: Double): Double = if (weightKg > 0) watts / weightKg else 0.0
 
     /** Kurzform fuer die Anzeige, immer mit Herkunft. */
-    val label: String
-        get() = "${dartRound(watts).toInt()} W (${eftpSourceLabels.getValue(source)})"
+    fun label(texts: CoreTexts): String = texts.load.eftpLabel(dartRound(watts).toInt(), source)
 
     companion object {
         /** Reiner Profilwert ohne jede Messung. */
@@ -1859,28 +1838,22 @@ data class LoadCalibration(
     val usable: Boolean get() = !clamped && alpha.isFinite() && alpha > 0
 
     /**
-     * Deutschsprachiger Hinweis zur Kalibrierung — `null`, wenn es nichts zu
-     * sagen gibt (α ≈ 1,0 aus genug Paaren).
+     * Hinweis zur Kalibrierung in der Sprache von [texts] — `null`, wenn es
+     * nichts zu sagen gibt (α ≈ 1,0 aus genug Paaren).
      */
-    val note: String?
-        get() {
-            val raw = rawAlpha
-            if (clamped && raw != null) {
-                return "Deine Herzfrequenz und die Leistungsschätzung liegen um Faktor " +
-                    "${toStringAsFixed(raw, 2).replace('.', ',')} auseinander — zu weit " +
-                    "für eine sinnvolle Korrektur. Prüfe Gewicht, Rad-/Gepäckgewicht und " +
-                    "ob deine Touren ein Höhenprofil haben."
-            }
-            if (raw == null) {
-                return null
-            }
-            if (abs(raw - 1.0) < 0.05) {
-                return null
-            }
-            return "Aus $sampleCount Touren mit Puls und Höhenprofil ergibt sich ein " +
-                "Korrekturfaktor von ${toStringAsFixed(raw, 2).replace('.', ',')} zwischen " +
-                "Herzfrequenz- und Leistungsschätzung."
+    fun note(texts: CoreTexts): String? {
+        val raw = rawAlpha
+        if (clamped && raw != null) {
+            return texts.load.calibrationTooFarApart(raw)
         }
+        if (raw == null) {
+            return null
+        }
+        if (abs(raw - 1.0) < 0.05) {
+            return null
+        }
+        return texts.load.calibrationFactor(sampleCount, raw)
+    }
 
     fun toJson(): JsonObject = buildJsonObject {
         put("alpha", alpha)
@@ -1979,15 +1952,6 @@ fun computeLoadCalibration(
  */
 enum class LoadSource { HERZFREQUENZ, PHYSIK, LEISTUNG, RPE, HEURISTIK, KEINE }
 
-val loadSourceLabels: Map<LoadSource, String> = mapOf(
-    LoadSource.HERZFREQUENZ to "aus Herzfrequenz",
-    LoadSource.PHYSIK to "aus GPS-Leistungsschätzung",
-    LoadSource.LEISTUNG to "aus gemessener Leistung",
-    LoadSource.RPE to "aus Anstrengungsempfinden",
-    LoadSource.HEURISTIK to "grob geschätzt aus Distanz und Höhenmetern",
-    LoadSource.KEINE to "nicht berechenbar",
-)
-
 /** Vollstaendige Lastauswertung einer Tour. */
 data class RideLoad(
     /** Last auf der einheitlichen 100er-Skala (1 h an der Schwelle = 100). */
@@ -1996,7 +1960,7 @@ data class RideLoad(
     val confidence: Confidence,
     val heartRate: HeartRateLoad,
     val physics: PhysicsEstimate,
-    /** Deutschsprachiger Hinweis zur Herkunft bzw. zum Fehlen der Last. */
+    /** Hinweis zur Herkunft bzw. zum Fehlen der Last, in der Sprache der Aufrufer-Texte. */
     val note: String,
 ) {
     val available: Boolean get() = source != LoadSource.KEINE
@@ -2035,10 +1999,11 @@ fun computeRideLoad(
     rpe: Double? = null,
     rpeFactor: Double = defaultRpeFactor,
     eftpW: Double? = null,
+    texts: CoreTexts,
 ): RideLoad {
     val series = buildRideSeries(points, profile)
-    val hr = computeHeartRateLoad(series, profile)
-    val physics = computePhysicsEstimate(series, profile, eftpW = eftpW)
+    val hr = computeHeartRateLoad(series, profile, texts = texts)
+    val physics = computePhysicsEstimate(series, profile, eftpW = eftpW, texts = texts)
 
     // Stufe A — Herzfrequenz.
     if (hr.available && hr.load > 0) {
@@ -2048,8 +2013,7 @@ fun computeRideLoad(
             confidence = hr.confidence,
             heartRate = hr,
             physics = physics,
-            note = "Last aus der Herzfrequenz berechnet " +
-                "(${dartRound(hr.hrCoverage * 100).toInt()} % Abdeckung).",
+            note = texts.load.noteFromHeartRate(dartRound(hr.hrCoverage * 100).toInt()),
         )
     }
 
@@ -2061,7 +2025,7 @@ fun computeRideLoad(
             confidence = physics.confidence,
             heartRate = hr,
             physics = physics,
-            note = measuredPowerLoadNote(physics.series.measuredCoverage),
+            note = measuredPowerLoadNote(physics.series.measuredCoverage, texts = texts),
         )
     }
 
@@ -2078,8 +2042,7 @@ fun computeRideLoad(
             },
             heartRate = hr,
             physics = physics,
-            note = "Last aus der geschätzten Leistung berechnet " +
-                "(GPS & Profil, ±15–25 %).",
+            note = texts.load.noteFromPower(),
         )
     }
 
@@ -2092,7 +2055,7 @@ fun computeRideLoad(
             confidence = Confidence.LOW,
             heartRate = hr,
             physics = physics,
-            note = "Last aus deinem Anstrengungsempfinden geschätzt.",
+            note = texts.load.noteFromRpe(),
         )
     }
 
@@ -2113,8 +2076,7 @@ fun computeRideLoad(
             confidence = Confidence.LOW,
             heartRate = hr,
             physics = physics,
-            note = "Grobe Schätzung aus Distanz, Dauer und Höhenmetern — " +
-                "ohne Herzfrequenz oder Höhenprofil nur eine Näherung.",
+            note = texts.load.noteHeuristic(),
         )
     }
 
@@ -2124,14 +2086,13 @@ fun computeRideLoad(
         confidence = Confidence.NONE,
         heartRate = hr,
         physics = physics,
-        note = "Für diese Tour liegen zu wenige Daten für eine Lastberechnung vor.",
+        note = texts.load.noteNoData(),
     )
 }
 
 /** Herkunftsnotiz der Last aus gemessener Leistung; geteilt mit `rideLoadFromFacts`. */
-internal fun measuredPowerLoadNote(coverage: Double): String =
-    "Last aus der gemessenen Leistung berechnet " +
-        "(Leistungsmesser, ${dartRound(coverage * 100).toInt()} % Abdeckung)."
+internal fun measuredPowerLoadNote(coverage: Double, texts: CoreTexts): String =
+    texts.load.noteFromMeasuredPower(dartRound(coverage * 100).toInt())
 
 /** Bequemlichkeits-Variante von [computeRideLoad] fuer ein [Ride]. */
 fun computeRideLoadForRide(
@@ -2140,6 +2101,7 @@ fun computeRideLoadForRide(
     calibration: LoadCalibration = LoadCalibration.NEUTRAL,
     rpe: Double? = null,
     eftpW: Double? = null,
+    texts: CoreTexts,
 ): RideLoad = computeRideLoad(
     points = ride.points,
     profile = profile,
@@ -2147,4 +2109,5 @@ fun computeRideLoadForRide(
     calibration = calibration,
     rpe = rpe,
     eftpW = eftpW,
+    texts = texts,
 )

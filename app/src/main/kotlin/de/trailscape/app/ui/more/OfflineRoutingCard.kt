@@ -44,8 +44,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.routing.InstalledSegment
 import de.trailscape.app.routing.SEGMENT_PART_SUFFIX
 import de.trailscape.app.routing.SegmentDownloads
@@ -53,6 +53,7 @@ import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentPhase
 import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.map.currentLocation
@@ -60,6 +61,7 @@ import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.map.missingPermissions
 import de.trailscape.core.GeoResult
 import de.trailscape.core.defaultBrouterServerUrl
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.parseSegmentTile
 import de.trailscape.core.searchPlaces
 import de.trailscape.core.segmentTileAt
@@ -122,6 +124,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
+    val coreTexts = LocalCoreTexts.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val inventory = AppServices.segmentInventory
@@ -158,7 +161,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         loading = true
         val loaded = withContext(Dispatchers.IO) {
             val list = inventory.list()
-            Triple(list, list.sumOf { it.sizeBytes }, readPartials(inventory.dir))
+            Triple(list, list.sumOf { it.sizeBytes }, readPartials(inventory.dir, coreTexts))
         }
         segments = loaded.first
         totalBytes = loaded.second
@@ -198,7 +201,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     fun offerTileAt(lat: Double, lon: Double) {
         val tile = segmentTileAt(lat, lon)
         if (segments.any { it.fileName == tile.fileName }) {
-            appViewModel.showMessage("Für „${tile.title}“ sind die Routingdaten schon da.")
+            appViewModel.showMessage("Für „${tile.title(coreTexts)}“ sind die Routingdaten schon da.")
             return
         }
         offerDownload(listOf(tile.fileName))
@@ -219,7 +222,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         busy = true
         scope.launch {
             val hits = withContext(Dispatchers.IO) {
-                runCatching { searchPlaces(text, AppServices.httpClient) }.getOrDefault(emptyList())
+                runCatching { searchPlaces(text, AppServices.httpClient, coreTexts) }.getOrDefault(emptyList())
             }
             busy = false
             results = hits.take(MAX_SEARCH_HITS)
@@ -271,7 +274,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     val running = status?.takeIf { it.running && !it.finished }
     if (running != null) {
         SegmentProgressRow(
-            label = downloadLabel(running.fileName, running.phase),
+            label = downloadLabel(running.fileName, running.phase, coreTexts),
             detail = downloadDetail(running.bytesDone, running.bytesTotal, running.phase),
             percent = running.percent,
             index = running.index,
@@ -522,7 +525,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             title = { Text("Routingdaten löschen") },
             text = {
                 Text(
-                    "Soll „${segment.tile.title}“ (${formatBytes(segment.sizeBytes)}) wirklich " +
+                    "Soll „${segment.tile.title(coreTexts)}“ (${formatBytes(segment.sizeBytes)}) wirklich " +
                         "gelöscht werden? Routen in dieser Gegend laufen danach wieder über " +
                         "den Server.",
                 )
@@ -568,10 +571,10 @@ private fun SegmentRow(
 ) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = segment.tile.title, style = MaterialTheme.typography.bodyLarge)
+            Text(text = segment.tile.title(LocalCoreTexts.current), style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = listOf(
-                    segment.tile.boundsLabel,
+                    segment.tile.boundsLabel(LocalCoreTexts.current),
                     formatBytes(segment.sizeBytes),
                     segmentAgeText(segment),
                 ).joinToString(" · "),
@@ -646,13 +649,13 @@ private data class PartialSegment(val title: String, val bytes: Long)
  * halbe Datei gehoert ausdruecklich nicht dazu (siehe dessen KDoc); sie ist
  * allein eine Frage der Anzeige.
  */
-private fun readPartials(dir: File): List<PartialSegment> {
+private fun readPartials(dir: File, texts: CoreTexts): List<PartialSegment> {
     val files = dir.listFiles() ?: return emptyList()
     return files
         .filter { it.isFile && it.name.endsWith(SEGMENT_PART_SUFFIX) && it.length() > 0 }
         .mapNotNull { file ->
             val name = file.name.removeSuffix(SEGMENT_PART_SUFFIX)
-            parseSegmentTile(name)?.let { PartialSegment(it.title, file.length()) }
+            parseSegmentTile(name)?.let { PartialSegment(it.title(texts), file.length()) }
         }
         .sortedBy { it.title }
 }
@@ -671,10 +674,10 @@ private fun segmentAgeText(segment: InstalledSegment): String = when (val days =
 }
 
 /** Die Kachel eines laufenden Downloads, so lesbar wie moeglich. */
-private fun downloadLabel(fileName: String?, phase: SegmentPhase?): String {
+private fun downloadLabel(fileName: String?, phase: SegmentPhase?, texts: CoreTexts): String {
     val tile = fileName
         ?.let { parseSegmentTile(it) }
-        ?.title
+        ?.title(texts)
         ?: "Routingdaten"
     return when (phase) {
         SegmentPhase.DELTA_DOWNLOAD, SegmentPhase.DELTA_APPLY -> "$tile — Aktualisierung"

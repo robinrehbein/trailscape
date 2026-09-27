@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- BODY_SENSORS ist die Herzfrequenz-Berechtigung bis einschliesslich
          API 35. Ab API 36 uebernimmt android.permission.health.READ_HEART_RATE
@@ -25,8 +26,10 @@
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault">
+        android:theme="@android:style/Theme.DeviceDefault"
+        tools:targetApi="33">
 
         <!-- Ehrlich: Die Uhr-App ist eine BEGLEIT-App. Sie liefert Puls und
              GPS live ans Telefon, und dort — nicht auf der Uhr — entsteht die

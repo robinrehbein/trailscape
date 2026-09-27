@@ -136,6 +136,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Ohne Handy unterwegs? Die Fahrt mit Samsung Health auf der Uhr aufzeichnen —
   Trailscape importiert sie danach über Health Connect
 
+**Sprache**
+- Deutsch und Englisch – folgt der Systemsprache (Deutsch, wenn das Gerät auf
+  Deutsch steht, sonst Englisch), umstellbar unter **Mehr → Sprache**;
+  Sprachansagen in der gewählten Sprache. Regeln für Übersetzungen:
+  `docs/i18n.md`
+
 **Selfhost-Sync (optional)**
 - Bidirektionale Synchronisierung der Touren mit einem eigenen Server
 

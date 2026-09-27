@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -29,7 +30,7 @@ class GeocodingTest {
             HttpResponse(200, "[]")
         }
 
-        searchPlaces("München", client)
+        searchPlaces("München", client, texts = CoreTextsDe)
 
         assertEquals(
             "https://nominatim.openstreetmap.org/search?q=M%C3%BCnchen&format=jsonv2&limit=5&accept-language=de",
@@ -49,7 +50,7 @@ class GeocodingTest {
             HttpResponse(200, "[]")
         }
 
-        searchPlaces("Bad Reichenhall", client)
+        searchPlaces("Bad Reichenhall", client, texts = CoreTextsDe)
 
         assertTrue(capturedUrl!!.contains("q=Bad+Reichenhall"))
     }
@@ -68,7 +69,7 @@ class GeocodingTest {
             )
         }
 
-        val results = searchPlaces("München", client)
+        val results = searchPlaces("München", client, texts = CoreTextsDe)
 
         assertEquals(2, results.size)
         assertEquals("München, Bayern, Deutschland", results[0].displayName)
@@ -95,7 +96,7 @@ class GeocodingTest {
             )
         }
 
-        val results = searchPlaces("irgendwas", client)
+        val results = searchPlaces("irgendwas", client, texts = CoreTextsDe)
 
         assertEquals(1, results.size)
         assertEquals("Gültig", results.single().displayName)
@@ -105,7 +106,7 @@ class GeocodingTest {
     fun `leere Antwort ergibt leere Liste`() {
         val client = HttpClient { HttpResponse(200, "[]") }
 
-        val results = searchPlaces("nirgendwo", client)
+        val results = searchPlaces("nirgendwo", client, texts = CoreTextsDe)
 
         assertTrue(results.isEmpty())
     }
@@ -114,15 +115,15 @@ class GeocodingTest {
     fun `leerer Query loest keinen Request aus`() {
         val client = HttpClient { throw AssertionError("sollte nicht aufgerufen werden") }
 
-        assertTrue(searchPlaces("", client).isEmpty())
-        assertTrue(searchPlaces("   ", client).isEmpty())
+        assertTrue(searchPlaces("", client, texts = CoreTextsDe).isEmpty())
+        assertTrue(searchPlaces("   ", client, texts = CoreTextsDe).isEmpty())
     }
 
     @Test
     fun `wirft bei HTTP-Fehler`() {
         val client = HttpClient { HttpResponse(500, "Server explodiert") }
 
-        val e = assertFailsWith<Exception> { searchPlaces("München", client) }
+        val e = assertFailsWith<Exception> { searchPlaces("München", client, texts = CoreTextsDe) }
         assertEquals("Ortssuche fehlgeschlagen (HTTP 500).", e.message)
     }
 
@@ -130,7 +131,7 @@ class GeocodingTest {
     fun `wirft bei kaputtem JSON`() {
         val client = HttpClient { HttpResponse(200, "kaputtes json{{{") }
 
-        val e = assertFailsWith<Exception> { searchPlaces("München", client) }
+        val e = assertFailsWith<Exception> { searchPlaces("München", client, texts = CoreTextsDe) }
         assertEquals("Unerwartete Antwort der Ortssuche.", e.message)
     }
 
@@ -138,7 +139,7 @@ class GeocodingTest {
     fun `wirft bei Netzwerkfehler`() {
         val client = HttpClient { throw RuntimeException("Netzwerkfehler") }
 
-        val e = assertFailsWith<Exception> { searchPlaces("München", client) }
+        val e = assertFailsWith<Exception> { searchPlaces("München", client, texts = CoreTextsDe) }
         assertEquals("Ortssuche nicht erreichbar. Bist du online?", e.message)
     }
 }

@@ -41,8 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.AppLocale
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.strava.StravaConfig
@@ -206,7 +210,7 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
                     // „Klartext"): „‹ Zurück" bzw. „‹ Einstellungen" oben,
                     // darunter der Titel.
                     ScreenHeader(
-                        title = current?.title ?: "Einstellungen",
+                        title = current?.displayTitle() ?: "Einstellungen",
                         backLabel = if (current != null && !arrivedDirectly) "Einstellungen" else "Zurück",
                         onBack = if (current != null) ::leavePage else onBack,
                         modifier = Modifier.padding(
@@ -250,8 +254,20 @@ internal enum class SettingsPage(val title: String) {
     // Nur in Builds mit Strava-Zugangsdaten sichtbar (StravaConfig.available).
     STRAVA("Strava"),
     SYNC("Sync mit eigenem Server"),
+
+    /** Titel aus den Ressourcen, siehe [displayTitle]. */
+    LANGUAGE("Sprache"),
     ABOUT("Über Trailscape"),
 }
+
+/**
+ * Titel einer Seite fuer die Anzeige. Die Sprachseite liest ihren Titel
+ * schon aus den Ressourcen (`more_language_title`); die uebrigen folgen,
+ * wenn der Bereich „Mehr" umzieht (siehe docs/i18n.md).
+ */
+@Composable
+private fun SettingsPage.displayTitle(): String =
+    if (this == SettingsPage.LANGUAGE) stringResource(R.string.more_language_title) else title
 
 /** Welche Seite ein Sprungziel von aussen meint. */
 private fun MoreSection.toPage(): SettingsPage = when (this) {
@@ -421,6 +437,12 @@ private fun SettingsList(
                 )
                 ListDivider()
                 SettingsNavRow(
+                    title = SettingsPage.LANGUAGE.displayTitle(),
+                    status = languageStatusAnnotated(AppLocale.preference(context), LocalAppLanguage.current),
+                    onClick = { onOpen(SettingsPage.LANGUAGE) },
+                )
+                ListDivider()
+                SettingsNavRow(
                     title = SettingsPage.ABOUT.title,
                     status = "Version $versionName",
                     onClick = { onOpen(SettingsPage.ABOUT) },
@@ -464,6 +486,7 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
             SettingsPage.BACKUP -> SettingsSection { BackupCardContent(appViewModel) }
             SettingsPage.STRAVA -> SettingsSection { StravaCardContent() }
             SettingsPage.SYNC -> SettingsSection { SyncCardContent(appViewModel) }
+            SettingsPage.LANGUAGE -> SettingsSection { LanguageCardContent() }
             SettingsPage.ABOUT -> {
                 SettingsSection { AboutCardContent(appViewModel) }
                 SettingsSection(label = "Open-Source-Lizenzen") { OpenSourceLicensesContent() }

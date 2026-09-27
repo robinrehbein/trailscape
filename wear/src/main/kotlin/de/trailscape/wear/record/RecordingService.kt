@@ -30,6 +30,7 @@ import de.trailscape.wear.comm.PhoneLink
 import de.trailscape.wear.comm.SensorSender
 import de.trailscape.wear.exercise.ExerciseRecorder
 import de.trailscape.wear.exercise.ermittleFaehigkeiten
+import de.trailscape.wear.localized
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -438,7 +439,7 @@ class RecordingService : Service() {
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle(getString(R.string.app_name))
+            .setContentTitle(localized().getString(R.string.app_name))
             .setContentText(text)
             .setContentIntent(tippIntent)
             .setOngoing(true)
@@ -460,10 +461,10 @@ class RecordingService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                getString(R.string.notification_channel_name),
+                localized().getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = getString(R.string.notification_channel_description)
+                description = localized().getString(R.string.notification_channel_description)
             },
         )
     }

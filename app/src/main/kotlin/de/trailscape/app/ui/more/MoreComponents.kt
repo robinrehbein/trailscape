@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.AnnotatedString
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.OneUiMotion
 
@@ -113,6 +114,27 @@ fun MoreGroup(label: String?, modifier: Modifier = Modifier, content: @Composabl
 fun SettingsNavRow(
     title: String,
     status: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    statusColor: Color = Color.Unspecified,
+) {
+    SettingsNavRow(
+        title = title,
+        status = AnnotatedString(status),
+        onClick = onClick,
+        modifier = modifier,
+        statusColor = statusColor,
+    )
+}
+
+/**
+ * Wie oben, aber mit einer ausgezeichneten Statuszeile — etwa einem
+ * Sprachnamen, der fuer TalkBack seine eigene Sprache traegt.
+ */
+@Composable
+fun SettingsNavRow(
+    title: String,
+    status: AnnotatedString,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     statusColor: Color = Color.Unspecified,

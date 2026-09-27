@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import kotlin.math.abs
 
 /**
@@ -66,4 +67,4 @@ fun isDuplicateRide(existing: List<RideInfo>, candidate: Ride): Boolean =
     findDuplicateRide(existing, candidate) != null
 
 /** Meldung, wenn ein Import an der Duplikatpruefung haengen bleibt. */
-const val DUPLICATE_RIDE_MESSAGE: String = "Diese Tour ist bereits vorhanden."
+fun duplicateRideMessage(texts: CoreTexts): String = texts.files.duplicateRide()

@@ -1,11 +1,13 @@
 package de.trailscape.app.health
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import de.trailscape.app.i18n.AppLocale
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +53,12 @@ const val HEALTH_PRIVACY_URL: String = "$ISSUE_REPOSITORY_URL/blob/main/PRIVACY.
  * Aufgabe, ohne dass die App sonst laufen muss.
  */
 class HealthPermissionsRationaleActivity : ComponentActivity() {
+
+    /** App-Sprache als Locale-Delta, siehe [AppLocale]. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        AppLocale.overrideConfiguration(newBase)?.let(::applyOverrideConfiguration)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()

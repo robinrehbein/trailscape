@@ -329,6 +329,7 @@ object RouteGenerationController {
                     exploredTiles = explored,
                     preferNewAreas = preferNewAreas && explored.isNotEmpty(),
                     wind = wind,
+                    texts = AppServices.coreTexts(),
                 )
                 if (flag.get()) return@launch
                 _state.update {

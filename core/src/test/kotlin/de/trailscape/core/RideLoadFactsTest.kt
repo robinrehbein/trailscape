@@ -1,11 +1,12 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Tests fuer das Tourlast-Destillat (`RideLoadFacts.kt`): Die aus dem
@@ -60,21 +61,21 @@ class RideLoadFactsTest {
     @Test
     fun `HF-Pfad - Rekonstruktion ist deckungsgleich zur Punkt-Berechnung`() {
         val r = ride(hr = 140)
-        val facts = computeRideLoadFacts(r, profile)
+        val facts = computeRideLoadFacts(r, profile, texts = CoreTextsDe)
         assertSameLoad(
-            computeRideLoadForRide(r, profile, eftpW = 200.0),
-            rideLoadFromFacts(facts, profile, eftpW = 200.0),
+            computeRideLoadForRide(r, profile, eftpW = 200.0, texts = CoreTextsDe),
+            rideLoadFromFacts(facts, profile, eftpW = 200.0, texts = CoreTextsDe),
         )
     }
 
     @Test
     fun `Physik-Pfad - eTss folgt jeder FTP ohne Neuberechnung der Punkte`() {
         val r = ride(hr = null)
-        val facts = computeRideLoadFacts(r, profile)
+        val facts = computeRideLoadFacts(r, profile, texts = CoreTextsDe)
         for (ftp in listOf(125.0, 187.2, 250.0, 400.0)) {
             assertSameLoad(
-                computeRideLoadForRide(r, profile, eftpW = ftp),
-                rideLoadFromFacts(facts, profile, eftpW = ftp),
+                computeRideLoadForRide(r, profile, eftpW = ftp, texts = CoreTextsDe),
+                rideLoadFromFacts(facts, profile, eftpW = ftp, texts = CoreTextsDe),
             )
         }
     }
@@ -82,17 +83,17 @@ class RideLoadFactsTest {
     @Test
     fun `Heuristik-Pfad - ohne Hoehenprofil bleibt es bei der Stats-Schaetzung`() {
         val r = ride(hr = null, withEle = false)
-        val facts = computeRideLoadFacts(r, profile)
-        val expected = computeRideLoadForRide(r, profile, eftpW = 200.0)
+        val facts = computeRideLoadFacts(r, profile, texts = CoreTextsDe)
+        val expected = computeRideLoadForRide(r, profile, eftpW = 200.0, texts = CoreTextsDe)
         assertEquals(LoadSource.HEURISTIK, expected.source)
-        assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = 200.0))
+        assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = 200.0, texts = CoreTextsDe))
     }
 
     @Test
     fun `bestes 20-min-Mittel und Steady-Segmente stimmen mit der Reihe ueberein`() {
         val r = ride(hr = 140)
-        val facts = computeRideLoadFacts(r, profile)
-        val physics = computePhysicsEstimate(buildRideSeries(r.points, profile), profile)
+        val facts = computeRideLoadFacts(r, profile, texts = CoreTextsDe)
+        val physics = computePhysicsEstimate(buildRideSeries(r.points, profile), profile, texts = CoreTextsDe)
         assertTrue(physics.available)
         assertEquals(bestRollingMeanPowerW(physics.series), facts.bestTwentyMinW)
         assertEquals(extractSteadySegments(physics.series, profile), facts.steadySegments)
@@ -100,7 +101,7 @@ class RideLoadFactsTest {
 
     @Test
     fun `Destillat und Cache-Eintrag ueberleben den JSON-Roundtrip`() {
-        val facts = computeRideLoadFacts(ride(hr = 140), profile)
+        val facts = computeRideLoadFacts(ride(hr = 140), profile, texts = CoreTextsDe)
         val parsed = RideLoadFacts.fromJson(
             Json.parseToJsonElement(facts.toJson().toString()) as JsonObject,
         )
@@ -119,28 +120,28 @@ class RideLoadFactsTest {
     fun `gemessene Leistung - Rekonstruktion ist bitgleich zur Punkt-Berechnung`() {
         // Ohne Hoehenprofil: Nur die Messung macht den Leistungspfad moeglich.
         val r = ride(hr = null, withEle = false, power = { i -> if (i % 7 == 0) 0 else 210 + i % 40 })
-        val facts = computeRideLoadFacts(r, profile)
+        val facts = computeRideLoadFacts(r, profile, texts = CoreTextsDe)
         assertTrue(facts.physicsMeasured)
         assertEquals(1.0, facts.physicsMeasuredCoverage, 1e-9)
         for (ftp in listOf(180.0, 250.0)) {
-            val expected = computeRideLoadForRide(r, profile, eftpW = ftp)
+            val expected = computeRideLoadForRide(r, profile, eftpW = ftp, texts = CoreTextsDe)
             assertEquals(LoadSource.LEISTUNG, expected.source)
-            assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = ftp))
+            assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = ftp, texts = CoreTextsDe))
             // α darf auf gemessene Leistung nicht wirken.
             val kalibriert = LoadCalibration(alpha = 1.3, sampleCount = 10, clamped = false, confidence = Confidence.MEDIUM)
-            assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = ftp, calibration = kalibriert))
+            assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = ftp, calibration = kalibriert, texts = CoreTextsDe))
         }
     }
 
     @Test
     fun `physicsMeasured ueberlebt den Roundtrip, alter Eintrag liest sich als false`() {
-        val facts = computeRideLoadFacts(ride(hr = null, power = { 200 }), profile)
+        val facts = computeRideLoadFacts(ride(hr = null, power = { 200 }), profile, texts = CoreTextsDe)
         assertTrue(facts.physicsMeasured)
         val json = facts.toJson()
         assertTrue(json.containsKey("physicsMeasured"))
         assertEquals(facts, RideLoadFacts.fromJson(Json.parseToJsonElement(json.toString()) as JsonObject))
 
-        val ohne = computeRideLoadFacts(ride(hr = 140), profile)
+        val ohne = computeRideLoadFacts(ride(hr = 140), profile, texts = CoreTextsDe)
         val ohneJson = ohne.toJson()
         // Ohne Messung kein neuer Schluessel — alte Cache-Eintraege bleiben gleich.
         assertTrue(!ohneJson.containsKey("physicsMeasured"))
@@ -153,7 +154,7 @@ class RideLoadFactsTest {
     @Test
     fun `Notnagel aus der Zusammenfassung faellt auf die Stats-Heuristik zurueck`() {
         val r = ride(hr = 140)
-        val load = rideLoadFromFacts(rideLoadFactsFromSummary(r.toSummary()), profile, eftpW = 200.0)
+        val load = rideLoadFromFacts(rideLoadFactsFromSummary(r.toSummary(), texts = CoreTextsDe), profile, eftpW = 200.0, texts = CoreTextsDe)
         assertEquals(LoadSource.HEURISTIK, load.source)
         assertTrue(load.load > 0.0)
     }

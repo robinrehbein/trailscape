@@ -1,9 +1,11 @@
 package de.trailscape.app
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import de.trailscape.app.i18n.AppLocale
 import androidx.lifecycle.lifecycleScope
 import de.trailscape.app.ui.readActivityFiles
 import kotlinx.coroutines.CancellationException
@@ -58,6 +60,12 @@ import kotlinx.coroutines.launch
  *    ab, ebenso ein spaeteres erneutes Teilen.
  */
 class ImportActivity : ComponentActivity() {
+
+    /** App-Sprache als Locale-Delta, siehe [AppLocale]. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        AppLocale.overrideConfiguration(newBase)?.let(::applyOverrideConfiguration)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

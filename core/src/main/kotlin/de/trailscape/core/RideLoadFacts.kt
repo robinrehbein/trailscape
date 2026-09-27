@@ -1,11 +1,12 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import kotlin.math.min
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlin.math.min
 
 /**
  * Kompaktes, **punktfreies** Destillat einer Tour fuer die Trainingsauswertung.
@@ -170,10 +171,10 @@ data class RideLoadFacts(
  * Kaskade sie ziehen wuerde (Stats vor Reihe) — die Rekonstruktion in
  * [rideLoadFromFacts] muss dann nicht mehr unterscheiden.
  */
-fun computeRideLoadFacts(ride: Ride, profile: TrainingProfile): RideLoadFacts {
+fun computeRideLoadFacts(ride: Ride, profile: TrainingProfile, texts: CoreTexts): RideLoadFacts {
     val series = buildRideSeries(ride.points, profile)
-    val hr = computeHeartRateLoad(series, profile)
-    val physics = computePhysicsEstimate(series, profile)
+    val hr = computeHeartRateLoad(series, profile, texts = texts)
+    val physics = computePhysicsEstimate(series, profile, texts = texts)
 
     val stats = ride.stats
     // Wie Stufe D in [computeRideLoad] mit uebergebenen Stats: Die Distanz
@@ -223,7 +224,7 @@ fun computeRideLoadFacts(ride: Ride, profile: TrainingProfile): RideLoadFacts {
  * auswertbare Punkte ansetzte. Besser eine grobe Last als eine lautlos aus
  * der Fitnesskurve verschwundene Tour.
  */
-fun rideLoadFactsFromSummary(summary: RideInfo): RideLoadFacts = RideLoadFacts(
+fun rideLoadFactsFromSummary(summary: RideInfo, texts: CoreTexts): RideLoadFacts = RideLoadFacts(
     hrAvailable = false,
     hrLoad = 0.0,
     hrCoverage = 0.0,
@@ -232,7 +233,7 @@ fun rideLoadFactsFromSummary(summary: RideInfo): RideLoadFacts = RideLoadFacts(
     hrAvgHr = null,
     hrMaxHr = null,
     hrConfidence = Confidence.NONE,
-    hrUnavailableReason = "Die Tour-Datei konnte nicht geladen werden.",
+    hrUnavailableReason = texts.load.rideFileNotLoadable(),
     physicsAvailable = false,
     physicsNpW = 0.0,
     physicsAvgPowerW = 0.0,
@@ -269,6 +270,7 @@ fun rideLoadFromFacts(
     profile: TrainingProfile,
     eftpW: Double? = null,
     calibration: LoadCalibration = LoadCalibration.NEUTRAL,
+    texts: CoreTexts,
 ): RideLoad {
     val zones = profile.zones
 
@@ -316,7 +318,7 @@ fun rideLoadFromFacts(
             measured = facts.physicsMeasured,
         )
     } else {
-        PhysicsEstimate.unavailable("Leistung nicht schätzbar.")
+        PhysicsEstimate.unavailable(texts.load.powerNotEstimable())
     }
 
     // Stufe A — Herzfrequenz.
@@ -327,8 +329,7 @@ fun rideLoadFromFacts(
             confidence = hr.confidence,
             heartRate = hr,
             physics = physics,
-            note = "Last aus der Herzfrequenz berechnet " +
-                "(${dartRound(hr.hrCoverage * 100).toInt()} % Abdeckung).",
+            note = texts.load.noteFromHeartRate(dartRound(hr.hrCoverage * 100).toInt()),
         )
     }
 
@@ -340,7 +341,7 @@ fun rideLoadFromFacts(
             confidence = physics.confidence,
             heartRate = hr,
             physics = physics,
-            note = measuredPowerLoadNote(facts.physicsMeasuredCoverage),
+            note = measuredPowerLoadNote(facts.physicsMeasuredCoverage, texts = texts),
         )
     }
 
@@ -357,8 +358,7 @@ fun rideLoadFromFacts(
             },
             heartRate = hr,
             physics = physics,
-            note = "Last aus der geschätzten Leistung berechnet " +
-                "(GPS & Profil, ±15–25 %).",
+            note = texts.load.noteFromPower(),
         )
     }
 
@@ -374,8 +374,7 @@ fun rideLoadFromFacts(
             confidence = Confidence.LOW,
             heartRate = hr,
             physics = physics,
-            note = "Grobe Schätzung aus Distanz, Dauer und Höhenmetern — " +
-                "ohne Herzfrequenz oder Höhenprofil nur eine Näherung.",
+            note = texts.load.noteHeuristic(),
         )
     }
 
@@ -385,7 +384,7 @@ fun rideLoadFromFacts(
         confidence = Confidence.NONE,
         heartRate = hr,
         physics = physics,
-        note = "Für diese Tour liegen zu wenige Daten für eine Lastberechnung vor.",
+        note = texts.load.noteNoData(),
     )
 }
 

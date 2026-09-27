@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -63,6 +64,7 @@ class TodayRouteTest {
             session = session,
             profile = profile,
             recentRides = rides,
+            texts = CoreTextsDe,
         )
     }
 
@@ -239,6 +241,7 @@ class TodayRouteTest {
         session = session,
         profile = profile,
         recentRides = recentRides,
+        texts = CoreTextsDe,
     )
 
     @Test
@@ -246,7 +249,7 @@ class TodayRouteTest {
         val route = decideWithoutHistory(DailyRecommendationKind.GRUNDLAGE)
 
         assertTrue(route.firstRound)
-        assertEquals(firstRoundTarget(1.5, profile, emptyList()), route.target)
+        assertEquals(firstRoundTarget(1.5, profile, emptyList(), texts = CoreTextsDe), route.target)
         assertEquals(26.0, assertNotNull(route.target).distanceKm, EPS)
         assertNull(route.note)
         assertFalse(route.downgraded)

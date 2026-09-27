@@ -1,9 +1,11 @@
 package de.trailscape.app
 
 import android.app.Application
+import android.content.res.Configuration
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.AppDiagnostics
 import de.trailscape.app.feedback.CrashReporter
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.record.RecordingService
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderScheduler
@@ -30,6 +32,9 @@ class TrailscapeApplication : Application() {
         // Gleich danach: Ab hier landen Diagnose-Eintraege in der Datei, auch
         // die aus AppServices und der Journal-Wiederherstellung unten.
         AppDiagnostics.install(this)
+        // Vor AppServices: Dessen Sprach-Startwert soll eine unter Android 12
+        // gespeicherte Wahl schon sehen (siehe AppLocale.migrateLegacyPreference).
+        AppLocale.migrateLegacyPreference(this)
         AppServices.init(this)
         AppServices.appScope.launch {
             // Binder- und Datei-I/O, deshalb nicht im onCreate selbst.
@@ -67,5 +72,16 @@ class TrailscapeApplication : Application() {
                 settings = AppServices.reminderStore.readSettings(),
             )
         }
+    }
+
+    /**
+     * Wechselt die Systemsprache, waehrend die App im Hintergrund laeuft
+     * (Aufzeichnung, Segment-Download, Health-Sync), muss auch
+     * [AppServices.coreTexts] umschwenken — sonst mischte ein Dienst die
+     * alte Sprache aus dem Zwischenstand mit der neuen aus [de.trailscape.app.i18n.localized].
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        AppLocale.refresh(this)
     }
 }

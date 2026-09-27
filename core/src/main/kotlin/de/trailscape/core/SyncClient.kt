@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -276,7 +277,7 @@ fun setSyncConfig(store: KeyValueStore, config: SyncConfig?) {
 private fun authHeaders(config: SyncConfig): Map<String, String> =
     mapOf("Authorization" to "Bearer ${config.token}")
 
-private fun fetchRemoteRides(client: HttpClient, config: SyncConfig): List<RemoteRideSummary> {
+private fun fetchRemoteRides(client: HttpClient, config: SyncConfig, texts: CoreTexts): List<RemoteRideSummary> {
     val response = try {
         client.execute(
             HttpRequest(
@@ -287,7 +288,7 @@ private fun fetchRemoteRides(client: HttpClient, config: SyncConfig): List<Remot
         )
     } catch (e: Exception) {
         DiagLog.shared.log(DiagEvent.SYNC_LIST_FAILED, error = e)
-        throw Exception("Sync-Server nicht erreichbar.")
+        throw Exception(texts.sync.serverUnreachable())
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -295,9 +296,9 @@ private fun fetchRemoteRides(client: HttpClient, config: SyncConfig): List<Remot
         // URL des eigenen Servers gehoert ebenso wenig ins Diagnose-Log.
         DiagLog.shared.log(DiagEvent.SYNC_LIST_FAILED, code = response.statusCode)
         if (response.statusCode == 401) {
-            throw Exception("Token wird vom Server abgelehnt.")
+            throw Exception(texts.sync.tokenRejected())
         }
-        throw Exception("Sync fehlgeschlagen (HTTP ${response.statusCode}).")
+        throw Exception(texts.sync.syncFailed(response.statusCode))
     }
 
     // Kaputtes JSON auf oberster Ebene wirft wie im Original die rohe
@@ -319,7 +320,7 @@ private fun fetchRemoteRides(client: HttpClient, config: SyncConfig): List<Remot
     }
 }
 
-private fun pushRide(client: HttpClient, config: SyncConfig, ride: Ride) {
+private fun pushRide(client: HttpClient, config: SyncConfig, ride: Ride, texts: CoreTexts) {
     val response = try {
         client.execute(
             HttpRequest(
@@ -331,20 +332,16 @@ private fun pushRide(client: HttpClient, config: SyncConfig, ride: Ride) {
         )
     } catch (e: Exception) {
         DiagLog.shared.log(DiagEvent.SYNC_PUSH_FAILED, error = e)
-        throw Exception(
-            "Hochladen der Tour \"${ride.name}\" fehlgeschlagen: Sync-Server nicht erreichbar.",
-        )
+        throw Exception(texts.sync.uploadUnreachable(ride.name))
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
         DiagLog.shared.log(DiagEvent.SYNC_PUSH_FAILED, code = response.statusCode)
-        throw Exception(
-            "Hochladen der Tour \"${ride.name}\" fehlgeschlagen (HTTP ${response.statusCode}).",
-        )
+        throw Exception(texts.sync.uploadFailed(ride.name, response.statusCode))
     }
 }
 
-private fun deleteRemoteRide(client: HttpClient, config: SyncConfig, id: String) {
+private fun deleteRemoteRide(client: HttpClient, config: SyncConfig, id: String, texts: CoreTexts) {
     val response = try {
         client.execute(
             HttpRequest(
@@ -355,14 +352,14 @@ private fun deleteRemoteRide(client: HttpClient, config: SyncConfig, id: String)
         )
     } catch (e: Exception) {
         DiagLog.shared.log(DiagEvent.SYNC_DELETE_FAILED, error = e)
-        throw Exception("Löschen einer Tour auf dem Server fehlgeschlagen: Sync-Server nicht erreichbar.")
+        throw Exception(texts.sync.deleteUnreachable())
     }
 
     // 404 gilt als Erfolg: Die Tour ist auf dem Server bereits weg — genau
     // das sollte die Loeschung erreichen.
     if ((response.statusCode < 200 || response.statusCode >= 300) && response.statusCode != 404) {
         DiagLog.shared.log(DiagEvent.SYNC_DELETE_FAILED, code = response.statusCode)
-        throw Exception("Löschen einer Tour auf dem Server fehlgeschlagen (HTTP ${response.statusCode}).")
+        throw Exception(texts.sync.deleteFailed(response.statusCode))
     }
 }
 
@@ -374,7 +371,7 @@ private fun isValidRideJson(data: JsonElement?): Boolean {
     return id != null && id.isString && name != null && name.isString && points is JsonArray
 }
 
-private fun pullRide(client: HttpClient, config: SyncConfig, entry: RemoteRideSummary): Ride {
+private fun pullRide(client: HttpClient, config: SyncConfig, entry: RemoteRideSummary, texts: CoreTexts): Ride {
     val response = try {
         client.execute(
             HttpRequest(
@@ -385,31 +382,23 @@ private fun pullRide(client: HttpClient, config: SyncConfig, entry: RemoteRideSu
         )
     } catch (e: Exception) {
         DiagLog.shared.log(DiagEvent.SYNC_PULL_FAILED, error = e)
-        throw Exception(
-            "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen: Sync-Server nicht erreichbar.",
-        )
+        throw Exception(texts.sync.downloadUnreachable(entry.name))
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
         DiagLog.shared.log(DiagEvent.SYNC_PULL_FAILED, code = response.statusCode)
-        throw Exception(
-            "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen (HTTP ${response.statusCode}).",
-        )
+        throw Exception(texts.sync.downloadFailed(entry.name, response.statusCode))
     }
 
     val data = try {
         Json.parseToJsonElement(response.body)
     } catch (e: Exception) {
         DiagLog.shared.log(DiagEvent.SYNC_PULL_FAILED, error = e)
-        throw Exception(
-            "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen: ungültige Daten vom Server.",
-        )
+        throw Exception(texts.sync.downloadInvalid(entry.name))
     }
 
     if (!isValidRideJson(data)) {
-        throw Exception(
-            "Herunterladen der Tour \"${entry.name}\" fehlgeschlagen: ungültige Daten vom Server.",
-        )
+        throw Exception(texts.sync.downloadInvalid(entry.name))
     }
 
     return Ride.fromJson(data as JsonObject)
@@ -445,10 +434,11 @@ fun syncRides(
     deleteLocal: (String) -> Unit = {},
     listTombstones: () -> List<RideTombstone> = { emptyList() },
     replaceTombstones: (List<RideTombstone>) -> Unit = {},
+    texts: CoreTexts,
 ): SyncResult {
-    val config = getSyncConfig(store) ?: throw Exception("Sync ist nicht konfiguriert.")
+    val config = getSyncConfig(store) ?: throw Exception(texts.sync.notConfigured())
 
-    val remoteRides = fetchRemoteRides(client, config)
+    val remoteRides = fetchRemoteRides(client, config, texts)
     val localRides = listLocal()
     val tombstones = listTombstones()
 
@@ -462,17 +452,17 @@ fun syncRides(
 
     for (id in plan.pushNew + plan.pushUpdated) {
         val ride = loadLocal(id) ?: continue
-        pushRide(client, config, ride)
+        pushRide(client, config, ride, texts)
     }
 
     for (id in plan.pullNew + plan.pullUpdated) {
         val entry = remoteById[id] ?: continue
-        val ride = pullRide(client, config, entry)
+        val ride = pullRide(client, config, entry, texts)
         saveLocal(ride)
     }
 
     for (id in plan.deleteRemote) {
-        deleteRemoteRide(client, config, id)
+        deleteRemoteRide(client, config, id, texts)
     }
 
     for (id in plan.deleteLocal) {

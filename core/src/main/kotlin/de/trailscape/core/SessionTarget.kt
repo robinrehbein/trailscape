@@ -1,5 +1,8 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.SessionTextKey
+import de.trailscape.core.i18n.sessionTitle
 import kotlin.math.max
 import kotlin.math.pow
 
@@ -30,12 +33,9 @@ import kotlin.math.pow
 /** Gewuenschtes Hoehenprofil eines generierten Rundkurses. */
 enum class AscentPreference { FLACH, MODERAT, BERGIG }
 
-/** Deutsche Labels fuer [AscentPreference] (Reihenfolge bedeutsam fuer Dropdowns). */
-val ascentPreferenceLabels: Map<AscentPreference, String> = linkedMapOf(
-    AscentPreference.FLACH to "Flach",
-    AscentPreference.MODERAT to "Wellig",
-    AscentPreference.BERGIG to "Bergig",
-)
+/** Label fuer [AscentPreference] in der Sprache von [texts] („Flach", „Wellig", „Bergig"). */
+fun ascentPreferenceLabel(preference: AscentPreference, texts: CoreTexts): String =
+    texts.today.ascentPreference(preference)
 
 /**
  * Grobe Intensitaetsstufe einer Einheit.
@@ -62,12 +62,9 @@ enum class SessionIntensity(
     }
 }
 
-/** Deutsche Labels fuer [SessionIntensity]. */
-val sessionIntensityLabels: Map<SessionIntensity, String> = linkedMapOf(
-    SessionIntensity.LOCKER to "locker",
-    SessionIntensity.GRUNDLAGE to "Grundlage",
-    SessionIntensity.HART to "intensiv",
-)
+/** Label fuer [SessionIntensity] in der Sprache von [texts]. */
+fun sessionIntensityLabel(intensity: SessionIntensity, texts: CoreTexts): String =
+    texts.training.sessionIntensity(intensity)
 
 /** Woher ein [RouteTarget] stammt — fuer die Beschriftung im UI. */
 enum class RouteTargetSource {
@@ -109,6 +106,13 @@ data class RouteTarget(
     /** Kurzbeschriftung der Einheit, z. B. "Lange Tour" oder "Grundlageneinheit". */
     val label: String,
     val source: RouteTargetSource,
+    /**
+     * Die ruhige erste Runde fuer jemanden ohne gefahrene Tour
+     * ([firstRoundTarget]). Ein eigenes Feld statt eines Vergleichs mit dem
+     * [label]: Das Label steht in der Sprache der Oberflaeche und taugt nicht
+     * als Erkennungsmerkmal.
+     */
+    val isFirstRound: Boolean = false,
 )
 
 // ---------------------------------------------------------------------------
@@ -302,14 +306,26 @@ fun canGenerateRouteFor(session: TrainingSession): Boolean = !session.isEvent
  *    Intensitaet nicht ueber die Topografie hereinkommt. → [AscentPreference.FLACH]
  */
 fun ascentPreferenceForSession(session: TrainingSession): AscentPreference {
-    val text = session.description.lowercase()
-    if (climbKeywords.any { text.contains(it) }) {
+    if (sessionAsksForClimbing(session)) {
         return AscentPreference.BERGIG
     }
     return when (session.intensity) {
         SessionIntensity.HART -> AscentPreference.MODERAT
         SessionIntensity.GRUNDLAGE, SessionIntensity.LOCKER -> AscentPreference.FLACH
     }
+}
+
+/**
+ * Ob die Einheit bewusst Anstiege verlangt. Mit Textschluessel steht das in
+ * den Argumenten (lange Fahrt mit Anstiegshinweis, Zielevent mit
+ * Hoehenmetern); bei Altplaenen ohne Schluessel entscheidet wie bisher der
+ * deutsche Beschreibungstext.
+ */
+private fun sessionAsksForClimbing(session: TrainingSession): Boolean = when (session.textKey) {
+    SessionTextKey.LONG_RIDE -> session.textArgs.firstOrNull() == 1
+    SessionTextKey.GOAL_EVENT -> (session.textArgs.getOrNull(1) ?: -1) >= 0
+    null -> session.description.lowercase().let { text -> climbKeywords.any { text.contains(it) } }
+    else -> false
 }
 
 /**
@@ -325,6 +341,7 @@ fun routeTargetForSession(
     session: TrainingSession,
     profile: TrainingProfile,
     recentRides: List<RideInfo>,
+    texts: CoreTexts,
 ): RouteTarget {
     val intensity = classifySessionIntensity(session)
     val speed = planningSpeedKmh(intensity, profile, recentRides)
@@ -336,7 +353,7 @@ fun routeTargetForSession(
         durationH = distanceKm / speed,
         speedKmh = speed,
         intensity = intensity,
-        label = session.title,
+        label = sessionTitle(session, texts),
         source = RouteTargetSource.PLAN,
     )
 }
@@ -458,7 +475,7 @@ fun routeTargetForToday(
 }
 
 /** Beschriftung der lockeren Runde am Ruhetag ([restDayRideTarget]). */
-const val restDayRideLabel: String = "Ruhetag – locker rollen"
+fun restDayRideLabel(texts: CoreTexts): String = texts.today.restDayRideLabel()
 
 /**
  * Die lockere Runde fuer einen Ruhetag, an dem trotzdem jemand fahren will.
@@ -488,10 +505,14 @@ const val restDayRideLabel: String = "Ruhetag – locker rollen"
  * Mindestdauer und Tempo koennen so nicht auseinanderlaufen. Nur die
  * Beschriftung wird ersetzt.
  */
-fun restDayRideTarget(profile: TrainingProfile, recentRides: List<RideInfo>): RouteTarget {
+fun restDayRideTarget(
+    profile: TrainingProfile,
+    recentRides: List<RideInfo>,
+    texts: CoreTexts,
+): RouteTarget {
     val recovery = DailyRecommendation(
         kind = DailyRecommendationKind.RECOVERY,
-        title = restDayRideLabel,
+        title = restDayRideLabel(texts),
         detail = "",
         reasons = emptyList(),
     )

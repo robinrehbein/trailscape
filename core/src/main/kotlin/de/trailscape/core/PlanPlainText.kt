@@ -1,5 +1,8 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.SessionTextKey
+
 /**
  * # Planeinheiten in Klartext
  *
@@ -13,23 +16,27 @@ package de.trailscape.core
  * plant.
  *
  * Die Ableitung laeuft ueber die Felder der Einheit ([TrainingSession.intensity],
- * [TrainingSession.isEvent]); nur die lange Fahrt wird am Titel erkannt, weil
- * es fuer sie kein eigenes Feld gibt — alle Planversionen nennen sie
- * „Lange Tour".
+ * [TrainingSession.isEvent], [TrainingSession.textKey]); nur bei Altplaenen
+ * ohne Textschluessel wird die lange Fahrt am Titel erkannt — alle
+ * Planversionen davor nannten sie „Lange Tour".
  */
 
 /** Ob [session] die lange Fahrt der Woche ist. */
-fun isLongRideSession(session: TrainingSession): Boolean =
-    !session.isEvent && session.title.lowercase().startsWith("lange")
+fun isLongRideSession(session: TrainingSession): Boolean {
+    if (session.isEvent) return false
+    val key = session.textKey ?: return session.title.lowercase().startsWith("lange")
+    return key == SessionTextKey.LONG_RIDE
+}
 
 /** Klartext-Titel, z. B. „Locker 45 km", „Lange Fahrt 80 km", „Hart 30 km". */
-fun plainSessionTitle(session: TrainingSession): String {
-    val km = "${session.targetKm} km"
+fun plainSessionTitle(session: TrainingSession, texts: CoreTexts): String {
+    val km = session.targetKm
+    val t = texts.training
     return when {
-        session.isEvent -> "Rennen $km"
-        isLongRideSession(session) -> "Lange Fahrt $km"
-        session.intensity == SessionIntensity.HART -> "Hart $km"
-        else -> "Locker $km"
+        session.isEvent -> t.plainTitleEvent(km)
+        isLongRideSession(session) -> t.plainTitleLongRide(km)
+        session.intensity == SessionIntensity.HART -> t.plainTitleHard(km)
+        else -> t.plainTitleEasy(km)
     }
 }
 
@@ -38,15 +45,13 @@ fun plainSessionTitle(session: TrainingSession): String {
  * Kuerzel. [goal] ergaenzt bei der langen Fahrt die Hoehenmeter-Erinnerung,
  * wenn das Ziel huegelig ist (ab 300 Hm).
  */
-fun plainSessionHint(session: TrainingSession, goal: Goal? = null): String = when {
-    session.isEvent -> "dein Ziel"
-    isLongRideSession(session) ->
-        if ((goal?.ascentM ?: 0.0) >= 300) {
-            "gleichmäßig, mit Höhenmetern wie im Rennen"
-        } else {
-            "gleichmäßig, lange im Sattel"
-        }
-    session.intensity == SessionIntensity.HART -> "mit harten Abschnitten, dazwischen locker"
-    session.intensity == SessionIntensity.LOCKER -> "ganz ruhig, für frische Beine"
-    else -> "ruhig, du kannst dich dabei unterhalten"
+fun plainSessionHint(session: TrainingSession, goal: Goal? = null, texts: CoreTexts): String {
+    val t = texts.training
+    return when {
+        session.isEvent -> t.plainHintEvent()
+        isLongRideSession(session) -> t.plainHintLongRide(hilly = (goal?.ascentM ?: 0.0) >= 300)
+        session.intensity == SessionIntensity.HART -> t.plainHintHard()
+        session.intensity == SessionIntensity.LOCKER -> t.plainHintRecovery()
+        else -> t.plainHintEndurance()
+    }
 }

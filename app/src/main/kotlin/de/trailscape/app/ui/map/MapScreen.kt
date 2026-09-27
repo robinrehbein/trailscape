@@ -1,42 +1,44 @@
 package de.trailscape.app.ui.map
 
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Layers
-import androidx.compose.material3.FilledTonalButton
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,14 +70,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -84,57 +87,58 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
-import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.record.abbiegehinweiseAktiviert
 import de.trailscape.app.record.batterieAusnahmeIntent
+import de.trailscape.app.record.batterieHinweisGezeigt
+import de.trailscape.app.record.merkeBatterieHinweisGezeigt
 import de.trailscape.app.record.navCourseUpAktiviert
 import de.trailscape.app.record.setzeNavCourseUpAktiviert
 import de.trailscape.app.record.setzeSprachansagenAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
-import de.trailscape.app.record.batterieHinweisGezeigt
-import de.trailscape.app.record.merkeBatterieHinweisGezeigt
 import de.trailscape.app.record.vonBatterieoptimierungAusgenommen
 import de.trailscape.app.routing.missingSegmentsFor
-import de.trailscape.app.voice.VoiceAnnouncer
-import de.trailscape.app.voice.vibriereOffRoute
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.PlaceSearchHistoryEntry
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.rememberTodayDecision
+import de.trailscape.app.ui.rides.RideShareDialog
+import de.trailscape.app.ui.rides.finishMarkers
+import de.trailscape.app.ui.rides.historyTotals
 import de.trailscape.app.ui.theme.CardPadding
-import de.trailscape.app.ui.theme.M3Transitions
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.togetherWith
 import de.trailscape.app.ui.theme.ContentMaxWidth
+import de.trailscape.app.ui.theme.M3Transitions
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.app.ui.theme.OverlayScreenPadding
+import de.trailscape.app.voice.VoiceAnnouncer
+import de.trailscape.app.voice.vibriereOffRoute
 import de.trailscape.core.AscentPreference
 import de.trailscape.core.ExplorerSquare
 import de.trailscape.core.GeoResult
+import de.trailscape.core.NAV_ZOOM_NAH
 import de.trailscape.core.NavState
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.Ride
 import de.trailscape.core.RouteNavigator
 import de.trailscape.core.RouteProfile
-import de.trailscape.core.TurnAnnouncer
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.RoutingSource
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.TurnAnnouncer
 import de.trailscape.core.Waypoint
-import de.trailscape.core.NAV_ZOOM_NAH
 import de.trailscape.core.buildGpx
 import de.trailscape.core.computeStats
 import de.trailscape.core.daempfeKurs
@@ -145,12 +149,9 @@ import de.trailscape.core.kursZwischen
 import de.trailscape.core.largestCluster
 import de.trailscape.core.largestExplorerSquare
 import de.trailscape.core.naechsteKurve
-import de.trailscape.core.zoomFuerTempo
 import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
-import de.trailscape.app.ui.rides.finishMarkers
-import de.trailscape.app.ui.rides.RideShareDialog
-import de.trailscape.app.ui.rides.historyTotals
+import de.trailscape.core.zoomFuerTempo
 import java.io.File
 import java.util.Locale
 import kotlin.math.abs
@@ -1152,10 +1153,15 @@ fun MapScreen(appViewModel: AppViewModel) {
     // --------------------------------------------------------------- Ortssuche
     // Laeuft nur beim Absenden ([submitSearch]); die Regeln dazu stehen an
     // [PlaceSearchEffect] und sind dort per Test abgesichert.
+    // Die Ortssuche sendet die App-Sprache mit (`accept-language`), damit
+    // Ortsnamen in der Sprache der Oberflaeche zurueckkommen.
+    val searchTexts = LocalCoreTexts.current
     PlaceSearchEffect(
         state = placeSearch,
         maxResults = MAX_SEARCH_RESULTS,
-        search = { query -> withContext(Dispatchers.IO) { searchPlaces(query, AppServices.httpClient) } },
+        search = { query ->
+            withContext(Dispatchers.IO) { searchPlaces(query, AppServices.httpClient, texts = searchTexts) }
+        },
     )
 
     // -------------------------------------------------------------- Navigation
@@ -1267,10 +1273,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // deshalb je Off-Route-Episode zusaetzlich einmal Vibration
                 // (README-Zusage, eigener Schalter) und Sprachansage.
                 vibriereOffRoute(context)
-                VoiceAnnouncer.sagAn(context, "Du bist abseits der Route.")
+                VoiceAnnouncer.sagAn(context) { it.offRoute() }
             }
             if (!state.offRoute && wasOffRoute) {
-                VoiceAnnouncer.sagAn(context, "Zurück auf der Route.")
+                VoiceAnnouncer.sagAn(context) { it.backOnRoute() }
             }
             wasOffRoute = state.offRoute
 
@@ -1282,14 +1288,14 @@ fun MapScreen(appViewModel: AppViewModel) {
                 // nimmt der Announcer sein Standardtempo an.
                 if (abbiegehinweiseAktiviert(context)) {
                     turnAnnouncer.melde(state.doneKm * 1000, RecordingRepository.speedKmh.value)
-                        ?.let { ansage -> VoiceAnnouncer.sagAn(context, ansage) }
+                        ?.let { ansage -> VoiceAnnouncer.sagAn(context) { it.turn(ansage.richtung, ansage.abstandM) } }
                 }
                 if (!zielGemeldet && state.remainingKm <= ZIEL_ERREICHT_KM && state.doneKm > ZIEL_ERREICHT_KM) {
                     // Einmal je Effekt-Lauf; die Mindest-Fahrstrecke davor
                     // verhindert die Zielansage direkt am Start einer Runde,
                     // deren Ziel neben dem Start liegt.
                     zielGemeldet = true
-                    VoiceAnnouncer.sagAn(context, "Ziel erreicht.")
+                    VoiceAnnouncer.sagAn(context) { it.destinationReached() }
                 }
             }
         }

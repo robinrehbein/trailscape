@@ -1,8 +1,6 @@
 package de.trailscape.core
 
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.xml.sax.InputSource
+import de.trailscape.core.i18n.CoreTexts
 import java.io.StringReader
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -10,6 +8,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Document
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
 
 /**
  * GPX-Import/-Export fuer Trailscape.
@@ -166,12 +167,12 @@ private fun parseIntInRange(raw: String?, range: IntRange): Int? {
 private fun findPowerText(el: Element): String? =
     findDescendantText(el, "power") ?: findDescendantText(el, "PowerInWatts")
 
-private fun parsePoint(el: Element): TrackPoint {
+private fun parsePoint(el: Element, texts: CoreTexts): TrackPoint {
     val lat = attrOrNull(el, "lat")?.trim()?.toDoubleOrNull()
     val lon = attrOrNull(el, "lon")?.trim()?.toDoubleOrNull()
 
     if (lat == null || !lat.isFinite() || lon == null || !lon.isFinite()) {
-        throw FormatException("Ungültige Koordinaten in der GPX-Datei.")
+        throw FormatException(texts.files.gpxInvalidCoordinates())
     }
 
     return TrackPoint(
@@ -212,7 +213,7 @@ private fun findName(root: Element): String? {
  * Trackpunkte in Reihenfolge. Faellt auf Routenpunkte (`rtept`) zurueck,
  * falls keine Trackpunkte vorhanden sind.
  */
-fun parseGpx(xmlString: String): GpxParseResult {
+fun parseGpx(xmlString: String, texts: CoreTexts): GpxParseResult {
     val doc: Document
     try {
         val factory = DocumentBuilderFactory.newInstance().apply {
@@ -233,12 +234,12 @@ fun parseGpx(xmlString: String): GpxParseResult {
         // — per `trim()` bilden wir dieselbe Nachsicht nach.
         doc = builder.parse(InputSource(StringReader(xmlString.trim())))
     } catch (e: Exception) {
-        throw FormatException("Die GPX-Datei enthält ungültiges XML.")
+        throw FormatException(texts.files.gpxInvalidXml())
     }
 
-    val root = doc.documentElement ?: throw FormatException("Die GPX-Datei enthält ungültiges XML.")
+    val root = doc.documentElement ?: throw FormatException(texts.files.gpxInvalidXml())
     if (localName(root) != "gpx") {
-        throw FormatException("Die Datei ist keine gültige GPX-Datei.")
+        throw FormatException(texts.files.gpxNotGpx())
     }
 
     var pointEls = findAllByLocalName(root, "trkpt")
@@ -247,10 +248,10 @@ fun parseGpx(xmlString: String): GpxParseResult {
     }
 
     if (pointEls.isEmpty()) {
-        throw FormatException("Die GPX-Datei enthält keine Trackpunkte.")
+        throw FormatException(texts.files.gpxNoTrackPoints())
     }
 
-    val points = pointEls.map { parsePoint(it) }
+    val points = pointEls.map { parsePoint(it, texts) }
     val name = findName(root)
 
     return GpxParseResult(name = name, points = points)

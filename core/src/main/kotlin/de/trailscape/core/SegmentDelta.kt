@@ -4,6 +4,7 @@ import btools.mapaccess.PhysicalFile
 import btools.mapaccess.Rd5DiffManager
 import btools.mapaccess.Rd5DiffTool
 import btools.util.ProgressListener
+import de.trailscape.core.i18n.CoreTexts
 import java.io.File
 
 /**
@@ -91,6 +92,7 @@ fun applySegmentDelta(
     out: File,
     onPercent: (Int) -> Unit = {},
     isCancelled: () -> Boolean = { false },
+    texts: CoreTexts,
 ): Boolean {
     val listener = object : ProgressListener {
         override fun updateProgress(task: String?, progress: Int) {
@@ -107,8 +109,7 @@ fun applySegmentDelta(
         // verwirrt.
         out.delete()
         throw OfflineRoutingException(
-            "Die Karten-Aktualisierung ließ sich nicht anwenden " +
-                "(${e.message ?: e.javaClass.simpleName}).",
+            texts.routing.segmentUpdateFailed(e.message ?: e.javaClass.simpleName),
         )
     }
     // Bei Abbruch loescht `recoverFromDelta` die Ausgabedatei selbst — genau
@@ -129,11 +130,11 @@ fun applySegmentDelta(
  * ueberschrieben, und sie meldet „checkum error" (nachgestellt in
  * `app/.../SegmentDownloadManualTest.kt`).
  *
- * @return `null`, wenn alles stimmt, sonst eine deutsche Meldung.
+ * @return `null`, wenn alles stimmt, sonst eine Meldung in der Sprache von [texts].
  */
-fun checkSegmentIntegrity(file: File): String? = try {
+fun checkSegmentIntegrity(file: File, texts: CoreTexts): String? = try {
     PhysicalFile.checkFileIntegrity(file)
     null
 } catch (e: Exception) {
-    "Die Kacheldatei ${file.name} ist beschädigt (${e.message ?: e.javaClass.simpleName})."
+    texts.routing.segmentFileDamaged(file.name, e.message ?: e.javaClass.simpleName)
 }

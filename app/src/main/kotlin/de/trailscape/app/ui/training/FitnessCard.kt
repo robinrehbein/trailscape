@@ -12,12 +12,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.FitnessAssessment
-import de.trailscape.core.levelLabels
 import kotlin.math.roundToInt
 
 /**
@@ -44,7 +44,7 @@ fun FitnessCard(assessment: FitnessAssessment) {
             // Derselbe Chip wie die Wochentyp-Marke im Trainingsplan:
             // die getoente [TagPill] mit Text in der Vollfarbe.
             TagPill(
-                text = levelLabels.getValue(assessment.level),
+                text = LocalCoreTexts.current.training.fitnessLevel(assessment.level),
                 containerColor = levelColor.copy(alpha = 0.15f),
                 contentColor = levelColor,
             )

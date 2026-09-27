@@ -112,13 +112,19 @@
          ueber den AndroidX-OnBackPressedDispatcher laeuft (Compose
          BackHandler); kein Activity.onBackPressed()/KEYCODE_BACK, das damit
          nicht mehr aufgerufen wuerde. tools:targetApi, weil das Attribut
-         unter API 33 unbekannt ist und dort ignoriert wird. -->
+         unter API 33 unbekannt ist und dort ignoriert wird.
+
+         localeConfig: Die Sprachen der App (res/xml/locales_config.xml) fuer
+         die per-App-Sprachwahl ab Android 13 (siehe i18n/AppLocale.kt). Bewusst
+         KEIN "locale" in configChanges: Nach einem Sprachwechsel wird die
+         Activity neu erzeugt und liest ihre Texte frisch. -->
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:name=".TrailscapeApplication"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"

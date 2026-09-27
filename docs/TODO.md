@@ -77,6 +77,15 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 
 ## Ideen
 
+- **Englisch: Texte je Bereich umziehen.** Das Fundament steht (Sprachwahl,
+  `:core`-Texte, TTS, Ressourcen-Gerüst, Paritätstest). Offen sind die fest im
+  Kotlin-Code stehenden UI-Texte der Bereiche today, map, rides, training,
+  more und onboarding-shell — je Bereich ein Zweig nach den Regeln in
+  `docs/i18n.md`. Danach die veralteten `*De`-Formathelfer in
+  `ui/UiFormat.kt` (`formatKmDe`, `formatDecimalDe`, `formatDate*`,
+  `formatBytes` …) entfernen. Vor einem Release müssen alle Bereiche durch
+  sein, sonst sieht eine englische Nutzerin Mischtexte.
+
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und
   strukturierte Einheiten als lesbare JSON-Datei exportieren und importieren,
   damit Trainer, Vereine und Foren Pläne ohne Plattform und ohne Konto

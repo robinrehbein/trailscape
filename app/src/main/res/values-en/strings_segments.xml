@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Englische Fassung von values/strings_segments.xml. Eigentuemer: i18n-map. -->
+<resources>
+    <string name="segment_notification_channel_name">Map data</string>
+    <string name="segment_notification_channel_description">Progress while downloading offline maps for routing. Quiet, and only while something is downloading.</string>
+    <string name="segment_notification_title">Downloading offline map</string>
+    <string name="segment_notification_start">Preparing …</string>
+    <string name="segment_notification_cancel">Cancel</string>
+</resources>

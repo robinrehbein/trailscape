@@ -1,15 +1,16 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * JSON-Kompatibilitaetstests fuer die Portierung von `lib/models.dart`.
@@ -407,13 +408,13 @@ class ModelsTest {
 
     @Test
     fun `levelLabels und weekKindLabels entsprechen den Dart-Konstanten`() {
-        assertEquals("Einsteiger", levelLabels[FitnessLevel.EINSTEIGER])
-        assertEquals("Fortgeschritten", levelLabels[FitnessLevel.FORTGESCHRITTEN])
-        assertEquals("Ambitioniert", levelLabels[FitnessLevel.AMBITIONIERT])
+        assertEquals("Einsteiger", CoreTextsDe.training.fitnessLevel(FitnessLevel.EINSTEIGER))
+        assertEquals("Fortgeschritten", CoreTextsDe.training.fitnessLevel(FitnessLevel.FORTGESCHRITTEN))
+        assertEquals("Ambitioniert", CoreTextsDe.training.fitnessLevel(FitnessLevel.AMBITIONIERT))
 
-        assertEquals("Aufbau", weekKindLabels[WeekKind.AUFBAU])
-        assertEquals("Erholung", weekKindLabels[WeekKind.ERHOLUNG])
-        assertEquals("Taper", weekKindLabels[WeekKind.TAPER])
-        assertEquals("Zielwoche", weekKindLabels[WeekKind.ZIELWOCHE])
+        assertEquals("Aufbau", CoreTextsDe.training.weekKind(WeekKind.AUFBAU))
+        assertEquals("Erholung", CoreTextsDe.training.weekKind(WeekKind.ERHOLUNG))
+        assertEquals("Taper", CoreTextsDe.training.weekKind(WeekKind.TAPER))
+        assertEquals("Zielwoche", CoreTextsDe.training.weekKind(WeekKind.ZIELWOCHE))
     }
 }

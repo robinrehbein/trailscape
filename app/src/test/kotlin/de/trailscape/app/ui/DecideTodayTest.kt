@@ -8,6 +8,7 @@ import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
 import de.trailscape.core.WeekKind
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -81,10 +82,10 @@ class DecideTodayTest {
         ),
     )
 
-    private val insights = emptyTrainingInsights(now = monday.atTime(LocalTime.NOON))
+    private val insights = emptyTrainingInsights(now = monday.atTime(LocalTime.NOON), texts = CoreTextsDe)
 
     private fun decide(day: LocalDate, withPlan: Boolean = true) =
-        decideToday(insights, if (withPlan) plan else null, emptyList(), ms(day))
+        decideToday(insights, if (withPlan) plan else null, emptyList(), ms(day), texts = CoreTextsDe)
 
     @Test
     fun `Plan-Ruhetag bietet ueberall die lockere Runde`() {
@@ -126,7 +127,7 @@ class DecideTodayTest {
 
     @Test
     fun `ohne Touren und ohne Plan bietet die Kette die erste Runde an`() {
-        val d = decideToday(emptyTrainingInsights(now = monday.atTime(LocalTime.NOON)), null, emptyList(), ms(monday))
+        val d = decideToday(emptyTrainingInsights(now = monday.atTime(LocalTime.NOON), texts = CoreTextsDe), null, emptyList(), ms(monday), texts = CoreTextsDe)
         assertTrue(d.route.firstRound)
         assertEquals(TodayEffort.LOCKER, d.effort)
         val offer = assertNotNull(d.offer)
@@ -138,11 +139,12 @@ class DecideTodayTest {
     @Test
     fun `solange die Touren laden gibt es weder erste Runde noch Angebot`() {
         val d = decideToday(
-            emptyTrainingInsights(now = monday.atTime(LocalTime.NOON)),
+            emptyTrainingInsights(now = monday.atTime(LocalTime.NOON), texts = CoreTextsDe),
             null,
             emptyList(),
             ms(monday),
             ridesLoading = true,
+            texts = CoreTextsDe,
         )
         assertFalse(d.route.firstRound)
         assertNull(d.offer)

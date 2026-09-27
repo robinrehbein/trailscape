@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -406,7 +407,7 @@ class StravaClientTest {
         // Genau einmal, und nicht in den Metadaten.
         assertEquals(1, Regex("<type>").findAll(typed).count())
         // Weiterhin gueltiges GPX.
-        assertEquals(1, parseGpx(typed).points.size)
+        assertEquals(1, parseGpx(typed, texts = CoreTextsDe).points.size)
         assertEquals("kein gpx", withGpxTrackType("kein gpx", "cycling"))
     }
 

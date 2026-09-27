@@ -28,14 +28,15 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NeutralButton
-import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.ScreenHeader
+import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
@@ -100,6 +101,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun TodayScreen(appViewModel: AppViewModel) {
+    val coreTexts = LocalCoreTexts.current
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -132,6 +134,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 rides = rides,
                 currentCtl = insights.latest?.ctl,
                 projectedCtl = projectedEventCtl(it, insights.latest?.ctl),
+                texts = coreTexts,
             )
         }
     }
@@ -308,6 +311,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 upcoming = upcomingKeySession(weekSessions, today.dayOfWeek.value - 1, todayKm),
                 deloadRecommended = insights.deload.recommended,
                 hasPlan = displayPlan != null,
+                texts = coreTexts,
             ),
             onDismiss = { showWhy = false },
         )

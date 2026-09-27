@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 import kotlin.test.Test
@@ -79,31 +80,31 @@ class ActivityFilesTest {
     @Test
     fun `Endung muss zum Inhalt passen`() {
         val error = assertFailsWith<FormatException> {
-            classifyActivityFile(file("tour.fit", gpxBytes("A", 1_000L)))
+            classifyActivityFile(file("tour.fit", gpxBytes("A", 1_000L)), texts = CoreTextsDe)
         }
         assertTrue(error.message!!.contains("Dateiendung"))
-        assertEquals(ActivityFileKind.GPX, classifyActivityFile(file("tour.GPX.gz", gzip(gpxBytes("A", 1_000L)))))
+        assertEquals(ActivityFileKind.GPX, classifyActivityFile(file("tour.GPX.gz", gzip(gpxBytes("A", 1_000L))), texts = CoreTextsDe))
     }
 
     @Test
     fun `octet-stream mit fremder Endung wird abgewiesen, ohne Namen entscheidet der Inhalt`() {
         assertFailsWith<FormatException> {
-            classifyActivityFile(file("foto.jpg", fitHeaderOnly(), mime = "application/octet-stream"))
+            classifyActivityFile(file("foto.jpg", fitHeaderOnly(), mime = "application/octet-stream"), texts = CoreTextsDe)
         }
         assertEquals(
             ActivityFileKind.FIT,
-            classifyActivityFile(file("export.bin", fitHeaderOnly(), mime = "application/vnd.ant.fit")),
+            classifyActivityFile(file("export.bin", fitHeaderOnly(), mime = "application/vnd.ant.fit"), texts = CoreTextsDe),
         )
-        assertEquals(ActivityFileKind.GPX, classifyActivityFile(file(null, gpxBytes("A", 1_000L))))
-        assertEquals(ActivityFileKind.GPX, classifyActivityFile(file("anhang", gpxBytes("A", 1_000L))))
+        assertEquals(ActivityFileKind.GPX, classifyActivityFile(file(null, gpxBytes("A", 1_000L)), texts = CoreTextsDe))
+        assertEquals(ActivityFileKind.GPX, classifyActivityFile(file("anhang", gpxBytes("A", 1_000L)), texts = CoreTextsDe))
     }
 
     @Test
     fun `Datei ohne GPX- oder FIT-Inhalt wird mit deutscher Meldung abgewiesen`() {
         val error = assertFailsWith<FormatException> {
-            classifyActivityFile(file("tour.gpx", "hallo".toByteArray()))
+            classifyActivityFile(file("tour.gpx", "hallo".toByteArray()), texts = CoreTextsDe)
         }
-        assertEquals(NOT_AN_ACTIVITY_FILE_MESSAGE, error.message)
+        assertEquals(notAnActivityFileMessage(CoreTextsDe), error.message)
     }
 
     // -----------------------------------------------------------------------
@@ -112,11 +113,11 @@ class ActivityFilesTest {
 
     @Test
     fun `GPX ohne time wird als Planung importiert, mit time als Fahrt`() {
-        val route = rideFromActivityFile(file("Komoot-Route.gpx", gpxBytes("Albtrauf", startMs = null)))
+        val route = rideFromActivityFile(file("Komoot-Route.gpx", gpxBytes("Albtrauf", startMs = null)), texts = CoreTextsDe)
         assertTrue(route.planned)
         assertEquals("Albtrauf", route.name)
 
-        val ride = rideFromActivityFile(file("fahrt.gpx", gpxBytes("Feierabend", startMs = 1_700_000_000_000L)))
+        val ride = rideFromActivityFile(file("fahrt.gpx", gpxBytes("Feierabend", startMs = 1_700_000_000_000L)), texts = CoreTextsDe)
         assertFalse(ride.planned)
         assertEquals(1_700_000_000_000L, ride.createdAt)
     }
@@ -128,7 +129,7 @@ class ActivityFilesTest {
     @Test
     fun `Sammelimport zaehlt Importe, Duplikate und defekte Dateien`() {
         val existing = listOf(
-            rideFromGpx(gpxBytes("Bestand", 1_600_000_000_000L).decodeToString(), "x", id = "alt").toSummary(),
+            rideFromGpx(gpxBytes("Bestand", 1_600_000_000_000L).decodeToString(), "x", id = "alt", texts = CoreTextsDe).toSummary(),
         )
         val files = listOf(
             file("neu-1.gpx", gpxBytes("Neu 1", 1_700_000_000_000L)),
@@ -142,48 +143,50 @@ class ActivityFilesTest {
             },
         )
 
-        val result = importActivityFiles(files, existing)
+        val result = importActivityFiles(files, existing, texts = CoreTextsDe)
 
         assertEquals(listOf("Neu 1", "Neu 2"), result.rides.map { it.name })
         assertEquals(listOf("bestand.gpx", "neu-2-kopie.gpx"), result.duplicates)
         assertEquals(listOf("kaputt.gpx", "cloud.gpx"), result.errors.map { it.path })
         assertEquals("Nicht lokal verfügbar.", result.errors[1].message)
         assertEquals(2, result.rides.map { it.id }.distinct().size)
-        assertEquals("2 importiert · 2 schon vorhanden · 2 unlesbar", bulkImportMessage(result))
-        assertNull(bulkImportFailureText(result))
+        assertEquals("2 importiert · 2 schon vorhanden · 2 unlesbar", bulkImportMessage(result, texts = CoreTextsDe))
+        assertNull(bulkImportFailureText(result, texts = CoreTextsDe))
     }
 
     @Test
     fun `dieselbe Planung zweimal importiert gilt als Duplikat`() {
-        val first = importActivityFiles(listOf(file("route.gpx", gpxBytes("Route", startMs = null))))
+        val first = importActivityFiles(listOf(file("route.gpx", gpxBytes("Route", startMs = null))), texts = CoreTextsDe)
         assertEquals(1, first.importedCount)
 
         val again = importActivityFiles(
             listOf(file("route.gpx", gpxBytes("Route", startMs = null))),
             existing = first.rides.map { it.toSummary() },
+            texts = CoreTextsDe,
         )
         assertEquals(0, again.importedCount)
         assertEquals(1, again.duplicateCount)
-        assertEquals(DUPLICATE_RIDE_MESSAGE, bulkImportMessage(again))
+        assertEquals(duplicateRideMessage(CoreTextsDe), bulkImportMessage(again, texts = CoreTextsDe))
     }
 
     @Test
     fun `Meldungen fuer eine einzelne Datei sind konkret`() {
-        val planned = importActivityFiles(listOf(file("r.gpx", gpxBytes("Route", startMs = null))))
-        assertEquals("„Route“ als Planung importiert", bulkImportMessage(planned))
+        val planned = importActivityFiles(listOf(file("r.gpx", gpxBytes("Route", startMs = null))), texts = CoreTextsDe)
+        assertEquals("„Route“ als Planung importiert", bulkImportMessage(planned, texts = CoreTextsDe))
 
-        val ridden = importActivityFiles(listOf(file("f.gpx", gpxBytes("Fahrt", 1_000L))))
-        assertEquals("„Fahrt“ importiert", bulkImportMessage(ridden))
+        val ridden = importActivityFiles(listOf(file("f.gpx", gpxBytes("Fahrt", 1_000L))), texts = CoreTextsDe)
+        assertEquals("„Fahrt“ importiert", bulkImportMessage(ridden, texts = CoreTextsDe))
 
-        val broken = importActivityFiles(listOf(file("x.gpx", "nix".toByteArray())))
-        assertEquals(NOT_AN_ACTIVITY_FILE_MESSAGE, bulkImportMessage(broken))
-        assertTrue(bulkImportFailureText(broken)!!.startsWith("Die Datei konnte nicht importiert werden."))
+        val broken = importActivityFiles(listOf(file("x.gpx", "nix".toByteArray())), texts = CoreTextsDe)
+        assertEquals(notAnActivityFileMessage(CoreTextsDe), bulkImportMessage(broken, texts = CoreTextsDe))
+        assertTrue(bulkImportFailureText(broken, texts = CoreTextsDe)!!.startsWith("Die Datei konnte nicht importiert werden."))
 
         val allBroken = importActivityFiles(
             listOf(file("x.gpx", "nix".toByteArray()), file("y.fit", "nix".toByteArray())),
+            texts = CoreTextsDe,
         )
-        assertTrue(bulkImportFailureText(allBroken)!!.startsWith("Keine der 2 Dateien"))
-        assertEquals("2 unlesbar", bulkImportMessage(allBroken))
+        assertTrue(bulkImportFailureText(allBroken, texts = CoreTextsDe)!!.startsWith("Keine der 2 Dateien"))
+        assertEquals("2 unlesbar", bulkImportMessage(allBroken, texts = CoreTextsDe))
     }
 
     @Test
@@ -193,8 +196,9 @@ class ActivityFilesTest {
                 file("a.gpx", gpxBytes("A", startMs = null, count = 3)),
                 file("b.gpx", gpxBytes("B", startMs = null, count = 4)),
             ),
+            texts = CoreTextsDe,
         )
-        assertEquals("2 als Planung importiert", bulkImportMessage(allPlanned))
+        assertEquals("2 als Planung importiert", bulkImportMessage(allPlanned, texts = CoreTextsDe))
 
         val mixed = importActivityFiles(
             listOf(
@@ -202,8 +206,9 @@ class ActivityFilesTest {
                 file("f.gpx", gpxBytes("F", 1_000L)),
                 file("g.gpx", gpxBytes("G", 2_000_000L)),
             ),
+            texts = CoreTextsDe,
         )
-        assertEquals("3 importiert (1 als Planung)", bulkImportMessage(mixed))
+        assertEquals("3 importiert (1 als Planung)", bulkImportMessage(mixed, texts = CoreTextsDe))
     }
 
     // -----------------------------------------------------------------------
@@ -229,10 +234,10 @@ class ActivityFilesTest {
         // Die Erkennung entpackt nur den Kopf und sieht eine GPX-Datei.
         assertEquals(ActivityFileKind.GPX, sniffActivityFileKind(bomb))
 
-        val result = importActivityFiles(listOf(file("bombe.gpx.gz", bomb)))
+        val result = importActivityFiles(listOf(file("bombe.gpx.gz", bomb)), texts = CoreTextsDe)
 
         assertEquals(0, result.importedCount)
-        assertEquals(listOf(FILE_TOO_LARGE_MESSAGE), result.errors.map { it.message })
+        assertEquals(listOf(fileTooLargeMessage(CoreTextsDe)), result.errors.map { it.message })
     }
 
     @Test
@@ -244,13 +249,13 @@ class ActivityFilesTest {
             byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + xml.toByteArray(Charsets.UTF_8),
         )) {
             assertEquals(ActivityFileKind.GPX, sniffActivityFileKind(bytes))
-            assertEquals("Fenster", rideFromActivityFile(file("w.gpx", bytes)).name)
+            assertEquals("Fenster", rideFromActivityFile(file("w.gpx", bytes), texts = CoreTextsDe).name)
         }
     }
 
     @Test
     fun `Planungen mit minimal abweichender Distanz gelten als Duplikat`() {
-        val route = rideFromActivityFile(file("r.gpx", gpxBytes("Route", startMs = null)), id = "1")
+        val route = rideFromActivityFile(file("r.gpx", gpxBytes("Route", startMs = null)), id = "1", texts = CoreTextsDe)
         // Frueher importiert: anderer Importzeitpunkt, also andere Startzeit.
         val summary = route.toSummary().copy(createdAt = route.createdAt - 86_400_000L)
         val rounded = summary.copy(

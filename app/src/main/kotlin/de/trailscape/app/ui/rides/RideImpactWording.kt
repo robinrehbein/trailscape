@@ -6,6 +6,7 @@ import de.trailscape.app.ui.training.formatSigned
 import de.trailscape.core.RideImpact
 import de.trailscape.core.formatDuration
 import de.trailscape.core.freshnessWord
+import de.trailscape.core.i18n.CoreTexts
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -28,7 +29,7 @@ internal data class RideImpactLine(val lead: String, val body: String)
 private const val BESTS_SUMMARY_FROM = 3
 
 /** Die Zeilen in fester Ordnung: Form, Wochenziel, Kacheln, Bestzeiten. */
-internal fun rideImpactLines(impact: RideImpact): List<RideImpactLine> = buildList {
+internal fun rideImpactLines(impact: RideImpact, texts: CoreTexts): List<RideImpactLine> = buildList {
     impact.form?.let { form ->
         if (form.noticeable) {
             add(
@@ -38,7 +39,7 @@ internal fun rideImpactLines(impact: RideImpact): List<RideImpactLine> = buildLi
                     lead = "Fitness ${formatSignedDecimalDe(form.fitnessGain)},",
                     body = "Müdigkeit ${formatSignedDecimalDe(form.fatigueGain)}, " +
                         "Frische danach ${formatSigned(form.freshnessAfter)} " +
-                        "(${freshnessWord(form.freshnessAfter)}).",
+                        "(${freshnessWord(form.freshnessAfter, texts)}).",
                 ),
             )
         } else {

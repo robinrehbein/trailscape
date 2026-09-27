@@ -4,6 +4,7 @@ import androidx.compose.runtime.saveable.SaverScope
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -33,9 +34,9 @@ class RouteSurfaceTextTest {
 
     @Test
     fun `Kandidatenzeile nennt zuerst die Gelaendeart`() {
-        assertEquals("Flach · 5 Hm/km · ±0 % zum Ziel", candidateDetailLine(candidate(40.0, 200.0, 40.0)))
-        assertEquals("Wellig · 12 Hm/km · +5,0 % zum Ziel", candidateDetailLine(candidate(42.0, 504.0, 40.0)))
-        assertEquals("Bergig · 20 Hm/km · −10,0 % zum Ziel", candidateDetailLine(candidate(36.0, 720.0, 40.0)))
+        assertEquals("Flach · 5 Hm/km · ±0 % zum Ziel", candidateDetailLine(candidate(40.0, 200.0, 40.0), texts = CoreTextsDe))
+        assertEquals("Wellig · 12 Hm/km · +5,0 % zum Ziel", candidateDetailLine(candidate(42.0, 504.0, 40.0), texts = CoreTextsDe))
+        assertEquals("Bergig · 20 Hm/km · −10,0 % zum Ziel", candidateDetailLine(candidate(36.0, 720.0, 40.0), texts = CoreTextsDe))
     }
 
     // ------------------------------------------------------- Saver

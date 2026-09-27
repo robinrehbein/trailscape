@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Heute-Tabs (ui/today/**, ui/TodayRouteTarget.kt, ui/ReadyToRideDialog.kt).
+
+    Eigentuemer: i18n-today · Schluessel-Praefix: today_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_today.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+</resources>

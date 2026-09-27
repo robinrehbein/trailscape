@@ -6,6 +6,7 @@ import de.trailscape.core.StoredRideLoadFacts
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.computeRideLoadFacts
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
@@ -48,7 +49,7 @@ class RideLoadCacheStoreTest {
         return StoredRideLoadFacts(
             updatedAt = createdAt,
             profileSignature = "sig-1",
-            facts = computeRideLoadFacts(ride, TrainingProfile(ageYears = 40, weightKg = 78.0)),
+            facts = computeRideLoadFacts(ride, TrainingProfile(ageYears = 40, weightKg = 78.0), texts = CoreTextsDe),
         )
     }
 

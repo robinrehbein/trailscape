@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -74,7 +75,7 @@ class VitalsHistoryTest {
         assertEquals(52.0, second.restingHeartRate.last().value)
 
         // Und genau darum geht es: Die Baseline traegt jetzt.
-        val assessment = assessRestingHeartRate(second.restingHeartRate, today = today)
+        val assessment = assessRestingHeartRate(second.restingHeartRate, today = today, texts = CoreTextsDe)
         assertTrue(assessment.available, assessment.unavailableReason)
         assertTrue(assessment.baselineDays >= 21)
     }
@@ -87,7 +88,7 @@ class VitalsHistoryTest {
         // was fuer einen Nutzer ohne Brustgurt eher optimistisch ist.
         val worn = summary(days = 30).restingHeartRate.series
             .filterIndexed { index, _ -> index % 4 != 0 }
-        val assessment = assessRestingHeartRate(worn, today = today)
+        val assessment = assessRestingHeartRate(worn, today = today, texts = CoreTextsDe)
         assertFalse(assessment.available)
         assertTrue(assessment.baselineDays < 21)
         assertTrue(assessment.unavailableReason!!.contains("Baseline wird aufgebaut"))
@@ -95,7 +96,7 @@ class VitalsHistoryTest {
         // Mit lokaler Historie ueber 60 Tage traegt dieselbe Trage-Quote.
         val longTerm = summary(days = 60).restingHeartRate.series
             .filterIndexed { index, _ -> index % 4 != 0 }
-        assertTrue(assessRestingHeartRate(longTerm, today = today).available)
+        assertTrue(assessRestingHeartRate(longTerm, today = today, texts = CoreTextsDe).available)
     }
 
     @Test

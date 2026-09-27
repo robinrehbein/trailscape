@@ -58,22 +58,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.components.ActionTileRow
-import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.localOfEpochMs
-import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
 import de.trailscape.app.ui.map.GravelGreen
@@ -83,6 +83,7 @@ import de.trailscape.app.ui.map.MapPadding
 import de.trailscape.app.ui.map.MapViewHost
 import de.trailscape.app.ui.map.RecordRed
 import de.trailscape.app.ui.map.buildElevationSamples
+import de.trailscape.app.ui.rememberTodayDecision
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
@@ -100,13 +101,12 @@ import de.trailscape.core.buildRideSeries
 import de.trailscape.core.computeDecoupling
 import de.trailscape.core.computePhysicsEstimate
 import de.trailscape.core.computeRideImpact
-import de.trailscape.core.confidenceLabels
 import de.trailscape.core.estimateVo2MaxFromSegments
 import de.trailscape.core.sensorMittelwerte
 import de.trailscape.core.extractSteadySegments
 import de.trailscape.core.formatDuration
 import de.trailscape.core.heartRateCurve
-import de.trailscape.core.loadSourceLabels
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.segmentEffortsForRide
 import de.trailscape.core.speedCurveKmh
 import java.time.LocalDate
@@ -294,7 +294,7 @@ internal fun RideDetailScreen(
                     )
                 } else {
                     note?.let { RideNoteBox(it) }
-                    impact?.let { RideImpactCard(rideImpactLines(it)) }
+                    impact?.let { RideImpactCard(rideImpactLines(it, LocalCoreTexts.current)) }
                 }
 
                 if (ride.points.size >= 2) {
@@ -666,6 +666,7 @@ private fun RideAnalysisCard(
     vo2max: Vo2MaxEstimate?,
     powerMeasured: Boolean = false,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val usableLoad = load?.takeIf { it.available }
     if (usableLoad == null && decoupling == null && vo2max == null) {
         return
@@ -677,7 +678,7 @@ private fun RideAnalysisCard(
                 AnalysisEntry(
                     label = "Trainingslast",
                     value = "${entry.load.roundToInt()} " +
-                        "(${loadSourceLabels[entry.source].orEmpty()})",
+                        "(${coreTexts.load.loadSource(entry.source)})",
                     explanation = entry.note,
                     confidence = entry.confidence,
                 )
@@ -698,7 +699,7 @@ private fun RideAnalysisCard(
             vo2max?.let { estimate ->
                 AnalysisEntry(
                     label = "VO₂max",
-                    value = estimate.text,
+                    value = estimate.text(coreTexts),
                     explanation = if (powerMeasured) {
                         stringResource(R.string.ble_vo2max_explanation_measured)
                     } else {
@@ -829,7 +830,7 @@ private fun AnalysisEntry(
         )
         if (confidence != Confidence.NONE) {
             Text(
-                text = "Verlässlichkeit: ${confidenceLabels[confidence].orEmpty()}",
+                text = "Verlässlichkeit: ${LocalCoreTexts.current.load.confidence(confidence)}",
                 style = MaterialTheme.typography.labelSmall,
                 color = muted,
             )
@@ -901,26 +902,30 @@ private fun rememberRideAnalysis(
     ride: Ride,
     profile: TrainingProfile,
     eftpW: Double,
+    texts: CoreTexts = LocalCoreTexts.current,
 ): State<RideAnalysis?> = produceState<RideAnalysis?>(
     initialValue = null,
     ride.id,
     ride.points.size,
     profile,
     eftpW,
+    texts,
 ) {
     value = withContext(Dispatchers.Default) {
         val estimate = computePhysicsEstimate(
             buildRideSeries(ride.points, profile),
             profile,
             eftpW = eftpW,
+            texts = texts,
         )
         if (!estimate.available) {
             RideAnalysis(decoupling = null, vo2max = null)
         } else {
-            val decoupling = computeDecoupling(estimate, profile)
+            val decoupling = computeDecoupling(estimate, profile, texts)
             val vo2max = estimateVo2MaxFromSegments(
                 extractSteadySegments(estimate.series, profile),
                 profile,
+                texts,
             )
             RideAnalysis(
                 decoupling = decoupling.takeIf { it.available },

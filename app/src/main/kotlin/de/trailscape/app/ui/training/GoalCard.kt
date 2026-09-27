@@ -4,12 +4,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -20,9 +20,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.OneUiTextField
@@ -673,6 +674,7 @@ fun GoalEditorSheet(
     onDismiss: () -> Unit,
     currentCtl: Double? = null,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     val existing = plan?.goal
 
@@ -741,7 +743,7 @@ fun GoalEditorSheet(
             return
         }
         try {
-            val newPlan = generatePlan(goal, assessFitness(rides), currentCtl = currentCtl)
+            val newPlan = generatePlan(goal, assessFitness(rides), currentCtl = currentCtl, texts = coreTexts)
             onSetPlan(newPlan)
             onMessage("Plan mit ${newPlan.weeks.size} Wochen erstellt.")
             onDismiss()

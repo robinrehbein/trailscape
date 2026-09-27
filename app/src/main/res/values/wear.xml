@@ -14,7 +14,7 @@
      verweisen, ist also von Hand synchron zu halten.
 -->
 <resources>
-    <string-array name="android_wear_capabilities">
+    <string-array name="android_wear_capabilities" translatable="false">
         <item>trailscape_telefon</item>
     </string-array>
 </resources>

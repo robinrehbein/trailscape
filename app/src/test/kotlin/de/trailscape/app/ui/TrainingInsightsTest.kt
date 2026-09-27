@@ -13,6 +13,7 @@ import de.trailscape.core.VitalsSummary
 import de.trailscape.core.VitalsTrend
 import de.trailscape.core.computeRideLoadForRide
 import de.trailscape.core.computeStats
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.Test
@@ -61,6 +62,7 @@ class TrainingInsightsTest {
             loadedIds?.add(id)
             rides.firstOrNull { it.id == id }
         },
+        texts = CoreTextsDe,
     )
 
     /**
@@ -127,7 +129,7 @@ class TrainingInsightsTest {
         // RideLoad traegt bewusst keine Leistungsreihe mehr (siehe
         // :core/RideLoadFacts.kt), ein Objektvergleich ginge daran vorbei.
         assertEquals(1.0, insights.calibration.alpha)
-        val expected = computeRideLoadForRide(ride, profile, eftpW = insights.eftp.watts)
+        val expected = computeRideLoadForRide(ride, profile, eftpW = insights.eftp.watts, texts = CoreTextsDe)
         val actual = insights.rideLoads.getValue("a")
         assertEquals(expected.load, actual.load, 1e-9)
         assertEquals(expected.source, actual.source)
@@ -216,6 +218,7 @@ class TrainingInsightsTest {
             vitals = null,
             profile = profile,
             now = now,
+            texts = CoreTextsDe,
         )
         val load = insights.rideLoads.getValue("a")
         // Grobe Heuristik statt Loch in der Fitnesskurve.
@@ -378,11 +381,13 @@ class TrainingInsightsTest {
             oldRide,
             profile.copyWith(restingHrOverride = 62.0),
             eftpW = insights.eftp.watts,
+            texts = CoreTextsDe,
         ).load
         val expectedNew = computeRideLoadForRide(
             newRide,
             profile.copyWith(restingHrOverride = 46.0),
             eftpW = insights.eftp.watts,
+            texts = CoreTextsDe,
         ).load
 
         assertEquals(expectedOld, insights.rideLoads.getValue("alt").load, 1e-9)
@@ -395,6 +400,7 @@ class TrainingInsightsTest {
             oldRide,
             profile.copyWith(restingHrOverride = 54.0),
             eftpW = insights.eftp.watts,
+            texts = CoreTextsDe,
         ).load
         assertTrue(kotlin.math.abs(globalMedian - expectedOld) > 0.5)
     }

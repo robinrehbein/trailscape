@@ -1,6 +1,5 @@
 package de.trailscape.app.ui.more
 
-import de.trailscape.app.ui.health.rememberRouteConsentLauncher
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -43,16 +42,19 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.formatDateTime
+import de.trailscape.app.ui.health.rememberRouteConsentLauncher
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.HealthSyncReport
-import de.trailscape.core.summaryLine
 import de.trailscape.core.healthSyncInitialWindowMs
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.summaryLine
 import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -84,6 +86,7 @@ private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
  */
 @Composable
 fun HealthCardContent(appViewModel: AppViewModel) {
+    val coreTexts = LocalCoreTexts.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -124,7 +127,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = current.message,
+                text = current.message(LocalCoreTexts.current),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
@@ -178,7 +181,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                             busy = true
                             try {
                                 appViewModel.syncHealthNow(reimportAll = false)
-                                appViewModel.showMessage(syncMessage(appViewModel.lastSyncReport.value))
+                                appViewModel.showMessage(syncMessage(appViewModel.lastSyncReport.value, coreTexts))
                             } catch (e: HealthSyncException) {
                                 appViewModel.showMessage(e.message)
                             } finally {
@@ -210,7 +213,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                             busy = true
                             try {
                                 appViewModel.syncHealthNow(reimportAll = true)
-                                appViewModel.showMessage(syncMessage(appViewModel.lastSyncReport.value))
+                                appViewModel.showMessage(syncMessage(appViewModel.lastSyncReport.value, coreTexts))
                             } catch (e: HealthSyncException) {
                                 appViewModel.showMessage(e.message)
                             } finally {
@@ -238,7 +241,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         val longImport = appViewModel.requestHealthHistoryAccess()
                         appViewModel.showMessage(
                             if (longImport != null) {
-                                syncMessage(longImport)
+                                syncMessage(longImport, coreTexts)
                             } else {
                                 // Health Connect zeigt den Dialog nach zwei
                                 // Ablehnungen nicht mehr — dann bleibt nur der
@@ -367,7 +370,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
 internal fun HealthSyncSummary(report: HealthSyncReport) {
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
     Text(
-        text = report.summaryLine(),
+        text = report.summaryLine(LocalCoreTexts.current),
         style = MaterialTheme.typography.bodyMedium,
     )
     Text(
@@ -410,8 +413,8 @@ internal fun HealthHistoryNotice(enabled: Boolean, onRequest: () -> Unit) {
 }
 
 /** Snackbar-Text nach einem Sync; `null` (kein Bericht) zaehlt als „nichts Neues". */
-private fun syncMessage(report: HealthSyncReport?): String =
-    report?.summaryLine() ?: "Keine neuen Touren"
+private fun syncMessage(report: HealthSyncReport?, texts: CoreTexts): String =
+    report?.summaryLine(texts) ?: texts.health.noNewRides()
 
 @Composable
 private fun HealthDebugDialog(lines: List<String>, onDismiss: () -> Unit, onCopied: () -> Unit) {

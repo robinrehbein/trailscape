@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Sprachen der Uhr-App fuer die per-App-Sprachwahl von Android 13+
+    (Einstellungen → Apps → Trailscape → Sprache). Muss zu values/ (Deutsch)
+    und values-en/ (Englisch) passen; siehe docs/i18n.md.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="de" />
+    <locale android:name="en" />
+</locale-config>

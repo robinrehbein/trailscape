@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.AscentPreference
@@ -20,6 +21,7 @@ import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
+import kotlin.math.sin
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -28,7 +30,6 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.sin
 
 /**
  * Bilder der beiden Stellen, an denen der Schotteranteil steht: die
@@ -41,7 +42,7 @@ import kotlin.math.sin
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class RouteSurfaceScreenshotTest {
 
     @get:Rule

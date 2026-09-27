@@ -43,10 +43,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.components.PillSegments
-import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.map.RouteGenerationController
 import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.theme.ContentMaxWidth
@@ -59,8 +60,8 @@ import de.trailscape.core.TrainingProfile
 import de.trailscape.core.firstRoundTarget
 import de.trailscape.core.onboardingFirstRoundPreselect
 import de.trailscape.core.riddenRides
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 /**
  * # Erststart-Einfuehrung
@@ -116,6 +117,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun OnboardingScreen(appViewModel: AppViewModel) {
+    val coreTexts = LocalCoreTexts.current
     val pagerState = rememberPagerState(pageCount = { OnboardingPage.entries.size })
     val scope = rememberCoroutineScope()
 
@@ -204,7 +206,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
         val duration = firstRound
         if (buildRound && duration != null) {
             appViewModel.requestRouteGeneration(
-                firstRoundTarget(duration.hours, appViewModel.profile.value, appViewModel.rides.value),
+                firstRoundTarget(duration.hours, appViewModel.profile.value, appViewModel.rides.value, coreTexts),
                 autoStart = true,
             )
         }
@@ -322,7 +324,7 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                                     firstRoundTouched = true
                                 },
                                 previewKm = firstRound?.let {
-                                    firstRoundTarget(it.hours, profile, rides).distanceKm.roundToInt()
+                                    firstRoundTarget(it.hours, profile, rides, coreTexts).distanceKm.roundToInt()
                                 },
                             )
                         }
@@ -465,9 +467,10 @@ private fun FirstRoundStep(
     onSelect: (FirstRoundDuration?) -> Unit,
     previewKm: Int?,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val durations = FirstRoundDuration.entries
     PillSegments(
-        options = durations.map { it.label } + FIRST_ROUND_LATER,
+        options = durations.map { it.label(coreTexts) } + FIRST_ROUND_LATER,
         selectedIndex = selected?.ordinal ?: durations.size,
         onSelect = { index -> onSelect(durations.getOrNull(index)) },
     )

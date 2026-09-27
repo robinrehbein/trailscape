@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -69,6 +70,7 @@ class RemindersTest {
                 rideCount = 20,
             ),
             now = dartEpochMs(start.atTime(9, 0)),
+            texts = CoreTextsDe,
         )
 
         fun parse(raw: String): JsonObject = Json.parseToJsonElement(raw) as JsonObject
@@ -86,6 +88,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = listOf(ride(at(TUESDAY.minusDays(30), 10))),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -117,6 +120,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = plan,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
 
         assertNotNull(notice)
@@ -133,6 +137,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = null,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -149,6 +154,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = plan,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
 
         assertNotNull(notice)
@@ -167,6 +173,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = plan,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -181,6 +188,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = plan,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -193,6 +201,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -205,6 +214,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNotNull(notice)
         assertEquals(ReminderKind.TAGESEINHEIT, notice.kind)
@@ -218,6 +228,7 @@ class RemindersTest {
             state = ReminderState(lastDailySessionOn = TUESDAY),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -230,6 +241,7 @@ class RemindersTest {
             state = ReminderState(lastDailySessionOn = MONDAY),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNotNull(notice)
     }
@@ -243,10 +255,10 @@ class RemindersTest {
         val plan = planFrom(MONDAY)
 
         assertNull(
-            dueReminder(at(TUESDAY, 5, 29), settings, ReminderState(), plan, emptyList()),
+            dueReminder(at(TUESDAY, 5, 29), settings, ReminderState(), plan, emptyList(), texts = CoreTextsDe),
         )
         assertNotNull(
-            dueReminder(at(TUESDAY, 5, 30), settings, ReminderState(), plan, emptyList()),
+            dueReminder(at(TUESDAY, 5, 30), settings, ReminderState(), plan, emptyList(), texts = CoreTextsDe),
         )
     }
 
@@ -271,6 +283,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = plan,
             rides = rides,
+            texts = CoreTextsDe,
         )
 
         assertNotNull(notice)
@@ -289,6 +302,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = plan,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
 
         assertNotNull(notice)
@@ -303,6 +317,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -315,6 +330,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -327,6 +343,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = null,
             rides = listOf(ride(at(TUESDAY, 17))),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -339,6 +356,7 @@ class RemindersTest {
             state = ReminderState(lastWeeklyReviewOn = SUNDAY),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -363,6 +381,7 @@ class RemindersTest {
             state = morningState,
             plan = plan,
             rides = listOf(ride(at(sundayInPlan.minusDays(1), 10))),
+            texts = CoreTextsDe,
         )
         assertNotNull(morning)
         assertEquals(ReminderKind.TAGESEINHEIT, morning.kind)
@@ -373,6 +392,7 @@ class RemindersTest {
             state = morningState.markDelivered(morning.kind, sundayInPlan),
             plan = plan,
             rides = listOf(ride(at(sundayInPlan.minusDays(1), 10))),
+            texts = CoreTextsDe,
         )
         assertNotNull(evening)
         assertEquals(ReminderKind.WOCHENRUECKSCHAU, evening.kind)
@@ -387,6 +407,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = listOf(ride(at(SUNDAY.minusDays(1), 10))),
+            texts = CoreTextsDe,
         )
         assertNotNull(notice)
         assertEquals(ReminderKind.WOCHENRUECKSCHAU, notice.kind)
@@ -402,6 +423,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNotNull(notice)
         assertEquals(ReminderKind.WOCHENRUECKSCHAU, notice.kind)
@@ -415,6 +437,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = planFrom(MONDAY),
             rides = listOf(ride(at(TUESDAY.minusDays(20), 10))),
+            texts = CoreTextsDe,
         )
         assertNotNull(notice)
         assertEquals(ReminderKind.TAGESEINHEIT, notice.kind)
@@ -432,6 +455,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = null,
             rides = listOf(ride(at(TUESDAY.minusDays(5), 16))),
+            texts = CoreTextsDe,
         )
 
         assertNotNull(notice)
@@ -448,6 +472,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = null,
             rides = listOf(ride(at(TUESDAY.minusDays(4), 16))),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -464,6 +489,7 @@ class RemindersTest {
                 ride(at(TUESDAY.minusDays(2), 16)),
                 ride(at(TUESDAY.minusDays(9), 16)),
             ),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -476,6 +502,7 @@ class RemindersTest {
             state = ReminderState(),
             plan = null,
             rides = emptyList(),
+            texts = CoreTextsDe,
         )
         assertNull(notice)
     }
@@ -492,6 +519,7 @@ class RemindersTest {
                 state = ReminderState(lastNudgeOn = TUESDAY.minusDays(6)),
                 plan = null,
                 rides = rides,
+                texts = CoreTextsDe,
             ),
         )
         assertNotNull(
@@ -501,6 +529,7 @@ class RemindersTest {
                 state = ReminderState(lastNudgeOn = TUESDAY.minusDays(7)),
                 plan = null,
                 rides = rides,
+                texts = CoreTextsDe,
             ),
         )
     }
@@ -510,8 +539,8 @@ class RemindersTest {
         val settings = ReminderSettings(nudgeEnabled = true, dailySessionTime = LocalTime.of(9, 0))
         val rides = listOf(ride(at(TUESDAY.minusDays(20), 16)))
 
-        assertNull(dueReminder(at(TUESDAY, 8, 59), settings, ReminderState(), null, rides))
-        assertNotNull(dueReminder(at(TUESDAY, 9, 0), settings, ReminderState(), null, rides))
+        assertNull(dueReminder(at(TUESDAY, 8, 59), settings, ReminderState(), null, rides, texts = CoreTextsDe))
+        assertNotNull(dueReminder(at(TUESDAY, 9, 0), settings, ReminderState(), null, rides, texts = CoreTextsDe))
     }
 
     // -----------------------------------------------------------------------
@@ -617,6 +646,7 @@ class RemindersTest {
                 state = ReminderState(),
                 plan = plan,
                 rides = rides,
+                texts = CoreTextsDe,
             )
 
             assertNotNull(notice)

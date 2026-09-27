@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Einstellungen (ui/more/**, ui/health/**, app/health/**, update/**, feedback/**).
+
+    Eigentuemer: i18n-more · Schluessel-Praefix: more_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_more.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- AppViewModel.kt (von der Foundation umgezogen) -->
+    <!-- %1$s = Versionsnummer -->
+    <string name="more_update_available_status">Version %1$s ist verfügbar — in den Einstellungen herunterladen.</string>
+
+    <!-- LanguageCard.kt / MoreScreen.kt -->
+    <string name="more_language_title">Sprache</string>
+    <!-- %1$s = Name der aufgeloesten Sprache („Deutsch" / „English") -->
+    <string name="more_language_status_system">Wie System (%1$s)</string>
+    <string name="more_language_option_system">System</string>
+    <string name="more_language_hint">Ohne eigene Wahl folgt Trailscape der Systemsprache: Deutsch, wenn dein Gerät auf Deutsch eingestellt ist, sonst Englisch.</string>
+    <string name="more_language_voice_hint">Sprachansagen kommen in der gewählten Sprache. Fehlt deinem Gerät die passende Stimme, bleibt es still.</string>
+</resources>

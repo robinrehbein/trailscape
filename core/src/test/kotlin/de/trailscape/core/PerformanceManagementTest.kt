@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -143,7 +144,7 @@ class PerformanceManagementTest {
         assertEquals(TsbBand.PRODUKTIV, classifyTsb(-10.1))
         assertEquals(TsbBand.PRODUKTIV, classifyTsb(-30.0))
         assertEquals(TsbBand.UEBERLASTUNG, classifyTsb(-30.1))
-        assertTrue(tsbBandMessages[TsbBand.FORMSPITZE]!!.contains("viele Fahrer"))
+        assertTrue(CoreTextsDe.load.tsbBandMessage(TsbBand.FORMSPITZE).contains("viele Fahrer"))
     }
 
     @Test
@@ -170,9 +171,10 @@ class PerformanceManagementTest {
             LoadRatioBand.BELASTUNGSSPRUNG,
             classifyLoadRatio(series.latest!!.loadRatio),
         )
-        assertEquals("Belastungssprung", loadRatioLabels[LoadRatioBand.BELASTUNGSSPRUNG])
+        assertEquals("Belastungssprung", CoreTextsDe.load.loadRatioBand(LoadRatioBand.BELASTUNGSSPRUNG))
         assertFalse(
-            loadRatioLabels.values.joinToString(" ").lowercase().contains("verletzung"),
+            LoadRatioBand.entries.joinToString(" ") { CoreTextsDe.load.loadRatioBand(it) }
+                .lowercase().contains("verletzung"),
         )
     }
 
@@ -251,8 +253,10 @@ class PerformanceManagementTest {
         // 4 h × 58 Last/h = 232 - schaerfer als der 130-%-Deckel (390).
         assertEquals(232.0, both.weeklyLoad, 1e-9)
         assertEquals(2, both.caps.size)
-        assertTrue(both.caps.last().contains("Zeitbudget"))
-        assertTrue(both.caps.last().contains("4 h"))
+        assertEquals(listOf(WeeklyLoadCap.RECENT_WEEKS, WeeklyLoadCap.TIME_BUDGET), both.caps)
+        val budgetText = weeklyLoadCapText(both.caps.last(), both, CoreTextsDe)
+        assertTrue(budgetText.contains("Zeitbudget"))
+        assertTrue(budgetText.contains("4 h"))
     }
 
     @Test
@@ -299,9 +303,9 @@ class PerformanceManagementTest {
 
     @Test
     fun `Stundenformat deutsch - ganze Zahl ohne Komma`() {
-        assertEquals("5", formatHours(5.0))
-        assertEquals("4,5", formatHours(4.5))
-        assertEquals("4,5", formatHours(4.47))
+        assertEquals("5", formatHours(5.0, texts = CoreTextsDe))
+        assertEquals("4,5", formatHours(4.5, texts = CoreTextsDe))
+        assertEquals("4,5", formatHours(4.47, texts = CoreTextsDe))
     }
 
     @Test

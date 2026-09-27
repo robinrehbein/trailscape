@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.core.dueReminder
 import de.trailscape.core.loadPlan
 import java.time.LocalDateTime
@@ -64,6 +65,7 @@ internal class ReminderWorker(
                 // Zusammenfassungen genuegen: Die Erinnerungslogik rechnet nur
                 // ueber Kennzahlen und Zeitstempel, nie ueber GPS-Punkte.
                 rides = AppServices.rideStorage.listSummaries().summaries,
+                texts = AppLocale.coreTexts(applicationContext),
             )
 
             if (notice != null && ReminderNotifications.show(applicationContext, notice)) {

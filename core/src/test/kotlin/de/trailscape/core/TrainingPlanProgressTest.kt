@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -199,7 +200,7 @@ class TrainingPlanProgressTest {
         rideCount = 16,
     )
 
-    private val plan = generatePlan(goal, advanced, now = now)
+    private val plan = generatePlan(goal, advanced, now = now, texts = CoreTextsDe)
 
     /** Dienstag der zweiten Planwoche — Woche 0 ist gerade abgeschlossen. */
     private val secondWeekTuesday: Long = dayAfterFirstMonday(7 + 1)
@@ -208,7 +209,7 @@ class TrainingPlanProgressTest {
     fun `deutlich unter Soll - die restlichen Wochen starten vom Erreichten`() {
         // Woche 0 wollte 95 km, gefahren wurden 30 → 32 % < 70 %.
         val rides = listOf(ride("r1", dayAfterFirstMonday(2), 30.0))
-        val result = adaptPlan(plan, rides, now = secondWeekTuesday)
+        val result = adaptPlan(plan, rides, now = secondWeekTuesday, texts = CoreTextsDe)
 
         assertTrue(result.adapted)
         val reason = assertNotNull(result.reason)
@@ -243,7 +244,7 @@ class TrainingPlanProgressTest {
     @Test
     fun `ueber Soll bleibt der Plan unveraendert`() {
         val rides = listOf(ride("r1", dayAfterFirstMonday(5), 90.0)) // 95 % von 95 km
-        val result = adaptPlan(plan, rides, now = secondWeekTuesday)
+        val result = adaptPlan(plan, rides, now = secondWeekTuesday, texts = CoreTextsDe)
         assertFalse(result.adapted)
         assertNull(result.reason)
         assertSame(plan, result.plan)
@@ -252,7 +253,7 @@ class TrainingPlanProgressTest {
     @Test
     fun `ohne abgeschlossene Woche passiert nichts`() {
         // Mitten in Woche 0: nichts ist abgeschlossen, nichts wird angepasst.
-        val result = adaptPlan(plan, emptyList(), now = now)
+        val result = adaptPlan(plan, emptyList(), now = now, texts = CoreTextsDe)
         assertFalse(result.adapted)
         assertSame(plan, result.plan)
     }
@@ -262,10 +263,10 @@ class TrainingPlanProgressTest {
         // Plan mit Last-Budgets (CTL 50 → Woche 0 ≈ 532 Last). Die Woche wurde
         // zwar fast komplett in Kilometern gefahren (90 von 95), aber nur mit
         // 100 Last — ein Bruchteil des Budgets: Der Aufbau traegt nicht.
-        val planned = generatePlan(goal, advanced, now = now, currentCtl = 50.0)
+        val planned = generatePlan(goal, advanced, now = now, currentCtl = 50.0, texts = CoreTextsDe)
         val rides = listOf(ride("r1", dayAfterFirstMonday(5), 90.0))
 
-        val kmOnly = adaptPlan(planned, rides, now = secondWeekTuesday)
+        val kmOnly = adaptPlan(planned, rides, now = secondWeekTuesday, texts = CoreTextsDe)
         assertFalse(kmOnly.adapted)
 
         val withLoads = adaptPlan(
@@ -274,6 +275,7 @@ class TrainingPlanProgressTest {
             now = secondWeekTuesday,
             currentCtl = 40.0,
             rideLoads = mapOf("r1" to 100.0),
+            texts = CoreTextsDe,
         )
         assertTrue(withLoads.adapted)
         // Die neuen Wochen rechnen ihre Budgets mit der uebergebenen CTL.
@@ -294,7 +296,7 @@ class TrainingPlanProgressTest {
             ride("w1", dayAfterFirstMonday(7 + 5), 20.0),
         )
         val thirdWeekTuesday = dayAfterFirstMonday(14 + 1)
-        val result = adaptPlan(plan, rides, now = thirdWeekTuesday)
+        val result = adaptPlan(plan, rides, now = thirdWeekTuesday, texts = CoreTextsDe)
 
         assertTrue(result.adapted)
         assertEquals(80, result.plan.weeks[2].targetKm)

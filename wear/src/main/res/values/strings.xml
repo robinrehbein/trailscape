@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Uhr-Texte. Eigentuemer: i18n-onboarding-shell; neue Schluessel mit Praefix wear_ (docs/i18n.md). -->
 <resources>
-    <string name="app_name">Trailscape</string>
+    <string name="app_name" translatable="false">Trailscape</string>
     <string name="notification_channel_name">Aufzeichnung</string>
     <string name="notification_channel_description">Laeuft, solange die Uhr eine Ausfahrt aufzeichnet.</string>
 </resources>

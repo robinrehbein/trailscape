@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.exp
@@ -201,10 +202,11 @@ fun predictGoalFinish(
     now: Long = System.currentTimeMillis(),
     currentCtl: Double? = null,
     projectedCtl: Double? = null,
+    texts: CoreTexts,
 ): GoalFinishPrediction {
     val goalKm = goal.distanceKm
     if (!goalKm.isFinite() || goalKm <= 0) {
-        return GoalFinishPrediction(null, "Für eine Prognose braucht das Ziel eine Distanz.")
+        return GoalFinishPrediction(null, texts.goal.predictionNeedsDistance())
     }
     val minKm = goalKm * PROGNOSIS_MIN_DISTANCE_SHARE
     val since = now - PROGNOSIS_LOOKBACK_DAYS * DAY_MS
@@ -230,9 +232,9 @@ fun predictGoalFinish(
     if (samples.size < PROGNOSIS_MIN_RIDES) {
         val needKm = ceil(minKm / 5.0).toInt() * 5
         val text = if (samples.isEmpty()) {
-            "Fahre 2–3 längere Touren (ab etwa $needKm km), dann gibt es eine Prognose."
+            texts.goal.predictionNeedsRides(needKm)
         } else {
-            "Noch eine längere Tour (ab etwa $needKm km), dann gibt es eine Prognose."
+            texts.goal.predictionNeedsOneMoreRide(needKm)
         }
         return GoalFinishPrediction(null, text)
     }
@@ -310,9 +312,10 @@ data class FitnessTrend(
     val direction: FitnessDirection,
     /** Seit wie vielen Wochen die Richtung ununterbrochen anhaelt (≥ 1). */
     val weeks: Int,
-    /** Der fertige Satz fuer die Formkarte, z. B. „Fitness steigt seit 6 Wochen". */
-    val sentence: String,
 )
+
+/** Der fertige Satz fuer die Formkarte, z. B. „Fitness steigt seit 6 Wochen". */
+fun FitnessTrend.sentence(texts: CoreTexts): String = texts.goal.fitnessTrend(direction, weeks)
 
 /** Schwelle fuer „steigt"/„sinkt" ueber zwei Wochen, in CTL-Punkten. */
 private const val TREND_THRESHOLD_14D = 1.5
@@ -343,7 +346,7 @@ fun describeFitnessTrend(points: List<FitnessPoint>): FitnessTrend? {
         else -> FitnessDirection.STABIL
     }
     if (direction == FitnessDirection.STABIL) {
-        return FitnessTrend(direction, 1, "Fitness stabil")
+        return FitnessTrend(direction, 1)
     }
     var weeks = 0
     var i = last
@@ -359,22 +362,11 @@ fun describeFitnessTrend(points: List<FitnessPoint>): FitnessTrend? {
         i -= 7
     }
     weeks = max(1, weeks)
-    val verb = if (direction == FitnessDirection.STEIGT) "steigt" else "sinkt"
-    val sentence = if (weeks >= 2) "Fitness $verb seit $weeks Wochen" else "Fitness $verb"
-    return FitnessTrend(direction, weeks, sentence)
+    return FitnessTrend(direction, weeks)
 }
 
 /**
  * Die Form (TSB) als ein Wort — „frisch", „etwas müde" … —, entlang derselben
  * Baender wie [classifyTsb].
  */
-val freshnessWords: Map<TsbBand, String> = mapOf(
-    TsbBand.SEHR_FRISCH to "sehr frisch",
-    TsbBand.FORMSPITZE to "frisch",
-    TsbBand.NEUTRAL to "ausgeglichen",
-    TsbBand.PRODUKTIV to "etwas müde",
-    TsbBand.UEBERLASTUNG to "sehr müde",
-)
-
-/** Kurzform: Frische-Wort zu einem TSB-Wert. */
-fun freshnessWord(tsb: Double): String = freshnessWords.getValue(classifyTsb(tsb))
+fun freshnessWord(tsb: Double, texts: CoreTexts): String = texts.goal.freshnessWord(classifyTsb(tsb))

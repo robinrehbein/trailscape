@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -114,13 +115,13 @@ internal fun archiveBaseName(path: String): String {
  *
  * Der Stream wird **nicht** geschlossen; das uebernimmt der Aufrufer.
  */
-fun scanArchive(input: InputStream): List<ArchiveEntry> {
+fun scanArchive(input: InputStream, texts: CoreTexts): List<ArchiveEntry> {
     val found = mutableListOf<ArchiveEntry>()
-    ZipInputStream(requireZip(input)).use { zip ->
+    ZipInputStream(requireZip(input, texts)).use { zip ->
         var entry = try {
             zip.nextEntry
         } catch (e: Exception) {
-            throw FormatException("Das Archiv konnte nicht gelesen werden.")
+            throw FormatException(texts.files.archiveUnreadable())
         }
         while (entry != null) {
             if (!entry.isDirectory) classifyArchivePath(entry.name)?.let { found.add(it) }
@@ -136,8 +137,8 @@ fun scanArchive(input: InputStream): List<ArchiveEntry> {
 }
 
 /** [scanArchive] fuer ein bereits vollstaendig geladenes Archiv. */
-fun scanArchive(zipBytes: ByteArray): List<ArchiveEntry> =
-    scanArchive(ByteArrayInputStream(zipBytes))
+fun scanArchive(zipBytes: ByteArray, texts: CoreTexts): List<ArchiveEntry> =
+    scanArchive(ByteArrayInputStream(zipBytes), texts)
 
 // ---------------------------------------------------------------------------
 // Importieren
@@ -165,6 +166,7 @@ fun importArchive(
     existing: List<RideInfo> = emptyList(),
     total: Int? = null,
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
+    texts: CoreTexts,
 ): BulkImportResult {
     val rides = mutableListOf<Ride>()
     val duplicates = mutableListOf<String>()
@@ -178,11 +180,11 @@ fun importArchive(
     val idBase = System.currentTimeMillis()
     var idIndex = 0
 
-    ZipInputStream(requireZip(input)).use { zip ->
+    ZipInputStream(requireZip(input, texts)).use { zip ->
         var zipEntry = try {
             zip.nextEntry
         } catch (e: Exception) {
-            throw FormatException("Das Archiv konnte nicht gelesen werden.")
+            throw FormatException(texts.files.archiveUnreadable())
         }
 
         while (zipEntry != null) {
@@ -191,7 +193,7 @@ fun importArchive(
                 val path = entry.path
                 try {
                     val bytes = zip.readAllBytesCompat()
-                    val ride = rideFromArchiveEntry(entry, bytes, id = (idBase + idIndex).toString())
+                    val ride = rideFromArchiveEntry(entry, bytes, id = (idBase + idIndex).toString(), texts = texts)
                     idIndex++
                     if (findDuplicateRide(seen, ride) != null) {
                         duplicates.add(path)
@@ -200,9 +202,9 @@ fun importArchive(
                         seen.add(ride)
                     }
                 } catch (e: FormatException) {
-                    errors.add(BulkImportError(path, e.message ?: "Die Datei konnte nicht gelesen werden."))
+                    errors.add(BulkImportError(path, e.message ?: texts.files.fileUnreadable()))
                 } catch (e: Exception) {
-                    errors.add(BulkImportError(path, "Die Datei konnte nicht gelesen werden."))
+                    errors.add(BulkImportError(path, texts.files.fileUnreadable()))
                 }
                 done++
                 onProgress?.invoke(done, total ?: done)
@@ -229,9 +231,10 @@ fun importArchive(
     zipBytes: ByteArray,
     existing: List<RideInfo> = emptyList(),
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
+    texts: CoreTexts,
 ): BulkImportResult {
-    val total = scanArchive(zipBytes).size
-    return importArchive(ByteArrayInputStream(zipBytes), existing, total, onProgress)
+    val total = scanArchive(zipBytes, texts).size
+    return importArchive(ByteArrayInputStream(zipBytes), existing, total, onProgress, texts)
 }
 
 /**
@@ -239,11 +242,16 @@ fun importArchive(
  * [rideFromGpx], FIT ueber [rideFromFit], `.gz` wird transparent entpackt.
  * Der Dateiname ohne Endung dient als Fallback-Name.
  */
-fun rideFromArchiveEntry(entry: ArchiveEntry, rawBytes: ByteArray, id: String? = null): Ride {
-    val bytes = if (entry.gzipped) gunzipIfNeeded(rawBytes) else rawBytes
+fun rideFromArchiveEntry(
+    entry: ArchiveEntry,
+    rawBytes: ByteArray,
+    id: String? = null,
+    texts: CoreTexts,
+): Ride {
+    val bytes = if (entry.gzipped) gunzipIfNeeded(rawBytes, texts = texts) else rawBytes
     return when (entry.kind) {
-        ArchiveEntryKind.GPX -> rideFromGpx(bytes.toString(Charsets.UTF_8), entry.baseName, id)
-        ArchiveEntryKind.FIT -> rideFromFit(bytes, entry.baseName, id)
+        ArchiveEntryKind.GPX -> rideFromGpx(bytes.toString(Charsets.UTF_8), entry.baseName, id, texts)
+        ArchiveEntryKind.FIT -> rideFromFit(bytes, entry.baseName, id, texts)
     }
 }
 
@@ -264,7 +272,7 @@ fun rideFromArchiveEntry(entry: ArchiveEntry, rawBytes: ByteArray, id: String? =
  * Daten einfach „keine Eintraege" — der Nutzer bekaeme dann statt einer
  * Fehlermeldung ein leeres Ergebnis.
  */
-private fun requireZip(input: InputStream): InputStream {
+private fun requireZip(input: InputStream, texts: CoreTexts): InputStream {
     val head = ByteArray(2)
     var read = 0
     while (read < head.size) {
@@ -273,7 +281,7 @@ private fun requireZip(input: InputStream): InputStream {
         read += n
     }
     if (read < 2 || head[0] != 'P'.code.toByte() || head[1] != 'K'.code.toByte()) {
-        throw FormatException("Die Datei ist kein gültiges ZIP-Archiv.")
+        throw FormatException(texts.files.notAZip())
     }
     val rewound = java.io.SequenceInputStream(ByteArrayInputStream(head), input)
     return NonClosingInputStream(rewound)

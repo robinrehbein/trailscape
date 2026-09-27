@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.time.LocalDateTime
 import kotlin.math.abs
 import kotlin.math.max
@@ -39,51 +40,42 @@ data class DecouplingResult(
     }
 }
 
-private fun decouplingRating(pct: Double): String {
-    if (pct < 5) {
-        return "gute aerobe Ausdauer"
-    }
-    if (pct <= 10) {
-        return "aerobe Ausdauer im Aufbau"
-    }
-    return "mehr Grundlagenarbeit sinnvoll"
-}
-
 /** Berechnet die Pe:Hr-Entkopplung — **nur**, wenn alle Gates halten (§7.2). */
 fun computeDecoupling(
     physics: PhysicsEstimate,
     profile: TrainingProfile,
+    texts: CoreTexts,
 ): DecouplingResult {
+    val t = texts.load
     if (!physics.available) {
         return DecouplingResult.unavailable(
-            physics.unavailableReason ?: "Kein Leistungsmodell verfügbar.",
+            physics.unavailableReason ?: t.decouplingNoPowerModel(),
         )
     }
     val series = physics.series
     if (series.movingTimeS < 3600) {
         return DecouplingResult.unavailable(
-            "Für die Entkopplung braucht es mindestens 60 Minuten Bewegungszeit.",
+            t.decouplingTooShort(),
         )
     }
     if (series.hrCoverage < 0.90) {
         return DecouplingResult.unavailable(
-            "Für die Entkopplung braucht es Herzfrequenz auf mindestens 90 % der Fahrt.",
+            t.decouplingHeartRateCoverage(),
         )
     }
     val avgHr = series.avgHr
     if (avgHr == null || avgHr <= 0) {
-        return DecouplingResult.unavailable("Keine Herzfrequenz vorhanden.")
+        return DecouplingResult.unavailable(t.decouplingNoHeartRate())
     }
     val relative = avgHr / profile.lthr
     if (relative < 0.70 || relative > 0.95) {
         return DecouplingResult.unavailable(
-            "Die Tour lag nicht im gleichmäßig-aeroben Bereich — " +
-                "die Entkopplung wäre nicht aussagekräftig.",
+            t.decouplingNotAerobic(),
         )
     }
     if (physics.variabilityIndex > 1.15) {
         return DecouplingResult.unavailable(
-            "Die Fahrt war zu ungleichmäßig für eine Entkopplungs-Analyse.",
+            t.decouplingTooUneven(),
         )
     }
 
@@ -100,7 +92,7 @@ fun computeDecoupling(
     }
     if (splitIndex <= 0 || splitIndex >= series.samples.size) {
         return DecouplingResult.unavailable(
-            "Die Tour lässt sich nicht in zwei vergleichbare Hälften teilen.",
+            t.decouplingNoHalves(),
         )
     }
 
@@ -112,7 +104,7 @@ fun computeDecoupling(
     val maxGain = max(gain1, gain2)
     if (maxGain > 0 && abs(gain1 - gain2) / maxGain > 0.35) {
         return DecouplingResult.unavailable(
-            "Die beiden Tourhälften unterscheiden sich zu stark im Höhenprofil.",
+            t.decouplingElevationMismatch(),
         )
     }
 
@@ -122,7 +114,7 @@ fun computeDecoupling(
     val np2 = secondHalf.normalizedPowerW
     if (hr1 == null || hr2 == null || hr1 <= 0 || hr2 <= 0 || np1 <= 0) {
         return DecouplingResult.unavailable(
-            "Für eine der Tourhälften fehlen auswertbare Werte.",
+            t.decouplingMissingValues(),
         )
     }
 
@@ -137,7 +129,7 @@ fun computeDecoupling(
         efSecond = ef2,
         decouplingPercent = pct,
         variabilityIndex = physics.variabilityIndex,
-        rating = decouplingRating(pct),
+        rating = t.decouplingRating(pct),
         // Nur die GESCHAETZTE Leistung deckelt auf „medium" — mehr ist dort
         // nicht serioes. Mit Leistungsmesser gilt die Einstufung der Messung.
         confidence = if (physics.measured) {
@@ -242,12 +234,11 @@ data class Vo2MaxEstimate(
     val confidence: Confidence,
 ) {
     /** Formulierung gemaess §8.5: immer als Band. */
-    val text: String
-        get() = if (available) {
-            "VO2max geschätzt: ${dartRound(lower!!).toInt()}–${dartRound(upper!!).toInt()} ml/kg/min"
-        } else {
-            unavailableReason ?: "VO2max nicht schätzbar"
-        }
+    fun text(texts: CoreTexts): String = if (available) {
+        texts.load.vo2MaxBand(dartRound(lower!!).toInt(), dartRound(upper!!).toInt())
+    } else {
+        unavailableReason ?: texts.load.vo2MaxNotEstimable()
+    }
 
     companion object {
         fun unavailable(reason: String): Vo2MaxEstimate = Vo2MaxEstimate(
@@ -290,9 +281,9 @@ private fun bandedEstimate(
 }
 
 /** VO2max nach Uth-Sørensen-Overgaard-Pedersen: `15,3 × HFmax / HFruhe` (§7.3 A). */
-fun estimateVo2MaxFromHrRatio(profile: TrainingProfile): Vo2MaxEstimate {
+fun estimateVo2MaxFromHrRatio(profile: TrainingProfile, texts: CoreTexts): Vo2MaxEstimate {
     if (profile.restingHr <= 0) {
-        return Vo2MaxEstimate.unavailable("Ohne Ruhepuls nicht schätzbar.")
+        return Vo2MaxEstimate.unavailable(texts.load.vo2MaxNoRestingHr())
     }
     return bandedEstimate(
         15.3 * profile.hrMax / profile.restingHr,
@@ -312,9 +303,11 @@ fun estimateVo2MaxFromHrRatio(profile: TrainingProfile): Vo2MaxEstimate {
 fun estimateVo2MaxFromSegments(
     segments: List<SteadySegment>,
     profile: TrainingProfile,
+    texts: CoreTexts,
 ): Vo2MaxEstimate {
+    val t = texts.load
     if (profile.weightKg <= 0) {
-        return Vo2MaxEstimate.unavailable("Ohne Gewichtsangabe nicht schätzbar.")
+        return Vo2MaxEstimate.unavailable(t.vo2MaxNoWeight())
     }
     val usable = segments.filter {
         it.avgHr > 0 &&
@@ -323,17 +316,13 @@ fun estimateVo2MaxFromSegments(
             it.avgPowerW.isFinite()
     }
     if (usable.size < 6) {
-        return Vo2MaxEstimate.unavailable(
-            "Zu wenige gleichmäßige Abschnitte (${usable.size} von 6).",
-        )
+        return Vo2MaxEstimate.unavailable(t.vo2MaxTooFewSegments(usable.size, 6))
     }
 
     val hrs = usable.map { it.avgHr }
     val span = hrs.reduce { a, b -> max(a, b) } - hrs.reduce { a, b -> min(a, b) }
     if (span < 25) {
-        return Vo2MaxEstimate.unavailable(
-            "Die Herzfrequenz-Spanne der Abschnitte ist zu klein.",
-        )
+        return Vo2MaxEstimate.unavailable(t.vo2MaxHeartRateSpanTooSmall())
     }
 
     // ACSM-Beinergometrie: VO2 = (10,8 × W) / kg + 7.
@@ -353,20 +342,17 @@ fun estimateVo2MaxFromSegments(
         syy += dy * dy
     }
     if (sxx <= 0 || syy <= 0) {
-        return Vo2MaxEstimate.unavailable("Regression nicht bestimmbar.")
+        return Vo2MaxEstimate.unavailable(t.vo2MaxRegressionUndetermined())
     }
     val slope = sxy / sxx
     val intercept = meanVo2 - slope * meanHr
     val r2 = (sxy * sxy) / (sxx * syy)
 
     if (r2 < 0.80) {
-        return Vo2MaxEstimate.unavailable(
-            "Der Zusammenhang zwischen Herzfrequenz und Leistung ist zu unscharf " +
-                "(r² = ${toStringAsFixed(r2, 2)}).",
-        )
+        return Vo2MaxEstimate.unavailable(t.vo2MaxRegressionFuzzy(r2))
     }
     if (slope <= 0) {
-        return Vo2MaxEstimate.unavailable("Regression nicht plausibel.")
+        return Vo2MaxEstimate.unavailable(t.vo2MaxRegressionImplausible())
     }
 
     return bandedEstimate(
@@ -385,6 +371,7 @@ fun estimateVo2Max(
     profile: TrainingProfile,
     segments: List<SteadySegment> = emptyList(),
     platformValue: Double? = null,
+    texts: CoreTexts,
 ): Vo2MaxEstimate {
     if (platformValue != null && platformValue > 0) {
         return bandedEstimate(
@@ -394,11 +381,11 @@ fun estimateVo2Max(
             Confidence.MEDIUM,
         )
     }
-    val regression = estimateVo2MaxFromSegments(segments, profile)
+    val regression = estimateVo2MaxFromSegments(segments, profile, texts = texts)
     if (regression.available) {
         return regression
     }
-    return estimateVo2MaxFromHrRatio(profile)
+    return estimateVo2MaxFromHrRatio(profile, texts = texts)
 }
 
 /** Rollierender 28-Tage-Median der VO2max-Punktwerte (§7.3, Edge Case). */

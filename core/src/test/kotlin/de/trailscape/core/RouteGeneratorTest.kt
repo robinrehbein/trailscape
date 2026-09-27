@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -156,6 +157,7 @@ class RouteGeneratorTest {
             exploredTiles = exploredTiles,
             preferNewAreas = preferNewAreas,
             wind = wind,
+            texts = CoreTextsDe,
         )
     }
 
@@ -316,6 +318,7 @@ class RouteGeneratorTest {
                 target = target(40.0),
                 pauseMs = 0,
                 sleeper = {},
+                texts = CoreTextsDe,
             )
         }
 
@@ -347,7 +350,7 @@ class RouteGeneratorTest {
 
         // Generische Meldung vorn, die konkrete Backend-Ursache in Klammern —
         // daran unterscheidet die Oberflaeche „kein Netz" von „kein Weg".
-        assertTrue(error.message!!.startsWith(errorNoRouteFound), "war: ${error.message}")
+        assertTrue(error.message!!.startsWith(errorNoRouteFound(CoreTextsDe)), "war: ${error.message}")
         assertTrue(error.message!!.contains("Routing-Server nicht erreichbar"))
         assertTrue(error.cause is RuntimeException)
     }

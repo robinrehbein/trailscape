@@ -21,5 +21,3 @@ fun findDuplicateRide(existing: List<RideInfo>, candidate: Ride): RideInfo? =
 fun isDuplicateRide(existing: List<RideInfo>, candidate: Ride): Boolean =
     de.trailscape.core.isDuplicateRide(existing, candidate)
 
-/** Meldung, wenn ein Import an der Duplikatpruefung haengen bleibt. */
-const val DUPLICATE_RIDE_MESSAGE: String = de.trailscape.core.DUPLICATE_RIDE_MESSAGE

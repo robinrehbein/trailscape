@@ -1,10 +1,12 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTexts
+import java.nio.charset.StandardCharsets
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import java.nio.charset.StandardCharsets
 
 /**
  * Ortssuche über den öffentlichen Nominatim-Server (OpenStreetMap).
@@ -56,13 +58,17 @@ private fun isDartUnreserved(c: Int): Boolean =
     (c in 'A'.code..'Z'.code) || (c in 'a'.code..'z'.code) || (c in '0'.code..'9'.code) ||
         c == '-'.code || c == '.'.code || c == '_'.code || c == '~'.code
 
-/** Baut die Nominatim-Such-URL mit denselben Query-Parametern (und derselben Reihenfolge) wie Dart. */
-private fun buildSearchUrl(query: String): String {
+/**
+ * Baut die Nominatim-Such-URL mit denselben Query-Parametern (und derselben
+ * Reihenfolge) wie Dart. `accept-language` ist die App-Sprache (`de`/`en`),
+ * damit Ortsnamen in der Sprache der Oberflaeche zurueckkommen.
+ */
+internal fun buildSearchUrl(query: String, language: AppLanguage): String {
     val params = listOf(
         "q" to query,
         "format" to "jsonv2",
         "limit" to "5",
-        "accept-language" to "de",
+        "accept-language" to language.tag,
     )
     val encodedQuery = params.joinToString("&") { (key, value) ->
         "${dartEncodeQueryComponent(key)}=${dartEncodeQueryComponent(value)}"
@@ -77,13 +83,13 @@ private fun buildSearchUrl(query: String): String {
  * Tests ein Fake) — anders als in Dart gibt es hier keinen intern erzeugten
  * Standard-Client, da `:core` keine konkrete HTTP-Implementierung enthält.
  */
-fun searchPlaces(query: String, client: HttpClient): List<GeoResult> {
+fun searchPlaces(query: String, client: HttpClient, texts: CoreTexts): List<GeoResult> {
     val trimmed = query.trim()
     if (trimmed.isEmpty()) {
         return emptyList()
     }
 
-    val url = buildSearchUrl(trimmed)
+    val url = buildSearchUrl(trimmed, texts.language)
 
     val response = try {
         client.execute(
@@ -94,21 +100,21 @@ fun searchPlaces(query: String, client: HttpClient): List<GeoResult> {
             ),
         )
     } catch (e: Exception) {
-        throw Exception("Ortssuche nicht erreichbar. Bist du online?")
+        throw Exception(texts.routing.placeSearchUnreachable())
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw Exception("Ortssuche fehlgeschlagen (HTTP ${response.statusCode}).")
+        throw Exception(texts.routing.placeSearchFailed(response.statusCode))
     }
 
     val data = try {
         Json.parseToJsonElement(response.body)
     } catch (e: Exception) {
-        throw Exception("Unerwartete Antwort der Ortssuche.")
+        throw Exception(texts.routing.placeSearchUnexpected())
     }
 
     if (data !is JsonArray) {
-        throw Exception("Unerwartete Antwort der Ortssuche.")
+        throw Exception(texts.routing.placeSearchUnexpected())
     }
 
     val results = mutableListOf<GeoResult>()

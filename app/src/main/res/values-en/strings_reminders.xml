@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Englische Fassung von values/strings_reminders.xml. Eigentuemer: i18n-onboarding-shell. -->
+<resources>
+    <string name="reminder_notification_channel_name">Reminders</string>
+    <string name="reminder_notification_channel_description">Today’s session, weekly review and a nudge after a longer break. Created on your device — Trailscape has no push server.</string>
+</resources>

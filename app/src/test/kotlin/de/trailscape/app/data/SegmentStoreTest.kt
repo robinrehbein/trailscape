@@ -4,6 +4,7 @@ import de.trailscape.core.Ride
 import de.trailscape.core.SegmentRegistry
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.computeStats
+import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.updateSegmentRegistry
 import java.io.File
 import kotlin.io.path.createTempDirectory
@@ -47,8 +48,8 @@ class SegmentStoreTest {
     private fun sampleRegistry(): SegmentRegistry {
         val r1 = climbRide("r1", 1_700_000_000_000L, dtMs = 5000L)
         val r2 = climbRide("r2", 1_700_100_000_000L, dtMs = 4000L, jitterLat = 0.00004)
-        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        registry = updateSegmentRegistry(registry, r2).registry
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
         return registry
     }
 
