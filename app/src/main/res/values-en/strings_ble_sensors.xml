@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- English counterparts of values/strings_ble_sensors.xml (see there for format arguments). -->
+<resources>
+    <string name="ble_page_intro">Heart rate straps, power meters and cadence sensors connect straight to your phone over Bluetooth — no watch needed. Trailscape only connects while you record and while this page is open. Readings stay on your device.</string>
+
+    <string name="ble_type_heart_rate">Heart rate</string>
+    <string name="ble_type_power">Power</string>
+    <string name="ble_type_cadence">Cadence</string>
+
+    <string name="ble_device_heart_rate">Heart rate strap</string>
+    <string name="ble_device_power">Power meter</string>
+    <string name="ble_device_cadence">Cadence sensor</string>
+
+    <string name="ble_none_paired">No sensor paired</string>
+    <string name="ble_list_status_none">None paired</string>
+
+    <string name="ble_scan">Search for sensors</string>
+    <string name="ble_scan_running">Searching …</string>
+    <string name="ble_scan_stop">Stop search</string>
+    <string name="ble_scan_hint">Wake the sensor up: put on the strap, turn the cranks or spin the wheel.</string>
+    <string name="ble_scan_empty">Nothing found yet.</string>
+    <string name="ble_found_heading">Found</string>
+    <string name="ble_scan_failed">The search couldn’t start (error %1$d). Turn Bluetooth off and on again and try once more.</string>
+
+    <string name="ble_pair">Pair</string>
+    <string name="ble_forget">Forget</string>
+    <string name="ble_cancel">Cancel</string>
+    <string name="ble_unnamed_device">Unnamed sensor</string>
+
+    <string name="ble_replace_title">Replace “%1$s”?</string>
+    <string name="ble_replace_text">Trailscape remembers one sensor per reading. “%1$s” will take the place of “%2$s”.</string>
+    <string name="ble_replace_confirm">Replace</string>
+
+    <string name="ble_forget_title">Forget “%1$s”?</string>
+    <string name="ble_forget_text">Trailscape will stop connecting to this sensor. Rides you’ve already recorded keep their data.</string>
+
+    <string name="ble_state_connecting">Connecting …</string>
+    <string name="ble_state_connected_hr">Connected · %1$d bpm</string>
+    <string name="ble_state_connected_power">Connected · %1$d W</string>
+    <string name="ble_state_connected_cadence">Connected · %1$d rpm</string>
+    <string name="ble_state_connected_waiting">Connected · waiting for readings</string>
+    <string name="ble_state_silent">Connected · no data for %1$d s</string>
+    <string name="ble_state_retry">Disconnected · retrying in %1$d s</string>
+    <string name="ble_state_idle">Connects when you next record</string>
+    <string name="ble_state_no_permission">No permission for nearby devices</string>
+    <string name="ble_state_bluetooth_off">Bluetooth is off</string>
+
+    <string name="ble_bluetooth_off_notice">Bluetooth is off. Without it, Trailscape can’t find or connect to sensors.</string>
+    <string name="ble_bluetooth_enable">Turn on Bluetooth</string>
+    <string name="ble_permission_notice">To search, Trailscape needs the “Nearby devices” permission. The app doesn’t use it to work out your location.</string>
+    <string name="ble_permission_notice_legacy">On this Android version, Bluetooth search requires location access — the same permission recording uses. Location must be switched on.</string>
+    <string name="ble_permission_grant">Allow</string>
+    <string name="ble_permission_settings">Allow in Settings</string>
+    <string name="ble_not_supported">This device doesn’t support Bluetooth Low Energy.</string>
+    <string name="ble_watch_priority_note">While a heart rate strap is connected, its reading counts and the watch’s heart rate steps aside.</string>
+
+    <string name="ble_ride_power_label">W · Power</string>
+    <string name="ble_ride_cadence_label">rpm · Cadence</string>
+    <string name="ble_tile_silent">no data %1$d s</string>
+    <string name="ble_tile_connecting">connecting …</string>
+
+    <string name="ble_compact_power_label">W</string>
+
+    <string name="ble_spoken_power">Power %1$d watts</string>
+    <string name="ble_spoken_cadence">Cadence %1$d revolutions per minute</string>
+    <string name="ble_spoken_silent">%1$s: no data from the sensor for %2$d seconds</string>
+    <string name="ble_spoken_connecting">%1$s: connecting to sensor</string>
+
+    <string name="ble_fact_avg_power">Avg. power</string>
+    <string name="ble_fact_power_value">%1$d W</string>
+    <string name="ble_fact_avg_cadence">Avg. cadence</string>
+    <string name="ble_fact_cadence_value">%1$d rpm</string>
+    <string name="ble_vo2max_explanation_measured">Estimated from the steady sections of this ride (heart rate against measured power). Even with a power meter it’s still an estimate — hence a range.</string>
+</resources>

@@ -73,7 +73,7 @@ import kotlinx.coroutines.withContext
  * vier Ebenen (Zahnrad → Liste → Akkordeon → „Erweitert"); zugeklappt zeigte
  * keine Zeile, wie es um sie steht. Jetzt:
  *
- *  * **Liste** — eine flache Karte mit sechs Zeilen und die Gruppe „App" mit
+ *  * **Liste** — eine flache Karte mit sieben Zeilen und die Gruppe „App" mit
  *    zwei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
  *    einer Statuszeile („Auto-Pause an · Ansagen an", „Noch nie gesichert"),
  *    siehe `SettingsStatus.kt`.
@@ -240,6 +240,7 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
 internal enum class SettingsPage(val title: String) {
     PROFILE("Profil"),
     HEALTH("Uhr & Gesundheitsdaten"),
+    SENSORS("Sensoren"),
     RECORDING("Aufzeichnung & Ansagen"),
     REMINDERS("Erinnerungen"),
     OFFLINE("Karten offline"),
@@ -256,11 +257,12 @@ private fun MoreSection.toPage(): SettingsPage = when (this) {
 }
 
 /**
- * Die Liste: Update-Hinweis (falls vorhanden), sechs Zeilen ohne
+ * Die Liste: Update-Hinweis (falls vorhanden), sieben Zeilen ohne
  * Gruppenlabel, dann die Gruppe „App".
  *
  * Die Reihenfolge folgt dem Erstnutzer: erst das Profil (ohne Alter und
- * Gewicht rechnet nichts richtig), dann die Uhr als Datenquelle, dann das
+ * Gewicht rechnet nichts richtig), dann die Uhr und die Bluetooth-Sensoren
+ * als Datenquellen, dann das
  * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Sync und „Über"
  * betreffen die App selbst und stehen deshalb abgesetzt.
  *
@@ -287,6 +289,7 @@ private fun SettingsList(
         recordingStatusText(autoPauseAktiviert(context), sprachansagenAktiviert(context))
     }
     val lastBackupAt = remember { lastBackupAt(context) }
+    val sensorsStatus = remember { sensorsListStatus(context) }
     var lastHealthImport by remember { mutableStateOf<LocalDateTime?>(null) }
     var offlineStatus by remember { mutableStateOf(offlineStatusText(null, null, 0L)) }
     val versionName = remember {
@@ -343,6 +346,12 @@ private fun SettingsList(
                     title = SettingsPage.HEALTH.title,
                     status = healthStatusText(health, lastHealthImport),
                     onClick = { onOpen(SettingsPage.HEALTH) },
+                )
+                ListDivider()
+                SettingsNavRow(
+                    title = SettingsPage.SENSORS.title,
+                    status = sensorsStatus,
+                    onClick = { onOpen(SettingsPage.SENSORS) },
                 )
                 ListDivider()
                 SettingsNavRow(
@@ -413,6 +422,7 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
         when (page) {
             SettingsPage.PROFILE -> SettingsSection { ProfileCardContent(appViewModel) }
             SettingsPage.HEALTH -> SettingsSection { HealthCardContent(appViewModel) }
+            SettingsPage.SENSORS -> SettingsSection { SensorsCardContent() }
             SettingsPage.RECORDING -> {
                 SettingsSection(label = "Aufzeichnung") { RecordingCardContent() }
                 SettingsSection(label = "Ansagen") { AnnouncementsCardContent() }

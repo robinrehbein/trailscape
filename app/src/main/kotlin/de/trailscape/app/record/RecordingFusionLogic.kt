@@ -1,6 +1,7 @@
 package de.trailscape.app.record
 
 import de.trailscape.core.FusedPoint
+import de.trailscape.core.PunktSensorWerte
 import de.trailscape.core.Quelle
 import de.trailscape.core.TrackPoint
 
@@ -31,9 +32,12 @@ import de.trailscape.core.TrackPoint
  *    im Telefon-GPS wird durch die Uhr geschlossen, statt die Tour
  *    unterbrechen zu lassen.
  *
- * Die zuletzt bekannte Herzfrequenz der Uhr haengt unabhaengig von der Quelle
- * an jedem aufgezeichneten Punkt (siehe [TrackPoint.hr]) — sie hat mit der
- * Positionsfrage nichts zu tun.
+ * Die Sensorwerte haengen unabhaengig von der Positionsquelle an jedem
+ * aufgezeichneten Punkt — sie haben mit der Positionsfrage nichts zu tun:
+ * die Herzfrequenz ([TrackPoint.hr], ein frischer Pulsgurt vor der Uhr), die
+ * Leistung ([TrackPoint.power], Mittel seit dem vorigen Punkt) und die
+ * Trittfrequenz ([TrackPoint.cad]). Welcher Wert gilt, entscheidet
+ * `punktSensorWerte` in `:core` (ueber `BleSensors.punktWerte`).
  */
 
 /**
@@ -47,7 +51,8 @@ import de.trailscape.core.TrackPoint
  * @param telefonPunkt der vom [de.trailscape.core.PointFilter] angenommene
  *   Telefon-Punkt dieses Aufrufs. `null`, wenn dieser Aufruf durch eine
  *   Uhr-Probe ausgeloest wurde (keine begleitende Telefon-Position).
- * @param letzteHf zuletzt von der Uhr gemeldete Herzfrequenz, oder `null`.
+ * @param werte die Sensorwerte fuer diesen Punkt; [PunktSensorWerte.LEER]
+ *   laesst den Basispunkt unveraendert (auch ein etwaiges `hr` darin).
  * @return `null`, wenn weder ein Telefon-Punkt noch eine fusionierte Position
  *   vorliegt — es gibt dann nichts aufzuzeichnen (nur bei kaputten Aufrufen,
  *   in der Praxis unerreichbar).
@@ -55,7 +60,7 @@ import de.trailscape.core.TrackPoint
 fun waehlePunktZumAufzeichnen(
     fused: FusedPoint?,
     telefonPunkt: TrackPoint?,
-    letzteHf: Int?,
+    werte: PunktSensorWerte,
 ): TrackPoint? {
     val basis = if (fused != null && fused.zuletzt == Quelle.UHR) {
         TrackPoint(lat = fused.lat, lon = fused.lon, ele = fused.hoeheM, time = fused.zeitMs)
@@ -63,5 +68,8 @@ fun waehlePunktZumAufzeichnen(
         telefonPunkt
     } ?: return null
 
-    return if (letzteHf != null) basis.copy(hr = letzteHf) else basis
+    val mitWerten = basis.copy(hr = werte.hr ?: basis.hr, power = werte.powerW ?: basis.power, cad = werte.cadRpm ?: basis.cad)
+    // Ohne neue Werte derselbe Punkt, nicht nur ein gleicher: Aufzeichnungen
+    // ohne Sensor bleiben so exakt beim alten Verhalten.
+    return if (mitWerten == basis) basis else mitWerten
 }

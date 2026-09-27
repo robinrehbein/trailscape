@@ -17,7 +17,12 @@ class RideLoadFactsTest {
 
     private val profile = TrainingProfile(ageYears = 40, weightKg = 78.0)
 
-    private fun ride(hr: Int? = 140, speedMs: Double = 8.33, withEle: Boolean = true): Ride {
+    private fun ride(
+        hr: Int? = 140,
+        speedMs: Double = 8.33,
+        withEle: Boolean = true,
+        power: ((Int) -> Int?)? = null,
+    ): Ride {
         val startMs = 1700000000000L
         val stepDeg = speedMs * 5.0 / 111_320.0
         val points = (0..720).map { i ->
@@ -27,6 +32,7 @@ class RideLoadFactsTest {
                 ele = if (withEle) 500.0 else null,
                 time = startMs + i * 5_000L,
                 hr = hr,
+                power = power?.invoke(i),
             )
         }
         return Ride(
@@ -107,6 +113,41 @@ class RideLoadFactsTest {
             ),
         )
         assertEquals(entry, parsedEntry)
+    }
+
+    @Test
+    fun `gemessene Leistung - Rekonstruktion ist bitgleich zur Punkt-Berechnung`() {
+        // Ohne Hoehenprofil: Nur die Messung macht den Leistungspfad moeglich.
+        val r = ride(hr = null, withEle = false, power = { i -> if (i % 7 == 0) 0 else 210 + i % 40 })
+        val facts = computeRideLoadFacts(r, profile)
+        assertTrue(facts.physicsMeasured)
+        assertEquals(1.0, facts.physicsMeasuredCoverage, 1e-9)
+        for (ftp in listOf(180.0, 250.0)) {
+            val expected = computeRideLoadForRide(r, profile, eftpW = ftp)
+            assertEquals(LoadSource.LEISTUNG, expected.source)
+            assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = ftp))
+            // α darf auf gemessene Leistung nicht wirken.
+            val kalibriert = LoadCalibration(alpha = 1.3, sampleCount = 10, clamped = false, confidence = Confidence.MEDIUM)
+            assertSameLoad(expected, rideLoadFromFacts(facts, profile, eftpW = ftp, calibration = kalibriert))
+        }
+    }
+
+    @Test
+    fun `physicsMeasured ueberlebt den Roundtrip, alter Eintrag liest sich als false`() {
+        val facts = computeRideLoadFacts(ride(hr = null, power = { 200 }), profile)
+        assertTrue(facts.physicsMeasured)
+        val json = facts.toJson()
+        assertTrue(json.containsKey("physicsMeasured"))
+        assertEquals(facts, RideLoadFacts.fromJson(Json.parseToJsonElement(json.toString()) as JsonObject))
+
+        val ohne = computeRideLoadFacts(ride(hr = 140), profile)
+        val ohneJson = ohne.toJson()
+        // Ohne Messung kein neuer Schluessel — alte Cache-Eintraege bleiben gleich.
+        assertTrue(!ohneJson.containsKey("physicsMeasured"))
+        assertTrue(!ohneJson.containsKey("physicsMeasuredCoverage"))
+        val alt = RideLoadFacts.fromJson(Json.parseToJsonElement(ohneJson.toString()) as JsonObject)
+        assertTrue(!alt.physicsMeasured)
+        assertEquals(0.0, alt.physicsMeasuredCoverage, 0.0)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package de.trailscape.app.record
 
 import de.trailscape.core.LocationFusion
+import de.trailscape.core.PunktSensorWerte
 import de.trailscape.core.Quelle
 import de.trailscape.core.TrackPoint
 import kotlin.test.Test
@@ -42,7 +43,7 @@ class RecordingFusionLogicTest {
                 genauigkeitM = 8.0,
             )
 
-            val aufgezeichnet = waehlePunktZumAufzeichnen(fused, punkt, letzteHf = null)
+            val aufgezeichnet = waehlePunktZumAufzeichnen(fused, punkt, werte = PunktSensorWerte.LEER)
 
             // Byteidentisch, nicht nur naeherungsweise gleich: Ohne Uhr darf
             // sich am heutigen Verhalten NICHTS aendern.
@@ -74,7 +75,7 @@ class RecordingFusionLogicTest {
             genauigkeitM = 12.0,
         )
 
-        val aufgezeichnet = waehlePunktZumAufzeichnen(fused, telefonPunkt = null, letzteHf = null)
+        val aufgezeichnet = waehlePunktZumAufzeichnen(fused, telefonPunkt = null, werte = PunktSensorWerte.LEER)
 
         requireNotNull(aufgezeichnet)
         requireNotNull(fused)
@@ -96,7 +97,7 @@ class RecordingFusionLogicTest {
             genauigkeitM = 8.0,
         )
 
-        val aufgezeichnet = waehlePunktZumAufzeichnen(fused, telefonPunkt, letzteHf = 142)
+        val aufgezeichnet = waehlePunktZumAufzeichnen(fused, telefonPunkt, werte = PunktSensorWerte(hr = 142, powerW = null, cadRpm = null))
 
         assertEquals(142, aufgezeichnet?.hr)
         // Position bleibt trotzdem exakt die des Telefons.
@@ -105,16 +106,48 @@ class RecordingFusionLogicTest {
     }
 
     @Test
+    fun `Leistung und Trittfrequenz haengen an Telefon- und Uhr-Punkten`() {
+        val werte = PunktSensorWerte(hr = null, powerW = 230, cadRpm = 88)
+        val fusion = LocationFusion()
+        val telefon = telefonPunkt(0L, 52.5200, 13.4050)
+        val fusedTelefon = fusion.fuege(Quelle.TELEFON, telefon.time!!, telefon.lat, telefon.lon, telefon.ele, 8.0)
+        val ausTelefon = requireNotNull(waehlePunktZumAufzeichnen(fusedTelefon, telefon, werte))
+        assertEquals(230, ausTelefon.power)
+        assertEquals(88, ausTelefon.cad)
+        assertNull(ausTelefon.hr)
+        assertEquals(telefon.lat, ausTelefon.lat)
+
+        val fusedUhr = fusion.fuege(Quelle.UHR, 3_000L, 52.5203, 13.4055, 118.0, 12.0)
+        val ausUhr = requireNotNull(waehlePunktZumAufzeichnen(fusedUhr, telefonPunkt = null, werte = werte))
+        assertEquals(230, ausUhr.power)
+        assertEquals(88, ausUhr.cad)
+        assertEquals(3_000L, ausUhr.time)
+    }
+
+    @Test
+    fun `der Gurtpuls ueberschreibt den hr des Basispunkts`() {
+        val mitHr = telefonPunkt(0L, 52.52, 13.405).copy(hr = 120)
+        val aufgezeichnet = waehlePunktZumAufzeichnen(
+            fused = null,
+            telefonPunkt = mitHr,
+            werte = PunktSensorWerte(hr = 151, powerW = null, cadRpm = null),
+        )
+        assertEquals(151, aufgezeichnet?.hr)
+        // Ohne neuen Puls bleibt der vorhandene stehen — und zwar derselbe Punkt.
+        assertSame(mitHr, waehlePunktZumAufzeichnen(fused = null, telefonPunkt = mitHr, werte = PunktSensorWerte.LEER))
+    }
+
+    @Test
     fun `eine von der Fusion verworfene Probe faellt auf den Telefon-Punkt zurueck`() {
         val telefonPunkt = telefonPunkt(0L, 52.5200, 13.4050)
 
-        val aufgezeichnet = waehlePunktZumAufzeichnen(fused = null, telefonPunkt = telefonPunkt, letzteHf = null)
+        val aufgezeichnet = waehlePunktZumAufzeichnen(fused = null, telefonPunkt = telefonPunkt, werte = PunktSensorWerte.LEER)
 
         assertSame(telefonPunkt, aufgezeichnet)
     }
 
     @Test
     fun `ohne Telefon-Punkt und ohne fusionierte Position gibt es nichts aufzuzeichnen`() {
-        assertNull(waehlePunktZumAufzeichnen(fused = null, telefonPunkt = null, letzteHf = null))
+        assertNull(waehlePunktZumAufzeichnen(fused = null, telefonPunkt = null, werte = PunktSensorWerte.LEER))
     }
 }

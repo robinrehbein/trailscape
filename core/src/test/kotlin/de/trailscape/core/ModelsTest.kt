@@ -62,6 +62,53 @@ class ModelsTest {
     }
 
     @Test
+    fun `TrackPoint mit Leistung und Trittfrequenz im Roundtrip`() {
+        val point = TrackPoint(lat = 1.0, lon = 2.0, time = 5L, hr = 150, power = 240, cad = 92)
+        val json = point.toJson()
+        assertEquals(
+            """{"lat":1.0,"lon":2.0,"time":5,"hr":150,"power":240,"cad":92}""",
+            json.toString(),
+        )
+        assertEquals(point, TrackPoint.fromJson(json))
+    }
+
+    @Test
+    fun `TrackPoint ohne Sensorwerte bleibt byteidentisch zum bisherigen Format`() {
+        val point = TrackPoint(lat = 1.0, lon = 2.0, ele = 3.5, time = 5L, hr = 150)
+        assertEquals("""{"lat":1.0,"lon":2.0,"ele":3.5,"time":5,"hr":150}""", point.toJson().toString())
+        assertFalse(point.toJson().containsKey("power"))
+        assertFalse(point.toJson().containsKey("cad"))
+    }
+
+    @Test
+    fun `fehlender power- und cad-Schluessel liest sich als null`() {
+        val point = TrackPoint.fromJson(obj("""{"lat":1.0,"lon":2.0,"hr":120}"""))
+        assertNull(point.power)
+        assertNull(point.cad)
+        // Explizites null ebenso — nicht 0.
+        val mitNull = TrackPoint.fromJson(obj("""{"lat":1.0,"lon":2.0,"power":null,"cad":null}"""))
+        assertNull(mitNull.power)
+        assertNull(mitNull.cad)
+    }
+
+    @Test
+    fun `Ride ohne Sensorwerte serialisiert unveraendert`() {
+        val ride = Ride(
+            id = "r",
+            name = "n",
+            createdAt = 10L,
+            stats = RideStats(distanceKm = 1.0, ascentM = 0.0, descentM = 0.0),
+            points = listOf(TrackPoint(lat = 1.0, lon = 2.0, time = 10L)),
+        )
+        assertEquals(
+            """{"id":"r","name":"n","createdAt":10,"points":[{"lat":1.0,"lon":2.0,"time":10}],""" +
+                """"stats":{"distanceKm":1.0,"durationS":null,"movingTimeS":null,"avgSpeedKmh":null,""" +
+                """"ascentM":0.0,"descentM":0.0},"updatedAt":10}""",
+            ride.toJson().toString(),
+        )
+    }
+
+    @Test
     fun `TrackPoint ohne lat wirft`() {
         assertFailsWith<MissingOrInvalidFieldException> {
             TrackPoint.fromJson(obj("""{"lon":11.5}"""))

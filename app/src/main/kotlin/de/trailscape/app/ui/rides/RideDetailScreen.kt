@@ -42,6 +42,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -100,6 +102,7 @@ import de.trailscape.core.computePhysicsEstimate
 import de.trailscape.core.computeRideImpact
 import de.trailscape.core.confidenceLabels
 import de.trailscape.core.estimateVo2MaxFromSegments
+import de.trailscape.core.sensorMittelwerte
 import de.trailscape.core.extractSteadySegments
 import de.trailscape.core.formatDuration
 import de.trailscape.core.heartRateCurve
@@ -595,6 +598,7 @@ private fun AllValues(
             load = load,
             decoupling = analysis?.decoupling,
             vo2max = analysis?.vo2max,
+            powerMeasured = analysis?.powerMeasured == true,
         )
 
         if (segmentViews.isNotEmpty()) {
@@ -605,11 +609,14 @@ private fun AllValues(
 
 /**
  * Die Kennzahlen, die nicht in der Zahlenzeile stehen: Fahrzeit (im
- * Unterschied zur Gesamtdauer dort), Ø Tempo, Abstieg und Max. Puls.
+ * Unterschied zur Gesamtdauer dort), Ø Tempo, Abstieg und Max. Puls — und,
+ * wo ein Leistungsmesser oder Trittfrequenzsensor mitgemessen hat (oder die
+ * importierte GPX-Datei es mitbrachte), Ø Leistung und Ø Trittfrequenz.
  */
 @Composable
 private fun RideExtraFactsCard(ride: Ride) {
     val stats = ride.stats
+    val sensoren = remember(ride.id, ride.points.size) { sensorMittelwerte(ride.points) }
 
     DetailCard {
         FlowRow(
@@ -624,6 +631,15 @@ private fun RideExtraFactsCard(ride: Ride) {
             )
             Fact("Hm ↓", "${stats.descentM.roundToInt()} Hm")
             stats.maxHrBpm?.let { Fact("Max. Puls", "$it bpm") }
+            sensoren.avgPowerW?.let {
+                Fact(stringResource(R.string.ble_fact_avg_power), stringResource(R.string.ble_fact_power_value, it))
+            }
+            sensoren.avgCadenceRpm?.let {
+                Fact(
+                    stringResource(R.string.ble_fact_avg_cadence),
+                    stringResource(R.string.ble_fact_cadence_value, it),
+                )
+            }
         }
     }
 }
@@ -642,6 +658,7 @@ private fun RideAnalysisCard(
     load: RideLoad?,
     decoupling: DecouplingResult?,
     vo2max: Vo2MaxEstimate?,
+    powerMeasured: Boolean = false,
 ) {
     val usableLoad = load?.takeIf { it.available }
     if (usableLoad == null && decoupling == null && vo2max == null) {
@@ -676,9 +693,13 @@ private fun RideAnalysisCard(
                 AnalysisEntry(
                     label = "VO₂max",
                     value = estimate.text,
-                    explanation = "Aus den gleichmäßigen Abschnitten dieser Tour geschätzt " +
-                        "(Herzfrequenz gegen geschätzte Leistung). Deshalb ein Band und " +
-                        "kein Messwert.",
+                    explanation = if (powerMeasured) {
+                        stringResource(R.string.ble_vo2max_explanation_measured)
+                    } else {
+                        "Aus den gleichmäßigen Abschnitten dieser Tour geschätzt " +
+                            "(Herzfrequenz gegen geschätzte Leistung). Deshalb ein Band und " +
+                            "kein Messwert."
+                    },
                     confidence = estimate.confidence,
                 )
             }
@@ -850,6 +871,8 @@ private fun rememberRideCurves(ride: Ride): State<RideCurves?> = produceState<Ri
 private data class RideAnalysis(
     val decoupling: DecouplingResult?,
     val vo2max: Vo2MaxEstimate?,
+    /** Leistung vom Leistungsmesser statt geschaetzt (siehe `PhysicsEstimate.measured`). */
+    val powerMeasured: Boolean = false,
 )
 
 /**
@@ -896,6 +919,7 @@ private fun rememberRideAnalysis(
             RideAnalysis(
                 decoupling = decoupling.takeIf { it.available },
                 vo2max = vo2max.takeIf { it.available },
+                powerMeasured = estimate.measured,
             )
         }
     }

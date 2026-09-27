@@ -32,6 +32,25 @@ data class TrackPoint(
      * Sync-Server bleiben damit unveraendert kompatibel.
      */
     val hr: Int? = null,
+    /**
+     * Leistung in Watt — das **Mittel seit dem vorigen Punkt**, nicht ein
+     * Momentwert, damit die Energie des Intervalls stimmt (Leistung schwankt
+     * je Pedaltritt stark). Quelle: ein per Bluetooth gekoppelter
+     * Leistungsmesser oder ein GPX-Import (`<power>`).
+     *
+     * Rueckwaertskompatibel wie [hr]: Der Schluessel `power` (Name wie in der
+     * GPX-Konvention von Strava) wird nur geschrieben, wenn er gesetzt ist;
+     * Punkte ohne Messung bleiben byteweise beim alten Format, und ein
+     * fehlender Schluessel liest sich als `null` (nicht als 0 W).
+     */
+    val power: Int? = null,
+    /**
+     * Trittfrequenz in Kurbelumdrehungen pro Minute zum Zeitpunkt des Punkts.
+     * Quelle: Bluetooth-Trittfrequenzsensor, Kurbeldaten des Leistungsmessers
+     * oder ein GPX-Import (`gpxtpx:cad`). Schluessel `cad` wie in der
+     * Garmin-TrackPointExtension; geschrieben nur mit Wert, siehe [power].
+     */
+    val cad: Int? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("lat", lat)
@@ -39,6 +58,9 @@ data class TrackPoint(
         ele?.let { put("ele", it) }
         time?.let { put("time", it) }
         hr?.let { put("hr", it) }
+        // Angehaengt und nur mit Wert (siehe [power]/[cad]).
+        power?.let { put("power", it) }
+        cad?.let { put("cad", it) }
     }
 
     companion object {
@@ -48,6 +70,8 @@ data class TrackPoint(
             ele = json.optionalDouble("ele"),
             time = json.optionalLong("time"),
             hr = json.optionalInt("hr"),
+            power = json.optionalInt("power"),
+            cad = json.optionalInt("cad"),
         )
     }
 }

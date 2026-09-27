@@ -301,6 +301,20 @@ enum class DiagEvent {
     WEAR_BRIDGE_UNAVAILABLE,
     WEAR_CAPABILITY_FAILED,
     WEAR_SEND_FAILED,
+
+    // Bluetooth-Sensoren — nur Codes, nie Adressen oder Geraetenamen.
+
+    /** Die Suche liess sich nicht starten: `code` = `ScanCallback.SCAN_FAILED_*`. */
+    BLE_SCAN_FAILED,
+
+    /** Verbindung abgebrochen oder gescheitert: `code` = GATT-Status (z. B. 133). */
+    BLE_GATT_ERROR,
+
+    /** Ein Bluetooth-Aufruf scheiterte an einer fehlenden Berechtigung. */
+    BLE_NO_PERMISSION,
+
+    /** Der Sensor bietet den erwarteten Dienst bzw. die Messwert-Characteristic nicht an. */
+    BLE_SERVICE_MISSING,
 }
 
 /**

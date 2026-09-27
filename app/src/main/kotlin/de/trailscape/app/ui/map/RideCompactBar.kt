@@ -1,6 +1,8 @@
 package de.trailscape.app.ui.map
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +36,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.trailscape.app.record.RecordingRepository
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
+import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
@@ -53,9 +55,13 @@ import kotlin.math.roundToInt
  * `MapScreen.kt`): dieselbe laufende Aufzeichnung wie im grossen Fahrmodus
  * (`RideModeScreen.kt`), nur so flach, dass die Karte die Hauptrolle behaelt.
  * Eine Zeile Werte — Tempo · gefahrene km · Hoehenmeter · Fahrzeit, dazu der
- * **Puls**, wenn eine gekoppelte Uhr live liefert (dieselbe Regel wie die
- * Puls-Kachel des Fahrmodus: ohne Uhr erscheint gar nichts, die uebrigen
- * Werte behalten ihre Plaetze) — und darunter die drei Handgriffe:
+ * **Puls**, wenn Uhr oder Pulsgurt live liefern, und die **Leistung**, wenn
+ * ein Leistungsmesser gekoppelt ist (dieselben Regeln wie die Sensorzeile
+ * des Fahrmodus, siehe `rememberLiveSensorAnzeige`: ohne Quelle erscheint
+ * gar nichts, ein stiller Sensor zeigt den Strich, die uebrigen Werte
+ * behalten ihre Plaetze). Die **Trittfrequenz** steht bewusst nur im
+ * Fahrmodus: Mit sieben Spalten wuerde die Leiste auf normal breiten
+ * Telefonen die Fahrzeit abschneiden. — Darunter die drei Handgriffe:
  * Pause/Weiter, Beenden und rechts „Daten" als Rueckweg zur grossen
  * Datenseite.
  *
@@ -85,15 +91,10 @@ internal fun RideCompactBar(
     onStop: () -> Unit,
     onShowData: () -> Unit,
     modifier: Modifier = Modifier,
+    // Die Live-Sensorwerte — dieselbe Quelle wie im Fahrmodus; Parameter nur
+    // fuer Screenshot-Tests.
+    sensoren: LiveSensorAnzeige = rememberLiveSensorAnzeige(),
 ) {
-
-    // Der Puls direkt aus dem Repository statt als Parameter — dasselbe
-    // Muster samt Begruendung wie im Fahrmodus (`RideModeScreen.kt`):
-    // `watchConnected` als Bedingung, denn eine veraltete Herzfrequenz einer
-    // getrennten Uhr waere ein stilles Falschanzeigen.
-    val heartRateBpm by RecordingRepository.heartRateBpm.collectAsStateWithLifecycle()
-    val watchConnected by RecordingRepository.watchConnected.collectAsStateWithLifecycle()
-    val pulsBpm = heartRateBpm.takeIf { watchConnected }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -133,12 +134,27 @@ internal fun RideCompactBar(
                     label = "Fahrzeit",
                     spoken = "Fahrzeit ${formatDuration(elapsedS)}",
                 )
-                if (pulsBpm != null) {
+                sensoren.puls?.let { kachel ->
+                    val t = sensorKachelText(SensorKachelArt.PULS, kachel, label = "bpm", stillLabelKurz = true)
                     CompactValue(
                         modifier = Modifier.weight(1f),
-                        value = "$pulsBpm",
-                        label = "bpm",
-                        spoken = "Puls $pulsBpm Schläge pro Minute",
+                        value = t.wert,
+                        label = t.label,
+                        spoken = t.spoken,
+                    )
+                }
+                sensoren.leistung?.let { kachel ->
+                    val t = sensorKachelText(
+                        SensorKachelArt.LEISTUNG,
+                        kachel,
+                        label = stringResource(R.string.ble_compact_power_label),
+                        stillLabelKurz = true,
+                    )
+                    CompactValue(
+                        modifier = Modifier.weight(1f),
+                        value = t.wert,
+                        label = t.label,
+                        spoken = t.spoken,
                     )
                 }
             }
@@ -243,18 +259,29 @@ private fun CompactValue(
     modifier: Modifier = Modifier,
     kleiner: Boolean = false,
 ) {
-    Column(modifier = modifier.clearAndSetSemantics { contentDescription = spoken }) {
-        Text(
+    // Rechts etwas Luft: geschrumpfte Werte sollen nicht an der Nachbarspalte kleben.
+    Column(modifier = modifier.padding(end = 6.dp).clearAndSetSemantics { contentDescription = spoken }) {
+        val groesse = if (kleiner) CompactValueSizeKlein else CompactValueSize
+        // Schrumpfen statt abschneiden: Mit Puls und Watt teilen sich sechs
+        // Spalten die Breite, und auf langen Touren wurde aus „112,8" sonst
+        // „11…" — ein abgeschnittener Wert ist eine falsche Auskunft.
+        BasicText(
             text = value,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontSize = if (kleiner) CompactValueSizeKlein else CompactValueSize,
-            lineHeight = CompactValueSize * 1.1f,
-            fontWeight = FontWeight.Bold,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = CompactValueSizeMin,
+                maxFontSize = groesse,
+                stepSize = 1.sp,
+            ),
             // Tabellenziffern: gleiche Ziffernbreite, damit die Sekunden der
             // Fahrzeit die Nachbarwerte nicht im Takt verschieben.
-            style = MaterialTheme.typography.bodyLarge.copy(fontFeatureSettings = "tnum"),
-            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontFeatureSettings = "tnum",
+                fontSize = groesse,
+                lineHeight = CompactValueSize * 1.1f,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
         )
         Text(
             text = label,
@@ -304,6 +331,9 @@ internal fun kompaktTempoSpoken(speedKmh: Double?, paused: Boolean, autoPaused: 
 
 /** Schriftgroesse der Kompaktwerte — gross genug fuer den Lenker-Blick, flach genug fuer die Karte. */
 private val CompactValueSize = 24.sp
+
+/** Untergrenze beim Schrumpfen langer Werte (siehe [CompactValue]). */
+private val CompactValueSizeMin = 14.sp
 
 /** Kleinere Stufe fuer Wort-Werte („Auto-Pause"), damit nichts abschneidet. */
 private val CompactValueSizeKlein = 18.sp

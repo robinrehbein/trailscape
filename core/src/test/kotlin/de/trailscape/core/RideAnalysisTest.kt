@@ -88,6 +88,23 @@ class RideAnalysisTest {
     }
 
     @Test
+    fun `mit gemessener Leistung darf die Entkopplung HIGH werden`() {
+        val points = track(
+            pointCount = 3701,
+            speedMs = 5.0,
+            stepS = 1,
+            startEle = 100.0,
+            hr = { i -> if (i <= 1850) 130 else 140 },
+        ).map { it.copy(power = 170) }
+        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile)
+        assertTrue(physics.measured)
+        val d = computeDecoupling(physics, refProfile)
+        assertTrue(d.available)
+        assertEquals(Confidence.HIGH, d.confidence)
+        assertEquals(7.14, d.decouplingPercent!!, 0.6)
+    }
+
+    @Test
     fun `konstante HF ergibt nahezu keine Entkopplung`() {
         val d = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 135, hrSecond = 135),
@@ -301,6 +318,9 @@ class RideAnalysisTest {
     fun `Lastquellen sind als Schaetzung gekennzeichnet`() {
         assertTrue(loadSourceLabels[LoadSource.PHYSIK]!!.contains("schätzung"))
         assertTrue(loadSourceLabels[LoadSource.HEURISTIK]!!.contains("geschätzt"))
+        // Gemessen heisst gemessen — nur dort fehlt das Wort „geschätzt".
+        assertEquals("aus gemessener Leistung", loadSourceLabels[LoadSource.LEISTUNG])
+        assertEquals(LoadSource.entries.size, loadSourceLabels.size)
     }
 
     @Test

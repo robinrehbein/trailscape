@@ -27,6 +27,9 @@ Servernamen sind bewusst mit angegeben.
   Gerät verarbeitet. Gesundheitswerte, die zu einer Tour gehören, können nur
   beim optionalen Sync an deinen eigenen Server gehen. Trailscape schreibt
   nichts nach Health Connect zurück.
+- **Bluetooth-Sensoren** (Pulsgurt, Leistungsmesser, Trittfrequenzsensor)
+  verbinden sich direkt und nur lokal; ihre Messwerte gehen nirgendwohin
+  außer in deine Touren.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
   Sync-Server und, nur mit Schalter, der aktuelle Wind am Startpunkt einer
@@ -55,10 +58,11 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 
 | Was | Wo | Inhalt |
 |---|---|---|
-| Touren | `<filesDir>/rides/<id>.json` | Zeitpunkt, Name, GPS-Punkte (Position, Höhe, Zeit, ggf. Puls), berechnete Statistik |
+| Touren | `<filesDir>/rides/<id>.json` | Zeitpunkt, Name, GPS-Punkte (Position, Höhe, Zeit, ggf. Puls, Leistung, Trittfrequenz), berechnete Statistik |
 | Laufende Aufzeichnung | `<filesDir>/recording/active.jsonl` | GPS-Punkte der gerade laufenden Tour, damit ein Absturz sie nicht verliert. Wird nach dem Speichern der Tour gelöscht |
 | Trainingsprofil und -plan | SharedPreferences (`trailscape.*`) | Alter, Geschlecht, Gewicht, FTP/Schwellenwerte, Zielsetzung, Wochenplan |
 | Vitalhistorie | SharedPreferences (`trailscape.vitals.v1`) | Tageswerte der letzten 400 Tage: Ruhepuls, HRV, Schlafstunden, VO₂max — lokal gehalten, weil Health Connect Daten nach 30 Tagen löscht und die Baselines längere Fenster brauchen (`core/…/VitalsHistory.kt`) |
+| Gekoppelte Sensoren | SharedPreferences (`trailscape.ble.sensors`) | je Messwert Typ, Bluetooth-Adresse und Name des Sensors |
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
 | Sync-Einstellungen (optional) | SharedPreferences (`trailscape.sync`) | Adresse **deines** Sync-Servers und dein Zugangstoken — im Klartext im privaten App-Speicher |
 | Health-Sync-Stand | SharedPreferences, Schlüssel `trailscape.healthsync`, `trailscape.healthsync.historyImportDone` und `trailscape.healthsync.historyImportedUntil` | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird; ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist; solange dieser Import noch nicht fertig ist, der Zeitpunkt, bis zu dem er schon gespeichert hat |
@@ -90,6 +94,7 @@ Komoot-Link) ruft die App nicht ab.
 | Standort (genau/ungefähr) | Aufzeichnung der Tour, Anzeige der eigenen Position auf der Karte und Startpunkt der Rundkurs-Suche („Runde bauen“ am Ende der Einführung, auf „Heute“, „Routen suchen“). Außerhalb einer Aufzeichnung liest die App die Position nur, wenn du sie ausdrücklich anforderst: Standort-Knopf auf der Karte, Rundkurs-Suche ab deinem Standort. „Während der Nutzung erlauben" genügt: Die Aufzeichnung läuft als Vordergrunddienst weiter, auch bei gesperrtem Display — eine Hintergrund-Standortberechtigung (`ACCESS_BACKGROUND_LOCATION`) fragt die App nicht an und deklariert sie auch nicht |
 | Vordergrunddienst (Standort) | damit die Aufzeichnung bei gesperrtem Display und nach dem Wegwischen der App weiterläuft |
 | Benachrichtigungen | die Anzeige der laufenden Aufzeichnung |
+| Geräte in der Nähe (Bluetooth; unter Android 12 der Standort) | Suchen und Verbinden von Pulsgurt, Leistungsmesser und Trittfrequenzsensor. Gesucht wird nur, wenn du unter *Mehr → Sensoren* „Nach Sensoren suchen“ tippst; verbunden wird nur während einer Aufzeichnung und solange die Seite *Sensoren* offen ist. Die App ermittelt darüber keinen Standort (`neverForLocation`) |
 | Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync, Wind am Startpunkt (nur mit Schalter „Wind berücksichtigen“), Update-Prüfung – Details in Abschnitt 4 |
 | Health Connect: Training, Trainingsrouten, Herzfrequenz, Ruhepuls, HRV, Schlaf, Distanz, Kalorien, VO₂max | **nur lesend**, für den Import von Trainings und die Erholungs-/Formberechnung. Liefert die Uhr keinen Ruhepuls, leitet die App ihn auf dem Gerät aus dem nächtlichen Puls ab |
 | Health Connect: Verlauf älter als 30 Tage (optional) | **nur lesend**, damit die Ruhepuls- und HRV-Baselines nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann |
@@ -119,6 +124,10 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
 | **api.github.com** (Update-Prüfung) | beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
+
+Bluetooth-Sensoren sind keine Netzwerkverbindung: Die Werte kommen per
+Bluetooth LE direkt vom Sensor aufs Handy und gehen von dort nirgendwohin —
+außer, wie alle Tourdaten, beim optionalen Sync an deinen eigenen Server.
 
 Zu den Kartenkacheln: Wer nur ungern seinen Kartenausschnitt an einen Anbieter
 gibt, wählt die **Vektorkarte** und speichert die Region einmal (*Karte →

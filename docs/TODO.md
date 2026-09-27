@@ -23,6 +23,16 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   die App dort nicht auf eine APK außerhalb von Play verweist. Den Absatz zur
   Update-Prüfung in `PRIVACY.md` dann entsprechend anpassen.
 
+- **Bluetooth-Sensoren auf echter Hardware testen.** Die GATT-Anbindung
+  (`app/.../sensors/`) ist nur ueber die reine Logik in `:core` getestet.
+  Vor dem Release mit mindestens einem Pulsgurt (z. B. Polar H10), einem
+  Leistungsmesser (z. B. Favero Assioma) und einem CSC-Sensor pruefen, je auf
+  einem Geraet unter und ab Android 12: Koppeln, Verbinden bei
+  Aufzeichnungsstart, Neuversuch nach Abbruch (Status 133), doppelte Werte ab
+  API 33, Sensoren ohne Dienst-UUID in der Werbung. Dazu klaeren, ob Play fuer
+  den RecordingService den Diensttyp `connectedDevice` verlangt, und die
+  Angaben zu „Gesundheit und Fitness" im Datensicherheitsformular pruefen.
+
 ## Ideen
 
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und
@@ -34,3 +44,12 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   der Spur kappen (optional), damit ein geteiltes Bild die Haustuer nicht
   verraet. Heute sagt nur ein Hinweis im Teilen-Dialog, dass man Start und
   Ziel erkennen kann.
+- **eFTP-Text bei Leistungsmesser** — `TrainingInsights` beschriftet die FTP
+  weiter als „aus der GPS-Leistungsschätzung (±15–25 %)“, auch wenn das beste
+  20-min-Mittel aus gemessener Leistung stammt. Herkunft je Tour mitfuehren
+  und den Text dann unterscheiden.
+- **Radtempo vom CSC-Sensor** — `radTempoKmh` (`core/.../BleSensorLogik.kt`)
+  ist gerechnet und getestet, aber nicht verdrahtet. Mit einem Radumfang im
+  Profil koennte es GPS im Tunnel oder auf der Rolle ersetzen.
+- **RR-Intervalle speichern** — der Puls-Parser liest sie schon; als eigenes
+  Feld in der Tour gaeben sie HRV waehrend der Fahrt her.

@@ -43,16 +43,24 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Absturzsicherung: Jeder Punkt geht sofort in ein Journal
   (`<filesDir>/recording/active.jsonl`). Bricht der Prozess ab, bietet die App
   beim nächsten Start die Wiederherstellung der Tour an
+- Bluetooth-Sensoren ohne Uhr: Pulsgurt, Leistungsmesser und
+  Trittfrequenzsensor (Bluetooth LE, Standard-Profile Herzfrequenz, Cycling
+  Power, Speed & Cadence) unter Mehr → Sensoren koppeln; während der
+  Aufzeichnung verbindet die App sich von selbst, zeigt Puls, Watt und
+  Trittfrequenz im Fahrmodus und speichert sie je Punkt. Ein gekoppelter Gurt
+  hat Vorrang vor dem Uhr-Puls. Gemessene Leistung ersetzt in der Auswertung
+  die GPS-Schätzung
 
 **Touren**
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
-  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben —
+  Pulskurve, Ø Leistung und Ø Trittfrequenz, wo gemessen, dazu Entkopplung
+  und VO₂max-Schätzung, wo die Daten es hergeben —
   und oben „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
   neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
   Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
   Tourblatt der Karte genau diese Ansicht
-- Umbenennen, Löschen, als GPX oder als Bild teilen (Story 9:16 oder Quadrat,
+- Umbenennen, Löschen, als GPX (mit Puls, Trittfrequenz und Leistung) oder als Bild teilen (Story 9:16 oder Quadrat,
   mit Spur, Höhenprofil und Kennzahlen), GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
@@ -341,6 +349,7 @@ AndroidX/Compose, Kotlin, OkHttp, OpenStreetMap, FOSSGIS, CyclOSM, OpenTopoMap,
 Esri, OpenFreeMap/OpenMapTiles, BRouter, Nominatim) stehen in der App unter
 **Mehr → Über → Open-Source-Lizenzen** und im Quelltext in
 [`app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt`](app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt).
+Bluetooth über die Android-Plattform-API, keine zusätzliche Bibliothek.
 
 **Eine proprietäre Abhängigkeit — mit Absicht.** Trailscape kam früher mit
 `com.google.android.gms:play-services-location`; diese Abhängigkeit bleibt

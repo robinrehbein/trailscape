@@ -14,6 +14,9 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.core.LiveKachel
+import de.trailscape.core.LiveSensorAnzeige
+import de.trailscape.core.PulsQuelle
 import de.trailscape.core.TurnRichtung
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -51,7 +54,12 @@ class RideModeScreenshotTest {
         naechsteKurveM = 610.0,
     )
 
-    private fun fahrmodus(paused: Boolean, nav: RideModeNavigation?, name: String) {
+    private fun fahrmodus(
+        paused: Boolean,
+        nav: RideModeNavigation?,
+        name: String,
+        sensoren: LiveSensorAnzeige = LiveSensorAnzeige.LEER,
+    ) {
         compose.setContent {
             TrailscapeTheme {
                 RideModeScreen(
@@ -66,6 +74,7 @@ class RideModeScreenshotTest {
                     onClose = {},
                     onShowMap = {},
                     autoPaused = paused,
+                    sensoren = sensoren,
                 )
             }
         }
@@ -82,6 +91,79 @@ class RideModeScreenshotTest {
 
     @Test
     fun fahrmodusOhneNavigation() = fahrmodus(paused = false, nav = null, name = "72-fahrmodus-ohne-navigation")
+
+    /** Pulsgurt 142, Leistung 215 W, Trittfrequenzsensor seit 12 s still. */
+    private val dreiSensoren = LiveSensorAnzeige(
+        puls = LiveKachel(142, null),
+        pulsQuelle = PulsQuelle.GURT,
+        leistung = LiveKachel(215, null),
+        trittfrequenz = LiveKachel(null, 12),
+    )
+
+    // Deutsch ausdruecklich: Robolectric laeuft sonst in en-US und nimmt die
+    // englischen Sensor-Texte aus values-en.
+    @Test
+    @Config(qualifiers = "+de")
+    fun fahrmodusSensoren() = fahrmodus(
+        paused = false,
+        nav = navigation,
+        name = "74-fahrmodus-sensoren",
+        sensoren = dreiSensoren,
+    )
+
+    @Test
+    @Config(qualifiers = "+de")
+    fun fahrmodusNurPuls() = fahrmodus(
+        paused = false,
+        nav = null,
+        name = "75-fahrmodus-nur-puls",
+        sensoren = LiveSensorAnzeige(LiveKachel(131, null), PulsQuelle.UHR, null, null),
+    )
+
+    @Test
+    @Config(qualifiers = "+de")
+    fun kartenseiteSensoren() {
+        compose.setContent {
+            TrailscapeTheme {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(24.dp),
+                    ) {
+                        RideCompactBar(
+                            speedKmh = 27.4,
+                            distanceKm = 112.8,
+                            ascentM = 1284.0,
+                            elapsedS = 15_310,
+                            paused = false,
+                            autoPaused = false,
+                            onTogglePause = {},
+                            onStop = {},
+                            onShowData = {},
+                            sensoren = dreiSensoren,
+                        )
+                        RideCompactBar(
+                            speedKmh = 21.0,
+                            distanceKm = 8.2,
+                            ascentM = 40.0,
+                            elapsedS = 1_210,
+                            paused = false,
+                            autoPaused = false,
+                            onTogglePause = {},
+                            onStop = {},
+                            onShowData = {},
+                            sensoren = dreiSensoren.copy(
+                                puls = LiveKachel(null, 7),
+                                leistung = LiveKachel(null, null),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/76-kartenseite-sensoren.png")
+    }
 
     @Test
     fun kartenseite() {
