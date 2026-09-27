@@ -96,7 +96,7 @@ class TodayWordingEnglishTest {
         assertEquals("Recovered as usual. Today is a rest day.", en(todayHeadline(effort, free, ReadinessBand.NORMAL, true)))
 
         val planned = TodayOffer(target(44.6, SessionIntensity.GRUNDLAGE), restDay = false)
-        assertEquals("Today 45 km", en(offerChipText(planned)))
+        assertEquals("Today · 45 km", en(offerChipText(planned)))
         assertEquals("Build today’s loop", en(offerButtonLabel(planned)))
         assertEquals("Today calls for 45 km.", en(offerHint(planned)))
     }
@@ -106,7 +106,7 @@ class TodayWordingEnglishTest {
         val upcoming = upcomingKeySession(week, todayIndex = 3, todayKm = 45)
         val note = whyNote(TodayEffort.LOCKER, route(null, null), false, upcoming, false, hasPlan = true, texts = CoreTextsEn)
         assertEquals(
-            listOf("Your long ride of 80 km is on Saturday. Don’t overdo it today, so you have enough energy for it."),
+            listOf("Your long 80 km ride is coming up on Saturday. Don’t overdo it today, so you have enough energy for it."),
             note.map(::en),
         )
         // Mit deutschen Kerntexten bliebe der Wochentag deutsch — die Sprache

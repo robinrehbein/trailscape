@@ -8,7 +8,7 @@
 -->
 <resources>
     <!-- TodayWording.kt: Angebot (Karte, Hero-Knopf, Losfahren-Dialog). %1$d = ganze Kilometer -->
-    <string name="today_offer_chip_label">Today %1$d km</string>
+    <string name="today_offer_chip_label">Today · %1$d km</string>
     <string name="today_offer_chip_rest_label">Easy · %1$d km</string>
     <string name="today_offer_rest_action">Easy spin · %1$d km</string>
     <string name="today_offer_first_round_action">Build loop · %1$d km</string>
@@ -52,7 +52,7 @@
     <string name="today_sentence_moderate">%1$s at a steady pace, no sprints.</string>
     <string name="today_sentence_hard">%1$s with a few hard efforts, spinning easy in between.</string>
     <string name="today_sentence_long">%1$s at a relaxed pace. Eat and drink enough on the way.</string>
-    <string name="today_sentence_rest_skipped">The plan had %1$d km. Better move the ride by a day – or just spin short and easy.</string>
+    <string name="today_sentence_rest_skipped">Your plan had %1$d km. Better push the ride back a day – or just go for a short, easy spin.</string>
     <string name="today_sentence_rest">No training today. If you still want to ride: short and easy.</string>
     <string name="today_sentence_event">%1$d km, the course is set. Good luck.</string>
 
@@ -124,10 +124,10 @@
     <string name="today_why_first_round_adapts_body">With every ride, the recommendation adapts more to your pace and your form.</string>
     <string name="today_why_plan_rest_day_body">Your plan has today off. Recovery is part of training.</string>
     <!-- %1$s = Wochentag („Samstag"), %2$d = Kilometer -->
-    <string name="today_why_upcoming_event_body">Your goal event of %2$d km is on %1$s.</string>
-    <string name="today_why_upcoming_hard_body">A hard session of %2$d km is on %1$s.</string>
-    <string name="today_why_upcoming_long_body">Your long ride of %2$d km is on %1$s.</string>
-    <string name="today_why_upcoming_longer_body">A longer ride of %2$d km is on %1$s.</string>
+    <string name="today_why_upcoming_event_body">Your %2$d km goal event is on %1$s.</string>
+    <string name="today_why_upcoming_hard_body">A hard %2$d km session is coming up on %1$s.</string>
+    <string name="today_why_upcoming_long_body">Your long %2$d km ride is coming up on %1$s.</string>
+    <string name="today_why_upcoming_longer_body">A longer %2$d km ride is coming up on %1$s.</string>
     <!-- %1$s = einer der Sätze today_why_upcoming_*_body -->
     <string name="today_why_upcoming_save_energy_body">%1$s Don’t overdo it today, so you have enough energy for it.</string>
     <string name="today_why_deload_body">Your numbers suggest taking it a little easier this week.</string>
@@ -155,7 +155,7 @@
     </plurals>
 
     <!-- TodayWording.kt: Zielzeile -->
-    <string name="today_goal_countdown_past">over</string>
+    <string name="today_goal_countdown_past">passed</string>
     <string name="today_goal_countdown_today">today</string>
     <string name="today_goal_countdown_tomorrow">tomorrow</string>
     <plurals name="today_goal_countdown_days_count">

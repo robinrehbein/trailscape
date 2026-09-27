@@ -10,6 +10,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
@@ -535,9 +536,11 @@ class ScreenshotTest {
     @Test
     @Config(qualifiers = "+en-rGB")
     fun heuteEnglischErststart() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
         sampleRides().filterNot { it.planned }.forEach { AppServices.rideStorage.deleteRide(it.id) }
         start()
         val context = compose.activity
+        assertEquals("No rides yet", context.getString(R.string.today_first_ride_title))
         compose.onAllNodesWithText(context.getString(R.string.today_first_ride_title))[0].assertIsDisplayed()
         compose.onAllNodesWithText(context.getString(R.string.today_first_ride_import_action))[0].assertExists()
         shot("19-heute-erststart-en")
@@ -545,13 +548,24 @@ class ScreenshotTest {
 
     /**
      * Der schwebende Aufnahme-Knopf. Seine Beschreibung gehoert dem Bereich
-     * der App-Huelle (`RecCapsuleButton.kt`) und ist vielleicht noch deutsch —
-     * gesucht wird deshalb nach beiden Fassungen.
+     * der App-Huelle (`RecCapsuleButton.kt`): Solange dort noch der deutsche
+     * Text steht, wird nach ihm gesucht; sobald die Huelle ihre eigene
+     * Ressource `shell_rec_start_cd` mitbringt, nach deren Wert. Der Schluessel
+     * wird per Name aufgeloest, damit dieser Test ohne den Huellen-Zweig
+     * kompiliert und nach dem Zusammenfuehren nicht an einem geaenderten
+     * englischen Text der Huelle bricht.
      */
-    private fun recordButton() = compose.onAllNodes(
-        hasContentDescription("Aufzeichnung starten") or
-            hasContentDescription(compose.activity.getString(R.string.today_ready_start_recording_action)),
-    )[0]
+    @Suppress("DiscouragedApi")
+    private fun recordButton(): SemanticsNodeInteraction {
+        val context = compose.activity
+        val shellKey = context.resources.getIdentifier("shell_rec_start_cd", "string", context.packageName)
+        val matcher = if (shellKey != 0) {
+            hasContentDescription(context.getString(shellKey))
+        } else {
+            hasContentDescription("Aufzeichnung starten")
+        }
+        return compose.onAllNodes(matcher)[0]
+    }
 
     private fun start(dark: Boolean = false) {
         compose.setContent {

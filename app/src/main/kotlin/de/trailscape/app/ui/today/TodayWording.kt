@@ -602,7 +602,7 @@ fun whyNote(
     }
     upcoming?.let {
         // Ein ganzer Satz je Art: Im Englischen steht der Wochentag hinten
-        // („… is on Saturday."), ein eingesetztes Satzglied passte nicht.
+        // („… is coming up on Saturday."), ein eingesetztes Satzglied passte nicht.
         val head = UiText.Res(
             when (it.kind) {
                 UpcomingKind.EVENT -> R.string.today_why_upcoming_event_body
