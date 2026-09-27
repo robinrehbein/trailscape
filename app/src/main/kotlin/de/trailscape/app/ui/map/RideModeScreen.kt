@@ -29,9 +29,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,10 +49,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.record.RecordingRepository
+import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
-import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
@@ -502,7 +503,7 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
     val abstandM = navigation.naechsteKurveM
     val spoken = (
         if (richtung != null && abstandM != null) {
-            "Nächste Kurve: ${turnAnsageText(richtung, abstandM)}"
+            "Nächste Kurve: ${turnAnsageText(richtung, abstandM, LocalCoreTexts.current)}"
         } else {
             "Keine Kurve in Sicht, dem Routenverlauf folgen."
         }

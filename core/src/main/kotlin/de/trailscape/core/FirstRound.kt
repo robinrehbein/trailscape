@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -37,31 +38,18 @@ enum class FirstRoundDuration(val hours: Double) {
     ;
 
     /** „1 h", „1½ h", „2 h" — siehe [formatRoundHours]. */
-    val label: String get() = formatRoundHours(hours)
+    fun label(texts: CoreTexts): String = formatRoundHours(hours, texts)
 }
 
 /**
  * Stunden fuer die Oberflaeche: „1 h", „1½ h", „2 h".
  *
  * Ganze Stunden als „N h", halbe mit dem Bruchzeichen („½ h" bei 0,5), alles
- * andere ueber das allgemeine [formatHours] („2,3 h"). Das Bruchzeichen, weil
- * „1,5 h" nach Messwert aussieht und „1½ h" nach dem, was man sagt.
+ * andere mit einer Nachkommastelle in der Sprache von [texts] („2,3 h" /
+ * „2.3 h"). Das Bruchzeichen, weil „1,5 h" nach Messwert aussieht und
+ * „1½ h" nach dem, was man sagt.
  */
-fun formatRoundHours(hours: Double): String {
-    val halves = hours * 2
-    if (halves == floor(halves)) {
-        val whole = (halves / 2).toInt()
-        return when {
-            halves.toInt() % 2 == 0 -> "$whole h"
-            whole == 0 -> "½ h"
-            else -> "$whole½ h"
-        }
-    }
-    return "${formatHours(hours)} h"
-}
-
-/** Beschriftung der ersten Runde im Generierungs-Panel („aus: Erste Runde …"). */
-const val FIRST_ROUND_LABEL: String = "Erste Runde"
+fun formatRoundHours(hours: Double, texts: CoreTexts): String = texts.format.roundHours(hours)
 
 /** Kuerzer wird keine erste Runde — darunter findet der Generator kaum eine Schleife. */
 const val FIRST_ROUND_MIN_KM: Double = 10.0
@@ -128,6 +116,7 @@ fun firstRoundTarget(
     hours: Double,
     profile: TrainingProfile,
     recentRides: List<RideInfo>,
+    texts: CoreTexts,
 ): RouteTarget {
     val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, profile, recentRides)
     val distanceKm = max((hours * speed).roundToInt().toDouble(), FIRST_ROUND_MIN_KM)
@@ -137,7 +126,8 @@ fun firstRoundTarget(
         durationH = hours,
         speedKmh = speed,
         intensity = SessionIntensity.GRUNDLAGE,
-        label = FIRST_ROUND_LABEL,
+        label = texts.today.firstRoundLabel(),
         source = RouteTargetSource.TAGESEMPFEHLUNG,
+        isFirstRound = true,
     )
 }

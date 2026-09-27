@@ -11,6 +11,7 @@ import de.trailscape.core.SessionIntensity
 import de.trailscape.core.SleepAssessment
 import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingSession
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.test.Test
@@ -228,7 +229,7 @@ class TodayWordingTest {
     fun `Notiz nennt die naechste gewichtige Einheit`() {
         val upcoming = upcomingKeySession(week, todayIndex = 3, todayKm = 45)
         assertEquals(UpcomingSession("Samstag", "die lange Fahrt", 80), upcoming)
-        val note = whyNote(TodayEffort.LOCKER, route(null, null), false, upcoming, false, hasPlan = true)
+        val note = whyNote(TodayEffort.LOCKER, route(null, null), false, upcoming, false, hasPlan = true, texts = CoreTextsDe)
         assertEquals(
             listOf("Samstag steht die lange Fahrt mit 80 km an. Heute nicht überziehen, dann hast du dafür genug Kraft."),
             note,
@@ -360,6 +361,7 @@ class TodayWordingTest {
             upcoming = null,
             deloadRecommended = false,
             hasPlan = false,
+            texts = CoreTextsDe,
         )
         assertEquals(
             listOf(

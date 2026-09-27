@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.PillSegments
@@ -61,7 +62,7 @@ import de.trailscape.core.RouteProfile
 import de.trailscape.core.RoutingSource
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
-import de.trailscape.core.routeProfileLabels
+import de.trailscape.core.routeProfileLabel
 import de.trailscape.core.unpavedLabel
 import kotlin.math.roundToInt
 
@@ -240,7 +241,7 @@ internal fun PlanningSheet(
                         // Der Schotteranteil steht direkt unter dem Profil —
                         // die zweite Frage an eine Route („wie faehrt sie
                         // sich?"). Ohne verlaessliche Belagsdaten entfaellt er.
-                        unpavedLabel(route)?.let { surface ->
+                        unpavedLabel(route, LocalCoreTexts.current)?.let { surface ->
                             Text(
                                 text = surface,
                                 style = MaterialTheme.typography.bodySmall,
@@ -622,6 +623,7 @@ private fun SurfaceChoice(
     profile: RouteProfile,
     onProfileChange: (RouteProfile) -> Unit,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val surfaces = listOf(
         RouteProfile.GRAVEL to "Gemischt",
         RouteProfile.ASPHALT to "Asphalt",
@@ -645,7 +647,7 @@ private fun SurfaceChoice(
                     .padding(horizontal = 4.dp)
                     .clearAndSetSemantics {
                         contentDescription = if (special) {
-                            "Routenprofil: ${routeProfileLabels[profile]}. Ändern"
+                            "Routenprofil: ${routeProfileLabel(profile, coreTexts)}. Ändern"
                         } else {
                             "Weitere Routenprofile"
                         }
@@ -654,7 +656,7 @@ private fun SurfaceChoice(
             ) {
                 Text(
                     text = if (special) {
-                        routeProfileLabels[profile] ?: "Weitere Profile"
+                        routeProfileLabel(profile, coreTexts)
                     } else {
                         "Weitere Profile"
                     },
@@ -676,7 +678,7 @@ private fun SurfaceChoice(
                     DropdownMenuItem(
                         text = {
                             Column {
-                                Text(routeProfileLabels[value] ?: value.name)
+                                Text(routeProfileLabel(value, coreTexts))
                                 routeProfileHint(value)?.let {
                                     Text(
                                         text = it,

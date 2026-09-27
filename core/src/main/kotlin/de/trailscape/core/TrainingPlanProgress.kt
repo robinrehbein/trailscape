@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
 import kotlin.math.max
@@ -37,13 +38,9 @@ enum class PlanSessionStatus {
     VERPASST,
 }
 
-/** Deutsche Beschriftung je Status — fuer die Oberflaeche. */
-val planSessionStatusLabels: Map<PlanSessionStatus, String> = mapOf(
-    PlanSessionStatus.OFFEN to "Offen",
-    PlanSessionStatus.ERLEDIGT to "Erledigt",
-    PlanSessionStatus.TEILWEISE to "Teilweise",
-    PlanSessionStatus.VERPASST to "Verpasst",
-)
+/** Beschriftung je Status — fuer die Oberflaeche, in der Sprache von [texts]. */
+fun planSessionStatusLabel(status: PlanSessionStatus, texts: CoreTexts): String =
+    texts.training.planSessionStatus(status)
 
 /**
  * Zeitliche Toleranz der Zuordnung in Tagen: Eine Tour am Vor- oder Folgetag
@@ -274,6 +271,7 @@ fun adaptPlan(
     now: Long? = null,
     currentCtl: Double? = null,
     rideLoads: Map<String, Double> = emptyMap(),
+    texts: CoreTexts,
 ): AdaptedPlan {
     val nowMs = now ?: System.currentTimeMillis()
     val unchanged = AdaptedPlan(plan, adapted = false, reason = null)
@@ -313,7 +311,7 @@ fun adaptPlan(
     val newStartKm = max(achievedKm, 5.0)
 
     val remainingKinds = remaining.map { it.kind }
-    val eventWeekKm = zielwocheSessions(plan.goal).sumOf { it.targetKm }
+    val eventWeekKm = zielwocheSessions(plan.goal, texts).sumOf { it.targetKm }
     val volumes = planWeekVolumes(
         kinds = remainingKinds,
         startKm = newStartKm,
@@ -330,7 +328,7 @@ fun adaptPlan(
             week.copy(
                 targetKm = volumes[j],
                 sessions = attachSessionLoads(
-                    sessions = buildSessions(week.kind, plan.level, volumes[j], plan.goal),
+                    sessions = buildSessions(week.kind, plan.level, volumes[j], plan.goal, texts),
                     weekBudget = budgets[j],
                     hilly = hilly,
                 ),
@@ -339,9 +337,7 @@ fun adaptPlan(
     }.associateBy { it.index }
 
     val percent = dartRound(ratio * 100).toInt()
-    val reason = "Plan angepasst: In Woche ${last.index + 1} hast du nur $percent % des " +
-        "Wochen-Solls erreicht. Die verbleibenden Wochen bauen wieder von deinem " +
-        "tatsächlichen Umfang auf – Ziel und Termin bleiben unverändert."
+    val reason = texts.training.planAdapted(last.index + 1, percent)
 
     return AdaptedPlan(
         plan = plan.copy(weeks = plan.weeks.map { rebuilt[it.index] ?: it }),

@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -166,6 +167,7 @@ class OfflineFirstRoutingTest {
             setup = null,
             sleeper = {},
             onSource = { sources.add(it) },
+            texts = CoreTextsDe,
         )
 
         assertEquals(RoutingSource.SERVER, result.source)
@@ -185,6 +187,7 @@ class OfflineFirstRoutingTest {
             client = client,
             setup = setup(installed = emptySet()),
             sleeper = {},
+            texts = CoreTextsDe,
         )
 
         assertEquals(RoutingSource.SERVER, result.source)
@@ -213,6 +216,7 @@ class OfflineFirstRoutingTest {
             ),
             sleeper = {},
             onSource = { sources.add(it) },
+            texts = CoreTextsDe,
         )
 
         assertEquals(RoutingSource.SERVER, result.source)
@@ -241,6 +245,7 @@ class OfflineFirstRoutingTest {
                 installed = setOf(tile),
             ),
             sleeper = {},
+            texts = CoreTextsDe,
         )
 
         assertEquals(RoutingSource.SERVER, result.source)
@@ -259,6 +264,7 @@ class OfflineFirstRoutingTest {
                 client = client,
                 setup = null,
                 sleeper = {},
+                texts = CoreTextsDe,
             )
         }.exceptionOrNull()
 
@@ -288,6 +294,7 @@ class OfflineFirstRoutingTest {
                 waypoints = listOf(hamburg, muenchen),
                 setup = setup(installed = emptySet()),
                 onProgress = { _, total -> reportedTotal = total },
+                texts = CoreTextsDe,
             )
         }
 
@@ -297,11 +304,11 @@ class OfflineFirstRoutingTest {
     @Test
     fun `ohne Profil meldet die Etappenrechnung einen verstaendlichen Fehler`() {
         val error = runCatching {
-            routeOfflineLegs(listOf(dresden, pirna), setup(profile = null))
+            routeOfflineLegs(listOf(dresden, pirna), setup(profile = null), texts = CoreTextsDe)
         }.exceptionOrNull()
 
         assertTrue(error is OfflineRoutingException)
-        assertEquals(errorOfflineProfileMissing, error.message)
+        assertEquals(CoreTextsDe.routing.offlineProfileMissing(), error.message)
     }
 
     // -----------------------------------------------------------------------
@@ -322,6 +329,7 @@ class OfflineFirstRoutingTest {
                 client = OfflineClient,
                 setup = offline,
                 sleeper = {},
+                texts = CoreTextsDe,
             )
         }.exceptionOrNull()
 
@@ -346,6 +354,7 @@ class OfflineFirstRoutingTest {
                 client = OfflineClient,
                 setup = null,
                 sleeper = {},
+                texts = CoreTextsDe,
             )
         }.exceptionOrNull()
 

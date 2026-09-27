@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.io.File
 
 /**
@@ -221,9 +222,10 @@ fun routeOfflineLegs(
     setup: OfflineRoutingSetup,
     maxRunningTimeMs: Long = offlineLegTimeoutMs,
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
+    texts: CoreTexts,
 ): PlannedRoute {
     val profile = setup.profileFile
-        ?: throw OfflineRoutingException(errorOfflineProfileMissing)
+        ?: throw OfflineRoutingException(texts.routing.offlineProfileMissing())
 
     val legs = planRouteLegs(waypoints)
     onProgress?.invoke(0, legs.size)
@@ -236,6 +238,7 @@ fun routeOfflineLegs(
                 segmentDir = setup.segmentDir,
                 profileFile = profile,
                 maxRunningTimeMs = maxRunningTimeMs,
+                texts = texts,
             ),
         )
         onProgress?.invoke(index + 1, legs.size)
@@ -290,9 +293,10 @@ fun routeOfflineFirst(
     onSource: ((RoutingSource) -> Unit)? = null,
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
     serverBaseUrl: String = defaultBrouterServerUrl,
+    texts: CoreTexts,
 ): RoutingResult {
     if (waypoints.size < 2) {
-        throw Exception("Mindestens zwei Wegpunkte nötig.")
+        throw Exception(texts.routing.needTwoWaypoints())
     }
 
     val choice = chooseRoutingSource(waypoints, setup)
@@ -306,7 +310,7 @@ fun routeOfflineFirst(
     if (choice.source == RoutingSource.OFFLINE && setup != null) {
         onSource?.invoke(RoutingSource.OFFLINE)
         try {
-            val route = routeOfflineLegs(waypoints, setup, onProgress = onProgress)
+            val route = routeOfflineLegs(waypoints, setup, onProgress = onProgress, texts = texts)
             return RoutingResult(route, RoutingSource.OFFLINE, null, emptyList())
         } catch (e: Exception) {
             // Bewusst **jede** Ausnahme, nicht nur [OfflineRoutingException]:
@@ -340,6 +344,7 @@ fun routeOfflineFirst(
             sleeper = sleeper,
             onProgress = onProgress,
             baseUrl = serverBaseUrl,
+            texts = texts,
         )
     } catch (serverFailure: Exception) {
         // Beide Wege sind gescheitert. Frueher gewann hier kommentarlos die
@@ -351,9 +356,10 @@ fun routeOfflineFirst(
         // fuer Fehlerberichte erhalten.
         throw offlineFailure?.let { offline ->
             OfflineRoutingException(
-                message = "${offline.message} " +
-                    "Der Routing-Server war anschließend ebenfalls nicht erreichbar " +
-                    "(${serverFailure.message}).",
+                message = texts.routing.offlineThenServerFailed(
+                    offline.message.orEmpty(),
+                    serverFailure.message.orEmpty(),
+                ),
                 missingSegmentFile = (offline as? OfflineRoutingException)?.missingSegmentFile,
                 cause = offline,
             )

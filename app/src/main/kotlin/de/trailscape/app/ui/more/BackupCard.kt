@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -39,11 +38,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.data.trailscapePrefs
-import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.UNREADABLE_FILE_MESSAGE
+import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.rememberActivityImportAction
 import de.trailscape.app.ui.withCause
 import de.trailscape.core.BulkImportResult
@@ -51,6 +52,7 @@ import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
 import de.trailscape.core.FormatException
 import de.trailscape.core.backupFileName
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.importArchive
 import de.trailscape.core.parseBackupJson
 import de.trailscape.core.scanArchive
@@ -111,6 +113,7 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun BackupCardContent(appViewModel: AppViewModel) {
+    val coreTexts = LocalCoreTexts.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -158,7 +161,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             busy = true
             try {
                 val raw = readTextFile(context, uri)
-                val data = parseBackupJson(raw)
+                val data = parseBackupJson(raw, coreTexts)
 
                 val existingIds = rides.map { it.id }.toSet()
                 val newRides = data.rides.filter { it.id !in existingIds }
@@ -211,7 +214,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
             archiveDone = 0
             archiveTotal = null
             try {
-                archiveTotal = withContext(Dispatchers.IO) { tryScanArchiveTotal(context, uri) }
+                archiveTotal = withContext(Dispatchers.IO) { tryScanArchiveTotal(context, uri, coreTexts) }
 
                 val result = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -219,6 +222,7 @@ fun BackupCardContent(appViewModel: AppViewModel) {
                             input = stream,
                             existing = rides,
                             total = archiveTotal,
+                            texts = coreTexts,
                             onProgress = { done, total ->
                                 archiveDone = done
                                 // `importArchive` meldet ohne bekannten Nenner
@@ -344,9 +348,9 @@ fun BackupCardContent(appViewModel: AppViewModel) {
  * bleibt die Anzeige unbestimmt, der eigentliche Import scheitert (falls
  * ueberhaupt) erst beim zweiten, tatsaechlich verwendeten Stream.
  */
-private fun tryScanArchiveTotal(context: Context, uri: Uri): Int? =
+private fun tryScanArchiveTotal(context: Context, uri: Uri, texts: CoreTexts): Int? =
     try {
-        context.contentResolver.openInputStream(uri)?.use { scanArchive(it).size }
+        context.contentResolver.openInputStream(uri)?.use { scanArchive(it, texts).size }
     } catch (e: Exception) {
         null
     }

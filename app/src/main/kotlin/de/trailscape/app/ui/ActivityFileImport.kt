@@ -3,8 +3,8 @@ package de.trailscape.app.ui
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.core.ActivityFileInput
-import de.trailscape.core.FILE_TOO_LARGE_MESSAGE
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
@@ -103,7 +103,7 @@ suspend fun readActivityFiles(
                 // nur der ganze Durchgang.
                 budget < MAX_ACTIVITY_FILE_BYTES ->
                     ActivityFileInput(name, mime, ByteArray(0), readError = TOO_MANY_FILES_MESSAGE)
-                else -> ActivityFileInput(name, mime, ByteArray(0), readError = FILE_TOO_LARGE_MESSAGE)
+                else -> ActivityFileInput(name, mime, ByteArray(0), readError = AppLocale.coreTexts(context).files.fileTooLarge())
             }
         } catch (e: Exception) {
             ActivityFileInput(name, mime, ByteArray(0), readError = UNREADABLE_FILE_MESSAGE)

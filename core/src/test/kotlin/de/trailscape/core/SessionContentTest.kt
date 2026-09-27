@@ -1,9 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -12,6 +9,10 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Inhalt und Kilometer einer Einheit muessen zusammenpassen — und die
@@ -46,7 +47,7 @@ class SessionContentTest {
     )
 
     private fun planFor(level: FitnessLevel, weeklyKm: Double, weeks: Int = 23): TrainingPlan =
-        generatePlan(goalIn(weeks, 150.0, ascentM = 1800.0), assessment(level, weeklyKm), now)
+        generatePlan(goalIn(weeks, 150.0, ascentM = 1800.0), assessment(level, weeklyKm), now, texts = CoreTextsDe)
 
     /** Alle Einheiten eines Plans mit dem gegebenen Titel. */
     private fun sessions(plan: TrainingPlan, title: String): List<TrainingSession> =
@@ -149,7 +150,7 @@ class SessionContentTest {
         // waere daraus lautlos eine Grundlageneinheit geworden.
         val renamed = intervals.copy(title = "Schwellenblock")
         assertEquals(SessionIntensity.HART, classifySessionIntensity(renamed))
-        assertEquals(SessionIntensity.HART, routeTargetForSession(renamed, TrainingProfile(40), emptyList()).intensity)
+        assertEquals(SessionIntensity.HART, routeTargetForSession(renamed, TrainingProfile(40), emptyList(), texts = CoreTextsDe).intensity)
 
         // Das alte Stichwortverfahren gibt es nur noch fuer alte Plaene.
         assertEquals(SessionIntensity.GRUNDLAGE, sessionIntensityFromTitle("Schwellenblock"))
@@ -246,6 +247,6 @@ class SessionContentTest {
         assertFalse(canGenerateRouteFor(events.single()))
 
         // Und die Machbarkeitspruefung zaehlt es nicht als Trainingsfahrt mit.
-        assertTrue(assessPlanFeasibility(plan).longestRideKm < 150)
+        assertTrue(assessPlanFeasibility(plan, texts = CoreTextsDe).longestRideKm < 150)
     }
 }

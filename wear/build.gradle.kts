@@ -103,6 +103,14 @@ android {
         }
     }
 
+    // Nur Deutsch und Englisch aus den Bibliotheken mitnehmen: Die Uhr loest
+    // ihre Sprache ohnehin auf de/en auf (siehe docs/i18n.md), fremdsprachige
+    // Ressourcen der AndroidX-/Material-Bibliotheken waeren nur Ballast und
+    // fuehrten auf einem franzoesischen Geraet zu Mischtexten in Systemdialogen.
+    androidResources {
+        localeFilters += setOf("de", "en")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

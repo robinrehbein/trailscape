@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -28,7 +29,7 @@ class RideAnalysisTest {
             startEle = 100.0,
             hr = { i -> if (i <= seconds / 2) hrFirst else hrSecond },
         )
-        return computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile)
+        return computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
     }
 
     // --- group('Pe:Hr-Entkopplung') ---
@@ -38,6 +39,7 @@ class RideAnalysisTest {
         val d = computeDecoupling(
             flatRide(seconds = 1200, hrFirst = 130, hrSecond = 140),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(d.available)
         assertTrue(d.unavailableReason!!.contains("60 Minuten"))
@@ -49,6 +51,7 @@ class RideAnalysisTest {
         val d = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 175, hrSecond = 180),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(d.available)
         assertTrue(d.unavailableReason!!.contains("aeroben"))
@@ -59,6 +62,7 @@ class RideAnalysisTest {
         val d = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 100, hrSecond = 105),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(d.available)
     }
@@ -68,6 +72,7 @@ class RideAnalysisTest {
         val d = computeDecoupling(
             PhysicsEstimate.unavailable("kein Höhenprofil"),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(d.available)
         assertEquals("kein Höhenprofil", d.unavailableReason)
@@ -78,6 +83,7 @@ class RideAnalysisTest {
         val d = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 130, hrSecond = 140),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertTrue(d.available)
         // Gleiche Leistung, HF +10 bpm -> ≈ (1/130 − 1/140)/(1/130) = 7,14 %
@@ -92,6 +98,7 @@ class RideAnalysisTest {
         val d = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 135, hrSecond = 135),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertTrue(d.available)
         assertTrue(abs(d.decouplingPercent!!) < 2)
@@ -108,8 +115,9 @@ class RideAnalysisTest {
             hr = { i -> if (i < 3000) 135 else null },
         )
         val d = computeDecoupling(
-            computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile),
+            computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(d.available)
         assertTrue(d.unavailableReason!!.contains("90 %"))
@@ -132,11 +140,13 @@ class RideAnalysisTest {
         val good = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 135, hrSecond = 135),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertEquals("gute aerobe Ausdauer", good.rating)
         val drifting = computeDecoupling(
             flatRide(seconds = 3700, hrFirst = 125, hrSecond = 145),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertEquals("mehr Grundlagenarbeit sinnvoll", drifting.rating)
     }
@@ -145,15 +155,15 @@ class RideAnalysisTest {
 
     @Test
     fun `Uth-Formel mit plus minus 15-Prozent-Band`() {
-        val e = estimateVo2MaxFromHrRatio(refProfile)
+        val e = estimateVo2MaxFromHrRatio(refProfile, texts = CoreTextsDe)
         assertTrue(e.available)
         assertEquals(58.14, e.value!!, 1e-9)
         assertEquals(58.14 * 0.85, e.lower!!, 1e-9)
         assertEquals(58.14 * 1.15, e.upper!!, 1e-9)
         assertEquals(Vo2MaxMethod.UTH_RATIO, e.method)
         assertEquals(Confidence.LOW, e.confidence)
-        assertTrue(e.text.contains("geschätzt"))
-        assertTrue(e.text.contains("–"))
+        assertTrue(e.text(CoreTextsDe).contains("geschätzt"))
+        assertTrue(e.text(CoreTextsDe).contains("–"))
     }
 
     @Test
@@ -167,7 +177,7 @@ class RideAnalysisTest {
                 durationS = 360.0,
             )
         }
-        val e = estimateVo2MaxFromSegments(segments, refProfile)
+        val e = estimateVo2MaxFromSegments(segments, refProfile, texts = CoreTextsDe)
         assertTrue(e.available)
         assertEquals(1.0, e.r2!!, 1e-9)
         assertEquals(6, e.segmentCount)
@@ -187,7 +197,7 @@ class RideAnalysisTest {
                 durationS = 360.0,
             )
         }
-        val e = estimateVo2MaxFromSegments(segments, refProfile)
+        val e = estimateVo2MaxFromSegments(segments, refProfile, texts = CoreTextsDe)
         assertFalse(e.available)
         assertTrue(e.unavailableReason!!.contains("6"))
     }
@@ -201,7 +211,7 @@ class RideAnalysisTest {
                 durationS = 360.0,
             )
         }
-        val e = estimateVo2MaxFromSegments(segments, refProfile)
+        val e = estimateVo2MaxFromSegments(segments, refProfile, texts = CoreTextsDe)
         assertFalse(e.available)
         assertTrue(e.unavailableReason!!.contains("Spanne"))
     }
@@ -216,7 +226,7 @@ class RideAnalysisTest {
                 durationS = 360.0,
             )
         }
-        val e = estimateVo2MaxFromSegments(segments, refProfile)
+        val e = estimateVo2MaxFromSegments(segments, refProfile, texts = CoreTextsDe)
         assertFalse(e.available)
         assertTrue(e.unavailableReason!!.contains("r²"))
     }
@@ -232,13 +242,13 @@ class RideAnalysisTest {
         }
         assertEquals(
             Vo2MaxMethod.PLATTFORM,
-            estimateVo2Max(profile = refProfile, platformValue = 52.0).method,
+            estimateVo2Max(profile = refProfile, platformValue = 52.0, texts = CoreTextsDe).method,
         )
         assertEquals(
             Vo2MaxMethod.REGRESSION,
-            estimateVo2Max(profile = refProfile, segments = segments).method,
+            estimateVo2Max(profile = refProfile, segments = segments, texts = CoreTextsDe).method,
         )
-        assertEquals(Vo2MaxMethod.UTH_RATIO, estimateVo2Max(profile = refProfile).method)
+        assertEquals(Vo2MaxMethod.UTH_RATIO, estimateVo2Max(profile = refProfile, texts = CoreTextsDe).method)
     }
 
     @Test
@@ -246,9 +256,10 @@ class RideAnalysisTest {
         val e = estimateVo2MaxFromSegments(
             emptyList(),
             refProfile.copyWith(weightKg = 0.0),
+            texts = CoreTextsDe,
         )
         assertFalse(e.available)
-        assertTrue(e.text.contains("Gewicht"))
+        assertTrue(e.text(CoreTextsDe).contains("Gewicht"))
     }
 
     @Test
@@ -256,7 +267,7 @@ class RideAnalysisTest {
         val segments = (110..160 step 10).map { hr ->
             SteadySegment(avgPowerW = 400.0, avgHr = hr.toDouble(), durationS = 360.0)
         }
-        assertFalse(estimateVo2MaxFromSegments(segments, refProfile).available)
+        assertFalse(estimateVo2MaxFromSegments(segments, refProfile, texts = CoreTextsDe).available)
     }
 
     @Test
@@ -299,26 +310,26 @@ class RideAnalysisTest {
 
     @Test
     fun `Lastquellen sind als Schaetzung gekennzeichnet`() {
-        assertTrue(loadSourceLabels[LoadSource.PHYSIK]!!.contains("schätzung"))
-        assertTrue(loadSourceLabels[LoadSource.HEURISTIK]!!.contains("geschätzt"))
+        assertTrue(CoreTextsDe.load.loadSource(LoadSource.PHYSIK).contains("schätzung"))
+        assertTrue(CoreTextsDe.load.loadSource(LoadSource.HEURISTIK).contains("geschätzt"))
     }
 
     @Test
     fun `Confidence-Labels sind sprechend`() {
-        assertEquals("nicht berechenbar", confidenceLabels[Confidence.NONE])
-        assertEquals(Confidence.entries.size, confidenceLabels.size)
+        assertEquals("nicht berechenbar", CoreTextsDe.load.confidence(Confidence.NONE))
+        assertTrue(Confidence.entries.all { CoreTextsDe.load.confidence(it).isNotBlank() })
     }
 
     @Test
     fun `Erholungs-Ampel spricht nicht von Krankheit als Diagnose`() {
-        val all = recoveryFlagLabels.values.joinToString(" ").lowercase()
+        val all = RecoveryFlag.entries.joinToString(" ") { CoreTextsDe.readiness.recoveryFlag(it) }.lowercase()
         assertFalse(all.contains("krank"))
         assertFalse(all.contains("übertraining"))
     }
 
     @Test
     fun `VO2max wird immer als Band ausgegeben`() {
-        val e = estimateVo2MaxFromHrRatio(refProfile)
-        assertTrue(Regex("""\d+–\d+ ml/kg/min""").containsMatchIn(e.text))
+        val e = estimateVo2MaxFromHrRatio(refProfile, texts = CoreTextsDe)
+        assertTrue(Regex("""\d+–\d+ ml/kg/min""").containsMatchIn(e.text(CoreTextsDe)))
     }
 }

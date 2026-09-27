@@ -4,12 +4,14 @@ import android.app.Application
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.MAX_ACTIVITY_FILE_BYTES
 import de.trailscape.app.ui.MAX_IMPORT_FILES
 import de.trailscape.app.ui.TOO_MANY_FILES_MESSAGE
 import de.trailscape.app.ui.readActivityFiles
 import de.trailscape.app.ui.readBounded
-import de.trailscape.core.FILE_TOO_LARGE_MESSAGE
+import de.trailscape.core.fileTooLargeMessage
+import de.trailscape.core.i18n.CoreTextsDe
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,7 +25,7 @@ import org.robolectric.annotation.Config
  * ([PendingImports]).
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class)
+@Config(sdk = [35], application = Application::class, qualifiers = TestLocales.DE)
 class ImportIntentsTest {
 
     private val gpx = Uri.parse("content://downloads/public/1/Albtrauf.gpx")
@@ -157,7 +159,7 @@ class ImportIntentsTest {
 
         val files = kotlinx.coroutines.runBlocking { readActivityFiles(context, uris) }
 
-        assertEquals(FILE_TOO_LARGE_MESSAGE, files[0].readError)
+        assertEquals(fileTooLargeMessage(CoreTextsDe), files[0].readError)
         assertEquals(0, files[0].bytes.size)
         assertEquals(null, files[1].readError)
         // Die 201. Datei wird nicht mehr gelesen.

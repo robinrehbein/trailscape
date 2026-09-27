@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.AnimatedVisibility
 import de.trailscape.app.ui.theme.M3Transitions
@@ -43,6 +44,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.AppFormats
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiNavigationBar
@@ -57,6 +64,7 @@ import de.trailscape.app.ui.onboarding.OnboardingScreen
 import de.trailscape.app.ui.rides.RidesScreen
 import de.trailscape.app.ui.today.TodayScreen
 import de.trailscape.app.ui.training.TrainingScreen
+import de.trailscape.core.i18n.coreTexts
 
 /**
  * # Navigationshuelle der App — und die Zustaendigkeitsgrenzen dahinter
@@ -241,8 +249,33 @@ private enum class TopLevelDestination(
  */
 private const val MORE_ROUTE = "mehr"
 
+/**
+ * Wurzel der Oberflaeche: stellt die Sprache bereit und zeichnet darin die
+ * Navigationshuelle ([TrailscapeAppContent]).
+ *
+ * Die Sprache kommt aus der Konfiguration der Activity (dort steckt der
+ * Override aus `AppLocale` bereits drin, in Robolectric-Tests der
+ * Qualifier), neu berechnet bei jeder Konfigurationsaenderung. Der
+ * `LaunchedEffect` gleicht [de.trailscape.app.data.AppServices.appLanguage]
+ * an — damit rechnet das [AppViewModel] seine `:core`-Saetze in derselben
+ * Sprache, in der die Oberflaeche sie zeigt.
+ */
 @Composable
 fun TrailscapeApp() {
+    val configuration = LocalConfiguration.current
+    val language = remember(configuration) { languageOf(configuration) }
+    LaunchedEffect(language) { AppServices.setAppLanguage(language) }
+    CompositionLocalProvider(
+        LocalAppLanguage provides language,
+        LocalCoreTexts provides coreTexts(language),
+        LocalAppFormats provides remember(language) { AppFormats(language) },
+    ) {
+        TrailscapeAppContent()
+    }
+}
+
+@Composable
+private fun TrailscapeAppContent() {
     // Activity-Scope: `viewModel()` ohne eigenen Store-Owner nimmt die
     // Activity als Owner — genau eine Instanz fuer alle Ziele, die
     // Tabwechsel und Konfigurationsaenderungen ueberlebt.

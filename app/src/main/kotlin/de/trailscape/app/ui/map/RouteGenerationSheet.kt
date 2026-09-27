@@ -31,32 +31,33 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
-import de.trailscape.core.FIRST_ROUND_LABEL
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.TrackPoint
-import de.trailscape.core.ascentPreferenceLabels
+import de.trailscape.core.ascentPreferenceLabel
 import de.trailscape.core.formatHours
 import de.trailscape.core.isTailwindHome
-import de.trailscape.core.sessionIntensityLabels
+import de.trailscape.core.sessionIntensityLabel
 import de.trailscape.core.terrainLabel
 import de.trailscape.core.unpavedLabel
 import de.trailscape.core.windLine
 import de.trailscape.core.windOptimisedLabel
+import de.trailscape.core.i18n.CoreTexts
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -147,6 +148,7 @@ internal fun RouteGenerationSheet(
     bottomInset: Dp = 0.dp,
     windEnabled: Boolean = false,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val target = state.target ?: return
     val theme = MaterialTheme.colorScheme
     val signals = LocalSignalColors.current
@@ -179,7 +181,7 @@ internal fun RouteGenerationSheet(
                 }
 
                 Text(
-                    text = targetLine(target),
+                    text = targetLine(target, coreTexts),
                     modifier = Modifier.padding(end = 8.dp),
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -206,7 +208,7 @@ internal fun RouteGenerationSheet(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = windLine(wind, shape),
+                                text = windLine(wind, shape, coreTexts),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = color,
                             )
@@ -422,6 +424,7 @@ private fun CandidateRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     // Ausserhalb des `semantics`-Blocks festhalten: Dort verdeckt die
     // gleichnamige Semantik-Eigenschaft den Parameter.
@@ -455,7 +458,7 @@ private fun CandidateRow(
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
-                    text = candidateDetailLine(candidate),
+                    text = candidateDetailLine(candidate, coreTexts),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
@@ -466,7 +469,7 @@ private fun CandidateRow(
                 // Belag ist fuer Gravel die Angabe, die nicht abgeschnitten
                 // werden darf. Fehlt er (keine Daten oder zu viel
                 // Unbekanntes), faellt die Zeile ganz weg statt „–" zu zeigen.
-                unpavedLabel(candidate.route)?.let { surface ->
+                unpavedLabel(candidate.route, coreTexts)?.let { surface ->
                     Text(
                         text = surface,
                         maxLines = 1,
@@ -510,7 +513,7 @@ private fun CandidateRow(
                         modifier = Modifier.padding(top = 2.dp),
                     ) {
                         Text(
-                            text = windOptimisedLabel,
+                            text = windOptimisedLabel(coreTexts),
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                         )
@@ -550,8 +553,8 @@ private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
  * dahinter fuer alle, die es genau wissen wollen; Schwellen siehe
  * [terrainLabel].
  */
-internal fun candidateDetailLine(candidate: RouteCandidate): String =
-    "${terrainLabel(candidate.ascentPerKm)} · ${candidate.ascentPerKm.roundToInt()} Hm/km · " +
+internal fun candidateDetailLine(candidate: RouteCandidate, texts: CoreTexts): String =
+    "${terrainLabel(candidate.ascentPerKm, texts)} · ${candidate.ascentPerKm.roundToInt()} Hm/km · " +
         "${deviationLabel(candidate)} zum Ziel"
 
 /** „+9 neu" bzw. „bekannt" — Kacheln, die die Runde neu entdecken wuerde. */
@@ -559,14 +562,14 @@ internal fun newTilesLabel(newTileCount: Int): String =
     if (newTileCount > 0) "+$newTileCount neu" else "bekannt"
 
 /** „≈ 45 km · Flach · locker · ca. 2,5 h" */
-internal fun targetLine(target: RouteTarget): String {
+internal fun targetLine(target: RouteTarget, texts: CoreTexts): String {
     val parts = mutableListOf(
         "≈ ${formatKmDe(target.distanceKm)} km",
-        ascentPreferenceLabels.getValue(target.ascentPreference),
-        sessionIntensityLabels.getValue(target.intensity),
+        ascentPreferenceLabel(target.ascentPreference, texts),
+        sessionIntensityLabel(target.intensity, texts),
     )
     target.durationH?.takeIf { it.isFinite() && it > 0 }?.let {
-        parts.add("ca. ${formatHours(it)} h")
+        parts.add("ca. ${formatHours(it, texts)} h")
     }
     return parts.joinToString(" · ")
 }
@@ -581,7 +584,7 @@ internal const val WIND_TIP =
  * wurde ([windUsed] `false`), der Schalter aus ist und das Ziel nicht aus
  * „Runde ab hier" kommt — dort steht der Schalter ja schon im Blatt davor.
  *
- * Nie bei der **ersten Runde** ([FIRST_ROUND_LABEL]): Sie startet direkt nach
+ * Nie bei der **ersten Runde** ([RouteTarget.isFirstRound]): Sie startet direkt nach
  * der Einfuehrung bzw. von „Heute" und soll ruhig bleiben — ein Tipp, der auf
  * ein anderes Blatt und eine Open-Meteo-Freigabe verweist, von denen dort
  * noch keine Rede war, waere in der ersten Minute nur Rauschen.
@@ -589,7 +592,7 @@ internal const val WIND_TIP =
 internal fun shouldOfferWindTip(target: RouteTarget, windUsed: Boolean, windEnabled: Boolean): Boolean =
     !windUsed && !windEnabled &&
         target.source != RouteTargetSource.SELBST_GEWAEHLT &&
-        target.label != FIRST_ROUND_LABEL
+        !target.isFirstRound
 
 /** „aus: GA1-Einheit (Trainingsplan)" */
 internal fun sourceLine(target: RouteTarget): String {

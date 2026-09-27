@@ -16,10 +16,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.TrainingInsights
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.formatHours
+import de.trailscape.core.weeklyLoadCapText
 import kotlin.math.roundToInt
 
 /**
@@ -52,6 +54,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     val deload = insights.deload
     val target = insights.weeklyTarget
@@ -61,7 +64,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
     var budgetText: String? = null
     var budgetClickable = false
     if (target != null && !deload.recommended) {
-        val hours = formatHours(target.estimatedHours)
+        val hours = formatHours(target.estimatedHours, coreTexts)
         // Die Umrechnung Last → Stunden unterstellt eine gemischte Woche
         // (≈ 58 Last je Fahrstunde, siehe `weeklyLoadPerHour` in :core) und
         // haengt ausserdem an derselben geschaetzten Schwellenleistung wie die
@@ -69,7 +72,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
         // Zahl wie eine Planvorgabe.
         if (weeklyHours != null && weeklyHours > 0) {
             budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche und " +
-                "deinem Budget von ${formatHours(weeklyHours)} h pro Woche. Fährst du " +
+                "deinem Budget von ${formatHours(weeklyHours, coreTexts)} h pro Woche. Fährst du " +
                 "härter, brauchst du weniger Zeit für denselben Zielwert."
         } else {
             budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche. Trage " +
@@ -102,9 +105,9 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
                 if (target != null && !deload.recommended) {
                     FigureText(target.weeklyLoad.roundToInt().toString(), "Zielwert", color = trainingGood)
                     FigureText(
-                        "${formatHours(target.estimatedHours)} h",
+                        "${formatHours(target.estimatedHours, coreTexts)} h",
                         if (weeklyHours != null && weeklyHours > 0) {
-                            "Fahrzeit (Budget ${formatHours(weeklyHours)} h)"
+                            "Fahrzeit (Budget ${formatHours(weeklyHours, coreTexts)} h)"
                         } else {
                             "Fahrzeit (geschätzt)"
                         },
@@ -159,7 +162,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
             if (target != null && !deload.recommended) {
                 for (cap in target.caps) {
                     Text(
-                        text = "· $cap",
+                        text = "· ${weeklyLoadCapText(cap, target, coreTexts)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = theme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),

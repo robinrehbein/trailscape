@@ -2,19 +2,9 @@ package de.trailscape.app.ui.training
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import de.trailscape.app.ui.components.NeutralButton
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.TextButton
-import de.trailscape.app.ui.components.Fact
-import de.trailscape.core.PlanFeasibility
-import de.trailscape.core.plainSessionHint
-import de.trailscape.core.plainSessionTitle
-import de.trailscape.core.sessionsForDay
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,23 +17,31 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.ui.components.Fact
+import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.formatDateShort
 import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.core.PlanFeasibility
 import de.trailscape.core.PlanSessionProgress
 import de.trailscape.core.PlanSessionStatus
 import de.trailscape.core.RideInfo
@@ -52,8 +50,12 @@ import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
 import de.trailscape.core.canGenerateRouteFor
 import de.trailscape.core.currentWeekIndex
-import de.trailscape.core.planSessionStatusLabels
-import de.trailscape.core.weekKindLabels
+import de.trailscape.core.i18n.sessionDescription
+import de.trailscape.core.i18n.sessionTitle
+import de.trailscape.core.plainSessionHint
+import de.trailscape.core.plainSessionTitle
+import de.trailscape.core.planSessionStatusLabel
+import de.trailscape.core.sessionsForDay
 import de.trailscape.core.weekKm
 import de.trailscape.core.weekSessionProgress
 import kotlin.math.roundToInt
@@ -116,6 +118,7 @@ fun PlanWeekCard(
     onPlanRoute: ((TrainingSession) -> Unit)? = null,
     rideLoads: Map<String, Double> = emptyMap(),
 ) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     val activeIndex = currentWeekIndex(plan)
     val isCurrent = week.index == activeIndex
@@ -154,7 +157,7 @@ fun PlanWeekCard(
                 // Wochentyp-Marke: dieselbe Pille wie der Fitnesslevel-Chip
                 // (`TagPill`) — getoente Flaeche, Text in der Vollfarbe.
                 TagPill(
-                    text = weekKindLabels.getValue(week.kind),
+                    text = coreTexts.training.weekKind(week.kind),
                     containerColor = kindColor.copy(alpha = 0.15f),
                     contentColor = kindColor,
                 )
@@ -188,14 +191,14 @@ fun PlanWeekCard(
                     modifier = Modifier.padding(vertical = 4.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
-                    WeekdayLabel(session.day)
+                    WeekdayLabel(coreTexts.format.weekdayShort(session.day))
                     Column(modifier = Modifier.weight(1f)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = session.title,
+                                text = sessionTitle(session, coreTexts),
                                 style = MaterialTheme.typography.titleSmall,
                                 modifier = Modifier.weight(1f),
                             )
@@ -230,7 +233,7 @@ fun PlanWeekCard(
                                         // Rundkurs (siehe KDoc oben und `RouteGenerationSheet.kt`,
                                         // das denselben Vorschlag ebenfalls "Runde" nennt) — Route
                                         // meint in dieser App eine geplante Strecke von A nach B.
-                                        contentDescription = "Passende Runde für „${session.title}“ planen",
+                                        contentDescription = "Passende Runde für „${sessionTitle(session, coreTexts)}“ planen",
                                         tint = theme.primary,
                                         modifier = Modifier.size(20.dp),
                                     )
@@ -238,7 +241,7 @@ fun PlanWeekCard(
                             }
                         }
                         Text(
-                            text = session.description,
+                            text = sessionDescription(session, coreTexts),
                             style = MaterialTheme.typography.bodyMedium,
                             color = theme.onSurfaceVariant,
                         )
@@ -258,6 +261,7 @@ fun PlanWeekCard(
  */
 @Composable
 private fun SessionStatusIcon(status: PlanSessionStatus) {
+    val coreTexts = LocalCoreTexts.current
     val signals = LocalSignalColors.current
     val (icon, tint) = when (status) {
         PlanSessionStatus.OFFEN -> return
@@ -269,7 +273,7 @@ private fun SessionStatusIcon(status: PlanSessionStatus) {
     Spacer(modifier = Modifier.width(6.dp))
     Icon(
         icon,
-        contentDescription = planSessionStatusLabels.getValue(status),
+        contentDescription = planSessionStatusLabel(status, coreTexts),
         tint = tint,
         modifier = Modifier.size(16.dp),
     )
@@ -298,6 +302,7 @@ fun CurrentWeekCard(
     rideLoads: Map<String, Double> = emptyMap(),
     headline: String? = null,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     val progress = weekSessionProgress(week, rides, rideLoads = rideLoads).associateBy { it.session }
     val todays = sessionsForDay(plan).toSet()
@@ -325,9 +330,9 @@ fun CurrentWeekCard(
                 val subline = when {
                     done && ridden != null ->
                         "gefahren: ${ridden.name}, ${formatKmDe(ridden.stats.distanceKm)} km"
-                    isToday -> "heute · ${plainSessionHint(session, plan.goal)}"
+                    isToday -> "heute · ${plainSessionHint(session, plan.goal, coreTexts)}"
                     entry?.status == PlanSessionStatus.VERPASST -> "ausgelassen"
-                    else -> plainSessionHint(session, plan.goal)
+                    else -> plainSessionHint(session, plan.goal, coreTexts)
                 }
                 val rowColor = if (isToday) theme.primaryContainer else theme.surface.copy(alpha = 0f)
                 val textColor = if (isToday) theme.onPrimaryContainer else theme.onSurface
@@ -340,13 +345,13 @@ fun CurrentWeekCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = session.day,
+                        text = coreTexts.format.weekdayShort(session.day),
                         style = MaterialTheme.typography.labelLarge,
                         color = mutedColor,
                         modifier = Modifier.width(34.dp),
                     )
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(plainSessionTitle(session), style = MaterialTheme.typography.titleSmall, color = textColor)
+                        Text(plainSessionTitle(session, coreTexts), style = MaterialTheme.typography.titleSmall, color = textColor)
                         Text(subline, style = MaterialTheme.typography.bodySmall, color = mutedColor)
                     }
                     when {

@@ -1,5 +1,6 @@
 package de.trailscape.app.routing
 
+import de.trailscape.app.data.AppServices
 import de.trailscape.core.RemoteSegment
 import de.trailscape.core.SegmentUpdateAction
 import de.trailscape.core.applySegmentDelta
@@ -418,6 +419,7 @@ class SegmentDownloader(
                     )
                 },
                 isCancelled = isCancelled,
+                texts = AppServices.coreTexts(),
             )
             if (!applied) return SegmentSyncResult.Cancelled(fileName, transferred)
 
@@ -467,7 +469,7 @@ class SegmentDownloader(
         val dummy = runCatching { head(segmentDeltaUrl(fileName, md5, baseUrl)) }.getOrNull()
         if (dummy != null && segmentDeltaIsDummy(dummy.sizeBytes)) return
 
-        checkSegmentIntegrity(assembled)?.let { throw SegmentDownloadException(it) }
+        checkSegmentIntegrity(assembled, AppServices.coreTexts())?.let { throw SegmentDownloadException(it) }
     }
 
     // -----------------------------------------------------------------------

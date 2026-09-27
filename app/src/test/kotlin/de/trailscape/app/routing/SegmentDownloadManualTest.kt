@@ -2,6 +2,7 @@ package de.trailscape.app.routing
 
 import de.trailscape.app.testing.MemoryKeyValueStore
 import de.trailscape.core.checkSegmentIntegrity
+import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.segmentDeltaUrl
 import de.trailscape.core.segmentMd5
 import java.io.File
@@ -134,7 +135,7 @@ class SegmentDownloadManualTest {
 
         // 5 ------------------------------------------------------ Integritaet
         val startedCheck = System.currentTimeMillis()
-        val defect = checkSegmentIntegrity(file)
+        val defect = checkSegmentIntegrity(file, texts = CoreTextsDe)
         println("checkSegmentIntegrity in ${System.currentTimeMillis() - startedCheck} ms")
         assertNull(defect)
 
@@ -148,7 +149,7 @@ class SegmentDownloadManualTest {
                 raf.seek(raf.length() / 2)
                 raf.write(ByteArray(4096) { 0x5A })
             }
-            val brokenMessage = checkSegmentIntegrity(broken)
+            val brokenMessage = checkSegmentIntegrity(broken, texts = CoreTextsDe)
             println("checkSegmentIntegrity(beschaedigt) → $brokenMessage")
             assertNotNull(brokenMessage, "die Beschaedigung wurde nicht bemerkt")
         } finally {

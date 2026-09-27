@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.pow
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -81,7 +82,7 @@ class SessionTargetTest {
                 longestRideKm = 80.0,
                 rideCount = 20,
             )
-            return generatePlan(goal, assessment, now)
+            return generatePlan(goal, assessment, now, texts = CoreTextsDe)
         }
 
         /** Erste Einheit im Plan, deren Titel [title] enthaelt. */
@@ -129,7 +130,7 @@ class SessionTargetTest {
         assertEquals(fallbackGravelSpeedKmh, fallbackSpeedKmh(defaultProfile), EPS)
         assertEquals(18.0, fallbackSpeedKmh(defaultProfile), EPS)
 
-        val target = routeTargetForSession(session("GA1", targetKm = 36), defaultProfile, emptyList())
+        val target = routeTargetForSession(session("GA1", targetKm = 36), defaultProfile, emptyList(), texts = CoreTextsDe)
         // GA1 = Grundlage -> Faktor 0,95.
         assertEquals(18.0 * 0.95, target.speedKmh, EPS)
         assertEquals(36.0 / (18.0 * 0.95), target.durationH!!, EPS)
@@ -148,7 +149,7 @@ class SessionTargetTest {
     @Test
     fun `Historie schlaegt den Profil-Fallback`() {
         val rides = List(5) { ride(createdAt = it.toLong(), avgSpeedKmh = 25.0) }
-        val target = routeTargetForSession(session("GA1"), defaultProfile, rides)
+        val target = routeTargetForSession(session("GA1"), defaultProfile, rides, texts = CoreTextsDe)
 
         assertEquals(25.0 * 0.95, target.speedKmh, EPS)
     }
@@ -220,7 +221,7 @@ class SessionTargetTest {
 
         assertTrue(lang.description.contains("Anstiege"))
         assertEquals(AscentPreference.BERGIG, ascentPreferenceForSession(lang))
-        assertEquals(AscentPreference.BERGIG, routeTargetForSession(lang, defaultProfile, emptyList()).ascentPreference)
+        assertEquals(AscentPreference.BERGIG, routeTargetForSession(lang, defaultProfile, emptyList(), texts = CoreTextsDe).ascentPreference)
 
         // Auch das Zielevent nennt dann die Anstiege.
         assertEquals(
@@ -236,7 +237,7 @@ class SessionTargetTest {
         val rides = List(3) { ride(createdAt = it.toLong(), avgSpeedKmh = 20.0) }
         val s = sessionFromPlan(plan(ascentM = 400.0), "Lange Tour")
 
-        val target = routeTargetForSession(s, defaultProfile, rides)
+        val target = routeTargetForSession(s, defaultProfile, rides, texts = CoreTextsDe)
 
         assertEquals(s.targetKm.toDouble(), target.distanceKm, EPS)
         assertEquals(RouteTargetSource.PLAN, target.source)
@@ -247,8 +248,8 @@ class SessionTargetTest {
     fun `lockere Einheit rechnet mit 0,9-fachem Tempo, harte mit vollem`() {
         val rides = List(3) { ride(createdAt = it.toLong(), avgSpeedKmh = 20.0) }
 
-        val locker = routeTargetForSession(session("Ruhige Runde", targetKm = 30), defaultProfile, rides)
-        val hart = routeTargetForSession(session("Intervalle", targetKm = 30), defaultProfile, rides)
+        val locker = routeTargetForSession(session("Ruhige Runde", targetKm = 30), defaultProfile, rides, texts = CoreTextsDe)
+        val hart = routeTargetForSession(session("Intervalle", targetKm = 30), defaultProfile, rides, texts = CoreTextsDe)
 
         assertEquals(18.0, locker.speedKmh, EPS)
         assertEquals(20.0, hart.speedKmh, EPS)
@@ -312,7 +313,7 @@ class SessionTargetTest {
     fun `Ruhetag-Runde ist die Erholungsvariante flach und locker`() {
         val rides = List(3) { ride(createdAt = it.toLong(), avgSpeedKmh = 20.0) }
 
-        val target = restDayRideTarget(defaultProfile, rides)
+        val target = restDayRideTarget(defaultProfile, rides, texts = CoreTextsDe)
         val recovery = routeTargetForToday(
             recommendation(DailyRecommendationKind.RECOVERY),
             defaultProfile,
@@ -323,12 +324,12 @@ class SessionTargetTest {
         assertEquals(1.0, target.durationH!!, EPS)
         assertEquals(SessionIntensity.LOCKER, target.intensity)
         assertEquals(AscentPreference.FLACH, target.ascentPreference)
-        assertEquals(restDayRideLabel, target.label)
+        assertEquals(restDayRideLabel(CoreTextsDe), target.label)
     }
 
     @Test
     fun `Ruhetag-Runde haelt das Wochenbudget ein`() {
-        val target = restDayRideTarget(TrainingProfile(ageYears = 40, weeklyHours = 1.0), emptyList())
+        val target = restDayRideTarget(TrainingProfile(ageYears = 40, weeklyHours = 1.0), emptyList(), texts = CoreTextsDe)
         assertEquals(0.5, target.durationH!!, EPS)
     }
 
@@ -384,8 +385,9 @@ class SessionTargetTest {
         val readiness = computeReadiness(
             restingHr = RestingHrAssessment.unavailable("keine Daten", 0),
             sleep = SleepAssessment.unavailable("keine Daten", 0),
+            texts = CoreTextsDe,
         )
-        val rec = recommendToday(readiness = readiness)
+        val rec = recommendToday(readiness = readiness, texts = CoreTextsDe)
         assertEquals(DailyRecommendationKind.GRUNDLAGE, rec.kind)
 
         val target = routeTargetForToday(rec, defaultProfile, emptyList())!!

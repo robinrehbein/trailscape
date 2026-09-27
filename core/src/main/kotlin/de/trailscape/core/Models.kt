@@ -1,8 +1,13 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.SessionTextKey
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
 /**
@@ -295,11 +300,10 @@ fun <T : RideInfo> riddenRides(rides: List<T>): List<T> = rides.filter { !it.pla
 enum class FitnessLevel(
     /** Exakter Dart-Enum-Name (`FitnessLevel.name`), wie er im JSON steht. */
     val jsonName: String,
-    val label: String,
 ) {
-    EINSTEIGER("einsteiger", "Einsteiger"),
-    FORTGESCHRITTEN("fortgeschritten", "Fortgeschritten"),
-    AMBITIONIERT("ambitioniert", "Ambitioniert"),
+    EINSTEIGER("einsteiger"),
+    FORTGESCHRITTEN("fortgeschritten"),
+    AMBITIONIERT("ambitioniert"),
     ;
 
     companion object {
@@ -310,8 +314,7 @@ enum class FitnessLevel(
     }
 }
 
-/** Entspricht der Dart-Konstante `levelLabels`. */
-val levelLabels: Map<FitnessLevel, String> = FitnessLevel.entries.associateWith { it.label }
+// Beschriftung: `texts.training.fitnessLevel(level)` (siehe `core/i18n`).
 
 /** Ergebnis von [assessFitness]. */
 data class FitnessAssessment(
@@ -372,12 +375,11 @@ data class Goal(
 enum class WeekKind(
     /** Exakter Dart-Enum-Name (`WeekKind.name`), wie er im JSON steht. */
     val jsonName: String,
-    val label: String,
 ) {
-    AUFBAU("aufbau", "Aufbau"),
-    ERHOLUNG("erholung", "Erholung"),
-    TAPER("taper", "Taper"),
-    ZIELWOCHE("zielwoche", "Zielwoche"),
+    AUFBAU("aufbau"),
+    ERHOLUNG("erholung"),
+    TAPER("taper"),
+    ZIELWOCHE("zielwoche"),
     ;
 
     companion object {
@@ -388,8 +390,7 @@ enum class WeekKind(
     }
 }
 
-/** Entspricht der Dart-Konstante `weekKindLabels`. */
-val weekKindLabels: Map<WeekKind, String> = WeekKind.entries.associateWith { it.label }
+// Beschriftung: `texts.training.weekKind(kind)` (siehe `core/i18n`).
 
 /**
  * Eine einzelne Trainingseinheit innerhalb einer [TrainingWeek].
@@ -452,6 +453,19 @@ data class TrainingSession(
      * Fehler.
      */
     val targetLoad: Double? = null,
+    /**
+     * Schluessel des Plantexts — damit [title] und [description] in der
+     * aktuellen Sprache neu gebaut werden koennen (siehe
+     * `de.trailscape.core.i18n.sessionTitle`/`sessionDescription`).
+     *
+     * [title] und [description] bleiben trotzdem gespeichert, in der Sprache,
+     * in der der Plan erzeugt wurde: als Rueckfall fuer Plaene aus der Zeit
+     * vor diesem Feld, fuer Backups und fuer aeltere App-Versionen. `null`
+     * bei solchen Altplaenen — dann gilt der gespeicherte Text.
+     */
+    val textKey: SessionTextKey? = null,
+    /** Ganzzahlige Argumente zu [textKey] (Minuten, Wiederholungen, km …). */
+    val textArgs: List<Int> = emptyList(),
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("day", day)
@@ -465,6 +479,10 @@ data class TrainingSession(
             put("isEvent", true)
         }
         targetLoad?.let { put("targetLoad", it) }
+        textKey?.let { put("textKey", it.jsonName) }
+        if (textArgs.isNotEmpty()) {
+            put("textArgs", buildJsonArray { textArgs.forEach { add(JsonPrimitive(it)) } })
+        }
     }
 
     companion object {
@@ -485,6 +503,10 @@ data class TrainingSession(
                 isEvent = json.optionalBoolean("isEvent")
                     ?: title.lowercase().startsWith(EVENT_TITLE_PREFIX),
                 targetLoad = json.optionalDouble("targetLoad"),
+                textKey = SessionTextKey.fromJsonNameOrNull(json.optionalString("textKey")),
+                textArgs = (json["textArgs"] as? JsonArray)
+                    ?.mapNotNull { (it as? JsonPrimitive)?.intOrNull }
+                    .orEmpty(),
             )
         }
     }

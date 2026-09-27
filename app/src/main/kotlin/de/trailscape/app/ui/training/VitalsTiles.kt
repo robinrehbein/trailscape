@@ -23,13 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.TrainingInsights
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.formatTime
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.core.RecoveryFlag
-import de.trailscape.core.confidenceLabels
 import de.trailscape.core.shortSleeperHint
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -138,7 +138,7 @@ fun VitalsTiles(
         )
 
         if (sleep.available && sleep.shortSleeper && showShortSleeperHint) {
-            NoticeBox(icon = TrainingInfoIcon, color = muted, text = shortSleeperHint)
+            NoticeBox(icon = TrainingInfoIcon, color = muted, text = shortSleeperHint(LocalCoreTexts.current))
             LaunchedEffect(Unit) { onShortSleeperHintShown() }
         }
     }
@@ -298,7 +298,7 @@ fun VitalsSheet(insights: TrainingInsights, onDismiss: () -> Unit) {
             )
             ExplainRow(
                 label = "VO₂max",
-                pill = if (vo2.available) confidenceLabels.getValue(vo2.confidence) else null,
+                pill = if (vo2.available) LocalCoreTexts.current.load.confidence(vo2.confidence) else null,
                 text = if (vo2.available) {
                     "Deine maximale Sauerstoffaufnahme unter Volllast, geschätzt aus Touren mit " +
                         "Puls und Höhenprofil – deshalb ein Bereich, keine Messung."

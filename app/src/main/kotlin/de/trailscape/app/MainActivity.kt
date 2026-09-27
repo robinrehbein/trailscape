@@ -1,5 +1,6 @@
 package de.trailscape.app
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import de.trailscape.app.feedback.CrashReportPrompt
 import de.trailscape.app.health.HealthPermissionRequester
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.reminder.EXTRA_OPEN_TODAY
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
@@ -32,9 +34,19 @@ class MainActivity : ComponentActivity() {
     @Suppress("unused")
     private val healthPermissionRequester = HealthPermissionRequester(this)
 
+    /**
+     * Setzt die App-Sprache als reines Locale-Delta, bevor irgendeine
+     * Ressource gelesen wird (siehe [AppLocale]).
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        AppLocale.overrideConfiguration(newBase)?.let(::applyOverrideConfiguration)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        AppLocale.refresh(this)
         showTodayIfRequested(intent)
         importIfRequested(intent)
         setContent {

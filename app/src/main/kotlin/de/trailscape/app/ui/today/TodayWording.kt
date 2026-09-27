@@ -1,7 +1,6 @@
 package de.trailscape.app.ui.today
 
 import de.trailscape.app.ui.localOfEpochMs
-import de.trailscape.core.formatGoalDuration
 import de.trailscape.core.HrvAssessment
 import de.trailscape.core.HrvStatus
 import de.trailscape.core.ReadinessBand
@@ -15,7 +14,9 @@ import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TsbBand
 import de.trailscape.core.classifyTsb
+import de.trailscape.core.formatGoalDuration
 import de.trailscape.core.formatRoundHours
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -513,13 +514,14 @@ fun whyNote(
     upcoming: UpcomingSession?,
     deloadRecommended: Boolean,
     hasPlan: Boolean,
+    texts: CoreTexts,
 ): List<String> = buildList {
     route.note?.let { add(it) }
     if (route.firstRound && effort != TodayEffort.RUHETAG) {
         val hours = route.target?.durationH
         add(
             if (hours != null) {
-                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa ${formatRoundHours(hours)}."
+                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa ${formatRoundHours(hours, texts)}."
             } else {
                 "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg."
             },

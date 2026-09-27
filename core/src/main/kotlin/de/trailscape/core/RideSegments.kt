@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -666,7 +667,7 @@ internal fun segmentPathsMatch(a: List<TrackPoint>, b: List<TrackPoint>): Boolea
  * Geplante Touren ([Ride.planned]) werden nur als verarbeitet vermerkt —
  * niemand ist sie gefahren.
  */
-fun updateSegmentRegistry(registry: SegmentRegistry, ride: Ride): SegmentRegistryUpdate {
+fun updateSegmentRegistry(registry: SegmentRegistry, ride: Ride, texts: CoreTexts): SegmentRegistryUpdate {
     val segments = registry.segments
         .map { seg -> seg.copy(efforts = seg.efforts.filterNot { it.rideId == ride.id }) }
         .toMutableList()
@@ -702,7 +703,7 @@ fun updateSegmentRegistry(registry: SegmentRegistry, ride: Ride): SegmentRegistr
             waiting.removeAll { member -> members.any { it === member } }
             segments += ClimbSegment(
                 id = uniqueSegmentId(partner.path, segments.mapTo(HashSet()) { it.id }),
-                name = suggestSegmentName(partner.distanceM, partner.ascentM),
+                name = suggestSegmentName(partner.distanceM, partner.ascentM, texts),
                 path = partner.path,
                 distanceM = partner.distanceM,
                 ascentM = partner.ascentM,
@@ -838,21 +839,17 @@ fun segmentEffortsForRide(registry: SegmentRegistry, rideId: String): List<Segme
 
 /**
  * Namensvorschlag eines neuen Segments: „Anstieg 4,2 km / 180 Hm" bzw.
- * „Anstieg 800 m / 45 Hm" unterhalb eines Kilometers. Deutsche
- * Dezimalschreibweise wie ueberall in der UI; umbenennen laesst sich in v1
- * nicht — der Vorschlag muss allein tragen.
+ * „Anstieg 800 m / 45 Hm" unterhalb eines Kilometers — in der Sprache von
+ * [texts] (Englisch „Climb 4.2 km / 180 m"). Umbenennen laesst sich in v1
+ * nicht — der Vorschlag muss allein tragen; gespeichert wird er in der
+ * Sprache beim Anlegen.
  */
-fun suggestSegmentName(distanceM: Double, ascentM: Double): String {
+fun suggestSegmentName(distanceM: Double, ascentM: Double, texts: CoreTexts): String {
     val hm = ascentM.roundToInt()
     return if (distanceM >= 1000.0) {
-        val km = java.math.BigDecimal.valueOf(distanceM / 1000)
-            .setScale(1, java.math.RoundingMode.HALF_UP)
-            .toPlainString()
-            .replace('.', ',')
-        "Anstieg $km km / $hm Hm"
+        texts.routing.climbSegmentName(distanceM / 1000, 0, hm)
     } else {
-        val m = (distanceM / 10).roundToInt() * 10
-        "Anstieg $m m / $hm Hm"
+        texts.routing.climbSegmentName(null, (distanceM / 10).roundToInt() * 10, hm)
     }
 }
 

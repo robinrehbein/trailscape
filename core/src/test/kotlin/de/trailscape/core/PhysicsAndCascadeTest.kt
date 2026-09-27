@@ -1,8 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,6 +8,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Portierung der Gruppen `Physikmodell`, `Kalibrierung α (HF ↔ Physik)` und
@@ -107,7 +108,7 @@ class PhysicsAndCascadeTest {
         // 1200 s × 4 m/s × 5 % = 240 m Anstieg (Hysterese 3 m).
         assertEquals(240.0, series.ascentM, 6.0)
 
-        val physics = computePhysicsEstimate(series, refProfile)
+        val physics = computePhysicsEstimate(series, refProfile, texts = CoreTextsDe)
         assertTrue(physics.available)
         assertEquals(1200.0, physics.movingTimeS, 1.0)
         // Referenzrechnung bei h = 120 m ≈ 219 W; Randeffekte der Glaettung
@@ -117,7 +118,7 @@ class PhysicsAndCascadeTest {
         assertTrue(physics.eTss > 0)
         assertTrue(physics.kcal > 0)
         assertEquals(Confidence.MEDIUM, physics.confidence)
-        assertTrue(physics.powerText.contains("±15–25 %"))
+        assertTrue(physics.powerText(CoreTextsDe).contains("±15–25 %"))
     }
 
     @Test
@@ -129,7 +130,7 @@ class PhysicsAndCascadeTest {
             gradeTan = 0.05,
             startEle = 0.0,
         )
-        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile)
+        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
         val hours = physics.movingTimeS / 3600
         val expected = hours * physics.intensityFactor * physics.intensityFactor * 100
         assertEquals(expected, physics.eTss, 1e-6)
@@ -143,6 +144,7 @@ class PhysicsAndCascadeTest {
                 refProfile,
             ),
             refProfile,
+            texts = CoreTextsDe,
         )
         val climb = computePhysicsEstimate(
             buildRideSeries(
@@ -156,6 +158,7 @@ class PhysicsAndCascadeTest {
                 refProfile,
             ),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertTrue(flat.eTss < climb.eTss)
         assertTrue(flat.avgPowerW < climb.avgPowerW)
@@ -182,7 +185,7 @@ class PhysicsAndCascadeTest {
             track(pointCount = 400, stepS = 1, withElevation = false),
             refProfile,
         )
-        val physics = computePhysicsEstimate(series, refProfile)
+        val physics = computePhysicsEstimate(series, refProfile, texts = CoreTextsDe)
         assertFalse(physics.available)
         assertTrue(physics.unavailableReason!!.contains("Höhenprofil"))
         assertEquals(0.0, physics.eTss, 0.0)
@@ -193,6 +196,7 @@ class PhysicsAndCascadeTest {
         val physics = computePhysicsEstimate(
             buildRideSeries(track(pointCount = 5, stepS = 1), refProfile),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(physics.available)
         assertNotNull(physics.unavailableReason)
@@ -200,7 +204,7 @@ class PhysicsAndCascadeTest {
 
     @Test
     fun `leere Serie wirft nicht`() {
-        val physics = computePhysicsEstimate(RideSeries.EMPTY, refProfile)
+        val physics = computePhysicsEstimate(RideSeries.EMPTY, refProfile, texts = CoreTextsDe)
         assertFalse(physics.available)
         assertTrue(physics.series.isEmpty)
     }
@@ -270,7 +274,7 @@ class PhysicsAndCascadeTest {
         assertEquals(Confidence.LOW, c.confidence)
         // Der Rohwert bleibt sichtbar — frueher verschwand der Fall lautlos.
         assertEquals(2.5, c.rawAlpha!!, 1e-9)
-        assertTrue(c.note!!.contains("2,50"))
+        assertTrue(c.note(CoreTextsDe)!!.contains("2,50"))
     }
 
     @Test
@@ -396,6 +400,7 @@ class PhysicsAndCascadeTest {
         val result = computeRideLoad(
             points = track(pointCount = 361, hr = { 130 }),
             profile = refProfile,
+            texts = CoreTextsDe,
         )
         assertEquals(LoadSource.HERZFREQUENZ, result.source)
         assertEquals(38.518307560003834, result.load, 1e-6)
@@ -412,7 +417,7 @@ class PhysicsAndCascadeTest {
             gradeTan = 0.05,
             startEle = 0.0,
         )
-        val plain = computeRideLoad(points = points, profile = refProfile)
+        val plain = computeRideLoad(points = points, profile = refProfile, texts = CoreTextsDe)
         assertEquals(LoadSource.PHYSIK, plain.source)
         assertTrue(plain.load > 0)
 
@@ -425,6 +430,7 @@ class PhysicsAndCascadeTest {
                 clamped = false,
                 confidence = Confidence.MEDIUM,
             ),
+            texts = CoreTextsDe,
         )
         assertEquals(1.25 * plain.load, scaled.load, 1e-6)
     }
@@ -432,7 +438,7 @@ class PhysicsAndCascadeTest {
     @Test
     fun `Stufe C - ohne HF und ohne Hoehe rettet RPE die Tour`() {
         val points = track(pointCount = 400, stepS = 1, withElevation = false)
-        val result = computeRideLoad(points = points, profile = refProfile, rpe = 6.0)
+        val result = computeRideLoad(points = points, profile = refProfile, rpe = 6.0, texts = CoreTextsDe)
         assertEquals(LoadSource.RPE, result.source)
         // 399 s Bewegungszeit ≈ 6,65 min × 6 × 1/6
         assertEquals(399.0 / 60 * 6 / 6, result.load, 1e-6)
@@ -451,6 +457,7 @@ class PhysicsAndCascadeTest {
                 ascentM = 0.0,
                 descentM = 0.0,
             ),
+            texts = CoreTextsDe,
         )
         assertEquals(LoadSource.HEURISTIK, result.source)
         // 2 h × 55 × clamp(44/(2×22)) = 110 × 1,0
@@ -487,7 +494,7 @@ class PhysicsAndCascadeTest {
 
     @Test
     fun `ohne jede Datengrundlage ist die Quelle keine und die Last 0`() {
-        val result = computeRideLoad(points = emptyList(), profile = refProfile)
+        val result = computeRideLoad(points = emptyList(), profile = refProfile, texts = CoreTextsDe)
         assertEquals(LoadSource.KEINE, result.source)
         assertFalse(result.available)
         assertEquals(0.0, result.load, 0.0)
@@ -504,7 +511,7 @@ class PhysicsAndCascadeTest {
             points = points,
             stats = RideStats(distanceKm = 18.0, ascentM = 0.0, descentM = 0.0),
         )
-        val result = computeRideLoadForRide(ride, refProfile)
+        val result = computeRideLoadForRide(ride, refProfile, texts = CoreTextsDe)
         assertEquals(LoadSource.HERZFREQUENZ, result.source)
         assertEquals(38.518307560003834, result.load, 1e-6)
     }

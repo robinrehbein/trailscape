@@ -3,6 +3,7 @@ package de.trailscape.app.routing
 import android.content.Context
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.OfflineRoutingFiles
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.core.OfflineRoutingSetup
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.RoutingResult
@@ -117,6 +118,7 @@ suspend fun planRouteOfflineFirst(
             onSource = onSource,
             onProgress = onProgress,
             serverBaseUrl = AppServices.routingServerSettings.effectiveUrl(),
+            texts = AppLocale.coreTexts(appContext),
         )
     }
 }
@@ -203,7 +205,7 @@ suspend fun describeSegmentOffer(fileNames: List<String>): SegmentOffer? {
  * Kacheln, und eine Aufzaehlung von zwanzig Staedten liest niemand.
  */
 private fun segmentOfferTitle(tiles: List<SegmentTile>): String {
-    val named = tiles.take(MAX_NAMED_TILES).map { it.title }
+    val named = tiles.take(MAX_NAMED_TILES).map { it.title(AppServices.coreTexts()) }
     val rest = tiles.size - named.size
     val joined = when (named.size) {
         1 -> named.first()

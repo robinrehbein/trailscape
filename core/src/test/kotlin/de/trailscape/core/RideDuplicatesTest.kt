@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -60,6 +61,6 @@ class RideDuplicatesTest {
 
     @Test
     fun `Meldung ist gesetzt`() {
-        assertTrue(DUPLICATE_RIDE_MESSAGE.isNotBlank())
+        assertTrue(duplicateRideMessage(CoreTextsDe).isNotBlank())
     }
 }

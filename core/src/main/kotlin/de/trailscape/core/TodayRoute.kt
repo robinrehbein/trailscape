@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.sessionTitle
 import kotlin.math.max
 
 /**
@@ -92,19 +94,6 @@ fun readinessAscentCap(kind: DailyRecommendationKind): AscentPreference = when (
     DailyRecommendationKind.HARTE_EINHEIT -> AscentPreference.BERGIG
 }
 
-/** Warum heute heruntergestuft wird — der „weil …"-Teil des Kartentexts. */
-private fun downgradeReason(kind: DailyRecommendationKind): String = when (kind) {
-    DailyRecommendationKind.RUHETAG -> "deine Erholungssignale für eine Pause sprechen"
-    DailyRecommendationKind.RECOVERY -> "deine Ermüdung gerade hoch ist"
-    DailyRecommendationKind.LOCKER_Z2 ->
-        "deine Erholungswerte heute nur für eine lockere Einheit reichen"
-
-    DailyRecommendationKind.GRUNDLAGE ->
-        "deine Erholungswerte für normales, aber nicht für volles Training sprechen"
-
-    DailyRecommendationKind.HARTE_EINHEIT -> "deine Erholung passt"
-}
-
 /**
  * Das Ergebnis der Tagesentscheidung.
  *
@@ -116,8 +105,8 @@ private fun downgradeReason(kind: DailyRecommendationKind): String = when (kind)
  * @param factor der angewandte [readinessDistanceFactor].
  * @param downgraded `true`, wenn Distanz oder Hoehenprofil gegenueber dem Plan
  *   zurueckgenommen wurden. Genau dann **muss** [note] auf der Karte stehen.
- * @param note der fertige deutsche Satz zur Abweichung; `null`, wenn es keine
- *   gibt.
+ * @param note der fertige Satz zur Abweichung in der Sprache der uebergebenen
+ *   Texte; `null`, wenn es keine gibt.
  * @param firstRound `true`, wenn [target] die ruhige erste Runde fuer
  *   jemanden ohne gefahrene Tour ist ([firstRoundTarget]) und nicht die
  *   Empfehlung aus der Tagesform.
@@ -169,8 +158,10 @@ fun decideTodayRoute(
     profile: TrainingProfile,
     recentRides: List<RideInfo>,
     weeklyTarget: WeeklyLoadTarget? = null,
+    texts: CoreTexts,
 ): TodayRoute {
     val kind = recommendation.kind
+    val t = texts.today
     val factor = readinessDistanceFactor(kind)
 
     // 1. Zieltag — die Strecke steht bereits.
@@ -181,8 +172,7 @@ fun decideTodayRoute(
             plannedKm = session.targetKm,
             factor = factor,
             downgraded = false,
-            note = "Heute ist dein Zielevent über ${session.targetKm} km. Dafür braucht es " +
-                "keine Runde vor der Haustür – die Strecke steht schon.",
+            note = t.eventDayNote(session.targetKm),
         )
     }
 
@@ -202,8 +192,7 @@ fun decideTodayRoute(
             factor = factor,
             downgraded = session != null,
             note = session?.let {
-                "Im Plan steht heute „${it.title}“ über ${it.targetKm} km – ausgesetzt, weil " +
-                    "${downgradeReason(kind)}. Schieb die Einheit lieber um einen Tag."
+                t.sessionSkippedNote(sessionTitle(it, texts), it.targetKm, t.downgradeReason(kind))
             },
         )
     }
@@ -216,7 +205,7 @@ fun decideTodayRoute(
         (kind == DailyRecommendationKind.GRUNDLAGE || kind == DailyRecommendationKind.HARTE_EINHEIT)
     ) {
         return TodayRoute(
-            target = firstRoundTarget(defaultFirstRoundDuration(profile).hours, profile, recentRides),
+            target = firstRoundTarget(defaultFirstRoundDuration(profile).hours, profile, recentRides, texts),
             session = null,
             plannedKm = null,
             factor = factor,
@@ -239,7 +228,7 @@ fun decideTodayRoute(
     }
 
     // 4. Planeinheit, gedaempft durch die Tagesform.
-    val planned = routeTargetForSession(session, profile, recentRides)
+    val planned = routeTargetForSession(session, profile, recentRides, texts)
     val cappedAscent = minOf(planned.ascentPreference, readinessAscentCap(kind))
     val cappedIntensity = minOf(planned.intensity, intensityForRecommendation(kind))
     val speed = planningSpeedKmh(cappedIntensity, profile, recentRides)
@@ -256,7 +245,7 @@ fun decideTodayRoute(
             durationH = distanceKm / speed,
             speedKmh = speed,
             intensity = cappedIntensity,
-            label = session.title,
+            label = sessionTitle(session, texts),
             source = RouteTargetSource.PLAN,
         ),
         session = session,
@@ -264,44 +253,17 @@ fun decideTodayRoute(
         factor = factor,
         downgraded = downgraded,
         note = if (downgraded) {
-            downgradeNote(
+            t.downgradeNote(
                 plannedKm = session.targetKm,
                 plannedAscent = planned.ascentPreference,
                 adjustedKm = dartRound(distanceKm).toInt(),
                 adjustedAscent = cappedAscent,
-                ascentChanged = ascentChanged,
                 distanceChanged = distanceChanged,
-                reason = downgradeReason(kind),
+                ascentChanged = ascentChanged,
+                reason = t.downgradeReason(kind),
             )
         } else {
             null
         },
     )
-}
-
-/**
- * „Plan: 90 km bergig — heute auf 55 km flach reduziert, weil …"
- *
- * Der Satz nennt **beide** Zahlen. Nur die neue zu zeigen waere bequemer und
- * genau das Problem: Die Nutzerin sieht im Trainings-Tab weiterhin 90 km und
- * muss verstehen, warum hier 55 stehen.
- */
-private fun downgradeNote(
-    plannedKm: Int,
-    plannedAscent: AscentPreference,
-    adjustedKm: Int,
-    adjustedAscent: AscentPreference,
-    ascentChanged: Boolean,
-    distanceChanged: Boolean,
-    reason: String,
-): String {
-    val plannedLabel = ascentPreferenceLabels.getValue(plannedAscent).lowercase()
-    val adjustedLabel = ascentPreferenceLabels.getValue(adjustedAscent).lowercase()
-    val head = "Plan: $plannedKm km $plannedLabel"
-    val change = when {
-        distanceChanged && ascentChanged -> "heute auf $adjustedKm km $adjustedLabel reduziert"
-        distanceChanged -> "heute auf $adjustedKm km reduziert"
-        else -> "heute $adjustedLabel statt $plannedLabel"
-    }
-    return "$head – $change, weil $reason."
 }

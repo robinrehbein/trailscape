@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -33,7 +34,7 @@ class GpxTest {
         assertTrue(xml.contains("creator=\"Trailscape\""))
         assertTrue(xml.contains("http://www.topografix.com/GPX/1/1"))
 
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals("Meine Tour", result.name)
         assertEquals(3, result.points.size)
 
@@ -58,14 +59,14 @@ class GpxTest {
         assertTrue(xml.contains("&amp;"))
         assertTrue(xml.contains("&lt;Test"))
 
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals("Tour & <Test> \"Zitat\" 'Apostroph'", result.name)
     }
 
     @Test
     fun `leere Punktliste erzeugt GPX ohne Trackpunkte parseGpx wirft`() {
         val xml = buildGpx("Leer", emptyList())
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     // --- parseGpx mit handgeschriebenem GPX ---
@@ -100,7 +101,7 @@ class GpxTest {
 
     @Test
     fun `liest alle trkpt aus beiden Segmenten in Reihenfolge`() {
-        val result = parseGpx(handwritten)
+        val result = parseGpx(handwritten, texts = CoreTextsDe)
 
         assertEquals(3, result.points.size)
         assertEquals(47.1, result.points[0].lat, EPS)
@@ -118,7 +119,7 @@ class GpxTest {
 
     @Test
     fun `Name kommt aus trk name nicht aus metadata name`() {
-        val result = parseGpx(handwritten)
+        val result = parseGpx(handwritten, texts = CoreTextsDe)
         assertEquals("Zwei Segmente Tour", result.name)
     }
 
@@ -137,7 +138,7 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals("Nur Metadata", result.name)
     }
 
@@ -153,7 +154,7 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertNull(result.name)
     }
 
@@ -173,7 +174,7 @@ class GpxTest {
   </rte>
 </gpx>
 """
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals(2, result.points.size)
         assertEquals(10.0, result.points[0].lat, EPS)
         assertEquals(100.0, result.points[0].ele!!, EPS)
@@ -186,13 +187,13 @@ class GpxTest {
     @Test
     fun `kaputtes XML wirft FormatException`() {
         val brokenXml = "<gpx><trk><trkseg><trkpt lat=\"1\" lon=\"2\">"
-        assertFailsWith<FormatException> { parseGpx(brokenXml) }
+        assertFailsWith<FormatException> { parseGpx(brokenXml, texts = CoreTextsDe) }
     }
 
     @Test
     fun `gueltiges XML ohne gpx-Wurzel wirft FormatException`() {
         val xml = "<?xml version=\"1.0\"?><notgpx></notgpx>"
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     @Test
@@ -206,7 +207,7 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     @Test
@@ -221,11 +222,11 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     @Test
     fun `leerer String wirft FormatException`() {
-        assertFailsWith<FormatException> { parseGpx("") }
+        assertFailsWith<FormatException> { parseGpx("", texts = CoreTextsDe) }
     }
 }

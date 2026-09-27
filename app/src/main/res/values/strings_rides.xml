@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Verlaufs (ui/rides/**, ui/map/HistorySummarySheet.kt, ui/ShareFiles.kt,
+    ui/RideImport.kt, ui/ActivityFileImport.kt, ui/ActivityImportAction.kt, ImportActivity.kt, ImportIntents.kt).
+
+    Eigentuemer: i18n-rides · Schluessel-Praefix: rides_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_rides.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- AppViewModel.kt (von der Foundation umgezogen) -->
+    <plurals name="rides_import_quarantined_count">
+        <item quantity="one">%1$d Tourdatei war unlesbar und liegt jetzt im Ordner „defekt“.</item>
+        <item quantity="other">%1$d Tourdateien waren unlesbar und liegen jetzt im Ordner „defekt“.</item>
+    </plurals>
+    <string name="rides_health_route_missing_error">Health Connect hat für diese Tour keine Route.</string>
+    <string name="rides_health_route_save_error">Die Route konnte nicht gespeichert werden.</string>
+    <!-- %1$s = Name der Tour -->
+    <string name="rides_health_route_added_status">Route für „%1$s“ ergänzt.</string>
+    <!-- %1$s = Segmentname, %2$s = Zeit (H:MM:SS), %3$s = Verbesserung („14 s", „1:15 min") -->
+    <string name="rides_segment_new_best_status">Neue Bestzeit auf „%1$s“: %2$s, %3$s schneller.</string>
+    <plurals name="rides_segment_new_bests_count">
+        <item quantity="one">Neue Bestzeit auf %1$d Segment.</item>
+        <item quantity="other">Neue Bestzeiten auf %1$d Segmenten.</item>
+    </plurals>
+    <string name="rides_record_saved_status">Tour gespeichert.</string>
+    <string name="rides_health_import_save_error">Die importierten Touren konnten nicht gespeichert werden. Beim nächsten Sync wird es erneut versucht.</string>
+</resources>

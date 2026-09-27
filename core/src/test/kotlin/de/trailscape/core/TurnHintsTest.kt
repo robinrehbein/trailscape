@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.test.Test
@@ -157,7 +158,7 @@ class TurnHintsTest {
         val announcer = TurnAnnouncer(listOf(hintBei(500.0)))
         // 30 km/h -> Vorlauf 8 s Fahrzeit = 66,7 m.
         assertNull(announcer.melde(400.0, 30.0))
-        assertEquals("In 50 Metern rechts.", announcer.melde(440.0, 30.0))
+        assertEquals("In 50 Metern rechts.", announcer.melde(440.0, 30.0)?.let { turnAnsageText(it.richtung, it.abstandM, CoreTextsDe) })
     }
 
     @Test
@@ -173,7 +174,7 @@ class TurnHintsTest {
         // Bei 60 km/h betraegt der Vorlauf 133 m — 100 m vor der Kurve ist
         // die Ansage also schon faellig, die bei 30 km/h noch schwieg.
         val announcer = TurnAnnouncer(listOf(hintBei(500.0)))
-        assertEquals("In 100 Metern rechts.", announcer.melde(400.0, 60.0))
+        assertEquals("In 100 Metern rechts.", announcer.melde(400.0, 60.0)?.let { turnAnsageText(it.richtung, it.abstandM, CoreTextsDe) })
     }
 
     @Test
@@ -203,7 +204,7 @@ class TurnHintsTest {
     @Test
     fun `im Nahbereich heisst es Gleich`() {
         val announcer = TurnAnnouncer(listOf(hintBei(500.0, TurnRichtung.KEHRE_LINKS)))
-        assertEquals("Gleich scharf links.", announcer.melde(470.0, 30.0))
+        assertEquals("Gleich scharf links.", announcer.melde(470.0, 30.0)?.let { turnAnsageText(it.richtung, it.abstandM, CoreTextsDe) })
     }
 
     @Test
@@ -212,7 +213,7 @@ class TurnHintsTest {
         // Wiedereinstieg hinter der ersten Kurve: sie wird nie angesagt,
         // die zweite ganz normal.
         assertNull(announcer.melde(600.0, 30.0))
-        assertEquals("In 50 Metern links.", announcer.melde(840.0, 30.0))
+        assertEquals("In 50 Metern links.", announcer.melde(840.0, 30.0)?.let { turnAnsageText(it.richtung, it.abstandM, CoreTextsDe) })
     }
 
     @Test
@@ -262,19 +263,19 @@ class TurnHintsTest {
 
     @Test
     fun `Ansagetexte sind deutsch und auf 50er gerundet`() {
-        assertEquals("In 100 Metern links.", turnAnsageText(TurnRichtung.LINKS, 100.0))
-        assertEquals("In 150 Metern rechts.", turnAnsageText(TurnRichtung.RECHTS, 137.0))
-        assertEquals("In 50 Metern rechts.", turnAnsageText(TurnRichtung.RECHTS, 44.0))
-        assertEquals("In 250 Metern scharf rechts.", turnAnsageText(TurnRichtung.KEHRE_RECHTS, 250.0))
-        assertEquals("Gleich links.", turnAnsageText(TurnRichtung.LINKS, 39.9))
-        assertEquals("Gleich scharf links.", turnAnsageText(TurnRichtung.KEHRE_LINKS, 10.0))
+        assertEquals("In 100 Metern links.", turnAnsageText(TurnRichtung.LINKS, 100.0, texts = CoreTextsDe))
+        assertEquals("In 150 Metern rechts.", turnAnsageText(TurnRichtung.RECHTS, 137.0, texts = CoreTextsDe))
+        assertEquals("In 50 Metern rechts.", turnAnsageText(TurnRichtung.RECHTS, 44.0, texts = CoreTextsDe))
+        assertEquals("In 250 Metern scharf rechts.", turnAnsageText(TurnRichtung.KEHRE_RECHTS, 250.0, texts = CoreTextsDe))
+        assertEquals("Gleich links.", turnAnsageText(TurnRichtung.LINKS, 39.9, texts = CoreTextsDe))
+        assertEquals("Gleich scharf links.", turnAnsageText(TurnRichtung.KEHRE_LINKS, 10.0, texts = CoreTextsDe))
     }
 
     @Test
     fun `richtungsWort deckt alle Richtungen ab`() {
-        assertEquals("links", richtungsWort(TurnRichtung.LINKS))
-        assertEquals("rechts", richtungsWort(TurnRichtung.RECHTS))
-        assertEquals("scharf links", richtungsWort(TurnRichtung.KEHRE_LINKS))
-        assertEquals("scharf rechts", richtungsWort(TurnRichtung.KEHRE_RECHTS))
+        assertEquals("links", richtungsWort(TurnRichtung.LINKS, texts = CoreTextsDe))
+        assertEquals("rechts", richtungsWort(TurnRichtung.RECHTS, texts = CoreTextsDe))
+        assertEquals("scharf links", richtungsWort(TurnRichtung.KEHRE_LINKS, texts = CoreTextsDe))
+        assertEquals("scharf rechts", richtungsWort(TurnRichtung.KEHRE_RECHTS, texts = CoreTextsDe))
     }
 }

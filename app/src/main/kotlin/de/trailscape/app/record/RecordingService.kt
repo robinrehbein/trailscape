@@ -29,6 +29,7 @@ import androidx.core.location.LocationListenerCompat
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.i18n.localized
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
@@ -316,7 +317,7 @@ class RecordingService : Service() {
         override fun onProviderDisabled(provider: String) {
             if (!active) return
             DiagLog.shared.log(DiagEvent.GPS_PROVIDER_OFF)
-            val message = getString(R.string.recording_error_location_off_during_ride)
+            val message = localized().getString(R.string.recording_error_location_off_during_ride)
             RecordingRepository.publishError(message)
             notifyError(message)
         }
@@ -385,7 +386,7 @@ class RecordingService : Service() {
             // Standortberechtigung ab Android 14). Aufraeumen passiert wie
             // alles andere auf dem Aufzeichnungs-Thread.
             handler.post {
-                failAndStop(getString(R.string.recording_error_permission))
+                failAndStop(localized().getString(R.string.recording_error_permission))
                 // Auch das ist eine Entscheidung: Eine wartende
                 // Wiederherstellung braucht auf diesen Dienst nicht laenger zu
                 // warten (siehe [RecoveryGate]).
@@ -499,7 +500,7 @@ class RecordingService : Service() {
                 meldeLebenszeichen(journal.touchHeartbeat(now))
             }
         } catch (e: Exception) {
-            failAndStop(getString(R.string.recording_error_journal))
+            failAndStop(localized().getString(R.string.recording_error_journal))
             return
         }
 
@@ -512,7 +513,7 @@ class RecordingService : Service() {
         // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
         // beim Losfahren typischerweise schon in der Tasche. Den Hauptschalter
         // „Sprachansagen" prueft der Announcer selbst.
-        VoiceAnnouncer.sagAn(this, "Aufzeichnung gestartet.")
+        VoiceAnnouncer.sagAn(this) { it.recordingStarted() }
         updateNotification(now, force = true)
         scheduleWatchdogAlarm()
         handler.removeCallbacks(ticker)
@@ -547,7 +548,7 @@ class RecordingService : Service() {
                 read
             }
         } catch (e: Exception) {
-            failAndStop(getString(R.string.recording_error_journal))
+            failAndStop(localized().getString(R.string.recording_error_journal))
             return
         }
 
@@ -561,7 +562,7 @@ class RecordingService : Service() {
             // zu ahnen, dass nichts mehr aufgezeichnet wird.
             if (systemNeustart) {
                 DiagLog.shared.log(DiagEvent.JOURNAL_CONTINUE_LOST)
-                val message = getString(R.string.recording_error_continue_lost)
+                val message = localized().getString(R.string.recording_error_continue_lost)
                 RecordingRepository.publishError(message)
                 notifyError(message)
             }
@@ -674,10 +675,7 @@ class RecordingService : Service() {
         }
 
         RecordingRepository.publishPaused(paused)
-        VoiceAnnouncer.sagAn(
-            this,
-            if (paused) "Aufzeichnung pausiert." else "Aufzeichnung fortgesetzt.",
-        )
+        VoiceAnnouncer.sagAn(this) { if (paused) it.recordingPaused() else it.recordingResumed() }
         updateNotification(now, force = true)
     }
 
@@ -707,10 +705,7 @@ class RecordingService : Service() {
         RecordingRepository.publishPaused(paused = pausieren, auto = pausieren)
         // Dieselben Texte wie bei der manuellen Pause: Fuer die Fahrerin
         // zaehlt, DASS pausiert wird, nicht wer es entschieden hat.
-        VoiceAnnouncer.sagAn(
-            this,
-            if (pausieren) "Aufzeichnung pausiert." else "Aufzeichnung fortgesetzt.",
-        )
+        VoiceAnnouncer.sagAn(this) { if (pausieren) it.recordingPaused() else it.recordingResumed() }
         updateNotification(now, force = true)
     }
 
@@ -768,7 +763,7 @@ class RecordingService : Service() {
         // Vor dem Speichern angestossen: Die Bestaetigung soll unmittelbar auf
         // den Stopp folgen. Der VoiceAnnouncer lebt am Prozess, nicht an
         // diesem Dienst — das folgende stopSelf schneidet sie nicht ab.
-        VoiceAnnouncer.sagAn(this, "Aufzeichnung beendet.")
+        VoiceAnnouncer.sagAn(this) { it.recordingStopped() }
 
         val snapshot = journal.read()?.let { mitRamPunkten(it) }
         journal.close()
@@ -782,7 +777,7 @@ class RecordingService : Service() {
             if (ride == null) {
                 // Wie im Dart-Original: unter zwei Punkten gibt es nichts zu
                 // speichern ("Zu wenige GPS-Punkte.").
-                RecordingRepository.publishError(getString(R.string.recording_error_too_few_points))
+                RecordingRepository.publishError(localized().getString(R.string.recording_error_too_few_points))
                 journal.discard()
             } else if (trySave(ride)) {
                 savedId = ride.id
@@ -803,7 +798,7 @@ class RecordingService : Service() {
         rideStorage.saveRide(ride)
         true
     } catch (e: Exception) {
-        RecordingRepository.publishError(getString(R.string.recording_error_save_failed))
+        RecordingRepository.publishError(localized().getString(R.string.recording_error_save_failed))
         false
     }
 
@@ -872,14 +867,14 @@ class RecordingService : Service() {
 
         if (!hasLocationPermission()) {
             DiagLog.shared.log(DiagEvent.GPS_PERMISSION_MISSING)
-            failAndStop(getString(R.string.recording_error_permission))
+            failAndStop(localized().getString(R.string.recording_error_permission))
             return false
         }
 
         val manager = locationManager
         if (manager == null) {
             DiagLog.shared.log(DiagEvent.GPS_START_FAILED)
-            failAndStop(getString(R.string.recording_error_start_failed))
+            failAndStop(localized().getString(R.string.recording_error_start_failed))
             return false
         }
 
@@ -897,10 +892,10 @@ class RecordingService : Service() {
         if (!gpsBereit) {
             DiagLog.shared.log(DiagEvent.GPS_PROVIDER_OFF)
             if (neueAufzeichnung) {
-                failAndStop(getString(R.string.recording_error_location_disabled))
+                failAndStop(localized().getString(R.string.recording_error_location_disabled))
                 return false
             }
-            val message = getString(R.string.recording_error_location_off_during_ride)
+            val message = localized().getString(R.string.recording_error_location_off_during_ride)
             RecordingRepository.publishError(message)
             notifyError(message)
         }
@@ -922,11 +917,11 @@ class RecordingService : Service() {
             true
         } catch (e: SecurityException) {
             DiagLog.shared.log(DiagEvent.GPS_PERMISSION_MISSING, error = e)
-            failAndStop(getString(R.string.recording_error_permission))
+            failAndStop(localized().getString(R.string.recording_error_permission))
             false
         } catch (e: Exception) {
             DiagLog.shared.log(DiagEvent.GPS_START_FAILED, error = e)
-            failAndStop(getString(R.string.recording_error_start_failed))
+            failAndStop(localized().getString(R.string.recording_error_start_failed))
             false
         }
     }
@@ -1078,9 +1073,10 @@ class RecordingService : Service() {
         RecordingRepository.publishPoint(point, distanceM / 1000, filter.currentSpeedKmh)
         // Der Zaehler wandert auch bei ausgeschaltetem Unterschalter weiter
         // (siehe [MeilensteinAnsagen.pruefe]) — nur gesprochen wird dann nicht.
-        val meilenstein = meilensteine.pruefe(distanceM / 1000, elapsedMs(System.currentTimeMillis()))
-        if (meilenstein != null && kilometerAnsagenAktiviert(this)) {
-            VoiceAnnouncer.sagAn(this, meilenstein)
+        val meilensteinKm = meilensteine.pruefe(distanceM / 1000)
+        if (meilensteinKm != null && kilometerAnsagenAktiviert(this)) {
+            val dauerMs = elapsedMs(System.currentTimeMillis())
+            VoiceAnnouncer.sagAn(this) { it.milestone(meilensteinKm, dauerMs) }
         }
         updateNotification(System.currentTimeMillis(), force = false)
     }
@@ -1142,7 +1138,7 @@ class RecordingService : Service() {
             // Bei vollem Speicher scheitert jeder Punkt — die Wiederholungs-
             // bremse des DiagLog fasst das zu einem Eintrag pro Minute zusammen.
             DiagLog.shared.log(DiagEvent.JOURNAL_WRITE_FAILED, error = e)
-            val message = getString(R.string.recording_error_journal_write)
+            val message = localized().getString(R.string.recording_error_journal_write)
             RecordingRepository.publishError(message)
             if (!schreibfehlerGemeldet) {
                 schreibfehlerGemeldet = true
@@ -1161,7 +1157,7 @@ class RecordingService : Service() {
     private fun meldeLebenszeichen(erfolgreich: Boolean) {
         if (erfolgreich || schreibfehlerGemeldet) return
         schreibfehlerGemeldet = true
-        val message = getString(R.string.recording_error_journal_write)
+        val message = localized().getString(R.string.recording_error_journal_write)
         RecordingRepository.publishError(message)
         notifyError(message)
     }
@@ -1439,7 +1435,7 @@ class RecordingService : Service() {
 
     private fun buildNotification(): Notification {
         val paused = pauseStartedAtMs != null
-        val title = getString(
+        val title = localized().getString(
             when {
                 paused && autoPausiert -> R.string.recording_notification_auto_paused_title
                 paused -> R.string.recording_notification_paused_title
@@ -1451,15 +1447,15 @@ class RecordingService : Service() {
         val text = when {
             // Die Stille geht vor: Sie ist die einzige Information, die der
             // Fahrerin sagt, dass gerade nichts mehr aufgezeichnet wird.
-            stilleMs != null -> getString(
+            stilleMs != null -> localized().getString(
                 R.string.recording_notification_no_gps,
                 (stilleMs / 60_000L).toInt(),
             )
 
             !active || filter.acceptedCount == 0 ->
-                getString(R.string.recording_notification_waiting)
+                localized().getString(R.string.recording_notification_waiting)
 
-            else -> getString(
+            else -> localized().getString(
                 R.string.recording_notification_progress,
                 formatKmDe(distanceM / 1000),
                 formatDuration((elapsedMs(jetzt) / 1000).toInt()),
@@ -1481,7 +1477,7 @@ class RecordingService : Service() {
         if (active) {
             builder.addAction(
                 0,
-                getString(if (paused) R.string.recording_action_resume else R.string.recording_action_pause),
+                localized().getString(if (paused) R.string.recording_action_resume else R.string.recording_action_pause),
                 commandIntent(
                     if (paused) ACTION_RESUME else ACTION_PAUSE,
                     if (paused) REQUEST_RESUME else REQUEST_PAUSE,
@@ -1490,7 +1486,7 @@ class RecordingService : Service() {
         }
         builder.addAction(
             0,
-            getString(R.string.recording_action_stop),
+            localized().getString(R.string.recording_action_stop),
             commandIntent(ACTION_STOP, REQUEST_STOP),
         )
 
@@ -1527,14 +1523,14 @@ class RecordingService : Service() {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                getString(R.string.recording_notification_channel_name),
+                localized().getString(R.string.recording_notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ),
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 ERROR_CHANNEL_ID,
-                getString(R.string.recording_error_channel_name),
+                localized().getString(R.string.recording_error_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ),
         )
@@ -1579,7 +1575,7 @@ class RecordingService : Service() {
     private fun notifyError(message: String) {
         try {
             val notification = NotificationCompat.Builder(this, ERROR_CHANNEL_ID)
-                .setContentTitle(getString(R.string.recording_error_title))
+                .setContentTitle(localized().getString(R.string.recording_error_title))
                 .setContentText(message)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
@@ -1842,7 +1838,7 @@ class RecordingService : Service() {
                 DiagLog.shared.log(DiagEvent.JOURNAL_RECOVERY_SAVE_FAILED, error = e)
                 // Datei bleibt liegen: naechster Versuch beim naechsten Start.
                 RecordingRepository.publishError(
-                    context.getString(R.string.recording_error_save_failed),
+                    context.localized().getString(R.string.recording_error_save_failed),
                 )
                 null
             }
@@ -1879,7 +1875,7 @@ class RecordingService : Service() {
             val createdAt = points.firstOrNull { it.time != null }?.time
                 ?: snapshot.startedAtMs
             val date = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date(createdAt))
-            val name = context.getString(
+            val name = context.localized().getString(
                 if (recovered) R.string.recording_ride_name_recovered else R.string.recording_ride_name,
                 date,
             )

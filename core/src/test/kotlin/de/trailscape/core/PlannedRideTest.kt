@@ -1,14 +1,15 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Eine gespeicherte **Planung** ist keine gefahrene Tour.
@@ -119,6 +120,7 @@ class PlannedRideTest {
             ),
             FitnessAssessment(FitnessLevel.FORTGESCHRITTEN, 95.0, 900.0, 2.0, 80.0, 16),
             now = now,
+            texts = CoreTextsDe,
         )
         val week = plan.weeks.first()
 
@@ -182,6 +184,7 @@ class PlannedRideTest {
                 ride("alt", longAgo, 30.0),
                 ride("plan", yesterday, 80.0, planned = true),
             ),
+            texts = CoreTextsDe,
         )
 
         assertEquals(ReminderKind.ANSTUPSER, notice?.kind)

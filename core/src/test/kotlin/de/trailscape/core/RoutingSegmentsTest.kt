@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -89,14 +90,14 @@ class RoutingSegmentsTest {
 
     @Test
     fun `boundsLabel nennt das Gradfeld mit dem kleineren Betrag zuerst`() {
-        assertEquals("50°–55° N, 10°–15° O", parseSegmentTile("E10_N50")!!.boundsLabel)
+        assertEquals("50°–55° N, 10°–15° O", parseSegmentTile("E10_N50")!!.boundsLabel(CoreTextsDe))
         // Westlich von Greenwich zaehlen die Betraege aufwaerts nach Westen.
-        assertEquals("50°–55° N, 5°–10° W", parseSegmentTile("W10_N50")!!.boundsLabel)
+        assertEquals("50°–55° N, 5°–10° W", parseSegmentTile("W10_N50")!!.boundsLabel(CoreTextsDe))
         // Suedhalbkugel ebenso.
-        assertEquals("30°–35° S, 15°–20° O", parseSegmentTile("E15_S35")!!.boundsLabel)
+        assertEquals("30°–35° S, 15°–20° O", parseSegmentTile("E15_S35")!!.boundsLabel(CoreTextsDe))
         // Die Kacheln direkt am Nullpunkt.
-        assertEquals("0°–5° N, 0°–5° O", parseSegmentTile("E0_N0")!!.boundsLabel)
-        assertEquals("0°–5° S, 0°–5° W", parseSegmentTile("W5_S5")!!.boundsLabel)
+        assertEquals("0°–5° N, 0°–5° O", parseSegmentTile("E0_N0")!!.boundsLabel(CoreTextsDe))
+        assertEquals("0°–5° S, 0°–5° W", parseSegmentTile("W5_S5")!!.boundsLabel(CoreTextsDe))
     }
 
     @Test
@@ -104,8 +105,8 @@ class RoutingSegmentsTest {
         val tile = assertNotNull(parseSegmentTile("E10_N50.rd5"))
         // Genau der Fall aus dem Klassendoc: eine Kachel ueber drei Laender.
         assertEquals(listOf("Berlin", "Dresden", "Prag"), tile.landmarks)
-        assertEquals("Berlin, Dresden, Prag u. a.", tile.title)
-        assertEquals("Berlin, Dresden, Prag u. a. · 50°–55° N, 10°–15° O", tile.description)
+        assertEquals("Berlin, Dresden, Prag u. a.", tile.title(CoreTextsDe))
+        assertEquals("Berlin, Dresden, Prag u. a. · 50°–55° N, 10°–15° O", tile.description(CoreTextsDe))
     }
 
     @Test
@@ -113,8 +114,8 @@ class RoutingSegmentsTest {
         // Mitten im Nordatlantik.
         val tile = assertNotNull(parseSegmentTile("W35_N45.rd5"))
         assertTrue(tile.landmarks.isEmpty())
-        assertEquals(tile.boundsLabel, tile.title)
-        assertEquals(tile.boundsLabel, tile.description)
+        assertEquals(tile.boundsLabel(CoreTextsDe), tile.title(CoreTextsDe))
+        assertEquals(tile.boundsLabel(CoreTextsDe), tile.description(CoreTextsDe))
     }
 
     @Test
@@ -343,7 +344,7 @@ class RoutingSegmentsTest {
         val delta = File(dir, "delta.df5").apply { writeBytes(ByteArray(0)) }
         val out = File(dir, "out.rd5")
 
-        assertTrue(applySegmentDelta(base, delta, out))
+        assertTrue(applySegmentDelta(base, delta, out, texts = CoreTextsDe))
         assertEquals("Kacheldaten", out.readText())
     }
 
@@ -355,7 +356,7 @@ class RoutingSegmentsTest {
         val out = File(dir, "out.rd5")
 
         val error = try {
-            applySegmentDelta(base, delta, out)
+            applySegmentDelta(base, delta, out, texts = CoreTextsDe)
             null
         } catch (e: OfflineRoutingException) {
             e
@@ -370,7 +371,7 @@ class RoutingSegmentsTest {
     fun `checkSegmentIntegrity meldet eine kaputte Kachel als Text`() {
         val dir = createTempDir()
         val broken = File(dir, "E10_N50.rd5").apply { writeText("das ist keine Kachel") }
-        val message = checkSegmentIntegrity(broken)
+        val message = checkSegmentIntegrity(broken, texts = CoreTextsDe)
         assertNotNull(message)
         assertTrue(message.contains("E10_N50.rd5"), message)
     }

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Englische Fassung von values/strings_recording.xml. Eigentuemer: i18n-onboarding-shell. -->
+<resources>
+    <string name="recording_notification_paused_title">Trailscape paused</string>
+    <string name="recording_notification_auto_paused_title">Auto-pause — Trailscape is waiting for you to ride on</string>
+    <string name="recording_notification_waiting">Waiting for GPS signal …</string>
+    <!-- %1$s = Distanz in km (eine Nachkommastelle), %2$s = Dauer H:MM:SS -->
+    <string name="recording_notification_progress">%1$s km · %2$s</string>
+    <!-- %1$d = Minuten ohne angenommenen GPS-Punkt -->
+    <string name="recording_notification_no_gps">No GPS signal for %1$d min</string>
+
+    <string name="recording_action_pause">Pause</string>
+    <string name="recording_action_resume">Resume</string>
+    <string name="recording_action_stop">Stop</string>
+
+    <string name="recording_error_channel_name">Recording: problems</string>
+    <string name="recording_error_title">Recording not possible</string>
+    <string name="recording_error_permission">Trailscape isn’t allowed to access your location. Please allow access in the app settings and start recording again.</string>
+    <string name="recording_error_start_failed">Location recording couldn’t be started.</string>
+    <string name="recording_error_location_disabled">GPS is turned off. Please turn on location (quick settings or Settings → Location) and start recording again.</string>
+    <string name="recording_error_location_off_during_ride">GPS was turned off — no new points are arriving. The ride so far is safe; as soon as you turn location back on, Trailscape continues recording by itself.</string>
+    <string name="recording_error_journal">The recording couldn’t be written to storage.</string>
+    <string name="recording_error_journal_write">The ride can no longer be written to storage — it’s probably full. For now Trailscape keeps recording in memory only; please free up space and stop the recording soon, otherwise points will be lost.</string>
+    <string name="recording_error_continue_lost">The running recording couldn’t be continued after the service restarted — Trailscape is NOT recording right now. The points collected until then are in your ride list as a recovered ride. Please start recording again.</string>
+    <string name="recording_error_save_failed">The ride couldn’t be saved. It stays safe and will be saved again the next time the app starts.</string>
+    <string name="recording_error_too_few_points">Too few GPS points.</string>
+
+    <!-- %1$s = Datum -->
+    <string name="recording_ride_name">Ride %1$s</string>
+    <string name="recording_ride_name_recovered">Ride %1$s (recovered)</string>
+</resources>

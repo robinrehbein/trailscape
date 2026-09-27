@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -28,7 +29,8 @@ import kotlin.math.sin
  *    folgenden keine Einzeldurchsage im Sekundentakt.
  *  * [TurnAnnouncer] entscheidet zur Laufzeit, wann welcher Hinweis faellig
  *    ist. Eingabe je GPS-Punkt: der Routenfortschritt und das aktuelle Tempo;
- *    Ausgabe: der Ansagetext oder `null`.
+ *    Ausgabe: eine [TurnAnsage] (Richtung und Restweg) oder `null`. Den Satz
+ *    dazu baut die Sprachausgabe in der gewaehlten Sprache.
  *
  * ## Warum der Announcer den Routenfortschritt nimmt statt der Rohposition
  * Die Entfernung zum Kurvenpunkt muss ENTLANG der Route gemessen werden — die
@@ -260,27 +262,38 @@ const val ANSAGE_GLEICH_M = 40.0
 /** Tempoannahme in km/h, wenn (noch) kein Tempo bekannt ist. */
 const val ANSAGE_ANNAHME_KMH = 15.0
 
-/** Ansageform eines Richtungswortes fuer die Sprachausgabe. */
-fun richtungsWort(richtung: TurnRichtung): String = when (richtung) {
-    TurnRichtung.LINKS -> "links"
-    TurnRichtung.RECHTS -> "rechts"
-    TurnRichtung.KEHRE_LINKS -> "scharf links"
-    TurnRichtung.KEHRE_RECHTS -> "scharf rechts"
+/**
+ * Gerundeter Ansageabstand in Metern — oder `null` im Nahbereich
+ * (< [ANSAGE_GLEICH_M]), wo es „Gleich …" statt „In N Metern …" heisst.
+ *
+ * Gerundet wird auf 50er-Schritte: Eine Sprachausgabe, die „In 137 Metern"
+ * sagt, behauptet eine Genauigkeit, die GPS und Routengeometrie nicht
+ * hergeben. Die Regel gilt fuer jede Sprache gleich; die Saetze selbst baut
+ * [de.trailscape.core.i18n.SpeechTexts.turn].
+ */
+fun ansageAbstandM(abstandM: Double): Int? {
+    if (abstandM < ANSAGE_GLEICH_M) return null
+    return ((abstandM / 50.0).roundToInt() * 50).coerceAtLeast(50)
 }
 
+/** Ansageform eines Richtungswortes fuer die Sprachausgabe („links" / „left"). */
+fun richtungsWort(richtung: TurnRichtung, texts: CoreTexts): String =
+    texts.speech.turnDirection(richtung)
+
 /**
- * Deutscher Ansagetext fuer einen Abbiegehinweis in [abstandM] Metern —
- * „In 100 Metern links." bzw. im Nahbereich (< [ANSAGE_GLEICH_M]) „Gleich
- * links." Der Abstand wird auf 50er-Schritte gerundet: Eine Sprachausgabe,
- * die „In 137 Metern" sagt, behauptet eine Genauigkeit, die GPS und
- * Routengeometrie nicht hergeben.
+ * Ansagetext fuer einen Abbiegehinweis in [abstandM] Metern in der Sprache
+ * von [texts] — „In 100 Metern links." / „In 100 metres, turn left." bzw. im
+ * Nahbereich „Gleich links." / „Now turn left." (siehe [ansageAbstandM]).
  */
-fun turnAnsageText(richtung: TurnRichtung, abstandM: Double): String {
-    val wort = richtungsWort(richtung)
-    if (abstandM < ANSAGE_GLEICH_M) return "Gleich $wort."
-    val gerundet = ((abstandM / 50.0).roundToInt() * 50).coerceAtLeast(50)
-    return "In $gerundet Metern $wort."
-}
+fun turnAnsageText(richtung: TurnRichtung, abstandM: Double, texts: CoreTexts): String =
+    texts.speech.turn(richtung, abstandM)
+
+/**
+ * Eine faellige Abbiegeansage: Richtung und Restweg entlang der Route.
+ * Bewusst ohne fertigen Satz — die Sprache waehlt erst der Sprecher
+ * (`VoiceAnnouncer`), siehe [de.trailscape.core.i18n.SpeechTexts.turn].
+ */
+data class TurnAnsage(val richtung: TurnRichtung, val abstandM: Double)
 
 /**
  * Laufzeit-Zustandsmaschine der Abbiegehinweise: entscheidet je GPS-Punkt, ob
@@ -311,9 +324,9 @@ class TurnAnnouncer(private val hints: List<TurnHint>) {
      * @param doneM zurueckgelegte Distanz entlang der Route in Metern
      *   (`NavState.doneKm * 1000`, siehe Datei-KDoc).
      * @param speedKmh aktuelles Tempo in km/h, oder `null` wenn unbekannt.
-     * @return der faellige Ansagetext, oder `null` wenn nichts anzusagen ist.
+     * @return die faellige Ansage, oder `null` wenn nichts anzusagen ist.
      */
-    fun melde(doneM: Double, speedKmh: Double?): String? {
+    fun melde(doneM: Double, speedKmh: Double?): TurnAnsage? {
         // Ueberfahrene Hinweise verfallen (siehe Klassen-KDoc).
         while (naechster < hints.size && hints[naechster].distanzM <= doneM) naechster++
         if (naechster >= hints.size) return null
@@ -326,7 +339,7 @@ class TurnAnnouncer(private val hints: List<TurnHint>) {
         if (restM > vorlaufM) return null
 
         naechster++
-        return turnAnsageText(hint.richtung, restM)
+        return TurnAnsage(hint.richtung, restM)
     }
 
     /** Setzt die Zustandsmaschine auf den Routenanfang zurueck. */

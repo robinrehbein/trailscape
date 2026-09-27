@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der App-Huelle (ui/onboarding/**, ui/TrailscapeApp.kt, ui/components/**, ui/ErrorText.kt,
+    ui/UiFormat.kt, record/**, reminder/**, voice/**, wear/**, MainActivity.kt, TrailscapeApplication.kt,
+    data/**). Die bestehenden strings.xml, strings_recording.xml und strings_reminders.xml gehoeren
+    ebenfalls i18n-onboarding-shell.
+
+    Eigentuemer: i18n-onboarding-shell · Schluessel-Praefix: shell_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values/strings_shell.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+</resources>

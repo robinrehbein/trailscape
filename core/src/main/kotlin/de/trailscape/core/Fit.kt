@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.ByteArrayInputStream
 import java.time.Instant
 import java.time.ZoneOffset
@@ -69,22 +71,27 @@ private const val MSG_RECORD = 20
 private const val FIELD_TIMESTAMP = 253
 
 /**
- * Deutsche Bezeichnungen der FIT-Sportarten, soweit fuer Trailscape relevant.
- * Alles Uebrige faellt auf "Aktivitaet" zurueck.
+ * Die FIT-Sportarten, soweit fuer Trailscape relevant — fuer den Namen einer
+ * importierten Aktivitaet („Radfahrt 14.03.2024"). Die Worte stehen in
+ * `FileTexts.fitActivityName`.
  */
-private val FIT_SPORT_LABELS: Map<Int, String> = mapOf(
-    1 to "Lauf",
-    FIT_SPORT_CYCLING to "Radfahrt",
-    5 to "Schwimmen",
-    11 to "Spaziergang",
-    12 to "Skilanglauf",
-    15 to "Rudern",
-    17 to "Wanderung",
-)
+enum class FitSport {
+    RUN, RIDE, SWIM, WALK, CROSS_COUNTRY_SKI, ROW, HIKE, OTHER;
 
-/** Datum im Namen einer importierten FIT-Tour — bewusst UTC, damit reproduzierbar. */
-private val FIT_NAME_DATE_FORMAT: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneOffset.UTC)
+    companion object {
+        /** Sportart zum FIT-Code (`sport` aus session/lap); Unbekanntes → [OTHER]. */
+        fun of(code: Int?): FitSport = when (code) {
+            1 -> RUN
+            FIT_SPORT_CYCLING -> RIDE
+            5 -> SWIM
+            11 -> WALK
+            12 -> CROSS_COUNTRY_SKI
+            15 -> ROW
+            17 -> HIKE
+            else -> OTHER
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Ergebnis
@@ -129,8 +136,7 @@ data class FitParseResult(
 internal const val MAX_GUNZIPPED_BYTES: Int = 32 * 1024 * 1024
 
 /** Meldung, wenn eine Datei (entpackt) ueber einer der Import-Obergrenzen liegt. */
-const val FILE_TOO_LARGE_MESSAGE: String =
-    "Die Datei ist zu groß für eine GPX- oder FIT-Datei."
+fun fileTooLargeMessage(texts: CoreTexts): String = texts.files.fileTooLarge()
 
 /**
  * Entpackt GZIP-Daten transparent (Strava exportiert `.fit.gz`/`.gpx.gz`),
@@ -140,9 +146,13 @@ const val FILE_TOO_LARGE_MESSAGE: String =
  * mit [FormatException] ab, statt den Speicher zu fluten (siehe
  * [MAX_GUNZIPPED_BYTES]).
  */
-internal fun gunzipIfNeeded(bytes: ByteArray, maxOut: Int = MAX_GUNZIPPED_BYTES): ByteArray {
+internal fun gunzipIfNeeded(
+    bytes: ByteArray,
+    maxOut: Int = MAX_GUNZIPPED_BYTES,
+    texts: CoreTexts,
+): ByteArray {
     if (!isGzip(bytes)) return bytes
-    return gunzipBounded(bytes, maxOut, truncate = false)
+    return gunzipBounded(bytes, maxOut, truncate = false, texts = texts)
 }
 
 /**
@@ -152,7 +162,8 @@ internal fun gunzipIfNeeded(bytes: ByteArray, maxOut: Int = MAX_GUNZIPPED_BYTES)
  */
 internal fun gunzipHead(bytes: ByteArray, length: Int): ByteArray {
     if (!isGzip(bytes)) return bytes
-    return gunzipBounded(bytes, length, truncate = true)
+    // Mit `truncate` wirft die Funktion nicht — die Texte sind nur Formsache.
+    return gunzipBounded(bytes, length, truncate = true, texts = CoreTextsDe)
 }
 
 private fun isGzip(bytes: ByteArray): Boolean =
@@ -163,7 +174,7 @@ private fun isGzip(bytes: ByteArray): Boolean =
  * bei [maxOut] (Kopf fuer die Erkennung), sonst ist mehr als [maxOut] ein
  * Fehler.
  */
-private fun gunzipBounded(bytes: ByteArray, maxOut: Int, truncate: Boolean): ByteArray {
+private fun gunzipBounded(bytes: ByteArray, maxOut: Int, truncate: Boolean, texts: CoreTexts): ByteArray {
     val out = java.io.ByteArrayOutputStream(minOf(maxOut, maxOf(bytes.size * 4, 1024)))
     try {
         GZIPInputStream(ByteArrayInputStream(bytes)).use { stream ->
@@ -177,7 +188,7 @@ private fun gunzipBounded(bytes: ByteArray, maxOut: Int, truncate: Boolean): Byt
                         out.write(buffer, 0, room)
                         break
                     }
-                    throw FormatException(FILE_TOO_LARGE_MESSAGE)
+                    throw FormatException(texts.files.fileTooLarge())
                 }
                 out.write(buffer, 0, read)
             }
@@ -189,7 +200,7 @@ private fun gunzipBounded(bytes: ByteArray, maxOut: Int, truncate: Boolean): Byt
         // stoeren, solange der Anfang da ist — ob die Datei wirklich lesbar
         // ist, entscheidet spaeter der volle Durchgang.
         if (truncate && out.size() > 0) return out.toByteArray()
-        throw FormatException("Die Datei ist GZIP-komprimiert, konnte aber nicht entpackt werden.")
+        throw FormatException(texts.files.gzipBroken())
     }
     return out.toByteArray()
 }
@@ -514,11 +525,11 @@ private fun hasFitSignature(bytes: ByteArray, at: Int): Boolean =
  * @throws FormatException wenn die Datei keine FIT-Signatur traegt oder keine
  *   Trackpunkte mit Position enthaelt.
  */
-fun parseFit(bytes: ByteArray, fallbackName: String? = null): FitParseResult {
-    val data = gunzipIfNeeded(bytes)
+fun parseFit(bytes: ByteArray, fallbackName: String? = null, texts: CoreTexts): FitParseResult {
+    val data = gunzipIfNeeded(bytes, texts = texts)
 
     if (data.size < 14 || !hasFitSignature(data, 0)) {
-        throw FormatException("Die Datei ist keine gültige FIT-Datei.")
+        throw FormatException(texts.files.fitInvalid())
     }
 
     val decoder = FitDecoder(data)
@@ -560,11 +571,11 @@ fun parseFit(bytes: ByteArray, fallbackName: String? = null): FitParseResult {
     }
 
     if (segments == 0 || decoder.points.isEmpty()) {
-        throw FormatException("Die FIT-Datei enthält keine Trackpunkte.")
+        throw FormatException(texts.files.fitNoTrackPoints())
     }
 
     val startMs = decoder.startTimeS?.let { (it + FIT_EPOCH_OFFSET_S) * 1000L }
-    val name = fitRideName(decoder.sport, startMs ?: decoder.points.firstOrNull { it.time != null }?.time)
+    val name = fitRideName(decoder.sport, startMs ?: decoder.points.firstOrNull { it.time != null }?.time, texts)
         ?: fallbackName?.trim()?.ifEmpty { null }
 
     return FitParseResult(
@@ -581,10 +592,9 @@ fun parseFit(bytes: ByteArray, fallbackName: String? = null): FitParseResult {
  * Baut den Tournamen aus Sportart und Startdatum, z. B. `Radfahrt 14.03.2024`.
  * Ohne Zeitstempel gibt es keinen sinnvollen Namen — dann null.
  */
-private fun fitRideName(sport: Int?, startMs: Long?): String? {
+private fun fitRideName(sport: Int?, startMs: Long?, texts: CoreTexts): String? {
     if (startMs == null) return null
-    val label = FIT_SPORT_LABELS[sport] ?: "Aktivität"
-    return "$label ${FIT_NAME_DATE_FORMAT.format(Instant.ofEpochMilli(startMs))}"
+    return texts.files.fitActivityName(FitSport.of(sport), startMs)
 }
 
 /**
@@ -600,14 +610,19 @@ private fun fitRideName(sport: Int?, startMs: Long?): String? {
  *
  * @throws FormatException bei ungueltiger Datei (siehe [parseFit]).
  */
-fun rideFromFit(bytes: ByteArray, fallbackName: String? = null, id: String? = null): Ride {
-    val parsed = parseFit(bytes, fallbackName)
+fun rideFromFit(
+    bytes: ByteArray,
+    fallbackName: String? = null,
+    id: String? = null,
+    texts: CoreTexts,
+): Ride {
+    val parsed = parseFit(bytes, fallbackName, texts)
     val points = parsed.points
     val baseStats = computeStats(points)
 
     val name = parsed.name?.trim()?.ifEmpty { null }
         ?: fallbackName?.trim()?.ifEmpty { null }
-        ?: "Tour"
+        ?: texts.files.rideFallbackName()
     val createdAt = points.first().time ?: parsed.startTime ?: System.currentTimeMillis()
 
     val hrValues = points.mapNotNull { it.hr }

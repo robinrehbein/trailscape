@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
 import kotlin.math.abs
@@ -150,9 +151,7 @@ private const val DISTANCE_WEIGHT = 100.0
 const val noveltyScoreWeight: Double = 12.0
 
 /** Fehlermeldung, wenn kein einziger Kandidat zustande kommt. */
-const val errorNoRouteFound: String =
-    "Es ließ sich keine passende Runde berechnen. Versuche einen anderen Startpunkt " +
-        "oder eine andere Zieldistanz."
+fun errorNoRouteFound(texts: CoreTexts): String = texts.routing.noRouteFound()
 
 /** Ein bewerteter Rundkurs-Vorschlag. */
 data class RouteCandidate(
@@ -418,23 +417,18 @@ suspend fun generateRoutes(
     exploredTiles: Set<ExplorerTile> = emptySet(),
     preferNewAreas: Boolean = false,
     wind: WindConditions? = null,
+    texts: CoreTexts,
 ): List<RouteCandidate> {
     val hints = mutableListOf<String>()
     val rawKm = if (target.distanceKm.isFinite()) target.distanceKm else 0.0
     var targetKm = rawKm
     if (targetKm < minRouteTargetKm) {
         targetKm = minRouteTargetKm
-        hints.add(
-            "Zieldistanz auf ${minRouteTargetKm.toInt()} km angehoben – kürzere Rundkurse " +
-                "lassen sich nicht sinnvoll planen.",
-        )
+        hints.add(texts.routing.targetDistanceRaised(minRouteTargetKm.toInt()))
     }
     if (targetKm > maxRouteTargetKm) {
         targetKm = maxRouteTargetKm
-        hints.add(
-            "Zieldistanz auf ${maxRouteTargetKm.toInt()} km gedeckelt – längere Runden " +
-                "berechnet der Routing-Server nicht zuverlässig.",
-        )
+        hints.add(texts.routing.targetDistanceCapped(maxRouteTargetKm.toInt()))
     }
 
     val total = candidates.coerceIn(1, 8)
@@ -560,9 +554,9 @@ suspend fun generateRoutes(
         // Server nicht erreichbar" von „kein Weg gefunden" unterscheiden kann.
         val detail = lastFailure?.message?.takeIf(String::isNotBlank)
         throw if (detail != null) {
-            Exception("$errorNoRouteFound ($detail)", lastFailure)
+            Exception(texts.routing.noRouteFoundWithDetail(detail), lastFailure)
         } else {
-            Exception(errorNoRouteFound, lastFailure)
+            Exception(errorNoRouteFound(texts), lastFailure)
         }
     }
 

@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -79,7 +80,7 @@ class TrainingTest {
     // -----------------------------------------------------------------------
 
     private val twelveWeekGoal = goalAt(dayAfterFirstMonday(11 * 7 + 5))
-    private val twelveWeekPlan = generatePlan(twelveWeekGoal, advanced, now = now)
+    private val twelveWeekPlan = generatePlan(twelveWeekGoal, advanced, now = now, texts = CoreTextsDe)
 
     @Test
     fun `12 Wochen - Plan-Rahmendaten stimmen`() {
@@ -232,6 +233,7 @@ class TrainingTest {
             goalAt(dayAfterFirstMonday(11 * 7 + 5), ascentM = 400.0),
             advanced,
             now = now,
+            texts = CoreTextsDe,
         )
         assertFalse(
             flat.weeks.first().sessions.last().description
@@ -249,6 +251,7 @@ class TrainingTest {
         goalAt(dayAfterFirstMonday(2 * 7 + 5), distanceKm = 30.0, ascentM = null),
         beginner,
         now = now,
+        texts = CoreTextsDe,
     )
 
     @Test
@@ -283,6 +286,7 @@ class TrainingTest {
             goalAt(dayAfterFirstMonday(2 * 7 + 5), distanceKm = 90.0, ascentM = null),
             beginner,
             now = now,
+            texts = CoreTextsDe,
         )
         // Frueher: peak = min(max(117, 40), 88) = 88 → Woche 1 sprang auf 90 km,
         // also +125 % gegenueber dem Basisvolumen von 40 km. Jetzt begrenzt die
@@ -303,6 +307,7 @@ class TrainingTest {
             goalAt(dayAfterFirstMonday(11 * 7 + 5), distanceKm = 200.0, ascentM = null),
             beginner,
             now = now,
+            texts = CoreTextsDe,
         )
         val week = long.weeks.first { it.kind == WeekKind.AUFBAU && it.targetKm >= 60 }
         val sessions = week.sessions
@@ -324,6 +329,7 @@ class TrainingTest {
             goalAt(dayAfterFirstMonday(2 * 7), distanceKm = 30.0, ascentM = null),
             beginner,
             now = now,
+            texts = CoreTextsDe,
         )
         val zielwoche = mondayGoal.weeks.last()
         assertEquals(1, zielwoche.sessions.size)
@@ -337,6 +343,7 @@ class TrainingTest {
             goalAt(dayAfterFirstMonday(2 * 7 + 1), distanceKm = 30.0, ascentM = null),
             beginner,
             now = now,
+            texts = CoreTextsDe,
         )
         val zielwoche = tuesdayGoal.weeks.last()
         assertEquals(2, zielwoche.sessions.size)
@@ -352,41 +359,41 @@ class TrainingTest {
     @Test
     fun `Fehler - Ziel in dieser Woche ist zu nah`() {
         val error = assertFailsWith<IllegalArgumentException> {
-            generatePlan(goalAt(dayAfterFirstMonday(4)), advanced, now = now)
+            generatePlan(goalAt(dayAfterFirstMonday(4)), advanced, now = now, texts = CoreTextsDe)
         }
-        assertEquals(errorTooSoon, error.message)
+        assertEquals(errorTooSoon(CoreTextsDe), error.message)
     }
 
     @Test
     fun `Fehler - Ziel in 2 Wochen ist zu nah`() {
         val error = assertFailsWith<IllegalArgumentException> {
-            generatePlan(goalAt(dayAfterFirstMonday(7 + 3)), advanced, now = now)
+            generatePlan(goalAt(dayAfterFirstMonday(7 + 3)), advanced, now = now, texts = CoreTextsDe)
         }
-        assertEquals(errorTooSoon, error.message)
+        assertEquals(errorTooSoon(CoreTextsDe), error.message)
     }
 
     @Test
     fun `Fehler - Ziel in der Vergangenheit ist zu nah`() {
         val error = assertFailsWith<IllegalArgumentException> {
-            generatePlan(goalAt(dayAfterFirstMonday(-5)), advanced, now = now)
+            generatePlan(goalAt(dayAfterFirstMonday(-5)), advanced, now = now, texts = CoreTextsDe)
         }
-        assertEquals(errorTooSoon, error.message)
+        assertEquals(errorTooSoon(CoreTextsDe), error.message)
     }
 
     @Test
     fun `Fehler - Ziel ueber 52 Wochen entfernt ist zu weit`() {
         val error = assertFailsWith<IllegalArgumentException> {
-            generatePlan(goalAt(dayAfterFirstMonday(52 * 7 + 3)), advanced, now = now)
+            generatePlan(goalAt(dayAfterFirstMonday(52 * 7 + 3)), advanced, now = now, texts = CoreTextsDe)
         }
-        assertEquals(errorTooFar, error.message)
+        assertEquals(errorTooFar(CoreTextsDe), error.message)
     }
 
     @Test
     fun `Fehler - Grenzen 3 und 52 Wochen sind gueltig`() {
-        val min = generatePlan(goalAt(dayAfterFirstMonday(2 * 7 + 3)), advanced, now = now)
+        val min = generatePlan(goalAt(dayAfterFirstMonday(2 * 7 + 3)), advanced, now = now, texts = CoreTextsDe)
         assertEquals(3, min.weeks.size)
 
-        val max = generatePlan(goalAt(dayAfterFirstMonday(51 * 7 + 3)), advanced, now = now)
+        val max = generatePlan(goalAt(dayAfterFirstMonday(51 * 7 + 3)), advanced, now = now, texts = CoreTextsDe)
         assertEquals(52, max.weeks.size)
     }
 
@@ -523,7 +530,7 @@ class TrainingTest {
 
     @Test
     fun `mit currentCtl folgen die Wochenbudgets der Standardrampe`() {
-        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 50.0)
+        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 50.0, texts = CoreTextsDe)
 
         // Dieselbe Formel wie das empfohlene Wochenziel der Auswertung:
         // Budget = 7 × (CTL + Rampe / ctlWeeklyResponse); die CTL waechst je
@@ -555,7 +562,7 @@ class TrainingTest {
     fun `Last-Budget waechst je Aufbauwoche nie ueber 15 Prozent`() {
         // Bei winziger CTL will die Rampe prozentual mehr als +15 % — der
         // Deckel MAX_WEEKLY_INCREASE greift dann auch auf der Lastskala.
-        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.2)
+        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.2, texts = CoreTextsDe)
         val builds = plan.weeks
             .filter { it.kind == WeekKind.AUFBAU }
             .map { w -> w.sessions.sumOf { it.targetLoad ?: 0.0 } }
@@ -574,15 +581,15 @@ class TrainingTest {
     fun `currentCtl null oder unbrauchbar verhaelt sich wie bisher`() {
         assertEquals(
             twelveWeekPlan,
-            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = null),
+            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = null, texts = CoreTextsDe),
         )
         assertEquals(
             twelveWeekPlan,
-            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.0),
+            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.0, texts = CoreTextsDe),
         )
         assertEquals(
             twelveWeekPlan,
-            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = Double.NaN),
+            generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = Double.NaN, texts = CoreTextsDe),
         )
     }
 
@@ -598,7 +605,7 @@ class TrainingTest {
     @Test
     fun `Speicher - JSON-Roundtrip erhaelt den vollstaendigen Plan`() {
         val store = InMemoryTrainingPlanStore()
-        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now)
+        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now, texts = CoreTextsDe)
         savePlan(store, plan)
 
         val loaded = loadPlan(store)
@@ -631,7 +638,7 @@ class TrainingTest {
     fun `Speicher - ein Plan-JSON ohne targetLoad laedt mit null-Last-Zielen`() {
         // Alte gespeicherte Plaene (Web-App, fruehere App-Versionen) kennen den
         // Schluessel nicht — fehlender Schluessel ist der Normalfall, kein Fehler.
-        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now)
+        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now, texts = CoreTextsDe)
         // `targetLoad` steht als letzter Schluessel jeder Session im JSON —
         // herausschneiden ergibt exakt das alte Format.
         val legacyJson = plan.toJson().toString()
@@ -653,7 +660,7 @@ class TrainingTest {
     @Test
     fun `Speicher - savePlan null entfernt den gespeicherten Plan`() {
         val store = InMemoryTrainingPlanStore()
-        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now)
+        val plan = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5)), advanced, now = now, texts = CoreTextsDe)
         savePlan(store, plan)
         assertNotNull(loadPlan(store))
 

@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.TurnRichtung
@@ -32,7 +33,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class RideModeScreenshotTest {
 
     @get:Rule

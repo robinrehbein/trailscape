@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.time.LocalDateTime
 import kotlin.math.abs
 import kotlin.math.max
@@ -447,6 +448,7 @@ fun buildRideFromWorkout(
     workout: HealthWorkout,
     route: List<HealthRoutePoint> = emptyList(),
     heartRate: List<HealthHeartRateSample> = emptyList(),
+    texts: CoreTexts,
 ): Ride {
     val samples = heartRate
         .filter { !it.time.isBefore(workout.start) && !it.time.isAfter(workout.end) }
@@ -503,7 +505,7 @@ fun buildRideFromWorkout(
 
     return Ride(
         id = healthRideId(workout.id),
-        name = healthRideName(workout),
+        name = healthRideName(workout, texts),
         createdAt = dartEpochMs(workout.start),
         points = points,
         stats = RideStats(
@@ -627,13 +629,18 @@ fun mergeHeartRateIntoRide(
     )
 }
 
-/** Name einer importierten Tour, im Stil der App: „Tour 08.08.2026 (Watch)". */
-fun healthRideName(workout: HealthWorkout): String {
+/**
+ * Name einer importierten Tour, im Stil der App: „Tour 08.08.2026 (Watch)".
+ * Gespeichert wird er in der Sprache zum Zeitpunkt des Imports.
+ */
+fun healthRideName(workout: HealthWorkout, texts: CoreTexts): String {
     val d = workout.start
-    val day = d.dayOfMonth.toString().padStart(2, '0')
-    val month = d.monthValue.toString().padStart(2, '0')
-    val suffix = if (workout.kind == HealthActivityKind.RADFAHREN_INDOOR) " (Indoor)" else ""
-    return "Tour $day.$month.${d.year} (Watch)$suffix"
+    return texts.health.importedRideName(
+        day = d.dayOfMonth,
+        month = d.monthValue,
+        year = d.year,
+        indoor = workout.kind == HealthActivityKind.RADFAHREN_INDOOR,
+    )
 }
 
 /** Naechstgelegene Herzfrequenz zu [time], maximal 30 s entfernt. */
@@ -857,6 +864,12 @@ class HealthSyncService(
     val gateway: HealthGateway,
     val store: HealthSyncStore = InMemoryHealthSyncStore(),
     private val now: () -> LocalDateTime = { LocalDateTime.now() },
+    /**
+     * Texte in der aktuellen Sprache — eine Funktion, weil der Dienst laenger
+     * lebt als eine Spracheinstellung. Nur fuer nutzersichtbare Meldungen und
+     * Tournamen; die Diagnosezeilen bleiben deutsch.
+     */
+    private val texts: () -> CoreTexts,
 ) {
     /** Prueft Installation und Berechtigungen in einem Rutsch. */
     fun checkAvailability(): HealthConnection {
@@ -1102,7 +1115,7 @@ class HealthSyncService(
     ): HealthSyncReport {
         val connection = checkAvailability()
         if (!connection.isReady) {
-            throw HealthSyncException(connection.message)
+            throw HealthSyncException(connection.message(texts()))
         }
 
         val to = now()
@@ -1290,10 +1303,7 @@ class HealthSyncService(
         val workouts: List<HealthWorkout> = try {
             gateway.readWorkouts(from, to)
         } catch (error: Throwable) {
-            throw HealthSyncException(
-                "Die Trainings konnten nicht aus Health Connect gelesen werden: " +
-                    describeError(error),
-            )
+            throw HealthSyncException(texts().health.workoutsUnreadable(describeError(error)))
         }
 
         if (log != null) {
@@ -1399,6 +1409,7 @@ class HealthSyncService(
                     workout,
                     route = routes[workout.id] ?: emptyList(),
                     heartRate = heartRate,
+                    texts = texts(),
                 )
                 imported.add(ride)
                 if (workout.kind == HealthActivityKind.RADFAHREN && ride.points.isEmpty()) {

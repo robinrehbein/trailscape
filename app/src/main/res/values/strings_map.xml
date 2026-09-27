@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Karte (ui/map/** ohne HistorySummarySheet.kt, ui/MapStyles.kt, routing/**).
+    Die bestehende strings_segments.xml gehoert ebenfalls i18n-map.
+
+    Eigentuemer: i18n-map · Schluessel-Praefix: map_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_map.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- AppViewModel.kt (von der Foundation umgezogen) -->
+    <string name="map_segments_download_start_error">Der Download der Kartendaten ließ sich nicht starten. Prüfe, ob genug Speicher frei ist, und versuche es erneut.</string>
+    <string name="map_segments_download_wifi_status">Kartendaten werden geladen, sobald WLAN da ist.</string>
+    <string name="map_segments_download_status">Kartendaten werden geladen.</string>
+    <plurals name="map_explorer_new_tiles_count">
+        <item quantity="one">⊞ +%1$d neue Kachel entdeckt.</item>
+        <item quantity="other">⊞ +%1$d neue Kacheln entdeckt.</item>
+    </plurals>
+</resources>
