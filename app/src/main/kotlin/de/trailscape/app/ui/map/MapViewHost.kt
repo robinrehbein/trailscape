@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.haversineM
+import de.trailscape.core.NAV_KAMERA_NEIGUNG_GRAD
 import de.trailscape.core.klemmeOffRouteZoom
 import java.util.Locale
 import kotlin.math.max
@@ -781,6 +782,9 @@ internal class MapController {
      * wuerde springen, `animateCamera` mit seiner Beschleunigungskurve pumpen.
      * Eine `ease`-Fahrt meldet sich ausserdem nicht als Geste, loest also
      * nicht das „Nutzerin hat selbst verschoben"-Signal aus.
+     *
+     * Mit [versatz] (also „Fahrtrichtung oben") kippt die Kamera zusaetzlich
+     * um [NAV_KAMERA_NEIGUNG_GRAD] in die Schraegsicht; ohne bleibt sie flach.
      */
     fun moveToNavCamera(
         lat: Double,
@@ -797,6 +801,7 @@ internal class MapController {
                         .target(LatLng(lat, lon))
                         .zoom(zoom)
                         .bearing(bearingGrad)
+                        .tilt(if (versatz) NAV_KAMERA_NEIGUNG_GRAD else 0.0)
                         .padding(0.0, topPad, 0.0, 0.0)
                         .build(),
                 ),
@@ -806,7 +811,7 @@ internal class MapController {
     }
 
     /**
-     * Nimmt die Navi-Kamera zurueck: Kurs wieder Nord, Padding null, Position
+     * Nimmt die Navi-Kamera zurueck: Kurs wieder Nord, Neigung und Padding null, Position
      * und Zoom bleiben, wo sie sind. Gerufen beim Ende der Navigation und
      * beim Umschalten auf „Nord oben" — danach verhaelt sich die Kamera exakt
      * wie vor der Navigation.
@@ -821,6 +826,7 @@ internal class MapController {
                         .target(target)
                         .zoom(position.zoom)
                         .bearing(0.0)
+                        .tilt(0.0)
                         .padding(0.0, 0.0, 0.0, 0.0)
                         .build(),
                 ),
@@ -856,6 +862,7 @@ internal class MapController {
                         .target(target.target)
                         .zoom(klemmeOffRouteZoom(target.zoom))
                         .bearing(0.0)
+                        .tilt(0.0)
                         .padding(0.0, 0.0, 0.0, 0.0)
                         .build(),
                 ),

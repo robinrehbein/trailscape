@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Straight
@@ -27,7 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
-import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.ANSAGE_ANNAHME_KMH
 import de.trailscape.core.ANSAGE_GLEICH_M
 import de.trailscape.core.TurnRichtung
@@ -84,6 +84,11 @@ import kotlin.math.roundToInt
  *    (`record/RecordingSettings.kt`) direkt hier um — der Weg ueber Mehr →
  *    Aufzeichnung ist waehrend der Fahrt keiner.
  *
+ * Aufbau: Die Kurvenzeile steht als farbige Flaeche (`primary`) ueber die
+ * ganze Kartenbreite oben, abseits der Route die Warnflaeche an ihrer Stelle;
+ * darunter auf der normalen Kartenflaeche Restdistanz, Lautsprecher und das
+ * X, das die Fuehrung beendet („ohne Route weiter", die Aufzeichnung laeuft).
+ *
  * Semantik: Kurvenzeile und Restzeile sprechen ganze Saetze statt nackter
  * Zahlen — dasselbe Muster wie `BigValue` im Fahrmodus.
  */
@@ -108,70 +113,82 @@ internal fun NavigationHud(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
-        Column(
+        // Oben die Fuehrung als eigene, farbige Flaeche — sie ist das, wonach
+        // man im Fahren schaut, und soll sich deshalb klar vom Statusteil
+        // darunter abheben (das Muster der aktiven Navigation bei Google Maps).
+        if (offRoute) {
+            OffRouteBanner()
+        } else {
+            TurnRow(richtung = naechsteKurve, abstandM = kurveAbstandM)
+        }
+        Row(
             modifier = Modifier.padding(
                 start = CardPadding,
-                top = OverlayCardPaddingVertical,
-                end = 8.dp,
-                bottom = OverlayCardPaddingVertical,
+                top = 4.dp,
+                end = 4.dp,
+                bottom = 4.dp,
             ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (offRoute) {
-                OffRouteBanner()
-            } else {
-                TurnRow(richtung = naechsteKurve, abstandM = kurveAbstandM)
+            val restzeit = restzeitText(restzeitMin(remainingKm, tempoKmh))
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clearAndSetSemantics {
+                        contentDescription = "Noch ${formatKmDe(remainingKm)} Kilometer " +
+                            "auf $label, geschätzte Restzeit " +
+                            restzeit.removePrefix("ca. ")
+                    },
+            ) {
+                Text(
+                    text = "${formatKmDe(remainingKm)} km · $restzeit",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = if (doneKm == null) {
+                        label
+                    } else {
+                        "$label · ${formatKmDe(doneKm)} km geschafft"
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val restzeit = restzeitText(restzeitMin(remainingKm, tempoKmh))
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clearAndSetSemantics {
-                            contentDescription = "Noch ${formatKmDe(remainingKm)} Kilometer " +
-                                "auf $label, geschätzte Restzeit " +
-                                restzeit.removePrefix("ca. ")
-                        },
-                ) {
-                    Text(
-                        text = "${formatKmDe(remainingKm)} km · $restzeit",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = if (doneKm == null) {
-                            label
-                        } else {
-                            "$label · ${formatKmDe(doneKm)} km geschafft"
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(onClick = onToggleSprachansagen) {
-                    Icon(
-                        imageVector = if (sprachansagenAn) {
-                            Icons.AutoMirrored.Filled.VolumeUp
-                        } else {
-                            Icons.AutoMirrored.Filled.VolumeOff
-                        },
-                        contentDescription = if (sprachansagenAn) {
-                            "Sprachansagen ausschalten"
-                        } else {
-                            "Sprachansagen einschalten"
-                        },
-                        tint = if (sprachansagenAn) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-                TextButton(onClick = onStop) { Text("Ohne Route weiter") }
+            IconButton(onClick = onToggleSprachansagen) {
+                Icon(
+                    imageVector = if (sprachansagenAn) {
+                        Icons.AutoMirrored.Filled.VolumeUp
+                    } else {
+                        Icons.AutoMirrored.Filled.VolumeOff
+                    },
+                    contentDescription = if (sprachansagenAn) {
+                        "Sprachansagen ausschalten"
+                    } else {
+                        "Sprachansagen einschalten"
+                    },
+                    tint = if (sprachansagenAn) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            // Als Symbol statt als Textknopf: „Ohne Route weiter" frass die
+            // halbe Zeile und schnitt Restdistanz und Restzeit ab. Das X
+            // beendet nur die Fuehrung, die Aufzeichnung laeuft weiter — das
+            // sagt die Beschreibung fuer TalkBack.
+            IconButton(onClick = onStop) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Navigation beenden, ohne Route weiterfahren",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -188,39 +205,40 @@ private fun TurnRow(richtung: TurnRichtung?, abstandM: Double?) {
     } else {
         "Keine Kurve in Sicht, dem Routenverlauf folgen."
     }
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clearAndSetSemantics { contentDescription = spoken },
-        verticalAlignment = Alignment.CenterVertically,
+        color = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
     ) {
-        Icon(
-            imageVector = turnRichtungIcon(richtung),
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text(
-                text = if (richtung != null && abstandM != null) {
-                    kurveAbstandKurzText(abstandM)
-                } else {
-                    "Geradeaus"
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+        Row(
+            modifier = Modifier.padding(horizontal = CardPadding, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = turnRichtungIcon(richtung),
+                contentDescription = null,
+                modifier = Modifier.size(52.dp),
             )
-            if (richtung != null) {
+            Spacer(Modifier.width(16.dp))
+            Column {
                 Text(
-                    text = kurveAnzeigeWort(richtung),
+                    text = if (richtung != null && abstandM != null) {
+                        kurveAbstandKurzText(abstandM)
+                    } else {
+                        "Geradeaus"
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (richtung != null) kurveAnzeigeWort(richtung) else "dem Weg folgen",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleMedium,
                 )
             }
         }
@@ -235,16 +253,13 @@ private fun TurnRow(richtung: TurnRichtung?, abstandM: Double?) {
 @Composable
 private fun OffRouteBanner() {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(end = 8.dp),
-        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Text(
             text = "Abseits der Route",
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = CardPadding, vertical = 20.dp),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
         )
@@ -285,7 +300,7 @@ internal fun NavKompassKnopf(
             Icon(
                 imageVector = Icons.Filled.Explore,
                 contentDescription = if (courseUp) {
-                    "Fahrtrichtung oben – auf Norden oben umschalten"
+                    "Fahrtrichtung oben, geneigt – auf Norden oben umschalten"
                 } else {
                     "Norden oben – auf Fahrtrichtung oben umschalten"
                 },

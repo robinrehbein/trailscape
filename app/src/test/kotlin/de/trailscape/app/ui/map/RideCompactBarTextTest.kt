@@ -28,7 +28,7 @@ class RideCompactBarTextTest {
     @Test
     fun `pausiert traegt der Wert den Zustand statt einer Null`() {
         assertEquals("Pause", kompaktTempoWert(0.0, paused = true, autoPaused = false))
-        assertEquals("Auto-Pause", kompaktTempoWert(0.0, paused = true, autoPaused = true))
+        assertEquals("Pause", kompaktTempoWert(0.0, paused = true, autoPaused = true))
         // Auch mit (veraltetem) Tempo gewinnt der Zustand.
         assertEquals("Pause", kompaktTempoWert(12.0, paused = true, autoPaused = false))
     }
@@ -47,6 +47,7 @@ class RideCompactBarTextTest {
     fun `label wechselt mit dem Pausenzustand`() {
         assertEquals("km/h", kompaktTempoLabel(paused = false))
         assertEquals("Aufzeichnung", kompaktTempoLabel(paused = true))
+        assertEquals("automatisch", kompaktTempoLabel(paused = true, autoPaused = true))
     }
 
     // ------------------------------------------------------- Vorlesesatz
