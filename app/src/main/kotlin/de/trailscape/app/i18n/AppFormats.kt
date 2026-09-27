@@ -21,8 +21,8 @@ import java.time.ZoneId
  * Der neue Weg fuer alle Bereiche (im Composable ueber [LocalAppFormats]).
  * Die Muster selbst stehen getestet in `:core` (`core/i18n/DateFormats.kt`,
  * `NumberFormats.kt`); hier nur die bequemen Einstiege fuer die App-Typen.
- * Die alten deutschen Helfer in `ui/UiFormat.kt` bleiben, bis alle Bereiche
- * umgezogen sind (siehe `docs/i18n.md`).
+ * Die frueheren deutschen Helfer (`ui/UiFormat.kt`) sind nach dem Umzug
+ * aller Bereiche entfallen.
  */
 class AppFormats(val language: AppLanguage) {
     /** Kilometer mit einer Nachkommastelle, ohne Einheit: „42,3" / „42.3". */
