@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -45,13 +46,16 @@ import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteTarget
-import de.trailscape.core.TrackPoint
 import de.trailscape.core.RouteTargetSource
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.ascentPreferenceLabels
 import de.trailscape.core.formatHours
+import de.trailscape.core.isTailwindHome
 import de.trailscape.core.sessionIntensityLabels
 import de.trailscape.core.terrainLabel
 import de.trailscape.core.unpavedLabel
+import de.trailscape.core.windLine
+import de.trailscape.core.windOptimisedLabel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -103,6 +107,18 @@ import kotlin.math.roundToInt
  * braucht, steht ohnehin da — die Reihenfolge (bester zuerst) und die
  * Abweichung vom Ziel in Prozent.
  *
+ * War „Wind berücksichtigen" an und kam der Wind an, steht unter der
+ * Quellzeile eine schlichte Windzeile zum gewaehlten Vorschlag („Wind 18 km/h
+ * aus West – Rückenwind auf dem Heimweg"), und windguenstige Vorschlaege
+ * tragen die Pille „Rückenwind heim". Bewusst Text statt [NoticeBox]: Das ist
+ * eine Information, keine Warnung — und ohne Wind fehlt sie einfach.
+ *
+ * Ist der Schalter aus und kam die Runde **nicht** aus „Runde ab hier" (also
+ * aus Heute oder Training), steht an derselben Stelle ein leiser Tipp, wo es
+ * ihn gibt: Nur dort sitzt der Schalter samt Hinweis, was an Open-Meteo geht.
+ * Wer aus „Runde ab hier" kommt, hat ihn gerade gesehen und braucht keinen.
+ *
+ * @param windEnabled Stand des Schalters „Wind berücksichtigen".
  * @param route Die Vorschau der gewaehlten Runde. Kommt aus dem Karten-Screen,
  *   der sie beim Waehlen setzt — dieses Blatt zeichnet daraus nur das
  *   Hoehenprofil und rechnet nichts.
@@ -128,6 +144,7 @@ internal fun RouteGenerationSheet(
     onHoverPoint: (TrackPoint?) -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    windEnabled: Boolean = false,
 ) {
     val target = state.target ?: return
     val theme = MaterialTheme.colorScheme
@@ -171,6 +188,40 @@ internal fun RouteGenerationSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
                 )
+                if (hasCandidates) {
+                    state.wind?.let { wind ->
+                        val shape = state.selected?.windShape
+                        val favourable = shape != null && isTailwindHome(shape)
+                        Row(
+                            modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val color = if (favourable) theme.primary else theme.onSurfaceVariant
+                            Icon(
+                                Icons.Filled.Air,
+                                contentDescription = null,
+                                tint = color,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = windLine(wind, shape),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = color,
+                            )
+                        }
+                    }
+                    val offerWindTip = state.wind == null && !windEnabled &&
+                        target.source != RouteTargetSource.SELBST_GEWAEHLT
+                    if (offerWindTip) {
+                        Text(
+                            text = WIND_TIP,
+                            modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = theme.onSurfaceVariant,
+                        )
+                    }
+                }
 
                 Spacer(Modifier.height(8.dp))
 
@@ -450,6 +501,22 @@ private fun CandidateRow(
                         )
                     }
                 }
+                // Hin gegen den Wind, heim mit Rueckenwind (nur mit Schalter
+                // und genug Wind — sonst ist `windShape` null).
+                if (candidate.windShape?.let(::isTailwindHome) == true) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = theme.primaryContainer,
+                        contentColor = theme.onPrimaryContainer,
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        Text(
+                            text = windOptimisedLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        )
+                    }
+                }
             }
         }
     }
@@ -506,6 +573,11 @@ internal fun targetLine(target: RouteTarget): String {
 }
 
 /** „aus: GA1-Einheit (Trainingsplan)" */
+/** Leiser Hinweis auf den Wind-Schalter fuer Einstiege ohne ihn (siehe KDoc des Blatts). */
+internal const val WIND_TIP =
+    "Tipp: Mit „Wind berücksichtigen“ unter „Runde ab hier“ auf der Karte bevorzugt die Suche " +
+        "Runden mit Rückenwind auf dem Heimweg."
+
 internal fun sourceLine(target: RouteTarget): String {
     // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. Frueher fehlte
     // `:core` dafuer ein Wert und die Beschriftung erkannte sie notduerftig an
