@@ -44,7 +44,11 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 **Touren**
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
-  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben
+  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben —
+  und oben „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
+  neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
+  Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
+  Tourblatt der Karte genau diese Ansicht
 - Umbenennen, Löschen, als GPX teilen, GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und

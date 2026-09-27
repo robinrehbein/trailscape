@@ -50,6 +50,7 @@ import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.collectExplorerTiles
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
+import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.loadPlan
@@ -2120,6 +2121,28 @@ class AppViewModel(
     suspend fun exploredTilesForPlanning(): Set<ExplorerTile> {
         if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
         return _explorerTiles.value
+    }
+
+    /**
+     * Wie viele Kacheln die Tour [rideId] zum ersten Mal befahren hat — fuer
+     * „Was die Tour gebracht hat" in der Detailansicht
+     * (`:core`/[explorerTilesNewInRide]).
+     *
+     * `null`, solange der Kachel-Layer aus ist: dieselbe Schranke wie die
+     * Meldung „+N neue Kacheln" nach der Fahrt. Wer den Layer nie einschaltet,
+     * soll fuer eine Zeile, die ihn nicht interessiert, keinen Lauf ueber den
+     * ganzen Tourbestand bezahlen. Ist der Layer an, aber noch nicht
+     * gerechnet, wird er es jetzt; danach wird nur noch im Cache
+     * nachgeschlagen.
+     */
+    suspend fun explorerTilesGainedBy(rideId: String): Int? {
+        if (!_explorerTilesEnabled.value) return null
+        if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
+        val summaries = allSummaries
+        return withContext(io) {
+            runCatching { explorerTilesNewInRide(rideId, summaries, explorerTilesStore) }.getOrNull()
+        }
     }
 
     // -------------------------------------------------------------------------
