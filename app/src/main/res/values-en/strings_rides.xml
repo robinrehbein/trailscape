@@ -25,4 +25,213 @@
     </plurals>
     <string name="rides_record_saved_status">Ride saved.</string>
     <string name="rides_health_import_save_error">The imported rides couldn’t be saved. The next sync will try again.</string>
+
+    <!-- RidesScreen.kt -->
+    <string name="rides_screen_title">History</string>
+    <string name="rides_screen_search_cd">Search rides</string>
+    <string name="rides_screen_search_close_cd">Close search</string>
+    <string name="rides_screen_import_cd">Import rides</string>
+    <string name="rides_screen_show_map_action">All rides on the map</string>
+    <string name="rides_screen_search_placeholder">Search rides by name</string>
+
+    <!-- TourList.kt -->
+    <string name="rides_list_empty_title">No rides yet</string>
+    <string name="rides_list_empty_body">Every ride you record or import ends up here, sorted by month.</string>
+    <string name="rides_list_empty_record_action">Record a ride</string>
+    <string name="rides_list_empty_import_action">Import rides</string>
+    <string name="rides_list_nothing_ridden_title">Nothing ridden yet</string>
+    <!-- %1$s = Suchtext -->
+    <string name="rides_list_no_match">No ride is called “%1$s”.</string>
+    <!-- %1$s = Suchtext -->
+    <string name="rides_list_no_ridden_match">No completed ride is called “%1$s”.</string>
+    <string name="rides_list_planned_eyebrow">Planned</string>
+    <string name="rides_list_planned_pill">Planned</string>
+    <!-- %1$s = Haerte-Wort („locker") -->
+    <string name="rides_list_effort_cd">Effort: %1$s</string>
+    <string name="rides_import_menu_files_action">GPX/FIT files</string>
+    <string name="rides_import_menu_archive_action">Archive (Strava/Garmin ZIP)</string>
+    <string name="rides_delete_undo_status">Ride deleted</string>
+    <string name="rides_delete_undo_action">Undo</string>
+    <string name="rides_rename_title">Rename ride</string>
+    <string name="rides_rename_name_label">Name</string>
+
+    <!-- RideEffort.kt -->
+    <string name="rides_effort_easy_label">easy</string>
+    <string name="rides_effort_moderate_label">moderate</string>
+    <string name="rides_effort_hard_label">hard</string>
+    <string name="rides_note_unit_easy">Easy session</string>
+    <string name="rides_note_unit_endurance">Endurance session</string>
+    <string name="rides_note_unit_hard">Hard session</string>
+    <string name="rides_note_partial_title">Partly as planned.</string>
+    <string name="rides_note_partial_body">%1$s started, %2$d km were planned.</string>
+    <string name="rides_note_plan_title">As planned.</string>
+    <string name="rides_note_plan_done">%1$s done.</string>
+    <string name="rides_note_plan_done_harder">%1$s done, but harder than planned.</string>
+    <string name="rides_note_plan_done_easier">%1$s done, but easier than planned.</string>
+    <string name="rides_note_plan_done_calm">%1$s done, your heart rate stayed calm to the end.</string>
+    <string name="rides_note_easy_title">Easy ride.</string>
+    <string name="rides_note_easy_body">Rides like this build your base without tiring you for long.</string>
+    <string name="rides_note_moderate_title">Moderate effort.</string>
+    <string name="rides_note_moderate_body">A real workout, usually absorbed within a day.</string>
+    <string name="rides_note_hard_title">Hard ride.</string>
+    <string name="rides_note_hard_body">Take an easy day afterwards so it can pay off.</string>
+
+    <!-- RideImpactWording.kt, RideImpactCard.kt -->
+    <string name="rides_impact_eyebrow">What this ride did for you</string>
+    <!-- %1$s = Fitnesszuwachs mit Vorzeichen („+1,9"). Das Komma am Ende gehoert dazu: Anfang und Rest werden als ein Satz gelesen. -->
+    <string name="rides_impact_form_lead">Fitness %1$s,</string>
+    <!-- %1$s = Muedigkeit mit Vorzeichen, %2$s = Frische danach („−12"), %3$s = Wort dazu aus :core („etwas müde") -->
+    <string name="rides_impact_form_body">fatigue %1$s, form afterwards %2$s (%3$s).</string>
+    <string name="rides_impact_small_lead">Small stimulus.</string>
+    <string name="rides_impact_small_body">Barely measurable for fitness (%1$s), but hardly any fatigue either.</string>
+    <string name="rides_impact_week_reached_lead">Weekly goal reached.</string>
+    <!-- %1$d = km der Woche, %2$d = Wochenziel in km -->
+    <string name="rides_impact_week_reached_body">With this ride, %1$d of %2$d km.</string>
+    <string name="rides_impact_week_met_lead">Weekly goal already met.</string>
+    <string name="rides_impact_week_open_lead">Weekly goal:</string>
+    <!-- %1$d = km der Woche, %2$d = Wochenziel in km, %3$s = km dieser Tour („42" / „4,2") -->
+    <string name="rides_impact_week_body">%1$d of %2$d km, this ride +%3$s km.</string>
+    <plurals name="rides_impact_new_tiles_count">
+        <item quantity="one">%1$d new tile</item>
+        <item quantity="other">%1$d new tiles</item>
+    </plurals>
+    <string name="rides_impact_new_tiles_body">ridden for the first time.</string>
+    <string name="rides_impact_bests_lead">New personal bests</string>
+    <!-- %1$d = Anzahl Segmente (immer mindestens 3) -->
+    <string name="rides_impact_bests_body">on %1$d segments — details under “All values”.</string>
+    <string name="rides_impact_best_lead">New personal best</string>
+    <!-- %1$s = Segmentname, %2$s = Zeit (H:MM:SS), %3$s = Verbesserung („14 s", „1:15 min") -->
+    <string name="rides_impact_best_body">on “%1$s”: %2$s, %3$s faster.</string>
+
+    <!-- RideListLogic.kt -->
+    <!-- %1$s = Kurzdatum („Di 23.9."), %2$s = km („32,4"), %3$s = Dauer („1:24") -->
+    <string name="rides_list_meta">%1$s · %2$s km · %3$s h</string>
+    <string name="rides_list_meta_no_duration">%1$s · %2$s km</string>
+    <!-- %1$s = km, %2$d = Hoehenmeter, %3$s = Erstelldatum („24.09.") -->
+    <string name="rides_list_planned_meta">%1$s km · %2$d m · created %3$s</string>
+
+    <!-- RideDetailScreen.kt -->
+    <string name="rides_detail_back_label">History</string>
+    <!-- %1$s = Wochentag und Datum, %2$s = Uhrzeit -->
+    <string name="rides_detail_date_line">%1$s · %2$s</string>
+    <string name="rides_detail_date_line_planned">%1$s · %2$s · planned route</string>
+    <string name="rides_detail_date_line_health_connect">%1$s · %2$s · from Health Connect</string>
+    <string name="rides_detail_date_line_planned_health_connect">%1$s · %2$s · planned route · from Health Connect</string>
+    <string name="rides_detail_planned_notice">This is a saved planned route, not a ride you’ve done. It doesn’t count towards weekly progress, fitness or form.</string>
+    <string name="rides_detail_ride_again_action">Ride this again</string>
+    <string name="rides_detail_show_map_action">Show map</string>
+    <string name="rides_detail_rename_action">Rename</string>
+    <string name="rides_detail_share_cd">Share ride</string>
+    <string name="rides_detail_delete_cd">Delete ride</string>
+    <string name="rides_detail_all_values_action">All values</string>
+    <string name="rides_detail_fewer_values_action">Fewer values</string>
+    <!-- %1$s = Name der Tour -->
+    <string name="rides_detail_map_cd">Map with the track of “%1$s”</string>
+    <string name="rides_detail_stat_km_label">km</string>
+    <string name="rides_detail_stat_hours_label">h</string>
+    <string name="rides_detail_stat_elevation_label">m climbed</string>
+    <string name="rides_detail_stat_avg_hr_label">Avg HR</string>
+    <string name="rides_detail_more_values_eyebrow">More values</string>
+    <string name="rides_detail_curves_eyebrow">Speed and heart rate</string>
+    <string name="rides_detail_speed_chart_title">Speed</string>
+    <string name="rides_detail_hr_chart_title">Heart rate</string>
+    <string name="rides_detail_segments_eyebrow">Segments</string>
+    <string name="rides_detail_moving_time_label">Moving time</string>
+    <!-- %1$s = Dauer („1:24") -->
+    <string name="rides_detail_hours_value">%1$s h</string>
+    <string name="rides_detail_avg_speed_label">Avg speed</string>
+    <string name="rides_detail_descent_label">Descent</string>
+    <!-- %1$d = Hoehenmeter -->
+    <string name="rides_detail_elevation_value">%1$d m</string>
+    <string name="rides_detail_max_hr_label">Max HR</string>
+    <string name="rides_detail_load_label">Training load</string>
+    <!-- %1$d = Last, %2$s = Quelle aus :core („Leistung") -->
+    <string name="rides_detail_load_value">%1$d (%2$s)</string>
+    <string name="rides_detail_decoupling_label">Decoupling (Pw:HR)</string>
+    <!-- %1$s = Prozent mit einer Stelle -->
+    <string name="rides_detail_decoupling_value">%1$s%%</string>
+    <!-- %1$s = Prozent mit einer Stelle, %2$s = Einordnung aus :core -->
+    <string name="rides_detail_decoupling_value_rated">%1$s%% · %2$s</string>
+    <string name="rides_detail_decoupling_body" formatted="false">Compares the second half of the ride with the first: how much power your heart rate still supports at the end. Below 5% your aerobic endurance counts as good; above 10%, more base training pays off.</string>
+    <string name="rides_detail_vo2max_label">VO₂max</string>
+    <string name="rides_detail_vo2max_body">Estimated from the steady sections of this ride (heart rate against estimated power). That’s why it’s a range, not a measurement.</string>
+    <string name="rides_detail_segments_body">Automatically detected climbs, compared with your earlier rides over the same stretch.</string>
+    <string name="rides_detail_segment_new_best_label">★ New personal best</string>
+    <string name="rides_detail_segment_time_label">Time</string>
+    <string name="rides_detail_segment_best_label">Personal best</string>
+    <string name="rides_detail_segment_rank_label">Rank</string>
+    <!-- %1$d = Platz, %2$d = Anzahl Befahrungen -->
+    <string name="rides_detail_segment_rank_value">%1$d of %2$d</string>
+    <string name="rides_detail_segment_gap_label">Gap</string>
+    <string name="rides_detail_segment_avg_hr_label">Avg HR</string>
+    <!-- %1$s = Verlaesslichkeit aus :core („hoch") -->
+    <string name="rides_detail_confidence_label">Confidence: %1$s</string>
+
+    <!-- ShareCard.kt, ShareCardRenderer.kt -->
+    <string name="rides_share_card_fallback_title">Ride</string>
+    <string name="rides_share_card_km_label">km</string>
+    <string name="rides_share_card_hours_label">h</string>
+    <string name="rides_share_card_elevation_label">m climbed</string>
+    <string name="rides_share_card_avg_hr_label">Avg HR</string>
+    <string name="rides_share_card_load_label">Training load</string>
+    <!-- %1$s = Datum mit Jahr („23. September 2025") -->
+    <string name="rides_share_card_planned_date_line">Planned route · %1$s</string>
+    <string name="rides_share_image_chooser_title">Share ride image</string>
+
+    <!-- ShareRideDialog.kt, RideShare.kt -->
+    <string name="rides_share_title">Share ride</string>
+    <string name="rides_share_story_option">Story</string>
+    <string name="rides_share_square_option">Square</string>
+    <string name="rides_share_gpx_option">GPX</string>
+    <string name="rides_share_hide_ends_title">Hide start and finish</string>
+    <string name="rides_share_hide_ends_subtitle">The line only starts and ends %1$d m away from the start and finish.</string>
+    <string name="rides_share_image_track_hint">The image shows the shape of your route without a map – anyone who knows the area can still spot the start and finish.</string>
+    <string name="rides_share_image_ends_hidden_hint">The image shows the shape of your route without a map and without the start and finish – anyone who knows the area can still recognise the rest of the route.</string>
+    <string name="rides_share_image_too_short_hint">The ride is too short to hide the start and finish – so the image only shows the stats.</string>
+    <string name="rides_share_image_stats_hint">The image only shows this ride’s stats – no route.</string>
+    <string name="rides_share_gpx_hint">The track as a GPX file – to ride it again in Komoot, Strava or on your bike computer.</string>
+    <string name="rides_share_preview_cd">Preview of the ride image</string>
+    <string name="rides_share_gpx_error">The ride couldn’t be shared. Check that there’s enough free storage and try again.</string>
+    <string name="rides_share_image_error">The image couldn’t be created. Check that there’s enough free storage and try again.</string>
+    <string name="rides_share_gpx_chooser_title">Share ride</string>
+
+    <!-- ActivityFileImport.kt -->
+    <string name="rides_import_unreadable_error">The file couldn’t be read. If it’s stored in the cloud, download it to your device first and then try again.</string>
+    <string name="rides_import_too_many_files_error">Too many files at once. Import the rest in another round.</string>
+
+    <!-- ActivityImportAction.kt -->
+    <string name="rides_import_failed_title">Import failed</string>
+    <string name="rides_import_failed_other_file_action">Choose another file</string>
+    <string name="rides_import_crash_error">The import failed. Some rides may not have been saved — try again with fewer files at once.</string>
+    <string name="rides_import_notice_details_action">Details</string>
+    <plurals name="rides_import_errors_title_count">
+        <item quantity="one">Not imported</item>
+        <item quantity="other">%1$d files not imported</item>
+    </plurals>
+
+    <!-- ImportActivity.kt -->
+    <string name="rides_import_no_file_error">No file to import found.</string>
+    <string name="rides_import_running_status">Importing…</string>
+    <string name="rides_import_cancelled_error">Import cancelled. Share or open the file again and wait until Trailscape appears.</string>
+
+    <!-- ui/map/HistorySummarySheet.kt -->
+    <string name="rides_summary_title">Everywhere you’ve been</string>
+    <string name="rides_summary_hint">Grey = never ridden</string>
+    <string name="rides_summary_close_cd">Back to history</string>
+    <plurals name="rides_summary_rides_label_count">
+        <item quantity="one">ride</item>
+        <item quantity="other">rides</item>
+    </plurals>
+    <string name="rides_summary_ridden_label">ridden</string>
+    <plurals name="rides_summary_tiles_label_count">
+        <item quantity="one">tile</item>
+        <item quantity="other">tiles</item>
+    </plurals>
+    <string name="rides_summary_square_label">largest square</string>
+    <plurals name="rides_summary_tile_count">
+        <item quantity="one">%1$d tile</item>
+        <item quantity="other">%1$d tiles</item>
+    </plurals>
+    <!-- %1$s = Kachelzahl („37 Kacheln") -->
+    <string name="rides_summary_cluster_status">Largest area: %1$s</string>
 </resources>

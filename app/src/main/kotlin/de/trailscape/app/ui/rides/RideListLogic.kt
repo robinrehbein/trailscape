@@ -1,16 +1,19 @@
 package de.trailscape.app.ui.rides
 
-import de.trailscape.app.ui.dateFormatShort
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.RideInfo
 import de.trailscape.core.RideStats
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDateShort
+import de.trailscape.core.i18n.formatDistanceKm
+import de.trailscape.core.i18n.formatMonthName
 import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -23,7 +26,10 @@ import kotlin.math.roundToInt
  *
  * Zieldesign `docs/design/prototyp-klartext.html`, Screen `#s-verlauf`: Monats-
  * Augenbrauen („September", „August") ueber je einer Gruppen-Karte, in der
- * Zeile „Di 23.9. · 32,4 km · 1:24 h".
+ * Zeile „Di 23.9. · 32,4 km · 1:24 h" (englisch „Tue 23 Sept · 32.4 km ·
+ * 1:24 h"). Monatsnamen und Datum kommen in der Sprache der Oberflaeche
+ * ([AppLanguage], Muster aus `:core`/`DateFormats.kt`), Zeilen mit
+ * uebersetzten Woertern als [UiText].
  *
  * Diese Klasse selbst ist eine Monatsgruppe: Ueberschrift plus Touren in
  * Listenreihenfolge.
@@ -34,16 +40,14 @@ internal data class RideMonthGroup<T : RideInfo>(
     val rides: List<T>,
 )
 
-/** Monat ausgeschrieben, z. B. `September`. */
-private val monthFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("LLLL", Locale.GERMANY)
-
 /**
  * Ueberschrift einer Monatsgruppe: im laufenden Jahr nur der Monat
  * („September"), sonst mit Jahr („September 2025") — sonst stuenden zwei
- * Septembers verschiedener Jahre ununterscheidbar untereinander.
+ * Septembers verschiedener Jahre ununterscheidbar untereinander. Monat vor
+ * Jahr schreiben beide Sprachen gleich.
  */
-internal fun monthLabel(month: YearMonth, today: LocalDate): String {
-    val name = monthFormat.format(month)
+internal fun monthLabel(month: YearMonth, today: LocalDate, language: AppLanguage): String {
+    val name = formatMonthName(month.atDay(1), language)
     return if (month.year == today.year) name else "$name ${month.year}"
 }
 
@@ -60,13 +64,14 @@ internal fun <T : RideInfo> groupRidesByMonth(
     rides: List<T>,
     today: LocalDate,
     localOf: (Long) -> LocalDateTime,
+    language: AppLanguage,
 ): List<RideMonthGroup<T>> {
     val byMonth = LinkedHashMap<YearMonth, MutableList<T>>()
     for (ride in rides) {
         val month = YearMonth.from(localOf(ride.createdAt))
         byMonth.getOrPut(month) { mutableListOf() }.add(ride)
     }
-    return byMonth.map { (month, list) -> RideMonthGroup(month, monthLabel(month, today), list) }
+    return byMonth.map { (month, list) -> RideMonthGroup(month, monthLabel(month, today, language), list) }
 }
 
 /**
@@ -79,8 +84,8 @@ internal fun <T : RideInfo> filterRidesByName(rides: List<T>, query: String): Li
     return rides.filter { it.name.contains(needle, ignoreCase = true) }
 }
 
-/** Zweibuchstabige Wochentagskuerzel ohne Punkt — „Di", nicht „Di.". */
-private val weekdayShort: Map<DayOfWeek, String> = mapOf(
+/** Deutsche zweibuchstabige Wochentagskuerzel ohne Punkt — „Di", nicht „Di.". */
+private val weekdayShortDe: Map<DayOfWeek, String> = mapOf(
     DayOfWeek.MONDAY to "Mo",
     DayOfWeek.TUESDAY to "Di",
     DayOfWeek.WEDNESDAY to "Mi",
@@ -90,12 +95,17 @@ private val weekdayShort: Map<DayOfWeek, String> = mapOf(
     DayOfWeek.SUNDAY to "So",
 )
 
+/** Englisch: Wochentag und Tag vor dem Monat, wie `d MMM` in `:core` („Tue 23 Sept"). */
+private val shortDateEn: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE d MMM", AppLanguage.EN.locale)
+
 /**
- * Kurzdatum der Listenzeile, z. B. `Di 23.9.`. Das Jahr steht in der
- * Monatsueberschrift darueber, nicht in jeder Zeile.
+ * Kurzdatum der Listenzeile, z. B. `Di 23.9.` / `Tue 23 Sept`. Das Jahr steht
+ * in der Monatsueberschrift darueber, nicht in jeder Zeile.
  */
-internal fun formatRideShortDate(at: LocalDateTime): String =
-    "${weekdayShort.getValue(at.dayOfWeek)} ${at.dayOfMonth}.${at.monthValue}."
+internal fun formatRideShortDate(at: LocalDateTime, language: AppLanguage): String = when (language) {
+    AppLanguage.DE -> "${weekdayShortDe.getValue(at.dayOfWeek)} ${at.dayOfMonth}.${at.monthValue}."
+    AppLanguage.EN -> shortDateEn.format(at)
+}
 
 /**
  * Dauer als Stunden und Minuten, z. B. `1:24` — die Form, die das Label
@@ -115,13 +125,16 @@ internal fun formatHoursMinutes(seconds: Int?): String {
  * Die gedaempfte Kennzahlen-Zeile einer Listenzeile: `Di 23.9. · 32,4 km ·
  * 1:24 h`. Bewusst nur drei Angaben wie im Zieldesign; Hoehenmeter und Puls
  * stehen gross in der Detailansicht. Ohne Dauer (manche Importe) entfaellt
- * die Zeitangabe statt als „–" dazustehen.
+ * die Zeitangabe statt als „–" dazustehen — dafuer eine eigene Ressource,
+ * statt Bruchstuecke aneinanderzuhaengen.
  */
-internal fun rideListMeta(at: LocalDateTime, stats: RideStats): String = buildList {
-    add(formatRideShortDate(at))
-    add("${formatKmDe(stats.distanceKm)} km")
-    stats.durationS?.let { add("${formatHoursMinutes(it)} h") }
-}.joinToString(" · ")
+internal fun rideListMeta(at: LocalDateTime, stats: RideStats, language: AppLanguage): UiText {
+    val date = formatRideShortDate(at, language)
+    val km = formatDistanceKm(stats.distanceKm, language)
+    val duration = stats.durationS
+        ?: return UiText.Res(R.string.rides_list_meta_no_duration, listOf(date, km))
+    return UiText.Res(R.string.rides_list_meta, listOf(date, km, formatHoursMinutes(duration)))
+}
 
 /**
  * Was der gefahrene Teil des Verlaufs unter dem Abschnitt „Geplant" zeigt.
@@ -169,13 +182,14 @@ internal fun <T : RideInfo> splitHistory(
     query: String,
     today: LocalDate,
     localOf: (Long) -> LocalDateTime,
+    language: AppLanguage,
 ): HistorySections<T> {
     val ridden = riddenRides(rides)
     val planned = rides.filter { it.planned }
 
     val plannedHits = filterRidesByName(planned, query)
     val riddenHits = filterRidesByName(ridden, query)
-    val months = groupRidesByMonth(riddenHits, today, localOf)
+    val months = groupRidesByMonth(riddenHits, today, localOf, language)
 
     val part = when {
         ridden.isEmpty() -> RiddenPart.NOCH_KEINE_FAHRT
@@ -197,10 +211,35 @@ internal fun <T : RideInfo> splitHistory(
  * gelesen wird. Kilometer ganzzahlig wie die Hoehenmeter — eine Planung ist
  * eine Absicht, keine Messung; erst unter 10 km zaehlt die Nachkommastelle
  * wieder (sonst stuende eine 2,4-km-Runde als „2 km" da).
+ *
+ * Englisch: `58 km · 640 m · created 24 Sept` — Hoehenmeter in „m" wie
+ * `common_value_elevation`.
+ */
+internal fun plannedRouteMeta(createdAt: LocalDateTime, stats: RideStats, language: AppLanguage): UiText {
+    val km = if (stats.distanceKm < 10.0) {
+        formatDistanceKm(stats.distanceKm, language)
+    } else {
+        "${stats.distanceKm.roundToInt()}"
+    }
+    return UiText.Res(
+        R.string.rides_list_planned_meta,
+        listOf(km, stats.ascentM.roundToInt(), formatDateShort(createdAt, language)),
+    )
+}
+
+/**
+ * Die bisherige, rein deutsche Fassung von [plannedRouteMeta] als fertiger
+ * String — nur noch fuer das „Wohin?"-Blatt der Karte (`ui/map/ExploreSheet.kt`),
+ * das dem Zweig i18n-map gehoert und dort auf die [UiText]-Fassung umzieht.
+ * Danach kann sie weg.
  */
 internal fun plannedRouteMeta(createdAt: LocalDateTime, stats: RideStats): String {
-    val km = if (stats.distanceKm < 10.0) formatKmDe(stats.distanceKm) else "${stats.distanceKm.roundToInt()}"
-    return "$km km · ${stats.ascentM.roundToInt()} Hm · erstellt ${dateFormatShort.format(createdAt)}"
+    val km = if (stats.distanceKm < 10.0) {
+        formatDistanceKm(stats.distanceKm, AppLanguage.DE)
+    } else {
+        "${stats.distanceKm.roundToInt()}"
+    }
+    return "$km km · ${stats.ascentM.roundToInt()} Hm · erstellt ${formatDateShort(createdAt, AppLanguage.DE)}"
 }
 
 /**

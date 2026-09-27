@@ -3,7 +3,10 @@ package de.trailscape.app.ui
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import de.trailscape.app.R
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.AppLocale
+import de.trailscape.app.i18n.localized
 import de.trailscape.core.ActivityFileInput
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -33,7 +36,8 @@ import kotlinx.coroutines.withContext
  */
 
 /**
- * Deutsche Rueckfallmeldung, falls eine geworfene Exception keinen Text traegt.
+ * Rueckfallmeldung, falls eine geworfene Exception keinen Text traegt
+ * (Ressource `rides_import_unreadable_error`).
  *
  * Mit Handlungsanweisung: „Die Datei konnte nicht gelesen werden." allein sagt
  * der Nutzerin nur, dass etwas nicht ging — nicht, was sie als Naechstes tun
@@ -42,9 +46,19 @@ import kotlinx.coroutines.withContext
  * erneut" statt „waehle sie erneut aus"): Beim Teilen aus WhatsApp oder
  * Komoot waehlt niemand etwas aus.
  */
-const val UNREADABLE_FILE_MESSAGE =
-    "Die Datei konnte nicht gelesen werden. Liegt sie in einer Cloud, lade sie " +
-        "erst auf das Gerät herunter und versuche es dann erneut."
+fun unreadableFileMessage(context: Context): String =
+    context.localized().getString(R.string.rides_import_unreadable_error)
+
+/**
+ * [unreadableFileMessage] in der aktuellen App-Sprache, ohne eigenen Kontext.
+ *
+ * Frueher eine deutsche Konstante; als Eigenschaft mit Getter bleibt der Name
+ * fuer die Backup-Karte (`ui/more/BackupCard.kt`, Zweig i18n-more) gueltig
+ * und liefert trotzdem die richtige Sprache. Neue Aufrufe nehmen
+ * [unreadableFileMessage] mit Kontext.
+ */
+val UNREADABLE_FILE_MESSAGE: String
+    get() = AppServices.localizedContext().getString(R.string.rides_import_unreadable_error)
 
 /**
  * Obergrenze je Datei. Aktivitaetsdateien sind einige zehn Kilobyte bis
@@ -61,9 +75,12 @@ internal const val MAX_IMPORT_TOTAL_BYTES = 64L * 1024 * 1024
 /** Hoechstzahl an Dateien je Durchgang — siehe Datei-KDoc. */
 internal const val MAX_IMPORT_FILES = 200
 
-/** Meldung fuer Dateien, die nach Erreichen einer Durchgangs-Grenze nicht mehr gelesen werden. */
-internal const val TOO_MANY_FILES_MESSAGE =
-    "Zu viele Dateien auf einmal. Importiere die übrigen in einem weiteren Durchgang."
+/**
+ * Meldung fuer Dateien, die nach Erreichen einer Durchgangs-Grenze nicht mehr
+ * gelesen werden (Ressource `rides_import_too_many_files_error`).
+ */
+internal fun tooManyFilesMessage(context: Context): String =
+    context.localized().getString(R.string.rides_import_too_many_files_error)
 
 /**
  * Liest jede der [uris] komplett in den Speicher — auf [Dispatchers.IO] und
@@ -81,18 +98,22 @@ suspend fun readActivityFiles(
     mimeTypes: Map<Uri, String?> = emptyMap(),
 ): List<ActivityFileInput> = withContext(Dispatchers.IO) {
     val resolver = context.contentResolver
+    // Einmal je Durchgang: die Meldungen in der App-Sprache (die gereichte
+    // Activity hat den Override schon, ein Anwendungskontext bekommt ihn hier).
+    val tooMany = tooManyFilesMessage(context)
+    val unreadable = unreadableFileMessage(context)
     var totalBytes = 0L
     uris.mapIndexed { index, uri ->
         val name = runCatching { queryDisplayName(context, uri) }.getOrNull()
             ?: uri.lastPathSegment?.substringAfterLast('/')
         val mime = mimeTypes[uri] ?: runCatching { resolver.getType(uri) }.getOrNull()
         if (index >= MAX_IMPORT_FILES) {
-            return@mapIndexed ActivityFileInput(name, mime, ByteArray(0), readError = TOO_MANY_FILES_MESSAGE)
+            return@mapIndexed ActivityFileInput(name, mime, ByteArray(0), readError = tooMany)
         }
         val budget = MAX_IMPORT_TOTAL_BYTES - totalBytes
         try {
             val stream = resolver.openInputStream(uri)
-                ?: return@mapIndexed ActivityFileInput(name, mime, ByteArray(0), readError = UNREADABLE_FILE_MESSAGE)
+                ?: return@mapIndexed ActivityFileInput(name, mime, ByteArray(0), readError = unreadable)
             val bytes = stream.use { readBounded(it, minOf(MAX_ACTIVITY_FILE_BYTES, budget)) }
             when {
                 bytes != null -> {
@@ -102,11 +123,11 @@ suspend fun readActivityFiles(
                 // Fuer sich allein haette die Datei noch gepasst — zu viel ist
                 // nur der ganze Durchgang.
                 budget < MAX_ACTIVITY_FILE_BYTES ->
-                    ActivityFileInput(name, mime, ByteArray(0), readError = TOO_MANY_FILES_MESSAGE)
+                    ActivityFileInput(name, mime, ByteArray(0), readError = tooMany)
                 else -> ActivityFileInput(name, mime, ByteArray(0), readError = AppLocale.coreTexts(context).files.fileTooLarge())
             }
         } catch (e: Exception) {
-            ActivityFileInput(name, mime, ByteArray(0), readError = UNREADABLE_FILE_MESSAGE)
+            ActivityFileInput(name, mime, ByteArray(0), readError = unreadable)
         }
     }
 }

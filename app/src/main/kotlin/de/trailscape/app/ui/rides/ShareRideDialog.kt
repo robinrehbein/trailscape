@@ -28,11 +28,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.more.SettingsSwitchRow
@@ -103,23 +105,35 @@ internal fun ShareRideDialog(
     // Der Inhalt haengt nicht vom Format ab: einmal je Fassung der Tour, und
     // wie das Zeichnen abseits des Hauptthreads (eine lange Aufzeichnung hat
     // zehntausende Punkte). Hier oben, weil auch der Hinweis davon abhaengt.
-    val content by produceState<ShareCardContent?>(null, ride.id, ride.updatedAt, load, hideEnds) {
+    val context = LocalContext.current
+    val language = LocalAppLanguage.current
+    val content by produceState<ShareCardContent?>(null, ride.id, ride.updatedAt, load, hideEnds, language) {
         value = withContext(Dispatchers.Default) {
-            shareCardContent(ride, load, endRadiusM = if (hideEnds) SHARE_END_RADIUS_M else null)
+            shareCardContent(
+                ride,
+                load,
+                language,
+                resolve = { it.resolve(context) },
+                endRadiusM = if (hideEnds) SHARE_END_RADIUS_M else null,
+            )
         }
     }
     val previewHeight = min(PreviewMaxHeight, LocalConfiguration.current.screenHeightDp.dp * 0.4f)
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tour teilen") },
+        title = { Text(stringResource(R.string.rides_share_title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PillSegments(
-                    options = listOf("Story", "Quadrat", "GPX"),
+                    options = listOf(
+                        stringResource(R.string.rides_share_story_option),
+                        stringResource(R.string.rides_share_square_option),
+                        stringResource(R.string.rides_share_gpx_option),
+                    ),
                     selectedIndex = selected,
                     onSelect = { selected = it },
                     // Der Dialog ist selbst surfaceContainerHigh; eine leichte
@@ -133,8 +147,8 @@ internal fun ShareRideDialog(
                     // ab, der Schalter verschwindet also nie beim Umlegen.
                     if (ride.points.size >= 2 && content?.trackNote != ShareTrackNote.NONE) {
                         SettingsSwitchRow(
-                            title = stringResource(R.string.share_hide_ends_title),
-                            subtitle = stringResource(R.string.share_hide_ends_subtitle, SHARE_END_RADIUS_M.toInt()),
+                            title = stringResource(R.string.rides_share_hide_ends_title),
+                            subtitle = stringResource(R.string.rides_share_hide_ends_subtitle, SHARE_END_RADIUS_M.toInt()),
                             checked = hideEnds,
                             onCheckedChange = onHideEndsChange,
                         )
@@ -143,10 +157,10 @@ internal fun ShareRideDialog(
                     if (card != null) {
                         Text(
                             text = when (card.trackNote) {
-                                ShareTrackNote.FULL -> stringResource(R.string.share_hint_full)
-                                ShareTrackNote.ENDS_HIDDEN -> stringResource(R.string.share_hint_ends_hidden)
-                                ShareTrackNote.TOO_SHORT -> stringResource(R.string.share_hint_too_short)
-                                ShareTrackNote.NONE -> stringResource(R.string.share_hint_no_track)
+                                ShareTrackNote.FULL -> stringResource(R.string.rides_share_image_track_hint)
+                                ShareTrackNote.ENDS_HIDDEN -> stringResource(R.string.rides_share_image_ends_hidden_hint)
+                                ShareTrackNote.TOO_SHORT -> stringResource(R.string.rides_share_image_too_short_hint)
+                                ShareTrackNote.NONE -> stringResource(R.string.rides_share_image_stats_hint)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -154,8 +168,7 @@ internal fun ShareRideDialog(
                     }
                 } else {
                     Text(
-                        text = "Die Spur als GPX-Datei – zum Nachfahren in Komoot, " +
-                            "Strava oder auf dem Radcomputer.",
+                        text = stringResource(R.string.rides_share_gpx_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -167,9 +180,9 @@ internal fun ShareRideDialog(
                 onClick = {
                     if (format == null) onShareGpx() else onShareImage(format)
                 },
-            ) { Text("Teilen") }
+            ) { Text(stringResource(R.string.common_action_share)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_cancel)) } },
     )
 }
 
@@ -211,7 +224,7 @@ private fun ShareCardPreview(content: ShareCardContent?, format: ShareCardFormat
         if (image != null) {
             Image(
                 bitmap = image,
-                contentDescription = "Vorschau des Tour-Bilds",
+                contentDescription = stringResource(R.string.rides_share_preview_cd),
                 contentScale = ContentScale.Fit,
                 modifier = frame,
             )

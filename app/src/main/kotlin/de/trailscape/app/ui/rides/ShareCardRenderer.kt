@@ -17,6 +17,8 @@ import android.text.TextPaint
 import android.text.TextUtils
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
+import de.trailscape.app.R
+import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.DarkPrimary
 import de.trailscape.core.Ride
@@ -291,8 +293,17 @@ internal suspend fun shareRideImage(
     format: ShareCardFormat,
     hideEnds: Boolean,
 ) {
+    // Texte in der Sprache der Oberflaeche: [context] ist der Activity-Kontext
+    // mit dem Locale-Override (siehe `i18n/AppLocale.kt`).
+    val language = languageOf(context.resources.configuration)
     val uri = withContext(Dispatchers.Default) {
-        val content = shareCardContent(ride, load, endRadiusM = if (hideEnds) SHARE_END_RADIUS_M else null)
+        val content = shareCardContent(
+            ride,
+            load,
+            language,
+            resolve = { it.resolve(context) },
+            endRadiusM = if (hideEnds) SHARE_END_RADIUS_M else null,
+        )
         val bitmap = renderShareCard(content, format)
         try {
             withContext(Dispatchers.IO) {
@@ -314,5 +325,5 @@ internal suspend fun shareRideImage(
         clipData = ClipData.newRawUri(ride.name, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Tour-Bild teilen"))
+    context.startActivity(Intent.createChooser(send, context.getString(R.string.rides_share_image_chooser_title)))
 }

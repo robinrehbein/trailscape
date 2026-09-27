@@ -10,6 +10,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
+import de.trailscape.app.R
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.withCause
@@ -69,13 +70,7 @@ internal fun RideShareDialog(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    appViewModel.showMessage(
-                        withCause(
-                            "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
-                                "Speicher frei ist, und versuche es erneut.",
-                            e,
-                        ),
-                    )
+                    appViewModel.showMessage(withCause(context.getString(R.string.rides_share_gpx_error), e))
                 }
             }
         },
@@ -95,13 +90,7 @@ internal fun RideShareDialog(
                     e
                 }
                 if (failure != null) {
-                    appViewModel.showMessage(
-                        withCause(
-                            "Das Bild konnte nicht erstellt werden. Prüfe, ob genug " +
-                                "Speicher frei ist, und versuche es erneut.",
-                            failure,
-                        ),
-                    )
+                    appViewModel.showMessage(withCause(context.getString(R.string.rides_share_image_error), failure))
                 }
             }
         },
@@ -133,5 +122,5 @@ internal suspend fun shareRideGpx(context: Context, ride: Ride) {
         putExtra(Intent.EXTRA_TITLE, ride.name)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Tour teilen"))
+    context.startActivity(Intent.createChooser(send, context.getString(R.string.rides_share_gpx_chooser_title)))
 }

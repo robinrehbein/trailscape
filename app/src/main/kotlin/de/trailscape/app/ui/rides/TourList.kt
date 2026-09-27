@@ -46,11 +46,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.UNDO_DELETE_GRACE_MS
@@ -136,8 +140,9 @@ fun TourListContent(
     // Das heutige Datum nur fuer die Jahresfrage der Monatsueberschrift —
     // einmal gemerkt genuegt, ein Jahreswechsel bei offener App ist egal.
     val today = remember { LocalDate.now() }
-    val sections = remember(rides, query, today) {
-        splitHistory(rides, query, today, ::localOfEpochMs)
+    val language = LocalAppLanguage.current
+    val sections = remember(rides, query, today, language) {
+        splitHistory(rides, query, today, ::localOfEpochMs, language)
     }
 
     LazyColumn(
@@ -160,7 +165,7 @@ fun TourListContent(
 
             rides.isEmpty() -> item(key = "leer") {
                 RidesEmptyState(
-                    title = "Noch keine Touren",
+                    title = stringResource(R.string.rides_list_empty_title),
                     onRecord = onRecord,
                     onImportFile = onImportFile,
                     onImportArchive = onImportArchive,
@@ -168,12 +173,12 @@ fun TourListContent(
             }
 
             sections.noMatch -> item(key = "keine-treffer") {
-                NoMatchText("Keine Tour heißt „${query.trim()}“.")
+                NoMatchText(stringResource(R.string.rides_list_no_match, query.trim()))
             }
 
             else -> {
                 if (sections.planned.isNotEmpty()) {
-                    item(key = "sec-geplant") { SectionEyebrow("Geplant") }
+                    item(key = "sec-geplant") { SectionEyebrow(stringResource(R.string.rides_list_planned_eyebrow)) }
                     // Eigener Schluesselraum: Die IDs sind zwar eindeutig, aber
                     // ein Praefix haelt die Zeilen beider Abschnitte auch dann
                     // auseinander, wenn eine Planung einmal zur Fahrt wuerde.
@@ -192,7 +197,7 @@ fun TourListContent(
                         // Nur Planungen: Der gefahrene Teil sagt ehrlich, dass
                         // es noch keine Fahrt gibt, statt leer zu bleiben.
                         RidesEmptyState(
-                            title = "Noch keine Fahrt",
+                            title = stringResource(R.string.rides_list_nothing_ridden_title),
                             onRecord = onRecord,
                             onImportFile = onImportFile,
                             onImportArchive = onImportArchive,
@@ -201,7 +206,7 @@ fun TourListContent(
                     }
 
                     RiddenPart.KEIN_TREFFER -> item(key = "keine-fahrt-treffer") {
-                        NoMatchText("Keine gefahrene Tour heißt „${query.trim()}“.")
+                        NoMatchText(stringResource(R.string.rides_list_no_ridden_match, query.trim()))
                     }
 
                     RiddenPart.LISTE -> sections.months.forEach { group ->
@@ -283,7 +288,7 @@ private fun RideRow(
     val effort = rideEffort(load, ride.stats)
     HistoryRow(
         ride = ride,
-        meta = rideListMeta(localOfEpochMs(ride.createdAt), ride.stats),
+        meta = rideListMeta(localOfEpochMs(ride.createdAt), ride.stats, LocalAppLanguage.current).asString(),
         loadRide = loadRide,
         first = first,
         last = last,
@@ -310,12 +315,12 @@ private fun PlannedRow(
 ) {
     HistoryRow(
         ride = ride,
-        meta = plannedRouteMeta(localOfEpochMs(ride.createdAt), ride.stats),
+        meta = plannedRouteMeta(localOfEpochMs(ride.createdAt), ride.stats, LocalAppLanguage.current).asString(),
         loadRide = loadRide,
         first = first,
         last = last,
         onClick = onClick,
-        trailing = { TagPill(text = "Geplant") },
+        trailing = { TagPill(text = stringResource(R.string.rides_list_planned_pill)) },
     )
 }
 
@@ -398,11 +403,13 @@ internal fun EffortPill(effort: RideEffort, modifier: Modifier = Modifier) {
         RideEffort.HART -> signals.warning.copy(alpha = 0.15f) to signals.warning
     }
     // Dieselbe Pille wie ueberall (TagPill), nur mit Belastungsfarbe.
+    val label = stringResource(effort.labelRes)
+    val description = stringResource(R.string.rides_list_effort_cd, label)
     TagPill(
-        text = effort.label,
+        text = label,
         containerColor = container,
         contentColor = content,
-        modifier = modifier.semantics { contentDescription = "Belastung: ${effort.label}" },
+        modifier = modifier.semantics { contentDescription = description },
     )
 }
 
@@ -420,7 +427,7 @@ internal fun ImportMenu(
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuItem(
-            text = { Text("GPX-/FIT-Dateien") },
+            text = { Text(stringResource(R.string.rides_import_menu_files_action)) },
             leadingIcon = { Icon(Icons.Filled.Route, contentDescription = null) },
             onClick = {
                 onDismiss()
@@ -428,7 +435,7 @@ internal fun ImportMenu(
             },
         )
         DropdownMenuItem(
-            text = { Text("Archiv (Strava/Garmin ZIP)") },
+            text = { Text(stringResource(R.string.rides_import_menu_archive_action)) },
             leadingIcon = { Icon(Icons.Filled.FolderZip, contentDescription = null) },
             onClick = {
                 onDismiss()
@@ -454,12 +461,14 @@ private fun RidesEmptyState(
     var importMenuOpen by remember { mutableStateOf(false) }
     EmptyState(
         title = title,
-        body = "Jede aufgezeichnete oder importierte Tour landet hier, nach Monaten sortiert.",
+        body = stringResource(R.string.rides_list_empty_body),
         modifier = modifier,
         actions = {
-            Button(onClick = onRecord) { Text("Tour aufzeichnen") }
+            Button(onClick = onRecord) { Text(stringResource(R.string.rides_list_empty_record_action)) }
             Box {
-                TextButton(onClick = { importMenuOpen = true }) { Text("Touren importieren") }
+                TextButton(onClick = { importMenuOpen = true }) {
+                    Text(stringResource(R.string.rides_list_empty_import_action))
+                }
                 ImportMenu(
                     expanded = importMenuOpen,
                     onDismiss = { importMenuOpen = false },
@@ -600,6 +609,9 @@ fun RideDetailHost(
  * Tour taucht beim naechsten Start wieder auf. Akzeptierter Kompromiss, siehe
  * [AppViewModel.deleteRideWithUndo].
  *
+ * [message] und [actionLabel] reicht der Aufrufer schon uebersetzt herein
+ * (`rides_delete_undo_*`) — diese Funktion laeuft ausserhalb der Komposition.
+ *
  * @return die neue Anzeige-Coroutine; der Aufrufer merkt sie sich als [undoJob]
  *   fuer die naechste Loeschung.
  */
@@ -609,14 +621,16 @@ internal fun deleteRideWithUndo(
     scope: CoroutineScope,
     snackbarHostState: SnackbarHostState,
     undoJob: Job?,
+    message: String,
+    actionLabel: String,
 ): Job {
     undoJob?.cancel()
     appViewModel.deleteRideWithUndo(rideId)
     return scope.launch {
         val result = withTimeoutOrNull(UNDO_DELETE_GRACE_MS) {
             snackbarHostState.showSnackbar(
-                message = "Tour gelöscht",
-                actionLabel = "Rückgängig",
+                message = message,
+                actionLabel = actionLabel,
                 duration = SnackbarDuration.Indefinite,
             )
         }
@@ -636,13 +650,13 @@ private fun RenameDialog(
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tour umbenennen") },
+        title = { Text(stringResource(R.string.rides_rename_title)) },
         text = {
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
                 singleLine = true,
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.rides_rename_name_label)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         },
@@ -650,8 +664,8 @@ private fun RenameDialog(
             TextButton(
                 enabled = name.isNotBlank(),
                 onClick = { onConfirm(name) },
-            ) { Text("Speichern") }
+            ) { Text(stringResource(R.string.common_action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_cancel)) } },
     )
 }

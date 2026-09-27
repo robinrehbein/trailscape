@@ -4,6 +4,7 @@ import de.trailscape.app.ui.map.ElevationSample
 import de.trailscape.core.Ride
 import de.trailscape.core.RideStats
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.i18n.AppLanguage
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import kotlin.math.abs
@@ -21,6 +22,40 @@ import kotlin.test.assertTrue
  * der Spur, Profil, Kennzahlen, Datumszeile, Dateiname und Layout.
  */
 class ShareCardTest {
+
+    // Die Tests unten pruefen den deutschen Wortlaut wie vor der Uebersetzung.
+    // Diese Member ueberdecken die echten Top-Level-Funktionen (Member vor
+    // Top-Level) und loesen die Ressourcen ueber [RidesXmlStrings] auf.
+
+    private fun shareCardContent(
+        ride: Ride,
+        load: Double?,
+        endRadiusM: Double? = null,
+        toLocal: (Long) -> LocalDateTime,
+        strings: RidesXmlStrings = RidesXmlStrings.DE,
+    ): ShareCardContent = de.trailscape.app.ui.rides.shareCardContent(
+        ride,
+        load,
+        strings.language,
+        strings::resolve,
+        endRadiusM = endRadiusM,
+        toLocal = toLocal,
+    )
+
+    private fun shareCardStats(
+        stats: RideStats,
+        load: Double?,
+        planned: Boolean,
+        hasElevation: Boolean,
+        strings: RidesXmlStrings = RidesXmlStrings.DE,
+    ): List<ShareStat> = de.trailscape.app.ui.rides.shareCardStats(stats, load, planned, hasElevation, strings.language)
+        .map { ShareStat(it.value, strings.resolve(it.label)) }
+
+    private fun shareCardDateLine(
+        at: LocalDateTime,
+        planned: Boolean,
+        strings: RidesXmlStrings = RidesXmlStrings.DE,
+    ): String = strings.resolve(de.trailscape.app.ui.rides.shareCardDateLine(at, planned, strings.language))
 
     private val eps = 0.01f
 
@@ -362,7 +397,7 @@ class ShareCardTest {
     @Test
     fun `Dateiname traegt das Format`() {
         assertEquals("Feierabendrunde-story.png", shareCardFileName("Feierabendrunde", ShareCardFormat.STORY))
-        assertEquals("tour-quadrat.png", shareCardFileName("  ", ShareCardFormat.SQUARE))
+        assertEquals("tour-square.png", shareCardFileName("  ", ShareCardFormat.SQUARE))
         assertNotEquals(
             shareCardFileName("Runde", ShareCardFormat.STORY),
             shareCardFileName("Runde", ShareCardFormat.SQUARE),
@@ -375,5 +410,24 @@ class ShareCardTest {
 
         assertTrue(content.dateLine.startsWith("Geplante Route · "))
         assertTrue(content.stats.none { it.label == "Trainingslast" })
+    }
+
+    // -------------------------------------------------------------- Englisch
+
+    @Test
+    fun `Bildinhalt auf Englisch`() {
+        val en = RidesXmlStrings.EN
+        val content = shareCardContent(ride(name = "   ", points = emptyList()), load = null, toLocal = utc, strings = en)
+        assertEquals("Ride", content.title)
+        assertEquals("Tuesday 23 September 2025", content.dateLine)
+        assertEquals(
+            listOf(ShareStat("42.3", "km"), ShareStat("1:24", "h"), ShareStat("613", "m climbed"), ShareStat("85", "Training load")),
+            shareCardStats(stats(), load = 84.6, planned = false, hasElevation = true, strings = en),
+        )
+        assertEquals("Avg HR", shareCardStats(stats(avgHrBpm = 142), null, false, true, en).last().label)
+        assertEquals(
+            "Planned route · 23 September 2025",
+            shareCardDateLine(LocalDateTime.of(2025, 9, 23, 18, 12), planned = true, strings = en),
+        )
     }
 }

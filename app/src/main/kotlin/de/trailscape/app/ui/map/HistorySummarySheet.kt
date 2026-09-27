@@ -14,10 +14,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.AppFormats
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.theme.CardPadding
 
 /**
@@ -52,24 +58,37 @@ internal fun HistorySummarySheet(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Wo du überall warst", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.rides_summary_title), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Grau = noch nie gefahren",
+                        stringResource(R.string.rides_summary_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Zurück zum Verlauf")
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.rides_summary_close_cd))
                 }
             }
             Row(Modifier.fillMaxWidth()) {
-                SummaryValue("$rideCount", "Touren", Modifier.weight(1f))
-                SummaryValue("${formatKmDe(totalKm).substringBefore(',')} km", "gefahren", Modifier.weight(1f))
-                SummaryValue("$tileCount", "Kacheln", Modifier.weight(1f))
+                // Die Einheiten unter den Zahlen sind Plurals: „1 Tour", „1 Kachel".
+                SummaryValue(
+                    "$rideCount",
+                    pluralStringResource(R.plurals.rides_summary_rides_label_count, rideCount),
+                    Modifier.weight(1f),
+                )
+                SummaryValue(
+                    stringResource(R.string.common_value_km, summaryWholeKm(totalKm, LocalAppFormats.current)),
+                    stringResource(R.string.rides_summary_ridden_label),
+                    Modifier.weight(1f),
+                )
+                SummaryValue(
+                    "$tileCount",
+                    pluralStringResource(R.plurals.rides_summary_tiles_label_count, tileCount),
+                    Modifier.weight(1f),
+                )
                 SummaryValue(
                     squareSize?.takeIf { it >= 2 }?.let { "$it×$it" } ?: "–",
-                    "größtes Quadrat",
+                    stringResource(R.string.rides_summary_square_label),
                     Modifier.weight(1f),
                 )
             }
@@ -77,7 +96,7 @@ internal fun HistorySummarySheet(
             // Zeile „0 Kacheln" — eine Null ohne Erklaerung wirkt wie ein Fehler.
             if (clusterSize != null && clusterSize > 0) {
                 Text(
-                    "Größte Fläche: ${formatTileCount(clusterSize)}",
+                    stringResource(R.string.rides_summary_cluster_status, formatTileCount(clusterSize).asString()),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -88,8 +107,16 @@ internal fun HistorySummarySheet(
     }
 }
 
-/** „1 Kachel" / „37 Kacheln" — Einzahl sauber statt „1 Kacheln". */
-internal fun formatTileCount(count: Int): String = if (count == 1) "1 Kachel" else "$count Kacheln"
+/**
+ * Ganze Kilometer wie bisher: auf eine Stelle gerundet, dann die
+ * Nachkommastelle abgeschnitten (2345,6 → „2345"). Beide Sprachen schreiben
+ * ohne Tausendertrennzeichen, also genuegt es, am ',' bzw. '.' zu schneiden.
+ */
+internal fun summaryWholeKm(totalKm: Double, formats: AppFormats): String =
+    formats.km(totalKm).substringBefore(',').substringBefore('.')
+
+/** „1 Kachel" / „37 Kacheln" — Einzahl sauber statt „1 Kacheln" (Plural-Ressource). */
+internal fun formatTileCount(count: Int): UiText = UiText.Plural(R.plurals.rides_summary_tile_count, count)
 
 @Composable
 private fun SummaryValue(value: String, label: String, modifier: Modifier = Modifier) {
