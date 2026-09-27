@@ -22,9 +22,10 @@ Servernamen sind bewusst mit angegeben.
   privaten App-Verzeichnis, Einstellungen in den SharedPreferences. Es gibt
   keinen Trailscape-Server, auf dem etwas von dir liegt. Der Entwickler hat
   keinen Zugriff auf deine Daten.
-- **Gesundheitsdaten werden nur gelesen**, aus Health Connect, und
-  auf dem Gerät verarbeitet. Gesundheitswerte in Touren können beim optionalen Sync an deinen eigenen Server übertragen werden.
-  Trailscape schreibt nichts nach Health Connect zurück.
+- **Gesundheitsdaten werden nur gelesen**, aus Health Connect, und auf dem
+  Gerät verarbeitet. Gesundheitswerte, die zu einer Tour gehören, können nur
+  beim optionalen Sync an deinen eigenen Server gehen. Trailscape schreibt
+  nichts nach Health Connect zurück.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
   Sync-Server) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
@@ -124,11 +125,13 @@ speichern, weil ihre Server Vorab-Downloads nicht erlauben; früher damit
 gespeicherte Regionen bleiben erhalten (verwalten unter *Mehr →
 Offline-Karten*).
 
-Zur Update-Prüfung: Die App ist über Google Play und als APK über GitHub erhältlich. Play-Installationen können über Google Play aktualisiert werden. Die GitHub-Prüfung zeigt neue Releases an. Sie ist die einzige Anfrage, die
-nicht unmittelbar aus einer Nutzeraktion folgt. Wer sie abschaltet, kann
+Zur Update-Prüfung: Die App ist über Google Play und als APK über GitHub
+erhältlich. Die Prüfung zeigt GitHub-Releases an und ist die einzige Anfrage,
+die nicht unmittelbar aus einer Nutzeraktion folgt. Wer sie abschaltet, kann
 jederzeit von Hand prüfen (*Mehr → Über → „Nach Updates suchen"*); die App
 lädt und installiert dabei in keinem Fall selbst etwas, der Download läuft
-über die Release-Seite im Browser.
+über die Release-Seite im Browser. Play-Installationen können unabhängig davon
+über Google Play aktualisiert werden.
 
 Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
 „Nach-Hause-Telefonieren", keine Absturz- oder Nutzungsstatistik.
@@ -168,8 +171,9 @@ Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
   liest Trailscape erst, wenn du sie über „Routen freigeben“ einzeln erlaubst.
   Bis dahin kommt die Tour ohne GPS-Spur.
 - Die Daten werden auf dem Gerät ausgewertet (Trainingslast, Fitness,
-  Erholung) und dort gespeichert. Gesundheitswerte in Touren können beim optionalen Sync an deinen eigenen Server übertragen werden. Sie werden nicht
-  weitergegeben und nicht ausgewertet, um dir etwas zu verkaufen.
+  Erholung) und dort gespeichert. Gesundheitswerte in Touren können beim
+  optionalen Sync an deinen eigenen Server übertragen werden. Sie werden
+  nicht ausgewertet, um dir etwas zu verkaufen.
 - Du kannst die Freigabe in Health Connect jederzeit widerrufen. Die App
   funktioniert dann weiter, nur ohne die importierten Werte.
 - Die Verbindung ist optional. Ohne sie zeichnet Trailscape ganz normal per

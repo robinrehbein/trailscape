@@ -86,13 +86,13 @@ Releases-Seite würde Nutzer nur verwirren.
 
 ```
 adb connect <IP>:<Port>
-adb shell ls /sdcard/Android/data/io.github.robinrehbein.trailscape/files/
-adb pull /sdcard/Android/data/io.github.robinrehbein.trailscape/files/<datei>.jsonl
+adb shell ls /sdcard/Android/data/de.robinrehbein.trailscape/files/
+adb pull /sdcard/Android/data/de.robinrehbein.trailscape/files/<datei>.jsonl
 ```
 
 Die App schreibt ihr Aufzeichnungs-Journal nach `getExternalFilesDir`, daher
 dieser Pfad. Die `applicationId` ist identisch mit der Handy-App
-(`io.github.robinrehbein.trailscape`) — das ist Absicht und für die spätere
+(`de.robinrehbein.trailscape`) — das ist Absicht und für die spätere
 Kommunikation zwischen Uhr und Handy zwingend notwendig.
 
 ## f) Was danach kommt

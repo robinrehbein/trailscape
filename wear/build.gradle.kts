@@ -47,7 +47,7 @@ android {
         // Ein Konflikt entsteht daraus nicht: Uhr und Telefon sind
         // verschiedene Geraete, dieselbe applicationId kann auf beiden
         // gleichzeitig installiert sein.
-        applicationId = "io.github.robinrehbein.trailscape"
+        applicationId = "de.robinrehbein.trailscape"
         // Wear OS 5 auf der Galaxy Watch Ultra ist API 34; minSdk 30 deckt
         // zusaetzlich Wear OS 3 ab, ohne dass am Code etwas anders waere.
         minSdk = 30
