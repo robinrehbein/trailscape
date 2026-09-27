@@ -15,6 +15,7 @@ import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TsbBand
 import de.trailscape.core.classifyTsb
+import de.trailscape.core.formatRoundHours
 import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -60,6 +61,10 @@ enum class TodayEffort { LOCKER, MITTEL, HART, LANG, RUHETAG, ZIELTAG }
  *     neu: Frueher bot die Seite an einem Ruhetag des Plans trotzdem eine Runde
  *     aus der Tagesempfehlung an — und der Wochenstreifen darunter zeigte
  *     zugleich „–". Jetzt sagen beide dasselbe.
+ *  2a. Die erste Runde ohne gefahrene Tour ([TodayRoute.firstRound]) ist
+ *     **locker** — sie ist bewusst ein ruhiger Einstieg, keine „normale
+ *     Runde". Erst nach den Ruhetag-Pruefungen: Ein Plan-Ruhetag bleibt auch
+ *     ohne Touren ein Ruhetag.
  *  3. Eine harte Intensitaet (nach Kappung durch die Tagesform) ist **hart**.
  *  4. Die laengste Grundlagen-Einheit einer Woche mit mehreren Einheiten ist
  *     die **lange Fahrt** — aber nur ungekuerzt; heruntergestuft ist sie eine
@@ -82,6 +87,7 @@ fun todayEffort(
     if (session?.isEvent == true) return TodayEffort.ZIELTAG
     val target = route.target ?: return TodayEffort.RUHETAG
     if (session == null && planRestDay) return TodayEffort.RUHETAG
+    if (route.firstRound) return TodayEffort.LOCKER
     return when (target.intensity) {
         SessionIntensity.HART -> TodayEffort.HART
         SessionIntensity.LOCKER -> TodayEffort.LOCKER
@@ -101,8 +107,11 @@ fun todayEffort(
  *
  * @param restDay `true`, wenn [target] die lockere Ruhetagsrunde ist
  *   ([de.trailscape.core.restDayRideTarget]) und nicht die Tagesrunde.
+ * @param firstRound `true`, wenn [target] die erste Runde ohne gefahrene Tour
+ *   ist ([TodayRoute.firstRound]). Dann startet „Runde bauen" die Suche
+ *   sofort, statt nur das Panel zu oeffnen.
  */
-data class TodayOffer(val target: RouteTarget, val restDay: Boolean)
+data class TodayOffer(val target: RouteTarget, val restDay: Boolean, val firstRound: Boolean = false)
 
 /**
  * Welche Runde „Heute", die Karte und der Losfahren-Dialog anbieten.
@@ -127,7 +136,7 @@ fun offeredTarget(route: TodayRoute, effort: TodayEffort, restDayRide: RouteTarg
     when (effort) {
         TodayEffort.ZIELTAG -> null
         TodayEffort.RUHETAG -> TodayOffer(restDayRide, restDay = true)
-        else -> route.target?.let { TodayOffer(it, restDay = false) }
+        else -> route.target?.let { TodayOffer(it, restDay = false, firstRound = route.firstRound) }
     }
 
 /**
@@ -152,12 +161,13 @@ fun offerChipLabel(offer: TodayOffer): String {
 /**
  * Beschriftung des Knopfs in der Hero-Karte von „Heute". Am Ruhetag dasselbe
  * „Locker rollen" wie im Losfahren-Dialog, hier mit Kilometern, weil der Knopf
- * die volle Breite hat.
+ * die volle Breite hat. Bei der ersten Runde ebenfalls mit Kilometern: Der
+ * Knopf baut sie sofort, man soll vorher sehen, wie lang sie wird.
  */
-fun offerButtonLabel(offer: TodayOffer): String = if (offer.restDay) {
-    "Locker rollen · ${offer.target.distanceKm.roundToInt()} km"
-} else {
-    "Runde für heute bauen"
+fun offerButtonLabel(offer: TodayOffer): String = when {
+    offer.restDay -> "Locker rollen · ${offer.target.distanceKm.roundToInt()} km"
+    offer.firstRound -> "Runde bauen · ${offer.target.distanceKm.roundToInt()} km"
+    else -> "Runde für heute bauen"
 }
 
 /**
@@ -235,6 +245,9 @@ fun restHeadline(route: TodayRoute, planRestDay: Boolean): String = when {
  * Seite, die still 55 statt 90 km anbietet, laesst die Nutzerin raten, ob sie
  * sich verlesen hat.
  *
+ * Die erste Runde ohne gefahrene Tour sagt, was sie ist: ein Anfang, keine
+ * Tagesform-Auskunft („Für den Anfang: eine ruhige Runde.").
+ *
  * @param band das Readiness-Band, oder `null` ohne Gesamtwert (dann faellt
  *   der erste Halbsatz weg — die Empfehlung kommt dann aus dem Plan).
  */
@@ -250,10 +263,10 @@ fun todayHeadline(
 
         TodayEffort.LANG -> "Heute steht die lange Fahrt an."
         TodayEffort.HART -> "Heute darf es hart werden."
-        else -> if (route.downgraded) {
-            "Heute weniger als geplant: ${effortPhrase(effort)}."
-        } else {
-            "Heute ${effortPhrase(effort)}."
+        else -> when {
+            route.firstRound -> "Für den Anfang: eine ruhige Runde."
+            route.downgraded -> "Heute weniger als geplant: ${effortPhrase(effort)}."
+            else -> "Heute ${effortPhrase(effort)}."
         }
     }
     return if (band != null) "${readinessLead(band)} $body" else body
@@ -296,6 +309,7 @@ fun todaySentence(effort: TodayEffort, route: TodayRoute): String {
 fun whyTitle(effort: TodayEffort, route: TodayRoute): String = when {
     effort == TodayEffort.ZIELTAG -> "Heute zählt es"
     effort == TodayEffort.RUHETAG -> "Warum heute Pause?"
+    route.firstRound -> "Warum diese Runde?"
     route.downgraded -> "Warum weniger als geplant?"
     else -> "Warum ${effortPhrase(effort)}?"
 }
@@ -484,6 +498,11 @@ fun loadSignal(tsb: Double?): WhySignal {
  * heute angepasst wurde, was als Naechstes ansteht und ob die Woche ruhiger
  * werden sollte.
  *
+ * Bei der ersten Runde ([TodayRoute.firstRound]) steht hier, warum sie so
+ * ruhig ist und dass sich das mit jeder Fahrt aendert. Der allgemeine Satz
+ * „Ohne Trainingsziel …" entfaellt dann — er behauptete „deine letzten
+ * Fahrten", die es noch nicht gibt.
+ *
  * @param upcoming die naechste gewichtige Einheit dieser Woche nach heute
  *   (siehe [upcomingKeySession]).
  */
@@ -496,6 +515,17 @@ fun whyNote(
     hasPlan: Boolean,
 ): List<String> = buildList {
     route.note?.let { add(it) }
+    if (route.firstRound && effort != TodayEffort.RUHETAG) {
+        val hours = route.target?.durationH
+        add(
+            if (hours != null) {
+                "Noch keine Tour gespeichert – deshalb ein ruhiger Einstieg über etwa ${formatRoundHours(hours)}."
+            } else {
+                "Noch keine Tour gespeichert – deshalb ein ruhiger Einstieg."
+            },
+        )
+        add("Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.")
+    }
     if (effort == TodayEffort.RUHETAG && planRestDay && route.session == null) {
         add("Laut Plan ist heute frei. Erholung gehört zum Training dazu.")
     }

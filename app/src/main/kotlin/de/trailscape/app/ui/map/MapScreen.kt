@@ -785,6 +785,15 @@ fun MapScreen(appViewModel: AppViewModel) {
             return@rememberLauncherForActivityResult
         }
         impreciseLocationNotice = false
+        if (action == PendingAction.GENERATE_ROUTES_AT_POSITION && !locationGranted) {
+            // Die automatisch gestartete erste Runde rechnet nie ab der
+            // Kartenmitte (siehe [runGenerateRoutes]). Kein
+            // [LocationPermissionNotice]: Dessen „ohne sie geht es hier nicht
+            // weiter" stimmt hier nicht — „Routen suchen" im offenen Panel
+            // funktioniert weiterhin, eben ab der Kartenmitte.
+            appViewModel.showMessage(FIRST_ROUND_NO_POSITION_TEXT)
+            return@rememberLauncherForActivityResult
+        }
         if (locationGranted || action == PendingAction.GENERATE_ROUTES) {
             // Die Rundkurs-Suche braucht die Freigabe nicht zwingend: Ohne sie
             // startet die Runde eben in der Kartenmitte. Sie hier trotzdem
@@ -2017,8 +2026,15 @@ fun MapScreen(appViewModel: AppViewModel) {
      * Fix (oder ohne Freigabe) die Kartenmitte — das Panel weist darauf hin.
      * Die Suche selbst laeuft im [RouteGenerationController] und ueberlebt
      * damit den Tab-Wechsel.
+     *
+     * @param requirePosition `true` beim automatischen Start der ersten Runde
+     *   ([AppViewModel.requestRouteGeneration] mit `autoStart`). Dann gibt es
+     *   ohne echten Standort **keinen** Start: Nach einer Neuinstallation zeigt
+     *   die Karte die Deutschland-Uebersicht, eine Runde ab deren Mitte waere
+     *   sinnlos. Das Panel bleibt offen, die Snackbar erklaert den Weg ueber
+     *   „Routen suchen".
      */
-    fun runGenerateRoutes() {
+    fun runGenerateRoutes(requirePosition: Boolean = false) {
         locationGranted = hasLocationPermission(context)
         scope.launch {
             locating = true
@@ -2026,6 +2042,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 currentLocation(context)
             } finally {
                 locating = false
+            }
+            if (position == null && requirePosition) {
+                appViewModel.showMessage(FIRST_ROUND_NO_POSITION_TEXT)
+                return@launch
             }
             val start = if (position != null) {
                 TrackPoint(lat = position.latitude, lon = position.longitude)
@@ -2246,6 +2266,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             PendingAction.PLAN_START -> runUseMyPositionAsStart()
             PendingAction.NAVIGATE_ROUTE -> runNavigatePlannedRoute()
             PendingAction.GENERATE_ROUTES -> runGenerateRoutes()
+            PendingAction.GENERATE_ROUTES_AT_POSITION -> runGenerateRoutes(requirePosition = true)
             PendingAction.NAVIGATE_RIDE -> {
                 val rideId = pendingNavigateRideId
                 pendingNavigateRideId = null
@@ -2290,10 +2311,17 @@ fun MapScreen(appViewModel: AppViewModel) {
     // Tab-Wechsel wirklich in der Komposition ist (siehe dessen KDoc).
     LaunchedEffect(pendingRouteTarget) {
         val target = pendingRouteTarget ?: return@LaunchedEffect
-        appViewModel.consumeRouteTarget()
+        val autoStart = appViewModel.consumeRouteTarget()
         if (mode == MapMode.PLANEN) exitPlanning()
         appViewModel.select(null)
         RouteGenerationController.open(target)
+        // „Runde bauen" (Einfuehrung, erste Runde auf „Heute") meint: jetzt
+        // suchen — aber nur ab echtem Standort, siehe [runGenerateRoutes].
+        if (autoStart) {
+            withPermissions(PendingAction.GENERATE_ROUTES_AT_POSITION) {
+                runGenerateRoutes(requirePosition = true)
+            }
+        }
     }
 
     // -------------------------------------- Startseite → Aufzeichnung starten
@@ -3616,6 +3644,13 @@ private enum class PendingAction {
     NAVIGATE_RIDE,
     NAVIGATE_ROUTE,
     GENERATE_ROUTES,
+
+    /**
+     * Rundkurs-Suche, die nur ab echtem Standort startet — der automatische
+     * Start der ersten Runde. Anders als [GENERATE_ROUTES] faellt sie nie auf
+     * die Kartenmitte zurueck.
+     */
+    GENERATE_ROUTES_AT_POSITION,
 }
 
 /**

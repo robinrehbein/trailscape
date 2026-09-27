@@ -220,7 +220,12 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         headline = todayHeadline(effort, todayRoute, band, planRestDay),
                         sentence = todaySentence(effort, todayRoute),
                         offer = offer,
-                        onBuildRoute = { offer?.let { appViewModel.requestRouteGeneration(it.target) } },
+                        // Die erste Runde ohne Historie baut sofort („Runde bauen ·
+                        // 26 km"), alle anderen Angebote oeffnen wie bisher nur
+                        // das Panel.
+                        onBuildRoute = {
+                            offer?.let { appViewModel.requestRouteGeneration(it.target, autoStart = it.firstRound) }
+                        },
                         onWhy = { showWhy = true },
                         healthHint = healthHint,
                         onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
@@ -236,6 +241,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         FirstRideState(
                             onRecord = appViewModel::requestRecording,
                             onImport = { appViewModel.requestMoreSection(MoreSection.BACKUP) },
+                            hasOffer = offer != null,
                         )
                     }
                 } else {
@@ -305,20 +311,29 @@ fun TodayScreen(appViewModel: AppViewModel) {
 /**
  * Erststart: noch keine einzige Tour.
  *
- * Der Weg ins Aufzeichnen steht hier — und nur hier — als Knopf: Wer noch
- * keine Tour hat, soll nicht raten muessen, was als Naechstes zu tun ist.
- * [onRecord] ist dieselbe [AppViewModel.requestRecording]-Bitte wie der
- * schwebende ●-Knopf. Beide Knoepfe sind neutral: Der eine volle Knopf der
- * Seite ist „Runde für heute bauen" in der Hero-Karte.
+ * Wer noch keine Tour hat, soll nicht raten muessen, was als Naechstes zu tun
+ * ist. Der eine volle Knopf der Seite bleibt in der Hero-Karte („Runde bauen ·
+ * 26 km", die erste Runde); hier stehen die beiden anderen Wege als neutrale
+ * Zweitknoepfe: zuerst der Import (mit der Historie wird die Empfehlung sofort
+ * persoenlich), dann das Aufzeichnen — [onRecord] ist dieselbe
+ * [AppViewModel.requestRecording]-Bitte wie der schwebende ●-Knopf.
+ *
+ * @param hasOffer ob die Hero-Karte eine Runde anbietet. Ohne Angebot (etwa am
+ *   Zieltag) verweist der Text nicht nach oben.
  */
 @Composable
-private fun FirstRideState(onRecord: () -> Unit, onImport: () -> Unit) {
+private fun FirstRideState(onRecord: () -> Unit, onImport: () -> Unit, hasOffer: Boolean) {
     EmptyState(
-        title = "Los geht's",
-        body = "Sobald die erste Tour gefahren oder importiert ist, siehst du hier deine Woche.",
+        title = "Noch keine Touren",
+        body = if (hasOffer) {
+            "Bau dir oben eine Runde und fahr los – oder hol deine bisherigen Touren aus " +
+                "Strava, Garmin oder Wahoo. Danach siehst du hier deine Woche."
+        } else {
+            "Sobald die erste Tour gefahren oder importiert ist, siehst du hier deine Woche."
+        },
         actions = {
-            NeutralButton(onClick = onRecord) { Text("Tour aufzeichnen") }
             NeutralButton(onClick = onImport) { Text("Touren importieren") }
+            NeutralButton(onClick = onRecord) { Text("Tour aufzeichnen") }
         },
     )
 }

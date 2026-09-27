@@ -316,18 +316,41 @@ class AppViewModel(
     val pendingRouteTarget: StateFlow<RouteTarget?> = _pendingRouteTarget.asStateFlow()
 
     /**
+     * Ob der Karten-Tab die Suche zum [pendingRouteTarget] sofort starten soll,
+     * statt nur das Panel mit „Routen suchen" zu oeffnen. Eine einfache `var`:
+     * Sie wird immer vor dem Ziel gesetzt und mit ihm zusammen abgeholt, beides
+     * auf dem Main-Thread.
+     */
+    private var pendingRouteAutoStart = false
+
+    /**
      * Uebergibt ein aus einer Einheit oder der Tagesempfehlung abgeleitetes
      * Ziel an den Karten-Tab und wechselt dorthin
-     * (`:core`: `routeTargetForSession` / `routeTargetForToday`).
+     * (`:core`: `routeTargetForSession` / `routeTargetForToday` /
+     * `firstRoundTarget`).
+     *
+     * @param autoStart `true` startet die Suche direkt (nur ab echtem
+     *   Standort, siehe MapScreen). Das gibt es nur nach einer ausdruecklichen
+     *   „Runde bauen"-Handlung — am Ende der Einfuehrung und bei der ersten
+     *   Runde auf „Heute". Die uebrigen Aufrufer (Training, Heute-Normalfall)
+     *   oeffnen weiterhin nur das Panel; dort entscheidet erst „Routen suchen".
      */
-    fun requestRouteGeneration(target: RouteTarget) {
+    fun requestRouteGeneration(target: RouteTarget, autoStart: Boolean = false) {
+        pendingRouteAutoStart = autoStart
         _pendingRouteTarget.value = target
         requestTab(AppTab.MAP)
     }
 
-    /** Quittiert das abgeholte Ziel (ruft der Karten-Screen). */
-    fun consumeRouteTarget() {
+    /**
+     * Quittiert das abgeholte Ziel (ruft der Karten-Screen).
+     *
+     * @return ob die Suche sofort starten soll (siehe [requestRouteGeneration]).
+     */
+    fun consumeRouteTarget(): Boolean {
+        val autoStart = pendingRouteAutoStart
+        pendingRouteAutoStart = false
         _pendingRouteTarget.value = null
+        return autoStart
     }
 
     // -------------------------------------------------------------------------

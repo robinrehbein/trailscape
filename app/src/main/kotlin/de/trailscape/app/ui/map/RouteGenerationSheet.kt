@@ -530,6 +530,17 @@ internal fun sourceLine(target: RouteTarget): String {
 internal const val SELF_PLANNED_ROUTE_LABEL: String = "Selbst gewählte Distanz"
 
 /**
+ * Snackbar, wenn die automatisch gestartete erste Runde keinen Standort hat
+ * (Freigabe abgelehnt oder kein Fix). Die Suche startet dann bewusst nicht ab
+ * der Kartenmitte — nach einer Neuinstallation ist das die
+ * Deutschland-Uebersicht. Das Panel bleibt offen; der Satz sagt, wie es von
+ * dort weitergeht.
+ */
+internal const val FIRST_ROUND_NO_POSITION_TEXT: String =
+    "Ohne Standort weiß Trailscape nicht, wo deine Runde beginnt. Schieb die Karte an " +
+        "deinen Startpunkt und tippe auf „Routen suchen“."
+
+/**
  * Abweichung vom Ziel mit Vorzeichen, z. B. `+3,4 %`.
  *
  * [RouteCandidate.distanceDeviation] ist der Betrag; die Richtung ergibt sich

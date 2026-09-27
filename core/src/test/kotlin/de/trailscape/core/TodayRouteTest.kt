@@ -224,4 +224,95 @@ class TodayRouteTest {
     fun `jede andere Einheit darf eine Runde bekommen`() {
         assertTrue(canGenerateRouteFor(longTour()))
     }
+
+    // -----------------------------------------------------------------------
+    // Noch keine gefahrene Tour — die erste Runde
+    // -----------------------------------------------------------------------
+
+    private fun decideWithoutHistory(
+        kind: DailyRecommendationKind,
+        session: TrainingSession? = null,
+        recentRides: List<RideInfo> = emptyList(),
+        profile: TrainingProfile = TodayRouteTest.profile,
+    ): TodayRoute = decideTodayRoute(
+        recommendation = recommendation(kind),
+        session = session,
+        profile = profile,
+        recentRides = recentRides,
+    )
+
+    @Test
+    fun `ohne Touren wird aus der Grundlage die ruhige erste Runde`() {
+        val route = decideWithoutHistory(DailyRecommendationKind.GRUNDLAGE)
+
+        assertTrue(route.firstRound)
+        assertEquals(firstRoundTarget(1.5, profile, emptyList()), route.target)
+        assertEquals(26.0, assertNotNull(route.target).distanceKm, EPS)
+        assertNull(route.note)
+        assertFalse(route.downgraded)
+    }
+
+    @Test
+    fun `ohne Touren wird auch aus einer harten Einheit die erste Runde`() {
+        val route = decideWithoutHistory(DailyRecommendationKind.HARTE_EINHEIT)
+        val target = assertNotNull(route.target)
+
+        assertTrue(route.firstRound)
+        assertEquals(SessionIntensity.GRUNDLAGE, target.intensity)
+        assertEquals(AscentPreference.FLACH, target.ascentPreference)
+    }
+
+    @Test
+    fun `ohne Touren bleiben locker und Erholung die Tagesempfehlung`() {
+        for (kind in listOf(DailyRecommendationKind.LOCKER_Z2, DailyRecommendationKind.RECOVERY)) {
+            val route = decideWithoutHistory(kind)
+            assertFalse(route.firstRound, kind.name)
+            assertEquals(
+                routeTargetForToday(recommendation(kind), profile, emptyList()),
+                route.target,
+                kind.name,
+            )
+        }
+    }
+
+    @Test
+    fun `ohne Touren bleibt ein Ruhetag ein Ruhetag`() {
+        val route = decideWithoutHistory(DailyRecommendationKind.RUHETAG)
+        assertNull(route.target)
+        assertFalse(route.firstRound)
+    }
+
+    @Test
+    fun `ohne Touren gewinnt eine Planeinheit ueber die erste Runde`() {
+        val route = decideWithoutHistory(DailyRecommendationKind.GRUNDLAGE, session = longTour())
+        assertFalse(route.firstRound)
+        assertEquals(RouteTargetSource.PLAN, assertNotNull(route.target).source)
+    }
+
+    @Test
+    fun `mit gefahrenen Touren bleibt die Tagesempfehlung wie bisher`() {
+        val route = decide(DailyRecommendationKind.GRUNDLAGE, null)
+        assertFalse(route.firstRound)
+        assertEquals(
+            routeTargetForToday(recommendation(DailyRecommendationKind.GRUNDLAGE), profile, rides),
+            route.target,
+        )
+    }
+
+    @Test
+    fun `nur gespeicherte Planungen gelten als keine Historie`() {
+        val plannedOnly = rides.map { it.copy(planned = true) }
+        val route = decideWithoutHistory(DailyRecommendationKind.GRUNDLAGE, recentRides = plannedOnly)
+        assertTrue(route.firstRound)
+    }
+
+    @Test
+    fun `ein knappes Zeitbudget macht die erste Runde kuerzer`() {
+        val route = decideWithoutHistory(
+            DailyRecommendationKind.GRUNDLAGE,
+            profile = profile.copy(weeklyHours = 2.0),
+        )
+        assertTrue(route.firstRound)
+        assertEquals(17.0, assertNotNull(route.target).distanceKm, EPS)
+    }
 }
