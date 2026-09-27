@@ -16,6 +16,14 @@ const SYNC_TOKEN = process.env.SYNC_TOKEN;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || './data');
 const MAX_BODY_BYTES = 20 * 1024 * 1024; // 20 MB
 const MIN_TOKEN_LENGTH = 16;
+// Hinter einem Reverse-Proxy (Coolify/Traefik, Caddy, Nginx) sieht der Server
+// als Absender jeder Anfrage nur die Adresse des Proxys. Die Sperre nach
+// Fehlversuchen (siehe unten) traefe dann alle Nutzer gemeinsam: Zehn falsche
+// Tokens von irgendwem im Netz sperrten auch die eigene App aus. Mit
+// TRUST_PROXY=1 gilt deshalb der letzte Eintrag in `X-Forwarded-For` — den
+// haengt der Proxy selbst an, ein Client kann ihn nicht vorgeben. Nur setzen,
+// wenn Port 8080 ausschliesslich ueber den Proxy erreichbar ist.
+const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
 
 if (!SYNC_TOKEN || SYNC_TOKEN.trim() === '') {
   console.error(
@@ -397,6 +405,21 @@ async function handleDeleteRide(res, id) {
 // Request-Routing
 // ---------------------------------------------------------------------------
 
+/**
+ * Absenderadresse fuer die Sperre nach Fehlversuchen: ohne TRUST_PROXY die
+ * Socket-Adresse, mit TRUST_PROXY der letzte (vom Proxy angehaengte) Eintrag
+ * in `X-Forwarded-For`.
+ */
+function clientIp(req) {
+  const socketIp = req.socket.remoteAddress || 'unbekannt';
+  if (!TRUST_PROXY) return socketIp;
+  const header = req.headers['x-forwarded-for'];
+  const value = Array.isArray(header) ? header.join(',') : header;
+  if (!value) return socketIp;
+  const entries = value.split(',').map((s) => s.trim()).filter(Boolean);
+  return entries.length > 0 ? entries[entries.length - 1] : socketIp;
+}
+
 async function handleRequest(req, res) {
   const method = req.method || 'GET';
 
@@ -408,7 +431,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  const ip = req.socket.remoteAddress || 'unbekannt';
+  const ip = clientIp(req);
 
   const retryAfter = rateLimitRetryAfterSeconds(ip);
   if (retryAfter > 0) {

@@ -25,6 +25,7 @@ Wichtige Umgebungsvariablen:
 | `SYNC_TOKEN` | ja      | –         | Geheimer Token für die Authentifizierung (mindestens 16 Zeichen) |
 | `PORT`       | nein    | `8080`    | Port, auf dem der Server lauscht             |
 | `DATA_DIR`   | nein    | `./data`  | Verzeichnis, in dem Touren gespeichert werden |
+| `TRUST_PROXY` | nein   | aus       | `1` hinter einem Reverse-Proxy: Die Sperre nach Fehlversuchen nimmt dann die Client-Adresse aus `X-Forwarded-For` statt der Proxy-Adresse. Nur setzen, wenn Port 8080 nicht direkt erreichbar ist |
 
 Ohne gesetzten `SYNC_TOKEN` startet der Server nicht; ebenso verweigert er
 den Start bei einem Token unter 16 Zeichen — kurze, erratbare Tokens (etwa
