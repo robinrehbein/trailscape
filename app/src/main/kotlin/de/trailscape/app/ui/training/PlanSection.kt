@@ -32,13 +32,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
-import de.trailscape.app.ui.formatDateShort
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.PlanFeasibility
@@ -113,6 +114,7 @@ fun PlanWeekCard(
     rideLoads: Map<String, Double> = emptyMap(),
 ) {
     val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
     val theme = MaterialTheme.colorScheme
     val activeIndex = currentWeekIndex(plan)
     val isCurrent = week.index == activeIndex
@@ -143,8 +145,12 @@ fun PlanWeekCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "Woche ${week.index + 1} · " +
-                        "${formatDateShort(week.start)}–${formatDateShort(week.end)}",
+                    text = stringResource(
+                        R.string.training_plan_week_title,
+                        week.index + 1,
+                        formats.dateShort(week.start),
+                        formats.dateShort(week.end),
+                    ),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),
                 )
@@ -168,9 +174,9 @@ fun PlanWeekCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = if (isPastOrCurrent) {
-                    "${formatKmDe(ridden)} von ${week.targetKm} km"
+                    stringResource(R.string.training_plan_week_progress, formats.km(ridden), week.targetKm)
                 } else {
-                    "Ziel: ${week.targetKm} km"
+                    stringResource(R.string.training_plan_week_target, week.targetKm)
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -202,8 +208,14 @@ fun PlanWeekCard(
                                 // sie kennt — alte Plaene ohne `targetLoad`
                                 // zeigen weiterhin nur die Distanz.
                                 text = session.targetLoad
-                                    ?.let { "${session.targetKm} km · Last ${it.roundToInt()}" }
-                                    ?: "${session.targetKm} km",
+                                    ?.let {
+                                        stringResource(
+                                            R.string.training_plan_session_km_load,
+                                            session.targetKm,
+                                            it.roundToInt(),
+                                        )
+                                    }
+                                    ?: stringResource(R.string.common_value_km, session.targetKm.toString()),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             sessionProgress[session]?.let { entry ->
@@ -227,7 +239,10 @@ fun PlanWeekCard(
                                         // Rundkurs (siehe KDoc oben und `RouteGenerationSheet.kt`,
                                         // das denselben Vorschlag ebenfalls "Runde" nennt) — Route
                                         // meint in dieser App eine geplante Strecke von A nach B.
-                                        contentDescription = "Passende Runde für „${sessionTitle(session, coreTexts)}“ planen",
+                                        contentDescription = stringResource(
+                                            R.string.training_plan_route_cd,
+                                            sessionTitle(session, coreTexts),
+                                        ),
                                         tint = theme.primary,
                                         modifier = Modifier.size(20.dp),
                                     )
@@ -297,6 +312,7 @@ fun CurrentWeekCard(
     headline: String? = null,
 ) {
     val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
     val theme = MaterialTheme.colorScheme
     val progress = weekSessionProgress(week, rides, rideLoads = rideLoads).associateBy { it.session }
     val todays = sessionsForDay(plan).toSet()
@@ -322,10 +338,16 @@ fun CurrentWeekCard(
                     entry?.status == PlanSessionStatus.TEILWEISE
                 val ridden = entry?.rideId?.let { ridesById[it] }
                 val subline = when {
-                    done && ridden != null ->
-                        "gefahren: ${ridden.name}, ${formatKmDe(ridden.stats.distanceKm)} km"
-                    isToday -> "heute · ${plainSessionHint(session, plan.goal, coreTexts)}"
-                    entry?.status == PlanSessionStatus.VERPASST -> "ausgelassen"
+                    done && ridden != null -> stringResource(
+                        R.string.training_plan_session_ridden,
+                        ridden.name,
+                        formats.km(ridden.stats.distanceKm),
+                    )
+                    isToday -> stringResource(
+                        R.string.training_plan_session_today,
+                        plainSessionHint(session, plan.goal, coreTexts),
+                    )
+                    entry?.status == PlanSessionStatus.VERPASST -> stringResource(R.string.training_plan_session_skipped)
                     else -> plainSessionHint(session, plan.goal, coreTexts)
                 }
                 val rowColor = if (isToday) theme.primaryContainer else theme.surface.copy(alpha = 0f)
@@ -342,7 +364,7 @@ fun CurrentWeekCard(
                         text = coreTexts.format.weekdayShort(session.day),
                         style = MaterialTheme.typography.labelLarge,
                         color = mutedColor,
-                        modifier = Modifier.width(34.dp),
+                        modifier = Modifier.width(40.dp),
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(plainSessionTitle(session, coreTexts), style = MaterialTheme.typography.titleSmall, color = textColor)
@@ -369,7 +391,7 @@ fun CurrentWeekCard(
                             ) {
                                 Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Runde")
+                                Text(stringResource(R.string.training_plan_loop_action))
                             }
                         }
                     }
@@ -402,6 +424,7 @@ fun TrainingPlanFeasibilityCard(
     onAcknowledge: () -> Unit,
 ) {
     val cautionColor = LocalSignalColors.current.caution
+    val formats = LocalAppFormats.current
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -415,7 +438,7 @@ fun TrainingPlanFeasibilityCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Plan und Ziel passen nicht zusammen",
+                    text = stringResource(R.string.training_plan_feasibility_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
@@ -424,16 +447,20 @@ fun TrainingPlanFeasibilityCard(
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Fact(label = "Längste Fahrt", value = "${feasibility.longestRideKm} km", compact = true)
                 Fact(
-                    label = "Ziel",
-                    value = "${formatKmDe(feasibility.goalDistanceKm)} km",
+                    label = stringResource(R.string.training_plan_feasibility_longest_label),
+                    value = stringResource(R.string.common_value_km, feasibility.longestRideKm.toString()),
+                    compact = true,
+                )
+                Fact(
+                    label = stringResource(R.string.training_plan_feasibility_goal_label),
+                    value = stringResource(R.string.common_value_km, formats.km(feasibility.goalDistanceKm)),
                     compact = true,
                 )
                 feasibility.suggestedDistanceKm?.let { suggested ->
                     Fact(
-                        label = "Trägt bis",
-                        value = "$suggested km",
+                        label = stringResource(R.string.training_plan_feasibility_supports_label),
+                        value = stringResource(R.string.common_value_km, suggested.toString()),
                         compact = true,
                         valueColor = cautionColor,
                     )
@@ -452,8 +479,8 @@ fun TrainingPlanFeasibilityCard(
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     ),
-                ) { Text("Ziel anpassen") }
-                TextButton(onClick = onAcknowledge) { Text("Verstanden") }
+                ) { Text(stringResource(R.string.training_plan_feasibility_adjust_action)) }
+                TextButton(onClick = onAcknowledge) { Text(stringResource(R.string.training_plan_feasibility_ack_action)) }
             }
         }
     }

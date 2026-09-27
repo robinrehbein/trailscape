@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.training
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -51,6 +52,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -61,12 +65,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.OneUiTextField
-import de.trailscape.app.ui.formatDate
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Goal
@@ -77,6 +84,8 @@ import de.trailscape.core.TrainingPlan
 import de.trailscape.core.assessFitness
 import de.trailscape.core.formatGoalDuration
 import de.trailscape.core.generatePlan
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.parseGoalDuration
 import java.time.DayOfWeek
 import java.time.Instant
@@ -86,7 +95,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
-import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -113,73 +121,96 @@ import kotlin.math.roundToInt
 /** Formatiert Minuten als „2:10 h". */
 internal fun formatHoursMinutes(minutes: Int): String = "${formatGoalDuration(minutes)} h"
 
-/** Zieldistanz ohne „,0" bei ganzen Kilometern („60", aber „42,2"). */
-internal fun formatGoalKm(km: Double): String =
-    if (km == Math.rint(km)) km.toLong().toString() else formatKmDe(km)
+/** Zieldistanz ohne „,0" bei ganzen Kilometern („60", aber „42,2" / „42.2"). */
+internal fun formatGoalKm(km: Double, language: AppLanguage): String =
+    if (km == Math.rint(km)) km.toLong().toString() else formatDistanceKm(km, language)
+
+/**
+ * Zieldatum mit kurzem Wochentag: „Sa, 19. Dezember" / „Sat 19 December".
+ *
+ * Eigenes Muster statt `DateFormats`: Die Zielzeile ist die einzige Stelle mit
+ * abgekuerztem Wochentag, und Java schreibt ihn im Deutschen mit Punkt
+ * („Sa."), der hier stoeren wuerde.
+ */
+internal fun formatGoalDate(date: LocalDate, language: AppLanguage): String {
+    val day = date.dayOfWeek.getDisplayName(TextStyle.SHORT, language.locale).removeSuffix(".")
+    return when (language) {
+        AppLanguage.DE -> "$day, ${date.format(DateTimeFormatter.ofPattern("d. MMMM", language.locale))}"
+        AppLanguage.EN -> "$day ${date.format(DateTimeFormatter.ofPattern("d MMMM", language.locale))}"
+    }
+}
 
 /**
  * „60 km · 700 Hm · Sa, 20. Dezember · noch 12 Wochen" — die Kopfzeile des
- * Ziels. Unter zwei Wochen zaehlt sie Tage; nach dem Renntag sagt sie das.
+ * Ziels, als Teile, die die Anzeige mit „ · " verbindet. Unter zwei Wochen
+ * zaehlt sie Tage; nach dem Renntag sagt sie das.
  */
-internal fun goalSummaryLine(goal: Goal, today: LocalDate = LocalDate.now()): String {
+internal fun goalSummaryParts(
+    goal: Goal,
+    language: AppLanguage,
+    today: LocalDate = LocalDate.now(),
+): List<UiText> {
     val date = Instant.ofEpochMilli(goal.date).atZone(ZoneId.systemDefault()).toLocalDate()
-    val day = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.GERMANY).removeSuffix(".")
-    val dateText = "$day, ${date.format(DateTimeFormatter.ofPattern("d. MMMM", Locale.GERMANY))}"
     val days = ChronoUnit.DAYS.between(today, date)
     val remaining = when {
-        days < 0 -> "vorbei"
-        days == 0L -> "heute"
-        days == 1L -> "morgen"
-        days < 14 -> "noch $days Tage"
-        else -> "noch ${(days / 7.0).roundToInt()} Wochen"
+        days < 0 -> UiText.Res(R.string.training_goal_date_passed)
+        days == 0L -> UiText.Res(R.string.training_goal_date_today)
+        days == 1L -> UiText.Res(R.string.training_goal_date_tomorrow)
+        days < 14 -> UiText.Plural(R.plurals.training_goal_days_left_count, days.toInt())
+        else -> UiText.Plural(R.plurals.training_goal_weeks_left_count, (days / 7.0).roundToInt())
     }
-    val parts = mutableListOf("${formatGoalKm(goal.distanceKm)} km")
-    goal.ascentM?.takeIf { it > 0 }?.let { parts.add("${it.roundToInt()} Hm") }
-    parts.add(dateText)
+    val parts = mutableListOf<UiText>(
+        UiText.Res(R.string.common_value_km, listOf(formatGoalKm(goal.distanceKm, language))),
+    )
+    goal.ascentM?.takeIf { it > 0 }?.let { parts.add(UiText.Res(R.string.training_goal_ascent, listOf(it.roundToInt()))) }
+    parts.add(UiText.Plain(formatGoalDate(date, language)))
     parts.add(remaining)
-    return parts.joinToString(" · ")
+    return parts
 }
 
 /**
  * Der Satz unter den Zeiten: wohin der Plan einen bringt, plus ein schlichter
  * Hinweis — oder, ohne genug Touren, was fuer eine Prognose fehlt.
  *
- * @return Paar aus (Hauptsatz-Anfang, fette Zahl, Hauptsatz-Ende, Hinweis).
+ * [sentence] ist ein ganzer Satz; [bold] ist der Teil darin, den die Anzeige
+ * fett setzt (die Zeit am Renntag). So bleibt der Satz ein Schluessel und wird
+ * nicht aus uebersetzten Bruchstuecken zusammengesetzt.
  */
 internal data class PrognosisNote(
-    val lead: String,
-    val bold: String?,
-    val tail: String,
-    val hint: String?,
+    val sentence: UiText,
+    val bold: UiText?,
+    val hint: UiText?,
 )
 
 internal fun prognosisNote(goal: Goal, prediction: GoalFinishPrediction): PrognosisNote {
     val p = prediction.prognosis
-        ?: return PrognosisNote(prediction.missing ?: "Noch keine Prognose.", null, "", null)
+        ?: return PrognosisNote(
+            // `missing` kommt aus `:core` bereits in der App-Sprache.
+            prediction.missing?.let { UiText.Plain(it) } ?: UiText.Res(R.string.training_goal_no_prognosis),
+            null,
+            null,
+        )
     val target = goal.targetDurationMin
     val reference = p.atEventMin ?: p.currentMin
     val hint = when {
-        p.beyondLongestRide ->
-            "Wichtigster Hebel: die langen Fahrten. Das Rennen ist länger als deine " +
-                "längste Tour der letzten Wochen."
+        p.beyondLongestRide -> UiText.Res(R.string.training_goal_hint_long_rides)
         target != null && reference > target ->
-            "Für deine Zielzeit fehlen noch etwa ${reference - target} Min. Am meisten " +
-                "bringen die langen Fahrten."
-        target != null -> "Das reicht für deine Zielzeit. Bleib bei den langen Fahrten dran."
-        else -> "Trag eine Zielzeit ein, dann siehst du, ob es reicht."
+            UiText.Res(R.string.training_goal_hint_short, listOf(reference - target))
+        target != null -> UiText.Res(R.string.training_goal_hint_on_track)
+        else -> UiText.Res(R.string.training_goal_hint_no_target)
     }
-    return if (p.atEventMin != null) {
+    val atEvent = p.atEventMin
+    return if (atEvent != null) {
+        val bold = UiText.Res(R.string.training_goal_prognosis_event_value, listOf(formatHoursMinutes(atEvent)))
         PrognosisNote(
-            lead = "Mit dem Plan kommst du bis zum Renntag auf ",
-            bold = "ca. ${formatHoursMinutes(p.atEventMin!!)}",
-            tail = ".",
+            sentence = UiText.Res(R.string.training_goal_prognosis_event, listOf(bold)),
+            bold = bold,
             hint = hint,
         )
     } else {
         PrognosisNote(
-            lead = "Sobald deine Fitnesskurve steht, rechnen wir auch den Renntag aus.",
+            sentence = UiText.Res(R.string.training_goal_prognosis_pending),
             bold = null,
-            tail = "",
             hint = hint,
         )
     }
@@ -202,8 +233,11 @@ fun GoalOverviewCard(
     onExplain: () -> Unit,
 ) {
     val theme = MaterialTheme.colorScheme
+    val language = LocalAppLanguage.current
     val p = prediction.prognosis
     val note = prognosisNote(goal, prediction)
+    val sentence = note.sentence.asString()
+    val bold = note.bold?.asString()
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -222,10 +256,10 @@ fun GoalOverviewCard(
                     TextButton(
                         onClick = onEdit,
                         contentPadding = PaddingValues(horizontal = 12.dp),
-                    ) { Text("Ändern") }
+                    ) { Text(stringResource(R.string.training_goal_edit_action)) }
                 }
                 Text(
-                    text = goalSummaryLine(goal),
+                    text = goalSummaryParts(goal, language).map { it.asString() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium,
                     color = theme.onSurfaceVariant,
                 )
@@ -238,17 +272,21 @@ fun GoalOverviewCard(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 TimeTile(
-                    label = "Stand heute",
+                    label = stringResource(R.string.training_goal_current_label),
                     value = p?.let { formatHoursMinutes(it.currentMin) } ?: "–",
                     accent = false,
                 )
                 val target = goal.targetDurationMin
                 if (target != null) {
-                    TimeTile(label = "Zielzeit", value = formatHoursMinutes(target), accent = true)
+                    TimeTile(
+                        label = stringResource(R.string.training_goal_target_label),
+                        value = formatHoursMinutes(target),
+                        accent = true,
+                    )
                 } else {
                     TimeTile(
-                        label = "Zielzeit",
-                        value = "Zielzeit eintragen",
+                        label = stringResource(R.string.training_goal_target_label),
+                        value = stringResource(R.string.training_goal_target_add_action),
                         accent = true,
                         small = true,
                         onClick = onEdit,
@@ -274,15 +312,19 @@ fun GoalOverviewCard(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = buildAnnotatedString {
-                            append(note.lead)
-                            note.bold?.let { withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(it) } }
-                            append(note.tail)
+                            append(sentence)
+                            // Die fette Zeit steht als Argument im Satz; hier
+                            // wird sie nur wiedergefunden und hervorgehoben.
+                            val start = bold?.let { sentence.indexOf(it) } ?: -1
+                            if (bold != null && start >= 0) {
+                                addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, start + bold.length)
+                            }
                         },
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     note.hint?.let {
                         Text(
-                            text = it,
+                            text = it.asString(),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp),
                         )
@@ -293,7 +335,7 @@ fun GoalOverviewCard(
             TextButton(
                 onClick = onExplain,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) { Text("Wie wird das berechnet?") }
+            ) { Text(stringResource(R.string.training_goal_explain_action)) }
         }
     }
 }
@@ -336,12 +378,12 @@ private fun RowScope.TimeTile(
 
 /**
  * Die Markierungen der Prognose-Skala, in der Reihenfolge der Legende.
- * [label] steht in der Legendenzeile unter der Skala.
+ * [labelRes] steht in der Legendenzeile unter der Skala.
  */
-internal enum class PrognosisMarker(val label: String) {
-    TODAY("heute"),
-    EVENT("am Renntag"),
-    TARGET("Ziel"),
+internal enum class PrognosisMarker(@StringRes val labelRes: Int) {
+    TODAY(R.string.training_goal_marker_today),
+    EVENT(R.string.training_goal_marker_event),
+    TARGET(R.string.training_goal_marker_target),
 }
 
 /**
@@ -386,10 +428,17 @@ private fun PrognosisTrack(
     val fast = values.min() - max(uncertaintyMin, 3)
     fun pos(t: Int): Float = ((slow - t).toFloat() / max(1, slow - fast)).coerceIn(0.03f, 0.97f)
 
-    val description = buildString {
-        append("Heute ${formatHoursMinutes(currentMin)}")
-        targetMin?.let { append(", Ziel ${formatHoursMinutes(it)}") }
-        atEventMin?.let { append(", mit Plan ${formatHoursMinutes(it)}") }
+    val now = formatHoursMinutes(currentMin)
+    val description = when {
+        targetMin != null && atEventMin != null -> stringResource(
+            R.string.training_goal_track_target_event_cd,
+            now,
+            formatHoursMinutes(targetMin),
+            formatHoursMinutes(atEventMin),
+        )
+        targetMin != null -> stringResource(R.string.training_goal_track_target_cd, now, formatHoursMinutes(targetMin))
+        atEventMin != null -> stringResource(R.string.training_goal_track_event_cd, now, formatHoursMinutes(atEventMin))
+        else -> stringResource(R.string.training_goal_track_cd, now)
     }
     val startColor = theme.primaryContainer
     val endColor = theme.surfaceVariant
@@ -447,12 +496,12 @@ private fun PrognosisTrack(
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "langsamer",
+                stringResource(R.string.training_goal_track_slower),
                 style = MaterialTheme.typography.labelSmall,
                 color = theme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            Text("schneller", style = MaterialTheme.typography.labelSmall, color = theme.onSurfaceVariant)
+            Text(stringResource(R.string.training_goal_track_faster), style = MaterialTheme.typography.labelSmall, color = theme.onSurfaceVariant)
         }
         // Legende: dieselben Formen wie auf der Skala, klein und mittig.
         Row(
@@ -480,7 +529,7 @@ private fun PrognosisTrack(
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(marker.label, style = MaterialTheme.typography.labelSmall, color = theme.onSurfaceVariant)
+                Text(stringResource(marker.labelRes), style = MaterialTheme.typography.labelSmall, color = theme.onSurfaceVariant)
             }
         }
     }
@@ -516,18 +565,16 @@ fun GoalSetupCard(onSetUp: () -> Unit, primary: Boolean = true) {
             modifier = Modifier.padding(CardPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Ziel festlegen", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.training_goal_setup_title), style = MaterialTheme.typography.titleLarge)
             Text(
-                text = "Trag ein Rennen oder eine Tour ein, auf die du hinfährst – mit Distanz, " +
-                    "Höhenmetern, Datum und gern einer Zielzeit. Daraus entsteht dein Plan, und " +
-                    "wir sagen dir, ob die Zeit drin ist.",
+                text = stringResource(R.string.training_goal_setup_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (primary) {
-                Button(onClick = onSetUp) { Text("Ziel festlegen") }
+                Button(onClick = onSetUp) { Text(stringResource(R.string.training_goal_setup_action)) }
             } else {
-                NeutralButton(onClick = onSetUp) { Text("Ziel festlegen") }
+                NeutralButton(onClick = onSetUp) { Text(stringResource(R.string.training_goal_setup_action)) }
             }
         }
     }
@@ -547,34 +594,33 @@ fun PrognosisSheet(
     onDismiss: () -> Unit,
 ) {
     val p = prediction.prognosis
+    val language = LocalAppLanguage.current
+    val lookbackWeeks = PROGNOSIS_LOOKBACK_DAYS / 7
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         SheetColumn {
-            Text("Wie die Prognose entsteht", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.training_prognosis_title), style = MaterialTheme.typography.titleLarge)
             ExplainRow(
-                label = "Deine Touren",
-                pill = "letzte ${PROGNOSIS_LOOKBACK_DAYS / 7} Wochen",
-                text = "Dein Tempo auf Touren ab etwa 40 % der Zieldistanz. Längere und " +
-                    "jüngere Touren zählen mehr." +
-                    (p?.let { " Eingeflossen: ${it.ridesUsed} Touren." } ?: ""),
+                label = stringResource(R.string.training_prognosis_rides_label),
+                pill = pluralStringResource(R.plurals.training_prognosis_rides_weeks_count, lookbackWeeks, lookbackWeeks),
+                text = p?.let {
+                    pluralStringResource(R.plurals.training_prognosis_rides_body_used_count, it.ridesUsed, it.ridesUsed)
+                } ?: stringResource(R.string.training_prognosis_rides_body),
             )
             ExplainRow(
-                label = "Deine Fitness",
+                label = stringResource(R.string.training_prognosis_fitness_label),
                 pill = currentCtl?.let { "${it.roundToInt()}" },
-                text = "Je höher die Fitness am Renntag, desto länger hältst du dasselbe Tempo. " +
-                    "Wir rechnen mit der Fitness, die dein Plan bis dahin aufbaut – höchstens " +
-                    "8 % schneller als heute.",
+                text = stringResource(R.string.training_prognosis_fitness_body),
             )
+            val km = formatGoalKm(goal.distanceKm, language)
             ExplainRow(
-                label = "Die Strecke",
-                pill = buildString {
-                    append("${formatGoalKm(goal.distanceKm)} km")
-                    goal.ascentM?.takeIf { it > 0 }?.let { append(" · ${it.roundToInt()} Hm") }
-                },
-                text = "Höhenmeter kosten Zeit: Jeder Höhenmeter zählt wie 9 m flache Strecke. " +
-                    "Ist das Rennen länger als deine längste Tour, rechnen wir etwas Zeit dazu.",
+                label = stringResource(R.string.training_prognosis_route_label),
+                pill = goal.ascentM?.takeIf { it > 0 }
+                    ?.let { stringResource(R.string.training_prognosis_route_ascent_pill, km, it.roundToInt()) }
+                    ?: stringResource(R.string.common_value_km, km),
+                text = stringResource(R.string.training_prognosis_route_body),
             )
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -584,16 +630,17 @@ fun PrognosisSheet(
             ) {
                 Text(
                     text = if (p != null) {
-                        "Die Zahl ist eine Schätzung mit etwa ±${p.uncertaintyMin} Minuten. Sie " +
-                            "wird mit jeder Tour genauer. Puls, Wind und Untergrund kennt sie nicht."
+                        pluralStringResource(R.plurals.training_prognosis_uncertainty_count, p.uncertaintyMin, p.uncertaintyMin)
                     } else {
-                        prediction.missing ?: "Noch keine Prognose."
+                        prediction.missing ?: stringResource(R.string.training_goal_no_prognosis)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(12.dp),
                 )
             }
-            NeutralButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Verstanden") }
+            NeutralButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.training_prognosis_done_action))
+            }
         }
     }
 }
@@ -675,6 +722,10 @@ fun GoalEditorSheet(
     currentCtl: Double? = null,
 ) {
     val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
+    // Fuer Meldungen und Fehler ausserhalb der Komposition (Knopf-Handler);
+    // der Activity-Kontext traegt die App-Sprache.
+    val resources = LocalContext.current.resources
     val theme = MaterialTheme.colorScheme
     val existing = plan?.goal
 
@@ -705,11 +756,12 @@ fun GoalEditorSheet(
         val ascent = if (ascentRaw.isEmpty()) null else ascentRaw.toDoubleOrNull()
         val target = if (targetText.isBlank()) null else parseGoalDuration(targetText)
         when {
-            trimmedName.isEmpty() -> error = "Bitte einen Namen für das Ziel angeben."
-            distance == null || distance <= 0 -> error = "Bitte eine gültige Distanz angeben."
-            goalDate == null -> error = "Bitte ein Zieldatum angeben."
+            trimmedName.isEmpty() -> error = resources.getString(R.string.training_goal_editor_name_error)
+            distance == null || distance <= 0 ->
+                error = resources.getString(R.string.training_goal_editor_distance_error)
+            goalDate == null -> error = resources.getString(R.string.training_goal_editor_date_error)
             targetText.isNotBlank() && target == null ->
-                error = "Die Zielzeit bitte als Stunden:Minuten angeben, z. B. 2:10."
+                error = resources.getString(R.string.training_goal_editor_target_error)
             else -> {
                 val dateMs = goalDate!!.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 return Goal(
@@ -738,17 +790,23 @@ fun GoalEditorSheet(
         val goal = readGoal() ?: return
         if (onlyMeta) {
             onSetPlan(plan!!.copy(goal = goal))
-            onMessage("Ziel gespeichert.")
+            onMessage(resources.getString(R.string.training_goal_editor_saved_status))
             onDismiss()
             return
         }
         try {
             val newPlan = generatePlan(goal, assessFitness(rides), currentCtl = currentCtl, texts = coreTexts)
             onSetPlan(newPlan)
-            onMessage("Plan mit ${newPlan.weeks.size} Wochen erstellt.")
+            onMessage(
+                resources.getQuantityString(
+                    R.plurals.training_goal_editor_plan_created_count,
+                    newPlan.weeks.size,
+                    newPlan.weeks.size,
+                ),
+            )
             onDismiss()
         } catch (e: IllegalArgumentException) {
-            error = e.message ?: "Ungültiges Ziel."
+            error = e.message ?: resources.getString(R.string.training_goal_editor_invalid_error)
         }
     }
 
@@ -757,18 +815,23 @@ fun GoalEditorSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         SheetColumn {
-            Text(if (plan == null) "Ziel festlegen" else "Ziel ändern", style = MaterialTheme.typography.titleLarge)
+            Text(
+                stringResource(
+                    if (plan == null) R.string.training_goal_editor_title_new else R.string.training_goal_editor_title_edit,
+                ),
+                style = MaterialTheme.typography.titleLarge,
+            )
 
             OneUiTextField(
-                label = "Name",
+                label = stringResource(R.string.training_goal_editor_name_label),
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "z. B. Rennen Hügelland",
+                placeholder = stringResource(R.string.training_goal_editor_name_placeholder),
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(modifier = Modifier.fillMaxWidth()) {
                 OneUiTextField(
-                    label = "Distanz (km)",
+                    label = stringResource(R.string.training_goal_editor_distance_label),
                     value = distanceText,
                     onValueChange = { distanceText = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -776,7 +839,7 @@ fun GoalEditorSheet(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 OneUiTextField(
-                    label = "Höhenmeter (optional)",
+                    label = stringResource(R.string.training_goal_editor_ascent_label),
                     value = ascentText,
                     onValueChange = { ascentText = it },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -785,14 +848,18 @@ fun GoalEditorSheet(
             }
             Row(modifier = Modifier.fillMaxWidth()) {
                 Box(modifier = Modifier.weight(1f)) {
+                    val dateText = goalDate?.let { formats.dateFull(it) }
+                    val dateCd = dateText
+                        ?.let { stringResource(R.string.training_goal_editor_date_cd, it) }
+                        ?: stringResource(R.string.training_goal_editor_date_choose_cd)
                     OneUiTextField(
-                        label = "Zieldatum",
-                        value = goalDate?.let { formatDate(it) } ?: "",
+                        label = stringResource(R.string.training_goal_editor_date_label),
+                        value = dateText ?: "",
                         onValueChange = {},
                         readOnly = true,
                         // Aufforderung als `placeholder`, nicht als Wert — sonst
                         // saehe sie aus wie ein gesetztes Datum.
-                        placeholder = "Datum wählen",
+                        placeholder = stringResource(R.string.training_goal_editor_date_placeholder),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     // Ueberlagerung mit gebuendelter Semantik: ein einziger,
@@ -804,18 +871,16 @@ fun GoalEditorSheet(
                             .clickable { showDatePicker = true }
                             .clearAndSetSemantics {
                                 role = Role.Button
-                                contentDescription = goalDate
-                                    ?.let { "Zieldatum, ${formatDate(it)}. Datum ändern" }
-                                    ?: "Zieldatum wählen"
+                                contentDescription = dateCd
                             },
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 OneUiTextField(
-                    label = "Zielzeit (h:mm)",
+                    label = stringResource(R.string.training_goal_editor_target_label),
                     value = targetText,
                     onValueChange = { targetText = it },
-                    placeholder = "optional",
+                    placeholder = stringResource(R.string.training_goal_editor_target_placeholder),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                     modifier = Modifier.weight(1f),
                 )
@@ -827,12 +892,18 @@ fun GoalEditorSheet(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Button(onClick = ::save) { Text(if (onlyMeta) "Speichern" else "Plan erstellen") }
+                Button(onClick = ::save) {
+                    Text(
+                        stringResource(
+                            if (onlyMeta) R.string.common_action_save else R.string.training_goal_editor_create_action,
+                        ),
+                    )
+                }
                 if (plan != null) {
                     // Loeschen traegt — wie jeder Loeschweg der App — die
                     // Fehlerfarbe des Themes.
                     NeutralButton(onClick = { showDeleteConfirm = true }, destructive = true) {
-                        Text("Plan löschen")
+                        Text(stringResource(R.string.training_goal_editor_delete_action))
                     }
                 }
             }
@@ -860,9 +931,11 @@ fun GoalEditorSheet(
                         goalDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
                     }
                     showDatePicker = false
-                }) { Text("Übernehmen") }
+                }) { Text(stringResource(R.string.training_goal_editor_date_confirm_action)) }
             },
-            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Abbrechen") } },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.common_action_cancel)) }
+            },
         ) {
             DatePicker(state = datePickerState)
         }
@@ -871,17 +944,19 @@ fun GoalEditorSheet(
     if (showDeleteConfirm) {
         OneUiDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Trainingsplan löschen") },
-            text = { Text("Soll der Trainingsplan wirklich gelöscht werden?") },
+            title = { Text(stringResource(R.string.training_goal_editor_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.training_goal_editor_delete_confirm_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     onSetPlan(null)
                     showDeleteConfirm = false
-                    onMessage("Plan gelöscht.")
+                    onMessage(resources.getString(R.string.training_goal_editor_deleted_status))
                     onDismiss()
-                }) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.common_action_delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Abbrechen") } },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.common_action_cancel)) }
+            },
         )
     }
 }

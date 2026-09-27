@@ -1,5 +1,7 @@
 package de.trailscape.app.ui
 
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.Confidence
 import de.trailscape.core.DailyRecommendation
 import de.trailscape.core.DailyValue
@@ -9,6 +11,7 @@ import de.trailscape.core.EftpSource
 import de.trailscape.core.FitnessPoint
 import de.trailscape.core.FitnessSeries
 import de.trailscape.core.HrvAssessment
+import de.trailscape.core.InMemoryRideLoadFactsStore
 import de.trailscape.core.LoadCalibration
 import de.trailscape.core.LoadCalibrationSample
 import de.trailscape.core.LoadEntry
@@ -17,22 +20,18 @@ import de.trailscape.core.Readiness
 import de.trailscape.core.RestingHrAssessment
 import de.trailscape.core.Ride
 import de.trailscape.core.RideInfo
+import de.trailscape.core.RideLoad
 import de.trailscape.core.RideLoadFacts
 import de.trailscape.core.RideLoadFactsStore
-import de.trailscape.core.InMemoryRideLoadFactsStore
 import de.trailscape.core.RideSummary
-import de.trailscape.core.StoredRideLoadFacts
-import de.trailscape.core.rideLoadFactsFromSummary
-import de.trailscape.core.rideLoadFromFacts
-import de.trailscape.core.RideLoad
 import de.trailscape.core.SleepAssessment
 import de.trailscape.core.SteadySegment
+import de.trailscape.core.StoredRideLoadFacts
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsSummary
 import de.trailscape.core.Vo2MaxEstimate
 import de.trailscape.core.WeeklyLoadTarget
 import de.trailscape.core.assessDeload
-import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.assessHrv
 import de.trailscape.core.assessRestingHeartRate
 import de.trailscape.core.assessSleep
@@ -45,11 +44,16 @@ import de.trailscape.core.computeRideLoadFacts
 import de.trailscape.core.dailyLoadsFrom
 import de.trailscape.core.eftpWindowDays
 import de.trailscape.core.estimateVo2Max
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.formatDecimal
 import de.trailscape.core.maxLoad
 import de.trailscape.core.median
 import de.trailscape.core.recommendToday
 import de.trailscape.core.resolveEftp
 import de.trailscape.core.riddenRides
+import de.trailscape.core.rideLoadFactsFromSummary
+import de.trailscape.core.rideLoadFromFacts
 import de.trailscape.core.weeklyLoadTarget
 import java.time.Instant
 import java.time.LocalDateTime
@@ -248,47 +252,23 @@ data class TrainingInsights(
      * eingetragen oder die Kalibrierung neu gerechnet wurde —, verschieben
      * sich alle historischen Werte mit. Wer das nicht weiss, haelt den Sprung
      * fuer einen Fehler.
+     *
+     * Je Herkunft ein ganzer Satz in den Ressourcen (Herkunft und Konsequenz
+     * gehoeren grammatisch zusammen); die W/kg-Zahl formatiert [language].
      */
-    val loadScaleNote: String
-        get() {
-            val perKg = eftp.perKg(profile.weightKg)
-            val head = "Alle Lastwerte rechnen mit ${dartRoundInt(eftp.watts)} W Schwelle " +
-                "(${germanOneDecimal(perKg)} W/kg), ${eftpSourceText(eftp.source)}."
-            val tail = when (eftp.source) {
-                EftpSource.EINGETRAGEN ->
-                    " Änderst du den Wert im Profil, verschiebt sich die Skala — auch " +
-                        "rückwirkend für alle bisherigen Touren."
-
-                EftpSource.GESCHAETZT ->
-                    " Das ist eine grobe Annahme (2,4 W/kg). Trage im Profil deine FTP " +
-                        "ein oder fahre eine Tour mit Puls und Höhenprofil — beides macht " +
-                        "die Skala belastbarer und verschiebt dann alle bisherigen Werte."
-
-                EftpSource.ZWANZIG_MINUTEN ->
-                    " Grundlage ist dein bester 20-Minuten-Abschnitt aus der " +
-                        "GPS-Leistungsschätzung (±15–25 %). Eine eingetragene FTP wäre " +
-                        "genauer."
-
-                EftpSource.KALIBRIERT ->
-                    " Grundlage ist der Abgleich mit deiner gemessenen Herzfrequenz. " +
-                        "Der Wert kann sich mit neuen Touren verschieben — und mit ihm " +
-                        "die Lastwerte der Vergangenheit."
-            }
-            return head + tail
+    fun loadScaleNote(language: AppLanguage): UiText {
+        val perKg = formatDecimal(eftp.perKg(profile.weightKg), 1, language)
+        val id = when (eftp.source) {
+            EftpSource.EINGETRAGEN -> R.string.training_insights_load_scale_entered
+            EftpSource.GESCHAETZT -> R.string.training_insights_load_scale_estimated
+            EftpSource.ZWANZIG_MINUTEN -> R.string.training_insights_load_scale_twenty_min
+            EftpSource.KALIBRIERT -> R.string.training_insights_load_scale_calibrated
         }
+        return UiText.Res(id, listOf(dartRoundInt(eftp.watts), perKg))
+    }
 }
 
 private fun dartRoundInt(value: Double): Int = kotlin.math.round(value).toInt()
-
-private fun germanOneDecimal(value: Double): String =
-    String.format(java.util.Locale.GERMANY, "%.1f", value)
-
-private fun eftpSourceText(source: EftpSource): String = when (source) {
-    EftpSource.EINGETRAGEN -> "von dir eingetragen"
-    EftpSource.ZWANZIG_MINUTEN -> "geschätzt aus deinen Touren"
-    EftpSource.KALIBRIERT -> "aus deinem Puls nachgeführt"
-    EftpSource.GESCHAETZT -> "nur aus deinem Gewicht geschätzt"
-}
 
 /**
  * Effektiv benutztes Profil: fehlt ein eigener Ruhepuls, wird der aus den

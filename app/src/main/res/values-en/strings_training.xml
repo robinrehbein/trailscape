@@ -7,4 +7,228 @@
     Gegenstueck in values/strings_training.xml — gleiche Schluessel, gleiche Reihenfolge.
 -->
 <resources>
+    <!-- TrainingInsights.kt: Lastskala-Hinweis, je Herkunft der FTP ein ganzer Satz. -->
+    <string name="training_insights_load_scale_entered">All load values use a threshold of %1$d W (%2$s W/kg), entered by you. If you change it in your profile, the scale shifts — retroactively for all past rides, too.</string>
+    <string name="training_insights_load_scale_estimated">All load values use a threshold of %1$d W (%2$s W/kg), estimated from your weight alone. That’s a rough assumption (2.4 W/kg). Enter your FTP in your profile or record a ride with heart rate and elevation — either makes the scale more reliable and then shifts all past values.</string>
+    <string name="training_insights_load_scale_twenty_min">All load values use a threshold of %1$d W (%2$s W/kg), estimated from your rides. It’s based on your best 20-minute stretch from the GPS power estimate (±15–25 %%). An entered FTP would be more accurate.</string>
+    <string name="training_insights_load_scale_calibrated">All load values use a threshold of %1$d W (%2$s W/kg), adjusted from your heart rate. It’s based on a comparison with your measured heart rate. The value can shift with new rides — and past load values with it.</string>
+
+    <!-- TrainingFormat.kt -->
+    <string name="training_format_hrv_trend">Trend: %1$s %% compared with your usual value (%2$d ms).</string>
+
+    <!-- TrainingNotices.kt -->
+    <string name="training_notice_profile_title">Add your profile</string>
+    <string name="training_notice_profile_body">Without your age and weight we assume %1$d years and %2$d kg — the numbers are rough.</string>
+    <string name="training_notice_profile_action">Open profile</string>
+
+    <!-- TrainingScreen.kt -->
+    <string name="training_screen_title">Training</string>
+    <string name="training_screen_goal_eyebrow">Your goal</string>
+    <string name="training_screen_week_eyebrow">This week</string>
+    <string name="training_screen_form_eyebrow">Your form</string>
+    <string name="training_screen_vitals_eyebrow">Body metrics</string>
+    <string name="training_screen_week_headline">Week %1$d of %2$d · %3$s</string>
+    <string name="training_screen_all_weeks_action">View all weeks</string>
+    <string name="training_screen_show_less_action">Show less</string>
+    <string name="training_screen_empty_title">Your training picture starts here</string>
+    <string name="training_screen_empty_body">Trailscape builds your training picture from your rides. It becomes reliable with about two weeks of history — importing rides gets you there fastest.</string>
+    <string name="training_screen_empty_record_action">Record a ride</string>
+    <string name="training_screen_empty_import_action">Import past rides</string>
+
+    <!-- GoalCard.kt: Zielkarte -->
+    <string name="training_goal_ascent">%1$d m</string>
+    <string name="training_goal_date_passed">over</string>
+    <string name="training_goal_date_today">today</string>
+    <string name="training_goal_date_tomorrow">tomorrow</string>
+    <plurals name="training_goal_days_left_count">
+        <item quantity="one">%1$d day to go</item>
+        <item quantity="other">%1$d days to go</item>
+    </plurals>
+    <plurals name="training_goal_weeks_left_count">
+        <item quantity="one">%1$d week to go</item>
+        <item quantity="other">%1$d weeks to go</item>
+    </plurals>
+    <string name="training_goal_no_prognosis">No prediction yet.</string>
+    <string name="training_goal_hint_long_rides">Biggest lever: the long rides. The race is longer than your longest ride of recent weeks.</string>
+    <string name="training_goal_hint_short">You’re still about %1$d min short of your target time. The long rides help most.</string>
+    <string name="training_goal_hint_on_track">That’s enough for your target time. Keep up the long rides.</string>
+    <string name="training_goal_hint_no_target">Add a target time to see whether it’s enough.</string>
+    <string name="training_goal_prognosis_event">With the plan, you’ll reach %1$s by race day.</string>
+    <string name="training_goal_prognosis_event_value">about %1$s</string>
+    <string name="training_goal_prognosis_pending">Once your fitness curve is in place, we’ll work out race day too.</string>
+    <string name="training_goal_edit_action">Edit</string>
+    <string name="training_goal_current_label">As of today</string>
+    <string name="training_goal_target_label">Target time</string>
+    <string name="training_goal_target_add_action">Add target time</string>
+    <string name="training_goal_explain_action">How is this calculated?</string>
+    <string name="training_goal_marker_today">today</string>
+    <string name="training_goal_marker_event">on race day</string>
+    <string name="training_goal_marker_target">target</string>
+    <string name="training_goal_track_slower">slower</string>
+    <string name="training_goal_track_faster">faster</string>
+    <string name="training_goal_track_cd">Today %1$s</string>
+    <string name="training_goal_track_target_cd">Today %1$s, target %2$s</string>
+    <string name="training_goal_track_event_cd">Today %1$s, with plan %2$s</string>
+    <string name="training_goal_track_target_event_cd">Today %1$s, target %2$s, with plan %3$s</string>
+    <string name="training_goal_setup_title">Set a goal</string>
+    <string name="training_goal_setup_body">Add a race or ride you’re working towards — with distance, elevation gain, date and ideally a target time. That becomes your plan, and we’ll tell you whether the time is within reach.</string>
+    <string name="training_goal_setup_action">Set a goal</string>
+
+    <!-- GoalCard.kt: Blatt „Wie die Prognose entsteht" -->
+    <string name="training_prognosis_title">How the prediction works</string>
+    <string name="training_prognosis_rides_label">Your rides</string>
+    <plurals name="training_prognosis_rides_weeks_count">
+        <item quantity="one">last %1$d week</item>
+        <item quantity="other">last %1$d weeks</item>
+    </plurals>
+    <string name="training_prognosis_rides_body" formatted="false">Your pace on rides of about 40 % of the goal distance or more. Longer and more recent rides count more.</string>
+    <plurals name="training_prognosis_rides_body_used_count">
+        <item quantity="one">Your pace on rides of about 40 %% of the goal distance or more. Longer and more recent rides count more. Included: %1$d ride.</item>
+        <item quantity="other">Your pace on rides of about 40 %% of the goal distance or more. Longer and more recent rides count more. Included: %1$d rides.</item>
+    </plurals>
+    <string name="training_prognosis_fitness_label">Your fitness</string>
+    <string name="training_prognosis_fitness_body" formatted="false">The higher your fitness on race day, the longer you can hold the same pace. We use the fitness your plan builds by then — at most 8 % faster than today.</string>
+    <string name="training_prognosis_route_label">The course</string>
+    <string name="training_prognosis_route_ascent_pill">%1$s km · %2$d m</string>
+    <string name="training_prognosis_route_body">Climbing costs time: every metre of elevation gain counts like 9 m of flat road. If the race is longer than your longest ride, we add a little time.</string>
+    <plurals name="training_prognosis_uncertainty_count">
+        <item quantity="one">The figure is an estimate, give or take about %1$d minute. It gets more accurate with every ride. It knows nothing about heart rate, wind or surface.</item>
+        <item quantity="other">The figure is an estimate, give or take about %1$d minutes. It gets more accurate with every ride. It knows nothing about heart rate, wind or surface.</item>
+    </plurals>
+    <string name="training_prognosis_done_action">Got it</string>
+
+    <!-- GoalCard.kt: Zielformular -->
+    <string name="training_goal_editor_title_new">Set a goal</string>
+    <string name="training_goal_editor_title_edit">Edit goal</string>
+    <string name="training_goal_editor_name_label">Name</string>
+    <string name="training_goal_editor_name_placeholder">e.g. Hill country race</string>
+    <string name="training_goal_editor_distance_label">Distance (km)</string>
+    <string name="training_goal_editor_ascent_label">Elevation gain (optional)</string>
+    <string name="training_goal_editor_date_label">Goal date</string>
+    <string name="training_goal_editor_date_placeholder">Choose date</string>
+    <string name="training_goal_editor_date_cd">Goal date, %1$s. Change date</string>
+    <string name="training_goal_editor_date_choose_cd">Choose goal date</string>
+    <string name="training_goal_editor_target_label">Target time (h:mm)</string>
+    <string name="training_goal_editor_target_placeholder">optional</string>
+    <string name="training_goal_editor_name_error">Please enter a name for the goal.</string>
+    <string name="training_goal_editor_distance_error">Please enter a valid distance.</string>
+    <string name="training_goal_editor_date_error">Please choose a goal date.</string>
+    <string name="training_goal_editor_target_error">Please enter the target time as hours:minutes, e.g. 2:10.</string>
+    <string name="training_goal_editor_invalid_error">Invalid goal.</string>
+    <string name="training_goal_editor_saved_status">Goal saved.</string>
+    <plurals name="training_goal_editor_plan_created_count">
+        <item quantity="one">Plan created with %1$d week.</item>
+        <item quantity="other">Plan created with %1$d weeks.</item>
+    </plurals>
+    <string name="training_goal_editor_create_action">Create plan</string>
+    <string name="training_goal_editor_delete_action">Delete plan</string>
+    <string name="training_goal_editor_date_confirm_action">Apply</string>
+    <string name="training_goal_editor_delete_confirm_title">Delete training plan</string>
+    <string name="training_goal_editor_delete_confirm_body">Do you really want to delete the training plan?</string>
+    <string name="training_goal_editor_deleted_status">Plan deleted.</string>
+
+    <!-- FormCard.kt -->
+    <string name="training_form_open_cd">Open form explained</string>
+    <string name="training_form_summary_empty">Your fitness curve starts with your first ride</string>
+    <plurals name="training_form_summary_building_count">
+        <item quantity="one">Building your curve (%1$d more day)</item>
+        <item quantity="other">Building your curve (%1$d more days)</item>
+    </plurals>
+    <string name="training_form_summary_stable">Fitness stable</string>
+    <string name="training_form_fitness_chip">Fitness %1$s</string>
+    <string name="training_form_sheet_title">Your form</string>
+    <string name="training_form_sheet_intro">Three lines, simply explained. The technical terms used by other apps follow in small print.</string>
+    <string name="training_form_fitness_label">Fitness</string>
+    <string name="training_form_fitness_body">What you’ve built up over weeks. Rises slowly.</string>
+    <string name="training_form_fatigue_label">Fatigue</string>
+    <string name="training_form_fatigue_body">What the last few days have cost you. Drops again quickly.</string>
+    <string name="training_form_freshness_label">Freshness</string>
+    <string name="training_form_freshness_body">Fitness minus fatigue. Slightly negative means you’re training productively right now.</string>
+    <string name="training_form_all_values_action">All values</string>
+    <string name="training_form_show_less_action">Show less</string>
+    <string name="training_form_empty">Once your first ride has been analysed, your fitness curve appears here.</string>
+    <plurals name="training_form_building_count">
+        <item quantity="one">Building your curve (%1$d more day).</item>
+        <item quantity="other">Building your curve (%1$d more days).</item>
+    </plurals>
+    <plurals name="training_form_legend_count">
+        <item quantity="one">Last %1$d day · green: fitness, orange: fatigue</item>
+        <item quantity="other">Last %1$d days · green: fitness, orange: fatigue</item>
+    </plurals>
+    <string name="training_form_fatigue_chip">Fatigue %1$d</string>
+    <string name="training_form_form_chip">Form %1$s</string>
+    <string name="training_form_jargon">In other training apps: CTL, ATL, TSB.</string>
+    <string name="training_form_load_jump">Load spike: your ratio of recent to usual load is %1$s — outside the 0.8–1.5 range.</string>
+    <string name="training_form_ramp_unknown">Ramp rate: no assessment yet (less than 7 days of history).</string>
+    <string name="training_form_ramp">Ramp rate: %1$s fitness points per week — %2$s.</string>
+    <string name="training_form_load_ratio">Load ratio: %1$s.</string>
+    <string name="training_form_load_ratio_value">Load ratio: %1$s (%2$s).</string>
+
+    <!-- FitnessCard.kt -->
+    <string name="training_fitness_title">Your fitness level</string>
+    <string name="training_fitness_weekly_km_label">km/week</string>
+    <string name="training_fitness_weekly_elevation_label">m climbed/week</string>
+    <string name="training_fitness_weekly_rides_label">rides/week</string>
+    <string name="training_fitness_longest_ride_label">km longest ride</string>
+    <string name="training_fitness_no_rides_hint">No rides in the last 8 weeks yet — so the rating is conservative.</string>
+
+    <!-- WeekCard.kt -->
+    <string name="training_week_title">This week’s load</string>
+    <string name="training_week_budget_hint">The target equals ≈ %1$s h of riding in a mixed week, with your budget of %2$s h per week. Ride harder and you need less time for the same target.</string>
+    <string name="training_week_budget_missing_hint">The target equals ≈ %1$s h of riding in a mixed week. Add your time budget in the More tab and we’ll take it into account.</string>
+    <string name="training_week_load_label">Load (7 days)</string>
+    <string name="training_week_average_label">Avg week (4 weeks)</string>
+    <string name="training_week_target_label">Target</string>
+    <string name="training_week_time_budget_label">Riding time (budget %1$s h)</string>
+    <string name="training_week_time_estimated_label">Riding time (estimated)</string>
+    <string name="training_week_no_deload_title">No recovery week needed</string>
+    <string name="training_week_deload_range">%1$s Guide: %2$d–%3$d load instead of %4$d recently.</string>
+
+    <!-- PlanSection.kt -->
+    <string name="training_plan_week_title">Week %1$d · %2$s–%3$s</string>
+    <string name="training_plan_week_progress">%1$s of %2$d km</string>
+    <string name="training_plan_week_target">Target: %1$d km</string>
+    <string name="training_plan_session_km_load">%1$d km · load %2$d</string>
+    <string name="training_plan_route_cd">Plan a matching loop for “%1$s”</string>
+    <string name="training_plan_session_ridden">ridden: %1$s, %2$s km</string>
+    <string name="training_plan_session_today">today · %1$s</string>
+    <string name="training_plan_session_skipped">skipped</string>
+    <string name="training_plan_loop_action">Loop</string>
+    <string name="training_plan_feasibility_title">Plan and goal don’t match</string>
+    <string name="training_plan_feasibility_longest_label">Longest ride</string>
+    <string name="training_plan_feasibility_goal_label">Goal</string>
+    <string name="training_plan_feasibility_supports_label">Supports up to</string>
+    <string name="training_plan_feasibility_adjust_action">Adjust goal</string>
+    <string name="training_plan_feasibility_ack_action">Got it</string>
+
+    <!-- VitalsTiles.kt -->
+    <string name="training_vitals_resting_hr_label">Resting heart rate</string>
+    <string name="training_vitals_hrv_label">Recovery (HRV)</string>
+    <string name="training_vitals_sleep_label">Sleep</string>
+    <string name="training_vitals_estimated">estimated</string>
+    <string name="training_vitals_no_data">No data yet</string>
+    <string name="training_vitals_open_cd">Open body metrics explained</string>
+    <string name="training_vitals_source_none">No values from your watch yet. You can connect Health Connect in Settings.</string>
+    <string name="training_vitals_source">From your watch via Health Connect</string>
+    <string name="training_vitals_source_today">From your watch via Health Connect · today %1$s</string>
+    <string name="training_vitals_source_yesterday">From your watch via Health Connect · yesterday %1$s</string>
+    <string name="training_vitals_source_date">From your watch via Health Connect · %1$s %2$s</string>
+    <string name="training_vitals_word_pending">pending</string>
+    <string name="training_vitals_word_normal">normal</string>
+    <string name="training_vitals_word_slightly_elevated">slightly high</string>
+    <string name="training_vitals_word_elevated">high</string>
+    <string name="training_vitals_word_very_elevated">very high</string>
+    <string name="training_vitals_word_slightly_low">slightly low</string>
+    <string name="training_vitals_word_low">low</string>
+    <string name="training_vitals_word_very_low">very low</string>
+    <string name="training_vitals_word_good">good</string>
+    <string name="training_vitals_word_slightly_short">a bit short</string>
+    <string name="training_vitals_word_short">short</string>
+    <string name="training_vitals_word_very_short">very short</string>
+    <string name="training_vitals_sheet_title">Body metrics</string>
+    <string name="training_vitals_recovery_label">Recovery</string>
+    <string name="training_vitals_no_statement">No assessment possible.</string>
+    <string name="training_vitals_vo2_body">Your maximum oxygen uptake at full effort, estimated from rides with heart rate and elevation — so a range, not a measurement.</string>
+    <string name="training_vitals_vo2_unavailable">Can’t be estimated yet.</string>
+    <string name="training_vitals_done_action">Got it</string>
 </resources>

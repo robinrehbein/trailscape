@@ -11,10 +11,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.components.TagPill
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.FitnessAssessment
@@ -34,11 +36,12 @@ import kotlin.math.roundToInt
 @Composable
 fun FitnessCard(assessment: FitnessAssessment) {
     val theme = MaterialTheme.colorScheme
+    val formats = LocalAppFormats.current
     val levelColor = LocalSignalColors.current.accentGreen
 
     Card {
         Column(modifier = Modifier.padding(CardPadding)) {
-            Text("Dein Fitnesslevel", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.training_fitness_title), style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
             // Derselbe Chip wie die Wochentyp-Marke im Trainingsplan:
@@ -55,17 +58,25 @@ fun FitnessCard(assessment: FitnessAssessment) {
                 horizontalArrangement = Arrangement.spacedBy(24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                InlineMetric(formatKmDe(assessment.weeklyKm), "km/Woche")
-                InlineMetric(assessment.weeklyHm.roundToInt().toString(), "Hm/Woche")
-                InlineMetric(germanFixed(assessment.weeklyRides, 1), "Touren/Woche")
-                InlineMetric(formatKmDe(assessment.longestRideKm), "km längste Tour")
+                InlineMetric(formats.km(assessment.weeklyKm), stringResource(R.string.training_fitness_weekly_km_label))
+                InlineMetric(
+                    assessment.weeklyHm.roundToInt().toString(),
+                    stringResource(R.string.training_fitness_weekly_elevation_label),
+                )
+                InlineMetric(
+                    formats.decimal(assessment.weeklyRides, 1),
+                    stringResource(R.string.training_fitness_weekly_rides_label),
+                )
+                InlineMetric(
+                    formats.km(assessment.longestRideKm),
+                    stringResource(R.string.training_fitness_longest_ride_label),
+                )
             }
 
             if (assessment.rideCount == 0) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Noch keine Touren der letzten 8 Wochen vorhanden – die " +
-                        "Einstufung ist daher konservativ.",
+                    text = stringResource(R.string.training_fitness_no_rides_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
                 )

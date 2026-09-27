@@ -1,5 +1,6 @@
 package de.trailscape.app.ui
 
+import de.trailscape.app.ui.training.XmlStrings
 import de.trailscape.core.Confidence
 import de.trailscape.core.DailyRecommendationKind
 import de.trailscape.core.DailyValue
@@ -13,6 +14,7 @@ import de.trailscape.core.VitalsSummary
 import de.trailscape.core.VitalsTrend
 import de.trailscape.core.computeRideLoadForRide
 import de.trailscape.core.computeStats
+import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -38,6 +40,10 @@ class TrainingInsightsTest {
 
     private fun epochMs(at: LocalDateTime): Long =
         at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    /** Der Lastskala-Hinweis, wie ihn die deutsche Oberflaeche zeigt. */
+    private val TrainingInsights.loadScaleNoteDe: String
+        get() = XmlStrings.de(loadScaleNote(AppLanguage.DE))
 
     /**
      * Ruft [computeInsights] so auf, wie es die App tut: mit Zusammenfassungen
@@ -261,10 +267,10 @@ class TrainingInsightsTest {
         // 2,4 W/kg × 78 kg.
         assertEquals(187.2, insights.eftp.watts, 1e-9)
         assertEquals(Confidence.LOW, insights.eftp.confidence)
-        assertTrue(insights.loadScaleNote.contains("187 W"))
-        assertTrue(insights.loadScaleNote.contains("2,4"))
+        assertTrue(insights.loadScaleNoteDe.contains("187 W"))
+        assertTrue(insights.loadScaleNoteDe.contains("2,4"))
         // Der Hinweis nennt die Konsequenz einer Aenderung.
-        assertTrue(insights.loadScaleNote.contains("bisherigen"))
+        assertTrue(insights.loadScaleNoteDe.contains("bisherigen"))
     }
 
     @Test
@@ -276,8 +282,8 @@ class TrainingInsightsTest {
         assertEquals(EftpSource.EINGETRAGEN, insights.eftp.source)
         assertEquals(250.0, insights.eftp.watts, 0.0)
         assertEquals(Confidence.HIGH, insights.eftp.confidence)
-        assertTrue(insights.loadScaleNote.contains("250 W"))
-        assertTrue(insights.loadScaleNote.contains("3,2 W/kg"))
+        assertTrue(insights.loadScaleNoteDe.contains("250 W"))
+        assertTrue(insights.loadScaleNoteDe.contains("3,2 W/kg"))
 
         // Und die Skala haengt wirklich daran: `eTSS ∝ 1/FTP²`, die haelftige
         // FTP ergibt die vierfache Last.
@@ -311,7 +317,27 @@ class TrainingInsightsTest {
             0.5,
         )
         // α darf danach nicht noch einmal als Faktor auf der Last liegen.
-        assertTrue(insights.loadScaleNote.contains("Herzfrequenz"))
+        assertTrue(insights.loadScaleNoteDe.contains("Herzfrequenz"))
+    }
+
+    @Test
+    fun `Lastskala-Hinweis auf Englisch mit Punkt als Dezimaltrenner`() {
+        val estimated = XmlStrings.en(insightsOf(emptyList()).loadScaleNote(AppLanguage.EN))
+        assertEquals(
+            "All load values use a threshold of 187 W (2.4 W/kg), estimated from your weight alone. " +
+                "That’s a rough assumption (2.4 W/kg). Enter your FTP in your profile or record a ride " +
+                "with heart rate and elevation — either makes the scale more reliable and then shifts " +
+                "all past values.",
+            estimated,
+        )
+        val entered = insightsOf(emptyList(), profile = profile.copyWith(eftpOverrideW = 250.0))
+        assertTrue(XmlStrings.en(entered.loadScaleNote(AppLanguage.EN)).startsWith("All load values use a threshold of 250 W (3.2 W/kg), entered by you."))
+        // Deutsch unveraendert, samt Komma.
+        assertEquals(
+            "Alle Lastwerte rechnen mit 250 W Schwelle (3,2 W/kg), von dir eingetragen. Änderst du den " +
+                "Wert im Profil, verschiebt sich die Skala — auch rückwirkend für alle bisherigen Touren.",
+            entered.loadScaleNoteDe,
+        )
     }
 
     @Test
