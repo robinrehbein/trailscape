@@ -66,6 +66,17 @@ class TodayWordingTest {
         note = note,
     )
 
+    /** Die erste Runde ohne Historie, wie `decideTodayRoute` sie liefert (1½ h, 26 km). */
+    private val firstRoundRoute = TodayRoute(
+        target = target(26.0, SessionIntensity.GRUNDLAGE).copy(durationH = 1.5),
+        session = null,
+        plannedKm = null,
+        factor = 0.9,
+        downgraded = false,
+        note = null,
+        firstRound = true,
+    )
+
     private val week = listOf(
         session("Di", 32),
         session("Do", 45),
@@ -300,6 +311,64 @@ class TodayWordingTest {
         val fromRecommendation = target(21.0, SessionIntensity.GRUNDLAGE)
         val o = offer(route(fromRecommendation, null), planRestDay = false, weekSessions = emptyList())
         assertEquals(TodayOffer(fromRecommendation, restDay = false), o)
+    }
+
+    // ------------------------------------------------------- Erste Runde
+
+    @Test
+    fun `die erste Runde ist locker, ein Plan-Ruhetag bleibt Ruhetag`() {
+        assertEquals(TodayEffort.LOCKER, todayEffort(firstRoundRoute, planRestDay = false, emptyList()))
+        assertEquals(TodayEffort.RUHETAG, todayEffort(firstRoundRoute, planRestDay = true, emptyList()))
+    }
+
+    @Test
+    fun `die erste Runde sagt, dass sie ein Anfang ist`() {
+        val effort = todayEffort(firstRoundRoute, false, emptyList())
+        assertEquals("Für den Anfang: eine ruhige Runde.", todayHeadline(effort, firstRoundRoute, null, false))
+        assertEquals(
+            "Normal erholt. Für den Anfang: eine ruhige Runde.",
+            todayHeadline(effort, firstRoundRoute, ReadinessBand.NORMAL, false),
+        )
+        assertEquals(
+            "26 km ruhig fahren, so dass du dich noch unterhalten kannst.",
+            todaySentence(effort, firstRoundRoute),
+        )
+    }
+
+    @Test
+    fun `die erste Runde wird mit Kilometern direkt gebaut`() {
+        val o = offer(firstRoundRoute, planRestDay = false, weekSessions = emptyList())
+        assertEquals(TodayOffer(firstRoundRoute.target!!, restDay = false, firstRound = true), o)
+        assertEquals("Runde bauen · 26 km", offerButtonLabel(o!!))
+        // Ohne erste Runde bleibt der gewohnte Knopf.
+        assertEquals(
+            "Runde für heute bauen",
+            offerButtonLabel(TodayOffer(firstRoundRoute.target!!, restDay = false)),
+        )
+        // Am Plan-Ruhetag gibt es auch ohne Touren nur die Ruhetagsrunde.
+        assertEquals(TodayOffer(easy, restDay = true), offer(firstRoundRoute, true, emptyList()))
+    }
+
+    @Test
+    fun `das Warum der ersten Runde nennt den Einstieg statt der letzten Fahrten`() {
+        val effort = todayEffort(firstRoundRoute, false, emptyList())
+        assertEquals("Warum diese Runde?", whyTitle(effort, firstRoundRoute))
+        val note = whyNote(
+            effort = effort,
+            route = firstRoundRoute,
+            planRestDay = false,
+            upcoming = null,
+            deloadRecommended = false,
+            hasPlan = false,
+        )
+        assertEquals(
+            listOf(
+                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa 1½ h.",
+                "Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.",
+            ),
+            note,
+        )
+        assertTrue(note.none { it.startsWith("Ohne Trainingsziel") })
     }
 
     // ----------------------------------------------------- Wochenstreifen

@@ -31,6 +31,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
   dafür eine passende Rundstrecke generiert
 - Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
+- Ohne eine einzige Tour eine ruhige erste Runde nach Zeit (1 h / 1½ h / 2 h),
+  die „Runde bauen" direkt ab deinem Standort sucht — auch als letzter Schritt
+  der Einführung
 
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und

@@ -125,6 +125,30 @@ class DecideTodayTest {
     }
 
     @Test
+    fun `ohne Touren und ohne Plan bietet die Kette die erste Runde an`() {
+        val d = decideToday(emptyTrainingInsights(now = monday.atTime(LocalTime.NOON)), null, emptyList(), ms(monday))
+        assertTrue(d.route.firstRound)
+        assertEquals(TodayEffort.LOCKER, d.effort)
+        val offer = assertNotNull(d.offer)
+        assertTrue(offer.firstRound)
+        assertFalse(offer.restDay)
+        assertEquals(26.0, offer.target.distanceKm)
+    }
+
+    @Test
+    fun `solange die Touren laden gibt es weder erste Runde noch Angebot`() {
+        val d = decideToday(
+            emptyTrainingInsights(now = monday.atTime(LocalTime.NOON)),
+            null,
+            emptyList(),
+            ms(monday),
+            ridesLoading = true,
+        )
+        assertFalse(d.route.firstRound)
+        assertNull(d.offer)
+    }
+
+    @Test
     fun `naechster Tagesanfang auch in der Zeitumstellungsnacht`() {
         val berlin = ZoneId.of("Europe/Berlin")
         // 25.10.2026: Die Nacht hat 25 Stunden; von 23 Uhr am Vorabend bis

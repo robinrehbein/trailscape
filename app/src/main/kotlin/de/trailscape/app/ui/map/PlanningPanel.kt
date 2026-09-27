@@ -5,76 +5,62 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
-import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.RoutingSource
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
-import de.trailscape.core.maxRouteTargetKm
-import de.trailscape.core.minRouteTargetKm
 import de.trailscape.core.routeProfileLabels
 import de.trailscape.core.unpavedLabel
 import kotlin.math.roundToInt
@@ -90,51 +76,42 @@ import kotlin.math.roundToInt
  */
 
 /**
- * Die Routenplanung als **oberste Stufe des einen Kartenblatts**
- * ([MapSheetStage.PLANEN], siehe `MapMode.kt` und den Karte-Screen in
- * `docs/design/prototyp-eine-leiste.html`).
+ * Die Routenplanung als Kartenblatt — „Route hierher", „+ Als Wegpunkt" und
+ * langes Druecken landen hier.
  *
- * Sie steht an derselben Stelle im Stapel wie das Erkunden-Gesicht
- * (`ExploreSheet.kt`) und tritt an die Stelle von dessen Aktionszeile; der
- * Griff bleibt, der Zurueck-Pfeil in der Kopfzeile fuehrt eine Stufe tiefer
- * ([onClose]).
+ * ## Aufbau nach der Fuehrung „Klartext"
+ * Das Blatt folgt denselben Regeln wie „Runde ab hier"
+ * (`RoundTripSetupSheet.kt`) und den Zustaenden „Route steht" / „Route
+ * anpassen" in `docs/design/prototyp-klartext.html`:
  *
- * ## Der Griff bleibt hier die innere Stufe
- * Anders als im Entwurf klappt der Griff in dieser Stufe nicht zurueck auf
- * die Aktionszeile, sondern zwischen vollem Planungsinhalt und blosser
- * Statuszeile um. Der Grund steht in der Aufgabe selbst: Wegpunkte werden auf
- * der **Karte** gesetzt (langes Druecken), und dafuer muss sich das Blatt
- * wegraeumen lassen, ohne die Planung zu verlieren (`onMapLongPress` in
- * `MapScreen.kt` tut genau das beim ersten Wegpunkt). Beide Zustaende bleiben dabei das, was der Entwurf
- * verlangt: Griff plus eine Zeile, oder Griff plus eine Zeile plus Inhalt.
+ *  * **Kopf** wie jedes Aufgaben-Blatt: Titel, eine graue Zeile darunter,
+ *    rechts ⋮ (Teilen, alles entfernen) und ✕. Der Titel sagt, was hier
+ *    entsteht („Route planen", sobald sie steht „Start → Ziel"), die Zeile
+ *    darunter den Stand (km, Hm, Herkunft oder was noch fehlt).
+ *  * **Nummerierte Punkte** statt Buchstabe plus Farbpunkt, darunter
+ *    „Punkt hinzufügen" als ruhige Listenzeile statt eines gestrichelten
+ *    Suchfelds, „Mein Standort als Start" als Zeile daneben statt als
+ *    Textknopf.
+ *  * **„Zurück zum Start" als Schalter** wie „Neue Gegenden bevorzugen" —
+ *    vorher ein Segment „Einfach | Zurück zum Start" in der Akzentfarbe, das
+ *    lauter war als die eigentliche Hauptaktion.
+ *  * **Untergrund als dieselben drei Segmente** wie in „Runde ab hier"
+ *    (Gemischt / Asphalt / Schotter). Vorher stand das BRouter-Profil als
+ *    abgeschnittener gruener Textknopf da und doppelte die Kopfzeile.
+ *  * **Genau eine Hauptaktion**: „Losfahren", daneben „Speichern". Beide
+ *    erscheinen erst, wenn eine Route steht — vorher standen sie ausgegraut
+ *    da, zusammen mit vier Textknoepfen („Letzten entfernen" doppelte das ✕
+ *    jeder Zeile, „Leeren" und „Teilen" wohnen jetzt im ⋮).
+ *  * Die Distanz-Chips „Runde ab hier" im leeren Zustand entfallen: Die Runde
+ *    hat ihr eigenes Blatt (eine Funktion, ein Ort); das ✕ fuehrt zurueck zum
+ *    „Wohin?"-Blatt, wo sie steht.
  *
- * ## Warum unten, und warum ueberhaupt eine eingeklappte Stufe
- * Vorher war das hier eine Karte im oberen Stapel — zusammen mit Suche,
- * Navigationsleiste und Generator-Panel belegten die Panels auf einem
- * 360×800-dp-Geraet ueber 600 der rund 720 nutzbaren dp. Uebrig blieb ein
- * Streifen Karte von rund 80 dp, und ausgerechnet dort soll die Nutzerin ihre
- * Wegpunkte hintippen. Die runden Knoepfe (Aufnahme, Position) lagen
- * ausserdem **auf** der Planungskarte.
- *
- * Als unteres Blatt loest sich beides auf einmal: Die Knoepfe stapeln sich
- * darueber statt darauf, und eingeklappt bleibt von der Planung nur eine Zeile
- * („Gravel · 3 Wegpunkte · 42,1 km · 380 Hm") — der Rest des Bildschirms ist
- * Karte. Aufgeklappt steht alles da, was zum Planen gebraucht wird. Es ist
- * zugleich die Anordnung, die jeder aus Komoot kennt.
- *
- * Die Stufe steuert der Screen ([expanded]/[onExpandedChange]), damit sie
- * einen Tabwechsel uebersteht und damit er sie selbst schliessen kann, sobald
- * die Nutzerin sichtbar mit der Karte arbeitet.
- *
- * ## [SwipeableSheet] statt eigener Klapp-Mechanik
- * Frueher klappte die ganze Kopfzeile per `clickable` samt Pfeilsymbol um —
- * ein harter Zustandswechsel ohne Fingerfuehrung. [SwipeableSheet]
- * (`SwipeableSheet.kt`) ersetzt das durch den Griff und das stufenlose Ziehen,
- * das alle unteren Blaetter der Karte inzwischen teilen; Pfeil und
- * `clickable`-Zeile entfallen deshalb hier ersatzlos. Peek bleibt die
- * bisherige Kopfzeile (Profil, Statuszeile, Fortschrittskringel,
- * Zurueck-Pfeil), Body der bisherige aufgeklappte Koerper unveraendert samt
- * seiner eigenen `heightIn(max)`- und `verticalScroll`-Kombination.
+ * ## Der Griff bleibt die innere Stufe
+ * Der Griff klappt zwischen vollem Inhalt, halber Hoehe und blossem Kopf um.
+ * Wegpunkte werden auf der **Karte** gesetzt (langes Druecken), und dafuer
+ * muss sich das Blatt wegraeumen lassen, ohne die Planung zu verlieren
+ * (`onMapLongPress` in `MapScreen.kt`). Der Kopf traegt deshalb allein alles,
+ * was man eingeklappt wissen muss.
  */
 @Composable
 internal fun PlanningSheet(
@@ -142,30 +119,24 @@ internal fun PlanningSheet(
     onExpandedChange: (Boolean) -> Unit,
     /**
      * Mittelstufe (nur zusammen mit [expanded]): halb aufgezogen zeigt das
-     * Blatt Profil, Streckenart und die ersten Wegpunkte, die Karte behaelt
-     * die obere Haelfte — die Stufe zum Wegpunktsetzen.
+     * Blatt die ersten Punkte, die Karte behaelt die obere Haelfte — die
+     * Stufe zum Wegpunktsetzen.
      */
     half: Boolean,
     onHalfChange: (Boolean) -> Unit,
     profile: RouteProfile,
     onProfileChange: (RouteProfile) -> Unit,
     /**
-     * Die gewaehlte Streckenart: `false` = „Einfach" (vom ersten zum letzten
-     * Wegpunkt), `true` = „Rundweg" (die Route kehrt vom letzten Wegpunkt zum
-     * **ersten** zurueck, die Schleife schliesst sich also). Angezeigt wird das
-     * als Segmentschalter neben dem Routenprofil; gerechnet wird es im
-     * Karten-Screen (`MapScreen.kt`, `routingWaypoints`), weshalb [waypoints]
-     * hier ohne den zurueckfuehrenden Punkt ankommt — er ist Folge der
-     * Streckenart, kein von der Nutzerin gesetzter Wegpunkt.
+     * „Zurück zum Start": `true` heisst, die Route kehrt vom letzten Wegpunkt
+     * zum **ersten** zurueck. Gerechnet wird das im Karten-Screen
+     * (`MapScreen.kt`, `routingWaypoints`), weshalb [waypoints] hier ohne den
+     * zurueckfuehrenden Punkt ankommt.
      *
-     * Nicht zu verwechseln mit [onRoundTrip] weiter unten: Das ist der
-     * Rundkurs-**Generator** („Runde ab hier über X km"), der eine fertige
-     * Runde ohne Wegpunkte vorschlaegt. Dieser Schalter beschreibt dagegen, wie
-     * die selbst gesetzten Wegpunkte verbunden werden — er steht deshalb bei
-     * einer generierten Runde ([generated]) gar nicht erst da.
+     * Nicht zu verwechseln mit dem Rundkurs-**Generator** („Runde ab hier"),
+     * der eine fertige Runde ohne Wegpunkte vorschlaegt. Bei einer
+     * generierten Runde ([generated]) steht der Schalter deshalb gar nicht da.
      */
     roundTrip: Boolean,
-    /** Umschalten zwischen „Einfach" und „Rundweg" — siehe [roundTrip]. */
     onRoundTripChange: (Boolean) -> Unit,
     waypoints: List<Waypoint>,
     route: PlannedRoute?,
@@ -173,88 +144,48 @@ internal fun PlanningSheet(
     error: String?,
     /**
      * Obergrenze des aufgeklappten Koerpers — aus dem Platz gerechnet, den der
-     * Stapel dem Blatt lassen kann (`overlaySheetBudget` in `MapScreen.kt`),
-     * nicht aus einem Anteil der Bildschirmhoehe. Ein zu weiter Deckel nimmt
-     * dem `verticalScroll` seinen Scrollweg, ohne das Fenster mitwachsen zu
-     * lassen; das Blatt waere dann unten abgeschnitten und nicht scrollbar.
+     * Stapel dem Blatt lassen kann (`overlaySheetBudget` in `MapScreen.kt`).
      */
     maxHeight: Dp,
     /**
-     * Rueckmeldung waehrend der Berechnung — entweder weil die Route in
-     * mehrere Etappen zerlegt wurde (siehe `Routing.kt`) oder weil **auf dem
-     * Geraet** gerechnet wird, was spuerbar dauert (siehe
-     * `planProgressText` in `MapScreen.kt`). `null`, wenn es nichts zu sagen
-     * gibt: eine kurze Route ueber den Server ist schneller da als der Text
-     * gelesen waere.
+     * Rueckmeldung waehrend der Berechnung (Etappen oder Rechnen auf dem
+     * Geraet, siehe `planProgressText` in `MapScreen.kt`); `null`, wenn es
+     * nichts zu sagen gibt.
      */
     progress: String? = null,
-    /**
-     * Ob [route] aus dem Rundkurs-Generator stammt (siehe
-     * `RouteGenerationSheet.kt`). Dann gibt es keine Wegpunkte, die sich
-     * zaehlen liessen — die Zeile nennt stattdessen die Herkunft.
-     */
+    /** Ob [route] aus dem Rundkurs-Generator stammt — dann gibt es keine Wegpunkte. */
     generated: Boolean = false,
     /**
      * Woher [route] stammt — auf dem Geraet oder ueber den Routing-Server
-     * (siehe `OfflineFirstRouting.kt`, `chooseRoutingSource`). `null`, solange
-     * keine Route steht; dann bleibt die Statuszeile ohne Herkunftsangabe.
-     *
-     * ## Warum das ueberhaupt sichtbar ist
-     * Trailscape entscheidet das bis hierher still: lokal nur, wenn Profil
-     * und alle Kacheln der Strecke vorhanden sind, sonst wortlos ueber
-     * brouter.de. Wer nie eine Kachel geladen hat, sah davon nichts — bis der
-     * oeffentliche Server bei einer langen Route ablehnte und die Meldung
-     * „Der Routing-Server ist gerade überlastet" ohne jeden Zusammenhang zur
-     * eigentlichen Ursache stand. Ein Wort an der Statuszeile reicht, um das
-     * ehrlich zu machen, ohne eine eigene Kachel dafuer zu brauchen.
+     * (siehe `OfflineFirstRouting.kt`). Ein Wort in der Kopfzeile macht
+     * ehrlich, warum eine lange Route am oeffentlichen Server scheitern kann.
      */
     source: RoutingSource? = null,
-    /**
-     * Ob gerade auf einen GPS-Fix gewartet wird. Das dauert bis zu zehn
-     * Sekunden und geschah vorher ohne jede Anzeige — der Knopf sah kaputt aus.
-     */
+    /** Ob gerade auf einen GPS-Fix gewartet wird (bis zu zehn Sekunden). */
     locating: Boolean = false,
-    /** Startet die Rundkurs-Suche ueber die gewaehlte Distanz in km. */
-    onRoundTrip: (Double) -> Unit,
     onUseMyPosition: () -> Unit,
-    /** Entfernt den Wegpunkt am gegebenen Index — das X einer einzelnen Zeile der Liste. */
+    /** Entfernt den Wegpunkt am gegebenen Index — das ✕ einer Zeile. */
     onRemoveWaypoint: (Int) -> Unit,
     /**
      * Oeffnet die Ortssuche im Ortswaehler-Modus (siehe `openPlaceSearch` in
-     * `MapScreen.kt`) und haengt den gewaehlten Ort als benannten Wegpunkt an
-     * — die leere, gestrichelt gerahmte Zeile am Ende der Liste.
+     * `MapScreen.kt`) und haengt den gewaehlten Ort als Wegpunkt an.
      */
     onAddWaypointViaSearch: () -> Unit,
-    onUndo: () -> Unit,
     onClear: () -> Unit,
     onSave: () -> Unit,
     onShare: () -> Unit,
     onNavigate: () -> Unit,
     onHoverPoint: (TrackPoint?) -> Unit,
     /**
-     * Eine Stufe tiefer — der Zurueck-Pfeil in der Kopfzeile. Der Aufrufer
-     * (`MapScreen.kt`, `goToSheetStage`) faehrt damit auf die Aktionszeile
-     * zurueck und beendet dabei die Planung, mit derselben
-     * Rueckhol-Snackbar wie die Zurueck-Geste. Frueher stand dafuer die Pille
-     * „Planung beenden" am oberen Kartenrand; der Ausgang eines Modus gehoert
-     * aber dorthin, wo der Modus wohnt (und die Pille sprengte mit ihrem
-     * langen Text die obere Knopfreihe, siehe `ExploreSheet.kt`).
+     * Beendet die Planung — das ✕ im Kopf. Der Aufrufer (`MapScreen.kt`)
+     * faehrt damit zurueck auf „Wohin?" und bietet die Planung per Snackbar
+     * wieder an.
      */
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
 ) {
-    val profileLabel = routeProfileLabels[profile] ?: "Route"
-    val status = planningStatus(
-        waypoints = waypoints,
-        route = route,
-        busy = busy,
-        progress = progress,
-        generated = generated,
-        source = source,
-        locating = locating,
-        roundTrip = roundTrip,
-    )
+    val hasRoute = route != null && route.points.size >= 2
 
     SwipeableSheet(
         bottomInset = bottomInset,
@@ -270,138 +201,93 @@ internal fun PlanningSheet(
         halfStop = true,
         modifier = modifier,
         peek = {
-            // Die ganze Planung in einer Zeile: Profil, Status, bei Bedarf
-            // der Fortschrittskringel und das X „Planung beenden". Kein
-            // eigener Klapp-Mechanismus mehr hier — Griff und Ziehen bringt
-            // [SwipeableSheet] mit.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .padding(start = CardPadding, end = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = profileLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = error ?: status,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = if (error != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                    )
-                }
-                if (busy || locating) {
-                    CircularProgressIndicator(
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-                // Eigenes Klickziel: Der Pfeil geht eine Stufe tiefer,
-                // unabhaengig vom Ziehen/Tippen des restlichen Blatts — zwei
-                // verschiedene Folgen, zwei getrennte Flaechen.
-                //
-                // ✕ wie an jedem Aufgaben-Blatt der Karte (Fuehrung
-                // „Klartext"). Der fruehere Zurueck-Pfeil hiess „Zurück zu
-                // den Kartenaktionen", beendete aber die Planung — das ✕ sagt,
-                // was passiert; die Rueckhol-Snackbar bleibt.
-                IconButton(onClick = onClose) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = "Planung beenden",
-                    )
-                }
-            }
+            PlanningHeader(
+                title = planningTitle(waypoints, route, generated, roundTrip),
+                subtitle = planningSubtitle(
+                    waypoints = waypoints,
+                    route = route,
+                    busy = busy,
+                    progress = progress,
+                    generated = generated,
+                    source = source,
+                    locating = locating,
+                    failed = error != null,
+                ),
+                isError = error != null && !busy,
+                working = busy || locating,
+                canShare = route != null,
+                canClear = waypoints.isNotEmpty() || route != null,
+                onShare = onShare,
+                onClear = onClear,
+                onClose = onClose,
+            )
         },
         body = {
             Column(
                 modifier = Modifier
                     .heightIn(max = maxHeight)
                     .verticalScroll(rememberScrollState())
-                    .padding(
-                        horizontal = CardPadding,
-                        vertical = OverlayCardPaddingVertical,
-                    ),
+                    .padding(start = CardPadding, end = CardPadding, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                RouteProfileDropdown(
-                    profile = profile,
-                    onProfileChange = onProfileChange,
-                    // Bei einer generierten Runde bleibt das Dropdown aus:
-                    // Der Generator hat zwar mit genau diesem Profil gerechnet
-                    // (siehe `RouteGenerationController`), aber eine fertige
-                    // Runde hat keine Wegpunkte, mit denen sich ein Wechsel
-                    // nachrechnen liesse.
-                    enabled = !generated,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (hasRoute) {
+                    Column {
+                        ElevationProfile(
+                            points = route!!.points,
+                            lineColor = MaterialTheme.colorScheme.primary,
+                            onHover = onHoverPoint,
+                        )
+                        // Der Schotteranteil steht direkt unter dem Profil —
+                        // die zweite Frage an eine Route („wie faehrt sie
+                        // sich?"). Ohne verlaessliche Belagsdaten entfaellt er.
+                        unpavedLabel(route)?.let { surface ->
+                            Text(
+                                text = surface,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+
                 if (generated) {
                     Text(
-                        text = "Diese Runde wurde mit dem oben gewählten Routenprofil " +
-                            "berechnet. Ändern lässt es sich wieder, sobald du selbst " +
-                            "Wegpunkte setzt.",
+                        text = "Eine vorgeschlagene Runde. Drückst du lange auf die Karte, " +
+                            "planst du mit eigenen Punkten weiter.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-
-                // Keine zweite Statuszeile mehr: Die Kopfzeile traegt den
-                // Status (auch aufgeklappt sichtbar), der Koerper traegt die
-                // Bedienung — vorher stand „Noch keine Wegpunkte" doppelt
-                // untereinander auf demselben Blatt.
-                if (!generated) {
-                    // Die generierte Runde hat keine Wegpunkte, die sich
-                    // auflisten liessen (siehe [generated] oben) — die Liste
-                    // gilt deshalb nur fuer selbst geplante Routen. Einen
-                    // erklaerenden Hinweistext braucht sie nicht mehr: Setzen
-                    // sagt die gestrichelte Zeile („… oder lange auf die Karte druecken"),
-                    // Entfernen zeigt das X jeder Zeile.
-                    //
-                    // Aus demselben Grund steht auch die Streckenart nur hier:
-                    // Eine fertige Generator-Runde ist bereits eine Schleife
-                    // und hat keine Wegpunkte, zwischen denen sich „Einfach"
-                    // und „Rundweg" unterscheiden liessen.
-                    Spacer(Modifier.height(8.dp))
-                    RouteShapeSegments(
-                        roundTrip = roundTrip,
-                        onRoundTripChange = onRoundTripChange,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(8.dp))
+                } else {
                     WaypointList(
                         waypoints = waypoints,
                         onRemove = onRemoveWaypoint,
                         onAddViaSearch = onAddWaypointViaSearch,
+                        showUseMyPosition = waypoints.none { it.name == MY_POSITION_NAME },
+                        locating = locating,
+                        onUseMyPosition = onUseMyPosition,
                     )
+
+                    SwitchRow(
+                        title = "Zurück zum Start",
+                        subtitle = "Die Route endet wieder am ersten Punkt",
+                        checked = roundTrip,
+                        onCheckedChange = onRoundTripChange,
+                    )
+
+                    SurfaceChoice(profile = profile, onProfileChange = onProfileChange)
                 }
 
-                if (error != null) {
-                    Spacer(Modifier.height(8.dp))
+                if (error != null && !busy) {
                     NoticeBox(
                         icon = Icons.Filled.Warning,
                         color = LocalSignalColors.current.danger,
                         text = error,
                     )
-                    Spacer(Modifier.height(8.dp))
                     // Der Fehler nennt den Server, kennt aber den Ausweg
                     // nicht: Trailscape rechnet Routen auch ohne Netz, sobald
-                    // die Routing-Karten der Gegend auf dem Geraet liegen. Wie
-                    // sie dorthin kommen, sagt dieser Hinweis nicht mehr
-                    // ausformuliert — fehlen sie fuer genau diese Strecke,
-                    // bietet Trailscape den Download direkt an (siehe
-                    // `AppViewModel.offerMissingSegments`, ausgeloest auch im
-                    // Fehlerzweig der Planung in `MapScreen.kt`); das doppelt
-                    // sich sonst mit „Mehr“ → „Karten für Offline-Routing“.
+                    // die Routing-Karten der Gegend auf dem Geraet liegen
+                    // (den Download bietet `AppViewModel.offerMissingSegments`
+                    // direkt an).
                     NoticeBox(
                         icon = Icons.Filled.Info,
                         color = LocalSignalColors.current.caution,
@@ -410,98 +296,31 @@ internal fun PlanningSheet(
                     )
                 }
 
-                if (waypoints.isEmpty() && route == null && !busy) {
-                    Spacer(Modifier.height(8.dp))
-                    RoundTripEntry(onStart = onRoundTrip)
-                }
-
-                if (route != null && route.points.size >= 2) {
-                    // Der Schotteranteil steht im Koerper, nicht in der
-                    // Statuszeile: Die ist einzeilig und traegt schon Start,
-                    // Ziel, km, Hm und Herkunft — ein weiteres Glied waere auf
-                    // einem schmalen Geraet das erste, das abgeschnitten wird.
-                    // Hier sitzt er direkt ueber dem Hoehenprofil, also bei der
-                    // zweiten Frage an eine Route („wie faehrt sie sich?").
-                    // Ohne verlaessliche Belagsdaten entfaellt die Zeile.
-                    unpavedLabel(route)?.let { surface ->
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = surface,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Eine Hauptaktion, und erst wenn es etwas zu tun gibt: Vorher
+                // standen „Route speichern" und „Losfahren" ausgegraut da und
+                // nahmen dem Blatt ein Viertel seiner Hoehe.
+                if (hasRoute) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NeutralButton(
+                            onClick = onSave,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Speichern", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        PrimaryButton(
+                            text = "Losfahren",
+                            onClick = onNavigate,
+                            modifier = Modifier.weight(1.4f),
+                            leading = {
+                                Icon(
+                                    Icons.Filled.PlayArrow,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            },
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    ElevationProfile(
-                        points = route.points,
-                        lineColor = MaterialTheme.colorScheme.primary,
-                        onHover = onHoverPoint,
-                    )
-                }
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    TextButton(onClick = onUseMyPosition, enabled = !locating) {
-                        Icon(
-                            Icons.Filled.LocationOn,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(if (locating) "Position wird geholt …" else "Position als Start")
-                    }
-                    TextButton(onClick = onUndo, enabled = waypoints.isNotEmpty()) {
-                        // „Rückgängig" mit einem Kreispfeil („Neu laden") war
-                        // doppelt falsch: falsches Symbol und ein Versprechen,
-                        // das die Aktion nicht haelt — sie nimmt den zuletzt
-                        // gesetzten Wegpunkt weg, mehr nicht.
-                        Icon(
-                            Icons.AutoMirrored.Filled.Undo,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Letzten entfernen")
-                    }
-                    TextButton(onClick = onClear, enabled = waypoints.isNotEmpty() || route != null) {
-                        Icon(
-                            Icons.Filled.Clear,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Leeren")
-                    }
-                    TextButton(onClick = onShare, enabled = route != null) {
-                        Icon(
-                            Icons.Filled.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text("Teilen")
-                    }
-                }
-
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // One UI kennt keine Outline-Knoepfe: Die Nebenaktion ist
-                    // eine gefuellte helle Flaeche (NeutralButton), nur die
-                    // Hauptaktion traegt die Farbe.
-                    NeutralButton(
-                        onClick = onSave,
-                        enabled = route != null,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Route speichern") }
-                    Spacer(Modifier.width(8.dp))
-                    PrimaryButton(
-                        text = "Losfahren",
-                        onClick = onNavigate,
-                        enabled = route != null && route.points.size >= 2,
-                        modifier = Modifier.weight(1f),
-                    )
                 }
             }
         },
@@ -509,362 +328,398 @@ internal fun PlanningSheet(
 }
 
 /**
- * Der Segmentschalter „Einfach | Rundweg" — die **Streckenart** der Planung
- * (siehe den Karte-Screen in `docs/design/prototyp-eine-leiste.html`).
- *
- * „Einfach" verbindet die Wegpunkte wie bisher vom ersten zum letzten.
- * „Rundweg" schliesst die Route: Sie kehrt vom letzten Wegpunkt zum **ersten**
- * zurueck. Der Rueckweg ist echtes Routing und keine Luftlinie — Distanz,
- * Hoehenmeter und damit auch das Kilometer-Etikett des Aufnahme-Knopfs rechnen
- * ihn mit (`MapScreen.kt`, `routingWaypoints` und `reportPlannedRoute`).
- *
- * ## Warum ein Segmentschalter und keine zwei Schaltflaechen
- * Es sind zwei Faelle, die sich ausschliessen und die beide sichtbar sein
- * sollen — genau das, wofuer One UI den Pillen-Segmentschalter kennt
- * (heller Grund, das gewaehlte Segment in der Akzentfarbe). Eine Checkbox
- * „Rundweg" waere kuerzer, wuerde die Gegenwahl aber verschweigen; ein Dropdown
- * kostete einen zusaetzlichen Tipp fuer zwei Werte.
- *
- * ## Warum von Hand und nicht `SegmentedButton`
- * Material 3 zeichnet seine `SingleChoiceSegmentedButtonRow` mit Rahmen und
- * Haekchen im gewaehlten Segment — sichtbar Material, nicht One UI. Die Form
- * kommt hier aus `MaterialTheme.shapes.small` (der Pillen-Slot, siehe
- * `Shape.kt`), es bleibt also bei den Formen des Themes.
+ * Der Kopf des Blatts — dieselbe Anordnung wie „Runde ab hier" und die
+ * Ortskarte: Titel und graue Zeile links, Knoepfe rechts. Er bleibt auch
+ * eingeklappt stehen und traegt deshalb den ganzen Stand der Planung.
  */
 @Composable
-private fun RouteShapeSegments(
-    roundTrip: Boolean,
-    onRoundTripChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+private fun PlanningHeader(
+    title: String,
+    subtitle: String,
+    isError: Boolean,
+    working: Boolean,
+    canShare: Boolean,
+    canClear: Boolean,
+    onShare: () -> Unit,
+    onClear: () -> Unit,
+    onClose: () -> Unit,
 ) {
     Row(
-        modifier = modifier
-            .clip(MaterialTheme.shapes.small)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            // Der schmale Rand laesst den hellen Grund als Rahmen um das
-            // gewaehlte Segment stehen — dieselbe Anmutung wie im Entwurf.
-            .padding(3.dp)
-            .selectableGroup(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .padding(start = CardPadding, end = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RouteShapeSegment(
-            text = "Einfach",
-            selected = !roundTrip,
-            onSelect = { onRoundTripChange(false) },
-            modifier = Modifier.weight(1f),
-        )
-        RouteShapeSegment(
-            text = "Zurück zum Start",
-            selected = roundTrip,
-            onSelect = { onRoundTripChange(true) },
-            modifier = Modifier.weight(1f),
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = subtitle,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isError) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+        if (working) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        if (canShare || canClear) {
+            PlanningMenu(
+                canShare = canShare,
+                canClear = canClear,
+                onShare = onShare,
+                onClear = onClear,
+            )
+        }
+        IconButton(onClick = onClose) {
+            Icon(Icons.Filled.Close, contentDescription = "Planung beenden")
+        }
     }
 }
 
 /**
- * Ein Segment von [RouteShapeSegments] — mit [Role.RadioButton] ausgezeichnet,
- * weil es genau das ist: eine Wahl aus zweien. 42 dp plus den 3 dp Rand der
- * Zeile ergeben die 48 dp, die ein Daumen braucht.
+ * „Weitere Aktionen" — was man selten braucht, aber finden muss. Wie das ⋮
+ * der Route-Karte im Prototyp; „Alles entfernen" bleibt per Snackbar
+ * rueckholbar (siehe `onClear` in `MapScreen.kt`).
  */
 @Composable
-private fun RouteShapeSegment(
-    text: String,
-    selected: Boolean,
-    onSelect: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun PlanningMenu(
+    canShare: Boolean,
+    canClear: Boolean,
+    onShare: () -> Unit,
+    onClear: () -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .heightIn(min = 42.dp)
-            .clip(MaterialTheme.shapes.small)
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.labelLarge,
-            color = if (selected) {
-                MaterialTheme.colorScheme.onPrimary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text("Teilen") },
+                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
+                enabled = canShare,
+                onClick = {
+                    open = false
+                    onShare()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Alle Punkte entfernen") },
+                leadingIcon = { Icon(Icons.Filled.DeleteOutline, contentDescription = null) },
+                enabled = canClear,
+                onClick = {
+                    open = false
+                    onClear()
+                },
+            )
+        }
     }
 }
 
 /**
- * Die Wegpunkte der Planung als benannte Liste — das Google-Maps-Muster fuer
- * Wegbeschreibungen: je Zeile ein Buchstabe (A, B, C … die Reihenfolge), ein
- * Farbpunkt (dieselbe Zuordnung wie die Kartenmarker, siehe `buildMapMarkers`
- * in `MapScreen.kt`: gruen = Start, blau = Zwischenziele, rot = Ziel), der
- * Ortsname und ein X zum Entfernen genau dieses einen Wegpunkts.
+ * Die Punkte der Planung als nummerierte Liste (Prototyp „Route anpassen"):
+ * je Zeile ein Kreis mit der Nummer in der Farbe des Kartenmarkers (gruen =
+ * Start, blau = dazwischen, rot = Ziel, siehe `buildMapMarkers` in
+ * `MapScreen.kt`), der Name und ein ✕ zum Entfernen genau dieses Punkts.
  *
- * ## Warum kein eigener „+ Zwischenziel"-Knopf
- * Ein zusaetzlicher Knopf unter der Liste haette exakt dasselbe getan wie die
- * leere Zeile an ihrem Ende — Ortssuche oeffnen, Auswahl anhaengen. Zwei
- * Wege zum selben Ergebnis sind keine zwei Moeglichkeiten, nur zweimal dieselbe
- * Frage; die leere Zeile allein deckt den Fall vollstaendig ab.
- *
- * ## Warum kein Drag-Umsortieren
- * Bewusst ausserhalb dieses Schritts (siehe Aufgabenstellung) — eine Reihen-
- * folge laesst sich bis dahin nur ueber Entfernen und erneutes Setzen aendern.
+ * Darunter die beiden Wege, einen Punkt dazuzunehmen, als ruhige Zeilen mit
+ * derselben Einrueckung: „Punkt hinzufügen" (Suche, oder lange drücken) und
+ * „Mein Standort als Start", solange der Standort nicht schon Start ist.
  */
 @Composable
 private fun WaypointList(
     waypoints: List<Waypoint>,
     onRemove: (Int) -> Unit,
     onAddViaSearch: () -> Unit,
-    modifier: Modifier = Modifier,
+    showUseMyPosition: Boolean,
+    locating: Boolean,
+    onUseMyPosition: () -> Unit,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         waypoints.forEachIndexed { index, waypoint ->
-            WaypointRow(
-                index = index,
-                label = waypoint.name ?: "Wegpunkt ${index + 1}",
-                color = waypointColor(index, waypoints.lastIndex),
-                onRemove = { onRemove(index) },
+            val label = waypoint.name ?: "Punkt ${index + 1}"
+            ListRow(
+                badge = {
+                    NumberBadge(
+                        number = index + 1,
+                        color = waypointColor(index, waypoints.lastIndex),
+                    )
+                },
+                title = label,
+                trailing = {
+                    IconButton(onClick = { onRemove(index) }) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "$label entfernen",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
             )
         }
-        AddWaypointRow(onClick = onAddViaSearch)
+        ListRow(
+            badge = { IconBadge(Icons.Filled.Add) },
+            title = if (waypoints.isEmpty()) "Start hinzufügen" else "Punkt hinzufügen",
+            subtitle = "Suchen oder lange auf die Karte drücken",
+            muted = true,
+            onClick = onAddViaSearch,
+        )
+        if (showUseMyPosition) {
+            ListRow(
+                badge = { IconBadge(Icons.Filled.MyLocation) },
+                title = if (locating) "Position wird geholt …" else "Mein Standort als Start",
+                muted = true,
+                onClick = if (locating) null else onUseMyPosition,
+            )
+        }
     }
 }
 
 /** Grün am Start, Rot am Ziel, Blau dazwischen — wie die Kartenmarker. */
-private fun waypointColor(index: Int, lastIndex: Int): Color = when (index) {
-    0 -> GravelGreen
-    lastIndex -> RecordRed
+private fun waypointColor(index: Int, lastIndex: Int): Color = when {
+    index == 0 -> GravelGreen
+    index == lastIndex -> RecordRed
     else -> RouteBlue
 }
 
-/** Eine einzelne Zeile der Wegpunktliste — mindestens 48 dp fuer den Daumen. */
+/** Eine Zeile der Punktliste — mindestens 48 dp fuer den Daumen. */
 @Composable
-private fun WaypointRow(
-    index: Int,
-    label: String,
-    color: Color,
-    onRemove: () -> Unit,
+private fun ListRow(
+    badge: @Composable () -> Unit,
+    title: String,
+    subtitle: String? = null,
+    muted: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = waypointLetter(index),
-            style = MaterialTheme.typography.labelLarge,
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(20.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .background(color = color, shape = CircleShape),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        IconButton(onClick = onRemove) {
-            Icon(Icons.Filled.Close, contentDescription = "$label entfernen")
-        }
-    }
-}
-
-/**
- * Die leere, gestrichelt gerahmte Zeile am Ende der Liste — der Einstieg in
- * die Ortssuche im Ortswaehler-Modus (siehe `openPlaceSearch` in
- * `MapScreen.kt`). Gestrichelt statt durchgezogen, damit sie sich auch ohne
- * Text erkennbar von einer echten Wegpunktzeile abhebt („hier fehlt noch
- * etwas", nicht „hier steht schon etwas").
- */
-@Composable
-private fun AddWaypointRow(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clip(MaterialTheme.shapes.extraSmall)
-            .dashedBorder(color = MaterialTheme.colorScheme.outline)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            Icons.Filled.Search,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(
-            text = "Ort suchen oder lange auf die Karte drücken",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/**
- * Buchstabenfolge der Wegpunkte — A, B, C … Z, AA, AB, … wie Tabellenspalten.
- * 26 Buchstaben reichen fuer jede realistische Wegpunktzahl bei weitem; die
- * Fortsetzung ist nur ein Sicherheitsnetz, kein erwarteter Fall.
- */
-private fun waypointLetter(index: Int): String {
-    var n = index + 1
-    val letters = StringBuilder()
-    while (n > 0) {
-        val remainder = (n - 1) % 26
-        letters.insert(0, 'A' + remainder)
-        n = (n - 1) / 26
-    }
-    return letters.toString()
-}
-
-/**
- * Gestrichelter Rahmen fuer [AddWaypointRow] — Compose kennt fuer `border()`
- * keine gestrichelte Variante, deshalb hier von Hand ueber `drawBehind` und
- * [PathEffect.dashPathEffect]. [cornerRadius] ist bewusst dieselbe 18-dp-Ecke
- * wie `TrailscapeShapes.extraSmall` (`Shape.kt`, Slot fuer Menues und
- * Textfelder — genau das ist diese Zeile, ein Ortsfeld als Zeile statt als
- * `OutlinedTextField`), nicht aus dieser Form selbst gelesen: Eine
- * `CornerBasedShape` laesst sich ohne bekannte Flaechengroesse nicht generisch
- * in einen Zeichenradius uebersetzen.
- */
-private fun Modifier.dashedBorder(
-    color: Color,
-    cornerRadius: Dp = 18.dp,
-    strokeWidth: Dp = 1.dp,
-): Modifier = drawBehind {
-    drawRoundRect(
-        color = color,
-        style = Stroke(
-            width = strokeWidth.toPx(),
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f),
-        ),
-        cornerRadius = CornerRadius(cornerRadius.toPx()),
-    )
-}
-
-/**
- * Der Einstieg „Runde ab hier über X km" — der haeufigste Wunsch eines
- * Gravelfahrers und bis hierher von der Karte aus **gar nicht** erreichbar:
- * Das Rundkurs-Panel oeffnete sich ausschliesslich ueber ein Ziel aus dem
- * Heute- oder Trainings-Tab, an einem Ruhetag also gar nicht, und eine eigene
- * Distanz liess sich nirgends eingeben. Die Rechenmaschinerie stand die ganze
- * Zeit bereit (siehe `RouteGenerationController`); es fehlte nur die Tuer.
- *
- * ## Chips **und** freie Eingabe
- * Der Review schlug drei Chips vor (30/50/80 km). Die bleiben — sie sind der
- * kuerzeste Weg (ein Tipp) und decken den Grossteil der Wuensche ab. Sie
- * allein waeren aber zu wenig: Wer zwei Stunden Zeit hat und 22 km/h faehrt,
- * will 45 km und nicht „30 oder 50". Deshalb steht darunter ein Feld fuer die
- * eigene Zahl. Umgekehrt waere ein Feld allein der schlechtere Tausch — fuer
- * die drei haeufigen Faelle Tastatur, Tippen und Bestaetigen statt eines
- * einzigen Tipps.
- *
- * Die Grenzen sind die des Generators in `:core` ([minRouteTargetKm] …
- * [maxRouteTargetKm]); darunter oder darueber saehe die Nutzerin sonst erst
- * nach einer halben Minute Suche einen Hinweis, dass ihre Zahl gar nicht
- * benutzt wurde.
- */
-@Composable
-private fun RoundTripEntry(
-    onStart: (Double) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var custom by rememberSaveable { mutableStateOf("") }
-    // Die eingegebene Distanz, sofern sie im Bereich des Generators liegt —
-    // sonst `null`, und das ist zugleich die Antwort auf „darf gesucht
-    // werden?".
-    val customKm = custom.toIntOrNull()?.toDouble()
-        ?.takeIf { it >= minRouteTargetKm && it <= maxRouteTargetKm }
-    val outOfRange = custom.isNotEmpty() && customKm == null
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Runde ab hier",
-            style = MaterialTheme.typography.titleSmall,
-        )
-        Text(
-            text = "Trailscape sucht Rundkurse ab deiner Position – ohne Standortfreigabe " +
-                "ab der Kartenmitte.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(4.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            ROUND_TRIP_SUGGESTIONS.forEach { km ->
-                AssistChip(
-                    onClick = { onStart(km) },
-                    label = { Text("${km.roundToInt()} km") },
+        badge()
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f).padding(vertical = 6.dp)) {
+            Text(
+                text = title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (muted) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = custom,
-                // Nur Ziffern: Ein Komma oder ein Buchstabe im Feld waere eine
-                // Zahl, die niemand berechnen kann — km auf den Kilometer
-                // genau reichen fuer eine Zieldistanz voellig.
-                onValueChange = { input -> custom = input.filter { it.isDigit() }.take(3) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                label = { Text("Eigene Distanz") },
-                suffix = { Text("km") },
-                isError = outOfRange,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Go,
-                ),
-                keyboardActions = KeyboardActions(
-                    onGo = { customKm?.let(onStart) },
-                ),
-            )
-            Spacer(Modifier.width(8.dp))
-            PrimaryButton(
-                text = "Suchen",
-                onClick = { customKm?.let(onStart) },
-                enabled = customKm != null,
+        trailing?.invoke()
+    }
+}
+
+/** Der Kreis mit der Nummer eines Punkts. */
+@Composable
+private fun NumberBadge(number: Int, color: Color) {
+    Box(
+        modifier = Modifier
+            .size(BadgeSize)
+            .background(color = color, shape = CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "$number",
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontSize = if (number < 10) 13.sp else 11.sp,
+        )
+    }
+}
+
+/** Derselbe Kreis, hell und mit Symbol — fuer „Punkt hinzufügen" und „Mein Standort". */
+@Composable
+private fun IconBadge(icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Box(
+        modifier = Modifier
+            .size(BadgeSize)
+            .background(
+                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                shape = CircleShape,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+private val BadgeSize = 26.dp
+
+/** Ein Schalter mit Titel und Erklaerzeile — wie „Neue Gegenden bevorzugen". */
+@Composable
+private fun SwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (outOfRange) {
-            Text(
-                text = "Zwischen ${minRouteTargetKm.roundToInt()} und " +
-                    "${maxRouteTargetKm.roundToInt()} km.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+/**
+ * Untergrund — dieselben drei Segmente wie in „Runde ab hier"
+ * (`RoundTripSetupSheet.kt`, [surfaceFor]). Die beiden Sonderprofile
+ * „Radwege bevorzugt" und „Kürzeste Route" gibt es nur hier, beim Planen von
+ * Hand; sie stehen deshalb in einem kleinen Menue darunter. Ist eines davon
+ * gewaehlt, ist keins der drei Segmente markiert und die Zeile nennt es.
+ */
+@Composable
+private fun SurfaceChoice(
+    profile: RouteProfile,
+    onProfileChange: (RouteProfile) -> Unit,
+) {
+    val surfaces = listOf(
+        RouteProfile.GRAVEL to "Gemischt",
+        RouteProfile.ASPHALT to "Asphalt",
+        RouteProfile.SCHOTTER to "Schotter",
+    )
+    val special = profile == RouteProfile.RADWEGE || profile == RouteProfile.KUERZESTER
+    var menuOpen by remember { mutableStateOf(false) }
+
+    Column {
+        PillSegments(
+            options = surfaces.map { it.second },
+            selectedIndex = if (special) -1 else surfaces.indexOfFirst { it.first == profile },
+            onSelect = { onProfileChange(surfaces[it].first) },
+            modifier = Modifier.semantics { contentDescription = "Untergrund" },
+        )
+        Box {
+            Row(
+                modifier = Modifier
+                    .heightIn(min = 40.dp)
+                    .clickable(role = Role.Button) { menuOpen = true }
+                    .padding(horizontal = 4.dp)
+                    .clearAndSetSemantics {
+                        contentDescription = if (special) {
+                            "Routenprofil: ${routeProfileLabels[profile]}. Ändern"
+                        } else {
+                            "Weitere Routenprofile"
+                        }
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (special) {
+                        routeProfileLabels[profile] ?: "Weitere Profile"
+                    } else {
+                        "Weitere Profile"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (special) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+                Icon(
+                    Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                listOf(RouteProfile.RADWEGE, RouteProfile.KUERZESTER).forEach { value ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(routeProfileLabels[value] ?: value.name)
+                                routeProfileHint(value)?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onProfileChange(value)
+                        },
+                    )
+                }
+            }
         }
     }
 }
 
 /**
- * Die Zustandszeile der Planung — sie lebt NUR in der Kopfzeile, die in
- * beiden Klappzustaenden sichtbar bleibt. Der aufgeklappte Koerper wiederholt
- * sie bewusst nicht (frueher stand sie dort ein zweites Mal).
+ * Der Titel im Kopf: was hier entsteht. Sobald eine Route steht, ihr Name
+ * („Mein Standort → Herkules", „Rundweg ab …") — vorher „Route planen".
+ */
+private fun planningTitle(
+    waypoints: List<Waypoint>,
+    route: PlannedRoute?,
+    generated: Boolean,
+    roundTrip: Boolean,
+): String = when {
+    route != null && generated -> "Vorgeschlagene Runde"
+    route != null -> planningRouteLabel(waypoints, roundTrip)
+    else -> "Route planen"
+}
+
+/**
+ * Die graue Zeile im Kopf — der Stand der Planung. Sie lebt nur hier; der
+ * Koerper wiederholt sie nicht.
  *
  * Steht eine selbst geplante Route, haengt [routeSourceSuffix] „ · Gerät"
- * bzw. „ · Server" an — waehrend der Berechnung sagt das bereits
- * `progress` in Praesens („Berechne auf dem Gerät …", siehe
- * `planProgressText` in `MapScreen.kt`), eine zweite Zeile dafuer braucht es
- * nicht.
+ * bzw. „ · Server" an.
  */
-private fun planningStatus(
+private fun planningSubtitle(
     waypoints: List<Waypoint>,
     route: PlannedRoute?,
     busy: Boolean,
@@ -872,26 +727,23 @@ private fun planningStatus(
     generated: Boolean,
     source: RoutingSource?,
     locating: Boolean,
-    roundTrip: Boolean,
+    failed: Boolean,
 ): String = when {
     locating -> "Position wird ermittelt …"
-    busy && progress != null -> progress
-    route != null && generated ->
-        "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑ · " +
-            "vorgeschlagene Runde"
-
+    busy -> progress ?: "Route wird berechnet …"
+    failed -> "Route konnte nicht berechnet werden"
     route != null ->
-        "${planningRouteLabel(waypoints, roundTrip)} · ${formatKmDe(route.distanceKm)} km · " +
-            "${route.ascentM.roundToInt()} Hm ↑" + routeSourceSuffix(source)
+        "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑" +
+            if (generated) "" else routeSourceSuffix(source)
 
-    waypoints.size == 1 -> "1 Wegpunkt – setze mindestens 2."
-    waypoints.size > 1 -> "${waypoints.size} Wegpunkte – berechne Route …"
-    else -> "Noch keine Wegpunkte"
+    waypoints.size == 1 -> "Start steht – jetzt ein Ziel hinzufügen"
+    waypoints.size > 1 -> "Route wird berechnet …"
+    else -> "Wähle Start und Ziel"
 }
 
 /**
  * „ · Gerät" bzw. „ · Server" — nichts, solange [source] `null` ist (keine
- * Route, oder eine vom Generator, siehe [PlanningSheet]s `source`-KDoc).
+ * Route, oder eine vom Generator).
  */
 private fun routeSourceSuffix(source: RoutingSource?): String = when (source) {
     RoutingSource.OFFLINE -> " · Gerät"
@@ -900,81 +752,28 @@ private fun routeSourceSuffix(source: RoutingSource?): String = when (source) {
 }
 
 /**
- * Der erste Teil der Zustandszeile, sobald eine Route steht: „Mein Standort →
- * Herkules" statt „3 Wegpunkte", sofern Start oder Ziel einen Namen tragen
- * (Suchtreffer oder eigene Position, siehe `Waypoint.name`) — sonst bleibt es
- * bei der reinen Anzahl, denn zwei „Wegpunkt N"-Platzhalter waeren keine
- * Verbesserung gegenueber der Zahl.
+ * Der Titel, sobald eine Route steht: „Mein Standort → Herkules" statt
+ * „3 Wegpunkte", sofern Start oder Ziel einen Namen tragen (Suchtreffer oder
+ * eigene Position, siehe `Waypoint.name`) — sonst bleibt es bei der Anzahl.
  *
- * Bei einem Rundweg fuehrt die Route zum Start zurueck — „Start → Ziel"
- * behauptete dann das Falsche. Die Zeile sagt stattdessen „Rundweg ab …",
- * und die Zwischenziele stecken weiter in km/Hm.
+ * Bei „Zurück zum Start" fuehrt die Route zum Start zurueck — „Start → Ziel"
+ * behauptete dann das Falsche; der Titel sagt stattdessen „Rundweg ab …".
  */
 private fun planningRouteLabel(waypoints: List<Waypoint>, roundTrip: Boolean): String {
     val start = waypoints.firstOrNull()
     if (roundTrip) {
         return start?.name?.let { "Rundweg ab $it" }
-            ?: "Rundweg · ${waypoints.size} Wegpunkte"
+            ?: "Rundweg · ${waypoints.size} Punkte"
     }
     val end = waypoints.lastOrNull()
-    if (start?.name == null && end?.name == null) return "${waypoints.size} Wegpunkte"
-    val startLabel = start?.name ?: "Wegpunkt 1"
-    val endLabel = end?.name ?: "Wegpunkt ${waypoints.size}"
+    if (start?.name == null && end?.name == null) return "${waypoints.size} Punkte"
+    val startLabel = start?.name ?: "Punkt 1"
+    val endLabel = end?.name ?: "Punkt ${waypoints.size}"
     return "$startLabel → $endLabel"
 }
 
-@Composable
-private fun RouteProfileDropdown(
-    profile: RouteProfile,
-    onProfileChange: (RouteProfile) -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Column(modifier = modifier) {
-        TextButton(onClick = { expanded = true }, enabled = enabled) {
-            Text(
-                text = routeProfileLabels[profile] ?: "Routenprofil",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = "Routenprofil wählen")
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            routeProfileLabels.forEach { (value, label) ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(label)
-                            routeProfileHint(value)?.let {
-                                Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    },
-                    onClick = {
-                        expanded = false
-                        onProfileChange(value)
-                    },
-                )
-            }
-        }
-    }
-}
-
 /**
- * Was ein Profil wirklich tut — als zweite Zeile im Dropdown.
- *
- * Der Anlass ist eine echte Verwechslungsgefahr: „Gravel (gemischt)" routet
- * mit dem oeffentlichen `trekking`-Profil, das **eigentliche** Gravel-Profil
- * haengt an „Schotter & Kieswege" (siehe `brouterProfile` in `:core`). Wer
- * Schotter sucht und „Gravel" waehlt, bekommt also gerade nicht, was er
- * erwartet. Die Namen selbst stehen in `:core` und bleiben unangetastet; hier
- * steht die Erklaerung daneben.
+ * Was ein Sonderprofil tut — als zweite Zeile im Menue „Weitere Profile".
  */
 private fun routeProfileHint(profile: RouteProfile): String? = when (profile) {
     RouteProfile.GRAVEL -> "Trekking: Asphalt und feste Wege gemischt"
@@ -984,12 +783,11 @@ private fun routeProfileHint(profile: RouteProfile): String? = when (profile) {
     RouteProfile.KUERZESTER -> "Kürzeste Strecke, ohne Rücksicht auf den Belag"
 }
 
+/**
+ * Name des Wegpunkts, den „Mein Standort als Start" setzt — daran erkennt die
+ * Liste, dass der Standort schon Start ist, und blendet die Zeile aus.
+ */
+internal const val MY_POSITION_NAME: String = "Mein Standort"
+
 /** Wie viele Suchtreffer angezeigt werden (Dart: `results.take(5)`). */
 internal const val MAX_SEARCH_RESULTS: Int = 5
-
-/**
- * Die drei Distanzen mit einem Tipp. Gewaehlt nach dem, was eine Feierabend-,
- * eine halbe Tages- und eine Tagesrunde auf dem Gravelbike ueblicherweise
- * misst; alles dazwischen und darueber deckt das Feld daneben ab.
- */
-private val ROUND_TRIP_SUGGESTIONS = listOf(30.0, 50.0, 80.0)

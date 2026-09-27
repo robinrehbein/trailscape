@@ -1,7 +1,7 @@
 # Datenschutzerklärung — Trailscape
 
-**Stand: 25. September 2026** · gilt für die Android-App Trailscape
-(`io.github.robinrehbein.trailscape`), verteilt als APK über die
+**Stand: 27. September 2026** · gilt für die Android-App Trailscape
+(`de.robinrehbein.trailscape`), verteilt über Google Play und als APK über die
 [GitHub-Releases](https://github.com/robinrehbein/trailscape/releases) dieses
 Projekts.
 
@@ -23,8 +23,8 @@ Servernamen sind bewusst mit angegeben.
   keinen Trailscape-Server, auf dem etwas von dir liegt. Der Entwickler hat
   keinen Zugriff auf deine Daten.
 - **Gesundheitsdaten werden nur gelesen**, aus Health Connect, und
-  ausschließlich auf dem Gerät verarbeitet. Sie werden nirgendwohin übertragen
-  und nicht nach Health Connect zurückgeschrieben.
+  auf dem Gerät verarbeitet. Gesundheitswerte in Touren können beim optionalen Sync an deinen eigenen Server übertragen werden.
+  Trailscape schreibt nichts nach Health Connect zurück.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
   Sync-Server) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
@@ -84,7 +84,7 @@ Komoot-Link) ruft die App nicht ab.
 
 | Berechtigung | Wofür |
 |---|---|
-| Standort (genau/ungefähr) | Aufzeichnung der Tour und Anzeige der eigenen Position auf der Karte. Ohne laufende Aufzeichnung fragt die App keine Positionen ab. „Während der Nutzung erlauben" genügt: Die Aufzeichnung läuft als Vordergrunddienst weiter, auch bei gesperrtem Display — eine Hintergrund-Standortberechtigung (`ACCESS_BACKGROUND_LOCATION`) fragt die App nicht an und deklariert sie auch nicht |
+| Standort (genau/ungefähr) | Aufzeichnung der Tour, Anzeige der eigenen Position auf der Karte und Startpunkt der Rundkurs-Suche („Runde bauen“ am Ende der Einführung, auf „Heute“, „Routen suchen“). Außerhalb einer Aufzeichnung liest die App die Position nur, wenn du sie ausdrücklich anforderst: Standort-Knopf auf der Karte, Rundkurs-Suche ab deinem Standort. „Während der Nutzung erlauben" genügt: Die Aufzeichnung läuft als Vordergrunddienst weiter, auch bei gesperrtem Display — eine Hintergrund-Standortberechtigung (`ACCESS_BACKGROUND_LOCATION`) fragt die App nicht an und deklariert sie auch nicht |
 | Vordergrunddienst (Standort) | damit die Aufzeichnung bei gesperrtem Display und nach dem Wegwischen der App weiterläuft |
 | Benachrichtigungen | die Anzeige der laufenden Aufzeichnung |
 | Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync |
@@ -109,7 +109,7 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | Empfänger | Wann | Was mitgeht |
 |---|---|---|
 | Der gewählte **Kachel-Server** — je nach Kartenstil `tile.openstreetmap.de` (FOSSGIS e. V.), `tile-cyclosm.openstreetmap.fr`, `tile.openstreetmap.org`, `tile.opentopomap.org`, `server.arcgisonline.com` (Esri) oder `tiles.openfreemap.org` (OpenFreeMap, Stil „Vektorkarte“) | sobald die Karte einen Ausschnitt zeichnet; beim Offline-Speichern (nur mit der „Vektorkarte“ möglich) ausschließlich `tiles.openfreemap.org` | Kachelkoordinaten (`z/x/y`), bei OpenFreeMap zusätzlich der Abruf von Kartenstil, Symbolen und Schriften (ohne Bezug zu dir). Daraus ergibt sich, **welchen Kartenausschnitt du dir ansiehst** — zusammen mit der IP-Adresse also ein Hinweis darauf, wo du dich aufhältst oder hin willst. **OpenFreeMap** (Hyperknot Software Kft., Ungarn) arbeitet ohne Registrierung, API-Schlüssel und Cookies; laut seiner [Datenschutzerklärung](https://openfreemap.org/privacy/) protokolliert es im Regelbetrieb Browser/User-Agent und Zeitpunkt, aber keine IP-Adresse, und schaltet ein IP-Protokoll nur bei Missbrauch oder Angriffen für höchstens 30 Tage zu. Ausgeliefert werden die Kacheln über das CDN **Cloudflare, Inc. (USA)**: Cloudflare sieht deine IP-Adresse und die abgerufenen Kachel-URLs, also ebenfalls den Kartenausschnitt — das ist eine Übermittlung in ein Drittland ([Datenschutzerklärung von Cloudflare](https://www.cloudflare.com/privacypolicy/)) |
-| **brouter.de** | wenn du eine Route berechnen lässt | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
+| **brouter.de** | wenn du eine Route berechnen lässt — auch mit „Runde bauen“ am Ende der Einführung oder auf „Heute“ | die Koordinaten deiner Wegpunkte und das gewählte Routing-Profil; beim ersten Mal zusätzlich das Profil selbst |
 | **brouter.de** | wenn du unter *Mehr → Offline-Routing* Routing-Kacheln herunterlädst oder aktualisierst (`https://brouter.de/brouter/segments4/…`, siehe `app/…/routing/SegmentDownloader.kt` und `core/…/RoutingSegments.kt`) | der Name der gewählten **5°×5°-Kachel** (z. B. `E10_N45.rd5`) — daraus ergibt sich die grobe Region, für die du Routing willst, typischerweise also deine Wohn- oder Urlaubsgegend. Bei einer Delta-Aktualisierung steht zusätzlich die **MD5-Prüfsumme deines lokalen Kachelstands** in der URL; sie verrät dem Server, welchen Tagesstand du zuletzt geladen hattest, aber nichts über deine Touren |
 | **nominatim.openstreetmap.org** | wenn du eine Ortssuche **absendest** (Suchtaste der Tastatur oder „„…“ suchen“) — nicht schon beim Tippen | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
@@ -124,9 +124,7 @@ speichern, weil ihre Server Vorab-Downloads nicht erlauben; früher damit
 gespeicherte Regionen bleiben erhalten (verwalten unter *Mehr →
 Offline-Karten*).
 
-Zur Update-Prüfung: Die App wird als APK per Sideload verteilt, kein Store
-aktualisiert sie — ohne diese Prüfung erführe niemand von einer neuen Version
-(und damit auch nicht von Fehlerkorrekturen). Sie ist die einzige Anfrage, die
+Zur Update-Prüfung: Die App ist über Google Play und als APK über GitHub erhältlich. Play-Installationen können über Google Play aktualisiert werden. Die GitHub-Prüfung zeigt neue Releases an. Sie ist die einzige Anfrage, die
 nicht unmittelbar aus einer Nutzeraktion folgt. Wer sie abschaltet, kann
 jederzeit von Hand prüfen (*Mehr → Über → „Nach Updates suchen"*); die App
 lädt und installiert dabei in keinem Fall selbst etwas, der Download läuft
@@ -170,7 +168,7 @@ Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
   liest Trailscape erst, wenn du sie über „Routen freigeben“ einzeln erlaubst.
   Bis dahin kommt die Tour ohne GPS-Spur.
 - Die Daten werden auf dem Gerät ausgewertet (Trainingslast, Fitness,
-  Erholung) und dort gespeichert. Sie werden **nicht** übertragen, nicht
+  Erholung) und dort gespeichert. Gesundheitswerte in Touren können beim optionalen Sync an deinen eigenen Server übertragen werden. Sie werden nicht
   weitergegeben und nicht ausgewertet, um dir etwas zu verkaufen.
 - Du kannst die Freigabe in Health Connect jederzeit widerrufen. Die App
   funktioniert dann weiter, nur ohne die importierten Werte.
