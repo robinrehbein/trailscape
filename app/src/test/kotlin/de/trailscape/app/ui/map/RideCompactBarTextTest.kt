@@ -85,7 +85,7 @@ class RideCompactBarTextTest {
     fun `auf Englisch mit Punkt und englischen Zustaenden`() {
         assertEquals("24.3", en(kompaktTempoWert(24.31, paused = false, autoPaused = false, language = AppLanguage.EN)))
         assertEquals("Paused", en(kompaktTempoWert(0.0, paused = true, autoPaused = false, language = AppLanguage.EN)))
-        assertEquals("manual", en(kompaktTempoLabel(paused = true)))
+        assertEquals("recording", en(kompaktTempoLabel(paused = true)))
         assertEquals("automatic", en(kompaktTempoLabel(paused = true, autoPaused = true)))
         assertEquals(
             "Speed 24.3 kilometres per hour",

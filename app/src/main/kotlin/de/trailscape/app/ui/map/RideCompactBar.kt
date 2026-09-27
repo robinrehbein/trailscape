@@ -306,6 +306,8 @@ internal fun kompaktTempoWert(
  * Beschriftung unter dem Tempo-Platz — pausiert traegt der Wert selbst den
  * Zustand, die Beschriftung sagt, ob automatisch. „Auto-Pause" als Wert
  * passte auf normal breiten Telefonen nicht in die Spalte („Auto-Pau…").
+ * Von Hand pausiert lautet das Paar „Pause / Aufzeichnung" (Englisch
+ * „Paused / recording") — die Aufzeichnung ruht, kein Moduswechsel.
  */
 internal fun kompaktTempoLabel(paused: Boolean, autoPaused: Boolean = false): UiText =
     when {

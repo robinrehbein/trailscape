@@ -254,7 +254,7 @@ internal fun RouteGenerationSheet(
                     NoticeBox(
                         icon = Icons.Filled.Warning,
                         color = signals.danger,
-                        text = error,
+                        text = error.asString(),
                         modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                     )
                     // Derselbe Ausweg wie im Fehlerzweig der manuellen Planung

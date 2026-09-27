@@ -385,6 +385,7 @@
     <string name="map_screen_battery_dialog_error">Der Systemdialog ließ sich nicht öffnen. Die Ausnahme lässt sich in den Android-Einstellungen unter „Akku“ erteilen.</string>
     <string name="map_screen_segment_offer_title">Karten für Offline-Routing</string>
     <string name="map_screen_segment_offer_body">Für diese Gegend fehlen die Kartendaten: %1$s, %2$s. Danach berechnet die App Routen hier ohne Netz — meist schneller als über den Server.</string>
+    <string name="map_screen_segment_offer_size_unknown">Größe unbekannt</string>
     <string name="map_screen_segment_offer_accept_action">Jetzt laden</string>
     <string name="map_screen_segment_offer_later_action">Nicht jetzt</string>
     <string name="map_screen_delete_title">Tour löschen</string>

@@ -3647,8 +3647,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                 Text(
                     stringResource(
                         R.string.map_screen_segment_offer_body,
-                        offer.title,
-                        formats.bytes(offer.totalBytes) ?: stringResource(R.string.common_unknown),
+                        offer.titleText(LocalCoreTexts.current).asString(),
+                        formats.bytes(offer.totalBytes)
+                            ?: stringResource(R.string.map_screen_segment_offer_size_unknown),
                     ),
                 )
             },
@@ -4240,8 +4241,9 @@ private const val ZIEL_ERREICHT_KM = 0.03
 
 /*
  * Der Wegpunktname der eigenen Position (gesetzt von [runRouteToPlace] und
- * „Mein Standort als Start") ist `map_planning_my_position_name` — derselbe
- * Name, an dem die Planungsliste den Standort-Start erkennt.
+ * „Mein Standort als Start") ist `map_planning_my_position_name` in der
+ * gerade gueltigen Sprache; erkannt wird er in jeder Sprache ueber
+ * [isMyPositionName].
  */
 
 /**

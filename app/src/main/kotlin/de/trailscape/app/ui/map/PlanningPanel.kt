@@ -270,10 +270,8 @@ internal fun PlanningSheet(
                         waypoints = waypoints,
                         onRemove = onRemoveWaypoint,
                         onAddViaSearch = onAddWaypointViaSearch,
-                        // Der Standort-Wegpunkt traegt den Namen in der Sprache,
-                        // in der er gesetzt wurde (siehe `map_planning_my_position_name`).
-                        showUseMyPosition = stringResource(R.string.map_planning_my_position_name)
-                            .let { myPosition -> waypoints.none { it.name == myPosition } },
+                        // Sprachunabhaengig, siehe [MY_POSITION_NAMES].
+                        showUseMyPosition = showUseMyPosition(waypoints),
                         locating = locating,
                         onUseMyPosition = onUseMyPosition,
                     )
@@ -462,7 +460,8 @@ private fun WaypointList(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         waypoints.forEachIndexed { index, waypoint ->
-            val label = waypoint.name ?: stringResource(R.string.map_planning_point_label, index + 1)
+            val label = waypoint.name?.let { waypointNameText(it).asString() }
+                ?: stringResource(R.string.map_planning_point_label, index + 1)
             ListRow(
                 badge = {
                     NumberBadge(
@@ -786,19 +785,19 @@ private fun routeSourceLabel(source: RoutingSource?): UiText? = when (source) {
  * Bei „Zurück zum Start" fuehrt die Route zum Start zurueck — „Start → Ziel"
  * behauptete dann das Falsche; der Titel sagt stattdessen „Rundweg ab …".
  */
-private fun planningRouteLabel(waypoints: List<Waypoint>, roundTrip: Boolean): UiText {
+internal fun planningRouteLabel(waypoints: List<Waypoint>, roundTrip: Boolean): UiText {
     val start = waypoints.firstOrNull()
     if (roundTrip) {
-        return start?.name?.let { UiText.Res(R.string.map_planning_loop_from, listOf(it)) }
+        return start?.name?.let { UiText.Res(R.string.map_planning_loop_from, listOf(waypointNameText(it))) }
             ?: UiText.Plural(R.plurals.map_planning_loop_points_count, waypoints.size)
     }
     val end = waypoints.lastOrNull()
     if (start?.name == null && end?.name == null) {
         return UiText.Plural(R.plurals.map_planning_points_count, waypoints.size)
     }
-    val startLabel: UiText = start?.name?.let(UiText::Plain)
+    val startLabel: UiText = start?.name?.let(::waypointNameText)
         ?: UiText.Res(R.string.map_planning_point_label, listOf(1))
-    val endLabel: UiText = end?.name?.let(UiText::Plain)
+    val endLabel: UiText = end?.name?.let(::waypointNameText)
         ?: UiText.Res(R.string.map_planning_point_label, listOf(waypoints.size))
     return UiText.Res(R.string.map_planning_from_to, listOf(startLabel, endLabel))
 }
@@ -817,9 +816,8 @@ private fun routeProfileHint(profile: RouteProfile): Int? = when (profile) {
 
 /*
  * Der Name des Wegpunkts, den „Mein Standort als Start" setzt, steht als
- * `map_planning_my_position_name` in `strings_map.xml` — daran erkennt die
- * Liste, dass der Standort schon Start ist, und blendet die Zeile aus. Er
- * wird in der Sprache gespeichert, in der der Punkt gesetzt wurde.
+ * `map_planning_my_position_name` in `strings_map.xml`. Erkannt wird er
+ * sprachunabhaengig ueber [isMyPositionName] (siehe `MyPositionName.kt`).
  */
 
 /** Wie viele Suchtreffer angezeigt werden (Dart: `results.take(5)`). */

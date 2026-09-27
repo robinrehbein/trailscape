@@ -165,7 +165,7 @@
     <string name="map_compact_data_cd">To the ride mode data page</string>
     <string name="map_compact_speed_paused_value">Paused</string>
     <string name="map_compact_speed_auto_label">automatic</string>
-    <string name="map_compact_speed_manual_label">manual</string>
+    <string name="map_compact_speed_manual_label">recording</string>
     <string name="map_compact_speed_auto_cd">Recording on auto-pause</string>
     <string name="map_compact_speed_paused_cd">Recording paused</string>
     <string name="map_compact_speed_cd">Speed %1$s kilometres per hour</string>
@@ -385,6 +385,7 @@
     <string name="map_screen_battery_dialog_error">The system dialog couldn’t be opened. You can grant the exception in the Android settings under “Battery”.</string>
     <string name="map_screen_segment_offer_title">Maps for offline routing</string>
     <string name="map_screen_segment_offer_body">Map data for this area is missing: %1$s, %2$s. After that, the app calculates routes here without signal — usually faster than via the server.</string>
+    <string name="map_screen_segment_offer_size_unknown">size unknown</string>
     <string name="map_screen_segment_offer_accept_action">Download now</string>
     <string name="map_screen_segment_offer_later_action">Not now</string>
     <string name="map_screen_delete_title">Delete ride</string>
