@@ -290,7 +290,9 @@ Anfrage an jemanden:
   Zielmarke entfallen, und ist die Tour dafür zu kurz, zeigt das Bild nur die
   Kennzahlen. Den Schalter „Start und Ziel ausblenden“ im Teilen-Dialog kannst
   du ausschalten. Wer die Gegend kennt, kann die übrige Strecke trotzdem
-  erkennen; Kennzahlen und Höhenprofil gelten für die ganze Tour, und eine
+  erkennen. Fährt die Tour unterwegs noch einmal nah an Start oder Ziel
+  vorbei, bleibt diese Durchfahrt im Bild sichtbar – ausgeblendet werden nur
+  die Enden der Linie. Kennzahlen und Höhenprofil gelten für die ganze Tour, und eine
   geteilte GPX-Datei enthält immer die vollständige Spur. Weitergegeben wird
   es nur über das Teilen-Menü an die App, die du auswählst.
 - **Löschung** — einzelne Touren in der Tourenliste löschen; alles auf einmal

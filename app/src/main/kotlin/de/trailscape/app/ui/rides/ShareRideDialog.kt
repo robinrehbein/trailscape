@@ -81,7 +81,7 @@ import kotlinx.coroutines.withContext
  * (Schalter aus), die uebrige Strecke (Schalter an), nur die Kennzahlen, weil
  * die Tour zum Kuerzen zu kurz ist, oder nur die Kennzahlen, weil es keine
  * Spur gibt. Der Schalter fehlt, wo es nichts zu kuerzen gibt (weniger als
- * zwei Punkte) und beim GPX, das immer die vollstaendige Spur enthaelt.
+ * zwei Punkte oder eine Spur ohne Strecke, [ShareTrackNote.NONE]) und beim GPX, das immer die vollstaendige Spur enthaelt.
  */
 @Composable
 internal fun ShareRideDialog(
@@ -128,7 +128,10 @@ internal fun ShareRideDialog(
                 )
                 if (format != null) {
                     ShareCardPreview(content = content, format = format, height = previewHeight)
-                    if (ride.points.size >= 2) {
+                    // Vorpruefung auf die Punkte, damit die Zeile nicht erst
+                    // nach dem Laden auftaucht; NONE haengt nicht von hideEnds
+                    // ab, der Schalter verschwindet also nie beim Umlegen.
+                    if (ride.points.size >= 2 && content?.trackNote != ShareTrackNote.NONE) {
                         SettingsSwitchRow(
                             title = stringResource(R.string.share_hide_ends_title),
                             subtitle = stringResource(R.string.share_hide_ends_subtitle, SHARE_END_RADIUS_M.toInt()),
@@ -140,13 +143,10 @@ internal fun ShareRideDialog(
                     if (card != null) {
                         Text(
                             text = when (card.trackNote) {
-                                ShareTrackNote.FULL ->
-                                    "Das Bild zeigt die Form deiner Strecke ohne Karte – " +
-                                        "wer die Gegend kennt, erkennt trotzdem Start und Ziel."
+                                ShareTrackNote.FULL -> stringResource(R.string.share_hint_full)
                                 ShareTrackNote.ENDS_HIDDEN -> stringResource(R.string.share_hint_ends_hidden)
                                 ShareTrackNote.TOO_SHORT -> stringResource(R.string.share_hint_too_short)
-                                ShareTrackNote.NONE ->
-                                    "Das Bild zeigt nur die Kennzahlen dieser Tour – ohne Strecke."
+                                ShareTrackNote.NONE -> stringResource(R.string.share_hint_no_track)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

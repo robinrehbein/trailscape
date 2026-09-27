@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Englische Fassung von values/strings_share_card_polish.xml. -->
-<resources>
-    <string name="share_hide_ends_title">Hide start and finish</string>
-    <string name="share_hide_ends_subtitle">The line starts and ends %1$d m away from your start and finish.</string>
-    <string name="share_hint_ends_hidden">The image shows the shape of your route without a map and without start and finish – anyone who knows the area may still recognise the rest of the route.</string>
-    <string name="share_hint_too_short">This ride is too short to hide start and finish – the image shows only the stats.</string>
-</resources>

@@ -144,4 +144,39 @@ class TrackPrivacyTest {
         assertEquals(13.0, head.lon, 1e-9)
         assertTrue(head.lat > start.lat && head.lat < far.lat)
     }
+
+    @Test
+    fun `nahe beieinander liegende Start und Ziel halten beide Enden fern`() {
+        // Start A, Ziel B 250 m oestlich. Die Fahrt geht erst ostwaerts an B
+        // vorbei 2 km weiter, dann 1 km nach Norden, zurueck nach Westen und
+        // schliesslich nach Sueden bis B.
+        val lat0 = 52.0
+        val lon0 = 13.0
+        val dLonPerM = degPerM / kotlin.math.cos(Math.toRadians(lat0))
+        fun at(eastM: Double, northM: Double) = TrackPoint(lat0 + northM * degPerM, lon0 + eastM * dLonPerM)
+        fun leg(from: Pair<Double, Double>, to: Pair<Double, Double>, steps: Int) =
+            (0 until steps).map { k ->
+                val t = k / steps.toDouble()
+                at(from.first + (to.first - from.first) * t, from.second + (to.second - from.second) * t)
+            }
+        val points = leg(0.0 to 0.0, 2000.0 to 0.0, 40) +
+            leg(2000.0 to 0.0, 2000.0 to 1000.0, 20) +
+            leg(2000.0 to 1000.0, 250.0 to 1000.0, 35) +
+            leg(250.0 to 1000.0, 250.0 to 0.0, 20) +
+            at(250.0, 0.0)
+        val start = points.first()
+        val finish = points.last()
+        assertEquals(250.0, haversineM(start, finish), 1.0)
+
+        val trimmed = trimTrackEnds(points)
+
+        assertTrue(trimmed.size > 10)
+        listOf(trimmed.first(), trimmed.last()).forEach { p ->
+            assertTrue(haversineM(start, p) >= r - 1.0, "Ende zu nah am Start: ${haversineM(start, p)} m")
+            assertTrue(haversineM(finish, p) >= r - 1.0, "Ende zu nah am Ziel: ${haversineM(finish, p)} m")
+        }
+        // Der Kopf sitzt auf dem Rand des Zielkreises (550 m oestlich von A), nicht bei 300 m.
+        assertEquals(r, haversineM(finish, trimmed.first()), 1.0)
+        assertEquals(r, haversineM(finish, trimmed.last()), 1.0)
+    }
 }

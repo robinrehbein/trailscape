@@ -35,8 +35,8 @@ import org.robolectric.annotation.GraphicsMode
  * an (gekuerzte Linie ohne Marken), nach dem Ausschalten (ganze Linie samt
  * Start und Ziel) und eine zu kurze Tour (nur Kennzahlen). Der Dialog ist ein
  * eigenes Fenster, daher `captureScreenRoboImage`. Die Sprache ist fest auf
- * Deutsch gestellt (`de` im Qualifier): Robolectric startet sonst englisch
- * und zoege die Texte aus `values-en`. Laeuft nur mit
+ * Deutsch gestellt (`de` im Qualifier), damit die Bilder auch dann
+ * unveraendert bleiben, wenn es spaeter uebersetzte Texte gibt. Laeuft nur mit
  * `-Pscreenshots`; die PNGs landen in `app/build/outputs/roborazzi/`.
  */
 @RunWith(RobolectricTestRunner::class)
