@@ -6,6 +6,7 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -300,6 +301,28 @@ class RideSegmentsTest {
         assertEquals(false, v1.isNewBest)
         assertEquals(true, v2.isNewBest)
         assertEquals(false, v3.isNewBest)
+    }
+
+    @Test
+    fun `previousBestTimeS ist die schnellste fruehere Befahrung, bei der ersten null`() {
+        val r1 = climbRide("r1", T0, dtMs = 5000L)
+        val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00004)
+        val r3 = climbRide("r3", T0 + 2 * 86_400_000L, dtMs = 4500L, jitterLat = 0.00002)
+
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
+        registry = updateSegmentRegistry(registry, r2).registry
+        registry = updateSegmentRegistry(registry, r3).registry
+
+        val v1 = segmentEffortsForRide(registry, "r1").single()
+        val v2 = segmentEffortsForRide(registry, "r2").single()
+        val v3 = segmentEffortsForRide(registry, "r3").single()
+
+        assertNull(v1.previousBestTimeS)
+        assertEquals(v1.timeS, v2.previousBestTimeS)
+        // Fuer r3 zaehlt die schnellste der beiden frueheren — r2, nicht r1.
+        assertEquals(v2.timeS, v3.previousBestTimeS)
+        // isNewBest bleibt unveraendert.
+        assertEquals(listOf(false, true, false), listOf(v1.isNewBest, v2.isNewBest, v3.isNewBest))
     }
 
     @Test

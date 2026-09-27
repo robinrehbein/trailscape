@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -256,6 +257,8 @@ internal fun LiveRecordingCard(
  * Puls) dazu. Frueher stand das Profil immer offen auf einer schwebenden
  * Karte und nahm der Strecke auf der Karte ein Drittel des Bildes.
  *
+ * @param onOpenDetails oeffnet die Detailansicht mit „Was die Tour gebracht
+ *   hat"; `null` blendet die Kachel aus. Nur fuer gefahrene Touren.
  * @param expanded Stufe des Blatts — bleibt beim Aufrufer.
  * @param onHoverPoint meldet den im Hoehenprofil abgelesenen Punkt nach oben,
  *   damit der Screen ihn auf der Karte markieren kann.
@@ -267,6 +270,7 @@ internal fun RideCard(
     onNavigate: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    onOpenDetails: (() -> Unit)? = null,
     onClose: () -> Unit,
     onHoverPoint: (TrackPoint?) -> Unit,
     expanded: Boolean,
@@ -357,7 +361,10 @@ internal fun RideCard(
                 // Funktion, die die App nicht haben will. „Auf der Karte
                 // zeigen" fehlt hier naturgemaess, „Umbenennen" bleibt dem
                 // Detail vorbehalten: Das Blatt soll niedrig bleiben, damit die
-                // Karte darueber sichtbar ist.
+                // Karte darueber sichtbar ist. Das Detail selbst ist aber ueber
+                // „Auswertung" erreichbar — dieses Blatt ist das erste, was man
+                // nach dem Beenden einer Aufzeichnung sieht, und die Frage
+                // „Was hat die Tour gebracht?" beantwortet erst das Detail.
                 Column(modifier = Modifier.padding(end = 8.dp)) {
                     PrimaryButton(
                         text = when {
@@ -386,7 +393,15 @@ internal fun RideCard(
                     )
                     Spacer(Modifier.height(8.dp))
                     ActionTileRow(
-                        actions = listOf(
+                        actions = listOfNotNull(
+                            onOpenDetails?.takeIf { !ride.planned }?.let {
+                                TileAction(
+                                    "Auswertung",
+                                    Icons.Filled.Insights,
+                                    contentDescription = "Auswertung dieser Tour öffnen",
+                                    onClick = it,
+                                )
+                            },
                             TileAction(
                                 "Teilen",
                                 Icons.Filled.Share,

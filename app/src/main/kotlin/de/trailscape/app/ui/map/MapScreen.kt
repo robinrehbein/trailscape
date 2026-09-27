@@ -3368,6 +3368,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onNavigate = { navigateRide(card) },
                             onShare = { shareRoute(card.name, card.points) },
                             onDelete = { deleteDialogRide = card },
+                            onOpenDetails = { appViewModel.requestRideDetail(card.id) },
                             onClose = {
                                 hoverPoint = null
                                 appViewModel.select(null)

@@ -16,6 +16,7 @@ import de.trailscape.app.routing.SegmentDownloads
 import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.routing.describeSegmentOffer
+import de.trailscape.app.ui.rides.formatImprovementDe
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.TrackPoint
@@ -50,6 +51,7 @@ import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.collectExplorerTiles
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
+import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
 import de.trailscape.core.loadPlan
@@ -1807,7 +1809,7 @@ class AppViewModel(
                 val best = newBests.first()
                 showMessage(
                     "Neue Bestzeit auf „${best.segmentName}“: ${formatDuration(best.timeS)}, " +
-                        "${formatImprovement(best.improvementS)} schneller.",
+                        "${formatImprovementDe(best.improvementS)} schneller.",
                 )
             }
             // Mehrere auf einmal (z. B. Runden-Tour ueber mehrere Anstiege):
@@ -1815,10 +1817,6 @@ class AppViewModel(
             else -> showMessage("Neue Bestzeiten auf ${newBests.size} Segmenten.")
         }
     }
-
-    /** „14 s" unter einer Minute, sonst „1:15 min" — fuer die Bestzeit-Meldung. */
-    private fun formatImprovement(seconds: Int): String =
-        if (seconds < 60) "$seconds s" else "${formatDuration(seconds)} min"
 
     // -------------------------------------------------------------------------
     // Trainingsplan
@@ -2143,6 +2141,28 @@ class AppViewModel(
     suspend fun exploredTilesForPlanning(): Set<ExplorerTile> {
         if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
         return _explorerTiles.value
+    }
+
+    /**
+     * Wie viele Kacheln die Tour [rideId] zum ersten Mal befahren hat — fuer
+     * „Was die Tour gebracht hat" in der Detailansicht
+     * (`:core`/[explorerTilesNewInRide]).
+     *
+     * Nachgeschlagen wird immer, auch bei ausgeschaltetem Kachel-Layer: der
+     * Blick in den Cache ist billig und liefert `null`, wenn er unvollstaendig
+     * oder veraltet ist. Nur die teure Neuberechnung ([refreshExplorerTiles],
+     * ein Lauf ueber den ganzen Tourbestand) gibt es allein bei
+     * eingeschaltetem Layer — wer ihn nie einschaltet, bezahlt dafuer nichts,
+     * sieht die Zeile aber, sobald der Cache (etwa aus der Rundkurs-Suche)
+     * vollstaendig ist.
+     */
+    suspend fun explorerTilesGainedBy(rideId: String): Int? {
+        if (_explorerTilesEnabled.value && _explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
+        val summaries = allSummaries
+        return withContext(io) {
+            runCatching { explorerTilesNewInRide(rideId, summaries, explorerTilesStore) }.getOrNull()
+        }
     }
 
     // -------------------------------------------------------------------------
