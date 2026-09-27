@@ -77,6 +77,7 @@ import de.trailscape.core.rideToGpx
 import de.trailscape.core.safeFileName
 import java.io.File
 import java.time.LocalDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -499,6 +500,12 @@ private fun RidesEmptyState(
  * Loeschen, und eine Snackbar in ihrem Fenster (samt der Coroutine, die auf
  * „Rückgängig" wartet) verschwaende mit ihr, bevor jemand tippen kann.
  *
+ * ## Teilen: Bild oder GPX
+ * „Teilen" oeffnet [ShareRideDialog]: das Tour-Bild als Story oder Quadrat
+ * ([shareRideImage]) oder die Spur als GPX ([shareGpx]). Die Trainingslast
+ * fuer das Bild kommt aus [AppViewModel.insights] — nur gelesen, keine neue
+ * Rechnung.
+ *
  * ## Meldungen
  * [AppViewModel.messages] sammelt diese Ansicht selbst ein: Ihr Fenster
  * verdeckt den Verlauf-Tab, ein Teilen-Fehler muss also hier erscheinen.
@@ -526,6 +533,9 @@ fun RideDetailHost(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var renameTarget by remember { mutableStateOf<RideSummary?>(null) }
+    var shareOpen by rememberSaveable { mutableStateOf(false) }
+    // Die Trainingslast kann auf dem Tour-Bild stehen (ohne Puls als vierte Zahl).
+    val insights by appViewModel.insights.collectAsStateWithLifecycle()
 
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -541,6 +551,7 @@ fun RideDetailHost(
     BackHandler(onBack = onBack)
 
     val loaded = ride ?: return
+    val load = insights.rideLoads[loaded.id]?.takeIf { it.available }?.load
 
     RideDetailScreen(
         ride = loaded,
@@ -559,21 +570,7 @@ fun RideDetailHost(
             appViewModel.requestRideAsRoute(loaded.id)
         },
         onRename = { renameTarget = summary },
-        onShare = {
-            scope.launch {
-                try {
-                    shareGpx(context, loaded)
-                } catch (e: Exception) {
-                    appViewModel.showMessage(
-                        withCause(
-                            "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
-                                "Speicher frei ist, und versuche es erneut.",
-                            e,
-                        ),
-                    )
-                }
-            }
-        },
+        onShare = { shareOpen = true },
         onDelete = { onDelete(loaded.id) },
     )
 
@@ -584,6 +581,56 @@ fun RideDetailHost(
             onConfirm = { newName ->
                 appViewModel.renameRide(target.id, newName)
                 renameTarget = null
+            },
+        )
+    }
+
+    if (shareOpen) {
+        ShareRideDialog(
+            ride = loaded,
+            load = load,
+            onDismiss = { shareOpen = false },
+            onShareGpx = {
+                shareOpen = false
+                scope.launch {
+                    try {
+                        shareGpx(context, loaded)
+                    } catch (e: Exception) {
+                        appViewModel.showMessage(
+                            withCause(
+                                "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
+                                    "Speicher frei ist, und versuche es erneut.",
+                                e,
+                            ),
+                        )
+                    }
+                }
+            },
+            onShareImage = { format ->
+                shareOpen = false
+                scope.launch {
+                    // Auch OutOfMemoryError: Eine Story-Bitmap belegt rund 8 MB,
+                    // auf knappen Geraeten soll das eine Meldung sein, kein Absturz.
+                    val failure: Throwable? = try {
+                        shareRideImage(context, loaded, load, format)
+                        null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        e
+                    } catch (e: OutOfMemoryError) {
+                        e
+                    }
+                    if (failure != null) {
+                        appViewModel.showMessage(
+                            withCause(
+                                "Das Bild konnte nicht erstellt werden. Prüfe, ob genug " +
+                                    "Speicher frei ist, und versuche es erneut.",
+                                failure,
+                            ),
+                        )
+                    }
+                }
             },
         )
     }

@@ -132,6 +132,8 @@ import kotlinx.coroutines.withContext
  *     sichtbar und beschriftet: Karte zeigen, Umbenennen, Teilen, Loeschen.
  *     Diese vier lagen frueher hinter ⋮; eine App ohne versteckte Funktionen
  *     kann sich kein Menue leisten, dessen Inhalt man erraten muss.
+ *     „Teilen" fragt nach dem Was: Tour-Bild (Story oder Quadrat) oder GPX
+ *     (`ShareRideDialog.kt`) — eine fuenfte Kachel haette die Reihe umbrochen.
  *  6. Hoehenprofil.
  *  7. „Alle Werte" klappt den Rest auf: Fahrzeit, Ø Tempo, Hm ↓, Max. Puls,
  *     Tempo- und Pulskurve, die Coach-Auswertung (Trainingslast als Zahl,
@@ -294,7 +296,7 @@ internal fun RideDetailScreen(
                         TileAction(
                             "Teilen",
                             Icons.Filled.Share,
-                            contentDescription = "Tour als GPX teilen",
+                            contentDescription = "Tour teilen",
                             onClick = onShare,
                         ),
                         TileAction(
