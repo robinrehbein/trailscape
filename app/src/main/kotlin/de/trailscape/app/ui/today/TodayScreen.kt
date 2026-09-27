@@ -103,6 +103,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    val ridesLoading by appViewModel.ridesLoading.collectAsStateWithLifecycle()
 
     // Tagesgenau und beim Zurueckkehren nach Mitternacht erneuert (siehe
     // [rememberNow]) — sonst galt nach einer Nacht im Hintergrund noch gestern.
@@ -232,7 +233,12 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     )
                 }
 
-                if (!hasRiddenRide) {
+                // Solange die Touren noch aus der Datenbank kommen, weder
+                // Wochenstreifen noch „Noch keine Touren" — sonst blitzt der
+                // Erststart kurz auch bei vorhandener Historie auf.
+                if (ridesLoading) {
+                    Unit
+                } else if (!hasRiddenRide) {
                     // Erststart: Ein Streifen aus lauter „–" sagte nichts —
                     // hier steht stattdessen der Weg zur ersten Tour. Nur
                     // gespeicherte Planungen zaehlen dabei nicht als Tour: Der
@@ -326,7 +332,7 @@ private fun FirstRideState(onRecord: () -> Unit, onImport: () -> Unit, hasOffer:
     EmptyState(
         title = "Noch keine Touren",
         body = if (hasOffer) {
-            "Bau dir oben eine Runde und fahr los – oder hol deine bisherigen Touren aus " +
+            "Bau dir oben eine Runde und fahr los — oder hol deine bisherigen Touren aus " +
                 "Strava, Garmin oder Wahoo. Danach siehst du hier deine Woche."
         } else {
             "Sobald die erste Tour gefahren oder importiert ist, siehst du hier deine Woche."

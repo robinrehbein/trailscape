@@ -74,6 +74,7 @@ fun decideToday(
     plan: TrainingPlan?,
     rides: List<RideSummary>,
     nowMs: Long,
+    ridesLoading: Boolean = false,
 ): TodayDecision {
     val displayPlan = plan?.let { current ->
         adaptPlan(
@@ -98,6 +99,22 @@ fun decideToday(
         weeklyTarget = insights.weeklyTarget,
     )
     val effort = todayEffort(route, planRestDay, currentWeek?.sessions.orEmpty())
+    // Solange die Touren noch laden, ist `rides` leer — auch fuer jemanden mit
+    // Historie. Die erste Runde waere dann eine Fehlannahme: falsche
+    // Schlagzeile, falsche Distanz und ein Auto-Start mit dem falschen Ziel.
+    // Bis die Liste steht, gibt es deshalb weder erste Runde noch Angebot.
+    if (ridesLoading && route.firstRound) {
+        val neutral = route.copy(firstRound = false)
+        return TodayDecision(
+            displayPlan = displayPlan,
+            todaySession = todaySession,
+            currentWeek = currentWeek,
+            planRestDay = planRestDay,
+            route = neutral,
+            effort = todayEffort(neutral, planRestDay, currentWeek?.sessions.orEmpty()),
+            offer = null,
+        )
+    }
     return TodayDecision(
         displayPlan = displayPlan,
         todaySession = todaySession,
@@ -163,6 +180,9 @@ fun rememberTodayDecision(appViewModel: AppViewModel, now: LocalDateTime = remem
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    val ridesLoading by appViewModel.ridesLoading.collectAsStateWithLifecycle()
     val nowMs = remember(now) { now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }
-    return remember(insights, plan, rides, nowMs) { decideToday(insights, plan, rides, nowMs) }
+    return remember(insights, plan, rides, nowMs, ridesLoading) {
+        decideToday(insights, plan, rides, nowMs, ridesLoading)
+    }
 }

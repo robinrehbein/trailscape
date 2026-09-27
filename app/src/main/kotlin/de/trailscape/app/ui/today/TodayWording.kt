@@ -519,9 +519,9 @@ fun whyNote(
         val hours = route.target?.durationH
         add(
             if (hours != null) {
-                "Noch keine Tour gespeichert – deshalb ein ruhiger Einstieg über etwa ${formatRoundHours(hours)}."
+                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa ${formatRoundHours(hours)}."
             } else {
-                "Noch keine Tour gespeichert – deshalb ein ruhiger Einstieg."
+                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg."
             },
         )
         add("Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.")

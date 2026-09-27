@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +47,7 @@ import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.OneUiMotion
 import de.trailscape.app.ui.theme.ScreenPadding
@@ -53,8 +55,9 @@ import de.trailscape.core.FirstRoundDuration
 import de.trailscape.core.HealthSyncException
 import de.trailscape.core.Sex
 import de.trailscape.core.TrainingProfile
-import de.trailscape.core.defaultFirstRoundDuration
 import de.trailscape.core.firstRoundTarget
+import de.trailscape.core.onboardingFirstRoundPreselect
+import de.trailscape.core.riddenRides
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -125,13 +128,26 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
     var sex by rememberSaveable { mutableStateOf(Sex.UNBEKANNT) }
     var profileError by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Die Dauer der ersten Runde; `null` steht fuer „Später". Vorauswahl aus
-    // dem Zeitbudget beim ersten Komponieren — spaeter nicht nachgezogen, das
-    // Profil aendert sich in der Einfuehrung nur ueber Alter und Gewicht.
-    var firstRound by rememberSaveable {
-        mutableStateOf<FirstRoundDuration?>(defaultFirstRoundDuration(profile))
-    }
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
+    // Mit gefahrenen Touren (Einfuehrung erneut angesehen) ist es keine
+    // „erste" Runde mehr — Titel neutral, Vorauswahl „Später".
+    val hasHistory = remember(rides) { riddenRides(rides).isNotEmpty() }
+
+    // Die Dauer der ersten Runde; `null` steht fuer „Später". Vorauswahl beim
+    // ersten Komponieren aus [onboardingFirstRoundPreselect] — nur ohne
+    // gefahrene Tour eine Dauer, sonst „Später". Das Profil wird nicht
+    // nachgezogen, es aendert sich in der Einfuehrung nur ueber Alter und
+    // Gewicht.
+    var firstRound by rememberSaveable {
+        mutableStateOf(onboardingFirstRoundPreselect(profile, rides))
+    }
+    var firstRoundTouched by rememberSaveable { mutableStateOf(false) }
+    // Kommen die Touren erst nach dem ersten Komponieren aus der Datenbank,
+    // wird die Vorauswahl nachtraeglich auf „Später" gestellt — solange noch
+    // niemand selbst gewaehlt hat.
+    LaunchedEffect(hasHistory) {
+        if (hasHistory && !firstRoundTouched) firstRound = null
+    }
 
     // „Mehr → Über → Einführung erneut ansehen" zeigt dieselben Seiten noch
     // einmal — bisher mit leeren Profilfeldern, als haette der Nutzer nie etwas
@@ -259,7 +275,14 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = page.title, style = MaterialTheme.typography.headlineLarge)
+                        Text(
+                            text = if (page == OnboardingPage.FIRST_ROUND && hasHistory) {
+                                FIRST_ROUND_TITLE_WITH_HISTORY
+                            } else {
+                                page.title
+                            },
+                            style = MaterialTheme.typography.headlineLarge,
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         page.paragraphs.forEach { paragraph ->
                             Text(
@@ -293,7 +316,10 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
 
                             OnboardingPage.FIRST_ROUND -> FirstRoundStep(
                                 selected = firstRound,
-                                onSelect = { firstRound = it },
+                                onSelect = {
+                                    firstRound = it
+                                    firstRoundTouched = true
+                                },
                                 previewKm = firstRound?.let {
                                     firstRoundTarget(it.hours, profile, rides).distanceKm.roundToInt()
                                 },
@@ -363,30 +389,30 @@ private enum class OnboardingPage(
             // Planen und Auswerten kann jede Konkurrenz einzeln auch. Was
             // sonst niemand verbindet, ist der Weg von der Tagesempfehlung
             // zur passenden Runde.
-            "Trailscape sagt dir, was du heute fahren solltest – und baut dir die passende " +
-                "Runde dazu, über Schotter und Nebenwege zurück nach Hause.",
+            "Trailscape sagt dir, was du heute fahren solltest — und baut dir die passende " +
+                "Runde dazu, über Schotter und Nebenwege, die dort endet, wo sie beginnt.",
             // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
             // — der Satz sagt deshalb, dass sie gleich kommt. Inhaltlich die
             // Fuehrung „Klartext" (siehe `ui/TrailscapeApp.kt`).
             "Gleich findest du unten Heute, Karte, Verlauf und Training, daneben den runden " +
                 "Fahren-Knopf. Alles Weitere liegt hinter dem Zahnrad.",
-            "Alles bleibt auf deinem Gerät. Kein Konto, keine Telemetrie.",
+            "Deine Daten liegen auf deinem Gerät. Kein Konto, keine Telemetrie.",
         ),
     ),
     DATA(
         title = "Bring deine Touren mit",
         paragraphs = listOf(
-            "Mit deinen bisherigen Fahrten ist die Auswertung sofort aussagekräftig – ohne " +
+            "Mit deinen bisherigen Fahrten ist die Auswertung sofort aussagekräftig — ohne " +
                 "dauert es rund zwei Wochen.",
             "GPX, FIT oder komplette Exporte aus Strava, Garmin und Wahoo als ZIP. Duplikate " +
                 "erkennt Trailscape selbst.",
-            "Import über das + oben rechts im Verlauf – oder teil eine Datei direkt an Trailscape.",
+            "Import über das + oben rechts im Verlauf — oder teil eine Datei direkt an Trailscape.",
         ),
     ),
     PROFILE(
         title = "Ein paar Angaben für die Auswertung",
         paragraphs = listOf(
-            "Aus Alter und Gewicht schätzt Trailscape Puls und Leistung – die Grundlage jeder " +
+            "Aus Alter und Gewicht schätzt Trailscape Puls und Leistung — die Grundlage jeder " +
                 "Trainingslast.",
             "Leer lassen geht auch. Genauere Werte trägst du später unter Einstellungen → " +
                 "Profil ein.",
@@ -405,10 +431,16 @@ private enum class OnboardingPage(
         title = "Deine erste Runde",
         paragraphs = listOf(
             "Wie viel Zeit hast du heute? Trailscape baut dir eine ruhige Runde ab deinem " +
-                "Standort, die wieder zu Hause endet.",
+                "Standort, die dort wieder endet.",
         ),
     ),
 }
+
+/**
+ * Titel der letzten Seite fuer jemanden mit gefahrenen Touren — „Deine erste
+ * Runde" waere dort schlicht falsch.
+ */
+private const val FIRST_ROUND_TITLE_WITH_HISTORY = "Eine Runde für heute"
 
 /** Die Beschriftung der „Später"-Option neben den Dauern. */
 private const val FIRST_ROUND_LATER = "Später"
@@ -445,15 +477,18 @@ private fun FirstRoundStep(
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(modifier = Modifier.height(8.dp))
+        // Den Hinweis auf die Abfrage gibt es nur, wenn sie auch kommt.
+        val askLocation = !hasLocationPermission(LocalContext.current)
         Text(
-            text = "Gleich fragt Trailscape nach deinem Standort. Für die Berechnung gehen " +
-                "nur die Wegpunkte der Runde an den Routing-Server.",
+            text = (if (askLocation) "Gleich fragt Trailscape nach deinem Standort. " else "") +
+                "Für die Berechnung gehen die Wegpunkte der Runde — also auch dein " +
+                "Startpunkt — an den Routing-Server.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     } else {
         Text(
-            text = "Kein Problem – auf „Heute“ wartet jederzeit eine passende Runde.",
+            text = "Kein Problem — auf „Heute“ wartet jederzeit eine passende Runde.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

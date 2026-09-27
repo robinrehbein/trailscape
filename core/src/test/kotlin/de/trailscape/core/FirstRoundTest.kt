@@ -83,7 +83,20 @@ class FirstRoundTest {
         assertEquals("1½ h", formatRoundHours(1.5))
         assertEquals("2 h", formatRoundHours(2.0))
         assertEquals("½ h", formatRoundHours(0.5))
-        assertEquals("2,25 h", formatRoundHours(2.25))
+        // Alles andere laeuft ueber formatHours (eine Nachkommastelle).
+        assertEquals("2,3 h", formatRoundHours(2.3))
         assertEquals(listOf("1 h", "1½ h", "2 h"), FirstRoundDuration.entries.map { it.label })
+    }
+
+    @Test
+    fun `die Einfuehrung waehlt nur ohne gefahrene Tour eine Dauer vor`() {
+        assertEquals(FirstRoundDuration.ANDERTHALB_STUNDEN, onboardingFirstRoundPreselect(profile, emptyList()))
+        // Eine gespeicherte Planung ist keine gefahrene Tour.
+        assertEquals(
+            FirstRoundDuration.ANDERTHALB_STUNDEN,
+            onboardingFirstRoundPreselect(profile, listOf(ride(1, 20.0, planned = true))),
+        )
+        // Mit Historie (Einfuehrung erneut angesehen): „Später".
+        assertEquals(null, onboardingFirstRoundPreselect(profile, listOf(ride(1, 20.0))))
     }
 }

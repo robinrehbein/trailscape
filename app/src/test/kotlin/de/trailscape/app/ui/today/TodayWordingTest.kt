@@ -363,7 +363,7 @@ class TodayWordingTest {
         )
         assertEquals(
             listOf(
-                "Noch keine Tour gespeichert – deshalb ein ruhiger Einstieg über etwa 1½ h.",
+                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa 1½ h.",
                 "Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.",
             ),
             note,

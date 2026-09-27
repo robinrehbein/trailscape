@@ -44,8 +44,8 @@ enum class FirstRoundDuration(val hours: Double) {
  * Stunden fuer die Oberflaeche: „1 h", „1½ h", „2 h".
  *
  * Ganze Stunden als „N h", halbe mit dem Bruchzeichen („½ h" bei 0,5), alles
- * andere als deutsche Dezimalzahl („2,25 h"). Das Bruchzeichen, weil „1,5 h"
- * nach Messwert aussieht und „1½ h" nach dem, was man sagt.
+ * andere ueber das allgemeine [formatHours] („2,3 h"). Das Bruchzeichen, weil
+ * „1,5 h" nach Messwert aussieht und „1½ h" nach dem, was man sagt.
  */
 fun formatRoundHours(hours: Double): String {
     val halves = hours * 2
@@ -57,8 +57,7 @@ fun formatRoundHours(hours: Double): String {
             else -> "$whole½ h"
         }
     }
-    val rounded = (hours * 100).roundToInt() / 100.0
-    return rounded.toString().trimEnd('0').trimEnd('.').replace('.', ',') + " h"
+    return "${formatHours(hours)} h"
 }
 
 /** Beschriftung der ersten Runde im Generierungs-Panel („aus: Erste Runde …"). */
@@ -91,6 +90,24 @@ fun defaultFirstRoundDuration(profile: TrainingProfile): FirstRoundDuration {
     val cap = minOf(budget * FIRST_ROUND_WEEK_HOURS_SHARE, FirstRoundDuration.ANDERTHALB_STUNDEN.hours)
     return FirstRoundDuration.entries.lastOrNull { it.hours <= cap } ?: FirstRoundDuration.EINE_STUNDE
 }
+
+/**
+ * Die Vorauswahl auf der letzten Seite der Einfuehrung: [defaultFirstRoundDuration]
+ * fuer jemanden ohne gefahrene Tour, sonst `null` („Später").
+ *
+ * ## Warum nicht immer eine Dauer
+ * Die Einfuehrung ist ueber „Mehr → Über → Einführung erneut ansehen" erneut
+ * aufrufbar. Wer dort nur nachlesen will und durchtippt, soll nicht
+ * ungefragt in der Karte landen, nach dem Standort gefragt werden und eine
+ * Routensuche am Server ausloesen. Mit Historie ist die Runde deshalb eine
+ * bewusste Wahl, keine Vorgabe. Gespeicherte Planungen zaehlen nicht als
+ * gefahrene Tour ([riddenRides]).
+ */
+fun onboardingFirstRoundPreselect(
+    profile: TrainingProfile,
+    rides: List<RideInfo>,
+): FirstRoundDuration? =
+    if (riddenRides(rides).isEmpty()) defaultFirstRoundDuration(profile) else null
 
 /**
  * Das Routenziel der ersten Runde fuer [hours] Stunden.
