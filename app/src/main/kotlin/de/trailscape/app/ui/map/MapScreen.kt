@@ -580,6 +580,12 @@ fun MapScreen(appViewModel: AppViewModel) {
     var roundTripStart by remember { mutableStateOf<Place?>(null) }
     var roundTripKm by rememberSaveable { mutableIntStateOf(DEFAULT_ROUND_TRIP_KM) }
     var preferNewAreas by rememberSaveable { mutableStateOf(true) }
+    // „Wind berücksichtigen": gemerkt im Controller, der ihn bei jedem Start
+    // selbst liest — hier nur der Spiegel fuer den Schalter im Blatt.
+    val considerWind by RouteGenerationController.windEnabled.collectAsStateWithLifecycle()
+    LaunchedEffect(roundTripSetupOpen) {
+        if (roundTripSetupOpen) RouteGenerationController.restoreWindSetting()
+    }
 
     // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
     // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
@@ -3372,6 +3378,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onProfileChange = { routeProfile = it },
                             preferNewAreas = preferNewAreas,
                             onPreferNewAreasChange = { preferNewAreas = it },
+                            considerWind = considerWind,
+                            onConsiderWindChange = RouteGenerationController::setWindEnabled,
                             onShowSuggestions = ::confirmRoundTripSetup,
                             onClose = { roundTripSetupOpen = false },
                             bottomInset = sheetBottomInset,

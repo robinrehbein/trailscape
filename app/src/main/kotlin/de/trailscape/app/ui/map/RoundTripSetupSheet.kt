@@ -53,6 +53,11 @@ import kotlin.math.roundToInt
  *    vorbehalten und erscheinen hier als „Gemischt".
  *  * **Neue Gegenden bevorzugen** — bevorzugt Runden durch noch nicht
  *    befahrene Kacheln (Squadrats-Idee, siehe `core/.../ExplorerTiles.kt`).
+ *  * **Wind berücksichtigen** — hin gegen den Wind, heim mit Rueckenwind
+ *    (`core/.../WindScore.kt`). Die einzige Netzanfrage dieses Blatts
+ *    (aktueller Wind bei Open-Meteo, Startpunkt auf etwa 1 km gerundet),
+ *    deshalb ab Werk aus und mit dem Hinweis direkt darunter; gemerkt wird
+ *    der Schalter im `RouteGenerationController`.
  *
  * @param startLabel Woher die Runde startet („ab deinem Standort" oder der
  *   Name des angetippten Orts).
@@ -66,6 +71,8 @@ internal fun RoundTripSetupSheet(
     onProfileChange: (RouteProfile) -> Unit,
     preferNewAreas: Boolean,
     onPreferNewAreasChange: (Boolean) -> Unit,
+    considerWind: Boolean,
+    onConsiderWindChange: (Boolean) -> Unit,
     onShowSuggestions: () -> Unit,
     onClose: () -> Unit,
     bottomInset: Dp,
@@ -142,6 +149,19 @@ internal fun RoundTripSetupSheet(
                     )
                 }
                 Switch(checked = preferNewAreas, onCheckedChange = onPreferNewAreasChange)
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Wind berücksichtigen", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Hin gegen den Wind, heim mit Rückenwind. Dafür geht dein Startpunkt, " +
+                            "auf etwa 1 km gerundet, an Open-Meteo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = considerWind, onCheckedChange = onConsiderWindChange)
             }
 
             Button(

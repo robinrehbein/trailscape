@@ -141,6 +141,7 @@ class RouteGeneratorTest {
         onProgress: ((Int, Int) -> Unit)? = null,
         exploredTiles: Set<ExplorerTile> = emptySet(),
         preferNewAreas: Boolean = false,
+        wind: WindConditions? = null,
     ): List<RouteCandidate> = runSync {
         generateRoutes(
             backend = backend,
@@ -154,6 +155,7 @@ class RouteGeneratorTest {
             onProgress = onProgress,
             exploredTiles = exploredTiles,
             preferNewAreas = preferNewAreas,
+            wind = wind,
         )
     }
 
@@ -597,5 +599,145 @@ class RouteGeneratorTest {
         // Die Nordrunde dreht um δ = 30° nach Westen, die Suedost-Runde nach Sueden.
         assertTrue(330.0 in bearings, "Kurse: $bearings")
         assertTrue(150.0 in bearings, "Kurse: $bearings")
+    }
+
+    // --- Wind (Schritt 7) ---
+
+    /** Kleinster Winkelabstand zweier Kurse in Grad (0…180). */
+    private fun angleBetween(a: Double, b: Double): Double {
+        val d = abs(((a - b) % 360 + 360) % 360)
+        return if (d > 180) 360 - d else d
+    }
+
+    @Test
+    fun `ohne Wind bleiben Kandidaten bitgenau gleich`() {
+        for (seed in 0..3) {
+            val plain = generate(FakeBackend(), target(40.0), seed = seed)
+            val nullWind = generate(FakeBackend(), target(40.0), seed = seed, wind = null)
+            assertEquals(plain.map { it.bearingDeg }, nullWind.map { it.bearingDeg })
+            assertEquals(plain.map { it.score }, nullWind.map { it.score })
+            assertEquals(plain, nullWind)
+            assertTrue(nullWind.all { it.windShape == null })
+        }
+    }
+
+    @Test
+    fun `schwacher Wind wird ignoriert, auch bei den Kursen`() {
+        for (seed in 0..3) {
+            val plain = generate(FakeBackend(), target(40.0), seed = seed)
+            val weak = generate(FakeBackend(), target(40.0), seed = seed, wind = WindConditions(5.0, 240.0, 30.0))
+            assertEquals(plain, weak)
+            assertTrue(weak.all { it.windShape == null })
+        }
+    }
+
+    @Test
+    fun `starker Wind stellt die Runde gegen den Wind nach vorn`() {
+        // Alle Distanzen gleich gut -> ohne Wind Gleichstand, sortiert nach Kurs.
+        val plain = generate(FakeBackend(fixedDistanceKm = 40.0), target(40.0))
+        assertEquals(0.0, plain.first().bearingDeg, EPS)
+
+        val wind = WindConditions(speedKmh = 30.0, fromDeg = 240.0, gustsKmh = 45.0)
+        val results = generate(FakeBackend(fixedDistanceKm = 40.0), target(40.0), wind = wind)
+
+        val best = results.first()
+        val closest = results.minBy { angleBetween(it.bearingDeg, 240.0) }
+        assertEquals(closest.bearingDeg, best.bearingDeg, EPS)
+        assertEquals(240.0, best.bearingDeg, EPS)
+        val shape = best.windShape
+        assertTrue(shape != null && shape > windTailwindHomeMinShape, "Form $shape")
+        assertTrue(results.all { it.windShape != null })
+        for (r in results) {
+            val expected = scoreRoute(
+                r.distanceKm, r.ascentM, r.targetKm, AscentPreference.FLACH,
+                windBonus = windScore(r.route.points, wind),
+            )
+            assertEquals(expected, r.score, EPS)
+        }
+        // Auch mit realistischem Umwegfaktor (Distanzen leicht verschieden).
+        val realistic = generate(FakeBackend(), target(40.0), wind = wind)
+        assertEquals(240.0, realistic.first().bearingDeg, EPS)
+    }
+
+    @Test
+    fun `Wind schlaegt die Distanz nicht`() {
+        val wind = WindConditions(speedKmh = 40.0, fromDeg = 240.0, gustsKmh = null)
+        // Die windguenstige Runde (Schwerpunkt Richtung 240°) ist 20 % zu lang,
+        // alle anderen treffen das Ziel genau.
+        val backend = RoutingBackend { waypoints, _ ->
+            val points = waypoints.map { TrackPoint(lat = it.lat, lon = it.lon, ele = 500.0) }
+            val windward = angleBetween(bearingTo(START, viaCentroid(points)), 240.0) < 45
+            PlannedRoute(points = points, distanceKm = if (windward) 48.0 else 40.0, ascentM = 0.0)
+        }
+
+        val results = generate(backend, target(40.0), wind = wind)
+
+        assertEquals(3, results.size)
+        val windward = results.single { angleBetween(it.bearingDeg, 240.0) < 45 }
+        assertTrue(windward.windShape!! > windTailwindHomeMinShape)
+        assertTrue(results.first() !== windward, "Kurse: ${results.map { it.bearingDeg }}")
+        assertEquals(results.last(), windward)
+    }
+
+    @Test
+    fun `Kursneigung mit Wind bleibt im Fenster und ist deterministisch`() {
+        val wind = WindConditions(speedKmh = 25.0, fromDeg = 200.0, gustsKmh = null)
+        for (seed in 0..3) {
+            val plain = generate(FakeBackend(), target(40.0), seed = seed)
+            val first = generate(FakeBackend(), target(40.0), seed = seed, wind = wind)
+            val second = generate(FakeBackend(), target(40.0), seed = seed, wind = wind)
+            assertEquals(first, second)
+
+            val base = plain.map { it.bearingDeg }.sorted()
+            for (r in first) {
+                val offset = base.minOf { angleBetween(it, r.bearingDeg) }
+                assertTrue(
+                    abs(offset) < 1e-6 || abs(offset - 30.0) < 1e-6,
+                    "seed $seed: Kurs ${r.bearingDeg} gegen $base",
+                )
+            }
+        }
+        val s0 = generate(FakeBackend(), target(40.0), seed = 0, wind = wind).map { it.bearingDeg }.toSet()
+        val s1 = generate(FakeBackend(), target(40.0), seed = 1, wind = wind).map { it.bearingDeg }.toSet()
+        assertTrue(s0 != s1, "$s0 / $s1")
+    }
+
+    @Test
+    fun `mit neuen Gegenden entscheidet die Neuheit, der Wind nur den Gleichstand`() {
+        // Wie oben: alles oestlich der Startspalte ist entdeckt. Wind aus Ost
+        // zoege die Kurse nach Osten — die Neuheit gewinnt trotzdem.
+        val s = explorerTileAt(START.lat, START.lon)
+        val eastExplored = buildSet {
+            for (x in s.x..s.x + 30) for (y in s.y - 30..s.y + 30) add(ExplorerTile(x, y))
+        }
+        val eastWind = WindConditions(speedKmh = 30.0, fromDeg = 90.0, gustsKmh = null)
+        val biased = generate(
+            FakeBackend(), target(40.0),
+            exploredTiles = eastExplored, preferNewAreas = true, wind = eastWind,
+        ).map { it.bearingDeg }.toSet()
+        assertTrue(330.0 in biased, "Kurse: $biased")
+        assertTrue(150.0 in biased, "Kurse: $biased")
+
+        // Alles ringsum ist entdeckt -> Gleichstand bei der Neuheit (ueberall
+        // 0 unentdeckte Kacheln), jetzt entscheidet der Wind (aus 240°).
+        val all = buildSet {
+            for (x in s.x - 30..s.x + 30) for (y in s.y - 30..s.y + 30) add(ExplorerTile(x, y))
+        }
+        val noWind = generate(FakeBackend(), target(40.0), exploredTiles = all, preferNewAreas = true)
+        assertEquals(setOf(0.0, 120.0, 240.0), noWind.map { it.bearingDeg }.toSet())
+        val withWind = generate(
+            FakeBackend(), target(40.0),
+            exploredTiles = all, preferNewAreas = true,
+            wind = WindConditions(speedKmh = 30.0, fromDeg = 240.0, gustsKmh = null),
+        )
+        assertEquals(setOf(330.0, 150.0, 240.0), withWind.map { it.bearingDeg }.toSet())
+    }
+
+    @Test
+    fun `scoreRoute mit Windbonus`() {
+        val plain = scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, newTileShare = 0.3)
+        assertEquals(plain, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, 0.3, windBonus = 0.0))
+        assertEquals(plain, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, 0.3, windBonus = Double.NaN))
+        assertEquals(plain - 4.0, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, 0.3, windBonus = -4.0), EPS)
     }
 }

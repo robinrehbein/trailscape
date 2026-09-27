@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -49,9 +50,12 @@ import de.trailscape.core.TrackPoint
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.ascentPreferenceLabels
 import de.trailscape.core.formatHours
+import de.trailscape.core.isTailwindHome
 import de.trailscape.core.sessionIntensityLabels
 import de.trailscape.core.terrainLabel
 import de.trailscape.core.unpavedLabel
+import de.trailscape.core.windLine
+import de.trailscape.core.windOptimisedLabel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -102,6 +106,12 @@ import kotlin.math.roundToInt
  * sind Strafpunkte, also ein internes Mass ohne Einheit. Was die Nutzerin
  * braucht, steht ohnehin da — die Reihenfolge (bester zuerst) und die
  * Abweichung vom Ziel in Prozent.
+ *
+ * War „Wind berücksichtigen" an und kam der Wind an, steht unter der
+ * Quellzeile eine schlichte Windzeile zum gewaehlten Vorschlag („Wind 18 km/h
+ * aus West – Rückenwind auf dem Heimweg"), und windguenstige Vorschlaege
+ * tragen die Pille „Rückenwind heim". Bewusst Text statt [NoticeBox]: Das ist
+ * eine Information, keine Warnung — und ohne Wind fehlt sie einfach.
  *
  * @param route Die Vorschau der gewaehlten Runde. Kommt aus dem Karten-Screen,
  *   der sie beim Waehlen setzt — dieses Blatt zeichnet daraus nur das
@@ -171,6 +181,30 @@ internal fun RouteGenerationSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
                 )
+                if (hasCandidates) {
+                    state.wind?.let { wind ->
+                        val shape = state.selected?.windShape
+                        val favourable = shape != null && isTailwindHome(shape)
+                        Row(
+                            modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val color = if (favourable) theme.primary else theme.onSurfaceVariant
+                            Icon(
+                                Icons.Filled.Air,
+                                contentDescription = null,
+                                tint = color,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = windLine(wind, shape),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = color,
+                            )
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(8.dp))
 
@@ -445,6 +479,22 @@ private fun CandidateRow(
                     ) {
                         Text(
                             text = newTilesLabel(candidate.newTileCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+                // Hin gegen den Wind, heim mit Rueckenwind (nur mit Schalter
+                // und genug Wind — sonst ist `windShape` null).
+                if (candidate.windShape?.let(::isTailwindHome) == true) {
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = theme.primaryContainer,
+                        contentColor = theme.onPrimaryContainer,
+                        modifier = Modifier.padding(top = 2.dp),
+                    ) {
+                        Text(
+                            text = windOptimisedLabel,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                         )
