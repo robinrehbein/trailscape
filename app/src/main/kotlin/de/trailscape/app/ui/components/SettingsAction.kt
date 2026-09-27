@@ -6,6 +6,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
 
 /**
  * Das Zahnrad, hinter dem der Mehr-Bereich liegt.
@@ -37,7 +39,7 @@ fun SettingsAction(onClick: () -> Unit, modifier: Modifier = Modifier) {
     IconButton(onClick = onClick, modifier = modifier) {
         Icon(
             imageVector = Icons.Outlined.Settings,
-            contentDescription = "Einstellungen",
+            contentDescription = stringResource(R.string.common_settings_cd),
         )
     }
 }

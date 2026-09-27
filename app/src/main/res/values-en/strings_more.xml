@@ -16,6 +16,6 @@
     <!-- %1$s = Name der aufgeloesten Sprache („Deutsch" / „English") -->
     <string name="more_language_status_system">Same as system (%1$s)</string>
     <string name="more_language_option_system">System</string>
-    <string name="more_language_hint">Without a choice of your own, Trailscape follows your system language: German if your device is set to German, otherwise English.</string>
+    <string name="more_language_hint">If you don’t choose a language, Trailscape follows your system language: German if your device is set to German, otherwise English.</string>
     <string name="more_language_voice_hint">Voice prompts use the language you choose. If your device lacks a matching voice, prompts stay silent.</string>
 </resources>

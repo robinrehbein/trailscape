@@ -33,6 +33,11 @@ class AppLocaleTest {
 
     @Before
     fun init() {
+        // Die App-Sprache des Systems nicht von einem Test in den naechsten tragen.
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            app.getSystemService(android.app.LocaleManager::class.java).applicationLocales =
+                android.os.LocaleList.getEmptyLocaleList()
+        }
         AppServices.init(app)
     }
 
@@ -94,6 +99,46 @@ class AppLocaleTest {
         AppLocale.setPreference(activity, LanguagePreference.SYSTEM)
         assertEquals(LanguagePreference.SYSTEM, AppLocale.preference(app))
         assertEquals(AppLanguage.DE, AppLocale.current(app))
+    }
+
+    @Test
+    fun `eine unter Android 12 gespeicherte Wahl zieht ab Android 13 ins System um`() {
+        // So hinterlaesst `setPreference` unter Android 13 die Datei (siehe Test oben).
+        val prefs = app.getSharedPreferences("trailscape_locale", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString("language", "en").commit()
+        assertEquals(LanguagePreference.SYSTEM, AppLocale.preference(app))
+
+        AppLocale.migrateLegacyPreference(app)
+
+        assertEquals(LanguagePreference.EN, AppLocale.preference(app))
+        assertNull(prefs.getString("language", null))
+    }
+
+    @Test
+    fun `eine im System gesetzte Sprache hat Vorrang vor der alten Datei`() {
+        app.getSystemService(android.app.LocaleManager::class.java).applicationLocales =
+            android.os.LocaleList.forLanguageTags("de")
+        val prefs = app.getSharedPreferences("trailscape_locale", android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString("language", "en").commit()
+
+        AppLocale.migrateLegacyPreference(app)
+
+        assertEquals(LanguagePreference.DE, AppLocale.preference(app))
+        assertNull(prefs.getString("language", null))
+    }
+
+    @Test
+    fun `Sprachnamen tragen fuer TalkBack ihre eigene Sprache`() {
+        val status = de.trailscape.app.ui.more.tagEndonym(
+            text = "Wie System (English)",
+            name = app.getString(R.string.language_name_en),
+            language = AppLanguage.EN,
+        )
+        assertEquals("Wie System (English)", status.text)
+        val range = status.spanStyles.single()
+        assertEquals("English", status.text.substring(range.start, range.end))
+        assertEquals("en", range.item.localeList?.get(0)?.language)
+        assertEquals("de", de.trailscape.app.ui.more.endonymLocale(AppLanguage.DE)[0].language)
     }
 
     @Test

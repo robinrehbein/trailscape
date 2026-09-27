@@ -4,6 +4,8 @@ import de.trailscape.core.Goal
 import de.trailscape.core.GoalFinishPrediction
 import de.trailscape.core.GoalPrognosis
 import de.trailscape.core.RecoveryFlag
+import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -120,15 +122,10 @@ class TrainingTextTest {
 
     @Test
     fun `Hinweistexte`() {
-        assertEquals(
-            "Plan an deine letzten Wochen angepasst: weniger gefahren als geplant.",
-            planAdaptionText("weniger gefahren als geplant."),
-        )
-        // Der Grund aus `:core` bringt seine Einleitung selbst mit — nicht doppeln.
-        assertEquals(
-            "Plan angepasst: In Woche 3 hast du nur 0 % des Wochen-Solls erreicht.",
-            planAdaptionText("Plan angepasst: In Woche 3 hast du nur 0 % des Wochen-Solls erreicht."),
-        )
+        // Die Anpassungs-Notiz zeigt den Grund aus `:core` unveraendert — er
+        // bringt seine Einleitung in beiden Sprachen selbst mit.
+        assertTrue(CoreTextsDe.training.planAdapted(3, 0).startsWith("Plan angepasst: In Woche 3 "))
+        assertTrue(CoreTextsEn.training.planAdapted(3, 0).startsWith("Plan adjusted: in week 3 "))
         assertTrue(unconfirmedProfileText.startsWith("Ohne Alter und Gewicht rechnen wir mit "))
         assertTrue(unconfirmedProfileText.endsWith("die Zahlen sind grob."))
         assertEquals("Profil öffnen", PROFILE_ACTION_LABEL)

@@ -26,6 +26,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
@@ -414,9 +415,14 @@ class ScreenshotTest {
     /**
      * Der Heute-Tab auf Englisch — das Beispielbild des i18n-Fundaments.
      *
-     * Erwartet (Stand Fundament): Die Tagesempfehlung und alle Saetze aus
-     * `:core` stehen englisch da, die fest im Kotlin-Code stehenden Texte der
-     * Oberflaeche noch deutsch — die ziehen die Bereichs-Zweige um.
+     * Stand Fundament: Der Heute-Tab zeigt noch keinen Satz aus `:core` und
+     * keine umgezogene Beschriftung — `01-heute-en` sieht deshalb aus wie
+     * `01-heute`; die sichtbaren Texte zieht erst i18n-today um. Das Bild
+     * belegt, dass der Test englisch laeuft. Was die Oberflaeche wirklich
+     * englisch liest, pruefen die Knoten: das Zahnrad des Heute-Tabs
+     * („Settings" aus `strings_common.xml`) und danach die Sprachseite
+     * (`45-einstellungen-sprache-en`), deren Texte schon aus
+     * `values-en/strings_more.xml` kommen.
      */
     @Test
     @Config(qualifiers = "+en-rGB")
@@ -431,10 +437,26 @@ class ScreenshotTest {
             val recommendation = viewModel.insights.value.recommendation
             recommendation.title == CoreTextsEn.readiness.recommendationTitle(recommendation.kind)
         }
+        val context = compose.activity
+        val settings = context.getString(R.string.common_settings_cd)
+        assertEquals("Settings", settings)
+        compose.onAllNodesWithContentDescription(settings)[0].assertExists()
         shot("01-heute-en")
+
+        compose.onAllNodesWithContentDescription(settings)[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.more_language_title))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.more_language_hint))[0].assertExists()
+        assertEquals(
+            1,
+            compose.onAllNodesWithText("If you don’t choose a language", substring = true)
+                .fetchSemanticsNodes().size,
+        )
+        shot("45-einstellungen-sprache-en")
     }
 
-    /** Einstellungen → Sprache: Auswahl System/Deutsch/English und die beiden Hinweise. */
+    /** Mehr → Sprache: Auswahl System/Deutsch/English und die beiden Hinweise. */
     @Test
     fun spracheSeite() {
         start()

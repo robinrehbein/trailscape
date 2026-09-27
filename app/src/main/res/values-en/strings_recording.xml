@@ -13,7 +13,7 @@
     <string name="recording_action_resume">Resume</string>
     <string name="recording_action_stop">Stop</string>
 
-    <string name="recording_error_channel_name">Recording: problems</string>
+    <string name="recording_error_channel_name">Recording problems</string>
     <string name="recording_error_title">Recording not possible</string>
     <string name="recording_error_permission">Trailscape isn’t allowed to access your location. Please allow access in the app settings and start recording again.</string>
     <string name="recording_error_start_failed">Location recording couldn’t be started.</string>

@@ -47,7 +47,6 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.LocalAppLanguage
-import de.trailscape.app.i18n.asString
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.ui.AppViewModel
@@ -406,7 +405,7 @@ private fun SettingsList(
                 ListDivider()
                 SettingsNavRow(
                     title = SettingsPage.LANGUAGE.displayTitle(),
-                    status = languageStatusText(AppLocale.preference(context), LocalAppLanguage.current).asString(),
+                    status = languageStatusAnnotated(AppLocale.preference(context), LocalAppLanguage.current),
                     onClick = { onOpen(SettingsPage.LANGUAGE) },
                 )
                 ListDivider()

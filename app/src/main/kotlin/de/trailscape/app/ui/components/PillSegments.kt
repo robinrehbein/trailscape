@@ -19,6 +19,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.intl.LocaleList
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
@@ -39,6 +42,11 @@ import androidx.compose.ui.unit.dp
  * [trackColor] ist nur fuer Stellen, deren Untergrund selbst schon
  * `surfaceContainerHigh` ist (etwa ein [OneUiDialog]) — dort verschwaende die
  * Spur sonst, und nur die gewaehlte Pille stuende noch da.
+ *
+ * [optionLocales] markiert einzelne Beschriftungen mit ihrer eigenen Sprache
+ * (Index wie [options], `null` = UI-Sprache). Noetig fuer Endonyme wie
+ * „Deutsch"/„English" in der Sprachwahl: Ohne Sprachmarke liest TalkBack sie
+ * mit der Stimme der UI-Sprache und spricht sie falsch aus.
  */
 @Composable
 fun PillSegments(
@@ -47,6 +55,7 @@ fun PillSegments(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
     trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    optionLocales: List<LocaleList?> = emptyList(),
 ) {
     val haptics = LocalHapticFeedback.current
     Surface(
@@ -81,7 +90,7 @@ fun PillSegments(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = label,
+                            text = localeTagged(label, optionLocales.getOrNull(index)),
                             style = MaterialTheme.typography.labelLarge,
                             color = if (selected) {
                                 MaterialTheme.colorScheme.onSurface
@@ -104,3 +113,14 @@ private val SegmentTrackHeight = 44.dp
 
 /** Luft zwischen Spur und gewaehltem Segment. */
 private val SegmentInset = 3.dp
+
+/**
+ * [text] als [AnnotatedString], bei gesetzter [locale] durchgehend mit dieser
+ * Sprache markiert (wird fuer die Bedienungshilfen zur `LocaleSpan`).
+ */
+internal fun localeTagged(text: String, locale: LocaleList?): AnnotatedString =
+    if (locale == null) {
+        AnnotatedString(text)
+    } else {
+        AnnotatedString(text, spanStyle = SpanStyle(localeList = locale))
+    }

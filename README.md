@@ -123,7 +123,7 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 
 **Sprache**
 - Deutsch und Englisch – folgt der Systemsprache (Deutsch, wenn das Gerät auf
-  Deutsch steht, sonst Englisch), umstellbar unter **Einstellungen → Sprache**;
+  Deutsch steht, sonst Englisch), umstellbar unter **Mehr → Sprache**;
   Sprachansagen in der gewählten Sprache. Regeln für Übersetzungen:
   `docs/i18n.md`
 

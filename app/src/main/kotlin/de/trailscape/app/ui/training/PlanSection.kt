@@ -89,17 +89,11 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun PlanAdaptionNote(reason: String) {
-    QuietNoteLine(text = planAdaptionText(reason))
+    // Der Grund aus `:core` ist bereits ein vollstaendiger Satz in der
+    // App-Sprache („Plan angepasst: …" / „Plan adjusted: …"). Eine eigene
+    // Einleitung davor doppelte ihn — und mischte im Englischen die Sprachen.
+    QuietNoteLine(text = reason)
 }
-
-/**
- * Der Satz der Anpassungs-Notiz. Der Grund aus `:core` beginnt selbst schon
- * mit „Plan angepasst: …" — davor noch einmal „Plan an deine letzten Wochen
- * angepasst:" stand doppelt da. Nur ein Grund ohne diesen Anfang bekommt die
- * Einleitung.
- */
-internal fun planAdaptionText(reason: String): String =
-    if (reason.startsWith("Plan angepasst")) reason else "Plan an deine letzten Wochen angepasst: $reason"
 
 
 /**

@@ -19,7 +19,7 @@ import de.trailscape.core.i18n.resolveAppLanguage
  *
  * Trailscape spricht Deutsch und Englisch. Ohne eigene Wahl folgt die App der
  * Systemsprache — Deutsch fuer `de-*`, sonst Englisch (Aufloesung in `:core`,
- * [resolveAppLanguage]). Die Wahl in Einstellungen → Sprache wird so
+ * [resolveAppLanguage]). Die Wahl in Mehr → Sprache wird so
  * gespeichert:
  *
  *  * **Ab Android 13** ueber [LocaleManager.setApplicationLocales]: Das
@@ -69,6 +69,31 @@ object AppLocale {
                 .getString(KEY_LANGUAGE, null)
         }.getOrNull()
         return LanguagePreference.fromTag(stored)
+    }
+
+    /**
+     * Nimmt eine unter Android 12/12L gespeicherte Wahl ins System mit.
+     *
+     * Warum: Ab Android 13 liest [preference] nur noch
+     * [LocaleManager.getApplicationLocales]. Wer vor dem System-Update
+     * „English" auf einem deutschen Geraet gewaehlt hatte, fiele danach
+     * stillschweigend auf die Systemsprache zurueck — die alte Datei liest
+     * niemand mehr. Einmal beim Start: Hat das System noch keine eigene
+     * App-Sprache, bekommt es die gespeicherte; danach wird der Schluessel
+     * entfernt (eine im System gesetzte Wahl hat Vorrang).
+     */
+    fun migrateLegacyPreference(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val prefs = runCatching {
+            context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }.getOrNull() ?: return
+        val stored = prefs.getString(KEY_LANGUAGE, null) ?: return
+        val manager = localeManager(context) ?: return
+        val legacy = LanguagePreference.fromTag(stored)
+        if (legacy != LanguagePreference.SYSTEM && manager.applicationLocales.isEmpty) {
+            manager.applicationLocales = LocaleList.forLanguageTags(legacy.tag)
+        }
+        prefs.edit().remove(KEY_LANGUAGE).apply()
     }
 
     /**

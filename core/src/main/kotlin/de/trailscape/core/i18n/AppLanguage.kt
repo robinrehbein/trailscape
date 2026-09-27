@@ -24,7 +24,7 @@ enum class AppLanguage(val tag: String, val locale: Locale) {
 }
 
 /**
- * Die Wahl in Einstellungen → Sprache.
+ * Die Wahl in Mehr → Sprache.
  *
  * [SYSTEM] heisst: der Systemsprache folgen (siehe [resolveAppLanguage]).
  *

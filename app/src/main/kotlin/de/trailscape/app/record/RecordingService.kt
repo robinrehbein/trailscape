@@ -1434,8 +1434,12 @@ class RecordingService : Service() {
     }
 
     private fun buildNotification(): Notification {
+        // Einmal je Aufbau: Die Benachrichtigung entsteht waehrend der Fahrt
+        // alle paar Sekunden neu, und jedes `localized()` kostet ab Android 13
+        // einen Binder-Aufruf (plus ggf. einen Konfigurationskontext).
+        val texts = localized()
         val paused = pauseStartedAtMs != null
-        val title = localized().getString(
+        val title = texts.getString(
             when {
                 paused && autoPausiert -> R.string.recording_notification_auto_paused_title
                 paused -> R.string.recording_notification_paused_title
@@ -1447,15 +1451,15 @@ class RecordingService : Service() {
         val text = when {
             // Die Stille geht vor: Sie ist die einzige Information, die der
             // Fahrerin sagt, dass gerade nichts mehr aufgezeichnet wird.
-            stilleMs != null -> localized().getString(
+            stilleMs != null -> texts.getString(
                 R.string.recording_notification_no_gps,
                 (stilleMs / 60_000L).toInt(),
             )
 
             !active || filter.acceptedCount == 0 ->
-                localized().getString(R.string.recording_notification_waiting)
+                texts.getString(R.string.recording_notification_waiting)
 
-            else -> localized().getString(
+            else -> texts.getString(
                 R.string.recording_notification_progress,
                 formatKmDe(distanceM / 1000),
                 formatDuration((elapsedMs(jetzt) / 1000).toInt()),
@@ -1477,7 +1481,7 @@ class RecordingService : Service() {
         if (active) {
             builder.addAction(
                 0,
-                localized().getString(if (paused) R.string.recording_action_resume else R.string.recording_action_pause),
+                texts.getString(if (paused) R.string.recording_action_resume else R.string.recording_action_pause),
                 commandIntent(
                     if (paused) ACTION_RESUME else ACTION_PAUSE,
                     if (paused) REQUEST_RESUME else REQUEST_PAUSE,
@@ -1486,7 +1490,7 @@ class RecordingService : Service() {
         }
         builder.addAction(
             0,
-            localized().getString(R.string.recording_action_stop),
+            texts.getString(R.string.recording_action_stop),
             commandIntent(ACTION_STOP, REQUEST_STOP),
         )
 
@@ -1520,17 +1524,18 @@ class RecordingService : Service() {
 
     private fun ensureNotificationChannels() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
+        val texts = localized()
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                localized().getString(R.string.recording_notification_channel_name),
+                texts.getString(R.string.recording_notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ),
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 ERROR_CHANNEL_ID,
-                localized().getString(R.string.recording_error_channel_name),
+                texts.getString(R.string.recording_error_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ),
         )
