@@ -130,7 +130,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 662 Unit-Tests hängen hier |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1151 Unit-Tests hängen hier |
 | `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Training, Mehr; die Tourenliste liegt als Blatt auf der Karte), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
@@ -186,8 +186,8 @@ legen. In der CI kommt der Schlüssel aus dem Secret
 ## Testen
 
 ```bash
-./gradlew :core:test              # 786 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # 147 Tests der plattformfreien :app-Teile
+./gradlew :core:test              # 1151 Tests des Domänenmodells
+./gradlew :app:testDebugUnitTest  # 467 Tests der plattformfreien :app-Teile
 ```
 
 Was die CI vor jedem Release ausführt:
