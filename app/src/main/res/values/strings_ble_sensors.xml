@@ -2,11 +2,8 @@
 <!--
     Texte der Bluetooth-Sensoren: Seite Mehr → Sensoren, Kacheln im Fahrmodus
     und in der Kompaktleiste, Tourdetails. Alle Schluessel mit dem Praefix
-    ble_, damit sie beim Umzug der uebrigen Texte (i18n) als Einheit
-    erkennbar bleiben. Bewusst noch ohne values-en: Solange die uebrige App
-    nur deutsch spricht, ergaebe eine einzelne englische Datei auf englisch
-    eingestellten Geraeten eine Sprachmischung. Die englischen Texte kommen
-    mit dem i18n-Umzug (Entwurf in Commit 32cfa9b, siehe docs/TODO.md).
+    ble_, damit sie als Einheit erkennbar bleiben. Englisch in
+    values-en/strings_ble_sensors.xml.
 -->
 <resources>
     <!-- Seite Mehr → Sensoren -->

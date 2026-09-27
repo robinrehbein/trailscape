@@ -103,6 +103,8 @@
     <string name="more_about_download_action">Herunterladen</string>
     <string name="more_about_auto_update_title">Täglich still nach Updates suchen</string>
     <string name="more_about_auto_update_hint">Fragt höchstens einmal am Tag bei github.com nach — GitHub sieht dabei deine IP-Adresse.</string>
+    <!-- Anstelle der Update-Pruefung, wenn Google Play die App installiert hat (isUpdateCheckAllowed) -->
+    <string name="more_about_play_update_hint">Updates kommen über Google Play.</string>
     <string name="more_about_licenses_hint">Trailscape ist freie Software unter der GNU GPL v3 oder später.</string>
     <string name="more_about_license_text_action">Lizenztext lesen</string>
     <string name="more_about_notices_show_action">Bibliotheken und Datenquellen</string>

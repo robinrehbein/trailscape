@@ -185,7 +185,7 @@ fun AboutCardContent(
     }
 
     if (updatesViaPlay) {
-        SettingsHint(stringResource(R.string.play_update_check_hint))
+        SettingsHint(stringResource(R.string.more_about_play_update_hint))
     }
 
     if (!updatesViaPlay) updateStatus?.let { status ->

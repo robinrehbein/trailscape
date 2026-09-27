@@ -35,6 +35,8 @@ class StringResourceParityTest {
         "strings_more.xml" to "more_",
         "strings_shell.xml" to "shell_",
         "strings_common.xml" to "common_",
+        "strings_ble_sensors.xml" to "ble_",
+        "strings_strava.xml" to "strava_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

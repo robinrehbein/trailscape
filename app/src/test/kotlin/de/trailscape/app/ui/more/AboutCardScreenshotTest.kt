@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import org.junit.Assume.assumeTrue
@@ -37,7 +38,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "de-w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class AboutCardScreenshotTest {
 
     @get:Rule

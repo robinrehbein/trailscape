@@ -103,6 +103,7 @@
     <string name="more_about_download_action">Download</string>
     <string name="more_about_auto_update_title">Quietly check for updates daily</string>
     <string name="more_about_auto_update_hint">Asks github.com at most once a day — GitHub sees your IP address when it does.</string>
+    <string name="more_about_play_update_hint">Updates come through Google Play.</string>
     <string name="more_about_licenses_hint">Trailscape is free software under the GNU GPL v3 or later.</string>
     <string name="more_about_license_text_action">Read the licence</string>
     <string name="more_about_notices_show_action">Libraries and data sources</string>

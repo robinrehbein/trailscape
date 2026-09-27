@@ -6,9 +6,7 @@
     Bewusst eine eigene Datei statt eines Anbaus an strings.xml: Android fuehrt
     alle values/*.xml zusammen, und so bleiben die Strava-Texte als Einheit
     lesbar. `:core` liefert fuer Fehler nur eine Klasse (StravaError), die
-    Saetze stehen hier. Eine englische Fassung kommt mit der Uebersetzung der
-    ganzen App (i18n-Zweig) — vorher gaebe es auf englischen Geraeten eine
-    Mischoberflaeche aus deutscher App und englischer Strava-Seite.
+    Saetze stehen hier. Englisch in values-en/strings_strava.xml.
 -->
 <resources>
     <string name="strava_settings_title" translatable="false">Strava</string>
@@ -23,7 +21,7 @@
     <string name="strava_connected_plain">Mit Strava verbunden.</string>
     <string name="strava_auto_upload">Neue Touren automatisch hochladen</string>
     <string name="strava_auto_upload_hint">Nach dem Beenden einer Aufzeichnung, im Hintergrund, sobald Netz da ist.</string>
-    <string name="strava_privacy_hint">Hochgeladen werden Name, Spur, Zeiten, Höhe und Puls der Tour. Wer sie auf Strava sieht, richtet sich nach deinen Strava-Einstellungen zur Privatsphäre.</string>
+    <string name="strava_privacy_hint">Hochgeladen werden Name, Spur, Zeiten und Höhe der Tour, dazu Puls, Trittfrequenz und Leistung, soweit gemessen. Wer sie auf Strava sieht, richtet sich nach deinen Strava-Einstellungen zur Privatsphäre.</string>
     <string name="strava_disconnect">Trennen</string>
     <string name="strava_disconnect_title">Strava trennen?</string>
     <string name="strava_disconnect_text">Trailscape lädt dann nichts mehr hoch und vergisst den Zugang. Bereits hochgeladene Touren bleiben auf Strava.</string>

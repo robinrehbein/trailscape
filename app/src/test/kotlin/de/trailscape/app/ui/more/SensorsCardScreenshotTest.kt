@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.sensors.BleFund
 import de.trailscape.app.sensors.BleKanaele
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.BleKanal
@@ -36,12 +37,12 @@ import org.robolectric.annotation.GraphicsMode
  * Berechtigungshinweis, zwei gekoppelte Sensoren waehrend einer laufenden
  * Suche, Bluetooth aus.
  *
- * Qualifier `de`: Robolectric laeuft sonst in en-US und naehme, sobald es
- * ein `values-en` gibt, die englischen Texte.
+ * Sprache fest Deutsch ueber [TestLocales] — Robolectric liefe sonst in
+ * en-US und naehme die englischen Texte.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "de-w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class SensorsCardScreenshotTest {
 
     @get:Rule
