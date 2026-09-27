@@ -79,6 +79,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -87,8 +89,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.repeatOnLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.record.abbiegehinweiseAktiviert
 import de.trailscape.app.record.batterieAusnahmeIntent
@@ -107,8 +113,6 @@ import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.PlaceSearchHistoryEntry
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.app.ui.formatBytes
-import de.trailscape.app.ui.formatToday
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
@@ -153,6 +157,7 @@ import de.trailscape.core.safeFileName
 import de.trailscape.core.searchPlaces
 import de.trailscape.core.zoomFuerTempo
 import java.io.File
+import java.time.LocalDate
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -380,6 +385,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun MapScreen(appViewModel: AppViewModel) {
     val context = LocalContext.current
+    val formats = LocalAppFormats.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val controller = remember { MapController() }
@@ -800,7 +806,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             // [LocationPermissionNotice]: Dessen „ohne sie geht es hier nicht
             // weiter" stimmt hier nicht — „Routen suchen" im offenen Panel
             // funktioniert weiterhin, eben ab der Kartenmitte.
-            appViewModel.showMessage(FIRST_ROUND_NO_POSITION_TEXT)
+            appViewModel.showMessage(UiText.Res(R.string.map_generation_first_round_no_position))
             return@rememberLauncherForActivityResult
         }
         if (locationGranted || action == PendingAction.GENERATE_ROUTES) {
@@ -1113,7 +1119,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 profile = routeProfile,
                 onSource = { source -> planSource = source },
                 onProgress = { done, total ->
-                    planProgress = planProgressText(planSource, done, total)
+                    planProgress = planProgressText(planSource, done, total)?.resolve(context)
                 },
             )
         }
@@ -1134,7 +1140,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 plannedFor = null
                 routeSource = null
                 planError = it.message?.takeIf(String::isNotBlank)
-                    ?: "Route konnte nicht berechnet werden."
+                    ?: context.getString(R.string.map_screen_route_failed_error)
                 // Auch im Fehlerfall dasselbe Angebot wie sonst nur nach Erfolg:
                 // Schlaegt sogar der Server ab (z. B. eine 600-km-Route ohne
                 // lokale Kacheln, siehe `missingSegmentsFor`-KDoc), soll die
@@ -1169,7 +1175,8 @@ fun MapScreen(appViewModel: AppViewModel) {
         val target = navTarget ?: return@LaunchedEffect
         val navigator = runCatching { RouteNavigator(target.points) }.getOrElse { error ->
             appViewModel.showMessage(
-                error.message?.takeIf(String::isNotBlank) ?: "Navigation nicht möglich.",
+                error.message?.takeIf(String::isNotBlank)?.let(UiText::Plain)
+                    ?: UiText.Res(R.string.map_screen_navigation_failed_error),
             )
             navTarget = null
             return@LaunchedEffect
@@ -1267,7 +1274,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 }
             }
             if (state.offRoute && !wasOffRoute) {
-                appViewModel.showMessage("Achtung: Du bist abseits der Route.")
+                appViewModel.showMessage(UiText.Res(R.string.map_screen_off_route_status))
                 // Die Snackbar ist im Fahrmodus (eigenes Dialog-Fenster)
                 // unsichtbar und mit dem Telefon in der Tasche sowieso —
                 // deshalb je Off-Route-Episode zusaetzlich einmal Vibration
@@ -1426,7 +1433,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         scope.launch {
             val answer = snackbarHostState.showSnackbar(
                 message = message,
-                actionLabel = "Rückgängig",
+                actionLabel = context.getString(R.string.map_screen_undo_action),
                 duration = SnackbarDuration.Long,
             )
             if (answer == SnackbarResult.ActionPerformed) restorePlanning(snapshot)
@@ -1449,7 +1456,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun enterPlanning() {
         if (isRecording) {
-            appViewModel.showMessage("Beende zuerst die Aufzeichnung.")
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_stop_recording_first_status))
             return
         }
         // Ein noch nicht uebernommener Vorschlag weicht: Wer „Route planen"
@@ -1507,7 +1514,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             }
 
             MapSheetStage.AUFGEZOGEN -> {
-                if (mode == MapMode.PLANEN) exitPlanningWithUndo("Planung beendet.")
+                if (mode == MapMode.PLANEN) exitPlanningWithUndo(context.getString(R.string.map_screen_planning_ended_status))
                 exploreExpanded = true
             }
 
@@ -1540,7 +1547,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         mode = MapMode.PLANEN
         planSheetExpanded = true
         controller.fitToPoints(candidate.route.points)
-        appViewModel.showMessage("Runde übernommen – du kannst sie speichern oder navigieren.")
+        appViewModel.showMessage(UiText.Res(R.string.map_screen_loop_applied_status))
     }
 
     // Jede Aktion mit Standortbedarf gibt es zweimal: `run…` ist der Rumpf,
@@ -1590,7 +1597,7 @@ fun MapScreen(appViewModel: AppViewModel) {
      */
     fun runRecording() {
         if (!isLocationEnabled(context)) {
-            appViewModel.showMessage("Standortdienste sind deaktiviert.")
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_location_off_error))
             return
         }
         val keepRoute = mode == MapMode.PLANEN
@@ -1632,7 +1639,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         followMe = true
         scope.launch {
             if (!isLocationEnabled(context)) {
-                appViewModel.showMessage("Standortdienste sind deaktiviert.")
+                appViewModel.showMessage(UiText.Res(R.string.map_screen_location_off_error))
                 return@launch
             }
             // Erst ein frischer Fix (wie `_goToMyPosition` in Dart), sonst
@@ -1640,7 +1647,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             val position = currentLocation(context)?.let { it.latitude to it.longitude }
                 ?: controller.lastKnownLocation()
             if (position == null) {
-                appViewModel.showMessage("Position konnte nicht ermittelt werden.")
+                appViewModel.showMessage(UiText.Res(R.string.map_screen_position_failed_error))
                 return@launch
             }
             controller.moveTo(position.first, position.second, MIN_RECORDING_ZOOM)
@@ -1688,11 +1695,15 @@ fun MapScreen(appViewModel: AppViewModel) {
                 locating = false
             }
             if (position == null) {
-                appViewModel.showMessage("Position konnte nicht ermittelt werden.")
+                appViewModel.showMessage(UiText.Res(R.string.map_screen_position_failed_error))
                 return@launch
             }
             waypoints = listOf(
-                Waypoint(position.latitude, position.longitude, name = MY_POSITION_NAME),
+                Waypoint(
+                    position.latitude,
+                    position.longitude,
+                    name = context.getString(R.string.map_planning_my_position_name),
+                ),
             ) + waypoints
             controller.moveTo(position.latitude, position.longitude, MIN_RECORDING_ZOOM)
         }
@@ -1732,7 +1743,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (mode != MapMode.PLANEN) {
             appViewModel.select(null)
             selectedPlace = Place(
-                displayName = "Markierter Punkt",
+                displayName = context.getString(R.string.map_screen_marked_point_name),
                 lat = lat,
                 lon = lon,
             )
@@ -1746,8 +1757,8 @@ fun MapScreen(appViewModel: AppViewModel) {
             // selbst ist dann der erste Wegpunkt und geht nicht verloren.
             scope.launch {
                 val answer = snackbarHostState.showSnackbar(
-                    message = "Die übernommene Runde bleibt stehen.",
-                    actionLabel = "Selbst planen",
+                    message = context.getString(R.string.map_screen_loop_kept_status),
+                    actionLabel = context.getString(R.string.map_screen_plan_yourself_action),
                     duration = SnackbarDuration.Long,
                 )
                 if (answer == SnackbarResult.ActionPerformed) {
@@ -1877,7 +1888,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 locating = false
             }
             val start = position?.let {
-                Waypoint(it.latitude, it.longitude, name = MY_LOCATION_WAYPOINT_NAME)
+                Waypoint(it.latitude, it.longitude, name = context.getString(R.string.map_planning_my_position_name))
             }
             waypoints = listOfNotNull(start) + Waypoint(place.lat, place.lon, name = place.displayName)
         }
@@ -1911,7 +1922,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 durationH = null,
                 speedKmh = 0.0,
                 intensity = SessionIntensity.GRUNDLAGE,
-                label = SELF_PLANNED_ROUTE_LABEL,
+                label = context.getString(R.string.map_generation_self_target_label),
                 source = RouteTargetSource.SELBST_GEWAEHLT,
             ),
         )
@@ -1939,8 +1950,8 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (routeFromGenerator) {
             scope.launch {
                 val answer = snackbarHostState.showSnackbar(
-                    message = "Die übernommene Runde bleibt stehen.",
-                    actionLabel = "Selbst planen",
+                    message = context.getString(R.string.map_screen_loop_kept_status),
+                    actionLabel = context.getString(R.string.map_screen_plan_yourself_action),
                     duration = SnackbarDuration.Long,
                 )
                 if (answer == SnackbarResult.ActionPerformed) {
@@ -1995,14 +2006,17 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     fun shareRoute(name: String, points: List<TrackPoint>) {
         if (points.isEmpty()) {
-            appViewModel.showMessage("Keine Punkte zum Teilen.")
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_share_empty_error))
             return
         }
         scope.launch {
             runCatching { shareGpxFile(context, name, points) }
                 .onFailure {
                     appViewModel.showMessage(
-                        "Teilen fehlgeschlagen: ${it.message ?: "unbekannter Fehler"}",
+                        UiText.Res(
+                            R.string.map_screen_share_failed_error,
+                            listOf(it.message?.let(UiText::Plain) ?: UiText.Res(R.string.common_unknown)),
+                        ),
                     )
                 }
         }
@@ -2013,7 +2027,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         val bounds = controller.visibleBounds()
         val zoom = controller.currentZoom()
         if (bounds == null || zoom == null) {
-            appViewModel.showMessage("Karte ist noch nicht bereit.")
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_map_not_ready_error))
             return
         }
         // Alle Grenzen (sinnvolle Groesse, Kachelzahl, Zoombereich) steckt
@@ -2029,7 +2043,11 @@ fun MapScreen(appViewModel: AppViewModel) {
                 style = mapStyle,
                 bounds = bounds,
                 plan = plan,
-                name = "${mapStyle.label} · ${formatToday()}",
+                name = context.getString(
+                    R.string.map_screen_offline_region_name,
+                    context.getString(mapStyle.labelRes),
+                    formats.dateFull(LocalDate.now()),
+                ),
                 onMessage = appViewModel::showMessage,
             )
         }
@@ -2058,7 +2076,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 locating = false
             }
             if (position == null && requirePosition) {
-                appViewModel.showMessage(FIRST_ROUND_NO_POSITION_TEXT)
+                appViewModel.showMessage(UiText.Res(R.string.map_generation_first_round_no_position))
                 return@launch
             }
             val start = if (position != null) {
@@ -2067,9 +2085,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 controller.rememberCamera()?.let { TrackPoint(lat = it.lat, lon = it.lon) }
             }
             if (start == null) {
-                appViewModel.showMessage(
-                    "Kein Startpunkt: Position unbekannt und die Karte ist noch nicht bereit.",
-                )
+                appViewModel.showMessage(UiText.Res(R.string.map_screen_no_start_error))
                 return@launch
             }
             RouteGenerationController.start(
@@ -2118,7 +2134,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 durationH = null,
                 speedKmh = 0.0,
                 intensity = SessionIntensity.GRUNDLAGE,
-                label = SELF_PLANNED_ROUTE_LABEL,
+                label = context.getString(R.string.map_generation_self_target_label),
                 // Seit `:core` dafuer einen eigenen Wert kennt: Ueber einer
                 // selbst eingetippten Distanz stand vorher „(Tagesempfehlung)".
                 source = RouteTargetSource.SELBST_GEWAEHLT,
@@ -2178,9 +2194,7 @@ fun MapScreen(appViewModel: AppViewModel) {
         // kann sie sich seit dem letzten Navigationsstart geaendert haben.
         navCourseUp = navCourseUpAktiviert(context)
         if (!sprachansagenAktiviert(context)) {
-            appViewModel.showMessage(
-                "Sprachansagen sind aus — hier im HUD oder unter Einstellungen → Aufzeichnung & Ansagen einschalten.",
-            )
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_voice_off_status))
         }
         // Komoot-Muster: Eine Navigation zeichnet automatisch mit auf.
         // Laeuft schon eine Aufzeichnung, wechselt nur die Ansicht auf die
@@ -2227,7 +2241,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
     fun navigateRide(ride: Ride) {
         if (ride.points.size < 2) {
-            appViewModel.showMessage("Die Tour hat zu wenige Punkte für die Navigation.")
+            appViewModel.showMessage(UiText.Res(R.string.map_screen_too_few_points_error))
             return
         }
         // Die Tour merken, falls der Systemdialog die Activity neu aufbaut.
@@ -2250,8 +2264,9 @@ fun MapScreen(appViewModel: AppViewModel) {
         locationGranted = true
         navState = null
         navRideId = null
-        navLabel = PLANNED_ROUTE_LABEL
-        navTarget = NavigationTarget(null, PLANNED_ROUTE_LABEL, route.points)
+        val plannedLabel = context.getString(R.string.map_screen_planned_route_label)
+        navLabel = plannedLabel
+        navTarget = NavigationTarget(null, plannedLabel, route.points)
         // Der Modus bleibt PLANEN (siehe KDoc oben), aber die Ansicht wird
         // trotzdem zur Navigation: Das Planungsblatt klappt ein — Wegpunkte
         // setzt jetzt niemand mehr, und das HUD braucht die Karte —, die
@@ -2448,7 +2463,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             var regulaerBeendet = false
             try {
                 snackbarHostState.showSnackbar(
-                    message = LONG_PRESS_HINT_TEXT,
+                    message = context.getString(R.string.map_long_press_hint_snackbar),
                     withDismissAction = true,
                     duration = SnackbarDuration.Short,
                 )
@@ -2902,8 +2917,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
                 locationDeniedAction?.let {
                     LocationPermissionNotice(
-                        text = "Standortfreigabe wurde abgelehnt – ohne sie geht es hier " +
-                            "nicht weiter.",
+                        text = stringResource(R.string.map_screen_location_denied_notice),
                         onRetry = ::retryLocationPermission,
                         onDismiss = { locationDeniedAction = null },
                     )
@@ -2911,8 +2925,7 @@ fun MapScreen(appViewModel: AppViewModel) {
 
                 if (impreciseLocationNotice) {
                     LocationPermissionNotice(
-                        text = "Zum Aufzeichnen wird der genaue Standort gebraucht. " +
-                            "Wähle in der Abfrage „Genau“ statt „Ungefähr“.",
+                        text = stringResource(R.string.map_screen_location_imprecise_notice),
                         onRetry = {
                             impreciseLocationNotice = false
                             startRecording()
@@ -3317,8 +3330,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                                 if (!snapshot.isEmpty) {
                                     scope.launch {
                                         val answer = snackbarHostState.showSnackbar(
-                                            message = "Planung geleert.",
-                                            actionLabel = "Rückgängig",
+                                            message = context.getString(R.string.map_screen_planning_cleared_status),
+                                            actionLabel = context.getString(R.string.map_screen_undo_action),
                                             duration = SnackbarDuration.Long,
                                         )
                                         if (answer == SnackbarResult.ActionPerformed) {
@@ -3434,8 +3447,9 @@ fun MapScreen(appViewModel: AppViewModel) {
                     DockedSheet.RUNDE -> {
                         Spacer(Modifier.height(OverlayGap))
                         RoundTripSetupSheet(
-                            startLabel = roundTripStart?.let { "ab ${it.displayName}" }
-                                ?: "ab deinem Standort",
+                            startLabel = roundTripStart?.let {
+                                stringResource(R.string.map_screen_round_trip_from_place, it.displayName)
+                            } ?: stringResource(R.string.map_screen_round_trip_from_position),
                             distanceKm = roundTripKm,
                             onDistanceChange = { roundTripKm = it },
                             profile = routeProfile,
@@ -3462,7 +3476,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             },
                             onEndSearch = ::endExploreSearch,
                             searchBusy = placeSearch.busy,
-                            searchError = placeSearch.error,
+                            searchError = placeSearch.error?.asString(),
                             searchResults = placeSearch.results,
                             searchHistory = placeHistory,
                             onSelectPlace = { place ->
@@ -3503,7 +3517,7 @@ fun MapScreen(appViewModel: AppViewModel) {
             onQueryChange = ::changeSearchQuery,
             onSearch = ::submitSearch,
             busy = placeSearch.busy,
-            error = placeSearch.error,
+            error = placeSearch.error?.asString(),
             results = placeSearch.results,
             history = placeHistory,
             onSelect = ::onPlaceChosen,
@@ -3541,9 +3555,9 @@ fun MapScreen(appViewModel: AppViewModel) {
             saveRouteDialog = false
         } else {
             NameDialog(
-                title = "Name der Route",
-                suggestion = "Route ${formatToday()}",
-                confirmLabel = "Speichern",
+                title = stringResource(R.string.map_screen_route_name_title),
+                suggestion = stringResource(R.string.map_screen_route_name_suggestion, formats.dateFull(LocalDate.now())),
+                confirmLabel = stringResource(R.string.map_screen_route_name_save_action),
                 onDismiss = { saveRouteDialog = false },
                 onConfirm = { name ->
                     saveRouteDialog = false
@@ -3567,10 +3581,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                 } catch (e: Exception) {
                     // Manche Geraete kennen den Dialog nicht — dann bleibt nur
                     // der Weg ueber die Systemeinstellungen.
-                    appViewModel.showMessage(
-                        "Der Systemdialog ließ sich nicht öffnen. Die Ausnahme lässt sich " +
-                            "in den Android-Einstellungen unter „Akku“ erteilen.",
-                    )
+                    appViewModel.showMessage(UiText.Res(R.string.map_screen_battery_dialog_error))
                 }
             },
             onLater = {
@@ -3631,21 +3642,23 @@ fun MapScreen(appViewModel: AppViewModel) {
         OneUiDialog(
             onDismissRequest = appViewModel::dismissSegmentOffer,
             icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
-            title = { Text("Karten für Offline-Routing") },
+            title = { Text(stringResource(R.string.map_screen_segment_offer_title)) },
             text = {
                 Text(
-                    "Für diese Gegend fehlen die Kartendaten: ${offer.title}, " +
-                        "${formatBytes(offer.totalBytes)}. Danach berechnet die App Routen " +
-                        "hier ohne Netz — meist schneller als über den Server.",
+                    stringResource(
+                        R.string.map_screen_segment_offer_body,
+                        offer.title,
+                        formats.bytes(offer.totalBytes) ?: stringResource(R.string.common_unknown),
+                    ),
                 )
             },
             confirmButton = {
                 TextButton(onClick = { appViewModel.acceptSegmentOffer(context) }) {
-                    Text("Jetzt laden")
+                    Text(stringResource(R.string.map_screen_segment_offer_accept_action))
                 }
             },
             dismissButton = {
-                TextButton(onClick = appViewModel::dismissSegmentOffer) { Text("Nicht jetzt") }
+                TextButton(onClick = appViewModel::dismissSegmentOffer) { Text(stringResource(R.string.map_screen_segment_offer_later_action)) }
             },
         )
     }
@@ -3663,8 +3676,8 @@ fun MapScreen(appViewModel: AppViewModel) {
     deleteDialogRide?.let { ride ->
         OneUiDialog(
             onDismissRequest = { deleteDialogRide = null },
-            title = { Text("Tour löschen") },
-            text = { Text("Soll „${ride.name}“ wirklich gelöscht werden?") },
+            title = { Text(stringResource(R.string.map_screen_delete_title)) },
+            text = { Text(stringResource(R.string.map_screen_delete_body, ride.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -3673,11 +3686,13 @@ fun MapScreen(appViewModel: AppViewModel) {
                         appViewModel.removeRide(ride.id)
                     },
                 ) {
-                    Text("Löschen", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.map_screen_delete_action), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deleteDialogRide = null }) { Text("Abbrechen") }
+                TextButton(onClick = { deleteDialogRide = null }) {
+                    Text(stringResource(R.string.map_screen_delete_cancel_action))
+                }
             },
         )
     }
@@ -3838,7 +3853,7 @@ private fun MapStyleSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(modifier = Modifier.padding(bottom = CardPadding)) {
             Text(
-                text = "Karte",
+                text = stringResource(R.string.map_style_sheet_title),
                 modifier = Modifier.padding(
                     start = CardPadding,
                     end = CardPadding,
@@ -3861,10 +3876,10 @@ private fun MapStyleSheet(
                     RadioButton(selected = style.id == current.id, onClick = { onSelect(style) })
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text(style.label, style = MaterialTheme.typography.bodyLarge)
+                        Text(stringResource(style.labelRes), style = MaterialTheme.typography.bodyLarge)
                         mapStyleSubtitle(style.id)?.let {
                             Text(
-                                text = it,
+                                text = stringResource(it),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -3894,9 +3909,9 @@ private fun MapStyleSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Entdeckt-Kacheln", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.map_style_sheet_explorer_title), style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        text = "Befahrene Gegenden bleiben klar, der Rest liegt unter Nebel",
+                        text = stringResource(R.string.map_style_sheet_explorer_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -3924,13 +3939,14 @@ private fun MapStyleSheet(
                 ) {
                     Icon(Icons.Filled.DownloadForOffline, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Diesen Ausschnitt offline speichern")
+                    Text(stringResource(R.string.map_style_sheet_download_action))
                 }
             } else {
                 Text(
-                    text = "Offline speichern geht nur mit der ${offlineStyle().label}. Die " +
-                        "anderen Kartenserver sind nur zum Anzeigen da und erlauben keine " +
-                        "Downloads.",
+                    text = stringResource(
+                        R.string.map_style_sheet_offline_only_hint,
+                        stringResource(offlineStyle().labelRes),
+                    ),
                     modifier = Modifier.padding(horizontal = CardPadding, vertical = 4.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -3947,7 +3963,7 @@ private fun MapStyleSheet(
                     // herunter, er stellt nur den Stil um.
                     Icon(Icons.Filled.SwapHoriz, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Zur Vektorkarte wechseln")
+                    Text(stringResource(R.string.map_style_sheet_switch_action))
                 }
             }
         }
@@ -3976,15 +3992,10 @@ private fun ExplorerTilesPill(
     square: ExplorerSquare?,
     modifier: Modifier = Modifier,
 ) {
-    val text = buildString {
-        append(tileCount)
-        append(" Kacheln")
-        if (square != null && square.size >= 2) {
-            append(" · Größtes Quadrat ")
-            append(square.size)
-            append("×")
-            append(square.size)
-        }
+    val text = if (square != null && square.size >= 2) {
+        pluralStringResource(R.plurals.map_explorer_pill_square_count, tileCount, tileCount, square.size)
+    } else {
+        pluralStringResource(R.plurals.map_explorer_pill_count, tileCount, tileCount)
     }
     Surface(
         modifier = modifier
@@ -4041,7 +4052,7 @@ private fun NameDialog(
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
-                label = { Text("Name") },
+                label = { Text(stringResource(R.string.map_name_dialog_label)) },
                 modifier = Modifier.fillMaxWidth(),
             )
         },
@@ -4052,7 +4063,9 @@ private fun NameDialog(
                 Text(confirmLabel)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.map_name_dialog_cancel_action)) }
+        },
     )
 }
 
@@ -4079,7 +4092,7 @@ private suspend fun shareGpxFile(context: Context, name: String, points: List<Tr
         putExtra(Intent.EXTRA_TITLE, name)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Route teilen"))
+    context.startActivity(Intent.createChooser(send, context.getString(R.string.map_share_chooser_title)))
 }
 
 private fun newRideId(): String {
@@ -4113,11 +4126,11 @@ private const val LIVE_TRACK_MIN_INTERVAL_MS = 1_000L
  * spuerbar laenger, und ohne Rueckmeldung saehe es nach einer haengenden App
  * aus statt nach einer arbeitenden.
  */
-private fun planProgressText(source: RoutingSource?, done: Int, total: Int): String? = when {
+private fun planProgressText(source: RoutingSource?, done: Int, total: Int): UiText? = when {
     source == RoutingSource.OFFLINE && total > 1 ->
-        "Auf dem Gerät: Teilstrecke ${(done + 1).coerceAtMost(total)} von $total …"
-    source == RoutingSource.OFFLINE -> "Berechne auf dem Gerät …"
-    total > 1 -> "Teilstrecke $done von $total …"
+        UiText.Res(R.string.map_screen_progress_device_leg, listOf((done + 1).coerceAtMost(total), total))
+    source == RoutingSource.OFFLINE -> UiText.Res(R.string.map_screen_progress_device)
+    total > 1 -> UiText.Res(R.string.map_screen_progress_leg, listOf(done, total))
     else -> null
 }
 
@@ -4212,8 +4225,10 @@ private val MinSheetBodyHeight = 120.dp
 private const val GENERATION_CANDIDATES_SHARE = 0.62f
 private const val GENERATION_BODY_SHARE = 0.38f
 
-/** Beschriftung der Navigation entlang der geplanten Route. */
-private const val PLANNED_ROUTE_LABEL = "Geplante Route"
+/*
+ * Die Beschriftung der Navigation entlang der geplanten Route steht als
+ * `map_screen_planned_route_label` in `strings_map.xml`.
+ */
 
 /**
  * Restdistanz, ab der die Zielansage „Ziel erreicht" faellt (30 m — etwa die
@@ -4223,8 +4238,11 @@ private const val PLANNED_ROUTE_LABEL = "Geplante Route"
  */
 private const val ZIEL_ERREICHT_KM = 0.03
 
-/** Wegpunktname der eigenen Position, gesetzt von [runRouteToPlace]. */
-private const val MY_LOCATION_WAYPOINT_NAME = "Mein Standort"
+/*
+ * Der Wegpunktname der eigenen Position (gesetzt von [runRouteToPlace] und
+ * „Mein Standort als Start") ist `map_planning_my_position_name` — derselbe
+ * Name, an dem die Planungsliste den Standort-Start erkennt.
+ */
 
 /**
  * Ein Stand der Planung, wie ihn „Rückgängig" wieder herstellt.
@@ -4304,7 +4322,7 @@ private fun MapLayersButton(onClick: () -> Unit, modifier: Modifier = Modifier) 
         shadowElevation = MapCircleButtonElevation,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(Icons.Filled.Layers, contentDescription = "Karte, Kacheln und Offline")
+            Icon(Icons.Filled.Layers, contentDescription = stringResource(R.string.map_layers_cd))
         }
     }
 }

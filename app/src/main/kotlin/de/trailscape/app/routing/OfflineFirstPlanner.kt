@@ -1,6 +1,7 @@
 package de.trailscape.app.routing
 
 import android.content.Context
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.OfflineRoutingFiles
 import de.trailscape.app.i18n.AppLocale
@@ -207,11 +208,16 @@ suspend fun describeSegmentOffer(fileNames: List<String>): SegmentOffer? {
 private fun segmentOfferTitle(tiles: List<SegmentTile>): String {
     val named = tiles.take(MAX_NAMED_TILES).map { it.title(AppServices.coreTexts()) }
     val rest = tiles.size - named.size
+    val texts = AppServices.localizedContext()
     val joined = when (named.size) {
         1 -> named.first()
-        else -> named.dropLast(1).joinToString(", ") + " und " + named.last()
+        else -> texts.getString(
+            R.string.map_segment_offer_and,
+            named.dropLast(1).joinToString(", "),
+            named.last(),
+        )
     }
-    return if (rest > 0) "$joined (+ $rest weitere)" else joined
+    return if (rest > 0) texts.getString(R.string.map_segment_offer_more, joined, rest) else joined
 }
 
 /** Wie viele Kacheln in einem Angebot beim Namen genannt werden. */

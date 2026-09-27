@@ -23,16 +23,14 @@ import de.trailscape.core.KeyValueStore
  * (`LongPressHintTest`).
  */
 
-/**
- * Text der einmaligen Snackbar — sagt, was die Geste beim Erkunden wirklich
- * tut: einen Punkt setzen, dessen Ortskarte „Route hierher" und „Runde ab
- * hier" anbietet. Bewusst kurz; die Ortskarte erklaert den Rest selbst.
+/*
+ * Die Texte stehen in `strings_map.xml`: `map_long_press_hint_snackbar` fuer die
+ * einmalige Snackbar — sagt, was die Geste beim Erkunden wirklich tut: einen
+ * Punkt setzen, dessen Ortskarte „Route hierher" und „Runde ab hier"
+ * anbietet; bewusst kurz, die Ortskarte erklaert den Rest selbst —, und
+ * `map_long_press_hint_line` fuer die dauerhafte Zeile im hochgewischten
+ * „Wohin?"-Blatt.
  */
-internal const val LONG_PRESS_HINT_TEXT =
-    "Tipp: Lange auf die Karte drücken setzt einen Punkt – als Ziel oder Start einer Runde."
-
-/** Die dauerhafte Zeile im hochgewischten „Wohin?"-Blatt. */
-internal const val LONG_PRESS_HINT_LINE = "Lange auf die Karte drücken: Punkt setzen"
 
 /**
  * So lange muss die Karte nach dem Betreten des Erkundens bzw. nach dem

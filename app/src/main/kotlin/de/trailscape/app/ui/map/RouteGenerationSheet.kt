@@ -32,15 +32,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NoticeBox
-import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
@@ -51,6 +54,9 @@ import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.ascentPreferenceLabel
 import de.trailscape.core.formatHours
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDecimal
+import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.isTailwindHome
 import de.trailscape.core.sessionIntensityLabel
 import de.trailscape.core.terrainLabel
@@ -170,23 +176,23 @@ internal fun RouteGenerationSheet(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Passende Runde",
+                        text = stringResource(R.string.map_generation_title),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
                     )
                     // Der einzige Ausweg — siehe „Ein Ausweg statt vier" oben.
                     IconButton(onClick = onDiscard) {
-                        Icon(Icons.Filled.Close, contentDescription = "Routenvorschlag verwerfen")
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_generation_discard_cd))
                     }
                 }
 
                 Text(
-                    text = targetLine(target, coreTexts),
+                    text = targetLine(target, coreTexts).asString(),
                     modifier = Modifier.padding(end = 8.dp),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    text = sourceLine(target),
+                    text = sourceLine(target).asString(),
                     modifier = Modifier.padding(end = 8.dp),
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
@@ -216,7 +222,7 @@ internal fun RouteGenerationSheet(
                     }
                     if (shouldOfferWindTip(target, windUsed = state.wind != null, windEnabled = windEnabled)) {
                         Text(
-                            text = WIND_TIP,
+                            text = stringResource(R.string.map_generation_wind_tip),
                             modifier = Modifier.padding(end = 8.dp, top = 2.dp),
                             style = MaterialTheme.typography.bodySmall,
                             color = theme.onSurfaceVariant,
@@ -239,8 +245,7 @@ internal fun RouteGenerationSheet(
                     NoticeBox(
                         icon = Icons.Filled.Info,
                         color = signals.caution,
-                        text = "Deine Position war nicht verfügbar – die Runde startet in der " +
-                            "Kartenmitte. „Neu suchen“ nimmt den Startpunkt noch einmal neu auf.",
+                        text = stringResource(R.string.map_generation_map_center_hint),
                         modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                     )
                 }
@@ -261,8 +266,7 @@ internal fun RouteGenerationSheet(
                     NoticeBox(
                         icon = Icons.Filled.Info,
                         color = signals.caution,
-                        text = "Ohne Netz rechnet Trailscape auch auf dem Gerät, sobald die " +
-                            "Routing-Karten dieser Gegend geladen sind.",
+                        text = stringResource(R.string.map_generation_offline_hint),
                         modifier = Modifier.padding(end = 8.dp, bottom = 8.dp),
                     )
                 }
@@ -278,7 +282,7 @@ internal fun RouteGenerationSheet(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = "Position wird ermittelt …",
+                            text = stringResource(R.string.map_generation_locating_status),
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -290,7 +294,11 @@ internal fun RouteGenerationSheet(
                     )
 
                     state.candidates.isEmpty() -> PrimaryButton(
-                        text = if (state.error == null) "Routen suchen" else "Erneut suchen",
+                        text = if (state.error == null) {
+                            stringResource(R.string.map_generation_search_action)
+                        } else {
+                            stringResource(R.string.map_generation_retry_action)
+                        },
                         onClick = onStart,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -320,7 +328,7 @@ internal fun RouteGenerationSheet(
 
                         Spacer(Modifier.height(2.dp))
                         PrimaryButton(
-                            text = "Übernehmen",
+                            text = stringResource(R.string.map_generation_apply_action),
                             onClick = onApply,
                             enabled = state.selected != null,
                             modifier = Modifier
@@ -362,22 +370,22 @@ internal fun RouteGenerationSheet(
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(4.dp))
-                            Text("Andere Vorschläge")
+                            Text(stringResource(R.string.map_generation_other_action))
                         }
                         // Gleiche Runden-Variation, aber Startpunkt neu
                         // bestimmen — nach einem GPS-Fix oder einer
                         // verschobenen Karte.
-                        TextButton(onClick = onStart) { Text("Neu suchen") }
+                        TextButton(onClick = onStart) { Text(stringResource(R.string.map_generation_research_action)) }
                     }
                 } else {
                     // Solange nichts zu waehlen ist, traegt der Koerper die
                     // Erklaerung. Vorher stand sie im immer sichtbaren Teil und
                     // war ab dem zweiten Mal nur noch Text im Weg.
                     Text(
-                        text = "Trailscape sucht ${RouteGenerationController.CANDIDATE_COUNT} " +
-                            "Rundkurse ab deiner aktuellen Position – ohne Standort ab der " +
-                            "Kartenmitte. Das dauert etwa eine halbe Minute; du kannst " +
-                            "zwischendurch ruhig den Tab wechseln.",
+                        text = stringResource(
+                            R.string.map_generation_intro_body,
+                            RouteGenerationController.CANDIDATE_COUNT,
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = theme.onSurfaceVariant,
                     )
@@ -395,14 +403,14 @@ private fun SearchProgress(done: Int, total: Int, onCancel: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = if (total <= 0) {
-                    "Suche läuft …"
+                    stringResource(R.string.map_generation_running_status)
                 } else {
-                    "Kandidat ${(done + 1).coerceAtMost(total)} von $total …"
+                    stringResource(R.string.map_generation_progress_status, (done + 1).coerceAtMost(total), total)
                 },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
             )
-            TextButton(onClick = onCancel) { Text("Abbrechen") }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.map_generation_cancel_action)) }
         }
         if (total > 0) {
             LinearProgressIndicator(
@@ -451,14 +459,17 @@ private fun CandidateRow(
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${formatKmDe(candidate.distanceKm)} km · " +
-                        "${candidate.ascentM.roundToInt()} Hm ↑",
+                    text = stringResource(
+                        R.string.map_generation_candidate_headline,
+                        LocalAppFormats.current.km(candidate.distanceKm),
+                        candidate.ascentM.roundToInt(),
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(
-                    text = candidateDetailLine(candidate, coreTexts),
+                    text = candidateDetailLine(candidate, coreTexts).asString(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodySmall,
@@ -482,7 +493,7 @@ private fun CandidateRow(
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = if (rank == 1) "Beste" else "#$rank",
+                    text = if (rank == 1) stringResource(R.string.map_generation_best_label) else "#$rank",
                     style = MaterialTheme.typography.labelSmall,
                     color = theme.onSurfaceVariant,
                 )
@@ -497,7 +508,7 @@ private fun CandidateRow(
                         modifier = Modifier.padding(top = 2.dp),
                     ) {
                         Text(
-                            text = newTilesLabel(candidate.newTileCount),
+                            text = newTilesLabel(candidate.newTileCount).asString(),
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                         )
@@ -535,7 +546,7 @@ private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
-                text = compassLabel(bearingDeg),
+                text = compassLabel(bearingDeg).asString(),
                 style = MaterialTheme.typography.labelMedium,
             )
         }
@@ -553,36 +564,45 @@ private fun DirectionChip(bearingDeg: Double, highlighted: Boolean) {
  * dahinter fuer alle, die es genau wissen wollen; Schwellen siehe
  * [terrainLabel].
  */
-internal fun candidateDetailLine(candidate: RouteCandidate, texts: CoreTexts): String =
-    "${terrainLabel(candidate.ascentPerKm, texts)} · ${candidate.ascentPerKm.roundToInt()} Hm/km · " +
-        "${deviationLabel(candidate)} zum Ziel"
+internal fun candidateDetailLine(candidate: RouteCandidate, texts: CoreTexts): UiText =
+    UiText.Res(
+        R.string.map_generation_candidate_detail,
+        listOf(
+            terrainLabel(candidate.ascentPerKm, texts),
+            candidate.ascentPerKm.roundToInt(),
+            deviationLabel(candidate, texts.language),
+        ),
+    )
 
 /** „+9 neu" bzw. „bekannt" — Kacheln, die die Runde neu entdecken wuerde. */
-internal fun newTilesLabel(newTileCount: Int): String =
-    if (newTileCount > 0) "+$newTileCount neu" else "bekannt"
+internal fun newTilesLabel(newTileCount: Int): UiText =
+    if (newTileCount > 0) {
+        UiText.Res(R.string.map_generation_new_tiles_label, listOf(newTileCount))
+    } else {
+        UiText.Res(R.string.map_generation_known_tiles_label)
+    }
 
 /** „≈ 45 km · Flach · locker · ca. 2,5 h" */
-internal fun targetLine(target: RouteTarget, texts: CoreTexts): String {
-    val parts = mutableListOf(
-        "≈ ${formatKmDe(target.distanceKm)} km",
-        ascentPreferenceLabel(target.ascentPreference, texts),
-        sessionIntensityLabel(target.intensity, texts),
-    )
-    target.durationH?.takeIf { it.isFinite() && it > 0 }?.let {
-        parts.add("ca. ${formatHours(it, texts)} h")
+internal fun targetLine(target: RouteTarget, texts: CoreTexts): UiText {
+    val km = formatDistanceKm(target.distanceKm, texts.language)
+    val ascent = ascentPreferenceLabel(target.ascentPreference, texts)
+    val intensity = sessionIntensityLabel(target.intensity, texts)
+    val hours = target.durationH?.takeIf { it.isFinite() && it > 0 }
+    return if (hours != null) {
+        UiText.Res(
+            R.string.map_generation_target_line_duration,
+            listOf(km, ascent, intensity, formatHours(hours, texts)),
+        )
+    } else {
+        UiText.Res(R.string.map_generation_target_line, listOf(km, ascent, intensity))
     }
-    return parts.joinToString(" · ")
 }
 
-/** Leiser Hinweis auf den Wind-Schalter fuer Einstiege ohne ihn (siehe KDoc des Blatts). */
-internal const val WIND_TIP =
-    "Tipp: Mit „Wind berücksichtigen“ unter „Runde ab hier“ auf der Karte bevorzugt die Suche " +
-        "Runden mit Rückenwind auf dem Heimweg."
-
 /**
- * Ob unter den Vorschlaegen [WIND_TIP] steht: nur, wenn ohne Wind gesucht
- * wurde ([windUsed] `false`), der Schalter aus ist und das Ziel nicht aus
- * „Runde ab hier" kommt — dort steht der Schalter ja schon im Blatt davor.
+ * Ob unter den Vorschlaegen der leise Wind-Tipp (`map_generation_wind_tip`)
+ * steht: nur, wenn ohne Wind gesucht wurde ([windUsed] `false`), der Schalter
+ * aus ist und das Ziel nicht aus „Runde ab hier" kommt — dort steht der
+ * Schalter ja schon im Blatt davor.
  *
  * Nie bei der **ersten Runde** ([RouteTarget.isFirstRound]): Sie startet direkt nach
  * der Einfuehrung bzw. von „Heute" und soll ruhig bleiben — ein Tipp, der auf
@@ -595,65 +615,68 @@ internal fun shouldOfferWindTip(target: RouteTarget, windUsed: Boolean, windEnab
         !target.isFirstRound
 
 /** „aus: GA1-Einheit (Trainingsplan)" */
-internal fun sourceLine(target: RouteTarget): String {
+internal fun sourceLine(target: RouteTarget): UiText {
     // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. Frueher fehlte
     // `:core` dafuer ein Wert und die Beschriftung erkannte sie notduerftig an
     // ihrem festen Label; seit es [RouteTargetSource.SELBST_GEWAEHLT] gibt,
     // steht es an der Quelle statt am Text.
     if (target.source == RouteTargetSource.SELBST_GEWAEHLT) {
-        return "aus: deiner Eingabe auf der Karte"
+        return UiText.Res(R.string.map_generation_source_self)
     }
     val source = when (target.source) {
-        RouteTargetSource.PLAN -> "Trainingsplan"
-        RouteTargetSource.TAGESEMPFEHLUNG -> "Tagesempfehlung"
-        RouteTargetSource.SELBST_GEWAEHLT -> "eigene Eingabe"
+        RouteTargetSource.PLAN -> R.string.map_generation_source_plan
+        RouteTargetSource.TAGESEMPFEHLUNG -> R.string.map_generation_source_today
+        RouteTargetSource.SELBST_GEWAEHLT -> R.string.map_generation_source_own
     }
-    return "aus: ${target.label} ($source)"
+    return UiText.Res(R.string.map_generation_source_line, listOf(target.label, UiText.Res(source)))
 }
 
-/**
- * Beschriftung eines Ziels, das die Nutzerin selbst auf der Karte eingegeben
- * hat („Runde ab hier über 50 km"). Steht zugleich als Erkennungsmerkmal in
- * [sourceLine].
+/*
+ * Zwei feste Saetze dieses Blatts stehen in `strings_map.xml`:
+ *  * `map_generation_self_target_label` — Beschriftung eines Ziels, das die
+ *    Nutzerin selbst auf der Karte eingegeben hat („Runde ab hier über 50 km").
+ *  * `map_generation_first_round_no_position` — Snackbar, wenn die
+ *    automatisch gestartete erste Runde keinen Standort hat (Freigabe
+ *    abgelehnt oder kein Fix). Die Suche startet dann bewusst nicht ab der
+ *    Kartenmitte — nach einer Neuinstallation ist das die
+ *    Deutschland-Uebersicht. Das Panel bleibt offen; der Satz sagt, wie es
+ *    von dort weitergeht.
  */
-internal const val SELF_PLANNED_ROUTE_LABEL: String = "Selbst gewählte Distanz"
 
 /**
- * Snackbar, wenn die automatisch gestartete erste Runde keinen Standort hat
- * (Freigabe abgelehnt oder kein Fix). Die Suche startet dann bewusst nicht ab
- * der Kartenmitte — nach einer Neuinstallation ist das die
- * Deutschland-Uebersicht. Das Panel bleibt offen; der Satz sagt, wie es von
- * dort weitergeht.
- */
-internal const val FIRST_ROUND_NO_POSITION_TEXT: String =
-    "Ohne Standort weiß Trailscape nicht, wo deine Runde beginnt. Schieb die Karte an " +
-        "deinen Startpunkt und tippe auf „Routen suchen“."
-
-/**
- * Abweichung vom Ziel mit Vorzeichen, z. B. `+3,4 %`.
+ * Abweichung vom Ziel mit Vorzeichen, z. B. `+3,4 %` (Englisch `+3.4%`).
  *
  * [RouteCandidate.distanceDeviation] ist der Betrag; die Richtung ergibt sich
  * aus dem Vergleich mit [RouteCandidate.targetKm].
  */
-internal fun deviationLabel(candidate: RouteCandidate): String {
+internal fun deviationLabel(candidate: RouteCandidate, language: AppLanguage): UiText {
     val percent = candidate.distanceDeviation * 100
     if (!percent.isFinite() || abs(percent) < 0.05) {
-        return "±0 %"
+        return UiText.Res(R.string.map_generation_deviation_zero)
     }
     val sign = if (candidate.distanceKm >= candidate.targetKm) "+" else "−"
-    return "$sign${formatOneDecimalDe(percent)} %"
+    return UiText.Res(R.string.map_generation_deviation, listOf(sign, formatDecimal(percent, 1, language)))
 }
 
 /**
- * Himmelsrichtung eines Kurses in acht Stufen (`N`, `NO`, …). 0° ist Nord,
- * gezaehlt wird im Uhrzeigersinn — dieselbe Konvention wie
- * [RouteCandidate.bearingDeg].
+ * Himmelsrichtung eines Kurses in acht Stufen (`N`, `NO`, … bzw. englisch
+ * `N`, `NE`, …). 0° ist Nord, gezaehlt wird im Uhrzeigersinn — dieselbe
+ * Konvention wie [RouteCandidate.bearingDeg].
  */
-internal fun compassLabel(bearingDeg: Double): String {
-    if (!bearingDeg.isFinite()) return "–"
+internal fun compassLabel(bearingDeg: Double): UiText {
+    if (!bearingDeg.isFinite()) return UiText.Plain("–")
     val normalized = ((bearingDeg % 360) + 360) % 360
     val index = ((normalized + 22.5) / 45).toInt() % COMPASS_LABELS.size
-    return COMPASS_LABELS[index]
+    return UiText.Res(COMPASS_LABELS[index])
 }
 
-private val COMPASS_LABELS = listOf("N", "NO", "O", "SO", "S", "SW", "W", "NW")
+private val COMPASS_LABELS = listOf(
+    R.string.map_generation_compass_n,
+    R.string.map_generation_compass_ne,
+    R.string.map_generation_compass_e,
+    R.string.map_generation_compass_se,
+    R.string.map_generation_compass_s,
+    R.string.map_generation_compass_sw,
+    R.string.map_generation_compass_w,
+    R.string.map_generation_compass_nw,
+)

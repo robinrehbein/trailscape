@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.map
 
 import android.content.Context
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
@@ -350,7 +351,7 @@ object RouteGenerationController {
                 }
             } catch (_: GenerationCancelled) {
                 // [cancel] hat den Zustand bereits freigegeben.
-                onMessage("Routensuche abgebrochen.")
+                onMessage(AppServices.localizedContext().getString(R.string.map_generation_cancelled_status))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -361,7 +362,7 @@ object RouteGenerationController {
                         done = 0,
                         total = 0,
                         error = e.message?.takeIf(String::isNotBlank)
-                            ?: "Die Routensuche ist fehlgeschlagen.",
+                            ?: AppServices.localizedContext().getString(R.string.map_generation_failed_error),
                     )
                 }
                 // Derselbe Ausweg wie im Fehlerzweig der manuellen Planung

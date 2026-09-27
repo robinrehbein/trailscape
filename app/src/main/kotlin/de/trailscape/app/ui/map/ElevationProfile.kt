@@ -24,8 +24,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.haversineM
 import kotlin.math.max
@@ -68,7 +70,7 @@ internal fun ElevationProfile(
 
     if (samples.size < 2) {
         Text(
-            text = "Keine Höhendaten für diese Tour.",
+            text = stringResource(R.string.map_elevation_empty),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = modifier,
@@ -76,6 +78,7 @@ internal fun ElevationProfile(
         return
     }
 
+    val formats = LocalAppFormats.current
     val minEle = samples.minOf { it.eleM }
     val maxEle = samples.maxOf { it.eleM }
     val totalKm = samples.last().distanceKm
@@ -96,12 +99,12 @@ internal fun ElevationProfile(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Höhenprofil",
+                text = stringResource(R.string.map_elevation_title),
                 style = MaterialTheme.typography.labelLarge,
             )
             Text(
                 text = if (hovered != null) {
-                    "${formatKmDe(hovered.distanceKm)} km · ${hovered.eleM.roundToInt()} m"
+                    stringResource(R.string.common_value_km, formats.km(hovered.distanceKm)) + " · ${hovered.eleM.roundToInt()} m"
                 } else {
                     "${minEle.roundToInt()}–${maxEle.roundToInt()} m"
                 },
@@ -182,7 +185,7 @@ internal fun ElevationProfile(
         ) {
             Text("0 km", style = MaterialTheme.typography.labelSmall, color = labelColor)
             Text(
-                text = "${formatKmDe(totalKm)} km",
+                text = stringResource(R.string.common_value_km, formats.km(totalKm)),
                 style = MaterialTheme.typography.labelSmall,
                 color = labelColor,
             )

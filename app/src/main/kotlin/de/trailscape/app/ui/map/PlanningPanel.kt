@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -50,11 +52,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.PillSegments
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.PlannedRoute
@@ -62,6 +67,8 @@ import de.trailscape.core.RouteProfile
 import de.trailscape.core.RoutingSource
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.Waypoint
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.routeProfileLabel
 import de.trailscape.core.unpavedLabel
 import kotlin.math.roundToInt
@@ -203,7 +210,7 @@ internal fun PlanningSheet(
         modifier = modifier,
         peek = {
             PlanningHeader(
-                title = planningTitle(waypoints, route, generated, roundTrip),
+                title = planningTitle(waypoints, route, generated, roundTrip).asString(),
                 subtitle = planningSubtitle(
                     waypoints = waypoints,
                     route = route,
@@ -213,7 +220,8 @@ internal fun PlanningSheet(
                     source = source,
                     locating = locating,
                     failed = error != null,
-                ),
+                    language = LocalAppLanguage.current,
+                ).asString(),
                 isError = error != null && !busy,
                 working = busy || locating,
                 canShare = route != null,
@@ -253,8 +261,7 @@ internal fun PlanningSheet(
 
                 if (generated) {
                     Text(
-                        text = "Eine vorgeschlagene Runde. Drückst du lange auf die Karte, " +
-                            "planst du mit eigenen Punkten weiter.",
+                        text = stringResource(R.string.map_planning_generated_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -263,14 +270,17 @@ internal fun PlanningSheet(
                         waypoints = waypoints,
                         onRemove = onRemoveWaypoint,
                         onAddViaSearch = onAddWaypointViaSearch,
-                        showUseMyPosition = waypoints.none { it.name == MY_POSITION_NAME },
+                        // Der Standort-Wegpunkt traegt den Namen in der Sprache,
+                        // in der er gesetzt wurde (siehe `map_planning_my_position_name`).
+                        showUseMyPosition = stringResource(R.string.map_planning_my_position_name)
+                            .let { myPosition -> waypoints.none { it.name == myPosition } },
                         locating = locating,
                         onUseMyPosition = onUseMyPosition,
                     )
 
                     SwitchRow(
-                        title = "Zurück zum Start",
-                        subtitle = "Die Route endet wieder am ersten Punkt",
+                        title = stringResource(R.string.map_planning_round_trip_title),
+                        subtitle = stringResource(R.string.map_planning_round_trip_body),
                         checked = roundTrip,
                         onCheckedChange = onRoundTripChange,
                     )
@@ -292,8 +302,7 @@ internal fun PlanningSheet(
                     NoticeBox(
                         icon = Icons.Filled.Info,
                         color = LocalSignalColors.current.caution,
-                        text = "Ohne Netz rechnet Trailscape auch auf dem Gerät, sobald die " +
-                            "Routing-Karten dieser Gegend geladen sind.",
+                        text = stringResource(R.string.map_planning_offline_hint),
                     )
                 }
 
@@ -306,11 +315,11 @@ internal fun PlanningSheet(
                             onClick = onSave,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Text("Speichern", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(stringResource(R.string.map_planning_save_action), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Spacer(Modifier.width(8.dp))
                         PrimaryButton(
-                            text = "Losfahren",
+                            text = stringResource(R.string.map_planning_start_action),
                             onClick = onNavigate,
                             modifier = Modifier.weight(1.4f),
                             leading = {
@@ -387,7 +396,7 @@ private fun PlanningHeader(
             )
         }
         IconButton(onClick = onClose) {
-            Icon(Icons.Filled.Close, contentDescription = "Planung beenden")
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_planning_close_cd))
         }
     }
 }
@@ -407,11 +416,11 @@ private fun PlanningMenu(
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "Weitere Aktionen")
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.map_planning_more_cd))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(
-                text = { Text("Teilen") },
+                text = { Text(stringResource(R.string.map_planning_share_action)) },
                 leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
                 enabled = canShare,
                 onClick = {
@@ -420,7 +429,7 @@ private fun PlanningMenu(
                 },
             )
             DropdownMenuItem(
-                text = { Text("Alle Punkte entfernen") },
+                text = { Text(stringResource(R.string.map_planning_clear_action)) },
                 leadingIcon = { Icon(Icons.Filled.DeleteOutline, contentDescription = null) },
                 enabled = canClear,
                 onClick = {
@@ -453,7 +462,7 @@ private fun WaypointList(
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         waypoints.forEachIndexed { index, waypoint ->
-            val label = waypoint.name ?: "Punkt ${index + 1}"
+            val label = waypoint.name ?: stringResource(R.string.map_planning_point_label, index + 1)
             ListRow(
                 badge = {
                     NumberBadge(
@@ -466,7 +475,7 @@ private fun WaypointList(
                     IconButton(onClick = { onRemove(index) }) {
                         Icon(
                             Icons.Filled.Close,
-                            contentDescription = "$label entfernen",
+                            contentDescription = stringResource(R.string.map_planning_remove_point_cd, label),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -475,15 +484,23 @@ private fun WaypointList(
         }
         ListRow(
             badge = { IconBadge(Icons.Filled.Add) },
-            title = if (waypoints.isEmpty()) "Start hinzufügen" else "Punkt hinzufügen",
-            subtitle = "Suchen oder lange auf die Karte drücken",
+            title = if (waypoints.isEmpty()) {
+                stringResource(R.string.map_planning_add_start_action)
+            } else {
+                stringResource(R.string.map_planning_add_point_action)
+            },
+            subtitle = stringResource(R.string.map_planning_add_point_hint),
             muted = true,
             onClick = onAddViaSearch,
         )
         if (showUseMyPosition) {
             ListRow(
                 badge = { IconBadge(Icons.Filled.MyLocation) },
-                title = if (locating) "Position wird geholt …" else "Mein Standort als Start",
+                title = if (locating) {
+                    stringResource(R.string.map_planning_locating_status)
+                } else {
+                    stringResource(R.string.map_planning_use_position_action)
+                },
                 muted = true,
                 onClick = if (locating) null else onUseMyPosition,
             )
@@ -625,10 +642,16 @@ private fun SurfaceChoice(
 ) {
     val coreTexts = LocalCoreTexts.current
     val surfaces = listOf(
-        RouteProfile.GRAVEL to "Gemischt",
-        RouteProfile.ASPHALT to "Asphalt",
-        RouteProfile.SCHOTTER to "Schotter",
+        RouteProfile.GRAVEL to stringResource(R.string.map_planning_surface_mixed),
+        RouteProfile.ASPHALT to stringResource(R.string.map_planning_surface_paved),
+        RouteProfile.SCHOTTER to stringResource(R.string.map_planning_surface_gravel),
     )
+    val surfaceCd = stringResource(R.string.map_planning_surface_cd)
+    val profileCd = if (profile == RouteProfile.RADWEGE || profile == RouteProfile.KUERZESTER) {
+        stringResource(R.string.map_planning_profile_cd, routeProfileLabel(profile, coreTexts))
+    } else {
+        stringResource(R.string.map_planning_more_profiles_cd)
+    }
     val special = profile == RouteProfile.RADWEGE || profile == RouteProfile.KUERZESTER
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -637,7 +660,7 @@ private fun SurfaceChoice(
             options = surfaces.map { it.second },
             selectedIndex = if (special) -1 else surfaces.indexOfFirst { it.first == profile },
             onSelect = { onProfileChange(surfaces[it].first) },
-            modifier = Modifier.semantics { contentDescription = "Untergrund" },
+            modifier = Modifier.semantics { contentDescription = surfaceCd },
         )
         Box {
             Row(
@@ -645,20 +668,14 @@ private fun SurfaceChoice(
                     .heightIn(min = 40.dp)
                     .clickable(role = Role.Button) { menuOpen = true }
                     .padding(horizontal = 4.dp)
-                    .clearAndSetSemantics {
-                        contentDescription = if (special) {
-                            "Routenprofil: ${routeProfileLabel(profile, coreTexts)}. Ändern"
-                        } else {
-                            "Weitere Routenprofile"
-                        }
-                    },
+                    .clearAndSetSemantics { contentDescription = profileCd },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = if (special) {
                         routeProfileLabel(profile, coreTexts)
                     } else {
-                        "Weitere Profile"
+                        stringResource(R.string.map_planning_more_profiles_action)
                     },
                     style = MaterialTheme.typography.labelLarge,
                     color = if (special) {
@@ -681,7 +698,7 @@ private fun SurfaceChoice(
                                 Text(routeProfileLabel(value, coreTexts))
                                 routeProfileHint(value)?.let {
                                     Text(
-                                        text = it,
+                                        text = stringResource(it),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -708,10 +725,10 @@ private fun planningTitle(
     route: PlannedRoute?,
     generated: Boolean,
     roundTrip: Boolean,
-): String = when {
-    route != null && generated -> "Vorgeschlagene Runde"
+): UiText = when {
+    route != null && generated -> UiText.Res(R.string.map_planning_generated_title)
     route != null -> planningRouteLabel(waypoints, roundTrip)
-    else -> "Route planen"
+    else -> UiText.Res(R.string.map_planning_title)
 }
 
 /**
@@ -730,27 +747,35 @@ private fun planningSubtitle(
     source: RoutingSource?,
     locating: Boolean,
     failed: Boolean,
-): String = when {
-    locating -> "Position wird ermittelt …"
-    busy -> progress ?: "Route wird berechnet …"
-    failed -> "Route konnte nicht berechnet werden"
-    route != null ->
-        "${formatKmDe(route.distanceKm)} km · ${route.ascentM.roundToInt()} Hm ↑" +
-            if (generated) "" else routeSourceSuffix(source)
+    language: AppLanguage,
+): UiText = when {
+    locating -> UiText.Res(R.string.map_planning_locating_subtitle)
+    busy -> progress?.let(UiText::Plain) ?: UiText.Res(R.string.map_planning_calculating_status)
+    failed -> UiText.Res(R.string.map_planning_failed_status)
+    route != null -> {
+        val km = formatDistanceKm(route.distanceKm, language)
+        val ascent = route.ascentM.roundToInt()
+        val source = if (generated) null else routeSourceLabel(source)
+        if (source == null) {
+            UiText.Res(R.string.map_planning_route_summary, listOf(km, ascent))
+        } else {
+            UiText.Res(R.string.map_planning_route_summary_source, listOf(km, ascent, source))
+        }
+    }
 
-    waypoints.size == 1 -> "Start steht – jetzt ein Ziel hinzufügen"
-    waypoints.size > 1 -> "Route wird berechnet …"
-    else -> "Wähle Start und Ziel"
+    waypoints.size == 1 -> UiText.Res(R.string.map_planning_need_destination_status)
+    waypoints.size > 1 -> UiText.Res(R.string.map_planning_calculating_status)
+    else -> UiText.Res(R.string.map_planning_choose_status)
 }
 
 /**
- * „ · Gerät" bzw. „ · Server" — nichts, solange [source] `null` ist (keine
+ * „Gerät" bzw. „Server" — `null`, solange [source] `null` ist (keine
  * Route, oder eine vom Generator).
  */
-private fun routeSourceSuffix(source: RoutingSource?): String = when (source) {
-    RoutingSource.OFFLINE -> " · Gerät"
-    RoutingSource.SERVER -> " · Server"
-    null -> ""
+private fun routeSourceLabel(source: RoutingSource?): UiText? = when (source) {
+    RoutingSource.OFFLINE -> UiText.Res(R.string.map_planning_source_device)
+    RoutingSource.SERVER -> UiText.Res(R.string.map_planning_source_server)
+    null -> null
 }
 
 /**
@@ -761,35 +786,41 @@ private fun routeSourceSuffix(source: RoutingSource?): String = when (source) {
  * Bei „Zurück zum Start" fuehrt die Route zum Start zurueck — „Start → Ziel"
  * behauptete dann das Falsche; der Titel sagt stattdessen „Rundweg ab …".
  */
-private fun planningRouteLabel(waypoints: List<Waypoint>, roundTrip: Boolean): String {
+private fun planningRouteLabel(waypoints: List<Waypoint>, roundTrip: Boolean): UiText {
     val start = waypoints.firstOrNull()
     if (roundTrip) {
-        return start?.name?.let { "Rundweg ab $it" }
-            ?: "Rundweg · ${waypoints.size} Punkte"
+        return start?.name?.let { UiText.Res(R.string.map_planning_loop_from, listOf(it)) }
+            ?: UiText.Plural(R.plurals.map_planning_loop_points_count, waypoints.size)
     }
     val end = waypoints.lastOrNull()
-    if (start?.name == null && end?.name == null) return "${waypoints.size} Punkte"
-    val startLabel = start?.name ?: "Punkt 1"
-    val endLabel = end?.name ?: "Punkt ${waypoints.size}"
-    return "$startLabel → $endLabel"
+    if (start?.name == null && end?.name == null) {
+        return UiText.Plural(R.plurals.map_planning_points_count, waypoints.size)
+    }
+    val startLabel: UiText = start?.name?.let(UiText::Plain)
+        ?: UiText.Res(R.string.map_planning_point_label, listOf(1))
+    val endLabel: UiText = end?.name?.let(UiText::Plain)
+        ?: UiText.Res(R.string.map_planning_point_label, listOf(waypoints.size))
+    return UiText.Res(R.string.map_planning_from_to, listOf(startLabel, endLabel))
 }
 
 /**
  * Was ein Sonderprofil tut — als zweite Zeile im Menue „Weitere Profile".
  */
-private fun routeProfileHint(profile: RouteProfile): String? = when (profile) {
-    RouteProfile.GRAVEL -> "Trekking: Asphalt und feste Wege gemischt"
-    RouteProfile.SCHOTTER -> "Das eigentliche Gravel-Profil: bevorzugt unbefestigte Wege"
-    RouteProfile.ASPHALT -> "Meidet unbefestigte Wege"
-    RouteProfile.RADWEGE -> "Bevorzugt ausgewiesene Radwege"
-    RouteProfile.KUERZESTER -> "Kürzeste Strecke, ohne Rücksicht auf den Belag"
+@StringRes
+private fun routeProfileHint(profile: RouteProfile): Int? = when (profile) {
+    RouteProfile.GRAVEL -> R.string.map_planning_profile_hint_gravel
+    RouteProfile.SCHOTTER -> R.string.map_planning_profile_hint_schotter
+    RouteProfile.ASPHALT -> R.string.map_planning_profile_hint_asphalt
+    RouteProfile.RADWEGE -> R.string.map_planning_profile_hint_radwege
+    RouteProfile.KUERZESTER -> R.string.map_planning_profile_hint_kuerzester
 }
 
-/**
- * Name des Wegpunkts, den „Mein Standort als Start" setzt — daran erkennt die
- * Liste, dass der Standort schon Start ist, und blendet die Zeile aus.
+/*
+ * Der Name des Wegpunkts, den „Mein Standort als Start" setzt, steht als
+ * `map_planning_my_position_name` in `strings_map.xml` — daran erkennt die
+ * Liste, dass der Standort schon Start ist, und blendet die Zeile aus. Er
+ * wird in der Sprache gespeichert, in der der Punkt gesetzt wurde.
  */
-internal const val MY_POSITION_NAME: String = "Mein Standort"
 
 /** Wie viele Suchtreffer angezeigt werden (Dart: `results.take(5)`). */
 internal const val MAX_SEARCH_RESULTS: Int = 5

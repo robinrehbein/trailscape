@@ -34,8 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.localOfEpochMs
@@ -130,7 +132,7 @@ internal fun ExploreSheet(
                 OneUiSearchField(
                     value = searchQuery,
                     onValueChange = onSearchQueryChange,
-                    placeholder = "Wohin?",
+                    placeholder = stringResource(R.string.map_explore_search_placeholder),
                     busy = searchBusy,
                     onFocusChange = onSearchingChange,
                     onSearch = onSubmitSearch,
@@ -187,7 +189,7 @@ internal fun ExploreSheet(
                                 contentColor = MaterialTheme.colorScheme.onSurface,
                             ),
                         ) {
-                            ChipContent(icon = Icons.Rounded.Loop, label = "Runde ab hier")
+                            ChipContent(icon = Icons.Rounded.Loop, label = stringResource(R.string.map_explore_round_trip_action))
                         }
                     }
                 }
@@ -220,7 +222,7 @@ private fun ExploreSheetBody(
     Column(modifier = modifier.padding(start = CardPadding, end = CardPadding, bottom = 12.dp)) {
         LongPressHintLine()
         if (savedRoutes.isNotEmpty()) {
-            SectionLabel("Gespeicherte Routen")
+            SectionLabel(stringResource(R.string.map_explore_saved_routes_label))
             savedRoutes.take(MAX_ROWS).forEach { ride ->
                 SheetRow(
                     title = ride.name,
@@ -233,7 +235,7 @@ private fun ExploreSheetBody(
             }
         }
         if (recentPlaces.isNotEmpty()) {
-            SectionLabel("Zuletzt gesucht")
+            SectionLabel(stringResource(R.string.map_explore_recent_label))
             recentPlaces.take(MAX_ROWS).forEach { place ->
                 val (title, area) = placeTitleAndArea(place.displayName)
                 SheetRow(
@@ -244,10 +246,10 @@ private fun ExploreSheetBody(
                 )
             }
         }
-        SectionLabel("Karte")
+        SectionLabel(stringResource(R.string.map_explore_map_label))
         SheetRow(
-            title = "Offline-Karten",
-            subtitle = "Gegenden für unterwegs ohne Netz laden",
+            title = stringResource(R.string.map_explore_offline_title),
+            subtitle = stringResource(R.string.map_explore_offline_body),
             icon = Icons.Rounded.DownloadForOffline,
             onClick = onOpenOfflineMaps,
         )
@@ -275,7 +277,7 @@ private fun LongPressHintLine() {
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = LONG_PRESS_HINT_LINE,
+            text = stringResource(R.string.map_long_press_hint_line),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

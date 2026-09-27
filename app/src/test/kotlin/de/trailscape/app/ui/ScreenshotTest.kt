@@ -31,7 +31,6 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
 import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_TEXT
 import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.Goal
@@ -288,15 +287,16 @@ class ScreenshotTest {
         AppServices.keyValueStore.remove(LONG_PRESS_HINT_STORAGE_KEY)
         start()
         tab("Karte")
+        val hint = compose.activity.getString(R.string.map_long_press_hint_snackbar)
         var waited = 0L
-        while (compose.onAllNodesWithText(LONG_PRESS_HINT_TEXT).fetchSemanticsNodes().isEmpty() &&
+        while (compose.onAllNodesWithText(hint).fetchSemanticsNodes().isEmpty() &&
             waited < LONG_PRESS_HINT_CALM_MS + 2_000
         ) {
             compose.mainClock.advanceTimeBy(100)
             compose.waitForIdle()
             waited += 100
         }
-        compose.onAllNodesWithText(LONG_PRESS_HINT_TEXT)[0].assertIsDisplayed()
+        compose.onAllNodesWithText(hint)[0].assertIsDisplayed()
         // Die Einblende-Animation der Snackbar zu Ende laufen lassen.
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
@@ -322,6 +322,43 @@ class ScreenshotTest {
         compose.onAllNodesWithText("Zur Vektorkarte wechseln")[0].performClick()
         settle()
         shot("41-karte-stil-offline")
+    }
+
+    /**
+     * Die Karte auf Englisch (i18n-map): das „Wohin?"-Blatt, hochgewischt mit
+     * gespeicherten Routen, das Tour-Blatt und das Stil-Blatt. Geklickt wird
+     * ueber Ressourcen, nicht ueber Literale — nur der Tab heisst je nach
+     * Stand der Shell-Uebersetzung noch „Karte" oder schon „Map".
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun karteEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        val context = compose.activity
+        start()
+        compose.onAllNodes(hasText("Karte") or hasText("Map"))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_explore_search_placeholder))[0].assertExists()
+        assertEquals("Where to?", context.getString(R.string.map_explore_search_placeholder))
+        shot("07-karte-en")
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
+            .performSemanticsAction(SemanticsActions.Expand)
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_explore_saved_routes_label))[0].assertExists()
+        shot("08-karte-wohin-offen-en")
+        compose.onAllNodesWithText("Alb-Runde über Hayingen")[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_ride_card_start_action))[0].assertExists()
+        shot("09-karte-tour-en")
+        compose.onAllNodesWithContentDescription(context.getString(R.string.map_ride_card_close_cd))[0]
+            .performClick()
+        settle()
+        compose.onAllNodesWithContentDescription(context.getString(R.string.map_layers_cd))[0].performClick()
+        settle()
+        compose.onAllNodesWithText("OpenStreetMap")[0].performTouchInput { swipeUp() }
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_style_sheet_switch_action))[0].assertExists()
+        shot("40-karte-stil-raster-en")
     }
 
     /**

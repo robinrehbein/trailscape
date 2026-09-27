@@ -4,7 +4,11 @@ import androidx.compose.runtime.saveable.SaverScope
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.terrainLabel
+import de.trailscape.app.ui.map.MapTestStrings.de
+import de.trailscape.app.ui.map.MapTestStrings.en
 import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,9 +38,32 @@ class RouteSurfaceTextTest {
 
     @Test
     fun `Kandidatenzeile nennt zuerst die Gelaendeart`() {
-        assertEquals("Flach · 5 Hm/km · ±0 % zum Ziel", candidateDetailLine(candidate(40.0, 200.0, 40.0), texts = CoreTextsDe))
-        assertEquals("Wellig · 12 Hm/km · +5,0 % zum Ziel", candidateDetailLine(candidate(42.0, 504.0, 40.0), texts = CoreTextsDe))
-        assertEquals("Bergig · 20 Hm/km · −10,0 % zum Ziel", candidateDetailLine(candidate(36.0, 720.0, 40.0), texts = CoreTextsDe))
+        assertEquals("Flach · 5 Hm/km · ±0 % zum Ziel", de(candidateDetailLine(candidate(40.0, 200.0, 40.0), texts = CoreTextsDe)))
+        assertEquals("Wellig · 12 Hm/km · +5,0 % zum Ziel", de(candidateDetailLine(candidate(42.0, 504.0, 40.0), texts = CoreTextsDe)))
+        assertEquals("Bergig · 20 Hm/km · −10,0 % zum Ziel", de(candidateDetailLine(candidate(36.0, 720.0, 40.0), texts = CoreTextsDe)))
+    }
+
+    @Test
+    fun `Kandidatenzeile auf Englisch mit Punkt und Metern`() {
+        val flat = candidateDetailLine(candidate(40.0, 200.0, 40.0), texts = CoreTextsEn)
+        val rolling = candidateDetailLine(candidate(42.0, 504.0, 40.0), texts = CoreTextsEn)
+        val hilly = candidateDetailLine(candidate(36.0, 720.0, 40.0), texts = CoreTextsEn)
+        assertEquals("${terrainLabel(5.0, CoreTextsEn)} · 5 m/km · ±0% vs. target", en(flat))
+        assertEquals("${terrainLabel(12.0, CoreTextsEn)} · 12 m/km · +5.0% vs. target", en(rolling))
+        assertEquals("${terrainLabel(20.0, CoreTextsEn)} · 20 m/km · −10.0% vs. target", en(hilly))
+    }
+
+    @Test
+    fun `Himmelsrichtung und neue Kacheln in beiden Sprachen`() {
+        assertEquals("NO", de(compassLabel(45.0)))
+        assertEquals("NE", en(compassLabel(45.0)))
+        assertEquals("O", de(compassLabel(90.0)))
+        assertEquals("E", en(compassLabel(90.0)))
+        assertEquals("–", en(compassLabel(Double.NaN)))
+        assertEquals("+9 neu", de(newTilesLabel(9)))
+        assertEquals("+9 new", en(newTilesLabel(9)))
+        assertEquals("bekannt", de(newTilesLabel(0)))
+        assertEquals("known", en(newTilesLabel(0)))
     }
 
     // ------------------------------------------------------- Saver
