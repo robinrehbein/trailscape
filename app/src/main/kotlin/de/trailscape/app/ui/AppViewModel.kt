@@ -16,6 +16,7 @@ import de.trailscape.app.routing.SegmentDownloads
 import de.trailscape.app.routing.SegmentOffer
 import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.routing.describeSegmentOffer
+import de.trailscape.app.ui.rides.formatImprovementDe
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
 import de.trailscape.core.TrackPoint
@@ -1785,7 +1786,7 @@ class AppViewModel(
                 val best = newBests.first()
                 showMessage(
                     "Neue Bestzeit auf „${best.segmentName}“: ${formatDuration(best.timeS)}, " +
-                        "${formatImprovement(best.improvementS)} schneller.",
+                        "${formatImprovementDe(best.improvementS)} schneller.",
                 )
             }
             // Mehrere auf einmal (z. B. Runden-Tour ueber mehrere Anstiege):
@@ -1793,10 +1794,6 @@ class AppViewModel(
             else -> showMessage("Neue Bestzeiten auf ${newBests.size} Segmenten.")
         }
     }
-
-    /** „14 s" unter einer Minute, sonst „1:15 min" — fuer die Bestzeit-Meldung. */
-    private fun formatImprovement(seconds: Int): String =
-        if (seconds < 60) "$seconds s" else "${formatDuration(seconds)} min"
 
     // -------------------------------------------------------------------------
     // Trainingsplan
@@ -2128,16 +2125,16 @@ class AppViewModel(
      * „Was die Tour gebracht hat" in der Detailansicht
      * (`:core`/[explorerTilesNewInRide]).
      *
-     * `null`, solange der Kachel-Layer aus ist: dieselbe Schranke wie die
-     * Meldung „+N neue Kacheln" nach der Fahrt. Wer den Layer nie einschaltet,
-     * soll fuer eine Zeile, die ihn nicht interessiert, keinen Lauf ueber den
-     * ganzen Tourbestand bezahlen. Ist der Layer an, aber noch nicht
-     * gerechnet, wird er es jetzt; danach wird nur noch im Cache
-     * nachgeschlagen.
+     * Nachgeschlagen wird immer, auch bei ausgeschaltetem Kachel-Layer: der
+     * Blick in den Cache ist billig und liefert `null`, wenn er unvollstaendig
+     * oder veraltet ist. Nur die teure Neuberechnung ([refreshExplorerTiles],
+     * ein Lauf ueber den ganzen Tourbestand) gibt es allein bei
+     * eingeschaltetem Layer — wer ihn nie einschaltet, bezahlt dafuer nichts,
+     * sieht die Zeile aber, sobald der Cache (etwa aus der Rundkurs-Suche)
+     * vollstaendig ist.
      */
     suspend fun explorerTilesGainedBy(rideId: String): Int? {
-        if (!_explorerTilesEnabled.value) return null
-        if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        if (_explorerTilesEnabled.value && _explorerTiles.value.isEmpty()) refreshExplorerTiles()
         // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
         val summaries = allSummaries
         return withContext(io) {

@@ -33,7 +33,9 @@ internal fun rideImpactLines(impact: RideImpact): List<RideImpactLine> = buildLi
         if (form.noticeable) {
             add(
                 RideImpactLine(
-                    lead = "Fitness ${formatSignedDecimalDe(form.fitnessGain)}",
+                    // Komma am Ende: Anfang und Rest werden nur mit Leerzeichen
+                    // verbunden und muessen als ein Satz lesbar sein.
+                    lead = "Fitness ${formatSignedDecimalDe(form.fitnessGain)},",
                     body = "Müdigkeit ${formatSignedDecimalDe(form.fatigueGain)}, " +
                         "Frische danach ${formatSigned(form.freshnessAfter)} " +
                         "(${freshnessWord(form.freshnessAfter)}).",
@@ -55,6 +57,15 @@ internal fun rideImpactLines(impact: RideImpact): List<RideImpactLine> = buildLi
         val after = goal.kmAfter.roundToInt()
         if (goal.reachedByThisRide) {
             add(RideImpactLine("Wochenziel geschafft.", "Mit dieser Tour $after von ${goal.targetKm} km."))
+        } else if (after >= goal.targetKm) {
+            // Schon vorher erreicht: wie `weekSummary` nicht „212 von 180 km"
+            // ohne Wort dazu, das liest sich sonst wie ein Rueckstand.
+            add(
+                RideImpactLine(
+                    "Wochenziel erreicht.",
+                    "$after von ${goal.targetKm} km, diese Tour +${formatRideKm(goal.rideKm)} km.",
+                ),
+            )
         } else {
             add(
                 RideImpactLine(
@@ -75,7 +86,7 @@ internal fun rideImpactLines(impact: RideImpact): List<RideImpactLine> = buildLi
         add(
             RideImpactLine(
                 "Neue Bestzeiten",
-                "auf ${bests.size} Anstiegen — Details unter „Alle Werte“.",
+                "auf ${bests.size} Segmenten — Details unter „Alle Werte“.",
             ),
         )
     } else {
@@ -106,9 +117,9 @@ internal fun formatSignedDecimalDe(value: Double): String {
 }
 
 /**
- * „14 s" unter einer Minute, sonst „1:15 min". Dieselbe Regel wie
- * `AppViewModel.formatImprovement` (dort privat, fuer die Bestzeit-Snackbar
- * nach der Fahrt) — die Karte muss dieselbe Zahl genauso schreiben.
+ * „14 s" unter einer Minute, sonst „1:15 min" — fuer die Karte und die
+ * Bestzeit-Snackbar nach der Fahrt (`AppViewModel.reportNewBests`), damit
+ * dieselbe Zahl an beiden Stellen gleich geschrieben wird.
  */
 internal fun formatImprovementDe(seconds: Int): String =
     if (seconds < 60) "$seconds s" else "${formatDuration(seconds)} min"

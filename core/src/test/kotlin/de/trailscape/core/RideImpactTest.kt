@@ -294,8 +294,21 @@ class RideImpactTest {
         assertEquals(60, bests[0].improvementS)
         assertEquals(200, bests[0].timeS)
         assertEquals(280, bests[1].timeS)
-        assertEquals(10, bests[1].improvementS)
+        assertEquals(20, bests[1].improvementS)
         assertEquals("Anstieg b", bests[0].name)
+    }
+
+    @Test
+    fun `zwei Bestzeit-Runden messen gegen die Bestzeit von vor der Tour`() {
+        // Vorher 300 s, Runde 1 290 s, Runde 2 280 s: die Tour hat den alten
+        // Stand um 20 s verbessert, nicht nur um die 10 s zur eigenen Runde 1.
+        val views = listOf(
+            view("a", timeS = 280, previousBestTimeS = 290, startedAt = 2),
+            view("a", timeS = 290, previousBestTimeS = 300, startedAt = 1),
+        )
+        val best = assertNotNull(impact(views = views)).newBests.single()
+        assertEquals(280, best.timeS)
+        assertEquals(20, best.improvementS)
     }
 
     @Test

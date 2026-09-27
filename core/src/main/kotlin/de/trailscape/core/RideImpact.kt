@@ -67,7 +67,11 @@ data class RideSegmentBest(
     val segmentId: String,
     val name: String,
     val timeS: Int,
-    /** Um so viele Sekunden war die Tour schneller als die fruehere Bestzeit. */
+    /**
+     * Um so viele Sekunden war die Tour schneller als die Bestzeit von VOR
+     * dieser Tour — bei zwei Runden auf demselben Segment zaehlt nicht der
+     * Abstand zur eigenen ersten Runde, sondern der zum alten Stand.
+     */
     val improvementS: Int,
 )
 
@@ -171,7 +175,11 @@ private fun rideSegmentBests(views: List<SegmentEffortView>): List<RideSegmentBe
         .values
         .mapNotNull { laps ->
             val fastest = laps.minBy { it.timeS }
-            val improvement = fastest.previousBestTimeS!! - fastest.timeS
+            // Die frueheste Bestzeit-Runde traegt die Bestzeit von vor der
+            // Tour; jede spaetere hat schon die eigene Runde als Massstab
+            // (kleiner). Das Maximum ist also der alte Stand.
+            val before = laps.maxOf { it.previousBestTimeS!! }
+            val improvement = before - fastest.timeS
             if (improvement <= 0) {
                 null
             } else {

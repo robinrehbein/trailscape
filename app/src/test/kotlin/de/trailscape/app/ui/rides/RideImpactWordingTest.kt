@@ -31,7 +31,7 @@ class RideImpactWordingTest {
             ),
         )
         assertEquals(
-            listOf(RideImpactLine("Fitness +1,9", "Müdigkeit +10,6, Frische danach −12 (etwas müde).")),
+            listOf(RideImpactLine("Fitness +1,9,", "Müdigkeit +10,6, Frische danach −12 (etwas müde).")),
             lines,
         )
     }
@@ -85,7 +85,7 @@ class RideImpactWordingTest {
         val lines = rideImpactLines(
             empty.copy(weekGoal = RideWeekGoalImpact(kmAfter = 212.0, targetKm = 180, rideKm = 32.0, reachedByThisRide = false)),
         )
-        assertEquals(listOf(RideImpactLine("Wochenziel:", "212 von 180 km, diese Tour +32 km.")), lines)
+        assertEquals(listOf(RideImpactLine("Wochenziel erreicht.", "212 von 180 km, diese Tour +32 km.")), lines)
     }
 
     @Test
@@ -138,7 +138,7 @@ class RideImpactWordingTest {
             empty.copy(newBests = listOf(best("a", 100, 30), best("b", 100, 20), best("c", 100, 10))),
         )
         assertEquals(
-            listOf(RideImpactLine("Neue Bestzeiten", "auf 3 Anstiegen — Details unter „Alle Werte“.")),
+            listOf(RideImpactLine("Neue Bestzeiten", "auf 3 Segmenten — Details unter „Alle Werte“.")),
             lines,
         )
     }
@@ -167,7 +167,7 @@ class RideImpactWordingTest {
                 newBests = listOf(best("a", 100, 10)),
             ),
         )
-        assertEquals(listOf("Fitness +1,9", "Wochenziel:", "4 neue Kacheln", "Neue Bestzeit"), lines.map { it.lead })
+        assertEquals(listOf("Fitness +1,9,", "Wochenziel:", "4 neue Kacheln", "Neue Bestzeit"), lines.map { it.lead })
         assertEquals("Müdigkeit +10,6, Frische danach ±0 (ausgeglichen).", lines.first().body)
     }
 }
