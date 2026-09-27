@@ -170,6 +170,33 @@
             </intent-filter>
         </activity>
 
+        <!-- Ruecksprung der Strava-Anmeldung (trailscape://strava-callback,
+             siehe strava/StravaAuthActivity): durchsichtiges Trampolin wie
+             die ImportActivity. Exportiert, weil der Browser sie aufrufen
+             muss; gegen fremde Aufrufe schuetzt das beim Start gemerkte
+             state-Nonce (core/…/StravaAuth.kt). Nur aktiv, wenn der Build
+             Strava-Zugangsdaten hat (manifestPlaceholder stravaEnabled, siehe
+             app/build.gradle.kts) — sonst registriert die App das Schema gar
+             nicht. Keine neue Berechtigung, INTERNET ist vorhanden. -->
+        <activity
+            android:name=".strava.StravaAuthActivity"
+            android:exported="true"
+            android:enabled="${stravaEnabled}"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="trailscape"
+                    android:host="strava-callback" />
+            </intent-filter>
+        </activity>
+
         <!-- Begruendung der Health-Connect-Leserechte (Kurzfassung von
              PRIVACY.md plus Link auf den Volltext). Health Connect ruft bis
              Android 13 ACTION_SHOW_PERMISSIONS_RATIONALE auf. Frueher hing der

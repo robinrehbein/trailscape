@@ -5,8 +5,11 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import de.trailscape.core.SensorSample
 import de.trailscape.core.TrackPoint
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
@@ -131,6 +134,23 @@ object RecordingRepository {
      * [clearFinishedRide].
      */
     val lastFinishedRideId: StateFlow<String?> = _lastFinishedRideId.asStateFlow()
+
+    private val _finishedRides = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
+
+    /**
+     * Jede fertig gespeicherte Tour als Ereignis — dieselben Meldungen wie
+     * [lastFinishedRideId] (Beenden und Wiederherstellung), aber ohne dass ein
+     * anderer Sammler sie wegquittieren kann.
+     *
+     * Warum neben [lastFinishedRideId]: Das ViewModel setzt jenen Wert nach
+     * dem Verarbeiten per [clearFinishedRide] zurueck, und ein [StateFlow]
+     * verschluckt Zwischenstaende. Ein zweiter Sammler (der Strava-Auto-Upload
+     * in `TrailscapeApplication`) koennte eine Tour so verpassen. `replay = 1`,
+     * weil dieser Sammler beim App-Start erst anlaeuft, waehrend die
+     * Wiederherstellung eines Journals schon melden kann; eine doppelt
+     * gesehene Tour faengt der Empfaenger ab.
+     */
+    val finishedRides: SharedFlow<String> = _finishedRides.asSharedFlow()
 
     /**
      * Zuletzt von einer gekoppelten Uhr gemeldete Herzfrequenz in Schlaegen
@@ -283,6 +303,7 @@ object RecordingRepository {
         _speedKmh.value = null
         if (finishedRideId != null) {
             _lastFinishedRideId.value = finishedRideId
+            _finishedRides.tryEmit(finishedRideId)
         }
     }
 
@@ -292,6 +313,7 @@ object RecordingRepository {
 
     internal fun publishFinishedRide(rideId: String) {
         _lastFinishedRideId.value = rideId
+        _finishedRides.tryEmit(rideId)
     }
 
     /**

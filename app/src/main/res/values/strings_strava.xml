@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des optionalen Strava-Uploads (Einstellungen → Strava und die
+    Strava-Zeile in der Tour-Detailansicht).
+
+    Bewusst eine eigene Datei statt eines Anbaus an strings.xml: Android fuehrt
+    alle values/*.xml zusammen, und so bleiben die Strava-Texte als Einheit
+    lesbar. `:core` liefert fuer Fehler nur eine Klasse (StravaError), die
+    Saetze stehen hier — deutsch als Vorgabe, englisch in values-en.
+-->
+<resources>
+    <string name="strava_settings_title" translatable="false">Strava</string>
+    <string name="strava_status_off">Nicht verbunden</string>
+    <string name="strava_status_connected">Verbunden</string>
+    <string name="strava_status_connected_auto">Verbunden · Auto-Upload an</string>
+    <string name="strava_intro">Lädt fertige Touren in dein eigenes Strava-Konto hoch – nur, wenn du es hier verbindest. Ohne Verbindung bleibt alles auf dem Gerät.</string>
+    <string name="strava_connect">Mit Strava verbinden</string>
+    <string name="strava_connecting">Verbinde mit Strava …</string>
+    <string name="strava_connected_as">Verbunden als „%1$s“.</string>
+    <string name="strava_connected_plain">Mit Strava verbunden.</string>
+    <string name="strava_auto_upload">Neue Touren automatisch hochladen</string>
+    <string name="strava_auto_upload_hint">Nach dem Beenden einer Aufzeichnung, im Hintergrund, sobald Netz da ist.</string>
+    <string name="strava_privacy_hint">Hochgeladen werden Name, Spur, Zeiten, Höhe und Puls der Tour. Wer sie auf Strava sieht, richtet sich nach deinen Strava-Einstellungen zur Privatsphäre.</string>
+    <string name="strava_disconnect">Trennen</string>
+    <string name="strava_disconnect_title">Strava trennen?</string>
+    <string name="strava_disconnect_text">Trailscape lädt dann nichts mehr hoch und vergisst den Zugang. Bereits hochgeladene Touren bleiben auf Strava.</string>
+    <string name="strava_cancel">Abbrechen</string>
+    <string name="strava_disconnected">Strava ist getrennt.</string>
+    <string name="strava_error_denied">Strava hat keinen Zugriff erteilt. Es wurde nichts verbunden.</string>
+    <string name="strava_error_missing_scope">Ohne die Erlaubnis „Aktivitäten hochladen“ kann Trailscape nichts hochladen. Verbinde erneut und lass das Häkchen gesetzt.</string>
+    <string name="strava_error_invalid">Die Anmeldung bei Strava ist abgelaufen oder passt nicht. Bitte verbinde erneut.</string>
+    <string name="strava_error_connect_failed">Die Verbindung mit Strava ist fehlgeschlagen. Prüfe deine Internetverbindung und versuche es erneut.</string>
+    <string name="strava_error_no_browser">Kein Browser gefunden, um die Anmeldung bei Strava zu öffnen.</string>
+    <string name="strava_error_keystore">Der sichere Speicher des Geräts ist nicht verfügbar. Trailscape kann den Strava-Zugang nicht ablegen.</string>
+    <string name="strava_upload_action">Zu Strava hochladen</string>
+    <string name="strava_upload_action_cd">Tour zu Strava hochladen</string>
+    <string name="strava_uploading">Wird zu Strava hochgeladen …</string>
+    <string name="strava_uploaded">Auf Strava hochgeladen.</string>
+    <string name="strava_view">Auf Strava ansehen</string>
+    <string name="strava_duplicate">Diese Tour ist schon auf Strava.</string>
+    <string name="strava_failed_title">Hochladen zu Strava fehlgeschlagen</string>
+    <string name="strava_failed_network">Strava war nicht erreichbar.</string>
+    <string name="strava_failed_rate_limited">Strava nimmt gerade keine Uploads an. Versuch es später noch einmal.</string>
+    <string name="strava_failed_auth">Der Zugang zu Strava gilt nicht mehr. Verbinde Strava unter Einstellungen → Strava neu.</string>
+    <string name="strava_failed_file">Strava konnte die Tour nicht verarbeiten.</string>
+    <string name="strava_failed_generic">Das Hochladen ist fehlgeschlagen.</string>
+    <string name="strava_retry">Erneut versuchen</string>
+</resources>

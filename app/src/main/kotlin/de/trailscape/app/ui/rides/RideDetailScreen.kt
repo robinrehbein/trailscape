@@ -138,6 +138,8 @@ import kotlinx.coroutines.withContext
  *     kann sich kein Menue leisten, dessen Inhalt man erraten muss.
  *     „Teilen" fragt nach dem Was: Tour-Bild (Story oder Quadrat) oder GPX
  *     (`ShareRideDialog.kt`) — eine fuenfte Kachel haette die Reihe umbrochen.
+ *     Darunter optional eine eigene Zeile fuer Strava ([StravaRideAction]),
+ *     nur wenn ein Strava-Konto verbunden ist.
  *  6. Hoehenprofil.
  *  7. „Alle Werte" klappt den Rest auf: Fahrzeit, Ø Tempo, Hm ↓, Max. Puls,
  *     Tempo- und Pulskurve, die Coach-Auswertung (Trainingslast als Zahl,
@@ -337,6 +339,10 @@ internal fun RideDetailScreen(
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 )
+
+                // Optional darunter: Strava (nur mit verbundenem Konto, siehe
+                // StravaRideAction.kt).
+                StravaRideAction(ride = ride)
 
                 val elevation = curves?.elevation.orEmpty()
                 if (elevation.size >= 2) {

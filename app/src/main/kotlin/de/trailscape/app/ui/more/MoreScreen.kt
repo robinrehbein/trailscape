@@ -45,6 +45,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
+import de.trailscape.app.strava.StravaConfig
+import de.trailscape.app.strava.StravaServices
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.MoreSection
@@ -244,6 +246,8 @@ internal enum class SettingsPage(val title: String) {
     REMINDERS("Erinnerungen"),
     OFFLINE("Karten offline"),
     BACKUP("Import & Backup"),
+    // Nur in Builds mit Strava-Zugangsdaten sichtbar (StravaConfig.available).
+    STRAVA("Strava"),
     SYNC("Sync mit eigenem Server"),
     ABOUT("Über Trailscape"),
 }
@@ -381,6 +385,18 @@ private fun SettingsList(
         }
         item {
             MoreGroup(label = "App") {
+                // Strava steht nur da, wenn der Build es kann — sonst gibt es
+                // die Zeile schlicht nicht (siehe StravaConfig).
+                if (StravaConfig.available) {
+                    val stravaConnection by StravaServices.connection.collectAsStateWithLifecycle()
+                    val stravaAutoUpload by StravaServices.autoUpload.collectAsStateWithLifecycle()
+                    SettingsNavRow(
+                        title = SettingsPage.STRAVA.title,
+                        status = stravaStatusText(stravaConnection, stravaAutoUpload),
+                        onClick = { onOpen(SettingsPage.STRAVA) },
+                    )
+                    ListDivider()
+                }
                 SettingsNavRow(
                     title = SettingsPage.SYNC.title,
                     status = syncStatusText(syncConfig),
@@ -428,6 +444,7 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
                 SettingsSection(label = "Routingdaten") { OfflineRoutingCardContent(appViewModel) }
             }
             SettingsPage.BACKUP -> SettingsSection { BackupCardContent(appViewModel) }
+            SettingsPage.STRAVA -> SettingsSection { StravaCardContent() }
             SettingsPage.SYNC -> SettingsSection { SyncCardContent(appViewModel) }
             SettingsPage.ABOUT -> {
                 SettingsSection { AboutCardContent(appViewModel) }

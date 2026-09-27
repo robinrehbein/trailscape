@@ -128,6 +128,37 @@ android {
         val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
         versionCode = (runNumber ?: 1) + 2000
         versionName = if (runNumber != null) "2.0.$runNumber" else "2.0.0-dev"
+
+        // Strava-Upload (optional, siehe app/.../strava/): Zugangsdaten der
+        // Strava-API-App kommen ausschliesslich aus der Umgebung
+        // (STRAVA_CLIENT_ID/STRAVA_CLIENT_SECRET, in der CI nur bei push auf
+        // main) oder aus `strava.clientId`/`strava.clientSecret` in
+        // ~/.gradle/gradle.properties — **nie** aus dem Repository. Fehlt
+        // eines davon, sind beide Felder leer: Die Funktion ist dann
+        // unsichtbar, das Rueckruf-Schema nicht registriert, und Build und CI
+        // bleiben gruen.
+        //
+        // Bewusst in Kauf genommen: Ein in die APK gebautes client_secret ist
+        // mit apktool/strings auslesbar. Wer es hat, kann sich gegenueber
+        // Strava als Trailscape ausgeben (App-Ratenlimit), aber kein fremdes
+        // Konto uebernehmen — dafuer braucht es weiter die Zustimmung im
+        // Browser. Die haertere Alternative (Token-Tausch ueber einen eigenen
+        // Endpunkt, der das Secret haelt) steht in docs/TODO.md.
+        //
+        // `providers.*` statt System.getenv: Die configuration-cache ist an,
+        // und nur so bemerkt sie eine geaenderte Variable.
+        fun stravaValue(property: String, env: String): String =
+            providers.gradleProperty(property)
+                .orElse(providers.environmentVariable(env))
+                .getOrElse("")
+                .trim()
+        val stravaId = stravaValue("strava.clientId", "STRAVA_CLIENT_ID")
+        val stravaSecret = stravaValue("strava.clientSecret", "STRAVA_CLIENT_SECRET")
+        val stravaEnabled = stravaId.isNotEmpty() && stravaSecret.isNotEmpty()
+        fun asJavaString(v: String) = "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        buildConfigField("String", "STRAVA_CLIENT_ID", asJavaString(if (stravaEnabled) stravaId else ""))
+        buildConfigField("String", "STRAVA_CLIENT_SECRET", asJavaString(if (stravaEnabled) stravaSecret else ""))
+        manifestPlaceholders["stravaEnabled"] = stravaEnabled.toString()
     }
 
     signingConfigs {
@@ -174,6 +205,8 @@ android {
 
     buildFeatures {
         compose = true
+        // Fuer die Strava-Zugangsdaten aus der Umgebung (siehe defaultConfig).
+        buildConfig = true
     }
 
     // Robolectric (nur Screenshot-Tests) braucht die gemergten Ressourcen.

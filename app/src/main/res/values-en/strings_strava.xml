@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Englische Fassung von values/strings_strava.xml (gleiche Schluessel). -->
+<resources>
+    <string name="strava_status_off">Not connected</string>
+    <string name="strava_status_connected">Connected</string>
+    <string name="strava_status_connected_auto">Connected · auto-upload on</string>
+    <string name="strava_intro">Uploads finished rides to your own Strava account – only if you connect it here. Without a connection, everything stays on your device.</string>
+    <string name="strava_connect">Connect with Strava</string>
+    <string name="strava_connecting">Connecting to Strava …</string>
+    <string name="strava_connected_as">Connected as “%1$s”.</string>
+    <string name="strava_connected_plain">Connected to Strava.</string>
+    <string name="strava_auto_upload">Upload new rides automatically</string>
+    <string name="strava_auto_upload_hint">After you finish a recording, in the background, as soon as you are online.</string>
+    <string name="strava_privacy_hint">The ride’s name, track, times, elevation and heart rate are uploaded. Who can see it on Strava depends on your Strava privacy settings.</string>
+    <string name="strava_disconnect">Disconnect</string>
+    <string name="strava_disconnect_title">Disconnect Strava?</string>
+    <string name="strava_disconnect_text">Trailscape will stop uploading and forget its access. Rides already uploaded stay on Strava.</string>
+    <string name="strava_cancel">Cancel</string>
+    <string name="strava_disconnected">Strava is disconnected.</string>
+    <string name="strava_error_denied">Strava did not grant access. Nothing was connected.</string>
+    <string name="strava_error_missing_scope">Without the “upload activities” permission Trailscape can’t upload anything. Connect again and keep that box ticked.</string>
+    <string name="strava_error_invalid">The Strava sign-in expired or didn’t match. Please connect again.</string>
+    <string name="strava_error_connect_failed">Connecting to Strava failed. Check your internet connection and try again.</string>
+    <string name="strava_error_no_browser">No browser found to open the Strava sign-in.</string>
+    <string name="strava_error_keystore">The device’s secure storage isn’t available. Trailscape can’t store the Strava access.</string>
+    <string name="strava_upload_action">Upload to Strava</string>
+    <string name="strava_upload_action_cd">Upload ride to Strava</string>
+    <string name="strava_uploading">Uploading to Strava …</string>
+    <string name="strava_uploaded">Uploaded to Strava.</string>
+    <string name="strava_view">View on Strava</string>
+    <string name="strava_duplicate">This ride is already on Strava.</string>
+    <string name="strava_failed_title">Upload to Strava failed</string>
+    <string name="strava_failed_network">Strava couldn’t be reached.</string>
+    <string name="strava_failed_rate_limited">Strava isn’t accepting uploads right now. Try again later.</string>
+    <string name="strava_failed_auth">Access to Strava is no longer valid. Reconnect under Settings → Strava.</string>
+    <string name="strava_failed_file">Strava couldn’t process this ride.</string>
+    <string name="strava_failed_generic">The upload failed.</string>
+    <string name="strava_retry">Try again</string>
+</resources>

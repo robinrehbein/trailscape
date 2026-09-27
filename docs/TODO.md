@@ -23,6 +23,37 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   die App dort nicht auf eine APK außerhalb von Play verweist. Den Absatz zur
   Update-Prüfung in `PRIVACY.md` dann entsprechend anpassen.
 
+- **Strava-Upload freischalten (Code ist fertig, Gründer-Aufgaben offen).**
+  Der optionale Upload (`app/.../strava/`, `core/.../StravaClient.kt`) ist nur
+  in Builds mit Zugangsdaten sichtbar. Dafür fehlt noch:
+  1. Strava-API-App unter https://www.strava.com/settings/api anlegen (Name,
+     Website, Icon). „Authorization Callback Domain“ vermutlich
+     `strava-callback` (Host von `trailscape://strava-callback`) — auf dem
+     Gerät prüfen, sonst meldet Strava „invalid redirect_uri“.
+  2. Client-ID und Client-Secret als GitHub-Secrets `STRAVA_CLIENT_ID` und
+     `STRAVA_CLIENT_SECRET` hinterlegen, lokal als `strava.clientId`/
+     `strava.clientSecret` in `~/.gradle/gradle.properties`. Nie ins Repo.
+  3. Bewusst entscheiden, ob das in der APK auslesbare Secret tragbar ist.
+     Wer es hat, kann sich als Trailscape ausgeben und das App-Ratenlimit
+     verbrauchen, aber kein fremdes Konto übernehmen. Härtere Alternative
+     (nicht gebaut): Token-Tausch und Refresh über einen kleinen eigenen
+     Endpunkt (z. B. im Sync-Server), der das Secret hält; die App schickte
+     dann nur Code bzw. Refresh-Token dorthin. Das brächte allerdings einen
+     Trailscape-Server in den Datenfluss und änderte `PRIVACY.md`.
+  4. Bei Strava den Review für mehr als einen Athleten beantragen (neue Apps:
+     Kapazität 1 = nur der Entwickler) und ggf. höhere Ratenlimits
+     (Standard 200 Anfragen/15 min, 2000/Tag für die ganze App).
+  5. Markenrichtlinien von Strava prüfen: offizielles „Connect with
+     Strava“-Knopfbild statt Textknopf, „View on Strava“-Gestaltung.
+  6. Google-Play-Datensicherheit: nutzerinitiierte Weitergabe von Standort-
+     und Fitnessdaten an Strava angeben.
+  7. Auf dem Gerät prüfen: Verbinden, Ablehnen, Häkchen „Aktivitäten
+     hochladen“ abwählen, Upload von Hand, Auto-Upload im Flugmodus, Duplikat,
+     Trennen, Sportart auf Strava = Radfahrt (sonst nach dem Upload
+     `PUT /activities/{id}` mit `sport_type=Ride`).
+  Später denkbar: verifizierte App Links statt `trailscape://` (braucht eine
+  eigene Domain mit `/.well-known/assetlinks.json`), FIT statt GPX.
+
 ## Ideen
 
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und

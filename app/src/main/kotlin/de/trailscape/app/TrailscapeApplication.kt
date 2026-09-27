@@ -5,7 +5,10 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.AppDiagnostics
 import de.trailscape.app.feedback.CrashReporter
 import de.trailscape.app.record.RecordingService
+import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderScheduler
+import de.trailscape.app.strava.StravaConfig
+import de.trailscape.app.strava.StravaServices
 import kotlinx.coroutines.launch
 
 /**
@@ -13,7 +16,8 @@ import kotlinx.coroutines.launch
  * `Context` zu initialisieren, bevor irgendeine Activity/ViewModel darauf
  * zugreift, liegengebliebene Aufzeichnungs-Journale eines abgestuerzten
  * Prozesses als Tour zu retten, den lokalen Absturzberichter und das
- * Diagnose-Log einzurichten und den Zeitplan der Erinnerungen wieder auszurichten. Enthaelt bewusst
+ * Diagnose-Log einzurichten, den Zeitplan der Erinnerungen wieder auszurichten
+ * und — nur in Builds mit Strava — den Auto-Upload anzuhaengen. Enthaelt bewusst
  * sonst nichts — kein globaler Zustand ausserhalb von [AppServices].
  */
 class TrailscapeApplication : Application() {
@@ -36,6 +40,21 @@ class TrailscapeApplication : Application() {
             // hochfaehrt — der hat Vorrang, denn nur er weiss, ob er eine
             // laufende Fahrt fortsetzen will. Siehe `RecoveryGate`.
             RecordingService.recoverIfNeeded(this@TrailscapeApplication, AppServices.rideStorage)
+        }
+        StravaServices.init(this)
+        if (StravaConfig.available) {
+            AppServices.appScope.launch {
+                // Strava-Auto-Upload: haengt am Ende der Aufzeichnung und an
+                // der Wiederherstellung eines Journals, ohne den
+                // RecordingService anzufassen. Doppelmeldungen fangen der
+                // eindeutige Arbeitsname (KEEP) und die Pruefung auf einen
+                // vorhandenen Vermerk ab (siehe StravaServices.onRideFinished).
+                RecordingRepository.finishedRides.collect { rideId ->
+                    // Ein Fehler hier darf den Sammler nicht beenden, sonst
+                    // fiele der Auto-Upload bis zum naechsten App-Start aus.
+                    runCatching { StravaServices.onRideFinished(rideId) }
+                }
+            }
         }
         AppServices.appScope.launch {
             // Nachziehen, was der Hintergrundlauf allein nicht kann: Wurde das

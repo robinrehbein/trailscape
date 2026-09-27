@@ -93,6 +93,11 @@ jobs:
           # zwar ohnehin ignorieren, aber ein Secret gehoert gar nicht erst in
           # die Umgebung eines PR-Laufs.
           RELEASE_KEYSTORE_PASSWORD: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && secrets.RELEASE_KEYSTORE_PASSWORD || '' }}
+          # Strava-App-Zugangsdaten (app/build.gradle.kts) nach demselben
+          # Muster: nur bei push auf main. In PR-Laeufen fehlen sie, die
+          # Strava-Funktion ist dort unsichtbar und der Build bleibt gruen.
+          STRAVA_CLIENT_ID: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && secrets.STRAVA_CLIENT_ID || '' }}
+          STRAVA_CLIENT_SECRET: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') && secrets.STRAVA_CLIENT_SECRET || '' }}
         # :app:testDebugUnitTest deckt die plattformfreien Teile von :app ab
         # (Aufzeichnungs-Journal); AGP legt Unit-Test-Tasks nur fuer die
         # Debug-Variante an, ein `:app:test` gaebe es sonst nicht.
