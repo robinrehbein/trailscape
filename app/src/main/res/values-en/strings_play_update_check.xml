@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Englische Fassung von values/strings_play_update_check.xml. -->
+<resources>
+    <string name="play_update_check_hint">Updates come through Google Play.</string>
+</resources>

@@ -259,7 +259,9 @@ suchen** lässt sich die Prüfung jederzeit von Hand auslösen. Der stille Check
 lässt sich an derselben Stelle abschalten („Täglich still nach Updates
 suchen") — dann geht beim Start keine Anfrage an GitHub hinaus. Ohne Netz
 passiert schlicht nichts — die Prüfung meldet nie einen Fehler und blockiert
-nie.
+nie. Bei einer Installation über Google Play entfällt all das: Die App fragt
+dann nie bei GitHub nach, und unter **Mehr → Über** steht nur „Updates kommen
+über Google Play.“
 
 ## Umstieg von Version 1.x
 
@@ -295,7 +297,8 @@ Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
 und Kachel-Downloads, Nominatim für die Zielsuche und — wenn eingerichtet —
 dem eigenen Sync-Server. Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
 tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter
-**Mehr → Über**. Kein Analytics, keine Telemetrie, keine Werbung, kein
+**Mehr → Über** (nur bei der APK von GitHub; bei Installation über Google Play
+entfällt sie). Kein Analytics, keine Telemetrie, keine Werbung, kein
 Konto.
 
 Was genau wann an wen geht, steht ausführlich und nachprüfbar in

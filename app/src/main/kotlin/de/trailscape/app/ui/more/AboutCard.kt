@@ -26,8 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.ISSUE_REPOSITORY_URL
 import de.trailscape.app.feedback.ProblemReportDialog
@@ -72,8 +74,11 @@ private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
  *  * **Nach Updates suchen** — die manuelle Fassung des stillen
  *    Start-Checks (`update/UpdateChecker.kt`), mit sichtbarer Antwort. Ohne
  *    sie gaebe es keinen Weg, die Frage „habe ich die neueste Version?"
- *    aktiv zu stellen: Die App kommt per Sideload, kein Store aktualisiert
- *    sie.
+ *    aktiv zu stellen: Die APK von GitHub kommt per Sideload, kein Store
+ *    aktualisiert sie. Bei Installation ueber Google Play steht hier
+ *    stattdessen nur „Updates kommen über Google Play." — Play aktualisiert
+ *    selbst, und ein Verweis auf eine APK ausserhalb von Play ist dort nicht
+ *    erlaubt (siehe `UpdateChecker.isCheckAllowed`).
  *  * **Schalter fuer den stillen Start-Check** — der einzige Netzzugriff der
  *    App, der nicht direkt aus einer Nutzeraktion folgt, und deshalb hier
  *    abschaltbar (siehe `UpdateChecker.isAutoCheckEnabled`). Er sitzt bewusst
@@ -81,7 +86,9 @@ private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
  *    Blick den Knopf, der die Pruefung weiterhin von Hand erlaubt. Geht ueber
  *    [AppServices.updateChecker] statt ueber das ViewModel — der Schalter ist
  *    reine Einstellung ohne App-Zustand, wie es auch `OfflineRoutingCard`
- *    und `SyncCard` mit ihren Einstellungen halten.
+ *    und `SyncCard` mit ihren Einstellungen halten. Bei Installation ueber
+ *    Google Play entfaellt er: Er haette dort keine Wirkung und deutete einen
+ *    Netzzugriff an, der nie stattfindet.
  *  * **Problem melden** — der einzige Meldeweg dieser App (siehe
  *    `feedback/ProblemReportDialog.kt`). Es gibt keine Telemetrie, die von
  *    selbst berichtet; ohne diesen Knopf erfaehrt niemand von einem Fehler.
@@ -93,9 +100,17 @@ private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
  *
  * Der erste Abschnitt der Seite „Über Trailscape" der Einstellungen (siehe
  * `MoreScreen.kt`).
+ *
+ * @param updatesViaPlay ob die App aus Google Play stammt (dann keine
+ *   GitHub-Update-Pruefung, siehe oben). Nur fuer den Screenshot-Test
+ *   ueberschreibbar — im Betrieb gilt immer, was [AppServices.updateChecker]
+ *   sagt; Robolectric kennt keinen Play-Installer.
  */
 @Composable
-fun AboutCardContent(appViewModel: AppViewModel) {
+fun AboutCardContent(
+    appViewModel: AppViewModel,
+    updatesViaPlay: Boolean = remember { !AppServices.updateChecker.isCheckAllowed() },
+) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val syncReport by appViewModel.lastSyncReport.collectAsStateWithLifecycle()
@@ -148,7 +163,8 @@ fun AboutCardContent(appViewModel: AppViewModel) {
         // (siehe UpdateChecker). Dieser Knopf ist der Weg, es *jetzt* zu
         // wissen — samt sichtbarer Antwort, auch wenn sie „alles aktuell"
         // lautet: Eine Pruefung ohne Rueckmeldung fuehlt sich kaputt an.
-        TextButton(
+        // Bei Play-Installation fehlt er: Er stellte dort nie eine Anfrage.
+        if (!updatesViaPlay) TextButton(
             onClick = {
                 if (updateStatus == UPDATE_CHECK_RUNNING) return@TextButton
                 scope.launch {
@@ -165,7 +181,11 @@ fun AboutCardContent(appViewModel: AppViewModel) {
         ) { Text("Nach Updates suchen") }
     }
 
-    updateStatus?.let { status ->
+    if (updatesViaPlay) {
+        SettingsHint(stringResource(R.string.play_update_check_hint))
+    }
+
+    if (!updatesViaPlay) updateStatus?.let { status ->
         Text(
             text = status,
             style = MaterialTheme.typography.bodySmall,
@@ -179,7 +199,7 @@ fun AboutCardContent(appViewModel: AppViewModel) {
         }
     }
 
-    AutoUpdateCheckRow()
+    if (!updatesViaPlay) AutoUpdateCheckRow()
 
     if (showProblemDialog) {
         ProblemReportDialog(

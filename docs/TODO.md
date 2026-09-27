@@ -15,14 +15,6 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   `offlineAllowed = false` setzen und eine eigene Kachelquelle (z. B.
   selbst gehostete PMTiles) aushandeln bzw. aufbauen.
 
-- **Play-Build: Update-Prüfung.** Der Build trägt seit #65
-  `de.robinrehbein.trailscape` (`app/build.gradle.kts`). Offen ist noch, für
-  Play-Installationen die GitHub-Update-Prüfung abzuschalten
-  (`installingPackageName == "com.android.vending"` über
-  `getInstallSourceInfo`, API 30+; darunter `getInstallerPackageName`), damit
-  die App dort nicht auf eine APK außerhalb von Play verweist. Den Absatz zur
-  Update-Prüfung in `PRIVACY.md` dann entsprechend anpassen.
-
 ## Ideen
 
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und

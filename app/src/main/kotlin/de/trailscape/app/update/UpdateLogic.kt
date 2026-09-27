@@ -142,3 +142,23 @@ fun shouldCheckNow(
  */
 fun shouldAnnounce(announcedVersionName: String?, versionName: String): Boolean =
     announcedVersionName != versionName
+
+/** Paketname des Google-Play-Store-Installers. */
+const val PLAY_STORE_INSTALLER: String = "com.android.vending"
+
+/**
+ * Ob die GitHub-Update-Pruefung fuer diese Installation laufen darf.
+ *
+ * Stammt die Installation aus Google Play, aktualisiert Play die App selbst —
+ * und die Play-Richtlinie verbietet, dort fuer eine APK ausserhalb von Play zu
+ * werben. Dann also keine Pruefung, kein Hinweis, keine Karte.
+ *
+ * `null` (Installer unbekannt: adb, Paketinstaller nach Browser-Download,
+ * fehlgeschlagene Abfrage) heisst **erlaubt**: So bleibt das Verhalten der
+ * APK von GitHub genau wie bisher, und ein Sideload verstummt nie still.
+ * Andere Stores (Galaxy Store, F-Droid …) zaehlen bewusst nicht dazu — die App
+ * wird dort nicht verteilt; wer sie von dort hat, bekommt weiter den Hinweis
+ * auf die GitHub-Releases.
+ */
+fun isUpdateCheckAllowed(installerPackageName: String?): Boolean =
+    installerPackageName != PLAY_STORE_INSTALLER
