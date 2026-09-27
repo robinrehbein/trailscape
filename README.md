@@ -53,7 +53,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
   Tourblatt der Karte genau diese Ansicht
 - Umbenennen, Löschen, als GPX oder als Bild teilen (Story 9:16 oder Quadrat,
-  mit Spur, Höhenprofil und Kennzahlen), GPX importieren (z. B. aus Komoot oder
+  mit Spur, Höhenprofil und Kennzahlen; Start und Ziel ab Werk ausgeblendet;
+  auch direkt vom Tourblatt der Karte), GPX importieren (z. B. aus Komoot oder
   Strava)
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
   wieder importieren

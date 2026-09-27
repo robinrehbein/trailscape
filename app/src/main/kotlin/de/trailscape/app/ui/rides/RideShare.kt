@@ -3,7 +3,11 @@ package de.trailscape.app.ui.rides
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import de.trailscape.app.ui.AppViewModel
@@ -33,6 +37,10 @@ import kotlinx.coroutines.withContext
  * `null`. Fehler landen ueber [AppViewModel.showMessage] in der Snackbar des
  * jeweiligen Bildschirms. Der Dialog schliesst sich vor dem Teilen selbst
  * ([onDismiss]).
+ *
+ * Der Schalter „Start und Ziel ausblenden" wird hier gelesen und gemerkt
+ * (`ShareCardSettings.kt`): Die Wahl gilt fuer jedes kuenftige Tour-Bild,
+ * egal von welcher der beiden Stellen aus geteilt wird.
  */
 @Composable
 internal fun RideShareDialog(
@@ -43,9 +51,15 @@ internal fun RideShareDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var hideEnds by remember { mutableStateOf(shareHideEnds(context)) }
     ShareRideDialog(
         ride = ride,
         load = load,
+        hideEnds = hideEnds,
+        onHideEndsChange = {
+            hideEnds = it
+            setShareHideEnds(context, it)
+        },
         onDismiss = onDismiss,
         onShareGpx = {
             onDismiss()
@@ -71,7 +85,7 @@ internal fun RideShareDialog(
                 // Auch OutOfMemoryError: Eine Story-Bitmap belegt rund 8 MB,
                 // auf knappen Geraeten soll das eine Meldung sein, kein Absturz.
                 val failure: Throwable? = try {
-                    shareRideImage(context, ride, load, format)
+                    shareRideImage(context, ride, load, format, hideEnds)
                     null
                 } catch (e: CancellationException) {
                     throw e

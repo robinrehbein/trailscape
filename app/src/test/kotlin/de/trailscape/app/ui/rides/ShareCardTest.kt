@@ -156,6 +156,67 @@ class ShareCardTest {
         assertEquals("Dienstag, 23. September 2025", content.dateLine)
     }
 
+    // ------------------------------------------------ Start und Ziel ausblenden
+
+    /** Gerade Strecke nach Nordosten mit Hoehen, ein Punkt je ~[stepM] Meter. */
+    private fun straight(lengthM: Double, stepM: Double = 50.0): List<TrackPoint> {
+        val n = (lengthM / stepM).toInt()
+        val degPerM = 1.0 / 111_195.0
+        return (0..n).map {
+            TrackPoint(lat = 53.0 + it * stepM * degPerM, lon = 10.0 + it * stepM * degPerM, ele = 40.0 + it % 7)
+        }
+    }
+
+    @Test
+    fun `ohne Radius bleibt alles wie bisher`() {
+        val points = straight(5000.0)
+        val content = shareCardContent(ride(points = points), load = null, toLocal = utc)
+
+        assertEquals(ShareTrackNote.FULL, content.trackNote)
+        assertEquals(false, content.endsHidden)
+        assertTrue(thumbnailPolyline(points, SHARE_TRACK_MAX_POINTS).contentEquals(content.trackUnit))
+    }
+
+    @Test
+    fun `mit Radius wird die Linie gekuerzt, Zahlen und Profil bleiben die der ganzen Tour`() {
+        val ride = ride(points = straight(5000.0))
+        val full = shareCardContent(ride, load = 55.0, toLocal = utc)
+        val hidden = shareCardContent(ride, load = 55.0, endRadiusM = 300.0, toLocal = utc)
+
+        assertTrue(hidden.hasTrack)
+        assertEquals(ShareTrackNote.ENDS_HIDDEN, hidden.trackNote)
+        assertTrue(hidden.endsHidden)
+        assertEquals(full.stats, hidden.stats)
+        assertEquals(full.hasProfile, hidden.hasProfile)
+        assertTrue(hidden.hasProfile)
+        assertEquals(full.profile, hidden.profile)
+    }
+
+    @Test
+    fun `zu kurze Tour zeigt mit Radius nur die Kennzahlen`() {
+        val content = shareCardContent(ride(points = straight(500.0)), load = null, endRadiusM = 300.0, toLocal = utc)
+
+        assertEquals(false, content.hasTrack)
+        assertEquals(ShareTrackNote.TOO_SHORT, content.trackNote)
+        assertEquals(false, content.endsHidden)
+        for (format in ShareCardFormat.entries) {
+            assertNull(shareCardLayout(format, content.hasTrack, content.hasProfile).track)
+        }
+    }
+
+    @Test
+    fun `ohne Punkte oder auf der Stelle ist mit Radius nichts zu kuerzen`() {
+        val none = shareCardContent(ride(points = emptyList()), load = null, endRadiusM = 300.0, toLocal = utc)
+        assertEquals(ShareTrackNote.NONE, none.trackNote)
+
+        val same = List(5) { TrackPoint(lat = 53.0, lon = 10.0) }
+        val still = shareCardContent(ride(points = same), load = null, endRadiusM = 300.0, toLocal = utc)
+        assertEquals(ShareTrackNote.NONE, still.trackNote)
+
+        val bare = shareCardContent(ride(points = emptyList()), load = null, toLocal = utc)
+        assertEquals(ShareTrackNote.NONE, bare.trackNote)
+    }
+
     // --------------------------------------------------------- shareCardStats
 
     @Test

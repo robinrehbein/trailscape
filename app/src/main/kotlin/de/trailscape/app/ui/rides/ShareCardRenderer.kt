@@ -20,6 +20,7 @@ import androidx.core.content.FileProvider
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.theme.DarkPrimary
 import de.trailscape.core.Ride
+import de.trailscape.core.SHARE_END_RADIUS_M
 import java.io.File
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
@@ -79,7 +80,7 @@ internal fun renderShareCard(content: ShareCardContent, format: ShareCardFormat,
     canvas.scale(scale, scale)
 
     drawBackground(canvas, layout)
-    layout.track?.let { drawTrack(canvas, fitPolyline(content.trackUnit, it)) }
+    layout.track?.let { drawTrack(canvas, fitPolyline(content.trackUnit, it), showEndpoints = !content.endsHidden) }
     layout.profile?.let { drawProfile(canvas, profilePolyline(content.profile, it), it) }
     drawHeader(canvas, layout, content)
     drawStats(canvas, layout, content.stats)
@@ -116,7 +117,13 @@ private fun polylinePath(coords: FloatArray): Path = Path().apply {
     }
 }
 
-private fun drawTrack(canvas: Canvas, coords: FloatArray) {
+/**
+ * Die Spur als leuchtende Linie. Mit [showEndpoints] zusaetzlich Start- und
+ * Zielpunkt; bei ausgeblendeten Enden nicht — die Linie endet dann mit ihrer
+ * runden Kappe, denn eine Marke am gekuerzten Ende behauptete einen Start,
+ * den es dort nicht gab.
+ */
+private fun drawTrack(canvas: Canvas, coords: FloatArray, showEndpoints: Boolean) {
     if (coords.size < 4) return
     val path = polylinePath(coords)
     val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -130,6 +137,7 @@ private fun drawTrack(canvas: Canvas, coords: FloatArray) {
     stroke.color = accent(0xFF)
     stroke.strokeWidth = TRACK_WIDTH
     canvas.drawPath(path, stroke)
+    if (!showEndpoints) return
 
     // Ziel zuerst, Start obendrauf: Bei einer Runde liegen beide uebereinander,
     // und der weisse Startpunkt mit gruenem Ring bleibt lesbar.
@@ -272,10 +280,20 @@ private const val WORDMARK = "Trailscape"
  *
  * Kein Netzwerk: Das Bild entsteht vollstaendig auf dem Geraet. Die Bitmap
  * (rund 8 MB bei 1080x1920) wird nach dem Schreiben sofort freigegeben.
+ *
+ * @param hideEnds Start und Ziel ausblenden: Die Spur wird an beiden Enden um
+ *   [SHARE_END_RADIUS_M] gekuerzt (Schalter im Teilen-Dialog, ab Werk an).
  */
-internal suspend fun shareRideImage(context: Context, ride: Ride, load: Double?, format: ShareCardFormat) {
+internal suspend fun shareRideImage(
+    context: Context,
+    ride: Ride,
+    load: Double?,
+    format: ShareCardFormat,
+    hideEnds: Boolean,
+) {
     val uri = withContext(Dispatchers.Default) {
-        val bitmap = renderShareCard(shareCardContent(ride, load), format)
+        val content = shareCardContent(ride, load, endRadiusM = if (hideEnds) SHARE_END_RADIUS_M else null)
+        val bitmap = renderShareCard(content, format)
         try {
             withContext(Dispatchers.IO) {
                 val file = File(prepareShareDirectory(context.cacheDir), shareCardFileName(ride.name, format))

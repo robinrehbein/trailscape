@@ -45,7 +45,3 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   damit Trainer, Vereine und Foren Pläne ohne Plattform und ohne Konto
   tauschen können. Baut auf dem vorhandenen formatstabilen JSON
   (`core/.../JsonSupport.kt`) und dem Datei-Ein-/Ausgang der Backup-Karte auf.
-- **Start und Ziel im Tour-Bild ausblenden** — die ersten und letzten ~300 m
-  der Spur kappen (optional), damit ein geteiltes Bild die Haustuer nicht
-  verraet. Heute sagt nur ein Hinweis im Teilen-Dialog, dass man Start und
-  Ziel erkennen kann.

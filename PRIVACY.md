@@ -60,6 +60,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Trainingsprofil und -plan | SharedPreferences (`trailscape.*`) | Alter, Geschlecht, Gewicht, FTP/Schwellenwerte, Zielsetzung, Wochenplan |
 | Vitalhistorie | SharedPreferences (`trailscape.vitals.v1`) | Tageswerte der letzten 400 Tage: Ruhepuls, HRV, Schlafstunden, VO₂max — lokal gehalten, weil Health Connect Daten nach 30 Tagen löscht und die Baselines längere Fenster brauchen (`core/…/VitalsHistory.kt`) |
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
+| Teilen-Einstellung | SharedPreferences (`trailscape.share.hideEnds`) | Ja/Nein: Start und Ziel im Tour-Bild ausblenden |
 | Sync-Einstellungen (optional) | SharedPreferences (`trailscape.sync`) | Adresse **deines** Sync-Servers und dein Zugangstoken — im Klartext im privaten App-Speicher |
 | Health-Sync-Stand | SharedPreferences, Schlüssel `trailscape.healthsync`, `trailscape.healthsync.historyImportDone` und `trailscape.healthsync.historyImportedUntil` | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird; ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist; solange dieser Import noch nicht fertig ist, der Zeitpunkt, bis zu dem er schon gespeichert hat |
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
@@ -284,9 +285,16 @@ Anfrage an jemanden:
   exportieren* schreibt alle Touren und das Trainingsprofil in eine lesbare
   JSON-Datei. Einzelne Touren lassen sich zusätzlich als GPX oder als Bild
   teilen. Ein Tour-Bild entsteht vollständig auf dem Gerät; es zeigt die Form
-  der Strecke ohne Karte, aber wer die Gegend kennt, kann Start und Ziel
-  erkennen. Weitergegeben wird es nur über das Teilen-Menü an die App, die du
-  auswählst.
+  der Strecke ohne Karte. Ab Werk blendet es Start und Ziel aus: Die Linie
+  beginnt und endet erst 300 m Luftlinie von beiden entfernt, Start- und
+  Zielmarke entfallen, und ist die Tour dafür zu kurz, zeigt das Bild nur die
+  Kennzahlen. Den Schalter „Start und Ziel ausblenden“ im Teilen-Dialog kannst
+  du ausschalten. Wer die Gegend kennt, kann die übrige Strecke trotzdem
+  erkennen. Fährt die Tour unterwegs noch einmal nah an Start oder Ziel
+  vorbei, bleibt diese Durchfahrt im Bild sichtbar – ausgeblendet werden nur
+  die Enden der Linie. Kennzahlen und Höhenprofil gelten für die ganze Tour, und eine
+  geteilte GPX-Datei enthält immer die vollständige Spur. Weitergegeben wird
+  es nur über das Teilen-Menü an die App, die du auswählst.
 - **Löschung** — einzelne Touren in der Tourenliste löschen; alles auf einmal
   über die Android-Einstellungen (*Apps → Trailscape → Speicher → Daten
   löschen*) oder durch Deinstallation der App. Damit sind auch der letzte
