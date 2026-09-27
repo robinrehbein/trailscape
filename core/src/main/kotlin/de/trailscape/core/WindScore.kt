@@ -1,9 +1,7 @@
 package de.trailscape.core
 
-import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
-import kotlin.math.sin
 
 /**
  * Windrechnung der Rundkurs-Suche: „hin gegen den Wind, heim mit Rueckenwind".
@@ -67,25 +65,6 @@ const val windTailwindHomeMinShape: Double = 0.25
 const val windOptimisedLabel: String = "Rückenwind heim"
 
 /**
- * Grosskreis-Anfangskurs von [a] nach [b] in Grad (0 = Nord, im
- * Uhrzeigersinn, 0…360).
- */
-internal fun initialBearingDeg(a: TrackPoint, b: TrackPoint): Double {
-    val lat1 = Math.toRadians(a.lat)
-    val lat2 = Math.toRadians(b.lat)
-    val dLon = Math.toRadians(b.lon - a.lon)
-    val y = sin(dLon) * cos(lat2)
-    val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-    return normalizeDeg(Math.toDegrees(atan2(y, x)))
-}
-
-/** Winkel auf 0…360 (exklusive 360). */
-private fun normalizeDeg(deg: Double): Double {
-    val n = ((deg % 360.0) + 360.0) % 360.0
-    return if (n >= 360.0) 0.0 else n
-}
-
-/**
  * Gegenwind-Anteil eines Abschnitts mit Kurs [bearingDeg] bei Wind aus
  * [windFromDeg]: +1 = voller Gegenwind, 0 = reiner Seitenwind, −1 = voller
  * Rueckenwind.
@@ -112,7 +91,10 @@ internal fun windHalves(points: List<TrackPoint>, windFromDeg: Double): Pair<Dou
         val len = haversineM(points[i - 1], points[i])
         if (!len.isFinite() || len <= 0.0) continue
         lengths[i - 1] = len
-        headwinds[i - 1] = headwindComponent(initialBearingDeg(points[i - 1], points[i]), windFromDeg)
+        headwinds[i - 1] = headwindComponent(
+            kursZwischen(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon),
+            windFromDeg,
+        )
         total += len
     }
     if (total <= 0.0) return null
@@ -178,7 +160,7 @@ private val WIND_DIRECTION_LABELS =
  */
 fun windDirectionLabel(fromDeg: Double): String {
     if (!fromDeg.isFinite()) return "wechselnder Richtung"
-    val index = ((normalizeDeg(fromDeg) + 22.5) / 45.0).toInt() % WIND_DIRECTION_LABELS.size
+    val index = ((normalisiereKurs(fromDeg) + 22.5) / 45.0).toInt() % WIND_DIRECTION_LABELS.size
     return WIND_DIRECTION_LABELS[index]
 }
 

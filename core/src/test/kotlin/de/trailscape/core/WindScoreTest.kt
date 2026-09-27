@@ -41,10 +41,10 @@ class WindScoreTest {
 
     @Test
     fun `Anfangskurs fuer reine Nord-, Ost-, Sued- und Westverschiebung`() {
-        assertEquals(0.0, initialBearingDeg(START, TrackPoint(START.lat + 0.05, START.lon)), 0.5)
-        assertEquals(90.0, initialBearingDeg(START, TrackPoint(START.lat, START.lon + 0.05)), 0.5)
-        assertEquals(180.0, initialBearingDeg(START, TrackPoint(START.lat - 0.05, START.lon)), 0.5)
-        assertEquals(270.0, initialBearingDeg(START, TrackPoint(START.lat, START.lon - 0.05)), 0.5)
+        assertEquals(0.0, kursZwischen(START.lat, START.lon, START.lat + 0.05, START.lon), 0.5)
+        assertEquals(90.0, kursZwischen(START.lat, START.lon, START.lat, START.lon + 0.05), 0.5)
+        assertEquals(180.0, kursZwischen(START.lat, START.lon, START.lat - 0.05, START.lon), 0.5)
+        assertEquals(270.0, kursZwischen(START.lat, START.lon, START.lat, START.lon - 0.05), 0.5)
     }
 
     @Test

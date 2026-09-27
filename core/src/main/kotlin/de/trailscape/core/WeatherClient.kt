@@ -86,7 +86,8 @@ fun parseWindResponse(body: String): WindConditions? {
     if (speed < 0) return null
     val gusts = current.finiteNumber("wind_gusts_10m")?.takeIf { it >= 0 }
 
-    val from = ((direction % 360.0) + 360.0) % 360.0
+    // Winzige negative Werte ergeben in `normalisiereKurs` genau 360 — daher der Waechter unten.
+    val from = normalisiereKurs(direction)
     return WindConditions(
         speedKmh = speed,
         fromDeg = if (from >= 360.0) 0.0 else from,

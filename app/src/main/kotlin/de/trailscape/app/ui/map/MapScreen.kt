@@ -580,12 +580,11 @@ fun MapScreen(appViewModel: AppViewModel) {
     var roundTripStart by remember { mutableStateOf<Place?>(null) }
     var roundTripKm by rememberSaveable { mutableIntStateOf(DEFAULT_ROUND_TRIP_KM) }
     var preferNewAreas by rememberSaveable { mutableStateOf(true) }
-    // „Wind berücksichtigen": gemerkt im Controller, der ihn bei jedem Start
-    // selbst liest — hier nur der Spiegel fuer den Schalter im Blatt.
+    // „Wind berücksichtigen": gemerkt im Controller — hier nur der Spiegel
+    // fuer den Schalter im Setup-Blatt und den Tipp im Vorschlagsblatt.
+    // Einmal laden genuegt (idempotent, liest nur die Prefs, kein Netz).
     val considerWind by RouteGenerationController.windEnabled.collectAsStateWithLifecycle()
-    LaunchedEffect(roundTripSetupOpen) {
-        if (roundTripSetupOpen) RouteGenerationController.restoreWindSetting()
-    }
+    LaunchedEffect(Unit) { RouteGenerationController.restoreWindSetting() }
 
     // Verlauf als Karte (Fuehrung „Klartext"): alle Spuren plus Kacheln, mit
     // eigener Zusammenfassung unten; ✕ fuehrt zurueck in den Verlauf.
@@ -3202,6 +3201,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onDiscard = ::discardGeneratedRoute,
                             onHoverPoint = { hoverPoint = it },
                             bottomInset = sheetBottomInset,
+                            windEnabled = considerWind,
                         )
                     }
                     DockedSheet.PLANUNG -> {

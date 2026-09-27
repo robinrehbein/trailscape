@@ -122,6 +122,16 @@ object RouteGenerationController {
     @Volatile
     private var windSetByUser = false
 
+    /**
+     * Ob [windEnabled] den gueltigen Stand traegt — gespeichert gelesen oder
+     * von der Nutzerin gesetzt. Erst dann ist der Speicher nicht mehr die
+     * Quelle fuer [start]: Das Schreiben in [setWindEnabled] laeuft auf IO und
+     * koennte sonst gegen das Lesen der Suche verlieren (Schalter aus, sofort
+     * „Vorschläge zeigen" — und die Anfrage ginge trotzdem raus).
+     */
+    @Volatile
+    private var windKnown = false
+
     /** Zuletzt geholter Wind samt gerundetem Ort und Zeitpunkt (siehe „Wind"). */
     @Volatile
     private var cachedWind: WindConditions? = null
@@ -142,7 +152,10 @@ object RouteGenerationController {
         AppServices.appScope.launch(Dispatchers.IO) {
             val stored = runCatching { readRouteWindEnabled(AppServices.keyValueStore) }.getOrDefault(false)
             // Hat die Nutzerin waehrend des Lesens schon umgeschaltet, gilt ihr Wert.
-            if (!windSetByUser) _windEnabled.value = stored
+            if (!windSetByUser) {
+                _windEnabled.value = stored
+                windKnown = true
+            }
         }
     }
 
@@ -151,6 +164,7 @@ object RouteGenerationController {
         windRestored = true
         windSetByUser = true
         _windEnabled.value = enabled
+        windKnown = true
         AppServices.appScope.launch(Dispatchers.IO) {
             runCatching { writeRouteWindEnabled(AppServices.keyValueStore, enabled) }
         }
@@ -243,6 +257,11 @@ object RouteGenerationController {
         lastExploredTiles = exploredTiles
         val flag = AtomicBoolean(false)
         cancelFlag = flag
+        // Schalterstand jetzt, auf dem Aufruf-Thread, festhalten — nicht erst
+        // im IO-Coroutine aus dem Speicher (siehe [windKnown]). Nur wenn er
+        // noch nie geladen wurde (Einstieg aus Heute/Training, Blatt nie
+        // offen), gilt der gespeicherte Wert; dann schreibt auch niemand.
+        val windSnapshot: Boolean? = if (windKnown) _windEnabled.value else null
 
         _state.value = current.copy(
             running = true,
@@ -279,10 +298,11 @@ object RouteGenerationController {
                 // Vorschlag zeigt „+N neu", und das stimmt nur gegen den
                 // echten Bestand. Bevorzugt wird nur mit Schalter.
                 val explored = runCatching { exploredTiles() }.getOrDefault(emptySet())
-                // Wind nur mit Schalter (siehe „Wind (Opt-in)"); frisch aus
-                // dem Speicher, damit jeder Einstieg gleich behandelt wird.
-                val considerWind = runCatching { readRouteWindEnabled(AppServices.keyValueStore) }
-                    .getOrDefault(false)
+                // Wind nur mit Schalter (siehe „Wind (Opt-in)"): der beim
+                // Start festgehaltene Stand, sonst der gespeicherte — so wird
+                // jeder Einstieg gleich behandelt.
+                val considerWind = windSnapshot
+                    ?: runCatching { readRouteWindEnabled(AppServices.keyValueStore) }.getOrDefault(false)
                 val wind = if (considerWind) windFor(start) else null
                 // Die Windabfrage blockiert bis zu 4 s — ein Abbruch in dieser
                 // Zeit soll nicht erst noch eine Suche starten. Derselbe Weg

@@ -46,8 +46,8 @@ import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteTarget
-import de.trailscape.core.TrackPoint
 import de.trailscape.core.RouteTargetSource
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.ascentPreferenceLabels
 import de.trailscape.core.formatHours
 import de.trailscape.core.isTailwindHome
@@ -113,6 +113,12 @@ import kotlin.math.roundToInt
  * tragen die Pille „Rückenwind heim". Bewusst Text statt [NoticeBox]: Das ist
  * eine Information, keine Warnung — und ohne Wind fehlt sie einfach.
  *
+ * Ist der Schalter aus und kam die Runde **nicht** aus „Runde ab hier" (also
+ * aus Heute oder Training), steht an derselben Stelle ein leiser Tipp, wo es
+ * ihn gibt: Nur dort sitzt der Schalter samt Hinweis, was an Open-Meteo geht.
+ * Wer aus „Runde ab hier" kommt, hat ihn gerade gesehen und braucht keinen.
+ *
+ * @param windEnabled Stand des Schalters „Wind berücksichtigen".
  * @param route Die Vorschau der gewaehlten Runde. Kommt aus dem Karten-Screen,
  *   der sie beim Waehlen setzt — dieses Blatt zeichnet daraus nur das
  *   Hoehenprofil und rechnet nichts.
@@ -138,6 +144,7 @@ internal fun RouteGenerationSheet(
     onHoverPoint: (TrackPoint?) -> Unit,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
+    windEnabled: Boolean = false,
 ) {
     val target = state.target ?: return
     val theme = MaterialTheme.colorScheme
@@ -203,6 +210,16 @@ internal fun RouteGenerationSheet(
                                 color = color,
                             )
                         }
+                    }
+                    val offerWindTip = state.wind == null && !windEnabled &&
+                        target.source != RouteTargetSource.SELBST_GEWAEHLT
+                    if (offerWindTip) {
+                        Text(
+                            text = WIND_TIP,
+                            modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = theme.onSurfaceVariant,
+                        )
                     }
                 }
 
@@ -556,6 +573,11 @@ internal fun targetLine(target: RouteTarget): String {
 }
 
 /** „aus: GA1-Einheit (Trainingsplan)" */
+/** Leiser Hinweis auf den Wind-Schalter fuer Einstiege ohne ihn (siehe KDoc des Blatts). */
+internal const val WIND_TIP =
+    "Tipp: Mit „Wind berücksichtigen“ unter „Runde ab hier“ auf der Karte bevorzugt die Suche " +
+        "Runden mit Rückenwind auf dem Heimweg."
+
 internal fun sourceLine(target: RouteTarget): String {
     // Selbst gewaehlte Runden kommen aus keinem Trainingsziel. Frueher fehlte
     // `:core` dafuer ein Wert und die Beschriftung erkannte sie notduerftig an

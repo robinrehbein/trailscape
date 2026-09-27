@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
@@ -20,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -139,36 +141,59 @@ internal fun RoundTripSetupSheet(
                 onSelect = { onProfileChange(surfaces[it].first) },
             )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Neue Gegenden bevorzugen", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Führt durch Kacheln, die du noch nicht kennst",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = preferNewAreas, onCheckedChange = onPreferNewAreasChange)
-            }
+            SetupSwitchRow(
+                title = "Neue Gegenden bevorzugen",
+                note = "Führt durch Kacheln, die du noch nicht kennst",
+                checked = preferNewAreas,
+                onCheckedChange = onPreferNewAreasChange,
+            )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Wind berücksichtigen", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Hin gegen den Wind, heim mit Rückenwind. Dafür geht dein Startpunkt, " +
-                            "auf etwa 1 km gerundet, an Open-Meteo.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = considerWind, onCheckedChange = onConsiderWindChange)
-            }
+            SetupSwitchRow(
+                title = "Wind berücksichtigen",
+                note = "Bevorzugt Runden, die gegen den aktuellen Wind hinaus- und mit Rückenwind " +
+                    "heimführen. Dafür geht dein Startpunkt, auf etwa 1 km gerundet, an Open-Meteo.",
+                checked = considerWind,
+                onCheckedChange = onConsiderWindChange,
+            )
 
             Button(
                 onClick = onShowSuggestions,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             ) { Text("Vorschläge zeigen") }
         }
+    }
+}
+
+/**
+ * Schalterzeile des Blatts. Die ganze Zeile ist `toggleable` mit
+ * `Role.Switch` (wie `MoreComponents`): TalkBack liest Titel und Hinweis als
+ * Beschriftung des Schalters vor — beim Wind-Schalter ist das die
+ * Einwilligung, die muss man hoeren koennen — und die Zeile ist die
+ * Tippflaeche, nicht nur der 48-dp-Schalter.
+ */
+@Composable
+private fun SetupSwitchRow(
+    title: String,
+    note: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                note,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

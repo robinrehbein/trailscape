@@ -59,8 +59,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Wegpräferenz (Gemischt, Asphalt, Radwege, kürzester Weg) — daraus wählt die
   App das passende BRouter-Profil
 - Rundkurs-Generator ab Standort oder angetipptem Ort: Länge, Untergrund,
-  optional „Neue Gegenden bevorzugen“ und „Wind berücksichtigen“ — dann führt
-  die empfohlene Runde gegen den Wind hinaus und mit Rückenwind nach Hause
+  optional „Neue Gegenden bevorzugen“ und „Wind berücksichtigen“ — dann
+  bevorzugt die Suche als empfohlene Runde eine, die gegen den Wind hinaus und
+  mit Rückenwind nach Hause führt
   (aktueller Wind von Open-Meteo, nur mit Schalter, Startpunkt auf etwa 1 km
   gerundet)
 - Höhenprofil der geplanten Route
