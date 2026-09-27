@@ -129,8 +129,8 @@ import kotlin.math.roundToInt
  * Strich und „seit X s nichts" — nie einen veralteten Wert, der im Fahren
  * nicht von einem echten zu unterscheiden waere. Ohne jede Quelle erscheint
  * gar nichts. Mit allen drei Sensoren sind es sieben statt vier Zahlen — die
- * Obergrenze gilt deshalb nur, wer Sensoren gekoppelt hat, und die drei
- * Kacheln werden dann eine Stufe kleiner (40 sp).
+ * Obergrenze von vier Zahlen ueberschreitet deshalb nur, wer Sensoren
+ * gekoppelt hat; die drei Kacheln werden dann eine Stufe kleiner (40 sp).
  *
  * ## Bedienung
  * Zwei gleich gebaute Flaechen ueber je die halbe Breite,
@@ -491,7 +491,7 @@ private fun BigValue(
 private fun LiveSensorRow(sensoren: LiveSensorAnzeige, groesse: TextUnit) {
     Row(modifier = Modifier.fillMaxWidth()) {
         sensoren.puls?.let { kachel ->
-            val t = sensorKachelText(SensorKachelArt.PULS, kachel, label = "bpm · Puls")
+            val t = sensorKachelText(SensorKachelArt.PULS, kachel, stringResource(R.string.ble_ride_hr_label))
             BigValue(Modifier.weight(1f), t, groesse)
         }
         sensoren.leistung?.let { kachel ->

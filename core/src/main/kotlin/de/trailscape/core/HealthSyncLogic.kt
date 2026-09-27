@@ -591,15 +591,9 @@ fun mergeHeartRateIntoRide(
         if (bpm > peak) {
             peak = bpm
         }
-        points.add(
-            TrackPoint(
-                lat = point.lat,
-                lon = point.lon,
-                ele = point.ele,
-                time = point.time,
-                hr = bpm,
-            ),
-        )
+        // copy statt Neubau: gemessene Leistung/Trittfrequenz eines Sensors
+        // (und kuenftige Punktfelder) duerfen beim Puls-Nachtrag nicht verloren gehen.
+        points.add(point.copy(hr = bpm))
     }
 
     if (count == 0) {

@@ -100,8 +100,8 @@ class RideModeScreenshotTest {
         trittfrequenz = LiveKachel(null, 12),
     )
 
-    // Deutsch ausdruecklich: Robolectric laeuft sonst in en-US und nimmt die
-    // englischen Sensor-Texte aus values-en.
+    // Deutsch ausdruecklich: Robolectric laeuft sonst in en-US und naehme,
+    // sobald es ein values-en gibt, die englischen Sensor-Texte.
     @Test
     @Config(qualifiers = "+de")
     fun fahrmodusSensoren() = fahrmodus(

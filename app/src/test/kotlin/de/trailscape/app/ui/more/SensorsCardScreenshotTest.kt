@@ -36,8 +36,8 @@ import org.robolectric.annotation.GraphicsMode
  * Berechtigungshinweis, zwei gekoppelte Sensoren waehrend einer laufenden
  * Suche, Bluetooth aus.
  *
- * Qualifier `de`: Robolectric laeuft sonst in en-US und naehme die
- * englischen Texte aus `values-en`.
+ * Qualifier `de`: Robolectric laeuft sonst in en-US und naehme, sobald es
+ * ein `values-en` gibt, die englischen Texte.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -132,6 +132,8 @@ class SensorsCardScreenshotTest {
         compose.onNodeWithText("Verbunden · 142 bpm").assertExists()
         compose.onNodeWithText("Getrennt · neuer Versuch in 10 s").assertExists()
         compose.onNodeWithText("Suche läuft …").assertExists()
+        // Der schon gekoppelte Leistungsmesser sagt „Gekoppelt“ statt eines toten „Koppeln“.
+        compose.onNodeWithText("Gekoppelt").assertExists()
     }
 
     @Test

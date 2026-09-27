@@ -29,7 +29,9 @@ Servernamen sind bewusst mit angegeben.
   nichts nach Health Connect zurück.
 - **Bluetooth-Sensoren** (Pulsgurt, Leistungsmesser, Trittfrequenzsensor)
   verbinden sich direkt und nur lokal; ihre Messwerte gehen nirgendwohin
-  außer in deine Touren.
+  außer in deine Touren und – bei gekoppelter Uhr – als Live-Puls an deine
+  Uhr (Wear-Datenverbindung, nur lokal); mit der Tour gehen sie beim
+  optionalen Sync an deinen eigenen Server.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
   Sync-Server und, nur mit Schalter, der aktuelle Wind am Startpunkt einer
@@ -127,7 +129,9 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 
 Bluetooth-Sensoren sind keine Netzwerkverbindung: Die Werte kommen per
 Bluetooth LE direkt vom Sensor aufs Handy und gehen von dort nirgendwohin —
-außer, wie alle Tourdaten, beim optionalen Sync an deinen eigenen Server.
+außer, bei gekoppelter Uhr, der Live-Puls während der Aufzeichnung an deine
+Uhr (Wear-Datenverbindung, nur lokal) und, wie alle Tourdaten, beim
+optionalen Sync an deinen eigenen Server.
 
 Zu den Kartenkacheln: Wer nur ungern seinen Kartenausschnitt an einen Anbieter
 gibt, wählt die **Vektorkarte** und speichert die Region einmal (*Karte →

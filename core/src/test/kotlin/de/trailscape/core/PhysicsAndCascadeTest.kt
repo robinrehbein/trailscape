@@ -550,14 +550,21 @@ class PhysicsAndCascadeTest {
     }
 
     @Test
-    fun `halbe Abdeckung ist gemischt und nicht measured`() {
-        val points = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1, gradeTan = 0.05, startEle = 0.0)) { i ->
+    fun `halbe Abdeckung ist reine Schaetzung und nicht measured`() {
+        val ohne = track(pointCount = 1201, speedMs = 4.0, stepS = 1, gradeTan = 0.05, startEle = 0.0)
+        val points = mitLeistung(ohne) { i ->
             if (i <= 600) 250 else null
         }
         val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile)
         assertTrue(physics.available)
         assertFalse(physics.measured)
-        assertEquals(0.5, physics.series.measuredCoverage, 0.01)
+        // Keine Mischung: Unter 80 % bleibt die Messung ungenutzt — sonst liefe
+        // der gemessene Anteil in die α-Kalibrierung und wuerde mit α skaliert.
+        assertEquals(0.0, physics.series.measuredCoverage, 0.0)
+        assertTrue(physics.series.samples.none { it.measured })
+        val geschaetzt = computePhysicsEstimate(buildRideSeries(ohne, refProfile), refProfile)
+        assertEquals(geschaetzt.avgPowerW, physics.avgPowerW, 1e-9)
+        assertEquals(geschaetzt.eTss, physics.eTss, 1e-9)
         assertTrue(physics.powerText.contains("±15–25 %"))
         // Ohne Hoehenprofil faellt die Mischung wie jede Schaetzung aus.
         val flach = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1, withElevation = false)) { i ->

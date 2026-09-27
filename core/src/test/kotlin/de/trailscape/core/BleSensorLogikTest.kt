@@ -70,6 +70,21 @@ class BleSensorLogikTest {
     }
 
     @Test
+    fun `nach 20 s Rollen kein Scheinwert, danach wieder 90 U pro min`() {
+        val r = DrehzahlRechner.kurbel()
+        r.biete(Umdrehungen(10, 0), 0)
+        // 90 U/min: eine Umdrehung je 2/3 s = 683 Ticks.
+        assertEquals(90.0, r.biete(Umdrehungen(11, 683), 667)!!, 0.2)
+        // 20 s Rollen: der Sensor wiederholt das letzte Paket.
+        assertEquals(0.0, r.biete(Umdrehungen(11, 683), 10_000)!!, 1e-9)
+        // Erste Umdrehung nach der Pause: 20 s Ereigniszeit — kein Wert zwischen 1 und 10.
+        val erster = r.biete(Umdrehungen(12, 683 + 20_480), 20_700)
+        assertEquals(0.0, erster!!, 1e-9)
+        // Die zweite rechnet wieder echt.
+        assertEquals(90.0, r.biete(Umdrehungen(13, 683 + 20_480 + 683), 21_367)!!, 0.2)
+    }
+
+    @Test
     fun `dTicks 0 bei neuer Umdrehung wird ignoriert`() {
         val r = DrehzahlRechner.kurbel()
         r.biete(Umdrehungen(10, 0), 0)

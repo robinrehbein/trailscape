@@ -68,9 +68,19 @@ internal class BleSensorConnection(
     private var gatt: BluetoothGatt? = null
     private var geschlossen = false
 
+    /**
+     * Frist fuer den ganzen Aufbau: CONNECTED, Dienstsuche und CCCD-Schreiben.
+     * Manche Stacks melden gar nichts, wenn der Sensor schlaeft, und bekannte
+     * Android-Fehler lassen `onServicesDiscovered` oder `onDescriptorWrite`
+     * nie kommen — ohne Frist bliebe die Verbindung ewig „verbunden" ohne
+     * Daten und ohne Neuversuch. Erst ein erfolgreiches CCCD-Schreiben hebt
+     * die Frist auf.
+     *
+     * Bewusst keine Stille-Frist danach: Trittfrequenz- und Leistungssensoren
+     * schweigen im Stand oft ganz legitim; ein Abbruch nach Stille wuerde bei
+     * jeder Pause neu verbinden.
+     */
     private val watchdog = Runnable {
-        // Kein CONNECTED binnen der Frist: Manche Stacks melden gar nichts,
-        // wenn der Sensor schlaeft — ohne Frist haenge die Verbindung ewig.
         scheitern(STATUS_ZEITUEBERSCHREITUNG)
     }
 
@@ -175,7 +185,7 @@ internal class BleSensorConnection(
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             aufBleThread(g) {
                 if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
-                    handler.removeCallbacks(watchdog)
+                    // Die Frist laeuft weiter bis zum erfolgreichen CCCD-Schreiben.
                     listener.verbunden(sensor.typ)
                     if (!g.discoverServices()) scheitern(STATUS_KEINE_DIENSTSUCHE)
                 } else {
@@ -192,7 +202,11 @@ internal class BleSensorConnection(
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
             aufBleThread(g) {
-                if (status != BluetoothGatt.GATT_SUCCESS) scheitern(status)
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    handler.removeCallbacks(watchdog)
+                } else {
+                    scheitern(status)
+                }
             }
         }
 
@@ -223,7 +237,7 @@ internal class BleSensorConnection(
     }
 
     companion object {
-        /** Frist fuer den Verbindungsaufbau. */
+        /** Frist fuer den Verbindungsaufbau bis einschliesslich CCCD-Schreiben. */
         const val VERBINDUNGS_FRIST_MS = 20_000L
 
         // Eigene Codes fuer das Diagnoseprotokoll — negativ, damit sie sich

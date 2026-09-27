@@ -381,7 +381,11 @@ internal fun ColumnScope.SensorsPageContent(
                                 onPair(typ, fund)
                             }
                         },
-                    ) { Text(stringResource(R.string.ble_pair)) }
+                    ) {
+                        // Deaktiviert allein saehe nach Stoerung aus; „Gekoppelt“
+                        // sagt (auch TalkBack), warum hier nichts zu tun ist.
+                        Text(stringResource(if (schonGekoppelt) R.string.ble_paired else R.string.ble_pair))
+                    }
                 }
             }
         }

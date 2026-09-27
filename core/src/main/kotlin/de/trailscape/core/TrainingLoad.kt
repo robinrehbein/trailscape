@@ -1389,24 +1389,40 @@ data class PowerSeries(
 /**
  * Baut die Leistungsreihe aus der aufbereiteten Tour (§3.2).
  *
- * Wo ein Segment gemessene Leistung traegt ([RideSegment.powerW]), gilt die
- * Messung; sonst die Schaetzung aus dem Physikmodell. So bleiben kurze
+ * Traegt mindestens [MEASURED_POWER_MIN_COVERAGE] der Bewegungszeit
+ * gemessene Leistung ([RideSegment.powerW]), gilt dort die Messung und nur in
+ * den Aussetzern die Schaetzung aus dem Physikmodell — so bleiben kurze
  * Aussetzer des Leistungsmessers ohne Loch in der Reihe.
+ *
+ * Darunter (etwa Akku des Leistungsmessers nach der Haelfte leer) ist die
+ * Reihe **reine Schaetzung**, die Messwerte bleiben ungenutzt. Eine Mischung
+ * waere weder Messung noch Schaetzung: Sie liefe in die α-Kalibrierung ein,
+ * die nur die Annahmen des Modells (Gewicht, cw-Wert) korrigieren soll, und
+ * α wuerde danach auch den gemessenen Anteil skalieren.
  */
 fun buildPowerSeries(series: RideSeries, profile: TrainingProfile): PowerSeries {
     if (series.isEmpty) {
         return PowerSeries.EMPTY
     }
+    var bewegtS = 0.0
+    var gemessenS = 0.0
+    for (s in series.segments) {
+        if (!s.moving) continue
+        bewegtS += s.dtS
+        if (s.powerW != null) gemessenS += s.dtS
+    }
+    val messungNutzen = bewegtS > 0 && gemessenS / bewegtS >= MEASURED_POWER_MIN_COVERAGE
     val samples = mutableListOf<PowerSample>()
     for (s in series.segments) {
         if (!s.moving) {
             continue
         }
+        val gemessen = s.powerW?.takeIf { messungNutzen }
         samples.add(
             PowerSample(
                 timeS = s.timeS,
                 dtS = s.dtS,
-                powerW = s.powerW?.toDouble() ?: estimateSamplePowerW(
+                powerW = gemessen?.toDouble() ?: estimateSamplePowerW(
                     speedMs = s.speedMs,
                     accelMs2 = s.accelMs2,
                     gradeTan = s.gradeTan,
@@ -1417,7 +1433,7 @@ fun buildPowerSeries(series: RideSeries, profile: TrainingProfile): PowerSeries 
                 elevationM = s.elevationM,
                 deltaElevationM = s.deltaElevationM,
                 hr = s.hr,
-                measured = s.powerW != null,
+                measured = gemessen != null,
             ),
         )
     }

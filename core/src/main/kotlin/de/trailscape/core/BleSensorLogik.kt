@@ -54,6 +54,9 @@ private const val EREIGNIS_TICKS_MODULO = 65_536L
  *    im Stand dasselbe Paket, und „letzter Wert" waere dann eine Luege.
  *  * `ΔTicks == 0` bei `ΔUmdrehungen > 0`: kaputtes Paket, ignoriert (die
  *    Basis bleibt, das naechste Paket rechnet ueber beide).
+ *  * `ΔEreigniszeit` laenger als [stillstandNachMs]: die erste Umdrehung
+ *    nach einer Pause → neue Basis, `0.0` statt eines Scheinwerts von
+ *    wenigen U/min; erst die naechste Umdrehung liefert die echte Drehzahl.
  *  * Unplausibel (ueber [maxUpm]) oder die letzte Umdrehung liegt laenger
  *    zurueck als 90 % der Ueberlaufperiode: Die Ereigniszeit ist dann
  *    mehrdeutig → neue Basis, `null`.
@@ -92,6 +95,16 @@ class DrehzahlRechner(
         val dTicks = Math.floorMod((u.ereignisTicks - b.ereignisTicks).toLong(), EREIGNIS_TICKS_MODULO)
         if (dTicks == 0L) {
             return letzterWert
+        }
+        if (dTicks * 1000 / ticksProSekunde > stillstandNachMs) {
+            // Erste Umdrehung nach dem Rollen: Die Ereigniszeit spannt ueber
+            // die ganze Pause, `ΔU/ΔT` ergaebe einen winzigen Scheinwert
+            // (20 s Rollen → 3 U/min), der Kachel und Ø Trittfrequenz
+            // verfaelscht. Das Paket wird nur neue Basis, die Anzeige bleibt 0.
+            basis = u
+            letztesEreignisMs = empfangenMs
+            letzterWert = 0.0
+            return 0.0
         }
         val upm = dRev * 60.0 * ticksProSekunde / dTicks
         if (upm > maxUpm) {

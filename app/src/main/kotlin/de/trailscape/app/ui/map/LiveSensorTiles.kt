@@ -84,8 +84,8 @@ internal fun sensorKachelText(
     val wert = kachel.wert
     if (wert != null) {
         val spoken = when (art) {
-            // Wortlaut der bisherigen Puls-Kachel (siehe RideModeScreen).
-            SensorKachelArt.PULS -> "Puls $wert Schläge pro Minute"
+            // Wortlaut der bisherigen Puls-Kachel, jetzt als Ressource wie die Nachbarn.
+            SensorKachelArt.PULS -> stringResource(R.string.ble_spoken_hr, wert)
             SensorKachelArt.LEISTUNG -> stringResource(R.string.ble_spoken_power, wert)
             SensorKachelArt.TRITTFREQUENZ -> stringResource(R.string.ble_spoken_cadence, wert)
         }
