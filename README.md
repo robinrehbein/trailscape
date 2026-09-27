@@ -192,6 +192,12 @@ Alles Rechnende liegt ohnehin in `:core`.
 
 ## Installation und Updates
 
+Der neue Play-Eintrag verwendet `de.robinrehbein.trailscape`. Er wird zunächst
+intern getestet. Diese App installiert sich wegen der neuen Paketkennung neben
+der bisherigen `io.github.robinrehbein.trailscape`-App. Touren und Profil können
+per Backup exportiert und in der neuen App importiert werden; Android übernimmt
+die Daten nicht automatisch.
+
 Jeder Push auf `main` baut die App und hängt sie an das GitHub-Release
 `latest`:
 
