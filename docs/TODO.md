@@ -68,23 +68,17 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
      hochladen“ abwählen, Upload von Hand, Auto-Upload im Flugmodus, Duplikat,
      Trennen, Sportart auf Strava = Radfahrt (sonst nach dem Upload
      `PUT /activities/{id}` mit `sport_type=Ride`).
-  8. Englische Texte (`values-en/strings_strava.xml`) erst zusammen mit der
-     Übersetzung der ganzen App ergänzen — allein ergäben sie auf englischen
-     Geräten eine Mischoberfläche. Englische Auslassungspunkte ohne
-     Leerzeichen („Uploading to Strava…“).
   Später denkbar: verifizierte App Links statt `trailscape://` (braucht eine
   eigene Domain mit `/.well-known/assetlinks.json`), FIT statt GPX.
 
 ## Ideen
 
-- **Englisch: Texte je Bereich umziehen.** Das Fundament steht (Sprachwahl,
-  `:core`-Texte, TTS, Ressourcen-Gerüst, Paritätstest). Offen sind die fest im
-  Kotlin-Code stehenden UI-Texte der Bereiche today, map, rides, training,
-  more und onboarding-shell — je Bereich ein Zweig nach den Regeln in
-  `docs/i18n.md`. Danach die veralteten `*De`-Formathelfer in
-  `ui/UiFormat.kt` (`formatKmDe`, `formatDecimalDe`, `formatDate*`,
-  `formatBytes` …) entfernen. Vor einem Release müssen alle Bereiche durch
-  sein, sonst sieht eine englische Nutzerin Mischtexte.
+- **Englisch vor dem Release gegenlesen.** Alle Bereiche liegen jetzt als
+  Ressourcen in `values/` und `values-en/` (Regeln in `docs/i18n.md`). Vor
+  dem Release einmal die App komplett auf Englisch durchklicken
+  (Sprachwahl unter *Mehr → Sprache*), vor allem die Sprachansagen mit einer
+  englischen TTS-Stimme und die nachgezogenen Texte der Sensoren und von
+  Strava (`strings_ble_sensors.xml`, `strings_strava.xml`).
 
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und
   strukturierte Einheiten als lesbare JSON-Datei exportieren und importieren,
@@ -98,12 +92,5 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 - **Radtempo vom CSC-Sensor** — `radTempoKmh` (`core/.../BleSensorLogik.kt`)
   ist gerechnet und getestet, aber nicht verdrahtet. Mit einem Radumfang im
   Profil koennte es GPS im Tunnel oder auf der Rolle ersetzen.
-- **Englische Sensor-Texte mit dem i18n-Umzug** — `values-en/strings_ble_sensors.xml`
-  stand im ersten Entwurf (Commit 32cfa9b) und ist wieder entfernt, weil eine
-  einzelne englische Datei auf englisch eingestellten Geraeten eine
-  Sprachmischung ergab. Mit den uebrigen englischen Texten zurueckholen; dabei
-  `ble_ride_hr_label`, `ble_spoken_hr` und `ble_paired` („Paired“) ergaenzen und
-  `ble_tile_silent` als „no data for %1$d s“, Auslassungspunkte ohne
-  Leerzeichen („Searching…“, „Connecting…“).
 - **RR-Intervalle speichern** — der Puls-Parser liest sie schon; als eigenes
   Feld in der Tour gaeben sie HRV waehrend der Fahrt her.

@@ -151,7 +151,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1151 Unit-Tests hängen hier |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1338 Unit-Tests hängen hier |
 | `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Training, Mehr; die Tourenliste liegt als Blatt auf der Karte), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
@@ -215,23 +215,26 @@ Pushes auf `main`.
 ## Testen
 
 ```bash
-./gradlew :core:test              # 1151 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # 467 Tests der plattformfreien :app-Teile
+./gradlew :core:test              # 1338 Tests des Domänenmodells
+./gradlew :app:testDebugUnitTest  # 656 Tests in :app, davon 82 Screenshot-Tests
+./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*Screenshot*'
+                                  # nur die Screenshots, PNGs unter app/build/outputs/roborazzi/
 ```
 
 Was die CI vor jedem Release ausführt:
 
 ```bash
-./gradlew :core:test :app:testDebugUnitTest \
+./gradlew :core:test :app:testDebugUnitTest -Pscreenshots \
           :app:assembleRelease :app:bundleRelease \
           :wear:assembleRelease :wear:bundleRelease
 ```
 
-`:app` hat bewusst kein Robolectric — getestet wird dort nur, was ohne
-Android-Framework auskommt (Aufzeichnungs-Journal, GPX-Import,
-Share-Dateinamen, Trainingsauswertung, Berichtsformat der Fehlermeldung,
-Update-Prüfung).
-Alles Rechnende liegt ohnehin in `:core`.
+In `:app` laufen die meisten Tests ohne Android-Framework (Aufzeichnungs-Journal,
+GPX-Import, Share-Dateinamen, Trainingsauswertung, Berichtsformat der
+Fehlermeldung, Update-Prüfung, Deckungsgleichheit der deutschen und englischen
+Texte). Robolectric kommt nur für die Screenshot-Tests zum Einsatz; sie laufen
+nur mit `-Pscreenshots`, in der CI also mit, auf Deutsch und — mit „-en“ im
+Dateinamen — auf Englisch. Alles Rechnende liegt ohnehin in `:core`.
 
 ## Installation und Updates
 

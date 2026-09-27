@@ -69,6 +69,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Vitalhistorie | SharedPreferences (`trailscape.vitals.v1`) | Tageswerte der letzten 400 Tage: Ruhepuls, HRV, Schlafstunden, VO₂max — lokal gehalten, weil Health Connect Daten nach 30 Tagen löscht und die Baselines längere Fenster brauchen (`core/…/VitalsHistory.kt`) |
 | Gekoppelte Sensoren | SharedPreferences (`trailscape.ble.sensors`) | je Messwert Typ, Bluetooth-Adresse und Name des Sensors |
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
+| Sprachwahl | unter Android 13: SharedPreferences (`trailscape_locale`); ab Android 13 speichert das System die Wahl selbst | System, Deutsch oder Englisch — nur, wenn du unter *Mehr → Sprache* etwas gewählt hast |
 | Teilen-Einstellung | SharedPreferences (`trailscape.share.hideEnds`) | Ja/Nein: Start und Ziel im Tour-Bild ausblenden |
 | Strava-Zugang (optional) | SharedPreferences (`trailscape.strava.tokens`) | nur wenn du Strava verbunden hast: Access- und Refresh-Token, Ablaufzeit und dein Vorname aus dem Strava-Profil — **verschlüsselt** mit einem Schlüssel im Android Keystore, der das Gerät nicht verlässt (`app/…/strava/KeystoreStravaTokenStore.kt`) |
 | Strava-Upload-Vermerke (optional) | SharedPreferences (`trailscape.strava.uploads`, `trailscape.strava.autoUpload`) | je hochgeladener Tour: Stand, Upload-ID, Aktivitäts-ID auf Strava und Zeitpunkt; dazu der Schalter für den Auto-Upload |
