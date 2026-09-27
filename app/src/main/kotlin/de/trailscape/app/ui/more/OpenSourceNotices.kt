@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.more
 
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
+
 /**
  * Handgepflegte Liste der Lizenzen und Datenquellen, die auf der Seite „Über Trailscape"
  * aufklappbar ist.
@@ -25,10 +28,15 @@ package de.trailscape.app.ui.more
  * ihn „in allen Kopien der Software" mitzuliefern.
  */
 
-/** Ein Eintrag der Lizenzliste: Komponente, Lizenz, Herkunft. */
+/**
+ * Ein Eintrag der Lizenzliste: Komponente, Lizenz, Herkunft. Name und Lizenz
+ * sind [UiText]: Produktnamen und Lizenzkuerzel stehen als [UiText.Plain] in
+ * jeder Sprache gleich da, Beschreibendes („Kartendaten", „proprietär")
+ * kommt aus `strings_more.xml`.
+ */
 data class LicenseNotice(
-    val name: String,
-    val license: String,
+    val name: UiText,
+    val license: UiText,
     val url: String,
 )
 
@@ -39,23 +47,23 @@ data class LicenseNotice(
  */
 val libraryNotices: List<LicenseNotice> = listOf(
     LicenseNotice(
-        name = "MapLibre Native (Android SDK)",
-        license = "BSD 2-Clause",
+        name = UiText.Plain("MapLibre Native (Android SDK)"),
+        license = UiText.Plain("BSD 2-Clause"),
         url = "https://github.com/maplibre/maplibre-native",
     ),
     LicenseNotice(
-        name = "Jetpack Compose, AndroidX, Material 3, Health Connect Client",
-        license = "Apache 2.0",
+        name = UiText.Plain("Jetpack Compose, AndroidX, Material 3, Health Connect Client"),
+        license = UiText.Plain("Apache 2.0"),
         url = "https://developer.android.com/jetpack/androidx",
     ),
     LicenseNotice(
-        name = "Kotlin, kotlinx.coroutines, kotlinx.serialization",
-        license = "Apache 2.0",
+        name = UiText.Plain("Kotlin, kotlinx.coroutines, kotlinx.serialization"),
+        license = UiText.Plain("Apache 2.0"),
         url = "https://github.com/JetBrains/kotlin",
     ),
     LicenseNotice(
-        name = "OkHttp (Square)",
-        license = "Apache 2.0",
+        name = UiText.Plain("OkHttp (Square)"),
+        license = UiText.Plain("Apache 2.0"),
         url = "https://github.com/square/okhttp",
     ),
     // Fuer die Uhr-Anbindung (Wear-OS-Datenschicht) gibt es keinen freien
@@ -64,8 +72,8 @@ val libraryNotices: List<LicenseNotice> = listOf(
     // Live-Sensorik der Uhr wiegt schwerer als die fruehere Zusicherung,
     // ohne proprietaere Abhaengigkeiten auszukommen.
     LicenseNotice(
-        name = "Google Play Services (Wearable Data Layer)",
-        license = "proprietär — Android SDK Terms",
+        name = UiText.Plain("Google Play Services (Wearable Data Layer)"),
+        license = UiText.Res(R.string.more_notice_play_services_license),
         url = "https://developer.android.com/distribute/play-services",
     ),
     // Die Routing-Engine steckt seit dem Offline-Routing im APK selbst (Modul
@@ -74,8 +82,8 @@ val libraryNotices: List<LicenseNotice> = listOf(
     // — beides ist hier: der Vermerk im angezeigten Text, der volle
     // Lizenztext als `assets/licenses/brouter-MIT.txt`.
     LicenseNotice(
-        name = "BRouter-Routing-Engine (im Gerät rechnend)",
-        license = "MIT — Copyright (c) 2019 BRouter contributors",
+        name = UiText.Res(R.string.more_notice_brouter_engine_name),
+        license = UiText.Plain("MIT — Copyright (c) 2019 BRouter contributors"),
         url = "https://github.com/abrensch/brouter",
     ),
 )
@@ -87,19 +95,18 @@ val libraryNotices: List<LicenseNotice> = listOf(
  */
 val dataNotices: List<LicenseNotice> = listOf(
     LicenseNotice(
-        name = "Kartendaten: © OpenStreetMap-Mitwirkende",
-        license = "ODbL 1.0",
+        name = UiText.Res(R.string.more_notice_osm_name),
+        license = UiText.Plain("ODbL 1.0"),
         url = "https://www.openstreetmap.org/copyright",
     ),
     // CARTO ist seit dem Wechsel der Straßenkarte auf FOSSGIS (siehe
     // `mapStyles`) nicht mehr im Spiel und steht deshalb hier nicht mehr.
     LicenseNotice(
-        name = "Kacheln „Straßenkarte“: FOSSGIS e. V. (tile.openstreetmap.de)",
+        name = UiText.Res(R.string.more_notice_fossgis_name),
         // Stil: openstreetmap-carto-de, wie sein Vorbild openstreetmap-carto
         // unter CC0 (LICENSE.txt in github.com/giggls/openstreetmap-carto-de) —
         // nicht CC BY-SA; das gilt nur fuer die Texte der FOSSGIS-Webseite.
-        license = "Daten ODbL, Stil openstreetmap-carto-de CC0 1.0, " +
-            "Nutzung nach FOSSGIS-Nutzungsbedingungen",
+        license = UiText.Res(R.string.more_notice_fossgis_license),
         url = "https://www.openstreetmap.de/germanstyle/",
     ),
     // Der offline speicherbare Vektor-Stil. Die Pflicht-Attribution
@@ -107,39 +114,38 @@ val dataNotices: List<LicenseNotice> = listOf(
     // aus der Quelle selbst ein (TileJSON bzw. festgeschriebene Stil-Kopie);
     // hier stehen die Lizenzen dahinter.
     LicenseNotice(
-        name = "Karte „Vektorkarte“: OpenFreeMap (tiles.openfreemap.org)",
-        license = "Dienst MIT; Stil „Liberty“: Code BSD 3-Clause, Design CC BY 4.0; " +
-            "Schrift Noto Sans (OFL 1.1)",
+        name = UiText.Res(R.string.more_notice_openfreemap_name),
+        license = UiText.Res(R.string.more_notice_openfreemap_license),
         url = "https://openfreemap.org/",
     ),
     LicenseNotice(
-        name = "Vektorkachel-Schema: © OpenMapTiles",
-        license = "BSD 3-Clause (Code), CC BY 4.0 (Schema)",
+        name = UiText.Res(R.string.more_notice_openmaptiles_name),
+        license = UiText.Res(R.string.more_notice_openmaptiles_license),
         url = "https://www.openmaptiles.org/",
     ),
     LicenseNotice(
-        name = "Kacheln „CyclOSM“",
-        license = "Kacheln CC BY-SA 2.0, Stil-Code BSD 3-Clause, Daten ODbL",
+        name = UiText.Res(R.string.more_notice_cyclosm_name),
+        license = UiText.Res(R.string.more_notice_cyclosm_license),
         url = "https://www.cyclosm.org/",
     ),
     LicenseNotice(
-        name = "Kacheln „OpenStreetMap“",
-        license = "Daten ODbL, Nutzung nach OSMF Tile Usage Policy",
+        name = UiText.Res(R.string.more_notice_osm_tiles_name),
+        license = UiText.Res(R.string.more_notice_osm_tiles_license),
         url = "https://operations.osmfoundation.org/policies/tiles/",
     ),
     LicenseNotice(
-        name = "Kacheln „OpenTopoMap“ (inkl. SRTM-Höhendaten)",
-        license = "CC BY-SA 3.0 (Stil), Daten ODbL",
+        name = UiText.Res(R.string.more_notice_opentopomap_name),
+        license = UiText.Res(R.string.more_notice_opentopomap_license),
         url = "https://opentopomap.org/about",
     ),
     LicenseNotice(
-        name = "Kacheln „Satellit“: Esri World Imagery (Esri, Maxar, Earthstar Geographics)",
-        license = "proprietär — Esri Terms of Use",
+        name = UiText.Res(R.string.more_notice_satellite_name),
+        license = UiText.Res(R.string.more_notice_satellite_license),
         url = "https://www.esri.com/en-us/legal/terms/full-master-agreement",
     ),
     LicenseNotice(
-        name = "Routing: BRouter (Dienst brouter.de)",
-        license = "MIT",
+        name = UiText.Res(R.string.more_notice_brouter_service_name),
+        license = UiText.Plain("MIT"),
         url = "https://github.com/abrensch/brouter",
     ),
     // Die Routing-Kacheln (*.rd5), die die Engine auf dem Gerät liest, sind
@@ -147,13 +153,13 @@ val dataNotices: List<LicenseNotice> = listOf(
     // ODbL wie die Kartenkacheln — eigener Eintrag, weil sie aus einer
     // anderen Quelle kommen als die Darstellungskacheln darüber.
     LicenseNotice(
-        name = "Offline-Routingdaten (BRouter-Segmente): © OpenStreetMap-Mitwirkende",
-        license = "ODbL 1.0",
+        name = UiText.Res(R.string.more_notice_segments_name),
+        license = UiText.Plain("ODbL 1.0"),
         url = "https://www.openstreetmap.org/copyright",
     ),
     LicenseNotice(
-        name = "Ortssuche: Nominatim (OpenStreetMap Foundation)",
-        license = "GPL 2.0 bzw. 3.0 (Software), Daten ODbL",
+        name = UiText.Res(R.string.more_notice_nominatim_name),
+        license = UiText.Res(R.string.more_notice_nominatim_license),
         url = "https://operations.osmfoundation.org/policies/nominatim/",
     ),
 )

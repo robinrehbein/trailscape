@@ -25,10 +25,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.AppFormats
+import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.app.ui.formatBytes
-import de.trailscape.app.ui.formatDate
 import de.trailscape.app.ui.map.listOfflineRegions
 import de.trailscape.app.ui.map.readOfflineRegionInfo
 import de.trailscape.app.ui.mapStyles
@@ -86,25 +88,20 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
         try {
             regions = listOfflineRegionsWithStatus(context)
         } catch (e: Exception) {
-            // Vorher gewann die englische MapLibre-Meldung; der deutsche Satz
+            // Vorher gewann die englische MapLibre-Meldung; der eigene Satz
             // kam nur zum Vorschein, wenn sie leer war (siehe ui/ErrorText.kt).
-            errorText = withCause(
-                "Die gespeicherten Offline-Karten ließen sich nicht auflisten. " +
-                    "Starte die App neu; bleibt es dabei, hilft ein Blick in die Karte, " +
-                    "die den Kartenspeicher selbst öffnet.",
-                e,
-            )
+            errorText = withCause(context.getString(R.string.more_offline_maps_list_error), e)
         } finally {
             loading = false
         }
     }
 
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
-    SettingsHint("Damit du offline etwas siehst. Neue Ausschnitte lädst du auf der Karte.")
+    SettingsHint(stringResource(R.string.more_offline_maps_hint))
     Spacer(modifier = Modifier.height(12.dp))
 
     when {
-        loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
+        loading -> Text(stringResource(R.string.more_offline_maps_loading), style = MaterialTheme.typography.bodyMedium)
         errorText != null -> Text(
             text = errorText ?: "",
             style = MaterialTheme.typography.bodyMedium,
@@ -112,7 +109,7 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
         )
 
         regions.isEmpty() -> Text(
-            text = "Keine Offline-Karten gespeichert.",
+            text = stringResource(R.string.more_offline_maps_empty),
             style = MaterialTheme.typography.bodyMedium,
         )
         else -> {
@@ -137,7 +134,10 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
                             )
                         } else {
                             IconButton(onClick = { confirmDeleteRegion = info }) {
-                                Icon(Icons.Filled.Delete, contentDescription = "Löschen")
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = stringResource(R.string.common_action_delete),
+                                )
                             }
                         }
                     }
@@ -151,15 +151,15 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
                 onClick = { confirmDeleteAll = true },
                 enabled = !deleteAllBusy,
                 destructive = true,
-            ) { Text("Alle löschen") }
+            ) { Text(stringResource(R.string.more_offline_maps_delete_all_action)) }
         }
     }
 
     confirmDeleteRegion?.let { target ->
         OneUiDialog(
             onDismissRequest = { confirmDeleteRegion = null },
-            title = { Text("Offline-Karte löschen") },
-            text = { Text("Soll „${target.name}“ wirklich gelöscht werden?") },
+            title = { Text(stringResource(R.string.more_offline_maps_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.more_offline_maps_delete_confirm_body, target.name)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -170,14 +170,16 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
                             if (success) {
                                 reloadToken++
                             } else {
-                                onMessage(DELETE_FAILED_MESSAGE)
+                                onMessage(deleteFailedMessage(context, 1))
                             }
                         }
                     },
-                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.common_action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDeleteRegion = null }) { Text("Abbrechen") }
+                TextButton(onClick = { confirmDeleteRegion = null }) {
+                    Text(stringResource(R.string.common_action_cancel))
+                }
             },
         )
     }
@@ -185,8 +187,8 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
     if (confirmDeleteAll) {
         OneUiDialog(
             onDismissRequest = { confirmDeleteAll = false },
-            title = { Text("Offline-Karten löschen") },
-            text = { Text("Sollen alle heruntergeladenen Kartenausschnitte wirklich gelöscht werden?") },
+            title = { Text(stringResource(R.string.more_offline_maps_delete_all_confirm_title)) },
+            text = { Text(stringResource(R.string.more_offline_maps_delete_all_confirm_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -196,22 +198,16 @@ fun OfflineMapsCardContent(onMessage: (String) -> Unit = {}) {
                             deleteAllBusy = false
                             reloadToken++
                             if (failed > 0) {
-                                onMessage(
-                                    if (failed == 1) {
-                                        DELETE_FAILED_MESSAGE
-                                    } else {
-                                        "$failed Offline-Karten konnten nicht gelöscht " +
-                                            "werden. Läuft gerade ein Download, warte ihn " +
-                                            "ab und versuche es dann erneut."
-                                    },
-                                )
+                                onMessage(deleteFailedMessage(context, failed))
                             }
                         }
                     },
-                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.common_action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDeleteAll = false }) { Text("Abbrechen") }
+                TextButton(onClick = { confirmDeleteAll = false }) {
+                    Text(stringResource(R.string.common_action_cancel))
+                }
             },
         )
     }
@@ -238,14 +234,13 @@ private data class OfflineRegionRow(
 )
 
 /**
- * Meldung, wenn MapLibre das Loeschen einer Region ablehnt.
+ * Meldung, wenn MapLibre das Loeschen von [failed] Regionen ablehnt.
  *
  * Mit Handlungsanweisung: Der haeufigste Grund ist ein Download, der zu genau
  * dieser Region noch laeuft — dann geht es nach dessen Ende von selbst.
  */
-private const val DELETE_FAILED_MESSAGE =
-    "Die Offline-Karte konnte nicht gelöscht werden. Läuft gerade ein Download " +
-        "für diesen Ausschnitt, warte ihn ab und versuche es dann erneut."
+private fun deleteFailedMessage(context: Context, failed: Int): String =
+    context.resources.getQuantityString(R.plurals.more_offline_maps_delete_failed_count, failed, failed)
 
 /**
  * Laedt alle gespeicherten Offline-Regionen samt Downloadstatus (fuer die
@@ -255,26 +250,30 @@ private const val DELETE_FAILED_MESSAGE =
  */
 private suspend fun listOfflineRegionsWithStatus(context: Context): List<OfflineRegionRow> {
     val rawRegions = listOfflineRegions(context)
+    val formats = AppFormats(languageOf(context.resources.configuration))
 
     return rawRegions.map { region ->
         val status = runCatching { offlineRegionStatus(region) }.getOrNull()
         val info = readOfflineRegionInfo(region.metadata)
         OfflineRegionRow(
             id = region.id,
-            name = info?.name?.takeIf { it.isNotBlank() } ?: fallbackRegionName(region),
+            name = info?.name?.takeIf { it.isNotBlank() } ?: fallbackRegionName(context, region),
             details = buildList {
                 mapStyles.firstOrNull { it.id == info?.styleId }?.let { add(it.label) }
                 info?.createdAtMs
                     ?.takeIf { it > 0L }
-                    ?.let { add(formatDate(it)) }
-                add(formatBytes(status?.completedResourceSize))
+                    ?.let { add(formats.dateFull(it)) }
+                add(
+                    formats.bytes(status?.completedResourceSize)
+                        ?: context.getString(R.string.more_offline_maps_size_unknown),
+                )
                 // Eine Region ohne eine einzige Kachel ist der Rest eines
                 // abgebrochenen Downloads (frueher blieb so etwas nach dem
                 // haengenden „0/1"-Balken liegen). MapLibre selbst meldet sie
                 // als „vollstaendig", weil es fuer gespeicherte Regionen die
                 // Sollzahl gleich der Istzahl setzt — also sagen wir es hier.
                 if (status != null && status.completedTileCount <= 0L) {
-                    add("unvollständig – bitte löschen")
+                    add(context.getString(R.string.more_offline_maps_incomplete_status))
                 }
             }.joinToString(" · "),
             sizeBytes = status?.completedResourceSize ?: 0L,
@@ -353,12 +352,13 @@ private fun deleteAllOfflineRegionsAsync(
  * `file://`-Adresse aelterer Regionen (`…/map-styles/voyager.json`). Das
  * schlichte `contains` erkennt deshalb beide.
  */
-private fun fallbackRegionName(region: OfflineRegion): String {
+private fun fallbackRegionName(context: Context, region: OfflineRegion): String {
     val definition = region.definition
     if (definition is OfflineTilePyramidRegionDefinition) {
         val styleUrl = definition.styleURL
         val styleLabel = mapStyles.firstOrNull { styleUrl?.contains(it.id) == true }?.label
-        return "${styleLabel ?: "Kartenausschnitt"} #${region.id}"
+        val label = styleLabel ?: context.getString(R.string.more_offline_maps_fallback_area)
+        return "$label #${region.id}"
     }
-    return "Region #${region.id}"
+    return "${context.getString(R.string.more_offline_maps_fallback_region)} #${region.id}"
 }

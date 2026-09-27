@@ -40,12 +40,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.routing.InstalledSegment
 import de.trailscape.app.routing.SEGMENT_PART_SUFFIX
 import de.trailscape.app.routing.SegmentDownloads
@@ -55,7 +60,6 @@ import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.OneUiTextField
-import de.trailscape.app.ui.formatBytes
 import de.trailscape.app.ui.map.currentLocation
 import de.trailscape.app.ui.map.hasLocationPermission
 import de.trailscape.app.ui.map.missingPermissions
@@ -188,9 +192,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             val offer = runCatching { describeSegmentOffer(fileNames) }.getOrNull()
             busy = false
             if (offer == null) {
-                appViewModel.showMessage(
-                    "Die Größe der Kartendaten ließ sich nicht abfragen. Bist du online?",
-                )
+                appViewModel.showMessage(UiText.Res(R.string.more_offline_routing_size_query_error))
             } else {
                 pendingOffer = offer
             }
@@ -201,7 +203,9 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     fun offerTileAt(lat: Double, lon: Double) {
         val tile = segmentTileAt(lat, lon)
         if (segments.any { it.fileName == tile.fileName }) {
-            appViewModel.showMessage("Für „${tile.title(coreTexts)}“ sind die Routingdaten schon da.")
+            appViewModel.showMessage(
+                UiText.Res(R.string.more_offline_routing_already_installed, listOf(tile.title(coreTexts))),
+            )
             return
         }
         offerDownload(listOf(tile.fileName))
@@ -227,11 +231,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             busy = false
             results = hits.take(MAX_SEARCH_HITS)
             if (hits.isEmpty()) {
-                appViewModel.showMessage(
-                    "Kein Ort gefunden. Versuche es mit dem Ortsnamen allein, ohne " +
-                        "Straße und Postleitzahl — die Kacheln sind ohnehin " +
-                        "5° × 5° groß.",
-                )
+                appViewModel.showMessage(UiText.Res(R.string.more_offline_routing_no_place_error))
             }
         }
     }
@@ -243,9 +243,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             val position = resolveLocation(context)
             busy = false
             if (position == null) {
-                appViewModel.showMessage(
-                    "Standort nicht verfügbar. Ist die Ortung eingeschaltet?",
-                )
+                appViewModel.showMessage(UiText.Res(R.string.more_offline_routing_no_location_error))
             } else {
                 offerTileAt(position.first, position.second)
             }
@@ -258,16 +256,13 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         if (hasLocationPermission(context)) {
             offerTileForMyLocation()
         } else {
-            appViewModel.showMessage(
-                "Ohne Standortfreigabe wissen wir nicht, welche Kachel du brauchst. " +
-                    "Nimm die Ortssuche darunter — oder erteile die Freigabe unter " +
-                    "„Einstellungen → Apps → Trailscape → Berechtigungen“.",
-            )
+            appViewModel.showMessage(UiText.Res(R.string.more_offline_routing_permission_error))
         }
     }
 
     val hintColor = MaterialTheme.colorScheme.onSurfaceVariant
-    SettingsHint("Damit Routen offline auf dem Gerät berechnet werden — nicht das Kartenbild.")
+    val sizeText = rememberSizeText()
+    SettingsHint(stringResource(R.string.more_offline_routing_hint))
     Spacer(Modifier.height(12.dp))
 
     // ------------------------------------------------------- laufender Lauf
@@ -295,10 +290,13 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
 
     // ------------------------------------------------------------- Bestand
     when {
-        loading -> Text("Lade …", style = MaterialTheme.typography.bodyMedium)
+        loading -> Text(
+            stringResource(R.string.more_offline_routing_loading),
+            style = MaterialTheme.typography.bodyMedium,
+        )
 
         segments.isEmpty() -> Text(
-            text = "Keine gespeichert — Routen rechnet bis dahin der Server.",
+            text = stringResource(R.string.more_offline_routing_empty),
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -319,7 +317,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             }
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Zusammen ${formatBytes(totalBytes)}",
+                text = stringResource(R.string.more_offline_routing_total, sizeText(totalBytes)),
                 style = MaterialTheme.typography.bodySmall,
                 color = hintColor,
             )
@@ -332,8 +330,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     partials.forEach { partial ->
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Angefangen: ${partial.title} — ${formatBytes(partial.bytes)} geladen. " +
-                "Ein neuer Download setzt hier auf.",
+            text = stringResource(R.string.more_offline_routing_partial, partial.title, sizeText(partial.bytes)),
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,
         )
@@ -358,7 +355,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         ) {
             Icon(Icons.Filled.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text("Für meinen Standort")
+            Text(stringResource(R.string.more_offline_routing_my_location_action))
         }
 
         if (segments.isNotEmpty()) {
@@ -384,7 +381,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
             ) {
                 Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Nach Aktualisierungen suchen")
+                Text(stringResource(R.string.more_offline_routing_check_updates_action))
             }
         }
     }
@@ -392,7 +389,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     if (updateCheckDone && outdated.isEmpty() && segments.isNotEmpty()) {
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Alles auf dem neuesten Stand.",
+            text = stringResource(R.string.more_offline_routing_up_to_date_status),
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,
         )
@@ -401,10 +398,10 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     // -------------------------------------------------------- Ortssuche
     Spacer(Modifier.height(12.dp))
     OneUiTextField(
-        label = "Gegend suchen",
+        label = stringResource(R.string.more_offline_routing_search_label),
         value = query,
         onValueChange = { query = it },
-        placeholder = "Ort oder Region, z. B. Innsbruck",
+        placeholder = stringResource(R.string.more_offline_routing_search_placeholder),
         enabled = !busy && running == null,
         // Der Knopf zusaetzlich zur Eingabetaste: Wer die Tastatur wegwischt,
         // statt „Suchen" zu druecken, steht sonst vor einem Feld ohne Wirkung.
@@ -413,7 +410,7 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
                 onClick = { runSearch() },
                 enabled = !busy && query.trim().length >= MIN_QUERY_LENGTH,
             ) {
-                Icon(Icons.Filled.Search, contentDescription = "Suchen")
+                Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.more_offline_routing_search_cd))
             }
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -440,15 +437,15 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
                     query = ""
                     offerTileAt(hit.lat, hit.lon)
                 },
-            ) { Text("Auswählen") }
+            ) { Text(stringResource(R.string.more_offline_routing_select_action)) }
         }
     }
 
     // ------------------------------------------------------- Einstellung
     Spacer(Modifier.height(12.dp))
     SettingsSwitchRow(
-        title = "Nur über WLAN laden",
-        subtitle = "Eine Kachel ist 120–240 MB groß.",
+        title = stringResource(R.string.more_offline_routing_wifi_title),
+        subtitle = stringResource(R.string.more_offline_routing_wifi_hint),
         checked = unmeteredOnly,
         onCheckedChange = appViewModel::setSegmentUnmeteredOnly,
     )
@@ -456,15 +453,14 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     // ------------------------------------------------- Eigener Routing-Server
     Spacer(Modifier.height(12.dp))
     OneUiTextField(
-        label = "Eigener Routing-Server (URL)",
+        label = stringResource(R.string.more_offline_routing_server_label),
         value = routingServerUrl,
         onValueChange = appViewModel::setRoutingServerUrl,
         placeholder = defaultBrouterServerUrl,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
     )
     SettingsHint(
-        "Nur für die Berechnung online; die Routingdaten oben kommen immer von brouter.de. " +
-            "Leer = öffentlicher Server.",
+        stringResource(R.string.more_offline_routing_server_hint),
         modifier = Modifier.padding(top = 4.dp),
     )
 
@@ -473,7 +469,11 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Einen Moment …", style = MaterialTheme.typography.bodySmall, color = hintColor)
+            Text(
+                stringResource(R.string.more_offline_routing_busy_status),
+                style = MaterialTheme.typography.bodySmall,
+                color = hintColor,
+            )
         }
     }
 
@@ -482,28 +482,28 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
         OneUiDialog(
             onDismissRequest = { pendingOffer = null },
             icon = { Icon(Icons.Filled.DownloadForOffline, contentDescription = null) },
-            title = { Text(if (pendingIsUpdate) "Routingdaten aktualisieren" else "Routingdaten laden") },
-            text = {
+            title = {
                 Text(
-                    buildString {
-                        append(offer.title)
-                        append(" — ")
+                    stringResource(
                         if (pendingIsUpdate) {
-                            append("meist nur ein bis zwei MB, im schlechtesten Fall ")
-                            append(formatBytes(offer.totalBytes))
+                            R.string.more_offline_routing_update_confirm_title
                         } else {
-                            append(formatBytes(offer.totalBytes))
-                        }
-                        append(".")
-                        append(
-                            if (unmeteredOnly) {
-                                " Der Download startet, sobald WLAN da ist."
-                            } else {
-                                " Der Download läuft auch über Mobilfunk."
-                            },
-                        )
-                    },
+                            R.string.more_offline_routing_download_confirm_title
+                        },
+                    ),
                 )
+            },
+            text = {
+                // Ein Schluessel je Fall (Laden/Aktualisieren × WLAN/Mobilfunk):
+                // Groesse und Netzweg stehen zusammen im uebersetzten Text,
+                // nicht als zwei im Code verbundene Saetze (docs/i18n.md, C).
+                val body = when {
+                    pendingIsUpdate && unmeteredOnly -> R.string.more_offline_routing_offer_update_wifi_body
+                    pendingIsUpdate -> R.string.more_offline_routing_offer_update_mobile_body
+                    unmeteredOnly -> R.string.more_offline_routing_offer_download_wifi_body
+                    else -> R.string.more_offline_routing_offer_download_mobile_body
+                }
+                Text(stringResource(body, offer.title, sizeText(offer.totalBytes)))
             },
             confirmButton = {
                 TextButton(
@@ -511,10 +511,10 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
                         pendingOffer = null
                         appViewModel.downloadSegments(context, offer.fileNames)
                     },
-                ) { Text("Laden") }
+                ) { Text(stringResource(R.string.more_offline_routing_download_action)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingOffer = null }) { Text("Abbrechen") }
+                TextButton(onClick = { pendingOffer = null }) { Text(stringResource(R.string.common_action_cancel)) }
             },
         )
     }
@@ -522,12 +522,14 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
     confirmDelete?.let { segment ->
         OneUiDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text("Routingdaten löschen") },
+            title = { Text(stringResource(R.string.more_offline_routing_delete_confirm_title)) },
             text = {
                 Text(
-                    "Soll „${segment.tile.title(coreTexts)}“ (${formatBytes(segment.sizeBytes)}) wirklich " +
-                        "gelöscht werden? Routen in dieser Gegend laufen danach wieder über " +
-                        "den Server.",
+                    stringResource(
+                        R.string.more_offline_routing_delete_confirm_body,
+                        segment.tile.title(coreTexts),
+                        sizeText(segment.sizeBytes),
+                    ),
                 )
             },
             confirmButton = {
@@ -538,19 +540,15 @@ fun OfflineRoutingCardContent(appViewModel: AppViewModel) {
                         scope.launch {
                             val ok = withContext(Dispatchers.IO) { inventory.delete(target) }
                             if (!ok) {
-                                appViewModel.showMessage(
-                                    "Die Routingdaten konnten nicht gelöscht werden. " +
-                                        "Läuft gerade ein Download für diese Gegend, " +
-                                        "warte ihn ab und versuche es dann erneut.",
-                                )
+                                appViewModel.showMessage(UiText.Res(R.string.more_offline_routing_delete_error))
                             }
                             reloadToken++
                         }
                     },
-                ) { Text("Löschen", color = MaterialTheme.colorScheme.error) }
+                ) { Text(stringResource(R.string.common_action_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = null }) { Text("Abbrechen") }
+                TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.common_action_cancel)) }
             },
         )
     }
@@ -569,13 +567,14 @@ private fun SegmentRow(
     onUpdate: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val sizeText = rememberSizeText()
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = segment.tile.title(LocalCoreTexts.current), style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = listOf(
                     segment.tile.boundsLabel(LocalCoreTexts.current),
-                    formatBytes(segment.sizeBytes),
+                    sizeText(segment.sizeBytes),
                     segmentAgeText(segment),
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
@@ -583,7 +582,7 @@ private fun SegmentRow(
             )
             if (outdated) {
                 Text(
-                    text = "Neuere Fassung verfügbar",
+                    text = stringResource(R.string.more_offline_routing_outdated_status),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -591,7 +590,7 @@ private fun SegmentRow(
         }
         if (outdated) {
             IconButton(onClick = onUpdate, enabled = enabled) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Aktualisieren")
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.more_offline_routing_update_cd))
             }
             // Ohne Abstand stossen zwei 48-dp-Ziele Kante an Kante — und der
             // Fehlgriff landet auf „Löschen". Der Leitfaden verlangt neben
@@ -599,7 +598,7 @@ private fun SegmentRow(
             Spacer(Modifier.width(8.dp))
         }
         IconButton(onClick = onDelete, enabled = enabled) {
-            Icon(Icons.Filled.Delete, contentDescription = "Löschen")
+            Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.common_action_delete))
         }
     }
 }
@@ -619,12 +618,16 @@ private fun SegmentProgressRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = label, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = if (count > 1) "$detail · Kachel ${index + 1} von $count" else detail,
+                    text = if (count > 1) {
+                        stringResource(R.string.more_offline_routing_progress_tile, detail, index + 1, count)
+                    } else {
+                        detail
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            TextButton(onClick = onCancel) { Text("Abbrechen") }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.common_action_cancel)) }
         }
         Spacer(Modifier.height(4.dp))
         LinearProgressIndicator(
@@ -666,21 +669,23 @@ private fun readPartials(dir: File, texts: CoreTexts): List<PartialSegment> {
  * eine erfundene Zahl waere hier schlimmer als die Luecke, weil an ihr die
  * Entscheidung „aktualisieren?" haengt.
  */
+@Composable
 private fun segmentAgeText(segment: InstalledSegment): String = when (val days = segment.ageDays()) {
-    null -> "Alter unbekannt"
-    0L -> "von heute"
-    1L -> "1 Tag alt"
-    else -> "$days Tage alt"
+    null -> stringResource(R.string.more_offline_routing_age_unknown)
+    0L -> stringResource(R.string.more_offline_routing_age_none)
+    else -> pluralStringResource(R.plurals.more_offline_routing_age_count, days.toInt(), days.toInt())
 }
 
 /** Die Kachel eines laufenden Downloads, so lesbar wie moeglich. */
+@Composable
 private fun downloadLabel(fileName: String?, phase: SegmentPhase?, texts: CoreTexts): String {
     val tile = fileName
         ?.let { parseSegmentTile(it) }
         ?.title(texts)
-        ?: "Routingdaten"
+        ?: stringResource(R.string.more_offline_routing_label_fallback)
     return when (phase) {
-        SegmentPhase.DELTA_DOWNLOAD, SegmentPhase.DELTA_APPLY -> "$tile — Aktualisierung"
+        SegmentPhase.DELTA_DOWNLOAD, SegmentPhase.DELTA_APPLY ->
+            stringResource(R.string.more_offline_routing_label_update, tile)
         else -> tile
     }
 }
@@ -692,14 +697,30 @@ private fun downloadLabel(fileName: String?, phase: SegmentPhase?, texts: CoreTe
  * Bytes (sie zaehlt Kachelbloecke) — dort waere „54 von 100 MB" schlicht
  * falsch.
  */
-private fun downloadDetail(done: Long, total: Long, phase: SegmentPhase?): String = when (phase) {
-    SegmentPhase.DELTA_APPLY -> "Wird eingearbeitet …"
-    SegmentPhase.CHECK -> "Wird geprüft …"
-    else -> if (total > 0) {
-        "${formatBytes(done)} von ${formatBytes(total)}"
-    } else {
-        "Wird geladen …"
+@Composable
+private fun downloadDetail(done: Long, total: Long, phase: SegmentPhase?): String {
+    val sizeText = rememberSizeText()
+    return when (phase) {
+        SegmentPhase.DELTA_APPLY -> stringResource(R.string.more_offline_routing_phase_apply)
+        SegmentPhase.CHECK -> stringResource(R.string.more_offline_routing_phase_check)
+        else -> if (total > 0) {
+            stringResource(R.string.more_offline_routing_progress_bytes, sizeText(done), sizeText(total))
+        } else {
+            stringResource(R.string.more_offline_routing_phase_download)
+        }
     }
+}
+
+/**
+ * Speicherplatz in der Sprache der Oberflaeche („119,4 MB" / „119.4 MB");
+ * ohne bekannte Groesse „Größe unbekannt". Als Funktion geliefert, damit
+ * auch Lambdas ausserhalb der Komposition (Dialogtexte) sie benutzen koennen.
+ */
+@Composable
+private fun rememberSizeText(): (Long?) -> String {
+    val formats = LocalAppFormats.current
+    val unknown = stringResource(R.string.more_offline_routing_size_unknown)
+    return remember(formats, unknown) { { bytes -> formats.bytes(bytes) ?: unknown } }
 }
 
 /** Eine einzelne Position als Paar, oder `null`. */

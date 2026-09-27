@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.more
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -47,6 +48,7 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
 import de.trailscape.app.strava.StravaConfig
@@ -210,8 +212,13 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
                     // „Klartext"): „‹ Zurück" bzw. „‹ Einstellungen" oben,
                     // darunter der Titel.
                     ScreenHeader(
-                        title = current?.displayTitle() ?: "Einstellungen",
-                        backLabel = if (current != null && !arrivedDirectly) "Einstellungen" else "Zurück",
+                        title = current?.let { stringResource(it.titleRes) }
+                            ?: stringResource(R.string.more_screen_title),
+                        backLabel = if (current != null && !arrivedDirectly) {
+                            stringResource(R.string.more_screen_title)
+                        } else {
+                            stringResource(R.string.common_action_back)
+                        },
                         onBack = if (current != null) ::leavePage else onBack,
                         modifier = Modifier.padding(
                             start = ScreenPadding,
@@ -240,34 +247,23 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
 }
 
 /**
- * Die Seiten der Einstellungen, in der Reihenfolge der Liste. [title] steht
- * in der Listenzeile und in der Kopfzeile der Seite.
+ * Die Seiten der Einstellungen, in der Reihenfolge der Liste. [titleRes]
+ * steht in der Listenzeile und in der Kopfzeile der Seite.
  */
-internal enum class SettingsPage(val title: String) {
-    PROFILE("Profil"),
-    HEALTH("Uhr & Gesundheitsdaten"),
-    SENSORS("Sensoren"),
-    RECORDING("Aufzeichnung & Ansagen"),
-    REMINDERS("Erinnerungen"),
-    OFFLINE("Karten offline"),
-    BACKUP("Import & Backup"),
+internal enum class SettingsPage(@StringRes val titleRes: Int) {
+    PROFILE(R.string.more_page_profile_title),
+    HEALTH(R.string.more_page_health_title),
+    SENSORS(R.string.more_page_sensors_title),
+    RECORDING(R.string.more_page_recording_title),
+    REMINDERS(R.string.more_page_reminders_title),
+    OFFLINE(R.string.more_page_offline_title),
+    BACKUP(R.string.more_page_backup_title),
     // Nur in Builds mit Strava-Zugangsdaten sichtbar (StravaConfig.available).
-    STRAVA("Strava"),
-    SYNC("Sync mit eigenem Server"),
-
-    /** Titel aus den Ressourcen, siehe [displayTitle]. */
-    LANGUAGE("Sprache"),
-    ABOUT("Über Trailscape"),
+    STRAVA(R.string.more_page_strava_title),
+    SYNC(R.string.more_page_sync_title),
+    LANGUAGE(R.string.more_language_title),
+    ABOUT(R.string.more_page_about_title),
 }
-
-/**
- * Titel einer Seite fuer die Anzeige. Die Sprachseite liest ihren Titel
- * schon aus den Ressourcen (`more_language_title`); die uebrigen folgen,
- * wenn der Bereich „Mehr" umzieht (siehe docs/i18n.md).
- */
-@Composable
-private fun SettingsPage.displayTitle(): String =
-    if (this == SettingsPage.LANGUAGE) stringResource(R.string.more_language_title) else title
 
 /** Welche Seite ein Sprungziel von aussen meint. */
 private fun MoreSection.toPage(): SettingsPage = when (this) {
@@ -300,6 +296,7 @@ private fun SettingsList(
     onOpen: (SettingsPage) -> Unit,
 ) {
     val context = LocalContext.current
+    val language = LocalAppLanguage.current
     val updateVersion by appViewModel.updateAvailable.collectAsStateWithLifecycle()
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
     val profileConfirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
@@ -313,19 +310,19 @@ private fun SettingsList(
     val lastBackupAt = remember { lastBackupAt(context) }
     val sensorsStatus = remember { sensorsListStatus(context) }
     var lastHealthImport by remember { mutableStateOf<LocalDateTime?>(null) }
-    var offlineStatus by remember { mutableStateOf(offlineStatusText(null, null, 0L)) }
+    var offlineStatus by remember { mutableStateOf(offlineStatusText(null, null, 0L, language)) }
     val versionName = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "unbekannt"
-    }
+        }.getOrNull()
+    } ?: stringResource(R.string.common_unknown)
 
     LaunchedEffect(Unit) {
         lastHealthImport = runCatching {
             withContext(Dispatchers.IO) { appViewModel.healthSync.lastImportAt() }
         }.getOrNull()
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(language) {
         // Beide Bestaende getrennt abfragen: Ist der Kartenspeicher gerade
         // nicht lesbar, soll die Zahl der Routing-Kacheln trotzdem erscheinen.
         val maps = runCatching { offlineMapsSummary(context) }.getOrNull()
@@ -336,6 +333,7 @@ private fun SettingsList(
             mapRegions = maps?.first ?: 0,
             routingTiles = routing?.size ?: 0,
             totalBytes = (maps?.second ?: 0L) + (routing?.sumOf { it.sizeBytes } ?: 0L),
+            language = language,
         )
     }
 
@@ -359,45 +357,45 @@ private fun SettingsList(
         item {
             MoreGroup(label = null) {
                 SettingsNavRow(
-                    title = SettingsPage.PROFILE.title,
-                    status = profileStatusText(profile, profileConfirmed),
+                    title = stringResource(SettingsPage.PROFILE.titleRes),
+                    status = profileStatusText(profile, profileConfirmed, language).asString(),
                     onClick = { onOpen(SettingsPage.PROFILE) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.HEALTH.title,
-                    status = healthStatusText(health, lastHealthImport),
+                    title = stringResource(SettingsPage.HEALTH.titleRes),
+                    status = healthStatusText(health, lastHealthImport, language).asString(),
                     onClick = { onOpen(SettingsPage.HEALTH) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.SENSORS.title,
+                    title = stringResource(SettingsPage.SENSORS.titleRes),
                     status = sensorsStatus,
                     onClick = { onOpen(SettingsPage.SENSORS) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.RECORDING.title,
-                    status = recordingStatus,
+                    title = stringResource(SettingsPage.RECORDING.titleRes),
+                    status = recordingStatus.asString(),
                     onClick = { onOpen(SettingsPage.RECORDING) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.REMINDERS.title,
-                    status = reminderStatusText(reminders),
+                    title = stringResource(SettingsPage.REMINDERS.titleRes),
+                    status = reminderStatusText(reminders).joinedStatus(),
                     onClick = { onOpen(SettingsPage.REMINDERS) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.OFFLINE.title,
-                    status = offlineStatus,
+                    title = stringResource(SettingsPage.OFFLINE.titleRes),
+                    status = offlineStatus.joinedStatus(),
                     onClick = { onOpen(SettingsPage.OFFLINE) },
                 )
                 ListDivider()
-                val backupStatus = backupStatusText(lastBackupAt)
+                val backupStatus = backupStatusText(lastBackupAt, language)
                 SettingsNavRow(
-                    title = SettingsPage.BACKUP.title,
-                    status = backupStatus ?: BACKUP_NEVER_TEXT,
+                    title = stringResource(SettingsPage.BACKUP.titleRes),
+                    status = (backupStatus ?: BACKUP_NEVER_TEXT).asString(),
                     // Eine Sicherung, die es nie gab, ist der eine Zustand in
                     // dieser Liste, der Handeln verlangt — deshalb in der
                     // Warnfarbe statt im ruhigen Grau.
@@ -411,7 +409,7 @@ private fun SettingsList(
             }
         }
         item {
-            MoreGroup(label = "App") {
+            MoreGroup(label = stringResource(R.string.more_list_group_app)) {
                 // Strava steht nur da, wenn der Build es kann — sonst gibt es
                 // die Zeile schlicht nicht (siehe StravaConfig).
                 if (StravaConfig.available) {
@@ -419,7 +417,7 @@ private fun SettingsList(
                     val stravaAutoUpload by StravaServices.autoUpload.collectAsStateWithLifecycle()
                     val stravaMessage by StravaServices.authMessage.collectAsStateWithLifecycle()
                     SettingsNavRow(
-                        title = SettingsPage.STRAVA.title,
+                        title = stringResource(SettingsPage.STRAVA.titleRes),
                         status = stravaStatusText(stravaConnection, stravaAutoUpload, stravaMessage),
                         statusColor = if (stravaNeedsReconnect(stravaConnection, stravaMessage)) {
                             LocalSignalColors.current.warning
@@ -431,20 +429,20 @@ private fun SettingsList(
                     ListDivider()
                 }
                 SettingsNavRow(
-                    title = SettingsPage.SYNC.title,
-                    status = syncStatusText(syncConfig),
+                    title = stringResource(SettingsPage.SYNC.titleRes),
+                    status = syncStatusText(syncConfig).asString(),
                     onClick = { onOpen(SettingsPage.SYNC) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.LANGUAGE.displayTitle(),
+                    title = stringResource(SettingsPage.LANGUAGE.titleRes),
                     status = languageStatusAnnotated(AppLocale.preference(context), LocalAppLanguage.current),
                     onClick = { onOpen(SettingsPage.LANGUAGE) },
                 )
                 ListDivider()
                 SettingsNavRow(
-                    title = SettingsPage.ABOUT.title,
-                    status = "Version $versionName",
+                    title = stringResource(SettingsPage.ABOUT.titleRes),
+                    status = stringResource(R.string.more_list_about_status, versionName),
                     onClick = { onOpen(SettingsPage.ABOUT) },
                 )
             }
@@ -470,18 +468,24 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
             SettingsPage.HEALTH -> SettingsSection { HealthCardContent(appViewModel) }
             SettingsPage.SENSORS -> SettingsSection { SensorsCardContent() }
             SettingsPage.RECORDING -> {
-                SettingsSection(label = "Aufzeichnung") { RecordingCardContent() }
-                SettingsSection(label = "Ansagen") { AnnouncementsCardContent() }
+                SettingsSection(label = stringResource(R.string.more_recording_section_recording)) {
+                    RecordingCardContent()
+                }
+                SettingsSection(label = stringResource(R.string.more_recording_section_voice)) {
+                    AnnouncementsCardContent()
+                }
             }
             SettingsPage.REMINDERS -> SettingsSection { ReminderCardContent(appViewModel) }
             // Kartenbild und Routingdaten auf einer Seite: Beide laden etwas
             // fuers netzlose Fahren herunter, meinen aber Verschiedenes — die
             // beiden Abschnittstitel sagen den Unterschied.
             SettingsPage.OFFLINE -> {
-                SettingsSection(label = "Kartenbild") {
+                SettingsSection(label = stringResource(R.string.more_offline_section_maps)) {
                     OfflineMapsCardContent(onMessage = appViewModel::showMessage)
                 }
-                SettingsSection(label = "Routingdaten") { OfflineRoutingCardContent(appViewModel) }
+                SettingsSection(label = stringResource(R.string.more_offline_section_routing)) {
+                    OfflineRoutingCardContent(appViewModel)
+                }
             }
             SettingsPage.BACKUP -> SettingsSection { BackupCardContent(appViewModel) }
             SettingsPage.STRAVA -> SettingsSection { StravaCardContent() }
@@ -489,7 +493,9 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
             SettingsPage.LANGUAGE -> SettingsSection { LanguageCardContent() }
             SettingsPage.ABOUT -> {
                 SettingsSection { AboutCardContent(appViewModel) }
-                SettingsSection(label = "Open-Source-Lizenzen") { OpenSourceLicensesContent() }
+                SettingsSection(label = stringResource(R.string.more_about_section_licenses)) {
+                    OpenSourceLicensesContent()
+                }
             }
         }
     }

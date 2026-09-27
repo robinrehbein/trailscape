@@ -8,7 +8,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.health.connect.client.contracts.ExerciseRouteRequestContract
+import de.trailscape.app.R
 import de.trailscape.app.health.toHealthRoutePoints
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.core.RouteConsentRequest
 import kotlinx.coroutines.launch
@@ -29,7 +31,7 @@ import kotlinx.coroutines.launch
  * val pending by appViewModel.routeConsentPending.collectAsState()
  * val requestRoute = rememberRouteConsentLauncher(appViewModel)
  * pending.firstOrNull()?.let { first ->
- *     Button(onClick = { requestRoute(first) }) { Text("Route freigeben (${pending.size})") }
+ *     Button(onClick = { requestRoute(first) }) { Text(pluralStringResource(…, pending.size, pending.size)) }
  * }
  * ```
  *
@@ -60,7 +62,7 @@ fun rememberRouteConsentLauncher(appViewModel: AppViewModel): (RouteConsentReque
         } catch (_: Exception) {
             // Health Connect fehlt oder ist zu alt fuer den Dialog.
             inFlight = null
-            appViewModel.showMessage("Der Freigabedialog von Health Connect lässt sich nicht öffnen.")
+            appViewModel.showMessage(UiText.Res(R.string.more_route_consent_error))
         }
     }
 }

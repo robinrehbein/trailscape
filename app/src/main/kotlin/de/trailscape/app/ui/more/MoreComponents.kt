@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.more
 
+import de.trailscape.app.R
 import de.trailscape.app.ui.components.Eyebrow
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -309,6 +311,8 @@ fun SettingsHint(text: String, modifier: Modifier = Modifier, color: Color = Col
 @Composable
 fun LearnMore(text: String, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf(false) }
+    val expandedState = stringResource(R.string.more_learn_more_expanded_state)
+    val collapsedState = stringResource(R.string.more_learn_more_collapsed_state)
     Column(modifier = modifier.fillMaxWidth()) {
         TextButton(
             onClick = { open = !open },
@@ -316,9 +320,15 @@ fun LearnMore(text: String, modifier: Modifier = Modifier) {
             // Der Text wechselt, aber eine Vorlesehilfe soll auch den Zustand
             // als solchen melden.
             modifier = Modifier.semantics {
-                stateDescription = if (open) "Aufgeklappt" else "Zugeklappt"
+                stateDescription = if (open) expandedState else collapsedState
             },
-        ) { Text(if (open) "Weniger anzeigen" else "Mehr erfahren") }
+        ) {
+            Text(
+                stringResource(
+                    if (open) R.string.more_learn_more_less_action else R.string.more_learn_more_action,
+                ),
+            )
+        }
         AnimatedVisibility(
             visible = open,
             // Der Leitfaden verlangt eine Dauer zwischen 100 und 500 ms auf

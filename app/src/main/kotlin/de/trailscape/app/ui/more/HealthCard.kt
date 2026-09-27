@@ -38,15 +38,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
-import de.trailscape.app.ui.formatDateTime
 import de.trailscape.app.ui.health.rememberRouteConsentLauncher
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.HealthAvailability
@@ -88,6 +92,7 @@ private const val HEALTH_CONNECT_PACKAGE = "com.google.android.apps.healthdata"
 fun HealthCardContent(appViewModel: AppViewModel) {
     val coreTexts = LocalCoreTexts.current
     val context = LocalContext.current
+    val formats = LocalAppFormats.current
     val scope = rememberCoroutineScope()
 
     val connection by appViewModel.healthConnection.collectAsStateWithLifecycle()
@@ -113,11 +118,11 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     // nicht mit aufgehellt wurde.
     val warningColor = LocalSignalColors.current.warning
 
-    SettingsHint("Workouts und Vitalwerte deiner Uhr kommen über Health Connect.")
+    SettingsHint(stringResource(R.string.more_health_intro))
     Spacer(modifier = Modifier.height(12.dp))
 
     when (val current = connection) {
-        null -> Text("Prüfe Verbindung …", style = MaterialTheme.typography.bodyMedium)
+        null -> Text(stringResource(R.string.more_health_checking_status), style = MaterialTheme.typography.bodyMedium)
         else -> Row(verticalAlignment = Alignment.Top) {
             Icon(
                 imageVector = if (current.isReady) Icons.Filled.CheckCircle else Icons.Filled.Info,
@@ -144,7 +149,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                 Button(
                     onClick = { openHealthConnectInPlayStore(context) },
                     enabled = !busy,
-                ) { Text("Health Connect installieren") }
+                ) { Text(stringResource(R.string.more_health_install_action)) }
             }
 
             connection?.needsPermissions == true -> {
@@ -171,7 +176,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         }
                     },
                     enabled = !busy,
-                ) { Text("Verbinden") }
+                ) { Text(stringResource(R.string.more_health_connect_action)) }
             }
 
             connection?.isReady == true -> {
@@ -204,7 +209,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         // voellig anderes tut (Abgleich mit dem eigenen
                         // Server). Hier werden Workouts und Vitalwerte aus
                         // Health Connect **geholt** — in eine Richtung.
-                        Text("Neue Touren holen")
+                        Text(stringResource(R.string.more_health_fetch_action))
                     }
                 }
                 SettingsSecondaryButton(
@@ -223,7 +228,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                         }
                     },
                     enabled = !busy,
-                ) { Text("Alles neu importieren") }
+                ) { Text(stringResource(R.string.more_health_reimport_action)) }
             }
         }
     }
@@ -246,8 +251,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
                                 // Health Connect zeigt den Dialog nach zwei
                                 // Ablehnungen nicht mehr — dann bleibt nur der
                                 // Weg ueber die Einstellungen.
-                                "Ohne Freigabe bleiben ältere Fahrten außen vor. Erlauben lässt sie " +
-                                    "sich in Health Connect unter „App-Berechtigungen → Trailscape“."
+                                context.getString(R.string.more_health_history_denied_status)
                             },
                         )
                     } catch (e: HealthSyncException) {
@@ -264,7 +268,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
     lastSyncAt?.let { at ->
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = "Letzter Sync: ${formatDateTime(at)}",
+            text = stringResource(R.string.more_health_last_sync, formats.dateFull(at.toLocalDate()), formats.time(at)),
             style = MaterialTheme.typography.bodySmall,
             color = hintColor,
         )
@@ -276,7 +280,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
         HealthSyncSummary(currentReport)
         if (currentReport.debugLines.isNotEmpty()) {
             TextButton(onClick = { showDebugDialog = true }) {
-                Text("Diagnose-Details", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.more_health_debug_action), style = MaterialTheme.typography.bodySmall)
             }
         }
         if (currentReport.workoutsFound == 0) {
@@ -284,8 +288,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             NoticeBox(
                 icon = Icons.Filled.Info,
                 color = hintColor,
-                text = "Keine Workouts gefunden — schreibt die App deiner Uhr " +
-                    "(Samsung Health, Garmin Connect, Fitbit …) nach Health Connect?",
+                text = stringResource(R.string.more_health_no_workouts_hint),
             )
         }
     }
@@ -303,11 +306,11 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                if (consentPending.size == 1) {
-                    "Route freigeben"
-                } else {
-                    "Routen freigeben (${consentPending.size})"
-                },
+                pluralStringResource(
+                    R.plurals.more_health_route_consent_count,
+                    consentPending.size,
+                    consentPending.size,
+                ),
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
@@ -327,24 +330,20 @@ fun HealthCardContent(appViewModel: AppViewModel) {
             // sie dort nie. Das schliessende Anfuehrungszeichen fehlte hier
             // ausserdem ganz, der Pfad lief ungebremst in den naechsten
             // Satzteil.
-            text = "$routesLocked " +
-                "${if (routesLocked == 1) "Tour kam" else "Touren kamen"} ohne Route. " +
-                "Erlaube in Health Connect „App-Berechtigungen → Trailscape → " +
-                "Trainingsrouten“ dauerhaft.",
+            text = pluralStringResource(R.plurals.more_health_routes_locked_count, routesLocked, routesLocked),
         )
     } else {
-        SettingsHint(
-            "Für die Route: in Health Connect „App-Berechtigungen → Trailscape → " +
-                "Trainingsrouten“ dauerhaft erlauben.",
-        )
+        SettingsHint(stringResource(R.string.more_health_route_hint))
     }
     Spacer(modifier = Modifier.height(8.dp))
     SettingsHint(
         if (historyAccess == true) {
-            "„Alles neu importieren“ holt die Radfahrten der letzten 12 Monate erneut."
+            stringResource(R.string.more_health_reimport_year_hint)
         } else {
-            "„Alles neu importieren“ holt die letzten " +
-                "${healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)} Tage erneut."
+            stringResource(
+                R.string.more_health_reimport_days_hint,
+                (healthSyncInitialWindowMs / (24L * 60 * 60 * 1000)).toInt(),
+            )
         },
     )
 
@@ -352,7 +351,7 @@ fun HealthCardContent(appViewModel: AppViewModel) {
         HealthDebugDialog(
             lines = report.debugLines,
             onDismiss = { showDebugDialog = false },
-            onCopied = { appViewModel.showMessage("Diagnose kopiert.") },
+            onCopied = { appViewModel.showMessage(UiText.Res(R.string.more_health_debug_copied_status)) },
         )
     }
 }
@@ -374,9 +373,12 @@ internal fun HealthSyncSummary(report: HealthSyncReport) {
         style = MaterialTheme.typography.bodyMedium,
     )
     Text(
-        text = "${report.workoutsFound} " +
-            "${if (report.workoutsFound == 1) "Radfahrt" else "Radfahrten"} gefunden · " +
-            "${report.duplicatesSkipped} schon vorhanden",
+        text = pluralStringResource(
+            R.plurals.more_health_summary_found_count,
+            report.workoutsFound,
+            report.workoutsFound,
+            report.duplicatesSkipped,
+        ),
         style = MaterialTheme.typography.bodySmall,
         color = hintColor,
     )
@@ -398,18 +400,15 @@ internal fun HealthHistoryNotice(enabled: Boolean, onRequest: () -> Unit) {
     NoticeBox(
         icon = Icons.Filled.History,
         color = MaterialTheme.colorScheme.primary,
-        title = "Ältere Fahrten",
-        text = "Ohne Freigabe sieht Trailscape keine Fahrten, die mehr als 30 Tage vor " +
-            "dem Verbinden liegen. Mit Freigabe holt Trailscape einmalig deine Radfahrten " +
-            "der letzten 12 Monate — Training und Form starten dann mit deiner " +
-            "Vorgeschichte statt bei null.",
+        title = stringResource(R.string.more_health_history_title),
+        text = stringResource(R.string.more_health_history_body),
     )
     Spacer(modifier = Modifier.height(8.dp))
     SettingsSecondaryButton(
         onClick = onRequest,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
-    ) { Text("Ältere Fahrten freigeben") }
+    ) { Text(stringResource(R.string.more_health_history_action)) }
 }
 
 /** Snackbar-Text nach einem Sync; `null` (kein Bericht) zaehlt als „nichts Neues". */
@@ -423,7 +422,7 @@ private fun HealthDebugDialog(lines: List<String>, onDismiss: () -> Unit, onCopi
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Diagnose-Details") },
+        title = { Text(stringResource(R.string.more_health_debug_title)) },
         text = {
             Box(modifier = Modifier.height(320.dp)) {
                 SelectionContainer {
@@ -443,10 +442,10 @@ private fun HealthDebugDialog(lines: List<String>, onDismiss: () -> Unit, onCopi
                     clipboard.setText(AnnotatedString(text))
                     onCopied()
                 },
-            ) { Text("Kopieren") }
+            ) { Text(stringResource(R.string.more_health_debug_copy_action)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Schließen") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_close)) }
         },
     )
 }

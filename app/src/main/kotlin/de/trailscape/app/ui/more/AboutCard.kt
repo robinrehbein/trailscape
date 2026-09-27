@@ -33,6 +33,8 @@ import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.ISSUE_REPOSITORY_URL
 import de.trailscape.app.feedback.ProblemReportDialog
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.update.RELEASE_PAGE_URL
 import de.trailscape.app.update.UpdateCheckResult
@@ -57,7 +59,7 @@ private const val LICENSE_URL = "$REPOSITORY_URL/blob/main/LICENSE"
  * Zwischenstand der manuellen Update-Pruefung. Dient zugleich als Sperre
  * gegen Doppelklicks — eine zweite laufende Abfrage braucht niemand.
  */
-private const val UPDATE_CHECK_RUNNING = "Suche nach Updates …"
+private val UPDATE_CHECK_RUNNING: UiText = UiText.Res(R.string.more_about_update_checking_status)
 
 /**
  * „Über"-Karte — Port des Fliesstexts aus der letzten Karte in
@@ -120,20 +122,19 @@ fun AboutCardContent(
     val versionName = remember {
         runCatching {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
-        }.getOrNull() ?: "unbekannt"
-    }
+        }.getOrNull()
+    } ?: stringResource(R.string.common_unknown)
 
     var showProblemDialog by remember { mutableStateOf(false) }
-    var updateStatus by remember { mutableStateOf<String?>(null) }
+    var updateStatus by remember { mutableStateOf<UiText?>(null) }
 
     Text(
-        text = "Kostenlos und local-first: Deine Touren bleiben auf deinem Gerät. " +
-            "Kartendaten © OpenStreetMap-Mitwirkende, Routing über BRouter.",
+        text = stringResource(R.string.more_about_intro),
         style = MaterialTheme.typography.bodyMedium,
     )
     Spacer(modifier = Modifier.height(12.dp))
     Text(
-        text = "Version $versionName · freie Software unter der GNU GPL v3 oder später",
+        text = stringResource(R.string.more_about_version, versionName),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -146,19 +147,19 @@ fun AboutCardContent(
         TextButton(
             onClick = { appViewModel.showOnboardingAgain() },
             contentPadding = PaddingValues(0.dp),
-        ) { Text("Einführung erneut ansehen") }
+        ) { Text(stringResource(R.string.more_about_onboarding_action)) }
         TextButton(
             onClick = { uriHandler.openUri(REPOSITORY_URL) },
             contentPadding = PaddingValues(0.dp),
-        ) { Text("Quellcode auf GitHub") }
+        ) { Text(stringResource(R.string.more_about_source_action)) }
         TextButton(
             onClick = { uriHandler.openUri(PRIVACY_URL) },
             contentPadding = PaddingValues(0.dp),
-        ) { Text("Datenschutz") }
+        ) { Text(stringResource(R.string.more_about_privacy_action)) }
         TextButton(
             onClick = { showProblemDialog = true },
             contentPadding = PaddingValues(0.dp),
-        ) { Text("Problem melden") }
+        ) { Text(stringResource(R.string.more_about_report_action)) }
         // Der automatische Check laeuft still und hoechstens einmal am Tag
         // (siehe UpdateChecker). Dieser Knopf ist der Weg, es *jetzt* zu
         // wissen — samt sichtbarer Antwort, auch wenn sie „alles aktuell"
@@ -170,15 +171,17 @@ fun AboutCardContent(
                 scope.launch {
                     updateStatus = UPDATE_CHECK_RUNNING
                     updateStatus = when (val result = appViewModel.checkForUpdateNow()) {
-                        is UpdateCheckResult.Available ->
-                            "Version ${result.versionName} ist verfügbar."
-                        UpdateCheckResult.UpToDate -> "Du bist aktuell."
-                        else -> "Prüfung nicht möglich — bist du gerade offline?"
+                        is UpdateCheckResult.Available -> UiText.Res(
+                            R.string.more_about_update_available_status,
+                            listOf(result.versionName),
+                        )
+                        UpdateCheckResult.UpToDate -> UiText.Res(R.string.more_about_update_current_status)
+                        else -> UiText.Res(R.string.more_about_update_failed_status)
                     }
                 }
             },
             contentPadding = PaddingValues(0.dp),
-        ) { Text("Nach Updates suchen") }
+        ) { Text(stringResource(R.string.more_about_update_check_action)) }
     }
 
     if (updatesViaPlay) {
@@ -187,7 +190,7 @@ fun AboutCardContent(
 
     if (!updatesViaPlay) updateStatus?.let { status ->
         Text(
-            text = status,
+            text = status.asString(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -195,7 +198,7 @@ fun AboutCardContent(
             TextButton(
                 onClick = { uriHandler.openUri(RELEASE_PAGE_URL) },
                 contentPadding = PaddingValues(0.dp),
-            ) { Text("Herunterladen") }
+            ) { Text(stringResource(R.string.more_about_download_action)) }
         }
     }
 
@@ -223,9 +226,8 @@ fun AboutCardContent(
 private fun AutoUpdateCheckRow() {
     var enabled by remember { mutableStateOf(AppServices.updateChecker.isAutoCheckEnabled()) }
     SettingsSwitchRow(
-        title = "Täglich still nach Updates suchen",
-        subtitle = "Fragt höchstens einmal am Tag bei github.com nach — GitHub sieht dabei " +
-            "deine IP-Adresse.",
+        title = stringResource(R.string.more_about_auto_update_title),
+        subtitle = stringResource(R.string.more_about_auto_update_hint),
         checked = enabled,
         onCheckedChange = {
             AppServices.updateChecker.setAutoCheckEnabled(it)
@@ -246,16 +248,20 @@ fun OpenSourceLicensesContent() {
     val uriHandler = LocalUriHandler.current
     var expanded by remember { mutableStateOf(false) }
 
-    SettingsHint("Trailscape ist freie Software unter der GNU GPL v3 oder später.")
+    SettingsHint(stringResource(R.string.more_about_licenses_hint))
     TextButton(
         onClick = { uriHandler.openUri(LICENSE_URL) },
         contentPadding = PaddingValues(0.dp),
-    ) { Text("Lizenztext lesen") }
+    ) { Text(stringResource(R.string.more_about_license_text_action)) }
     TextButton(
         onClick = { expanded = !expanded },
         contentPadding = PaddingValues(0.dp),
     ) {
-        Text(if (expanded) "Bibliotheken und Datenquellen ausblenden" else "Bibliotheken und Datenquellen")
+        Text(
+            stringResource(
+                if (expanded) R.string.more_about_notices_hide_action else R.string.more_about_notices_show_action,
+            ),
+        )
     }
 
     AnimatedVisibility(
@@ -266,14 +272,11 @@ fun OpenSourceLicensesContent() {
         exit = shrinkVertically(OneUiMotion.standard()) + fadeOut(OneUiMotion.standard()),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            NoticeGroup(title = "Verwendete Bibliotheken", notices = libraryNotices)
+            NoticeGroup(title = stringResource(R.string.more_about_notices_libraries_title), notices = libraryNotices)
             Spacer(modifier = Modifier.height(12.dp))
-            NoticeGroup(title = "Daten und Dienste", notices = dataNotices)
+            NoticeGroup(title = stringResource(R.string.more_about_notices_data_title), notices = dataNotices)
             Spacer(modifier = Modifier.height(12.dp))
-            SettingsHint(
-                "Du darfst die App benutzen, weitergeben und verändern — abgeleitete " +
-                    "Versionen müssen ihrerseits quelloffen unter der GPL stehen.",
-            )
+            SettingsHint(stringResource(R.string.more_about_notices_gpl_hint))
         }
     }
 }
@@ -298,9 +301,9 @@ private fun NoticeGroup(title: String, notices: List<LicenseNotice>) {
                 .clickable { uriHandler.openUri(notice.url) }
                 .padding(vertical = 4.dp),
         ) {
-            Text(text = notice.name, style = MaterialTheme.typography.bodyMedium)
+            Text(text = notice.name.asString(), style = MaterialTheme.typography.bodyMedium)
             Text(
-                text = notice.license,
+                text = notice.license.asString(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

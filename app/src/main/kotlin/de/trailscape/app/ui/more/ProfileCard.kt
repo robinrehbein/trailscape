@@ -25,11 +25,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
@@ -78,6 +83,7 @@ import kotlinx.coroutines.delay
 fun ProfileCardContent(appViewModel: AppViewModel) {
     val profile by appViewModel.profile.collectAsStateWithLifecycle()
     val confirmed by appViewModel.profileConfirmed.collectAsStateWithLifecycle()
+    val formats = LocalAppFormats.current
 
     var form by remember { mutableStateOf(ProfileForm()) }
     var edited by remember { mutableStateOf(false) }
@@ -119,7 +125,7 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     }
 
     /** Fehlertext eines Felds — erst, wenn es nicht (mehr) den Fokus hat. */
-    fun shownError(field: ProfileField): String? =
+    fun shownError(field: ProfileField): UiText? =
         if (focused == field) null else profileFieldError(field, form.text(field), confirmed)
 
     @Composable
@@ -128,7 +134,7 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
             label = label,
             value = form.text(field),
             onValueChange = { update(form.with(field, it)) },
-            error = shownError(field),
+            error = shownError(field)?.asString(),
             placeholder = placeholder,
             decimal = field.decimal,
             onFocus = { hasFocus ->
@@ -138,7 +144,7 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
         )
     }
 
-    SettingsHint("Grundlage für Trainingslast, Fitness-Kurve und Erholungswerte.")
+    SettingsHint(stringResource(R.string.more_profile_hint))
     Spacer(modifier = Modifier.height(12.dp))
 
     Row {
@@ -147,15 +153,15 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
         // statt als scheinbar eigene Angabe.
         NumberField(
             ProfileField.AGE,
-            "Alter",
+            stringResource(R.string.more_profile_age_label),
             Modifier.weight(1f),
             placeholder = defaultTrainingProfile.ageYears.toString(),
         )
         Spacer(modifier = Modifier.width(12.dp))
         OneUiDropdownField(
-            label = "Geschlecht",
+            label = stringResource(R.string.more_profile_sex_label),
             value = form.sex,
-            options = sexOptions,
+            options = sexOptions(),
             onChange = { update(form.copy(sex = it)) },
             modifier = Modifier.weight(1f),
         )
@@ -165,14 +171,14 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     Row {
         NumberField(
             ProfileField.WEIGHT,
-            "Gewicht (kg)",
+            stringResource(R.string.more_profile_weight_label),
             Modifier.weight(1f),
             placeholder = formatProfileNumber(defaultTrainingProfile.weightKg),
         )
         Spacer(modifier = Modifier.width(12.dp))
         NumberField(
             ProfileField.SETUP_MASS,
-            "Rad + Gepäck (kg)",
+            stringResource(R.string.more_profile_setup_mass_label),
             Modifier.weight(1f),
             placeholder = formatProfileNumber(defaultSetupMassKg),
         )
@@ -180,25 +186,33 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
     if (!confirmed) {
         Spacer(modifier = Modifier.height(4.dp))
         SettingsHint(
-            "Noch nicht eingetragen — bis dahin rechnen wir grob mit " +
-                "${defaultTrainingProfile.ageYears} Jahren und " +
-                "${formatProfileNumber(defaultTrainingProfile.weightKg)} kg.",
+            stringResource(
+                R.string.more_profile_defaults_hint,
+                defaultTrainingProfile.ageYears,
+                formatProfileNumber(defaultTrainingProfile.weightKg),
+            ),
         )
     }
     Spacer(modifier = Modifier.height(12.dp))
 
-    NumberField(ProfileField.WEEKLY_HOURS, "Zeit pro Woche (Stunden, optional)", Modifier.fillMaxWidth())
+    NumberField(
+        ProfileField.WEEKLY_HOURS,
+        stringResource(R.string.more_profile_weekly_hours_label),
+        Modifier.fillMaxWidth(),
+    )
     Spacer(modifier = Modifier.height(4.dp))
-    SettingsHint("Deckelt das Wochenziel auf das, was in dieser Zeit machbar ist.")
+    SettingsHint(stringResource(R.string.more_profile_weekly_hours_hint))
     Spacer(modifier = Modifier.height(8.dp))
 
     // Der Text „Erweitert" bleibt in beiden Zustaenden gleich und das Icon
     // traegt keinen Alternativtext — deshalb meldet die Semantik den Zustand
     // eigens.
+    val expandedState = stringResource(R.string.more_learn_more_expanded_state)
+    val collapsedState = stringResource(R.string.more_learn_more_collapsed_state)
     TextButton(
         onClick = { advancedOpen = !advancedOpen },
         modifier = Modifier.semantics {
-            stateDescription = if (advancedOpen) "Aufgeklappt" else "Zugeklappt"
+            stateDescription = if (advancedOpen) expandedState else collapsedState
         },
     ) {
         Icon(
@@ -206,37 +220,31 @@ fun ProfileCardContent(appViewModel: AppViewModel) {
             contentDescription = null,
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text("Erweitert: Puls und FTP", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.more_profile_advanced_action), style = MaterialTheme.typography.titleSmall)
     }
 
     if (advancedOpen) {
-        SettingsHint("Ohne eigene Werte schätzen wir HFmax und Schwelle aus deinem Alter.")
-        LearnMore(
-            "Die Schätzung ist 208 − 0,7 × Alter. Genauer wird es mit einem " +
-                "HFmax-Feldtest: nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten " +
-                "mit maximalem Endspurt.",
-        )
+        SettingsHint(stringResource(R.string.more_profile_advanced_hint))
+        LearnMore(stringResource(R.string.more_profile_hr_max_learn_more))
         Spacer(modifier = Modifier.height(8.dp))
-        NumberField(ProfileField.HR_MAX, "HFmax (bpm, optional)", Modifier.fillMaxWidth())
+        NumberField(ProfileField.HR_MAX, stringResource(R.string.more_profile_hr_max_label), Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(12.dp))
-        NumberField(ProfileField.LTHR, "Schwellenpuls LTHR (bpm, optional)", Modifier.fillMaxWidth())
+        NumberField(ProfileField.LTHR, stringResource(R.string.more_profile_lthr_label), Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(12.dp))
-        NumberField(ProfileField.RESTING_HR, "Ruhepuls (bpm, optional)", Modifier.fillMaxWidth())
+        NumberField(
+            ProfileField.RESTING_HR,
+            stringResource(R.string.more_profile_resting_hr_label),
+            Modifier.fillMaxWidth(),
+        )
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsHint("Leer: der aus deinen Vitaldaten gemessene Wert.")
+        SettingsHint(stringResource(R.string.more_profile_resting_hr_hint))
 
         Spacer(modifier = Modifier.height(12.dp))
-        NumberField(ProfileField.FTP, "Schwellenleistung FTP (Watt, optional)", Modifier.fillMaxWidth())
+        NumberField(ProfileField.FTP, stringResource(R.string.more_profile_ftp_label), Modifier.fillMaxWidth())
         Spacer(modifier = Modifier.height(4.dp))
-        SettingsHint("Die wirksamste Einzelangabe: An der FTP hängt jede Trainingslast.")
+        SettingsHint(stringResource(R.string.more_profile_ftp_hint))
         LearnMore(
-            "Die FTP ist die Leistung, die du rund eine Stunde am Stück halten kannst. " +
-                "An ihr hängen Fitness, Ermüdung, Form und dein Wochenziel — änderst du " +
-                "sie, verschieben sich auch alle bisherigen Werte. Ohne Eintrag schätzen " +
-                "wir sie aus deinem besten 20-Minuten-Abschnitt (× 0,95), dann aus deiner " +
-                "Herzfrequenz, notfalls grob mit ${formatProfileNumber(defaultEftpWPerKg)} " +
-                "W/kg. Für eine belastbare Zahl fährst du nach gutem Aufwärmen 20 Minuten " +
-                "am Anschlag und trägst 95 % deiner Durchschnittsleistung ein.",
+            stringResource(R.string.more_profile_ftp_learn_more, formats.decimal(defaultEftpWPerKg, 1)),
         )
     }
 }
@@ -286,10 +294,11 @@ private const val PERSIST_DELAY_MS = 600L
  * Die Auswahl des Geschlechts — als geordnete Liste, weil die Reihenfolge im
  * aufgeklappten Menue genau diese ist (siehe [OneUiDropdownField]).
  */
-private val sexOptions: List<Pair<Sex, String>> = listOf(
-    Sex.MAENNLICH to "männlich",
-    Sex.WEIBLICH to "weiblich",
-    Sex.UNBEKANNT to "keine Angabe",
+@Composable
+private fun sexOptions(): List<Pair<Sex, String>> = listOf(
+    Sex.MAENNLICH to stringResource(R.string.more_profile_sex_male),
+    Sex.WEIBLICH to stringResource(R.string.more_profile_sex_female),
+    Sex.UNBEKANNT to stringResource(R.string.more_profile_sex_unknown),
 )
 
 /** Die Textfelder des Profils. */
@@ -345,32 +354,36 @@ internal data class ProfileForm(
  *   **leeres** Pflichtfeld ein Fehler — vorher ist leer schlicht „noch nicht
  *   eingetragen".
  */
-internal fun profileFieldError(field: ProfileField, text: String, confirmed: Boolean): String? {
+internal fun profileFieldError(field: ProfileField, text: String, confirmed: Boolean): UiText? {
     val empty = text.isBlank()
     return when (field) {
         ProfileField.AGE -> when {
-            empty -> if (confirmed) "Bitte ein Alter angeben." else null
-            text.trim().toIntOrNull()?.let { it in 10..100 } != true -> "Zwischen 10 und 100 Jahren."
+            empty -> if (confirmed) UiText.Res(R.string.more_profile_age_missing_error) else null
+            text.trim().toIntOrNull()?.let { it in 10..100 } != true ->
+                UiText.Res(R.string.more_profile_age_range_error)
             else -> null
         }
         ProfileField.WEIGHT -> when {
-            empty -> if (confirmed) "Bitte ein Gewicht angeben." else null
-            parseProfileNumber(text)?.let { it in 30.0..250.0 } != true -> "Zwischen 30 und 250 kg."
+            empty -> if (confirmed) UiText.Res(R.string.more_profile_weight_missing_error) else null
+            parseProfileNumber(text)?.let { it in 30.0..250.0 } != true ->
+                UiText.Res(R.string.more_profile_weight_range_error)
             else -> null
         }
         ProfileField.SETUP_MASS -> when {
             empty -> null
-            parseProfileNumber(text)?.let { it in 0.0..60.0 } != true -> "Höchstens 60 kg."
+            parseProfileNumber(text)?.let { it in 0.0..60.0 } != true ->
+                UiText.Res(R.string.more_profile_setup_mass_range_error)
             else -> null
         }
         ProfileField.WEEKLY_HOURS -> when {
             empty -> null
-            parseProfileNumber(text)?.let { it > 0 && it <= 40 } != true -> "Zwischen 1 und 40 Stunden."
+            parseProfileNumber(text)?.let { it > 0 && it <= 40 } != true ->
+                UiText.Res(R.string.more_profile_weekly_hours_range_error)
             else -> null
         }
         ProfileField.HR_MAX, ProfileField.LTHR, ProfileField.RESTING_HR -> when {
             empty -> null
-            parseProfileNumber(text) == null -> "Bitte eine Zahl eingeben."
+            parseProfileNumber(text) == null -> UiText.Res(R.string.more_profile_number_error)
             else -> null
         }
         // Dieselben Grenzen wie im Rechenkern (`minEftpW`/`maxEftpW`): Ein
@@ -378,8 +391,10 @@ internal fun profileFieldError(field: ProfileField, text: String, confirmed: Boo
         // lieber hier.
         ProfileField.FTP -> when {
             empty -> null
-            parseProfileNumber(text)?.let { it in minEftpW..maxEftpW } != true ->
-                "Zwischen ${formatProfileNumber(minEftpW)} und ${formatProfileNumber(maxEftpW)} Watt."
+            parseProfileNumber(text)?.let { it in minEftpW..maxEftpW } != true -> UiText.Res(
+                R.string.more_profile_ftp_range_error,
+                listOf(formatProfileNumber(minEftpW), formatProfileNumber(maxEftpW)),
+            )
             else -> null
         }
     }

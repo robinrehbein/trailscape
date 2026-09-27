@@ -26,13 +26,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.UiText
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.reminder.ReminderScheduler
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.NoticeBox
-import de.trailscape.app.ui.formatTime
 import de.trailscape.app.ui.map.hasNotificationPermission
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ReminderSettings
@@ -91,11 +95,7 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
     ) { granted ->
         permissionGranted = granted || hasNotificationPermission(context)
         if (!granted) {
-            appViewModel.showMessage(
-                "Ohne diese Freigabe bleiben die Erinnerungen still. Erteilen lässt sie " +
-                    "sich jederzeit unter „Einstellungen → Apps → Trailscape → " +
-                    "Benachrichtigungen“.",
-            )
+            appViewModel.showMessage(UiText.Res(R.string.more_reminder_permission_denied_status))
         }
     }
 
@@ -104,17 +104,17 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
         ReminderScheduler.reschedule(context, next)
     }
 
-    SettingsHint("Die Meldungen entstehen auf dem Gerät — ohne Push-Dienst und ohne Konto.")
+    SettingsHint(stringResource(R.string.more_reminder_hint))
     Spacer(modifier = Modifier.height(8.dp))
 
     SettingsSwitchRow(
-        title = "Tagesplan",
-        subtitle = "Morgens, was heute ansteht. Nur mit Trainingsplan.",
+        title = stringResource(R.string.more_reminder_daily_title),
+        subtitle = stringResource(R.string.more_reminder_daily_hint),
         checked = settings.dailySessionEnabled,
         onCheckedChange = { apply(settings.copy(dailySessionEnabled = it)) },
     )
     ReminderTimeRow(
-        label = "Uhrzeit morgens",
+        label = stringResource(R.string.more_reminder_daily_time_label),
         time = settings.dailySessionTime,
         enabled = settings.dailySessionEnabled || settings.nudgeEnabled,
         onClick = { editing = ReminderTime.DAILY },
@@ -126,13 +126,13 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
     HorizontalDivider()
 
     SettingsSwitchRow(
-        title = "Wochenrückblick",
-        subtitle = "Sonntagabends: gefahrene gegen geplante Kilometer.",
+        title = stringResource(R.string.more_reminder_weekly_title),
+        subtitle = stringResource(R.string.more_reminder_weekly_hint),
         checked = settings.weeklyReviewEnabled,
         onCheckedChange = { apply(settings.copy(weeklyReviewEnabled = it)) },
     )
     ReminderTimeRow(
-        label = "Uhrzeit sonntags",
+        label = stringResource(R.string.more_reminder_weekly_time_label),
         time = settings.weeklyReviewTime,
         enabled = settings.weeklyReviewEnabled,
         onClick = { editing = ReminderTime.WEEKLY },
@@ -141,8 +141,12 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
     HorizontalDivider()
 
     SettingsSwitchRow(
-        title = "Anstupser",
-        subtitle = "Nach $reminderNudgeAfterDays Tagen ohne Fahrt, höchstens einmal pro Woche.",
+        title = stringResource(R.string.more_reminder_nudge_title),
+        subtitle = pluralStringResource(
+            R.plurals.more_reminder_nudge_hint_count,
+            reminderNudgeAfterDays,
+            reminderNudgeAfterDays,
+        ),
         checked = settings.nudgeEnabled,
         onCheckedChange = { apply(settings.copy(nudgeEnabled = it)) },
     )
@@ -158,7 +162,7 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
         NoticeBox(
             icon = Icons.Filled.Info,
             color = LocalSignalColors.current.warning,
-            text = "Benachrichtigungen sind nicht erlaubt — die Erinnerungen bleiben still.",
+            text = stringResource(R.string.more_reminder_permission_notice),
         )
         Spacer(modifier = Modifier.height(8.dp))
         Button(
@@ -171,7 +175,7 @@ fun ReminderCardContent(appViewModel: AppViewModel) {
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             },
-        ) { Text("Benachrichtigungen erlauben") }
+        ) { Text(stringResource(R.string.more_reminder_permission_action)) }
     }
 
     editing?.let { target ->
@@ -217,7 +221,7 @@ private fun ReminderTimeRow(
             modifier = Modifier.weight(1f),
         )
         TextButton(onClick = onClick, enabled = enabled) {
-            Text(text = formatTime(time))
+            Text(text = LocalAppFormats.current.time(time))
         }
     }
 }
@@ -243,15 +247,15 @@ private fun ReminderTimeDialog(
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Uhrzeit") },
+        title = { Text(stringResource(R.string.more_reminder_time_dialog_title)) },
         text = { TimeInput(state = state) },
         confirmButton = {
             TextButton(onClick = { onConfirm(LocalTime.of(state.hour, state.minute)) }) {
-                Text("Übernehmen")
+                Text(stringResource(R.string.more_reminder_time_dialog_confirm_action))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Abbrechen") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_cancel)) }
         },
     )
 }

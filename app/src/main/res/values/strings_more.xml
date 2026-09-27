@@ -18,4 +18,434 @@
     <string name="more_language_option_system">System</string>
     <string name="more_language_hint">Ohne eigene Wahl folgt Trailscape der Systemsprache: Deutsch, wenn dein Gerät auf Deutsch eingestellt ist, sonst Englisch.</string>
     <string name="more_language_voice_hint">Sprachansagen kommen in der gewählten Sprache. Fehlt deinem Gerät die passende Stimme, bleibt es still.</string>
+
+    <!-- MoreScreen.kt -->
+    <string name="more_screen_title">Einstellungen</string>
+    <string name="more_page_profile_title">Profil</string>
+    <string name="more_page_health_title">Uhr &amp; Gesundheitsdaten</string>
+    <string name="more_page_sensors_title">Sensoren</string>
+    <string name="more_page_recording_title">Aufzeichnung &amp; Ansagen</string>
+    <string name="more_page_reminders_title">Erinnerungen</string>
+    <string name="more_page_offline_title">Karten offline</string>
+    <string name="more_page_backup_title">Import &amp; Backup</string>
+    <string name="more_page_strava_title">Strava</string>
+    <string name="more_page_sync_title">Sync mit eigenem Server</string>
+    <string name="more_page_about_title">Über Trailscape</string>
+    <string name="more_list_group_app">App</string>
+    <!-- %1$s = Versionsnummer -->
+    <string name="more_list_about_status">Version %1$s</string>
+    <string name="more_recording_section_recording">Aufzeichnung</string>
+    <string name="more_recording_section_voice">Ansagen</string>
+    <string name="more_offline_section_maps">Kartenbild</string>
+    <string name="more_offline_section_routing">Routingdaten</string>
+    <string name="more_about_section_licenses">Open-Source-Lizenzen</string>
+
+    <!-- SettingsStatus.kt -->
+    <string name="more_status_profile_missing">Noch nicht eingetragen</string>
+    <!-- %1$d = Alter, %2$s = Gewicht, %3$s = Radgewicht (je schon formatiert) -->
+    <string name="more_status_profile">%1$d J · %2$s kg · Rad %3$s kg</string>
+    <string name="more_status_checking">Wird geprüft …</string>
+    <string name="more_status_health_connected">Verbunden</string>
+    <!-- %1$s = Uhrzeit, „heute“/„gestern“ oder Datum -->
+    <string name="more_status_health_connected_last">Verbunden · zuletzt %1$s</string>
+    <string name="more_status_health_not_installed">Nicht installiert</string>
+    <string name="more_status_health_update_needed">Update nötig</string>
+    <string name="more_status_health_unavailable">Nicht verfügbar</string>
+    <string name="more_status_health_not_connected">Nicht verbunden</string>
+    <!-- %1$s = more_status_on/off (Auto-Pause), %2$s = dasselbe fuer die Ansagen -->
+    <string name="more_status_recording">Auto-Pause %1$s · Ansagen %2$s</string>
+    <string name="more_status_on">an</string>
+    <string name="more_status_off">aus</string>
+    <!-- %1$s = Uhrzeit -->
+    <string name="more_status_reminder_daily">Tagesplan um %1$s</string>
+    <string name="more_status_reminder_weekly">Wochenrückblick</string>
+    <string name="more_status_reminder_nudge">Anstupser</string>
+    <string name="more_status_reminder_off">Aus</string>
+    <string name="more_status_offline_empty">Nichts gespeichert</string>
+    <plurals name="more_status_offline_regions_count">
+        <item quantity="one">%1$d Region</item>
+        <item quantity="other">%1$d Regionen</item>
+    </plurals>
+    <plurals name="more_status_offline_tiles_count">
+        <item quantity="one">%1$d Routing-Kachel</item>
+        <item quantity="other">%1$d Routing-Kacheln</item>
+    </plurals>
+    <!-- %1$s = „heute“, „gestern“ oder Datum -->
+    <string name="more_status_backup_last">Zuletzt: %1$s</string>
+    <string name="more_status_backup_never">Noch nie gesichert</string>
+    <string name="more_status_sync_off">Aus</string>
+    <string name="more_status_sync_configured">Eingerichtet</string>
+    <!-- %1$s = Hostname des Servers -->
+    <string name="more_status_sync_configured_host">Eingerichtet · %1$s</string>
+    <string name="more_status_today">heute</string>
+    <string name="more_status_yesterday">gestern</string>
+
+    <!-- MoreComponents.kt -->
+    <string name="more_learn_more_expanded_state">Aufgeklappt</string>
+    <string name="more_learn_more_collapsed_state">Zugeklappt</string>
+    <string name="more_learn_more_action">Mehr erfahren</string>
+    <string name="more_learn_more_less_action">Weniger anzeigen</string>
+
+    <!-- AboutCard.kt -->
+    <string name="more_about_intro">Kostenlos und local-first: Deine Touren bleiben auf deinem Gerät. Kartendaten © OpenStreetMap-Mitwirkende, Routing über BRouter.</string>
+    <!-- %1$s = Versionsnummer -->
+    <string name="more_about_version">Version %1$s · freie Software unter der GNU GPL v3 oder später</string>
+    <string name="more_about_onboarding_action">Einführung erneut ansehen</string>
+    <string name="more_about_source_action">Quellcode auf GitHub</string>
+    <string name="more_about_privacy_action">Datenschutz</string>
+    <string name="more_about_report_action">Problem melden</string>
+    <string name="more_about_update_check_action">Nach Updates suchen</string>
+    <string name="more_about_update_checking_status">Suche nach Updates …</string>
+    <!-- %1$s = Versionsnummer -->
+    <string name="more_about_update_available_status">Version %1$s ist verfügbar.</string>
+    <string name="more_about_update_current_status">Du bist aktuell.</string>
+    <string name="more_about_update_failed_status">Prüfung nicht möglich — bist du gerade offline?</string>
+    <string name="more_about_download_action">Herunterladen</string>
+    <string name="more_about_auto_update_title">Täglich still nach Updates suchen</string>
+    <string name="more_about_auto_update_hint">Fragt höchstens einmal am Tag bei github.com nach — GitHub sieht dabei deine IP-Adresse.</string>
+    <string name="more_about_licenses_hint">Trailscape ist freie Software unter der GNU GPL v3 oder später.</string>
+    <string name="more_about_license_text_action">Lizenztext lesen</string>
+    <string name="more_about_notices_show_action">Bibliotheken und Datenquellen</string>
+    <string name="more_about_notices_hide_action">Bibliotheken und Datenquellen ausblenden</string>
+    <string name="more_about_notices_libraries_title">Verwendete Bibliotheken</string>
+    <string name="more_about_notices_data_title">Daten und Dienste</string>
+    <string name="more_about_notices_gpl_hint">Du darfst die App benutzen, weitergeben und verändern — abgeleitete Versionen müssen ihrerseits quelloffen unter der GPL stehen.</string>
+
+    <!-- OpenSourceNotices.kt -->
+    <string name="more_notice_play_services_license">proprietär — Android SDK Terms</string>
+    <string name="more_notice_brouter_engine_name">BRouter-Routing-Engine (im Gerät rechnend)</string>
+    <string name="more_notice_osm_name">Kartendaten: © OpenStreetMap-Mitwirkende</string>
+    <string name="more_notice_fossgis_name">Kacheln „Straßenkarte“: FOSSGIS e. V. (tile.openstreetmap.de)</string>
+    <string name="more_notice_fossgis_license">Daten ODbL, Stil openstreetmap-carto-de CC0 1.0, Nutzung nach FOSSGIS-Nutzungsbedingungen</string>
+    <string name="more_notice_openfreemap_name">Karte „Vektorkarte“: OpenFreeMap (tiles.openfreemap.org)</string>
+    <string name="more_notice_openfreemap_license">Dienst MIT; Stil „Liberty“: Code BSD 3-Clause, Design CC BY 4.0; Schrift Noto Sans (OFL 1.1)</string>
+    <string name="more_notice_openmaptiles_name">Vektorkachel-Schema: © OpenMapTiles</string>
+    <string name="more_notice_openmaptiles_license">BSD 3-Clause (Code), CC BY 4.0 (Schema)</string>
+    <string name="more_notice_cyclosm_name">Kacheln „CyclOSM“</string>
+    <string name="more_notice_cyclosm_license">Kacheln CC BY-SA 2.0, Stil-Code BSD 3-Clause, Daten ODbL</string>
+    <string name="more_notice_osm_tiles_name">Kacheln „OpenStreetMap“</string>
+    <string name="more_notice_osm_tiles_license">Daten ODbL, Nutzung nach OSMF Tile Usage Policy</string>
+    <string name="more_notice_opentopomap_name">Kacheln „OpenTopoMap“ (inkl. SRTM-Höhendaten)</string>
+    <string name="more_notice_opentopomap_license">CC BY-SA 3.0 (Stil), Daten ODbL</string>
+    <string name="more_notice_satellite_name">Kacheln „Satellit“: Esri World Imagery (Esri, Maxar, Earthstar Geographics)</string>
+    <string name="more_notice_satellite_license">proprietär — Esri Terms of Use</string>
+    <string name="more_notice_brouter_service_name">Routing: BRouter (Dienst brouter.de)</string>
+    <string name="more_notice_segments_name">Offline-Routingdaten (BRouter-Segmente): © OpenStreetMap-Mitwirkende</string>
+    <string name="more_notice_nominatim_name">Ortssuche: Nominatim (OpenStreetMap Foundation)</string>
+    <string name="more_notice_nominatim_license">GPL 2.0 bzw. 3.0 (Software), Daten ODbL</string>
+
+    <!-- UpdateCard.kt -->
+    <!-- %1$s = Versionsnummer -->
+    <string name="more_update_card_title">Version %1$s ist verfügbar</string>
+    <string name="more_update_card_body">Herunterladen und über die bestehende Installation legen — deine Touren bleiben erhalten.</string>
+    <string name="more_update_card_dismiss_cd">Hinweis ausblenden</string>
+    <string name="more_update_card_download_action">Herunterladen</string>
+
+    <!-- BackupCard.kt -->
+    <string name="more_backup_exported_status">Backup exportiert.</string>
+    <string name="more_backup_write_error">Das Backup konnte nicht geschrieben werden. Wähle einen anderen Speicherort oder gib Speicherplatz frei.</string>
+    <plurals name="more_backup_imported_count">
+        <item quantity="one">%1$d Tour importiert</item>
+        <item quantity="other">%1$d Touren importiert</item>
+    </plurals>
+    <plurals name="more_backup_imported_skipped_count">
+        <item quantity="one">%1$d Tour importiert, %2$d übersprungen</item>
+        <item quantity="other">%1$d Touren importiert, %2$d übersprungen</item>
+    </plurals>
+    <!-- %1$s = Satz aus more_backup_imported_count bzw. _skipped_count -->
+    <string name="more_backup_imported_with_profile">%1$s · Profil übernommen</string>
+    <string name="more_backup_read_error">Die Backup-Datei konnte nicht gelesen werden. Wähle die JSON-Datei aus, die Trailscape unter „Backup exportieren“ angelegt hat.</string>
+    <string name="more_backup_archive_read_error">Das Archiv konnte nicht gelesen werden. Erwartet wird eine ZIP-Datei mit GPX- oder FIT-Dateien darin, etwa der Strava- oder Garmin-Export.</string>
+    <string name="more_backup_hint">Sichere Touren und Profil in einer Datei — oder hole GPX, FIT und ganze Strava-/Garmin-Exporte (ZIP) herein.</string>
+    <string name="more_backup_privacy_hint">Das Backup ist unverschlüsselt und enthält jeden GPS-Punkt und deine Gesundheitsdaten — gib es nur vertraulich weiter.</string>
+    <string name="more_backup_export_action">Backup exportieren</string>
+    <string name="more_backup_import_action">Backup importieren</string>
+    <string name="more_backup_import_rides_action">Touren importieren (GPX/FIT)</string>
+    <string name="more_backup_import_archive_action">Archiv importieren (ZIP)</string>
+    <string name="more_backup_archive_progress_title">Archiv wird importiert …</string>
+    <!-- %1$d = bisher importiert, %2$d = gesamt -->
+    <string name="more_backup_archive_progress_known">%1$d von %2$d importiert …</string>
+    <string name="more_backup_archive_progress_unknown">%1$d importiert …</string>
+    <string name="more_backup_archive_done_title">Archiv importiert</string>
+    <plurals name="more_backup_archive_imported_count">
+        <item quantity="one">%1$d Tour importiert</item>
+        <item quantity="other">%1$d Touren importiert</item>
+    </plurals>
+    <plurals name="more_backup_archive_duplicates_count">
+        <item quantity="one">%1$d Duplikat übersprungen</item>
+        <item quantity="other">%1$d Duplikate übersprungen</item>
+    </plurals>
+    <plurals name="more_backup_archive_errors_count">
+        <item quantity="one">%1$d Datei mit Fehler</item>
+        <item quantity="other">%1$d Dateien mit Fehler</item>
+    </plurals>
+    <string name="more_backup_archive_errors_show_action">Fehler anzeigen</string>
+    <string name="more_backup_archive_errors_hide_action">Fehler ausblenden</string>
+    <string name="more_backup_archive_empty_hint">Keine GPX- oder FIT-Dateien im Archiv gefunden.</string>
+
+    <!-- HealthCard.kt -->
+    <string name="more_health_intro">Workouts und Vitalwerte deiner Uhr kommen über Health Connect.</string>
+    <string name="more_health_checking_status">Prüfe Verbindung …</string>
+    <string name="more_health_install_action">Health Connect installieren</string>
+    <string name="more_health_connect_action">Verbinden</string>
+    <string name="more_health_fetch_action">Neue Touren holen</string>
+    <string name="more_health_reimport_action">Alles neu importieren</string>
+    <string name="more_health_history_denied_status">Ohne Freigabe bleiben ältere Fahrten außen vor. Erlauben lässt sie sich in Health Connect unter „App-Berechtigungen → Trailscape“.</string>
+    <!-- %1$s = Datum, %2$s = Uhrzeit -->
+    <string name="more_health_last_sync">Letzter Sync: %1$s, %2$s</string>
+    <string name="more_health_debug_action">Diagnose-Details</string>
+    <string name="more_health_no_workouts_hint">Keine Workouts gefunden — schreibt die App deiner Uhr (Samsung Health, Garmin Connect, Fitbit …) nach Health Connect?</string>
+    <plurals name="more_health_route_consent_count">
+        <item quantity="one">Route freigeben</item>
+        <item quantity="other">Routen freigeben (%1$d)</item>
+    </plurals>
+    <plurals name="more_health_routes_locked_count">
+        <item quantity="one">%1$d Tour kam ohne Route. Erlaube in Health Connect „App-Berechtigungen → Trailscape → Trainingsrouten“ dauerhaft.</item>
+        <item quantity="other">%1$d Touren kamen ohne Route. Erlaube in Health Connect „App-Berechtigungen → Trailscape → Trainingsrouten“ dauerhaft.</item>
+    </plurals>
+    <string name="more_health_route_hint">Für die Route: in Health Connect „App-Berechtigungen → Trailscape → Trainingsrouten“ dauerhaft erlauben.</string>
+    <string name="more_health_reimport_year_hint">„Alles neu importieren“ holt die Radfahrten der letzten 12 Monate erneut.</string>
+    <!-- %1$d = Tage (fest 30) -->
+    <string name="more_health_reimport_days_hint">„Alles neu importieren“ holt die letzten %1$d Tage erneut.</string>
+    <string name="more_health_debug_copied_status">Diagnose kopiert.</string>
+    <!-- %1$d = gefundene Radfahrten, %2$d = schon vorhanden -->
+    <plurals name="more_health_summary_found_count">
+        <item quantity="one">%1$d Radfahrt gefunden · %2$d schon vorhanden</item>
+        <item quantity="other">%1$d Radfahrten gefunden · %2$d schon vorhanden</item>
+    </plurals>
+    <string name="more_health_history_title">Ältere Fahrten</string>
+    <string name="more_health_history_body">Ohne Freigabe sieht Trailscape keine Fahrten, die mehr als 30 Tage vor dem Verbinden liegen. Mit Freigabe holt Trailscape einmalig deine Radfahrten der letzten 12 Monate — Training und Form starten dann mit deiner Vorgeschichte statt bei null.</string>
+    <string name="more_health_history_action">Ältere Fahrten freigeben</string>
+    <string name="more_health_debug_title">Diagnose-Details</string>
+    <string name="more_health_debug_copy_action">Kopieren</string>
+
+    <!-- RouteConsent.kt -->
+    <string name="more_route_consent_error">Der Freigabedialog von Health Connect lässt sich nicht öffnen.</string>
+
+    <!-- OfflineMapsCard.kt -->
+    <string name="more_offline_maps_list_error">Die gespeicherten Offline-Karten ließen sich nicht auflisten. Starte die App neu; bleibt es dabei, hilft ein Blick in die Karte, die den Kartenspeicher selbst öffnet.</string>
+    <string name="more_offline_maps_hint">Damit du offline etwas siehst. Neue Ausschnitte lädst du auf der Karte.</string>
+    <string name="more_offline_maps_loading">Lade …</string>
+    <string name="more_offline_maps_empty">Keine Offline-Karten gespeichert.</string>
+    <string name="more_offline_maps_delete_all_action">Alle löschen</string>
+    <string name="more_offline_maps_delete_confirm_title">Offline-Karte löschen</string>
+    <!-- %1$s = Name des Kartenausschnitts -->
+    <string name="more_offline_maps_delete_confirm_body">Soll „%1$s“ wirklich gelöscht werden?</string>
+    <string name="more_offline_maps_delete_all_confirm_title">Offline-Karten löschen</string>
+    <string name="more_offline_maps_delete_all_confirm_body">Sollen alle heruntergeladenen Kartenausschnitte wirklich gelöscht werden?</string>
+    <plurals name="more_offline_maps_delete_failed_count">
+        <item quantity="one">Die Offline-Karte konnte nicht gelöscht werden. Läuft gerade ein Download für diesen Ausschnitt, warte ihn ab und versuche es dann erneut.</item>
+        <item quantity="other">%1$d Offline-Karten konnten nicht gelöscht werden. Läuft gerade ein Download, warte ihn ab und versuche es dann erneut.</item>
+    </plurals>
+    <string name="more_offline_maps_incomplete_status">unvollständig – bitte löschen</string>
+    <string name="more_offline_maps_size_unknown">Größe unbekannt</string>
+    <string name="more_offline_maps_fallback_area">Kartenausschnitt</string>
+    <string name="more_offline_maps_fallback_region">Region</string>
+
+    <!-- OfflineRoutingCard.kt -->
+    <string name="more_offline_routing_size_query_error">Die Größe der Kartendaten ließ sich nicht abfragen. Bist du online?</string>
+    <!-- %1$s = Name der Kachel -->
+    <string name="more_offline_routing_already_installed">Für „%1$s“ sind die Routingdaten schon da.</string>
+    <string name="more_offline_routing_no_place_error">Kein Ort gefunden. Versuche es mit dem Ortsnamen allein, ohne Straße und Postleitzahl — die Kacheln sind ohnehin 5° × 5° groß.</string>
+    <string name="more_offline_routing_no_location_error">Standort nicht verfügbar. Ist die Ortung eingeschaltet?</string>
+    <string name="more_offline_routing_permission_error">Ohne Standortfreigabe wissen wir nicht, welche Kachel du brauchst. Nimm die Ortssuche darunter — oder erteile die Freigabe unter „Einstellungen → Apps → Trailscape → Berechtigungen“.</string>
+    <string name="more_offline_routing_hint">Damit Routen offline auf dem Gerät berechnet werden — nicht das Kartenbild.</string>
+    <string name="more_offline_routing_loading">Lade …</string>
+    <string name="more_offline_routing_empty">Keine gespeichert — Routen rechnet bis dahin der Server.</string>
+    <!-- %1$s = Speicherplatz -->
+    <string name="more_offline_routing_total">Zusammen %1$s</string>
+    <!-- %1$s = Name der Kachel, %2$s = bisher geladen -->
+    <string name="more_offline_routing_partial">Angefangen: %1$s — %2$s geladen. Ein neuer Download setzt hier auf.</string>
+    <string name="more_offline_routing_my_location_action">Für meinen Standort</string>
+    <string name="more_offline_routing_check_updates_action">Nach Aktualisierungen suchen</string>
+    <string name="more_offline_routing_up_to_date_status">Alles auf dem neuesten Stand.</string>
+    <string name="more_offline_routing_search_label">Gegend suchen</string>
+    <string name="more_offline_routing_search_placeholder">Ort oder Region, z. B. Innsbruck</string>
+    <string name="more_offline_routing_search_cd">Suchen</string>
+    <string name="more_offline_routing_select_action">Auswählen</string>
+    <string name="more_offline_routing_wifi_title">Nur über WLAN laden</string>
+    <string name="more_offline_routing_wifi_hint">Eine Kachel ist 120–240 MB groß.</string>
+    <string name="more_offline_routing_server_label">Eigener Routing-Server (URL)</string>
+    <string name="more_offline_routing_server_hint">Nur für die Berechnung online; die Routingdaten oben kommen immer von brouter.de. Leer = öffentlicher Server.</string>
+    <string name="more_offline_routing_busy_status">Einen Moment …</string>
+    <string name="more_offline_routing_update_confirm_title">Routingdaten aktualisieren</string>
+    <string name="more_offline_routing_download_confirm_title">Routingdaten laden</string>
+    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse im schlechtesten Fall; ein Satz zur Groesse, einer zum Netzweg -->
+    <string name="more_offline_routing_offer_update_wifi_body">%1$s — meist nur ein bis zwei MB, im schlechtesten Fall %2$s. Der Download startet, sobald WLAN da ist.</string>
+    <string name="more_offline_routing_offer_update_mobile_body">%1$s — meist nur ein bis zwei MB, im schlechtesten Fall %2$s. Der Download läuft auch über Mobilfunk.</string>
+    <!-- %1$s = Angebot (Kacheln), %2$s = Groesse; ein Satz zur Groesse, einer zum Netzweg -->
+    <string name="more_offline_routing_offer_download_wifi_body">%1$s — %2$s. Der Download startet, sobald WLAN da ist.</string>
+    <string name="more_offline_routing_offer_download_mobile_body">%1$s — %2$s. Der Download läuft auch über Mobilfunk.</string>
+    <string name="more_offline_routing_download_action">Laden</string>
+    <string name="more_offline_routing_delete_confirm_title">Routingdaten löschen</string>
+    <!-- %1$s = Name der Kachel, %2$s = Groesse -->
+    <string name="more_offline_routing_delete_confirm_body">Soll „%1$s“ (%2$s) wirklich gelöscht werden? Routen in dieser Gegend laufen danach wieder über den Server.</string>
+    <string name="more_offline_routing_delete_error">Die Routingdaten konnten nicht gelöscht werden. Läuft gerade ein Download für diese Gegend, warte ihn ab und versuche es dann erneut.</string>
+    <string name="more_offline_routing_outdated_status">Neuere Fassung verfügbar</string>
+    <string name="more_offline_routing_update_cd">Aktualisieren</string>
+    <!-- %1$s = Fortschritt, %2$d = laufende Kachel, %3$d = Kacheln gesamt -->
+    <string name="more_offline_routing_progress_tile">%1$s · Kachel %2$d von %3$d</string>
+    <string name="more_offline_routing_age_unknown">Alter unbekannt</string>
+    <string name="more_offline_routing_age_none">von heute</string>
+    <plurals name="more_offline_routing_age_count">
+        <item quantity="one">%1$d Tag alt</item>
+        <item quantity="other">%1$d Tage alt</item>
+    </plurals>
+    <string name="more_offline_routing_label_fallback">Routingdaten</string>
+    <!-- %1$s = Name der Kachel -->
+    <string name="more_offline_routing_label_update">%1$s — Aktualisierung</string>
+    <string name="more_offline_routing_phase_apply">Wird eingearbeitet …</string>
+    <string name="more_offline_routing_phase_check">Wird geprüft …</string>
+    <string name="more_offline_routing_phase_download">Wird geladen …</string>
+    <!-- %1$s = geladen, %2$s = gesamt -->
+    <string name="more_offline_routing_progress_bytes">%1$s von %2$s</string>
+    <string name="more_offline_routing_size_unknown">Größe unbekannt</string>
+
+    <!-- ProfileCard.kt -->
+    <string name="more_profile_hint">Grundlage für Trainingslast, Fitness-Kurve und Erholungswerte.</string>
+    <string name="more_profile_age_label">Alter</string>
+    <string name="more_profile_sex_label">Geschlecht</string>
+    <string name="more_profile_weight_label">Gewicht (kg)</string>
+    <string name="more_profile_setup_mass_label">Rad + Gepäck (kg)</string>
+    <!-- %1$d = Standardalter, %2$s = Standardgewicht -->
+    <string name="more_profile_defaults_hint">Noch nicht eingetragen — bis dahin rechnen wir grob mit %1$d Jahren und %2$s kg.</string>
+    <string name="more_profile_weekly_hours_label">Zeit pro Woche (Stunden, optional)</string>
+    <string name="more_profile_weekly_hours_hint">Deckelt das Wochenziel auf das, was in dieser Zeit machbar ist.</string>
+    <string name="more_profile_advanced_action">Erweitert: Puls und FTP</string>
+    <string name="more_profile_advanced_hint">Ohne eigene Werte schätzen wir HFmax und Schwelle aus deinem Alter.</string>
+    <string name="more_profile_hr_max_learn_more">Die Schätzung ist 208 − 0,7 × Alter. Genauer wird es mit einem HFmax-Feldtest: nach gutem Aufwärmen ein harter Anstieg über 3–5 Minuten mit maximalem Endspurt.</string>
+    <string name="more_profile_hr_max_label">HFmax (bpm, optional)</string>
+    <string name="more_profile_lthr_label">Schwellenpuls LTHR (bpm, optional)</string>
+    <string name="more_profile_resting_hr_label">Ruhepuls (bpm, optional)</string>
+    <string name="more_profile_resting_hr_hint">Leer: der aus deinen Vitaldaten gemessene Wert.</string>
+    <string name="more_profile_ftp_label">Schwellenleistung FTP (Watt, optional)</string>
+    <string name="more_profile_ftp_hint">Die wirksamste Einzelangabe: An der FTP hängt jede Trainingslast.</string>
+    <!-- %1$s = grobe Schaetzung in W/kg -->
+    <string name="more_profile_ftp_learn_more">Die FTP ist die Leistung, die du rund eine Stunde am Stück halten kannst. An ihr hängen Fitness, Ermüdung, Form und dein Wochenziel — änderst du sie, verschieben sich auch alle bisherigen Werte. Ohne Eintrag schätzen wir sie aus deinem besten 20-Minuten-Abschnitt (× 0,95), dann aus deiner Herzfrequenz, notfalls grob mit %1$s W/kg. Für eine belastbare Zahl fährst du nach gutem Aufwärmen 20 Minuten am Anschlag und trägst 95 %% deiner Durchschnittsleistung ein.</string>
+    <string name="more_profile_sex_male">männlich</string>
+    <string name="more_profile_sex_female">weiblich</string>
+    <string name="more_profile_sex_unknown">keine Angabe</string>
+    <string name="more_profile_age_missing_error">Bitte ein Alter angeben.</string>
+    <string name="more_profile_age_range_error">Zwischen 10 und 100 Jahren.</string>
+    <string name="more_profile_weight_missing_error">Bitte ein Gewicht angeben.</string>
+    <string name="more_profile_weight_range_error">Zwischen 30 und 250 kg.</string>
+    <string name="more_profile_setup_mass_range_error">Höchstens 60 kg.</string>
+    <string name="more_profile_weekly_hours_range_error">Zwischen 1 und 40 Stunden.</string>
+    <string name="more_profile_number_error">Bitte eine Zahl eingeben.</string>
+    <!-- %1$s = untere, %2$s = obere Grenze -->
+    <string name="more_profile_ftp_range_error">Zwischen %1$s und %2$s Watt.</string>
+
+    <!-- RecordingCard.kt -->
+    <string name="more_recording_auto_pause_title">Auto-Pause</string>
+    <string name="more_recording_auto_pause_hint">Pausiert, wenn du stehst, und läuft bei Weiterfahrt weiter.</string>
+    <string name="more_recording_battery_title">Batterieoptimierung</string>
+    <string name="more_recording_battery_exempt_hint">Ausgenommen — die Aufzeichnung läuft auch bei dunklem Bildschirm weiter.</string>
+    <string name="more_recording_battery_hint">Manche Geräte beenden die Aufzeichnung bei dunklem Bildschirm. Eine Ausnahme verhindert das.</string>
+    <string name="more_recording_battery_action">Ausnahme erlauben</string>
+    <string name="more_recording_voice_title">Sprachansagen</string>
+    <string name="more_recording_voice_hint">Abbiegehinweise, Kilometer und Aufzeichnungsstatus per Sprachausgabe.</string>
+    <string name="more_recording_turns_title">Abbiegehinweise</string>
+    <string name="more_recording_turns_hint">„In 100 Metern links“ während einer Navigation.</string>
+    <string name="more_recording_km_title">Kilometer-Ansagen</string>
+    <string name="more_recording_km_hint">Alle 5 km Distanz und Fahrzeit.</string>
+    <string name="more_recording_off_route_title">Vibration abseits der Route</string>
+    <string name="more_recording_off_route_hint">Vibriert, wenn du die Route verlässt — auch ohne Ansagen.</string>
+    <string name="more_recording_local_hint">Alles läuft lokal auf dem Gerät, ohne Internet.</string>
+
+    <!-- ReminderCard.kt -->
+    <string name="more_reminder_permission_denied_status">Ohne diese Freigabe bleiben die Erinnerungen still. Erteilen lässt sie sich jederzeit unter „Einstellungen → Apps → Trailscape → Benachrichtigungen“.</string>
+    <string name="more_reminder_hint">Die Meldungen entstehen auf dem Gerät — ohne Push-Dienst und ohne Konto.</string>
+    <string name="more_reminder_daily_title">Tagesplan</string>
+    <string name="more_reminder_daily_hint">Morgens, was heute ansteht. Nur mit Trainingsplan.</string>
+    <string name="more_reminder_daily_time_label">Uhrzeit morgens</string>
+    <string name="more_reminder_weekly_title">Wochenrückblick</string>
+    <string name="more_reminder_weekly_hint">Sonntagabends: gefahrene gegen geplante Kilometer.</string>
+    <string name="more_reminder_weekly_time_label">Uhrzeit sonntags</string>
+    <string name="more_reminder_nudge_title">Anstupser</string>
+    <plurals name="more_reminder_nudge_hint_count">
+        <item quantity="one">Nach %1$d Tag ohne Fahrt, höchstens einmal pro Woche.</item>
+        <item quantity="other">Nach %1$d Tagen ohne Fahrt, höchstens einmal pro Woche.</item>
+    </plurals>
+    <string name="more_reminder_permission_notice">Benachrichtigungen sind nicht erlaubt — die Erinnerungen bleiben still.</string>
+    <string name="more_reminder_permission_action">Benachrichtigungen erlauben</string>
+    <string name="more_reminder_time_dialog_title">Uhrzeit</string>
+    <string name="more_reminder_time_dialog_confirm_action">Übernehmen</string>
+
+    <!-- SyncCard.kt -->
+    <string name="more_sync_hint">Gleicht deine Touren mit einem selbst betriebenen Trailscape-Server ab.</string>
+    <string name="more_sync_url_label">Server-URL</string>
+    <string name="more_sync_token_label">Token</string>
+    <string name="more_sync_missing_error">Bitte Server-URL und Token eintragen.</string>
+    <string name="more_sync_running_status">Synchronisiere …</string>
+    <string name="more_sync_result_pushed">%1$d hochgeladen</string>
+    <string name="more_sync_result_pulled">%1$d geladen</string>
+    <!-- %1$d = geladen, %2$d = davon aktualisiert -->
+    <string name="more_sync_result_pulled_updated">%1$d geladen (davon %2$d aktualisiert)</string>
+    <string name="more_sync_result_deleted">%1$d gelöscht</string>
+    <plurals name="more_sync_result_total_count">
+        <item quantity="one">%1$d Tour</item>
+        <item quantity="other">%1$d Touren</item>
+    </plurals>
+    <string name="more_sync_failed_error">Der Abgleich ist fehlgeschlagen. Prüfe Server-URL und Token und ob der Server erreichbar ist.</string>
+    <string name="more_sync_action">Mit Server abgleichen</string>
+    <string name="more_sync_guide_hint">Anleitung zum eigenen Server: server/README im Repository.</string>
+    <!-- Verbindet zwei Teile des Ergebnissatzes -->
+    <string name="more_sync_result_join">%1$s, %2$s</string>
+
+    <!-- BackupCard.kt (Ursache in Klammern hinter more_backup_write_error) -->
+    <string name="more_backup_file_write_error">Die Datei konnte nicht geschrieben werden.</string>
+
+    <!-- HealthPermissionsRationaleActivity.kt -->
+    <string name="more_health_rationale_title">Gesundheitsdaten in Trailscape</string>
+    <string name="more_health_rationale_intro_body">Trailscape liest Gesundheitsdaten ausschließlich aus Health Connect und schreibt nichts zurück. Alles wird nur auf diesem Gerät verarbeitet; es gibt keinen Trailscape-Server, und der Entwickler hat keinen Zugriff auf deine Daten.</string>
+    <string name="more_health_rationale_workouts_body">Trainings, Trainingsrouten, Distanz und Kalorien: um die Fahrten deiner Uhr als Touren zu importieren.</string>
+    <string name="more_health_rationale_heart_rate_body">Herzfrequenz: für Puls-Kennzahlen deiner Touren und — falls deine Uhr keinen Ruhepuls liefert — für einen aus dem Nacht-Puls abgeleiteten Ruhepuls.</string>
+    <string name="more_health_rationale_recovery_body">Ruhepuls, HRV, Schlaf und VO₂max: für die Erholungs- und Formberechnung (Readiness, Trainingsempfehlung).</string>
+    <string name="more_health_rationale_history_body">Verlauf älter als 30 Tage (optional): damit die Baselines für Ruhepuls und HRV nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann.</string>
+    <string name="more_health_rationale_sync_body">Die Daten verlassen das Gerät nur, wenn du selbst den optionalen Sync mit deinem eigenen Server eingerichtet hast.</string>
+    <string name="more_health_rationale_privacy_action">Vollständige Datenschutzerklärung</string>
+
+    <!-- HealthConnectGateway.kt -->
+    <string name="more_health_gateway_foreground_error">Der Berechtigungsdialog von Health Connect lässt sich nur öffnen, solange Trailscape im Vordergrund läuft.</string>
+    <string name="more_health_gateway_not_installed_error">Health Connect ist nicht installiert.</string>
+    <string name="more_health_gateway_update_error">Health Connect muss aktualisiert werden.</string>
+    <string name="more_health_gateway_unsupported_error">Health Connect wird auf diesem Gerät nicht unterstützt.</string>
+    <!-- %1$s = technische Ursache -->
+    <string name="more_health_gateway_connect_error">Die Verbindung zu Health Connect konnte nicht aufgebaut werden: %1$s</string>
+    <!-- %1$s = Betreff (more_health_gateway_subject_*) -->
+    <string name="more_health_gateway_timeout_error">%1$s: Health Connect antwortet nicht. Bitte später erneut versuchen.</string>
+    <string name="more_health_gateway_denied_error">%1$s: Health Connect verweigert den Zugriff. Bitte die Freigabe in den Health-Connect-Einstellungen erteilen.</string>
+    <!-- %1$s = Betreff, %2$s = technische Ursache -->
+    <string name="more_health_gateway_read_error">%1$s konnte nicht aus Health Connect gelesen werden: %2$s</string>
+    <string name="more_health_gateway_subject_permissions">Die Berechtigungen</string>
+    <string name="more_health_gateway_subject_workouts">Die Trainings</string>
+    <string name="more_health_gateway_subject_routes">Die Routen</string>
+    <string name="more_health_gateway_subject_heart_rate">Die Herzfrequenz</string>
+    <string name="more_health_gateway_subject_resting_hr">Der Ruhepuls</string>
+    <string name="more_health_gateway_subject_sleep">Der Schlaf</string>
+    <string name="more_health_gateway_subject_vo2max">Der VO2max-Wert</string>
+    <string name="more_health_gateway_subject_hrv">Die Herzratenvariabilität</string>
+
+    <!-- CrashReportPrompt.kt -->
+    <string name="more_crash_title">Absturz beim letzten Mal</string>
+    <string name="more_crash_intro">Trailscape ist beim letzten Mal abgestürzt. Bericht ansehen und auf GitHub melden? Der Bericht wurde nur auf diesem Gerät gespeichert und bisher nirgendwohin gesendet — er enthält keine Standort-, Touren- oder Gesundheitsdaten.</string>
+    <string name="more_crash_discarded_status">Absturzbericht gelöscht.</string>
+
+    <!-- ProblemReportDialog.kt -->
+    <string name="more_report_title">Problem melden</string>
+    <string name="more_report_intro">Trailscape hat keine Fehler-Telemetrie — ohne deine Meldung erfährt niemand von einem Problem. Angehängt werden App-Version, Gerät, Android-Version und – solange der Haken unten gesetzt ist – die technische Diagnose. Du siehst den kompletten Text, bevor du ihn absendest; ohne deinen Klick verlässt nichts das Gerät.</string>
+    <string name="more_report_diag_cleared_status">Diagnose-Protokoll gelöscht.</string>
+    <string name="more_report_diag_clear_action">Diagnose-Protokoll löschen</string>
+    <string name="more_report_health_attach_label">Health-Sync-Diagnose anhängen</string>
+    <string name="more_report_diag_attach_label">Technische Diagnose anhängen</string>
+    <string name="more_report_diag_explanation">Enthält feste Ereignisnamen (z. B. „GPS-Start fehlgeschlagen“), Uhrzeiten, Zähler, Fehlercodes und die Namen von Fehlerklassen der letzten Tage. Nicht enthalten: Standorte, Touren und ihre Namen, Gesundheitswerte, Server-Adressen oder Zugangsdaten.</string>
+
+    <!-- ReportDialog.kt -->
+    <string name="more_report_show_action">Bericht anzeigen</string>
+    <string name="more_report_hide_action">Bericht ausblenden</string>
+    <string name="more_report_no_share_app_error">Keine App zum Teilen gefunden.</string>
+    <string name="more_report_share_action">Teilen (ohne GitHub-Konto)</string>
+    <string name="more_report_discard_action">Verwerfen</string>
+    <string name="more_report_no_browser_error">Kein Browser gefunden — bitte „Teilen“ benutzen.</string>
+    <string name="more_report_github_action">Auf GitHub melden</string>
 </resources>

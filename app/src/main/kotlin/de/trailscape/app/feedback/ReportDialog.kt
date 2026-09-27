@@ -23,8 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 import de.trailscape.app.ui.components.OneUiDialog
 
 /**
@@ -76,7 +78,11 @@ fun ReportDialog(
                     onClick = { expanded = !expanded },
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Text(if (expanded) "Bericht ausblenden" else "Bericht anzeigen")
+                    Text(
+                        stringResource(
+                            if (expanded) R.string.more_report_hide_action else R.string.more_report_show_action,
+                        ),
+                    )
                 }
 
                 if (expanded) {
@@ -106,12 +112,12 @@ fun ReportDialog(
                 TextButton(
                     onClick = {
                         if (!shareReportText(context, shareSubject, reportText)) {
-                            showFeedbackToast(context, "Keine App zum Teilen gefunden.")
+                            showFeedbackToast(context, context.getString(R.string.more_report_no_share_app_error))
                         }
                     },
                     contentPadding = PaddingValues(0.dp),
                 ) {
-                    Text("Teilen (ohne GitHub-Konto)")
+                    Text(stringResource(R.string.more_report_share_action))
                 }
 
                 if (onDiscard != null) {
@@ -119,7 +125,7 @@ fun ReportDialog(
                         onClick = onDiscard,
                         contentPadding = PaddingValues(0.dp),
                     ) {
-                        Text("Verwerfen")
+                        Text(stringResource(R.string.more_report_discard_action))
                     }
                 }
             }
@@ -129,15 +135,15 @@ fun ReportDialog(
                 onClick = {
                     val body = buildIssueBody(reportText, reportHeading)
                     if (!openIssueInBrowser(context, issueTitle, body)) {
-                        showFeedbackToast(context, "Kein Browser gefunden — bitte „Teilen“ benutzen.")
+                        showFeedbackToast(context, context.getString(R.string.more_report_no_browser_error))
                     }
                 },
             ) {
-                Text("Auf GitHub melden")
+                Text(stringResource(R.string.more_report_github_action))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Schließen") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_close)) }
         },
     )
 }

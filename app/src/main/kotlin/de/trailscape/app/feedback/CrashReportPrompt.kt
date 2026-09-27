@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -47,20 +49,20 @@ fun CrashReportPrompt() {
     if (pending == null || dismissed) return
 
     ReportDialog(
-        title = "Absturz beim letzten Mal",
-        intro = "Trailscape ist beim letzten Mal abgestürzt. Bericht ansehen und auf " +
-            "GitHub melden? Der Bericht wurde nur auf diesem Gerät gespeichert und " +
-            "bisher nirgendwohin gesendet — er enthält keine Standort-, Touren- oder " +
-            "Gesundheitsdaten.",
+        title = stringResource(R.string.more_crash_title),
+        intro = stringResource(R.string.more_crash_intro),
         reportText = if (attachDiag) pending else withoutDiagSection(pending),
         issueTitle = crashIssueTitleFromReport(pending),
+        // Ueberschrift im Issue-Text und Betreff beim Teilen gehoeren zum
+        // Bericht an den Entwickler und bleiben deshalb deutsch (siehe
+        // docs/i18n.md, „Diagnose bleibt Deutsch").
         reportHeading = "Absturzbericht",
         shareSubject = "Trailscape-Absturzbericht",
         onDismiss = { dismissed = true },
         onDiscard = {
             CrashReporter.clearPendingReport(context)
             dismissed = true
-            showFeedbackToast(context, "Absturzbericht gelöscht.")
+            showFeedbackToast(context, context.getString(R.string.more_crash_discarded_status))
         },
         extraContent = {
             if (hasDiagSection(pending)) {
