@@ -13,7 +13,11 @@ sealed interface UpdateCheckResult {
     /** Die installierte Version ist die neueste veroeffentlichte. */
     data object UpToDate : UpdateCheckResult
 
-    /** Die Drosselung hat den Netzzugriff verhindert (siehe [UPDATE_CHECK_INTERVAL_MS]). */
+    /**
+     * Kein Netzzugriff: Die Drosselung hat ihn verhindert (siehe
+     * [UPDATE_CHECK_INTERVAL_MS]), oder die App stammt aus Google Play (siehe
+     * [UpdateChecker.isCheckAllowed]).
+     */
     data object Skipped : UpdateCheckResult
 
     /**
@@ -42,9 +46,9 @@ data class StartupUpdate(
  * und vergleicht die hoechste dort gefundene Lauf-Nummer mit der der
  * installierten APK.
  *
- * Diese App wird als APK per Sideload verteilt — es gibt keinen Store, der
- * von sich aus aktualisiert. Ohne diese Pruefung erfaehrt niemand je von
- * einer neuen Version.
+ * Diese App wird auch als APK per Sideload verteilt — dort gibt es keinen
+ * Store, der von sich aus aktualisiert. Ohne diese Pruefung erfaehrt dort
+ * niemand je von einer neuen Version.
  *
  * ## Regeln
  *  * **Blockierend, aber nie auf dem Main-Thread.** Alle Methoden hier rufen
@@ -60,18 +64,39 @@ data class StartupUpdate(
  *  * **Abschaltbar.** Der stille Start-Check laesst sich unter „Mehr → Über"
  *    ausschalten ([isAutoCheckEnabled]); dann geht beim Start keine Anfrage
  *    an GitHub hinaus. Die manuelle Pruefung bleibt davon unberuehrt.
+ *  * **Nur ausserhalb von Google Play.** Stammt die Installation aus Play
+ *    ([checkAllowed] ist `false`, siehe [isUpdateCheckAllowed]), geht nie eine
+ *    Anfrage an GitHub hinaus — weder still noch von Hand —, und es gibt
+ *    weder Karte noch Snackbar: Play aktualisiert selbst und verbietet den
+ *    Verweis auf eine APK ausserhalb von Play. Das Tor sitzt bewusst hier und
+ *    nicht in jeder Aufrufstelle, damit keine Oberflaeche es vergessen kann.
  *
  * @param installedRunNumber die Lauf-Nummer der laufenden App
  *   ([runNumberFromVersionCode] auf dem `versionCode` des PackageManagers);
  *   `null`, wenn sie sich nicht ermitteln laesst — dann wird gar nicht
  *   geprueft, statt gegen einen geratenen Wert zu vergleichen.
+ * @param checkAllowed ob diese Installation ueberhaupt bei GitHub nachfragen
+ *   darf (siehe [isUpdateCheckAllowed]); Vorgabe `true`, das Verhalten der APK
+ *   von GitHub.
  */
 class UpdateChecker(
     private val httpClient: HttpClient,
     private val store: KeyValueStore,
     private val installedRunNumber: () -> Int?,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
+    private val checkAllowed: () -> Boolean = { true },
 ) {
+
+    /**
+     * Ob diese Installation die GitHub-Update-Pruefung nutzen darf — `false`
+     * bei Installation ueber Google Play. Die Oberflaeche blendet dann „Nach
+     * Updates suchen" und den Schalter aus.
+     *
+     * Wirft die Abfrage wider Erwarten, gilt `true`: Lieber zeigt eine
+     * Play-Installation im Ausnahmefall den GitHub-Hinweis, als dass eine
+     * Sideload-Installation still nie wieder von Updates erfaehrt.
+     */
+    fun isCheckAllowed(): Boolean = runCatching(checkAllowed).getOrDefault(true)
 
     /**
      * Der stille Check beim App-Start: erst der gespeicherte Stand (damit die
@@ -88,8 +113,14 @@ class UpdateChecker(
      *
      * Vermerkt die angekuendigte Version gleich mit; ein zweiter Aufruf
      * liefert fuer dieselbe Version [StartupUpdate.announceVersion] `null`.
+     *
+     * Bei Play-Installation ([isCheckAllowed] `false`) kommt sofort ein leeres
+     * [StartupUpdate] zurueck — ohne auch nur den gespeicherten Stand zu
+     * lesen, damit kein Rest aus einer frueheren GitHub-APK-Installation eine
+     * Karte oder Snackbar ausloest.
      */
     fun startupCheck(): StartupUpdate {
+        if (!isCheckAllowed()) return StartupUpdate()
         val fresh = if (isAutoCheckEnabled()) {
             check(force = false)
         } else {
@@ -114,7 +145,8 @@ class UpdateChecker(
 
     /**
      * Die manuelle Pruefung („Mehr → Über → Nach Updates suchen"): immer mit
-     * Netzzugriff, Ergebnis fuer die Anzeige.
+     * Netzzugriff, Ergebnis fuer die Anzeige — ausser bei Play-Installation,
+     * dann [UpdateCheckResult.Skipped] ohne Anfrage und ohne Schreibzugriff.
      *
      * Wer von Hand prueft, will die Antwort sehen — deshalb wird eine
      * gefundene Version wieder eingeblendet, auch wenn ihre Karte schon
@@ -161,9 +193,11 @@ class UpdateChecker(
      * Eine Pruefung; [force] uebergeht die Drosselung.
      *
      * Ohne [force] und innerhalb des Intervalls kommt [UpdateCheckResult.Skipped]
-     * zurueck, **ohne** dass eine Anfrage gestellt wird.
+     * zurueck, **ohne** dass eine Anfrage gestellt wird. Ebenso — auch mit
+     * [force] — bei Play-Installation (siehe [isCheckAllowed]).
      */
     fun check(force: Boolean = false): UpdateCheckResult {
+        if (!isCheckAllowed()) return UpdateCheckResult.Skipped
         val installed = installedRunNumber() ?: return UpdateCheckResult.Failed
         if (!force && !shouldCheckNow(readLong(LAST_CHECK_KEY), nowMs())) {
             return UpdateCheckResult.Skipped

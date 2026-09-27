@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Hinweis unter „Mehr → Über", wenn Google Play die App installiert hat.
+
+    Dann gibt es keine GitHub-Update-Pruefung (siehe
+    `update/UpdateLogic.kt`, `isUpdateCheckAllowed`) — statt „Nach Updates
+    suchen" steht dort nur dieser Satz. Eigene Datei, damit der Text als
+    Einheit mit seiner Uebersetzung in values-en/ lesbar bleibt.
+-->
+<resources>
+    <string name="play_update_check_hint">Updates kommen über Google Play.</string>
+</resources>

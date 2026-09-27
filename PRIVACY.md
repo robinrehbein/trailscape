@@ -31,7 +31,8 @@ Servernamen sind bewusst mit angegeben.
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
   Sync-Server und, nur mit Schalter, der aktuelle Wind am Startpunkt einer
   Runde bei Open-Meteo) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
-  GitHub, höchstens einmal am Tag, abschaltbar unter *Mehr → Über*. Diese
+  GitHub, höchstens einmal am Tag, abschaltbar unter *Mehr → Über* — nur bei
+  der APK von GitHub, nicht bei Installation über Google Play. Diese
   Dienste sehen dabei deine IP-Adresse — siehe unten, Abschnitt „Was das
   Gerät nach außen sendet".
 
@@ -105,7 +106,8 @@ Telefonstatus, Aktivitätserkennung oder Werbe-ID an.
 Anfragen entstehen als Folge einer Aktion — Karte anzeigen, Route berechnen,
 Ort suchen, Kacheln herunterladen, synchronisieren — mit **einer** Ausnahme:
 der täglichen Update-Prüfung beim App-Start (letzte Tabellenzeile), die sich
-abschalten lässt. Bei jeder dieser Anfragen sieht der jeweilige Betreiber
+abschalten lässt und bei Installation über Google Play ganz entfällt.
+Bei jeder dieser Anfragen sieht der jeweilige Betreiber
 technisch bedingt deine **IP-Adresse** und den Zeitpunkt; welche Daten darüber
 hinaus mitgehen, steht in der Tabelle. Für die Verarbeitung dort gelten die
 Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
@@ -119,7 +121,7 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | **nominatim.openstreetmap.org** | wenn du eine Ortssuche **absendest** (Suchtaste der Tastatur oder „„…“ suchen“) — nicht schon beim Tippen | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
-| **api.github.com** (Update-Prüfung) | beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
+| **api.github.com** (Update-Prüfung) | nur bei Installation als APK von GitHub: beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* —, und beim Tippen auf *„Nach Updates suchen"*; bei Installation über Google Play nie | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
 
 Zu den Kartenkacheln: Wer nur ungern seinen Kartenausschnitt an einen Anbieter
 gibt, wählt die **Vektorkarte** und speichert die Region einmal (*Karte →
@@ -130,12 +132,14 @@ gespeicherte Regionen bleiben erhalten (verwalten unter *Mehr →
 Offline-Karten*).
 
 Zur Update-Prüfung: Die App ist über Google Play und als APK über GitHub
-erhältlich. Die Prüfung zeigt GitHub-Releases an und ist die einzige Anfrage,
-die nicht unmittelbar aus einer Nutzeraktion folgt. Wer sie abschaltet, kann
-jederzeit von Hand prüfen (*Mehr → Über → „Nach Updates suchen"*); die App
-lädt und installiert dabei in keinem Fall selbst etwas, der Download läuft
-über die Release-Seite im Browser. Play-Installationen können unabhängig davon
-über Google Play aktualisiert werden.
+erhältlich. Stammt die Installation aus Google Play (die App liest dazu beim
+Start aus, welcher Installer sie installiert hat — das bleibt auf dem Gerät),
+fragt sie GitHub nie nach Updates und zeigt keine Update-Hinweise; Updates
+kommen dann über Google Play. Bei der APK von GitHub ist die Prüfung die
+einzige Anfrage, die nicht unmittelbar aus einer Nutzeraktion folgt. Wer sie
+abschaltet, kann jederzeit von Hand prüfen (*Mehr → Über → „Nach Updates
+suchen"*); die App lädt und installiert dabei in keinem Fall selbst etwas, der
+Download läuft über die Release-Seite im Browser.
 
 Es gibt keine weiteren Netzwerkverbindungen. Insbesondere kein
 „Nach-Hause-Telefonieren", keine Absturz- oder Nutzungsstatistik.

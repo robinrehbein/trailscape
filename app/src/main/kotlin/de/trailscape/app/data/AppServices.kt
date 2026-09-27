@@ -11,6 +11,8 @@ import de.trailscape.app.routing.SegmentInventory
 import de.trailscape.app.routing.SegmentMetadataStore
 import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.update.UpdateChecker
+import de.trailscape.app.update.installerPackageName
+import de.trailscape.app.update.isUpdateCheckAllowed
 import de.trailscape.app.update.runNumberFromVersionCode
 import de.trailscape.core.HealthGateway
 import de.trailscape.core.HealthSyncService
@@ -211,6 +213,19 @@ object AppServices {
     }
 
     /**
+     * Ob die GitHub-Update-Pruefung laufen darf — `false`, wenn Google Play
+     * die App installiert hat (siehe
+     * [de.trailscape.app.update.isUpdateCheckAllowed]).
+     *
+     * Einmal pro Prozess gelesen: Der Installer aendert sich zur Laufzeit
+     * nicht; ein Update ueber eine andere Quelle startet den Prozess ohnehin
+     * neu.
+     */
+    val updateChecksAllowed: Boolean by lazy {
+        isUpdateCheckAllowed(installerPackageName(appContext))
+    }
+
+    /**
      * Der Update-Kanal (siehe [UpdateChecker]). Benutzt denselben
      * [httpClient] und [keyValueStore] wie der Rest der App.
      */
@@ -219,6 +234,7 @@ object AppServices {
             httpClient = httpClient,
             store = keyValueStore,
             installedRunNumber = { installedRunNumber },
+            checkAllowed = { updateChecksAllowed },
         )
     }
 
