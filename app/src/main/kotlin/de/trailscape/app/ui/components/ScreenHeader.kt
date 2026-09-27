@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.trailscape.app.R
 import de.trailscape.app.ui.theme.CardPadding
 
 /**
@@ -78,7 +80,11 @@ fun ScreenHeader(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = if (backLabel == null) "Zurück" else null,
+                        contentDescription = if (backLabel == null) {
+                            stringResource(R.string.shell_header_back_cd)
+                        } else {
+                            null
+                        },
                         modifier = Modifier.padding(8.dp).size(24.dp),
                     )
                     if (backLabel != null) {

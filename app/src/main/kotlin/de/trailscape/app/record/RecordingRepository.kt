@@ -3,6 +3,8 @@ package de.trailscape.app.record
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import de.trailscape.app.R
+import de.trailscape.app.i18n.localized
 import de.trailscape.core.SensorSample
 import de.trailscape.core.TrackPoint
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -245,8 +247,7 @@ object RecordingRepository {
             // Ab Android 12 kann das System den Start eines Vordergrunddienstes
             // aus dem Hintergrund ablehnen (ForegroundServiceStartNotAllowedException).
             // Das darf die App nicht abstuerzen lassen.
-            _lastError.value = "Die Aufzeichnung konnte nicht gestartet werden. " +
-                "Bitte oeffne Trailscape und versuche es erneut."
+            _lastError.value = context.localized().getString(R.string.shell_recording_start_blocked_error)
         }
     }
 

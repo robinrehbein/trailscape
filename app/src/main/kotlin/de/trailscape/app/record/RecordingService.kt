@@ -29,10 +29,12 @@ import androidx.core.location.LocationListenerCompat
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.i18n.AppLocale
+import de.trailscape.app.i18n.languageOf
 import de.trailscape.app.i18n.localized
+import de.trailscape.app.i18n.localizedFor
 import de.trailscape.app.sensors.BleNutzer
 import de.trailscape.app.sensors.BleSensors
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
 import de.trailscape.core.AufzeichnungsZustand
@@ -49,11 +51,12 @@ import de.trailscape.core.TrackPoint
 import de.trailscape.core.computeStats
 import de.trailscape.core.formatDuration
 import de.trailscape.core.haversineM
+import de.trailscape.core.i18n.formatDateFull
+import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.toLocationSample
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.Executor
 
 /**
@@ -1481,7 +1484,7 @@ class RecordingService : Service() {
 
             else -> texts.getString(
                 R.string.recording_notification_progress,
-                formatKmDe(distanceM / 1000),
+                formatDistanceKm(distanceM / 1000, languageOf(texts.resources.configuration)),
                 formatDuration((elapsedMs(jetzt) / 1000).toInt()),
             )
         }
@@ -1900,8 +1903,15 @@ class RecordingService : Service() {
 
             val createdAt = points.firstOrNull { it.time != null }?.time
                 ?: snapshot.startedAtMs
-            val date = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date(createdAt))
-            val name = context.localized().getString(
+            // Der Name wird in der Sprache zum Zeitpunkt des Speicherns
+            // festgehalten (docs/i18n.md, „Namen, die beim Import entstehen"):
+            // „Tour 05.06.2026" bzw. „Ride 5 Jun 2026".
+            val language = AppLocale.current(context)
+            val date = formatDateFull(
+                Instant.ofEpochMilli(createdAt).atZone(ZoneId.systemDefault()).toLocalDate(),
+                language,
+            )
+            val name = context.localizedFor(language).getString(
                 if (recovered) R.string.recording_ride_name_recovered else R.string.recording_ride_name,
                 date,
             )
