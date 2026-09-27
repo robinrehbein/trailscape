@@ -113,7 +113,7 @@ internal fun stravaRideActionVisible(state: StravaRideActionState, connected: Bo
  *    zu lassen ([stravaRideActionVisible]).
  */
 @Composable
-internal fun StravaRideAction(ride: Ride, modifier: Modifier = Modifier) {
+internal fun StravaRideAction(ride: Ride, onReconnect: () -> Unit, modifier: Modifier = Modifier) {
     if (!StravaConfig.available || !isStravaUploadable(ride)) return
     val connection by StravaServices.connection.collectAsStateWithLifecycle()
     val records by StravaServices.records.collectAsStateWithLifecycle()
@@ -128,6 +128,7 @@ internal fun StravaRideAction(ride: Ride, modifier: Modifier = Modifier) {
         onOpen = { url -> runCatching { uriHandler.openUri(url) } },
         onRetry = { StravaServices.requestUpload(ride.id, replace = true) },
         canUpload = connected,
+        onReconnect = onReconnect,
         modifier = modifier,
     )
 }
@@ -137,6 +138,9 @@ internal fun StravaRideAction(ride: Ride, modifier: Modifier = Modifier) {
  *
  * @param canUpload `false` nach dem Trennen: Dann gibt es nur noch „Auf
  *   Strava ansehen", keine Aktion, die hochladen wuerde.
+ * @param onReconnect Sprung zur Seite Strava — angeboten, wenn Strava den
+ *   Zugang abgewiesen hat und die App nicht mehr verbunden ist; sonst waere
+ *   der Hinweis „Verbinde Strava … neu" eine Sackgasse.
  */
 @Composable
 internal fun StravaRideActionContent(
@@ -146,6 +150,7 @@ internal fun StravaRideActionContent(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     canUpload: Boolean = true,
+    onReconnect: () -> Unit = {},
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         when (state) {
@@ -205,10 +210,14 @@ internal fun StravaRideActionContent(
                 color = MaterialTheme.colorScheme.error,
                 title = stringResource(R.string.strava_failed_title),
                 text = stringResource(stravaErrorText(state.error)),
-                action = if (canUpload) {
-                    { TextButton(onClick = onRetry) { Text(stringResource(R.string.strava_retry)) } }
-                } else {
-                    null
+                action = when {
+                    canUpload -> {
+                        { TextButton(onClick = onRetry) { Text(stringResource(R.string.strava_retry)) } }
+                    }
+                    state.error == StravaError.UNAUTHORIZED -> {
+                        { TextButton(onClick = onReconnect) { Text(stringResource(R.string.strava_reconnect)) } }
+                    }
+                    else -> null
                 },
             )
         }

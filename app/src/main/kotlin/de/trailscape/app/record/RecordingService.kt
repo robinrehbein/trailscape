@@ -520,6 +520,7 @@ class RecordingService : Service() {
         // Aufzeichnung (eigener Thread, siehe BleSensors).
         BleSensors.acquire(this, BleNutzer.AUFZEICHNUNG)
         meldeLebenszeichen(journal.touchHeartbeat(now))
+        RecordingRepository.clearHeartRate()
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
         // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
         // beim Losfahren typischerweise schon in der Tasche. Den Hauptschalter
@@ -1439,7 +1440,11 @@ class RecordingService : Service() {
      * Leistungsmittel beginnt danach neu.
      */
     private fun aktuelleSensorWerte(): PunktSensorWerte =
-        BleSensors.punktWerte(System.currentTimeMillis(), uhrBpm = RecordingRepository.heartRateBpm.value)
+        BleSensors.punktWerte(
+            System.currentTimeMillis(),
+            uhrBpm = RecordingRepository.heartRateBpm.value,
+            uhrVerbunden = RecordingRepository.watchConnected.value,
+        )
 
     /** Baut den aktuellen Aufzeichnungszustand und schickt ihn an eine erreichbare Uhr. */
     private fun sendeZustandAnUhr() {
@@ -1451,7 +1456,11 @@ class RecordingService : Service() {
                 dauerMs = elapsedMs(System.currentTimeMillis()),
                 distanzKm = distanceM / 1000,
                 // Der wirksame Live-Puls: Ein verbundener Gurt zaehlt vor der Uhr.
-                hf = BleSensors.livePulsBpm(System.currentTimeMillis(), RecordingRepository.heartRateBpm.value),
+                hf = BleSensors.livePulsBpm(
+                    System.currentTimeMillis(),
+                    RecordingRepository.heartRateBpm.value,
+                    RecordingRepository.watchConnected.value,
+                ),
             ),
         )
     }

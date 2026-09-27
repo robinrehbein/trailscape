@@ -141,6 +141,9 @@ enum class MoreSection {
 
     /** „Health Connect" — Uhr verbinden, Vitalwerte holen. */
     HEALTH,
+
+    /** „Strava" — Konto verbinden (z. B. nachdem Strava den Zugang entzogen hat). */
+    STRAVA,
 }
 
 /**

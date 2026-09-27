@@ -270,6 +270,7 @@ private fun MoreSection.toPage(): SettingsPage = when (this) {
     MoreSection.PROFILE -> SettingsPage.PROFILE
     MoreSection.BACKUP -> SettingsPage.BACKUP
     MoreSection.HEALTH -> SettingsPage.HEALTH
+    MoreSection.STRAVA -> SettingsPage.STRAVA
 }
 
 /**

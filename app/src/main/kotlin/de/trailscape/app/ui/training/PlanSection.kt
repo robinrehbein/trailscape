@@ -149,7 +149,10 @@ fun PlanWeekCard(
                         R.string.training_plan_week_title,
                         week.index + 1,
                         formats.dateShort(week.start),
-                        formats.dateShort(week.end),
+                        // `end` ist der exklusive Folgemontag 00:00 — eine
+                        // Millisekunde davor liegt sicher auf dem Sonntag,
+                        // auch in einer Woche mit Zeitumstellung.
+                        formats.dateShort(week.end - 1),
                     ),
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f),

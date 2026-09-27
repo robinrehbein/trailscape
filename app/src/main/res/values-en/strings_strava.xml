@@ -39,4 +39,5 @@
     <string name="strava_failed_file">Strava couldn’t process the ride.</string>
     <string name="strava_failed_generic">The upload failed.</string>
     <string name="strava_retry">Try again</string>
+    <string name="strava_reconnect">Reconnect</string>
 </resources>

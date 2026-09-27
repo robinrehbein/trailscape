@@ -420,7 +420,11 @@ data class PunktSensorWerte(val hr: Int?, val powerW: Int?, val cadRpm: Int?) {
  * Puls: frischer Gurt vor Uhr. Anders als die Anzeige nimmt die Aufzeichnung
  * den Uhr-Wert auch ohne `watchConnected` — so hat sie es vor den
  * Bluetooth-Sensoren schon getan, und daran soll sich fuer Uhr-Nutzer nichts
- * aendern. Leistung: das Punktmittel ([LeistungsPuffer.punktMittel]).
+ * aendern. Ausnahme: Ist ein Gurt eingerichtet ([BleKanal.aktiv]) und die Uhr
+ * gerade NICHT verbunden ([uhrVerbunden]), faellt ein Gurt-Aussetzer auf
+ * `null` statt auf den letzten Uhr-Wert — der kann von einer frueheren Fahrt
+ * stammen und wuerde sonst zwei Quellen in einer Fahrt vermischen (Ø-Puls,
+ * Last). Leistung: das Punktmittel ([LeistungsPuffer.punktMittel]).
  * Trittfrequenz: der aktuelle Wert, solange frisch.
  */
 fun punktSensorWerte(
@@ -429,12 +433,13 @@ fun punktSensorWerte(
     leistungMittelW: Double?,
     trittfrequenz: BleKanal,
     uhrBpm: Int?,
+    uhrVerbunden: Boolean,
 ): PunktSensorWerte {
     val gurtWert = gurt.wert
     val hr = if (gurt.aktiv && gurtWert != null && gurtWert > 0 && istFrisch(gurt.zeitMs, jetzt)) {
         gurtWert
     } else {
-        uhrBpm
+        uhrBpm?.takeIf { uhrVerbunden || !gurt.aktiv }
     }
     val cad = trittfrequenz.wert?.takeIf { trittfrequenz.aktiv && istFrisch(trittfrequenz.zeitMs, jetzt) }
     return PunktSensorWerte(hr = hr, powerW = leistungMittelW?.roundToInt(), cadRpm = cad)

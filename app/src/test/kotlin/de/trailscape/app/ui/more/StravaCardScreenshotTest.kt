@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.strava.StravaAuthMessage
@@ -23,6 +24,7 @@ import de.trailscape.app.ui.rides.StravaRideActionContent
 import de.trailscape.app.ui.rides.StravaRideActionState
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.StravaError
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -95,6 +97,7 @@ class StravaCardScreenshotTest {
 
     @Test
     fun einstellungenZugangBeendet() {
+        var neuVerbunden = false
         show(dark = false) {
             SettingsSection {
                 StravaCardBody(
@@ -106,19 +109,23 @@ class StravaCardScreenshotTest {
                     onAutoUploadChange = {},
                 )
             }
-            // Die Tour nach abgewiesenem Zugang: Hinweis ohne Aktion.
+            // Die Tour nach abgewiesenem Zugang: kein Hochladen, aber der
+            // Sprung zur Seite Strava.
             StravaRideActionContent(
                 state = StravaRideActionState.Failed(StravaError.UNAUTHORIZED),
                 onUpload = {},
                 onOpen = {},
                 onRetry = {},
                 canUpload = false,
+                onReconnect = { neuVerbunden = true },
             )
         }
         compose.onNodeWithText("Strava hat den Zugang beendet.", substring = true).assertExists()
         compose.onNodeWithText("Einstellungen → Strava", substring = true).assertExists()
         compose.onNodeWithText("Erneut versuchen").assertDoesNotExist()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/75-strava-zugang-beendet.png")
+        compose.onNodeWithText("Neu verbinden").performClick()
+        assertTrue(neuVerbunden)
     }
 
     @Test

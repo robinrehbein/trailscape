@@ -163,7 +163,8 @@ object RecordingRepository {
      * schickt ihre Proben ohnehin nur, waehrend sie selbst gerade aufzeichnet.
      * Wird NICHT automatisch geloescht, wenn [watchConnected] auf `false`
      * faellt — wer einen „live"-Wert braucht (siehe `RideModeScreen`), prueft
-     * beide Flows gemeinsam.
+     * beide Flows gemeinsam. Geloescht wird er nur beim Start einer neuen
+     * Aufzeichnung ([clearHeartRate]).
      */
     val heartRateBpm: StateFlow<Int?> = _heartRateBpm.asStateFlow()
 
@@ -271,6 +272,16 @@ object RecordingRepository {
         _lastPoint.value = points.lastOrNull()
         _pointCount.value = points.size
         _lastError.value = null
+    }
+
+    /**
+     * Vergisst den letzten Uhr-Puls. Beim Start einer NEUEN Aufzeichnung
+     * aufgerufen: Ein Wert aus einer frueheren Fahrt im selben Prozess darf
+     * nicht als Rueckfall in die neue Fahrt rutschen — eine laufende Uhr
+     * meldet sich ohnehin sekuendlich neu.
+     */
+    internal fun clearHeartRate() {
+        _heartRateBpm.value = null
     }
 
     internal fun publishPaused(paused: Boolean, auto: Boolean = false) {

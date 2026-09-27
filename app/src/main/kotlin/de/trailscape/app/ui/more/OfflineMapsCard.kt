@@ -259,7 +259,7 @@ private suspend fun listOfflineRegionsWithStatus(context: Context): List<Offline
             id = region.id,
             name = info?.name?.takeIf { it.isNotBlank() } ?: fallbackRegionName(context, region),
             details = buildList {
-                mapStyles.firstOrNull { it.id == info?.styleId }?.let { add(it.label) }
+                mapStyles.firstOrNull { it.id == info?.styleId }?.let { add(context.getString(it.labelRes)) }
                 info?.createdAtMs
                     ?.takeIf { it > 0L }
                     ?.let { add(formats.dateFull(it)) }
@@ -356,7 +356,7 @@ private fun fallbackRegionName(context: Context, region: OfflineRegion): String 
     val definition = region.definition
     if (definition is OfflineTilePyramidRegionDefinition) {
         val styleUrl = definition.styleURL
-        val styleLabel = mapStyles.firstOrNull { styleUrl?.contains(it.id) == true }?.label
+        val styleLabel = mapStyles.firstOrNull { styleUrl?.contains(it.id) == true }?.let { context.getString(it.labelRes) }
         val label = styleLabel ?: context.getString(R.string.more_offline_maps_fallback_area)
         return "$label #${region.id}"
     }

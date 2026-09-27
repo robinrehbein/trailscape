@@ -96,6 +96,9 @@ object BleSensors {
     /** Laengstes Intervall, ueber das [punktWerte] die Leistung mittelt. */
     private const val PUNKT_MITTEL_MAX_MS = 30_000L
 
+    /** Zustaende, in denen gar nicht verbunden wird (siehe [veroeffentliche]). */
+    private val BLOCKIERT = setOf(BleVerbindung.BLUETOOTH_AUS, BleVerbindung.KEINE_BERECHTIGUNG)
+
     private val lock = Any()
     private var appContext: Context? = null
     private val nutzer = mutableSetOf<BleNutzer>()
@@ -195,7 +198,7 @@ object BleSensors {
      * Leistung als Mittel seit dem vorigen Aufruf, aktuelle Trittfrequenz).
      * Aufgerufen vom Aufzeichnungsthread, je Punkt genau einmal.
      */
-    fun punktWerte(jetzt: Long, uhrBpm: Int?): PunktSensorWerte {
+    fun punktWerte(jetzt: Long, uhrBpm: Int?, uhrVerbunden: Boolean): PunktSensorWerte {
         val mittel = synchronized(lock) {
             // Hoechstens 30 s zurueck: Nach einer Pause oder GPS-Luecke
             // gehoert die Zwischenzeit nicht in den Punkt — die Auswertung
@@ -205,13 +208,13 @@ object BleSensors {
             leistungsPuffer.punktMittel(seit, jetzt)
         }
         val k = _kanaele.value
-        return punktSensorWerte(jetzt, k.puls, mittel, k.trittfrequenz, uhrBpm)
+        return punktSensorWerte(jetzt, k.puls, mittel, k.trittfrequenz, uhrBpm, uhrVerbunden)
     }
 
     /** Der wirksame Live-Puls (frischer Gurt vor Uhr), ohne das Punktmittel weiterzuschieben. */
-    fun livePulsBpm(jetzt: Long, uhrBpm: Int?): Int? {
+    fun livePulsBpm(jetzt: Long, uhrBpm: Int?, uhrVerbunden: Boolean): Int? {
         val k = _kanaele.value
-        return punktSensorWerte(jetzt, k.puls, null, k.trittfrequenz, uhrBpm).hr
+        return punktSensorWerte(jetzt, k.puls, null, k.trittfrequenz, uhrBpm, uhrVerbunden).hr
     }
 
     // ------------------------------------------- Verbinden (BLE-Thread)
@@ -356,9 +359,14 @@ object BleSensors {
     }
 
     private fun veroeffentliche() {
-        val typen = gemerkt.map { it.typ }.toSet()
+        val alleTypen = gemerkt.map { it.typ }.toSet()
         val aktiv = hatNutzer()
-        _status.value = typen.associateWith { zustaende.getValue(it).status }
+        _status.value = alleTypen.associateWith { zustaende.getValue(it).status }
+        // Ein blockierter Sensor (Bluetooth aus, keine Berechtigung) ist kein
+        // aktiver Kanal: Es wird gar nicht verbunden, eine Kachel „verbinde …"
+        // wuerde die ganze Fahrt ueber etwas Falsches behaupten. Ohne Kanal
+        // fehlt die Kachel wie ohne Sensor, und beim Puls greift die Uhr.
+        val typen = alleTypen.filterTo(mutableSetOf()) { zustaende.getValue(it).status !in BLOCKIERT }
         fun kanal(k: BleKanal, an: Boolean) = if (aktiv && an) k.copy(aktiv = true) else BleKanal.AUS
         _kanaele.value = BleKanaele(
             puls = kanal(puls, BleSensorTyp.PULS in typen),

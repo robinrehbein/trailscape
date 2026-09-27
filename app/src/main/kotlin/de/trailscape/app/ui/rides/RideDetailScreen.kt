@@ -66,6 +66,7 @@ import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.components.ActionTileRow
 import de.trailscape.app.ui.components.CoachCard
@@ -359,7 +360,10 @@ internal fun RideDetailScreen(
 
                 // Optional darunter: Strava (nur mit verbundenem Konto, siehe
                 // StravaRideAction.kt).
-                StravaRideAction(ride = ride)
+                StravaRideAction(
+                    ride = ride,
+                    onReconnect = { appViewModel.requestMoreSection(MoreSection.STRAVA) },
+                )
 
                 val elevation = curves?.elevation.orEmpty()
                 if (elevation.size >= 2) {

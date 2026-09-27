@@ -292,11 +292,19 @@ class BleSensorLogikTest {
 
     @Test
     fun `Punktwerte - Gurt vor Uhr, Uhr auch ohne Verbindungsstatus`() {
-        val mitGurt = punktSensorWerte(jetzt, kanal(150, 1000), 212.6, kanal(90, 1000), uhrBpm = 120)
+        val mitGurt = punktSensorWerte(jetzt, kanal(150, 1000), 212.6, kanal(90, 1000), uhrBpm = 120, uhrVerbunden = true)
         assertEquals(PunktSensorWerte(150, 213, 90), mitGurt)
-        val stillerGurt = punktSensorWerte(jetzt, kanal(150, 8000), null, kanal(90, 8000), uhrBpm = 120)
+        val stillerGurt = punktSensorWerte(jetzt, kanal(150, 8000), null, kanal(90, 8000), uhrBpm = 120, uhrVerbunden = true)
         assertEquals(PunktSensorWerte(120, null, null), stillerGurt)
-        assertEquals(PunktSensorWerte.LEER, punktSensorWerte(jetzt, BleKanal.AUS, null, BleKanal.AUS, null))
+        assertEquals(PunktSensorWerte.LEER, punktSensorWerte(jetzt, BleKanal.AUS, null, BleKanal.AUS, null, uhrVerbunden = false))
+        // Reiner Uhr-Nutzer: der Uhr-Wert zaehlt auch ohne Verbindungsstatus.
+        assertEquals(120, punktSensorWerte(jetzt, BleKanal.AUS, null, BleKanal.AUS, 120, uhrVerbunden = false).hr)
+    }
+
+    @Test
+    fun `Punktwerte - Gurt aktiv, still, Uhr getrennt ergibt keinen Puls`() {
+        val w = punktSensorWerte(jetzt, kanal(150, 8000), null, BleKanal.AUS, uhrBpm = 120, uhrVerbunden = false)
+        assertNull(w.hr)
     }
 
     // ---------------------------------------------------- Gemerkte Sensoren

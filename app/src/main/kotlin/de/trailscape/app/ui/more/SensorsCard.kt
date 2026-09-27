@@ -32,7 +32,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -46,7 +45,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.sensors.BleFund
 import de.trailscape.app.sensors.BleKanaele
@@ -101,9 +104,14 @@ fun ColumnScope.SensorsCardContent() {
     var permanentlyDenied by remember { mutableStateOf(false) }
     val supported = remember { bluetoothLeSupported(context) }
 
-    DisposableEffect(Unit) {
+    // An den Lebenszyklus gebunden, nicht an die Komposition: Nach „Home"
+    // oder ausgeschaltetem Display bleibt die Komposition stehen, die
+    // Verbindungen zu Gurt und Co. sollen es nicht (Akku, und kein Sensor
+    // bleibt unbemerkt belegt — siehe PRIVACY.md). Zurueck auf der Seite
+    // verbindet `acquire` alles neu.
+    LifecycleStartEffect(Unit) {
         BleSensors.acquire(context, BleNutzer.EINSTELLUNGEN)
-        onDispose {
+        onStopOrDispose {
             scanner.stop()
             BleSensors.release(BleNutzer.EINSTELLUNGEN)
         }
@@ -111,14 +119,18 @@ fun ColumnScope.SensorsCardContent() {
     // Sekundentakt: Stillzeiten und Neuversuch-Countdown laufen ohne neues
     // Paket weiter, und Bluetooth/Berechtigung koennen sich in den
     // Systemeinstellungen geaendert haben, ohne dass die Seite davon hoert.
-    LaunchedEffect(Unit) {
-        while (true) {
-            jetzt = System.currentTimeMillis()
-            bluetoothOn = bluetoothEnabled(context)
-            val granted = hasBluetoothPermissions(context)
-            if (granted && !permissionGranted) BleSensors.neuVerbinden()
-            permissionGranted = granted
-            delay(1_000)
+    // Im Hintergrund ruht er.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                jetzt = System.currentTimeMillis()
+                bluetoothOn = bluetoothEnabled(context)
+                val granted = hasBluetoothPermissions(context)
+                if (granted && !permissionGranted) BleSensors.neuVerbinden()
+                permissionGranted = granted
+                delay(1_000)
+            }
         }
     }
 

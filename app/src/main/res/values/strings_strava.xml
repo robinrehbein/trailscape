@@ -48,4 +48,5 @@
     <string name="strava_failed_file">Strava konnte die Tour nicht verarbeiten.</string>
     <string name="strava_failed_generic">Das Hochladen ist fehlgeschlagen.</string>
     <string name="strava_retry">Erneut versuchen</string>
+    <string name="strava_reconnect">Neu verbinden</string>
 </resources>
