@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -75,7 +77,7 @@ import kotlinx.coroutines.launch
 fun HoldToEndButton(
     onEnd: () -> Unit,
     modifier: Modifier = Modifier,
-    label: String = "Halten zum Beenden",
+    label: String = stringResource(R.string.shell_hold_to_end_label),
     minHeight: Dp = 52.dp,
     icon: ImageVector? = null,
     iconSize: Dp = 18.dp,
@@ -87,6 +89,8 @@ fun HoldToEndButton(
     val currentOnEnd by rememberUpdatedState(onEnd)
     val progress = remember { Animatable(0f) }
     var showHint by remember { mutableStateOf(false) }
+    val endDescription = stringResource(R.string.shell_hold_to_end_cd)
+    val holdHintText = stringResource(R.string.shell_hold_to_end_hint)
 
     // Der Hinweis nach einem kurzen Tipp verschwindet von selbst wieder.
     LaunchedEffect(showHint) {
@@ -134,8 +138,8 @@ fun HoldToEndButton(
             }
             .semantics {
                 role = Role.Button
-                contentDescription = "Aufzeichnung beenden"
-                onClick(label = "Aufzeichnung beenden") {
+                contentDescription = endDescription
+                onClick(label = endDescription) {
                     currentOnEnd()
                     true
                 }
@@ -153,7 +157,7 @@ fun HoldToEndButton(
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = if (showHint) "Gedrückt halten" else label,
+                    text = if (showHint) holdHintText else label,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = textStyle,

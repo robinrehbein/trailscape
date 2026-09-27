@@ -1,5 +1,7 @@
 package de.trailscape.app.ui
 
+import androidx.annotation.StringRes
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -29,12 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.animation.AnimatedVisibility
-import de.trailscape.app.ui.theme.M3Transitions
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -44,6 +45,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.AppFormats
 import de.trailscape.app.i18n.LocalAppFormats
@@ -62,6 +64,7 @@ import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
 import de.trailscape.app.ui.rides.RidesScreen
+import de.trailscape.app.ui.theme.M3Transitions
 import de.trailscape.app.ui.today.TodayScreen
 import de.trailscape.app.ui.training.TrainingScreen
 import de.trailscape.core.i18n.coreTexts
@@ -234,13 +237,13 @@ import de.trailscape.core.i18n.coreTexts
 private enum class TopLevelDestination(
     val tab: AppTab,
     val route: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
-    HOME(AppTab.HOME, "heute", "Heute", Icons.Outlined.Today),
-    MAP(AppTab.MAP, "karte", "Karte", Icons.Outlined.Map),
-    RIDES(AppTab.RIDES, "touren", "Verlauf", Icons.Outlined.Route),
-    TRAINING(AppTab.TRAINING, "training", "Training", Icons.AutoMirrored.Outlined.ShowChart),
+    HOME(AppTab.HOME, "heute", R.string.shell_nav_today_label, Icons.Outlined.Today),
+    MAP(AppTab.MAP, "karte", R.string.shell_nav_map_label, Icons.Outlined.Map),
+    RIDES(AppTab.RIDES, "touren", R.string.shell_nav_history_label, Icons.Outlined.Route),
+    TRAINING(AppTab.TRAINING, "training", R.string.shell_nav_training_label, Icons.AutoMirrored.Outlined.ShowChart),
 }
 
 /**
@@ -519,7 +522,7 @@ private fun TrailscapeAppContent() {
                             selected = selected,
                             onClick = { navController.navigateToTab(destination.route) },
                             icon = destination.icon,
-                            label = destination.label,
+                            label = stringResource(destination.labelRes),
                         )
                     }
                 }

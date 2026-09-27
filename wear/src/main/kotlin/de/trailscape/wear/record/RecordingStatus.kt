@@ -6,8 +6,10 @@ import androidx.core.content.ContextCompat
 import androidx.health.services.client.HealthServices
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.Befehl
+import de.trailscape.wear.R
 import de.trailscape.wear.exercise.FaehigkeitsBericht
 import de.trailscape.wear.exercise.ermittleFaehigkeiten
+import de.trailscape.wear.localized
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,7 +108,10 @@ object RecordingStatus {
             _bericht.value = ermittleFaehigkeiten(client)
             if (_phase.value == Phase.UNBEKANNT) _phase.value = Phase.BEREIT
         } catch (e: Exception) {
-            _fehler.value = "Fähigkeiten nicht abrufbar: ${e.message ?: e::class.java.simpleName}"
+            _fehler.value = context.localized().getString(
+                R.string.wear_error_capabilities,
+                e.message ?: e::class.java.simpleName,
+            )
             _phase.value = Phase.FEHLER
         }
     }

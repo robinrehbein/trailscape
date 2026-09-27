@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.onboarding
 
 import androidx.activity.compose.BackHandler
+import androidx.annotation.StringRes
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,10 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.components.OneUiDropdownField
 import de.trailscape.app.ui.components.OneUiTextField
@@ -129,7 +134,9 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
     var ageText by rememberSaveable { mutableStateOf("") }
     var weightText by rememberSaveable { mutableStateOf("") }
     var sex by rememberSaveable { mutableStateOf(Sex.UNBEKANNT) }
-    var profileError by rememberSaveable { mutableStateOf<String?>(null) }
+    // Als Ressourcen-ID gemerkt, nicht als fertiger Satz: So stimmt die
+    // Sprache auch nach einem Sprachwechsel mit offener Einfuehrung.
+    var profileError by rememberSaveable { mutableStateOf<Int?>(null) }
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     // Mit gefahrenen Touren (Einfuehrung erneut angesehen) ist es keine
@@ -180,12 +187,12 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
         }
         val age = if (ageRaw.isEmpty()) profile.ageYears else ageRaw.toIntOrNull()
         if (age == null || age < 10 || age > 100) {
-            profileError = "Bitte ein Alter zwischen 10 und 100 Jahren angeben."
+            profileError = R.string.shell_onboarding_age_error
             return false
         }
         val weight = if (weightRaw.isEmpty()) profile.weightKg else weightRaw.toDoubleOrNull()
         if (weight == null || weight < 30 || weight > 250) {
-            profileError = "Bitte ein Gewicht zwischen 30 und 250 kg angeben."
+            profileError = R.string.shell_onboarding_weight_error
             return false
         }
         profileError = null
@@ -256,7 +263,9 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                         .padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    TextButton(onClick = { finish(buildRound = false) }) { Text("Überspringen") }
+                    TextButton(onClick = { finish(buildRound = false) }) {
+                        Text(stringResource(R.string.shell_onboarding_skip_action))
+                    }
                 }
 
                 HorizontalPager(
@@ -273,23 +282,25 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                             .padding(horizontal = ScreenPadding, vertical = 8.dp),
                     ) {
                         Text(
-                            text = onboardingEyebrow(index, OnboardingPage.entries.size),
+                            text = onboardingEyebrow(index, OnboardingPage.entries.size).asString(),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (page == OnboardingPage.FIRST_ROUND && hasHistory) {
-                                FIRST_ROUND_TITLE_WITH_HISTORY
-                            } else {
-                                page.title
-                            },
+                            text = stringResource(
+                                if (page == OnboardingPage.FIRST_ROUND && hasHistory) {
+                                    R.string.shell_onboarding_first_round_title_history
+                                } else {
+                                    page.titleRes
+                                },
+                            ),
                             style = MaterialTheme.typography.headlineLarge,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
-                        page.paragraphs.forEach { paragraph ->
+                        page.paragraphRes.forEach { paragraph ->
                             Text(
-                                text = paragraph,
+                                text = stringResource(paragraph),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -349,16 +360,19 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     if (pagerState.currentPage > 0) {
-                        TextButton(onClick = ::goBack) { Text("Zurück") }
+                        TextButton(onClick = ::goBack) { Text(stringResource(R.string.shell_onboarding_back_action)) }
                         Spacer(modifier = Modifier.width(8.dp))
                     }
                     Button(onClick = ::goForward) {
                         Text(
-                            when {
-                                pagerState.currentPage != OnboardingPage.entries.lastIndex -> "Weiter"
-                                firstRound != null -> "Runde bauen"
-                                else -> "Los geht's"
-                            },
+                            stringResource(
+                                when {
+                                    pagerState.currentPage != OnboardingPage.entries.lastIndex ->
+                                        R.string.shell_onboarding_next_action
+                                    firstRound != null -> R.string.shell_onboarding_build_loop_action
+                                    else -> R.string.shell_onboarding_finish_action
+                                },
+                            ),
                         )
                     }
                 }
@@ -373,8 +387,12 @@ fun OnboardingScreen(appViewModel: AppViewModel) {
  * [pageCount] − 1. Abgeleitet statt je Seite fest geschrieben — eine neue
  * Seite hat die Zaehlung sonst an jeder Seite einzeln verstellt.
  */
-internal fun onboardingEyebrow(index: Int, pageCount: Int): String =
-    if (index <= 0) "Willkommen" else "Schritt $index von ${pageCount - 1}"
+internal fun onboardingEyebrow(index: Int, pageCount: Int): UiText =
+    if (index <= 0) {
+        UiText.Res(R.string.shell_onboarding_welcome_eyebrow)
+    } else {
+        UiText.Res(R.string.shell_onboarding_step_eyebrow, listOf(index, pageCount - 1))
+    }
 
 /**
  * Die fuenf Seiten samt Text. Als Aufzaehlung, damit Reihenfolge, Anzahl der
@@ -382,71 +400,74 @@ internal fun onboardingEyebrow(index: Int, pageCount: Int): String =
  * koennen.
  */
 private enum class OnboardingPage(
-    val title: String,
-    val paragraphs: List<String>,
+    @StringRes val titleRes: Int,
+    val paragraphRes: List<Int>,
 ) {
     WELCOME(
-        title = "Trailscape",
-        paragraphs = listOf(
+        titleRes = R.string.app_name,
+        paragraphRes = listOf(
             // Bewusst die Schleife statt einer Merkmalsliste: Aufzeichnen,
             // Planen und Auswerten kann jede Konkurrenz einzeln auch. Was
             // sonst niemand verbindet, ist der Weg von der Tagesempfehlung
             // zur passenden Runde.
-            "Trailscape sagt dir, was du heute fahren solltest — und baut dir die passende " +
-                "Runde dazu, über Schotter und Nebenwege, die dort endet, wo sie beginnt.",
+            R.string.shell_onboarding_welcome_body_1,
             // Die Navigationsleiste ist waehrend der Einfuehrung ausgeblendet
             // — der Satz sagt deshalb, dass sie gleich kommt. Inhaltlich die
             // Fuehrung „Klartext" (siehe `ui/TrailscapeApp.kt`).
-            "Gleich findest du unten Heute, Karte, Verlauf und Training, daneben den runden " +
-                "Fahren-Knopf. Alles Weitere liegt hinter dem Zahnrad.",
-            "Deine Daten liegen auf deinem Gerät. Kein Konto, keine Telemetrie.",
+            R.string.shell_onboarding_welcome_body_2,
+            R.string.shell_onboarding_welcome_body_3,
         ),
     ),
     DATA(
-        title = "Bring deine Touren mit",
-        paragraphs = listOf(
-            "Mit deinen bisherigen Fahrten ist die Auswertung sofort aussagekräftig — ohne " +
-                "dauert es rund zwei Wochen.",
-            "GPX, FIT oder komplette Exporte aus Strava, Garmin und Wahoo als ZIP. Duplikate " +
-                "erkennt Trailscape selbst.",
-            "Import über das + oben rechts im Verlauf — oder teil eine Datei direkt an Trailscape.",
+        titleRes = R.string.shell_onboarding_data_title,
+        paragraphRes = listOf(
+            R.string.shell_onboarding_data_body_1,
+            R.string.shell_onboarding_data_body_2,
+            R.string.shell_onboarding_data_body_3,
         ),
     ),
     PROFILE(
-        title = "Ein paar Angaben für die Auswertung",
-        paragraphs = listOf(
-            "Aus Alter und Gewicht schätzt Trailscape Puls und Leistung — die Grundlage jeder " +
-                "Trainingslast.",
-            "Leer lassen geht auch. Genauere Werte trägst du später unter Einstellungen → " +
-                "Profil ein.",
+        titleRes = R.string.shell_onboarding_profile_title,
+        paragraphRes = listOf(
+            R.string.shell_onboarding_profile_body_1,
+            R.string.shell_onboarding_profile_body_2,
         ),
     ),
     HEALTH(
-        title = "Erholungswerte aus deiner Uhr",
-        paragraphs = listOf(
-            "Schreibt deine Uhr nach Health Connect (Samsung Health, Garmin, Fitbit und " +
-                "andere), fließen Ruhepuls, HRV und Schlaf in die Tagesempfehlung ein.",
-            "Ohne Uhr funktioniert alles genauso. Verbinden geht auch später unter " +
-                "Einstellungen → Uhr & Gesundheitsdaten.",
+        titleRes = R.string.shell_onboarding_health_title,
+        paragraphRes = listOf(
+            R.string.shell_onboarding_health_body_1,
+            R.string.shell_onboarding_health_body_2,
         ),
     ),
+
+    /**
+     * Mit gefahrenen Touren (Einfuehrung erneut angesehen) traegt die Seite
+     * stattdessen `shell_onboarding_first_round_title_history` — „Deine erste
+     * Runde" waere dort schlicht falsch.
+     */
     FIRST_ROUND(
-        title = "Deine erste Runde",
-        paragraphs = listOf(
-            "Wie viel Zeit hast du heute? Trailscape baut dir eine ruhige Runde ab deinem " +
-                "Standort, die dort wieder endet.",
-        ),
+        titleRes = R.string.shell_onboarding_first_round_title,
+        paragraphRes = listOf(R.string.shell_onboarding_first_round_body),
     ),
 }
 
 /**
- * Titel der letzten Seite fuer jemanden mit gefahrenen Touren — „Deine erste
- * Runde" waere dort schlicht falsch.
+ * Der Hinweis unter der gewaehlten Dauer: was fuer die Berechnung das Geraet
+ * verlaesst. Vier ganze Saetze statt zusammengesetzter Bruchstuecke — ein
+ * Satz ist ein Schluessel (siehe `docs/i18n.md`, Abschnitt C).
+ *
+ * @param askLocation die Standortabfrage kommt gleich (noch keine Freigabe).
+ * @param windEnabled „Wind berücksichtigen" ist an — dann geht der
+ *   gerundete Startpunkt zusaetzlich an Open-Meteo.
  */
-private const val FIRST_ROUND_TITLE_WITH_HISTORY = "Eine Runde für heute"
-
-/** Die Beschriftung der „Später"-Option neben den Dauern. */
-private const val FIRST_ROUND_LATER = "Später"
+@StringRes
+internal fun firstRoundPrivacyHint(askLocation: Boolean, windEnabled: Boolean): Int = when {
+    askLocation && windEnabled -> R.string.shell_onboarding_first_round_privacy_location_wind_hint
+    askLocation -> R.string.shell_onboarding_first_round_privacy_location_hint
+    windEnabled -> R.string.shell_onboarding_first_round_privacy_wind_hint
+    else -> R.string.shell_onboarding_first_round_privacy_hint
+}
 
 /**
  * Auswahl der Dauer fuer die erste Runde — drei Dauern und „Später" als ein
@@ -470,14 +491,15 @@ private fun FirstRoundStep(
     val coreTexts = LocalCoreTexts.current
     val durations = FirstRoundDuration.entries
     PillSegments(
-        options = durations.map { it.label(coreTexts) } + FIRST_ROUND_LATER,
+        options = durations.map { it.label(coreTexts) } +
+            stringResource(R.string.shell_onboarding_first_round_later_label),
         selectedIndex = selected?.ordinal ?: durations.size,
         onSelect = { index -> onSelect(durations.getOrNull(index)) },
     )
     Spacer(modifier = Modifier.height(16.dp))
     if (selected != null && previewKm != null) {
         Text(
-            text = "≈ $previewKm km · flach · ruhiges Tempo",
+            text = stringResource(R.string.shell_onboarding_first_round_preview, previewKm),
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -489,23 +511,13 @@ private fun FirstRoundStep(
         LaunchedEffect(Unit) { RouteGenerationController.restoreWindSetting() }
         val windEnabled by RouteGenerationController.windEnabled.collectAsStateWithLifecycle()
         Text(
-            text = (if (askLocation) "Gleich fragt Trailscape nach deinem Standort. " else "") +
-                "Für die Berechnung gehen die Wegpunkte der Runde — also auch dein " +
-                "Startpunkt — an den Routing-Server." +
-                (
-                    if (windEnabled) {
-                        " Mit „Wind berücksichtigen“ geht der Startpunkt, auf etwa 1 km " +
-                            "gerundet, außerdem an Open-Meteo."
-                    } else {
-                        ""
-                    }
-                    ),
+            text = stringResource(firstRoundPrivacyHint(askLocation, windEnabled)),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     } else {
         Text(
-            text = "Kein Problem — auf „Heute“ wartet jederzeit eine passende Runde.",
+            text = stringResource(R.string.shell_onboarding_first_round_later_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -522,11 +534,11 @@ private fun ProfileFields(
     onWeightChange: (String) -> Unit,
     sex: Sex,
     onSexChange: (Sex) -> Unit,
-    error: String?,
+    @StringRes error: Int?,
 ) {
     Row(modifier = Modifier.fillMaxWidth()) {
         OneUiTextField(
-            label = "Alter",
+            label = stringResource(R.string.shell_onboarding_age_label),
             value = ageText,
             onValueChange = onAgeChange,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -534,7 +546,7 @@ private fun ProfileFields(
         )
         Spacer(modifier = Modifier.width(12.dp))
         OneUiTextField(
-            label = "Gewicht (kg)",
+            label = stringResource(R.string.shell_onboarding_weight_label),
             value = weightText,
             onValueChange = onWeightChange,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -544,9 +556,9 @@ private fun ProfileFields(
     Spacer(modifier = Modifier.height(12.dp))
 
     OneUiDropdownField(
-        label = "Geschlecht (optional)",
+        label = stringResource(R.string.shell_onboarding_sex_label),
         value = sex,
-        options = onboardingSexOptions,
+        options = onboardingSexOptions.map { (value, label) -> value to stringResource(label) },
         onChange = onSexChange,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -554,7 +566,7 @@ private fun ProfileFields(
     if (error != null) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = error,
+            text = stringResource(error),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
         )
@@ -574,7 +586,7 @@ private fun ProfileFields(
 private fun HealthConnectStep(appViewModel: AppViewModel) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<UiText?>(null) }
 
     Button(
         enabled = !busy,
@@ -584,14 +596,15 @@ private fun HealthConnectStep(appViewModel: AppViewModel) {
                 status = null
                 try {
                     val granted = appViewModel.requestHealthPermissions()
-                    status = if (granted) {
-                        "Verbunden. Trailscape holt deine Werte ab jetzt automatisch."
-                    } else {
-                        "Keine Freigabe erteilt — du kannst das später unter " +
-                            "Einstellungen → Uhr & Gesundheitsdaten nachholen."
-                    }
+                    status = UiText.Res(
+                        if (granted) {
+                            R.string.shell_onboarding_health_connected_status
+                        } else {
+                            R.string.shell_onboarding_health_denied_status
+                        },
+                    )
                 } catch (e: HealthSyncException) {
-                    status = e.message
+                    status = e.message?.let(UiText::Plain)
                 } finally {
                     busy = false
                 }
@@ -605,14 +618,14 @@ private fun HealthConnectStep(appViewModel: AppViewModel) {
                 color = MaterialTheme.colorScheme.onPrimary,
             )
         } else {
-            Text("Health Connect verbinden")
+            Text(stringResource(R.string.shell_onboarding_health_connect_action))
         }
     }
 
     status?.let { text ->
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = text,
+            text = text.asString(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -660,8 +673,9 @@ private fun PageDots(count: Int, current: Int) {
     }
 }
 
-private val onboardingSexOptions: List<Pair<Sex, String>> = listOf(
-    Sex.MAENNLICH to "männlich",
-    Sex.WEIBLICH to "weiblich",
-    Sex.UNBEKANNT to "keine Angabe",
+/** Die Auswahl fuer das Geschlecht als Ressourcen — aufgeloest erst beim Zeichnen. */
+private val onboardingSexOptions: List<Pair<Sex, Int>> = listOf(
+    Sex.MAENNLICH to R.string.shell_onboarding_sex_male,
+    Sex.WEIBLICH to R.string.shell_onboarding_sex_female,
+    Sex.UNBEKANNT to R.string.shell_onboarding_sex_unknown,
 )

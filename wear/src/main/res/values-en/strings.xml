@@ -3,4 +3,26 @@
 <resources>
     <string name="notification_channel_name">Recording</string>
     <string name="notification_channel_description">Active while the watch is recording a ride.</string>
+
+    <!-- ui/RecordingScreen.kt -->
+    <string name="wear_start_cd">Start recording</string>
+    <string name="wear_phone_connected_status">Phone connected</string>
+    <string name="wear_phone_disconnected_status">Phone disconnected</string>
+    <string name="wear_no_phone_hint">Without your phone: record in Samsung Health</string>
+    <string name="wear_resume_cd">Resume</string>
+    <string name="wear_pause_cd">Pause</string>
+    <string name="wear_stop_cd">Stop</string>
+    <string name="wear_back_to_start_cd">Back to start</string>
+    <!-- %1$s = Kilometer mit einer Nachkommastelle im Zahlformat der Sprache -->
+    <string name="wear_value_km">%1$s km</string>
+    <!-- %1$s = Tempo mit einer Nachkommastelle, „–“ ohne Wert -->
+    <string name="wear_value_kmh">%1$s km/h</string>
+
+    <!-- record/RecordingService.kt, record/RecordingStatus.kt -->
+    <!-- %1$s = Dauer H:MM:SS, %2$s = Kilometer -->
+    <string name="wear_notification_progress">%1$s · %2$s km</string>
+    <string name="wear_error_no_cycling">The watch reports no cycling support</string>
+    <!-- %1$s = technische Ursache (Fremdtext) -->
+    <string name="wear_error_callback">Callback not registered: %1$s</string>
+    <string name="wear_error_capabilities">Capabilities unavailable: %1$s</string>
 </resources>

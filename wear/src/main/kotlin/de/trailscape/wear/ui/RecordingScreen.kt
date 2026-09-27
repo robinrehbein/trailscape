@@ -30,7 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +45,11 @@ import androidx.wear.compose.material3.CircularProgressIndicator
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.Text
 import de.trailscape.core.formatDuration
-import de.trailscape.core.formatKm
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDecimal
+import de.trailscape.core.i18n.formatDistanceKm
+import de.trailscape.core.i18n.languageOfTag
+import de.trailscape.wear.R
 import de.trailscape.wear.comm.PhoneLink
 import de.trailscape.wear.record.RecordingStatus
 import de.trailscape.wear.ui.theme.AccentGreen
@@ -51,7 +57,6 @@ import de.trailscape.wear.ui.theme.LiveActionButtonSize
 import de.trailscape.wear.ui.theme.MutedText
 import de.trailscape.wear.ui.theme.OnAccentGreen
 import de.trailscape.wear.ui.theme.StartButtonSize
-import java.util.Locale
 import kotlinx.coroutines.launch
 
 /**
@@ -163,7 +168,7 @@ private fun StartScreen(
         ) {
             Icon(
                 imageVector = Icons.Filled.PlayArrow,
-                contentDescription = "Aufzeichnung starten",
+                contentDescription = stringResource(R.string.wear_start_cd),
                 tint = if (kannStarten) OnAccentGreen else Color.Black,
                 modifier = Modifier.size(56.dp),
             )
@@ -172,14 +177,16 @@ private fun StartScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         Text(
-            text = if (telefonVerbunden) "Telefon verbunden" else "Telefon getrennt",
+            text = stringResource(
+                if (telefonVerbunden) R.string.wear_phone_connected_status else R.string.wear_phone_disconnected_status,
+            ),
             color = MutedText,
             fontSize = 13.sp,
             textAlign = TextAlign.Center,
         )
         if (!telefonVerbunden) {
             Text(
-                text = "Ohne Telefon: in Samsung Health aufzeichnen",
+                text = stringResource(R.string.wear_no_phone_hint),
                 color = MutedText,
                 fontSize = 11.sp,
                 textAlign = TextAlign.Center,
@@ -221,6 +228,7 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
     val distanzKm by RecordingStatus.distanzKm.collectAsStateWithLifecycle()
     val tempoKmh by RecordingStatus.tempoKmh.collectAsStateWithLifecycle()
     val hf by RecordingStatus.letzteHfBpm.collectAsStateWithLifecycle()
+    val sprache = spracheDerKonfiguration()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -250,13 +258,13 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
                     style = TextStyle(fontFeatureSettings = "tnum"),
                 )
                 Text(
-                    text = "${formatKmDe(distanzKm)} km",
+                    text = stringResource(R.string.wear_value_km, formatDistanceKm(distanzKm, sprache)),
                     color = Color.White,
                     fontSize = 16.sp,
                     style = TextStyle(fontFeatureSettings = "tnum"),
                 )
                 Text(
-                    text = "${formatTempoDe(tempoKmh)} km/h",
+                    text = stringResource(R.string.wear_value_kmh, formatTempo(tempoKmh, sprache)),
                     color = Color.White,
                     fontSize = 16.sp,
                     style = TextStyle(fontFeatureSettings = "tnum"),
@@ -287,7 +295,13 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
                     } else {
                         Icons.Filled.Pause
                     },
-                    contentDescription = if (phase == RecordingStatus.Phase.PAUSIERT) "Weiter" else "Pause",
+                    contentDescription = stringResource(
+                        if (phase == RecordingStatus.Phase.PAUSIERT) {
+                            R.string.wear_resume_cd
+                        } else {
+                            R.string.wear_pause_cd
+                        },
+                    ),
                     tint = OnAccentGreen,
                 )
             }
@@ -300,7 +314,11 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
                 hintergrund = MutedText.copy(alpha = 0.18f),
                 onClick = { RecordingStatus.stop(context) },
             ) {
-                Icon(imageVector = Icons.Filled.Stop, contentDescription = "Beenden", tint = MutedText)
+                Icon(
+                    imageVector = Icons.Filled.Stop,
+                    contentDescription = stringResource(R.string.wear_stop_cd),
+                    tint = MutedText,
+                )
             }
         }
     }
@@ -311,6 +329,7 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
 private fun EndeScreen() {
     val laufzeitMs by RecordingStatus.laufzeitMs.collectAsStateWithLifecycle()
     val distanzKm by RecordingStatus.distanzKm.collectAsStateWithLifecycle()
+    val sprache = spracheDerKonfiguration()
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -324,7 +343,7 @@ private fun EndeScreen() {
             style = TextStyle(fontFeatureSettings = "tnum"),
         )
         Text(
-            text = "${formatKmDe(distanzKm)} km",
+            text = stringResource(R.string.wear_value_km, formatDistanceKm(distanzKm, sprache)),
             color = MutedText,
             fontSize = 15.sp,
             style = TextStyle(fontFeatureSettings = "tnum"),
@@ -337,7 +356,11 @@ private fun EndeScreen() {
             hintergrund = AccentGreen,
             onClick = { RecordingStatus.zurueckZumStart() },
         ) {
-            Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Zurück zum Start", tint = OnAccentGreen)
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = stringResource(R.string.wear_back_to_start_cd),
+                tint = OnAccentGreen,
+            )
         }
     }
 }
@@ -371,9 +394,18 @@ private fun RundKnopf(
     }
 }
 
-/** Kilometer mit deutschem Dezimalkomma — [formatKm] liefert einen Punkt. */
-private fun formatKmDe(km: Double): String = formatKm(km).replace('.', ',')
+/**
+ * Die Sprache, in der die Ressourcen dieses Bildschirms gerade antworten —
+ * aus der Konfiguration, die der Override aus [de.trailscape.wear.WearLocale]
+ * bereits traegt. So passen Zahlformat (Komma/Punkt) und Texte immer
+ * zusammen.
+ */
+@Composable
+private fun spracheDerKonfiguration(): AppLanguage {
+    val locale = LocalConfiguration.current.locales[0] ?: return AppLanguage.EN
+    return languageOfTag(locale.toLanguageTag())
+}
 
-/** Tempo mit einer Nachkommastelle und deutschem Komma, "–" ohne Wert. */
-private fun formatTempoDe(kmh: Double?): String =
-    kmh?.let { String.format(Locale.GERMANY, "%.1f", it) } ?: "–"
+/** Tempo mit einer Nachkommastelle im Zahlformat der [sprache], „–" ohne Wert. */
+internal fun formatTempo(kmh: Double?, sprache: AppLanguage): String =
+    kmh?.let { formatDecimal(it, 1, sprache) } ?: "–"

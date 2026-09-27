@@ -29,10 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 
 /**
  * # Das One-UI-Eingabefeld: Beschriftung **ueber** dem Feld
@@ -160,7 +162,7 @@ fun OneUiSearchField(
                 )
 
                 value.isNotEmpty() -> IconButton(onClick = { onValueChange("") }) {
-                    Icon(Icons.Filled.Clear, contentDescription = "Suche leeren")
+                    Icon(Icons.Filled.Clear, contentDescription = stringResource(R.string.shell_search_clear_cd))
                 }
             }
         },

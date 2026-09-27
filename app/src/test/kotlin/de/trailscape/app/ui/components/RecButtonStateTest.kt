@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.components
 
+import de.trailscape.core.i18n.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -59,23 +60,31 @@ class RecButtonStateTest {
 
     @Test
     fun `null Kilometer bleiben eine Nachkommastelle`() {
-        assertEquals("0,0 km", recRouteLabel(0.0))
+        assertEquals("0,0 km", recRouteLabel(0.0, AppLanguage.DE))
     }
 
     @Test
     fun `44 75 rundet kaufmaennisch auf 44 8`() {
-        assertEquals("44,8 km", recRouteLabel(44.75))
+        assertEquals("44,8 km", recRouteLabel(44.75, AppLanguage.DE))
     }
 
     @Test
     fun `100 04 rundet ab und behaelt die Nachkommastelle`() {
-        assertEquals("100,0 km", recRouteLabel(100.04))
+        assertEquals("100,0 km", recRouteLabel(100.04, AppLanguage.DE))
     }
 
     @Test
     fun `glatte Werte bleiben nie ohne Nachkommastelle`() {
         // Bewusst NICHT "45 km" — das Label bleibt in jedem Fall einstellig
         // nach dem Komma, konsistent mit jeder anderen Kilometerzahl der App.
-        assertEquals("45,0 km", recRouteLabel(45.0))
+        assertEquals("45,0 km", recRouteLabel(45.0, AppLanguage.DE))
+    }
+
+    @Test
+    fun `englisch mit Dezimalpunkt und derselben Rundung`() {
+        assertEquals("0.0 km", recRouteLabel(0.0, AppLanguage.EN))
+        assertEquals("44.8 km", recRouteLabel(44.75, AppLanguage.EN))
+        assertEquals("100.0 km", recRouteLabel(100.04, AppLanguage.EN))
+        assertEquals("45.0 km", recRouteLabel(45.0, AppLanguage.EN))
     }
 }
