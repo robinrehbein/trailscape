@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.today
 
+import androidx.annotation.StringRes
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.core.HrvAssessment
 import de.trailscape.core.HrvStatus
@@ -17,6 +20,7 @@ import de.trailscape.core.classifyTsb
 import de.trailscape.core.formatGoalDuration
 import de.trailscape.core.formatRoundHours
 import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.formatMonthName
 import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -38,6 +42,14 @@ import kotlin.math.roundToInt
  * Trennung wie bei `TrainingInsights.kt`, damit die Wortwahl als gewoehnlicher
  * JVM-Test pruefbar bleibt (`TodayWordingTest`). Die Composables in
  * `TodayCards.kt` setzen die fertigen Saetze nur noch.
+ *
+ * ## Sprache
+ * Die Saetze stehen in `res/values[-en]/strings_today.xml`. Die Funktionen
+ * liefern deshalb [UiText] statt fertiger Strings: welcher Satz mit welchen
+ * Zahlen — aufgeloest wird erst in der Anzeige, in der Sprache der
+ * Oberflaeche. Jede Tagesart hat ihren eigenen ganzen Satz; zusammengesetzt
+ * werden hoechstens ganze Saetze (Readiness-Vorsatz + Schlagzeile) und
+ * sprachneutrale Zahlen. Wochentage und Dauer kommen ueber [CoreTexts].
  *
  * ## Was hier NICHT passiert
  * Keine Trainingsentscheidung. Ob heute gefahren wird, wie weit und wie hart,
@@ -153,10 +165,15 @@ fun offeredTarget(route: TodayRoute, effort: TodayEffort, restDayRide: RouteTarg
  * Gerundet wie in „Heute" und im Dialog: Die Tagesrunde ist Stunden × Tempo
  * und hat fast immer Nachkommastellen — abgeschnitten stand hier „21 km",
  * dort „22 km".
+ *
+ * Die Karte liest den fertigen String ueber [offerChipLabel] (`TodayCards.kt`).
  */
-fun offerChipLabel(offer: TodayOffer): String {
+fun offerChipText(offer: TodayOffer): UiText {
     val km = offer.target.distanceKm.roundToInt()
-    return if (offer.restDay) "Locker · $km km" else "Heute $km km"
+    return UiText.Res(
+        if (offer.restDay) R.string.today_offer_chip_rest_label else R.string.today_offer_chip_label,
+        listOf(km),
+    )
 }
 
 /**
@@ -165,10 +182,11 @@ fun offerChipLabel(offer: TodayOffer): String {
  * die volle Breite hat. Bei der ersten Runde ebenfalls mit Kilometern: Der
  * Knopf baut sie sofort, man soll vorher sehen, wie lang sie wird.
  */
-fun offerButtonLabel(offer: TodayOffer): String = when {
-    offer.restDay -> "Locker rollen · ${offer.target.distanceKm.roundToInt()} km"
-    offer.firstRound -> "Runde bauen · ${offer.target.distanceKm.roundToInt()} km"
-    else -> "Runde für heute bauen"
+fun offerButtonLabel(offer: TodayOffer): UiText = when {
+    offer.restDay -> UiText.Res(R.string.today_offer_rest_action, listOf(offer.target.distanceKm.roundToInt()))
+    offer.firstRound ->
+        UiText.Res(R.string.today_offer_first_round_action, listOf(offer.target.distanceKm.roundToInt()))
+    else -> UiText.Res(R.string.today_offer_action)
 }
 
 /**
@@ -179,18 +197,21 @@ fun offerButtonLabel(offer: TodayOffer): String = when {
  * Vorher stand hier „45,0 km", oben „45 km" — dieselbe Zahl, zwei
  * Schreibweisen.
  */
-fun offerHint(offer: TodayOffer, restHeadline: String = "Heute ist Ruhetag."): String {
+fun offerHint(
+    offer: TodayOffer,
+    restHeadline: UiText = UiText.Res(R.string.today_rest_headline_plan),
+): UiText {
     val km = offer.target.distanceKm.roundToInt()
     return if (offer.restDay) {
-        "$restHeadline Wenn du trotzdem fahren magst: $km km locker rollen."
+        UiText.Res(R.string.today_offer_rest_hint, listOf(restHeadline, km))
     } else {
-        "Heute stehen $km km an."
+        UiText.Res(R.string.today_offer_hint, listOf(km))
     }
 }
 
 /** Beschriftung des Bau-Knopfs im Losfahren-Dialog — am Ruhetag wie in „Heute". */
-fun offerDialogAction(offer: TodayOffer): String =
-    if (offer.restDay) "Locker rollen" else "Passende Runde bauen"
+fun offerDialogAction(offer: TodayOffer): UiText =
+    UiText.Res(if (offer.restDay) R.string.today_offer_dialog_rest_action else R.string.today_offer_dialog_action)
 
 /** Die laengste Einheit einer Woche mit mindestens zwei Einheiten. */
 private fun isLongestOfWeek(session: TrainingSession, weekSessions: List<TrainingSession>): Boolean {
@@ -203,41 +224,37 @@ private fun isLongestOfWeek(session: TrainingSession, weekSessions: List<Trainin
  * Das eine Wort unter der Zahl im Ring. Nie das feste „bereit" von frueher —
  * das stand auch unter einer 23 und war dann schlicht falsch.
  */
-fun readinessWord(band: ReadinessBand): String = when (band) {
-    ReadinessBand.HART -> "erholt"
-    ReadinessBand.NORMAL -> "normal"
-    ReadinessBand.LOCKER -> "müde"
-    ReadinessBand.RUHE -> "Ruhe"
-}
+fun readinessWord(band: ReadinessBand): UiText = UiText.Res(
+    when (band) {
+        ReadinessBand.HART -> R.string.today_readiness_word_hard
+        ReadinessBand.NORMAL -> R.string.today_readiness_word_normal
+        ReadinessBand.LOCKER -> R.string.today_readiness_word_easy
+        ReadinessBand.RUHE -> R.string.today_readiness_word_rest
+    },
+)
 
 /** Der erste Halbsatz der Schlagzeile — nur mit Gesamtwert. */
-private fun readinessLead(band: ReadinessBand): String = when (band) {
-    ReadinessBand.HART -> "Gut erholt."
-    ReadinessBand.NORMAL -> "Normal erholt."
-    ReadinessBand.LOCKER -> "Etwas müde."
-    ReadinessBand.RUHE -> "Ziemlich müde."
-}
-
-/** „eine lockere Runde" — die Tagesart als Satzglied. */
-private fun effortPhrase(effort: TodayEffort): String = when (effort) {
-    TodayEffort.LOCKER -> "eine lockere Runde"
-    TodayEffort.MITTEL -> "eine normale Runde"
-    TodayEffort.HART -> "eine harte Einheit"
-    TodayEffort.LANG -> "die lange Fahrt"
-    TodayEffort.RUHETAG -> "ein Ruhetag"
-    TodayEffort.ZIELTAG -> "dein Zielevent"
-}
+private fun readinessLead(band: ReadinessBand): UiText = UiText.Res(
+    when (band) {
+        ReadinessBand.HART -> R.string.today_headline_lead_hard
+        ReadinessBand.NORMAL -> R.string.today_headline_lead_normal
+        ReadinessBand.LOCKER -> R.string.today_headline_lead_easy
+        ReadinessBand.RUHE -> R.string.today_headline_lead_rest
+    },
+)
 
 /**
  * Die Ruhetag-Schlagzeile ohne Readiness-Vorsatz — geteilt von [todayHeadline]
  * und dem Losfahren-Dialog ([offerHint]), damit beide denselben Grund nennen:
  * Plan-Ruhetag, Tagesform statt Planeinheit oder Tagesform ohne Plan.
  */
-fun restHeadline(route: TodayRoute, planRestDay: Boolean): String = when {
-    route.session != null -> "Heute lieber Pause statt Training."
-    planRestDay -> "Heute ist Ruhetag."
-    else -> "Heute lieber ein Ruhetag."
-}
+fun restHeadline(route: TodayRoute, planRestDay: Boolean): UiText = UiText.Res(
+    when {
+        route.session != null -> R.string.today_rest_headline_skipped
+        planRestDay -> R.string.today_rest_headline_plan
+        else -> R.string.today_rest_headline_readiness
+    },
+)
 
 /**
  * Die Schlagzeile der Hero-Karte: „Gut erholt. Heute eine lockere Runde."
@@ -249,6 +266,10 @@ fun restHeadline(route: TodayRoute, planRestDay: Boolean): String = when {
  * Die erste Runde ohne gefahrene Tour sagt, was sie ist: ein Anfang, keine
  * Tagesform-Auskunft („Für den Anfang: eine ruhige Runde.").
  *
+ * Jede Tagesart hat ihren eigenen ganzen Satz statt „Heute" + Satzglied —
+ * im Englischen stehen Artikel und Wortstellung anders, ein eingesetztes
+ * „eine lockere Runde" liesse sich nicht sauber uebersetzen.
+ *
  * @param band das Readiness-Band, oder `null` ohne Gesamtwert (dann faellt
  *   der erste Halbsatz weg — die Empfehlung kommt dann aus dem Plan).
  */
@@ -257,63 +278,83 @@ fun todayHeadline(
     route: TodayRoute,
     band: ReadinessBand?,
     planRestDay: Boolean,
-): String {
+): UiText {
     val body = when (effort) {
-        TodayEffort.ZIELTAG -> "Heute ist dein großer Tag."
+        TodayEffort.ZIELTAG -> UiText.Res(R.string.today_headline_event)
         TodayEffort.RUHETAG -> restHeadline(route, planRestDay)
 
-        TodayEffort.LANG -> "Heute steht die lange Fahrt an."
-        TodayEffort.HART -> "Heute darf es hart werden."
-        else -> when {
-            route.firstRound -> "Für den Anfang: eine ruhige Runde."
-            route.downgraded -> "Heute weniger als geplant: ${effortPhrase(effort)}."
-            else -> "Heute ${effortPhrase(effort)}."
+        TodayEffort.LANG -> UiText.Res(R.string.today_headline_long)
+        TodayEffort.HART -> UiText.Res(R.string.today_headline_hard)
+        // Uebrig bleiben LOCKER und MITTEL.
+        TodayEffort.LOCKER, TodayEffort.MITTEL -> {
+            val easy = effort == TodayEffort.LOCKER
+            UiText.Res(
+                when {
+                    route.firstRound -> R.string.today_headline_first_round
+                    route.downgraded && easy -> R.string.today_headline_downgraded_easy
+                    route.downgraded -> R.string.today_headline_downgraded_moderate
+                    easy -> R.string.today_headline_easy
+                    else -> R.string.today_headline_moderate
+                },
+            )
         }
     }
-    return if (band != null) "${readinessLead(band)} $body" else body
+    return if (band != null) UiText.Res(R.string.today_headline_with_lead, listOf(readinessLead(band), body)) else body
 }
 
 /**
  * Der eine Satz unter der Schlagzeile: was konkret zu fahren ist, in Worten
  * statt Zonen. „45 km ruhig fahren, so dass du dich noch unterhalten kannst."
  */
-fun todaySentence(effort: TodayEffort, route: TodayRoute): String {
+fun todaySentence(effort: TodayEffort, route: TodayRoute): UiText {
     val km = route.target?.distanceKm?.roundToInt()
     val planned = route.plannedKm
-    val kmText = when {
-        km == null -> ""
-        route.downgraded && planned != null && planned != km -> "$km km statt $planned km"
-        else -> "$km km"
+    val kmText: UiText = when {
+        km == null -> UiText.Plain("")
+        route.downgraded && planned != null && planned != km ->
+            UiText.Res(R.string.today_sentence_km_instead, listOf(km, planned))
+        else -> UiText.Res(R.string.today_sentence_km, listOf(km))
     }
     return when (effort) {
         TodayEffort.LOCKER -> if (route.target?.intensity == SessionIntensity.LOCKER) {
-            "$kmText ganz locker rollen, mit leichten Gängen und ohne Druck."
+            UiText.Res(R.string.today_sentence_easy_spin, listOf(kmText))
         } else {
-            "$kmText ruhig fahren, so dass du dich noch unterhalten kannst."
+            UiText.Res(R.string.today_sentence_easy, listOf(kmText))
         }
 
-        TodayEffort.MITTEL -> "$kmText in gleichmäßigem Tempo, ohne Sprints."
-        TodayEffort.HART -> "$kmText mit ein paar kräftigen Abschnitten, dazwischen locker rollen."
-        TodayEffort.LANG -> "$kmText in ruhigem Tempo. Iss und trink unterwegs genug."
+        TodayEffort.MITTEL -> UiText.Res(R.string.today_sentence_moderate, listOf(kmText))
+        TodayEffort.HART -> UiText.Res(R.string.today_sentence_hard, listOf(kmText))
+        TodayEffort.LANG -> UiText.Res(R.string.today_sentence_long, listOf(kmText))
         // Unter dem Satz steht am Ruhetag der Knopf „Locker rollen" (siehe
         // [offeredTarget]); der Satz sagt deshalb, wofuer er da ist, statt
         // mit „Spaziergang" gegen ihn zu reden.
         TodayEffort.RUHETAG -> route.session?.let {
-            "Im Plan standen ${it.targetKm} km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker."
-        } ?: "Kein Training heute. Wenn du trotzdem aufs Rad willst: kurz und locker."
+            UiText.Res(R.string.today_sentence_rest_skipped, listOf(it.targetKm))
+        } ?: UiText.Res(R.string.today_sentence_rest)
 
-        TodayEffort.ZIELTAG -> "${route.session?.targetKm ?: km ?: 0} km, die Strecke steht schon. Viel Erfolg!"
+        TodayEffort.ZIELTAG ->
+            UiText.Res(R.string.today_sentence_event, listOf(route.session?.targetKm ?: km ?: 0))
     }
 }
 
 /** Titel des „Warum?"-Blatts: „Warum eine lockere Runde?" */
-fun whyTitle(effort: TodayEffort, route: TodayRoute): String = when {
-    effort == TodayEffort.ZIELTAG -> "Heute zählt es"
-    effort == TodayEffort.RUHETAG -> "Warum heute Pause?"
-    route.firstRound -> "Warum diese Runde?"
-    route.downgraded -> "Warum weniger als geplant?"
-    else -> "Warum ${effortPhrase(effort)}?"
-}
+fun whyTitle(effort: TodayEffort, route: TodayRoute): UiText = UiText.Res(
+    when {
+        effort == TodayEffort.ZIELTAG -> R.string.today_why_title_event
+        effort == TodayEffort.RUHETAG -> R.string.today_why_title_rest
+        route.firstRound -> R.string.today_why_title_first_round
+        route.downgraded -> R.string.today_why_title_downgraded
+        else -> when (effort) {
+            TodayEffort.LOCKER -> R.string.today_why_title_easy
+            TodayEffort.MITTEL -> R.string.today_why_title_moderate
+            TodayEffort.HART -> R.string.today_why_title_hard
+            TodayEffort.LANG -> R.string.today_why_title_long
+            // Oben schon beantwortet; nur fuer die Vollstaendigkeit des `when`.
+            TodayEffort.RUHETAG -> R.string.today_why_title_rest
+            TodayEffort.ZIELTAG -> R.string.today_why_title_event
+        }
+    },
+)
 
 // ---------------------------------------------------------------------------
 // „Warum?"-Blatt: die vier Signale
@@ -327,25 +368,34 @@ enum class SignalTone { GUT, NEUTRAL, ACHTUNG, WARNUNG }
  * Ersetzt die frueheren Coach-Saetze („HRV 7-Tage-Mittel … Normalband").
  */
 data class WhySignal(
-    val label: String,
-    val word: String,
+    val label: UiText,
+    val word: UiText,
     val tone: SignalTone,
-    val sentence: String,
+    val sentence: UiText,
 )
 
+/** Kurzform fuer eine Zeile, deren Name und Wort Ressourcen ohne Argumente sind. */
+private fun signal(@StringRes label: Int, @StringRes word: Int, tone: SignalTone, sentence: UiText) =
+    WhySignal(UiText.Res(label), UiText.Res(word), tone, sentence)
+
 /** Satz fuer ein fehlendes Signal — die Uhr liefert nichts oder noch zu wenig. */
-private fun missingSignal(label: String, collectedDays: Int): WhySignal = if (collectedDays <= 0) {
-    WhySignal(label, "keine Daten", SignalTone.NEUTRAL, "Noch keine Daten von der Uhr.")
-} else {
-    WhySignal(
+private fun missingSignal(@StringRes label: Int, collectedDays: Int): WhySignal = if (collectedDays <= 0) {
+    signal(
         label,
-        "sammelt noch",
+        R.string.today_signal_no_data_word,
         SignalTone.NEUTRAL,
-        "Noch zu wenige Werte von der Uhr für eine Einschätzung.",
+        UiText.Res(R.string.today_signal_no_data_body),
+    )
+} else {
+    signal(
+        label,
+        R.string.today_signal_collecting_word,
+        SignalTone.NEUTRAL,
+        UiText.Res(R.string.today_signal_collecting_body),
     )
 }
 
-/** „7 h 40 min" */
+/** „7 h 40 min" — in beiden Sprachen gleich (nur Einheitenzeichen). */
 internal fun formatHoursMinutes(hours: Double): String {
     var h = floor(hours).toInt()
     var min = ((hours - h) * 60).roundToInt()
@@ -362,88 +412,98 @@ internal fun formatHoursMinutes(hours: Double): String {
 
 /** Schlaf der letzten Nacht gegen den eigenen Schnitt. */
 fun sleepSignal(sleep: SleepAssessment): WhySignal {
-    val label = "Schlaf"
+    val label = R.string.today_signal_sleep_label
     val last = sleep.lastNightH
     val dev = sleep.deviationH
     if (!sleep.available || last == null || dev == null) return missingSignal(label, sleep.validNights)
     val (word, tone) = when (sleep.flag) {
-        RecoveryFlag.GRUEN, RecoveryFlag.UNBEKANNT -> "gut" to SignalTone.GUT
-        RecoveryFlag.GELB -> "etwas kurz" to SignalTone.ACHTUNG
-        RecoveryFlag.ORANGE -> "zu kurz" to SignalTone.ACHTUNG
-        RecoveryFlag.ROT -> "viel zu kurz" to SignalTone.WARNUNG
+        RecoveryFlag.GRUEN, RecoveryFlag.UNBEKANNT -> R.string.today_signal_sleep_good_word to SignalTone.GUT
+        RecoveryFlag.GELB -> R.string.today_signal_sleep_bit_short_word to SignalTone.ACHTUNG
+        RecoveryFlag.ORANGE -> R.string.today_signal_sleep_short_word to SignalTone.ACHTUNG
+        RecoveryFlag.ROT -> R.string.today_signal_sleep_very_short_word to SignalTone.WARNUNG
     }
-    val comparison = when {
-        abs(dev) < 0.25 -> "etwa so viel wie sonst"
-        dev > 0 -> "etwas mehr als dein Schnitt"
-        else -> "${formatHoursMinutes(-dev)} weniger als dein Schnitt"
+    val duration = formatHoursMinutes(last)
+    val sentence = when {
+        abs(dev) < 0.25 -> UiText.Res(R.string.today_signal_sleep_same_body, listOf(duration))
+        dev > 0 -> UiText.Res(R.string.today_signal_sleep_more_body, listOf(duration))
+        else -> UiText.Res(R.string.today_signal_sleep_less_body, listOf(duration, formatHoursMinutes(-dev)))
     }
-    return WhySignal(label, word, tone, "${formatHoursMinutes(last)}, $comparison.")
+    return signal(label, word, tone, sentence)
 }
 
 /** Ruhepuls gegen den eigenen Normalwert. */
 fun restingHrSignal(restingHr: RestingHrAssessment): WhySignal {
-    val label = "Ruhepuls"
+    val label = R.string.today_signal_resting_hr_label
     val current = restingHr.current
     val delta = restingHr.deltaBpm
     if (!restingHr.available || current == null || delta == null) {
         return missingSignal(label, restingHr.baselineDays)
     }
     val (word, tone) = when (restingHr.flag) {
-        RecoveryFlag.GRUEN, RecoveryFlag.UNBEKANNT -> "normal" to SignalTone.GUT
-        RecoveryFlag.GELB -> "leicht erhöht" to SignalTone.ACHTUNG
-        RecoveryFlag.ORANGE -> "erhöht" to SignalTone.ACHTUNG
-        RecoveryFlag.ROT -> "deutlich erhöht" to SignalTone.WARNUNG
+        RecoveryFlag.GRUEN, RecoveryFlag.UNBEKANNT -> R.string.today_signal_resting_hr_normal_word to SignalTone.GUT
+        RecoveryFlag.GELB -> R.string.today_signal_resting_hr_slightly_raised_word to SignalTone.ACHTUNG
+        RecoveryFlag.ORANGE -> R.string.today_signal_resting_hr_raised_word to SignalTone.ACHTUNG
+        RecoveryFlag.ROT -> R.string.today_signal_resting_hr_clearly_raised_word to SignalTone.WARNUNG
     }
-    val roundedDelta = delta.roundToInt()
-    val comparison = when {
-        abs(delta) < 1.5 -> "wie sonst auch"
-        delta > 0 -> "$roundedDelta mehr als sonst"
-        else -> "etwas niedriger als sonst"
+    val bpm = current.roundToInt()
+    val sentence = when {
+        abs(delta) < 1.5 -> UiText.Res(R.string.today_signal_resting_hr_same_body, listOf(bpm))
+        delta > 0 -> UiText.Res(R.string.today_signal_resting_hr_higher_body, listOf(bpm, delta.roundToInt()))
+        else -> UiText.Res(R.string.today_signal_resting_hr_lower_body, listOf(bpm))
     }
-    return WhySignal(label, word, tone, "${current.roundToInt()} Schläge pro Minute, $comparison.")
+    return signal(label, word, tone, sentence)
 }
 
 /** HRV gegen den eigenen Normalbereich — im Blatt heisst sie „Erholung (HRV)". */
 fun hrvSignal(hrv: HrvAssessment): WhySignal {
-    val label = "Erholung (HRV)"
+    val label = R.string.today_signal_hrv_label
     val current = hrv.currentRmssd
     val low = hrv.bandLowRmssd
     val high = hrv.bandHighRmssd
     if (!hrv.available || current == null || low == null || high == null) {
         return missingSignal(label, hrv.historyDays)
     }
+    // Zahl, Strich und „ms" sind in beiden Sprachen gleich.
     val range = "${low.roundToInt()}–${high.roundToInt()} ms"
     val value = "${current.roundToInt()} ms"
+    fun sentence(@StringRes id: Int) = UiText.Res(id, listOf(value, range))
     return when (hrv.status) {
-        HrvStatus.IM_BAND, HrvStatus.UNBEKANNT ->
-            WhySignal(label, "normal", SignalTone.GUT, "$value, in deinem Normalbereich von $range.")
+        HrvStatus.IM_BAND, HrvStatus.UNBEKANNT -> signal(
+            label,
+            R.string.today_signal_hrv_normal_word,
+            SignalTone.GUT,
+            sentence(R.string.today_signal_hrv_in_range_body),
+        )
 
-        HrvStatus.UEBER_BAND ->
-            WhySignal(label, "gut", SignalTone.GUT, "$value, über deinem Normalbereich von $range.")
+        HrvStatus.UEBER_BAND -> signal(
+            label,
+            R.string.today_signal_hrv_good_word,
+            SignalTone.GUT,
+            sentence(R.string.today_signal_hrv_above_body),
+        )
 
         HrvStatus.NIEDRIG -> if (hrv.flag == RecoveryFlag.GELB) {
-            WhySignal(
+            signal(
                 label,
-                "etwas niedrig",
+                R.string.today_signal_hrv_bit_low_word,
                 SignalTone.ACHTUNG,
-                "$value, leicht unter deinem Normalbereich von $range.",
+                sentence(R.string.today_signal_hrv_slightly_below_body),
             )
         } else {
-            WhySignal(
+            signal(
                 label,
-                "niedrig",
+                R.string.today_signal_hrv_low_word,
                 if (hrv.flag == RecoveryFlag.ROT) SignalTone.WARNUNG else SignalTone.ACHTUNG,
-                "$value, deutlich unter deinem Normalbereich von $range.",
+                sentence(R.string.today_signal_hrv_clearly_below_body),
             )
         }
 
-        HrvStatus.SAETTIGUNG ->
-            WhySignal(
-                label,
-                "auffällig",
-                SignalTone.ACHTUNG,
-                "$value, hoch bei zugleich erhöhtem Ruhepuls. Das kommt auch bei starker Müdigkeit vor.",
-            )
+        HrvStatus.SAETTIGUNG -> signal(
+            label,
+            R.string.today_signal_hrv_unusual_word,
+            SignalTone.ACHTUNG,
+            UiText.Res(R.string.today_signal_hrv_saturation_body, listOf(value)),
+        )
     }
 }
 
@@ -452,41 +512,47 @@ fun hrvSignal(hrv: HrvAssessment): WhySignal {
  * nennen. `null` heisst: noch keine Fitnesskurve.
  */
 fun loadSignal(tsb: Double?): WhySignal {
-    val label = "Belastung"
+    val label = R.string.today_signal_load_label
     if (tsb == null) {
-        return WhySignal(
+        return signal(
             label,
-            "keine Daten",
+            R.string.today_signal_no_data_word,
             SignalTone.NEUTRAL,
-            "Noch zu wenige Fahrten, um die Belastung einzuschätzen.",
+            UiText.Res(R.string.today_signal_load_no_data_body),
         )
     }
-    return when (classifyTsb(tsb)) {
-        TsbBand.SEHR_FRISCH ->
-            WhySignal(label, "sehr frisch", SignalTone.GUT, "Du bist zuletzt wenig gefahren. Die Beine sind ausgeruht.")
+    val (word, tone, sentence) = when (classifyTsb(tsb)) {
+        TsbBand.SEHR_FRISCH -> Triple(
+            R.string.today_signal_load_very_fresh_word,
+            SignalTone.GUT,
+            R.string.today_signal_load_very_fresh_body,
+        )
 
-        TsbBand.FORMSPITZE ->
-            WhySignal(label, "frisch", SignalTone.GUT, "Die Beine sind ausgeruht und bereit.")
+        TsbBand.FORMSPITZE -> Triple(
+            R.string.today_signal_load_fresh_word,
+            SignalTone.GUT,
+            R.string.today_signal_load_fresh_body,
+        )
 
-        TsbBand.NEUTRAL ->
-            WhySignal(label, "ausgeglichen", SignalTone.GUT, "Training und Erholung halten sich die Waage.")
+        TsbBand.NEUTRAL -> Triple(
+            R.string.today_signal_load_balanced_word,
+            SignalTone.GUT,
+            R.string.today_signal_load_balanced_body,
+        )
 
-        TsbBand.PRODUKTIV ->
-            WhySignal(
-                label,
-                "etwas müde",
-                SignalTone.ACHTUNG,
-                "Die letzten Tage waren intensiv. Der Körper baut gerade auf.",
-            )
+        TsbBand.PRODUKTIV -> Triple(
+            R.string.today_signal_load_tired_word,
+            SignalTone.ACHTUNG,
+            R.string.today_signal_load_tired_body,
+        )
 
-        TsbBand.UEBERLASTUNG ->
-            WhySignal(
-                label,
-                "sehr müde",
-                SignalTone.WARNUNG,
-                "Die letzten Wochen waren sehr hart. Der Körper braucht Erholung.",
-            )
+        TsbBand.UEBERLASTUNG -> Triple(
+            R.string.today_signal_load_very_tired_word,
+            SignalTone.WARNUNG,
+            R.string.today_signal_load_very_tired_body,
+        )
     }
+    return signal(label, word, tone, UiText.Res(sentence))
 }
 
 /**
@@ -504,6 +570,9 @@ fun loadSignal(tsb: Double?): WhySignal {
  * „Ohne Trainingsziel …" entfaellt dann — er behauptete „deine letzten
  * Fahrten", die es noch nicht gibt.
  *
+ * [TodayRoute.note] kommt fertig aus `:core`, in der Sprache von [texts]
+ * gerechnet; [texts] liefert ausserdem Wochentag und Dauer.
+ *
  * @param upcoming die naechste gewichtige Einheit dieser Woche nach heute
  *   (siehe [upcomingKeySession]).
  */
@@ -515,42 +584,60 @@ fun whyNote(
     deloadRecommended: Boolean,
     hasPlan: Boolean,
     texts: CoreTexts,
-): List<String> = buildList {
-    route.note?.let { add(it) }
+): List<UiText> = buildList {
+    route.note?.let { add(UiText.Plain(it)) }
     if (route.firstRound && effort != TodayEffort.RUHETAG) {
         val hours = route.target?.durationH
         add(
             if (hours != null) {
-                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa ${formatRoundHours(hours, texts)}."
+                UiText.Res(R.string.today_why_first_round_hours_body, listOf(formatRoundHours(hours, texts)))
             } else {
-                "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg."
+                UiText.Res(R.string.today_why_first_round_body)
             },
         )
-        add("Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.")
+        add(UiText.Res(R.string.today_why_first_round_adapts_body))
     }
     if (effort == TodayEffort.RUHETAG && planRestDay && route.session == null) {
-        add("Laut Plan ist heute frei. Erholung gehört zum Training dazu.")
+        add(UiText.Res(R.string.today_why_plan_rest_day_body))
     }
     upcoming?.let {
-        val head = "${it.weekday} steht ${it.what} mit ${it.km} km an."
+        // Ein ganzer Satz je Art: Im Englischen steht der Wochentag hinten
+        // („… is coming up on Saturday."), ein eingesetztes Satzglied passte nicht.
+        val head = UiText.Res(
+            when (it.kind) {
+                UpcomingKind.EVENT -> R.string.today_why_upcoming_event_body
+                UpcomingKind.HARD -> R.string.today_why_upcoming_hard_body
+                UpcomingKind.LONG -> R.string.today_why_upcoming_long_body
+                UpcomingKind.LONGER -> R.string.today_why_upcoming_longer_body
+            },
+            listOf(texts.format.weekdayLong(PLAN_DAY_CODES[it.dayIndex]), it.km),
+        )
         add(
             if (effort == TodayEffort.LOCKER || effort == TodayEffort.MITTEL) {
-                "$head Heute nicht überziehen, dann hast du dafür genug Kraft."
+                UiText.Res(R.string.today_why_upcoming_save_energy_body, listOf(head))
             } else {
                 head
             },
         )
     }
     if (deloadRecommended) {
-        add("Deine Werte sprechen dafür, diese Woche etwas kürzer zu treten.")
+        add(UiText.Res(R.string.today_why_deload_body))
     }
     if (!hasPlan && isEmpty()) {
-        add("Ohne Trainingsziel richtet sich die Empfehlung nach deiner Tagesform und deinen letzten Fahrten.")
+        add(UiText.Res(R.string.today_why_no_plan_body))
     }
 }
 
-/** „Samstag steht die lange Fahrt mit 80 km an." — die Bausteine dazu. */
-data class UpcomingSession(val weekday: String, val what: String, val km: Int)
+/** Welche Art gewichtiger Einheit als Naechstes ansteht. */
+enum class UpcomingKind { EVENT, HARD, LONG, LONGER }
+
+/**
+ * „Samstag steht die lange Fahrt mit 80 km an." — die Bausteine dazu.
+ *
+ * @param dayIndex 0 = Montag … 6 = Sonntag; den Namen setzt erst [whyNote]
+ *   in der Sprache der Oberflaeche ein.
+ */
+data class UpcomingSession(val dayIndex: Int, val kind: UpcomingKind, val km: Int)
 
 /**
  * Die naechste gewichtige Einheit dieser Woche **nach** heute: das Zielevent,
@@ -574,13 +661,13 @@ fun upcomingKeySession(
             .maxByOrNull { (s, _) -> s.targetKm }
         ?: return null
     val (session, index) = pick
-    val what = when {
-        session.isEvent -> "dein Zielevent"
-        session.intensity == SessionIntensity.HART -> "eine harte Einheit"
-        isLongestOfWeek(session, weekSessions) -> "die lange Fahrt"
-        else -> "eine längere Fahrt"
+    val kind = when {
+        session.isEvent -> UpcomingKind.EVENT
+        session.intensity == SessionIntensity.HART -> UpcomingKind.HARD
+        isLongestOfWeek(session, weekSessions) -> UpcomingKind.LONG
+        else -> UpcomingKind.LONGER
     }
-    return UpcomingSession(WEEKDAY_LONG[index], what, session.targetKm)
+    return UpcomingSession(index, kind, session.targetKm)
 }
 
 // ---------------------------------------------------------------------------
@@ -588,18 +675,15 @@ fun upcomingKeySession(
 // ---------------------------------------------------------------------------
 
 /**
- * Wochentagskuerzel, wie sie in [TrainingSession.day] stehen. `:core` haelt
- * dieselbe Tabelle privat (`Training.kt`, `weekdays`); eine Aenderung dort
- * muss hier nachgezogen werden.
+ * Wochentagskuerzel, wie sie in [TrainingSession.day] stehen — ein interner
+ * Code, keine Anzeige (angezeigt ueber `texts.format.weekdayShort/Long`).
+ * `:core` haelt dieselbe Tabelle privat (`PLAN_WEEKDAY_CODES`); eine
+ * Aenderung dort muss hier nachgezogen werden.
  */
-internal val WEEKDAY_SHORT = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
-
-/** Ausgeschriebene Wochentage fuer Vorlesetext und Coach-Satz. */
-internal val WEEKDAY_LONG =
-    listOf("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+internal val PLAN_DAY_CODES = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 
 /** 0 = Montag … 6 = Sonntag; `-1` bei fremdem Kuerzel. */
-internal fun planDayIndex(day: String): Int = WEEKDAY_SHORT.indexOf(day)
+internal fun planDayIndex(day: String): Int = PLAN_DAY_CODES.indexOf(day)
 
 /** Zustand eines Tages im Wochenstreifen. */
 enum class StripState {
@@ -622,13 +706,15 @@ enum class StripState {
  * [description] ist der ganze Satz, den TalkBack statt Kuerzel und Zahl
  * vorliest („Dienstag: 32 km gefahren", „Mittwoch: Ruhetag") — sonst hoerte
  * man nur „Di", „32" und muesste die Bedeutung des Kreises erraten.
+ *
+ * [label] ist das Wochentagskuerzel in der Sprache von `texts` („Di" / „Tue").
  */
 data class StripDay(
     val label: String,
     val state: StripState,
     val km: Int?,
     val isToday: Boolean,
-    val description: String,
+    val description: UiText,
 )
 
 /**
@@ -654,12 +740,14 @@ fun riddenKmByDate(rides: List<RideInfo>, from: LocalDate, to: LocalDate): Map<L
  * @param sessions Einheiten der laufenden Planwoche (leer ohne Plan).
  * @param todayKm was heute ansteht (`null` am Ruhetag) — dieselbe Zahl wie in
  *   der Hero-Karte, damit Ring und Satz nicht auseinanderlaufen.
+ * @param texts liefert die Wochentagsnamen in der Sprache der Oberflaeche.
  */
 fun weekStrip(
     today: LocalDate,
     sessions: List<TrainingSession>,
     riddenKm: Map<LocalDate, Double>,
     todayKm: Int?,
+    texts: CoreTexts,
 ): List<StripDay> {
     val monday = today.with(DayOfWeek.MONDAY)
     return (0..6).map { index ->
@@ -667,30 +755,37 @@ fun weekStrip(
         val isToday = date == today
         val ridden = riddenKm[date]?.takeIf { it > 0 }
         val plannedKm = sessions.filter { planDayIndex(it.day) == index }.maxOfOrNull { it.targetKm }
-        val name = if (isToday) "${WEEKDAY_LONG[index]}, heute" else WEEKDAY_LONG[index]
+        val code = PLAN_DAY_CODES[index]
+        val label = texts.format.weekdayShort(code)
+        val weekday = texts.format.weekdayLong(code)
+        val name: Any = if (isToday) UiText.Res(R.string.today_strip_today_name, listOf(weekday)) else weekday
         when {
             ridden != null -> StripDay(
-                WEEKDAY_SHORT[index],
+                label,
                 StripState.DONE,
                 ridden.roundToInt(),
                 isToday,
-                "$name: ${ridden.roundToInt()} km gefahren",
+                UiText.Res(R.string.today_strip_ridden_cd, listOf(name, ridden.roundToInt())),
             )
 
             isToday -> StripDay(
-                WEEKDAY_SHORT[index],
+                label,
                 StripState.TODAY,
                 todayKm,
                 true,
-                if (todayKm != null) "$name: $todayKm km geplant" else "$name: Ruhetag",
+                if (todayKm != null) {
+                    UiText.Res(R.string.today_strip_planned_cd, listOf(name, todayKm))
+                } else {
+                    UiText.Res(R.string.today_strip_rest_day_cd, listOf(name))
+                },
             )
 
             date.isAfter(today) && plannedKm != null -> StripDay(
-                WEEKDAY_SHORT[index],
+                label,
                 StripState.PLANNED,
                 plannedKm,
                 false,
-                "$name: $plannedKm km geplant",
+                UiText.Res(R.string.today_strip_planned_cd, listOf(name, plannedKm)),
             )
 
             // Vorgelesen wird zwischen Vergangenheit und Zukunft unterschieden,
@@ -698,11 +793,14 @@ fun weekStrip(
             // war nicht zwingend ein Ruhetag (auch ein verpasster Plantag landet
             // hier), ein kommender ohne Einheit ist es.
             else -> StripDay(
-                WEEKDAY_SHORT[index],
+                label,
                 StripState.REST,
                 null,
                 false,
-                if (date.isBefore(today)) "$name: keine Fahrt" else "$name: Ruhetag",
+                UiText.Res(
+                    if (date.isBefore(today)) R.string.today_strip_no_ride_cd else R.string.today_strip_rest_day_cd,
+                    listOf(name),
+                ),
             )
         }
     }
@@ -721,15 +819,15 @@ fun weekSummary(
     targetKm: Int?,
     strip: List<StripDay>,
     rideCount: Int,
-): Pair<String, String?> {
+): Pair<UiText, UiText?> {
     val km = riddenKm.roundToInt()
     if (targetKm == null) {
-        val rides = when (rideCount) {
-            0 -> "noch keine Fahrt"
-            1 -> "1 Fahrt"
-            else -> "$rideCount Fahrten"
+        val rides = if (rideCount <= 0) {
+            UiText.Res(R.string.today_week_rides_none)
+        } else {
+            UiText.Plural(R.plurals.today_week_rides_count, rideCount)
         }
-        return "$km km diese Woche" to rides
+        return UiText.Res(R.string.today_week_km_label, listOf(km)) to rides
     }
     val open = strip.count {
         it.state == StripState.PLANNED || (it.state == StripState.TODAY && it.km != null)
@@ -739,12 +837,11 @@ fun weekSummary(
     // gerundete Zahl — dieselbe, die davor steht; „40 von 40 km" ohne
     // „geschafft" waere derselbe Widerspruch in klein.
     val extra = when {
-        km >= targetKm -> "Wochenziel geschafft"
-        open == 1 -> "noch 1 Fahrt"
-        open > 1 -> "noch $open Fahrten"
+        km >= targetKm -> UiText.Res(R.string.today_week_goal_reached_status)
+        open > 0 -> UiText.Plural(R.plurals.today_week_open_rides_count, open)
         else -> null
     }
-    return "$km von $targetKm km" to extra
+    return UiText.Res(R.string.today_week_progress_label, listOf(km, targetKm)) to extra
 }
 
 // ---------------------------------------------------------------------------
@@ -752,53 +849,71 @@ fun weekSummary(
 // ---------------------------------------------------------------------------
 
 /** „noch 12 Wochen" / „noch 5 Tage" / „morgen" / „heute" / „vorbei". */
-fun goalCountdown(today: LocalDate, goalDate: LocalDate): String {
+fun goalCountdown(today: LocalDate, goalDate: LocalDate): UiText {
     val days = ChronoUnit.DAYS.between(today, goalDate)
     return when {
-        days < 0 -> "vorbei"
-        days == 0L -> "heute"
-        days == 1L -> "morgen"
-        days < 14 -> "noch $days Tage"
-        else -> "noch ${days / 7} Wochen"
+        days < 0 -> UiText.Res(R.string.today_goal_countdown_past)
+        days == 0L -> UiText.Res(R.string.today_goal_countdown_today)
+        days == 1L -> UiText.Res(R.string.today_goal_countdown_tomorrow)
+        days < 14 -> UiText.Plural(R.plurals.today_goal_countdown_days_count, days.toInt())
+        else -> UiText.Plural(R.plurals.today_goal_countdown_weeks_count, (days / 7).toInt())
     }
 }
 
-/** „Sa, 20. Dezember" — mit Jahr, wenn es nicht das laufende ist. */
-fun formatGoalDate(today: LocalDate, goalDate: LocalDate): String {
-    val weekday = WEEKDAY_SHORT[goalDate.dayOfWeek.value - 1]
-    val month = GERMAN_MONTHS[goalDate.monthValue - 1]
-    val year = if (goalDate.year != today.year) " ${goalDate.year}" else ""
-    return "$weekday, ${goalDate.dayOfMonth}. $month$year"
+/**
+ * „Sa, 20. Dezember" / „Sat 20 December" — mit Jahr, wenn es nicht das
+ * laufende ist.
+ *
+ * Kein `DateTimeFormatter` mit Muster „EE": Der schreibt im Deutschen „Sa.",
+ * die Seite zeigt seit jeher das Plan-Kuerzel „Sa" ohne Punkt. Kuerzel und
+ * Monat kommen deshalb einzeln ([texts], [formatMonthName]), die Stellung
+ * aus der Ressource.
+ */
+fun formatGoalDate(today: LocalDate, goalDate: LocalDate, texts: CoreTexts): UiText {
+    val weekday = texts.format.weekdayShort(PLAN_DAY_CODES[goalDate.dayOfWeek.value - 1])
+    val month = formatMonthName(goalDate, texts.format.language)
+    return if (goalDate.year != today.year) {
+        UiText.Res(R.string.today_goal_date_year, listOf(weekday, goalDate.dayOfMonth, month, goalDate.year))
+    } else {
+        UiText.Res(R.string.today_goal_date, listOf(weekday, goalDate.dayOfMonth, month))
+    }
 }
-
-private val GERMAN_MONTHS = listOf(
-    "Januar", "Februar", "März", "April", "Mai", "Juni",
-    "Juli", "August", "September", "Oktober", "November", "Dezember",
-)
 
 /**
  * Die gedaempfte Zeile unter dem Zielnamen: „Sa, 20. Dezember · noch 12
  * Wochen · Woche 3 von 15". Die Planwoche entfaellt vor Planbeginn
  * ([weekIndex] < 0).
+ *
+ * Liefert die Teile; die Anzeige verbindet sie nach dem Aufloesen mit dem
+ * sprachneutralen „ · ".
  */
-fun goalLine(today: LocalDate, goalDate: LocalDate, weekIndex: Int, weekCount: Int): String =
-    buildList {
-        add(formatGoalDate(today, goalDate))
-        add(goalCountdown(today, goalDate))
-        if (weekIndex >= 0 && weekCount > 0) add("Woche ${weekIndex + 1} von $weekCount")
-    }.joinToString(" · ")
+fun goalLine(
+    today: LocalDate,
+    goalDate: LocalDate,
+    weekIndex: Int,
+    weekCount: Int,
+    texts: CoreTexts,
+): List<UiText> = buildList {
+    add(formatGoalDate(today, goalDate, texts))
+    add(goalCountdown(today, goalDate))
+    if (weekIndex >= 0 && weekCount > 0) {
+        add(UiText.Res(R.string.today_goal_plan_week_label, listOf(weekIndex + 1, weekCount)))
+    }
+}
 
 /**
  * Die Ziel-Zeile, wenn eine Zielzeit eingetragen ist (Fuehrung „Klartext"):
  * „Ziel 2:10 h · Stand heute ca. 2:25 h · noch 12 Wochen". Ohne Prognose
  * (zu wenige passende Touren) entfaellt der mittlere Teil.
  */
-fun goalTimeLine(today: LocalDate, goalDate: LocalDate, targetMin: Int, currentMin: Int?): String =
+fun goalTimeLine(today: LocalDate, goalDate: LocalDate, targetMin: Int, currentMin: Int?): List<UiText> =
     buildList {
-        add("Ziel ${formatGoalDuration(targetMin)} h")
-        currentMin?.let { add("Stand heute ca. ${formatGoalDuration(it)} h") }
+        add(UiText.Res(R.string.today_goal_target_time_label, listOf(formatGoalDuration(targetMin))))
+        currentMin?.let {
+            add(UiText.Res(R.string.today_goal_current_time_label, listOf(formatGoalDuration(it))))
+        }
         add(goalCountdown(today, goalDate))
-    }.joinToString(" · ")
+    }
 
 /** Anteil der Zeit von Planbeginn bis Zieltag, der schon hinter uns liegt (0…1). */
 fun goalProgress(planStart: LocalDate, goalDate: LocalDate, today: LocalDate): Float {

@@ -1,6 +1,7 @@
 package de.trailscape.app.ui
 
 import de.trailscape.app.ui.today.TodayEffort
+import de.trailscape.app.ui.today.TodayStrings
 import de.trailscape.core.FitnessLevel
 import de.trailscape.core.Goal
 import de.trailscape.core.SessionIntensity
@@ -95,7 +96,7 @@ class DecideTodayTest {
         assertTrue(d.planRestDay)
         assertEquals(TodayEffort.RUHETAG, d.effort)
         assertEquals(true, d.offer?.restDay)
-        assertEquals("Heute ist Ruhetag.", d.restHeadline)
+        assertEquals("Heute ist Ruhetag.", TodayStrings.de(d.restHeadline))
     }
 
     @Test

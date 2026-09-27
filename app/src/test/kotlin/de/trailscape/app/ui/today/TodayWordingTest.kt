@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.today
 
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.AscentPreference
 import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RecoveryFlag
@@ -25,8 +26,18 @@ import kotlin.test.assertTrue
  * Schlagzeile, Satz, Signalzeilen, Wochenstreifen und Zielzeile. Reine
  * JVM-Tests — die Composables selbst bleiben, wie ueberall in diesem Modul,
  * ungetestet.
+ *
+ * Die Saetze sind [UiText]; [de] loest sie gegen `values/strings_today.xml`
+ * auf ([TodayStrings]), damit der deutsche Wortlaut wie vor dem Umzug in
+ * Ressourcen geprueft bleibt. Die englischen Faelle stehen in
+ * `TodayWordingEnglishTest`.
  */
 class TodayWordingTest {
+
+    private fun de(text: UiText): String = TodayStrings.de(text)
+    private fun de(texts: List<UiText>): List<String> = texts.map(TodayStrings::de)
+    private fun de(pair: Pair<UiText, UiText?>): Pair<String, String?> =
+        TodayStrings.de(pair.first) to pair.second?.let(TodayStrings::de)
 
     private fun session(
         day: String,
@@ -91,9 +102,9 @@ class TodayWordingTest {
         val r = route(target(45.0, SessionIntensity.GRUNDLAGE), week[1])
         val effort = todayEffort(r, planRestDay = false, weekSessions = week)
         assertEquals(TodayEffort.LOCKER, effort)
-        assertEquals("Gut erholt. Heute eine lockere Runde.", todayHeadline(effort, r, ReadinessBand.HART, false))
-        assertEquals("45 km ruhig fahren, so dass du dich noch unterhalten kannst.", todaySentence(effort, r))
-        assertEquals("Warum eine lockere Runde?", whyTitle(effort, r))
+        assertEquals("Gut erholt. Heute eine lockere Runde.", de(todayHeadline(effort, r, ReadinessBand.HART, false)))
+        assertEquals("45 km ruhig fahren, so dass du dich noch unterhalten kannst.", de(todaySentence(effort, r)))
+        assertEquals("Warum eine lockere Runde?", de(whyTitle(effort, r)))
     }
 
     @Test
@@ -109,9 +120,9 @@ class TodayWordingTest {
         assertEquals(TodayEffort.LOCKER, effort)
         assertEquals(
             "Etwas müde. Heute weniger als geplant: eine lockere Runde.",
-            todayHeadline(effort, r, ReadinessBand.LOCKER, false),
+            de(todayHeadline(effort, r, ReadinessBand.LOCKER, false)),
         )
-        assertTrue(todaySentence(effort, r).startsWith("48 km statt 80 km"))
+        assertTrue(de(todaySentence(effort, r)).startsWith("48 km statt 80 km"))
     }
 
     @Test
@@ -134,15 +145,15 @@ class TodayWordingTest {
         val skipped = route(null, week[1], downgraded = true)
         val effort = todayEffort(skipped, false, week)
         assertEquals(TodayEffort.RUHETAG, effort)
-        assertEquals("Heute lieber Pause statt Training.", todayHeadline(effort, skipped, null, false))
+        assertEquals("Heute lieber Pause statt Training.", de(todayHeadline(effort, skipped, null, false)))
         assertEquals(
             "Im Plan standen 45 km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker.",
-            todaySentence(effort, skipped),
+            de(todaySentence(effort, skipped)),
         )
         // Ohne Planeinheit: kein Widerspruch zum Knopf „Locker rollen" darunter.
         assertEquals(
             "Kein Training heute. Wenn du trotzdem aufs Rad willst: kurz und locker.",
-            todaySentence(TodayEffort.RUHETAG, route(null, null)),
+            de(todaySentence(TodayEffort.RUHETAG, route(null, null))),
         )
 
         // Planfreier Tag mitten im Plan: kein Angebot, auch wenn die
@@ -150,7 +161,7 @@ class TodayWordingTest {
         val free = route(target(40.0, SessionIntensity.GRUNDLAGE), null)
         val freeEffort = todayEffort(free, planRestDay = true, weekSessions = week)
         assertEquals(TodayEffort.RUHETAG, freeEffort)
-        assertEquals("Normal erholt. Heute ist Ruhetag.", todayHeadline(freeEffort, free, ReadinessBand.NORMAL, true))
+        assertEquals("Normal erholt. Heute ist Ruhetag.", de(todayHeadline(freeEffort, free, ReadinessBand.NORMAL, true)))
     }
 
     @Test
@@ -159,7 +170,7 @@ class TodayWordingTest {
         val r = route(null, event)
         val effort = todayEffort(r, false, week)
         assertEquals(TodayEffort.ZIELTAG, effort)
-        assertEquals("Heute ist dein großer Tag.", todayHeadline(effort, r, null, false))
+        assertEquals("Heute ist dein großer Tag.", de(todayHeadline(effort, r, null, false)))
     }
 
     @Test
@@ -174,7 +185,7 @@ class TodayWordingTest {
         for (r in cases) {
             val effort = todayEffort(r, false, week)
             for (band in ReadinessBand.entries) {
-                val text = todayHeadline(effort, r, band, false) + " " + todaySentence(effort, r)
+                val text = de(todayHeadline(effort, r, band, false)) + " " + de(todaySentence(effort, r))
                 for (word in jargon) assertFalse(text.contains(word), "„$word“ in: $text")
             }
         }
@@ -182,10 +193,10 @@ class TodayWordingTest {
 
     @Test
     fun `Ring-Wort passt zum Band`() {
-        assertEquals("erholt", readinessWord(ReadinessBand.HART))
-        assertEquals("normal", readinessWord(ReadinessBand.NORMAL))
-        assertEquals("müde", readinessWord(ReadinessBand.LOCKER))
-        assertEquals("Ruhe", readinessWord(ReadinessBand.RUHE))
+        assertEquals("erholt", de(readinessWord(ReadinessBand.HART)))
+        assertEquals("normal", de(readinessWord(ReadinessBand.NORMAL)))
+        assertEquals("müde", de(readinessWord(ReadinessBand.LOCKER)))
+        assertEquals("Ruhe", de(readinessWord(ReadinessBand.RUHE)))
     }
 
     // ------------------------------------------------------- Warum-Blatt
@@ -207,32 +218,33 @@ class TodayWordingTest {
             message = "",
         )
         val row = sleepSignal(sleep)
-        assertEquals("gut", row.word)
+        assertEquals("Schlaf", de(row.label))
+        assertEquals("gut", de(row.word))
         assertEquals(SignalTone.GUT, row.tone)
-        assertEquals("7 h 40 min, etwas mehr als dein Schnitt.", row.sentence)
+        assertEquals("7 h 40 min, etwas mehr als dein Schnitt.", de(row.sentence))
     }
 
     @Test
     fun `fehlende Uhrdaten werden benannt`() {
-        assertEquals("Noch keine Daten von der Uhr.", sleepSignal(SleepAssessment.unavailable("x", 0)).sentence)
+        assertEquals("Noch keine Daten von der Uhr.", de(sleepSignal(SleepAssessment.unavailable("x", 0)).sentence))
         assertEquals(SignalTone.NEUTRAL, sleepSignal(SleepAssessment.unavailable("x", 5)).tone)
     }
 
     @Test
     fun `Belastung ohne Formwert und im Aufbau`() {
-        assertEquals("keine Daten", loadSignal(null).word)
-        assertEquals("etwas müde", loadSignal(-15.0).word)
+        assertEquals("keine Daten", de(loadSignal(null).word))
+        assertEquals("etwas müde", de(loadSignal(-15.0).word))
         assertEquals(SignalTone.WARNUNG, loadSignal(-40.0).tone)
     }
 
     @Test
     fun `Notiz nennt die naechste gewichtige Einheit`() {
         val upcoming = upcomingKeySession(week, todayIndex = 3, todayKm = 45)
-        assertEquals(UpcomingSession("Samstag", "die lange Fahrt", 80), upcoming)
+        assertEquals(UpcomingSession(5, UpcomingKind.LONG, 80), upcoming)
         val note = whyNote(TodayEffort.LOCKER, route(null, null), false, upcoming, false, hasPlan = true, texts = CoreTextsDe)
         assertEquals(
             listOf("Samstag steht die lange Fahrt mit 80 km an. Heute nicht überziehen, dann hast du dafür genug Kraft."),
-            note,
+            de(note),
         )
         assertNull(upcomingKeySession(week, todayIndex = 5, todayKm = 80))
     }
@@ -254,12 +266,12 @@ class TodayWordingTest {
         val o = offer(free, planRestDay = true, weekSessions = week)
         assertEquals(TodayOffer(easy, restDay = true), o)
         // Kurz genug fuer den halbbreiten Knopf auf der Karte, mit Kilometern.
-        assertEquals("Locker · 16 km", offerChipLabel(o!!))
-        assertEquals("Locker rollen · 16 km", offerButtonLabel(o))
-        assertEquals("Locker rollen", offerDialogAction(o))
+        assertEquals("Locker · 16 km", de(offerChipText(o!!)))
+        assertEquals("Locker rollen · 16 km", de(offerButtonLabel(o)))
+        assertEquals("Locker rollen", de(offerDialogAction(o)))
         assertEquals(
             "Heute ist Ruhetag. Wenn du trotzdem fahren magst: 16 km locker rollen.",
-            offerHint(o, restHeadline(free, planRestDay = true)),
+            de(offerHint(o, restHeadline(free, planRestDay = true))),
         )
     }
 
@@ -271,7 +283,7 @@ class TodayWordingTest {
         // Der Dialog nennt denselben Grund wie die Schlagzeile in „Heute".
         assertEquals(
             "Heute lieber Pause statt Training. Wenn du trotzdem fahren magst: 16 km locker rollen.",
-            offerHint(o!!, restHeadline(skipped, planRestDay = false)),
+            de(offerHint(o!!, restHeadline(skipped, planRestDay = false))),
         )
         // Ohne Plan genauso.
         assertEquals(TodayOffer(easy, restDay = true), offer(route(null, null), false, emptyList()))
@@ -288,9 +300,9 @@ class TodayWordingTest {
         val planned = target(45.0, SessionIntensity.GRUNDLAGE)
         val o = offer(route(planned, week[1]), false, week)
         assertEquals(TodayOffer(planned, restDay = false), o)
-        assertEquals("Heute 45 km", offerChipLabel(o!!))
-        assertEquals("Runde für heute bauen", offerButtonLabel(o))
-        assertEquals("Heute stehen 45 km an.", offerHint(o))
+        assertEquals("Heute 45 km", de(offerChipText(o!!)))
+        assertEquals("Runde für heute bauen", de(offerButtonLabel(o)))
+        assertEquals("Heute stehen 45 km an.", de(offerHint(o)))
     }
 
     @Test
@@ -298,11 +310,11 @@ class TodayWordingTest {
         // Stunden × Tempo hat fast immer Nachkommastellen. Frueher schnitt die
         // Karte ab („Heute 44 km"), waehrend „Heute" und der Dialog rundeten.
         val o = TodayOffer(target(44.6, SessionIntensity.GRUNDLAGE), restDay = false)
-        assertEquals("Heute 45 km", offerChipLabel(o))
-        assertEquals("Heute stehen 45 km an.", offerHint(o))
+        assertEquals("Heute 45 km", de(offerChipText(o)))
+        assertEquals("Heute stehen 45 km an.", de(offerHint(o)))
         val rest = TodayOffer(target(16.7, SessionIntensity.LOCKER), restDay = true)
-        assertEquals("Locker · 17 km", offerChipLabel(rest))
-        assertEquals("Locker rollen · 17 km", offerButtonLabel(rest))
+        assertEquals("Locker · 17 km", de(offerChipText(rest)))
+        assertEquals("Locker rollen · 17 km", de(offerButtonLabel(rest)))
     }
 
     @Test
@@ -325,14 +337,14 @@ class TodayWordingTest {
     @Test
     fun `die erste Runde sagt, dass sie ein Anfang ist`() {
         val effort = todayEffort(firstRoundRoute, false, emptyList())
-        assertEquals("Für den Anfang: eine ruhige Runde.", todayHeadline(effort, firstRoundRoute, null, false))
+        assertEquals("Für den Anfang: eine ruhige Runde.", de(todayHeadline(effort, firstRoundRoute, null, false)))
         assertEquals(
             "Normal erholt. Für den Anfang: eine ruhige Runde.",
-            todayHeadline(effort, firstRoundRoute, ReadinessBand.NORMAL, false),
+            de(todayHeadline(effort, firstRoundRoute, ReadinessBand.NORMAL, false)),
         )
         assertEquals(
             "26 km ruhig fahren, so dass du dich noch unterhalten kannst.",
-            todaySentence(effort, firstRoundRoute),
+            de(todaySentence(effort, firstRoundRoute)),
         )
     }
 
@@ -340,11 +352,11 @@ class TodayWordingTest {
     fun `die erste Runde wird mit Kilometern direkt gebaut`() {
         val o = offer(firstRoundRoute, planRestDay = false, weekSessions = emptyList())
         assertEquals(TodayOffer(firstRoundRoute.target!!, restDay = false, firstRound = true), o)
-        assertEquals("Runde bauen · 26 km", offerButtonLabel(o!!))
+        assertEquals("Runde bauen · 26 km", de(offerButtonLabel(o!!)))
         // Ohne erste Runde bleibt der gewohnte Knopf.
         assertEquals(
             "Runde für heute bauen",
-            offerButtonLabel(TodayOffer(firstRoundRoute.target!!, restDay = false)),
+            de(offerButtonLabel(TodayOffer(firstRoundRoute.target!!, restDay = false))),
         )
         // Am Plan-Ruhetag gibt es auch ohne Touren nur die Ruhetagsrunde.
         assertEquals(TodayOffer(easy, restDay = true), offer(firstRoundRoute, true, emptyList()))
@@ -353,7 +365,7 @@ class TodayWordingTest {
     @Test
     fun `das Warum der ersten Runde nennt den Einstieg statt der letzten Fahrten`() {
         val effort = todayEffort(firstRoundRoute, false, emptyList())
-        assertEquals("Warum diese Runde?", whyTitle(effort, firstRoundRoute))
+        assertEquals("Warum diese Runde?", de(whyTitle(effort, firstRoundRoute)))
         val note = whyNote(
             effort = effort,
             route = firstRoundRoute,
@@ -368,9 +380,9 @@ class TodayWordingTest {
                 "Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa 1½ h.",
                 "Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.",
             ),
-            note,
+            de(note),
         )
-        assertTrue(note.none { it.startsWith("Ohne Trainingsziel") })
+        assertTrue(de(note).none { it.startsWith("Ohne Trainingsziel") })
     }
 
     // ----------------------------------------------------- Wochenstreifen
@@ -379,7 +391,7 @@ class TodayWordingTest {
     fun `Streifen zeigt erledigt, heute, geplant und frei`() {
         val thursday = LocalDate.of(2026, 9, 24)
         val ridden = mapOf(LocalDate.of(2026, 9, 22) to 31.6, LocalDate.of(2026, 9, 27) to 0.0)
-        val strip = weekStrip(thursday, week, ridden, todayKm = 45)
+        val strip = weekStrip(thursday, week, ridden, todayKm = 45, texts = CoreTextsDe)
         assertEquals(listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"), strip.map { it.label })
         assertEquals(
             listOf(
@@ -389,39 +401,39 @@ class TodayWordingTest {
             strip.map { it.state },
         )
         assertEquals(32, strip[1].km)
-        assertEquals("Donnerstag, heute: 45 km geplant", strip[3].description)
-        assertEquals("Samstag: 80 km geplant", strip[5].description)
-        assertEquals("Dienstag: 32 km gefahren", strip[1].description)
-        assertEquals("Mittwoch: keine Fahrt", strip[2].description)
-        assertEquals("Freitag: Ruhetag", strip[4].description)
+        assertEquals("Donnerstag, heute: 45 km geplant", de(strip[3].description))
+        assertEquals("Samstag: 80 km geplant", de(strip[5].description))
+        assertEquals("Dienstag: 32 km gefahren", de(strip[1].description))
+        assertEquals("Mittwoch: keine Fahrt", de(strip[2].description))
+        assertEquals("Freitag: Ruhetag", de(strip[4].description))
 
-        assertEquals("32 von 120 km" to "noch 2 Fahrten", weekSummary(31.6, 120, strip, rideCount = 1))
-        assertEquals("32 km diese Woche" to "1 Fahrt", weekSummary(31.6, null, strip, rideCount = 1))
+        assertEquals("32 von 120 km" to "noch 2 Fahrten", de(weekSummary(31.6, 120, strip, rideCount = 1)))
+        assertEquals("32 km diese Woche" to "1 Fahrt", de(weekSummary(31.6, null, strip, rideCount = 1)))
     }
 
     @Test
     fun `erreichtes Wochenziel schlaegt offene Fahrten`() {
         val thursday = LocalDate.of(2026, 9, 24)
         // Noch eine Fahrt geplant (Samstag) — trotzdem kein Rueckstand.
-        val strip = weekStrip(thursday, week, emptyMap(), todayKm = null)
-        assertEquals("79 von 40 km" to "Wochenziel geschafft", weekSummary(79.0, 40, strip, rideCount = 3))
+        val strip = weekStrip(thursday, week, emptyMap(), todayKm = null, texts = CoreTextsDe)
+        assertEquals("79 von 40 km" to "Wochenziel geschafft", de(weekSummary(79.0, 40, strip, rideCount = 3)))
         // Angezeigt wird die gerundete Zahl — „40 von 40 km" ist geschafft.
-        assertEquals("40 von 40 km" to "Wochenziel geschafft", weekSummary(39.6, 40, strip, rideCount = 2))
+        assertEquals("40 von 40 km" to "Wochenziel geschafft", de(weekSummary(39.6, 40, strip, rideCount = 2)))
         // Knapp darunter bleibt es beim Offenen.
-        assertEquals("39 von 40 km" to "noch 1 Fahrt", weekSummary(39.4, 40, strip, rideCount = 2))
+        assertEquals("39 von 40 km" to "noch 1 Fahrt", de(weekSummary(39.4, 40, strip, rideCount = 2)))
     }
 
     @Test
     fun `unter Ziel ohne offene Fahrt bleibt der Zusatz leer`() {
         val sunday = LocalDate.of(2026, 9, 27)
-        val strip = weekStrip(sunday, week, emptyMap(), todayKm = null)
-        assertEquals("30 von 40 km" to null, weekSummary(30.0, 40, strip, rideCount = 2))
+        val strip = weekStrip(sunday, week, emptyMap(), todayKm = null, texts = CoreTextsDe)
+        assertEquals("30 von 40 km" to null, de(weekSummary(30.0, 40, strip, rideCount = 2)))
     }
 
     @Test
     fun `heute schon gefahren zaehlt als erledigt`() {
         val thursday = LocalDate.of(2026, 9, 24)
-        val strip = weekStrip(thursday, week, mapOf(thursday to 44.0), todayKm = 45)
+        val strip = weekStrip(thursday, week, mapOf(thursday to 44.0), todayKm = 45, texts = CoreTextsDe)
         assertEquals(StripState.DONE, strip[3].state)
         assertTrue(strip[3].isToday)
     }
@@ -432,12 +444,13 @@ class TodayWordingTest {
     fun `Zielzeile mit Datum, Restzeit und Planwoche`() {
         val today = LocalDate.of(2026, 9, 25)
         val goal = LocalDate.of(2026, 12, 19)
-        assertEquals("Sa, 19. Dezember · noch 12 Wochen · Woche 3 von 15", goalLine(today, goal, 2, 15))
-        assertEquals("Sa, 19. Dezember · noch 12 Wochen", goalLine(today, goal, -1, 15))
-        assertEquals("noch 5 Tage", goalCountdown(today, today.plusDays(5)))
-        assertEquals("morgen", goalCountdown(today, today.plusDays(1)))
-        assertEquals("vorbei", goalCountdown(today, today.minusDays(1)))
-        assertEquals("Fr, 1. Januar 2027", formatGoalDate(today, LocalDate.of(2027, 1, 1)))
+        fun line(weekIndex: Int) = de(goalLine(today, goal, weekIndex, 15, texts = CoreTextsDe)).joinToString(" · ")
+        assertEquals("Sa, 19. Dezember · noch 12 Wochen · Woche 3 von 15", line(2))
+        assertEquals("Sa, 19. Dezember · noch 12 Wochen", line(-1))
+        assertEquals("noch 5 Tage", de(goalCountdown(today, today.plusDays(5))))
+        assertEquals("morgen", de(goalCountdown(today, today.plusDays(1))))
+        assertEquals("vorbei", de(goalCountdown(today, today.minusDays(1))))
+        assertEquals("Fr, 1. Januar 2027", de(formatGoalDate(today, LocalDate.of(2027, 1, 1), texts = CoreTextsDe)))
     }
 
     @Test
