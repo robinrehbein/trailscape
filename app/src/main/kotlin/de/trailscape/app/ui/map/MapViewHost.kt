@@ -217,6 +217,12 @@ internal fun MapViewHost(
     AndroidView(
         modifier = modifier,
         factory = {
+            // Wird die Karte kleiner (Tastatur der Suche, Splitscreen), passt
+            // der in der Kamera gespeicherte Rand womoeglich nicht mehr —
+            // gleich wieder begrenzen, bevor MapLibre damit rechnet.
+            mapView.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                if (bottom - top != oldBottom - oldTop) controller.reclampPadding()
+            }
             mapView.getMapAsync { map ->
                 map.uiSettings.apply {
                     // Attribution ist Pflicht (OSM/OpenFreeMap/Esri …) — sie bleibt an.
@@ -856,10 +862,17 @@ internal class MapController {
                 // die Kamera kann in diesem Moment noch course-up gedreht sein.
                 map.getCameraForLatLngBounds(bounds, intArrayOf(pad, pad, pad, pad), 0.0, 0.0)
             }.getOrNull() ?: return@run
+            // Dieselbe Sperre wie beim Einpassen: Auf einer sehr flachen
+            // Karte (Tastatur, Splitscreen) liefert die Rechnung mit festem
+            // Rand NaN — eine solche Kamera legt MapLibre lahm.
+            val center = target.target ?: return@run
+            if (!target.zoom.isFinite() || !center.latitude.isFinite() || !center.longitude.isFinite()) {
+                return@run
+            }
             map.easeCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()
-                        .target(target.target)
+                        .target(center)
                         .zoom(klemmeOffRouteZoom(target.zoom))
                         .bearing(0.0)
                         .tilt(0.0)
@@ -901,6 +914,35 @@ internal class MapController {
         if (metersPerPixel <= 0 || metersPerPixel.isNaN()) return false
         val distanceM = haversineM(a, TrackPoint(lat = bLat, lon = bLon))
         return distanceM <= metersPerPixel * tolerancePx
+    }
+
+    /**
+     * Verwirft eine noch wartende Kamerafahrt. Gerufen, sobald die Nutzerin
+     * selbst schiebt: Eine Einpass-Fahrt, die auf das Fertigwerden des Stils
+     * gewartet hat, soll nicht Sekunden spaeter die Karte unter dem Finger
+     * wegreissen.
+     */
+    fun cancelPendingCamera() {
+        pendingCamera = null
+    }
+
+    /**
+     * Begrenzt den in der Kamera gespeicherten Rand auf die aktuelle
+     * Kartenhoehe (siehe [reclampedCameraPadding]) — nach jeder
+     * Groessenaenderung der Karte, Tastatur und Splitscreen eingeschlossen.
+     */
+    fun reclampPadding() {
+        val map = map ?: return
+        val position = map.cameraPosition
+        val padding = position.padding ?: return
+        val clamped = reclampedCameraPadding(padding, map.height.toInt()) ?: return
+        map.moveCamera(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder(position)
+                    .padding(clamped[0], clamped[1], clamped[2], clamped[3])
+                    .build(),
+            ),
+        )
     }
 
     private fun run(afterReady: Boolean, action: (MapLibreMap) -> Unit) {
