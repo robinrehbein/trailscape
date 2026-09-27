@@ -65,6 +65,11 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Start und Ziel ab Werk ausgeblendet; auch direkt vom Tourblatt der Karte),
   GPX importieren (z. B. aus Komoot oder
   Strava)
+- Optional zu Strava hochladen: von Hand in der Tour („Zu Strava hochladen“,
+  danach „Auf Strava ansehen“) oder automatisch nach dem Beenden einer
+  Aufzeichnung (Schalter unter Einstellungen → Strava, ab Werk aus). Ohne
+  Verbindung geht nichts an Strava. Nur in Builds mit hinterlegten
+  Strava-App-Zugangsdaten sichtbar
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
   wieder importieren
 
@@ -193,6 +198,14 @@ gebautes APK lässt sich aber nicht als Update über die verteilte Installation
 legen. In der CI kommt der Schlüssel aus dem Secret
 `RELEASE_KEYSTORE_BASE64`.
 
+**Strava (optional):** Die Zugangsdaten der Strava-API-App stehen ebenfalls
+nicht im Repository. Der Build liest sie aus den Umgebungsvariablen
+`STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` oder aus `strava.clientId`/
+`strava.clientSecret` in `~/.gradle/gradle.properties` — niemals aus einer
+Datei im Repo. Fehlen sie, ist die Strava-Funktion unsichtbar und der Build
+bleibt grün. In der CI kommen sie aus den gleichnamigen Secrets, nur bei
+Pushes auf `main`.
+
 ## Testen
 
 ```bash
@@ -305,7 +318,8 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 Alles bleibt lokal. Die App spricht mit den Diensten, die für eine konkrete
 Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
 und Kachel-Downloads, Nominatim für die Zielsuche und — wenn eingerichtet —
-dem eigenen Sync-Server. Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
+dem eigenen Sync-Server bzw. Strava (nur nach dem Verbinden des eigenen
+Strava-Kontos). Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
 tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter
 **Mehr → Über** (nur bei der APK von GitHub; bei Installation über Google Play
 entfällt sie). Kein Analytics, keine Telemetrie, keine Werbung, kein

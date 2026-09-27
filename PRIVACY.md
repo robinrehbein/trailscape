@@ -15,7 +15,8 @@ Servernamen sind bewusst mit angegeben.
 ## Kurzfassung
 
 - **Kein Konto, keine Registrierung, keine Anmeldung.** Trailscape kennt keine
-  Nutzerkennung.
+  Nutzerkennung. Trailscape selbst kennt kein Konto; wer Strava verbindet,
+  nutzt dafür sein eigenes Strava-Konto.
 - **Kein Analytics, kein Tracking, keine Werbung, keine Werbe-ID, keine
   Crash-Telemetrie.** Es gibt kein SDK von Google Analytics, Firebase,
   Crashlytics, Sentry, Meta oder ähnlichem im Projekt.
@@ -34,7 +35,8 @@ Servernamen sind bewusst mit angegeben.
   optionalen Sync an deinen eigenen Server.
 - **Anfragen ins Netz gehen an die Dienste, die eine konkrete Aktion braucht**
   (Kartenkacheln, Routing, Ortssuche, Kachel-Downloads, optional dein eigener
-  Sync-Server und, nur mit Schalter, der aktuelle Wind am Startpunkt einer
+  Sync-Server, optional Strava — nur, nachdem du dein Strava-Konto verbunden
+  hast — und, nur mit Schalter, der aktuelle Wind am Startpunkt einer
   Runde bei Open-Meteo) — plus **eine** Ausnahme: eine stille Update-Prüfung bei
   GitHub, höchstens einmal am Tag, abschaltbar unter *Mehr → Über* — nur bei
   der APK von GitHub, nicht bei Installation über Google Play. Diese
@@ -68,6 +70,8 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Gekoppelte Sensoren | SharedPreferences (`trailscape.ble.sensors`) | je Messwert Typ, Bluetooth-Adresse und Name des Sensors |
 | Kartenstil-Auswahl | SharedPreferences (`trailscape.mapstyle`) | ID des gewählten Kachelstils |
 | Teilen-Einstellung | SharedPreferences (`trailscape.share.hideEnds`) | Ja/Nein: Start und Ziel im Tour-Bild ausblenden |
+| Strava-Zugang (optional) | SharedPreferences (`trailscape.strava.tokens`) | nur wenn du Strava verbunden hast: Access- und Refresh-Token, Ablaufzeit und dein Vorname aus dem Strava-Profil — **verschlüsselt** mit einem Schlüssel im Android Keystore, der das Gerät nicht verlässt (`app/…/strava/KeystoreStravaTokenStore.kt`) |
+| Strava-Upload-Vermerke (optional) | SharedPreferences (`trailscape.strava.uploads`, `trailscape.strava.autoUpload`) | je hochgeladener Tour: Stand, Upload-ID, Aktivitäts-ID auf Strava und Zeitpunkt; dazu der Schalter für den Auto-Upload |
 | Sync-Einstellungen (optional) | SharedPreferences (`trailscape.sync`) | Adresse **deines** Sync-Servers und dein Zugangstoken — im Klartext im privaten App-Speicher |
 | Health-Sync-Stand | SharedPreferences, Schlüssel `trailscape.healthsync`, `trailscape.healthsync.historyImportDone` und `trailscape.healthsync.historyImportedUntil` | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird; ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist; solange dieser Import noch nicht fertig ist, der Zeitpunkt, bis zu dem er schon gespeichert hat |
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
@@ -99,7 +103,7 @@ Komoot-Link) ruft die App nicht ab.
 | Vordergrunddienst (Standort) | damit die Aufzeichnung bei gesperrtem Display und nach dem Wegwischen der App weiterläuft |
 | Benachrichtigungen | die Anzeige der laufenden Aufzeichnung |
 | Geräte in der Nähe (Bluetooth; unter Android 12 der Standort) | Suchen und Verbinden von Pulsgurt, Leistungsmesser und Trittfrequenzsensor. Gesucht wird nur, wenn du unter *Mehr → Sensoren* „Nach Sensoren suchen“ tippst; verbunden wird nur während einer Aufzeichnung und solange die Seite *Sensoren* offen ist. Die App ermittelt darüber keinen Standort (`neverForLocation`) |
-| Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync, Wind am Startpunkt (nur mit Schalter „Wind berücksichtigen“), Update-Prüfung – Details in Abschnitt 4 |
+| Internet | Kartenkacheln, Routing, Ortssuche, optionaler Sync, optionaler Strava-Upload, Wind am Startpunkt (nur mit Schalter „Wind berücksichtigen“), Update-Prüfung – Details in Abschnitt 4 |
 | Health Connect: Training, Trainingsrouten, Herzfrequenz, Ruhepuls, HRV, Schlaf, Distanz, Kalorien, VO₂max | **nur lesend**, für den Import von Trainings und die Erholungs-/Formberechnung. Liefert die Uhr keinen Ruhepuls, leitet die App ihn auf dem Gerät aus dem nächtlichen Puls ab |
 | Health Connect: Verlauf älter als 30 Tage (optional) | **nur lesend**, damit die Ruhepuls- und HRV-Baselines nicht erst nach Wochen stehen und der erste Import einmalig deine Radfahrten der letzten 12 Monate übernehmen kann |
 
@@ -111,7 +115,8 @@ Telefonstatus, Aktivitätserkennung oder Werbe-ID an.
 ## 4. Was das Gerät nach außen sendet
 
 Anfragen entstehen als Folge einer Aktion — Karte anzeigen, Route berechnen,
-Ort suchen, Kacheln herunterladen, synchronisieren — mit **einer** Ausnahme:
+Ort suchen, Kacheln herunterladen, synchronisieren; bei Strava auch nach dem
+Beenden einer Aufzeichnung, wenn du den Auto-Upload eingeschaltet hast — mit **einer** Ausnahme:
 der täglichen Update-Prüfung beim App-Start (letzte Tabellenzeile), die sich
 abschalten lässt und bei Installation über Google Play ganz entfällt.
 Bei jeder dieser Anfragen sieht der jeweilige Betreiber
@@ -127,6 +132,7 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | **api.open-meteo.com** (Open-Meteo) | nur wenn im Blatt *Runde ab hier* „Wind berücksichtigen“ eingeschaltet ist (ab Werk aus) — gilt dann für jede Rundkurs-Suche, auch aus *Heute* und *Training*; ausschalten nur im Blatt *Runde ab hier* —, beim Start einer Rundkurs-Suche — höchstens eine Anfrage je Suche; „Andere Vorschläge“ und „Neu suchen“ am selben Ort fragen innerhalb von 30 Minuten nicht erneut | der Startpunkt der Runde, **auf zwei Nachkommastellen gerundet** (in Mitteleuropa etwa 1 km Genauigkeit), und die Namen der abgefragten Werte (Windgeschwindigkeit, Windrichtung, Böen). Kein API-Schlüssel, keine Kennung, keine eigenen Header; der User-Agent ist der Standard der HTTP-Bibliothek (`okhttp/…`). Scheitert die Anfrage, rechnet die App ohne Wind weiter ([Nutzungsbedingungen und Datenschutz von Open-Meteo](https://open-meteo.com/en/terms); `core/…/WeatherClient.kt`) |
 | **nominatim.openstreetmap.org** | wenn du eine Ortssuche **absendest** (Suchtaste der Tastatur oder „„…“ suchen“) — nicht schon beim Tippen | dein **Suchtext** und ein App-Kennzeichen im User-Agent (`Trailscape/1.0 (github.com/robinrehbein/trailscape)`, von den Nominatim-Nutzungsrichtlinien verlangt) |
 | **Dein eigener Sync-Server** (nur wenn du in *Mehr → Sync* eine Adresse hinterlegt hast) | beim Synchronisieren | deine Touren inklusive GPS-Punkten und dein Zugangstoken (`Authorization: Bearer …`), an genau die Adresse, die du eingetragen hast — an niemanden sonst |
+| **Strava** (`www.strava.com`, Strava, Inc., USA) — nur wenn du unter *Einstellungen → Strava* dein Konto verbunden hast | beim Verbinden (Anmeldung im Browser direkt bei Strava, danach Tausch des Codes gegen einen Zugang), wenn du in einer Tour „Zu Strava hochladen“ tippst oder — nur mit dem Schalter „Neue Touren automatisch hochladen“, ab Werk aus — nach dem Beenden einer Aufzeichnung, sobald Netz da ist; danach einige Statusabfragen zu genau diesem Upload; beim Erneuern des Zugangs; beim Trennen eine Abmeldung | die Tour als GPX-Datei: Name, alle GPS-Punkte mit Zeit und Höhe, dazu je Punkt Puls, Trittfrequenz und Leistung, soweit gemessen — also **wo und wann du gefahren bist**; dazu dein Zugangs-Token (`Authorization: Bearer …`) und die App-Kennung von Trailscape. Übermittlung in ein Drittland (USA); wer die Tour auf Strava sieht, richtet sich nach deinen Strava-Einstellungen ([Datenschutzerklärung von Strava](https://www.strava.com/legal/privacy); `core/…/StravaClient.kt`) |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
 | **api.github.com** (Update-Prüfung) | nur bei Installation als APK von GitHub: beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* —, und beim Tippen auf *„Nach Updates suchen"*; bei Installation über Google Play nie | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
 
@@ -273,7 +279,9 @@ Was du dazu wissen solltest:
   Google-Backup noch in den direkten Gerätewechsel-Transfer. Die Kehrseite,
   bewusst in Kauf genommen: Einstellungen und Trainingsprofil wandern beim
   Gerätewechsel **nicht** automatisch mit — dafür ist der manuelle
-  Backup-Export da (*Mehr → Daten & Backup*).
+  Backup-Export da (*Mehr → Daten & Backup*). Auch der **Strava-Zugang**
+  geht beim Gerätewechsel nicht mit — auf dem neuen Gerät Strava einfach neu
+  verbinden.
 - Ebenfalls ausgenommen sind die laufende Aufzeichnung, die heruntergeladenen
   Offline-Karten und -Routing-Kacheln, die Absturzberichte und das
   Diagnose-Log (siehe `res/xml/backup_rules.xml` und

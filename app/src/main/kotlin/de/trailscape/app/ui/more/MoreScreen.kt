@@ -45,6 +45,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.record.autoPauseAktiviert
 import de.trailscape.app.record.sprachansagenAktiviert
+import de.trailscape.app.strava.StravaConfig
+import de.trailscape.app.strava.StravaServices
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
 import de.trailscape.app.ui.MoreSection
@@ -74,7 +76,7 @@ import kotlinx.coroutines.withContext
  * keine Zeile, wie es um sie steht. Jetzt:
  *
  *  * **Liste** — eine flache Karte mit sieben Zeilen und die Gruppe „App" mit
- *    zwei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
+ *    zwei, in Builds mit Strava-Zugangsdaten drei weiteren ([SettingsNavRow]). Jede Zeile nennt ihren Zustand in
  *    einer Statuszeile („Auto-Pause an · Ansagen an", „Noch nie gesichert"),
  *    siehe `SettingsStatus.kt`.
  *  * **Seite** — Antippen oeffnet die Seite der Zeile ([SettingsPage]) im
@@ -245,6 +247,8 @@ internal enum class SettingsPage(val title: String) {
     REMINDERS("Erinnerungen"),
     OFFLINE("Karten offline"),
     BACKUP("Import & Backup"),
+    // Nur in Builds mit Strava-Zugangsdaten sichtbar (StravaConfig.available).
+    STRAVA("Strava"),
     SYNC("Sync mit eigenem Server"),
     ABOUT("Über Trailscape"),
 }
@@ -263,8 +267,10 @@ private fun MoreSection.toPage(): SettingsPage = when (this) {
  * Die Reihenfolge folgt dem Erstnutzer: erst das Profil (ohne Alter und
  * Gewicht rechnet nichts richtig), dann die Uhr und die Bluetooth-Sensoren
  * als Datenquellen, dann das
- * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Sync und „Über"
- * betreffen die App selbst und stehen deshalb abgesetzt.
+ * Verhalten beim Fahren, zuletzt Speicher und Sicherung. Strava, Sync und
+ * „Über" betreffen die App selbst und stehen deshalb abgesetzt — Strava und
+ * Sync als Verbindungen der App nach aussen, beide freiwillig; Strava gibt es
+ * nur in Builds mit Zugangsdaten.
  *
  * Die Zustaende, die nicht als `StateFlow` vorliegen (Einstellungen in den
  * `SharedPreferences`, Offline-Bestand, letzter Import), liest die Liste bei
@@ -390,6 +396,24 @@ private fun SettingsList(
         }
         item {
             MoreGroup(label = "App") {
+                // Strava steht nur da, wenn der Build es kann — sonst gibt es
+                // die Zeile schlicht nicht (siehe StravaConfig).
+                if (StravaConfig.available) {
+                    val stravaConnection by StravaServices.connection.collectAsStateWithLifecycle()
+                    val stravaAutoUpload by StravaServices.autoUpload.collectAsStateWithLifecycle()
+                    val stravaMessage by StravaServices.authMessage.collectAsStateWithLifecycle()
+                    SettingsNavRow(
+                        title = SettingsPage.STRAVA.title,
+                        status = stravaStatusText(stravaConnection, stravaAutoUpload, stravaMessage),
+                        statusColor = if (stravaNeedsReconnect(stravaConnection, stravaMessage)) {
+                            LocalSignalColors.current.warning
+                        } else {
+                            Color.Unspecified
+                        },
+                        onClick = { onOpen(SettingsPage.STRAVA) },
+                    )
+                    ListDivider()
+                }
                 SettingsNavRow(
                     title = SettingsPage.SYNC.title,
                     status = syncStatusText(syncConfig),
@@ -438,6 +462,7 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
                 SettingsSection(label = "Routingdaten") { OfflineRoutingCardContent(appViewModel) }
             }
             SettingsPage.BACKUP -> SettingsSection { BackupCardContent(appViewModel) }
+            SettingsPage.STRAVA -> SettingsSection { StravaCardContent() }
             SettingsPage.SYNC -> SettingsSection { SyncCardContent(appViewModel) }
             SettingsPage.ABOUT -> {
                 SettingsSection { AboutCardContent(appViewModel) }
