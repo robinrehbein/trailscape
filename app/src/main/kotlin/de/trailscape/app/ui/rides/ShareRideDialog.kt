@@ -28,9 +28,13 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.core.Ride
@@ -88,21 +92,29 @@ internal fun ShareRideDialog(
     // Der Inhalt haengt nicht vom Format ab: einmal je Fassung der Tour, und
     // wie das Zeichnen abseits des Hauptthreads (eine lange Aufzeichnung hat
     // zehntausende Punkte). Hier oben, weil auch der Hinweis davon abhaengt.
-    val content by produceState<ShareCardContent?>(null, ride.id, ride.updatedAt, load) {
-        value = withContext(Dispatchers.Default) { shareCardContent(ride, load) }
+    val context = LocalContext.current
+    val language = LocalAppLanguage.current
+    val content by produceState<ShareCardContent?>(null, ride.id, ride.updatedAt, load, language) {
+        value = withContext(Dispatchers.Default) {
+            shareCardContent(ride, load, language, resolve = { it.resolve(context) })
+        }
     }
     val previewHeight = min(PreviewMaxHeight, LocalConfiguration.current.screenHeightDp.dp * 0.4f)
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tour teilen") },
+        title = { Text(stringResource(R.string.rides_share_title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PillSegments(
-                    options = listOf("Story", "Quadrat", "GPX"),
+                    options = listOf(
+                        stringResource(R.string.rides_share_story_option),
+                        stringResource(R.string.rides_share_square_option),
+                        stringResource(R.string.rides_share_gpx_option),
+                    ),
                     selectedIndex = selected,
                     onSelect = { selected = it },
                     // Der Dialog ist selbst surfaceContainerHigh; eine leichte
@@ -114,20 +126,16 @@ internal fun ShareRideDialog(
                     val card = content
                     if (card != null) {
                         Text(
-                            text = if (card.hasTrack) {
-                                "Das Bild zeigt die Form deiner Strecke ohne Karte – " +
-                                    "wer die Gegend kennt, erkennt trotzdem Start und Ziel."
-                            } else {
-                                "Das Bild zeigt nur die Kennzahlen dieser Tour – ohne Strecke."
-                            },
+                            text = stringResource(
+                                if (card.hasTrack) R.string.rides_share_image_track_hint else R.string.rides_share_image_stats_hint,
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 } else {
                     Text(
-                        text = "Die Spur als GPX-Datei – zum Nachfahren in Komoot, " +
-                            "Strava oder auf dem Radcomputer.",
+                        text = stringResource(R.string.rides_share_gpx_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -139,9 +147,9 @@ internal fun ShareRideDialog(
                 onClick = {
                     if (format == null) onShareGpx() else onShareImage(format)
                 },
-            ) { Text("Teilen") }
+            ) { Text(stringResource(R.string.common_action_share)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_cancel)) } },
     )
 }
 
@@ -183,7 +191,7 @@ private fun ShareCardPreview(content: ShareCardContent?, format: ShareCardFormat
         if (image != null) {
             Image(
                 bitmap = image,
-                contentDescription = "Vorschau des Tour-Bilds",
+                contentDescription = stringResource(R.string.rides_share_preview_cd),
                 contentScale = ContentScale.Fit,
                 modifier = frame,
             )

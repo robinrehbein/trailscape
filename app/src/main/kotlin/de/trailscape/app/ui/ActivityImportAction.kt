@@ -24,8 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.core.BulkImportError
 import kotlinx.coroutines.flow.combine
@@ -122,7 +126,7 @@ fun rememberActivityImportAction(appViewModel: AppViewModel): ActivityImportActi
     errorMessage?.let { message ->
         OneUiDialog(
             onDismissRequest = appViewModel::dismissFileImportFailure,
-            title = { Text("Import fehlgeschlagen") },
+            title = { Text(stringResource(R.string.rides_import_failed_title)) },
             text = { Text(message) },
             confirmButton = {
                 TextButton(
@@ -130,10 +134,12 @@ fun rememberActivityImportAction(appViewModel: AppViewModel): ActivityImportActi
                         appViewModel.dismissFileImportFailure()
                         start()
                     },
-                ) { Text("Andere Datei wählen") }
+                ) { Text(stringResource(R.string.rides_import_failed_other_file_action)) }
             },
             dismissButton = {
-                TextButton(onClick = appViewModel::dismissFileImportFailure) { Text("Schließen") }
+                TextButton(onClick = appViewModel::dismissFileImportFailure) {
+                    Text(stringResource(R.string.common_action_close))
+                }
             },
         )
     }
@@ -157,10 +163,16 @@ data class FileImportNotice(
     val inHistory: Boolean,
 )
 
-/** Fehlertext, wenn der Import-Lauf selbst scheitert (Speicherfehler, volles Geraet). */
-internal const val FILE_IMPORT_CRASH_MESSAGE =
-    "Der Import ist fehlgeschlagen. Es wurden möglicherweise nicht alle Touren gespeichert — " +
-        "versuche es mit weniger Dateien auf einmal erneut."
+/**
+ * Fehlertext, wenn der Import-Lauf selbst scheitert (Speicherfehler, volles
+ * Geraet) — Ressource `rides_import_crash_error` in der aktuellen App-Sprache.
+ *
+ * Eine Eigenschaft mit Getter statt der frueheren Konstante: Der Aufrufer
+ * (`AppViewModel.importActivityFiles`) bleibt unveraendert und bekommt den
+ * Text trotzdem in der Sprache zum Zeitpunkt des Fehlers.
+ */
+internal val FILE_IMPORT_CRASH_MESSAGE: String
+    get() = AppServices.localizedContext().getString(R.string.rides_import_crash_error)
 
 /**
  * Zeigt [AppViewModel.fileImportNotice] in [snackbarHostState] an und
@@ -186,6 +198,7 @@ fun FileImportNoticeEffect(
 ) {
     var details by remember { mutableStateOf<List<BulkImportError>?>(null) }
     val currentStandBy by rememberUpdatedState(standBy)
+    val detailsLabel = stringResource(R.string.rides_import_notice_details_action)
 
     LaunchedEffect(appViewModel, snackbarHostState, acceptHistory) {
         combine(
@@ -203,7 +216,7 @@ fun FileImportNoticeEffect(
                 appViewModel.consumeFileImportNotice(notice)
                 val result = snackbarHostState.showSnackbar(
                     message = notice.message,
-                    actionLabel = if (notice.errors.isNotEmpty()) "Details" else null,
+                    actionLabel = if (notice.errors.isNotEmpty()) detailsLabel else null,
                     // Mit Aktion lange genug stehen lassen, um sie zu treffen.
                     duration = if (notice.errors.isNotEmpty()) SnackbarDuration.Long else SnackbarDuration.Short,
                 )
@@ -214,7 +227,7 @@ fun FileImportNoticeEffect(
     details?.let { errors ->
         OneUiDialog(
             onDismissRequest = { details = null },
-            title = { Text(if (errors.size == 1) "Nicht importiert" else "${errors.size} Dateien nicht importiert") },
+            title = { Text(pluralStringResource(R.plurals.rides_import_errors_title_count, errors.size, errors.size)) },
             text = {
                 Column(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -229,7 +242,7 @@ fun FileImportNoticeEffect(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { details = null }) { Text("OK") }
+                TextButton(onClick = { details = null }) { Text(stringResource(R.string.common_action_ok)) }
             },
         )
     }

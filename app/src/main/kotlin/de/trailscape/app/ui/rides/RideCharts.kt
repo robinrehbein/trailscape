@@ -18,8 +18,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.core.RideCurve
 
 /**
@@ -151,9 +153,13 @@ internal fun RideCurveChart(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("0 km", style = MaterialTheme.typography.labelSmall, color = labelColor)
             Text(
-                text = "${formatKmDe(curve.totalKm)} km",
+                text = stringResource(R.string.common_value_km, "0"),
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+            )
+            Text(
+                text = stringResource(R.string.common_value_km, LocalAppFormats.current.km(curve.totalKm)),
                 style = MaterialTheme.typography.labelSmall,
                 color = labelColor,
             )

@@ -11,9 +11,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
+import de.trailscape.app.R
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -44,6 +46,26 @@ class HistorySummaryScreenshotTest {
 
     @Test
     fun verlaufGroessteFlaeche() {
+        render()
+        compose.onNodeWithText("Größte Fläche: 37 Kacheln").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/63-verlauf-groesste-flaeche.png")
+    }
+
+    /** Dasselbe Blatt auf Englisch — die vier Spalten muessen auch mit „largest square" passen. */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun verlaufGroessteFlaecheEnglisch() {
+        render()
+        val context = compose.activity
+        val title = context.getString(R.string.rides_summary_title)
+        assertEquals("Everywhere you’ve been", title)
+        compose.onNodeWithText(title).assertExists()
+        compose.onNodeWithText("Largest area: 37 tiles").assertExists()
+        compose.onNodeWithText("2345 km").assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/63-verlauf-groesste-flaeche-en.png")
+    }
+
+    private fun render() {
         compose.setContent {
             TrailscapeTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -62,7 +84,5 @@ class HistorySummaryScreenshotTest {
             }
         }
         compose.waitForIdle()
-        compose.onNodeWithText("Größte Fläche: 37 Kacheln").assertExists()
-        compose.onRoot().captureRoboImage("build/outputs/roborazzi/63-verlauf-groesste-flaeche.png")
     }
 }

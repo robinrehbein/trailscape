@@ -139,6 +139,21 @@ class RideEffortTest {
 
     private val lockerSession = plan.weeks[0].sessions[0]
 
+    /** Der Satz als fertiger Text (Ressourcen ueber [RidesXmlStrings]). */
+    private data class NoteText(val headline: String, val body: String)
+
+    /**
+     * Ueberdeckt das echte [de.trailscape.app.ui.rides.rideNote] (Member vor
+     * Top-Level): Die Tests unten pruefen weiterhin den deutschen Wortlaut.
+     */
+    private fun rideNote(
+        effort: RideEffort?,
+        match: RidePlanMatch?,
+        decouplingPercent: Double?,
+        strings: RidesXmlStrings = RidesXmlStrings.DE,
+    ): NoteText? = de.trailscape.app.ui.rides.rideNote(effort, match, decouplingPercent)
+        ?.let { NoteText(strings.resolve(it.headline), strings.resolve(it.body)) }
+
     @Test
     fun `Plantreffer mit ruhigem Puls klingt wie im Zieldesign`() {
         val note = rideNote(
@@ -172,5 +187,29 @@ class RideEffortTest {
         assertEquals("Harte Tour.", rideNote(RideEffort.HART, null, null)?.headline)
         assertEquals("Locker gefahren.", rideNote(RideEffort.LOCKER, null, null)?.headline)
         assertNull(rideNote(null, null, 1.0))
+    }
+
+    @Test
+    fun `der Satz auf Englisch`() {
+        val en = RidesXmlStrings.EN
+        val calm = rideNote(RideEffort.LOCKER, RidePlanMatch(lockerSession, PlanSessionStatus.ERLEDIGT), 3.2, en)
+        assertEquals(NoteText("On plan.", "Easy session done, your heart rate stayed calm to the end."), calm)
+        val harder = rideNote(RideEffort.HART, RidePlanMatch(lockerSession, PlanSessionStatus.ERLEDIGT), 2.0, en)
+        assertEquals("Easy session done, but harder than planned.", harder?.body)
+        val partial = rideNote(null, RidePlanMatch(lockerSession, PlanSessionStatus.TEILWEISE), null, en)
+        assertEquals(NoteText("Partly to plan.", "Easy session started, 30 km were planned."), partial)
+        assertEquals("Hard ride.", rideNote(RideEffort.HART, null, null, en)?.headline)
+    }
+
+    @Test
+    fun `Haerte-Woerter in beiden Sprachen`() {
+        assertEquals(
+            listOf("locker", "mittel", "hart"),
+            RideEffort.entries.map { RidesXmlStrings.DE.string(it.labelRes) },
+        )
+        assertEquals(
+            listOf("easy", "moderate", "hard"),
+            RideEffort.entries.map { RidesXmlStrings.EN.string(it.labelRes) },
+        )
     }
 }

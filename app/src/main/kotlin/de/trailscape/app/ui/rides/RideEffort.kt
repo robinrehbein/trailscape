@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.rides
 
+import androidx.annotation.StringRes
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.PlanSessionStatus
 import de.trailscape.core.RideInfo
 import de.trailscape.core.RideLoad
@@ -41,10 +44,10 @@ import de.trailscape.core.weekSessionProgress
  * Biergarten mitten in der Tour macht sie nicht lockerer. Fehlt die Fahrzeit,
  * springt die Gesamtdauer ein.
  */
-internal enum class RideEffort(val label: String) {
-    LOCKER("locker"),
-    MITTEL("mittel"),
-    HART("hart"),
+internal enum class RideEffort(@StringRes val labelRes: Int) {
+    LOCKER(R.string.rides_effort_easy_label),
+    MITTEL(R.string.rides_effort_moderate_label),
+    HART(R.string.rides_effort_hard_label),
 }
 
 /** Ab dieser Last pro Stunde gilt eine Tour als „mittel" (siehe Tabelle oben). */
@@ -129,18 +132,24 @@ internal fun planMatchForRide(
 
 // ---------------------------------------------------------------- Satz
 
-/** Der getoente Klartext-Hinweis der Detailansicht: fetter Anfang, dann ein Satz. */
-internal data class RideNote(val headline: String, val body: String)
+/**
+ * Der getoente Klartext-Hinweis der Detailansicht: fetter Anfang, dann ein Satz.
+ * Als [UiText], damit der Satz in der Sprache der Oberflaeche entsteht und
+ * trotzdem ohne Robolectric pruefbar bleibt (`RideEffortTest`).
+ */
+internal data class RideNote(val headline: UiText, val body: UiText)
 
 /** Unterhalb dieser Pe:Hr-Entkopplung (in %) blieb der Puls „bis zum Schluss ruhig". */
 private const val CalmDecouplingPercent: Double = 5.0
 
 /** Wie eine Einheit im Satz heisst — „Lockere Einheit erledigt". */
-private fun unitName(intensity: SessionIntensity): String = when (intensity) {
-    SessionIntensity.LOCKER -> "Lockere Einheit"
-    SessionIntensity.GRUNDLAGE -> "Grundlagen-Einheit"
-    SessionIntensity.HART -> "Harte Einheit"
-}
+private fun unitName(intensity: SessionIntensity): UiText = UiText.Res(
+    when (intensity) {
+        SessionIntensity.LOCKER -> R.string.rides_note_unit_easy
+        SessionIntensity.GRUNDLAGE -> R.string.rides_note_unit_endurance
+        SessionIntensity.HART -> R.string.rides_note_unit_hard
+    },
+)
 
 /** Welche Woerter zu einer geplanten Intensitaet passen. */
 private fun expectedEfforts(intensity: SessionIntensity): Set<RideEffort> = when (intensity) {
@@ -171,34 +180,39 @@ internal fun rideNote(
         val unit = unitName(intensity)
         if (match.status == PlanSessionStatus.TEILWEISE) {
             return RideNote(
-                headline = "Zum Teil nach Plan.",
-                body = "$unit angefangen, geplant waren ${match.session.targetKm} km.",
+                headline = UiText.Res(R.string.rides_note_partial_title),
+                body = UiText.Res(R.string.rides_note_partial_body, listOf(unit, match.session.targetKm)),
             )
         }
         val expected = expectedEfforts(intensity)
-        val clause = when {
+        // Je Nachsatz ein ganzer Satz als Ressource — Satzteile aneinander-
+        // zuhaengen hiesse, die Wortstellung der Uebersetzung festzulegen.
+        val body = when {
             effort != null && effort.ordinal > expected.maxOf { it.ordinal } ->
-                ", allerdings härter als vorgesehen"
+                R.string.rides_note_plan_done_harder
             effort != null && effort.ordinal < expected.minOf { it.ordinal } ->
-                ", allerdings lockerer als vorgesehen"
+                R.string.rides_note_plan_done_easier
             decouplingPercent != null && decouplingPercent < CalmDecouplingPercent ->
-                ", dein Puls blieb bis zum Schluss ruhig"
-            else -> ""
+                R.string.rides_note_plan_done_calm
+            else -> R.string.rides_note_plan_done
         }
-        return RideNote(headline = "Passt zum Plan.", body = "$unit erledigt$clause.")
+        return RideNote(
+            headline = UiText.Res(R.string.rides_note_plan_title),
+            body = UiText.Res(body, listOf(unit)),
+        )
     }
     return when (effort) {
         RideEffort.LOCKER -> RideNote(
-            headline = "Locker gefahren.",
-            body = "Solche Touren bauen Grundlage auf, ohne dich lange zu ermüden.",
+            headline = UiText.Res(R.string.rides_note_easy_title),
+            body = UiText.Res(R.string.rides_note_easy_body),
         )
         RideEffort.MITTEL -> RideNote(
-            headline = "Mittlere Belastung.",
-            body = "Spürbar gefordert, nach einem Tag meist gut verdaut.",
+            headline = UiText.Res(R.string.rides_note_moderate_title),
+            body = UiText.Res(R.string.rides_note_moderate_body),
         )
         RideEffort.HART -> RideNote(
-            headline = "Harte Tour.",
-            body = "Gönn dir danach einen ruhigen Tag, damit sie wirken kann.",
+            headline = UiText.Res(R.string.rides_note_hard_title),
+            body = UiText.Res(R.string.rides_note_hard_body),
         )
         null -> null
     }

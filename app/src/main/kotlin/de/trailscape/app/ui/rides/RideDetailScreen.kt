@@ -47,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -56,7 +58,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.components.ActionTileRow
@@ -69,8 +76,6 @@ import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.screenContentPadding
-import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
@@ -103,13 +108,15 @@ import de.trailscape.core.estimateVo2MaxFromSegments
 import de.trailscape.core.extractSteadySegments
 import de.trailscape.core.formatDuration
 import de.trailscape.core.heartRateCurve
+import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.formatTime
+import de.trailscape.core.i18n.formatWeekdayDate
+import de.trailscape.core.i18n.formatWeekdayDateYear
 import de.trailscape.core.segmentEffortsForRide
 import de.trailscape.core.speedCurveKmh
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -266,8 +273,9 @@ internal fun RideDetailScreen(
                         today = LocalDate.now(),
                         planned = ride.planned,
                         fromHealthConnect = ride.id.startsWith("hc-"),
-                    ),
-                    backLabel = "Verlauf",
+                        language = LocalAppLanguage.current,
+                    ).asString(),
+                    backLabel = stringResource(R.string.rides_detail_back_label),
                     onBack = onBack,
                 )
 
@@ -284,8 +292,7 @@ internal fun RideDetailScreen(
                     NoticeBox(
                         icon = Icons.Filled.Route,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        text = "Das ist eine gespeicherte Planung, keine gefahrene Tour. Sie " +
-                            "zählt deshalb nicht für Wochenfortschritt, Fitness und Form.",
+                        text = stringResource(R.string.rides_detail_planned_notice),
                     )
                 } else {
                     note?.let { RideNoteBox(it) }
@@ -303,7 +310,7 @@ internal fun RideDetailScreen(
                             modifier = Modifier.size(ButtonDefaults.IconSize),
                         )
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("Diese Tour nochmal fahren")
+                        Text(stringResource(R.string.rides_detail_ride_again_action))
                     }
                 }
 
@@ -319,19 +326,27 @@ internal fun RideDetailScreen(
                 // sagt nicht, *was* geloescht wird.
                 ActionTileRow(
                     actions = listOf(
-                        TileAction("Karte zeigen", Icons.Filled.Map, onClick = onShowOnMap),
-                        TileAction("Umbenennen", Icons.Filled.Edit, onClick = onRename),
                         TileAction(
-                            "Teilen",
+                            stringResource(R.string.rides_detail_show_map_action),
+                            Icons.Filled.Map,
+                            onClick = onShowOnMap,
+                        ),
+                        TileAction(
+                            stringResource(R.string.rides_detail_rename_action),
+                            Icons.Filled.Edit,
+                            onClick = onRename,
+                        ),
+                        TileAction(
+                            stringResource(R.string.common_action_share),
                             Icons.Filled.Share,
-                            contentDescription = "Tour teilen",
+                            contentDescription = stringResource(R.string.rides_detail_share_cd),
                             onClick = onShare,
                         ),
                         TileAction(
-                            "Löschen",
+                            stringResource(R.string.common_action_delete),
                             Icons.Filled.Delete,
                             destructive = true,
-                            contentDescription = "Tour löschen",
+                            contentDescription = stringResource(R.string.rides_detail_delete_cd),
                             onClick = onDelete,
                         ),
                     ),
@@ -360,7 +375,15 @@ internal fun RideDetailScreen(
                     onClick = { allValues = !allValues },
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (allValues) "Weniger Werte" else "Alle Werte")
+                    Text(
+                        stringResource(
+                            if (allValues) {
+                                R.string.rides_detail_fewer_values_action
+                            } else {
+                                R.string.rides_detail_all_values_action
+                            },
+                        ),
+                    )
                 }
 
                 if (allValues) {
@@ -380,21 +403,12 @@ internal fun RideDetailScreen(
     }
 }
 
-/** Wochentag, Tag und Monat ausgeschrieben, z. B. `Dienstag, 23. September`. */
-private val detailDateFormat: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("EEEE, d. MMMM", Locale.GERMANY)
-
-/** Wie [detailDateFormat], mit Jahr — fuer Touren aus frueheren Jahren. */
-private val detailDateYearFormat: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMANY)
-
-private val detailTimeFormat: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("HH:mm", Locale.GERMANY)
-
 /**
- * Die gedaempfte Zeile unter dem Namen: `Dienstag, 23. September · 18:12`,
- * aus frueheren Jahren mit Jahreszahl, und die Herkunft genau **einmal** —
- * frueher stand „aus Health Connect" hier *und* als Pille weiter unten.
+ * Die gedaempfte Zeile unter dem Namen: `Dienstag, 23. September · 18:12`
+ * (englisch `Tuesday 23 September · 18:12`), aus frueheren Jahren mit
+ * Jahreszahl, und die Herkunft genau **einmal** — frueher stand „aus Health
+ * Connect" hier *und* als Pille weiter unten. Datumsmuster aus `:core`
+ * (`DateFormats.kt`); je Herkunft eine ganze Zeile als Ressource.
  *
  * „aus Health Connect", nicht „aus Samsung Health": Das `hc-`-Praefix vergibt
  * der Health-Connect-Import (`:core`, HealthSyncLogic.kt), unabhaengig davon,
@@ -405,12 +419,18 @@ internal fun rideDetailDateLine(
     today: LocalDate,
     planned: Boolean,
     fromHealthConnect: Boolean,
-): String = buildList {
-    add((if (at.year == today.year) detailDateFormat else detailDateYearFormat).format(at))
-    add(detailTimeFormat.format(at))
-    if (planned) add("geplante Route")
-    if (fromHealthConnect) add("aus Health Connect")
-}.joinToString(" · ")
+    language: AppLanguage,
+): UiText {
+    val date = if (at.year == today.year) formatWeekdayDate(at, language) else formatWeekdayDateYear(at, language)
+    val time = formatTime(at, language)
+    val id = when {
+        planned && fromHealthConnect -> R.string.rides_detail_date_line_planned_health_connect
+        planned -> R.string.rides_detail_date_line_planned
+        fromHealthConnect -> R.string.rides_detail_date_line_health_connect
+        else -> R.string.rides_detail_date_line
+    }
+    return UiText.Res(id, listOf(date, time))
+}
 
 // ---------------------------------------------------------------- Karten
 
@@ -442,13 +462,14 @@ private fun RideMapCard(ride: Ride, style: MapStyle) {
         }
     }
 
+    val description = stringResource(R.string.rides_detail_map_cd, ride.name)
     Card(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(MapHeight)
                 .semantics {
-                    contentDescription = "Karte mit der gefahrenen Spur von „${ride.name}“"
+                    contentDescription = description
                 },
         ) {
             MapViewHost(
@@ -475,18 +496,28 @@ private fun RideMapCard(ride: Ride, style: MapStyle) {
 @Composable
 private fun RideStatsRow(ride: Ride) {
     val stats = ride.stats
+    val formats = LocalAppFormats.current
 
     DetailCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
-            BigStat(value = formatKmDe(stats.distanceKm), label = "km")
-            BigStat(value = formatHoursMinutes(stats.durationS), label = "Std.")
-            BigStat(value = "${stats.ascentM.roundToInt()}", label = "Hm")
+            BigStat(
+                value = formats.km(stats.distanceKm),
+                label = stringResource(R.string.rides_detail_stat_km_label),
+            )
+            BigStat(
+                value = formatHoursMinutes(stats.durationS),
+                label = stringResource(R.string.rides_detail_stat_hours_label),
+            )
+            BigStat(
+                value = "${stats.ascentM.roundToInt()}",
+                label = stringResource(R.string.rides_detail_stat_elevation_label),
+            )
             BigStat(
                 value = stats.avgHrBpm?.toString() ?: "–",
-                label = "Ø Puls",
+                label = stringResource(R.string.rides_detail_stat_avg_hr_label),
             )
         }
     }
@@ -526,6 +557,8 @@ private fun BigStat(value: String, label: String, modifier: Modifier = Modifier)
  */
 @Composable
 private fun RideNoteBox(note: RideNote) {
+    val headline = note.headline.asString()
+    val body = note.body.asString()
     Surface(
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -534,9 +567,9 @@ private fun RideNoteBox(note: RideNote) {
     ) {
         Text(
             text = buildAnnotatedString {
-                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(note.headline) }
+                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(headline) }
                 append(" ")
-                append(note.body)
+                append(body)
             },
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -560,20 +593,25 @@ private fun AllValues(
     analysis: RideAnalysis?,
     segmentViews: List<SegmentEffortView>,
 ) {
+    // Fuer die Wertebereiche der Kurven — `formatValue` ist kein Composable.
+    val context = LocalContext.current
+    val formats = LocalAppFormats.current
     Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
-        DetailSection(title = "Weitere Werte") { RideExtraFactsCard(ride) }
+        DetailSection(title = stringResource(R.string.rides_detail_more_values_eyebrow)) {
+            RideExtraFactsCard(ride)
+        }
 
         val speed = curves?.speed
         val heartRate = curves?.heartRate
         if (speed != null || heartRate != null) {
-            DetailSection(title = "Tempo und Puls") {
+            DetailSection(title = stringResource(R.string.rides_detail_curves_eyebrow)) {
                 speed?.let {
                     DetailCard {
                         RideCurveChart(
-                            title = "Tempo",
+                            title = stringResource(R.string.rides_detail_speed_chart_title),
                             curve = it,
                             lineColor = LocalSignalColors.current.accentBlue,
-                            formatValue = { v -> "${formatOneDecimalDe(v)} km/h" },
+                            formatValue = { v -> context.getString(R.string.common_value_kmh, formats.decimal(v, 1)) },
                             filled = true,
                         )
                     }
@@ -581,10 +619,10 @@ private fun AllValues(
                 heartRate?.let {
                     DetailCard {
                         RideCurveChart(
-                            title = "Puls",
+                            title = stringResource(R.string.rides_detail_hr_chart_title),
                             curve = it,
                             lineColor = MaterialTheme.colorScheme.primary,
-                            formatValue = { v -> "${v.roundToInt()} bpm" },
+                            formatValue = { v -> context.getString(R.string.common_value_bpm, "${v.roundToInt()}") },
                         )
                     }
                 }
@@ -598,7 +636,9 @@ private fun AllValues(
         )
 
         if (segmentViews.isNotEmpty()) {
-            DetailSection(title = "Segmente") { SegmentsCard(views = segmentViews) }
+            DetailSection(title = stringResource(R.string.rides_detail_segments_eyebrow)) {
+                SegmentsCard(views = segmentViews)
+            }
         }
     }
 }
@@ -610,6 +650,7 @@ private fun AllValues(
 @Composable
 private fun RideExtraFactsCard(ride: Ride) {
     val stats = ride.stats
+    val formats = LocalAppFormats.current
 
     DetailCard {
         FlowRow(
@@ -617,13 +658,26 @@ private fun RideExtraFactsCard(ride: Ride) {
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Fact("Fahrzeit", "${formatHoursMinutes(stats.movingTimeS)} Std.")
             Fact(
-                label = "Ø Tempo",
-                value = stats.avgSpeedKmh?.let { "${formatOneDecimalDe(it)} km/h" } ?: "–",
+                stringResource(R.string.rides_detail_moving_time_label),
+                stringResource(R.string.rides_detail_hours_value, formatHoursMinutes(stats.movingTimeS)),
             )
-            Fact("Hm ↓", "${stats.descentM.roundToInt()} Hm")
-            stats.maxHrBpm?.let { Fact("Max. Puls", "$it bpm") }
+            Fact(
+                label = stringResource(R.string.rides_detail_avg_speed_label),
+                value = stats.avgSpeedKmh
+                    ?.let { stringResource(R.string.common_value_kmh, formats.decimal(it, 1)) }
+                    ?: "–",
+            )
+            Fact(
+                stringResource(R.string.rides_detail_descent_label),
+                stringResource(R.string.rides_detail_elevation_value, stats.descentM.roundToInt()),
+            )
+            stats.maxHrBpm?.let {
+                Fact(
+                    stringResource(R.string.rides_detail_max_hr_label),
+                    stringResource(R.string.common_value_bpm, "$it"),
+                )
+            }
         }
     }
 }
@@ -644,6 +698,7 @@ private fun RideAnalysisCard(
     vo2max: Vo2MaxEstimate?,
 ) {
     val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
     val usableLoad = load?.takeIf { it.available }
     if (usableLoad == null && decoupling == null && vo2max == null) {
         return
@@ -653,33 +708,34 @@ private fun RideAnalysisCard(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             usableLoad?.let { entry ->
                 AnalysisEntry(
-                    label = "Trainingslast",
-                    value = "${entry.load.roundToInt()} " +
-                        "(${coreTexts.load.loadSource(entry.source)})",
+                    label = stringResource(R.string.rides_detail_load_label),
+                    value = stringResource(
+                        R.string.rides_detail_load_value,
+                        entry.load.roundToInt(),
+                        coreTexts.load.loadSource(entry.source),
+                    ),
                     explanation = entry.note,
                     confidence = entry.confidence,
                 )
             }
 
             decoupling?.let { result ->
+                val percent = formats.decimal(result.decouplingPercent ?: 0.0, 1)
                 AnalysisEntry(
-                    label = "Entkopplung (Pe:Hr)",
-                    value = "${formatOneDecimalDe(result.decouplingPercent ?: 0.0)} %" +
-                        (result.rating?.let { " · $it" } ?: ""),
-                    explanation = "Vergleicht die zweite Tourhälfte mit der ersten: wie viel " +
-                        "Leistung dein Puls am Ende noch trägt. Unter 5 % gilt die aerobe " +
-                        "Ausdauer als gut, über 10 % lohnt sich mehr Grundlagenarbeit.",
+                    label = stringResource(R.string.rides_detail_decoupling_label),
+                    value = result.rating
+                        ?.let { stringResource(R.string.rides_detail_decoupling_value_rated, percent, it) }
+                        ?: stringResource(R.string.rides_detail_decoupling_value, percent),
+                    explanation = stringResource(R.string.rides_detail_decoupling_body),
                     confidence = result.confidence,
                 )
             }
 
             vo2max?.let { estimate ->
                 AnalysisEntry(
-                    label = "VO₂max",
+                    label = stringResource(R.string.rides_detail_vo2max_label),
                     value = estimate.text(coreTexts),
-                    explanation = "Aus den gleichmäßigen Abschnitten dieser Tour geschätzt " +
-                        "(Herzfrequenz gegen geschätzte Leistung). Deshalb ein Band und " +
-                        "kein Messwert.",
+                    explanation = stringResource(R.string.rides_detail_vo2max_body),
                     confidence = estimate.confidence,
                 )
             }
@@ -697,8 +753,7 @@ private fun RideAnalysisCard(
 private fun SegmentsCard(views: List<SegmentEffortView>) {
     DetailCard {
         Text(
-            text = "Automatisch erkannte Anstiege, verglichen mit deinen " +
-                "früheren Fahrten über dasselbe Stück.",
+            text = stringResource(R.string.rides_detail_segments_body),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -728,7 +783,7 @@ private fun SegmentEffortEntry(view: SegmentEffortView) {
                 // Bedeutung nicht allein ueber Farbe: Stern und Text tragen
                 // sie auch in Graustufen.
                 TagPill(
-                    text = "★ Neue Bestzeit",
+                    text = stringResource(R.string.rides_detail_segment_new_best_label),
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
@@ -740,14 +795,22 @@ private fun SegmentEffortEntry(view: SegmentEffortView) {
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Fact("Zeit", formatDuration(view.timeS))
-            Fact("Bestzeit", formatDuration(view.bestTimeS))
-            Fact("Platz", "${view.rank}. von ${view.effortCount}")
+            Fact(stringResource(R.string.rides_detail_segment_time_label), formatDuration(view.timeS))
+            Fact(stringResource(R.string.rides_detail_segment_best_label), formatDuration(view.bestTimeS))
             Fact(
-                label = "Rückstand",
+                stringResource(R.string.rides_detail_segment_rank_label),
+                stringResource(R.string.rides_detail_segment_rank_value, view.rank, view.effortCount),
+            )
+            Fact(
+                label = stringResource(R.string.rides_detail_segment_gap_label),
                 value = if (view.deltaToBestS <= 0) "–" else "+${view.deltaToBestS} s",
             )
-            view.avgHr?.let { Fact("Ø Puls", "$it bpm") }
+            view.avgHr?.let {
+                Fact(
+                    stringResource(R.string.rides_detail_segment_avg_hr_label),
+                    stringResource(R.string.common_value_bpm, "$it"),
+                )
+            }
         }
     }
 }
@@ -803,7 +866,10 @@ private fun AnalysisEntry(
         )
         if (confidence != Confidence.NONE) {
             Text(
-                text = "Verlässlichkeit: ${LocalCoreTexts.current.load.confidence(confidence)}",
+                text = stringResource(
+                    R.string.rides_detail_confidence_label,
+                    LocalCoreTexts.current.load.confidence(confidence),
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = muted,
             )

@@ -7,7 +7,6 @@ import android.net.Uri
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.MAX_ACTIVITY_FILE_BYTES
 import de.trailscape.app.ui.MAX_IMPORT_FILES
-import de.trailscape.app.ui.TOO_MANY_FILES_MESSAGE
 import de.trailscape.app.ui.readActivityFiles
 import de.trailscape.app.ui.readBounded
 import de.trailscape.core.fileTooLargeMessage
@@ -163,7 +162,8 @@ class ImportIntentsTest {
         assertEquals(0, files[0].bytes.size)
         assertEquals(null, files[1].readError)
         // Die 201. Datei wird nicht mehr gelesen.
-        assertEquals(TOO_MANY_FILES_MESSAGE, files.last().readError)
+        assertEquals(context.getString(R.string.rides_import_too_many_files_error), files.last().readError)
+        assertTrue(files.last().readError!!.startsWith("Zu viele Dateien auf einmal."))
         assertEquals(MAX_IMPORT_FILES - 1, files.count { it.readError == null })
         huge.delete()
     }

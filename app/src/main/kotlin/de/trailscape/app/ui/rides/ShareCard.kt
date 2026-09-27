@@ -1,15 +1,18 @@
 package de.trailscape.app.ui.rides
 
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationSample
 import de.trailscape.app.ui.map.buildElevationSamples
 import de.trailscape.core.Ride
 import de.trailscape.core.RideStats
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDistanceKm
+import de.trailscape.core.i18n.formatWeekdayDateYear
 import de.trailscape.core.safeFileName
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -34,7 +37,10 @@ import kotlin.math.roundToInt
  * Alles, was sich ausrechnen laesst — Projektion, Einpassen, Ausduennen,
  * Profil, Texte, welche Zahlen erscheinen, wo was steht — liegt in dieser
  * Datei und ist als reiner JVM-Test pruefbar (`ShareCardTest`). Das Zeichnen
- * mit `android.graphics` (`ShareCardRenderer.kt`) setzt nur noch um. Die Datei
+ * mit `android.graphics` (`ShareCardRenderer.kt`) setzt nur noch um. Die Texte
+ * kommen als [UiText] aus den Ressourcen; aufgeloest werden sie ueber den
+ * `resolve`-Parameter von [shareCardContent] — in der App gegen den Kontext,
+ * im Test gegen die Ressourcendateien. Die Datei
  * liegt in `:app` statt in `:core`, weil sie [thumbnailPolyline] und
  * [buildElevationSamples] wiederverwendet, die ebenfalls hier wohnen.
  *
@@ -56,6 +62,9 @@ internal data class CardRect(val left: Float, val top: Float, val right: Float, 
 
 /** Eine Kennzahl auf dem Bild: gross die Zahl, klein darunter ihre Einheit. */
 internal data class ShareStat(val value: String, val label: String)
+
+/** Wie [ShareStat], die Einheit noch als [UiText] — was [shareCardStats] liefert. */
+internal data class ShareStatText(val value: String, val label: UiText)
 
 /**
  * Was auf dem Bild steht, unabhaengig vom Format.
@@ -106,21 +115,26 @@ internal const val SHARE_TRACK_MAX_POINTS = 600
  * Punkt wie bei der Mini-Spur in der Liste, damit eine Runde auf dem Bild so
  * aussieht wie in der App.
  *
+ * @param language Sprache fuer Zahlen und Datum — die der Oberflaeche.
+ * @param resolve loest die [UiText]-Beschriftungen auf (App: `{ it.resolve(context) }`).
  * @param toLocal Umrechnung des Zeitstempels in Ortszeit; im Test fest.
  */
 internal fun shareCardContent(
     ride: Ride,
     load: Double?,
+    language: AppLanguage,
+    resolve: (UiText) -> String,
     toLocal: (Long) -> LocalDateTime = ::localOfEpochMs,
 ): ShareCardContent = ShareCardContent(
-    title = ride.name.trim().ifEmpty { "Tour" },
-    dateLine = shareCardDateLine(toLocal(ride.createdAt), ride.planned),
+    title = ride.name.trim().ifEmpty { resolve(UiText.Res(R.string.rides_share_card_fallback_title)) },
+    dateLine = resolve(shareCardDateLine(toLocal(ride.createdAt), ride.planned, language)),
     stats = shareCardStats(
         stats = ride.stats,
         load = load,
         planned = ride.planned,
         hasElevation = ride.points.any { it.ele != null },
-    ),
+        language = language,
+    ).map { ShareStat(it.value, resolve(it.label)) },
     trackUnit = thumbnailPolyline(ride.points, SHARE_TRACK_MAX_POINTS),
     profile = buildElevationSamples(ride.points),
 )
@@ -145,32 +159,38 @@ internal fun shareCardStats(
     load: Double?,
     planned: Boolean,
     hasElevation: Boolean,
-): List<ShareStat> = buildList {
-    add(ShareStat(formatKmDe(stats.distanceKm), "km"))
-    (stats.durationS ?: stats.movingTimeS)?.let { add(ShareStat(formatHoursMinutes(it), "Std.")) }
+    language: AppLanguage,
+): List<ShareStatText> = buildList {
+    add(ShareStatText(formatDistanceKm(stats.distanceKm, language), UiText.Res(R.string.rides_share_card_km_label)))
+    (stats.durationS ?: stats.movingTimeS)?.let {
+        add(ShareStatText(formatHoursMinutes(it), UiText.Res(R.string.rides_share_card_hours_label)))
+    }
     if (stats.ascentM >= 1 || hasElevation) {
-        add(ShareStat("${stats.ascentM.roundToInt()}", "Hm"))
+        add(ShareStatText("${stats.ascentM.roundToInt()}", UiText.Res(R.string.rides_share_card_elevation_label)))
     }
     val hr = stats.avgHrBpm
     when {
-        hr != null -> add(ShareStat("$hr", "Ø Puls"))
-        !planned && load != null && load > 0 -> add(ShareStat("${load.roundToInt()}", "Trainingslast"))
+        hr != null -> add(ShareStatText("$hr", UiText.Res(R.string.rides_share_card_avg_hr_label)))
+        !planned && load != null && load > 0 ->
+            add(ShareStatText("${load.roundToInt()}", UiText.Res(R.string.rides_share_card_load_label)))
     }
 }
 
-private val dateLineRidden = DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMANY)
-private val dateLinePlanned = DateTimeFormatter.ofPattern("d. MMMM yyyy", Locale.GERMANY)
+/** Tag, Monat und Jahr ohne Wochentag, z. B. „23. September 2026" / „23 September 2026". */
+private val dateLinePlannedDe = DateTimeFormatter.ofPattern("d. MMMM yyyy", AppLanguage.DE.locale)
+private val dateLinePlannedEn = DateTimeFormatter.ofPattern("d MMMM yyyy", AppLanguage.EN.locale)
 
 /**
  * Die Datumszeile, immer **mit** Jahr: Ein geteiltes Bild lebt laenger als
  * die Monatsueberschrift der Liste, und „Dienstag, 23. September" sagt in
  * einem Jahr nichts mehr. Eine Planung sagt, dass sie eine ist.
  */
-internal fun shareCardDateLine(at: LocalDateTime, planned: Boolean): String =
+internal fun shareCardDateLine(at: LocalDateTime, planned: Boolean, language: AppLanguage): UiText =
     if (planned) {
-        "Geplante Route · ${dateLinePlanned.format(at)}"
+        val date = (if (language == AppLanguage.DE) dateLinePlannedDe else dateLinePlannedEn).format(at)
+        UiText.Res(R.string.rides_share_card_planned_date_line, listOf(date))
     } else {
-        dateLineRidden.format(at)
+        UiText.Plain(formatWeekdayDateYear(at, language))
     }
 
 /**
@@ -270,7 +290,7 @@ private val SquareSpec = LayoutSpec(
 /** Groesse der Einheit unter einer Zahl; der Zeichner verkleinert bei Bedarf bis [STAT_LABEL_MIN_SIZE]. */
 internal const val STAT_LABEL_SIZE = 32f
 
-/** Kleiner wird eine Einheit nicht — sonst ist „Trainingslast" in vier Spalten nicht mehr lesbar. */
+/** Kleiner wird eine Einheit nicht — sonst ist „Trainingslast" („Training load") in vier Spalten nicht mehr lesbar. */
 internal const val STAT_LABEL_MIN_SIZE = 24f
 
 /**
