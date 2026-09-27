@@ -104,13 +104,10 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        // Die Kennung der ausgelieferten App. Waehrend des Rewrites trug der
-        // native Build hier ein `.beta`-Suffix, damit er sich neben der alten
-        // App installieren liess; dieser Parallelbetrieb ist beendet, die
-        // native App IST jetzt Trailscape. Weil der Signierschluessel der
-        // alten Pipeline nicht uebernommen wurde, ist der Umstieg von 1.x eine
-        // einmalige Neuinstallation (siehe README, Abschnitt "Umstieg").
-        applicationId = "io.github.robinrehbein.trailscape"
+        // Neue Play-App. Die alte GitHub-Installation mit
+        // io.github.robinrehbein.trailscape bleibt als separates Paket
+        // installierbar; Daten werden per Backup exportiert und importiert.
+        applicationId = "de.robinrehbein.trailscape"
         minSdk = 26
         targetSdk = 36
         // Offset 2000, damit der Zaehler sicher ueber allen bisher von der

@@ -167,6 +167,6 @@ class ImportIntentsTest {
     }
 
     private companion object {
-        const val OWN = "io.github.robinrehbein.trailscape"
+        const val OWN = "de.robinrehbein.trailscape"
     }
 }
