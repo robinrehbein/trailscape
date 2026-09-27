@@ -38,8 +38,11 @@ import kotlinx.coroutines.withContext
  * grell wirken. Die Farben sind die Markenfarben des dunklen Themas.
  */
 
-/** Oberer Ton des Hintergrundverlaufs — Markengruen, fast schwarz. */
-private const val BG_TOP: Int = 0xFF0F1A14.toInt()
+/**
+ * Oberer Ton des Hintergrundverlaufs — Markengruen, fast schwarz. Auch die
+ * Flaeche, die der Teilen-Dialog zeigt, solange die Vorschau entsteht.
+ */
+internal const val BG_TOP: Int = 0xFF0F1A14.toInt()
 
 /** Unterer Ton des Hintergrundverlaufs. */
 private const val BG_BOTTOM: Int = 0xFF1C3226.toInt()

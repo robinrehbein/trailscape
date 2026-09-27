@@ -81,7 +81,14 @@ internal class ShareCardContent(
      */
     val hasTrack: Boolean get() = trackUnit.size >= 4 && unitExtent(trackUnit) > 0f
 
-    val hasProfile: Boolean get() = profile.size >= 2
+    /**
+     * Wie bei [hasTrack]: Ohne zurueckgelegte Strecke (etwa eine Aufzeichnung
+     * auf der Rolle mit festem Standort und Barometerhoehe) zeichnet
+     * [profilePolyline] nichts — dann darf das Layout auch keinen Platz
+     * dafuer freihalten.
+     */
+    val hasProfile: Boolean
+        get() = profile.size >= 2 && profile.last().distanceKm > profile.first().distanceKm
 }
 
 /**
@@ -123,8 +130,10 @@ internal fun shareCardContent(
  * hoechstens eine vierte. Mehr als vier Spalten werden auf 1080 px zu eng, und
  * ein geteiltes Bild ist keine Auswertung.
  *
- *  - Die Dauer ist dieselbe wie in der Kennzahlenzeile der Detailansicht
- *    (Gesamtdauer, sonst Fahrzeit) und entfaellt, wenn beide fehlen.
+ *  - Die Dauer ist die Gesamtdauer; fehlt sie, springt die Fahrzeit ein. Die
+ *    Kennzahlenzeile der Detailansicht zeigt dann „–" — ein geteiltes Bild
+ *    soll aber keinen Platzhalterstrich tragen. Fehlen beide, entfaellt die
+ *    Zahl ganz.
  *  - Hoehenmeter erscheinen nur, wenn es sie gibt: Ein Import ohne Hoehen soll
  *    kein „0 Hm" behaupten. Hat die Spur Hoehen und ist trotzdem flach, steht
  *    die ehrliche 0 da.

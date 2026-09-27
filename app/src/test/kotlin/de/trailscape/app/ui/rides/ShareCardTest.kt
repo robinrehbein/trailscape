@@ -110,6 +110,19 @@ class ShareCardTest {
         assertEquals(false, content.hasTrack)
     }
 
+    @Test
+    fun `Aufzeichnung auf der Stelle mit Hoehen bekommt weder Spur noch Profil`() {
+        val same = List(5) { TrackPoint(lat = 53.0, lon = 10.0, ele = 40.0 + it) }
+        val content = shareCardContent(ride(points = same), load = null, toLocal = utc)
+
+        assertTrue(content.profile.size >= 2)
+        assertEquals(false, content.hasTrack)
+        assertEquals(false, content.hasProfile)
+        for (format in ShareCardFormat.entries) {
+            assertNull(shareCardLayout(format, content.hasTrack, content.hasProfile).profile)
+        }
+    }
+
     // ------------------------------------------------------- shareCardContent
 
     @Test

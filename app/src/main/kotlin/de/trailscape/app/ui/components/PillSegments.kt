@@ -35,6 +35,10 @@ import androidx.compose.ui.unit.dp
  * („Daten | Karte"). Im Verlauf stand frueher „Liste | Karte"; weil
  * „Karte" dort nur den Tab wechselte, ist es jetzt ein ausgeschriebener Knopf
  * (siehe `RidesScreen`).
+ *
+ * [trackColor] ist nur fuer Stellen, deren Untergrund selbst schon
+ * `surfaceContainerHigh` ist (etwa ein [OneUiDialog]) — dort verschwaende die
+ * Spur sonst, und nur die gewaehlte Pille stuende noch da.
  */
 @Composable
 fun PillSegments(
@@ -42,12 +46,13 @@ fun PillSegments(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
 ) {
     val haptics = LocalHapticFeedback.current
     Surface(
         modifier = modifier.fillMaxWidth().height(SegmentTrackHeight),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = trackColor,
     ) {
         Row(
             modifier = Modifier.padding(SegmentInset).selectableGroup(),
