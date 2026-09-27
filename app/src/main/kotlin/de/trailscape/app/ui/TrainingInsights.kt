@@ -475,11 +475,16 @@ fun computeInsights(
     val anchorEftpW = effective.eftpW
     val firstPass = ordered.map { loadFor(it, anchorEftpW) }
 
+    // Nur GESCHAETZTE Physiklast wird kalibriert: α korrigiert die Annahmen
+    // des Physikmodells (Gewicht, cw-Wert, FTP-Schaetzung). Eine Tour mit
+    // Leistungsmesser misst die Leistung direkt; sie mitzuzaehlen, wuerde α
+    // mit Touren verschieben, fuer die es gar nicht gilt.
     val calibration = computeLoadCalibration(
         firstPass.mapNotNull { load ->
             if (load.heartRate.available &&
                 load.heartRate.load > 0 &&
                 load.physics.available &&
+                !load.physics.measured &&
                 load.physics.eTss > 0
             ) {
                 LoadCalibrationSample(
@@ -627,7 +632,9 @@ fun computeInsights(
 
 /**
  * Skaliert die Physiklast mit α. Bei geklemmter Kalibrierung ist α = 1,0 —
- * dann bleibt die Rohlast unveraendert.
+ * dann bleibt die Rohlast unveraendert. Last aus gemessener Leistung
+ * ([LoadSource.LEISTUNG]) bleibt ebenfalls unangetastet: Die Pruefung auf
+ * PHYSIK schliesst sie von selbst aus.
  */
 private fun calibrated(base: RideLoad, calibration: LoadCalibration): RideLoad {
     if (base.source != LoadSource.PHYSIK || calibration.alpha == 1.0) {

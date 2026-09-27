@@ -1252,6 +1252,25 @@ class HealthSyncTest {
     }
 
     @Test
+    fun `mergeHeartRateIntoRide - behaelt gemessene Leistung und Trittfrequenz an jedem Punkt`() {
+        val basis = rideWithPoints(id = "lokal", start = mergeStart)
+        val r = basis.copy(
+            points = basis.points.mapIndexed { i, p -> p.copy(power = 200 + i, cad = 85 + i) },
+        )
+        val merged = mergeHeartRateIntoRide(
+            r,
+            listOf(
+                HealthHeartRateSample(time = mergeStart, bpm = 130.0),
+                HealthHeartRateSample(time = mergeStart.plusMs(minutes(20)), bpm = 150.0),
+            ),
+        )!!
+
+        assertEquals(r.points.map { it.power }, merged.points.map { it.power })
+        assertEquals(r.points.map { it.cad }, merged.points.map { it.cad })
+        assertEquals(130, merged.points.first().hr)
+    }
+
+    @Test
     fun `mergeHeartRateIntoRide - behaelt ID, Name, Zeitpunkt, Punkte und Kennzahlen`() {
         val r = rideWithPoints(id = "lokal", start = mergeStart)
         val merged = mergeHeartRateIntoRide(

@@ -29,7 +29,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -48,8 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import de.trailscape.app.record.RecordingRepository
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
+import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.components.HoldToEndButton
@@ -111,14 +111,26 @@ import kotlin.math.roundToInt
  * ausgewertet in `MapScreen.kt`. Hier wird nur angezeigt, was dort schon
  * berechnet ist.
  *
- * Liefert eine gekoppelte Uhr live Werte (Handy-Bruecke, siehe
+ * Liefern Sensoren live Werte — eine gekoppelte Uhr (Handy-Bruecke, siehe
  * `de.trailscape.app.record.RecordingRepository.heartRateBpm`/
- * `.watchConnected`), kommt eine **Puls**-Kachel dazu — an einer FESTEN
- * Stelle direkt nach Distanz/Fahrzeit, unabhaengig davon, ob zusaetzlich eine
- * Navigation laeuft: Die Reihenfolge der uebrigen Kacheln soll sich weder
- * beim Verbinden noch beim Trennen der Uhr veraendern, nur um die Puls-Kachel
- * herum wachsen oder schrumpfen. Ohne Uhr erscheint gar nichts — eine leere
- * oder veraltete Pulsanzeige waere eine Falschmeldung, kein Informationsverlust.
+ * `.watchConnected`) oder per Bluetooth ein Pulsgurt, Leistungsmesser oder
+ * Trittfrequenzsensor (`de.trailscape.app.sensors.BleSensors`) —, kommt eine
+ * **Sensorzeile** dazu: an einer FESTEN Stelle direkt nach Distanz/Fahrzeit
+ * und vor den Hoehenmetern, unabhaengig davon, ob zusaetzlich eine Navigation
+ * laeuft. Darin stehen nebeneinander, immer in dieser Reihenfolge, Puls ·
+ * Leistung · Trittfrequenz — nur die Kacheln, fuer die es eine Quelle gibt.
+ * Die Reihenfolge der uebrigen Werte veraendert sich weder beim Verbinden
+ * noch beim Trennen; die Zeile waechst oder schrumpft nur in sich.
+ *
+ * Welche Kachel mit welchem Wert erscheint, entscheidet `liveSensorAnzeige`
+ * in `:core` (siehe [rememberLiveSensorAnzeige]): Ein frischer Gurtwert
+ * schlaegt den Puls der Uhr; ist der Gurt still, springt die verbundene Uhr
+ * ein. Ein Sensor, der seit mehr als fuenf Sekunden nichts liefert, zeigt den
+ * Strich und „seit X s nichts" — nie einen veralteten Wert, der im Fahren
+ * nicht von einem echten zu unterscheiden waere. Ohne jede Quelle erscheint
+ * gar nichts. Mit allen drei Sensoren sind es sieben statt vier Zahlen — die
+ * Obergrenze von vier Zahlen ueberschreitet deshalb nur, wer Sensoren
+ * gekoppelt hat; die drei Kacheln werden dann eine Stufe kleiner (40 sp).
  *
  * ## Bedienung
  * Zwei gleich gebaute Flaechen ueber je die halbe Breite,
@@ -178,6 +190,9 @@ internal fun RideModeScreen(
     // von selbst bei Weiterfahrt) — nur fuer die Beschriftung des
     // Status-Chips, die Bedienung ist dieselbe wie bei einer manuellen Pause.
     autoPaused: Boolean = false,
+    // Die Live-Sensorwerte — Parameter nur, damit Screenshot-Tests sie
+    // einsetzen koennen; im Betrieb gilt der Vorgabewert.
+    sensoren: LiveSensorAnzeige = rememberLiveSensorAnzeige(),
 ) {
     Dialog(
         onDismissRequest = onClose,
@@ -190,18 +205,6 @@ internal fun RideModeScreen(
         ),
     ) {
         KeepScreenOn()
-
-        // Direkt aus dem Repository statt als Parameter: Anders als
-        // speedKmh/distanceKm/... (aus der laufenden Navigation berechnet und
-        // vom Aufrufer durchgereicht) hat der Puls mit der Fahrt selbst
-        // nichts zu tun — er ist ein reiner Live-Wert der Handy-Bruecke
-        // (siehe `RecordingRepository.heartRateBpm`). `watchConnected` gilt
-        // als Bedingung dafuer, dass die Kachel ueberhaupt erscheint: eine
-        // veraltete Herzfrequenz von einer inzwischen getrennten Uhr waere
-        // ein stilles Falschanzeigen, kein leeres Feld (siehe Klassendoc).
-        val heartRateBpm by RecordingRepository.heartRateBpm.collectAsStateWithLifecycle()
-        val watchConnected by RecordingRepository.watchConnected.collectAsStateWithLifecycle()
-        val pulsBpm = heartRateBpm.takeIf { watchConnected }
 
         BackHandler { onClose() }
 
@@ -280,13 +283,13 @@ internal fun RideModeScreen(
                             spoken = "Fahrzeit ${formatDuration(elapsedS)}",
                         )
                     }
-                    if (pulsBpm != null) {
+                    // Feste Stelle der Sensorzeile (siehe Klassendoc): nach
+                    // Distanz/Fahrzeit, vor den Hoehenmetern.
+                    if (sensoren.anzahl > 0) {
                         Spacer(Modifier.height(CardGap))
-                        BigValue(
-                            value = "$pulsBpm",
-                            label = "bpm · Puls",
-                            size = SecondaryValueSize,
-                            spoken = "Puls $pulsBpm Schläge pro Minute",
+                        LiveSensorRow(
+                            sensoren = sensoren,
+                            groesse = if (sensoren.anzahl <= 2) SecondaryValueSize else ThreeUpValueSize,
                         )
                     }
                     Spacer(Modifier.height(CardGap))
@@ -476,6 +479,39 @@ private fun BigValue(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/**
+ * Die Sensorzeile des Fahrmodus: je vorhandener Quelle eine gleich breite
+ * [BigValue]-Kachel, immer in der Reihenfolge Puls · Leistung ·
+ * Trittfrequenz. Mit nur einer Kachel sieht sie aus wie die fruehere
+ * Puls-Kachel.
+ */
+@Composable
+private fun LiveSensorRow(sensoren: LiveSensorAnzeige, groesse: TextUnit) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        sensoren.puls?.let { kachel ->
+            val t = sensorKachelText(SensorKachelArt.PULS, kachel, stringResource(R.string.ble_ride_hr_label))
+            BigValue(Modifier.weight(1f), t, groesse)
+        }
+        sensoren.leistung?.let { kachel ->
+            val t = sensorKachelText(SensorKachelArt.LEISTUNG, kachel, stringResource(R.string.ble_ride_power_label))
+            BigValue(Modifier.weight(1f), t, groesse)
+        }
+        sensoren.trittfrequenz?.let { kachel ->
+            val t = sensorKachelText(
+                SensorKachelArt.TRITTFREQUENZ,
+                kachel,
+                stringResource(R.string.ble_ride_cadence_label),
+            )
+            BigValue(Modifier.weight(1f), t, groesse)
+        }
+    }
+}
+
+@Composable
+private fun BigValue(modifier: Modifier, text: SensorKachelText, size: TextUnit) {
+    BigValue(value = text.wert, label = text.label, size = size, spoken = text.spoken, modifier = modifier)
 }
 
 /**
@@ -698,6 +734,9 @@ private fun Context.findActivity(): Activity? {
 private val SpeedValueSize = 96.sp
 private val SecondaryValueSize = 52.sp
 private val SmallValueSize = 30.sp
+
+/** Drei Sensorkacheln nebeneinander: eine Stufe unter [SecondaryValueSize], damit „215" und „142" passen. */
+private val ThreeUpValueSize = 40.sp
 
 /** Symbolgroesse beider Bedienflaechen — Pause/Weiter und Beenden gleich. */
 private val RideModeActionIconSize = 36.dp

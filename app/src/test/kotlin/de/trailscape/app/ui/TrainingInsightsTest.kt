@@ -75,6 +75,7 @@ class TrainingInsightsTest {
         startedAt: LocalDateTime,
         hr: Int? = 140,
         speedMs: Double = 1.11,
+        power: Int? = null,
     ): Ride {
         val startMs = epochMs(startedAt)
         val stepDeg = speedMs * 5.0 / 111_320.0
@@ -85,6 +86,7 @@ class TrainingInsightsTest {
                 ele = 500.0,
                 time = startMs + i * 5_000L,
                 hr = hr,
+                power = power,
             )
         }
         return Ride(
@@ -309,6 +311,19 @@ class TrainingInsightsTest {
         )
         // α darf danach nicht noch einmal als Faktor auf der Last liegen.
         assertTrue(insights.loadScaleNote.contains("Herzfrequenz"))
+    }
+
+    @Test
+    fun `Touren mit Leistungsmesser zaehlen nicht zur alpha-Kalibrierung`() {
+        // Dieselben sechs Touren wie oben, aber mit gemessener Leistung: Es gibt
+        // nichts Geschaetztes zu kalibrieren.
+        val rides = (0 until 6).map { i ->
+            ride("r$i", now.minusDays((3 + i * 2).toLong()), speedMs = 8.33, power = 180)
+        }
+        val insights = insightsOf(rides)
+        assertEquals(0, insights.calibration.sampleCount)
+        assertEquals(1.0, insights.calibration.alpha)
+        assertTrue(insights.eftp.source != EftpSource.KALIBRIERT)
     }
 
     @Test

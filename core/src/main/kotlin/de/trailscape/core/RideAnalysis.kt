@@ -138,8 +138,13 @@ fun computeDecoupling(
         decouplingPercent = pct,
         variabilityIndex = physics.variabilityIndex,
         rating = decouplingRating(pct),
-        // Die Leistung ist geschaetzt — mehr als „medium" ist nicht serioes.
-        confidence = minConfidence(Confidence.MEDIUM, physics.confidence),
+        // Nur die GESCHAETZTE Leistung deckelt auf „medium" — mehr ist dort
+        // nicht serioes. Mit Leistungsmesser gilt die Einstufung der Messung.
+        confidence = if (physics.measured) {
+            physics.confidence
+        } else {
+            minConfidence(Confidence.MEDIUM, physics.confidence)
+        },
     )
 }
 

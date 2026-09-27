@@ -67,6 +67,17 @@ data class RideLoadFacts(
     val fallbackDistanceKm: Double,
     val fallbackDurationS: Double,
     val fallbackAscentM: Double,
+    /**
+     * `true`, wenn die Leistung gemessen ist ([PhysicsEstimate.measured]) —
+     * dann rechnet Stufe B ohne α (siehe [LoadSource.LEISTUNG]).
+     *
+     * Angehaengt und nur geschrieben, wenn `true`: Alte Cache-Eintraege
+     * kennen den Schluessel nicht und lesen sich als `false` — richtig, denn
+     * Touren von vor dem Leistungsmesser haben keine gemessene Leistung.
+     */
+    val physicsMeasured: Boolean = false,
+    /** Anteil der Bewegungszeit mit gemessener Leistung (0…1), fuer die Herkunftsnotiz. */
+    val physicsMeasuredCoverage: Double = 0.0,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("hrAvailable", hrAvailable)
@@ -101,6 +112,11 @@ data class RideLoadFacts(
         put("fallbackDistanceKm", fallbackDistanceKm)
         put("fallbackDurationS", fallbackDurationS)
         put("fallbackAscentM", fallbackAscentM)
+        // Angehaengt und nur im Ausnahmefall (siehe [physicsMeasured]).
+        if (physicsMeasured) {
+            put("physicsMeasured", true)
+            put("physicsMeasuredCoverage", physicsMeasuredCoverage)
+        }
     }
 
     companion object {
@@ -137,6 +153,8 @@ data class RideLoadFacts(
             fallbackDistanceKm = json.optionalDouble("fallbackDistanceKm") ?: 0.0,
             fallbackDurationS = json.optionalDouble("fallbackDurationS") ?: 0.0,
             fallbackAscentM = json.optionalDouble("fallbackAscentM") ?: 0.0,
+            physicsMeasured = json.optionalBoolean("physicsMeasured") ?: false,
+            physicsMeasuredCoverage = json.optionalDouble("physicsMeasuredCoverage") ?: 0.0,
         )
     }
 }
@@ -190,6 +208,8 @@ fun computeRideLoadFacts(ride: Ride, profile: TrainingProfile): RideLoadFacts {
         fallbackDistanceKm = fallbackDistanceKm,
         fallbackDurationS = fallbackDurationS,
         fallbackAscentM = stats.ascentM,
+        physicsMeasured = physics.measured,
+        physicsMeasuredCoverage = if (physics.measured) physics.series.measuredCoverage else 0.0,
     )
 }
 
@@ -225,6 +245,7 @@ fun rideLoadFactsFromSummary(summary: RideInfo): RideLoadFacts = RideLoadFacts(
         ?: summary.stats.durationS?.toDouble()
         ?: 0.0,
     fallbackAscentM = summary.stats.ascentM,
+    physicsMeasured = false,
 )
 
 /**
@@ -292,6 +313,7 @@ fun rideLoadFromFacts(
             eftpW = ftp,
             kcal = estimateKcal(avgPowerW = avg, movingTimeS = facts.physicsMovingTimeS),
             confidence = facts.physicsConfidence,
+            measured = facts.physicsMeasured,
         )
     } else {
         PhysicsEstimate.unavailable("Leistung nicht schätzbar.")
@@ -307,6 +329,18 @@ fun rideLoadFromFacts(
             physics = physics,
             note = "Last aus der Herzfrequenz berechnet " +
                 "(${dartRound(hr.hrCoverage * 100).toInt()} % Abdeckung).",
+        )
+    }
+
+    // Stufe B — gemessene Leistung, wie in [computeRideLoad] ohne α.
+    if (physics.available && physics.eTss > 0 && physics.measured) {
+        return RideLoad(
+            load = min(physics.eTss, maxLoad),
+            source = LoadSource.LEISTUNG,
+            confidence = physics.confidence,
+            heartRate = hr,
+            physics = physics,
+            note = measuredPowerLoadNote(facts.physicsMeasuredCoverage),
         )
     }
 

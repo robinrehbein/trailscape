@@ -29,6 +29,8 @@ import androidx.core.location.LocationListenerCompat
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.sensors.BleNutzer
+import de.trailscape.app.sensors.BleSensors
 import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
@@ -38,6 +40,7 @@ import de.trailscape.core.DiagLog
 import de.trailscape.core.LocationFusion
 import de.trailscape.core.PointFilter
 import de.trailscape.core.PointFilterResult
+import de.trailscape.core.PunktSensorWerte
 import de.trailscape.core.Quelle
 import de.trailscape.core.Ride
 import de.trailscape.core.SensorSample
@@ -414,6 +417,8 @@ class RecordingService : Service() {
         // failAndStop durchlaeuft: Ein haengender Sink wuerde Uhr-Proben ins
         // Leere schicken (die naechste Aufzeichnung registriert ohnehin neu).
         RecordingRepository.detachWatchSampleSink()
+        // Dasselbe Netz fuer die Bluetooth-Sensoren (idempotent).
+        BleSensors.release(BleNutzer.AUFZEICHNUNG)
         journal.close()
         recordingThread.quitSafely()
         super.onDestroy()
@@ -507,6 +512,9 @@ class RecordingService : Service() {
 
         active = true
         registriereWatchSampleSink()
+        // Gekoppelte Bluetooth-Sensoren verbinden sich fuer die Dauer der
+        // Aufzeichnung (eigener Thread, siehe BleSensors).
+        BleSensors.acquire(this, BleNutzer.AUFZEICHNUNG)
         meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
         // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
@@ -597,6 +605,7 @@ class RecordingService : Service() {
 
         active = true
         registriereWatchSampleSink()
+        BleSensors.acquire(this, BleNutzer.AUFZEICHNUNG)
         val now = System.currentTimeMillis()
         stromSeitMs = now
         letzterResubscribeMs = now
@@ -765,6 +774,7 @@ class RecordingService : Service() {
         handler.removeCallbacks(ticker)
         active = false
         RecordingRepository.detachWatchSampleSink()
+        BleSensors.release(BleNutzer.AUFZEICHNUNG)
         // Vor dem Speichern angestossen: Die Bestaetigung soll unmittelbar auf
         // den Stopp folgen. Der VoiceAnnouncer lebt am Prozess, nicht an
         // diesem Dienst — das folgende stopSelf schneidet sie nicht ab.
@@ -1007,7 +1017,7 @@ class RecordingService : Service() {
                     hoeheM = telefonPunkt.ele,
                     genauigkeitM = sample.accuracyM.takeIf { it > 0.0 },
                 )
-                val point = waehlePunktZumAufzeichnen(fused, telefonPunkt, RecordingRepository.heartRateBpm.value)
+                val point = waehlePunktZumAufzeichnen(fused, telefonPunkt, aktuelleSensorWerte())
                     ?: telefonPunkt
                 recordFusedPoint(point)
             }
@@ -1058,7 +1068,7 @@ class RecordingService : Service() {
         // LocationFusion) — dann gibt es nichts Neues aufzuzeichnen.
         if (fused.zuletzt != Quelle.UHR) return
 
-        val point = waehlePunktZumAufzeichnen(fused, telefonPunkt = null, RecordingRepository.heartRateBpm.value)
+        val point = waehlePunktZumAufzeichnen(fused, telefonPunkt = null, aktuelleSensorWerte())
             ?: return
         lastAcceptedAtMs = System.currentTimeMillis()
         recordFusedPoint(point)
@@ -1423,6 +1433,15 @@ class RecordingService : Service() {
         sendeZustandAnUhr()
     }
 
+    /**
+     * Die Sensorwerte fuer den gerade aufgezeichneten Punkt: Puls (frischer
+     * Gurt vor Uhr), Leistung (Mittel seit dem vorigen Punkt) und
+     * Trittfrequenz. Genau einmal je aufgezeichnetem Punkt aufrufen — das
+     * Leistungsmittel beginnt danach neu.
+     */
+    private fun aktuelleSensorWerte(): PunktSensorWerte =
+        BleSensors.punktWerte(System.currentTimeMillis(), uhrBpm = RecordingRepository.heartRateBpm.value)
+
     /** Baut den aktuellen Aufzeichnungszustand und schickt ihn an eine erreichbare Uhr. */
     private fun sendeZustandAnUhr() {
         WearBridge.sendZustand(
@@ -1432,7 +1451,8 @@ class RecordingService : Service() {
                 pausiert = pauseStartedAtMs != null,
                 dauerMs = elapsedMs(System.currentTimeMillis()),
                 distanzKm = distanceM / 1000,
-                hf = RecordingRepository.heartRateBpm.value,
+                // Der wirksame Live-Puls: Ein verbundener Gurt zaehlt vor der Uhr.
+                hf = BleSensors.livePulsBpm(System.currentTimeMillis(), RecordingRepository.heartRateBpm.value),
             ),
         )
     }
@@ -1551,6 +1571,7 @@ class RecordingService : Service() {
         notifyError(message)
 
         cancelWatchdogAlarm()
+        BleSensors.release(BleNutzer.AUFZEICHNUNG)
         if (active || journal.exists()) {
             active = false
             RecordingRepository.detachWatchSampleSink()
