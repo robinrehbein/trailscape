@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.runtime.staticCompositionLocalOf
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -31,6 +33,7 @@ import de.trailscape.core.haversineM
 import de.trailscape.core.NAV_KAMERA_NEIGUNG_GRAD
 import de.trailscape.core.klemmeOffRouteZoom
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import org.maplibre.android.MapLibre
@@ -711,16 +714,57 @@ internal class MapController {
      */
     private var obscuredBottomPx = 0
 
+    /**
+     * Die Punkte des letzten [fitToPoints] mit `followObscured = true` —
+     * solange gesetzt, wird bei jeder spuerbaren Aenderung von
+     * [obscuredBottomPx] neu eingepasst.
+     *
+     * Grund: Die Vorschau eines Rundkurs-Vorschlags wird eingepasst, sobald
+     * er da ist — das Blatt darunter waechst aber erst danach von der
+     * Suchanzeige auf die Vorschlagsliste. Mit dem Rand vom ersten Moment lag
+     * die Runde dann halb unter dem Blatt, und man musste selbst wischen und
+     * zoomen. Jede eigene Bewegung ([cancelPendingCamera]) und jede andere
+     * Kamerafahrt beendet das Nachfuehren.
+     */
+    private var followedFit: Pair<List<TrackPoint>, MapPadding>? = null
+
+    /** Wartet kurz, bis das Blatt ausgewachsen ist (Animation), statt je Bild neu zu fahren. */
+    private val refitHandler = Handler(Looper.getMainLooper())
+    private val refit = Runnable {
+        val (points, padding) = followedFit ?: return@Runnable
+        fitToPoints(points, padding, followObscured = true)
+    }
+
     fun setObscuredBottom(px: Int) {
-        obscuredBottomPx = px.coerceAtLeast(0)
+        val neu = px.coerceAtLeast(0)
+        val alt = obscuredBottomPx
+        obscuredBottomPx = neu
+        if (followedFit != null && abs(neu - alt) >= REFIT_MIN_CHANGE_PX) {
+            refitHandler.removeCallbacks(refit)
+            refitHandler.postDelayed(refit, REFIT_DELAY_MS)
+        }
+    }
+
+    /** Beendet das Nachfuehren aus [fitToPoints] (`followObscured`). */
+    fun stopFollowingFit() {
+        followedFit = null
+        refitHandler.removeCallbacks(refit)
     }
 
     /**
      * Faehrt die Kamera so, dass alle [points] sichtbar sind — mit demselben
      * Rand und derselben Zoomgrenze wie `_fitToPoints` im Flutter-Original.
+     *
+     * @param followObscured `true` passt spaeter von selbst neu ein, sobald
+     *   sich die verdeckte Hoehe unten aendert (siehe [followedFit]).
      */
-    fun fitToPoints(points: List<TrackPoint>, padding: MapPadding = DEFAULT_FIT_PADDING) {
+    fun fitToPoints(
+        points: List<TrackPoint>,
+        padding: MapPadding = DEFAULT_FIT_PADDING,
+        followObscured: Boolean = false,
+    ) {
         if (points.isEmpty()) return
+        if (followObscured) followedFit = points to padding else stopFollowingFit()
         run(afterReady = true) { map ->
             val builder = LatLngBounds.Builder()
             points.forEach { builder.include(LatLng(it.lat, it.lon)) }
@@ -766,6 +810,7 @@ internal class MapController {
      * sie noch darunter liegt (Original: `math.max(camera.zoom, 15)`).
      */
     fun moveTo(lat: Double, lon: Double, minZoom: Double? = null, animate: Boolean = true) {
+        stopFollowingFit()
         run(afterReady = false) { map ->
             val zoom = if (minZoom == null) map.cameraPosition.zoom else max(map.cameraPosition.zoom, minZoom)
             // Mitte des sichtbaren Teils, nicht der ganzen Karte: Das Blatt
@@ -812,6 +857,7 @@ internal class MapController {
         bearingGrad: Double,
         versatz: Boolean,
     ) {
+        stopFollowingFit()
         run(afterReady = false) { map ->
             val topPad = if (versatz) map.height * NAV_CAMERA_VERSATZ_ANTEIL else 0.0
             map.easeCamera(
@@ -836,6 +882,7 @@ internal class MapController {
      * wie vor der Navigation.
      */
     fun resetNavCamera() {
+        stopFollowingFit()
         run(afterReady = false) { map ->
             val position = map.cameraPosition
             val target = position.target ?: return@run
@@ -862,6 +909,7 @@ internal class MapController {
      * kommen aus `:core` (`klemmeOffRouteZoom`, 12..16).
      */
     fun frameOffRoute(lat: Double, lon: Double, routeLat: Double, routeLon: Double) {
+        stopFollowingFit()
         run(afterReady = true) { map ->
             val bounds = runCatching {
                 LatLngBounds.Builder()
@@ -930,12 +978,14 @@ internal class MapController {
     }
 
     /**
-     * Verwirft eine noch wartende Kamerafahrt. Gerufen, sobald die Nutzerin
-     * selbst schiebt: Eine Einpass-Fahrt, die auf das Fertigwerden des Stils
-     * gewartet hat, soll nicht Sekunden spaeter die Karte unter dem Finger
-     * wegreissen.
+     * Verwirft eine noch wartende Kamerafahrt und beendet das Nachfuehren
+     * einer eingepassten Route. Gerufen, sobald die Nutzerin selbst schiebt:
+     * Eine Einpass-Fahrt, die auf das Fertigwerden des Stils gewartet hat
+     * oder einem wachsenden Blatt folgt, soll nicht Sekunden spaeter die
+     * Karte unter dem Finger wegreissen.
      */
     fun cancelPendingCamera() {
+        stopFollowingFit()
         pendingCamera = null
     }
 
@@ -1220,6 +1270,12 @@ internal const val MIN_RECORDING_ZOOM = 15.0
 private const val MAX_FIT_ZOOM = 16.0
 private const val MAX_CAMERA_ZOOM = 20.0
 private const val CAMERA_ANIMATION_MS = 600
+
+/** Ab dieser Aenderung der verdeckten Hoehe wird nachgefuehrt ([MapController.fitToPoints]). */
+private const val REFIT_MIN_CHANGE_PX = 24
+
+/** Pause nach der letzten Hoehenaenderung, bevor neu eingepasst wird. */
+private const val REFIT_DELAY_MS = 250L
 
 /**
  * Anteil der Kartenhoehe, der als oberes Kamera-Padding die Position ins

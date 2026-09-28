@@ -2534,7 +2534,16 @@ fun MapScreen(appViewModel: AppViewModel) {
             "${generation.candidates.size}-${generation.selectedIndex}"
         if (key == fittedGenerationKey) return@LaunchedEffect
         fittedGenerationKey = key
-        controller.fitToPoints(candidate.route.points)
+        // Mit Nachfuehren: Das Blatt waechst nach dem Einpassen noch von der
+        // Suchanzeige auf die Vorschlagsliste (siehe `followedFit` in
+        // `MapViewHost.kt`).
+        controller.fitToPoints(candidate.route.points, followObscured = true)
+    }
+
+    // Ohne offenen Vorschlag nichts mehr nachfuehren — sonst zoge ein
+    // spaeter schrumpfendes Blatt die Karte auf eine verworfene Runde.
+    LaunchedEffect(generation.target == null) {
+        if (generation.target == null) controller.stopFollowingFit()
     }
 
     // ------------------------------- geplante Route → Aufnahme-Knopf der Huelle
