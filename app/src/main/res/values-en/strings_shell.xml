@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der App-Huelle (ui/onboarding/**, ui/TrailscapeApp.kt, ui/components/**, ui/ErrorText.kt,
+    ui/UiFormat.kt, record/**, reminder/**, voice/**, wear/**, MainActivity.kt, TrailscapeApplication.kt,
+    data/**). Die bestehenden strings.xml, strings_recording.xml und strings_reminders.xml gehoeren
+    ebenfalls i18n-onboarding-shell.
+
+    Eigentuemer: i18n-onboarding-shell · Schluessel-Praefix: shell_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values/strings_shell.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- OnboardingScreen.kt -->
+    <string name="shell_onboarding_skip_action">Skip</string>
+    <string name="shell_onboarding_back_action">Back</string>
+    <string name="shell_onboarding_next_action">Next</string>
+    <string name="shell_onboarding_build_loop_action">Build loop</string>
+    <string name="shell_onboarding_finish_action">Let’s go</string>
+    <string name="shell_onboarding_welcome_eyebrow">Welcome</string>
+    <string name="shell_onboarding_step_eyebrow">Step %1$d of %2$d</string>
+    <string name="shell_onboarding_welcome_body_1">Trailscape tells you what to ride today — and builds you a matching loop over gravel and quiet lanes that ends where it starts.</string>
+    <string name="shell_onboarding_welcome_body_2">In a moment you’ll find Today, Map, History and Training at the bottom, next to the round Ride button. Everything else is behind the gear.</string>
+    <string name="shell_onboarding_welcome_body_3">Your data stays on your device. No account, no telemetry.</string>
+    <string name="shell_onboarding_data_title">Bring your rides along</string>
+    <string name="shell_onboarding_data_body_1">With your past rides, the analysis is meaningful straight away — without them it takes about two weeks.</string>
+    <string name="shell_onboarding_data_body_2">GPX, FIT or complete exports from Strava, Garmin and Wahoo as a ZIP. Trailscape spots duplicates by itself.</string>
+    <string name="shell_onboarding_data_body_3">Import via the + at the top right of History — or share a file straight to Trailscape.</string>
+    <string name="shell_onboarding_profile_title">A few details for the analysis</string>
+    <string name="shell_onboarding_profile_body_1">From your age and weight, Trailscape estimates heart rate and power — the basis of all training load.</string>
+    <string name="shell_onboarding_profile_body_2">You can also leave this empty. Enter more precise values later under Settings → Profile.</string>
+    <string name="shell_onboarding_health_title">Recovery data from your watch</string>
+    <string name="shell_onboarding_health_body_1">If your watch writes to Health Connect (Samsung Health, Garmin, Fitbit and others), resting heart rate, HRV and sleep feed into the daily recommendation.</string>
+    <string name="shell_onboarding_health_body_2">Everything works just the same without a watch. You can also connect later under Settings → Watch &amp; health data.</string>
+    <string name="shell_onboarding_first_round_title">Your first loop</string>
+    <string name="shell_onboarding_first_round_title_history">A loop for today</string>
+    <string name="shell_onboarding_first_round_body">How much time do you have today? Trailscape builds you a calm loop from your location that ends back there.</string>
+    <string name="shell_onboarding_first_round_later_label">Later</string>
+    <string name="shell_onboarding_first_round_preview">≈ %1$d km · flat · easy pace</string>
+    <string name="shell_onboarding_first_round_privacy_hint">To calculate it, the loop’s waypoints — including your starting point — are sent to the routing server.</string>
+    <string name="shell_onboarding_first_round_privacy_location_hint">Trailscape will ask for your location in a moment. To calculate it, the loop’s waypoints — including your starting point — are sent to the routing server.</string>
+    <string name="shell_onboarding_first_round_privacy_wind_hint">To calculate it, the loop’s waypoints — including your starting point — are sent to the routing server. With “Consider wind”, your starting point, rounded to about 1 km, is also sent to Open-Meteo.</string>
+    <string name="shell_onboarding_first_round_privacy_location_wind_hint">Trailscape will ask for your location in a moment. To calculate it, the loop’s waypoints — including your starting point — are sent to the routing server. With “Consider wind”, your starting point, rounded to about 1 km, is also sent to Open-Meteo.</string>
+    <string name="shell_onboarding_first_round_later_hint">No problem — a suitable loop is always waiting on “Today”.</string>
+    <string name="shell_onboarding_age_label">Age</string>
+    <string name="shell_onboarding_weight_label">Weight (kg)</string>
+    <string name="shell_onboarding_sex_label">Sex (optional)</string>
+    <string name="shell_onboarding_sex_male">male</string>
+    <string name="shell_onboarding_sex_female">female</string>
+    <string name="shell_onboarding_sex_unknown">not specified</string>
+    <string name="shell_onboarding_age_error">Please enter an age between 10 and 100 years.</string>
+    <string name="shell_onboarding_weight_error">Please enter a weight between 30 and 250 kg.</string>
+    <string name="shell_onboarding_health_connect_action">Connect to Health Connect</string>
+    <string name="shell_onboarding_health_connected_status">Connected. From now on Trailscape fetches your data automatically.</string>
+    <string name="shell_onboarding_health_denied_status">No access granted — you can do this later under Settings → Watch &amp; health data.</string>
+
+    <!-- TrailscapeApp.kt -->
+    <string name="shell_nav_today_label">Today</string>
+    <string name="shell_nav_map_label">Map</string>
+    <string name="shell_nav_history_label">History</string>
+    <string name="shell_nav_training_label">Training</string>
+
+    <!-- components/RecCapsuleButton.kt -->
+    <string name="shell_rec_idle_label">Ride</string>
+    <string name="shell_rec_start_cd">Start recording</string>
+    <string name="shell_rec_route_cd">Start planned route</string>
+    <string name="shell_rec_paused_cd">Recording paused — open cockpit</string>
+    <string name="shell_rec_running_cd">Recording — open cockpit</string>
+
+    <!-- components/HoldToEndButton.kt -->
+    <string name="shell_hold_to_end_label">Hold to stop</string>
+    <string name="shell_hold_to_end_hint">Keep holding</string>
+    <string name="shell_hold_to_end_cd">Stop recording</string>
+
+    <!-- components/OneUiTextField.kt -->
+    <string name="shell_search_clear_cd">Clear search</string>
+
+    <!-- components/ScreenHeader.kt -->
+    <string name="shell_header_back_cd">Back</string>
+
+    <!-- components/Eyebrow.kt -->
+    <string name="shell_coach_eyebrow">Coach</string>
+
+    <!-- record/RecordingRepository.kt -->
+    <string name="shell_recording_start_blocked_error">The recording couldn’t be started. Please open Trailscape and try again.</string>
+</resources>

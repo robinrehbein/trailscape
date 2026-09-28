@@ -126,6 +126,21 @@ class RecordingJournalTest {
     }
 
     @Test
+    fun `Punkt mit Leistung und Trittfrequenz ueberlebt den Journal-Roundtrip`() {
+        val j = journal()
+        j.begin("id-7", 1_000L)
+        val mitSensoren = point(52.0, 1_005L).copy(hr = 140, power = 212, cad = 86)
+        j.appendPoint(mitSensoren)
+        j.appendPoint(point(52.1, 1_010L))
+        j.close()
+
+        val snapshot = assertNotNull(journal().read())
+        assertEquals(mitSensoren, snapshot.points[0])
+        assertNull(snapshot.points[1].power)
+        assertNull(snapshot.points[1].cad)
+    }
+
+    @Test
     fun `read summiert abgeschlossene Pausen`() {
         val j = journal()
         j.begin("id-1", 1_000L)

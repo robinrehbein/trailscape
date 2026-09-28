@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -60,7 +61,7 @@ class HeartRateLoadTest {
         val points = track(pointCount = 361, hr = { 130 })
         val series = buildRideSeries(points, refProfile)
         assertEquals(3600.0, series.movingTimeS, 1e-9)
-        val load = computeHeartRateLoad(series, refProfile)
+        val load = computeHeartRateLoad(series, refProfile, texts = CoreTextsDe)
         assertTrue(load.available)
         assertEquals(65.73191188513462, load.trimpBanister, 1e-6)
         assertEquals(38.518307560003834, load.load, 1e-6)
@@ -83,7 +84,7 @@ class HeartRateLoadTest {
 
         assertEquals(0.0, series.movingTimeS, 1e-9)
         assertEquals(600.0, series.totalTimeS, 1e-9)
-        assertFalse(computeHeartRateLoad(series, refProfile).available)
+        assertFalse(computeHeartRateLoad(series, refProfile, texts = CoreTextsDe).available)
     }
 
     @Test
@@ -110,7 +111,7 @@ class HeartRateLoadTest {
     fun `sample-weise Integration liegt ueber der Durchschnitts-HF-Variante (Jensen)`() {
         // 30 min @110 + 30 min @150 vs. 60 min @130 (gleiche Ø-HF).
         val points = track(pointCount = 361, hr = { i -> if (i <= 180) 110 else 150 })
-        val split = computeHeartRateLoad(buildRideSeries(points, refProfile), refProfile)
+        val split = computeHeartRateLoad(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
         assertEquals(72.78410600605302, split.trimpBanister, 1e-6)
         assertEquals(42.65082971449509, split.load, 1e-6)
         assertTrue(split.load > 38.52)
@@ -132,6 +133,7 @@ class HeartRateLoadTest {
         val load = computeHeartRateLoad(
             buildRideSeries(track(pointCount = 361, hr = { 130 }), refProfile),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertEquals(120.0, load.trimpEdwards, 1e-6)
     }
@@ -145,7 +147,7 @@ class HeartRateLoadTest {
             pointCount = 301,
             hr = { i -> blockHr[minOf(4, maxOf(0, (i - 1) / 60))] },
         )
-        val load = computeHeartRateLoad(buildRideSeries(points, refProfile), refProfile)
+        val load = computeHeartRateLoad(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
         for (i in 0 until 5) {
             assertEquals(600.0, load.frielZones.seconds[i], 1.0)
         }
@@ -160,11 +162,11 @@ class HeartRateLoadTest {
     @Test
     fun `Confidence sinkt ohne Feldtest und ohne Geschlecht`() {
         val points = track(pointCount = 361, hr = { 130 })
-        val full = computeHeartRateLoad(buildRideSeries(points, refProfile), refProfile)
+        val full = computeHeartRateLoad(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
         assertEquals(Confidence.HIGH, full.confidence)
 
         val anon = TrainingProfile(ageYears = 40)
-        val weak = computeHeartRateLoad(buildRideSeries(points, anon), anon)
+        val weak = computeHeartRateLoad(buildRideSeries(points, anon), anon, texts = CoreTextsDe)
         assertEquals(Confidence.LOW, weak.confidence)
     }
 
@@ -172,7 +174,7 @@ class HeartRateLoadTest {
     fun `unter 80 Prozent HF-Abdeckung faellt die Tour aus dem HF-Pfad`() {
         val points = track(pointCount = 361, hr = { i -> if (i < 150) 130 else null })
         val series = buildRideSeries(points, refProfile)
-        val load = computeHeartRateLoad(series, refProfile)
+        val load = computeHeartRateLoad(series, refProfile, texts = CoreTextsDe)
         assertTrue(load.hrCoverage < 0.8)
         assertFalse(load.available)
         assertTrue(load.unavailableReason!!.contains("Herzfrequenz"))
@@ -205,7 +207,7 @@ class HeartRateLoadTest {
         for (points in cases) {
             val series = buildRideSeries(points, refProfile)
             assertTrue(series.isEmpty)
-            val load = computeHeartRateLoad(series, refProfile)
+            val load = computeHeartRateLoad(series, refProfile, texts = CoreTextsDe)
             assertFalse(load.available)
             assertEquals(0.0, load.load, 0.0)
             assertNotNull(load.unavailableReason)
@@ -217,6 +219,7 @@ class HeartRateLoadTest {
         val load = computeHeartRateLoad(
             buildRideSeries(track(pointCount = 100), refProfile),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(load.available)
         assertTrue(load.unavailableReason!!.contains("keine Herzfrequenz"))

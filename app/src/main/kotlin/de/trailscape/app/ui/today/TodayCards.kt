@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
@@ -62,6 +63,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.theme.CardPadding
@@ -92,6 +96,17 @@ import de.trailscape.core.ReadinessBand
  * aus [LocalSignalColors] — bewusst nicht aus `ui/training/`, damit diese Seite
  * nicht an der Farblogik eines anderen Tabs haengt.
  */
+
+/**
+ * Beschriftung des Heute-Knopfs auf der Karte ([offerChipText]) als fertiger
+ * String in der Sprache der Oberflaeche.
+ *
+ * Eigene Composable-Huelle, damit die Karte (`ui/map/ExploreSheet.kt`) ihren
+ * Aufruf `offerChipLabel(todayOffer)` unveraendert behalten kann — die reine
+ * Formulierung bleibt in `TodayWording.kt` ohne Compose testbar.
+ */
+@Composable
+fun offerChipLabel(offer: TodayOffer): String = offerChipText(offer).asString()
 
 /** Zustand der kleinen Uhren-Zeile in der Hero-Karte. */
 enum class HealthHint {
@@ -124,8 +139,8 @@ enum class HealthHint {
 internal fun HeroCard(
     score: Int?,
     band: ReadinessBand?,
-    headline: String,
-    sentence: String,
+    headline: UiText,
+    sentence: UiText,
     offer: TodayOffer?,
     onBuildRoute: () -> Unit,
     onWhy: () -> Unit,
@@ -140,18 +155,22 @@ internal fun HeroCard(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (score != null && band != null) {
-                    ReadinessRing(score = score, word = readinessWord(band), color = readinessColor(band))
+                    ReadinessRing(
+                        score = score,
+                        word = readinessWord(band).asString(),
+                        color = readinessColor(band),
+                    )
                     Spacer(modifier = Modifier.width(14.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = headline,
+                        text = headline.asString(),
                         style = MaterialTheme.typography.titleLarge,
                         modifier = Modifier.semantics { heading() },
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = sentence,
+                        text = sentence.asString(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = theme.onSurfaceVariant,
                     )
@@ -161,16 +180,16 @@ internal fun HeroCard(
             when (healthHint) {
                 HealthHint.NONE -> Unit
                 HealthHint.CONNECT -> WatchLine(
-                    text = "Verbinde deine Uhr, um deine Tagesform zu sehen.",
+                    text = stringResource(R.string.today_hero_connect_watch_hint),
                     modifier = Modifier.clickable(
-                        onClickLabel = "Gesundheitsdaten öffnen",
+                        onClickLabel = stringResource(R.string.today_hero_open_health_action),
                         role = Role.Button,
                         onClick = onOpenHealth,
                     ),
                 )
 
                 HealthHint.COLLECTING -> WatchLine(
-                    text = "Deine Uhr sammelt noch Werte. In ein paar Tagen siehst du hier deine Tagesform.",
+                    text = stringResource(R.string.today_hero_collecting_hint),
                 )
             }
 
@@ -184,7 +203,7 @@ internal fun HeroCard(
                 ) {
                     Icon(Icons.Filled.Route, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = offerButtonLabel(offer).asString(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             } else if (offer != null) {
                 // Am Ruhetag: dasselbe Angebot wie auf der Karte, aber ruhig
@@ -201,7 +220,7 @@ internal fun HeroCard(
                     // Dasselbe Spa-Symbol wie der Ruhetag-Knopf auf der Karte.
                     Icon(Icons.Rounded.Spa, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = offerButtonLabel(offer), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(text = offerButtonLabel(offer).asString(), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
@@ -209,7 +228,7 @@ internal fun HeroCard(
                 onClick = onWhy,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             ) {
-                Text("Warum diese Empfehlung?")
+                Text(stringResource(R.string.today_hero_why_action))
             }
         }
     }
@@ -263,10 +282,11 @@ private fun readinessColor(band: ReadinessBand): Color {
 @Composable
 private fun ReadinessRing(score: Int, word: String, color: Color) {
     val track = MaterialTheme.colorScheme.surfaceContainerHigh
+    val description = stringResource(R.string.today_ring_cd, score, word)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clearAndSetSemantics {
-            contentDescription = "Tagesform $score von 100, $word"
+            contentDescription = description
         },
     ) {
         Box(modifier = Modifier.size(RingSize), contentAlignment = Alignment.Center) {
@@ -326,8 +346,10 @@ private val RingStroke = 7.dp
  * vorgelesen ([StripDay.description]) statt als Kuerzel und nackte Zahl.
  */
 @Composable
-internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
-    val summarySpoken = summary.second?.let { "${summary.first}, $it" } ?: summary.first
+internal fun WeekCard(summary: Pair<UiText, UiText?>, strip: List<StripDay>) {
+    val first = summary.first.asString()
+    val second = summary.second?.asString()
+    val summarySpoken = second?.let { "$first, $it" } ?: first
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(CardPadding)) {
             Row(
@@ -337,8 +359,8 @@ internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
                     contentDescription = summarySpoken
                 },
             ) {
-                Text(text = summary.first, style = MaterialTheme.typography.titleMedium)
-                summary.second?.let {
+                Text(text = first, style = MaterialTheme.typography.titleMedium)
+                second?.let {
                     Text(
                         text = " · $it",
                         style = MaterialTheme.typography.bodySmall,
@@ -368,10 +390,11 @@ internal fun WeekCard(summary: Pair<String, String?>, strip: List<StripDay>) {
 @Composable
 private fun StripDayCell(day: StripDay, index: Int, modifier: Modifier = Modifier) {
     val theme = MaterialTheme.colorScheme
+    val description = day.description.asString()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.clearAndSetSemantics {
-            contentDescription = day.description
+            contentDescription = description
             collectionItemInfo = CollectionItemInfo(rowIndex = 0, rowSpan = 1, columnIndex = index, columnSpan = 1)
         },
     ) {
@@ -463,9 +486,9 @@ internal fun GoalCard(title: String, line: String, progress: Float, onOpenTraini
 @Composable
 internal fun GoalPromptCard(onOpenTraining: () -> Unit) {
     ChevronCard(onClick = onOpenTraining) {
-        Text(text = "Ziel festlegen", style = MaterialTheme.typography.titleMedium)
+        Text(text = stringResource(R.string.today_goal_prompt_title), style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Sag Trailscape, worauf du hinfährst. Daraus entsteht dein Wochenplan.",
+            text = stringResource(R.string.today_goal_prompt_body),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -478,7 +501,11 @@ private fun ChevronCard(onClick: () -> Unit, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClickLabel = "Training öffnen", role = Role.Button, onClick = onClick),
+            .clickable(
+                onClickLabel = stringResource(R.string.today_goal_open_training_action),
+                role = Role.Button,
+                onClick = onClick,
+            ),
     ) {
         Row(
             modifier = Modifier.padding(CardPadding),
@@ -507,9 +534,9 @@ private fun ChevronCard(onClick: () -> Unit, content: @Composable () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun WhySheet(
-    title: String,
+    title: UiText,
     signals: List<WhySignal>,
-    note: List<String>,
+    note: List<UiText>,
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -524,7 +551,7 @@ internal fun WhySheet(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(
-                text = title,
+                text = title.asString(),
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.semantics { heading() },
             )
@@ -546,13 +573,13 @@ internal fun WhySheet(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         for (sentence in note) {
-                            Text(text = sentence, style = MaterialTheme.typography.bodyMedium)
+                            Text(text = sentence.asString(), style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }
             }
             NeutralButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("Verstanden")
+                Text(stringResource(R.string.today_why_sheet_dismiss_action))
             }
         }
     }
@@ -570,16 +597,16 @@ private fun SignalRow(signal: WhySignal) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = signal.label,
+                text = signal.label.asString(),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
-            TagPill(text = signal.word, containerColor = container, contentColor = content)
+            TagPill(text = signal.word.asString(), containerColor = container, contentColor = content)
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = signal.sentence,
+            text = signal.sentence.asString(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

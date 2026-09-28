@@ -42,18 +42,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.ui.components.ActionTileRow
 import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.TileAction
-import de.trailscape.app.ui.formatDate
-import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
@@ -149,6 +150,7 @@ internal fun LiveRecordingCard(
     // Bedienung wie bei einer manuellen Pause.
     autoPaused: Boolean = false,
 ) {
+    val formats = LocalAppFormats.current
     Card(
         modifier = modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -164,16 +166,16 @@ internal fun LiveRecordingCard(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = when {
-                        paused && autoPaused -> "Auto-Pause"
-                        paused -> "Pausiert"
-                        else -> "Aufzeichnung läuft"
+                        paused && autoPaused -> stringResource(R.string.map_live_status_auto_paused)
+                        paused -> stringResource(R.string.map_live_status_paused)
+                        else -> stringResource(R.string.map_live_status_recording)
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.error,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = "$pointCount Punkte",
+                    text = pluralStringResource(R.plurals.map_live_points_count, pointCount, pointCount),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -183,31 +185,31 @@ internal fun LiveRecordingCard(
                 Metric(
                     modifier = Modifier.weight(1f),
                     big = true,
-                    value = speedKmh?.let { formatOneDecimalDe(it) } ?: "–",
+                    value = speedKmh?.let { formats.decimal(it, 1) } ?: "–",
                     label = "km/h",
                 )
                 Metric(
                     modifier = Modifier.weight(1f),
                     big = true,
-                    value = formatKmDe(distanceKm),
+                    value = formats.km(distanceKm),
                     label = "km",
                 )
                 Metric(
                     modifier = Modifier.weight(1f),
                     big = true,
                     value = formatDuration(elapsedS),
-                    label = "Zeit",
+                    label = stringResource(R.string.map_live_time_label),
                 )
                 Metric(
                     modifier = Modifier.weight(1f),
                     big = true,
                     value = "${ascentM.roundToInt()}",
-                    label = "Hm ↑",
+                    label = stringResource(R.string.map_live_ascent_label),
                 )
             }
             Spacer(Modifier.height(8.dp))
             PrimaryButton(
-                text = "Fahrmodus",
+                text = stringResource(R.string.map_live_ride_mode_action),
                 onClick = onOpenRideMode,
                 modifier = Modifier.fillMaxWidth(),
                 leading = {
@@ -234,15 +236,21 @@ internal fun LiveRecordingCard(
                         )
                     }
                     Spacer(Modifier.width(6.dp))
-                    Text(if (paused) "Weiter" else "Pause")
+                    Text(
+                        if (paused) {
+                            stringResource(R.string.map_live_resume_action)
+                        } else {
+                            stringResource(R.string.map_live_pause_action)
+                        },
+                    )
                 }
                 Spacer(Modifier.width(OverlayGap))
                 // Frueher beendete dieser Knopf die Aufzeichnung ohne jede
                 // Rueckfrage; jetzt derselbe Halte-Knopf wie im Cockpit.
                 HoldToEndButton(
                     onEnd = onStop,
-                    label = "Beenden",
-                    holdHint = "gedrückt halten",
+                    label = stringResource(R.string.map_live_end_action),
+                    holdHint = stringResource(R.string.map_live_end_hold_hint),
                     icon = Icons.Filled.Stop,
                     minHeight = 48.dp,
                     modifier = Modifier.weight(1f),
@@ -283,31 +291,38 @@ internal fun RideCard(
     bottomInset: Dp = 0.dp,
 ) {
     val stats = ride.stats
+    val formats = LocalAppFormats.current
+    val ascentLabel = stringResource(R.string.map_ride_card_ascent_label)
+    val descentLabel = stringResource(R.string.map_ride_card_descent_label)
     // Eine Planung hat weder Dauer noch Tempo oder Puls — statt vier Striche
     // zeigt ihr Blatt, was eine Route ausmacht: Laenge und Hoehenmeter.
     val headMetrics = if (ride.planned) {
         listOf(
-            formatKmDe(stats.distanceKm) to "km",
-            "${stats.ascentM.roundToInt()}" to "Hm ↑",
-            "${stats.descentM.roundToInt()}" to "Hm ↓",
+            formats.km(stats.distanceKm) to "km",
+            "${stats.ascentM.roundToInt()}" to ascentLabel,
+            "${stats.descentM.roundToInt()}" to descentLabel,
         )
     } else {
         listOf(
-            formatKmDe(stats.distanceKm) to "km",
-            formatDuration(stats.durationS) to "Dauer",
-            (stats.avgSpeedKmh?.let { formatOneDecimalDe(it) } ?: "–") to "Ø km/h",
-            "${stats.ascentM.roundToInt()}" to "Hm ↑",
+            formats.km(stats.distanceKm) to "km",
+            formatDuration(stats.durationS) to stringResource(R.string.map_ride_card_duration_label),
+            (stats.avgSpeedKmh?.let { formats.decimal(it, 1) } ?: "–") to
+                stringResource(R.string.map_ride_card_avg_speed_label),
+            "${stats.ascentM.roundToInt()}" to ascentLabel,
         )
     }
     // Hochgewischt nur Werte, die es gibt.
+    val movingLabel = stringResource(R.string.map_ride_card_moving_label)
+    val avgHrLabel = stringResource(R.string.map_ride_card_avg_hr_label)
+    val maxHrLabel = stringResource(R.string.map_ride_card_max_hr_label)
     val moreMetrics = if (ride.planned) {
         emptyList()
     } else {
         listOfNotNull(
-            "${stats.descentM.roundToInt()}" to "Hm ↓",
-            stats.movingTimeS?.let { formatDuration(it) to "In Bewegung" },
-            stats.avgHrBpm?.let { "$it" to "Ø Puls" },
-            stats.maxHrBpm?.let { "$it" to "Max. Puls" },
+            "${stats.descentM.roundToInt()}" to descentLabel,
+            stats.movingTimeS?.let { formatDuration(it) to movingLabel },
+            stats.avgHrBpm?.let { "$it" to avgHrLabel },
+            stats.maxHrBpm?.let { "$it" to maxHrLabel },
         )
     }
     SwipeableSheet(
@@ -336,9 +351,9 @@ internal fun RideCard(
                         )
                         Text(
                             text = if (ride.planned) {
-                                "Geplant · ${formatDate(ride.createdAt)}"
+                                stringResource(R.string.map_ride_card_planned_date, formats.dateFull(ride.createdAt))
                             } else {
-                                formatDate(ride.createdAt)
+                                formats.dateFull(ride.createdAt)
                             },
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -347,7 +362,7 @@ internal fun RideCard(
                         )
                     }
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Filled.Close, contentDescription = "Auswahl aufheben")
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_ride_card_close_cd))
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -372,9 +387,9 @@ internal fun RideCard(
                 Column(modifier = Modifier.padding(end = 8.dp)) {
                     PrimaryButton(
                         text = when {
-                            navigating -> "Unterwegs"
-                            ride.planned -> "Losfahren"
-                            else -> "Nochmal fahren"
+                            navigating -> stringResource(R.string.map_ride_card_navigating_label)
+                            ride.planned -> stringResource(R.string.map_ride_card_start_action)
+                            else -> stringResource(R.string.map_ride_card_ride_again_action)
                         },
                         onClick = onNavigate,
                         enabled = !navigating,
@@ -396,27 +411,31 @@ internal fun RideCard(
                         },
                     )
                     Spacer(Modifier.height(8.dp))
+                    val detailsLabel = stringResource(R.string.map_ride_card_details_action)
+                    val detailsCd = stringResource(R.string.map_ride_card_details_cd)
                     ActionTileRow(
                         actions = listOfNotNull(
                             onOpenDetails?.takeIf { !ride.planned }?.let {
                                 TileAction(
-                                    "Auswertung",
+                                    detailsLabel,
                                     Icons.Filled.Insights,
-                                    contentDescription = "Auswertung dieser Tour öffnen",
+                                    contentDescription = detailsCd,
                                     onClick = it,
                                 )
                             },
                             TileAction(
-                                "Teilen",
+                                stringResource(R.string.map_ride_card_share_action),
                                 Icons.Filled.Share,
-                                contentDescription = "Tour als GPX teilen",
+                                contentDescription = stringResource(
+                                    if (ride.planned) R.string.map_ride_card_share_route_cd else R.string.map_ride_card_share_cd,
+                                ),
                                 onClick = onShare,
                             ),
                             TileAction(
-                                "Löschen",
+                                stringResource(R.string.map_ride_card_delete_action),
                                 Icons.Filled.Delete,
                                 destructive = true,
-                                contentDescription = "Tour löschen",
+                                contentDescription = stringResource(R.string.map_ride_card_delete_cd),
                                 onClick = onDelete,
                             ),
                         ),
@@ -485,7 +504,7 @@ internal fun DownloadProgressCard(
             // „Kartendaten" statt „Kacheln": Beim Vektor-Stil zaehlen Schriften
             // und Symbole mit (siehe `OfflineDownloadProgress`).
             Text(
-                text = "Lade Kartendaten … $done/$total",
+                text = stringResource(R.string.map_download_progress_status, "$done/$total"),
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(6.dp))
@@ -562,14 +581,14 @@ internal fun LocationPermissionNotice(
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Hinweis schließen")
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_notice_close_cd))
                 }
             }
             TextButton(
                 onClick = onRetry,
                 modifier = Modifier.align(Alignment.End),
             ) {
-                Text("Erneut fragen")
+                Text(stringResource(R.string.map_notice_retry_action))
             }
         }
     }
@@ -616,9 +635,9 @@ internal fun LocateButton(
             Icon(
                 Icons.Filled.MyLocation,
                 contentDescription = if (following) {
-                    "Meine Position – die Karte folgt dir"
+                    stringResource(R.string.map_locate_following_cd)
                 } else {
-                    "Meine Position – die Karte folgt dir nicht mehr"
+                    stringResource(R.string.map_locate_not_following_cd)
                 },
                 tint = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -129,7 +130,7 @@ class OfflineRoutingTest {
 
     @Test
     fun `offlineRoutingErrorMessage fuehrt den Kachelnamen maschinenlesbar mit`() {
-        val e = offlineRoutingErrorMessage("datafile E5_N50.rd5 not found")
+        val e = offlineRoutingErrorMessage("datafile E5_N50.rd5 not found", texts = CoreTextsDe)
         assertEquals("E5_N50.rd5", e.missingSegmentFile)
         val message = assertNotNull(e.message)
         assertTrue(message.contains("Offline-Kartendaten"), "Meldung ist Deutsch: $message")
@@ -140,27 +141,27 @@ class OfflineRoutingTest {
 
     @Test
     fun `offlineRoutingErrorMessage uebersetzt die uebrigen bekannten Faelle`() {
-        assertEquals(errorOfflineNoTrack, offlineRoutingErrorMessage("no track found").message)
+        assertEquals(CoreTextsDe.routing.offlineNoTrack(), offlineRoutingErrorMessage("no track found", texts = CoreTextsDe).message)
         assertEquals(
-            errorOfflineNoTrack,
-            offlineRoutingErrorMessage("wp-position not mapped in existing datafile").message,
+            CoreTextsDe.routing.offlineNoTrack(),
+            offlineRoutingErrorMessage("wp-position not mapped in existing datafile", texts = CoreTextsDe).message,
         )
         assertEquals(
-            errorOfflineNoTrack,
-            offlineRoutingErrorMessage("start island detected for section 0").message,
+            CoreTextsDe.routing.offlineNoTrack(),
+            offlineRoutingErrorMessage("start island detected for section 0", texts = CoreTextsDe).message,
         )
         assertEquals(
-            errorOfflineTimeout,
-            offlineRoutingErrorMessage("routing timeout after 60 seconds").message,
+            CoreTextsDe.routing.offlineTimeout(),
+            offlineRoutingErrorMessage("routing timeout after 60 seconds", texts = CoreTextsDe).message,
         )
         // Kein Kachelname bei diesen Faellen — sie sind nicht durch einen
         // Download zu beheben.
-        assertNull(offlineRoutingErrorMessage("no track found").missingSegmentFile)
+        assertNull(offlineRoutingErrorMessage("no track found", texts = CoreTextsDe).missingSegmentFile)
     }
 
     @Test
     fun `offlineRoutingErrorMessage haengt unbekannte Meldungen in Klammern an`() {
-        val message = assertNotNull(offlineRoutingErrorMessage("something\n  odd").message)
+        val message = assertNotNull(offlineRoutingErrorMessage("something\n  odd", texts = CoreTextsDe).message)
         assertTrue(message.startsWith("Route konnte nicht berechnet werden."), message)
         // Zeilenumbrueche und Mehrfach-Leerzeichen sind zu einem Leerzeichen
         // zusammengezogen, damit die Meldung einzeilig bleibt.
@@ -169,7 +170,7 @@ class OfflineRoutingTest {
 
     @Test
     fun `offlineRoutingErrorMessage kuerzt sehr lange Engine-Texte`() {
-        val message = assertNotNull(offlineRoutingErrorMessage("x".repeat(500)).message)
+        val message = assertNotNull(offlineRoutingErrorMessage("x".repeat(500), texts = CoreTextsDe).message)
         assertTrue(message.contains("…"), "Text muss gekuerzt sein: $message")
         assertTrue(message.length < 300, "Meldung bleibt kurz, war ${message.length}")
     }
@@ -193,6 +194,7 @@ class OfflineRoutingTest {
                 ),
                 segmentDir = segments,
                 profileFile = profile,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("E10_N50.rd5", e.missingSegmentFile)
@@ -213,9 +215,10 @@ class OfflineRoutingTest {
                 ),
                 segmentDir = segments,
                 profileFile = profile,
+                texts = CoreTextsDe,
             )
         }
-        assertEquals(errorOfflineNoSegments, e.message)
+        assertEquals(CoreTextsDe.routing.offlineNoSegments(), e.message)
         // Trotz der allgemeinen Meldung die konkret noetige Kachel — sonst
         // haette eine spaetere Kachelverwaltung hier nichts anzubieten.
         assertEquals("E10_N50.rd5", e.missingSegmentFile)
@@ -226,8 +229,8 @@ class OfflineRoutingTest {
         // Greift, wenn das Verzeichnis waehrend eines laufenden Aufrufs
         // verschwindet — dann kommt die Meldung aus der Engine.
         assertEquals(
-            errorOfflineNoSegments,
-            offlineRoutingErrorMessage("segment directory /data/segments does not exist").message,
+            CoreTextsDe.routing.offlineNoSegments(),
+            offlineRoutingErrorMessage("segment directory /data/segments does not exist", texts = CoreTextsDe).message,
         )
     }
 
@@ -241,9 +244,10 @@ class OfflineRoutingTest {
                 waypoints = listOf(Waypoint(lat = 51.05, lon = 13.74), Waypoint(lat = 51.08, lon = 13.8)),
                 segmentDir = dir,
                 profileFile = File(dir, "gravel.brf"),
+                texts = CoreTextsDe,
             )
         }
-        assertEquals(errorOfflineProfileMissing, e.message)
+        assertEquals(CoreTextsDe.routing.offlineProfileMissing(), e.message)
         assertNull(e.missingSegmentFile)
     }
 
@@ -261,9 +265,10 @@ class OfflineRoutingTest {
                 waypoints = listOf(Waypoint(lat = 51.05, lon = 13.74), Waypoint(lat = 51.08, lon = 13.8)),
                 segmentDir = dir,
                 profileFile = profile,
+                texts = CoreTextsDe,
             )
         }
-        assertEquals(errorOfflineLookupsMissing, e.message)
+        assertEquals(CoreTextsDe.routing.offlineLookupsMissing(), e.message)
     }
 
     @Test
@@ -274,6 +279,7 @@ class OfflineRoutingTest {
                 waypoints = listOf(Waypoint(lat = 51.05, lon = 13.74)),
                 segmentDir = profile.parentFile,
                 profileFile = profile,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("Mindestens zwei Wegpunkte nötig.", e.message)
@@ -345,6 +351,7 @@ class OfflineRoutingTest {
                         ),
                         segmentDir = segments,
                         profileFile = profile,
+                        texts = CoreTextsDe,
                     )
                 }
                 done.countDown()
@@ -396,6 +403,7 @@ class OfflineRoutingTest {
             ),
             segmentDir = File(dir),
             profileFile = profile,
+            texts = CoreTextsDe,
         )
         val elapsedMs = System.currentTimeMillis() - started
 

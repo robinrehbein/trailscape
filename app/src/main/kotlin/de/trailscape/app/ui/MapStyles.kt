@@ -1,5 +1,8 @@
 package de.trailscape.app.ui
 
+import androidx.annotation.StringRes
+import de.trailscape.app.R
+
 /**
  * Katalog der auswaehlbaren Kartenstile — Port von `mapStyles` aus
  * `lib/tile_cache.dart`.
@@ -25,8 +28,13 @@ package de.trailscape.app.ui
 data class MapStyle(
     /** Stabiler Schluessel fuer Cache-Verzeichnis und Persistenz. */
     val id: String,
-    /** Anzeigename in der Stil-Auswahl. */
+    /**
+     * Deutscher Anzeigename — Rueckfall fuer Stellen ohne Ressourcen (Tests,
+     * Bereiche, die noch nicht uebersetzt sind). Angezeigt wird [labelRes].
+     */
     val label: String,
+    /** Anzeigename in der Stil-Auswahl, in der App-Sprache (`strings_map.xml`). */
+    @StringRes val labelRes: Int,
     /**
      * Kachel-URL mit den Platzhaltern `{z}`, `{x}` und `{y}` in beliebiger
      * Reihenfolge (Esri nutzt etwa `{z}/{y}/{x}`). Leer bei einem
@@ -187,6 +195,7 @@ val mapStyles: List<MapStyle> = listOf(
     MapStyle(
         id = "osmde",
         label = "Straßenkarte",
+        labelRes = R.string.map_style_osmde_label,
         urlTemplate = "https://tile.openstreetmap.de/{z}/{x}/{y}.png",
         maxZoom = 19,
         attribution = "© OpenStreetMap-Mitwirkende",
@@ -194,6 +203,7 @@ val mapStyles: List<MapStyle> = listOf(
     MapStyle(
         id = "cyclosm",
         label = "CyclOSM (Fahrrad)",
+        labelRes = R.string.map_style_cyclosm_label,
         urlTemplate = "https://a.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png",
         maxZoom = 19,
         attribution = "© OpenStreetMap-Mitwirkende · Stil: CyclOSM",
@@ -201,6 +211,7 @@ val mapStyles: List<MapStyle> = listOf(
     MapStyle(
         id = "osm",
         label = "OpenStreetMap",
+        labelRes = R.string.map_style_osm_label,
         urlTemplate = "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
         maxZoom = 19,
         attribution = "© OpenStreetMap-Mitwirkende",
@@ -208,6 +219,7 @@ val mapStyles: List<MapStyle> = listOf(
     MapStyle(
         id = "opentopo",
         label = "OpenTopoMap (Gelände)",
+        labelRes = R.string.map_style_opentopo_label,
         urlTemplate = "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
         maxZoom = 17,
         attribution = "© OpenStreetMap-Mitwirkende · SRTM · Stil: OpenTopoMap (CC-BY-SA)",
@@ -215,6 +227,7 @@ val mapStyles: List<MapStyle> = listOf(
     MapStyle(
         id = "esri-sat",
         label = "Satellit (Esri)",
+        labelRes = R.string.map_style_esri_sat_label,
         urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/" +
             "World_Imagery/MapServer/tile/{z}/{y}/{x}",
         maxZoom = 19,
@@ -225,6 +238,7 @@ val mapStyles: List<MapStyle> = listOf(
         // Nicht „Offline-Karte": Der Stil wird live geladen, solange nichts
         // gespeichert ist — offline ist er erst nach dem Speichern.
         label = "Vektorkarte (OpenFreeMap)",
+        labelRes = R.string.map_style_openfreemap_label,
         urlTemplate = "",
         // `maxzoom` der Vektorquelle `https://tiles.openfreemap.org/planet`.
         maxZoom = 14,
@@ -240,10 +254,11 @@ val mapStyles: List<MapStyle> = listOf(
  * im Bottom-Sheet dort zu sehen — die Auswahl im Mehr-Tab zeigte dieselbe
  * Liste ohne jede Erlaeuterung.
  */
-fun mapStyleSubtitle(id: String): String? = when (id) {
-    "osmde" -> "Klar und aufgeräumt (Standard)"
-    "cyclosm" -> "Radwege & Wegbeläge hervorgehoben"
-    "openfreemap" -> "Lässt sich offline speichern"
+@StringRes
+fun mapStyleSubtitle(id: String): Int? = when (id) {
+    "osmde" -> R.string.map_style_osmde_subtitle
+    "cyclosm" -> R.string.map_style_cyclosm_subtitle
+    "openfreemap" -> R.string.map_style_openfreemap_subtitle
     else -> null
 }
 

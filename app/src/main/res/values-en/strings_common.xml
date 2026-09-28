@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Allerweltstexte, die mehrere Bereiche brauchen.
+
+    Eigentuemer: NUR die Foundation (i18n-foundation) · Praefix: common_
+    Folgezweige fuegen hier NICHTS hinzu — fehlt ein Wort, bekommt der eigene
+    Bereich einen eigenen Schluessel (Dubletten sind ausdruecklich erlaubt).
+    Regeln: docs/i18n.md. Gegenstueck: values/strings_common.xml.
+-->
+<resources>
+    <string name="common_action_cancel">Cancel</string>
+    <string name="common_action_save">Save</string>
+    <string name="common_action_delete">Delete</string>
+    <string name="common_action_close">Close</string>
+    <string name="common_action_back">Back</string>
+    <string name="common_action_ok">OK</string>
+    <string name="common_action_retry">Try again</string>
+    <string name="common_action_share">Share</string>
+    <string name="common_action_done">Done</string>
+    <string name="common_action_continue">Continue</string>
+    <string name="common_action_learn_more">Learn more</string>
+    <string name="common_settings_cd">Settings</string>
+    <string name="common_unknown">unknown</string>
+
+    <!-- Einheiten. Kommazahlen vorher mit LocalAppFormats formatieren und als %1$s einsetzen. -->
+    <string name="common_value_km">%1$s km</string>
+    <string name="common_value_kmh">%1$s km/h</string>
+    <string name="common_value_elevation">%1$s m</string>
+    <string name="common_value_bpm">%1$s bpm</string>
+    <string name="common_value_watts">%1$s W</string>
+    <string name="common_value_minutes">%1$d min</string>
+    <string name="common_value_hours">%1$s h</string>
+</resources>

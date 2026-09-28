@@ -8,6 +8,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.today.TodayEffort
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offeredTarget
@@ -20,6 +22,7 @@ import de.trailscape.core.TrainingWeek
 import de.trailscape.core.adaptPlan
 import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.decideTodayRoute
+import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.restDayRideTarget
 import de.trailscape.core.sessionsForDay
 import java.time.LocalDateTime
@@ -62,7 +65,7 @@ data class TodayDecision(
      * Der Ruhetag-Grund, wie ihn die Schlagzeile in „Heute" nennt — fuer den
      * Losfahren-Dialog, damit beide dasselbe sagen ([restHeadline]).
      */
-    val restHeadline: String get() = de.trailscape.app.ui.today.restHeadline(route, planRestDay)
+    val restHeadline: UiText get() = de.trailscape.app.ui.today.restHeadline(route, planRestDay)
 }
 
 /**
@@ -75,6 +78,7 @@ fun decideToday(
     rides: List<RideSummary>,
     nowMs: Long,
     ridesLoading: Boolean = false,
+    texts: CoreTexts,
 ): TodayDecision {
     val displayPlan = plan?.let { current ->
         adaptPlan(
@@ -82,6 +86,7 @@ fun decideToday(
             rides = rides,
             currentCtl = insights.latest?.ctl,
             rideLoads = insights.rideLoads.mapValues { entry -> entry.value.load },
+            texts = texts,
         ).plan
     }
     // Hoechstens eine Einheit ist das Tagesprogramm; `:core` setzt nie zwei
@@ -97,6 +102,7 @@ fun decideToday(
         profile = insights.profile,
         recentRides = rides,
         weeklyTarget = insights.weeklyTarget,
+        texts = texts,
     )
     val effort = todayEffort(route, planRestDay, currentWeek?.sessions.orEmpty())
     // Solange die Touren noch laden, ist `rides` leer — auch fuer jemanden mit
@@ -122,7 +128,7 @@ fun decideToday(
         planRestDay = planRestDay,
         route = route,
         effort = effort,
-        offer = offeredTarget(route, effort, restDayRideTarget(insights.profile, rides)),
+        offer = offeredTarget(route, effort, restDayRideTarget(insights.profile, rides, texts)),
     )
 }
 
@@ -177,12 +183,13 @@ internal fun millisUntilNextDay(from: LocalDateTime, zone: ZoneId = ZoneId.syste
  */
 @Composable
 fun rememberTodayDecision(appViewModel: AppViewModel, now: LocalDateTime = rememberNow()): TodayDecision {
+    val coreTexts = LocalCoreTexts.current
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     val ridesLoading by appViewModel.ridesLoading.collectAsStateWithLifecycle()
     val nowMs = remember(now) { now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() }
-    return remember(insights, plan, rides, nowMs, ridesLoading) {
-        decideToday(insights, plan, rides, nowMs, ridesLoading)
+    return remember(insights, plan, rides, nowMs, ridesLoading, coreTexts) {
+        decideToday(insights, plan, rides, nowMs, ridesLoading, coreTexts)
     }
 }

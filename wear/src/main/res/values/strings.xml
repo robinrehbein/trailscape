@@ -1,6 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Uhr-Texte. Eigentuemer: i18n-onboarding-shell; neue Schluessel mit Praefix wear_ (docs/i18n.md). -->
 <resources>
-    <string name="app_name">Trailscape</string>
+    <string name="app_name" translatable="false">Trailscape</string>
     <string name="notification_channel_name">Aufzeichnung</string>
-    <string name="notification_channel_description">Laeuft, solange die Uhr eine Ausfahrt aufzeichnet.</string>
+    <string name="notification_channel_description">Läuft, solange die Uhr eine Ausfahrt aufzeichnet.</string>
+
+    <!-- ui/RecordingScreen.kt -->
+    <string name="wear_start_cd">Aufzeichnung starten</string>
+    <string name="wear_phone_connected_status">Telefon verbunden</string>
+    <string name="wear_phone_disconnected_status">Telefon getrennt</string>
+    <string name="wear_no_phone_hint">Ohne Telefon: in Samsung Health aufzeichnen</string>
+    <string name="wear_resume_cd">Weiter</string>
+    <string name="wear_pause_cd">Pause</string>
+    <string name="wear_stop_cd">Beenden</string>
+    <string name="wear_back_to_start_cd">Zurück zum Start</string>
+    <!-- %1$s = Kilometer mit einer Nachkommastelle im Zahlformat der Sprache -->
+    <string name="wear_value_km">%1$s km</string>
+    <!-- %1$s = Tempo mit einer Nachkommastelle, „–“ ohne Wert -->
+    <string name="wear_value_kmh">%1$s km/h</string>
+
+    <!-- record/RecordingService.kt, record/RecordingStatus.kt -->
+    <!-- %1$s = Dauer H:MM:SS, %2$s = Kilometer -->
+    <string name="wear_notification_progress">%1$s · %2$s km</string>
+    <string name="wear_error_no_cycling">Uhr meldet keine Radfahr-Fähigkeiten</string>
+    <!-- %1$s = technische Ursache (Fremdtext) -->
+    <string name="wear_error_callback">Callback nicht registriert: %1$s</string>
+    <string name="wear_error_capabilities">Fähigkeiten nicht abrufbar: %1$s</string>
 </resources>

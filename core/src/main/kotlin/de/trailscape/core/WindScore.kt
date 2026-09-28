@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.WindVerdict
 import kotlin.math.cos
 import kotlin.math.roundToInt
 
@@ -61,8 +63,8 @@ const val windScoreWeight: Double = 8.0
 /** Ab dieser [windShape] gilt eine Runde als „Rückenwind heim". */
 const val windTailwindHomeMinShape: Double = 0.25
 
-/** Pille an einem windguenstigen Vorschlag. */
-const val windOptimisedLabel: String = "Rückenwind heim"
+/** Pille an einem windguenstigen Vorschlag („Rückenwind heim"). */
+fun windOptimisedLabel(texts: CoreTexts): String = texts.routing.windOptimisedLabel()
 
 /**
  * Gegenwind-Anteil eines Abschnitts mit Kurs [bearingDeg] bei Wind aus
@@ -150,18 +152,18 @@ fun windScore(points: List<TrackPoint>, wind: WindConditions): Double {
 /** Ob eine Runde mit dieser [windShape] als „Rückenwind heim" gilt. */
 fun isTailwindHome(shape: Double): Boolean = shape.isFinite() && shape >= windTailwindHomeMinShape
 
-private val WIND_DIRECTION_LABELS =
-    listOf("Nord", "Nordost", "Ost", "Südost", "Süd", "Südwest", "West", "Nordwest")
+/** Zahl der Richtungsstufen der Windanzeige (acht, je 45°). */
+private const val WIND_DIRECTION_STEPS = 8
 
 /**
  * Himmelsrichtung, **aus** der der Wind kommt, in acht Stufen (je ±22,5° um
  * die Mitte). Passt hinter „aus": „aus West". Nicht endlich ergibt
  * „wechselnder Richtung".
  */
-fun windDirectionLabel(fromDeg: Double): String {
-    if (!fromDeg.isFinite()) return "wechselnder Richtung"
-    val index = ((normalisiereKurs(fromDeg) + 22.5) / 45.0).toInt() % WIND_DIRECTION_LABELS.size
-    return WIND_DIRECTION_LABELS[index]
+fun windDirectionLabel(fromDeg: Double, texts: CoreTexts): String {
+    if (!fromDeg.isFinite()) return texts.routing.windDirectionVariable()
+    val index = ((normalisiereKurs(fromDeg) + 22.5) / 45.0).toInt() % WIND_DIRECTION_STEPS
+    return texts.routing.windDirection(index)
 }
 
 /**
@@ -176,20 +178,18 @@ fun windDirectionLabel(fromDeg: Double): String {
  * @param shape [windShape] des ausgewaehlten Vorschlags; `null`, wenn keine
  *   Form bekannt ist.
  */
-fun windLine(wind: WindConditions, shape: Double?): String {
+fun windLine(wind: WindConditions, shape: Double?, texts: CoreTexts): String {
     val speed = if (wind.speedKmh.isFinite() && wind.speedKmh > 0) wind.speedKmh else 0.0
     val gusts = wind.gustsKmh
         ?.takeIf { it.isFinite() && it >= speed + GUST_MENTION_MARGIN_KMH }
-        ?.let { ", Böen bis ${it.roundToInt()} km/h" }
-        .orEmpty()
-    val head = "Wind ${speed.roundToInt()} km/h aus ${windDirectionLabel(wind.fromDeg)}$gusts"
-    val tail = when {
-        windStrengthFactor(speed) <= 0.0 -> "zu schwach, um die Runde danach auszurichten"
-        shape != null && isTailwindHome(shape) -> "Rückenwind auf dem Heimweg"
-        shape != null && shape.isFinite() && shape <= -windTailwindHomeMinShape -> "Gegenwind auf dem Heimweg"
-        else -> "Seitenwind, kein klarer Vorteil"
+        ?.roundToInt()
+    val verdict = when {
+        windStrengthFactor(speed) <= 0.0 -> WindVerdict.TOO_WEAK
+        shape != null && isTailwindHome(shape) -> WindVerdict.TAILWIND_HOME
+        shape != null && shape.isFinite() && shape <= -windTailwindHomeMinShape -> WindVerdict.HEADWIND_HOME
+        else -> WindVerdict.CROSSWIND
     }
-    return "$head – $tail"
+    return texts.routing.windLine(speed.roundToInt(), windDirectionLabel(wind.fromDeg, texts), gusts, verdict)
 }
 
 /** Ab so viel ueber dem Mittelwind werden Boeen in der Windzeile genannt. */

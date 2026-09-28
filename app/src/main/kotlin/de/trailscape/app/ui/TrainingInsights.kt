@@ -1,5 +1,7 @@
 package de.trailscape.app.ui
 
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.Confidence
 import de.trailscape.core.DailyRecommendation
 import de.trailscape.core.DailyValue
@@ -9,6 +11,7 @@ import de.trailscape.core.EftpSource
 import de.trailscape.core.FitnessPoint
 import de.trailscape.core.FitnessSeries
 import de.trailscape.core.HrvAssessment
+import de.trailscape.core.InMemoryRideLoadFactsStore
 import de.trailscape.core.LoadCalibration
 import de.trailscape.core.LoadCalibrationSample
 import de.trailscape.core.LoadEntry
@@ -17,16 +20,13 @@ import de.trailscape.core.Readiness
 import de.trailscape.core.RestingHrAssessment
 import de.trailscape.core.Ride
 import de.trailscape.core.RideInfo
+import de.trailscape.core.RideLoad
 import de.trailscape.core.RideLoadFacts
 import de.trailscape.core.RideLoadFactsStore
-import de.trailscape.core.InMemoryRideLoadFactsStore
 import de.trailscape.core.RideSummary
-import de.trailscape.core.StoredRideLoadFacts
-import de.trailscape.core.rideLoadFactsFromSummary
-import de.trailscape.core.rideLoadFromFacts
-import de.trailscape.core.RideLoad
 import de.trailscape.core.SleepAssessment
 import de.trailscape.core.SteadySegment
+import de.trailscape.core.StoredRideLoadFacts
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsSummary
 import de.trailscape.core.Vo2MaxEstimate
@@ -44,11 +44,16 @@ import de.trailscape.core.computeRideLoadFacts
 import de.trailscape.core.dailyLoadsFrom
 import de.trailscape.core.eftpWindowDays
 import de.trailscape.core.estimateVo2Max
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.formatDecimal
 import de.trailscape.core.maxLoad
 import de.trailscape.core.median
 import de.trailscape.core.recommendToday
 import de.trailscape.core.resolveEftp
 import de.trailscape.core.riddenRides
+import de.trailscape.core.rideLoadFactsFromSummary
+import de.trailscape.core.rideLoadFromFacts
 import de.trailscape.core.weeklyLoadTarget
 import java.time.Instant
 import java.time.LocalDateTime
@@ -247,47 +252,23 @@ data class TrainingInsights(
      * eingetragen oder die Kalibrierung neu gerechnet wurde —, verschieben
      * sich alle historischen Werte mit. Wer das nicht weiss, haelt den Sprung
      * fuer einen Fehler.
+     *
+     * Je Herkunft ein ganzer Satz in den Ressourcen (Herkunft und Konsequenz
+     * gehoeren grammatisch zusammen); die W/kg-Zahl formatiert [language].
      */
-    val loadScaleNote: String
-        get() {
-            val perKg = eftp.perKg(profile.weightKg)
-            val head = "Alle Lastwerte rechnen mit ${dartRoundInt(eftp.watts)} W Schwelle " +
-                "(${germanOneDecimal(perKg)} W/kg), ${eftpSourceText(eftp.source)}."
-            val tail = when (eftp.source) {
-                EftpSource.EINGETRAGEN ->
-                    " Änderst du den Wert im Profil, verschiebt sich die Skala — auch " +
-                        "rückwirkend für alle bisherigen Touren."
-
-                EftpSource.GESCHAETZT ->
-                    " Das ist eine grobe Annahme (2,4 W/kg). Trage im Profil deine FTP " +
-                        "ein oder fahre eine Tour mit Puls und Höhenprofil — beides macht " +
-                        "die Skala belastbarer und verschiebt dann alle bisherigen Werte."
-
-                EftpSource.ZWANZIG_MINUTEN ->
-                    " Grundlage ist dein bester 20-Minuten-Abschnitt aus der " +
-                        "GPS-Leistungsschätzung (±15–25 %). Eine eingetragene FTP wäre " +
-                        "genauer."
-
-                EftpSource.KALIBRIERT ->
-                    " Grundlage ist der Abgleich mit deiner gemessenen Herzfrequenz. " +
-                        "Der Wert kann sich mit neuen Touren verschieben — und mit ihm " +
-                        "die Lastwerte der Vergangenheit."
-            }
-            return head + tail
+    fun loadScaleNote(language: AppLanguage): UiText {
+        val perKg = formatDecimal(eftp.perKg(profile.weightKg), 1, language)
+        val id = when (eftp.source) {
+            EftpSource.EINGETRAGEN -> R.string.training_insights_load_scale_entered
+            EftpSource.GESCHAETZT -> R.string.training_insights_load_scale_estimated
+            EftpSource.ZWANZIG_MINUTEN -> R.string.training_insights_load_scale_twenty_min
+            EftpSource.KALIBRIERT -> R.string.training_insights_load_scale_calibrated
         }
+        return UiText.Res(id, listOf(dartRoundInt(eftp.watts), perKg))
+    }
 }
 
 private fun dartRoundInt(value: Double): Int = kotlin.math.round(value).toInt()
-
-private fun germanOneDecimal(value: Double): String =
-    String.format(java.util.Locale.GERMANY, "%.1f", value)
-
-private fun eftpSourceText(source: EftpSource): String = when (source) {
-    EftpSource.EINGETRAGEN -> "von dir eingetragen"
-    EftpSource.ZWANZIG_MINUTEN -> "geschätzt aus deinen Touren"
-    EftpSource.KALIBRIERT -> "aus deinem Puls nachgeführt"
-    EftpSource.GESCHAETZT -> "nur aus deinem Gewicht geschätzt"
-}
 
 /**
  * Effektiv benutztes Profil: fehlt ein eigener Ruhepuls, wird der aus den
@@ -407,6 +388,7 @@ fun computeInsights(
     now: LocalDateTime = LocalDateTime.now(),
     factsStore: RideLoadFactsStore = InMemoryRideLoadFactsStore(),
     loadRide: (String) -> Ride? = { null },
+    texts: CoreTexts,
 ): TrainingInsights {
     val effective = effectiveProfile(profile, vitals)
     val restingHrSeries = vitals?.restingHeartRate?.series ?: emptyList()
@@ -444,7 +426,7 @@ fun computeInsights(
         } else {
             val full = loadRide(summary.id)
             if (full != null) {
-                val computed = computeRideLoadFacts(full, rideProfile)
+                val computed = computeRideLoadFacts(full, rideProfile, texts)
                 factsStore.put(
                     summary.id,
                     StoredRideLoadFacts(
@@ -455,7 +437,7 @@ fun computeInsights(
                 )
                 computed
             } else {
-                rideLoadFactsFromSummary(summary)
+                rideLoadFactsFromSummary(summary, texts)
             }
         }
         factsById[summary.id] = facts
@@ -469,17 +451,23 @@ fun computeInsights(
         facts = factsById.getValue(summary.id),
         profile = rideProfiles.getValue(summary.id),
         eftpW = eftpW,
+        texts = texts,
     )
 
     // --- Durchgang 1: Profil-FTP. Liefert die Kennzahlen fuer α und FTP.
     val anchorEftpW = effective.eftpW
     val firstPass = ordered.map { loadFor(it, anchorEftpW) }
 
+    // Nur GESCHAETZTE Physiklast wird kalibriert: α korrigiert die Annahmen
+    // des Physikmodells (Gewicht, cw-Wert, FTP-Schaetzung). Eine Tour mit
+    // Leistungsmesser misst die Leistung direkt; sie mitzuzaehlen, wuerde α
+    // mit Touren verschieben, fuer die es gar nicht gilt.
     val calibration = computeLoadCalibration(
         firstPass.mapNotNull { load ->
             if (load.heartRate.available &&
                 load.heartRate.load > 0 &&
                 load.physics.available &&
+                !load.physics.measured &&
                 load.physics.eTss > 0
             ) {
                 LoadCalibrationSample(
@@ -546,11 +534,11 @@ fun computeInsights(
     val sleepSeries = vitals?.sleepHours?.series ?: emptyList()
     val hrvSeries = vitals?.heartRateVariability?.series ?: emptyList()
 
-    val restingHr = assessRestingHeartRate(restingHrSeries, today = now)
+    val restingHr = assessRestingHeartRate(restingHrSeries, today = now, texts = texts)
     // Reihenfolge ist verbindlich: HRV- und Schlafampel kennen die
     // Ruhepuls-Ampel (Saettigungsfall bzw. rote Schlafstufe).
-    val hrv = assessHrv(hrvSeries, today = now, restingHrFlag = restingHr.flag)
-    val sleep = assessSleep(sleepSeries, today = now, restingHrFlag = restingHr.flag)
+    val hrv = assessHrv(hrvSeries, today = now, restingHrFlag = restingHr.flag, texts = texts)
+    val sleep = assessSleep(sleepSeries, today = now, restingHrFlag = restingHr.flag, texts = texts)
 
     val tsb = fitness.latest?.tsb
     val readiness = computeReadiness(
@@ -559,6 +547,7 @@ fun computeInsights(
         hrv = hrv,
         tsb = tsb,
         trainingHistoryDays = fitness.historyDays,
+        texts = texts,
     )
     // HIT-Budget: Wie viele harte Tage stecken schon in den letzten 7 Tagen?
     // Vorher blieb `hitBudgetLeft` auf seinem Default `true` — bei
@@ -568,6 +557,7 @@ fun computeInsights(
         readiness = readiness,
         tsb = tsb,
         hitBudgetLeft = hardDaysLast7 < MAX_HARD_DAYS_PER_7D,
+        texts = texts,
     )
 
     val weeklyLoad = sumLastDays(fitness, 7)
@@ -584,6 +574,7 @@ fun computeInsights(
             hrvSeries = hrvSeries,
             fitness = fitness,
             today = now,
+            texts = texts,
         ),
     )
 
@@ -592,6 +583,7 @@ fun computeInsights(
         readinessLast7 = readinessLast7,
         weeklyLoad = if (fitness.points.isEmpty()) null else weeklyLoad,
         fourWeekMeanWeeklyLoad = fourWeekMean,
+        texts = texts,
     )
 
     val latest = fitness.latest
@@ -619,7 +611,7 @@ fun computeInsights(
         recommendation = recommendation,
         deload = deload,
         weeklyTarget = weeklyTarget,
-        vo2max = estimateVo2max(ordered, factsById, effective, vitals),
+        vo2max = estimateVo2max(ordered, factsById, effective, vitals, texts),
         weeklyLoad = weeklyLoad,
         fourWeekMeanWeeklyLoad = fourWeekMean,
     )
@@ -627,7 +619,9 @@ fun computeInsights(
 
 /**
  * Skaliert die Physiklast mit α. Bei geklemmter Kalibrierung ist α = 1,0 —
- * dann bleibt die Rohlast unveraendert.
+ * dann bleibt die Rohlast unveraendert. Last aus gemessener Leistung
+ * ([LoadSource.LEISTUNG]) bleibt ebenfalls unangetastet: Die Pruefung auf
+ * PHYSIK schliesst sie von selbst aus.
  */
 private fun calibrated(base: RideLoad, calibration: LoadCalibration): RideLoad {
     if (base.source != LoadSource.PHYSIK || calibration.alpha == 1.0) {
@@ -718,6 +712,7 @@ private fun estimateVo2max(
     facts: Map<String, RideLoadFacts>,
     profile: TrainingProfile,
     vitals: VitalsSummary?,
+    texts: CoreTexts,
 ): Vo2MaxEstimate {
     val segments = mutableListOf<SteadySegment>()
     if (vitals?.vo2max == null) {
@@ -740,6 +735,7 @@ private fun estimateVo2max(
         profile = profile,
         segments = segments,
         platformValue = vitals?.vo2max,
+        texts = texts,
     )
 }
 
@@ -751,11 +747,13 @@ private fun estimateVo2max(
 fun emptyTrainingInsights(
     profile: TrainingProfile = defaultTrainingProfile,
     now: LocalDateTime = LocalDateTime.now(),
+    texts: CoreTexts,
 ): TrainingInsights = computeInsights(
     rides = emptyList(),
     vitals = null,
     profile = profile,
     now = now,
+    texts = texts,
 )
 
 /** Ob eine Auswertung mangels Confidence gar nichts hergibt. */

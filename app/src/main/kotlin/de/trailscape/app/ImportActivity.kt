@@ -1,9 +1,11 @@
 package de.trailscape.app
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import de.trailscape.app.i18n.AppLocale
 import androidx.lifecycle.lifecycleScope
 import de.trailscape.app.ui.readActivityFiles
 import kotlinx.coroutines.CancellationException
@@ -59,6 +61,12 @@ import kotlinx.coroutines.launch
  */
 class ImportActivity : ComponentActivity() {
 
+    /** App-Sprache als Locale-Delta, siehe [AppLocale]. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        AppLocale.overrideConfiguration(newBase)?.let(::applyOverrideConfiguration)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launchedFromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0
@@ -69,7 +77,7 @@ class ImportActivity : ComponentActivity() {
 
         val sources = importSourcesFromIntent(intent, ownPackage = packageName)
         if (sources.isEmpty()) {
-            Toast.makeText(this, "Keine Datei zum Importieren gefunden.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.rides_import_no_file_error), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -80,11 +88,15 @@ class ImportActivity : ComponentActivity() {
         }
 
         // Toasts ueber den Anwendungskontext: Sie sollen auch dann noch
-        // erscheinen, wenn diese Activity gerade beendet wird.
+        // erscheinen, wenn diese Activity gerade beendet wird. Die Texte
+        // vorher aus der Activity (mit Sprach-Override) holen — der
+        // Anwendungskontext spricht die Systemsprache.
         val appContext = applicationContext
+        val slowText = getString(R.string.rides_import_running_status)
+        val cancelledText = getString(R.string.rides_import_cancelled_error)
         val slowHint = lifecycleScope.launch {
             delay(SLOW_READ_HINT_MS)
-            Toast.makeText(appContext, "Wird importiert …", Toast.LENGTH_SHORT).show()
+            Toast.makeText(appContext, slowText, Toast.LENGTH_SHORT).show()
         }
         lifecycleScope.launch {
             try {
@@ -107,11 +119,7 @@ class ImportActivity : ComponentActivity() {
                         ),
                 )
             } catch (e: CancellationException) {
-                Toast.makeText(
-                    appContext,
-                    "Import abgebrochen. Teile oder öffne die Datei erneut und warte, bis Trailscape erscheint.",
-                    Toast.LENGTH_LONG,
-                ).show()
+                Toast.makeText(appContext, cancelledText, Toast.LENGTH_LONG).show()
                 throw e
             } finally {
                 slowHint.cancel()

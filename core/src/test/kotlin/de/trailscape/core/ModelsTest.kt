@@ -1,15 +1,16 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * JSON-Kompatibilitaetstests fuer die Portierung von `lib/models.dart`.
@@ -59,6 +60,53 @@ class ModelsTest {
         assertFalse(roundTripped.containsKey("time"))
         assertFalse(roundTripped.containsKey("hr"))
         assertEquals(point, TrackPoint.fromJson(roundTripped))
+    }
+
+    @Test
+    fun `TrackPoint mit Leistung und Trittfrequenz im Roundtrip`() {
+        val point = TrackPoint(lat = 1.0, lon = 2.0, time = 5L, hr = 150, power = 240, cad = 92)
+        val json = point.toJson()
+        assertEquals(
+            """{"lat":1.0,"lon":2.0,"time":5,"hr":150,"power":240,"cad":92}""",
+            json.toString(),
+        )
+        assertEquals(point, TrackPoint.fromJson(json))
+    }
+
+    @Test
+    fun `TrackPoint ohne Sensorwerte bleibt byteidentisch zum bisherigen Format`() {
+        val point = TrackPoint(lat = 1.0, lon = 2.0, ele = 3.5, time = 5L, hr = 150)
+        assertEquals("""{"lat":1.0,"lon":2.0,"ele":3.5,"time":5,"hr":150}""", point.toJson().toString())
+        assertFalse(point.toJson().containsKey("power"))
+        assertFalse(point.toJson().containsKey("cad"))
+    }
+
+    @Test
+    fun `fehlender power- und cad-Schluessel liest sich als null`() {
+        val point = TrackPoint.fromJson(obj("""{"lat":1.0,"lon":2.0,"hr":120}"""))
+        assertNull(point.power)
+        assertNull(point.cad)
+        // Explizites null ebenso — nicht 0.
+        val mitNull = TrackPoint.fromJson(obj("""{"lat":1.0,"lon":2.0,"power":null,"cad":null}"""))
+        assertNull(mitNull.power)
+        assertNull(mitNull.cad)
+    }
+
+    @Test
+    fun `Ride ohne Sensorwerte serialisiert unveraendert`() {
+        val ride = Ride(
+            id = "r",
+            name = "n",
+            createdAt = 10L,
+            stats = RideStats(distanceKm = 1.0, ascentM = 0.0, descentM = 0.0),
+            points = listOf(TrackPoint(lat = 1.0, lon = 2.0, time = 10L)),
+        )
+        assertEquals(
+            """{"id":"r","name":"n","createdAt":10,"points":[{"lat":1.0,"lon":2.0,"time":10}],""" +
+                """"stats":{"distanceKm":1.0,"durationS":null,"movingTimeS":null,"avgSpeedKmh":null,""" +
+                """"ascentM":0.0,"descentM":0.0},"updatedAt":10}""",
+            ride.toJson().toString(),
+        )
     }
 
     @Test
@@ -360,13 +408,13 @@ class ModelsTest {
 
     @Test
     fun `levelLabels und weekKindLabels entsprechen den Dart-Konstanten`() {
-        assertEquals("Einsteiger", levelLabels[FitnessLevel.EINSTEIGER])
-        assertEquals("Fortgeschritten", levelLabels[FitnessLevel.FORTGESCHRITTEN])
-        assertEquals("Ambitioniert", levelLabels[FitnessLevel.AMBITIONIERT])
+        assertEquals("Einsteiger", CoreTextsDe.training.fitnessLevel(FitnessLevel.EINSTEIGER))
+        assertEquals("Fortgeschritten", CoreTextsDe.training.fitnessLevel(FitnessLevel.FORTGESCHRITTEN))
+        assertEquals("Ambitioniert", CoreTextsDe.training.fitnessLevel(FitnessLevel.AMBITIONIERT))
 
-        assertEquals("Aufbau", weekKindLabels[WeekKind.AUFBAU])
-        assertEquals("Erholung", weekKindLabels[WeekKind.ERHOLUNG])
-        assertEquals("Taper", weekKindLabels[WeekKind.TAPER])
-        assertEquals("Zielwoche", weekKindLabels[WeekKind.ZIELWOCHE])
+        assertEquals("Aufbau", CoreTextsDe.training.weekKind(WeekKind.AUFBAU))
+        assertEquals("Erholung", CoreTextsDe.training.weekKind(WeekKind.ERHOLUNG))
+        assertEquals("Taper", CoreTextsDe.training.weekKind(WeekKind.TAPER))
+        assertEquals("Zielwoche", CoreTextsDe.training.weekKind(WeekKind.ZIELWOCHE))
     }
 }

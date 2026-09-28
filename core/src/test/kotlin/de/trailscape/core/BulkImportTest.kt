@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
@@ -117,7 +118,7 @@ class BulkImportTest {
             "__MACOSX/activities/._1.gpx" to ByteArray(4),
         )
 
-        val entries = scanArchive(zip)
+        val entries = scanArchive(zip, texts = CoreTextsDe)
 
         assertEquals(3, entries.size)
         assertEquals(listOf("activities/1.gpx", "activities/2.fit.gz", "activities/nested/3.gpx.gz"), entries.map { it.path })
@@ -128,9 +129,9 @@ class BulkImportTest {
 
     @Test
     fun `scanArchive weist Nicht-ZIP-Dateien ab`() {
-        val error = assertFailsWith<FormatException> { scanArchive("kein zip".toByteArray()) }
+        val error = assertFailsWith<FormatException> { scanArchive("kein zip".toByteArray(), texts = CoreTextsDe) }
         assertEquals("Die Datei ist kein gültiges ZIP-Archiv.", error.message)
-        assertFailsWith<FormatException> { importArchive("kein zip".toByteArray()) }
+        assertFailsWith<FormatException> { importArchive("kein zip".toByteArray(), texts = CoreTextsDe) }
     }
 
     // -----------------------------------------------------------------------
@@ -146,7 +147,7 @@ class BulkImportTest {
             "activities/4.fit.gz" to gzip(fitBytes(1_700_300_000_000L)),
         )
 
-        val result = importArchive(zip)
+        val result = importArchive(zip, texts = CoreTextsDe)
 
         assertEquals(4, result.importedCount)
         assertEquals(0, result.duplicateCount)
@@ -172,7 +173,7 @@ class BulkImportTest {
             "activities/4.fit" to fitBytes(1_700_100_000_000L),
         )
 
-        val result = importArchive(zip)
+        val result = importArchive(zip, texts = CoreTextsDe)
 
         assertEquals(2, result.importedCount)
         assertEquals(2, result.errorCount)
@@ -190,7 +191,7 @@ class BulkImportTest {
             "activities/2.gpx" to gpxBytes("Neu", start + 86_400_000L),
         )
 
-        val result = importArchive(zip, existing)
+        val result = importArchive(zip, existing, texts = CoreTextsDe)
 
         assertEquals(1, result.importedCount)
         assertEquals("Neu", result.rides.single().name)
@@ -208,7 +209,7 @@ class BulkImportTest {
             "activities/2.gpx" to gpxBytes("Andere", start + 3_600_000L),
         )
 
-        val result = importArchive(zip)
+        val result = importArchive(zip, texts = CoreTextsDe)
 
         assertEquals(2, result.importedCount)
         assertEquals(2, result.duplicateCount)
@@ -225,7 +226,7 @@ class BulkImportTest {
         )
 
         val steps = mutableListOf<Pair<Int, Int>>()
-        val result = importArchive(zip) { done, total -> steps.add(done to total) }
+        val result = importArchive(zip, onProgress = { done, total -> steps.add(done to total) }, texts = CoreTextsDe)
 
         assertEquals(3, result.importedCount)
         // Nur Aktivitaetsdateien zaehlen — readme.txt taucht im Fortschritt nicht auf.
@@ -240,7 +241,7 @@ class BulkImportTest {
         )
 
         val steps = mutableListOf<Pair<Int, Int>>()
-        val result = importArchive(ByteArrayInputStream(zip), onProgress = { done, total -> steps.add(done to total) })
+        val result = importArchive(ByteArrayInputStream(zip), onProgress = { done, total -> steps.add(done to total) }, texts = CoreTextsDe)
 
         assertEquals(2, result.importedCount)
         assertEquals(listOf(1 to 1, 2 to 2), steps)
@@ -249,7 +250,7 @@ class BulkImportTest {
     @Test
     fun `leeres Archiv liefert ein leeres Ergebnis statt eines Fehlers`() {
         val zip = zipOf("readme.txt" to "nichts zu holen".toByteArray())
-        val result = importArchive(zip)
+        val result = importArchive(zip, texts = CoreTextsDe)
 
         assertTrue(result.isEmpty)
         assertEquals(0, result.totalCount)
@@ -269,7 +270,7 @@ class BulkImportTest {
             </gpx>
         """.trimIndent().toByteArray(Charsets.UTF_8)
 
-        val result = importArchive(zipOf("activities/12345678.gpx" to nameless))
+        val result = importArchive(zipOf("activities/12345678.gpx" to nameless), texts = CoreTextsDe)
 
         assertEquals(1, result.importedCount)
         assertEquals("12345678", result.rides.single().name)
@@ -293,8 +294,8 @@ class BulkImportTest {
         val gpxEntry = ArchiveEntry("activities/9.gpx.gz", ArchiveEntryKind.GPX, gzipped = true)
         val fitEntry = ArchiveEntry("activities/9.fit.gz", ArchiveEntryKind.FIT, gzipped = true)
 
-        val fromGpx = rideFromArchiveEntry(gpxEntry, gzip(gpxBytes("Aus GPX", 1_700_000_000_000L)), id = "g")
-        val fromFit = rideFromArchiveEntry(fitEntry, gzip(fitBytes(1_700_000_000_000L)), id = "f")
+        val fromGpx = rideFromArchiveEntry(gpxEntry, gzip(gpxBytes("Aus GPX", 1_700_000_000_000L)), id = "g", texts = CoreTextsDe)
+        val fromFit = rideFromArchiveEntry(fitEntry, gzip(fitBytes(1_700_000_000_000L)), id = "f", texts = CoreTextsDe)
 
         assertEquals("Aus GPX", fromGpx.name)
         assertEquals(1_700_000_000_000L, fromGpx.createdAt)

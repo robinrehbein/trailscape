@@ -39,7 +39,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
@@ -105,6 +107,8 @@ fun RidesScreen(appViewModel: AppViewModel) {
     }
     val scope = rememberCoroutineScope()
     var undoJob by remember { mutableStateOf<Job?>(null) }
+    val deletedMessage = stringResource(R.string.rides_delete_undo_status)
+    val undoLabel = stringResource(R.string.rides_delete_undo_action)
 
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
     // Nur gefahrene Touren landen auf der Verlaufskarte (siehe
@@ -234,6 +238,8 @@ fun RidesScreen(appViewModel: AppViewModel) {
                             scope = scope,
                             snackbarHostState = snackbarHostState,
                             undoJob = undoJob,
+                            message = deletedMessage,
+                            actionLabel = undoLabel,
                         )
                     },
                 )
@@ -265,17 +271,19 @@ private fun VerlaufHeader(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         ScreenHeader(
-            title = "Verlauf",
+            title = stringResource(R.string.rides_screen_title),
             actions = {
                 IconButton(onClick = onToggleSearch) {
                     Icon(
                         imageVector = if (searchOpen) Icons.Outlined.SearchOff else Icons.Outlined.Search,
-                        contentDescription = if (searchOpen) "Suche schließen" else "Touren suchen",
+                        contentDescription = stringResource(
+                            if (searchOpen) R.string.rides_screen_search_close_cd else R.string.rides_screen_search_cd,
+                        ),
                     )
                 }
                 Box {
                     IconButton(onClick = { importMenuOpen = true }) {
-                        Icon(Icons.Outlined.Add, contentDescription = "Touren importieren")
+                        Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.rides_screen_import_cd))
                     }
                     ImportMenu(
                         expanded = importMenuOpen,
@@ -300,7 +308,7 @@ private fun VerlaufHeader(
             ) {
                 Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Alle Touren auf der Karte")
+                Text(stringResource(R.string.rides_screen_show_map_action))
             }
         }
         if (searchOpen) {
@@ -311,7 +319,7 @@ private fun VerlaufHeader(
             OneUiSearchField(
                 value = query,
                 onValueChange = onQueryChange,
-                placeholder = "Tour nach Namen suchen",
+                placeholder = stringResource(R.string.rides_screen_search_placeholder),
                 modifier = Modifier
                     .padding(top = CardGap)
                     .focusRequester(focusRequester),

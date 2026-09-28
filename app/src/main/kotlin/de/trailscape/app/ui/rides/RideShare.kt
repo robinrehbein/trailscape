@@ -3,9 +3,14 @@ package de.trailscape.app.ui.rides
 import android.content.Context
 import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
+import de.trailscape.app.R
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.prepareShareDirectory
 import de.trailscape.app.ui.withCause
@@ -33,6 +38,10 @@ import kotlinx.coroutines.withContext
  * `null`. Fehler landen ueber [AppViewModel.showMessage] in der Snackbar des
  * jeweiligen Bildschirms. Der Dialog schliesst sich vor dem Teilen selbst
  * ([onDismiss]).
+ *
+ * Der Schalter „Start und Ziel ausblenden" wird hier gelesen und gemerkt
+ * (`ShareCardSettings.kt`): Die Wahl gilt fuer jedes kuenftige Tour-Bild,
+ * egal von welcher der beiden Stellen aus geteilt wird.
  */
 @Composable
 internal fun RideShareDialog(
@@ -43,9 +52,15 @@ internal fun RideShareDialog(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var hideEnds by remember { mutableStateOf(shareHideEnds(context)) }
     ShareRideDialog(
         ride = ride,
         load = load,
+        hideEnds = hideEnds,
+        onHideEndsChange = {
+            hideEnds = it
+            setShareHideEnds(context, it)
+        },
         onDismiss = onDismiss,
         onShareGpx = {
             onDismiss()
@@ -55,13 +70,7 @@ internal fun RideShareDialog(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    appViewModel.showMessage(
-                        withCause(
-                            "Die Tour konnte nicht geteilt werden. Prüfe, ob genug " +
-                                "Speicher frei ist, und versuche es erneut.",
-                            e,
-                        ),
-                    )
+                    appViewModel.showMessage(withCause(context.getString(R.string.rides_share_gpx_error), e))
                 }
             }
         },
@@ -71,7 +80,7 @@ internal fun RideShareDialog(
                 // Auch OutOfMemoryError: Eine Story-Bitmap belegt rund 8 MB,
                 // auf knappen Geraeten soll das eine Meldung sein, kein Absturz.
                 val failure: Throwable? = try {
-                    shareRideImage(context, ride, load, format)
+                    shareRideImage(context, ride, load, format, hideEnds)
                     null
                 } catch (e: CancellationException) {
                     throw e
@@ -81,13 +90,7 @@ internal fun RideShareDialog(
                     e
                 }
                 if (failure != null) {
-                    appViewModel.showMessage(
-                        withCause(
-                            "Das Bild konnte nicht erstellt werden. Prüfe, ob genug " +
-                                "Speicher frei ist, und versuche es erneut.",
-                            failure,
-                        ),
-                    )
+                    appViewModel.showMessage(withCause(context.getString(R.string.rides_share_image_error), failure))
                 }
             }
         },
@@ -119,5 +122,5 @@ internal suspend fun shareRideGpx(context: Context, ride: Ride) {
         putExtra(Intent.EXTRA_TITLE, ride.name)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(send, "Tour teilen"))
+    context.startActivity(Intent.createChooser(send, context.getString(R.string.rides_share_gpx_chooser_title)))
 }

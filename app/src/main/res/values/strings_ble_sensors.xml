@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Bluetooth-Sensoren: Seite Mehr → Sensoren, Kacheln im Fahrmodus
+    und in der Kompaktleiste, Tourdetails. Alle Schluessel mit dem Praefix
+    ble_, damit sie als Einheit erkennbar bleiben. Englisch in
+    values-en/strings_ble_sensors.xml.
+-->
+<resources>
+    <!-- Seite Mehr → Sensoren -->
+    <string name="ble_page_intro">Pulsgurt, Leistungsmesser und Trittfrequenzsensor verbinden sich direkt per Bluetooth mit dem Handy — ohne Uhr. Trailscape verbindet sich nur während einer Aufzeichnung und solange diese Seite offen ist. Die Messwerte bleiben auf dem Gerät.</string>
+
+    <string name="ble_type_heart_rate">Puls</string>
+    <string name="ble_type_power">Leistung</string>
+    <string name="ble_type_cadence">Trittfrequenz</string>
+
+    <string name="ble_device_heart_rate">Pulsgurt</string>
+    <string name="ble_device_power">Leistungsmesser</string>
+    <string name="ble_device_cadence">Trittfrequenzsensor</string>
+
+    <string name="ble_none_paired">Kein Sensor gekoppelt</string>
+    <!-- Statuszeile der Einstellungsliste; gekoppelte Typen werden mit „ · “ verbunden -->
+    <string name="ble_list_status_none">Keine gekoppelt</string>
+
+    <string name="ble_scan">Nach Sensoren suchen</string>
+    <string name="ble_scan_running">Suche läuft …</string>
+    <string name="ble_scan_stop">Suche beenden</string>
+    <string name="ble_scan_hint">Wecke den Sensor auf: Gurt anlegen, Kurbel drehen oder das Rad bewegen.</string>
+    <string name="ble_scan_empty">Noch nichts gefunden.</string>
+    <string name="ble_found_heading">Gefunden</string>
+    <!-- %1$d = Fehlercode aus ScanCallback.onScanFailed -->
+    <string name="ble_scan_failed">Die Suche ließ sich nicht starten (Fehler %1$d). Schalte Bluetooth aus und wieder ein und versuche es erneut.</string>
+
+    <string name="ble_pair">Koppeln</string>
+    <!-- Anstelle von „Koppeln“, wenn der gefundene Sensor schon gekoppelt ist -->
+    <string name="ble_paired">Gekoppelt</string>
+    <string name="ble_forget">Vergessen</string>
+    <string name="ble_cancel">Abbrechen</string>
+    <string name="ble_unnamed_device">Unbenannter Sensor</string>
+
+    <!-- %1$s = Name des bisher gekoppelten Sensors -->
+    <string name="ble_replace_title">„%1$s“ ersetzen?</string>
+    <!-- %1$s = Name des neuen Sensors, %2$s = Name des bisherigen -->
+    <string name="ble_replace_text">Je Messwert merkt sich Trailscape einen Sensor. „%1$s“ tritt an die Stelle von „%2$s“.</string>
+    <string name="ble_replace_confirm">Ersetzen</string>
+
+    <!-- %1$s = Name des Sensors -->
+    <string name="ble_forget_title">„%1$s“ vergessen?</string>
+    <string name="ble_forget_text">Trailscape verbindet sich dann nicht mehr mit diesem Sensor. Bereits aufgezeichnete Touren behalten ihre Werte.</string>
+
+    <!-- Statuszeile eines gekoppelten Sensors -->
+    <string name="ble_state_connecting">Verbinde …</string>
+    <!-- %1$d = Herzfrequenz in bpm -->
+    <string name="ble_state_connected_hr">Verbunden · %1$d bpm</string>
+    <!-- %1$d = Leistung in Watt -->
+    <string name="ble_state_connected_power">Verbunden · %1$d W</string>
+    <!-- %1$d = Trittfrequenz in U/min -->
+    <string name="ble_state_connected_cadence">Verbunden · %1$d U/min</string>
+    <string name="ble_state_connected_waiting">Verbunden · wartet auf Messwerte</string>
+    <!-- %1$d = Sekunden seit dem letzten Messwert -->
+    <string name="ble_state_silent">Verbunden · liefert seit %1$d s nichts</string>
+    <!-- %1$d = Sekunden bis zum nächsten Verbindungsversuch -->
+    <string name="ble_state_retry">Getrennt · neuer Versuch in %1$d s</string>
+    <string name="ble_state_idle">Verbindet sich bei der nächsten Aufzeichnung</string>
+    <string name="ble_state_no_permission">Keine Berechtigung für Geräte in der Nähe</string>
+    <string name="ble_state_bluetooth_off">Bluetooth ist aus</string>
+
+    <string name="ble_bluetooth_off_notice">Bluetooth ist ausgeschaltet. Ohne Bluetooth findet und verbindet Trailscape keine Sensoren.</string>
+    <string name="ble_bluetooth_enable">Bluetooth einschalten</string>
+    <!-- Ab Android 12 -->
+    <string name="ble_permission_notice">Für die Suche braucht Trailscape die Berechtigung „Geräte in der Nähe“. Deinen Standort ermittelt die App darüber nicht.</string>
+    <!-- Unter Android 12 -->
+    <string name="ble_permission_notice_legacy">Unter dieser Android-Version setzt die Bluetooth-Suche die Standortfreigabe voraus — dieselbe, die auch die Aufzeichnung braucht. Der Standort muss dafür eingeschaltet sein.</string>
+    <string name="ble_permission_grant">Erlauben</string>
+    <string name="ble_permission_settings">In den Einstellungen erlauben</string>
+    <string name="ble_not_supported">Dieses Gerät unterstützt kein Bluetooth Low Energy.</string>
+    <string name="ble_watch_priority_note">Ist ein Pulsgurt verbunden, zählt sein Puls — der Puls der Uhr tritt dann zurück.</string>
+
+    <!-- Fahrmodus: Beschriftung unter den Kacheln -->
+    <string name="ble_ride_hr_label">bpm · Puls</string>
+    <string name="ble_ride_power_label">W · Leistung</string>
+    <!-- „Tritt“ statt „Trittfrequenz“: Die volle Form wird in der Dreierreihe abgeschnitten. -->
+    <string name="ble_ride_cadence_label">U/min · Tritt</string>
+    <!-- %1$d = Sekunden seit dem letzten Messwert -->
+    <string name="ble_tile_silent">seit %1$d s nichts</string>
+    <!-- Beschriftung, solange noch nie ein Wert kam -->
+    <string name="ble_tile_connecting">verbinde …</string>
+
+    <!-- Kompaktleiste -->
+    <string name="ble_compact_power_label">W</string>
+
+    <!-- Vorlesesätze (TalkBack) -->
+    <!-- %1$d = Herzfrequenz in bpm; Wortlaut der bisherigen Puls-Kachel -->
+    <string name="ble_spoken_hr">Puls %1$d Schläge pro Minute</string>
+    <!-- %1$d = Watt -->
+    <string name="ble_spoken_power">Leistung %1$d Watt</string>
+    <!-- %1$d = Umdrehungen pro Minute -->
+    <string name="ble_spoken_cadence">Trittfrequenz %1$d Umdrehungen pro Minute</string>
+    <!-- %1$s = Messgröße (ble_type_*), %2$d = Sekunden -->
+    <string name="ble_spoken_silent">%1$s: Sensor liefert seit %2$d Sekunden nichts</string>
+    <!-- %1$s = Messgröße (ble_type_*) -->
+    <string name="ble_spoken_connecting">%1$s: Sensor wird verbunden</string>
+
+    <!-- Tourdetails -->
+    <string name="ble_fact_avg_power">Ø Leistung</string>
+    <!-- %1$d = Watt -->
+    <string name="ble_fact_power_value">%1$d W</string>
+    <string name="ble_fact_avg_cadence">Ø Trittfrequenz</string>
+    <!-- %1$d = Umdrehungen pro Minute -->
+    <string name="ble_fact_cadence_value">%1$d U/min</string>
+    <string name="ble_vo2max_explanation_measured">Aus den gleichmäßigen Abschnitten dieser Tour geschätzt (Herzfrequenz gegen gemessene Leistung). Auch mit Leistungsmesser bleibt es eine Schätzung — deshalb ein Band.</string>
+</resources>

@@ -77,7 +77,7 @@ class ShareFilesTest {
     fun `Tour-Bilder werden wie GPX nach einer Stunde weggeraeumt`() {
         val dir = prepareShareDirectory(cacheDir)
         val oldImage = fileIn(dir, "runde-story.png", ageMs = 2 * SHARE_FILE_MAX_AGE_MS)
-        val freshImage = fileIn(dir, "runde-quadrat.png", ageMs = 0L)
+        val freshImage = fileIn(dir, "runde-square.png", ageMs = 0L)
 
         assertEquals(1, pruneShareDirectory(dir))
         assertFalse(oldImage.exists())

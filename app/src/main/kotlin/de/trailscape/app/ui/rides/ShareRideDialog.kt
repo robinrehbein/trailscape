@@ -28,12 +28,18 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.more.SettingsSwitchRow
 import de.trailscape.core.Ride
+import de.trailscape.core.SHARE_END_RADIUS_M
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -65,15 +71,26 @@ import kotlinx.coroutines.withContext
  * „Teilen" nie aus dem Fenster rutschen.
  *
  * ## Datenschutz
- * Das Bild zeigt keine Karte, aber die Form der Strecke samt Start und Ziel —
- * wer die Gegend kennt, erkennt beides. Der Hinweis darunter sagt das ruhig,
- * statt es zu verschweigen. Hat die Tour keine Spur, sagt er stattdessen,
- * dass nur die Kennzahlen draufstehen.
+ * Das Bild zeigt keine Karte, aber die Form der Strecke — und die verraet an
+ * Start und Ziel meist die Haustuer. Deshalb steht unter der Vorschau der
+ * Schalter „Start und Ziel ausblenden" ([hideEnds], ab Werk an, gemerkt vom
+ * Wirt [RideShareDialog]): Die Linie beginnt und endet dann erst
+ * [SHARE_END_RADIUS_M] Luftlinie von beiden entfernt, ohne Start- und
+ * Zielmarke. Die Vorschau zeigt das sofort, weil der Inhalt neu entsteht.
+ *
+ * Der Hinweis darunter sagt ruhig, was trotzdem zu erkennen ist
+ * ([ShareCardContent.trackNote]): die ganze Strecke samt Start und Ziel
+ * (Schalter aus), die uebrige Strecke (Schalter an), nur die Kennzahlen, weil
+ * die Tour zum Kuerzen zu kurz ist, oder nur die Kennzahlen, weil es keine
+ * Spur gibt. Der Schalter fehlt, wo es nichts zu kuerzen gibt (weniger als
+ * zwei Punkte oder eine Spur ohne Strecke, [ShareTrackNote.NONE]) und beim GPX, das immer die vollstaendige Spur enthaelt.
  */
 @Composable
 internal fun ShareRideDialog(
     ride: Ride,
     load: Double?,
+    hideEnds: Boolean,
+    onHideEndsChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     onShareGpx: () -> Unit,
     onShareImage: (ShareCardFormat) -> Unit,
@@ -88,21 +105,35 @@ internal fun ShareRideDialog(
     // Der Inhalt haengt nicht vom Format ab: einmal je Fassung der Tour, und
     // wie das Zeichnen abseits des Hauptthreads (eine lange Aufzeichnung hat
     // zehntausende Punkte). Hier oben, weil auch der Hinweis davon abhaengt.
-    val content by produceState<ShareCardContent?>(null, ride.id, ride.updatedAt, load) {
-        value = withContext(Dispatchers.Default) { shareCardContent(ride, load) }
+    val context = LocalContext.current
+    val language = LocalAppLanguage.current
+    val content by produceState<ShareCardContent?>(null, ride.id, ride.updatedAt, load, hideEnds, language) {
+        value = withContext(Dispatchers.Default) {
+            shareCardContent(
+                ride,
+                load,
+                language,
+                resolve = { it.resolve(context) },
+                endRadiusM = if (hideEnds) SHARE_END_RADIUS_M else null,
+            )
+        }
     }
     val previewHeight = min(PreviewMaxHeight, LocalConfiguration.current.screenHeightDp.dp * 0.4f)
 
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Tour teilen") },
+        title = { Text(stringResource(R.string.rides_share_title)) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 PillSegments(
-                    options = listOf("Story", "Quadrat", "GPX"),
+                    options = listOf(
+                        stringResource(R.string.rides_share_story_option),
+                        stringResource(R.string.rides_share_square_option),
+                        stringResource(R.string.rides_share_gpx_option),
+                    ),
                     selectedIndex = selected,
                     onSelect = { selected = it },
                     // Der Dialog ist selbst surfaceContainerHigh; eine leichte
@@ -111,14 +142,25 @@ internal fun ShareRideDialog(
                 )
                 if (format != null) {
                     ShareCardPreview(content = content, format = format, height = previewHeight)
+                    // Vorpruefung auf die Punkte, damit die Zeile nicht erst
+                    // nach dem Laden auftaucht; NONE haengt nicht von hideEnds
+                    // ab, der Schalter verschwindet also nie beim Umlegen.
+                    if (ride.points.size >= 2 && content?.trackNote != ShareTrackNote.NONE) {
+                        SettingsSwitchRow(
+                            title = stringResource(R.string.rides_share_hide_ends_title),
+                            subtitle = stringResource(R.string.rides_share_hide_ends_subtitle, SHARE_END_RADIUS_M.toInt()),
+                            checked = hideEnds,
+                            onCheckedChange = onHideEndsChange,
+                        )
+                    }
                     val card = content
                     if (card != null) {
                         Text(
-                            text = if (card.hasTrack) {
-                                "Das Bild zeigt die Form deiner Strecke ohne Karte – " +
-                                    "wer die Gegend kennt, erkennt trotzdem Start und Ziel."
-                            } else {
-                                "Das Bild zeigt nur die Kennzahlen dieser Tour – ohne Strecke."
+                            text = when (card.trackNote) {
+                                ShareTrackNote.FULL -> stringResource(R.string.rides_share_image_track_hint)
+                                ShareTrackNote.ENDS_HIDDEN -> stringResource(R.string.rides_share_image_ends_hidden_hint)
+                                ShareTrackNote.TOO_SHORT -> stringResource(R.string.rides_share_image_too_short_hint)
+                                ShareTrackNote.NONE -> stringResource(R.string.rides_share_image_stats_hint)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -126,8 +168,7 @@ internal fun ShareRideDialog(
                     }
                 } else {
                     Text(
-                        text = "Die Spur als GPX-Datei – zum Nachfahren in Komoot, " +
-                            "Strava oder auf dem Radcomputer.",
+                        text = stringResource(R.string.rides_share_gpx_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -139,9 +180,9 @@ internal fun ShareRideDialog(
                 onClick = {
                     if (format == null) onShareGpx() else onShareImage(format)
                 },
-            ) { Text("Teilen") }
+            ) { Text(stringResource(R.string.common_action_share)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_cancel)) } },
     )
 }
 
@@ -183,7 +224,7 @@ private fun ShareCardPreview(content: ShareCardContent?, format: ShareCardFormat
         if (image != null) {
             Image(
                 bitmap = image,
-                contentDescription = "Vorschau des Tour-Bilds",
+                contentDescription = stringResource(R.string.rides_share_preview_cd),
                 contentScale = ContentScale.Fit,
                 modifier = frame,
             )

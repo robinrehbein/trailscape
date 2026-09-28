@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.ReadinessSignal
 import java.time.LocalDateTime
 import kotlin.math.abs
 import kotlin.math.exp
@@ -17,14 +19,6 @@ import kotlin.math.sqrt
 
 /** Ampelstufe eines Erholungssignals. */
 enum class RecoveryFlag { UNBEKANNT, GRUEN, GELB, ORANGE, ROT }
-
-val recoveryFlagLabels: Map<RecoveryFlag, String> = mapOf(
-    RecoveryFlag.UNBEKANNT to "keine Aussage",
-    RecoveryFlag.GRUEN to "unauffällig",
-    RecoveryFlag.GELB to "leicht erhöht",
-    RecoveryFlag.ORANGE to "deutlich auffällig",
-    RecoveryFlag.ROT to "stark auffällig",
-)
 
 internal fun atLeast(flag: RecoveryFlag, min: RecoveryFlag): Boolean =
     flag.ordinal >= min.ordinal
@@ -107,13 +101,12 @@ fun assessRestingHeartRate(
     series: List<DailyValue>,
     today: LocalDateTime? = null,
     afterHardDay: Boolean = false,
+    texts: CoreTexts,
 ): RestingHrAssessment {
+    val t = texts.readiness
     val values = normalizeDaily(series, min = 25.0, max = 130.0)
     if (values.isEmpty()) {
-        return RestingHrAssessment.unavailable(
-            "Noch keine Ruhepuls-Werte vorhanden.",
-            0,
-        )
+        return RestingHrAssessment.unavailable(t.restingHrNoValues(), 0)
     }
     val ref = atMidnight(today ?: values.last().day)
     val lastValue = values.lastOrNull { dayDifference(ref, it.day) >= 0 }?.value
@@ -127,7 +120,7 @@ fun assessRestingHeartRate(
 
     if (baselineValues.size < 21) {
         return RestingHrAssessment.unavailable(
-            "Ruhepuls-Baseline wird aufgebaut (${baselineValues.size} von 21 Tagen).",
+            t.restingHrBaselineBuilding(baselineValues.size, 21),
             baselineValues.size,
             last = lastValue,
         )
@@ -139,7 +132,7 @@ fun assessRestingHeartRate(
     val recent = values.filter { dayDifference(ref, it.day) <= 2 }
     if (recent.isEmpty()) {
         return RestingHrAssessment.unavailable(
-            "Kein aktueller Ruhepuls-Wert (letzte 3 Tage).",
+            t.restingHrNoRecent(),
             baselineValues.size,
             last = lastValue,
         )
@@ -182,33 +175,12 @@ fun assessRestingHeartRate(
         flag = RecoveryFlag.ROT
     }
 
-    val rounded = if (abs(delta) < 0.05) "0,0" else toStringAsFixed(abs(delta), 1)
-    val signed = if (delta >= 0.05) "+$rounded" else (if (delta <= -0.05) "−$rounded" else "±0,0")
     val message = when (flag) {
-        RecoveryFlag.GRUEN ->
-            "Dein Ruhepuls liegt im gewohnten Bereich ($signed bpm gegenüber " +
-                "deinem Normalwert)."
-
-        RecoveryFlag.GELB -> if (afterHardDay) {
-            "Dein Ruhepuls liegt +$rounded bpm über deinem Normalwert — " +
-                "nach der gestrigen Belastung erwartbar."
-        } else {
-            "Dein Ruhepuls liegt seit mindestens zwei Messungen +$rounded bpm " +
-                "über deinem Normalwert. Das kann an Training, Schlaf, Stress, " +
-                "Alkohol, Hitze oder einem beginnenden Infekt liegen."
-        }
-
-        RecoveryFlag.ORANGE ->
-            "Dein Ruhepuls liegt deutlich über deinem Normalwert (+$rounded bpm). " +
-                "Das kann an Training, Schlaf, Stress, Alkohol, Hitze oder einem " +
-                "Infekt liegen."
-
-        RecoveryFlag.ROT ->
-            "Dein Ruhepuls liegt seit mehreren Tagen klar über deinem Normalwert " +
-                "(+$rounded bpm) — das kann an Training, Schlaf, Stress oder einem " +
-                "Infekt liegen."
-
-        RecoveryFlag.UNBEKANNT -> "Keine Aussage möglich."
+        RecoveryFlag.GRUEN -> t.restingHrGreen(delta)
+        RecoveryFlag.GELB -> t.restingHrYellow(delta, afterHardDay)
+        RecoveryFlag.ORANGE -> t.restingHrOrange(delta)
+        RecoveryFlag.ROT -> t.restingHrRed(delta)
+        RecoveryFlag.UNBEKANNT -> t.noStatement()
     }
 
     return RestingHrAssessment(
@@ -250,14 +222,6 @@ enum class HrvStatus {
      */
     SAETTIGUNG,
 }
-
-val hrvStatusLabels: Map<HrvStatus, String> = mapOf(
-    HrvStatus.UNBEKANNT to "keine Aussage",
-    HrvStatus.NIEDRIG to "unter deinem Normalband",
-    HrvStatus.IM_BAND to "im Normalband",
-    HrvStatus.UEBER_BAND to "über deinem Normalband",
-    HrvStatus.SAETTIGUNG to "über dem Band bei erhöhtem Ruhepuls",
-)
 
 /**
  * Bewertung der naechtlichen HRV (rMSSD) gegen die persoenliche Baseline.
@@ -333,10 +297,14 @@ data class HrvAssessment(
         }
 
     companion object {
-        /** Zustand „gar keine HRV uebergeben" — Defaultwert von [computeReadiness]. */
-        val MISSING = HrvAssessment(
+        /**
+         * Zustand „gar keine HRV uebergeben" — Defaultwert von [computeReadiness].
+         * Eine Funktion statt Konstante, weil der Grund in der Sprache von
+         * [texts] dasteht.
+         */
+        fun missing(texts: CoreTexts): HrvAssessment = HrvAssessment(
             available = false,
-            unavailableReason = "Noch keine HRV-Werte vorhanden.",
+            unavailableReason = texts.readiness.hrvNoValues(),
             baselineLn = null,
             sigmaLn = null,
             currentLn = null,
@@ -347,7 +315,7 @@ data class HrvAssessment(
             flag = RecoveryFlag.UNBEKANNT,
             historyDays = 0,
             recentDays = 0,
-            message = "Noch keine HRV-Werte vorhanden.",
+            message = texts.readiness.hrvNoValues(),
         )
 
         fun unavailable(
@@ -424,10 +392,12 @@ fun assessHrv(
     series: List<DailyValue>,
     today: LocalDateTime? = null,
     restingHrFlag: RecoveryFlag = RecoveryFlag.UNBEKANNT,
+    texts: CoreTexts,
 ): HrvAssessment {
+    val t = texts.readiness
     val values = normalizeDaily(series, min = hrvMinMs, max = hrvMaxMs)
     if (values.isEmpty()) {
-        return HrvAssessment.unavailable("Noch keine HRV-Werte vorhanden.", 0)
+        return HrvAssessment.unavailable(t.hrvNoValues(), 0)
     }
     val ref = atMidnight(today ?: values.last().day)
 
@@ -446,8 +416,7 @@ fun assessHrv(
     if (window.size < hrvMinBaselineDays) {
         val missing = hrvMinBaselineDays - window.size
         return HrvAssessment.unavailable(
-            "Braucht noch $missing ${if (missing == 1) "Tag" else "Tage"} HRV-Daten " +
-                "(${window.size} von $hrvMinBaselineDays im Vergleichszeitraum).",
+            t.hrvNeedsDays(missing, window.size, hrvMinBaselineDays),
             window.size,
             lastRmssd = lastValue,
         )
@@ -461,8 +430,7 @@ fun assessHrv(
 
     if (recent.size < hrvMinRecentDays) {
         return HrvAssessment.unavailable(
-            "Zu wenige HRV-Messungen in den letzten sieben Tagen " +
-                "(${recent.size} von $hrvMinRecentDays).",
+            t.hrvTooFewRecent(recent.size, hrvMinRecentDays),
             window.size,
             lastRmssd = lastValue,
         )
@@ -501,31 +469,11 @@ fun assessHrv(
     val high = dartRound(exp(baselineLn + hrvBandFactor * sigmaLn)).toInt()
 
     val message = when (status) {
-        HrvStatus.NIEDRIG -> if (flag == RecoveryFlag.GELB) {
-            "Deine HRV liegt im 7-Tage-Mittel mit $current ms knapp unter deinem " +
-                "Normalband ($low–$high ms). Das kann an Training, Schlaf, Stress, " +
-                "Alkohol oder einem beginnenden Infekt liegen."
-        } else {
-            "Deine HRV liegt im 7-Tage-Mittel mit $current ms deutlich unter deinem " +
-                "Normalband ($low–$high ms). Das kann an Training, Schlaf, Stress, " +
-                "Alkohol oder einem Infekt liegen."
-        }
-
-        HrvStatus.IM_BAND ->
-            "Deine HRV liegt im 7-Tage-Mittel mit $current ms in deinem Normalband " +
-                "($low–$high ms)."
-
-        HrvStatus.UEBER_BAND ->
-            "Deine HRV liegt im 7-Tage-Mittel mit $current ms über deinem Normalband " +
-                "($low–$high ms) — dein Nervensystem wirkt gut erholt."
-
-        HrvStatus.SAETTIGUNG ->
-            "Deine HRV liegt im 7-Tage-Mittel mit $current ms über deinem Normalband " +
-                "($low–$high ms), gleichzeitig ist dein Ruhepuls erhöht. Diese " +
-                "Kombination kommt auch bei starker Ermüdung vor — beobachte die " +
-                "nächsten Tage, bevor du hart trainierst."
-
-        HrvStatus.UNBEKANNT -> "Keine Aussage möglich."
+        HrvStatus.NIEDRIG -> t.hrvLow(current, low, high, clearly = flag != RecoveryFlag.GELB)
+        HrvStatus.IM_BAND -> t.hrvInBand(current, low, high)
+        HrvStatus.UEBER_BAND -> t.hrvAboveBand(current, low, high)
+        HrvStatus.SAETTIGUNG -> t.hrvSaturation(current, low, high)
+        HrvStatus.UNBEKANNT -> t.noStatement()
     }
 
     return HrvAssessment(
@@ -586,11 +534,7 @@ data class SleepAssessment(
 }
 
 /** Nicht-blockierender Gesundheitshinweis fuer chronische Kurzschlaefer (§5.2). */
-const val shortSleeperHint: String =
-    "Dein üblicher Schlaf liegt seit Wochen unter 6,5 Stunden. Für Erwachsene " +
-        "werden 7–9 Stunden empfohlen, bei viel Training eher mehr — mehr Schlaf " +
-        "verbessert Regeneration und Leistung. Deine Tagesempfehlung ändert das " +
-        "nicht."
+fun shortSleeperHint(texts: CoreTexts): String = texts.readiness.shortSleeperHint()
 
 /** Ob der Kurzschlaefer-Hinweis gezeigt werden darf (hoechstens 1×/Monat). */
 fun shouldShowShortSleeperHint(lastShownAt: LocalDateTime?, now: LocalDateTime): Boolean =
@@ -601,11 +545,13 @@ fun assessSleep(
     series: List<DailyValue>,
     today: LocalDateTime? = null,
     restingHrFlag: RecoveryFlag = RecoveryFlag.UNBEKANNT,
+    texts: CoreTexts,
 ): SleepAssessment {
+    val t = texts.readiness
     // Sensorartefakte ausschliessen: < 2 h und > 14 h zaehlen nicht.
     val values = normalizeDaily(series, min = 2.0, max = 14.0)
     if (values.isEmpty()) {
-        return SleepAssessment.unavailable("Noch keine Schlafdaten vorhanden.", 0)
+        return SleepAssessment.unavailable(t.sleepNoData(), 0)
     }
     val ref = atMidnight(today ?: values.last().day)
 
@@ -616,7 +562,7 @@ fun assessSleep(
 
     if (window.size < 14) {
         return SleepAssessment.unavailable(
-            "Schlaf-Baseline wird aufgebaut (${window.size} von 14 Nächten).",
+            t.sleepBaselineBuilding(window.size, 14),
             window.size,
         )
     }
@@ -628,7 +574,7 @@ fun assessSleep(
     val recent = window.filter { dayDifference(ref, it.day) <= 1 }
     if (recent.isEmpty()) {
         return SleepAssessment.unavailable(
-            "Keine aktuelle Schlafmessung vorhanden.",
+            t.sleepNoRecent(),
             window.size,
         )
     }
@@ -659,22 +605,12 @@ fun assessSleep(
         flag = RecoveryFlag.ROT
     }
 
-    val devText = toStringAsFixed(abs(deviation), 1)
     val message = when (flag) {
-        RecoveryFlag.GRUEN ->
-            "Dein Schlaf entspricht deinem Normalwert (${toStringAsFixed(baseline, 1)} h)."
-
-        RecoveryFlag.GELB -> "Du hast $devText h weniger geschlafen als sonst."
-
-        RecoveryFlag.ORANGE ->
-            "Dein Schlaf liegt deutlich unter deinem Normalwert " +
-                "(−$devText h; 7-Tage-Defizit ${toStringAsFixed(debt, 1)} h)."
-
-        RecoveryFlag.ROT ->
-            "Deutlich zu wenig Schlaf (−$devText h) bei gleichzeitig erhöhtem " +
-                "Ruhepuls."
-
-        RecoveryFlag.UNBEKANNT -> "Keine Aussage möglich."
+        RecoveryFlag.GRUEN -> t.sleepGreen(baseline)
+        RecoveryFlag.GELB -> t.sleepYellow(deviation)
+        RecoveryFlag.ORANGE -> t.sleepOrange(deviation, debt)
+        RecoveryFlag.ROT -> t.sleepRed(deviation)
+        RecoveryFlag.UNBEKANNT -> t.noStatement()
     }
 
     return SleepAssessment(
@@ -695,13 +631,6 @@ fun assessSleep(
 
 /** Baender des Readiness-Scores (§5.4). */
 enum class ReadinessBand { HART, NORMAL, LOCKER, RUHE }
-
-val readinessBandLabels: Map<ReadinessBand, String> = mapOf(
-    ReadinessBand.HART to "bereit für eine harte Einheit",
-    ReadinessBand.NORMAL to "normales Training",
-    ReadinessBand.LOCKER to "locker (Grundlagentempo)",
-    ReadinessBand.RUHE to "Ruhe oder sehr locker",
-)
 
 fun classifyReadiness(score: Double): ReadinessBand {
     if (score >= 80) return ReadinessBand.HART
@@ -730,7 +659,7 @@ data class Readiness(
     val confidence: Confidence,
     val headline: String,
     val detail: String,
-    val hrv: HrvAssessment = HrvAssessment.MISSING,
+    val hrv: HrvAssessment,
     /** HRV-Strafterm auf der Skala 0…100 (nur gesetzt, wenn [usesHrv]). */
     val penaltyHrv: Double = 0.0,
     /**
@@ -774,10 +703,14 @@ data class Readiness(
 fun computeReadiness(
     restingHr: RestingHrAssessment,
     sleep: SleepAssessment,
-    hrv: HrvAssessment = HrvAssessment.MISSING,
+    hrv: HrvAssessment? = null,
     tsb: Double? = null,
     trainingHistoryDays: Int = 0,
+    texts: CoreTexts,
 ): Readiness {
+    val t = texts.readiness
+    @Suppress("NAME_SHADOWING")
+    val hrv = hrv ?: HrvAssessment.missing(texts)
     val restingHrZ = restingHr.z
     val usesRhr = restingHr.available && restingHrZ != null
     val penaltyRhr = if (usesRhr) {
@@ -844,15 +777,15 @@ fun computeReadiness(
     }
     val band = classifyReadiness(score)
 
-    val missing = mutableListOf<String>()
+    val missing = mutableListOf<ReadinessSignal>()
     if (!restingHr.available) {
-        missing.add("Ruhepuls")
+        missing.add(ReadinessSignal.RESTING_HR)
     }
     if (!sleep.available) {
-        missing.add("Schlaf")
+        missing.add(ReadinessSignal.SLEEP)
     }
     if (trainingHistoryDays < 28) {
-        missing.add("Trainingshistorie")
+        missing.add(ReadinessSignal.TRAINING_HISTORY)
     }
     val available = missing.isEmpty()
 
@@ -868,12 +801,7 @@ fun computeReadiness(
 
     return Readiness(
         available = available,
-        unavailableReason = if (available) {
-            null
-        } else {
-            "Noch nicht genug Daten für einen Gesamtwert " +
-                "(${missing.joinToString(", ")}). Die einzelnen Signale siehst du trotzdem."
-        },
+        unavailableReason = if (available) null else t.readinessUnavailable(missing),
         score = score,
         band = band,
         penaltyRhr = penaltyRhr,
@@ -888,23 +816,11 @@ fun computeReadiness(
         signalCoverage = coverage,
         confidence = confidence,
         headline = if (available) {
-            "Erholung: ${dartRound(score).toInt()} — ${readinessBandLabels[band]}"
+            t.readinessHeadline(dartRound(score).toInt(), band)
         } else {
-            "Erholung noch nicht berechenbar"
+            t.readinessHeadlineUnavailable()
         },
-        detail = if (available) {
-            if (usesHrv) {
-                "Basierend auf HRV, Ruhepuls, Schlaf und Trainingslast — " +
-                    "ein Trendindikator, keine Messung."
-            } else {
-                "Basierend auf Ruhepuls, Schlaf und Trainingslast (ohne HRV) — " +
-                    "ein Trendindikator, keine Messung. Ohne HRV fehlt das " +
-                    "direkteste Signal; der Wert ist deshalb unsicherer."
-            }
-        } else {
-            "Sobald genug Tage vorliegen, fassen wir Ruhepuls, Schlaf und " +
-                "Trainingslast zu einem Wert zusammen."
-        },
+        detail = if (available) t.readinessDetail(usesHrv) else t.readinessDetailUnavailable(),
     )
 }
 
@@ -934,6 +850,7 @@ fun computeReadinessSeries(
     fitness: FitnessSeries = FitnessSeries.EMPTY,
     today: LocalDateTime? = null,
     days: Int = 7,
+    texts: CoreTexts,
 ): List<ReadinessPoint> {
     if (days <= 0) {
         return emptyList()
@@ -959,16 +876,19 @@ fun computeReadinessSeries(
         val restingHr = assessRestingHeartRate(
             upTo(restingHrSeries, day),
             today = day,
+            texts = texts,
         )
         val hrv = assessHrv(
             upTo(hrvSeries, day),
             today = day,
             restingHrFlag = restingHr.flag,
+            texts = texts,
         )
         val sleep = assessSleep(
             upTo(sleepSeries, day),
             today = day,
             restingHrFlag = restingHr.flag,
+            texts = texts,
         )
 
         points.add(
@@ -980,6 +900,7 @@ fun computeReadinessSeries(
                     hrv = hrv,
                     tsb = point?.tsb,
                     trainingHistoryDays = historyDays,
+                    texts = texts,
                 ),
             ),
         )
@@ -1022,6 +943,7 @@ fun recommendToday(
     readiness: Readiness,
     tsb: Double? = null,
     hitBudgetLeft: Boolean = true,
+    texts: CoreTexts,
 ): DailyRecommendation {
     val rhr = readiness.restingHr.flag
     val sleep = readiness.sleep.flag
@@ -1037,7 +959,7 @@ fun recommendToday(
         reasons.add(readiness.sleep.message)
     }
     if (tsb != null) {
-        reasons.add(tsbBandMessages[classifyTsb(tsb)]!!)
+        reasons.add(texts.load.tsbBandMessage(classifyTsb(tsb)))
     }
 
     // Ohne Gesamtscore steuern nur die vorhandenen Einzelsignale.
@@ -1052,8 +974,8 @@ fun recommendToday(
     ) {
         return DailyRecommendation(
             kind = DailyRecommendationKind.RUHETAG,
-            title = "Heute besser Ruhetag",
-            detail = "Deine Erholungssignale sprechen für Pause statt Training.",
+            title = texts.readiness.recommendationTitle(DailyRecommendationKind.RUHETAG),
+            detail = texts.readiness.recommendationDetail(DailyRecommendationKind.RUHETAG),
             reasons = reasons,
         )
     }
@@ -1063,17 +985,16 @@ fun recommendToday(
     ) {
         return DailyRecommendation(
             kind = DailyRecommendationKind.LOCKER_Z2,
-            title = "Locker im Grundlagentempo (Zone 2), 60–90 min",
-            detail = "Keine Intervalle — halte die Intensität heute im " +
-                "Grundlagenbereich.",
+            title = texts.readiness.recommendationTitle(DailyRecommendationKind.LOCKER_Z2),
+            detail = texts.readiness.recommendationDetail(DailyRecommendationKind.LOCKER_Z2),
             reasons = reasons,
         )
     }
     if (tsb != null && tsb < -25) {
         return DailyRecommendation(
             kind = DailyRecommendationKind.RECOVERY,
-            title = "Regenerationsfahrt, ganz ruhig (Zone 1–2)",
-            detail = "Deine Ermüdung ist gerade hoch — kurz und locker fahren.",
+            title = texts.readiness.recommendationTitle(DailyRecommendationKind.RECOVERY),
+            detail = texts.readiness.recommendationDetail(DailyRecommendationKind.RECOVERY),
             reasons = reasons,
         )
     }
@@ -1087,15 +1008,15 @@ fun recommendToday(
     ) {
         return DailyRecommendation(
             kind = DailyRecommendationKind.HARTE_EINHEIT,
-            title = "Harte Einheit möglich (Z4/Z5)",
-            detail = "Erholung und Form passen — heute darf ein harter Reiz rein.",
+            title = texts.readiness.recommendationTitle(DailyRecommendationKind.HARTE_EINHEIT),
+            detail = texts.readiness.recommendationDetail(DailyRecommendationKind.HARTE_EINHEIT),
             reasons = reasons,
         )
     }
     return DailyRecommendation(
         kind = DailyRecommendationKind.GRUNDLAGE,
-        title = "Grundlageneinheit",
-        detail = "Fahre nach dem Restbudget deiner Woche, überwiegend im Grundlagentempo (Zone 2 — Tempo, bei dem du dich noch unterhalten kannst).",
+        title = texts.readiness.recommendationTitle(DailyRecommendationKind.GRUNDLAGE),
+        detail = texts.readiness.recommendationDetail(DailyRecommendationKind.GRUNDLAGE),
         reasons = reasons,
     )
 }
@@ -1103,7 +1024,7 @@ fun recommendToday(
 /** Empfehlung fuer eine Entlastungswoche (§6.2). */
 data class DeloadRecommendation(
     val recommended: Boolean,
-    /** Ausgeloeste Deload-Trigger (deutschsprachig). */
+    /** Ausgeloeste Deload-Trigger, in der Sprache der uebergebenen Texte. */
     val triggers: List<String>,
     /** Weiche Hinweise (z. B. Wochenlastsprung), die keinen Deload ausloesen. */
     val warnings: List<String>,
@@ -1126,13 +1047,15 @@ fun assessDeload(
     readinessLast7: List<Double> = emptyList(),
     weeklyLoad: Double? = null,
     fourWeekMeanWeeklyLoad: Double? = null,
+    texts: CoreTexts,
 ): DeloadRecommendation {
+    val t = texts.readiness
     val triggers = mutableListOf<String>()
     val warnings = mutableListOf<String>()
 
     val tail = series.lastDays(3)
     if (tail.size == 3 && tail.all { it.tsb < -30 }) {
-        triggers.add("Dein Formwert liegt seit drei Tagen sehr tief.")
+        triggers.add(t.deloadTriggerLowForm())
     }
 
     val points = series.points
@@ -1140,15 +1063,13 @@ fun assessDeload(
     if (rampDays.all { it >= 0 }) {
         val ramps = rampDays.map { points[it].rampRate7d }
         if (ramps.all { it != null && it > 8 }) {
-            triggers.add("Deine Fitness ist seit drei Wochen sehr schnell gestiegen.")
+            triggers.add(t.deloadTriggerFastRamp())
         }
     }
 
     val lowReadiness = readinessLast7.count { it < 40 }
     if (lowReadiness >= 3) {
-        triggers.add(
-            "Deine Erholung lag an $lowReadiness von sieben Tagen im unteren Bereich.",
-        )
+        triggers.add(t.deloadTriggerLowReadiness(lowReadiness))
     }
 
     if (weeklyLoad != null &&
@@ -1156,16 +1077,14 @@ fun assessDeload(
         fourWeekMeanWeeklyLoad > 0 &&
         weeklyLoad > 1.3 * fourWeekMeanWeeklyLoad
     ) {
-        warnings.add("Deine Belastung ist diese Woche deutlich gestiegen.")
+        warnings.add(t.deloadWarningWeeklyJump())
     }
 
     val latest = series.latest
     if (latest?.loadRatio != null &&
         classifyLoadRatio(latest.loadRatio) == LoadRatioBand.BELASTUNGSSPRUNG
     ) {
-        warnings.add(
-            "Deine akute Belastung liegt klar über deinem gewohnten Niveau.",
-        )
+        warnings.add(t.deloadWarningAcuteLoad())
     }
 
     val recommended = triggers.isNotEmpty()
@@ -1173,12 +1092,7 @@ fun assessDeload(
         recommended = recommended,
         triggers = triggers,
         warnings = warnings,
-        title = if (recommended) "Entlastungswoche empfohlen" else "Kein Deload nötig",
-        detail = if (recommended) {
-            "Nimm das Wochenvolumen um 40–50 % zurück und behalte die Intensität " +
-                "bei — kurze harte Reize dürfen drinbleiben."
-        } else {
-            "Deine Belastung sieht aktuell tragfähig aus."
-        },
+        title = t.deloadTitle(recommended),
+        detail = t.deloadDetail(recommended),
     )
 }

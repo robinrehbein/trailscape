@@ -1,5 +1,6 @@
 package de.trailscape.wear
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,6 +22,12 @@ import de.trailscape.wear.ui.RecordingScreen
  * wo sie sie brauchen, statt das ganze Schema zu ueberschreiben.
  */
 class MainActivity : ComponentActivity() {
+
+    /** Sprache der Uhr als Locale-Delta, siehe [WearLocale]. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        WearLocale.overrideConfiguration(newBase)?.let(::applyOverrideConfiguration)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

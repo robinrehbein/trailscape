@@ -22,14 +22,16 @@ import de.trailscape.core.Befehl
 import de.trailscape.core.PFAD_BEFEHL_AN_TELEFON
 import de.trailscape.core.SensorSample
 import de.trailscape.core.formatDuration
-import de.trailscape.core.formatKm
+import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.kodiereBefehl
 import de.trailscape.wear.MainActivity
+import de.trailscape.wear.WearLocale
 import de.trailscape.wear.R
 import de.trailscape.wear.comm.PhoneLink
 import de.trailscape.wear.comm.SensorSender
 import de.trailscape.wear.exercise.ExerciseRecorder
 import de.trailscape.wear.exercise.ermittleFaehigkeiten
+import de.trailscape.wear.localized
 import java.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -176,7 +178,7 @@ class RecordingService : Service() {
             )
 
             if (!bericht.radfahrenUnterstuetzt || bericht.angeforderte.isEmpty()) {
-                scheitere("Uhr meldet keine Radfahr-Fähigkeiten")
+                scheitere(localized().getString(R.string.wear_error_no_cycling))
                 return
             }
 
@@ -216,7 +218,12 @@ class RecordingService : Service() {
                         System.currentTimeMillis(),
                         "Callback-Registrierung fehlgeschlagen: ${ereignis.ursache}",
                     )
-                    scheitere("Callback nicht registriert: ${ereignis.ursache.message}")
+                    scheitere(
+                        localized().getString(
+                            R.string.wear_error_callback,
+                            ereignis.ursache.message ?: ereignis.ursache::class.java.simpleName,
+                        ),
+                    )
                 }
 
                 // Sensorverfuegbarkeit und Rundenzusammenfassungen waren fuer
@@ -434,11 +441,16 @@ class RecordingService : Service() {
         )
 
         val laufzeitS = (RecordingStatus.laufzeitMs.value / 1000).toInt()
-        val text = "${formatDuration(laufzeitS)} · ${formatKm(RecordingStatus.distanzKm.value)} km"
+        val texte = localized()
+        val text = texte.getString(
+            R.string.wear_notification_progress,
+            formatDuration(laufzeitS),
+            formatDistanceKm(RecordingStatus.distanzKm.value, WearLocale.current(this)),
+        )
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher)
-            .setContentTitle(getString(R.string.app_name))
+            .setContentTitle(texte.getString(R.string.app_name))
             .setContentText(text)
             .setContentIntent(tippIntent)
             .setOngoing(true)
@@ -456,14 +468,17 @@ class RecordingService : Service() {
 
     private fun legeBenachrichtigungskanalAn() {
         val manager = getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        // Bei jedem Dienststart neu anlegen, auch wenn es den Kanal schon
+        // gibt: Das aendert nur Name und Beschreibung — so folgen sie einer
+        // inzwischen umgestellten Systemsprache der Uhr (docs/i18n.md, D).
+        val texte = localized()
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_ID,
-                getString(R.string.notification_channel_name),
+                texte.getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = getString(R.string.notification_channel_description)
+                description = texte.getString(R.string.notification_channel_description)
             },
         )
     }

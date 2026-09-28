@@ -1,6 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.JsonArray
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDateTime
 import java.util.TimeZone
 import kotlin.test.Test
@@ -10,6 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.JsonArray
 
 /**
  * Portierung von `test/health_sync_test.dart`, soweit die Faelle
@@ -281,7 +282,7 @@ class HealthSyncTest {
         gateway: FakeHealthGateway,
         now: LocalDateTime,
         store: HealthSyncStore = InMemoryHealthSyncStore(),
-    ): HealthSyncService = HealthSyncService(gateway = gateway, store = store, now = { now })
+    ): HealthSyncService = HealthSyncService(gateway = gateway, store = store, now = { now }, texts = { CoreTextsDe })
 
     // -----------------------------------------------------------------------
     // group('overlapRatio')
@@ -403,6 +404,7 @@ class HealthSyncTest {
                 HealthHeartRateSample(time = start.plusMs(minutes(30)), bpm = 150.0),
                 HealthHeartRateSample(time = start.plusMs(hours(1)), bpm = 180.0),
             ),
+            texts = CoreTextsDe,
         )
 
         assertEquals("hc-abc-123", r.id)
@@ -437,6 +439,7 @@ class HealthSyncTest {
                 HealthHeartRateSample(time = start.plusMs(minutes(10)), bpm = 130.0),
                 HealthHeartRateSample(time = start.plusMs(minutes(20)), bpm = 140.0),
             ),
+            texts = CoreTextsDe,
         )
 
         assertTrue(r.points.isEmpty())
@@ -464,6 +467,7 @@ class HealthSyncTest {
                 HealthRoutePoint(lat = 0.0, lon = 0.0, time = start),
                 HealthRoutePoint(lat = 0.0, lon = 0.1, time = start.plusMs(minutes(10))),
             ),
+            texts = CoreTextsDe,
         )
 
         assertTrue(r.stats.distanceKm > 10)
@@ -480,6 +484,7 @@ class HealthSyncTest {
                 HealthHeartRateSample(time = start.plusMs(minutes(10)), bpm = 150.0),
                 HealthHeartRateSample(time = start.plusMs(hours(5)), bpm = 200.0),
             ),
+            texts = CoreTextsDe,
         )
 
         assertEquals(150, r.stats.avgHrBpm)
@@ -491,6 +496,7 @@ class HealthSyncTest {
         val start = at(2026, 8, 5, 7)
         val r = buildRideFromWorkout(
             cycling(id = "ohne-hf", start = start, end = start.plusMs(minutes(30))),
+            texts = CoreTextsDe,
         )
         assertNull(r.stats.avgHrBpm)
         assertNull(r.stats.maxHrBpm)
@@ -509,6 +515,7 @@ class HealthSyncTest {
                 end = start.plusMs(minutes(45)),
                 kind = HealthActivityKind.RADFAHREN_INDOOR,
             ),
+            texts = CoreTextsDe,
         )
         assertEquals("Tour 06.08.2026 (Watch) (Indoor)", r.name)
     }
@@ -849,7 +856,7 @@ class HealthSyncTest {
         ).checkAvailability()
         assertFalse(connection.isReady)
         assertTrue(connection.needsPermissions)
-        assertTrue(connection.message.contains("Zustimmung"))
+        assertTrue(connection.message(CoreTextsDe).contains("Zustimmung"))
     }
 
     @Test
@@ -883,7 +890,7 @@ class HealthSyncTest {
             FakeHealthGateway(availabilityValue = HealthAvailability.UPDATE_NOETIG),
             at(2026, 8, 10),
         ).checkAvailability()
-        assertTrue(connection.message.contains("aktualisiert"))
+        assertTrue(connection.message(CoreTextsDe).contains("aktualisiert"))
     }
 
     // -----------------------------------------------------------------------
@@ -1249,6 +1256,25 @@ class HealthSyncTest {
         assertNotNull(merged)
         assertEquals(155, merged.points.single().hr)
         assertEquals(155, merged.stats.avgHrBpm)
+    }
+
+    @Test
+    fun `mergeHeartRateIntoRide - behaelt gemessene Leistung und Trittfrequenz an jedem Punkt`() {
+        val basis = rideWithPoints(id = "lokal", start = mergeStart)
+        val r = basis.copy(
+            points = basis.points.mapIndexed { i, p -> p.copy(power = 200 + i, cad = 85 + i) },
+        )
+        val merged = mergeHeartRateIntoRide(
+            r,
+            listOf(
+                HealthHeartRateSample(time = mergeStart, bpm = 130.0),
+                HealthHeartRateSample(time = mergeStart.plusMs(minutes(20)), bpm = 150.0),
+            ),
+        )!!
+
+        assertEquals(r.points.map { it.power }, merged.points.map { it.power })
+        assertEquals(r.points.map { it.cad }, merged.points.map { it.cad })
+        assertEquals(130, merged.points.first().hr)
     }
 
     @Test
@@ -2219,7 +2245,7 @@ class HealthSyncTest {
         assertEquals(3, report.routeConsentPending.size)
         assertEquals(
             "5 Touren importiert · 3 ohne Route (Freigabe in Health Connect nötig) · 1 ohne GPS-Daten",
-            report.summaryLine(),
+            report.summaryLine(texts = CoreTextsDe),
         )
     }
 
@@ -2237,10 +2263,10 @@ class HealthSyncTest {
         )
 
         val report = serviceOf(gateway, at(2026, 8, 10)).importWithReport(existing = emptyList())
-        assertEquals("1 Tour importiert", report.summaryLine())
+        assertEquals("1 Tour importiert", report.summaryLine(texts = CoreTextsDe))
 
         val leer = serviceOf(FakeHealthGateway(), at(2026, 8, 10)).importWithReport(existing = emptyList())
-        assertEquals("Keine neuen Touren", leer.summaryLine())
+        assertEquals("Keine neuen Touren", leer.summaryLine(texts = CoreTextsDe))
     }
 
     @Test
@@ -2249,10 +2275,10 @@ class HealthSyncTest {
         val basis = HealthSyncReport.empty(tag, tag)
         val zwei = listOf(rideWithPoints(id = "a", start = tag), rideWithPoints(id = "b", start = tag))
 
-        assertEquals("2 Touren mit Puls ergänzt", basis.copy(mergedRides = zwei).summaryLine())
+        assertEquals("2 Touren mit Puls ergänzt", basis.copy(mergedRides = zwei).summaryLine(texts = CoreTextsDe))
         assertEquals(
             "1 Tour importiert · 2 mit Puls ergänzt",
-            basis.copy(imported = zwei.take(1), mergedRides = zwei).summaryLine(),
+            basis.copy(imported = zwei.take(1), mergedRides = zwei).summaryLine(texts = CoreTextsDe),
         )
     }
 

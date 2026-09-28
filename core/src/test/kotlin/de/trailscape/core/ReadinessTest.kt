@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.ln
 import kotlin.math.sqrt
 import kotlin.test.Test
@@ -70,6 +71,7 @@ class ReadinessTest {
             sleep = goodSleep,
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertTrue(r.available)
         assertEquals(100.0, r.score, 1e-9)
@@ -113,6 +115,7 @@ class ReadinessTest {
             sleep = sleep,
             tsb = -35.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(27.0, r.penaltyRhr, 1e-9) // (2,0 − 0,5) × 18
         assertEquals(33.0, r.penaltySleep, 1e-9) // 18 + 15 (gedeckelt)
@@ -147,6 +150,7 @@ class ReadinessTest {
             sleep = goodSleep,
             tsb = -200.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(45.0, r.penaltyRhr, 0.0)
         assertEquals(30.0, r.penaltyLoad, 0.0)
@@ -161,6 +165,7 @@ class ReadinessTest {
             sleep = goodSleep,
             tsb = 0.0,
             trainingHistoryDays = 10,
+            texts = CoreTextsDe,
         )
         assertFalse(r.available)
         assertTrue(r.unavailableReason!!.contains("Trainingshistorie"))
@@ -173,6 +178,7 @@ class ReadinessTest {
             restingHr = RestingHrAssessment.unavailable("x", 3),
             sleep = SleepAssessment.unavailable("y", 2),
             trainingHistoryDays = 5,
+            texts = CoreTextsDe,
         )
         assertFalse(r.available)
         assertTrue(r.unavailableReason!!.contains("Ruhepuls"))
@@ -184,6 +190,7 @@ class ReadinessTest {
         val r = computeReadiness(
             restingHr = RestingHrAssessment.unavailable("x", 3),
             sleep = SleepAssessment.unavailable("y", 2),
+            texts = CoreTextsDe,
         )
         assertEquals(0.0, r.penaltyRhr, 0.0)
         assertEquals(0.0, r.penaltySleep, 0.0)
@@ -210,6 +217,7 @@ class ReadinessTest {
             hrv = hrvWith(z = -2.0, status = HrvStatus.NIEDRIG, flag = RecoveryFlag.ORANGE),
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertTrue(r.usesHrv)
         // (2,0 − 0,75) × 50 = 62,5 Strafpunkte, davon 40 %.
@@ -242,6 +250,7 @@ class ReadinessTest {
             hrv = hrvWith(z = 0.0, status = HrvStatus.IM_BAND, flag = RecoveryFlag.GRUEN),
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         // 27 von 45 moeglichen Ruhepuls-Strafpunkten, gewichtet mit 25 %.
         assertEquals(0.0, withHrv.penaltyHrv, 0.0)
@@ -252,6 +261,7 @@ class ReadinessTest {
             sleep = goodSleep,
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertFalse(withoutHrv.usesHrv)
         // Dieselbe Formel, nur ohne HRV-Gewicht: (0,25×60) / 0,60 = 25.
@@ -268,6 +278,7 @@ class ReadinessTest {
             hrv = hrvWith(z = 1.4, status = HrvStatus.SAETTIGUNG, flag = RecoveryFlag.ORANGE),
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(50.0, r.penaltyHrv, 0.0)
         assertEquals(80.0, r.score, 1e-9)
@@ -309,6 +320,7 @@ class ReadinessTest {
             hrv = hrvWith(z = -10.0, status = HrvStatus.NIEDRIG, flag = RecoveryFlag.ROT),
             tsb = -200.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(100.0, r.penaltyHrv, 0.0)
         assertEquals(0.0, r.score, 0.0)
@@ -322,6 +334,7 @@ class ReadinessTest {
             sleep = goodSleep,
             hrv = hrvWith(z = 0.0, status = HrvStatus.IM_BAND, flag = RecoveryFlag.GRUEN),
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertFalse(r.available)
         assertTrue(r.unavailableReason!!.contains("Ruhepuls"))
@@ -335,6 +348,7 @@ class ReadinessTest {
             hrv = HrvAssessment.unavailable("Braucht noch 6 Tage HRV-Daten.", 8),
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertFalse(r.usesHrv)
         assertEquals(0.0, r.penaltyHrv, 0.0)
@@ -345,13 +359,14 @@ class ReadinessTest {
 
     @Test
     fun `End-to-End ueber echte Serien - Kurzschlaefer bleibt bei 100`() {
-        val rhr = assessRestingHeartRate(daily(filled(60, 50.0)))
-        val sleep = assessSleep(daily(filled(28, 5.8)))
+        val rhr = assessRestingHeartRate(daily(filled(60, 50.0)), texts = CoreTextsDe)
+        val sleep = assessSleep(daily(filled(28, 5.8)), texts = CoreTextsDe)
         val r = computeReadiness(
             restingHr = rhr,
             sleep = sleep,
             tsb = -5.0,
             trainingHistoryDays = 60,
+            texts = CoreTextsDe,
         )
         assertTrue(r.available)
         assertEquals(100.0, r.score, 1e-9)
@@ -384,6 +399,7 @@ class ReadinessTest {
             sleep = sleepWithPenalty(15.0),
             tsb = -(10.0 / 1.2 + 20),
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(20.0, r.penaltyRhr, 1e-9)
         assertEquals(15.0, r.penaltySleep, 1e-9)
@@ -408,6 +424,7 @@ class ReadinessTest {
             sleep = sleep,
             tsb = tsb,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         // Eine HRV, die genauso „mittelmaessig" ist wie die uebrigen Signale
         // (Strafterm auf dem Niveau des gewichteten Mittels), darf den Score
@@ -423,6 +440,7 @@ class ReadinessTest {
             ),
             tsb = tsb,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(withoutHrv.score, withNeutralHrv.score, 1e-6)
         assertEquals(withoutHrv.band, withNeutralHrv.band)
@@ -446,11 +464,13 @@ class ReadinessTest {
             sleep = sleep,
             tsb = 0.0,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         val withoutTsb = computeReadiness(
             restingHr = rhr,
             sleep = sleep,
             trainingHistoryDays = 40,
+            texts = CoreTextsDe,
         )
         assertEquals(100 - 25.0 / 0.6, withTsb.score, 1e-6)
         assertEquals(100 - 25.0 / 0.45, withoutTsb.score, 1e-6)
@@ -465,6 +485,7 @@ class ReadinessTest {
         val r = computeReadiness(
             restingHr = RestingHrAssessment.unavailable("x", 0),
             sleep = SleepAssessment.unavailable("y", 0),
+            texts = CoreTextsDe,
         )
         assertFalse(r.available)
         assertEquals(0.0, r.signalCoverage, 0.0)
@@ -509,7 +530,7 @@ class ReadinessTest {
             message = "schlaf",
         )
         val hrv = if (hrvFlag == null) {
-            HrvAssessment.MISSING
+            HrvAssessment.missing(CoreTextsDe)
         } else {
             HrvAssessment(
                 available = true,
@@ -552,7 +573,7 @@ class ReadinessTest {
 
     @Test
     fun `Readiness unter 40 ergibt einen Ruhetag`() {
-        val r = recommendToday(readiness = readinessWith(score = 30.0), tsb = 0.0)
+        val r = recommendToday(readiness = readinessWith(score = 30.0), tsb = 0.0, texts = CoreTextsDe)
         assertEquals(DailyRecommendationKind.RUHETAG, r.kind)
         assertTrue(r.reasons.isNotEmpty())
     }
@@ -562,13 +583,14 @@ class ReadinessTest {
         val r = recommendToday(
             readiness = readinessWith(score = 90.0, rhrFlag = RecoveryFlag.ROT),
             tsb = 0.0,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.RUHETAG, r.kind)
     }
 
     @Test
     fun `Readiness unter 60 ergibt locker Z2`() {
-        val r = recommendToday(readiness = readinessWith(score = 55.0), tsb = 0.0)
+        val r = recommendToday(readiness = readinessWith(score = 55.0), tsb = 0.0, texts = CoreTextsDe)
         assertEquals(DailyRecommendationKind.LOCKER_Z2, r.kind)
         assertTrue(r.detail.contains("Intervalle"))
     }
@@ -578,19 +600,20 @@ class ReadinessTest {
         val r = recommendToday(
             readiness = readinessWith(score = 85.0, sleepFlag = RecoveryFlag.ORANGE),
             tsb = 0.0,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.LOCKER_Z2, r.kind)
     }
 
     @Test
     fun `TSB unter minus 25 ergibt eine Regenerationsfahrt`() {
-        val r = recommendToday(readiness = readinessWith(score = 70.0), tsb = -28.0)
+        val r = recommendToday(readiness = readinessWith(score = 70.0), tsb = -28.0, texts = CoreTextsDe)
         assertEquals(DailyRecommendationKind.RECOVERY, r.kind)
     }
 
     @Test
     fun `Readiness ab 80 mit Budget gibt die harte Einheit frei`() {
-        val r = recommendToday(readiness = readinessWith(score = 85.0), tsb = -10.0)
+        val r = recommendToday(readiness = readinessWith(score = 85.0), tsb = -10.0, texts = CoreTextsDe)
         assertEquals(DailyRecommendationKind.HARTE_EINHEIT, r.kind)
     }
 
@@ -600,6 +623,7 @@ class ReadinessTest {
             readiness = readinessWith(score = 85.0),
             tsb = -10.0,
             hitBudgetLeft = false,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.GRUNDLAGE, r.kind)
     }
@@ -610,7 +634,9 @@ class ReadinessTest {
             readiness = computeReadiness(
                 restingHr = RestingHrAssessment.unavailable("x", 0),
                 sleep = SleepAssessment.unavailable("y", 0),
+                texts = CoreTextsDe,
             ),
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.GRUNDLAGE, r.kind)
     }
@@ -620,6 +646,7 @@ class ReadinessTest {
         val r = recommendToday(
             readiness = readinessWith(score = 90.0, hrvFlag = RecoveryFlag.ROT),
             tsb = 0.0,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.RUHETAG, r.kind)
         assertEquals("hrv", r.reasons.first())
@@ -630,6 +657,7 @@ class ReadinessTest {
         val r = recommendToday(
             readiness = readinessWith(score = 85.0, hrvFlag = RecoveryFlag.ORANGE),
             tsb = 0.0,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.LOCKER_Z2, r.kind)
     }
@@ -639,12 +667,14 @@ class ReadinessTest {
         val r = recommendToday(
             readiness = readinessWith(score = 85.0, hrvFlag = RecoveryFlag.GELB),
             tsb = -10.0,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.GRUNDLAGE, r.kind)
 
         val green = recommendToday(
             readiness = readinessWith(score = 85.0, hrvFlag = RecoveryFlag.GRUEN),
             tsb = -10.0,
+            texts = CoreTextsDe,
         )
         assertEquals(DailyRecommendationKind.HARTE_EINHEIT, green.kind)
     }
@@ -665,6 +695,7 @@ class ReadinessTest {
             sleepSeries = daily(filled(40, 7.0), end = today),
             fitness = fitness,
             today = today,
+            texts = CoreTextsDe,
         )
         assertEquals(7, series.size)
         assertEquals(dt(2026, 8, 2), series.first().day)
@@ -688,6 +719,7 @@ class ReadinessTest {
             ),
             fitness = fitness,
             today = today,
+            texts = CoreTextsDe,
         )
         val scores = availableReadinessScores(series)
         assertEquals(7, scores.size)
@@ -709,10 +741,12 @@ class ReadinessTest {
             ),
             fitness = fitness,
             today = today,
+            texts = CoreTextsDe,
         )
         val deload = assessDeload(
             fitness,
             readinessLast7 = availableReadinessScores(series),
+            texts = CoreTextsDe,
         )
         assertTrue(deload.recommended)
         assertTrue(deload.triggers.single().contains("Erholung"))
@@ -729,6 +763,7 @@ class ReadinessTest {
             hrvSeries = hrv,
             fitness = fitness,
             today = today,
+            texts = CoreTextsDe,
         )
         assertTrue(withHrv.last().readiness.usesHrv)
         assertTrue(withHrv.last().readiness.score < 100)
@@ -738,6 +773,7 @@ class ReadinessTest {
             sleepSeries = sleep,
             fitness = fitness,
             today = today,
+            texts = CoreTextsDe,
         )
         assertFalse(withoutHrv.last().readiness.usesHrv)
         assertEquals(100.0, withoutHrv.last().readiness.score, 1e-9)
@@ -745,7 +781,7 @@ class ReadinessTest {
 
     @Test
     fun `ohne Daten entstehen Tage ohne Gesamtscore und nichts wirft`() {
-        val series = computeReadinessSeries(today = today)
+        val series = computeReadinessSeries(today = today, texts = CoreTextsDe)
         assertEquals(7, series.size)
         assertTrue(series.all { !it.readiness.available })
         assertTrue(availableReadinessScores(series).isEmpty())
@@ -753,13 +789,14 @@ class ReadinessTest {
             assessDeload(
                 FitnessSeries.EMPTY,
                 readinessLast7 = availableReadinessScores(series),
+                texts = CoreTextsDe,
             ).recommended,
         )
     }
 
     @Test
     fun `days kleiner gleich 0 liefert eine leere Reihe`() {
-        assertTrue(computeReadinessSeries(today = today, days = 0).isEmpty())
+        assertTrue(computeReadinessSeries(today = today, days = 0, texts = CoreTextsDe).isEmpty())
     }
 
     // --- group('Deload') ---
@@ -783,7 +820,7 @@ class ReadinessTest {
 
     @Test
     fun `TSB unter minus 30 ueber drei Tage loest Deload aus`() {
-        val d = assessDeload(seriesWithTsb(listOf(-10.0, -31.0, -32.0, -33.0)))
+        val d = assessDeload(seriesWithTsb(listOf(-10.0, -31.0, -32.0, -33.0)), texts = CoreTextsDe)
         assertTrue(d.recommended)
         assertEquals(1, d.triggers.size)
         assertTrue(d.detail.contains("40–50 %"))
@@ -794,7 +831,7 @@ class ReadinessTest {
 
     @Test
     fun `nur zwei Tage unter minus 30 loesen nichts aus`() {
-        val d = assessDeload(seriesWithTsb(listOf(-10.0, -20.0, -31.0, -32.0)))
+        val d = assessDeload(seriesWithTsb(listOf(-10.0, -20.0, -31.0, -32.0)), texts = CoreTextsDe)
         assertFalse(d.recommended)
         assertEquals("Kein Deload nötig", d.title)
     }
@@ -819,6 +856,7 @@ class ReadinessTest {
                 seedLoad = 0.0,
                 displayReady = true,
             ),
+            texts = CoreTextsDe,
         )
         assertTrue(d.recommended)
         assertTrue(d.triggers.first().contains("drei Wochen"))
@@ -829,6 +867,7 @@ class ReadinessTest {
         val d = assessDeload(
             seriesWithTsb(listOf(0.0, 0.0, 0.0)),
             readinessLast7 = listOf(80.0, 35.0, 30.0, 70.0, 39.0, 60.0, 65.0),
+            texts = CoreTextsDe,
         )
         assertTrue(d.recommended)
         assertTrue(d.triggers.single().contains("Erholung"))
@@ -840,6 +879,7 @@ class ReadinessTest {
             seriesWithTsb(listOf(0.0, 0.0, 0.0)),
             weeklyLoad = 500.0,
             fourWeekMeanWeeklyLoad = 300.0,
+            texts = CoreTextsDe,
         )
         assertFalse(d.recommended)
         assertTrue(d.warnings.first().contains("deutlich gestiegen"))
@@ -848,7 +888,7 @@ class ReadinessTest {
 
     @Test
     fun `leere Fitness-Serie wirft nicht`() {
-        val d = assessDeload(FitnessSeries.EMPTY)
+        val d = assessDeload(FitnessSeries.EMPTY, texts = CoreTextsDe)
         assertFalse(d.recommended)
         assertTrue(d.triggers.isEmpty())
     }

@@ -1,6 +1,9 @@
 package de.trailscape.app.ui.map
 
+import de.trailscape.app.ui.map.MapTestStrings.de
+import de.trailscape.app.ui.map.MapTestStrings.en
 import de.trailscape.core.TurnRichtung
+import de.trailscape.core.i18n.AppLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -17,26 +20,26 @@ class NavigationHudTextTest {
 
     @Test
     fun `Kurvendistanz wird auf 50er gerundet`() {
-        assertEquals("In 250 m", kurveAbstandKurzText(250.0))
-        assertEquals("In 150 m", kurveAbstandKurzText(137.0))
-        assertEquals("In 50 m", kurveAbstandKurzText(44.0))
-        assertEquals("In 1000 m", kurveAbstandKurzText(990.0))
+        assertEquals("In 250 m", de(kurveAbstandKurzText(250.0)))
+        assertEquals("In 150 m", de(kurveAbstandKurzText(137.0)))
+        assertEquals("In 50 m", de(kurveAbstandKurzText(44.0)))
+        assertEquals("In 1000 m", de(kurveAbstandKurzText(990.0)))
     }
 
     @Test
     fun `im Nahbereich heisst es Gleich`() {
         // Dieselbe Schwelle wie die Sprachansage (`ANSAGE_GLEICH_M` = 40 m).
-        assertEquals("Gleich", kurveAbstandKurzText(39.9))
-        assertEquals("Gleich", kurveAbstandKurzText(0.0))
-        assertEquals("In 50 m", kurveAbstandKurzText(40.0))
+        assertEquals("Gleich", de(kurveAbstandKurzText(39.9)))
+        assertEquals("Gleich", de(kurveAbstandKurzText(0.0)))
+        assertEquals("In 50 m", de(kurveAbstandKurzText(40.0)))
     }
 
     @Test
     fun `Anzeigeworte decken alle Richtungen ab`() {
-        assertEquals("Links", kurveAnzeigeWort(TurnRichtung.LINKS))
-        assertEquals("Rechts", kurveAnzeigeWort(TurnRichtung.RECHTS))
-        assertEquals("Scharf links", kurveAnzeigeWort(TurnRichtung.KEHRE_LINKS))
-        assertEquals("Scharf rechts", kurveAnzeigeWort(TurnRichtung.KEHRE_RECHTS))
+        assertEquals("Links", de(kurveAnzeigeWort(TurnRichtung.LINKS)))
+        assertEquals("Rechts", de(kurveAnzeigeWort(TurnRichtung.RECHTS)))
+        assertEquals("Scharf links", de(kurveAnzeigeWort(TurnRichtung.KEHRE_LINKS)))
+        assertEquals("Scharf rechts", de(kurveAnzeigeWort(TurnRichtung.KEHRE_RECHTS)))
     }
 
     // -------------------------------------------------------- Tempo-Glaettung
@@ -87,19 +90,45 @@ class NavigationHudTextTest {
 
     @Test
     fun `Restzeittext unter einer Stunde in Minuten`() {
-        assertEquals("ca. 50 min", restzeitText(50))
-        assertEquals("ca. 0 min", restzeitText(0))
+        assertEquals("ca. 50 min", de(restzeitText(50)))
+        assertEquals("ca. 0 min", de(restzeitText(0)))
     }
 
     @Test
     fun `Restzeittext ab einer Stunde in Stunden und Minuten`() {
-        assertEquals("ca. 1 h 10 min", restzeitText(70))
-        assertEquals("ca. 2 h", restzeitText(120))
+        assertEquals("ca. 1 h 10 min", de(restzeitText(70)))
+        assertEquals("ca. 2 h", de(restzeitText(120)))
     }
 
     @Test
     fun `die Restzeile kombiniert Distanz und Restzeit deutsch`() {
-        assertEquals("12,4 km · ca. 50 min", navRestZeile(12.4, null))
-        assertEquals("10,0 km · ca. 20 min", navRestZeile(10.0, 30.0))
+        assertEquals("12,4 km · ca. 50 min", de(navRestZeile(12.4, null, AppLanguage.DE)))
+        assertEquals("10,0 km · ca. 20 min", de(navRestZeile(10.0, 30.0, AppLanguage.DE)))
+    }
+
+    // ----------------------------------------------------------- Englisch
+
+    @Test
+    fun `Kurvenzeile auf Englisch`() {
+        assertEquals("In 250 m", en(kurveAbstandKurzText(250.0)))
+        assertEquals("Now", en(kurveAbstandKurzText(10.0)))
+        assertEquals("Left", en(kurveAnzeigeWort(TurnRichtung.LINKS)))
+        assertEquals("Right", en(kurveAnzeigeWort(TurnRichtung.RECHTS)))
+        assertEquals("Sharp left", en(kurveAnzeigeWort(TurnRichtung.KEHRE_LINKS)))
+        assertEquals("Sharp right", en(kurveAnzeigeWort(TurnRichtung.KEHRE_RECHTS)))
+    }
+
+    @Test
+    fun `Restzeit und Restzeile auf Englisch mit Punkt`() {
+        assertEquals("approx. 50 min", en(restzeitText(50)))
+        assertEquals("approx. 1 h 10 min", en(restzeitText(70)))
+        assertEquals("approx. 2 h", en(restzeitText(120)))
+        assertEquals("12.4 km · approx. 50 min", en(navRestZeile(12.4, null, AppLanguage.EN)))
+    }
+
+    @Test
+    fun `die vorgelesene Dauer kommt ohne ca`() {
+        assertEquals("50 min", de(restzeitDauer(50)))
+        assertEquals("1 h 10 min", en(restzeitDauer(70)))
     }
 }

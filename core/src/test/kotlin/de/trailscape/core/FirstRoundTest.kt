@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -31,7 +32,7 @@ class FirstRoundTest {
     fun `ohne Historie wird die Dauer ueber 17,1 km pro Stunde zur Distanz`() {
         val expected = mapOf(1.0 to 17.0, 1.5 to 26.0, 2.0 to 34.0)
         expected.forEach { (hours, km) ->
-            val target = firstRoundTarget(hours, profile, emptyList())
+            val target = firstRoundTarget(hours, profile, emptyList(), texts = CoreTextsDe)
             assertEquals(km, target.distanceKm, EPS, "$hours h")
             assertEquals(AscentPreference.FLACH, target.ascentPreference)
             assertEquals(SessionIntensity.GRUNDLAGE, target.intensity)
@@ -45,7 +46,7 @@ class FirstRoundTest {
     @Test
     fun `mit gefahrenen Touren zaehlt der Median der Historie`() {
         val rides = List(5) { ride(it, speed = 20.0) }
-        val target = firstRoundTarget(1.0, profile, rides)
+        val target = firstRoundTarget(1.0, profile, rides, texts = CoreTextsDe)
         // 20 km/h × 0,95 = 19 km/h
         assertEquals(19.0, target.distanceKm, EPS)
         assertEquals(19.0, target.speedKmh, EPS)
@@ -54,12 +55,12 @@ class FirstRoundTest {
     @Test
     fun `gespeicherte Planungen sind keine Tempoquelle`() {
         val rides = List(5) { ride(it, speed = 30.0, planned = true) }
-        assertEquals(26.0, firstRoundTarget(1.5, profile, rides).distanceKm, EPS)
+        assertEquals(26.0, firstRoundTarget(1.5, profile, rides, texts = CoreTextsDe).distanceKm, EPS)
     }
 
     @Test
     fun `die erste Runde wird nie kuerzer als die Untergrenze`() {
-        assertEquals(FIRST_ROUND_MIN_KM, firstRoundTarget(0.25, profile, emptyList()).distanceKm, EPS)
+        assertEquals(FIRST_ROUND_MIN_KM, firstRoundTarget(0.25, profile, emptyList(), texts = CoreTextsDe).distanceKm, EPS)
     }
 
     @Test
@@ -79,13 +80,13 @@ class FirstRoundTest {
 
     @Test
     fun `Stunden werden so geschrieben, wie man sie sagt`() {
-        assertEquals("1 h", formatRoundHours(1.0))
-        assertEquals("1½ h", formatRoundHours(1.5))
-        assertEquals("2 h", formatRoundHours(2.0))
-        assertEquals("½ h", formatRoundHours(0.5))
+        assertEquals("1 h", formatRoundHours(1.0, texts = CoreTextsDe))
+        assertEquals("1½ h", formatRoundHours(1.5, texts = CoreTextsDe))
+        assertEquals("2 h", formatRoundHours(2.0, texts = CoreTextsDe))
+        assertEquals("½ h", formatRoundHours(0.5, texts = CoreTextsDe))
         // Alles andere laeuft ueber formatHours (eine Nachkommastelle).
-        assertEquals("2,3 h", formatRoundHours(2.3))
-        assertEquals(listOf("1 h", "1½ h", "2 h"), FirstRoundDuration.entries.map { it.label })
+        assertEquals("2,3 h", formatRoundHours(2.3, texts = CoreTextsDe))
+        assertEquals(listOf("1 h", "1½ h", "2 h"), FirstRoundDuration.entries.map { it.label(CoreTextsDe) })
     }
 
     @Test

@@ -32,6 +32,32 @@
          einmal automatisch beim Start einer Aufzeichnung, sonst nur auf
          Wunsch unter Mehr → Aufzeichnung. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Bluetooth-Sensoren (Pulsgurt, Leistungsmesser, Trittfrequenzsensor,
+         siehe sensors/BleSensors.kt): Suchen unter Mehr → Sensoren und
+         Verbinden waehrend einer Aufzeichnung.
+         Ab Android 12 (API 31) reichen BLUETOOTH_SCAN und BLUETOOTH_CONNECT
+         („Geraete in der Naehe"). neverForLocation trifft zu: Die Suche
+         filtert ausschliesslich nach den Dienst-UUIDs der drei
+         Standardprofile und leitet aus den Treffern keinen Standort ab.
+         Bis Android 11 (API 30) gelten die alten BLUETOOTH/BLUETOOTH_ADMIN,
+         und die Suche setzt ACCESS_FINE_LOCATION voraus — die ist fuer das
+         GPS der Aufzeichnung ohnehin deklariert.
+         bluetooth_le mit required="false", damit Play niemanden ohne
+         Bluetooth LE ausfiltert; die App funktioniert dort ohne Sensoren. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
     <!-- ACTIVITY_RECOGNITION bewusst NICHT deklariert: Trailscape zaehlt keine
          Schritte und erkennt keine Aktivitaeten selbst — das Aufzeichnen
          beruht ausschliesslich auf GPS-Standortpunkten. -->
@@ -86,13 +112,19 @@
          ueber den AndroidX-OnBackPressedDispatcher laeuft (Compose
          BackHandler); kein Activity.onBackPressed()/KEYCODE_BACK, das damit
          nicht mehr aufgerufen wuerde. tools:targetApi, weil das Attribut
-         unter API 33 unbekannt ist und dort ignoriert wird. -->
+         unter API 33 unbekannt ist und dort ignoriert wird.
+
+         localeConfig: Die Sprachen der App (res/xml/locales_config.xml) fuer
+         die per-App-Sprachwahl ab Android 13 (siehe i18n/AppLocale.kt). Bewusst
+         KEIN "locale" in configChanges: Nach einem Sprachwechsel wird die
+         Activity neu erzeugt und liest ihre Texte frisch. -->
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:name=".TrailscapeApplication"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
@@ -170,6 +202,33 @@
             </intent-filter>
         </activity>
 
+        <!-- Ruecksprung der Strava-Anmeldung (trailscape://strava-callback,
+             siehe strava/StravaAuthActivity): durchsichtiges Trampolin wie
+             die ImportActivity. Exportiert, weil der Browser sie aufrufen
+             muss; gegen fremde Aufrufe schuetzt das beim Start gemerkte
+             state-Nonce (core/…/StravaAuth.kt). Nur aktiv, wenn der Build
+             Strava-Zugangsdaten hat (manifestPlaceholder stravaEnabled, siehe
+             app/build.gradle.kts) — sonst registriert die App das Schema gar
+             nicht. Keine neue Berechtigung, INTERNET ist vorhanden. -->
+        <activity
+            android:name=".strava.StravaAuthActivity"
+            android:exported="true"
+            android:enabled="${stravaEnabled}"
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="trailscape"
+                    android:host="strava-callback" />
+            </intent-filter>
+        </activity>
+
         <!-- Begruendung der Health-Connect-Leserechte (Kurzfassung von
              PRIVACY.md plus Link auf den Volltext). Health Connect ruft bis
              Android 13 ACTION_SHOW_PERMISSIONS_RATIONALE auf. Frueher hing der
@@ -221,7 +280,13 @@
              das Schliessen der Activity als auch das Wegwischen der App aus
              den Recents. `stopWithTask="false"` ist zwar der Standardwert,
              steht hier aber ausdruecklich, weil genau davon abhaengt, ob eine
-             laufende Tour beim Aufraeumen der Recents abbricht. -->
+             laufende Tour beim Aufraeumen der Recents abbricht.
+
+             Der Typ bleibt „location", auch wenn der Dienst waehrend der
+             Aufzeichnung Bluetooth-Sensoren verbindet: Der Prozess ist
+             damit ohnehin im Vordergrund, und GATT-Verbindungen brauchen
+             keinen eigenen Diensttyp. „connectedDevice" kaeme nur hinzu,
+             falls das Play-Review es fuer die Sensoren verlangt. -->
         <service
             android:name=".record.RecordingService"
             android:exported="false"

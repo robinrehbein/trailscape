@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDateTime
 import java.util.Random
 import kotlin.math.exp
@@ -73,7 +74,7 @@ class HrvNoiseTest {
 
     @Test
     fun `auf rauschender Serie misst die Baseline die echte Streuung`() {
-        val h = assessHrv(noisySeries(days = 70), today = today)
+        val h = assessHrv(noisySeries(days = 70), today = today, texts = CoreTextsDe)
         assertTrue(h.available)
         // Der Sigma-Boden darf hier nicht greifen — sonst waere der Test
         // wieder nur eine Konstantserie mit anderem Namen.
@@ -88,7 +89,7 @@ class HrvNoiseTest {
         // ausloesen, sonst waere das System im Alltag unbrauchbar.
         var yellowOrWorse = 0
         for (seed in 1L..10L) {
-            val h = assessHrv(noisySeries(days = 70, seed = seed), today = today)
+            val h = assessHrv(noisySeries(days = 70, seed = seed), today = today, texts = CoreTextsDe)
             assertTrue(h.available)
             assertFalse(
                 atLeast(h.flag, RecoveryFlag.ORANGE),
@@ -113,6 +114,7 @@ class HrvNoiseTest {
             val h = assessHrv(
                 noisySeries(days = 70, dipDays = 7, dipFactor = 0.6, seed = seed),
                 today = today,
+                texts = CoreTextsDe,
             )
             assertTrue(h.available)
             assertEquals(HrvStatus.NIEDRIG, h.status)
@@ -129,19 +131,21 @@ class HrvNoiseTest {
         val hrv = assessHrv(
             noisySeries(days = 70, dipDays = 7, dipFactor = 0.6),
             today = today,
+            texts = CoreTextsDe,
         )
         val readiness = computeReadiness(
-            restingHr = assessRestingHeartRate(daily(filled(60, 50.0), end = today), today = today),
-            sleep = assessSleep(daily(filled(28, 7.5), end = today), today = today),
+            restingHr = assessRestingHeartRate(daily(filled(60, 50.0), end = today), today = today, texts = CoreTextsDe),
+            sleep = assessSleep(daily(filled(28, 7.5), end = today), today = today, texts = CoreTextsDe),
             hrv = hrv,
             tsb = 0.0,
             trainingHistoryDays = 60,
+            texts = CoreTextsDe,
         )
         assertTrue(readiness.available)
         assertTrue(readiness.usesHrv)
         assertEquals(
             DailyRecommendationKind.RUHETAG,
-            recommendToday(readiness = readiness, tsb = 0.0).kind,
+            recommendToday(readiness = readiness, tsb = 0.0, texts = CoreTextsDe).kind,
         )
     }
 
@@ -155,6 +159,7 @@ class HrvNoiseTest {
             assessHrv(
                 noisySeries(days = 70, dipDays = 7, dipFactor = factor, seed = 7),
                 today = today,
+                texts = CoreTextsDe,
             ).flag
 
         // −5 %: im Rauschen, keine Aussage.
@@ -174,14 +179,14 @@ class HrvNoiseTest {
     @Test
     fun `wenige getragene Naechte eskalieren zurueckhaltender`() {
         val full = noisySeries(days = 70, dipDays = 7, dipFactor = 0.78, seed = 3)
-        val dense = assessHrv(full, today = today)
+        val dense = assessHrv(full, today = today, texts = CoreTextsDe)
         assertEquals(RecoveryFlag.ORANGE, dense.flag)
         assertEquals(7, dense.recentDays)
 
         // Dieselbe Absenkung, aber die Uhr lag an vier von sieben Naechten auf
         // dem Nachttisch: dieselbe Effektstaerke, weniger Sicherheit.
         val sparse = full.filter { dayDifference(today, it.day) !in listOf(0, 2, 4, 6) }
-        val thin = assessHrv(sparse, today = today)
+        val thin = assessHrv(sparse, today = today, texts = CoreTextsDe)
         assertEquals(3, thin.recentDays)
         assertTrue(
             thin.zMean!! > dense.zMean!!,
@@ -199,10 +204,11 @@ class HrvNoiseTest {
 
     @Test
     fun `ein anhaltender Einbruch zieht seine Baseline nicht mehr mit`() {
-        val stable = assessHrv(noisySeries(days = 70, seed = 5), today = today)
+        val stable = assessHrv(noisySeries(days = 70, seed = 5), today = today, texts = CoreTextsDe)
         val dipped = assessHrv(
             noisySeries(days = 70, dipDays = 7, dipFactor = 0.6, seed = 5),
             today = today,
+            texts = CoreTextsDe,
         )
         // Exakt dieselben Baselinetage (nur das Rollfenster wurde abgesenkt) —
         // Baseline und Streuung duerfen sich deshalb kein Stueck bewegen.
@@ -216,7 +222,7 @@ class HrvNoiseTest {
         // 28 Tagen inklusive Rollfenster, sinkt sie mit und die Streuung
         // steigt — der z-Wert schrumpft auf einen Bruchteil.
         val series = noisySeries(days = 70, dipDays = 7, dipFactor = 0.6)
-        val correct = assessHrv(series, today = today)
+        val correct = assessHrv(series, today = today, texts = CoreTextsDe)
 
         val overlapping = series
             .filter { dayDifference(today, it.day) in 0..27 }

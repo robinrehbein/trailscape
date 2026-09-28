@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -57,8 +58,9 @@ class PlanFeasibilityTest {
             goalIn(11, 200.0),
             assessment(FitnessLevel.EINSTEIGER, 0.0),
             now = now,
+            texts = CoreTextsDe,
         )
-        val verdict = assessPlanFeasibility(plan)
+        val verdict = assessPlanFeasibility(plan, texts = CoreTextsDe)
 
         assertFalse(verdict.feasible)
         // Die laengste Trainingsfahrt bleibt weit unter der Zieldistanz.
@@ -83,21 +85,22 @@ class PlanFeasibilityTest {
     fun `der Gegenvorschlag ist selbst tragfaehig`() {
         val level = FitnessLevel.EINSTEIGER
         val start = assessment(level, 0.0)
-        val plan = generatePlan(goalIn(11, 200.0), start, now = now)
-        val verdict = assessPlanFeasibility(plan)
+        val plan = generatePlan(goalIn(11, 200.0), start, now = now, texts = CoreTextsDe)
+        val verdict = assessPlanFeasibility(plan, texts = CoreTextsDe)
 
         // Dieselbe Laufzeit, aber die vorgeschlagene Distanz: Der Plan traegt.
         val reduced = generatePlan(
             goalIn(11, verdict.suggestedDistanceKm!!.toDouble()),
             start,
             now = now,
+            texts = CoreTextsDe,
         )
-        assertTrue(assessPlanFeasibility(reduced).feasible)
+        assertTrue(assessPlanFeasibility(reduced, texts = CoreTextsDe).feasible)
 
         // Und mit der vorgeschlagenen Laufzeit traegt auch das urspruengliche Ziel.
-        val longer = generatePlan(goalIn(verdict.suggestedWeeks!! - 1, 200.0), start, now = now)
+        val longer = generatePlan(goalIn(verdict.suggestedWeeks!! - 1, 200.0), start, now = now, texts = CoreTextsDe)
         assertEquals(verdict.suggestedWeeks, longer.weeks.size)
-        assertTrue(assessPlanFeasibility(longer).feasible)
+        assertTrue(assessPlanFeasibility(longer, texts = CoreTextsDe).feasible)
     }
 
     @Test
@@ -106,8 +109,9 @@ class PlanFeasibilityTest {
             goalIn(23, 200.0),
             assessment(FitnessLevel.AMBITIONIERT, 150.0),
             now = now,
+            texts = CoreTextsDe,
         )
-        val verdict = assessPlanFeasibility(plan)
+        val verdict = assessPlanFeasibility(plan, texts = CoreTextsDe)
 
         assertTrue(verdict.feasible)
         assertNull(verdict.message)
@@ -127,18 +131,19 @@ class PlanFeasibilityTest {
                 goalIn(39, 120.0),
                 assessment(level, 60.0),
                 now = now,
+                texts = CoreTextsDe,
             )
-            val verdict = assessPlanFeasibility(plan)
+            val verdict = assessPlanFeasibility(plan, texts = CoreTextsDe)
             assertTrue(verdict.feasible, "$level: Abdeckung nur ${verdict.coverage}")
         }
     }
 
     @Test
     fun `unsinnige Zieldistanz erzeugt keine Warnung`() {
-        val plan = generatePlan(goalIn(11, 160.0), assessment(FitnessLevel.FORTGESCHRITTEN, 95.0), now)
+        val plan = generatePlan(goalIn(11, 160.0), assessment(FitnessLevel.FORTGESCHRITTEN, 95.0), now, texts = CoreTextsDe)
         val broken = plan.copy(goal = plan.goal.copy(distanceKm = 0.0))
 
-        val verdict = assessPlanFeasibility(broken)
+        val verdict = assessPlanFeasibility(broken, texts = CoreTextsDe)
         assertTrue(verdict.feasible)
         assertNull(verdict.message)
     }
@@ -154,6 +159,7 @@ class PlanFeasibilityTest {
             goalIn(2, 200.0),
             assessment(FitnessLevel.AMBITIONIERT, start),
             now = now,
+            texts = CoreTextsDe,
         )
 
         // Frueher: buildCount = 1 → progress = 1,0 → Woche 1 auf 260 km (+73 %).
@@ -174,6 +180,7 @@ class PlanFeasibilityTest {
                     goalIn(weeks - 1, 300.0),
                     assessment(level, 80.0),
                     now = now,
+                    texts = CoreTextsDe,
                 )
                 var lastBuild: Int? = null
                 for (week in plan.weeks.filter { it.kind == WeekKind.AUFBAU }) {
@@ -198,6 +205,7 @@ class PlanFeasibilityTest {
             goalIn(2, 200.0),
             assessment(FitnessLevel.AMBITIONIERT, 150.0),
             now = now,
+            texts = CoreTextsDe,
         )
         val peak = plan.weeks.filter { it.kind == WeekKind.AUFBAU }.maxOf { it.targetKm }
         val taper = plan.weeks.first { it.kind == WeekKind.TAPER }
@@ -216,16 +224,16 @@ class PlanFeasibilityTest {
     @Test
     fun `weeksForFeasibleGoal liefert die erste tragfaehige Laufzeit`() {
         val weeks = assertNotNull(
-            weeksForFeasibleGoal(goalIn(11, 120.0), FitnessLevel.FORTGESCHRITTEN, 70.0),
+            weeksForFeasibleGoal(goalIn(11, 120.0), FitnessLevel.FORTGESCHRITTEN, 70.0, texts = CoreTextsDe),
         )
         assertTrue(weeks in 3..52)
 
         // Eine Woche weniger traegt noch nicht, die gemeldete traegt.
         val start = assessment(FitnessLevel.FORTGESCHRITTEN, 70.0)
-        assertTrue(assessPlanFeasibility(generatePlan(goalIn(weeks - 1, 120.0), start, now)).feasible)
+        assertTrue(assessPlanFeasibility(generatePlan(goalIn(weeks - 1, 120.0), start, now, texts = CoreTextsDe), texts = CoreTextsDe).feasible)
         if (weeks > 3) {
             assertFalse(
-                assessPlanFeasibility(generatePlan(goalIn(weeks - 2, 120.0), start, now)).feasible,
+                assessPlanFeasibility(generatePlan(goalIn(weeks - 2, 120.0), start, now, texts = CoreTextsDe), texts = CoreTextsDe).feasible,
             )
         }
     }
@@ -235,8 +243,8 @@ class PlanFeasibilityTest {
         // 20 000 km (Tippfehler beim Eintragen, oder ein Etappenrennen) sind aus
         // 40 km Wochenvolumen auch in einem Jahr nicht aufzubauen — dann gibt es
         // keine Zahl, sondern einen Rat.
-        val plan = generatePlan(goalIn(11, 20_000.0), assessment(FitnessLevel.EINSTEIGER, 0.0), now)
-        val verdict = assessPlanFeasibility(plan)
+        val plan = generatePlan(goalIn(11, 20_000.0), assessment(FitnessLevel.EINSTEIGER, 0.0), now, texts = CoreTextsDe)
+        val verdict = assessPlanFeasibility(plan, texts = CoreTextsDe)
 
         assertFalse(verdict.feasible)
         assertNull(verdict.suggestedWeeks)

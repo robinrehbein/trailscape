@@ -28,21 +28,28 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.ANSAGE_ANNAHME_KMH
 import de.trailscape.core.ANSAGE_GLEICH_M
 import de.trailscape.core.TurnRichtung
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.turnAnsageText
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -130,18 +137,22 @@ internal fun NavigationHud(
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val restzeit = restzeitText(restzeitMin(remainingKm, tempoKmh))
+            val language = LocalAppLanguage.current
+            val formats = LocalAppFormats.current
+            val restDauer = restzeitDauer(restzeitMin(remainingKm, tempoKmh)).asString()
+            val spoken = stringResource(
+                R.string.map_nav_remaining_cd,
+                formats.km(remainingKm),
+                label,
+                restDauer,
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clearAndSetSemantics {
-                        contentDescription = "Noch ${formatKmDe(remainingKm)} Kilometer " +
-                            "auf $label, geschätzte Restzeit " +
-                            restzeit.removePrefix("ca. ")
-                    },
+                    .clearAndSetSemantics { contentDescription = spoken },
             ) {
                 Text(
-                    text = "${formatKmDe(remainingKm)} km · $restzeit",
+                    text = navRestZeile(remainingKm, tempoKmh, language).asString(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium,
@@ -152,7 +163,7 @@ internal fun NavigationHud(
                     text = if (doneKm == null) {
                         label
                     } else {
-                        "$label · ${formatKmDe(doneKm)} km geschafft"
+                        stringResource(R.string.map_nav_done_line, label, formats.km(doneKm))
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -168,9 +179,9 @@ internal fun NavigationHud(
                         Icons.AutoMirrored.Filled.VolumeOff
                     },
                     contentDescription = if (sprachansagenAn) {
-                        "Sprachansagen ausschalten"
+                        stringResource(R.string.map_nav_voice_off_cd)
                     } else {
-                        "Sprachansagen einschalten"
+                        stringResource(R.string.map_nav_voice_on_cd)
                     },
                     tint = if (sprachansagenAn) {
                         MaterialTheme.colorScheme.primary
@@ -186,7 +197,7 @@ internal fun NavigationHud(
             IconButton(onClick = onStop) {
                 Icon(
                     imageVector = Icons.Filled.Close,
-                    contentDescription = "Navigation beenden, ohne Route weiterfahren",
+                    contentDescription = stringResource(R.string.map_nav_stop_cd),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -201,9 +212,9 @@ internal fun NavigationHud(
 @Composable
 private fun TurnRow(richtung: TurnRichtung?, abstandM: Double?) {
     val spoken = if (richtung != null && abstandM != null) {
-        "Nächste Kurve: ${turnAnsageText(richtung, abstandM)}"
+        stringResource(R.string.map_nav_next_turn_cd, turnAnsageText(richtung, abstandM, LocalCoreTexts.current))
     } else {
-        "Keine Kurve in Sicht, dem Routenverlauf folgen."
+        stringResource(R.string.map_nav_no_turn_cd)
     }
     Surface(
         modifier = Modifier
@@ -225,9 +236,9 @@ private fun TurnRow(richtung: TurnRichtung?, abstandM: Double?) {
             Column {
                 Text(
                     text = if (richtung != null && abstandM != null) {
-                        kurveAbstandKurzText(abstandM)
+                        kurveAbstandKurzText(abstandM).asString()
                     } else {
-                        "Geradeaus"
+                        stringResource(R.string.map_nav_straight_label)
                     },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -235,7 +246,11 @@ private fun TurnRow(richtung: TurnRichtung?, abstandM: Double?) {
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = if (richtung != null) kurveAnzeigeWort(richtung) else "dem Weg folgen",
+                    text = if (richtung != null) {
+                        kurveAnzeigeWort(richtung).asString()
+                    } else {
+                        stringResource(R.string.map_nav_follow_label)
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.titleMedium,
@@ -258,7 +273,7 @@ private fun OffRouteBanner() {
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Text(
-            text = "Abseits der Route",
+            text = stringResource(R.string.map_nav_off_route_title),
             modifier = Modifier.padding(horizontal = CardPadding, vertical = 20.dp),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
@@ -300,9 +315,9 @@ internal fun NavKompassKnopf(
             Icon(
                 imageVector = Icons.Filled.Explore,
                 contentDescription = if (courseUp) {
-                    "Fahrtrichtung oben, geneigt – auf Norden oben umschalten"
+                    stringResource(R.string.map_nav_course_up_cd)
                 } else {
-                    "Norden oben – auf Fahrtrichtung oben umschalten"
+                    stringResource(R.string.map_nav_north_up_cd)
                 },
                 modifier = Modifier.size(24.dp),
             )
@@ -338,7 +353,7 @@ internal fun RezentrierenChip(onClick: () -> Unit, modifier: Modifier = Modifier
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = "Re-zentrieren",
+                text = stringResource(R.string.map_nav_recenter_action),
                 style = MaterialTheme.typography.titleSmall,
             )
         }
@@ -374,19 +389,21 @@ internal const val NAECHSTE_KURVE_SICHT_M = 1000.0
  * [ANSAGE_GLEICH_M]) wie die Sprachansage `turnAnsageText` in `:core`;
  * Anzeige und Ansage duerfen sich nicht widersprechen.
  */
-internal fun kurveAbstandKurzText(abstandM: Double): String {
-    if (abstandM < ANSAGE_GLEICH_M) return "Gleich"
+internal fun kurveAbstandKurzText(abstandM: Double): UiText {
+    if (abstandM < ANSAGE_GLEICH_M) return UiText.Res(R.string.map_nav_turn_now_label)
     val gerundet = ((abstandM / 50.0).roundToInt() * 50).coerceAtLeast(50)
-    return "In $gerundet m"
+    return UiText.Res(R.string.map_nav_turn_in_label, listOf(gerundet))
 }
 
 /** Anzeigeform des Richtungswortes — Satzanfang gross, sonst wie die Ansage. */
-internal fun kurveAnzeigeWort(richtung: TurnRichtung): String = when (richtung) {
-    TurnRichtung.LINKS -> "Links"
-    TurnRichtung.RECHTS -> "Rechts"
-    TurnRichtung.KEHRE_LINKS -> "Scharf links"
-    TurnRichtung.KEHRE_RECHTS -> "Scharf rechts"
-}
+internal fun kurveAnzeigeWort(richtung: TurnRichtung): UiText = UiText.Res(
+    when (richtung) {
+        TurnRichtung.LINKS -> R.string.map_nav_turn_left_label
+        TurnRichtung.RECHTS -> R.string.map_nav_turn_right_label
+        TurnRichtung.KEHRE_LINKS -> R.string.map_nav_turn_sharp_left_label
+        TurnRichtung.KEHRE_RECHTS -> R.string.map_nav_turn_sharp_right_label
+    },
+)
 
 /**
  * Tempo unterhalb dieser Schwelle (km/h) zaehlt fuer die Restzeit als
@@ -420,14 +437,28 @@ internal fun restzeitMin(remainingKm: Double, tempoKmh: Double?): Int {
     return ceil(remainingKm / kmh * 60.0).toInt().coerceAtLeast(0)
 }
 
-/** Minuten als Anzeigetext: „ca. 50 min", ab einer Stunde „ca. 1 h 10 min". */
-internal fun restzeitText(minuten: Int): String {
-    if (minuten < 60) return "ca. $minuten min"
+/**
+ * Minuten als Dauer ohne „ca.": „50 min", ab einer Stunde „1 h 10 min" —
+ * so liest TalkBack die Restzeit vor („geschätzte Restzeit 50 min").
+ */
+internal fun restzeitDauer(minuten: Int): UiText {
+    if (minuten < 60) return UiText.Res(R.string.map_nav_duration_minutes, listOf(minuten))
     val h = minuten / 60
     val min = minuten % 60
-    return if (min == 0) "ca. $h h" else "ca. $h h $min min"
+    return if (min == 0) {
+        UiText.Res(R.string.map_nav_duration_hours, listOf(h))
+    } else {
+        UiText.Res(R.string.map_nav_duration_hours_minutes, listOf(h, min))
+    }
 }
 
-/** Die Restzeile des HUD: „12,4 km · ca. 50 min". */
-internal fun navRestZeile(remainingKm: Double, tempoKmh: Double?): String =
-    "${formatKmDe(remainingKm)} km · ${restzeitText(restzeitMin(remainingKm, tempoKmh))}"
+/** Minuten als Anzeigetext: „ca. 50 min", ab einer Stunde „ca. 1 h 10 min". */
+internal fun restzeitText(minuten: Int): UiText =
+    UiText.Res(R.string.map_nav_eta_approx, listOf(restzeitDauer(minuten)))
+
+/** Die Restzeile des HUD: „12,4 km · ca. 50 min" bzw. „12.4 km · approx. 50 min". */
+internal fun navRestZeile(remainingKm: Double, tempoKmh: Double?, language: AppLanguage): UiText =
+    UiText.Res(
+        R.string.map_nav_remaining_line,
+        listOf(formatDistanceKm(remainingKm, language), restzeitText(restzeitMin(remainingKm, tempoKmh))),
+    )

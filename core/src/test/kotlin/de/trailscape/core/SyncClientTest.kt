@@ -1,13 +1,14 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Tests fuer die Portierung von `lib/sync_client.dart`.
@@ -130,6 +131,7 @@ class SyncClientTest {
             saveLocal = { saved.add(it) },
             client = client,
             store = store,
+            texts = CoreTextsDe,
         )
 
         // Volltouren werden nur fuer den Push nachgeladen — nie der ganze
@@ -163,6 +165,7 @@ class SyncClientTest {
                 saveLocal = {},
                 client = client,
                 store = store,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("Token wird vom Server abgelehnt.", e.message)
@@ -185,6 +188,7 @@ class SyncClientTest {
                 saveLocal = {},
                 client = client,
                 store = store,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("Sync-Server nicht erreichbar.", e.message)
@@ -201,6 +205,7 @@ class SyncClientTest {
                 saveLocal = {},
                 client = failingClient(),
                 store = store,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("Sync ist nicht konfiguriert.", e.message)
@@ -505,6 +510,7 @@ class SyncClientTest {
             deleteLocal = { deletedLocal.add(it) },
             listTombstones = { tombstones },
             replaceTombstones = { tombstonesAfter = it },
+            texts = CoreTextsDe,
         )
 
         // Push: nur die lokal neuere Tour, mit updatedAt im Body.
@@ -565,6 +571,7 @@ class SyncClientTest {
             client = client,
             store = store,
             listTombstones = { listOf(RideTombstone("a", deletedAt = 100)) },
+            texts = CoreTextsDe,
         )
 
         assertEquals(1, result.deletedRemote)

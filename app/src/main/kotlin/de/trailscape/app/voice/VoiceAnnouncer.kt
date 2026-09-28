@@ -6,7 +6,11 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.record.sprachansagenAktiviert
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.SpeechTexts
+import de.trailscape.core.i18n.coreTexts
 import java.util.Locale
 
 /**
@@ -20,7 +24,14 @@ import java.util.Locale
  * **Alles lokal**: Gesprochen wird ueber die auf dem Geraet installierte
  * TTS-Engine. Trailscape schickt dafuer nichts ins Netz; ob die
  * Engine des Herstellers ihrerseits offline spricht, entscheidet deren
- * Konfiguration — die ueblichen Engines haben deutsche Offline-Stimmen.
+ * Konfiguration — die ueblichen Engines haben deutsche und englische
+ * Offline-Stimmen.
+ *
+ * **In der App-Sprache**: Der Aufrufer reicht keinen fertigen Satz, sondern
+ * eine Funktion auf [SpeechTexts] herein ([sagAn]). Der Announcer bestimmt
+ * die Sprache ([AppLocale.current]), baut daraus den Satz und stellt die
+ * Engine auf dieselbe Sprache ein (Kandidaten siehe [ttsLocaleCandidates]).
+ * Wechselt die Sprache zwischen zwei Ansagen, wird die Engine umgestellt.
  *
  * ## Verhalten
  *  * **Default AUS**: [sagAn] prueft den Hauptschalter „Sprachansagen"
@@ -35,9 +46,11 @@ import java.util.Locale
  *  * **Warteschlange statt Abschneiden** ([TextToSpeech.QUEUE_ADD]): Faellt
  *    ein Abbiegehinweis mit einem Kilometer-Meilenstein zusammen, werden
  *    beide nacheinander gesprochen, keiner verschluckt.
- *  * **Graceful ohne Engine**: Meldet die Initialisierung einen Fehler oder
- *    fehlt die deutsche Sprache, verstummen alle Ansagen still ([gescheitert])
- *    — kein Absturz, keine Fehlermeldungsflut waehrend der Fahrt. Die
+ *  * **Graceful ohne Engine**: Meldet die Initialisierung einen Fehler,
+ *    verstummen alle Ansagen still ([gescheitert]); fehlt nur die Stimme
+ *    einer Sprache, verstummen die Ansagen in dieser Sprache
+ *    ([fehlendeSprachen]) — kein Absturz, keine Fehlermeldungsflut waehrend
+ *    der Fahrt. Die
  *    Vibrationswarnung (siehe `Vibration.kt`) haengt bewusst NICHT an
  *    dieser Klasse und funktioniert dann weiterhin.
  *
@@ -56,18 +69,32 @@ object VoiceAnnouncer {
 
     private var tts: TextToSpeech? = null
 
-    /** Engine initialisiert und Deutsch verfuegbar — es darf gesprochen werden. */
+    /** Engine initialisiert — es darf gesprochen werden. */
     private var bereit = false
 
     /**
-     * Engine fehlt oder kann kein Deutsch — alle Ansagen verfallen still.
-     * Wird nur von [shutdown] zurueckgesetzt (naechster Versuch z. B. nach
-     * Installation einer Engine erst im naechsten Prozess bzw. nach Reset).
+     * Engine fehlt oder laesst sich nicht initialisieren — alle Ansagen
+     * verfallen still. Wird nur von [shutdown] zurueckgesetzt (naechster
+     * Versuch z. B. nach Installation einer Engine erst im naechsten Prozess
+     * bzw. nach Reset).
      */
     private var gescheitert = false
 
+    /**
+     * Sprachen, fuer die die Engine keine Stimme hat
+     * (`LANG_MISSING_DATA`/`LANG_NOT_SUPPORTED`) — Ansagen in diesen
+     * Sprachen verfallen still, die anderen laufen weiter.
+     */
+    private val fehlendeSprachen = mutableSetOf<AppLanguage>()
+
+    /** Die Sprache, auf die die Engine zuletzt eingestellt wurde. */
+    private var engineSprache: AppLanguage? = null
+
+    /** Ein Text samt der Sprache, in der er gebaut wurde. */
+    private data class Ansage(val text: String, val sprache: AppLanguage)
+
     /** Vor Abschluss der Engine-Initialisierung angefallene Texte. */
-    private val wartend = ArrayDeque<String>()
+    private val wartend = ArrayDeque<Ansage>()
 
     /** Zahl der an die Engine uebergebenen, noch nicht fertig gesprochenen Texte. */
     private var offen = 0
@@ -95,17 +122,21 @@ object VoiceAnnouncer {
     }
 
     /**
-     * Spricht [text], sofern der Hauptschalter „Sprachansagen" an ist und die
-     * Engine verfuegbar ist. Ansonsten folgenlos — die Aufrufer brauchen
-     * keinen eigenen Guard um den Hauptschalter.
+     * Spricht den von [text] gebauten Satz in der App-Sprache, sofern der
+     * Hauptschalter „Sprachansagen" an ist und die Engine verfuegbar ist.
+     * Ansonsten folgenlos — die Aufrufer brauchen keinen eigenen Guard um den
+     * Hauptschalter.
+     *
+     * Beispiel: `VoiceAnnouncer.sagAn(context) { it.recordingStarted() }`.
      */
-    fun sagAn(context: Context, text: String) {
+    fun sagAn(context: Context, text: (SpeechTexts) -> String) {
         if (!sprachansagenAktiviert(context)) return
-        sprichRoh(context, text)
+        val sprache = AppLocale.current(context)
+        sprichRoh(context, Ansage(text(coreTexts(sprache).speech), sprache))
     }
 
     /** Innerer Weg ohne den Hauptschalter-Guard von [sagAn]. */
-    private fun sprichRoh(context: Context, text: String) {
+    private fun sprichRoh(context: Context, text: Ansage) {
         val appContext = context.applicationContext
         synchronized(lock) {
             if (gescheitert) return
@@ -149,15 +180,6 @@ object VoiceAnnouncer {
                 verwerfeEngine()
                 return
             }
-            val sprache = try {
-                engine.setLanguage(Locale.GERMAN)
-            } catch (e: Exception) {
-                TextToSpeech.LANG_NOT_SUPPORTED
-            }
-            if (sprache == TextToSpeech.LANG_MISSING_DATA || sprache == TextToSpeech.LANG_NOT_SUPPORTED) {
-                verwerfeEngine()
-                return
-            }
             try {
                 engine.setAudioAttributes(audioAttributes)
             } catch (e: Exception) {
@@ -171,6 +193,39 @@ object VoiceAnnouncer {
         }
     }
 
+    /**
+     * Stellt die Engine auf [sprache] ein, falls noetig. `false`, wenn es
+     * dafuer keine Stimme gibt (dann verfaellt die Ansage). Nur unter [lock].
+     */
+    private fun stelleSpracheEin(engine: TextToSpeech, sprache: AppLanguage): Boolean {
+        if (sprache in fehlendeSprachen) return false
+        if (engineSprache == sprache) return true
+        val locale = ttsLocaleCandidates(sprache).firstOrNull { candidate ->
+            val verfuegbar = try {
+                engine.isLanguageAvailable(candidate)
+            } catch (e: Exception) {
+                TextToSpeech.LANG_NOT_SUPPORTED
+            }
+            verfuegbar >= TextToSpeech.LANG_AVAILABLE
+        }
+        val ergebnis = if (locale == null) {
+            TextToSpeech.LANG_NOT_SUPPORTED
+        } else {
+            try {
+                engine.setLanguage(locale)
+            } catch (e: Exception) {
+                TextToSpeech.LANG_NOT_SUPPORTED
+            }
+        }
+        if (ergebnis == TextToSpeech.LANG_MISSING_DATA || ergebnis == TextToSpeech.LANG_NOT_SUPPORTED) {
+            fehlendeSprachen += sprache
+            engineSprache = null
+            return false
+        }
+        engineSprache = sprache
+        return true
+    }
+
     /** Gibt eine Engine auf, die nicht benutzbar ist. Nur unter [lock] rufen. */
     private fun verwerfeEngine() {
         gescheitert = true
@@ -182,14 +237,16 @@ object VoiceAnnouncer {
         }
         tts = null
         bereit = false
+        engineSprache = null
     }
 
     /** Uebergibt einen Text an die Engine. Nur unter [lock] rufen. */
-    private fun sprichJetzt(engine: TextToSpeech, text: String) {
+    private fun sprichJetzt(engine: TextToSpeech, ansage: Ansage) {
+        if (!stelleSpracheEin(engine, ansage.sprache)) return
         if (offen == 0) holeAudioFokus()
         offen++
         val ergebnis = try {
-            engine.speak(text, TextToSpeech.QUEUE_ADD, null, "trailscape-${laufendeId++}")
+            engine.speak(ansage.text, TextToSpeech.QUEUE_ADD, null, "trailscape-${laufendeId++}")
         } catch (e: Exception) {
             TextToSpeech.ERROR
         }
@@ -251,9 +308,23 @@ object VoiceAnnouncer {
             tts = null
             bereit = false
             gescheitert = false
+            fehlendeSprachen.clear()
+            engineSprache = null
             wartend.clear()
             offen = 0
             gibAudioFokusFrei()
         }
     }
+}
+
+/**
+ * Die Stimmen, die fuer eine Sprache in Frage kommen, in Vorzugsreihenfolge.
+ * Der Announcer nimmt die erste, die die Engine kennt.
+ *
+ * Englisch zuerst britisch — die Saetze sind britisch geschrieben
+ * („metres") —, dann amerikanisch, dann irgendein Englisch.
+ */
+internal fun ttsLocaleCandidates(language: AppLanguage): List<Locale> = when (language) {
+    AppLanguage.DE -> listOf(Locale.GERMANY, Locale.GERMAN)
+    AppLanguage.EN -> listOf(Locale.UK, Locale.US, Locale.ENGLISH)
 }

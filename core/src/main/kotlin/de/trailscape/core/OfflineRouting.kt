@@ -4,6 +4,7 @@ import btools.router.FormatJson
 import btools.router.OsmNodeNamed
 import btools.router.RoutingContext
 import btools.router.RoutingEngine
+import de.trailscape.core.i18n.CoreTexts
 import java.io.File
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -90,32 +91,11 @@ class OfflineRoutingException(
     cause: Throwable? = null,
 ) : Exception(message, cause)
 
-/** Meldung, wenn das Profil (`*.brf`) nicht am erwarteten Ort liegt. */
-const val errorOfflineProfileMissing: String =
-    "Das Routing-Profil fehlt. Starte die App neu, damit sie es neu anlegt."
-
-/** Meldung, wenn `lookups.dat` neben dem Profil fehlt. */
-const val errorOfflineLookupsMissing: String =
-    "Die Routing-Merkmalstabelle (lookups.dat) fehlt neben dem Profil. " +
-        "Starte die App neu, damit sie sie neu anlegt."
-
-/**
- * Meldung, wenn ueberhaupt kein Kartenverzeichnis da ist — der Zustand vor
- * dem allerersten Download.
+/*
+ * Die Meldungen der Geraete-Engine stehen in `RoutingTexts` (core/i18n) —
+ * `offlineProfileMissing`, `offlineLookupsMissing`, `offlineNoSegments`,
+ * `offlineNoTrack`, `offlineTimeout`.
  */
-const val errorOfflineNoSegments: String =
-    "Es sind noch keine Offline-Karten gespeichert. Lade zuerst die Karte für " +
-        "deine Gegend herunter."
-
-/** Meldung, wenn die Engine ueberhaupt keine Verbindung zwischen den Punkten findet. */
-const val errorOfflineNoTrack: String =
-    "Zwischen diesen Punkten wurde keine Route gefunden. Setz sie näher an " +
-        "einen befahrbaren Weg."
-
-/** Meldung, wenn die lokale Berechnung ihr Zeitlimit reisst. */
-const val errorOfflineTimeout: String =
-    "Die Berechnung hat zu lange gedauert. Versuch es mit näheren Wegpunkten " +
-        "noch einmal."
 
 /** Hoechstlaenge des in die Meldung uebernommenen Engine-Texts. */
 private const val MAX_ENGINE_TEXT_CHARS = 200
@@ -191,22 +171,20 @@ internal fun missingSegmentFileOf(engineMessage: String): String? =
         ?.get(1)
 
 /**
- * Uebersetzt eine rohe Engine-Meldung in eine deutsche Meldung — dasselbe
+ * Uebersetzt eine rohe Engine-Meldung in eine Meldung in der Sprache von
+ * [texts] — dasselbe
  * Muster wie [routingErrorMessage] fuer die Serverantworten: bekannte Faelle
  * bekommen einen verstaendlichen Satz, alles Unbekannte eine generische
  * Meldung, die den Originaltext **in Klammern** mitfuehrt, damit Bugreports
  * diagnostizierbar bleiben.
  */
-internal fun offlineRoutingErrorMessage(engineMessage: String): OfflineRoutingException {
+internal fun offlineRoutingErrorMessage(engineMessage: String, texts: CoreTexts): OfflineRoutingException {
+    val t = texts.routing
     val text = engineMessage.trim().replace(Regex("\\s+"), " ")
 
     val missing = missingSegmentFileOf(text)
     if (missing != null) {
-        return OfflineRoutingException(
-            "Für diesen Bereich fehlen die Offline-Kartendaten (Kachel $missing). " +
-                "Lade sie herunter, um hier ohne Netz zu routen.",
-            missingSegmentFile = missing,
-        )
+        return OfflineRoutingException(t.offlineMissingTile(missing), missingSegmentFile = missing)
     }
 
     val lower = text.lowercase()
@@ -216,7 +194,7 @@ internal fun offlineRoutingErrorMessage(engineMessage: String): OfflineRoutingEx
     // die noetige Kachel; dieser Zweig greift nur, wenn das Verzeichnis
     // *waehrend* eines Laufs verschwindet.
     if (lower.contains("segment directory") && lower.contains("does not exist")) {
-        return OfflineRoutingException(errorOfflineNoSegments)
+        return OfflineRoutingException(t.offlineNoSegments())
     }
     // "…-position not mapped in existing datafile" heisst: die Kachel ist da,
     // aber am Wegpunkt liegt nichts Befahrbares in Reichweite.
@@ -224,23 +202,21 @@ internal fun offlineRoutingErrorMessage(engineMessage: String): OfflineRoutingEx
         lower.contains("no track found") ||
         lower.contains("island detected")
     ) {
-        return OfflineRoutingException(errorOfflineNoTrack)
+        return OfflineRoutingException(t.offlineNoTrack())
     }
     if (lower.contains("timeout after")) {
-        return OfflineRoutingException(errorOfflineTimeout)
+        return OfflineRoutingException(t.offlineTimeout())
     }
 
     if (text.isEmpty()) {
-        return OfflineRoutingException(errorRouteFailed)
+        return OfflineRoutingException(t.routeFailed())
     }
     val shortened = if (text.length > MAX_ENGINE_TEXT_CHARS) {
         text.take(MAX_ENGINE_TEXT_CHARS) + "…"
     } else {
         text
     }
-    return OfflineRoutingException(
-        "Route konnte nicht berechnet werden. (Meldung der Routing-Engine: $shortened)",
-    )
+    return OfflineRoutingException(t.routeFailedWithEngineText(shortened))
 }
 
 // ---------------------------------------------------------------------------
@@ -300,16 +276,17 @@ internal var offlineRoutingRunCount: Int = 0
  *   Der Aufruf laeuft **synchron im aufrufenden Thread**, gehoert auf Android
  *   also auf einen Hintergrund-Dispatcher.
  *
- * @throws OfflineRoutingException mit fertiger deutscher Meldung.
+ * @throws OfflineRoutingException mit fertiger Meldung in der Sprache von [texts].
  */
 fun routeOffline(
     waypoints: List<Waypoint>,
     segmentDir: File,
     profileFile: File,
     maxRunningTimeMs: Long = 0,
+    texts: CoreTexts,
 ): PlannedRoute {
     if (waypoints.size < 2) {
-        throw OfflineRoutingException("Mindestens zwei Wegpunkte nötig.")
+        throw OfflineRoutingException(texts.routing.needTwoWaypoints())
     }
 
     // Vorab pruefen statt die Engine hineinlaufen zu lassen: Bei fehlendem
@@ -318,11 +295,11 @@ fun routeOffline(
     // ungeprueft `new File(rc.localFunction).getParentFile()` aufruft. Ein
     // eigener, klarer Fehler ist da in jedem Fall besser als ein Stacktrace.
     if (!profileFile.isFile) {
-        throw OfflineRoutingException(errorOfflineProfileMissing)
+        throw OfflineRoutingException(texts.routing.offlineProfileMissing())
     }
     val lookups = File(profileFile.parentFile ?: File("."), "lookups.dat")
     if (!lookups.isFile) {
-        throw OfflineRoutingException(errorOfflineLookupsMissing)
+        throw OfflineRoutingException(texts.routing.offlineLookupsMissing())
     }
 
     // Fehlt das Kartenverzeichnis komplett, wirft die Engine
@@ -333,7 +310,7 @@ fun routeOffline(
     // machen kann.
     if (!segmentDir.isDirectory) {
         throw OfflineRoutingException(
-            errorOfflineNoSegments,
+            texts.routing.offlineNoSegments(),
             missingSegmentFile = segmentFileName(waypoints[0].lat, waypoints[0].lon),
         )
     }
@@ -350,7 +327,7 @@ fun routeOffline(
 
     val geoJson = withRoutingEngineLock {
         try {
-            runEngine(nodes, segmentDir, profileFile, maxRunningTimeMs)
+            runEngine(nodes, segmentDir, profileFile, maxRunningTimeMs, texts)
         } finally {
             offlineRoutingRunCount++
         }
@@ -361,7 +338,7 @@ fun routeOffline(
     // Struktur, gleiche Eigenheiten (`track-length`/`filtered ascend` als
     // Zeichenketten, Hoehe als drittes Element der Koordinate). Ein zweiter
     // Parser waere eine zweite Wahrheit, die auseinanderlaufen kann.
-    return parseBrouterGeoJson(geoJson)
+    return parseBrouterGeoJson(geoJson, texts)
 }
 
 /** Der Engine-Aufruf selbst. Laeuft immer unter [routingEngineLock]. */
@@ -370,6 +347,7 @@ private fun runEngine(
     segmentDir: File,
     profileFile: File,
     maxRunningTimeMs: Long,
+    texts: CoreTexts,
 ): String {
     val rc = RoutingContext()
     // Pflichtfeld: ein Dateipfad, kein Profilname. Siehe Konstruktor-Hinweis
@@ -389,7 +367,7 @@ private fun runEngine(
     } catch (e: Exception) {
         // Der Konstruktor liest bereits das Profil (`ProfileCache.parseProfile`)
         // und wirft bei kaputtem oder unlesbarem Profil.
-        throw offlineRoutingErrorMessage(e.message ?: e.toString())
+        throw offlineRoutingErrorMessage(e.message ?: e.toString(), texts)
     }
     // Sonst schreibt die Engine ihren Fortschritt auf System.out — auf Android
     // ist das nur Rauschen im Logcat.
@@ -401,12 +379,12 @@ private fun runEngine(
         // `doRun` faengt intern eigentlich alles ab und legt es in
         // `getErrorMessage()`; dieser Zweig ist die Sicherung fuer alles, was
         // dort durchrutscht (z. B. Fehler ausserhalb des inneren try).
-        throw offlineRoutingErrorMessage(e.message ?: e.toString())
+        throw offlineRoutingErrorMessage(e.message ?: e.toString(), texts)
     }
 
-    engine.errorMessage?.let { throw offlineRoutingErrorMessage(it) }
+    engine.errorMessage?.let { throw offlineRoutingErrorMessage(it, texts) }
 
-    val track = engine.foundTrack ?: throw OfflineRoutingException(errorOfflineNoTrack)
+    val track = engine.foundTrack ?: throw OfflineRoutingException(texts.routing.offlineNoTrack())
     return FormatJson(rc).format(track)
 }
 

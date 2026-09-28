@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+
 /**
  * Erkennung und Sammelimport einzelner Aktivitaetsdateien (GPX oder FIT, je
  * auch `.gz`) — der Kern hinter „Teilen an Trailscape", „Oeffnen mit
@@ -41,12 +43,11 @@ class ActivityFileInput(
     val readError: String? = null,
 ) {
     /** Bezeichnung fuer Meldungen und [BulkImportResult]: Name oder Platzhalter. */
-    val label: String get() = displayName?.takeIf { it.isNotBlank() } ?: "Datei ohne Namen"
+    fun label(texts: CoreTexts): String = displayName?.takeIf { it.isNotBlank() } ?: texts.files.unnamedFile()
 }
 
 /** Meldung fuer Dateien, die weder GPX noch FIT sind. */
-const val NOT_AN_ACTIVITY_FILE_MESSAGE: String =
-    "Die Datei ist weder eine GPX- noch eine FIT-Datei."
+fun notAnActivityFileMessage(texts: CoreTexts): String = texts.files.notAnActivityFile()
 
 /** MIME-Typen, die eine Datei bereits als GPX bzw. FIT ausweisen. */
 private val GPX_MIME_TYPES = setOf("application/gpx+xml", "application/x-gpx+xml", "application/gpx")
@@ -140,15 +141,13 @@ fun activityKindFromName(name: String?): ActivityFileKind? {
  *     ausweist — `application/octet-stream` allein reicht dann nicht.
  *  4. Ganz ohne Endung (Mailanhang ohne Namen) entscheidet der Inhalt.
  */
-fun classifyActivityFile(input: ActivityFileInput): ActivityFileKind {
+fun classifyActivityFile(input: ActivityFileInput, texts: CoreTexts): ActivityFileKind {
     val content = sniffActivityFileKind(input.bytes)
-        ?: throw FormatException(NOT_AN_ACTIVITY_FILE_MESSAGE)
+        ?: throw FormatException(texts.files.notAnActivityFile())
     val byName = activityKindFromName(input.displayName)
     if (byName != null) {
         if (byName != content) {
-            throw FormatException(
-                "Die Dateiendung passt nicht zum Inhalt — die Datei ist beschädigt oder umbenannt.",
-            )
+            throw FormatException(texts.files.extensionMismatch())
         }
         return content
     }
@@ -159,7 +158,7 @@ fun classifyActivityFile(input: ActivityFileInput): ActivityFileKind {
             in FIT_MIME_TYPES -> ActivityFileKind.FIT
             else -> null
         }
-        if (byMime != content) throw FormatException(NOT_AN_ACTIVITY_FILE_MESSAGE)
+        if (byMime != content) throw FormatException(texts.files.notAnActivityFile())
     }
     return content
 }
@@ -175,20 +174,20 @@ private fun hasForeignExtension(name: String?): Boolean {
  * Baut aus einer einzelnen Datei eine Tour (GPX ueber [rideFromGpx], FIT ueber
  * [rideFromFit]). Der Dateiname ohne Endung dient als Fallback-Name.
  */
-fun rideFromActivityFile(input: ActivityFileInput, id: String? = null): Ride {
+fun rideFromActivityFile(input: ActivityFileInput, id: String? = null, texts: CoreTexts): Ride {
     input.readError?.let { throw FormatException(it) }
-    val kind = classifyActivityFile(input)
+    val kind = classifyActivityFile(input, texts)
     val fallbackName = input.displayName
         ?.let { archiveBaseName(it) }
         ?.takeIf { it.isNotBlank() }
-        ?: "Importierte Tour"
+        ?: texts.files.importedRideFallbackName()
     // Genau einmal (begrenzt, siehe [MAX_GUNZIPPED_BYTES]) entpacken und das
     // Ergebnis weiterreichen — `parseFit` findet dann nichts Gepacktes mehr
     // vor und entpackt nicht ein zweites Mal.
-    val data = gunzipIfNeeded(input.bytes)
+    val data = gunzipIfNeeded(input.bytes, texts = texts)
     return when (kind) {
-        ActivityFileKind.GPX -> rideFromGpx(decodeXmlText(data), fallbackName, id)
-        ActivityFileKind.FIT -> rideFromFit(data, fallbackName, id)
+        ActivityFileKind.GPX -> rideFromGpx(decodeXmlText(data), fallbackName, id, texts)
+        ActivityFileKind.FIT -> rideFromFit(data, fallbackName, id, texts)
     }
 }
 
@@ -205,6 +204,7 @@ fun rideFromActivityFile(input: ActivityFileInput, id: String? = null): Ride {
 fun importActivityFiles(
     files: List<ActivityFileInput>,
     existing: List<RideInfo> = emptyList(),
+    texts: CoreTexts,
 ): BulkImportResult {
     val rides = mutableListOf<Ride>()
     val duplicates = mutableListOf<String>()
@@ -215,24 +215,24 @@ fun importActivityFiles(
     val idBase = System.currentTimeMillis()
     files.forEachIndexed { index, file ->
         try {
-            val ride = rideFromActivityFile(file, id = (idBase + index).toString())
+            val ride = rideFromActivityFile(file, id = (idBase + index).toString(), texts = texts)
             if (findDuplicateRide(seen, ride) != null) {
-                duplicates.add(file.label)
+                duplicates.add(file.label(texts))
             } else {
                 rides.add(ride)
                 seen.add(ride)
             }
         } catch (e: FormatException) {
-            errors.add(BulkImportError(file.label, e.message ?: "Die Datei konnte nicht gelesen werden."))
+            errors.add(BulkImportError(file.label(texts), e.message ?: texts.files.fileUnreadable()))
         } catch (e: Exception) {
-            errors.add(BulkImportError(file.label, "Die Datei konnte nicht gelesen werden."))
+            errors.add(BulkImportError(file.label(texts), texts.files.fileUnreadable()))
         } catch (e: OutOfMemoryError) {
             // Letzte Linie hinter den Groessengrenzen: Eine grosse GPX waechst
             // als String (UTF-16) plus DOM auf ein Vielfaches der Datei. Auf
             // einem knappen Heap soll daran nur diese eine Datei scheitern,
             // nicht der ganze Prozess — der Speicher des DOM ist mit dem
             // Verlassen von `rideFromActivityFile` wieder frei.
-            errors.add(BulkImportError(file.label, FILE_TOO_LARGE_MESSAGE))
+            errors.add(BulkImportError(file.label(texts), texts.files.fileTooLarge()))
         }
     }
     return BulkImportResult(rides = rides, duplicates = duplicates, errors = errors)
@@ -252,25 +252,24 @@ fun importActivityFiles(
  * in den Monaten des Verlaufs, dabei stehen sie oben unter den Planungen.
  * Deshalb „10 als Planung importiert" bzw. „7 importiert (3 als Planung)".
  */
-fun bulkImportMessage(result: BulkImportResult): String {
+fun bulkImportMessage(result: BulkImportResult, texts: CoreTexts): String {
+    val t = texts.files
     if (result.totalCount == 1) {
-        result.rides.firstOrNull()?.let { ride ->
-            return if (ride.planned) "„${ride.name}“ als Planung importiert" else "„${ride.name}“ importiert"
-        }
-        if (result.duplicateCount == 1) return DUPLICATE_RIDE_MESSAGE
+        result.rides.firstOrNull()?.let { ride -> return t.importedOne(ride.name, ride.planned) }
+        if (result.duplicateCount == 1) return t.duplicateRide()
         result.errors.firstOrNull()?.let { return it.message }
     }
-    if (result.totalCount == 0) return "Keine Datei zum Importieren gefunden."
+    if (result.totalCount == 0) return t.nothingToImport()
     return buildList {
         val planned = result.rides.count { it.planned }
         when {
             result.importedCount == 0 -> Unit
-            planned == result.importedCount -> add("$planned als Planung importiert")
-            planned > 0 -> add("${result.importedCount} importiert ($planned als Planung)")
-            else -> add("${result.importedCount} importiert")
+            planned == result.importedCount -> add(t.importedAllPlanned(planned))
+            planned > 0 -> add(t.importedSomePlanned(result.importedCount, planned))
+            else -> add(t.imported(result.importedCount))
         }
-        if (result.duplicateCount > 0) add("${result.duplicateCount} schon vorhanden")
-        if (result.errorCount > 0) add("${result.errorCount} unlesbar")
+        if (result.duplicateCount > 0) add(t.alreadyPresent(result.duplicateCount))
+        if (result.errorCount > 0) add(t.unreadable(result.errorCount))
     }.joinToString(" · ")
 }
 
@@ -282,13 +281,7 @@ fun bulkImportMessage(result: BulkImportResult): String {
  * Erst, was Trailscape liest, dann der Grund: bei einer Datei der konkrete,
  * bei mehreren der erste, damit der Dialog nicht zur Liste wird.
  */
-fun bulkImportFailureText(result: BulkImportResult): String? {
+fun bulkImportFailureText(result: BulkImportResult, texts: CoreTexts): String? {
     if (result.rides.isNotEmpty() || result.duplicates.isNotEmpty() || result.errors.isEmpty()) return null
-    val intro = if (result.errorCount == 1) {
-        "Die Datei konnte nicht importiert werden."
-    } else {
-        "Keine der ${result.errorCount} Dateien konnte importiert werden."
-    }
-    return "$intro Trailscape liest GPX- und FIT-Dateien, auch als .gz gepackt. " +
-        "(${result.errors.first().message})"
+    return texts.files.importFailed(result.errorCount, result.errors.first().message)
 }

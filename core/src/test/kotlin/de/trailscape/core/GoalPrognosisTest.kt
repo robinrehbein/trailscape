@@ -1,8 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDateTime
 import kotlin.math.roundToInt
 import kotlin.test.Test
@@ -11,6 +9,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Zielzeit am [Goal] (Format, Rueckwaertskompatibilitaet) und die Prognose aus
@@ -112,11 +113,11 @@ class GoalPrognosisTest {
     @Test
     fun `ohne passende Touren sagt die Prognose was fehlt`() {
         val short = listOf(ride(10.0, 50.0, 30), ride(15.0, 80.0, 40, daysAgo = 5))
-        val result = predictGoalFinish(goal, short, now = NOW)
+        val result = predictGoalFinish(goal, short, now = NOW, texts = CoreTextsDe)
         assertNull(result.prognosis)
         assertEquals("Fahre 2–3 längere Touren (ab etwa 25 km), dann gibt es eine Prognose.", result.missing)
 
-        val one = predictGoalFinish(goal, listOf(ride(40.0, 400.0, 100)), now = NOW)
+        val one = predictGoalFinish(goal, listOf(ride(40.0, 400.0, 100)), now = NOW, texts = CoreTextsDe)
         assertNull(one.prognosis)
         assertTrue(one.missing!!.startsWith("Noch eine längere Tour"))
     }
@@ -128,7 +129,7 @@ class GoalPrognosisTest {
             ride(50.0, 500.0, 120, planned = true, id = "p"),
             ride(50.0, 500.0, null, id = "n"),
         )
-        assertNull(predictGoalFinish(goal, rides, now = NOW).prognosis)
+        assertNull(predictGoalFinish(goal, rides, now = NOW, texts = CoreTextsDe).prognosis)
     }
 
     @Test
@@ -137,7 +138,7 @@ class GoalPrognosisTest {
         // Prognose muss (bis auf Rundung) 2:20 h sagen — kein Laengen-,
         // kein Neuland-Zuschlag.
         val rides = listOf(ride(60.0, 700.0, 140, daysAgo = 2), ride(60.0, 700.0, 140, daysAgo = 9))
-        val p = assertNotNull(predictGoalFinish(goal, rides, now = NOW).prognosis)
+        val p = assertNotNull(predictGoalFinish(goal, rides, now = NOW, texts = CoreTextsDe).prognosis)
         assertEquals(140, p.currentMin)
         assertFalse(p.beyondLongestRide)
         assertEquals(2, p.ridesUsed)
@@ -148,8 +149,8 @@ class GoalPrognosisTest {
     fun `Hoehenmeter kosten Zeit ueber die Flachaequivalenz`() {
         val rides = listOf(ride(60.0, 0.0, 120, daysAgo = 2), ride(60.0, 0.0, 120, daysAgo = 4))
         val flatGoal = goal.copy(ascentM = 0.0)
-        val flat = predictGoalFinish(flatGoal, rides, now = NOW).prognosis!!
-        val hilly = predictGoalFinish(goal, rides, now = NOW).prognosis!!
+        val flat = predictGoalFinish(flatGoal, rides, now = NOW, texts = CoreTextsDe).prognosis!!
+        val hilly = predictGoalFinish(goal, rides, now = NOW, texts = CoreTextsDe).prognosis!!
         assertEquals(120, flat.currentMin)
         // 60 km + 700 Hm × 9 m = 66,3 Flach-km bei 30 km/h → 132,6 min.
         assertEquals(133, hilly.currentMin)
@@ -159,7 +160,7 @@ class GoalPrognosisTest {
     fun `Ziel ueber der laengsten Tour bekommt Zuschlag und mehr Unsicherheit`() {
         val rides = listOf(ride(30.0, 0.0, 60, daysAgo = 2), ride(30.0, 0.0, 60, daysAgo = 4))
         val flatGoal = goal.copy(ascentM = 0.0)
-        val p = predictGoalFinish(flatGoal, rides, now = NOW).prognosis!!
+        val p = predictGoalFinish(flatGoal, rides, now = NOW, texts = CoreTextsDe).prognosis!!
         assertTrue(p.beyondLongestRide)
         // Basis 120 min × 2^0,06 (≈1,0425) × Neuland 1,10 ≈ 137,6 min.
         assertEquals(138, p.currentMin)
@@ -167,6 +168,7 @@ class GoalPrognosisTest {
             flatGoal,
             listOf(ride(60.0, 0.0, 120, daysAgo = 2), ride(60.0, 0.0, 120, daysAgo = 4)),
             now = NOW,
+            texts = CoreTextsDe,
         ).prognosis!!
         assertTrue(p.uncertaintyMin > same.uncertaintyMin)
     }
@@ -175,8 +177,8 @@ class GoalPrognosisTest {
     fun `Unsicherheit schrumpft mit mehr Touren`() {
         val two = (0 until 2).map { ride(60.0, 700.0, 140, daysAgo = it + 1, id = "a$it") }
         val eight = (0 until 8).map { ride(60.0, 700.0, 140, daysAgo = it + 1, id = "b$it") }
-        val u2 = predictGoalFinish(goal, two, now = NOW).prognosis!!.uncertaintyMin
-        val u8 = predictGoalFinish(goal, eight, now = NOW).prognosis!!.uncertaintyMin
+        val u2 = predictGoalFinish(goal, two, now = NOW, texts = CoreTextsDe).prognosis!!.uncertaintyMin
+        val u8 = predictGoalFinish(goal, eight, now = NOW, texts = CoreTextsDe).prognosis!!.uncertaintyMin
         assertTrue(u8 < u2, "u8=$u8 u2=$u2")
         // 2 Touren: (4 % + 12 %/√2) × 140 ≈ 17,48 → 17 min.
         assertEquals(17, u2)
@@ -188,7 +190,7 @@ class GoalPrognosisTest {
             ride(60.0, 0.0, 100, daysAgo = 1, id = "neu"),
             ride(60.0, 0.0, 140, daysAgo = 40, id = "alt"),
         )
-        val p = predictGoalFinish(goal.copy(ascentM = 0.0), rides, now = NOW).prognosis!!
+        val p = predictGoalFinish(goal.copy(ascentM = 0.0), rides, now = NOW, texts = CoreTextsDe).prognosis!!
         // Ungewichtet laege das Mittel bei 120; die neue, schnelle Tour zieht es runter.
         assertTrue(p.currentMin < 115, "war ${p.currentMin}")
     }
@@ -196,10 +198,10 @@ class GoalPrognosisTest {
     @Test
     fun `Renntag skaliert mit der Plan-Fitness und ist gedeckelt`() {
         val rides = listOf(ride(60.0, 700.0, 140, daysAgo = 2), ride(60.0, 700.0, 140, daysAgo = 9))
-        val modest = predictGoalFinish(goal, rides, now = NOW, currentCtl = 50.0, projectedCtl = 60.0).prognosis!!
+        val modest = predictGoalFinish(goal, rides, now = NOW, currentCtl = 50.0, projectedCtl = 60.0, texts = CoreTextsDe).prognosis!!
         // (60/50)^0,2 ≈ 1,0371 → 140 / 1,0371 ≈ 135.
         assertEquals(135, modest.atEventMin)
-        val huge = predictGoalFinish(goal, rides, now = NOW, currentCtl = 30.0, projectedCtl = 90.0).prognosis!!
+        val huge = predictGoalFinish(goal, rides, now = NOW, currentCtl = 30.0, projectedCtl = 90.0, texts = CoreTextsDe).prognosis!!
         // Gedeckelt auf +8 %: 140 / 1,08 ≈ 129,6.
         assertEquals((140 / 1.08).roundToInt(), huge.atEventMin)
     }
@@ -243,25 +245,25 @@ class GoalPrognosisTest {
         val trend = describeFitnessTrend(series(ctl))!!
         assertEquals(FitnessDirection.STEIGT, trend.direction)
         assertEquals(6, trend.weeks)
-        assertEquals("Fitness steigt seit 6 Wochen", trend.sentence)
+        assertEquals("Fitness steigt seit 6 Wochen", trend.sentence(CoreTextsDe))
     }
 
     @Test
     fun `flache und fallende Kurven`() {
-        assertEquals("Fitness stabil", describeFitnessTrend(series(List(30) { 40.0 }))!!.sentence)
+        assertEquals("Fitness stabil", describeFitnessTrend(series(List(30) { 40.0 }))!!.sentence(CoreTextsDe))
         val falling = List(20) { 50.0 - it * 0.4 }
         val trend = describeFitnessTrend(series(falling))!!
         assertEquals(FitnessDirection.SINKT, trend.direction)
-        assertEquals("Fitness sinkt seit 2 Wochen", trend.sentence)
+        assertEquals("Fitness sinkt seit 2 Wochen", trend.sentence(CoreTextsDe))
         assertNull(describeFitnessTrend(series(List(10) { 1.0 })))
     }
 
     @Test
     fun `Frische als Wort`() {
-        assertEquals("frisch", freshnessWord(10.0))
-        assertEquals("ausgeglichen", freshnessWord(0.0))
-        assertEquals("etwas müde", freshnessWord(-9.0 - 5))
-        assertEquals("sehr müde", freshnessWord(-40.0))
-        assertEquals("sehr frisch", freshnessWord(30.0))
+        assertEquals("frisch", freshnessWord(10.0, texts = CoreTextsDe))
+        assertEquals("ausgeglichen", freshnessWord(0.0, texts = CoreTextsDe))
+        assertEquals("etwas müde", freshnessWord(-9.0 - 5, texts = CoreTextsDe))
+        assertEquals("sehr müde", freshnessWord(-40.0, texts = CoreTextsDe))
+        assertEquals("sehr frisch", freshnessWord(30.0, texts = CoreTextsDe))
     }
 }

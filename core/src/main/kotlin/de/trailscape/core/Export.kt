@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -8,7 +10,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.time.LocalDate
 
 /**
  * Export, Backup und Import von Nutzerdaten.
@@ -97,8 +98,8 @@ fun backupFileName(at: LocalDate): String {
  * Fahrten; die Duplikatpruefung erkennt sie beim erneuten Import nicht als
  * dieselbe Planung (Grenzen siehe [findDuplicateRide]).
  */
-fun rideFromGpx(xml: String, fallbackName: String, id: String? = null): Ride {
-    val parsed = parseGpx(xml)
+fun rideFromGpx(xml: String, fallbackName: String, id: String? = null, texts: CoreTexts): Ride {
+    val parsed = parseGpx(xml, texts)
     val points = parsed.points
     val baseStats = computeStats(points)
 
@@ -253,50 +254,46 @@ private fun JsonPrimitive.asDartIntOrNull(): Int? {
 
 /**
  * Liest eine Trailscape-Sicherung (siehe [buildBackupJson]) und liefert
- * Touren sowie optionales Profil. Wirft [FormatException] mit deutscher
- * Meldung bei kaputtem JSON, fremdem Format oder einer neueren, hier noch
- * unbekannten Backup-Version.
+ * Touren sowie optionales Profil. Wirft [FormatException] mit einer Meldung
+ * in der Sprache von [texts] bei kaputtem JSON, fremdem Format oder einer
+ * neueren, hier noch unbekannten Backup-Version.
  */
-fun parseBackupJson(raw: String): BackupData {
+fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
+    val t = texts.files
     val decoded = try {
         Json.parseToJsonElement(raw)
     } catch (e: Exception) {
-        throw FormatException("Die Datei enthält kein gültiges JSON und kann nicht importiert werden.")
+        throw FormatException(t.backupInvalidJson())
     }
 
     if (decoded !is JsonObject) {
-        throw FormatException("Die Datei ist keine gültige Trailscape-Sicherung.")
+        throw FormatException(t.backupNotTrailscape())
     }
 
     val appValue = (decoded["app"] as? JsonPrimitive)?.takeIf { it.isString }?.content
     if (appValue != backupAppName) {
-        throw FormatException("Die Datei ist keine gültige Trailscape-Sicherung.")
+        throw FormatException(t.backupNotTrailscape())
     }
 
     val version = (decoded["backupVersion"] as? JsonPrimitive)?.asDartIntOrNull()
     if (version == null) {
-        throw FormatException("Die Sicherung enthält keine gültige Versionsangabe.")
+        throw FormatException(t.backupNoVersion())
     }
     if (version > backupFormatVersion) {
-        throw FormatException(
-            "Diese Sicherung wurde mit einer neueren Trailscape-Version erstellt " +
-                "(Format $version, unterstützt wird bis $backupFormatVersion) und kann " +
-                "von dieser App-Version nicht gelesen werden. Bitte Trailscape " +
-                "aktualisieren.",
-        )
+        throw FormatException(t.backupTooNew(version, backupFormatVersion))
     }
 
     val ridesRaw = decoded["rides"] as? JsonArray
-        ?: throw FormatException("Die Sicherung enthält keine gültige Touren-Liste.")
+        ?: throw FormatException(t.backupNoRideList())
 
     val rides = mutableListOf<Ride>()
     for (entry in ridesRaw) {
         val entryObj = entry as? JsonObject
-            ?: throw FormatException("Die Sicherung enthält eine ungültige Tour.")
+            ?: throw FormatException(t.backupInvalidRide())
         try {
             rides.add(Ride.fromJson(entryObj))
         } catch (e: Exception) {
-            throw FormatException("Die Sicherung enthält eine ungültige Tour.")
+            throw FormatException(t.backupInvalidRide())
         }
     }
 
@@ -306,7 +303,7 @@ fun parseBackupJson(raw: String): BackupData {
         profile = try {
             TrainingProfile.fromJson(profileRaw)
         } catch (e: Exception) {
-            throw FormatException("Die Sicherung enthält ein ungültiges Trainingsprofil.")
+            throw FormatException(t.backupInvalidProfile())
         }
     }
 

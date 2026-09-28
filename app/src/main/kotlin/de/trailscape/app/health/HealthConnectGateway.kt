@@ -1,6 +1,7 @@
 package de.trailscape.app.health
 
 import android.content.Context
+import androidx.annotation.StringRes
 import android.content.pm.ApplicationInfo
 import android.os.Looper
 import androidx.health.connect.client.HealthConnectClient
@@ -21,6 +22,8 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import de.trailscape.app.R
+import de.trailscape.app.i18n.localized
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
 import de.trailscape.core.HealthActivityKind
@@ -124,7 +127,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         HealthAvailability.NICHT_UNTERSTUETZT
     }
 
-    override fun hasPermissions(): Boolean = read("Die Berechtigungen") { client ->
+    override fun hasPermissions(): Boolean = read(R.string.more_health_gateway_subject_permissions) { client ->
         HealthPermissions.hasAllRequired(client)
     }
 
@@ -133,7 +136,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * Geraet die Funktion nicht, gilt das als „nein" — der Import bleibt dann
      * beim 30-Tage-Fenster.
      */
-    override fun hasHistoryPermission(): Boolean = read("Die Berechtigungen") { client ->
+    override fun hasHistoryPermission(): Boolean = read(R.string.more_health_gateway_subject_permissions) { client ->
         HealthPermissions.isHistoryFeatureAvailable(client) &&
             client.permissionController.getGrantedPermissions()
                 .contains(HealthPermissions.READ_HEALTH_DATA_HISTORY)
@@ -155,10 +158,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         val client = requireClient()
         return runBlocking {
             HealthPermissionHub.request(HealthPermissions.requestSet(client))
-                ?: throw HealthSyncException(
-                    "Der Berechtigungsdialog von Health Connect lässt sich nur öffnen, " +
-                        "solange Trailscape im Vordergrund läuft.",
-                )
+                ?: throw HealthSyncException(text(R.string.more_health_gateway_foreground_error))
             // Nicht das Contract-Ergebnis auswerten, sondern nachfragen: Der
             // Contract meldet nur die in *diesem* Dialog erteilten Rechte,
             // frueher erteilte fehlten sonst.
@@ -198,7 +198,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * sie nur fuer Diagnose und Filter.
      */
     override fun readWorkouts(from: LocalDateTime, to: LocalDateTime): List<HealthWorkout> =
-        read("Die Trainings") { client ->
+        read(R.string.more_health_gateway_subject_workouts) { client ->
             val records = client.readAllPages(ExerciseSessionRecord::class, from, to)
 
             val activityTypes = linkedMapOf<String, Int>()
@@ -253,7 +253,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readExerciseSessionsNative(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): List<HealthSessionInfo> = read("Die Trainings") { client ->
+    ): List<HealthSessionInfo> = read(R.string.more_health_gateway_subject_workouts) { client ->
         client.readAllPages(ExerciseSessionRecord::class, from, to)
             .map { it.toSessionInfo() }
             .sortedBy { it.start }
@@ -284,7 +284,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readRoutesWithStatus(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): HealthRouteReadResult = read("Die Routen") { client ->
+    ): HealthRouteReadResult = read(R.string.more_health_gateway_subject_routes) { client ->
         val routes = linkedMapOf<String, List<HealthRoutePoint>>()
         val consentRequired = linkedSetOf<String>()
         for (record in client.readAllPages(ExerciseSessionRecord::class, from, to)) {
@@ -319,7 +319,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         sessionIds: Set<String>,
         from: LocalDateTime,
         to: LocalDateTime,
-    ): HealthRouteReadResult = read("Die Routen") { client ->
+    ): HealthRouteReadResult = read(R.string.more_health_gateway_subject_routes) { client ->
         val routes = linkedMapOf<String, List<HealthRoutePoint>>()
         val consentRequired = linkedSetOf<String>()
         for (id in sessionIds) {
@@ -352,7 +352,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * Historien-Freigabe ueberhaupt kennt.
      */
     override fun readPermissionStatus(): Map<HealthReadType, Boolean> =
-        read("Die Berechtigungen") { client ->
+        read(R.string.more_health_gateway_subject_permissions) { client ->
             val granted = client.permissionController.getGrantedPermissions()
             fun has(type: KClass<out Record>) =
                 granted.contains(HealthPermission.getReadPermission(type))
@@ -386,7 +386,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readHeartRate(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): List<HealthHeartRateSample> = read("Die Herzfrequenz") { client ->
+    ): List<HealthHeartRateSample> = read(R.string.more_health_gateway_subject_heart_rate) { client ->
         client.readAllPages(HeartRateRecord::class, from, to)
             .flatMap { record ->
                 val source = record.metadata.dataOrigin.packageName
@@ -404,7 +404,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readRestingHeartRate(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): List<HealthNumericSample> = read("Der Ruhepuls") { client ->
+    ): List<HealthNumericSample> = read(R.string.more_health_gateway_subject_resting_hr) { client ->
         client.readAllPages(RestingHeartRateRecord::class, from, to)
             .map {
                 HealthNumericSample(
@@ -419,7 +419,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readSleepSessions(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): List<HealthSleepSession> = read("Der Schlaf") { client ->
+    ): List<HealthSleepSession> = read(R.string.more_health_gateway_subject_sleep) { client ->
         // Bewusst die ganze Sitzung und nicht die einzelnen Phasen (`stages`):
         // `HealthSyncService.readVitals` summiert Schlafdauer je Aufwachtag
         // (nach dem Vereinigen ueberlappender Sitzungen mehrerer Apps), und
@@ -438,7 +438,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readVo2Max(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): List<HealthNumericSample> = read("Der VO2max-Wert") { client ->
+    ): List<HealthNumericSample> = read(R.string.more_health_gateway_subject_vo2max) { client ->
         client.readAllPages(Vo2MaxRecord::class, from, to)
             .map {
                 HealthNumericSample(
@@ -453,7 +453,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     override fun readHrv(
         from: LocalDateTime,
         to: LocalDateTime,
-    ): List<HealthNumericSample> = read("Die Herzratenvariabilität") { client ->
+    ): List<HealthNumericSample> = read(R.string.more_health_gateway_subject_hrv) { client ->
         client.readAllPages(HeartRateVariabilityRmssdRecord::class, from, to)
             .map {
                 HealthNumericSample(
@@ -470,9 +470,17 @@ class HealthConnectGateway(context: Context) : HealthGateway {
     // -----------------------------------------------------------------------
 
     /**
-     * Der Client, oder [HealthSyncException] mit der passenden deutschen
-     * Meldung. Wird gecached: `getOrCreate` baut eine Service-Verbindung auf,
-     * die nicht pro Lesezugriff neu entstehen soll.
+     * Ein Text in der App-Sprache — je Aufruf neu aufgeloest (siehe
+     * docs/i18n.md, D: Dienste ohne Activity). Die Meldungen landen als
+     * [HealthSyncException] in der Snackbar der Einstellungen.
+     */
+    private fun text(@StringRes id: Int, vararg args: Any): String =
+        appContext.localized().getString(id, *args)
+
+    /**
+     * Der Client, oder [HealthSyncException] mit der passenden Meldung in
+     * der App-Sprache. Wird gecached: `getOrCreate` baut eine
+     * Service-Verbindung auf, die nicht pro Lesezugriff neu entstehen soll.
      */
     private fun requireClient(): HealthConnectClient {
         cachedClient?.let { return it }
@@ -480,13 +488,13 @@ class HealthConnectGateway(context: Context) : HealthGateway {
         when (availability()) {
             HealthAvailability.VERFUEGBAR -> Unit
             HealthAvailability.NICHT_INSTALLIERT -> throw HealthSyncException(
-                "Health Connect ist nicht installiert.",
+                text(R.string.more_health_gateway_not_installed_error),
             )
             HealthAvailability.UPDATE_NOETIG -> throw HealthSyncException(
-                "Health Connect muss aktualisiert werden.",
+                text(R.string.more_health_gateway_update_error),
             )
             HealthAvailability.NICHT_UNTERSTUETZT -> throw HealthSyncException(
-                "Health Connect wird auf diesem Gerät nicht unterstützt.",
+                text(R.string.more_health_gateway_unsupported_error),
             )
         }
 
@@ -494,10 +502,7 @@ class HealthConnectGateway(context: Context) : HealthGateway {
             HealthConnectClient.getOrCreate(appContext)
         } catch (error: Throwable) {
             DiagLog.shared.log(DiagEvent.HEALTH_CLIENT_FAILED, error = error)
-            throw HealthSyncException(
-                "Die Verbindung zu Health Connect konnte nicht aufgebaut werden: " +
-                    describe(error),
-            )
+            throw HealthSyncException(text(R.string.more_health_gateway_connect_error, describe(error)))
         }
         cachedClient = created
         return created
@@ -507,15 +512,16 @@ class HealthConnectGateway(context: Context) : HealthGateway {
      * Gemeinsamer Rand aller Lesezugriffe: Client besorgen, [block] blockierend
      * ausfuehren, Fehler in die `:core`-Semantik uebersetzen.
      *
-     * [subject] ist der deutsche Betreff der Fehlermeldung („Die Trainings",
-     * „Der Ruhepuls", ...) und wird zu „<Betreff> konnten/konnte nicht ..."
-     * ergaenzt — bewusst schlicht gehalten: Die Meldung landet ueber
-     * `HealthSyncReport.debugLines` bzw. `HealthSyncException` in der UI.
+     * [subjectRes] ist der Betreff der Fehlermeldung („Die Trainings",
+     * „Der Ruhepuls", ...) und wird zu „<Betreff> konnte nicht ..." ergaenzt
+     * — bewusst schlicht gehalten: Die Meldung landet ueber
+     * `HealthSyncReport.debugLines` bzw. `HealthSyncException` in der UI und
+     * kommt deshalb in der App-Sprache ([text]).
      */
-    private fun <T> read(subject: String, block: suspend (HealthConnectClient) -> T): T {
+    private fun <T> read(@StringRes subjectRes: Int, block: suspend (HealthConnectClient) -> T): T {
         checkNotMainThread(DiagEvent.HEALTH_READ_ON_MAIN_THREAD)
         val client = requireClient()
-        // [subject] kommt bewusst NICHT ins Diagnose-Log (siehe DiagLog: nur
+        // Der Betreff kommt bewusst NICHT ins Diagnose-Log (siehe DiagLog: nur
         // Konstanten) — Ereignis und Fehlerklasse reichen, um „Health Connect
         // verweigert" von „Health Connect wirft" zu unterscheiden.
         return try {
@@ -528,21 +534,16 @@ class HealthConnectGateway(context: Context) : HealthGateway {
             runBlocking { withTimeout(READ_TIMEOUT_MS) { block(client) } }
         } catch (error: TimeoutCancellationException) {
             DiagLog.shared.log(DiagEvent.HEALTH_READ_FAILED, error = error)
-            throw HealthSyncException(
-                "$subject: Health Connect antwortet nicht. Bitte später erneut versuchen.",
-            )
+            throw HealthSyncException(text(R.string.more_health_gateway_timeout_error, text(subjectRes)))
         } catch (error: SecurityException) {
             DiagLog.shared.log(DiagEvent.HEALTH_ACCESS_DENIED)
-            throw HealthSyncException(
-                "$subject: Health Connect verweigert den Zugriff. Bitte die Freigabe " +
-                    "in den Health-Connect-Einstellungen erteilen.",
-            )
+            throw HealthSyncException(text(R.string.more_health_gateway_denied_error, text(subjectRes)))
         } catch (error: HealthSyncException) {
             throw error
         } catch (error: Throwable) {
             DiagLog.shared.log(DiagEvent.HEALTH_READ_FAILED, error = error)
             throw HealthSyncException(
-                "$subject konnte nicht aus Health Connect gelesen werden: ${describe(error)}",
+                text(R.string.more_health_gateway_read_error, text(subjectRes), describe(error)),
             )
         }
     }

@@ -11,7 +11,7 @@
      gehalten. Aendert sich der Name dort, muss er hier mitgeaendert werden.
 -->
 <resources>
-    <string-array name="android_wear_capabilities">
+    <string-array name="android_wear_capabilities" translatable="false">
         <item>trailscape_uhr</item>
     </string-array>
 </resources>

@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.training
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,7 +19,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.theme.CardPadding
@@ -87,12 +92,14 @@ internal fun trainingNoticeLayout(feasibilityOpen: Boolean, profileMissing: Bool
 }
 
 /** Der Satz des Profil-Hinweises — eine Stelle fuer Karte und ruhige Zeile. */
-internal val unconfirmedProfileText: String =
-    "Ohne Alter und Gewicht rechnen wir mit ${defaultTrainingProfile.ageYears} Jahren und " +
-        "${defaultTrainingProfile.weightKg.toInt()} kg — die Zahlen sind grob."
+internal val unconfirmedProfileText: UiText = UiText.Res(
+    R.string.training_notice_profile_body,
+    listOf(defaultTrainingProfile.ageYears, defaultTrainingProfile.weightKg.toInt()),
+)
 
 /** Beschriftung der Aktion am Profil-Hinweis. */
-internal const val PROFILE_ACTION_LABEL = "Profil öffnen"
+@StringRes
+internal val PROFILE_ACTION_LABEL: Int = R.string.training_notice_profile_action
 
 /**
  * Eine ruhige Hinweiszeile: Umriss-Info, `bodySmall` in `onSurfaceVariant`,
@@ -160,18 +167,18 @@ internal fun UnconfirmedProfileNotice(asCard: Boolean, onOpenProfile: () -> Unit
         NoticeBox(
             icon = TrainingWarningIcon,
             color = LocalSignalColors.current.caution,
-            title = "Profil eintragen",
-            text = unconfirmedProfileText,
+            title = stringResource(R.string.training_notice_profile_title),
+            text = unconfirmedProfileText.asString(),
             action = {
                 TextButton(onClick = onOpenProfile, contentPadding = PaddingValues(horizontal = 12.dp)) {
-                    Text(PROFILE_ACTION_LABEL)
+                    Text(stringResource(PROFILE_ACTION_LABEL))
                 }
             },
         )
     } else {
         QuietNoteLine(
-            text = unconfirmedProfileText,
-            actionLabel = PROFILE_ACTION_LABEL,
+            text = unconfirmedProfileText.asString(),
+            actionLabel = stringResource(PROFILE_ACTION_LABEL),
             onAction = onOpenProfile,
         )
     }

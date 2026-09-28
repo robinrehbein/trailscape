@@ -9,11 +9,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.theme.CardPadding
 
@@ -38,13 +41,15 @@ internal fun RideImpactCard(lines: List<RideImpactLine>) {
             modifier = Modifier.padding(CardPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Eyebrow("Was die Tour gebracht hat")
+            Eyebrow(stringResource(R.string.rides_impact_eyebrow))
             for (line in lines) {
+                val lead = line.lead.asString()
+                val body = line.body.asString()
                 Text(
                     text = buildAnnotatedString {
-                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(line.lead) }
+                        withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(lead) }
                         append(" ")
-                        append(line.body)
+                        append(body)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )

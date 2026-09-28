@@ -1,5 +1,9 @@
 package de.trailscape.app.routing
 
+import androidx.annotation.StringRes
+import de.trailscape.app.R
+import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.RemoteSegment
 import de.trailscape.core.SegmentUpdateAction
 import de.trailscape.core.applySegmentDelta
@@ -65,9 +69,20 @@ import okhttp3.Response
  * macht [SegmentDownloadWorker].
  */
 
-/** Fehler beim Holen einer Kachel. [message] ist bereits eine deutsche Meldung. */
-class SegmentDownloadException(message: String, cause: Throwable? = null) :
-    IOException(message, cause)
+/**
+ * Fehler beim Holen einer Kachel.
+ *
+ * Die Meldung fuer die Nutzerin steht in [text] und wird erst beim Anzeigen in
+ * der App-Sprache aufgeloest (im [SegmentDownloadWorker] ueber
+ * `localized()`) — dieser Downloader kennt bewusst keinen `Context`. Die
+ * [message] der Ausnahme ist nur Diagnose (Ressource und Argumente).
+ */
+class SegmentDownloadException(val text: UiText, cause: Throwable? = null) :
+    IOException("SegmentDownloadException: $text", cause) {
+
+    /** Bequemlichkeit fuer eine Ressourcen-Meldung mit Argumenten. */
+    constructor(@StringRes id: Int, vararg args: Any) : this(UiText.Res(id, args.toList()))
+}
 
 /** Welcher Abschnitt der Arbeit gerade laeuft. */
 enum class SegmentPhase {
@@ -172,9 +187,7 @@ class SegmentDownloader(
     fun remoteSegment(fileName: String): RemoteSegment {
         requireSegmentName(fileName)
         val head = head(segmentDownloadUrl(fileName, baseUrl))
-            ?: throw SegmentDownloadException(
-                "Die Kachel $fileName gibt es auf dem Server nicht.",
-            )
+            ?: throw SegmentDownloadException(R.string.map_segment_missing_error, fileName)
         return RemoteSegment(
             fileName = fileName,
             sizeBytes = head.sizeBytes,
@@ -294,12 +307,14 @@ class SegmentDownloader(
                 206 -> true
                 200 -> false // Server hat den Range verworfen: von vorn.
                 else -> throw SegmentDownloadException(
-                    "Der Server hat die Kachel $fileName abgelehnt (HTTP ${response.code}).",
+                    R.string.map_segment_rejected_error,
+                    fileName,
+                    response.code,
                 )
             }
             val offset = if (append) have else 0L
             val body = response.body
-                ?: throw SegmentDownloadException("Der Server hat $fileName ohne Inhalt geliefert.")
+                ?: throw SegmentDownloadException(R.string.map_segment_empty_error, fileName)
             val total = if (remote.sizeBytes > 0) {
                 remote.sizeBytes
             } else {
@@ -346,8 +361,10 @@ class SegmentDownloader(
             // Abgerissene Verbindung ohne Ausnahme (kommt vor). Die Teildatei
             // bleibt liegen — der naechste Lauf setzt darauf auf.
             throw SegmentDownloadException(
-                "Die Kachel $fileName kam unvollständig an " +
-                    "(${part.length()} von ${remote.sizeBytes} Bytes).",
+                R.string.map_segment_incomplete_error,
+                fileName,
+                part.length(),
+                remote.sizeBytes,
             )
         }
 
@@ -418,6 +435,7 @@ class SegmentDownloader(
                     )
                 },
                 isCancelled = isCancelled,
+                texts = AppServices.coreTexts(),
             )
             if (!applied) return SegmentSyncResult.Cancelled(fileName, transferred)
 
@@ -467,7 +485,8 @@ class SegmentDownloader(
         val dummy = runCatching { head(segmentDeltaUrl(fileName, md5, baseUrl)) }.getOrNull()
         if (dummy != null && segmentDeltaIsDummy(dummy.sizeBytes)) return
 
-        checkSegmentIntegrity(assembled)?.let { throw SegmentDownloadException(it) }
+        checkSegmentIntegrity(assembled, AppServices.coreTexts())
+            ?.let { throw SegmentDownloadException(UiText.Plain(it)) }
     }
 
     // -----------------------------------------------------------------------
@@ -486,9 +505,7 @@ class SegmentDownloader(
         client.newCall(request).execute().use { response ->
             if (response.code == 404) return null
             if (!response.isSuccessful) {
-                throw SegmentDownloadException(
-                    "Der Server antwortete auf die Nachfrage mit HTTP ${response.code}.",
-                )
+                throw SegmentDownloadException(R.string.map_segment_head_error, response.code)
             }
             return response.toHead()
         }
@@ -520,12 +537,10 @@ class SegmentDownloader(
     ): Long? {
         client.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) {
-                throw SegmentDownloadException(
-                    "Die Aktualisierung ließ sich nicht laden (HTTP ${response.code}).",
-                )
+                throw SegmentDownloadException(R.string.map_segment_update_load_error, response.code)
             }
             val body = response.body
-                ?: throw SegmentDownloadException("Die Aktualisierung kam ohne Inhalt an.")
+                ?: throw SegmentDownloadException(R.string.map_segment_update_empty_error)
             var written = 0L
             var stopped = false
             body.byteStream().use { input ->
@@ -551,7 +566,9 @@ class SegmentDownloader(
             }
             if (expectedBytes > 0 && written != expectedBytes) {
                 throw SegmentDownloadException(
-                    "Die Aktualisierung kam unvollständig an ($written von $expectedBytes Bytes).",
+                    R.string.map_segment_update_incomplete_error,
+                    written,
+                    expectedBytes,
                 )
             }
             return written
@@ -573,14 +590,10 @@ class SegmentDownloader(
     private fun placeFile(temp: File, target: File) {
         if (temp.renameTo(target)) return
         if (target.exists() && !target.delete()) {
-            throw SegmentDownloadException(
-                "Die alte Kachel ${target.name} ließ sich nicht ersetzen.",
-            )
+            throw SegmentDownloadException(R.string.map_segment_replace_error, target.name)
         }
         if (!temp.renameTo(target)) {
-            throw SegmentDownloadException(
-                "Die Kachel ${target.name} ließ sich nicht speichern.",
-            )
+            throw SegmentDownloadException(R.string.map_segment_store_error, target.name)
         }
     }
 
@@ -605,7 +618,7 @@ class SegmentDownloader(
      */
     private fun requireSegmentName(fileName: String) {
         if (parseSegmentTile(fileName) == null || !fileName.endsWith(".rd5")) {
-            throw SegmentDownloadException("„$fileName“ ist kein Kachelname.")
+            throw SegmentDownloadException(R.string.map_segment_invalid_name_error, fileName)
         }
     }
 }

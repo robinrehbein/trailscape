@@ -1,7 +1,6 @@
 package de.trailscape.app.ui.map
 
 import de.trailscape.core.AscentPreference
-import de.trailscape.core.FIRST_ROUND_LABEL
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
@@ -12,7 +11,7 @@ import kotlin.test.assertTrue
 /** Wann das Vorschlagsblatt auf „Wind berücksichtigen" hinweist ([shouldOfferWindTip]). */
 class WindTipTest {
 
-    private fun target(label: String, source: RouteTargetSource) = RouteTarget(
+    private fun target(label: String, source: RouteTargetSource, firstRound: Boolean = false) = RouteTarget(
         distanceKm = 30.0,
         ascentPreference = AscentPreference.FLACH,
         durationH = 1.5,
@@ -20,6 +19,7 @@ class WindTipTest {
         intensity = SessionIntensity.GRUNDLAGE,
         label = label,
         source = source,
+        isFirstRound = firstRound,
     )
 
     @Test
@@ -37,7 +37,7 @@ class WindTipTest {
     fun `die erste Runde bleibt ohne Tipp`() {
         assertFalse(
             shouldOfferWindTip(
-                target(FIRST_ROUND_LABEL, RouteTargetSource.TAGESEMPFEHLUNG),
+                target("Erste Runde", RouteTargetSource.TAGESEMPFEHLUNG, firstRound = true),
                 windUsed = false,
                 windEnabled = false,
             ),

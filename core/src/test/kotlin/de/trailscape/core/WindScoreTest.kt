@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -180,55 +181,55 @@ class WindScoreTest {
 
     @Test
     fun `Himmelsrichtungen in acht Stufen`() {
-        assertEquals("Nord", windDirectionLabel(0.0))
-        assertEquals("Nord", windDirectionLabel(22.4))
-        assertEquals("Nordost", windDirectionLabel(22.5))
-        assertEquals("Ost", windDirectionLabel(90.0))
-        assertEquals("Südost", windDirectionLabel(135.0))
-        assertEquals("Süd", windDirectionLabel(180.0))
-        assertEquals("Südwest", windDirectionLabel(225.0))
-        assertEquals("West", windDirectionLabel(270.0))
-        assertEquals("Nordwest", windDirectionLabel(315.0))
-        assertEquals("Nord", windDirectionLabel(337.6))
-        assertEquals("Nord", windDirectionLabel(359.9))
-        assertEquals("West", windDirectionLabel(-90.0))
-        assertEquals("wechselnder Richtung", windDirectionLabel(Double.NaN))
+        assertEquals("Nord", windDirectionLabel(0.0, texts = CoreTextsDe))
+        assertEquals("Nord", windDirectionLabel(22.4, texts = CoreTextsDe))
+        assertEquals("Nordost", windDirectionLabel(22.5, texts = CoreTextsDe))
+        assertEquals("Ost", windDirectionLabel(90.0, texts = CoreTextsDe))
+        assertEquals("Südost", windDirectionLabel(135.0, texts = CoreTextsDe))
+        assertEquals("Süd", windDirectionLabel(180.0, texts = CoreTextsDe))
+        assertEquals("Südwest", windDirectionLabel(225.0, texts = CoreTextsDe))
+        assertEquals("West", windDirectionLabel(270.0, texts = CoreTextsDe))
+        assertEquals("Nordwest", windDirectionLabel(315.0, texts = CoreTextsDe))
+        assertEquals("Nord", windDirectionLabel(337.6, texts = CoreTextsDe))
+        assertEquals("Nord", windDirectionLabel(359.9, texts = CoreTextsDe))
+        assertEquals("West", windDirectionLabel(-90.0, texts = CoreTextsDe))
+        assertEquals("wechselnder Richtung", windDirectionLabel(Double.NaN, texts = CoreTextsDe))
     }
 
     @Test
     fun `Windzeile bei zu schwachem Wind`() {
         assertEquals(
             "Wind 6 km/h aus West – zu schwach, um die Runde danach auszurichten",
-            windLine(WindConditions(6.0, WEST, null), shape = null),
+            windLine(WindConditions(6.0, WEST, null), shape = null, texts = CoreTextsDe),
         )
     }
 
     @Test
     fun `Windzeile nach Form der Runde`() {
         val wind = WindConditions(18.0, WEST, null)
-        assertEquals("Wind 18 km/h aus West – Rückenwind auf dem Heimweg", windLine(wind, 0.5))
-        assertEquals("Wind 18 km/h aus West – Gegenwind auf dem Heimweg", windLine(wind, -0.5))
-        assertEquals("Wind 18 km/h aus West – Seitenwind, kein klarer Vorteil", windLine(wind, 0.1))
-        assertEquals("Wind 18 km/h aus West – Seitenwind, kein klarer Vorteil", windLine(wind, null))
+        assertEquals("Wind 18 km/h aus West – Rückenwind auf dem Heimweg", windLine(wind, 0.5, texts = CoreTextsDe))
+        assertEquals("Wind 18 km/h aus West – Gegenwind auf dem Heimweg", windLine(wind, -0.5, texts = CoreTextsDe))
+        assertEquals("Wind 18 km/h aus West – Seitenwind, kein klarer Vorteil", windLine(wind, 0.1, texts = CoreTextsDe))
+        assertEquals("Wind 18 km/h aus West – Seitenwind, kein klarer Vorteil", windLine(wind, null, texts = CoreTextsDe))
     }
 
     @Test
     fun `Boeen nur deutlich ueber dem Mittelwind`() {
         assertEquals(
             "Wind 18 km/h aus West, Böen bis 35 km/h – Rückenwind auf dem Heimweg",
-            windLine(WindConditions(18.0, WEST, 35.0), 0.5),
+            windLine(WindConditions(18.0, WEST, 35.0), 0.5, texts = CoreTextsDe),
         )
         assertEquals(
             "Wind 18 km/h aus West – Rückenwind auf dem Heimweg",
-            windLine(WindConditions(18.0, WEST, 24.0), 0.5),
+            windLine(WindConditions(18.0, WEST, 24.0), 0.5, texts = CoreTextsDe),
         )
         assertEquals(
             "Wind 18 km/h aus West – Rückenwind auf dem Heimweg",
-            windLine(WindConditions(18.0, WEST, null), 0.5),
+            windLine(WindConditions(18.0, WEST, null), 0.5, texts = CoreTextsDe),
         )
         assertEquals(
             "Wind 18 km/h aus West – Rückenwind auf dem Heimweg",
-            windLine(WindConditions(17.6, WEST, null), 0.5),
+            windLine(WindConditions(17.6, WEST, null), 0.5, texts = CoreTextsDe),
         )
     }
 }

@@ -43,18 +43,33 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Absturzsicherung: Jeder Punkt geht sofort in ein Journal
   (`<filesDir>/recording/active.jsonl`). Bricht der Prozess ab, bietet die App
   beim nächsten Start die Wiederherstellung der Tour an
+- Bluetooth-Sensoren ohne Uhr: Pulsgurt, Leistungsmesser und
+  Trittfrequenzsensor (Bluetooth LE, Standard-Profile Herzfrequenz, Cycling
+  Power, Speed & Cadence) unter Mehr → Sensoren koppeln; während der
+  Aufzeichnung verbindet die App sich von selbst, zeigt Puls, Watt und
+  Trittfrequenz im Fahrmodus und speichert sie je Punkt. Ein gekoppelter Gurt
+  hat Vorrang vor dem Uhr-Puls. Gemessene Leistung ersetzt in der Auswertung
+  die GPS-Schätzung
 
 **Touren**
 - Tourenliste mit Distanz, Dauer, Höhenmetern, Ø-Puls und Trainingslast
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
-  Pulskurve, dazu Entkopplung und VO₂max-Schätzung, wo die Daten es hergeben —
+  Pulskurve, Ø Leistung und Ø Trittfrequenz, wo gemessen, dazu Entkopplung
+  und VO₂max-Schätzung, wo die Daten es hergeben —
   und oben „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
   neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
   Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
   Tourblatt der Karte genau diese Ansicht
-- Umbenennen, Löschen, als GPX oder als Bild teilen (Story 9:16 oder Quadrat,
-  mit Spur, Höhenprofil und Kennzahlen), GPX importieren (z. B. aus Komoot oder
+- Umbenennen, Löschen, als GPX (mit Puls, Trittfrequenz und Leistung) oder als
+  Bild teilen (Story 9:16 oder Quadrat, mit Spur, Höhenprofil und Kennzahlen;
+  Start und Ziel ab Werk ausgeblendet; auch direkt vom Tourblatt der Karte),
+  GPX importieren (z. B. aus Komoot oder
   Strava)
+- Optional zu Strava hochladen: von Hand in der Tour („Zu Strava hochladen“,
+  danach „Auf Strava ansehen“) oder automatisch nach dem Beenden einer
+  Aufzeichnung (Schalter unter Einstellungen → Strava, ab Werk aus). Ohne
+  Verbindung geht nichts an Strava. Nur in Builds mit hinterlegten
+  Strava-App-Zugangsdaten sichtbar
 - Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
   wieder importieren
 
@@ -121,6 +136,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Ohne Handy unterwegs? Die Fahrt mit Samsung Health auf der Uhr aufzeichnen —
   Trailscape importiert sie danach über Health Connect
 
+**Sprache**
+- Deutsch und Englisch – folgt der Systemsprache (Deutsch, wenn das Gerät auf
+  Deutsch steht, sonst Englisch), umstellbar unter **Mehr → Sprache**;
+  Sprachansagen in der gewählten Sprache. Regeln für Übersetzungen:
+  `docs/i18n.md`
+
 **Selfhost-Sync (optional)**
 - Bidirektionale Synchronisierung der Touren mit einem eigenen Server
 
@@ -130,7 +151,7 @@ Ein Gradle-Projekt mit zwei Modulen:
 
 | Modul | Was | Warum getrennt |
 |---|---|---|
-| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1151 Unit-Tests hängen hier |
+| `:core` | Reines Kotlin/JVM: Domänenmodell, GPX/Export, Statistik, Routing- und Geocoding-Clients, Navigation, komplettes Trainings- und Readiness-Modell, Health-Sync-Logik | Kein einziger Android-Import — dadurch in Sekunden und ohne Emulator testbar. 1338 Unit-Tests hängen hier |
 | `:app` | Android: Compose/Material-3-Oberfläche (vier Tabs — Heute, Karte, Training, Mehr; die Tourenliste liegt als Blatt auf der Karte), Aufzeichnungs-Service, MapLibre-Einbettung, Health Connect, Speicherung | Alles, was ein Gerät braucht |
 
 Weitere Bausteine:
@@ -183,26 +204,37 @@ gebautes APK lässt sich aber nicht als Update über die verteilte Installation
 legen. In der CI kommt der Schlüssel aus dem Secret
 `RELEASE_KEYSTORE_BASE64`.
 
+**Strava (optional):** Die Zugangsdaten der Strava-API-App stehen ebenfalls
+nicht im Repository. Der Build liest sie aus den Umgebungsvariablen
+`STRAVA_CLIENT_ID`/`STRAVA_CLIENT_SECRET` oder aus `strava.clientId`/
+`strava.clientSecret` in `~/.gradle/gradle.properties` — niemals aus einer
+Datei im Repo. Fehlen sie, ist die Strava-Funktion unsichtbar und der Build
+bleibt grün. In der CI kommen sie aus den gleichnamigen Secrets, nur bei
+Pushes auf `main`.
+
 ## Testen
 
 ```bash
-./gradlew :core:test              # 1151 Tests des Domänenmodells
-./gradlew :app:testDebugUnitTest  # 467 Tests der plattformfreien :app-Teile
+./gradlew :core:test              # 1338 Tests des Domänenmodells
+./gradlew :app:testDebugUnitTest  # 656 Tests in :app, davon 82 Screenshot-Tests
+./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*Screenshot*'
+                                  # nur die Screenshots, PNGs unter app/build/outputs/roborazzi/
 ```
 
 Was die CI vor jedem Release ausführt:
 
 ```bash
-./gradlew :core:test :app:testDebugUnitTest \
+./gradlew :core:test :app:testDebugUnitTest -Pscreenshots \
           :app:assembleRelease :app:bundleRelease \
           :wear:assembleRelease :wear:bundleRelease
 ```
 
-`:app` hat bewusst kein Robolectric — getestet wird dort nur, was ohne
-Android-Framework auskommt (Aufzeichnungs-Journal, GPX-Import,
-Share-Dateinamen, Trainingsauswertung, Berichtsformat der Fehlermeldung,
-Update-Prüfung).
-Alles Rechnende liegt ohnehin in `:core`.
+In `:app` laufen die meisten Tests ohne Android-Framework (Aufzeichnungs-Journal,
+GPX-Import, Share-Dateinamen, Trainingsauswertung, Berichtsformat der
+Fehlermeldung, Update-Prüfung, Deckungsgleichheit der deutschen und englischen
+Texte). Robolectric kommt nur für die Screenshot-Tests zum Einsatz; sie laufen
+nur mit `-Pscreenshots`, in der CI also mit, auf Deutsch und — mit „-en“ im
+Dateinamen — auf Englisch. Alles Rechnende liegt ohnehin in `:core`.
 
 ## Installation und Updates
 
@@ -259,7 +291,9 @@ suchen** lässt sich die Prüfung jederzeit von Hand auslösen. Der stille Check
 lässt sich an derselben Stelle abschalten („Täglich still nach Updates
 suchen") — dann geht beim Start keine Anfrage an GitHub hinaus. Ohne Netz
 passiert schlicht nichts — die Prüfung meldet nie einen Fehler und blockiert
-nie.
+nie. Bei einer Installation über Google Play entfällt all das: Die App fragt
+dann nie bei GitHub nach, und unter **Mehr → Über** steht nur „Updates kommen
+über Google Play.“
 
 ## Umstieg von Version 1.x
 
@@ -293,9 +327,11 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 Alles bleibt lokal. Die App spricht mit den Diensten, die für eine konkrete
 Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
 und Kachel-Downloads, Nominatim für die Zielsuche und — wenn eingerichtet —
-dem eigenen Sync-Server. Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
+dem eigenen Sync-Server bzw. Strava (nur nach dem Verbinden des eigenen
+Strava-Kontos). Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
 tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter
-**Mehr → Über**. Kein Analytics, keine Telemetrie, keine Werbung, kein
+**Mehr → Über** (nur bei der APK von GitHub; bei Installation über Google Play
+entfällt sie). Kein Analytics, keine Telemetrie, keine Werbung, kein
 Konto.
 
 Was genau wann an wen geht, steht ausführlich und nachprüfbar in
@@ -341,6 +377,7 @@ AndroidX/Compose, Kotlin, OkHttp, OpenStreetMap, FOSSGIS, CyclOSM, OpenTopoMap,
 Esri, OpenFreeMap/OpenMapTiles, BRouter, Nominatim) stehen in der App unter
 **Mehr → Über → Open-Source-Lizenzen** und im Quelltext in
 [`app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt`](app/src/main/kotlin/de/trailscape/app/ui/more/OpenSourceNotices.kt).
+Bluetooth über die Android-Plattform-API, keine zusätzliche Bibliothek.
 
 **Eine proprietäre Abhängigkeit — mit Absicht.** Trailscape kam früher mit
 `com.google.android.gms:play-services-location`; diese Abhängigkeit bleibt

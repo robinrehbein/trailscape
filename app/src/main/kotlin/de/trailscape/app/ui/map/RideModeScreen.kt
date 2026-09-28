@@ -29,15 +29,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -48,11 +49,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.record.RecordingRepository
-import de.trailscape.app.ui.formatKmDe
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.app.ui.components.HoldToEndButton
+import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.RideModeActionHeight
 import de.trailscape.app.ui.theme.RideModeExitHeight
@@ -111,14 +116,26 @@ import kotlin.math.roundToInt
  * ausgewertet in `MapScreen.kt`. Hier wird nur angezeigt, was dort schon
  * berechnet ist.
  *
- * Liefert eine gekoppelte Uhr live Werte (Handy-Bruecke, siehe
+ * Liefern Sensoren live Werte — eine gekoppelte Uhr (Handy-Bruecke, siehe
  * `de.trailscape.app.record.RecordingRepository.heartRateBpm`/
- * `.watchConnected`), kommt eine **Puls**-Kachel dazu — an einer FESTEN
- * Stelle direkt nach Distanz/Fahrzeit, unabhaengig davon, ob zusaetzlich eine
- * Navigation laeuft: Die Reihenfolge der uebrigen Kacheln soll sich weder
- * beim Verbinden noch beim Trennen der Uhr veraendern, nur um die Puls-Kachel
- * herum wachsen oder schrumpfen. Ohne Uhr erscheint gar nichts — eine leere
- * oder veraltete Pulsanzeige waere eine Falschmeldung, kein Informationsverlust.
+ * `.watchConnected`) oder per Bluetooth ein Pulsgurt, Leistungsmesser oder
+ * Trittfrequenzsensor (`de.trailscape.app.sensors.BleSensors`) —, kommt eine
+ * **Sensorzeile** dazu: an einer FESTEN Stelle direkt nach Distanz/Fahrzeit
+ * und vor den Hoehenmetern, unabhaengig davon, ob zusaetzlich eine Navigation
+ * laeuft. Darin stehen nebeneinander, immer in dieser Reihenfolge, Puls ·
+ * Leistung · Trittfrequenz — nur die Kacheln, fuer die es eine Quelle gibt.
+ * Die Reihenfolge der uebrigen Werte veraendert sich weder beim Verbinden
+ * noch beim Trennen; die Zeile waechst oder schrumpft nur in sich.
+ *
+ * Welche Kachel mit welchem Wert erscheint, entscheidet `liveSensorAnzeige`
+ * in `:core` (siehe [rememberLiveSensorAnzeige]): Ein frischer Gurtwert
+ * schlaegt den Puls der Uhr; ist der Gurt still, springt die verbundene Uhr
+ * ein. Ein Sensor, der seit mehr als fuenf Sekunden nichts liefert, zeigt den
+ * Strich und „seit X s nichts" — nie einen veralteten Wert, der im Fahren
+ * nicht von einem echten zu unterscheiden waere. Ohne jede Quelle erscheint
+ * gar nichts. Mit allen drei Sensoren sind es sieben statt vier Zahlen — die
+ * Obergrenze von vier Zahlen ueberschreitet deshalb nur, wer Sensoren
+ * gekoppelt hat; die drei Kacheln werden dann eine Stufe kleiner (40 sp).
  *
  * ## Bedienung
  * Zwei gleich gebaute Flaechen ueber je die halbe Breite,
@@ -178,6 +195,9 @@ internal fun RideModeScreen(
     // von selbst bei Weiterfahrt) — nur fuer die Beschriftung des
     // Status-Chips, die Bedienung ist dieselbe wie bei einer manuellen Pause.
     autoPaused: Boolean = false,
+    // Die Live-Sensorwerte — Parameter nur, damit Screenshot-Tests sie
+    // einsetzen koennen; im Betrieb gilt der Vorgabewert.
+    sensoren: LiveSensorAnzeige = rememberLiveSensorAnzeige(),
 ) {
     Dialog(
         onDismissRequest = onClose,
@@ -190,18 +210,6 @@ internal fun RideModeScreen(
         ),
     ) {
         KeepScreenOn()
-
-        // Direkt aus dem Repository statt als Parameter: Anders als
-        // speedKmh/distanceKm/... (aus der laufenden Navigation berechnet und
-        // vom Aufrufer durchgereicht) hat der Puls mit der Fahrt selbst
-        // nichts zu tun — er ist ein reiner Live-Wert der Handy-Bruecke
-        // (siehe `RecordingRepository.heartRateBpm`). `watchConnected` gilt
-        // als Bedingung dafuer, dass die Kachel ueberhaupt erscheint: eine
-        // veraltete Herzfrequenz von einer inzwischen getrennten Uhr waere
-        // ein stilles Falschanzeigen, kein leeres Feld (siehe Klassendoc).
-        val heartRateBpm by RecordingRepository.heartRateBpm.collectAsStateWithLifecycle()
-        val watchConnected by RecordingRepository.watchConnected.collectAsStateWithLifecycle()
-        val pulsBpm = heartRateBpm.takeIf { watchConnected }
 
         BackHandler { onClose() }
 
@@ -255,46 +263,47 @@ internal fun RideModeScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.Center,
                 ) {
+                    val formats = LocalAppFormats.current
                     BigValue(
-                        value = speedKmh?.let { formatOneDecimalDe(it) } ?: "–",
+                        value = speedKmh?.let { formats.decimal(it, 1) } ?: "–",
                         label = "km/h",
                         size = SpeedValueSize,
                         spoken = speedKmh
-                            ?.let { "Tempo ${formatOneDecimalDe(it)} Kilometer pro Stunde" }
-                            ?: "Tempo unbekannt",
+                            ?.let { stringResource(R.string.map_ride_speed_cd, formats.decimal(it, 1)) }
+                            ?: stringResource(R.string.map_ride_speed_unknown_cd),
                     )
                     Spacer(Modifier.height(CardGap))
                     Row(modifier = Modifier.fillMaxWidth()) {
                         BigValue(
                             modifier = Modifier.weight(1f),
-                            value = formatKmDe(distanceKm),
-                            label = "km gefahren",
+                            value = formats.km(distanceKm),
+                            label = stringResource(R.string.map_ride_distance_label),
                             size = SecondaryValueSize,
-                            spoken = "Distanz ${formatKmDe(distanceKm)} Kilometer",
+                            spoken = stringResource(R.string.map_ride_distance_cd, formats.km(distanceKm)),
                         )
                         BigValue(
                             modifier = Modifier.weight(1f),
                             value = formatDuration(elapsedS),
-                            label = "Fahrzeit",
+                            label = stringResource(R.string.map_ride_time_label),
                             size = SecondaryValueSize,
-                            spoken = "Fahrzeit ${formatDuration(elapsedS)}",
+                            spoken = stringResource(R.string.map_ride_time_cd, formatDuration(elapsedS)),
                         )
                     }
-                    if (pulsBpm != null) {
+                    // Feste Stelle der Sensorzeile (siehe Klassendoc): nach
+                    // Distanz/Fahrzeit, vor den Hoehenmetern.
+                    if (sensoren.anzahl > 0) {
                         Spacer(Modifier.height(CardGap))
-                        BigValue(
-                            value = "$pulsBpm",
-                            label = "bpm · Puls",
-                            size = SecondaryValueSize,
-                            spoken = "Puls $pulsBpm Schläge pro Minute",
+                        LiveSensorRow(
+                            sensoren = sensoren,
+                            groesse = if (sensoren.anzahl <= 2) SecondaryValueSize else ThreeUpValueSize,
                         )
                     }
                     Spacer(Modifier.height(CardGap))
                     BigValue(
                         value = "${ascentM.roundToInt()}",
-                        label = "Höhenmeter ↑",
+                        label = stringResource(R.string.map_ride_ascent_label),
                         size = SmallValueSize,
-                        spoken = "${ascentM.roundToInt()} Höhenmeter bergauf",
+                        spoken = stringResource(R.string.map_ride_ascent_cd, ascentM.roundToInt()),
                     )
                 }
 
@@ -303,14 +312,18 @@ internal fun RideModeScreen(
                 Row(modifier = Modifier.fillMaxWidth()) {
                         RideModeAction(
                             modifier = Modifier.weight(1f),
-                            label = if (paused) "Weiter" else "Pause",
+                            label = if (paused) {
+                                stringResource(R.string.map_ride_resume_action)
+                            } else {
+                                stringResource(R.string.map_ride_pause_action)
+                            },
                             // Pause ist folgenlos und wirkt deshalb sofort —
                             // anders als das Beenden daneben, das erst noch
                             // durch die Rueckfrage muss.
                             description = if (paused) {
-                                "Aufzeichnung fortsetzen"
+                                stringResource(R.string.map_ride_resume_cd)
                             } else {
-                                "Aufzeichnung pausieren"
+                                stringResource(R.string.map_ride_pause_cd)
                             },
                             icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
                             container = MaterialTheme.colorScheme.primary,
@@ -324,8 +337,8 @@ internal fun RideModeScreen(
                             onEnd = onStop,
                             modifier = Modifier.weight(1f),
                             minHeight = RideModeActionHeight,
-                            label = "Beenden",
-                            holdHint = "gedrückt halten",
+                            label = stringResource(R.string.map_ride_end_action),
+                            holdHint = stringResource(R.string.map_ride_end_hold_hint),
                             icon = Icons.Filled.Stop,
                             iconSize = RideModeActionIconSize,
                             textStyle = MaterialTheme.typography.headlineSmall,
@@ -394,9 +407,9 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = when {
-                        paused && autoPaused -> "Auto-Pause"
-                        paused -> "Pausiert"
-                        else -> "Aufzeichnung"
+                        paused && autoPaused -> stringResource(R.string.map_ride_status_auto_paused)
+                        paused -> stringResource(R.string.map_ride_status_paused)
+                        else -> stringResource(R.string.map_ride_status_recording)
                     },
                     maxLines = 1,
                     style = MaterialTheme.typography.titleMedium,
@@ -404,14 +417,12 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
             }
         }
         Spacer(Modifier.weight(1f))
+        val showMapCd = stringResource(R.string.map_ride_show_map_cd)
         Surface(
             onClick = onShowMap,
             modifier = Modifier
                 .height(RideModeExitHeight)
-                .semantics {
-                    contentDescription = "Zur Kartenseite des Fahrmodus wechseln, " +
-                        "Aufzeichnung läuft weiter"
-                },
+                .semantics { contentDescription = showMapCd },
             shape = MaterialTheme.shapes.small,
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -423,7 +434,7 @@ private fun RideModeHeader(paused: Boolean, autoPaused: Boolean, onShowMap: () -
                 Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Karte",
+                    text = stringResource(R.string.map_ride_show_map_action),
                     maxLines = 1,
                     style = MaterialTheme.typography.titleMedium,
                 )
@@ -479,6 +490,39 @@ private fun BigValue(
 }
 
 /**
+ * Die Sensorzeile des Fahrmodus: je vorhandener Quelle eine gleich breite
+ * [BigValue]-Kachel, immer in der Reihenfolge Puls · Leistung ·
+ * Trittfrequenz. Mit nur einer Kachel sieht sie aus wie die fruehere
+ * Puls-Kachel.
+ */
+@Composable
+private fun LiveSensorRow(sensoren: LiveSensorAnzeige, groesse: TextUnit) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        sensoren.puls?.let { kachel ->
+            val t = sensorKachelText(SensorKachelArt.PULS, kachel, stringResource(R.string.ble_ride_hr_label))
+            BigValue(Modifier.weight(1f), t, groesse)
+        }
+        sensoren.leistung?.let { kachel ->
+            val t = sensorKachelText(SensorKachelArt.LEISTUNG, kachel, stringResource(R.string.ble_ride_power_label))
+            BigValue(Modifier.weight(1f), t, groesse)
+        }
+        sensoren.trittfrequenz?.let { kachel ->
+            val t = sensorKachelText(
+                SensorKachelArt.TRITTFREQUENZ,
+                kachel,
+                stringResource(R.string.ble_ride_cadence_label),
+            )
+            BigValue(Modifier.weight(1f), t, groesse)
+        }
+    }
+}
+
+@Composable
+private fun BigValue(modifier: Modifier, text: SensorKachelText, size: TextUnit) {
+    BigValue(value = text.wert, label = text.label, size = size, spoken = text.spoken, modifier = modifier)
+}
+
+/**
  * Die Fuehrung des Fahrmodus als eigene, farbige Flaeche direkt unter der
  * Kopfzeile: gross die naechste Kurve (Pfeil plus gerundete Distanz — dieselbe
  * Auskunft wie im Navigations-HUD auf der Karte, `NavigationHud.kt`), darunter
@@ -500,13 +544,17 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
     }
     val richtung = navigation.naechsteKurve
     val abstandM = navigation.naechsteKurveM
-    val spoken = (
-        if (richtung != null && abstandM != null) {
-            "Nächste Kurve: ${turnAnsageText(richtung, abstandM)}"
-        } else {
-            "Keine Kurve in Sicht, dem Routenverlauf folgen."
-        }
-        ) + " Noch ${formatKmDe(navigation.remainingKm)} Kilometer auf ${navigation.label}."
+    val remainingKm = LocalAppFormats.current.km(navigation.remainingKm)
+    val spoken = if (richtung != null && abstandM != null) {
+        stringResource(
+            R.string.map_ride_nav_turn_cd,
+            turnAnsageText(richtung, abstandM, LocalCoreTexts.current),
+            remainingKm,
+            navigation.label,
+        )
+    } else {
+        stringResource(R.string.map_ride_nav_no_turn_cd, remainingKm, navigation.label)
+    }
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -526,9 +574,9 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
                 Column {
                     Text(
                         text = if (richtung != null && abstandM != null) {
-                            kurveAbstandKurzText(abstandM)
+                            kurveAbstandKurzText(abstandM).asString()
                         } else {
-                            "Geradeaus"
+                            stringResource(R.string.map_nav_straight_label)
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -537,7 +585,11 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = if (richtung != null) kurveAnzeigeWort(richtung) else "dem Weg folgen",
+                        text = if (richtung != null) {
+                            kurveAnzeigeWort(richtung).asString()
+                        } else {
+                            stringResource(R.string.map_nav_follow_label)
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleLarge,
@@ -555,7 +607,11 @@ private fun NavigationPanel(navigation: RideModeNavigation) {
 @Composable
 private fun RemainingLine(navigation: RideModeNavigation) {
     Text(
-        text = "${formatKmDe(navigation.remainingKm)} km übrig · ${navigation.label}",
+        text = stringResource(
+            R.string.map_ride_nav_remaining_line,
+            LocalAppFormats.current.km(navigation.remainingKm),
+            navigation.label,
+        ),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         style = MaterialTheme.typography.titleMedium,
@@ -572,20 +628,22 @@ private fun RemainingLine(navigation: RideModeNavigation) {
  */
 @Composable
 private fun OffRouteWarning(navigation: RideModeNavigation) {
+    val spoken = stringResource(
+        R.string.map_ride_nav_off_route_cd,
+        LocalAppFormats.current.km(navigation.remainingKm),
+        navigation.label,
+    )
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clearAndSetSemantics {
-                contentDescription = "Abseits der Route. Noch ${formatKmDe(navigation.remainingKm)} " +
-                    "Kilometer auf ${navigation.label}."
-            },
+            .clearAndSetSemantics { contentDescription = spoken },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(
-                text = "Abseits der Route",
+                text = stringResource(R.string.map_nav_off_route_title),
                 fontSize = SmallValueSize,
                 lineHeight = SmallValueSize * 1.1f,
                 fontWeight = FontWeight.Bold,
@@ -698,6 +756,9 @@ private fun Context.findActivity(): Activity? {
 private val SpeedValueSize = 96.sp
 private val SecondaryValueSize = 52.sp
 private val SmallValueSize = 30.sp
+
+/** Drei Sensorkacheln nebeneinander: eine Stufe unter [SecondaryValueSize], damit „215" und „142" passen. */
+private val ThreeUpValueSize = 40.sp
 
 /** Symbolgroesse beider Bedienflaechen — Pause/Weiter und Beenden gleich. */
 private val RideModeActionIconSize = 36.dp

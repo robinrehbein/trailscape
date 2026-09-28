@@ -1,8 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,6 +8,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Portierung der Gruppen `Physikmodell`, `Kalibrierung α (HF ↔ Physik)` und
@@ -107,7 +108,7 @@ class PhysicsAndCascadeTest {
         // 1200 s × 4 m/s × 5 % = 240 m Anstieg (Hysterese 3 m).
         assertEquals(240.0, series.ascentM, 6.0)
 
-        val physics = computePhysicsEstimate(series, refProfile)
+        val physics = computePhysicsEstimate(series, refProfile, texts = CoreTextsDe)
         assertTrue(physics.available)
         assertEquals(1200.0, physics.movingTimeS, 1.0)
         // Referenzrechnung bei h = 120 m ≈ 219 W; Randeffekte der Glaettung
@@ -117,7 +118,7 @@ class PhysicsAndCascadeTest {
         assertTrue(physics.eTss > 0)
         assertTrue(physics.kcal > 0)
         assertEquals(Confidence.MEDIUM, physics.confidence)
-        assertTrue(physics.powerText.contains("±15–25 %"))
+        assertTrue(physics.powerText(CoreTextsDe).contains("±15–25 %"))
     }
 
     @Test
@@ -129,7 +130,7 @@ class PhysicsAndCascadeTest {
             gradeTan = 0.05,
             startEle = 0.0,
         )
-        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile)
+        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
         val hours = physics.movingTimeS / 3600
         val expected = hours * physics.intensityFactor * physics.intensityFactor * 100
         assertEquals(expected, physics.eTss, 1e-6)
@@ -143,6 +144,7 @@ class PhysicsAndCascadeTest {
                 refProfile,
             ),
             refProfile,
+            texts = CoreTextsDe,
         )
         val climb = computePhysicsEstimate(
             buildRideSeries(
@@ -156,6 +158,7 @@ class PhysicsAndCascadeTest {
                 refProfile,
             ),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertTrue(flat.eTss < climb.eTss)
         assertTrue(flat.avgPowerW < climb.avgPowerW)
@@ -182,7 +185,7 @@ class PhysicsAndCascadeTest {
             track(pointCount = 400, stepS = 1, withElevation = false),
             refProfile,
         )
-        val physics = computePhysicsEstimate(series, refProfile)
+        val physics = computePhysicsEstimate(series, refProfile, texts = CoreTextsDe)
         assertFalse(physics.available)
         assertTrue(physics.unavailableReason!!.contains("Höhenprofil"))
         assertEquals(0.0, physics.eTss, 0.0)
@@ -193,6 +196,7 @@ class PhysicsAndCascadeTest {
         val physics = computePhysicsEstimate(
             buildRideSeries(track(pointCount = 5, stepS = 1), refProfile),
             refProfile,
+            texts = CoreTextsDe,
         )
         assertFalse(physics.available)
         assertNotNull(physics.unavailableReason)
@@ -200,7 +204,7 @@ class PhysicsAndCascadeTest {
 
     @Test
     fun `leere Serie wirft nicht`() {
-        val physics = computePhysicsEstimate(RideSeries.EMPTY, refProfile)
+        val physics = computePhysicsEstimate(RideSeries.EMPTY, refProfile, texts = CoreTextsDe)
         assertFalse(physics.available)
         assertTrue(physics.series.isEmpty)
     }
@@ -270,7 +274,7 @@ class PhysicsAndCascadeTest {
         assertEquals(Confidence.LOW, c.confidence)
         // Der Rohwert bleibt sichtbar — frueher verschwand der Fall lautlos.
         assertEquals(2.5, c.rawAlpha!!, 1e-9)
-        assertTrue(c.note!!.contains("2,50"))
+        assertTrue(c.note(CoreTextsDe)!!.contains("2,50"))
     }
 
     @Test
@@ -396,6 +400,7 @@ class PhysicsAndCascadeTest {
         val result = computeRideLoad(
             points = track(pointCount = 361, hr = { 130 }),
             profile = refProfile,
+            texts = CoreTextsDe,
         )
         assertEquals(LoadSource.HERZFREQUENZ, result.source)
         assertEquals(38.518307560003834, result.load, 1e-6)
@@ -412,7 +417,7 @@ class PhysicsAndCascadeTest {
             gradeTan = 0.05,
             startEle = 0.0,
         )
-        val plain = computeRideLoad(points = points, profile = refProfile)
+        val plain = computeRideLoad(points = points, profile = refProfile, texts = CoreTextsDe)
         assertEquals(LoadSource.PHYSIK, plain.source)
         assertTrue(plain.load > 0)
 
@@ -425,6 +430,7 @@ class PhysicsAndCascadeTest {
                 clamped = false,
                 confidence = Confidence.MEDIUM,
             ),
+            texts = CoreTextsDe,
         )
         assertEquals(1.25 * plain.load, scaled.load, 1e-6)
     }
@@ -432,7 +438,7 @@ class PhysicsAndCascadeTest {
     @Test
     fun `Stufe C - ohne HF und ohne Hoehe rettet RPE die Tour`() {
         val points = track(pointCount = 400, stepS = 1, withElevation = false)
-        val result = computeRideLoad(points = points, profile = refProfile, rpe = 6.0)
+        val result = computeRideLoad(points = points, profile = refProfile, rpe = 6.0, texts = CoreTextsDe)
         assertEquals(LoadSource.RPE, result.source)
         // 399 s Bewegungszeit ≈ 6,65 min × 6 × 1/6
         assertEquals(399.0 / 60 * 6 / 6, result.load, 1e-6)
@@ -451,6 +457,7 @@ class PhysicsAndCascadeTest {
                 ascentM = 0.0,
                 descentM = 0.0,
             ),
+            texts = CoreTextsDe,
         )
         assertEquals(LoadSource.HEURISTIK, result.source)
         // 2 h × 55 × clamp(44/(2×22)) = 110 × 1,0
@@ -487,7 +494,7 @@ class PhysicsAndCascadeTest {
 
     @Test
     fun `ohne jede Datengrundlage ist die Quelle keine und die Last 0`() {
-        val result = computeRideLoad(points = emptyList(), profile = refProfile)
+        val result = computeRideLoad(points = emptyList(), profile = refProfile, texts = CoreTextsDe)
         assertEquals(LoadSource.KEINE, result.source)
         assertFalse(result.available)
         assertEquals(0.0, result.load, 0.0)
@@ -504,7 +511,7 @@ class PhysicsAndCascadeTest {
             points = points,
             stats = RideStats(distanceKm = 18.0, ascentM = 0.0, descentM = 0.0),
         )
-        val result = computeRideLoadForRide(ride, refProfile)
+        val result = computeRideLoadForRide(ride, refProfile, texts = CoreTextsDe)
         assertEquals(LoadSource.HERZFREQUENZ, result.source)
         assertEquals(38.518307560003834, result.load, 1e-6)
     }
@@ -512,5 +519,102 @@ class PhysicsAndCascadeTest {
     @Test
     fun `Last ist auf 500 gedeckelt`() {
         assertEquals(maxLoad, normalizeTrimp(100000.0, refProfile), 0.0)
+    }
+
+    // --- Gemessene Leistung (Leistungsmesser) ---
+
+    private fun mitLeistung(points: List<TrackPoint>, power: (Int) -> Int?): List<TrackPoint> =
+        points.mapIndexed { i, p -> p.copy(power = power(i)) }
+
+    @Test
+    fun `gemessene Leistung ab 80 Prozent - measured, Messmittel, HIGH`() {
+        val points = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1)) { 180 }
+        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
+        assertTrue(physics.available)
+        assertTrue(physics.measured)
+        assertEquals(180.0, physics.avgPowerW, 1e-9)
+        assertEquals(Confidence.HIGH, physics.confidence)
+        assertEquals(1.0, physics.series.measuredCoverage, 1e-9)
+        assertTrue(physics.powerText(CoreTextsDe).startsWith("Gemessene Leistung ≈ 180 W"))
+    }
+
+    @Test
+    fun `gemessene Leistung braucht weder Hoehenprofil noch Gewicht`() {
+        val points = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1, withElevation = false)) { 200 }
+        val ohneGewicht = refProfile.copy(weightKg = 0.0)
+        val physics = computePhysicsEstimate(buildRideSeries(points, ohneGewicht), ohneGewicht, texts = CoreTextsDe)
+        assertTrue(physics.available)
+        assertTrue(physics.measured)
+        assertEquals(200.0, physics.avgPowerW, 1e-9)
+    }
+
+    @Test
+    fun `gemessene Leistung unter 15 min bleibt MEDIUM`() {
+        val points = mitLeistung(track(pointCount = 601, speedMs = 4.0, stepS = 1)) { 200 }
+        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
+        assertTrue(physics.measured)
+        assertEquals(Confidence.MEDIUM, physics.confidence)
+    }
+
+    @Test
+    fun `halbe Abdeckung ist reine Schaetzung und nicht measured`() {
+        val ohne = track(pointCount = 1201, speedMs = 4.0, stepS = 1, gradeTan = 0.05, startEle = 0.0)
+        val points = mitLeistung(ohne) { i ->
+            if (i <= 600) 250 else null
+        }
+        val physics = computePhysicsEstimate(buildRideSeries(points, refProfile), refProfile, texts = CoreTextsDe)
+        assertTrue(physics.available)
+        assertFalse(physics.measured)
+        // Keine Mischung: Unter 80 % bleibt die Messung ungenutzt — sonst liefe
+        // der gemessene Anteil in die α-Kalibrierung und wuerde mit α skaliert.
+        assertEquals(0.0, physics.series.measuredCoverage, 0.0)
+        assertTrue(physics.series.samples.none { it.measured })
+        val geschaetzt = computePhysicsEstimate(buildRideSeries(ohne, refProfile), refProfile, texts = CoreTextsDe)
+        assertEquals(geschaetzt.avgPowerW, physics.avgPowerW, 1e-9)
+        assertEquals(geschaetzt.eTss, physics.eTss, 1e-9)
+        assertTrue(physics.powerText(CoreTextsDe).contains("±15–25 %"))
+        // Ohne Hoehenprofil faellt die Mischung wie jede Schaetzung aus.
+        val flach = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1, withElevation = false)) { i ->
+            if (i <= 600) 250 else null
+        }
+        assertFalse(computePhysicsEstimate(buildRideSeries(flach, refProfile), refProfile, texts = CoreTextsDe).available)
+    }
+
+    @Test
+    fun `Luecke ueber 30 s traegt keine gemessene Leistung`() {
+        val points = listOf(
+            TrackPoint(lat = 47.0, lon = 11.0, time = T0, power = 100),
+            TrackPoint(lat = 47.0001, lon = 11.0, time = T0 + 5_000, power = 200),
+            TrackPoint(lat = 47.001, lon = 11.0, time = T0 + 65_000, power = 300),
+        )
+        val series = buildRideSeries(points, refProfile)
+        assertEquals(200, series.segments[0].powerW)
+        assertNull(series.segments[1].powerW)
+    }
+
+    @Test
+    fun `Kaskade ohne HF mit gemessener Leistung - LEISTUNG ohne alpha`() {
+        val points = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1)) { 220 }
+        val plain = computeRideLoad(points = points, profile = refProfile, texts = CoreTextsDe)
+        assertEquals(LoadSource.LEISTUNG, plain.source)
+        assertEquals(Confidence.HIGH, plain.confidence)
+        assertTrue(plain.note.contains("gemessenen Leistung"))
+        assertTrue(plain.note.contains("100 % Abdeckung"))
+        val kalibriert = computeRideLoad(
+            points = points,
+            profile = refProfile,
+            calibration = LoadCalibration(alpha = 1.4, sampleCount = 12, clamped = true, confidence = Confidence.MEDIUM), texts = CoreTextsDe,
+        )
+        assertEquals(plain.load, kalibriert.load, 0.0)
+        assertEquals(Confidence.HIGH, kalibriert.confidence)
+        assertEquals("aus gemessener Leistung", CoreTextsDe.load.loadSource(LoadSource.LEISTUNG))
+    }
+
+    @Test
+    fun `Kaskade mit HF und gemessener Leistung bleibt Herzfrequenz`() {
+        val points = mitLeistung(track(pointCount = 1201, speedMs = 4.0, stepS = 1, hr = { 130 })) { 220 }
+        val result = computeRideLoad(points = points, profile = refProfile, texts = CoreTextsDe)
+        assertEquals(LoadSource.HERZFREQUENZ, result.source)
+        assertTrue(result.physics.measured)
     }
 }

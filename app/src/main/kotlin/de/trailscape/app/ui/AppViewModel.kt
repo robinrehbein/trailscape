@@ -3,12 +3,14 @@ package de.trailscape.app.ui
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.ExplorerTilesCacheStore
 import de.trailscape.app.data.RideLoadCacheStore
 import de.trailscape.app.data.RideStorage
 import de.trailscape.app.data.SegmentStore
 import de.trailscape.app.data.TombstoneStore
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderStore
 import de.trailscape.app.routing.RoutingServerSettings
@@ -19,10 +21,8 @@ import de.trailscape.app.routing.describeSegmentOffer
 import de.trailscape.app.ui.rides.formatImprovementDe
 import de.trailscape.app.update.UpdateCheckResult
 import de.trailscape.app.update.UpdateChecker
-import de.trailscape.core.TrackPoint
 import de.trailscape.core.ActivityFileInput
-import de.trailscape.core.bulkImportFailureText
-import de.trailscape.core.bulkImportMessage
+import de.trailscape.core.EXPLORER_TILES_CHEAP_REFRESH_MAX
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
 import de.trailscape.core.HealthConnection
@@ -42,20 +42,24 @@ import de.trailscape.core.SegmentNewBest
 import de.trailscape.core.SegmentRegistry
 import de.trailscape.core.SyncConfig
 import de.trailscape.core.SyncResult
+import de.trailscape.core.TrackPoint
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingPlanStore
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.VitalsHistory
 import de.trailscape.core.VitalsSummary
 import de.trailscape.core.attachRouteToRide
+import de.trailscape.core.bulkImportFailureText
+import de.trailscape.core.bulkImportMessage
 import de.trailscape.core.collectExplorerTiles
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
-import de.trailscape.core.EXPLORER_TILES_CHEAP_REFRESH_MAX
 import de.trailscape.core.explorerTilesCacheGaps
 import de.trailscape.core.explorerTilesNewInRide
 import de.trailscape.core.formatDuration
 import de.trailscape.core.getSyncConfig
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.coreTexts
 import de.trailscape.core.loadPlan
 import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
@@ -73,12 +77,12 @@ import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,8 +95,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -137,6 +141,9 @@ enum class MoreSection {
 
     /** „Health Connect" — Uhr verbinden, Vitalwerte holen. */
     HEALTH,
+
+    /** „Strava" — Konto verbinden (z. B. nachdem Strava den Zugang entzogen hat). */
+    STRAVA,
 }
 
 /**
@@ -228,17 +235,32 @@ class AppViewModel(
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
 
     /**
-     * Einmalige, kurze Hinweise fuer eine Snackbar (deutschsprachig). Der
-     * Screen, der gerade sichtbar ist, sammelt sie ein:
+     * Einmalige, kurze Hinweise fuer eine Snackbar, bereits in der App-Sprache
+     * aufgeloest (siehe [showMessage] mit [UiText]). Der Screen, der gerade
+     * sichtbar ist, sammelt sie ein:
      * ```kotlin
      * LaunchedEffect(Unit) { appViewModel.messages.collect { snackbarHostState.showSnackbar(it) } }
      * ```
      */
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
-    /** Stellt einen Hinweis in die Warteschlange (verwirft ihn bei vollem Puffer). */
+    /**
+     * Stellt einen fertigen Hinweis in die Warteschlange (verwirft ihn bei
+     * vollem Puffer). Fuer Texte, die schon aufgeloest sind — Fehlermeldungen
+     * aus `:core`, Namen. Neue Meldungen kommen als [UiText] (siehe unten).
+     */
     fun showMessage(text: String) {
         _messages.tryEmit(text)
+    }
+
+    /**
+     * Stellt einen Ressourcen-Hinweis in die Warteschlange. Er wird **sofort**
+     * in der aktuellen App-Sprache aufgeloest ([AppServices.localizedContext]):
+     * [messages] bleibt ein Strom fertiger Strings, und die Sammler in den
+     * Screens aendern sich nicht.
+     */
+    fun showMessage(text: UiText) {
+        showMessage(text.resolve(AppServices.localizedContext()))
     }
 
     // -------------------------------------------------------------------------
@@ -784,13 +806,7 @@ class AppViewModel(
     private fun reportQuarantined(count: Int) {
         if (count <= 0 || quarantineReported) return
         quarantineReported = true
-        showMessage(
-            if (count == 1) {
-                "1 Tourdatei war unlesbar und liegt jetzt im Ordner „defekt“."
-            } else {
-                "$count Tourdateien waren unlesbar und liegen jetzt im Ordner „defekt“."
-            },
-        )
+        showMessage(UiText.Plural(R.plurals.rides_import_quarantined_count, count))
     }
 
     /**
@@ -927,20 +943,21 @@ class AppViewModel(
             try {
                 fileImportMutex.withLock {
                     _ridesLoading.first { loading -> !loading }
+                    val texts = AppServices.coreTexts()
                     val result = withContext(computation) {
-                        de.trailscape.core.importActivityFiles(files, allSummaries)
+                        de.trailscape.core.importActivityFiles(files, allSummaries, texts = texts)
                     }
                     saveNewRides(result.rides)
                     result.rides.singleOrNull()?.let { ride ->
                         select(ride.id)
                         if (openInHistory) requestRideDetail(ride.id)
                     }
-                    val failure = bulkImportFailureText(result)
+                    val failure = bulkImportFailureText(result, texts = texts)
                     if (failure != null) {
                         _fileImportFailure.value = failure
                     } else {
                         _fileImportNotice.value = FileImportNotice(
-                            message = bulkImportMessage(result),
+                            message = bulkImportMessage(result, texts = texts),
                             errors = result.errors,
                             inHistory = openInHistory,
                         )
@@ -1398,8 +1415,8 @@ class AppViewModel(
                     // was gespeichert wurde, der naechste Versuch kann aber
                     // genauso scheitern — etwa bei vollem Speicher). Jeder
                     // andere Fehler bleibt still.
-                    if (e.message != HEALTH_SAVE_FAILED_MESSAGE) throw e
-                    showMessage(HEALTH_SAVE_FAILED_MESSAGE)
+                    if (e.message != healthSaveFailedMessage()) throw e
+                    showMessage(e.message)
                 }
                 syncVitals()
             }
@@ -1455,7 +1472,7 @@ class AppViewModel(
      * Zurueckrollen wie frueher entfaellt.
      *
      * @throws HealthSyncException bei Lesefehlern oder, mit
-     *   [HEALTH_SAVE_FAILED_MESSAGE], wenn das Speichern scheiterte.
+     *   [healthSaveFailedMessage], wenn das Speichern scheiterte.
      */
     private suspend fun runHealthImport(reimportAll: Boolean): HealthSyncReport =
         viewModelScope.async {
@@ -1513,7 +1530,7 @@ class AppViewModel(
                             refreshSegments()
                         }
                         throw when (error) {
-                            is HealthSaveFailedException -> HealthSyncException(HEALTH_SAVE_FAILED_MESSAGE)
+                            is HealthSaveFailedException -> HealthSyncException(healthSaveFailedMessage())
                             else -> error
                         }
                     },
@@ -1630,7 +1647,7 @@ class AppViewModel(
         if (route == null) return false
         if (route.isEmpty()) {
             dismissRouteConsent(request)
-            showMessage("Health Connect hat für diese Tour keine Route.")
+            showMessage(UiText.Res(R.string.rides_health_route_missing_error))
             return false
         }
         val ride = withContext(io) { runCatching { rideStorage.loadRide(request.rideId) }.getOrNull() }
@@ -1646,14 +1663,14 @@ class AppViewModel(
         val updated = attachRouteToRide(ride, route, heartRate).touchedNow()
         val saved = withContext(io) { runCatching { rideStorage.saveRides(listOf(updated)) } }
         if (saved.isFailure) {
-            showMessage("Die Route konnte nicht gespeichert werden.")
+            showMessage(UiText.Res(R.string.rides_health_route_save_error))
             return false
         }
         dismissRouteConsent(request)
         reloadRides()
         refreshSegments(reportRideIds = setOf(updated.id))
         refreshExplorerTilesIfEnabled()
-        showMessage("Route für „${ride.name}“ ergänzt.")
+        showMessage(UiText.Res(R.string.rides_health_route_added_status, listOf(ride.name)))
         return true
     }
 
@@ -1709,21 +1726,37 @@ class AppViewModel(
      * also nie zwei gleichzeitige Zugriffe auf den Cache aus diesem Flow.
      */
     val insights: StateFlow<TrainingInsights> =
-        combine(_rides, _vitals, _profile) { rides, vitals, profile ->
-            Triple(rides, vitals, profile)
+        combine(_rides, _vitals, _profile, AppServices.appLanguage) { rides, vitals, profile, language ->
+            InsightsInput(rides, vitals, profile, language)
         }
-            .mapLatest { (rides, vitals, profile) ->
+            .mapLatest { input ->
                 computeInsights(
-                    rides = rides,
-                    vitals = vitals,
-                    profile = profile,
+                    rides = input.rides,
+                    vitals = input.vitals,
+                    profile = input.profile,
                     now = LocalDateTime.now(),
                     factsStore = rideLoadCache,
                     loadRide = { rideStorage.loadRide(it) },
+                    // Die Sprache ist Eingang des Flows: Nach einem Wechsel
+                    // rechnet die Auswertung ihre Saetze neu, statt die alten
+                    // stehen zu lassen (siehe docs/i18n.md).
+                    texts = coreTexts(input.language),
                 )
             }
             .flowOn(computation)
-            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyTrainingInsights())
+            .stateIn(
+                viewModelScope,
+                SharingStarted.Eagerly,
+                emptyTrainingInsights(texts = AppServices.coreTexts()),
+            )
+
+    /** Eingang von [insights] — ein Tupel mit sprechenden Namen. */
+    private data class InsightsInput(
+        val rides: List<RideSummary>,
+        val vitals: VitalsSummary?,
+        val profile: TrainingProfile,
+        val language: AppLanguage,
+    )
 
     /** Trainingslast einer einzelnen Tour; `null`, wenn sie unbekannt ist. */
     fun rideLoad(rideId: String): RideLoad? = insights.value.rideLoads[rideId]
@@ -1789,7 +1822,7 @@ class AppViewModel(
             for (info in ridesNeedingSegmentUpdate(registry, summaries)) {
                 // Eine Volltour zurzeit: laden, einrechnen, verwerfen.
                 val ride = withContext(io) { rideStorage.loadRide(info.id) } ?: continue
-                val update = updateSegmentRegistry(registry, ride)
+                val update = updateSegmentRegistry(registry, ride, AppServices.coreTexts())
                 registry = update.registry
                 if (info.id in reportRideIds) {
                     newBests += update.newBests
@@ -1810,13 +1843,15 @@ class AppViewModel(
             newBests.size == 1 -> {
                 val best = newBests.first()
                 showMessage(
-                    "Neue Bestzeit auf „${best.segmentName}“: ${formatDuration(best.timeS)}, " +
-                        "${formatImprovementDe(best.improvementS)} schneller.",
+                    UiText.Res(
+                        R.string.rides_segment_new_best_status,
+                        listOf(best.segmentName, formatDuration(best.timeS), formatImprovementDe(best.improvementS)),
+                    ),
                 )
             }
             // Mehrere auf einmal (z. B. Runden-Tour ueber mehrere Anstiege):
             // EINE Meldung statt einer Snackbar-Kaskade.
-            else -> showMessage("Neue Bestzeiten auf ${newBests.size} Segmenten.")
+            else -> showMessage(UiText.Plural(R.plurals.rides_segment_new_bests_count, newBests.size))
         }
     }
 
@@ -2334,19 +2369,18 @@ class AppViewModel(
                 )
             }
             showMessage(
-                when {
-                    // Kein Entwicklerdeutsch („nicht eingereiht") und kein
-                    // Rueckschluss, den nur wir ziehen koennen: WorkManager
-                    // lehnt praktisch nur bei fehlendem Speicher oder
-                    // eingeschraeteter App ab — beides loest ein neuer Versuch
-                    // nach dem Nachsehen.
-                    !started ->
-                        "Der Download der Kartendaten ließ sich nicht starten. " +
-                            "Prüfe, ob genug Speicher frei ist, und versuche es erneut."
-                    _segmentUnmeteredOnly.value ->
-                        "Kartendaten werden geladen, sobald WLAN da ist."
-                    else -> "Kartendaten werden geladen."
-                },
+                UiText.Res(
+                    when {
+                        // Kein Entwicklerdeutsch („nicht eingereiht") und kein
+                        // Rueckschluss, den nur wir ziehen koennen: WorkManager
+                        // lehnt praktisch nur bei fehlendem Speicher oder
+                        // eingeschraeteter App ab — beides loest ein neuer
+                        // Versuch nach dem Nachsehen.
+                        !started -> R.string.map_segments_download_start_error
+                        _segmentUnmeteredOnly.value -> R.string.map_segments_download_wifi_status
+                        else -> R.string.map_segments_download_status
+                    },
+                ),
             )
         }
     }
@@ -2427,6 +2461,7 @@ class AppViewModel(
                 deleteLocal = { rideStorage.deleteRide(it) },
                 listTombstones = { tombstoneStore.list() },
                 replaceTombstones = { tombstoneStore.replaceAll(it) },
+                texts = AppServices.coreTexts(),
             )
         }
         reloadRides()
@@ -2497,7 +2532,7 @@ class AppViewModel(
             } ?: return@launch
             startup.noticeVersion?.let { _updateAvailable.value = it }
             startup.announceVersion?.let {
-                showMessage("Version $it ist verfügbar — in den Einstellungen herunterladen.")
+                showMessage(UiText.Res(R.string.more_update_available_status, listOf(it)))
             }
         }
     }
@@ -2518,7 +2553,7 @@ class AppViewModel(
                 reloadRides()
                 select(rideId)
                 RecordingRepository.clearFinishedRide()
-                showMessage("Tour gespeichert.")
+                showMessage(UiText.Res(R.string.rides_record_saved_status))
                 // Nach der Fahrt: die Entdeckt-Kacheln nachziehen und melden,
                 // wie viele davon neu sind — der eigentliche Reiz des Layers
                 // ist ja, dass eine Fahrt ihn veraendert. Der Vergleich
@@ -2530,7 +2565,7 @@ class AppViewModel(
                     refreshExplorerTiles()
                     val neue = (_explorerTiles.value - vorher).size
                     if (neue > 0) {
-                        showMessage("⊞ +$neue neue Kacheln entdeckt.")
+                        showMessage(UiText.Plural(R.plurals.map_explorer_new_tiles_count, neue))
                     }
                 }
                 // Nach der Fahrt: Segmente einrechnen und eine etwaige
@@ -2756,10 +2791,13 @@ private fun decodePlaceSearchHistory(raw: String?): List<PlaceSearchHistoryEntry
  * werden konnten. `:core` bestaetigt Zeitstempel und Lang-Import-Fortschritt
  * erst nach dem Speichern (siehe `AppViewModel.runHealthImport`), der naechste
  * Sync holt dieselben Workouts also erneut.
+ *
+ * Eine Funktion statt Konstante: Die Meldung steht in der App-Sprache. Sie
+ * dient zugleich als Erkennungsmerkmal der Ausnahme; beide Seiten loesen sie
+ * in derselben Sprache auf.
  */
-private const val HEALTH_SAVE_FAILED_MESSAGE: String =
-    "Die importierten Touren konnten nicht gespeichert werden. " +
-        "Beim nächsten Sync wird es erneut versucht."
+private fun healthSaveFailedMessage(): String =
+    AppServices.localizedContext().getString(R.string.rides_health_import_save_error)
 
 /** Hoechstzahl Punkte je Spur in der Verlaufs-Karte. */
 private const val HISTORY_TRACK_MAX_POINTS = 200

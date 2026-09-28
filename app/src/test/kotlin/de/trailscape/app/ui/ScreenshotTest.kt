@@ -6,31 +6,34 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
-import de.trailscape.app.ui.map.LONG_PRESS_HINT_TEXT
-import de.trailscape.app.ui.map.LocalMapRenderingAvailable
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
-import org.junit.Assert.assertEquals
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
-import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
-import androidx.compose.ui.test.hasSetTextAction
+import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.testing.TestLocales
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
+import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
+import de.trailscape.app.ui.map.LocalMapRenderingAvailable
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.Goal
 import de.trailscape.core.Ride
@@ -38,7 +41,13 @@ import de.trailscape.core.RideStats
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.assessFitness
 import de.trailscape.core.generatePlan
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import de.trailscape.core.savePlan
+import kotlin.math.cos
+import kotlin.math.sin
+import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -48,8 +57,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * Screenshots der vier Tabs und der Einstellungen — das Werkzeug fuer den
@@ -60,11 +67,13 @@ import kotlin.math.sin
  * `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotTest*'`.
  * Die PNGs landen in `app/build/outputs/roborazzi/`.
  *
- * Geraet: Galaxy S25 (1080 × 2340 px, rund 411 × 891 dp).
+ * Geraet: Galaxy S25 (1080 × 2340 px, rund 411 × 891 dp). Sprache: fest
+ * Deutsch ([TestLocales.S25_DE]) — die Tests klicken auf deutsche Texte.
+ * Englische Bilder tragen „-en" im Namen und laufen mit „+en-rGB".
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class ScreenshotTest {
 
     @get:Rule
@@ -87,7 +96,7 @@ class ScreenshotTest {
             date = NOW + 8 * WEEK_MS,
             targetDurationMin = 130,
         )
-        savePlan(AppServices.trainingPlanStore, generatePlan(goal, assessFitness(rides), now = NOW))
+        savePlan(AppServices.trainingPlanStore, generatePlan(goal, assessFitness(rides), now = NOW, texts = CoreTextsDe))
     }
 
     @Test
@@ -120,7 +129,7 @@ class ScreenshotTest {
 
     /** Ganze Seiten auf einem sehr hohen Bildschirm — zeigt, was sonst unter dem Rand liegt. */
     @Test
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
     fun tall() {
         start()
         shot("11-heute-lang")
@@ -147,7 +156,7 @@ class ScreenshotTest {
      * Warnfarbe, der Rest ruhige Zeilen.
      */
     @Test
-    @Config(qualifiers = "w411dp-h2400dp-xxhdpi")
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
     fun trainingHinweise() {
         val goal = Goal(
             name = "Alb-Gold",
@@ -158,7 +167,7 @@ class ScreenshotTest {
         )
         savePlan(
             AppServices.trainingPlanStore,
-            generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS),
+            generatePlan(goal, assessFitness(sampleRides()), now = NOW - 3 * WEEK_MS, texts = CoreTextsDe),
         )
         start()
         tab("Training")
@@ -194,7 +203,7 @@ class ScreenshotTest {
      * Karte bleibt.
      */
     @Test
-    @Config(qualifiers = "w360dp-h640dp-xxhdpi")
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h640dp-xxhdpi")
     fun schmal() {
         RuntimeEnvironment.setFontScale(1.15f)
         start()
@@ -280,15 +289,16 @@ class ScreenshotTest {
         AppServices.keyValueStore.remove(LONG_PRESS_HINT_STORAGE_KEY)
         start()
         tab("Karte")
+        val hint = compose.activity.getString(R.string.map_long_press_hint_snackbar)
         var waited = 0L
-        while (compose.onAllNodesWithText(LONG_PRESS_HINT_TEXT).fetchSemanticsNodes().isEmpty() &&
+        while (compose.onAllNodesWithText(hint).fetchSemanticsNodes().isEmpty() &&
             waited < LONG_PRESS_HINT_CALM_MS + 2_000
         ) {
             compose.mainClock.advanceTimeBy(100)
             compose.waitForIdle()
             waited += 100
         }
-        compose.onAllNodesWithText(LONG_PRESS_HINT_TEXT)[0].assertIsDisplayed()
+        compose.onAllNodesWithText(hint)[0].assertIsDisplayed()
         // Die Einblende-Animation der Snackbar zu Ende laufen lassen.
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
@@ -314,6 +324,43 @@ class ScreenshotTest {
         compose.onAllNodesWithText("Zur Vektorkarte wechseln")[0].performClick()
         settle()
         shot("41-karte-stil-offline")
+    }
+
+    /**
+     * Die Karte auf Englisch (i18n-map): das „Wohin?"-Blatt, hochgewischt mit
+     * gespeicherten Routen, das Tour-Blatt und das Stil-Blatt. Geklickt wird
+     * ueber Ressourcen, nicht ueber Literale — nur der Tab heisst je nach
+     * Stand der Shell-Uebersetzung noch „Karte" oder schon „Map".
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun karteEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        val context = compose.activity
+        start()
+        compose.onAllNodes(hasText("Karte") or hasText("Map"))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_explore_search_placeholder))[0].assertExists()
+        assertEquals("Where to?", context.getString(R.string.map_explore_search_placeholder))
+        shot("07-karte-en")
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.Expand))[0]
+            .performSemanticsAction(SemanticsActions.Expand)
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_explore_saved_routes_label))[0].assertExists()
+        shot("08-karte-wohin-offen-en")
+        compose.onAllNodesWithText("Alb-Runde über Hayingen")[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_ride_card_start_action))[0].assertExists()
+        shot("09-karte-tour-en")
+        compose.onAllNodesWithContentDescription(context.getString(R.string.map_ride_card_close_cd))[0]
+            .performClick()
+        settle()
+        compose.onAllNodesWithContentDescription(context.getString(R.string.map_layers_cd))[0].performClick()
+        settle()
+        compose.onAllNodesWithText("OpenStreetMap")[0].performTouchInput { swipeUp() }
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.map_style_sheet_switch_action))[0].assertExists()
+        shot("40-karte-stil-raster-en")
     }
 
     /**
@@ -404,6 +451,71 @@ class ScreenshotTest {
         return hasText("Karte", substring = true) and !navTab and !hasAnyAncestor(navTab)
     }
 
+    /**
+     * Der Heute-Tab auf Englisch (`01-heute-en`), danach die Sprachseite
+     * (`45-einstellungen-sprache-en`).
+     *
+     * Das Bild allein beweist nichts; die Knoten pruefen, dass wirklich
+     * englisch gezeichnet wird: Titel und „Warum"-Link aus
+     * `values-en/strings_today.xml`, das Zahnrad („Settings" aus
+     * `strings_common.xml`) und die Texte der Sprachseite aus
+     * `values-en/strings_more.xml`.
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        start()
+        assertEquals(AppLanguage.EN, AppServices.appLanguage.value)
+        // Die Auswertung rechnet ihre `:core`-Saetze in der Sprache der
+        // Oberflaeche neu (AppViewModel.insights kombiniert appLanguage).
+        val viewModel = ViewModelProvider(compose.activity)[AppViewModel::class.java]
+        compose.waitUntil(timeoutMillis = 10_000) {
+            val recommendation = viewModel.insights.value.recommendation
+            recommendation.title == CoreTextsEn.readiness.recommendationTitle(recommendation.kind)
+        }
+        val context = compose.activity
+        val settings = context.getString(R.string.common_settings_cd)
+        assertEquals("Settings", settings)
+        compose.onAllNodesWithContentDescription(settings)[0].assertExists()
+        assertEquals("Today", context.getString(R.string.today_screen_title))
+        compose.onAllNodesWithText(context.getString(R.string.today_screen_title))[0].assertExists()
+        compose.onAllNodesWithText(context.getString(R.string.today_hero_why_action))[0].assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.today_week_eyebrow))[0].assertExists()
+        shot("01-heute-en")
+
+        compose.onAllNodesWithContentDescription(settings)[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.more_language_title))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.more_language_hint))[0].assertExists()
+        assertEquals(
+            1,
+            compose.onAllNodesWithText("If you don’t choose a language", substring = true)
+                .fetchSemanticsNodes().size,
+        )
+        shot("45-einstellungen-sprache-en")
+    }
+
+    /** Mehr → Sprache: Auswahl System/Deutsch/English und die beiden Hinweise. */
+    @Test
+    fun spracheSeite() {
+        start()
+        compose.onAllNodesWithContentDescription("Einstellungen", substring = true)[0].performClick()
+        settle()
+        compose.onAllNodesWithText("Sprache")[0].performClick()
+        settle()
+        shot("45-einstellungen-sprache")
+    }
+
+    /** Die deutschen Bilder laufen wirklich deutsch — sonst braechen die Klicks auf Texte. */
+    @Test
+    fun spracheIstDeutsch() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        start()
+        assertEquals(AppLanguage.DE, AppServices.appLanguage.value)
+    }
+
     /** Losfahren-Dialog: Hauptaktion gefuellt, Alternative umrandet, Abbrechen als Text. */
     @Test
     fun losfahren() {
@@ -411,6 +523,85 @@ class ScreenshotTest {
         compose.onAllNodesWithContentDescription("Aufzeichnung starten")[0].performClick()
         settle()
         shot("18-losfahren")
+    }
+
+    /**
+     * „Warum?"-Blatt und Losfahren-Dialog auf Englisch — die beiden Stellen
+     * mit den laengsten Saetzen von „Heute" (`05-warum-en`, `18-losfahren-en`).
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteEnglischDetails() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        start()
+        val context = compose.activity
+        compose.onAllNodesWithText(context.getString(R.string.today_hero_why_action))[0].performClick()
+        settle()
+        compose.onAllNodesWithText(context.getString(R.string.today_signal_sleep_label))[0].assertExists()
+        compose.onAllNodesWithText(context.getString(R.string.today_signal_load_label))[0].assertExists()
+        shot("05-warum-en")
+        compose.onAllNodesWithText(context.getString(R.string.today_why_sheet_dismiss_action))[0].performClick()
+        settle()
+
+        recordButton().performClick()
+        settle()
+        assertEquals("Start riding", context.getString(R.string.today_ready_title))
+        compose.onAllNodesWithText(context.getString(R.string.today_ready_title))[0].assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.today_ready_free_body))[0].assertIsDisplayed()
+        shot("18-losfahren-en")
+    }
+
+    /**
+     * „Heute" auf Englisch auf einem schmalen Geraet (360 dp) mit Samsungs
+     * erster Vergroesserungsstufe — findet abgeschnittene englische
+     * Beschriftungen im Hero-Knopf, im Wochenstreifen und in der Zielzeile.
+     */
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w360dp-h1400dp-xxhdpi")
+    fun heuteEnglischSchmal() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        RuntimeEnvironment.setFontScale(1.15f)
+        start()
+        compose.onAllNodesWithText(compose.activity.getString(R.string.today_goal_eyebrow))[0].assertIsDisplayed()
+        shot("12-heute-schmal-en")
+    }
+
+    /**
+     * Erststart auf Englisch: keine gefahrene Tour — die erste Runde im
+     * Hero-Knopf („Build loop · 26 km") und die Einladung zum Import.
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteEnglischErststart() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        sampleRides().filterNot { it.planned }.forEach { AppServices.rideStorage.deleteRide(it.id) }
+        start()
+        val context = compose.activity
+        assertEquals("No rides yet", context.getString(R.string.today_first_ride_title))
+        compose.onAllNodesWithText(context.getString(R.string.today_first_ride_title))[0].assertIsDisplayed()
+        compose.onAllNodesWithText(context.getString(R.string.today_first_ride_import_action))[0].assertExists()
+        shot("19-heute-erststart-en")
+    }
+
+    /**
+     * Der schwebende Aufnahme-Knopf. Seine Beschreibung gehoert dem Bereich
+     * der App-Huelle (`RecCapsuleButton.kt`): Solange dort noch der deutsche
+     * Text steht, wird nach ihm gesucht; sobald die Huelle ihre eigene
+     * Ressource `shell_rec_start_cd` mitbringt, nach deren Wert. Der Schluessel
+     * wird per Name aufgeloest, damit dieser Test ohne den Huellen-Zweig
+     * kompiliert und nach dem Zusammenfuehren nicht an einem geaenderten
+     * englischen Text der Huelle bricht.
+     */
+    @Suppress("DiscouragedApi")
+    private fun recordButton(): SemanticsNodeInteraction {
+        val context = compose.activity
+        val shellKey = context.resources.getIdentifier("shell_rec_start_cd", "string", context.packageName)
+        val matcher = if (shellKey != 0) {
+            hasContentDescription(context.getString(shellKey))
+        } else {
+            hasContentDescription("Aufzeichnung starten")
+        }
+        return compose.onAllNodes(matcher)[0]
     }
 
     private fun start(dark: Boolean = false) {

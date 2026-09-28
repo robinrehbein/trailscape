@@ -1,16 +1,17 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import kotlin.math.atan2
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlin.math.atan2
-import kotlin.math.ceil
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 /**
  * Routenberechnung ueber den oeffentlichen BRouter-Server.
@@ -51,12 +52,15 @@ enum class RouteProfile { GRAVEL, SCHOTTER, ASPHALT, RADWEGE, KUERZESTER }
  * falsch angeschrieben. Der Modus mit dem echten Gravel-Profil steht jetzt
  * zuerst, weil er der ist, den diese App verspricht.
  */
-val routeProfileLabels: Map<RouteProfile, String> = linkedMapOf(
-    RouteProfile.SCHOTTER to "Gravel (Schotter & unbefestigt)",
-    RouteProfile.GRAVEL to "Trekking (Asphalt & feste Wege gemischt)",
-    RouteProfile.ASPHALT to "Rennrad / Asphalt",
-    RouteProfile.RADWEGE to "Radwege bevorzugt",
-    RouteProfile.KUERZESTER to "Kürzeste Route",
+fun routeProfileLabel(profile: RouteProfile, texts: CoreTexts): String = texts.routing.routeProfile(profile)
+
+/** Die Reihenfolge der Fahrmodi in Auswahllisten: das echte Gravel-Profil zuerst. */
+val routeProfileDisplayOrder: List<RouteProfile> = listOf(
+    RouteProfile.SCHOTTER,
+    RouteProfile.GRAVEL,
+    RouteProfile.ASPHALT,
+    RouteProfile.RADWEGE,
+    RouteProfile.KUERZESTER,
 )
 
 /**
@@ -172,13 +176,10 @@ const val watchdogRetryPauseMs: Long = 1500
 const val legRequestPauseMs: Long = 250
 
 /** Meldung bei Watchdog-Abbruch bzw. Server-Timeout. */
-const val errorServerOverloaded: String =
-    "Der Routing-Server ist gerade überlastet oder die Strecke ist zu lang. " +
-        "Versuch es mit näheren Wegpunkten noch einmal."
+fun errorServerOverloaded(texts: CoreTexts): String = texts.routing.serverOverloaded()
 
 /** Meldung, wenn der Server ohne verwertbaren Text scheitert. */
-const val errorRouteFailed: String =
-    "Route konnte nicht berechnet werden. Versuch es gleich noch einmal."
+fun errorRouteFailed(texts: CoreTexts): String = texts.routing.routeFailed()
 
 /** Hoechstlaenge des in die Meldung uebernommenen Servertexts. */
 private const val MAX_SERVER_TEXT_CHARS = 200
@@ -196,26 +197,26 @@ internal fun isServerOverloadBody(body: String): Boolean {
 }
 
 /**
- * Uebersetzt einen Server-Fehlerbody in eine deutsche Meldung.
+ * Uebersetzt einen Server-Fehlerbody in eine Meldung in der Sprache von [texts].
  *
  * Bekannte Ueberlast-/Timeout-Faelle bekommen [errorServerOverloaded];
  * alles andere eine generische Meldung, die den Originaltext **in Klammern**
  * mitfuehrt, damit Bugreports weiterhin diagnostizierbar bleiben.
  */
-internal fun routingErrorMessage(body: String): String {
+internal fun routingErrorMessage(body: String, texts: CoreTexts): String {
     if (isServerOverloadBody(body)) {
-        return errorServerOverloaded
+        return errorServerOverloaded(texts)
     }
     val text = body.trim().replace(Regex("\\s+"), " ")
     if (text.isEmpty()) {
-        return errorRouteFailed
+        return errorRouteFailed(texts)
     }
     val shortened = if (text.length > MAX_SERVER_TEXT_CHARS) {
         text.take(MAX_SERVER_TEXT_CHARS) + "…"
     } else {
         text
     }
-    return "Route konnte nicht berechnet werden. (Servermeldung: $shortened)"
+    return texts.routing.routeFailedWithServerText(shortened)
 }
 
 // ---------------------------------------------------------------------------
@@ -477,13 +478,19 @@ private fun uploadGravelProfile(client: HttpClient, baseUrl: String): String? {
 }
 
 /** Setzt genau eine Routing-Anfrage ab. */
-private fun requestRouteOnce(lonlats: String, profileId: String, client: HttpClient, baseUrl: String): HttpResponse {
+private fun requestRouteOnce(
+    lonlats: String,
+    profileId: String,
+    client: HttpClient,
+    baseUrl: String,
+    texts: CoreTexts,
+): HttpResponse {
     val url = "${normalizeServerBaseUrl(baseUrl)}?lonlats=$lonlats&profile=$profileId" +
         "&alternativeidx=0&format=geojson"
     return try {
         client.execute(HttpRequest(method = HttpMethod.GET, url = url))
     } catch (e: Exception) {
-        throw Exception("Routing-Server nicht erreichbar. Bist du online?")
+        throw Exception(texts.routing.serverUnreachable())
     }
 }
 
@@ -502,23 +509,24 @@ private fun requestRoute(
     client: HttpClient,
     sleeper: (Long) -> Unit,
     baseUrl: String,
+    texts: CoreTexts,
 ): HttpResponse {
-    val first = requestRouteOnce(lonlats, profileId, client, baseUrl)
+    val first = requestRouteOnce(lonlats, profileId, client, baseUrl, texts)
     if (isOk(first) || !isServerOverloadBody(first.body)) {
         return first
     }
     sleeper(watchdogRetryPauseMs)
-    return requestRouteOnce(lonlats, profileId, client, baseUrl)
+    return requestRouteOnce(lonlats, profileId, client, baseUrl, texts)
 }
 
 private fun isOk(response: HttpResponse): Boolean =
     response.statusCode in 200..299
 
-private fun parseRouteResponse(response: HttpResponse): PlannedRoute {
+private fun parseRouteResponse(response: HttpResponse, texts: CoreTexts): PlannedRoute {
     if (!isOk(response)) {
-        throw Exception(routingErrorMessage(response.body))
+        throw Exception(routingErrorMessage(response.body, texts))
     }
-    return parseBrouterGeoJson(response.body)
+    return parseBrouterGeoJson(response.body, texts)
 }
 
 /**
@@ -535,6 +543,7 @@ private fun fetchRouteWithCustomGravel(
     client: HttpClient,
     sleeper: (Long) -> Unit,
     baseUrl: String,
+    texts: CoreTexts,
 ): PlannedRoute {
     var profileId = customGravelProfileId
     if (profileId == null) {
@@ -543,15 +552,15 @@ private fun fetchRouteWithCustomGravel(
     }
 
     if (profileId != null) {
-        val response = requestRoute(lonlats, profileId, client, sleeper, baseUrl)
+        val response = requestRoute(lonlats, profileId, client, sleeper, baseUrl, texts)
         if (isOk(response)) {
-            return parseBrouterGeoJson(response.body)
+            return parseBrouterGeoJson(response.body, texts)
         }
         // Ueberlast liegt nicht am Profil: [requestRoute] hat bereits einmal
         // wiederholt, weitere Anfragen wuerden den Server nur zusaetzlich
         // belasten. Also direkt mit der deutschen Meldung aufgeben.
         if (isServerOverloadBody(response.body)) {
-            throw Exception(errorServerOverloaded)
+            throw Exception(errorServerOverloaded(texts))
         }
 
         // Vermutlich wurde das hochgeladene Profil serverseitig verworfen:
@@ -560,19 +569,19 @@ private fun fetchRouteWithCustomGravel(
         val freshId = uploadGravelProfile(client, baseUrl)
         if (freshId != null) {
             customGravelProfileId = freshId
-            val retry = requestRoute(lonlats, freshId, client, sleeper, baseUrl)
+            val retry = requestRoute(lonlats, freshId, client, sleeper, baseUrl, texts)
             if (isOk(retry)) {
-                return parseBrouterGeoJson(retry.body)
+                return parseBrouterGeoJson(retry.body, texts)
             }
             customGravelProfileId = null
             if (isServerOverloadBody(retry.body)) {
-                throw Exception(errorServerOverloaded)
+                throw Exception(errorServerOverloaded(texts))
             }
         }
     }
 
     // Fallback: öffentliches Profil, damit immer eine Route herauskommt.
-    return parseRouteResponse(requestRoute(lonlats, FALLBACK_PROFILE, client, sleeper, baseUrl))
+    return parseRouteResponse(requestRoute(lonlats, FALLBACK_PROFILE, client, sleeper, baseUrl, texts), texts)
 }
 
 /** Routet **ein** Leg (eine Server-Anfrage) und liefert das Teilergebnis. */
@@ -582,14 +591,15 @@ private fun fetchLeg(
     client: HttpClient,
     sleeper: (Long) -> Unit,
     baseUrl: String,
+    texts: CoreTexts,
 ): PlannedRoute {
     val lonlats = waypoints.joinToString("|") { wp ->
         "${toStringAsFixed(wp.lon, 6)},${toStringAsFixed(wp.lat, 6)}"
     }
     return if (profileId == CUSTOM_GRAVEL_PROFILE) {
-        fetchRouteWithCustomGravel(lonlats, client, sleeper, baseUrl)
+        fetchRouteWithCustomGravel(lonlats, client, sleeper, baseUrl, texts)
     } else {
-        parseRouteResponse(requestRoute(lonlats, profileId, client, sleeper, baseUrl))
+        parseRouteResponse(requestRoute(lonlats, profileId, client, sleeper, baseUrl, texts), texts)
     }
 }
 
@@ -630,9 +640,10 @@ fun fetchRoute(
     sleeper: (Long) -> Unit = { ms -> if (ms > 0) Thread.sleep(ms) },
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
     baseUrl: String = defaultBrouterServerUrl,
+    texts: CoreTexts,
 ): PlannedRoute {
     if (waypoints.size < 2) {
-        throw Exception("Mindestens zwei Wegpunkte nötig.")
+        throw Exception(texts.routing.needTwoWaypoints())
     }
 
     val legs = planRouteLegs(waypoints)
@@ -643,7 +654,7 @@ fun fetchRoute(
         if (index > 0) {
             sleeper(legRequestPauseMs)
         }
-        parts.add(fetchLeg(leg, profileId, client, sleeper, baseUrl))
+        parts.add(fetchLeg(leg, profileId, client, sleeper, baseUrl, texts))
         onProgress?.invoke(index + 1, legs.size)
     }
 
@@ -655,8 +666,8 @@ fun fetchRoute(
  * [PlannedRoute]. Öffentlich, damit Tests direkt gegen gecannte
  * Server-Antworten prüfen können.
  */
-fun parseBrouterGeoJson(body: String): PlannedRoute {
-    val unexpectedFormat = "Unerwartete Antwort vom Routing-Server."
+fun parseBrouterGeoJson(body: String, texts: CoreTexts): PlannedRoute {
+    val unexpectedFormat = texts.routing.unexpectedServerResponse()
 
     val data = try {
         Json.parseToJsonElement(body)

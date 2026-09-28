@@ -37,25 +37,7 @@ class OkHttpClientAdapter(
 ) : HttpClient {
 
     override fun execute(request: HttpRequest): HttpResponse {
-        // OkHttp verlangt fuer POST/PUT einen (ggf. leeren) Body, waehrend GET
-        // gar keinen haben darf und DELETE ihn nur erlaubt — alle Aufrufstellen
-        // in :core setzen bei POST/PUT zwar immer einen Body, dieser Fallback
-        // macht den Adapter aber robust, falls das in Zukunft nicht mehr gilt.
-        val requiresBody = request.method == HttpMethod.POST || request.method == HttpMethod.PUT
-        val requestBodyText = request.body
-        val body = when {
-            requestBodyText != null -> requestBodyText.toRequestBody(JSON_MEDIA_TYPE)
-            requiresBody -> "".toRequestBody(JSON_MEDIA_TYPE)
-            else -> null
-        }
-
-        val okRequest = Request.Builder()
-            .url(request.url)
-            .apply {
-                request.headers.forEach { (name, value) -> addHeader(name, value) }
-            }
-            .method(request.method.toOkHttpMethod(), body)
-            .build()
+        val okRequest = buildOkRequest(request)
 
         try {
             client.newCall(okRequest).execute().use { response ->
@@ -74,6 +56,52 @@ class OkHttpClientAdapter(
             // `SocketException`, die dort ebenso durchgereicht wird.
             throw e
         }
+    }
+
+    /**
+     * Baut die OkHttp-Anfrage — herausgezogen, damit der Test Body und
+     * Content-Type ohne Netz pruefen kann.
+     *
+     * ## Content-Type
+     * Ohne `Content-Type`-Header des Aufrufers gilt wie bisher JSON
+     * (`application/json; charset=utf-8`). Setzt der Aufrufer einen (Gross-/
+     * Kleinschreibung egal), wird der Body mit **genau diesem** Typ gebaut:
+     * Einen zusaetzlich per Header gesetzten Typ ueberschriebe OkHttps
+     * BridgeInterceptor sonst mit dem Typ des Bodys — ein Multipart-Upload
+     * (Strava) kaeme dann als JSON ohne Boundary an. Der Body geht als
+     * UTF-8-Bytes hinein, damit OkHttp kein `; charset=` anhaengt; das
+     * vertragen nicht alle Server bei `multipart/form-data`. Fuer den
+     * Selfhost-Sync (setzt `application/json`) faellt damit nur der
+     * Charset-Zusatz weg; der Server dekodiert ohnehin immer UTF-8.
+     */
+    internal fun buildOkRequest(request: HttpRequest): Request {
+        // OkHttp verlangt fuer POST/PUT einen (ggf. leeren) Body, waehrend GET
+        // gar keinen haben darf und DELETE ihn nur erlaubt — alle Aufrufstellen
+        // in :core setzen bei POST/PUT zwar immer einen Body, dieser Fallback
+        // macht den Adapter aber robust, falls das in Zukunft nicht mehr gilt.
+        val requiresBody = request.method == HttpMethod.POST || request.method == HttpMethod.PUT
+        val contentTypeHeader = request.headers.entries
+            .firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }
+        val explicitType = contentTypeHeader?.value?.toMediaTypeOrNull()
+        val requestBodyText = request.body ?: if (requiresBody) "" else null
+        val body = when {
+            requestBodyText == null -> null
+            explicitType != null -> requestBodyText.toByteArray(Charsets.UTF_8).toRequestBody(explicitType)
+            else -> requestBodyText.toRequestBody(JSON_MEDIA_TYPE)
+        }
+
+        return Request.Builder()
+            .url(request.url)
+            .apply {
+                request.headers.forEach { (name, value) ->
+                    // Der Typ steckt schon im Body (siehe oben); doppelt
+                    // gesetzt gewaenne ohnehin der des Bodys.
+                    if (body != null && explicitType != null && name == contentTypeHeader?.key) return@forEach
+                    addHeader(name, value)
+                }
+            }
+            .method(request.method.toOkHttpMethod(), body)
+            .build()
     }
 
     private fun HttpMethod.toOkHttpMethod(): String = when (this) {

@@ -1,13 +1,14 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 /**
  * Tests fuer die lokalen Segment-Bestleistungen (`RideSegments.kt`):
@@ -147,12 +148,12 @@ class RideSegmentsTest {
         val r1 = climbRide("r1", T0, dtMs = 5000L)
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00004)
 
-        val after1 = updateSegmentRegistry(SegmentRegistry.EMPTY, r1)
+        val after1 = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe)
         assertEquals(0, after1.registry.segments.size)
         assertEquals(1, after1.registry.candidates.size)
         assertEquals(emptyList(), after1.newBests)
 
-        val after2 = updateSegmentRegistry(after1.registry, r2)
+        val after2 = updateSegmentRegistry(after1.registry, r2, texts = CoreTextsDe)
         assertEquals(1, after2.registry.segments.size)
         assertEquals(0, after2.registry.candidates.size)
         val segment = after2.registry.segments.first()
@@ -165,8 +166,8 @@ class RideSegmentsTest {
         val r1 = climbRide("r1", T0, dtMs = 5000L)
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00004)
 
-        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        val update = updateSegmentRegistry(registry, r2)
+        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        val update = updateSegmentRegistry(registry, r2, texts = CoreTextsDe)
 
         assertEquals(1, update.newBests.size)
         val best = update.newBests.first()
@@ -180,8 +181,8 @@ class RideSegmentsTest {
         val r1 = climbRide("r1", T0, dtMs = 4000L)
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 5000L, jitterLat = 0.00004)
 
-        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        val update = updateSegmentRegistry(registry, r2)
+        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        val update = updateSegmentRegistry(registry, r2, texts = CoreTextsDe)
 
         assertEquals(1, update.registry.segments.size)
         assertEquals(emptyList(), update.newBests)
@@ -204,8 +205,8 @@ class RideSegmentsTest {
         val points = track(reversedSteps, 5000L, startMs = T0 + 86_400_000L)
         val r2 = Ride(id = "r2", name = "r2", createdAt = T0 + 86_400_000L, stats = computeStats(points), points = points)
 
-        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        val after = updateSegmentRegistry(registry, r2).registry
+        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        val after = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
 
         assertEquals(0, after.segments.size)
         assertEquals(2, after.candidates.size)
@@ -217,8 +218,8 @@ class RideSegmentsTest {
         // Parallelstrasse ~220 m weiter noerdlich.
         val r2 = climbRide("r2", T0 + 86_400_000L, jitterLat = 0.002)
 
-        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        val after = updateSegmentRegistry(registry, r2).registry
+        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        val after = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
 
         assertEquals(0, after.segments.size)
         assertEquals(2, after.candidates.size)
@@ -248,7 +249,7 @@ class RideSegmentsTest {
     @Test
     fun `zwei Runden in einer Tour bleiben zwei Kandidaten und werden zwei Efforts`() {
         val laps = twoLapRide("laps", T0)
-        val after1 = updateSegmentRegistry(SegmentRegistry.EMPTY, laps)
+        val after1 = updateSegmentRegistry(SegmentRegistry.EMPTY, laps, texts = CoreTextsDe)
 
         // Zwei Runden EINER Tour gruenden noch kein Segment.
         assertEquals(0, after1.registry.segments.size)
@@ -257,7 +258,7 @@ class RideSegmentsTest {
         // Eine zweite Tour ueber den Anstieg etabliert das Segment — mit
         // beiden Runden der ersten Tour als Efforts.
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00002)
-        val after2 = updateSegmentRegistry(after1.registry, r2)
+        val after2 = updateSegmentRegistry(after1.registry, r2, texts = CoreTextsDe)
 
         assertEquals(1, after2.registry.segments.size)
         assertEquals(0, after2.registry.candidates.size)
@@ -278,9 +279,9 @@ class RideSegmentsTest {
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00004)
         val r3 = climbRide("r3", T0 + 2 * 86_400_000L, dtMs = 4500L, jitterLat = 0.00002)
 
-        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        registry = updateSegmentRegistry(registry, r2).registry
-        registry = updateSegmentRegistry(registry, r3).registry
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r3, texts = CoreTextsDe).registry
 
         assertEquals(1, registry.segments.size)
         val v1 = segmentEffortsForRide(registry, "r1").single()
@@ -309,9 +310,9 @@ class RideSegmentsTest {
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00004)
         val r3 = climbRide("r3", T0 + 2 * 86_400_000L, dtMs = 4500L, jitterLat = 0.00002)
 
-        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        registry = updateSegmentRegistry(registry, r2).registry
-        registry = updateSegmentRegistry(registry, r3).registry
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r3, texts = CoreTextsDe).registry
 
         val v1 = segmentEffortsForRide(registry, "r1").single()
         val v2 = segmentEffortsForRide(registry, "r2").single()
@@ -341,11 +342,11 @@ class RideSegmentsTest {
         val r2 = climbRide("r2", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00002, hr = 148)
         val flat = flatRide("flat", T0 + 3 * 86_400_000L)
 
-        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, laps).registry
-        registry = updateSegmentRegistry(registry, r2).registry
-        registry = updateSegmentRegistry(registry, flat).registry
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, laps, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, flat, texts = CoreTextsDe).registry
         // Zusaetzlich ein wartender Kandidat im Bestand.
-        registry = updateSegmentRegistry(registry, climbRide("solo", T0 + 4 * 86_400_000L, jitterLat = 0.003)).registry
+        registry = updateSegmentRegistry(registry, climbRide("solo", T0 + 4 * 86_400_000L, jitterLat = 0.003), texts = CoreTextsDe).registry
 
         val json = registry.toJson().toString()
         val decoded = SegmentRegistry.fromJson(Json.parseToJsonElement(json) as JsonObject)
@@ -361,12 +362,12 @@ class RideSegmentsTest {
     fun `geaenderte Tour ersetzt ihre Efforts statt sie zu verdoppeln`() {
         val r1 = climbRide("r1", T0)
         val r2 = climbRide("r2", T0 + 86_400_000L, jitterLat = 0.00004)
-        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        registry = updateSegmentRegistry(registry, r2).registry
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
 
         // HF-Anreicherung: gleiche Punkte, neues updatedAt.
         val r2b = r2.copy(updatedAt = r2.updatedAt + 1000L)
-        val after = updateSegmentRegistry(registry, r2b).registry
+        val after = updateSegmentRegistry(registry, r2b, texts = CoreTextsDe).registry
 
         assertEquals(1, after.segments.size)
         assertEquals(2, after.segments.first().efforts.size)
@@ -377,7 +378,7 @@ class RideSegmentsTest {
     @Test
     fun `ridesNeedingSegmentUpdate erkennt neue und geaenderte Touren`() {
         val r1 = climbRide("r1", T0)
-        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
+        val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
 
         val unchanged = r1.toSummary()
         val changed = r1.copy(updatedAt = r1.updatedAt + 5).toSummary()
@@ -400,8 +401,8 @@ class RideSegmentsTest {
     fun `Loeschung entfernt Efforts und leere Segmente`() {
         val r1 = climbRide("r1", T0)
         val r2 = climbRide("r2", T0 + 86_400_000L, jitterLat = 0.00004)
-        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry
-        registry = updateSegmentRegistry(registry, r2).registry
+        var registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry
+        registry = updateSegmentRegistry(registry, r2, texts = CoreTextsDe).registry
 
         // r1 geloescht: Segment bleibt mit dem verbliebenen Effort bestehen.
         val withoutR1 = retainRidesInSegmentRegistry(registry, setOf("r2"))
@@ -424,8 +425,8 @@ class RideSegmentsTest {
         val r1 = climbRide("r1", T0)
         val r2 = climbRide("r2", T0 + 86_400_000L, jitterLat = 0.00004)
 
-        val a = updateSegmentRegistry(updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry, r2).registry
-        val b = updateSegmentRegistry(updateSegmentRegistry(SegmentRegistry.EMPTY, r1).registry, r2).registry
+        val a = updateSegmentRegistry(updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry, r2, texts = CoreTextsDe).registry
+        val b = updateSegmentRegistry(updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry, r2, texts = CoreTextsDe).registry
 
         assertEquals(a.segments.single().id, b.segments.single().id)
         assertNotEquals("", a.segments.single().id)

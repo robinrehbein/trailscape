@@ -3,6 +3,8 @@ package de.trailscape.app.data
 import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
 import de.trailscape.app.health.HealthConnectGateway
+import de.trailscape.app.i18n.AppLocale
+import de.trailscape.app.i18n.localizedFor
 import de.trailscape.app.reminder.ReminderStore
 import de.trailscape.app.routing.RoutingServerSettings
 import de.trailscape.app.routing.SegmentDownloadWorker
@@ -11,6 +13,8 @@ import de.trailscape.app.routing.SegmentInventory
 import de.trailscape.app.routing.SegmentMetadataStore
 import de.trailscape.app.routing.SegmentSettings
 import de.trailscape.app.update.UpdateChecker
+import de.trailscape.app.update.installerPackageName
+import de.trailscape.app.update.isUpdateCheckAllowed
 import de.trailscape.app.update.runNumberFromVersionCode
 import de.trailscape.core.HealthGateway
 import de.trailscape.core.HealthSyncService
@@ -18,11 +22,16 @@ import de.trailscape.core.HealthSyncStore
 import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.TrainingPlanStore
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.coreTexts
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import okhttp3.OkHttpClient
 
 /**
@@ -60,6 +69,37 @@ object AppServices {
     fun init(context: Context) {
         appContext = context.applicationContext
     }
+
+    // -----------------------------------------------------------------------
+    // Sprache
+    // -----------------------------------------------------------------------
+
+    private val languageState: MutableStateFlow<AppLanguage> by lazy {
+        MutableStateFlow(AppLocale.current(appContext))
+    }
+
+    /**
+     * Die Sprache der App. Startwert aus [AppLocale.current]; danach setzt
+     * `TrailscapeApp()` sie aus der Konfiguration der Activity (siehe
+     * [setAppLanguage]). Jeder Flow, der `:core`-Texte erzeugt, kombiniert
+     * diesen Wert — sonst blieben nach einem Sprachwechsel alte Saetze stehen.
+     */
+    val appLanguage: StateFlow<AppLanguage> get() = languageState
+
+    /** Setzt die Sprache (von `TrailscapeApp()` und [AppLocale.refresh]). */
+    fun setAppLanguage(language: AppLanguage) {
+        languageState.value = language
+    }
+
+    /** Die `:core`-Texte in der aktuellen Sprache. */
+    fun coreTexts(): CoreTexts = coreTexts(appLanguage.value)
+
+    /**
+     * Ein Kontext, dessen Ressourcen in der aktuellen App-Sprache antworten —
+     * fuer Meldungen, die ausserhalb einer Komposition entstehen
+     * (`AppViewModel.showMessage`).
+     */
+    fun localizedContext(): Context = appContext.localizedFor(appLanguage.value)
 
     /**
      * Lang laufender Scope fuer App-weite Hintergrundarbeit (Health-Sync,
@@ -211,6 +251,19 @@ object AppServices {
     }
 
     /**
+     * Ob die GitHub-Update-Pruefung laufen darf — `false`, wenn Google Play
+     * die App installiert hat (siehe
+     * [de.trailscape.app.update.isUpdateCheckAllowed]).
+     *
+     * Einmal pro Prozess gelesen: Der Installer aendert sich zur Laufzeit
+     * nicht; ein Update ueber eine andere Quelle startet den Prozess ohnehin
+     * neu.
+     */
+    val updateChecksAllowed: Boolean by lazy {
+        isUpdateCheckAllowed(installerPackageName(appContext))
+    }
+
+    /**
      * Der Update-Kanal (siehe [UpdateChecker]). Benutzt denselben
      * [httpClient] und [keyValueStore] wie der Rest der App.
      */
@@ -219,6 +272,7 @@ object AppServices {
             httpClient = httpClient,
             store = keyValueStore,
             installedRunNumber = { installedRunNumber },
+            checkAllowed = { updateChecksAllowed },
         )
     }
 
@@ -254,6 +308,6 @@ object AppServices {
      * festhalten koennen.
      */
     val healthSyncService: HealthSyncService by lazy {
-        HealthSyncService(gateway = healthGateway, store = healthSyncStore)
+        HealthSyncService(gateway = healthGateway, store = healthSyncStore, texts = { coreTexts() })
     }
 }

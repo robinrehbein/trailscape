@@ -3,54 +3,58 @@ package de.trailscape.app.ui.training
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.asString
+import de.trailscape.app.ui.TrainingInsights
+import de.trailscape.app.ui.components.CoachCard
 import de.trailscape.app.ui.components.NeutralButton
+import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.FitnessAssessment
 import de.trailscape.core.FitnessDirection
 import de.trailscape.core.FitnessTrend
-import de.trailscape.core.describeFitnessTrend
-import de.trailscape.core.freshnessWord
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.TrainingInsights
-import de.trailscape.app.ui.components.CoachCard
-import de.trailscape.app.ui.components.NoticeBox
-import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.LoadRatioBand
 import de.trailscape.core.classifyLoadRatio
 import de.trailscape.core.classifyRampRate
 import de.trailscape.core.classifyTsb
-import de.trailscape.core.loadRatioLabels
-import de.trailscape.core.rampBandLabels
-import de.trailscape.core.tsbBandLabels
-import de.trailscape.core.tsbBandMessages
+import de.trailscape.core.describeFitnessTrend
+import de.trailscape.core.freshnessWord
+import de.trailscape.core.sentence
 import kotlin.math.roundToInt
 
 /**
@@ -87,6 +91,7 @@ private fun trendArrow(trend: FitnessTrend?): String = when (trend?.direction) {
  */
 @Composable
 fun FormSummaryCard(insights: TrainingInsights, onClick: () -> Unit) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     val series = insights.fitness
     val latest = series.latest
@@ -95,17 +100,19 @@ fun FormSummaryCard(insights: TrainingInsights, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClickLabel = "Form erklärt öffnen", onClick = onClick),
+            .clickable(onClickLabel = stringResource(R.string.training_form_open_cd), onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(CardPadding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = when {
-                        latest == null -> "Deine Fitnesskurve entsteht mit der ersten Tour"
-                        !series.displayReady ->
-                            "Kurve wird aufgebaut (noch ${series.daysUntilDisplayReady} " +
-                                "${if (series.daysUntilDisplayReady == 1) "Tag" else "Tage"})"
-                        else -> trend?.sentence ?: "Fitness stabil"
+                        latest == null -> stringResource(R.string.training_form_summary_empty)
+                        !series.displayReady -> pluralStringResource(
+                            R.plurals.training_form_summary_building_count,
+                            series.daysUntilDisplayReady,
+                            series.daysUntilDisplayReady,
+                        )
+                        else -> trend?.sentence(coreTexts) ?: stringResource(R.string.training_form_summary_stable)
                     },
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
@@ -129,14 +136,14 @@ fun FormSummaryCard(insights: TrainingInsights, onClick: () -> Unit) {
             if (latest != null) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     MetricChip(
-                        "Fitness ${latest.ctl.roundToInt()}${trendArrow(trend)}",
+                        stringResource(R.string.training_form_fitness_chip, "${latest.ctl.roundToInt()}${trendArrow(trend)}"),
                         when (trend?.direction) {
                             FitnessDirection.STEIGT -> trainingGood
                             FitnessDirection.SINKT -> trainingCaution
                             else -> Color.Unspecified
                         },
                     )
-                    MetricChip(freshnessWord(latest.tsb), tsbBandColor(latest.tsb))
+                    MetricChip(freshnessWord(latest.tsb, coreTexts), tsbBandColor(latest.tsb))
                 }
             }
         }
@@ -199,6 +206,7 @@ fun FormSheet(
     onOpenProfile: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val coreTexts = LocalCoreTexts.current
     val latest = insights.fitness.latest
     val trend = describeFitnessTrend(insights.fitness.points)
     var allValues by rememberSaveable { mutableStateOf(false) }
@@ -208,35 +216,39 @@ fun FormSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         SheetColumn {
-            Text("Deine Form", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.training_form_sheet_title), style = MaterialTheme.typography.titleLarge)
             Text(
-                "Drei Linien, einfach erklärt. Die Fachbegriffe aus anderen Apps stehen klein dahinter.",
+                stringResource(R.string.training_form_sheet_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ExplainRow(
-                label = "Fitness",
+                label = stringResource(R.string.training_form_fitness_label),
                 pill = latest?.let { "${it.ctl.roundToInt()}${trendArrow(trend)}" },
                 pillColor = trainingGood,
-                text = "Was du über Wochen aufgebaut hast. Steigt langsam.",
+                text = stringResource(R.string.training_form_fitness_body),
                 jargon = "CTL",
             )
             ExplainRow(
-                label = "Müdigkeit",
+                label = stringResource(R.string.training_form_fatigue_label),
                 pill = latest?.let { "${it.atl.roundToInt()}" },
                 pillColor = trainingWarning,
-                text = "Was die letzten Tage gekostet haben. Fällt schnell wieder.",
+                text = stringResource(R.string.training_form_fatigue_body),
                 jargon = "ATL",
             )
             ExplainRow(
-                label = "Frische",
-                pill = latest?.let { "${formatSigned(it.tsb)} · ${freshnessWord(it.tsb)}" },
+                label = stringResource(R.string.training_form_freshness_label),
+                pill = latest?.let { "${formatSigned(it.tsb)} · ${freshnessWord(it.tsb, coreTexts)}" },
                 pillColor = latest?.let { tsbBandColor(it.tsb) } ?: Color.Unspecified,
-                text = "Fitness minus Müdigkeit. Leicht negativ heißt: du trainierst gerade produktiv.",
+                text = stringResource(R.string.training_form_freshness_body),
                 jargon = "TSB",
             )
             NeutralButton(onClick = { allValues = !allValues }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (allValues) "Weniger anzeigen" else "Alle Werte")
+                Text(
+                    stringResource(
+                        if (allValues) R.string.training_form_show_less_action else R.string.training_form_all_values_action,
+                    ),
+                )
             }
             if (allValues) {
                 FormCard(insights)
@@ -262,6 +274,8 @@ fun FormSheet(
  */
 @Composable
 fun FormCard(insights: TrainingInsights) {
+    val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
     val theme = MaterialTheme.colorScheme
     val series = insights.fitness
     val latest = series.latest
@@ -270,8 +284,7 @@ fun FormCard(insights: TrainingInsights) {
         Column(modifier = Modifier.padding(CardPadding)) {
             if (latest == null) {
                 Text(
-                    text = "Sobald die erste Tour ausgewertet ist, entsteht hier deine " +
-                        "Fitness-Kurve.",
+                    text = stringResource(R.string.training_form_empty),
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
                 )
@@ -285,9 +298,9 @@ fun FormCard(insights: TrainingInsights) {
             NoticeBox(
                 icon = TrainingInfoIcon,
                 color = theme.onSurfaceVariant,
-                text = insights.loadScaleNote,
+                text = insights.loadScaleNote(LocalAppLanguage.current).asString(),
             )
-            insights.calibration.note?.let { note ->
+            insights.calibration.note(coreTexts)?.let { note ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = note,
@@ -304,9 +317,11 @@ fun FormCard(insights: TrainingInsights) {
                 NoticeBox(
                     icon = TrainingInfoIcon,
                     color = theme.onSurfaceVariant,
-                    text = "Kurve wird aufgebaut (noch " +
-                        "${series.daysUntilDisplayReady} " +
-                        "${if (series.daysUntilDisplayReady == 1) "Tag" else "Tage"}).",
+                    text = pluralStringResource(
+                        R.plurals.training_form_building_count,
+                        series.daysUntilDisplayReady,
+                        series.daysUntilDisplayReady,
+                    ),
                 )
             } else {
                 PmcSparkline(
@@ -321,9 +336,7 @@ fun FormCard(insights: TrainingInsights) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Letzte ${window.size} " +
-                        "${if (window.size == 1) "Tag" else "Tage"} · " +
-                        "grün: Fitness, orange: Ermüdung",
+                    text = pluralStringResource(R.plurals.training_form_legend_count, window.size, window.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.onSurfaceVariant,
                 )
@@ -335,13 +348,19 @@ fun FormCard(insights: TrainingInsights) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                MetricChip("Fitness ${latest.ctl.roundToInt()}", trainingGood)
-                MetricChip("Ermüdung ${latest.atl.roundToInt()}", trainingWarning)
-                MetricChip("Form ${formatSigned(latest.tsb)}", tsbBandColor(latest.tsb))
+                MetricChip(
+                    stringResource(R.string.training_form_fitness_chip, latest.ctl.roundToInt().toString()),
+                    trainingGood,
+                )
+                MetricChip(stringResource(R.string.training_form_fatigue_chip, latest.atl.roundToInt()), trainingWarning)
+                MetricChip(
+                    stringResource(R.string.training_form_form_chip, formatSigned(latest.tsb)),
+                    tsbBandColor(latest.tsb),
+                )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "In anderen Trainings-Apps: CTL, ATL, TSB.",
+                text = stringResource(R.string.training_form_jargon),
                 style = MaterialTheme.typography.bodySmall,
                 color = theme.onSurfaceVariant,
             )
@@ -356,10 +375,7 @@ fun FormCard(insights: TrainingInsights) {
                 NoticeBox(
                     icon = TrainingWarningIcon,
                     color = trainingWarning,
-                    text = "Belastungssprung: dein Verhältnis von akuter zu " +
-                        "gewohnter Belastung liegt bei " +
-                        "${germanFixed(latest.loadRatio!!, 2)} " +
-                        "— außerhalb des Bandes 0,8–1,5.",
+                    text = stringResource(R.string.training_form_load_jump, formats.decimal(latest.loadRatio!!, 2)),
                 )
             }
         }
@@ -382,6 +398,8 @@ fun FormCard(insights: TrainingInsights) {
  */
 @Composable
 fun FormCoachCard(insights: TrainingInsights) {
+    val coreTexts = LocalCoreTexts.current
+    val formats = LocalAppFormats.current
     val latest = insights.fitness.latest ?: return
     val tsbBand = classifyTsb(latest.tsb)
     val ramp = latest.rampRate7d
@@ -390,25 +408,28 @@ fun FormCoachCard(insights: TrainingInsights) {
 
     CoachCard {
         Text(
-            text = "${tsbBandLabels.getValue(tsbBand)} — ${tsbBandMessages.getValue(tsbBand)}",
+            text = "${coreTexts.load.tsbBand(tsbBand)} — ${coreTexts.load.tsbBandMessage(tsbBand)}",
             style = MaterialTheme.typography.bodyMedium,
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = if (ramp == null || rampBand == null) {
-                "Rampenrate: noch keine Aussage möglich (weniger als 7 Tage Historie)."
+                stringResource(R.string.training_form_ramp_unknown)
             } else {
-                "Rampenrate: ${formatSigned(ramp)} Fitness-Punkte pro Woche — " +
-                    "${rampBandLabels.getValue(rampBand)}."
+                stringResource(R.string.training_form_ramp, formatSigned(ramp), coreTexts.load.rampBand(rampBand))
             },
             style = MaterialTheme.typography.bodyMedium,
         )
         if (ratioBand != LoadRatioBand.BELASTUNGSSPRUNG) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Belastungsverhältnis: ${loadRatioLabels.getValue(ratioBand)}" +
-                    (latest.loadRatio?.let { " (${germanFixed(it, 2)})" } ?: "") +
-                    ".",
+                text = latest.loadRatio?.let {
+                    stringResource(
+                        R.string.training_form_load_ratio_value,
+                        coreTexts.load.loadRatioBand(ratioBand),
+                        formats.decimal(it, 2),
+                    )
+                } ?: stringResource(R.string.training_form_load_ratio, coreTexts.load.loadRatioBand(ratioBand)),
                 style = MaterialTheme.typography.bodyMedium,
             )
         }

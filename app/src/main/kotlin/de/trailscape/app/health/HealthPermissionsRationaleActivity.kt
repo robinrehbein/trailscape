@@ -1,11 +1,13 @@
 package de.trailscape.app.health
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import de.trailscape.app.i18n.AppLocale
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +24,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 import de.trailscape.app.feedback.ISSUE_REPOSITORY_URL
 import de.trailscape.app.ui.theme.TrailscapeTheme
 
@@ -52,6 +56,12 @@ const val HEALTH_PRIVACY_URL: String = "$ISSUE_REPOSITORY_URL/blob/main/PRIVACY.
  */
 class HealthPermissionsRationaleActivity : ComponentActivity() {
 
+    /** App-Sprache als Locale-Delta, siehe [AppLocale]. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase)
+        AppLocale.overrideConfiguration(newBase)?.let(::applyOverrideConfiguration)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -65,18 +75,21 @@ class HealthPermissionsRationaleActivity : ComponentActivity() {
                             .padding(horizontal = 24.dp, vertical = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("Gesundheitsdaten in Trailscape", style = MaterialTheme.typography.headlineSmall)
+                        Text(
+                            stringResource(R.string.more_health_rationale_title),
+                            style = MaterialTheme.typography.headlineSmall,
+                        )
                         RATIONALE_PARAGRAPHS.forEach { paragraph ->
-                            Text(paragraph, style = MaterialTheme.typography.bodyMedium)
+                            Text(stringResource(paragraph), style = MaterialTheme.typography.bodyMedium)
                         }
                         Button(
                             onClick = { openPrivacyPolicy() },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Vollständige Datenschutzerklärung") }
+                        ) { Text(stringResource(R.string.more_health_rationale_privacy_action)) }
                         TextButton(
                             onClick = { finish() },
                             modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Schließen") }
+                        ) { Text(stringResource(R.string.common_action_close)) }
                     }
                 }
             }
@@ -94,22 +107,12 @@ class HealthPermissionsRationaleActivity : ComponentActivity() {
     private companion object {
         /** Kurzfassung von `PRIVACY.md`, Abschnitte „Kurz gesagt" und 3. */
         val RATIONALE_PARAGRAPHS = listOf(
-            "Trailscape liest Gesundheitsdaten ausschließlich aus Health Connect und " +
-                "schreibt nichts zurück. Alles wird nur auf diesem Gerät verarbeitet; " +
-                "es gibt keinen Trailscape-Server, und der Entwickler hat keinen Zugriff " +
-                "auf deine Daten.",
-            "Trainings, Trainingsrouten, Distanz und Kalorien: um die Fahrten deiner " +
-                "Uhr als Touren zu importieren.",
-            "Herzfrequenz: für Puls-Kennzahlen deiner Touren und — falls deine Uhr " +
-                "keinen Ruhepuls liefert — für einen aus dem Nacht-Puls abgeleiteten " +
-                "Ruhepuls.",
-            "Ruhepuls, HRV, Schlaf und VO₂max: für die Erholungs- und " +
-                "Formberechnung (Readiness, Trainingsempfehlung).",
-            "Verlauf älter als 30 Tage (optional): damit die Baselines für Ruhepuls " +
-                "und HRV nicht erst nach Wochen stehen und der erste Import einmalig " +
-                "deine Radfahrten der letzten 12 Monate übernehmen kann.",
-            "Die Daten verlassen das Gerät nur, wenn du selbst den optionalen Sync " +
-                "mit deinem eigenen Server eingerichtet hast.",
+            R.string.more_health_rationale_intro_body,
+            R.string.more_health_rationale_workouts_body,
+            R.string.more_health_rationale_heart_rate_body,
+            R.string.more_health_rationale_recovery_body,
+            R.string.more_health_rationale_history_body,
+            R.string.more_health_rationale_sync_body,
         )
     }
 }

@@ -1,11 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import de.trailscape.core.i18n.CoreTexts
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDateTime
@@ -16,6 +11,12 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Sportwissenschaftlicher Rechenkern fuer Trainingslast, Fitness/Form,
@@ -459,13 +460,6 @@ enum class Confidence(
 /** Woher ein HF-Grundwert stammt (§1.1/§1.3). */
 enum class ValueSource { TEST, BEOBACHTET, GESCHAETZT }
 
-val confidenceLabels: Map<Confidence, String> = mapOf(
-    Confidence.NONE to "nicht berechenbar",
-    Confidence.LOW to "grobe Schätzung",
-    Confidence.MEDIUM to "Schätzung",
-    Confidence.HIGH to "belastbar",
-)
-
 internal fun downgrade(c: Confidence): Confidence = when (c) {
     Confidence.HIGH -> Confidence.MEDIUM
     Confidence.MEDIUM -> Confidence.LOW
@@ -653,6 +647,11 @@ data class TrainingProfile(
 // Zonenmodelle (§1.4)
 // ---------------------------------------------------------------------------
 
+/*
+ * Die Zonenbezeichnungen sind Schluessel im Datenmodell ([ZoneDistribution]
+ * wird mit ihnen gespeichert), keine Anzeigetexte — sie laufen deshalb
+ * bewusst NICHT ueber `CoreTexts` und bleiben in allen Sprachen gleich.
+ */
 val frielZoneLabels: List<String> = listOf(
     "Z1 Regeneration",
     "Z2 Grundlage",
@@ -806,6 +805,13 @@ data class RideSegment(
     val hr: Int?,
     /** Ob das Segment zur Bewegungszeit zaehlt (§2.1). */
     val moving: Boolean,
+    /**
+     * Gemessene Leistung in W (Leistungsmesser, siehe [TrackPoint.power]) oder
+     * `null` — ohne Messung oder bei einer Luecke > [maxHrGapS]. Anders als
+     * [hr] ohne Rueckgriff auf den Vorpunkt: Der Punktwert ist bereits das
+     * Mittel ueber genau dieses Intervall.
+     */
+    val powerW: Int? = null,
 )
 
 /** Aufbereitete Tour: geglaettete Hoehe, Geschwindigkeit, Steigung, HF-Zuordnung. */
@@ -1049,6 +1055,7 @@ fun buildRideSeries(points: List<TrackPoint>, profile: TrainingProfile): RideSer
                 deltaElevationM = if (hasElevation) smoothEle[i] - smoothEle[i - 1] else 0.0,
                 hr = hr,
                 moving = moving,
+                powerW = if (dt <= maxHrGapS) timed[i].power?.coerceAtLeast(0) else null,
             ),
         )
     }
@@ -1148,16 +1155,17 @@ fun normalizeTrimp(trimp: Double, profile: TrainingProfile): Double {
 }
 
 /** HF-basierte Tourlast inklusive Zonenverteilung. */
-fun computeHeartRateLoad(series: RideSeries, profile: TrainingProfile): HeartRateLoad {
+fun computeHeartRateLoad(
+    series: RideSeries,
+    profile: TrainingProfile,
+    texts: CoreTexts,
+): HeartRateLoad {
     val zones = profile.zones
     if (series.isEmpty) {
-        return HeartRateLoad.unavailable(
-            "Keine auswertbaren Trackpunkte mit Zeitstempel.",
-            zones,
-        )
+        return HeartRateLoad.unavailable(texts.load.noTimedPoints(), zones)
     }
     if (series.movingTimeS <= 0) {
-        return HeartRateLoad.unavailable("Keine Bewegungszeit erkannt.", zones)
+        return HeartRateLoad.unavailable(texts.load.noMovingTime(), zones)
     }
 
     var trimp = 0.0
@@ -1185,10 +1193,7 @@ fun computeHeartRateLoad(series: RideSeries, profile: TrainingProfile): HeartRat
 
     val coverage = series.hrCoverage
     if (series.movingTimeWithHrS <= 0) {
-        return HeartRateLoad.unavailable(
-            "Für diese Tour liegt keine Herzfrequenz vor.",
-            zones,
-        )
+        return HeartRateLoad.unavailable(texts.load.noHeartRateForRide(), zones)
     }
 
     var confidence = if (coverage >= 0.9) Confidence.HIGH else Confidence.MEDIUM
@@ -1206,9 +1211,10 @@ fun computeHeartRateLoad(series: RideSeries, profile: TrainingProfile): HeartRat
         unavailableReason = if (available) {
             null
         } else {
-            "Herzfrequenz deckt nur " +
-                "${dartRound(coverage * 100).toInt()} % der Bewegungszeit ab " +
-                "(mindestens ${dartRound(minHrCoverage * 100).toInt()} % nötig)."
+            texts.load.heartRateCoverageTooLow(
+                dartRound(coverage * 100).toInt(),
+                dartRound(minHrCoverage * 100).toInt(),
+            )
         },
         trimpBanister = trimp,
         trimpEdwards = edwardsZones.weightedMinutes,
@@ -1263,7 +1269,10 @@ fun estimateSamplePowerW(
     return max(0.0, pWheel) / eta
 }
 
-/** Ein Sample der geschaetzten Leistungsreihe (nur Bewegungszeit). */
+/**
+ * Ein Sample der Leistungsreihe (nur Bewegungszeit) — geschaetzt oder, mit
+ * Leistungsmesser, gemessen (siehe [measured]).
+ */
 data class PowerSample(
     val timeS: Double,
     val dtS: Double,
@@ -1272,9 +1281,11 @@ data class PowerSample(
     val elevationM: Double,
     val deltaElevationM: Double,
     val hr: Int?,
+    /** `true`, wenn [powerW] vom Leistungsmesser stammt statt aus dem Physikmodell. */
+    val measured: Boolean = false,
 )
 
-/** Geschaetzte Leistungsreihe einer Tour. */
+/** Leistungsreihe einer Tour: geschaetzt, gemessen oder gemischt (siehe [measuredCoverage]). */
 data class PowerSeries(
     val samples: List<PowerSample>,
     /** Nachlaufender 30-s-Mittelwert der Leistung — Basis fuer NP (§3.3). */
@@ -1318,6 +1329,20 @@ data class PowerSeries(
             return clamp(withHr / t, 0.0, 1.0)
         }
 
+    /**
+     * Anteil der Bewegungszeit (0…1), fuer den die Leistung **gemessen** ist.
+     * Entscheidet in [computePhysicsEstimate], ob die Tour als gemessen gilt.
+     */
+    val measuredCoverage: Double
+        get() {
+            val t = movingTimeS
+            if (t <= 0) {
+                return 0.0
+            }
+            val measured = samples.filter { it.measured }.fold(0.0) { a, s -> a + s.dtS }
+            return clamp(measured / t, 0.0, 1.0)
+        }
+
     val avgHr: Double?
         get() {
             var sum = 0.0
@@ -1359,21 +1384,43 @@ data class PowerSeries(
     }
 }
 
-/** Baut die geschaetzte Leistungsreihe aus der aufbereiteten Tour (§3.2). */
+/**
+ * Baut die Leistungsreihe aus der aufbereiteten Tour (§3.2).
+ *
+ * Traegt mindestens [MEASURED_POWER_MIN_COVERAGE] der Bewegungszeit
+ * gemessene Leistung ([RideSegment.powerW]), gilt dort die Messung und nur in
+ * den Aussetzern die Schaetzung aus dem Physikmodell — so bleiben kurze
+ * Aussetzer des Leistungsmessers ohne Loch in der Reihe.
+ *
+ * Darunter (etwa Akku des Leistungsmessers nach der Haelfte leer) ist die
+ * Reihe **reine Schaetzung**, die Messwerte bleiben ungenutzt. Eine Mischung
+ * waere weder Messung noch Schaetzung: Sie liefe in die α-Kalibrierung ein,
+ * die nur die Annahmen des Modells (Gewicht, cw-Wert) korrigieren soll, und
+ * α wuerde danach auch den gemessenen Anteil skalieren.
+ */
 fun buildPowerSeries(series: RideSeries, profile: TrainingProfile): PowerSeries {
     if (series.isEmpty) {
         return PowerSeries.EMPTY
     }
+    var bewegtS = 0.0
+    var gemessenS = 0.0
+    for (s in series.segments) {
+        if (!s.moving) continue
+        bewegtS += s.dtS
+        if (s.powerW != null) gemessenS += s.dtS
+    }
+    val messungNutzen = bewegtS > 0 && gemessenS / bewegtS >= MEASURED_POWER_MIN_COVERAGE
     val samples = mutableListOf<PowerSample>()
     for (s in series.segments) {
         if (!s.moving) {
             continue
         }
+        val gemessen = s.powerW?.takeIf { messungNutzen }
         samples.add(
             PowerSample(
                 timeS = s.timeS,
                 dtS = s.dtS,
-                powerW = estimateSamplePowerW(
+                powerW = gemessen?.toDouble() ?: estimateSamplePowerW(
                     speedMs = s.speedMs,
                     accelMs2 = s.accelMs2,
                     gradeTan = s.gradeTan,
@@ -1384,6 +1431,7 @@ fun buildPowerSeries(series: RideSeries, profile: TrainingProfile): PowerSeries 
                 elevationM = s.elevationM,
                 deltaElevationM = s.deltaElevationM,
                 hr = s.hr,
+                measured = gemessen != null,
             ),
         )
     }
@@ -1416,15 +1464,22 @@ data class PhysicsEstimate(
     val eftpW: Double,
     val kcal: Double,
     val confidence: Confidence,
+    /**
+     * `true`, wenn mindestens [MEASURED_POWER_MIN_COVERAGE] der Bewegungszeit
+     * vom Leistungsmesser stammt. Dann ist [avgPowerW] im Wesentlichen
+     * **gemessen**, die Pflicht zu Hoehenprofil und Gewicht entfaellt, und die
+     * Last braucht keine α-Kalibrierung (siehe [computeRideLoad]).
+     */
+    val measured: Boolean = false,
 ) {
     /** Textbaustein ohne Overclaim (§8.5). */
-    val powerText: String
-        get() = if (available) {
-            "Geschätzte Leistung ≈ ${dartRound(avgPowerW).toInt()} W " +
-                "(aus GPS & Profil, ±15–25 %)"
-        } else {
-            "Leistung nicht schätzbar"
-        }
+    fun powerText(texts: CoreTexts): String = if (available && measured) {
+        texts.load.measuredPowerText(dartRound(avgPowerW).toInt())
+    } else if (available) {
+        texts.load.powerText(dartRound(avgPowerW).toInt())
+    } else {
+        texts.load.powerNotEstimable()
+    }
 
     companion object {
         fun unavailable(reason: String): PhysicsEstimate = PhysicsEstimate(
@@ -1444,37 +1499,41 @@ data class PhysicsEstimate(
     }
 }
 
-/** Physikbasierte Lastschaetzung einer Tour ohne (oder mit) Herzfrequenz. */
+/**
+ * Mindestanteil der Bewegungszeit mit gemessener Leistung, ab dem eine Tour
+ * als „gemessen" gilt ([PhysicsEstimate.measured]). Darunter ist die Reihe
+ * eine Mischung, und es gelten die Regeln der Schaetzung.
+ */
+const val MEASURED_POWER_MIN_COVERAGE: Double = 0.8
+
+/**
+ * Leistungsbasierte Last einer Tour ohne (oder mit) Herzfrequenz — aus dem
+ * Physikmodell oder, mit Leistungsmesser, aus der Messung.
+ */
 fun computePhysicsEstimate(
     series: RideSeries,
     profile: TrainingProfile,
     eftpW: Double? = null,
+    texts: CoreTexts,
 ): PhysicsEstimate {
     if (series.isEmpty) {
-        return PhysicsEstimate.unavailable(
-            "Keine auswertbaren Trackpunkte mit Zeitstempel.",
-        )
-    }
-    if (!series.hasElevation) {
-        return PhysicsEstimate.unavailable(
-            "Ohne Höhenprofil lässt sich die Leistung nicht schätzen.",
-        )
-    }
-    if (profile.weightKg <= 0) {
-        return PhysicsEstimate.unavailable(
-            "Ohne Gewichtsangabe lässt sich die Leistung nicht schätzen.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.noTimedPoints())
     }
     val power = buildPowerSeries(series, profile)
+    // Gemessene Leistung braucht weder Hoehenprofil noch Gewicht — beides
+    // ist nur Eingabe des Physikmodells.
+    val measured = power.measuredCoverage >= MEASURED_POWER_MIN_COVERAGE
+    if (!measured && !series.hasElevation) {
+        return PhysicsEstimate.unavailable(texts.load.powerNoElevation())
+    }
+    if (!measured && profile.weightKg <= 0) {
+        return PhysicsEstimate.unavailable(texts.load.powerNoWeight())
+    }
     if (power.isEmpty || power.movingTimeS < 60) {
-        return PhysicsEstimate.unavailable(
-            "Zu wenig Bewegungszeit für eine Leistungsschätzung.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.powerTooLittleMovingTime())
     }
     if (series.distanceM < 200) {
-        return PhysicsEstimate.unavailable(
-            "Zu kurze Strecke für eine Leistungsschätzung.",
-        )
+        return PhysicsEstimate.unavailable(texts.load.powerTooShort())
     }
 
     val avg = power.avgPowerW
@@ -1487,9 +1546,14 @@ fun computePhysicsEstimate(
 
     // Das Dokument stuft das Physikmodell grundsaetzlich als „medium" ein (§3.1).
     // Sehr kurze oder sehr stochastische Fahrten stufen wir zusaetzlich ab.
-    var confidence = Confidence.MEDIUM
-    if (power.movingTimeS < 900 || (avg > 0 && np / avg > 1.3)) {
-        confidence = Confidence.LOW
+    // Gemessene Leistung ist „high"; nur sehr kurze Fahrten bleiben „medium" —
+    // ein hoher VI ist dann echte Fahrweise, kein Modellrauschen.
+    val confidence = if (measured) {
+        if (power.movingTimeS < 900) Confidence.MEDIUM else Confidence.HIGH
+    } else if (power.movingTimeS < 900 || (avg > 0 && np / avg > 1.3)) {
+        Confidence.LOW
+    } else {
+        Confidence.MEDIUM
     }
 
     return PhysicsEstimate(
@@ -1505,6 +1569,7 @@ fun computePhysicsEstimate(
         eftpW = ftp,
         kcal = kcal,
         confidence = confidence,
+        measured = measured,
     )
 }
 
@@ -1563,10 +1628,12 @@ fun bestRollingMeanPowerW(series: PowerSeries, windowS: Double = 1200.0): Double
  * `0,95 × bestes 20-min-Mittel` (Coggan), geklemmt auf 100…400 W. Ohne harte
  * Tour bleibt der Profil-Default (2,4 W/kg).
  *
- * Achtung: Die Leistungsreihen sind selbst geschaetzt (GPS + Physikmodell,
- * ±15–25 %). Der Wert ist damit eine Schaetzung **auf** einer Schaetzung und
- * traegt nie mehr als [Confidence.MEDIUM] — siehe [resolveEftp], das genau das
- * mitfuehrt.
+ * Achtung: Die Leistungsreihen sind meist selbst geschaetzt (GPS +
+ * Physikmodell, ±15–25 %). Der Wert ist damit eine Schaetzung **auf** einer
+ * Schaetzung und traegt nie mehr als [Confidence.MEDIUM] — siehe
+ * [resolveEftp], das genau das mitfuehrt. Mit Leistungsmesser koennen einzelne
+ * Reihen gemessen sein; weil das Fenster aber gemessene und geschaetzte
+ * Touren mischt, bleibt die Obergrenze bewusst bei MEDIUM.
  */
 fun estimateEftpW(recent: Iterable<PowerSeries>, profile: TrainingProfile): Double =
     bestTwentyMinuteMeanW(recent)?.let { clamp(0.95 * it, minEftpW, maxEftpW) } ?: profile.eftpW
@@ -1598,13 +1665,6 @@ enum class EftpSource {
     GESCHAETZT,
 }
 
-val eftpSourceLabels: Map<EftpSource, String> = mapOf(
-    EftpSource.EINGETRAGEN to "von dir eingetragen",
-    EftpSource.ZWANZIG_MINUTEN to "aus deinem besten 20-Minuten-Abschnitt geschätzt",
-    EftpSource.KALIBRIERT to "aus dem Vergleich mit deiner Herzfrequenz nachgeführt",
-    EftpSource.GESCHAETZT to "grob aus deinem Gewicht geschätzt",
-)
-
 /**
  * Die FTP, mit der die Lastskala tatsaechlich rechnet — samt Herkunft.
  *
@@ -1625,8 +1685,7 @@ data class EftpEstimate(
     fun perKg(weightKg: Double): Double = if (weightKg > 0) watts / weightKg else 0.0
 
     /** Kurzform fuer die Anzeige, immer mit Herkunft. */
-    val label: String
-        get() = "${dartRound(watts).toInt()} W (${eftpSourceLabels.getValue(source)})"
+    fun label(texts: CoreTexts): String = texts.load.eftpLabel(dartRound(watts).toInt(), source)
 
     companion object {
         /** Reiner Profilwert ohne jede Messung. */
@@ -1779,28 +1838,22 @@ data class LoadCalibration(
     val usable: Boolean get() = !clamped && alpha.isFinite() && alpha > 0
 
     /**
-     * Deutschsprachiger Hinweis zur Kalibrierung — `null`, wenn es nichts zu
-     * sagen gibt (α ≈ 1,0 aus genug Paaren).
+     * Hinweis zur Kalibrierung in der Sprache von [texts] — `null`, wenn es
+     * nichts zu sagen gibt (α ≈ 1,0 aus genug Paaren).
      */
-    val note: String?
-        get() {
-            val raw = rawAlpha
-            if (clamped && raw != null) {
-                return "Deine Herzfrequenz und die Leistungsschätzung liegen um Faktor " +
-                    "${toStringAsFixed(raw, 2).replace('.', ',')} auseinander — zu weit " +
-                    "für eine sinnvolle Korrektur. Prüfe Gewicht, Rad-/Gepäckgewicht und " +
-                    "ob deine Touren ein Höhenprofil haben."
-            }
-            if (raw == null) {
-                return null
-            }
-            if (abs(raw - 1.0) < 0.05) {
-                return null
-            }
-            return "Aus $sampleCount Touren mit Puls und Höhenprofil ergibt sich ein " +
-                "Korrekturfaktor von ${toStringAsFixed(raw, 2).replace('.', ',')} zwischen " +
-                "Herzfrequenz- und Leistungsschätzung."
+    fun note(texts: CoreTexts): String? {
+        val raw = rawAlpha
+        if (clamped && raw != null) {
+            return texts.load.calibrationTooFarApart(raw)
         }
+        if (raw == null) {
+            return null
+        }
+        if (abs(raw - 1.0) < 0.05) {
+            return null
+        }
+        return texts.load.calibrationFactor(sampleCount, raw)
+    }
 
     fun toJson(): JsonObject = buildJsonObject {
         put("alpha", alpha)
@@ -1890,16 +1943,14 @@ fun computeLoadCalibration(
 // Fallback-Kaskade zur einheitlichen Last (§3.1)
 // ---------------------------------------------------------------------------
 
-/** Woher die Tourlast stammt (§3.1). */
-enum class LoadSource { HERZFREQUENZ, PHYSIK, RPE, HEURISTIK, KEINE }
-
-val loadSourceLabels: Map<LoadSource, String> = mapOf(
-    LoadSource.HERZFREQUENZ to "aus Herzfrequenz",
-    LoadSource.PHYSIK to "aus GPS-Leistungsschätzung",
-    LoadSource.RPE to "aus Anstrengungsempfinden",
-    LoadSource.HEURISTIK to "grob geschätzt aus Distanz und Höhenmetern",
-    LoadSource.KEINE to "nicht berechenbar",
-)
+/**
+ * Woher die Tourlast stammt (§3.1).
+ *
+ * [LEISTUNG] ist Stufe B mit Leistungsmesser ([PhysicsEstimate.measured]):
+ * dieselbe Formel wie [PHYSIK], aber ohne α-Kalibrierung, weil nichts
+ * geschaetzt ist. Die Herzfrequenz bleibt davor (Stufe A).
+ */
+enum class LoadSource { HERZFREQUENZ, PHYSIK, LEISTUNG, RPE, HEURISTIK, KEINE }
 
 /** Vollstaendige Lastauswertung einer Tour. */
 data class RideLoad(
@@ -1909,7 +1960,7 @@ data class RideLoad(
     val confidence: Confidence,
     val heartRate: HeartRateLoad,
     val physics: PhysicsEstimate,
-    /** Deutschsprachiger Hinweis zur Herkunft bzw. zum Fehlen der Last. */
+    /** Hinweis zur Herkunft bzw. zum Fehlen der Last, in der Sprache der Aufrufer-Texte. */
     val note: String,
 ) {
     val available: Boolean get() = source != LoadSource.KEINE
@@ -1948,10 +1999,11 @@ fun computeRideLoad(
     rpe: Double? = null,
     rpeFactor: Double = defaultRpeFactor,
     eftpW: Double? = null,
+    texts: CoreTexts,
 ): RideLoad {
     val series = buildRideSeries(points, profile)
-    val hr = computeHeartRateLoad(series, profile)
-    val physics = computePhysicsEstimate(series, profile, eftpW = eftpW)
+    val hr = computeHeartRateLoad(series, profile, texts = texts)
+    val physics = computePhysicsEstimate(series, profile, eftpW = eftpW, texts = texts)
 
     // Stufe A — Herzfrequenz.
     if (hr.available && hr.load > 0) {
@@ -1961,8 +2013,19 @@ fun computeRideLoad(
             confidence = hr.confidence,
             heartRate = hr,
             physics = physics,
-            note = "Last aus der Herzfrequenz berechnet " +
-                "(${dartRound(hr.hrCoverage * 100).toInt()} % Abdeckung).",
+            note = texts.load.noteFromHeartRate(dartRound(hr.hrCoverage * 100).toInt()),
+        )
+    }
+
+    // Stufe B — gemessene Leistung: kein α, denn es gibt nichts zu kalibrieren.
+    if (physics.available && physics.eTss > 0 && physics.measured) {
+        return RideLoad(
+            load = min(physics.eTss, maxLoad),
+            source = LoadSource.LEISTUNG,
+            confidence = physics.confidence,
+            heartRate = hr,
+            physics = physics,
+            note = measuredPowerLoadNote(physics.series.measuredCoverage, texts = texts),
         )
     }
 
@@ -1979,8 +2042,7 @@ fun computeRideLoad(
             },
             heartRate = hr,
             physics = physics,
-            note = "Last aus der geschätzten Leistung berechnet " +
-                "(GPS & Profil, ±15–25 %).",
+            note = texts.load.noteFromPower(),
         )
     }
 
@@ -1993,7 +2055,7 @@ fun computeRideLoad(
             confidence = Confidence.LOW,
             heartRate = hr,
             physics = physics,
-            note = "Last aus deinem Anstrengungsempfinden geschätzt.",
+            note = texts.load.noteFromRpe(),
         )
     }
 
@@ -2014,8 +2076,7 @@ fun computeRideLoad(
             confidence = Confidence.LOW,
             heartRate = hr,
             physics = physics,
-            note = "Grobe Schätzung aus Distanz, Dauer und Höhenmetern — " +
-                "ohne Herzfrequenz oder Höhenprofil nur eine Näherung.",
+            note = texts.load.noteHeuristic(),
         )
     }
 
@@ -2025,9 +2086,13 @@ fun computeRideLoad(
         confidence = Confidence.NONE,
         heartRate = hr,
         physics = physics,
-        note = "Für diese Tour liegen zu wenige Daten für eine Lastberechnung vor.",
+        note = texts.load.noteNoData(),
     )
 }
+
+/** Herkunftsnotiz der Last aus gemessener Leistung; geteilt mit `rideLoadFromFacts`. */
+internal fun measuredPowerLoadNote(coverage: Double, texts: CoreTexts): String =
+    texts.load.noteFromMeasuredPower(dartRound(coverage * 100).toInt())
 
 /** Bequemlichkeits-Variante von [computeRideLoad] fuer ein [Ride]. */
 fun computeRideLoadForRide(
@@ -2036,6 +2101,7 @@ fun computeRideLoadForRide(
     calibration: LoadCalibration = LoadCalibration.NEUTRAL,
     rpe: Double? = null,
     eftpW: Double? = null,
+    texts: CoreTexts,
 ): RideLoad = computeRideLoad(
     points = ride.points,
     profile = profile,
@@ -2043,4 +2109,5 @@ fun computeRideLoadForRide(
     calibration = calibration,
     rpe = rpe,
     eftpW = eftpW,
+    texts = texts,
 )

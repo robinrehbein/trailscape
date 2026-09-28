@@ -2,12 +2,16 @@ package de.trailscape.wear.record
 
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.health.services.client.HealthServices
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.Befehl
+import de.trailscape.core.eigenerPulsZaehlt
+import de.trailscape.wear.R
 import de.trailscape.wear.exercise.FaehigkeitsBericht
 import de.trailscape.wear.exercise.ermittleFaehigkeiten
+import de.trailscape.wear.localized
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +39,12 @@ import kotlinx.coroutines.flow.asStateFlow
  * Uhr-Zahl praktisch sofort wieder; bei einem Funkloch bleibt die letzte
  * lokale Messung stehen — in beiden Faellen zeigt die Uhr die beste gerade
  * verfuegbare Zahl, ohne dass die Anzeige zwischen zwei Werten "springt".
+ *
+ * Beim Puls reicht "spaeteres Schreiben gewinnt" nicht: Die Uhr misst etwa
+ * jede Sekunde, das Telefon meldet (bei Brustgurt: den Gurtwert) nur alle
+ * ~5 s. Deshalb merkt sich [wendeTelefonZustandAn] den Empfangszeitpunkt,
+ * und [setzeHf] ueberschreibt nur, solange kein frischer Telefonwert
+ * vorliegt (Fenster siehe `eigenerPulsZaehlt` in `:core`).
  *
  * ## Gestartet von der Uhr ODER vom Telefon
  * Diese Symmetrie ist Absicht: [start]/[pausieren]/[fortsetzen]/[stop]
@@ -74,6 +84,10 @@ object RecordingStatus {
     private val _letzteHfBpm = MutableStateFlow<Int?>(null)
     private val _fehler = MutableStateFlow<String?>(null)
 
+    /** `elapsedRealtime` des letzten Pulswerts vom Telefon, `null` = noch keiner (siehe Klassen-KDoc). */
+    @Volatile
+    private var hfVomTelefonMs: Long? = null
+
     val phase: StateFlow<Phase> = _phase.asStateFlow()
     val bericht: StateFlow<FaehigkeitsBericht?> = _bericht.asStateFlow()
 
@@ -106,7 +120,10 @@ object RecordingStatus {
             _bericht.value = ermittleFaehigkeiten(client)
             if (_phase.value == Phase.UNBEKANNT) _phase.value = Phase.BEREIT
         } catch (e: Exception) {
-            _fehler.value = "Fähigkeiten nicht abrufbar: ${e.message ?: e::class.java.simpleName}"
+            _fehler.value = context.localized().getString(
+                R.string.wear_error_capabilities,
+                e.message ?: e::class.java.simpleName,
+            )
             _phase.value = Phase.FEHLER
         }
     }
@@ -150,7 +167,10 @@ object RecordingStatus {
     internal fun wendeTelefonZustandAn(zustand: AufzeichnungsZustand) {
         _laufzeitMs.value = zustand.dauerMs
         _distanzKm.value = zustand.distanzKm
-        zustand.hf?.let { _letzteHfBpm.value = it }
+        zustand.hf?.let {
+            _letzteHfBpm.value = it
+            hfVomTelefonMs = SystemClock.elapsedRealtime()
+        }
     }
 
     private fun starteLokal(context: Context) {
@@ -189,7 +209,9 @@ object RecordingStatus {
         _tempoKmh.value = kmh
     }
 
+    /** Eigene Pulsprobe der Uhr — gilt nur, solange kein frischer Telefonwert vorliegt. */
     internal fun setzeHf(bpm: Int?) {
+        if (!eigenerPulsZaehlt(SystemClock.elapsedRealtime(), hfVomTelefonMs)) return
         _letzteHfBpm.value = bpm
     }
 
@@ -203,6 +225,7 @@ object RecordingStatus {
         _distanzKm.value = 0.0
         _tempoKmh.value = null
         _letzteHfBpm.value = null
+        hfVomTelefonMs = null
         _fehler.value = null
     }
 }

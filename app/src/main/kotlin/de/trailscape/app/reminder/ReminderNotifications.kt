@@ -8,6 +8,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import de.trailscape.app.MainActivity
 import de.trailscape.app.R
+import de.trailscape.app.i18n.localized
 import de.trailscape.app.ui.map.hasNotificationPermission
 import de.trailscape.core.ReminderNotice
 
@@ -93,10 +94,10 @@ internal object ReminderNotifications {
     private fun ensureChannel(context: Context, manager: NotificationManager) {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            context.getString(R.string.reminder_notification_channel_name),
+            context.localized().getString(R.string.reminder_notification_channel_name),
             NotificationManager.IMPORTANCE_DEFAULT,
         )
-        channel.description = context.getString(R.string.reminder_notification_channel_description)
+        channel.description = context.localized().getString(R.string.reminder_notification_channel_description)
         manager.createNotificationChannel(channel)
     }
 

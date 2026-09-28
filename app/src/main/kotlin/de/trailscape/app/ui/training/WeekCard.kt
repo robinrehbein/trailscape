@@ -15,11 +15,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.TrainingInsights
 import de.trailscape.app.ui.components.NoticeBox
+import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.formatHours
+import de.trailscape.core.weeklyLoadCapText
 import kotlin.math.roundToInt
 
 /**
@@ -52,6 +56,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
+    val coreTexts = LocalCoreTexts.current
     val theme = MaterialTheme.colorScheme
     val deload = insights.deload
     val target = insights.weeklyTarget
@@ -61,33 +66,40 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
     var budgetText: String? = null
     var budgetClickable = false
     if (target != null && !deload.recommended) {
-        val hours = formatHours(target.estimatedHours)
+        val hours = formatHours(target.estimatedHours, coreTexts)
         // Die Umrechnung Last → Stunden unterstellt eine gemischte Woche
         // (≈ 58 Last je Fahrstunde, siehe `weeklyLoadPerHour` in :core) und
         // haengt ausserdem an derselben geschaetzten Schwellenleistung wie die
         // Lastwerte selbst. Beides gehoert in den Satz, sonst liest sich die
         // Zahl wie eine Planvorgabe.
         if (weeklyHours != null && weeklyHours > 0) {
-            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche und " +
-                "deinem Budget von ${formatHours(weeklyHours)} h pro Woche. Fährst du " +
-                "härter, brauchst du weniger Zeit für denselben Zielwert."
+            budgetText = stringResource(
+                R.string.training_week_budget_hint,
+                hours,
+                formatHours(weeklyHours, coreTexts),
+            )
         } else {
-            budgetText = "Zielwert entspricht ≈ $hours h Fahrzeit bei gemischter Woche. Trage " +
-                "im Mehr-Tab dein Zeitbudget ein, dann rechnen wir es mit ein."
+            budgetText = stringResource(R.string.training_week_budget_missing_hint, hours)
             budgetClickable = true
         }
     }
 
-    var deloadRange: String? = null
+    var deloadText: String = deload.detail
     if (deload.recommended && reference != null && reference > 0) {
         val low = (reference * (1 - deload.volumeReductionHigh)).roundToInt()
         val high = (reference * (1 - deload.volumeReductionLow)).roundToInt()
-        deloadRange = "$low–$high Last statt zuletzt ${reference.roundToInt()}"
+        deloadText = stringResource(
+            R.string.training_week_deload_range,
+            deload.detail,
+            low,
+            high,
+            reference.roundToInt(),
+        )
     }
 
     Card {
         Column(modifier = Modifier.padding(CardPadding)) {
-            Text("Belastung dieser Woche", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.training_week_title), style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(12.dp))
 
             FlowRow(
@@ -95,18 +107,25 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                FigureText(insights.weeklyLoad.roundToInt().toString(), "Last (7 Tage)")
+                FigureText(
+                    insights.weeklyLoad.roundToInt().toString(),
+                    stringResource(R.string.training_week_load_label),
+                )
                 if (reference != null) {
-                    FigureText(reference.roundToInt().toString(), "ø Woche (4 Wochen)")
+                    FigureText(reference.roundToInt().toString(), stringResource(R.string.training_week_average_label))
                 }
                 if (target != null && !deload.recommended) {
-                    FigureText(target.weeklyLoad.roundToInt().toString(), "Zielwert", color = trainingGood)
                     FigureText(
-                        "${formatHours(target.estimatedHours)} h",
+                        target.weeklyLoad.roundToInt().toString(),
+                        stringResource(R.string.training_week_target_label),
+                        color = trainingGood,
+                    )
+                    FigureText(
+                        stringResource(R.string.common_value_hours, formatHours(target.estimatedHours, coreTexts)),
                         if (weeklyHours != null && weeklyHours > 0) {
-                            "Fahrzeit (Budget ${formatHours(weeklyHours)} h)"
+                            stringResource(R.string.training_week_time_budget_label, formatHours(weeklyHours, coreTexts))
                         } else {
-                            "Fahrzeit (geschätzt)"
+                            stringResource(R.string.training_week_time_estimated_label)
                         },
                     )
                 }
@@ -136,8 +155,8 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
                 // heisst bereits „Entlastungswoche empfohlen"; wir spiegeln
                 // dieselbe Uebersetzung hier lokal ueber das Flag, ohne den
                 // Text zu parsen.
-                title = if (deload.recommended) deload.title else "Keine Entlastungswoche nötig",
-                text = if (deloadRange != null) "${deload.detail} Richtwert: $deloadRange." else deload.detail,
+                title = if (deload.recommended) deload.title else stringResource(R.string.training_week_no_deload_title),
+                text = deloadText,
             )
 
             for (trigger in deload.triggers) {
@@ -159,7 +178,7 @@ fun WeekCard(insights: TrainingInsights, onOpenMore: () -> Unit) {
             if (target != null && !deload.recommended) {
                 for (cap in target.caps) {
                     Text(
-                        text = "· $cap",
+                        text = "· ${weeklyLoadCapText(cap, target, coreTexts)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = theme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 8.dp),

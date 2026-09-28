@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -92,32 +93,22 @@ data class HealthConnection(
     val needsPermissions: Boolean
         get() = availability == HealthAvailability.VERFUEGBAR && !hasPermissions
 
-    /** Fuer die UI verwendbare deutsche Beschreibung des Zustands. */
-    val message: String
-        get() = when (availability) {
-            HealthAvailability.NICHT_UNTERSTUETZT ->
-                "Health Connect wird auf diesem Gerät nicht unterstützt."
-
-            HealthAvailability.NICHT_INSTALLIERT ->
-                "Health Connect ist nicht installiert. Bitte installiere die App aus " +
-                    "dem Play Store, damit Trailscape auf die Watch-Daten zugreifen kann."
-
-            HealthAvailability.UPDATE_NOETIG ->
-                "Health Connect muss aktualisiert werden, bevor Trailscape darauf " +
-                    "zugreifen kann."
-
-            HealthAvailability.VERFUEGBAR -> if (hasPermissions) {
-                "Health Connect ist verbunden."
-            } else {
-                "Trailscape braucht noch deine Zustimmung, um Health-Connect-Daten " +
-                    "zu lesen."
-            }
+    /** Fuer die UI verwendbare Beschreibung des Zustands in der Sprache von [texts]. */
+    fun message(texts: CoreTexts): String = when (availability) {
+        HealthAvailability.NICHT_UNTERSTUETZT -> texts.health.notSupported()
+        HealthAvailability.NICHT_INSTALLIERT -> texts.health.notInstalled()
+        HealthAvailability.UPDATE_NOETIG -> texts.health.updateNeeded()
+        HealthAvailability.VERFUEGBAR -> if (hasPermissions) {
+            texts.health.connected()
+        } else {
+            texts.health.permissionNeeded()
         }
+    }
 }
 
 /** Fehler, der eine Synchronisation komplett verhindert. */
 class HealthSyncException(
-    /** Fuer die UI geeignete deutsche Meldung. */
+    /** Fuer die UI geeignete Meldung in der Sprache der App. */
     override val message: String,
 ) : Exception(message) {
     override fun toString(): String = message
@@ -398,20 +389,19 @@ data class HealthSyncReport(
  * (Verlauf, Tour-Details); die Zeile bleibt dabei, auch wenn Health Connect
  * selbst von Trainings spricht.
  */
-fun HealthSyncReport.summaryLine(): String {
-    fun touren(n: Int) = if (n == 1) "1 Tour" else "$n Touren"
+fun HealthSyncReport.summaryLine(texts: CoreTexts): String {
+    val t = texts.health
     val consent = routeConsentPending.size
     val withoutData = routesWithoutData
-    if (imported.isEmpty() && mergedRides.isEmpty()) return "Keine neuen Touren"
+    if (imported.isEmpty() && mergedRides.isEmpty()) return t.noNewRides()
     val parts = mutableListOf<String>()
-    if (imported.isNotEmpty()) parts.add("${touren(imported.size)} importiert")
+    if (imported.isNotEmpty()) parts.add(t.ridesImported(imported.size))
     if (mergedRides.isNotEmpty()) {
         // Steht die Ergaenzung vorn, braucht sie das Substantiv selbst.
-        val n = mergedRides.size
-        parts.add(if (parts.isEmpty()) "${touren(n)} mit Puls ergänzt" else "$n mit Puls ergänzt")
+        parts.add(t.ridesEnrichedWithHeartRate(mergedRides.size, standalone = parts.isEmpty()))
     }
-    if (consent > 0) parts.add("$consent ohne Route (Freigabe in Health Connect nötig)")
-    if (withoutData > 0) parts.add("$withoutData ohne GPS-Daten")
+    if (consent > 0) parts.add(t.ridesWithoutRouteConsent(consent))
+    if (withoutData > 0) parts.add(t.ridesWithoutGps(withoutData))
     return parts.joinToString(" · ")
 }
 

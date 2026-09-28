@@ -3,6 +3,7 @@ package de.trailscape.app.ui.rides
 import de.trailscape.core.RideStats
 import de.trailscape.core.RideSummary
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.i18n.AppLanguage
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.YearMonth
@@ -43,6 +44,9 @@ class RideListLogicTest {
     private fun plan(id: String, at: LocalDateTime, name: String = "Plan $id") =
         summary(id, at, name = name, planned = true, km = 58.0)
 
+    private val de = RidesXmlStrings.DE
+    private val en = RidesXmlStrings.EN
+
     @Test
     fun `Touren werden nach Monat gruppiert, Reihenfolge bleibt`() {
         val rides = listOf(
@@ -51,7 +55,7 @@ class RideListLogicTest {
             summary("c", LocalDateTime.of(2026, 8, 28, 8, 0)),
             summary("d", LocalDateTime.of(2025, 9, 14, 8, 0)),
         )
-        val groups = groupRidesByMonth(rides, today, utc)
+        val groups = groupRidesByMonth(rides, today, utc, AppLanguage.DE)
 
         assertEquals(listOf("September", "August", "September 2025"), groups.map { it.label })
         assertEquals(listOf("a", "b"), groups[0].rides.map { it.id })
@@ -74,12 +78,12 @@ class RideListLogicTest {
         val stats = RideStats(distanceKm = 32.4, ascentM = 410.0, descentM = 400.0, durationS = 5074)
         assertEquals(
             "Di 22.9. · 32,4 km · 1:24 h",
-            rideListMeta(LocalDateTime.of(2026, 9, 22, 18, 12), stats),
+            de.resolve(rideListMeta(LocalDateTime.of(2026, 9, 22, 18, 12), stats, AppLanguage.DE)),
         )
         // Ohne Dauer entfaellt die Zeitangabe.
         assertEquals(
             "So 1.3. · 32,4 km",
-            rideListMeta(LocalDateTime.of(2026, 3, 1, 9, 0), stats.copy(durationS = null)),
+            de.resolve(rideListMeta(LocalDateTime.of(2026, 3, 1, 9, 0), stats.copy(durationS = null), AppLanguage.DE)),
         )
     }
 
@@ -96,15 +100,15 @@ class RideListLogicTest {
         val at = LocalDateTime.of(2026, 9, 22, 18, 12)
         assertEquals(
             "Dienstag, 22. September · 18:12",
-            rideDetailDateLine(at, today, planned = false, fromHealthConnect = false),
+            de.resolve(rideDetailDateLine(at, today, planned = false, fromHealthConnect = false, AppLanguage.DE)),
         )
         assertEquals(
             "Dienstag, 22. September · 18:12 · aus Health Connect",
-            rideDetailDateLine(at, today, planned = false, fromHealthConnect = true),
+            de.resolve(rideDetailDateLine(at, today, planned = false, fromHealthConnect = true, AppLanguage.DE)),
         )
         assertEquals(
             "Sonntag, 22. September 2024 · 18:12",
-            rideDetailDateLine(at.withYear(2024), today, planned = false, fromHealthConnect = false),
+            de.resolve(rideDetailDateLine(at.withYear(2024), today, planned = false, fromHealthConnect = false, AppLanguage.DE)),
         )
     }
 
@@ -156,7 +160,7 @@ class RideListLogicTest {
             plan("p2", LocalDateTime.of(2026, 8, 30, 9, 0)),
             summary("c", LocalDateTime.of(2026, 8, 28, 8, 0)),
         )
-        val sections = splitHistory(rides, "", today, utc)
+        val sections = splitHistory(rides, "", today, utc, AppLanguage.DE)
 
         assertEquals(listOf("p1", "p2"), sections.planned.map { it.id })
         assertEquals(listOf("September", "August"), sections.months.map { it.label })
@@ -173,7 +177,7 @@ class RideListLogicTest {
             summary("a", LocalDateTime.of(2026, 9, 23, 18, 0), name = "Feierabendrunde"),
             plan("p", LocalDateTime.of(2026, 9, 20, 9, 0), name = "Alb-Runde über Hayingen"),
         )
-        val sections = splitHistory(rides, "hayingen", today, utc)
+        val sections = splitHistory(rides, "hayingen", today, utc, AppLanguage.DE)
 
         assertEquals(listOf("p"), sections.planned.map { it.id })
         assertTrue(sections.months.isEmpty())
@@ -187,13 +191,13 @@ class RideListLogicTest {
             plan("p1", LocalDateTime.of(2026, 9, 20, 9, 0)),
             plan("p2", LocalDateTime.of(2026, 9, 10, 9, 0)),
         )
-        val sections = splitHistory(rides, "", today, utc)
+        val sections = splitHistory(rides, "", today, utc, AppLanguage.DE)
 
         assertEquals(listOf("p1", "p2"), sections.planned.map { it.id })
         assertTrue(sections.months.isEmpty())
         assertEquals(RiddenPart.NOCH_KEINE_FAHRT, sections.ridden)
         // Auch waehrend einer Suche: Es gibt keine Fahrt, nicht nur keinen Treffer.
-        assertEquals(RiddenPart.NOCH_KEINE_FAHRT, splitHistory(rides, "p1", today, utc).ridden)
+        assertEquals(RiddenPart.NOCH_KEINE_FAHRT, splitHistory(rides, "p1", today, utc, AppLanguage.DE).ridden)
     }
 
     @Test
@@ -202,10 +206,10 @@ class RideListLogicTest {
             summary("a", LocalDateTime.of(2026, 9, 23, 18, 0)),
             summary("b", LocalDateTime.of(2026, 8, 2, 8, 0)),
         )
-        val sections = splitHistory(rides, "", today, utc)
+        val sections = splitHistory(rides, "", today, utc, AppLanguage.DE)
 
         assertTrue(sections.planned.isEmpty())
-        assertEquals(groupRidesByMonth(rides, today, utc), sections.months)
+        assertEquals(groupRidesByMonth(rides, today, utc, AppLanguage.DE), sections.months)
         assertEquals(RiddenPart.LISTE, sections.ridden)
     }
 
@@ -215,12 +219,12 @@ class RideListLogicTest {
             summary("a", LocalDateTime.of(2026, 9, 23, 18, 0)),
             plan("p", LocalDateTime.of(2026, 9, 20, 9, 0)),
         )
-        val sections = splitHistory(rides, "gibtsnicht", today, utc)
+        val sections = splitHistory(rides, "gibtsnicht", today, utc, AppLanguage.DE)
 
         assertTrue(sections.noMatch)
         assertTrue(sections.planned.isEmpty())
         // Ohne Touren ist es kein Such-, sondern der Erststart-Fall.
-        assertFalse(splitHistory(emptyList<RideSummary>(), "x", today, utc).noMatch)
+        assertFalse(splitHistory(emptyList<RideSummary>(), "x", today, utc, AppLanguage.DE).noMatch)
     }
 
     @Test
@@ -228,12 +232,14 @@ class RideListLogicTest {
         val stats = RideStats(distanceKm = 58.3, ascentM = 640.4, descentM = 640.0, durationS = 3600)
         assertEquals(
             "58 km · 640 Hm · erstellt 24.09.",
-            plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats),
+            de.resolve(plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats, AppLanguage.DE)),
         )
         // Kurze Runden behalten die Nachkommastelle.
         assertEquals(
             "2,4 km · 12 Hm · erstellt 01.03.",
-            plannedRouteMeta(LocalDateTime.of(2026, 3, 1, 8, 0), stats.copy(distanceKm = 2.4, ascentM = 12.0)),
+            de.resolve(
+                plannedRouteMeta(LocalDateTime.of(2026, 3, 1, 8, 0), stats.copy(distanceKm = 2.4, ascentM = 12.0), AppLanguage.DE),
+            ),
         )
     }
 
@@ -246,5 +252,60 @@ class RideListLogicTest {
         )
         assertEquals(HistoryTotals(rideCount = 2, totalKm = 42.5), historyTotals(rides))
         assertEquals(HistoryTotals(0, 0.0), historyTotals(listOf(plan("p", LocalDateTime.of(2026, 9, 20, 9, 0)))))
+    }
+
+    // ------------------------------------------------------------- Englisch
+
+    @Test
+    fun `Monatsueberschriften auf Englisch`() {
+        val rides = listOf(
+            summary("a", LocalDateTime.of(2026, 9, 23, 18, 12)),
+            summary("d", LocalDateTime.of(2025, 9, 14, 8, 0)),
+        )
+        assertEquals(listOf("September", "September 2025"), groupRidesByMonth(rides, today, utc, AppLanguage.EN).map { it.label })
+    }
+
+    @Test
+    fun `Kennzahlen-Zeile auf Englisch`() {
+        val stats = RideStats(distanceKm = 32.4, ascentM = 410.0, descentM = 400.0, durationS = 5074)
+        assertEquals(
+            "Tue 22 Sept · 32.4 km · 1:24 h",
+            en.resolve(rideListMeta(LocalDateTime.of(2026, 9, 22, 18, 12), stats, AppLanguage.EN)),
+        )
+        assertEquals(
+            "Sun 1 Mar · 32.4 km",
+            en.resolve(rideListMeta(LocalDateTime.of(2026, 3, 1, 9, 0), stats.copy(durationS = null), AppLanguage.EN)),
+        )
+    }
+
+    @Test
+    fun `Datumszeile der Detailansicht auf Englisch`() {
+        val at = LocalDateTime.of(2026, 9, 22, 18, 12)
+        assertEquals(
+            "Tuesday 22 September · 18:12 · from Health Connect",
+            en.resolve(rideDetailDateLine(at, today, planned = false, fromHealthConnect = true, AppLanguage.EN)),
+        )
+        assertEquals(
+            "Sunday 22 September 2024 · 18:12 · planned route",
+            en.resolve(rideDetailDateLine(at.withYear(2024), today, planned = true, fromHealthConnect = false, AppLanguage.EN)),
+        )
+        assertEquals(
+            "Dienstag, 22. September · 18:12 · geplante Route · aus Health Connect",
+            de.resolve(rideDetailDateLine(at, today, planned = true, fromHealthConnect = true, AppLanguage.DE)),
+        )
+    }
+
+    @Test
+    fun `Planungszeile auf Englisch mit m statt Hm`() {
+        val stats = RideStats(distanceKm = 58.3, ascentM = 640.4, descentM = 640.0, durationS = 3600)
+        assertEquals(
+            "58 km · 640 m · created 24 Sept",
+            en.resolve(plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats, AppLanguage.EN)),
+        )
+        // Die deutsche String-Fassung fuer das Karten-Blatt bleibt gleich.
+        assertEquals(
+            de.resolve(plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats, AppLanguage.DE)),
+            plannedRouteMeta(LocalDateTime.of(2026, 9, 24, 21, 5), stats),
+        )
     }
 }

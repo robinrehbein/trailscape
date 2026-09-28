@@ -12,13 +12,14 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.components.OneUiSearchField
 import de.trailscape.core.GeoResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +39,7 @@ import org.robolectric.annotation.Config
  * Effekt wieder an den Suchtext haengen wollte.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], application = Application::class)
+@Config(sdk = [35], application = Application::class, qualifiers = TestLocales.DE)
 class PlaceSearchTest {
 
     @get:Rule

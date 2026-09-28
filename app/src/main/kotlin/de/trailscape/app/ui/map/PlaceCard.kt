@@ -18,11 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.ui.components.NeutralButton
-import de.trailscape.app.ui.formatKmDe
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.GeoResult
@@ -132,7 +134,10 @@ internal fun PlaceCard(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    val subtitle = placeSubtitle(area, distanceKm)
+                    val distanceText = distanceKm?.let {
+                        stringResource(R.string.map_place_distance_away, LocalAppFormats.current.km(it))
+                    }
+                    val subtitle = placeSubtitle(area, distanceText)
                     if (subtitle != null) {
                         Text(
                             text = subtitle,
@@ -144,13 +149,13 @@ internal fun PlaceCard(
                     }
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Ort schließen")
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.map_place_close_cd))
                 }
             }
             Spacer(Modifier.height(OverlayCardPaddingVertical))
             when (mode) {
                 MapMode.PLANEN -> PrimaryButton(
-                    text = "Als Wegpunkt",
+                    text = stringResource(R.string.map_place_waypoint_action),
                     onClick = onAddWaypoint,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -162,7 +167,7 @@ internal fun PlaceCard(
                 // docs/design/prototyp-eine-leiste.html (dort .placesecond).
                 MapMode.ERKUNDEN -> Column {
                     PrimaryButton(
-                        text = "Route hierher",
+                        text = stringResource(R.string.map_place_route_here_action),
                         onClick = onRouteHere,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -173,22 +178,23 @@ internal fun PlaceCard(
                             modifier = Modifier.weight(1f),
                         ) {
                             Text(
-                                text = "Runde ab hier",
+                                text = stringResource(R.string.map_place_round_trip_action),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
                         Spacer(Modifier.width(8.dp))
+                        val addWaypointCd = stringResource(R.string.map_place_add_waypoint_cd)
                         NeutralButton(
                             onClick = onAddAsWaypoint,
                             modifier = Modifier
                                 .weight(1f)
                                 .clearAndSetSemantics {
-                                    contentDescription = "Ort als Wegpunkt zur Route hinzufügen"
+                                    contentDescription = addWaypointCd
                                 },
                         ) {
                             Text(
-                                text = "+ Als Wegpunkt",
+                                text = stringResource(R.string.map_place_add_waypoint_action),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
@@ -204,9 +210,11 @@ internal fun PlaceCard(
     }
 }
 
-/** Baut Gegend und Entfernung zu einer Unterzeile zusammen — beides optional. */
-private fun placeSubtitle(area: String, distanceKm: Double?): String? {
-    val distance = distanceKm?.let { "${formatKmDe(it)} km entfernt" }
+/**
+ * Baut Gegend und Entfernung („3,2 km entfernt", schon in der App-Sprache)
+ * zu einer Unterzeile zusammen — beides optional.
+ */
+private fun placeSubtitle(area: String, distance: String?): String? {
     return listOfNotNull(area.takeIf(String::isNotBlank), distance)
         .joinToString(" · ")
         .takeIf(String::isNotBlank)

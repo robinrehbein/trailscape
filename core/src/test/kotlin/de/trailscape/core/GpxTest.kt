@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -33,7 +34,7 @@ class GpxTest {
         assertTrue(xml.contains("creator=\"Trailscape\""))
         assertTrue(xml.contains("http://www.topografix.com/GPX/1/1"))
 
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals("Meine Tour", result.name)
         assertEquals(3, result.points.size)
 
@@ -58,14 +59,14 @@ class GpxTest {
         assertTrue(xml.contains("&amp;"))
         assertTrue(xml.contains("&lt;Test"))
 
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals("Tour & <Test> \"Zitat\" 'Apostroph'", result.name)
     }
 
     @Test
     fun `leere Punktliste erzeugt GPX ohne Trackpunkte parseGpx wirft`() {
         val xml = buildGpx("Leer", emptyList())
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     // --- parseGpx mit handgeschriebenem GPX ---
@@ -100,7 +101,7 @@ class GpxTest {
 
     @Test
     fun `liest alle trkpt aus beiden Segmenten in Reihenfolge`() {
-        val result = parseGpx(handwritten)
+        val result = parseGpx(handwritten, texts = CoreTextsDe)
 
         assertEquals(3, result.points.size)
         assertEquals(47.1, result.points[0].lat, EPS)
@@ -118,7 +119,7 @@ class GpxTest {
 
     @Test
     fun `Name kommt aus trk name nicht aus metadata name`() {
-        val result = parseGpx(handwritten)
+        val result = parseGpx(handwritten, texts = CoreTextsDe)
         assertEquals("Zwei Segmente Tour", result.name)
     }
 
@@ -137,7 +138,7 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals("Nur Metadata", result.name)
     }
 
@@ -153,7 +154,7 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertNull(result.name)
     }
 
@@ -173,7 +174,7 @@ class GpxTest {
   </rte>
 </gpx>
 """
-        val result = parseGpx(xml)
+        val result = parseGpx(xml, texts = CoreTextsDe)
         assertEquals(2, result.points.size)
         assertEquals(10.0, result.points[0].lat, EPS)
         assertEquals(100.0, result.points[0].ele!!, EPS)
@@ -186,13 +187,13 @@ class GpxTest {
     @Test
     fun `kaputtes XML wirft FormatException`() {
         val brokenXml = "<gpx><trk><trkseg><trkpt lat=\"1\" lon=\"2\">"
-        assertFailsWith<FormatException> { parseGpx(brokenXml) }
+        assertFailsWith<FormatException> { parseGpx(brokenXml, texts = CoreTextsDe) }
     }
 
     @Test
     fun `gueltiges XML ohne gpx-Wurzel wirft FormatException`() {
         val xml = "<?xml version=\"1.0\"?><notgpx></notgpx>"
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     @Test
@@ -206,7 +207,7 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     @Test
@@ -221,11 +222,126 @@ class GpxTest {
   </trk>
 </gpx>
 """
-        assertFailsWith<FormatException> { parseGpx(xml) }
+        assertFailsWith<FormatException> { parseGpx(xml, texts = CoreTextsDe) }
     }
 
     @Test
     fun `leerer String wirft FormatException`() {
-        assertFailsWith<FormatException> { parseGpx("") }
+        assertFailsWith<FormatException> { parseGpx("", texts = CoreTextsDe) }
+    }
+
+    // --- Sensorwerte: Puls, Trittfrequenz, Leistung ---
+
+    @Test
+    fun `Export nur mit Puls bleibt byteidentisch zum bisherigen Format`() {
+        val xml = buildGpx("T", listOf(TrackPoint(lat = 1.0, lon = 2.0, time = 1700000000000L, hr = 140)))
+        val erwartet = """<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Trailscape" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+  <metadata>
+    <name>T</name>
+  </metadata>
+  <trk>
+    <name>T</name>
+    <trkseg>
+      <trkpt lat="1.0" lon="2.0">
+        <time>2023-11-14T22:13:20.000Z</time>
+        <extensions>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:hr>140</gpxtpx:hr>
+          </gpxtpx:TrackPointExtension>
+        </extensions>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
+"""
+        assertEquals(erwartet, xml)
+    }
+
+    @Test
+    fun `Export ohne Sensorwerte deklariert keinen Namespace`() {
+        val xml = buildGpx("T", listOf(TrackPoint(lat = 1.0, lon = 2.0), TrackPoint(lat = 1.1, lon = 2.1, ele = 3.0)))
+        assertTrue(!xml.contains("gpxtpx"))
+        assertTrue(!xml.contains("extensions"))
+        assertTrue(xml.contains("<trkpt lat=\"1.0\" lon=\"2.0\"/>"))
+    }
+
+    @Test
+    fun `Export mit Trittfrequenz und Leistung`() {
+        val xml = buildGpx(
+            "T",
+            listOf(
+                TrackPoint(lat = 1.0, lon = 2.0, time = 1700000000000L, hr = 140, power = 230, cad = 88),
+                TrackPoint(lat = 1.1, lon = 2.1, power = 0),
+            ),
+        )
+        assertTrue(xml.contains("xmlns:gpxtpx="))
+        assertTrue(
+            xml.contains(
+                """        <extensions>
+          <power>230</power>
+          <gpxtpx:TrackPointExtension>
+            <gpxtpx:hr>140</gpxtpx:hr>
+            <gpxtpx:cad>88</gpxtpx:cad>
+          </gpxtpx:TrackPointExtension>
+        </extensions>""",
+            ),
+        )
+        // Nur Leistung: keine leere TrackPointExtension.
+        assertTrue(
+            xml.contains(
+                """      <trkpt lat="1.1" lon="2.1">
+        <extensions>
+          <power>0</power>
+        </extensions>
+      </trkpt>""",
+            ),
+        )
+        val back = parseGpx(xml, texts = CoreTextsDe).points
+        assertEquals(140, back[0].hr)
+        assertEquals(230, back[0].power)
+        assertEquals(88, back[0].cad)
+        assertEquals(0, back[1].power)
+        assertNull(back[1].cad)
+        assertNull(back[1].hr)
+    }
+
+    @Test
+    fun `Namespace auch bei Trittfrequenz ohne Puls`() {
+        val xml = buildGpx("T", listOf(TrackPoint(lat = 1.0, lon = 2.0, cad = 90)))
+        assertTrue(xml.contains("xmlns:gpxtpx="))
+        assertTrue(xml.contains("<gpxtpx:cad>90</gpxtpx:cad>"))
+        assertTrue(!xml.contains("<gpxtpx:hr>"))
+        assertEquals(90, parseGpx(xml, texts = CoreTextsDe).points.single().cad)
+    }
+
+    @Test
+    fun `Import liest PowerInWatts und verwirft Unplausibles`() {
+        val xml = """
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:ns3="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+  <trk>
+    <trkseg>
+      <trkpt lat="1.0" lon="2.0">
+        <extensions>
+          <ns3:TrackPointExtension><ns3:cad>91.4</ns3:cad></ns3:TrackPointExtension>
+          <pwr:PowerInWatts xmlns:pwr="http://www.garmin.com/xmlschemas/PowerExtension/v1">305</pwr:PowerInWatts>
+        </extensions>
+      </trkpt>
+      <trkpt lat="1.1" lon="2.1">
+        <extensions>
+          <power>9999</power>
+          <ns3:TrackPointExtension><ns3:cad>400</ns3:cad></ns3:TrackPointExtension>
+        </extensions>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
+"""
+        val points = parseGpx(xml, texts = CoreTextsDe).points
+        assertEquals(305, points[0].power)
+        assertEquals(91, points[0].cad)
+        assertNull(points[1].power)
+        assertNull(points[1].cad)
     }
 }

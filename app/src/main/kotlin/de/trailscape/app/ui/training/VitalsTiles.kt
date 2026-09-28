@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.training
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,20 +22,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.i18n.UiText
+import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.TrainingInsights
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
-import de.trailscape.app.ui.formatTime
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.core.RecoveryFlag
-import de.trailscape.core.confidenceLabels
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatTime
 import de.trailscape.core.shortSleeperHint
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -91,18 +97,18 @@ fun VitalsTiles(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             VitalTile(
-                label = "Ruhepuls",
+                label = stringResource(R.string.training_vitals_resting_hr_label),
                 value = rhr.last?.let { "${it.roundToInt()}" },
                 unit = "bpm",
-                word = if (rhr.available) restingHrWord(rhr.flag) else null,
+                word = if (rhr.available) stringResource(restingHrWord(rhr.flag)) else null,
                 color = recoveryFlagColor(rhr.flag, muted),
                 onClick = onOpenDetails,
             )
             VitalTile(
-                label = "Erholung (HRV)",
+                label = stringResource(R.string.training_vitals_hrv_label),
                 value = hrv.lastRmssd?.let { "${it.roundToInt()}" },
                 unit = "ms",
-                word = if (hrv.available) hrvWord(hrv.flag) else null,
+                word = if (hrv.available) stringResource(hrvWord(hrv.flag)) else null,
                 color = recoveryFlagColor(hrv.flag, muted),
                 onClick = onOpenDetails,
             )
@@ -112,10 +118,10 @@ fun VitalsTiles(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             VitalTile(
-                label = "Schlaf",
+                label = stringResource(R.string.training_vitals_sleep_label),
                 value = sleep.lastNightH?.let { formatSleep(it) },
                 unit = "h",
-                word = if (sleep.available) sleepWord(sleep.flag) else null,
+                word = if (sleep.available) stringResource(sleepWord(sleep.flag)) else null,
                 color = recoveryFlagColor(sleep.flag, muted),
                 onClick = onOpenDetails,
             )
@@ -124,49 +130,58 @@ fun VitalsTiles(
                 // Immer als Band, nie als Punktwert (§8.5).
                 value = if (vo2.available) "${vo2.lower!!.roundToInt()}–${vo2.upper!!.roundToInt()}" else null,
                 unit = "ml/kg/min",
-                word = if (vo2.available) "geschätzt" else null,
+                word = if (vo2.available) stringResource(R.string.training_vitals_estimated) else null,
                 color = Color.Unspecified,
                 onClick = onOpenDetails,
             )
         }
 
         Text(
-            text = vitalsSourceLine(syncedAt, hasAny = rhr.last != null || hrv.lastRmssd != null || sleep.lastNightH != null),
+            text = vitalsSourceLine(
+                syncedAt,
+                hasAny = rhr.last != null || hrv.lastRmssd != null || sleep.lastNightH != null,
+                language = LocalAppLanguage.current,
+            ).asString(),
             style = MaterialTheme.typography.labelSmall,
             color = muted.copy(alpha = 0.8f),
             modifier = Modifier.padding(horizontal = 4.dp),
         )
 
         if (sleep.available && sleep.shortSleeper && showShortSleeperHint) {
-            NoticeBox(icon = TrainingInfoIcon, color = muted, text = shortSleeperHint)
+            NoticeBox(icon = TrainingInfoIcon, color = muted, text = shortSleeperHint(LocalCoreTexts.current))
             LaunchedEffect(Unit) { onShortSleeperHintShown() }
         }
     }
 }
 
 /**
- * Quellzeile unter dem Raster: „Von deiner Uhr über Health Connect · heute 6:12".
+ * Quellzeile unter dem Raster: „Von deiner Uhr über Health Connect · heute 06:12".
  *
  * Health Connect nennt fuer die Vitalwerte keine Herkunfts-App an die
  * Auswertung weiter; die Zeile sagt deshalb „deiner Uhr" statt eines
- * Geraetenamens.
+ * Geraetenamens. „heute"/„gestern" stehen mit in den Saetzen, weil sich die
+ * Wortstellung je Sprache unterscheiden darf.
  */
 internal fun vitalsSourceLine(
     syncedAt: LocalDateTime?,
     hasAny: Boolean,
+    language: AppLanguage,
     today: LocalDate = LocalDate.now(),
-): String {
+): UiText {
     if (!hasAny && syncedAt == null) {
-        return "Noch keine Werte von deiner Uhr. Health Connect verbindest du in den Einstellungen."
+        return UiText.Res(R.string.training_vitals_source_none)
     }
-    val base = "Von deiner Uhr über Health Connect"
-    val at = syncedAt ?: return base
-    val day = when (at.toLocalDate()) {
-        today -> "heute"
-        today.minusDays(1) -> "gestern"
-        else -> at.format(DateTimeFormatter.ofPattern("d. MMMM", Locale.GERMANY))
+    val at = syncedAt ?: return UiText.Res(R.string.training_vitals_source)
+    val time = formatTime(at, language)
+    return when (at.toLocalDate()) {
+        today -> UiText.Res(R.string.training_vitals_source_today, listOf(time))
+        today.minusDays(1) -> UiText.Res(R.string.training_vitals_source_yesterday, listOf(time))
+        else -> {
+            val pattern = if (language == AppLanguage.DE) "d. MMMM" else "d MMMM"
+            val day = at.format(DateTimeFormatter.ofPattern(pattern, language.locale))
+            UiText.Res(R.string.training_vitals_source_date, listOf(day, time))
+        }
     }
-    return "$base · $day ${formatTime(at.toLocalTime())}"
 }
 
 /** Schlafdauer als „7:40". */
@@ -176,30 +191,33 @@ internal fun formatSleep(hours: Double): String {
 }
 
 /** Ein Wort zum Ruhepuls: hoch ist hier das Auffaellige. */
-internal fun restingHrWord(flag: RecoveryFlag): String = when (flag) {
-    RecoveryFlag.UNBEKANNT -> "noch offen"
-    RecoveryFlag.GRUEN -> "normal"
-    RecoveryFlag.GELB -> "etwas erhöht"
-    RecoveryFlag.ORANGE -> "erhöht"
-    RecoveryFlag.ROT -> "stark erhöht"
+@StringRes
+internal fun restingHrWord(flag: RecoveryFlag): Int = when (flag) {
+    RecoveryFlag.UNBEKANNT -> R.string.training_vitals_word_pending
+    RecoveryFlag.GRUEN -> R.string.training_vitals_word_normal
+    RecoveryFlag.GELB -> R.string.training_vitals_word_slightly_elevated
+    RecoveryFlag.ORANGE -> R.string.training_vitals_word_elevated
+    RecoveryFlag.ROT -> R.string.training_vitals_word_very_elevated
 }
 
 /** Ein Wort zur HRV: niedrig ist hier das Auffaellige. */
-internal fun hrvWord(flag: RecoveryFlag): String = when (flag) {
-    RecoveryFlag.UNBEKANNT -> "noch offen"
-    RecoveryFlag.GRUEN -> "normal"
-    RecoveryFlag.GELB -> "etwas niedrig"
-    RecoveryFlag.ORANGE -> "niedrig"
-    RecoveryFlag.ROT -> "sehr niedrig"
+@StringRes
+internal fun hrvWord(flag: RecoveryFlag): Int = when (flag) {
+    RecoveryFlag.UNBEKANNT -> R.string.training_vitals_word_pending
+    RecoveryFlag.GRUEN -> R.string.training_vitals_word_normal
+    RecoveryFlag.GELB -> R.string.training_vitals_word_slightly_low
+    RecoveryFlag.ORANGE -> R.string.training_vitals_word_low
+    RecoveryFlag.ROT -> R.string.training_vitals_word_very_low
 }
 
 /** Ein Wort zum Schlaf. */
-internal fun sleepWord(flag: RecoveryFlag): String = when (flag) {
-    RecoveryFlag.UNBEKANNT -> "noch offen"
-    RecoveryFlag.GRUEN -> "gut"
-    RecoveryFlag.GELB -> "etwas kurz"
-    RecoveryFlag.ORANGE -> "kurz"
-    RecoveryFlag.ROT -> "sehr kurz"
+@StringRes
+internal fun sleepWord(flag: RecoveryFlag): Int = when (flag) {
+    RecoveryFlag.UNBEKANNT -> R.string.training_vitals_word_pending
+    RecoveryFlag.GRUEN -> R.string.training_vitals_word_good
+    RecoveryFlag.GELB -> R.string.training_vitals_word_slightly_short
+    RecoveryFlag.ORANGE -> R.string.training_vitals_word_short
+    RecoveryFlag.ROT -> R.string.training_vitals_word_very_short
 }
 
 /**
@@ -220,7 +238,11 @@ private fun RowScope.VitalTile(
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
-            .clickable(role = Role.Button, onClickLabel = "Körperwerte erklärt öffnen", onClick = onClick),
+            .clickable(
+                role = Role.Button,
+                onClickLabel = stringResource(R.string.training_vitals_open_cd),
+                onClick = onClick,
+            ),
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -242,7 +264,7 @@ private fun RowScope.VitalTile(
                 }
             } else {
                 Text(
-                    "Noch keine Daten",
+                    stringResource(R.string.training_vitals_no_data),
                     style = MaterialTheme.typography.bodyMedium,
                     color = theme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
@@ -272,38 +294,39 @@ fun VitalsSheet(insights: TrainingInsights, onDismiss: () -> Unit) {
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
         SheetColumn {
-            Text("Körperwerte", style = MaterialTheme.typography.titleLarge)
+            val noStatement = stringResource(R.string.training_vitals_no_statement)
+            Text(stringResource(R.string.training_vitals_sheet_title), style = MaterialTheme.typography.titleLarge)
             ExplainRow(
-                label = "Ruhepuls",
-                pill = if (rhr.available) restingHrWord(rhr.flag) else null,
+                label = stringResource(R.string.training_vitals_resting_hr_label),
+                pill = if (rhr.available) stringResource(restingHrWord(rhr.flag)) else null,
                 pillColor = recoveryFlagColor(rhr.flag, muted),
-                text = if (rhr.available) rhr.message else rhr.unavailableReason ?: "Keine Aussage möglich.",
+                text = if (rhr.available) rhr.message else rhr.unavailableReason ?: noStatement,
             )
             ExplainRow(
-                label = "Erholung",
-                pill = if (hrv.available) hrvWord(hrv.flag) else null,
+                label = stringResource(R.string.training_vitals_recovery_label),
+                pill = if (hrv.available) stringResource(hrvWord(hrv.flag)) else null,
                 pillColor = recoveryFlagColor(hrv.flag, muted),
                 text = if (hrv.available) {
-                    "${hrv.message} ${hrvTrendText(hrv)}"
+                    // Zwei ganze Saetze: die Deutung aus `:core`, dahinter die Tendenz.
+                    listOfNotNull(hrv.message, hrvTrendText(hrv)?.asString()).joinToString(" ")
                 } else {
-                    hrv.unavailableReason ?: "Keine Aussage möglich."
+                    hrv.unavailableReason ?: noStatement
                 },
                 jargon = "HRV",
             )
             ExplainRow(
-                label = "Schlaf",
-                pill = if (sleep.available) sleepWord(sleep.flag) else null,
+                label = stringResource(R.string.training_vitals_sleep_label),
+                pill = if (sleep.available) stringResource(sleepWord(sleep.flag)) else null,
                 pillColor = recoveryFlagColor(sleep.flag, muted),
-                text = if (sleep.available) sleep.message else sleep.unavailableReason ?: "Keine Aussage möglich.",
+                text = if (sleep.available) sleep.message else sleep.unavailableReason ?: noStatement,
             )
             ExplainRow(
                 label = "VO₂max",
-                pill = if (vo2.available) confidenceLabels.getValue(vo2.confidence) else null,
+                pill = if (vo2.available) LocalCoreTexts.current.load.confidence(vo2.confidence) else null,
                 text = if (vo2.available) {
-                    "Deine maximale Sauerstoffaufnahme unter Volllast, geschätzt aus Touren mit " +
-                        "Puls und Höhenprofil – deshalb ein Bereich, keine Messung."
+                    stringResource(R.string.training_vitals_vo2_body)
                 } else {
-                    vo2.unavailableReason ?: "Noch nicht schätzbar."
+                    vo2.unavailableReason ?: stringResource(R.string.training_vitals_vo2_unavailable)
                 },
             )
             Text(
@@ -311,7 +334,9 @@ fun VitalsSheet(insights: TrainingInsights, onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = muted,
             )
-            NeutralButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Verstanden") }
+            NeutralButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.training_vitals_done_action))
+            }
         }
     }
 }

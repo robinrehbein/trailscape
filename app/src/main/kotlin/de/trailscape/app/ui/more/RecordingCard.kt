@@ -15,6 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import de.trailscape.app.R
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.record.abbiegehinweiseAktiviert
 import de.trailscape.app.record.autoPauseAktiviert
@@ -66,8 +68,8 @@ fun RecordingCardContent() {
     }
 
     SettingsSwitchRow(
-        title = "Auto-Pause",
-        subtitle = "Pausiert, wenn du stehst, und läuft bei Weiterfahrt weiter.",
+        title = stringResource(R.string.more_recording_auto_pause_title),
+        subtitle = stringResource(R.string.more_recording_auto_pause_hint),
         checked = autoPause,
         onCheckedChange = {
             autoPause = it
@@ -77,13 +79,11 @@ fun RecordingCardContent() {
 
     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-    Text(text = "Batterieoptimierung", style = MaterialTheme.typography.bodyLarge)
+    Text(text = stringResource(R.string.more_recording_battery_title), style = MaterialTheme.typography.bodyLarge)
     SettingsHint(
-        text = if (ausgenommen) {
-            "Ausgenommen — die Aufzeichnung läuft auch bei dunklem Bildschirm weiter."
-        } else {
-            "Manche Geräte beenden die Aufzeichnung bei dunklem Bildschirm. Eine Ausnahme verhindert das."
-        },
+        text = stringResource(
+            if (ausgenommen) R.string.more_recording_battery_exempt_hint else R.string.more_recording_battery_hint,
+        ),
     )
     if (!ausgenommen) {
         Spacer(modifier = Modifier.height(8.dp))
@@ -96,7 +96,7 @@ fun RecordingCardContent() {
                     // Status eben stehen und der Text erklaert die Lage.
                 }
             },
-        ) { Text("Ausnahme erlauben") }
+        ) { Text(stringResource(R.string.more_recording_battery_action)) }
     }
 }
 
@@ -122,8 +122,8 @@ fun AnnouncementsCardContent() {
     var offRouteVibration by remember { mutableStateOf(offRouteVibrationAktiviert(context)) }
 
     SettingsSwitchRow(
-        title = "Sprachansagen",
-        subtitle = "Abbiegehinweise, Kilometer und Aufzeichnungsstatus per Sprachausgabe.",
+        title = stringResource(R.string.more_recording_voice_title),
+        subtitle = stringResource(R.string.more_recording_voice_hint),
         checked = sprachansagen,
         onCheckedChange = {
             sprachansagen = it
@@ -133,8 +133,8 @@ fun AnnouncementsCardContent() {
     // Die Unterschalter bleiben sichtbar, sind aber nur mit Hauptschalter
     // bedienbar — so ist ablesbar, was ein Einschalten mitbringt.
     SettingsSwitchRow(
-        title = "Abbiegehinweise",
-        subtitle = "„In 100 Metern links“ während einer Navigation.",
+        title = stringResource(R.string.more_recording_turns_title),
+        subtitle = stringResource(R.string.more_recording_turns_hint),
         checked = abbiegehinweise,
         enabled = sprachansagen,
         indented = true,
@@ -144,8 +144,8 @@ fun AnnouncementsCardContent() {
         },
     )
     SettingsSwitchRow(
-        title = "Kilometer-Ansagen",
-        subtitle = "Alle 5 km Distanz und Fahrzeit.",
+        title = stringResource(R.string.more_recording_km_title),
+        subtitle = stringResource(R.string.more_recording_km_hint),
         checked = kilometerAnsagen,
         enabled = sprachansagen,
         indented = true,
@@ -155,8 +155,8 @@ fun AnnouncementsCardContent() {
         },
     )
     SettingsSwitchRow(
-        title = "Vibration abseits der Route",
-        subtitle = "Vibriert, wenn du die Route verlässt — auch ohne Ansagen.",
+        title = stringResource(R.string.more_recording_off_route_title),
+        subtitle = stringResource(R.string.more_recording_off_route_hint),
         checked = offRouteVibration,
         onCheckedChange = {
             offRouteVibration = it
@@ -164,5 +164,5 @@ fun AnnouncementsCardContent() {
         },
     )
     Spacer(modifier = Modifier.height(4.dp))
-    SettingsHint("Alles läuft lokal auf dem Gerät, ohne Internet.")
+    SettingsHint(stringResource(R.string.more_recording_local_hint))
 }

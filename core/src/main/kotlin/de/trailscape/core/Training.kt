@@ -1,10 +1,13 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.PLAN_WEEKDAY_CODES
+import de.trailscape.core.i18n.SessionTextKey
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Trainingsplan-Generator und -Persistenz.
@@ -22,7 +25,12 @@ import kotlin.math.min
 /** Speicherschluessel des Plans (Dart: `_storageKey`). */
 const val trainingPlanStorageKey: String = "trailscape.plan"
 
-private val weekdays = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+/**
+ * Die Wochentagskuerzel im Plan-JSON. Ein interner Code (mit Web-App und
+ * Sync-Server abgestimmt), keine Anzeige — angezeigt wird ueber
+ * `texts.format.weekdayShort/weekdayLong`.
+ */
+private val weekdays = PLAN_WEEKDAY_CODES
 
 /**
  * Index eines Plan-Wochentagskuerzels (0 = Mo … 6 = So); `-1` bei fremdem
@@ -34,9 +42,11 @@ internal fun planWeekdayIndex(day: String): Int = weekdays.indexOf(day)
 private const val MIN_WEEKS = 3
 private const val MAX_WEEKS = 52
 
-const val errorTooSoon: String =
-    "Das Ziel liegt zu nah in der Zukunft – plane mindestens 3 Wochen ein."
-const val errorTooFar: String = "Das Ziel liegt mehr als ein Jahr entfernt."
+/** Meldung, wenn das Ziel weniger als [MIN_WEEKS] Wochen entfernt liegt. */
+fun errorTooSoon(texts: CoreTexts): String = texts.training.errorTooSoon()
+
+/** Meldung, wenn das Ziel mehr als [MAX_WEEKS] Wochen entfernt liegt. */
+fun errorTooFar(texts: CoreTexts): String = texts.training.errorTooFar()
 
 /** Basisvolumen pro Woche in km, falls die bisherige Belastung darunter liegt. */
 private val levelBaseKm: Map<FitnessLevel, Double> = mapOf(
@@ -49,8 +59,6 @@ private const val RECOVERY_FACTOR = 0.6
 private const val TAPER_FACTOR = 0.5
 private const val PEAK_DISTANCE_FACTOR = 1.3
 private const val ACTIVATION_KM = 15
-private const val CLIMBING_HINT =
-    " Baue dabei bewusst Anstiege ein, um dich an die Höhenmeter des Ziels zu gewöhnen."
 private const val CLIMB_HINT_THRESHOLD_M = 1000.0
 
 private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
@@ -290,19 +298,27 @@ private fun splitKm(totalKm: Int, shares: List<Double>): List<Int> {
  * Baut eine Einheit, deren Kilometer sich aus [km] und deren Dauer sich aus
  * dem nominalen Tempo der Intensitaet ergibt.
  */
+/**
+ * Eine Einheit mit Plantext-Schluessel: Titel und Beschreibung werden in der
+ * Sprache von [texts] gerendert und zusaetzlich als [SessionTextKey] +
+ * Argumente festgehalten (siehe [TrainingSession.textKey]).
+ */
 private fun session(
     day: String,
-    title: String,
-    description: String,
+    key: SessionTextKey,
     km: Int,
     intensity: SessionIntensity,
+    texts: CoreTexts,
+    args: List<Int> = emptyList(),
 ): TrainingSession = TrainingSession(
     day = day,
-    title = title,
-    description = description,
+    title = texts.training.sessionTitle(key, args, null),
+    description = texts.training.sessionDescription(key, args),
     targetKm = km,
     intensity = intensity,
     durationMin = minutesFor(km.toDouble(), intensity),
+    textKey = key,
+    textArgs = args,
 )
 
 // ---------------------------------------------------------------------------
@@ -333,8 +349,12 @@ private data class IntervalShape(
     val cooldownMin: Int,
     val minReps: Int,
     val maxReps: Int,
-    /** Wie die Belastung im Text benannt wird. */
-    val effort: String,
+    /**
+     * Wie die Belastung im Text benannt wird: 0 = „zuegig im
+     * Schwellenbereich", 1 = „hart an der Schwelle" (Argument
+     * `haerte` von [SessionTextKey.INTERVALS]).
+     */
+    val effort: Int,
 ) {
     fun minutesFor(reps: Int): Int =
         warmupMin + reps * workMin + (reps - 1) * restMin + cooldownMin
@@ -348,7 +368,7 @@ private val intervalShapeFortgeschritten = IntervalShape(
     cooldownMin = 10,
     minReps = 3,
     maxReps = 5,
-    effort = "zügig im Schwellenbereich",
+    effort = 0,
 )
 
 /** 5×6-Raster fuer Ambitionierte (4…6 Wiederholungen). */
@@ -359,14 +379,19 @@ private val intervalShapeAmbitioniert = IntervalShape(
     cooldownMin = 10,
     minReps = 4,
     maxReps = 6,
-    effort = "hart an der Schwelle",
+    effort = 1,
 )
 
 /**
  * Die Intervalleinheit zu einem gewuenschten Umfang [wantedKm]: Struktur
  * zuerst, Kilometer danach (Begruendung in [IntervalShape]).
  */
-private fun intervalSession(day: String, shape: IntervalShape, wantedKm: Double): TrainingSession {
+private fun intervalSession(
+    day: String,
+    shape: IntervalShape,
+    wantedKm: Double,
+    texts: CoreTexts,
+): TrainingSession {
     val wantedMin = minutesFor(max(wantedKm, 1.0), SessionIntensity.HART)
     val room = wantedMin - shape.warmupMin - shape.cooldownMin
     val fitting = if (room <= 0) 0 else room / (shape.workMin + shape.restMin)
@@ -374,26 +399,34 @@ private fun intervalSession(day: String, shape: IntervalShape, wantedKm: Double)
     val minutes = shape.minutesFor(reps)
     val km = max(1, dartRound(kmForMinutes(minutes, SessionIntensity.HART)).toInt())
 
+    val args = listOf(shape.warmupMin, reps, shape.workMin, shape.restMin, shape.cooldownMin, minutes, shape.effort)
     return TrainingSession(
         day = day,
-        title = "Intervalle",
-        description = "Nach ${shape.warmupMin} Minuten Einfahren $reps×${shape.workMin} Minuten " +
-            "${shape.effort}, dazwischen je ${shape.restMin} Minuten locker rollen; zum " +
-            "Abschluss ${shape.cooldownMin} Minuten ausfahren – zusammen rund $minutes Minuten.",
+        title = texts.training.sessionTitle(SessionTextKey.INTERVALS, args, null),
+        description = texts.training.sessionDescription(SessionTextKey.INTERVALS, args),
         targetKm = km,
         intensity = SessionIntensity.HART,
         durationMin = minutes,
+        textKey = SessionTextKey.INTERVALS,
+        textArgs = args,
     )
 }
 
-private fun longTourDescription(goal: Goal): String {
-    val base = "Die Schlüsseleinheit der Woche: gleichmäßig im Grundlagentempo fahren und " +
-        "konsequent essen und trinken."
+/**
+ * Die lange Fahrt der Woche. Ab [CLIMB_HINT_THRESHOLD_M] Zielhoehenmetern
+ * bekommt sie den Anstiegs-Hinweis (Argument 1 von [SessionTextKey.LONG_RIDE]).
+ */
+private fun longRide(day: String, km: Int, goal: Goal, texts: CoreTexts): TrainingSession {
     val ascentM = goal.ascentM
-    if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) {
-        return base + CLIMBING_HINT
-    }
-    return base
+    val climbing = if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) 1 else 0
+    return session(
+        day = day,
+        key = SessionTextKey.LONG_RIDE,
+        km = km,
+        intensity = SessionIntensity.GRUNDLAGE,
+        texts = texts,
+        args = listOf(climbing),
+    )
 }
 
 internal fun buildSessions(
@@ -401,56 +434,29 @@ internal fun buildSessions(
     level: FitnessLevel,
     targetKm: Int,
     goal: Goal,
+    texts: CoreTexts,
 ): List<TrainingSession> {
     if (kind == WeekKind.ZIELWOCHE) {
-        return zielwocheSessions(goal)
+        return zielwocheSessions(goal, texts)
     }
 
     if (kind == WeekKind.ERHOLUNG) {
         val km = splitKm(targetKm, listOf(0.5, 0.5))
         return listOf(
-            session(
-                day = "Di",
-                title = "Lockere Ausfahrt",
-                description = "Entspannt rollen, kleine Gänge und hohe Trittfrequenz – diese " +
-                    "Woche dient ausschließlich der Erholung.",
-                km = km[0],
-                intensity = SessionIntensity.LOCKER,
-            ),
-            session(
-                day = "Sa",
-                title = "Ruhige Runde",
-                description = "Gemütliche Ausfahrt ohne Leistungsdruck, halte den Puls " +
-                    "durchgehend im niedrigen Bereich.",
-                km = km[1],
-                intensity = SessionIntensity.LOCKER,
-            ),
+            session("Di", SessionTextKey.RECOVERY_EASY_RIDE, km[0], SessionIntensity.LOCKER, texts),
+            session("Sa", SessionTextKey.RECOVERY_CALM_LOOP, km[1], SessionIntensity.LOCKER, texts),
         )
     }
 
     if (kind == WeekKind.TAPER) {
         val km = splitKm(targetKm, listOf(0.55, 0.45))
         return listOf(
-            session(
-                day = "Di",
-                title = "Locker mit Antritten",
-                description = "Locker rollen und dabei 3 kurze Antritte über je 30 Sekunden " +
-                    "einstreuen, um spritzig zu bleiben.",
-                km = km[0],
-                intensity = SessionIntensity.LOCKER,
-            ),
-            session(
-                day = "Do",
-                title = "Kurze lockere Ausfahrt",
-                description = "Kurz und ruhig fahren, danach Material checken und die Beine " +
-                    "bewusst schonen.",
-                km = km[1],
-                intensity = SessionIntensity.LOCKER,
-            ),
+            session("Di", SessionTextKey.TAPER_EASY_SURGES, km[0], SessionIntensity.LOCKER, texts),
+            session("Do", SessionTextKey.TAPER_SHORT_EASY, km[1], SessionIntensity.LOCKER, texts),
         )
     }
 
-    return aufbauSessions(level, targetKm, goal)
+    return aufbauSessions(level, targetKm, goal, texts)
 }
 
 /**
@@ -474,6 +480,7 @@ private fun aufbauSessions(
     level: FitnessLevel,
     targetKm: Int,
     goal: Goal,
+    texts: CoreTexts,
 ): List<TrainingSession> {
     if (level == FitnessLevel.EINSTEIGER) {
         // Einsteiger fahren keine Schwellenintervalle: erst Umfang, dann Härte.
@@ -481,108 +488,52 @@ private fun aufbauSessions(
         val shares = if (withRecovery) listOf(0.3, 0.5, 0.2) else listOf(0.4, 0.6)
         val km = splitKm(targetKm, shares)
         val sessions = mutableListOf(
-            session(
-                day = "Di",
-                title = "Lockere Ausfahrt GA1",
-                description = "Ruhiges Grundlagentempo – du solltest dich während der gesamten " +
-                    "Fahrt unterhalten können.",
-                km = km[0],
-                intensity = SessionIntensity.GRUNDLAGE,
-            ),
-            session(
-                day = "Sa",
-                title = "Lange Tour",
-                description = longTourDescription(goal),
-                km = km[1],
-                intensity = SessionIntensity.GRUNDLAGE,
-            ),
+            session("Di", SessionTextKey.BASE_EASY_RIDE, km[0], SessionIntensity.GRUNDLAGE, texts),
+            longRide("Sa", km[1], goal, texts),
         )
         if (withRecovery) {
-            sessions.add(
-                session(
-                    day = "So",
-                    title = "Regeneration locker",
-                    description = "Kurze Regenerationsrunde im leichten Gang, bewusst niedrige " +
-                        "Intensität für frische Beine.",
-                    km = km[2],
-                    intensity = SessionIntensity.LOCKER,
-                ),
-            )
+            sessions.add(session("So", SessionTextKey.RECOVERY_SPIN, km[2], SessionIntensity.LOCKER, texts))
         }
         return sessions
     }
 
     if (level == FitnessLevel.FORTGESCHRITTEN) {
-        val intervals = intervalSession("Do", intervalShapeFortgeschritten, targetKm * 0.2)
+        val intervals = intervalSession("Do", intervalShapeFortgeschritten, targetKm * 0.2, texts)
         val rest = max(0, targetKm - intervals.targetKm)
         val km = splitKm(rest, listOf(0.25, 0.55))
         return listOf(
-            session(
-                day = "Di",
-                title = "GA1",
-                description = "Lockere Grundlageneinheit zum Auffüllen des Wochenvolumens, Puls " +
-                    "konstant im GA1-Bereich halten.",
-                km = km[0],
-                intensity = SessionIntensity.GRUNDLAGE,
-            ),
+            session("Di", SessionTextKey.ENDURANCE_FILL, km[0], SessionIntensity.GRUNDLAGE, texts),
             intervals,
-            session(
-                day = "Sa",
-                title = "Lange Tour",
-                description = longTourDescription(goal),
-                km = km[1],
-                intensity = SessionIntensity.GRUNDLAGE,
-            ),
+            longRide("Sa", km[1], goal, texts),
         )
     }
 
-    val intervals = intervalSession("Mi", intervalShapeAmbitioniert, targetKm * 0.2)
+    val intervals = intervalSession("Mi", intervalShapeAmbitioniert, targetKm * 0.2, texts)
     val rest = max(0, targetKm - intervals.targetKm)
     val km = splitKm(rest, listOf(0.2, 0.45, 0.15))
     return listOf(
-        session(
-            day = "Di",
-            title = "GA1",
-            description = "Ruhige Grundlageneinheit, gleichmäßige Belastung ohne Spitzen und " +
-                "ohne Sprints.",
-            km = km[0],
-            intensity = SessionIntensity.GRUNDLAGE,
-        ),
+        session("Di", SessionTextKey.ENDURANCE_STEADY, km[0], SessionIntensity.GRUNDLAGE, texts),
         intervals,
-        session(
-            day = "Sa",
-            title = "Lange Tour",
-            description = longTourDescription(goal),
-            km = km[1],
-            intensity = SessionIntensity.GRUNDLAGE,
-        ),
-        session(
-            day = "So",
-            title = "GA1 kompensatorisch",
-            description = "Kompensationsrunde mit hoher Trittfrequenz, um die Beine nach der " +
-                "langen Tour wieder locker zu fahren.",
-            km = km[2],
-            intensity = SessionIntensity.LOCKER,
-        ),
+        longRide("Sa", km[1], goal, texts),
+        session("So", SessionTextKey.ENDURANCE_COMPENSATION, km[2], SessionIntensity.LOCKER, texts),
     )
 }
 
-internal fun zielwocheSessions(goal: Goal): List<TrainingSession> {
+internal fun zielwocheSessions(goal: Goal, texts: CoreTexts): List<TrainingSession> {
     val eventIndex = weekdayIndex(goal.date)
     val eventDay = weekdays[eventIndex]
     val eventKm = max(1, dartRound(goal.distanceKm).toInt())
     val ascentM = goal.ascentM
 
+    // Hoehenmeter nur als Argument, wenn der Anstiegshinweis greift; sonst −1.
+    val eventArgs = listOf(
+        eventKm,
+        if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) dartRound(ascentM).toInt() else -1,
+    )
     val eventSession = TrainingSession(
         day = eventDay,
-        title = "Zielevent: ${goal.name}",
-        description = if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) {
-            "Dein Zielevent über $eventKm km und rund ${dartRound(ascentM).toInt()} Hm – " +
-                "teile dir die Kraft an den Anstiegen ein und trinke von Beginn an regelmäßig."
-        } else {
-            "Dein Zielevent über $eventKm km – starte kontrolliert, halte dein Tempo und " +
-                "versorge dich unterwegs konsequent."
-        },
+        title = texts.training.sessionTitle(SessionTextKey.GOAL_EVENT, eventArgs, goal.name),
+        description = texts.training.sessionDescription(SessionTextKey.GOAL_EVENT, eventArgs),
         targetKm = eventKm,
         intensity = SessionIntensity.HART,
         // Keine Dauerangabe: Wie lange das Event dauert, entscheidet der
@@ -591,6 +542,8 @@ internal fun zielwocheSessions(goal: Goal): List<TrainingSession> {
         // Das Event hat eine eigene Strecke — dafuer wird nie eine Runde
         // generiert (siehe [canGenerateRouteFor]).
         isEvent = true,
+        textKey = SessionTextKey.GOAL_EVENT,
+        textArgs = eventArgs,
     )
 
     val activationDay = if (eventIndex > 1) "Di" else if (eventIndex == 1) "Mo" else null
@@ -599,14 +552,7 @@ internal fun zielwocheSessions(goal: Goal): List<TrainingSession> {
     }
 
     return listOf(
-        session(
-            day = activationDay,
-            title = "Aktivierung locker",
-            description = "Kurze lockere Runde mit ein paar Antritten, danach Rad und " +
-                "Verpflegung für den Zieltag vorbereiten.",
-            km = ACTIVATION_KM,
-            intensity = SessionIntensity.LOCKER,
-        ),
+        session(activationDay, SessionTextKey.ACTIVATION, ACTIVATION_KM, SessionIntensity.LOCKER, texts),
         eventSession,
     )
 }
@@ -801,6 +747,7 @@ fun generatePlan(
     assessment: FitnessAssessment,
     now: Long? = null,
     currentCtl: Double? = null,
+    texts: CoreTexts,
 ): TrainingPlan {
     val nowMs = now ?: System.currentTimeMillis()
     val firstMonday = startOfWeek(nowMs)
@@ -808,10 +755,10 @@ fun generatePlan(
     val weekCount = dartRound((goalMonday - firstMonday).toDouble() / WEEK_MS).toInt() + 1
 
     if (weekCount < MIN_WEEKS) {
-        throw IllegalArgumentException(errorTooSoon)
+        throw IllegalArgumentException(errorTooSoon(texts))
     }
     if (weekCount > MAX_WEEKS) {
-        throw IllegalArgumentException(errorTooFar)
+        throw IllegalArgumentException(errorTooFar(texts))
     }
 
     val level = assessment.level
@@ -821,7 +768,7 @@ fun generatePlan(
         kinds = kinds,
         startKm = startKm,
         peakKm = peakKmFor(goal, startKm),
-        eventWeekKm = zielwocheSessions(goal).sumOf { it.targetKm },
+        eventWeekKm = zielwocheSessions(goal, texts).sumOf { it.targetKm },
     )
     val budgets = planWeekLoadBudgets(kinds, currentCtl)
     val hilly = planIsHilly(goal)
@@ -834,7 +781,7 @@ fun generatePlan(
             kind = kinds[i],
             targetKm = volumes[i],
             sessions = attachSessionLoads(
-                sessions = buildSessions(kinds[i], level, volumes[i], goal),
+                sessions = buildSessions(kinds[i], level, volumes[i], goal, texts),
                 weekBudget = budgets[i],
                 hilly = hilly,
             ),
@@ -879,7 +826,7 @@ data class PlanFeasibility(
      * wenn der Plan traegt oder selbst ein Jahr Vorbereitung nicht reicht.
      */
     val suggestedWeeks: Int?,
-    /** Fertiger deutscher Hinweistext; `null`, wenn es nichts zu sagen gibt. */
+    /** Fertiger Hinweistext in der Sprache der Texte; `null`, wenn es nichts zu sagen gibt. */
     val message: String?,
 )
 
@@ -907,7 +854,7 @@ data class PlanFeasibility(
  * Startvolumen). Damit braucht die Pruefung keine [FitnessAssessment] und
  * funktioniert auch fuer einen laengst gespeicherten Plan.
  */
-fun assessPlanFeasibility(plan: TrainingPlan): PlanFeasibility {
+fun assessPlanFeasibility(plan: TrainingPlan, texts: CoreTexts): PlanFeasibility {
     val goalKm = plan.goal.distanceKm
     val longest = plan.weeks
         .flatMap { it.sessions }
@@ -926,23 +873,10 @@ fun assessPlanFeasibility(plan: TrainingPlan): PlanFeasibility {
 
     val startKm = plan.weeks.firstOrNull()?.targetKm?.toDouble() ?: 0.0
     val suggestedDistance = max(5, round5(longest / minLongestRideShare))
-    val suggestedWeeks = weeksForFeasibleGoal(plan.goal, plan.level, startKm)
+    val suggestedWeeks = weeksForFeasibleGoal(plan.goal, plan.level, startKm, texts)
 
     val percent = dartRound(coverage * 100).toInt()
     val goalText = dartRound(goalKm).toInt()
-    val outlook = when {
-        suggestedWeeks != null && suggestedWeeks > plan.weeks.size ->
-            "Für die vollen $goalText km brauchst du von deinem heutigen Umfang aus rund " +
-                "$suggestedWeeks Wochen."
-
-        suggestedWeeks != null ->
-            "Mit einem etwas anderen Zuschnitt wären die $goalText km in $suggestedWeeks " +
-                "Wochen erreichbar."
-
-        else ->
-            "Für die vollen $goalText km reicht selbst ein Jahr Vorbereitung von deinem " +
-                "heutigen Umfang aus nicht — bau erst über eine Zwischendistanz auf."
-    }
 
     return PlanFeasibility(
         longestRideKm = longest,
@@ -951,9 +885,14 @@ fun assessPlanFeasibility(plan: TrainingPlan): PlanFeasibility {
         feasible = false,
         suggestedDistanceKm = suggestedDistance,
         suggestedWeeks = suggestedWeeks,
-        message = "Die längste Fahrt in diesem Plan sind $longest km – nur $percent % deiner " +
-            "Zieldistanz von $goalText km. Realistisch trägt dieser Plan ein Ziel um " +
-            "$suggestedDistance km. $outlook",
+        message = texts.training.planNotFeasible(
+            longestKm = longest,
+            percent = percent,
+            goalKm = goalText,
+            suggestedKm = suggestedDistance,
+            suggestedWeeks = suggestedWeeks,
+            needsLongerPlan = suggestedWeeks != null && suggestedWeeks > plan.weeks.size,
+        ),
     )
 }
 
@@ -968,18 +907,18 @@ fun assessPlanFeasibility(plan: TrainingPlan): PlanFeasibility {
  * daneben waere genau die Sorte Wahrheit, die irgendwann von der ersten
  * abweicht.
  */
-fun weeksForFeasibleGoal(goal: Goal, level: FitnessLevel, startKm: Double): Int? {
+fun weeksForFeasibleGoal(goal: Goal, level: FitnessLevel, startKm: Double, texts: CoreTexts): Int? {
     if (!goal.distanceKm.isFinite() || goal.distanceKm <= 0 || startKm <= 0) {
         return null
     }
     val peakKm = peakKmFor(goal, startKm)
-    val eventWeekKm = zielwocheSessions(goal).sumOf { it.targetKm }
+    val eventWeekKm = zielwocheSessions(goal, texts).sumOf { it.targetKm }
 
     for (weekCount in MIN_WEEKS..MAX_WEEKS) {
         val kinds = planWeekKinds(weekCount)
         val volumes = planWeekVolumes(kinds, startKm, peakKm, eventWeekKm)
         val longest = kinds.indices
-            .flatMap { buildSessions(kinds[it], level, volumes[it], goal) }
+            .flatMap { buildSessions(kinds[it], level, volumes[it], goal, texts) }
             .filterNot { it.isEvent }
             .maxOfOrNull { it.targetKm }
             ?: 0

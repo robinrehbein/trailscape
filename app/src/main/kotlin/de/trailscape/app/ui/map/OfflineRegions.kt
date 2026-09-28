@@ -1,11 +1,13 @@
 package de.trailscape.app.ui.map
 
 import android.content.Context
+import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.MapStyle
-import de.trailscape.app.ui.formatOneDecimalDe
 import de.trailscape.core.HttpMethod
 import de.trailscape.core.HttpRequest
+import de.trailscape.core.i18n.formatDecimal
 import java.io.File
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -223,7 +225,7 @@ private suspend fun preparePinnedVectorStyle(context: Context, style: MapStyle):
             pinStyleSources(styleJson, tileJsons)
         }.getOrElse {
             throw IllegalStateException(
-                "Der Kartenstil ließ sich nicht laden. Bitte Internetverbindung prüfen.",
+                AppServices.localizedContext().getString(R.string.map_offline_style_load_error),
             )
         }
         file.parentFile?.mkdirs()
@@ -292,7 +294,7 @@ suspend fun downloadOfflineRegion(
 ): OfflineDownloadProgress = coroutineScope {
     // Zweite Sperre neben `planOfflineDownload`: Wer diese Funktion je an der
     // Planung vorbei aufruft, soll trotzdem keinen Rasterserver abgrasen.
-    check(style.offlineAllowed) { offlineNotAllowedMessage(style) }
+    check(style.offlineAllowed) { offlineNotAllowedMessage(style).resolve(AppServices.localizedContext()) }
     val appContext = context.applicationContext
     val manager = OfflineManager.getInstance(appContext)
     val styleUrl = offlineStyleUrl(style)
@@ -322,7 +324,9 @@ suspend fun downloadOfflineRegion(
             false,
         )
     }.getOrElse {
-        throw IllegalStateException("Der Kartenstil konnte nicht abgelegt werden.")
+        throw IllegalStateException(
+            AppServices.localizedContext().getString(R.string.map_offline_style_store_error),
+        )
     }
 
     val definition = OfflineTilePyramidRegionDefinition(
@@ -372,7 +376,7 @@ suspend fun downloadOfflineRegion(
             while (true) {
                 delay(STALL_CHECK_INTERVAL_MS)
                 if (System.currentTimeMillis() - lastProgressAt < STALL_TIMEOUT_MS) continue
-                fail(stalledMessage(lastError))
+                fail(stalledMessage(lastError).resolve(AppServices.localizedContext()))
                 return@launch
             }
         }
@@ -432,8 +436,8 @@ suspend fun downloadOfflineRegion(
 
                             override fun mapboxTileCountLimitExceeded(limit: Long) {
                                 fail(
-                                    "Zu viele Kacheln: MapLibre lädt höchstens $limit Stück. " +
-                                        "Zoome näher heran.",
+                                    AppServices.localizedContext()
+                                        .getString(R.string.map_offline_tile_limit_error, limit),
                                 )
                             }
                         },
@@ -444,7 +448,10 @@ suspend fun downloadOfflineRegion(
                 override fun onError(error: String) {
                     finish {
                         continuation.resumeWithException(
-                            IllegalStateException("Region konnte nicht angelegt werden: $error"),
+                            IllegalStateException(
+                                AppServices.localizedContext()
+                                    .getString(R.string.map_offline_region_create_error, error),
+                            ),
                         )
                     }
                 }
@@ -462,16 +469,19 @@ suspend fun downloadOfflineRegion(
     }
 }
 
-/** Uebersetzt einen [OfflineRegionError] in einen deutschen Halbsatz. */
+/** Uebersetzt einen [OfflineRegionError] in einen Halbsatz in der App-Sprache. */
 internal fun describeOfflineError(error: OfflineRegionError): String {
-    val reason = when (error.reason) {
-        OfflineRegionError.REASON_NOT_FOUND -> "Kachel nicht gefunden"
-        OfflineRegionError.REASON_SERVER -> "Serverfehler"
-        OfflineRegionError.REASON_CONNECTION -> "keine Verbindung"
-        else -> "Fehler"
-    }
+    val texts = AppServices.localizedContext()
+    val reason = texts.getString(
+        when (error.reason) {
+            OfflineRegionError.REASON_NOT_FOUND -> R.string.map_offline_error_not_found
+            OfflineRegionError.REASON_SERVER -> R.string.map_offline_error_server
+            OfflineRegionError.REASON_CONNECTION -> R.string.map_offline_error_connection
+            else -> R.string.map_offline_error_other
+        },
+    )
     val detail = error.message.takeIf { it.isNotBlank() }
-    return if (detail == null) reason else "$reason: $detail"
+    return if (detail == null) reason else texts.getString(R.string.map_offline_error_detail, reason, detail)
 }
 
 private object NoopDeleteCallback : OfflineRegion.OfflineRegionDeleteCallback {
@@ -531,7 +541,7 @@ object OfflineDownloadController {
         bounds: LatLngBounds,
         plan: OfflineDownloadPlan.Ready,
         name: String,
-        onMessage: (String) -> Unit,
+        onMessage: (UiText) -> Unit,
     ) {
         if (_state.value.running) return
         _state.value = OfflineDownloadState(
@@ -542,7 +552,13 @@ object OfflineDownloadController {
         val appContext = context.applicationContext
         // Der Fortschrittsbalken zeigt nur Zahlen; welcher Ausschnitt in
         // welcher Aufloesung entsteht, sagt diese eine Meldung.
-        onMessage("Lade Kartenausschnitt: ca. ${plan.tileCount} Kacheln, ${plan.zoomLabel}.")
+        onMessage(
+            UiText.Plural(
+                R.plurals.map_offline_start_status_count,
+                plan.tileCount,
+                listOf(plan.tileCount, plan.zoomLabel),
+            ),
+        )
 
         AppServices.appScope.launch(Dispatchers.Main) {
             try {
@@ -575,13 +591,19 @@ object OfflineDownloadController {
                 }
                 _savedRegions.value += 1
                 onMessage(
-                    "Ausschnitt gespeichert: ${result.completedTiles} Kacheln " +
-                        "(${formatMegabytes(result.completedBytes)} MB).",
+                    UiText.Plural(
+                        R.plurals.map_offline_saved_status_count,
+                        result.completedTiles.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                        listOf(result.completedTiles, formatMegabytes(result.completedBytes)),
+                    ),
                 )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                onMessage(e.message?.takeIf(String::isNotBlank) ?: "Download fehlgeschlagen.")
+                onMessage(
+                    e.message?.takeIf(String::isNotBlank)?.let(UiText::Plain)
+                        ?: UiText.Res(R.string.map_offline_failed_error),
+                )
             } finally {
                 _state.value = OfflineDownloadState()
             }
@@ -589,4 +611,5 @@ object OfflineDownloadController {
     }
 }
 
-private fun formatMegabytes(bytes: Long): String = formatOneDecimalDe(bytes / 1024.0 / 1024.0)
+private fun formatMegabytes(bytes: Long): String =
+    formatDecimal(bytes / 1024.0 / 1024.0, 1, AppServices.appLanguage.value)

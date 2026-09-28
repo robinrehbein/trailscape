@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte, die in jeder Sprache gleich bleiben (translatable="false") — kein
+    Gegenstueck in values-en/.
+
+    Die Sprachnamen stehen als Endonyme da: „Deutsch" und „English" liest
+    jeder in seiner eigenen Sprache, auch wer versehentlich die falsche
+    eingestellt hat. Eigentuemer: i18n-more (Sprachwahl).
+-->
+<resources>
+    <string name="language_name_de" translatable="false">Deutsch</string>
+    <string name="language_name_en" translatable="false">English</string>
+</resources>

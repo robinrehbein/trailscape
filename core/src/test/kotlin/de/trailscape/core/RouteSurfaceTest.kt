@@ -1,6 +1,6 @@
 package de.trailscape.core
 
-import kotlinx.serialization.json.Json
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -8,6 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import kotlinx.serialization.json.Json
 
 /**
  * Tests fuer den Schotteranteil (`RouteSurface.kt`).
@@ -40,20 +41,20 @@ class RouteSurfaceTest {
 
     @Test
     fun `Serverantwort mit Gravel-Profil liefert den Schotteranteil`() {
-        val route = parseBrouterGeoJson(fixture("online-gravel.geojson"))
+        val route = parseBrouterGeoJson(fixture("online-gravel.geojson"), texts = CoreTextsDe)
 
         assertEquals(10.710, route.distanceKm, 1e-9)
         assertEquals(1.186, assertNotNull(route.pavedKm), 1e-9)
         assertEquals(9.511, assertNotNull(route.unpavedKm), 1e-9)
         // 9511 / (1186 + 9511) = 88,9 % — die Heide ist fast nur Forstweg.
         assertEquals(89, route.unpavedPercent)
-        assertEquals("ca. 89 % unbefestigt", unpavedLabel(route))
+        assertEquals("ca. 89 % unbefestigt", unpavedLabel(route, texts = CoreTextsDe))
     }
 
     @Test
     fun `eingebettete Engine liefert dieselben Belaege wie der Server`() {
-        val online = parseBrouterGeoJson(fixture("online-gravel.geojson"))
-        val offline = parseBrouterGeoJson(fixture("offline-gravel.geojson"))
+        val online = parseBrouterGeoJson(fixture("online-gravel.geojson"), texts = CoreTextsDe)
+        val offline = parseBrouterGeoJson(fixture("offline-gravel.geojson"), texts = CoreTextsDe)
 
         assertEquals(online.pavedKm, offline.pavedKm)
         assertEquals(online.unpavedKm, offline.unpavedKm)
@@ -63,7 +64,7 @@ class RouteSurfaceTest {
 
     @Test
     fun `trekking liefert ebenfalls Belaege`() {
-        val route = parseBrouterGeoJson(fixture("online-trekking.geojson"))
+        val route = parseBrouterGeoJson(fixture("online-trekking.geojson"), texts = CoreTextsDe)
 
         assertEquals(1.736, assertNotNull(route.pavedKm), 1e-9)
         assertEquals(9.600, assertNotNull(route.unpavedKm), 1e-9)
@@ -78,7 +79,7 @@ class RouteSurfaceTest {
             // fragt `surface` nie ab, also gibt die Engine es nicht aus.
             assertTrue("surface=" !in body, "$name: shortest sollte kein surface ausgeben")
 
-            val route = parseBrouterGeoJson(body)
+            val route = parseBrouterGeoJson(body, texts = CoreTextsDe)
             assertEquals(0.384, assertNotNull(route.pavedKm), 1e-9, name)
             assertEquals(7.257, assertNotNull(route.unpavedKm), 1e-9, name)
             // 1,45 km Pfade ohne Tracktyp bleiben unklassifiziert (16 %) —
@@ -95,6 +96,7 @@ class RouteSurfaceTest {
             profileId = "trekking",
             client = { HttpResponse(200, body) },
             sleeper = {},
+            texts = CoreTextsDe,
         )
         assertEquals(85, route.unpavedPercent)
     }
@@ -182,6 +184,7 @@ class RouteSurfaceTest {
     fun `gueltige Minimaltabelle wird gelesen`() {
         val route = parseBrouterGeoJson(
             geoJson("[$header, ${row("600", "highway=track surface=gravel")}, ${row("400", "highway=tertiary")}]"),
+            texts = CoreTextsDe,
         )
         assertEquals(0.4, assertNotNull(route.pavedKm), 1e-9)
         assertEquals(0.6, assertNotNull(route.unpavedKm), 1e-9)
@@ -215,13 +218,13 @@ class RouteSurfaceTest {
             "[$header, ${row("0", "highway=track surface=gravel")}]",
         )
         for (messages in broken) {
-            val route = parseBrouterGeoJson(geoJson(messages))
+            val route = parseBrouterGeoJson(geoJson(messages), texts = CoreTextsDe)
             assertEquals(1.0, route.distanceKm, 1e-9, "messages=$messages")
             assertEquals(2, route.points.size, "messages=$messages")
             assertNull(route.pavedKm, "messages=$messages")
             assertNull(route.unpavedKm, "messages=$messages")
             assertNull(route.unpavedPercent, "messages=$messages")
-            assertNull(unpavedLabel(route), "messages=$messages")
+            assertNull(unpavedLabel(route, texts = CoreTextsDe), "messages=$messages")
         }
     }
 
@@ -309,9 +312,9 @@ class RouteSurfaceTest {
         assertEquals(AscentPreference.FLACH, terrainClass(Double.NaN))
         assertEquals(AscentPreference.FLACH, terrainClass(-3.0))
 
-        assertEquals("Flach", terrainLabel(5.0))
-        assertEquals("Wellig", terrainLabel(12.0))
-        assertEquals("Bergig", terrainLabel(20.0))
+        assertEquals("Flach", terrainLabel(5.0, texts = CoreTextsDe))
+        assertEquals("Wellig", terrainLabel(12.0, texts = CoreTextsDe))
+        assertEquals("Bergig", terrainLabel(20.0, texts = CoreTextsDe))
     }
 
     @Test
@@ -375,6 +378,7 @@ class RouteSurfaceTest {
             waypoints = listOf(Waypoint(51.0930, 13.7800), Waypoint(51.0660, 13.8800)),
             segmentDir = File(dir),
             profileFile = profile,
+            texts = CoreTextsDe,
         )
         println("RouteSurfaceTest: offline ${route.unpavedPercent} % unbefestigt")
         assertNotNull(route.pavedKm)

@@ -1,8 +1,6 @@
 package de.trailscape.core
 
-import org.w3c.dom.Document
-import org.w3c.dom.Element
-import org.xml.sax.InputSource
+import de.trailscape.core.i18n.CoreTexts
 import java.io.StringReader
 import java.time.Instant
 import java.time.OffsetDateTime
@@ -10,6 +8,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import javax.xml.parsers.DocumentBuilderFactory
+import org.w3c.dom.Document
+import org.w3c.dom.Element
+import org.xml.sax.InputSource
 
 /**
  * GPX-Import/-Export fuer Trailscape.
@@ -40,6 +41,12 @@ data class GpxParseResult(val name: String?, val points: List<TrackPoint>)
  */
 private const val GARMIN_TRACK_POINT_EXTENSION_NS =
     "http://www.garmin.com/xmlschemas/TrackPointExtension/v1"
+
+/** Obergrenze plausibler Leistung beim Import; darueber ist der Wert ein Messfehler. */
+private const val MAX_PLAUSIBLE_POWER_W = 3000
+
+/** Obergrenze plausibler Trittfrequenz beim Import. */
+private const val MAX_PLAUSIBLE_CADENCE_RPM = 250
 
 private val ISO_UTC_FORMATTER: DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").withZone(ZoneOffset.UTC)
@@ -146,12 +153,26 @@ private fun parseHrBpm(raw: String?): Int? {
     return dartRound(value).toInt()
 }
 
-private fun parsePoint(el: Element): TrackPoint {
+/** Ganzzahliger Messwert innerhalb von [range], sonst `null` (Unsinn im Export anderer Werkzeuge). */
+private fun parseIntInRange(raw: String?, range: IntRange): Int? {
+    val value = parseEleM(raw) ?: return null
+    val rounded = dartRound(value).toInt()
+    return rounded.takeIf { it in range }
+}
+
+/**
+ * Leistung eines Trackpunkts: `<power>` direkt unter `<extensions>`
+ * (Strava-/Wahoo-Konvention) oder `PowerInWatts` (Garmin-Power-Extension).
+ */
+private fun findPowerText(el: Element): String? =
+    findDescendantText(el, "power") ?: findDescendantText(el, "PowerInWatts")
+
+private fun parsePoint(el: Element, texts: CoreTexts): TrackPoint {
     val lat = attrOrNull(el, "lat")?.trim()?.toDoubleOrNull()
     val lon = attrOrNull(el, "lon")?.trim()?.toDoubleOrNull()
 
     if (lat == null || !lat.isFinite() || lon == null || !lon.isFinite()) {
-        throw FormatException("Ungültige Koordinaten in der GPX-Datei.")
+        throw FormatException(texts.files.gpxInvalidCoordinates())
     }
 
     return TrackPoint(
@@ -160,6 +181,8 @@ private fun parsePoint(el: Element): TrackPoint {
         ele = parseEleM(findChildText(el, "ele")),
         time = parseTimeToMs(findChildText(el, "time")),
         hr = parseHrBpm(findDescendantText(el, "hr")),
+        power = parseIntInRange(findPowerText(el), 0..MAX_PLAUSIBLE_POWER_W),
+        cad = parseIntInRange(findDescendantText(el, "cad"), 0..MAX_PLAUSIBLE_CADENCE_RPM),
     )
 }
 
@@ -190,7 +213,7 @@ private fun findName(root: Element): String? {
  * Trackpunkte in Reihenfolge. Faellt auf Routenpunkte (`rtept`) zurueck,
  * falls keine Trackpunkte vorhanden sind.
  */
-fun parseGpx(xmlString: String): GpxParseResult {
+fun parseGpx(xmlString: String, texts: CoreTexts): GpxParseResult {
     val doc: Document
     try {
         val factory = DocumentBuilderFactory.newInstance().apply {
@@ -211,12 +234,12 @@ fun parseGpx(xmlString: String): GpxParseResult {
         // — per `trim()` bilden wir dieselbe Nachsicht nach.
         doc = builder.parse(InputSource(StringReader(xmlString.trim())))
     } catch (e: Exception) {
-        throw FormatException("Die GPX-Datei enthält ungültiges XML.")
+        throw FormatException(texts.files.gpxInvalidXml())
     }
 
-    val root = doc.documentElement ?: throw FormatException("Die GPX-Datei enthält ungültiges XML.")
+    val root = doc.documentElement ?: throw FormatException(texts.files.gpxInvalidXml())
     if (localName(root) != "gpx") {
-        throw FormatException("Die Datei ist keine gültige GPX-Datei.")
+        throw FormatException(texts.files.gpxNotGpx())
     }
 
     var pointEls = findAllByLocalName(root, "trkpt")
@@ -225,10 +248,10 @@ fun parseGpx(xmlString: String): GpxParseResult {
     }
 
     if (pointEls.isEmpty()) {
-        throw FormatException("Die GPX-Datei enthält keine Trackpunkte.")
+        throw FormatException(texts.files.gpxNoTrackPoints())
     }
 
-    val points = pointEls.map { parsePoint(it) }
+    val points = pointEls.map { parsePoint(it, texts) }
     val name = findName(root)
 
     return GpxParseResult(name = name, points = points)
@@ -272,16 +295,24 @@ private fun escapeXmlAttr(s: String): String = buildString {
  * auch Komoot, Strava und die meisten Sportuhren beim GPX-Export nutzen und
  * das beim erneuten Einlesen (siehe [parseGpx]) wieder erkannt wird.
  *
+ * Trittfrequenz ([TrackPoint.cad]) steht in derselben Extension als
+ * `gpxtpx:cad` (Schema-Reihenfolge: `hr` vor `cad`), die Leistung
+ * ([TrackPoint.power]) als `<power>` direkt unter `<extensions>` — die
+ * Konvention, die Strava beim Import versteht. Punkte ohne diese Werte
+ * erzeugen exakt dieselben Zeilen wie zuvor.
+ *
  * [time] wird — falls angegeben (ms seit Epoch) — zusaetzlich als
  * `<metadata><time>` geschrieben (z. B. der Aufnahmezeitpunkt einer Tour).
  */
 fun buildGpx(name: String, points: List<TrackPoint>, time: Long? = null): String {
-    val hasHr = points.any { it.hr != null }
+    // Namespace nur, wenn ein Punkt ihn braucht: So bleibt der Export einer
+    // Tour ohne Sensorwerte byteidentisch zum bisherigen.
+    val needsTpx = points.any { it.hr != null || it.cad != null }
 
     val sb = StringBuilder()
     sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
     sb.append("<gpx version=\"1.1\" creator=\"Trailscape\" xmlns=\"http://www.topografix.com/GPX/1/1\"")
-    if (hasHr) {
+    if (needsTpx) {
         sb.append(" xmlns:gpxtpx=\"").append(GARMIN_TRACK_POINT_EXTENSION_NS).append('"')
     }
     sb.append(">\n")
@@ -297,7 +328,8 @@ fun buildGpx(name: String, points: List<TrackPoint>, time: Long? = null): String
     sb.append("    <name>").append(escapeXmlText(name)).append("</name>\n")
     sb.append("    <trkseg>\n")
     for (point in points) {
-        val hasChildren = point.ele != null || point.time != null || point.hr != null
+        val hasChildren = point.ele != null || point.time != null || point.hr != null ||
+            point.cad != null || point.power != null
         sb.append("      <trkpt lat=\"")
             .append(escapeXmlAttr(point.lat.toString()))
             .append("\" lon=\"")
@@ -314,11 +346,21 @@ fun buildGpx(name: String, points: List<TrackPoint>, time: Long? = null): String
         if (point.time != null) {
             sb.append("        <time>").append(formatIso8601Utc(point.time)).append("</time>\n")
         }
-        if (point.hr != null) {
+        if (point.hr != null || point.cad != null || point.power != null) {
             sb.append("        <extensions>\n")
-            sb.append("          <gpxtpx:TrackPointExtension>\n")
-            sb.append("            <gpxtpx:hr>").append(point.hr).append("</gpxtpx:hr>\n")
-            sb.append("          </gpxtpx:TrackPointExtension>\n")
+            if (point.power != null) {
+                sb.append("          <power>").append(point.power).append("</power>\n")
+            }
+            if (point.hr != null || point.cad != null) {
+                sb.append("          <gpxtpx:TrackPointExtension>\n")
+                if (point.hr != null) {
+                    sb.append("            <gpxtpx:hr>").append(point.hr).append("</gpxtpx:hr>\n")
+                }
+                if (point.cad != null) {
+                    sb.append("            <gpxtpx:cad>").append(point.cad).append("</gpxtpx:cad>\n")
+                }
+                sb.append("          </gpxtpx:TrackPointExtension>\n")
+            }
             sb.append("        </extensions>\n")
         }
         sb.append("      </trkpt>\n")

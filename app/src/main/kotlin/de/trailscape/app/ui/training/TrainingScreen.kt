@@ -27,15 +27,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.EmptyState
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.NeutralButton
-import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.ScreenHeader
+import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.planFeasibilityIdentityKey
@@ -49,7 +52,6 @@ import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.predictGoalFinish
 import de.trailscape.core.projectedEventCtl
 import de.trailscape.core.routeTargetForSession
-import de.trailscape.core.weekKindLabels
 import kotlinx.coroutines.launch
 
 /**
@@ -113,6 +115,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrainingScreen(appViewModel: AppViewModel) {
+    val coreTexts = LocalCoreTexts.current
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -127,32 +130,34 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     // Der ANGEZEIGTE Plan: an die gefahrene Realitaet angepasst (`:core`,
     // adaptPlan). Der gespeicherte Plan bleibt unveraendert — Format und
     // Referenz fuer kuenftige Vergleiche.
-    val adaptedPlan = remember(plan, rides, rideLoadValues, currentCtl) {
+    val adaptedPlan = remember(plan, rides, rideLoadValues, currentCtl, coreTexts) {
         plan?.let {
             adaptPlan(
                 plan = it,
                 rides = rides,
                 currentCtl = currentCtl,
                 rideLoads = rideLoadValues,
+                texts = coreTexts,
             )
         }
     }
     val displayPlan = adaptedPlan?.plan
     // Prognose fuer das Ziel: heute und — mit der Fitness, die der Plan bis
     // zum Renntag aufbaut — am Renntag.
-    val prediction = remember(displayPlan, rides, currentCtl) {
+    val prediction = remember(displayPlan, rides, currentCtl, coreTexts) {
         displayPlan?.let {
             predictGoalFinish(
                 goal = it.goal,
                 rides = rides,
                 currentCtl = currentCtl,
                 projectedCtl = projectedEventCtl(it, currentCtl),
+                texts = coreTexts,
             )
         }
     }
     // Traegt der Plan sein eigenes Ziel? Bewertet wird der angepasste Stand;
     // quittiert wird ueber den Schluessel des gespeicherten Plans.
-    val feasibility = remember(displayPlan) { displayPlan?.let { assessPlanFeasibility(it) } }
+    val feasibility = remember(displayPlan, coreTexts) { displayPlan?.let { assessPlanFeasibility(it, coreTexts) } }
     val planKey = remember(plan) { plan?.let { planFeasibilityIdentityKey(it) } }
     val openFeasibility = feasibility?.takeIf { !it.feasible && planKey != planFeasibilityAckKey }
     val currentWeek = remember(displayPlan) {
@@ -192,6 +197,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 session = session,
                 profile = insights.profile,
                 recentRides = rides,
+                texts = coreTexts,
             ),
         )
     }
@@ -227,7 +233,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
             ) {
                 item(key = "kopf") {
                     ScreenHeader(
-                        title = "Training",
+                        title = stringResource(R.string.training_screen_title),
                         actions = {
                             SettingsAction(onClick = { appViewModel.requestTab(AppTab.MORE) })
                         },
@@ -256,7 +262,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 // ---------------------------------------------------- Dein Ziel
                 val shownPlan = displayPlan
                 if (shownPlan != null && prediction != null) {
-                    item(key = "sec-goal") { SectionEyebrow("Dein Ziel") }
+                    item(key = "sec-goal") { SectionEyebrow(stringResource(R.string.training_screen_goal_eyebrow)) }
                     item(key = "goal") {
                         GoalOverviewCard(
                             goal = shownPlan.goal,
@@ -292,7 +298,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 if (shownPlan != null) {
                     currentWeek?.let { week ->
                         item(key = "sec-week") {
-                            SectionEyebrow("Diese Woche")
+                            SectionEyebrow(stringResource(R.string.training_screen_week_eyebrow))
                         }
                         item(key = "week-now") {
                             CurrentWeekCard(
@@ -301,8 +307,12 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                                 rides = rides,
                                 onPlanRoute = onPlanRoute,
                                 rideLoads = rideLoadValues,
-                                headline = "Woche ${week.index + 1} von ${shownPlan.weeks.size} · " +
-                                    weekKindLabels.getValue(week.kind),
+                                headline = stringResource(
+                                    R.string.training_screen_week_headline,
+                                    week.index + 1,
+                                    shownPlan.weeks.size,
+                                    coreTexts.training.weekKind(week.kind),
+                                ),
                             )
                         }
                     }
@@ -314,7 +324,15 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     item(key = "all-weeks-toggle") {
                         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                             TextButton(onClick = { allWeeks = !allWeeks }) {
-                                Text(if (allWeeks) "Weniger anzeigen" else "Alle Wochen ansehen")
+                                Text(
+                                    stringResource(
+                                        if (allWeeks) {
+                                            R.string.training_screen_show_less_action
+                                        } else {
+                                            R.string.training_screen_all_weeks_action
+                                        },
+                                    ),
+                                )
                             }
                         }
                     }
@@ -333,14 +351,14 @@ fun TrainingScreen(appViewModel: AppViewModel) {
 
                 // --------------------------------------------------- Deine Form
                 if (rides.isNotEmpty() || insights.fitness.latest != null) {
-                    item(key = "sec-form") { SectionEyebrow("Deine Form") }
+                    item(key = "sec-form") { SectionEyebrow(stringResource(R.string.training_screen_form_eyebrow)) }
                     item(key = "form") {
                         FormSummaryCard(insights, onClick = { showForm = true })
                     }
                 }
 
                 // -------------------------------------------------- Koerperwerte
-                item(key = "sec-werte") { SectionEyebrow("Körperwerte") }
+                item(key = "sec-werte") { SectionEyebrow(stringResource(R.string.training_screen_vitals_eyebrow)) }
                 item(key = "vitals") {
                     VitalsTiles(
                         insights = insights,
@@ -401,13 +419,11 @@ fun TrainingScreen(appViewModel: AppViewModel) {
 @Composable
 private fun TrainingEmptyState(onRecord: () -> Unit, onImport: () -> Unit) {
     EmptyState(
-        title = "Hier entsteht dein Trainingsbild",
-        body = "Trailscape baut aus deinen Touren dein Trainingsbild auf. Belastbar wird " +
-            "es erst mit rund zwei Wochen Historie — am schnellsten bist du dort mit " +
-            "importierten Touren.",
+        title = stringResource(R.string.training_screen_empty_title),
+        body = stringResource(R.string.training_screen_empty_body),
         actions = {
-            Button(onClick = onRecord) { Text("Tour aufzeichnen") }
-            NeutralButton(onClick = onImport) { Text("Alte Touren importieren") }
+            Button(onClick = onRecord) { Text(stringResource(R.string.training_screen_empty_record_action)) }
+            NeutralButton(onClick = onImport) { Text(stringResource(R.string.training_screen_empty_import_action)) }
         },
     )
 }

@@ -2,6 +2,21 @@
 
 Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 
+## Bugs
+
+- **Vorschlagswahl „Passende Runde“: Route fehlt auf der Karte, Karte
+  lässt sich nicht bewegen.** Gemeldet am 27.09.2026 (Android, Einstieg über
+  die Tagesempfehlung, „aus: Erste Runde (Tagesempfehlung)“). Das Blatt zeigt
+  drei Kandidaten (SO/N/SW, „Beste“ ist ausgewählt), aber auf der Karte ist
+  keine Linie für den ausgewählten Kandidaten zu sehen. Außerdem reagiert die
+  Karte nicht auf Wischen oder Zoomen, solange das Blatt offen ist. Erwartet:
+  Der gewählte Kandidat wird als Vorschau gezeichnet und die Kamera zeigt ihn,
+  die Karte bleibt bedienbar. Einstieg zum Nachsehen:
+  `RouteGenerationSheet` (`app/.../ui/map/RouteGenerationSheet.kt`) und der
+  Aufruf in `MapScreen.kt` (`DockedSheet.VORSCHLAEGE`). Zu prüfen ist, ob die
+  Vorschau-Ebene beim Start über die Tagesempfehlung gesetzt wird und ob das
+  Blatt oder eine Ebene darüber die Gesten der Karte abfängt.
+
 ## Vor dem öffentlichen Release (Blocker)
 
 - **OpenFreeMap: Offline-Download bestätigen lassen.** Die Nutzungsbedingungen
@@ -15,22 +30,67 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   `offlineAllowed = false` setzen und eine eigene Kachelquelle (z. B.
   selbst gehostete PMTiles) aushandeln bzw. aufbauen.
 
-- **Play-Build: Update-Prüfung.** Der Build trägt seit #65
-  `de.robinrehbein.trailscape` (`app/build.gradle.kts`). Offen ist noch, für
-  Play-Installationen die GitHub-Update-Prüfung abzuschalten
-  (`installingPackageName == "com.android.vending"` über
-  `getInstallSourceInfo`, API 30+; darunter `getInstallerPackageName`), damit
-  die App dort nicht auf eine APK außerhalb von Play verweist. Den Absatz zur
-  Update-Prüfung in `PRIVACY.md` dann entsprechend anpassen.
+- **Bluetooth-Sensoren auf echter Hardware testen.** Die GATT-Anbindung
+  (`app/.../sensors/`) ist nur ueber die reine Logik in `:core` getestet.
+  Vor dem Release mit mindestens einem Pulsgurt (z. B. Polar H10), einem
+  Leistungsmesser (z. B. Favero Assioma) und einem CSC-Sensor pruefen, je auf
+  einem Geraet unter und ab Android 12: Koppeln, Verbinden bei
+  Aufzeichnungsstart, Neuversuch nach Abbruch (Status 133), doppelte Werte ab
+  API 33, Sensoren ohne Dienst-UUID in der Werbung. Dazu klaeren, ob Play fuer
+  den RecordingService den Diensttyp `connectedDevice` verlangt, und die
+  Angaben zu „Gesundheit und Fitness" im Datensicherheitsformular pruefen.
+
+- **Strava-Upload freischalten (Code ist fertig, Gründer-Aufgaben offen).**
+  Der optionale Upload (`app/.../strava/`, `core/.../StravaClient.kt`) ist nur
+  in Builds mit Zugangsdaten sichtbar. Dafür fehlt noch:
+  1. Strava-API-App unter https://www.strava.com/settings/api anlegen (Name,
+     Website, Icon). „Authorization Callback Domain“ vermutlich
+     `strava-callback` (Host von `trailscape://strava-callback`) — auf dem
+     Gerät prüfen, sonst meldet Strava „invalid redirect_uri“.
+  2. Client-ID und Client-Secret als GitHub-Secrets `STRAVA_CLIENT_ID` und
+     `STRAVA_CLIENT_SECRET` hinterlegen, lokal als `strava.clientId`/
+     `strava.clientSecret` in `~/.gradle/gradle.properties`. Nie ins Repo.
+  3. Bewusst entscheiden, ob das in der APK auslesbare Secret tragbar ist.
+     Wer es hat, kann sich als Trailscape ausgeben und das App-Ratenlimit
+     verbrauchen, aber kein fremdes Konto übernehmen. Härtere Alternative
+     (nicht gebaut): Token-Tausch und Refresh über einen kleinen eigenen
+     Endpunkt (z. B. im Sync-Server), der das Secret hält; die App schickte
+     dann nur Code bzw. Refresh-Token dorthin. Das brächte allerdings einen
+     Trailscape-Server in den Datenfluss und änderte `PRIVACY.md`.
+  4. Bei Strava den Review für mehr als einen Athleten beantragen (neue Apps:
+     Kapazität 1 = nur der Entwickler) und ggf. höhere Ratenlimits
+     (Standard 200 Anfragen/15 min, 2000/Tag für die ganze App).
+  5. Markenrichtlinien von Strava prüfen: offizielles „Connect with
+     Strava“-Knopfbild statt Textknopf, „View on Strava“-Gestaltung.
+  6. Google-Play-Datensicherheit: nutzerinitiierte Weitergabe von Standort-
+     und Fitnessdaten an Strava angeben.
+  7. Auf dem Gerät prüfen: Verbinden, Ablehnen, Häkchen „Aktivitäten
+     hochladen“ abwählen, Upload von Hand, Auto-Upload im Flugmodus, Duplikat,
+     Trennen, Sportart auf Strava = Radfahrt (sonst nach dem Upload
+     `PUT /activities/{id}` mit `sport_type=Ride`).
+  Später denkbar: verifizierte App Links statt `trailscape://` (braucht eine
+  eigene Domain mit `/.well-known/assetlinks.json`), FIT statt GPX.
 
 ## Ideen
+
+- **Englisch vor dem Release gegenlesen.** Alle Bereiche liegen jetzt als
+  Ressourcen in `values/` und `values-en/` (Regeln in `docs/i18n.md`). Vor
+  dem Release einmal die App komplett auf Englisch durchklicken
+  (Sprachwahl unter *Mehr → Sprache*), vor allem die Sprachansagen mit einer
+  englischen TTS-Stimme und die nachgezogenen Texte der Sensoren und von
+  Strava (`strings_ble_sensors.xml`, `strings_strava.xml`).
 
 - **Trainingspläne als teilbare Dateien („Plan-Rezepte")** — Trainingsplan und
   strukturierte Einheiten als lesbare JSON-Datei exportieren und importieren,
   damit Trainer, Vereine und Foren Pläne ohne Plattform und ohne Konto
   tauschen können. Baut auf dem vorhandenen formatstabilen JSON
   (`core/.../JsonSupport.kt`) und dem Datei-Ein-/Ausgang der Backup-Karte auf.
-- **Start und Ziel im Tour-Bild ausblenden** — die ersten und letzten ~300 m
-  der Spur kappen (optional), damit ein geteiltes Bild die Haustuer nicht
-  verraet. Heute sagt nur ein Hinweis im Teilen-Dialog, dass man Start und
-  Ziel erkennen kann.
+- **eFTP-Text bei Leistungsmesser** — `TrainingInsights` beschriftet die FTP
+  weiter als „aus der GPS-Leistungsschätzung (±15–25 %)“, auch wenn das beste
+  20-min-Mittel aus gemessener Leistung stammt. Herkunft je Tour mitfuehren
+  und den Text dann unterscheiden.
+- **Radtempo vom CSC-Sensor** — `radTempoKmh` (`core/.../BleSensorLogik.kt`)
+  ist gerechnet und getestet, aber nicht verdrahtet. Mit einem Radumfang im
+  Profil koennte es GPS im Tunnel oder auf der Rolle ersetzen.
+- **RR-Intervalle speichern** — der Puls-Parser liest sie schon; als eigenes
+  Feld in der Tour gaeben sie HRV waehrend der Fahrt her.

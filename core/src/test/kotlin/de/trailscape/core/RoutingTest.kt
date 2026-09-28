@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -57,7 +58,7 @@ class RoutingTest {
 
     @Test
     fun `parst Koordinaten und String-Properties`() {
-        val route = parseBrouterGeoJson(SAMPLE_GEO_JSON)
+        val route = parseBrouterGeoJson(SAMPLE_GEO_JSON, texts = CoreTextsDe)
 
         assertEquals(3, route.points.size)
         assertEquals(48.111111, route.points[0].lat, EPS)
@@ -85,20 +86,20 @@ class RoutingTest {
           ]
         }
         """
-        val route = parseBrouterGeoJson(body)
+        val route = parseBrouterGeoJson(body, texts = CoreTextsDe)
         assertEquals(0.0, route.distanceKm, EPS)
         assertEquals(0.0, route.ascentM, EPS)
     }
 
     @Test
     fun `wirft bei kaputtem JSON`() {
-        val e = assertFailsWith<Exception> { parseBrouterGeoJson("not json{") }
+        val e = assertFailsWith<Exception> { parseBrouterGeoJson("not json{", texts = CoreTextsDe) }
         assertEquals("Unerwartete Antwort vom Routing-Server.", e.message)
     }
 
     @Test
     fun `wirft bei unerwartetem Format fehlende features`() {
-        val e = assertFailsWith<Exception> { parseBrouterGeoJson("""{"foo": "bar"}""") }
+        val e = assertFailsWith<Exception> { parseBrouterGeoJson("""{"foo": "bar"}""", texts = CoreTextsDe) }
         assertEquals("Unerwartete Antwort vom Routing-Server.", e.message)
     }
 
@@ -123,22 +124,24 @@ class RoutingTest {
     @Test
     fun `jedes Routenprofil hat ein Label`() {
         for (profile in RouteProfile.entries) {
-            assertNotNull(routeProfileLabels[profile])
+            assertTrue(routeProfileLabel(profile, CoreTextsDe).isNotBlank())
         }
         // Die Beschriftung muss zum tatsaechlich benutzten BRouter-Profil
         // passen: SCHOTTER faehrt das eingebettete Gravel-Custom-Profil und
         // heisst deshalb „Gravel", GRAVEL faehrt `trekking` und heisst so.
-        assertTrue(routeProfileLabels.getValue(RouteProfile.SCHOTTER).startsWith("Gravel"))
+        assertTrue(routeProfileLabel(RouteProfile.SCHOTTER, CoreTextsDe).startsWith("Gravel"))
         assertEquals(CUSTOM_GRAVEL_PROFILE, brouterProfile(RouteProfile.SCHOTTER))
-        assertTrue(routeProfileLabels.getValue(RouteProfile.GRAVEL).startsWith("Trekking"))
+        assertTrue(routeProfileLabel(RouteProfile.GRAVEL, CoreTextsDe).startsWith("Trekking"))
         assertEquals("trekking", brouterProfile(RouteProfile.GRAVEL))
         // Kein anderer Modus darf „Gravel" fuer sich beanspruchen.
         assertEquals(
             listOf(RouteProfile.SCHOTTER),
-            routeProfileLabels.filterValues { it.contains("Gravel") }.keys.toList(),
+            RouteProfile.entries.filter { routeProfileLabel(it, CoreTextsDe).contains("Gravel") },
         )
-        // Das echte Gravel-Profil steht zuerst im Dropdown.
-        assertEquals(RouteProfile.SCHOTTER, routeProfileLabels.keys.first())
+        // Das echte Gravel-Profil steht zuerst im Dropdown, jeder Modus genau einmal.
+        assertEquals(RouteProfile.SCHOTTER, routeProfileDisplayOrder.first())
+        assertEquals(RouteProfile.entries.toSet(), routeProfileDisplayOrder.toSet())
+        assertEquals(RouteProfile.entries.size, routeProfileDisplayOrder.size)
     }
 
     // --- fetchRoute ---
@@ -146,7 +149,7 @@ class RoutingTest {
     @Test
     fun `wirft bei weniger als 2 Wegpunkten ohne Netzwerkaufruf`() {
         val e = assertFailsWith<Exception> {
-            fetchRoute(listOf(Waypoint(lat = 48.1, lon = 11.1)), "trekking", failingClient())
+            fetchRoute(listOf(Waypoint(lat = 48.1, lon = 11.1)), "trekking", failingClient(), texts = CoreTextsDe)
         }
         assertEquals("Mindestens zwei Wegpunkte nötig.", e.message)
     }
@@ -164,7 +167,7 @@ class RoutingTest {
             Waypoint(lat = 48.2, lon = 11.2),
         )
 
-        val route = fetchRoute(waypoints, "fastbike", client)
+        val route = fetchRoute(waypoints, "fastbike", client, texts = CoreTextsDe)
 
         assertEquals(
             "https://brouter.de/brouter?lonlats=11.100000,48.100000|11.200000,48.200000" +
@@ -187,8 +190,8 @@ class RoutingTest {
             Waypoint(lat = 48.2, lon = 11.2),
         )
 
-        fetchRoute(waypoints, "fastbike", client, baseUrl = "https://mein-server.example/brouter")
-        fetchRoute(waypoints, "fastbike", client, baseUrl = "https://mein-server.example/brouter/")
+        fetchRoute(waypoints, "fastbike", client, baseUrl = "https://mein-server.example/brouter", texts = CoreTextsDe)
+        fetchRoute(waypoints, "fastbike", client, baseUrl = "https://mein-server.example/brouter/", texts = CoreTextsDe)
 
         val expected = "https://mein-server.example/brouter?lonlats=11.100000,48.100000|11.200000,48.200000" +
             "&profile=fastbike&alternativeidx=0&format=geojson"
@@ -208,6 +211,7 @@ class RoutingTest {
             listOf(Waypoint(lat = 48.1, lon = 11.1), Waypoint(lat = 48.2, lon = 11.2)),
             "trekking",
             client,
+            texts = CoreTextsDe,
         )
 
         assertTrue(capturedUrl!!.startsWith(defaultBrouterServerUrl))
@@ -222,6 +226,7 @@ class RoutingTest {
                 listOf(Waypoint(lat = 48.1, lon = 11.1), Waypoint(lat = 48.2, lon = 11.2)),
                 "trekking",
                 client,
+                texts = CoreTextsDe,
             )
         }
         // Unbekannte Servertexte werden nicht mehr roh durchgereicht, sondern in
@@ -239,6 +244,7 @@ class RoutingTest {
                 listOf(Waypoint(lat = 48.1, lon = 11.1), Waypoint(lat = 48.2, lon = 11.2)),
                 "shortest",
                 client,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("Unerwartete Antwort vom Routing-Server.", e.message)
@@ -253,6 +259,7 @@ class RoutingTest {
                 listOf(Waypoint(lat = 48.1, lon = 11.1), Waypoint(lat = 48.2, lon = 11.2)),
                 "trekking",
                 client,
+                texts = CoreTextsDe,
             )
         }
         assertEquals("Routing-Server nicht erreichbar. Bist du online?", e.message)
@@ -290,7 +297,7 @@ class RoutingTest {
             }
         }
 
-        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
 
         assertEquals(1, uploadBodies.size)
         assertTrue(uploadBodies.single().contains("prefer_unpaved_paths"))
@@ -314,8 +321,8 @@ class RoutingTest {
             }
         }
 
-        fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
-        fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
+        fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
 
         assertEquals(1, uploads)
         assertEquals(listOf("custom_abc", "custom_abc"), routedProfiles)
@@ -342,14 +349,14 @@ class RoutingTest {
             }
         }
 
-        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
 
         assertEquals(2, uploads)
         assertEquals(listOf("custom_v1", "custom_v2"), routedProfiles)
         assertEquals(3, route.points.size)
 
         // Nach dem erfolgreichen Retry ist die neue ID gecacht.
-        fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
         assertEquals(2, uploads)
         assertEquals(listOf("custom_v1", "custom_v2", "custom_v2"), routedProfiles)
     }
@@ -367,7 +374,7 @@ class RoutingTest {
             }
         }
 
-        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
 
         assertEquals(listOf("trekking"), routedProfiles)
         assertEquals(3, route.points.size)
@@ -386,7 +393,7 @@ class RoutingTest {
             }
         }
 
-        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
 
         assertEquals(listOf("trekking"), routedProfiles)
         assertEquals(3, route.points.size)
@@ -412,7 +419,7 @@ class RoutingTest {
             }
         }
 
-        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client)
+        val route = fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe)
 
         assertEquals(2, uploads)
         assertEquals(listOf("custom_v1", "custom_v2", "trekking"), routedProfiles)
@@ -429,7 +436,7 @@ class RoutingTest {
             }
         }
 
-        val e = assertFailsWith<Exception> { fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client) }
+        val e = assertFailsWith<Exception> { fetchRoute(customWaypoints, CUSTOM_GRAVEL_PROFILE, client, texts = CoreTextsDe) }
         assertEquals("Route konnte nicht berechnet werden. (Servermeldung: Server explodiert)", e.message)
     }
 
@@ -454,7 +461,7 @@ class RoutingTest {
             if (calls == 1) HttpResponse(400, watchdogBody) else HttpResponse(200, SAMPLE_GEO_JSON)
         }
 
-        val route = fetchRoute(shortWaypoints, "trekking", client, sleeper = { pauses.add(it) })
+        val route = fetchRoute(shortWaypoints, "trekking", client, sleeper = { pauses.add(it) }, texts = CoreTextsDe)
 
         assertEquals(2, calls)
         assertEquals(listOf(watchdogRetryPauseMs), pauses)
@@ -470,12 +477,12 @@ class RoutingTest {
         }
 
         val e = assertFailsWith<Exception> {
-            fetchRoute(shortWaypoints, "trekking", client, sleeper = {})
+            fetchRoute(shortWaypoints, "trekking", client, sleeper = {}, texts = CoreTextsDe)
         }
 
         // Genau ein Retry — danach sauber scheitern, statt den Server weiter zu belasten.
         assertEquals(2, calls)
-        assertEquals(errorServerOverloaded, e.message)
+        assertEquals(errorServerOverloaded(CoreTextsDe), e.message)
         assertTrue(e.message!!.contains("näheren Wegpunkten"))
         // Der rohe Servertext taucht nicht mehr im UI auf.
         assertTrue(!e.message!!.contains("watchdog"))
@@ -490,11 +497,11 @@ class RoutingTest {
         }
 
         val e = assertFailsWith<Exception> {
-            fetchRoute(shortWaypoints, "trekking", client, sleeper = {})
+            fetchRoute(shortWaypoints, "trekking", client, sleeper = {}, texts = CoreTextsDe)
         }
 
         assertEquals(2, calls)
-        assertEquals(errorServerOverloaded, e.message)
+        assertEquals(errorServerOverloaded(CoreTextsDe), e.message)
     }
 
     @Test
@@ -506,7 +513,7 @@ class RoutingTest {
         }
 
         val e = assertFailsWith<Exception> {
-            fetchRoute(shortWaypoints, "trekking", client, sleeper = {})
+            fetchRoute(shortWaypoints, "trekking", client, sleeper = {}, texts = CoreTextsDe)
         }
 
         assertEquals(1, calls)
@@ -519,7 +526,7 @@ class RoutingTest {
     @Test
     fun `kuerzt sehr lange Servertexte in der Meldung`() {
         val long = "x".repeat(500)
-        val message = routingErrorMessage(long)
+        val message = routingErrorMessage(long, texts = CoreTextsDe)
 
         assertTrue(message.startsWith("Route konnte nicht berechnet werden. (Servermeldung: "))
         assertTrue(message.endsWith("…)"))
@@ -528,7 +535,7 @@ class RoutingTest {
 
     @Test
     fun `leerer Servertext ergibt die generische Meldung ohne Klammern`() {
-        assertEquals(errorRouteFailed, routingErrorMessage("   \n "))
+        assertEquals(errorRouteFailed(CoreTextsDe), routingErrorMessage("   \n ", texts = CoreTextsDe))
     }
 
     @Test
@@ -546,10 +553,10 @@ class RoutingTest {
         }
 
         val e = assertFailsWith<Exception> {
-            fetchRoute(shortWaypoints, CUSTOM_GRAVEL_PROFILE, client, sleeper = {})
+            fetchRoute(shortWaypoints, CUSTOM_GRAVEL_PROFILE, client, sleeper = {}, texts = CoreTextsDe)
         }
 
-        assertEquals(errorServerOverloaded, e.message)
+        assertEquals(errorServerOverloaded(CoreTextsDe), e.message)
         assertEquals(1, uploads)
         // Ein Versuch plus ein Retry — kein zweiter Upload, kein trekking-Fallback.
         assertEquals(2, routeCalls)
@@ -563,7 +570,7 @@ class RoutingTest {
     fun `kurze Route ergibt genau eine Server-Anfrage`() {
         val counter = CountingBrouter()
 
-        fetchRoute(shortWaypoints, "trekking", counter, sleeper = {})
+        fetchRoute(shortWaypoints, "trekking", counter, sleeper = {}, texts = CoreTextsDe)
 
         assertEquals(1, counter.routeRequests)
         assertEquals(listOf(shortWaypoints), planRouteLegs(shortWaypoints))
@@ -578,7 +585,7 @@ class RoutingTest {
             Waypoint(lat = 48.3705, lon = 10.8978),
         )
 
-        fetchRoute(waypoints, "trekking", counter, sleeper = {})
+        fetchRoute(waypoints, "trekking", counter, sleeper = {}, texts = CoreTextsDe)
 
         assertEquals(1, counter.routeRequests)
         assertEquals(3, counter.legWaypoints.single().size)
@@ -600,7 +607,7 @@ class RoutingTest {
             assertTrue(km <= maxLegAirDistanceKm, "Teil-Leg ist $km km lang")
         }
 
-        fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", counter, sleeper = {})
+        fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", counter, sleeper = {}, texts = CoreTextsDe)
         assertEquals(5, counter.routeRequests)
     }
 
@@ -687,7 +694,7 @@ class RoutingTest {
         // Nahtstellen denselben Punkt zweimal liefern wuerde.
         val client = CountingBrouter(distanceM = 100_000.0, ascentM = 50.0)
 
-        val route = fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", client, sleeper = {})
+        val route = fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", client, sleeper = {}, texts = CoreTextsDe)
 
         assertEquals(5, client.routeRequests)
         assertEquals(500.0, route.distanceKm, EPS)
@@ -709,7 +716,7 @@ class RoutingTest {
         val pauses = mutableListOf<Long>()
         val client = CountingBrouter()
 
-        fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", client, sleeper = { pauses.add(it) })
+        fetchRoute(listOf(HAMBURG, MUENCHEN), "trekking", client, sleeper = { pauses.add(it) }, texts = CoreTextsDe)
 
         assertEquals(5, client.routeRequests)
         assertEquals(List(4) { legRequestPauseMs }, pauses)
@@ -725,6 +732,7 @@ class RoutingTest {
             CountingBrouter(),
             sleeper = {},
             onProgress = { done, total -> progress.add(done to total) },
+            texts = CoreTextsDe,
         )
 
         assertEquals(listOf(0 to 5, 1 to 5, 2 to 5, 3 to 5, 4 to 5, 5 to 5), progress)
@@ -734,7 +742,7 @@ class RoutingTest {
     fun `das Custom-Profil wird fuer alle Legs nur einmal hochgeladen`() {
         val client = CountingBrouter()
 
-        fetchRoute(listOf(HAMBURG, MUENCHEN), CUSTOM_GRAVEL_PROFILE, client, sleeper = {})
+        fetchRoute(listOf(HAMBURG, MUENCHEN), CUSTOM_GRAVEL_PROFILE, client, sleeper = {}, texts = CoreTextsDe)
 
         assertEquals(1, client.profileUploads)
         assertEquals(5, client.routeRequests)

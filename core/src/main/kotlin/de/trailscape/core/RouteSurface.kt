@@ -1,10 +1,11 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 /**
  * # Schotteranteil einer Route — „ca. 62 % unbefestigt"
@@ -237,8 +238,8 @@ val RouteCandidate.unpavedPercent: Int?
  * soll (siehe [unpavedPercent]). Das „ca." ist Pflicht: OSM-Beläge sind
  * Freiwilligendaten, und ein Teil der Strecke ist hochgerechnet.
  */
-fun unpavedLabel(route: PlannedRoute): String? =
-    route.unpavedPercent?.let { "ca. $it % unbefestigt" }
+fun unpavedLabel(route: PlannedRoute, texts: CoreTexts): String? =
+    route.unpavedPercent?.let { texts.routing.unpavedShare(it) }
 
 // ---------------------------------------------------------------------------
 // Gelaendeart „Flach / Wellig / Bergig"
@@ -269,6 +270,6 @@ fun terrainClass(ascentPerKm: Double): AscentPreference {
     }
 }
 
-/** „Flach", „Wellig" oder „Bergig" — dieselben Worte wie [ascentPreferenceLabels]. */
-fun terrainLabel(ascentPerKm: Double): String =
-    ascentPreferenceLabels.getValue(terrainClass(ascentPerKm))
+/** „Flach", „Wellig" oder „Bergig" — dieselben Worte wie [ascentPreferenceLabel]. */
+fun terrainLabel(ascentPerKm: Double, texts: CoreTexts): String =
+    ascentPreferenceLabel(terrainClass(ascentPerKm), texts)

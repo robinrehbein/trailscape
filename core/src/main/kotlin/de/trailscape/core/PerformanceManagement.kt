@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.time.LocalDateTime
 import kotlin.math.max
 
@@ -36,26 +37,6 @@ data class FitnessPoint(
 /** Baender der Form (§4.2). */
 enum class TsbBand { SEHR_FRISCH, FORMSPITZE, NEUTRAL, PRODUKTIV, UEBERLASTUNG }
 
-val tsbBandLabels: Map<TsbBand, String> = mapOf(
-    TsbBand.SEHR_FRISCH to "Sehr ausgeruht",
-    TsbBand.FORMSPITZE to "Formspitze",
-    TsbBand.NEUTRAL to "Neutral",
-    TsbBand.PRODUKTIV to "Produktiver Bereich",
-    TsbBand.UEBERLASTUNG to "Sehr hohe Ermüdung",
-)
-
-val tsbBandMessages: Map<TsbBand, String> = mapOf(
-    TsbBand.SEHR_FRISCH to
-        "Sehr ausgeruht — typischerweise ein guter Zeitpunkt, wieder Reize zu setzen.",
-    TsbBand.FORMSPITZE to
-        "Dein Formwert liegt im Bereich, in dem viele Fahrer gute Leistungen zeigen.",
-    TsbBand.NEUTRAL to "Form und Ermüdung halten sich ungefähr die Waage.",
-    TsbBand.PRODUKTIV to
-        "Erwünschte Ermüdung beim Aufbau — viele Fahrer trainieren in diesem Bereich.",
-    TsbBand.UEBERLASTUNG to
-        "Deine Ermüdung ist deutlich höher als deine Fitness. Eine Entlastungswoche ist typischerweise sinnvoll.",
-)
-
 fun classifyTsb(tsb: Double): TsbBand {
     if (tsb > 25) return TsbBand.SEHR_FRISCH
     if (tsb >= 5) return TsbBand.FORMSPITZE
@@ -66,14 +47,6 @@ fun classifyTsb(tsb: Double): TsbBand {
 
 /** Baender der CTL-Rampenrate (§4.3). */
 enum class RampBand { FORMVERLUST, ERHALTUNG, AUFBAU, AGGRESSIV, ZU_SCHNELL }
-
-val rampBandLabels: Map<RampBand, String> = mapOf(
-    RampBand.FORMVERLUST to "Formverlust / Entlastung",
-    RampBand.ERHALTUNG to "Erhaltung",
-    RampBand.AUFBAU to "Nachhaltiger Aufbau",
-    RampBand.AGGRESSIV to "Aggressiver Aufbau",
-    RampBand.ZU_SCHNELL to "Sehr schneller Aufbau",
-)
 
 fun classifyRampRate(ramp: Double): RampBand {
     if (ramp < 0) return RampBand.FORMVERLUST
@@ -88,13 +61,6 @@ fun classifyRampRate(ramp: Double): RampBand {
  * „Verletzungsrisiko" benannt (§4.4).
  */
 enum class LoadRatioBand { UNBEKANNT, NIEDRIG, IM_BAND, BELASTUNGSSPRUNG }
-
-val loadRatioLabels: Map<LoadRatioBand, String> = mapOf(
-    LoadRatioBand.UNBEKANNT to "noch keine Aussage möglich",
-    LoadRatioBand.NIEDRIG to "Belastung zuletzt niedriger als gewohnt",
-    LoadRatioBand.IM_BAND to "Belastung im gewohnten Rahmen",
-    LoadRatioBand.BELASTUNGSSPRUNG to "Belastungssprung",
-)
 
 fun classifyLoadRatio(ratio: Double?): LoadRatioBand {
     if (ratio == null || !ratio.isFinite()) {
@@ -280,13 +246,26 @@ fun dailyLoadsFrom(entries: Iterable<LoadEntry>): List<DailyLoad> {
  */
 const val defaultTargetRampPerWeek: Double = 4.0
 
+/**
+ * Ein Sicherheitsdeckel des Wochenziels. Ein Typ statt eines fertigen Satzes:
+ * Der Plan-Generator rechnet mit dem Ziel, ohne je Text zu brauchen; den Satz
+ * baut erst die Anzeige ueber `LoadTexts.weeklyCap…`.
+ */
+enum class WeeklyLoadCap {
+    /** Hoechstens 130 % der letzten vier Wochen. */
+    RECENT_WEEKS,
+
+    /** Hoechstens das Zeitbudget aus dem Profil ([WeeklyLoadTarget.weeklyHours]). */
+    TIME_BUDGET,
+}
+
 /** Empfohlene Wochenlast fuer eine Zielrampe (§6.3). */
 data class WeeklyLoadTarget(
     val targetRamp: Double,
     val dailyLoad: Double,
     val weeklyLoad: Double,
-    /** Welche Sicherheitsdeckel gegriffen haben (deutschsprachig). */
-    val caps: List<String>,
+    /** Welche Sicherheitsdeckel gegriffen haben, in der Reihenfolge der Pruefung. */
+    val caps: List<WeeklyLoadCap>,
     /** Hinterlegtes Zeitbudget in Stunden pro Woche, falls vorhanden. */
     val weeklyHours: Double? = null,
 ) {
@@ -312,23 +291,20 @@ fun weeklyLoadTarget(
 ): WeeklyLoadTarget {
     val daily = max(ctl + targetRamp / ctlWeeklyResponse, 0.0)
     var weekly = 7 * daily
-    val caps = mutableListOf<String>()
+    val caps = mutableListOf<WeeklyLoadCap>()
 
     if (recentWeeklyMean != null && recentWeeklyMean > 0) {
         val cap = 1.30 * recentWeeklyMean
         if (weekly > cap) {
             weekly = cap
-            caps.add("Begrenzt auf 130 % deiner letzten vier Wochen.")
+            caps.add(WeeklyLoadCap.RECENT_WEEKS)
         }
     }
     if (weeklyHours != null && weeklyHours > 0) {
         val cap = weeklyHours * weeklyLoadPerHour
         if (weekly > cap) {
             weekly = cap
-            caps.add(
-                "Begrenzt auf dein Zeitbudget von ${formatHours(weeklyHours)} h " +
-                    "pro Woche.",
-            )
+            caps.add(WeeklyLoadCap.TIME_BUDGET)
         }
     }
 
@@ -342,16 +318,19 @@ fun weeklyLoadTarget(
 }
 
 /**
- * Stundenangabe im deutschen Format: ganze Zahlen ohne Nachkommastelle,
- * sonst eine Stelle mit Komma („4,5").
+ * Satz zu einem Deckel des Wochenziels in der Sprache von [texts].
  */
-fun formatHours(hours: Double): String {
-    val rounded = dartRound(hours * 10) / 10
-    if (rounded == dartRound(rounded)) {
-        return dartRound(rounded).toInt().toString()
+fun weeklyLoadCapText(cap: WeeklyLoadCap, target: WeeklyLoadTarget, texts: CoreTexts): String =
+    when (cap) {
+        WeeklyLoadCap.RECENT_WEEKS -> texts.load.weeklyCapRecentWeeks()
+        WeeklyLoadCap.TIME_BUDGET -> texts.load.weeklyCapTimeBudget(target.weeklyHours ?: 0.0)
     }
-    return toStringAsFixed(rounded, 1).replace(".", ",")
-}
+
+/**
+ * Stundenangabe ohne Einheit: ganze Zahlen ohne Nachkommastelle, sonst eine
+ * Stelle — „4,5" auf Deutsch, „4.5" auf Englisch.
+ */
+fun formatHours(hours: Double, texts: CoreTexts): String = texts.format.hours(hours)
 
 /** Ziel-Intensitaetsverteilung LIT : MIT : HIT in Prozent (§6.3). */
 fun intensityDistributionTarget(polarized: Boolean = true): List<Double> =

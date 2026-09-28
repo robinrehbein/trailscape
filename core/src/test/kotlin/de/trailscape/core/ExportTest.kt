@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -67,7 +68,7 @@ class ExportTest {
         assertTrue(xml.contains("version=\"1.1\""))
         assertTrue(xml.contains("gpxtpx:hr"))
 
-        val parsed = parseGpx(xml)
+        val parsed = parseGpx(xml, texts = CoreTextsDe)
         assertEquals(r.name, parsed.name)
         assertEquals(r.points.size, parsed.points.size)
 
@@ -119,7 +120,7 @@ class ExportTest {
         assertTrue(xml.contains("&amp;"))
         assertTrue(xml.contains("&lt;Test"))
 
-        val parsed = parseGpx(xml)
+        val parsed = parseGpx(xml, texts = CoreTextsDe)
         assertEquals(r.name, parsed.name)
     }
 
@@ -130,7 +131,7 @@ class ExportTest {
         val original = ride()
         val xml = rideToGpx(original)
 
-        val imported = rideFromGpx(xml, fallbackName = "egal", id = "imported")
+        val imported = rideFromGpx(xml, fallbackName = "egal", id = "imported", texts = CoreTextsDe)
 
         assertEquals("imported", imported.id)
         assertEquals(original.name, imported.name)
@@ -153,7 +154,7 @@ class ExportTest {
   </trk>
 </gpx>
 """
-        val r = rideFromGpx(xml, fallbackName = "Ohne Extras")
+        val r = rideFromGpx(xml, fallbackName = "Ohne Extras", texts = CoreTextsDe)
 
         assertEquals("Ohne Extras", r.name)
         assertEquals(2, r.points.size)
@@ -173,13 +174,13 @@ class ExportTest {
     fun `nutzt den GPX-Namen wenn vorhanden statt fallbackName`() {
         val original = ride(name = "Original-Name")
         val xml = rideToGpx(original)
-        val imported = rideFromGpx(xml, fallbackName = "Fallback")
+        val imported = rideFromGpx(xml, fallbackName = "Fallback", texts = CoreTextsDe)
         assertEquals("Original-Name", imported.name)
     }
 
     @Test
     fun `kaputtes GPX wirft FormatException`() {
-        assertFailsWith<FormatException> { rideFromGpx("<gpx><trk>", fallbackName = "x") }
+        assertFailsWith<FormatException> { rideFromGpx("<gpx><trk>", fallbackName = "x", texts = CoreTextsDe) }
     }
 
     // --- Backup: buildBackupJson / parseBackupJson ---
@@ -198,7 +199,7 @@ class ExportTest {
         assertTrue(json.contains("\"app\": \"trailscape\""))
         assertTrue(json.contains("\"backupVersion\": 1"))
 
-        val data = parseBackupJson(json)
+        val data = parseBackupJson(json, texts = CoreTextsDe)
         assertEquals(2, data.rides.size)
         assertTrue(data.rides.map { it.id }.containsAll(listOf("a", "b")))
         assertEquals(rides.first().points.size, data.rides.first().points.size)
@@ -212,7 +213,7 @@ class ExportTest {
     @Test
     fun `Roundtrip ohne Profil liefert null`() {
         val json = buildBackupJson(listOf(ride()), null)
-        val data = parseBackupJson(json)
+        val data = parseBackupJson(json, texts = CoreTextsDe)
         assertNull(data.profile)
         assertEquals(1, data.rides.size)
     }
@@ -220,39 +221,39 @@ class ExportTest {
     @Test
     fun `leere Tourenliste erzeugt gueltiges Backup mit leerer Liste`() {
         val json = buildBackupJson(emptyList(), null)
-        val data = parseBackupJson(json)
+        val data = parseBackupJson(json, texts = CoreTextsDe)
         assertTrue(data.rides.isEmpty())
         assertNull(data.profile)
     }
 
     @Test
     fun `kaputtes JSON wirft FormatException`() {
-        assertFailsWith<FormatException> { parseBackupJson("{ das ist kein json") }
+        assertFailsWith<FormatException> { parseBackupJson("{ das ist kein json", texts = CoreTextsDe) }
     }
 
     @Test
     fun `valides JSON ohne Trailscape-Signatur wirft FormatException`() {
-        assertFailsWith<FormatException> { parseBackupJson("""{"foo": "bar"}""") }
+        assertFailsWith<FormatException> { parseBackupJson("""{"foo": "bar"}""", texts = CoreTextsDe) }
     }
 
     @Test
     fun `fremdes app-Feld wirft FormatException`() {
         assertFailsWith<FormatException> {
-            parseBackupJson("""{"app": "andereApp", "backupVersion": 1, "rides": []}""")
+            parseBackupJson("""{"app": "andereApp", "backupVersion": 1, "rides": []}""", texts = CoreTextsDe)
         }
     }
 
     @Test
     fun `hoehere unbekannte backupVersion wirft FormatException`() {
         assertFailsWith<FormatException> {
-            parseBackupJson("""{"app": "trailscape", "backupVersion": 999, "rides": []}""")
+            parseBackupJson("""{"app": "trailscape", "backupVersion": 999, "rides": []}""", texts = CoreTextsDe)
         }
     }
 
     @Test
     fun `fehlende Touren-Liste wirft FormatException`() {
         assertFailsWith<FormatException> {
-            parseBackupJson("""{"app": "trailscape", "backupVersion": 1}""")
+            parseBackupJson("""{"app": "trailscape", "backupVersion": 1}""", texts = CoreTextsDe)
         }
     }
 
@@ -281,7 +282,7 @@ class ExportTest {
 
         assertEquals(expected, streamed.toString())
         // Und das Ergebnis bleibt eine gueltige Sicherung.
-        assertEquals(3, parseBackupJson(streamed.toString()).rides.size)
+        assertEquals(3, parseBackupJson(streamed.toString(), texts = CoreTextsDe).rides.size)
     }
 
     @Test
@@ -291,7 +292,7 @@ class ExportTest {
         val streamed = StringBuilder()
         writeBackupJson(streamed, emptySequence(), null, exportedAtMs = at)
         assertEquals(expected, streamed.toString())
-        assertTrue(parseBackupJson(streamed.toString()).rides.isEmpty())
+        assertTrue(parseBackupJson(streamed.toString(), texts = CoreTextsDe).rides.isEmpty())
     }
 
     @Test

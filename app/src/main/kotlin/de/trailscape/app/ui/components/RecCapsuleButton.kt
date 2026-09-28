@@ -32,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -40,8 +41,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.trailscape.app.ui.formatKmDe
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.core.formatDuration
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.formatDistanceKm
 
 /**
  * # Der abgesetzte ●-Knopf neben der Kapsel
@@ -104,19 +108,21 @@ fun RecCapsuleButton(
     val ringColor = MaterialTheme.colorScheme.error
 
     val label = when (state) {
-        is RecButtonState.Idle -> "Fahren"
-        is RecButtonState.RouteReady -> recRouteLabel(state.distanceKm)
+        is RecButtonState.Idle -> stringResource(R.string.shell_rec_idle_label)
+        is RecButtonState.RouteReady -> recRouteLabel(state.distanceKm, LocalAppLanguage.current)
         is RecButtonState.Recording -> recElapsedLabel(state.elapsedMs)
     }
-    val contentDescriptionText = when (state) {
-        is RecButtonState.Idle -> "Aufzeichnung starten"
-        is RecButtonState.RouteReady -> "Geplante Tour starten"
-        is RecButtonState.Recording -> if (state.paused) {
-            "Aufzeichnung pausiert — Cockpit öffnen"
-        } else {
-            "Aufzeichnung läuft — Cockpit öffnen"
-        }
-    }
+    val contentDescriptionText = stringResource(
+        when (state) {
+            is RecButtonState.Idle -> R.string.shell_rec_start_cd
+            is RecButtonState.RouteReady -> R.string.shell_rec_route_cd
+            is RecButtonState.Recording -> if (state.paused) {
+                R.string.shell_rec_paused_cd
+            } else {
+                R.string.shell_rec_running_cd
+            }
+        },
+    )
 
     val showStaticRing = isRecording && paused
     val showPulseRing = isRecording && !paused
@@ -312,9 +318,12 @@ object RecCapsuleButtonDefaults {
 fun recElapsedLabel(elapsedMs: Long): String = formatDuration((elapsedMs / 1000).toInt())
 
 /**
- * Streckenlabel wie „44,8 km" — immer eine Nachkommastelle, deutsches Komma,
- * nie „45 km" fuer glatte Werte. Dieselbe Zusammensetzung
- * `"${formatKmDe(x)} km"`, mit der auch jede andere Kennzahl der App eine
- * Kilometerzahl beschriftet (siehe `UiFormat.kt`).
+ * Streckenlabel wie „44,8 km" / „44.8 km" — immer eine Nachkommastelle im
+ * Zahlformat der [language], nie „45 km" fuer glatte Werte. Die Zahl kommt
+ * aus [formatDistanceKm] (`:core`, dort getestet), wie jede andere
+ * Kilometerzahl der App. Die Einheit „km" ist in beiden Sprachen gleich und
+ * bleibt deshalb im Code — so bleibt der Helfer ein reiner JVM-Test ohne
+ * Ressourcen.
  */
-fun recRouteLabel(distanceKm: Double): String = "${formatKmDe(distanceKm)} km"
+fun recRouteLabel(distanceKm: Double, language: AppLanguage): String =
+    "${formatDistanceKm(distanceKm, language)} km"

@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTextsDe
 import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 import kotlin.math.roundToInt
@@ -193,7 +194,7 @@ class FitTest {
     @Test
     fun `drei Records mit Position Hoehe und Puls werden gelesen`() {
         val file = fitFile(cat(fileIdMessages(), threeRecords(), sessionMessages()))
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertEquals(3, result.points.size)
         assertTrue(result.crcValid)
@@ -214,7 +215,7 @@ class FitTest {
     @Test
     fun `Name entsteht aus Sportart und Startdatum`() {
         val file = fitFile(cat(threeRecords(), sessionMessages()))
-        val result = parseFit(file, fallbackName = "1234567890")
+        val result = parseFit(file, fallbackName = "1234567890", texts = CoreTextsDe)
 
         assertEquals(FIT_SPORT_CYCLING, result.sport)
         assertTrue(result.isCycling)
@@ -225,7 +226,7 @@ class FitTest {
     @Test
     fun `unbekannte Sportart bekommt einen neutralen Namen`() {
         val file = fitFile(cat(threeRecords(), sessionMessages(sport = 42)))
-        assertEquals("Aktivität 14.03.2024", parseFit(file).name)
+        assertEquals("Aktivität 14.03.2024", parseFit(file, texts = CoreTextsDe).name)
     }
 
     @Test
@@ -234,7 +235,7 @@ class FitTest {
             definition(7, 19, listOf(Field(2, 4, TYPE_UINT32), Field(25, 1, TYPE_ENUM))),
             dataMessage(7, cat(u32(FIT_2024_03_14_10H), u8(FIT_SPORT_CYCLING))),
         )
-        val result = parseFit(fitFile(cat(threeRecords(), lap)))
+        val result = parseFit(fitFile(cat(threeRecords(), lap)), texts = CoreTextsDe)
 
         assertEquals(FIT_SPORT_CYCLING, result.sport)
         assertEquals("Radfahrt 14.03.2024", result.name)
@@ -243,7 +244,7 @@ class FitTest {
     @Test
     fun `rideFromFit berechnet Statistiken und Pulswerte`() {
         val file = fitFile(cat(threeRecords(), sessionMessages()))
-        val ride = rideFromFit(file, fallbackName = "egal", id = "fest")
+        val ride = rideFromFit(file, fallbackName = "egal", id = "fest", texts = CoreTextsDe)
 
         assertEquals("fest", ride.id)
         assertEquals("Radfahrt 14.03.2024", ride.name)
@@ -263,14 +264,14 @@ class FitTest {
     @Test
     fun `kaputte Signatur wird abgewiesen`() {
         val file = fitFile(threeRecords(), signature = ".XXX")
-        val error = assertFailsWith<FormatException> { parseFit(file) }
+        val error = assertFailsWith<FormatException> { parseFit(file, texts = CoreTextsDe) }
         assertEquals("Die Datei ist keine gültige FIT-Datei.", error.message)
     }
 
     @Test
     fun `zu kurze Datei wird abgewiesen`() {
-        assertFailsWith<FormatException> { parseFit(ByteArray(5)) }
-        assertFailsWith<FormatException> { parseFit(ByteArray(0)) }
+        assertFailsWith<FormatException> { parseFit(ByteArray(5), texts = CoreTextsDe) }
+        assertFailsWith<FormatException> { parseFit(ByteArray(0), texts = CoreTextsDe) }
     }
 
     @Test
@@ -285,7 +286,7 @@ class FitTest {
                 dataMessage(0, cat(u32(FIT_2024_03_14_10H + 1), u8(121))),
             ),
         )
-        val error = assertFailsWith<FormatException> { parseFit(file) }
+        val error = assertFailsWith<FormatException> { parseFit(file, texts = CoreTextsDe) }
         assertEquals("Die FIT-Datei enthält keine Trackpunkte.", error.message)
     }
 
@@ -299,7 +300,7 @@ class FitTest {
                 dataMessage(0, recordPayload(FIT_2024_03_14_10H + 5, 47.0, 11.0, 600.0, 120)),
             ),
         )
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertEquals(1, result.points.size)
         assertEquals(47.0, result.points[0].lat, EPS)
@@ -313,7 +314,7 @@ class FitTest {
                 dataMessage(0, recordPayload(FIT_2024_03_14_10H, 47.0, 11.0, null, null)),
             ),
         )
-        val point = parseFit(file).points.single()
+        val point = parseFit(file, texts = CoreTextsDe).points.single()
 
         assertNull(point.ele)
         assertNull(point.hr)
@@ -327,7 +328,7 @@ class FitTest {
     @Test
     fun `Big-Endian-Definition wird respektiert`() {
         val file = fitFile(threeRecords(littleEndian = false))
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertEquals(3, result.points.size)
         assertEquals(47.0, result.points[0].lat, EPS)
@@ -351,7 +352,7 @@ class FitTest {
                 compressedMessage(1, 3, cat(u32(semicircles(47.002)), u32(semicircles(11.002)))),
             ),
         )
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertEquals(3, result.points.size)
         assertEquals(UNIX_2024_03_14_10H * 1000L, result.points[0].time)
@@ -362,8 +363,8 @@ class FitTest {
     @Test
     fun `gz-Variante wird transparent entpackt`() {
         val file = fitFile(cat(threeRecords(), sessionMessages()))
-        val plain = parseFit(file)
-        val packed = parseFit(gzip(file))
+        val plain = parseFit(file, texts = CoreTextsDe)
+        val packed = parseFit(gzip(file), texts = CoreTextsDe)
 
         assertEquals(plain.points, packed.points)
         assertEquals(plain.name, packed.name)
@@ -379,7 +380,7 @@ class FitTest {
         )
         val file = fitFile(cat(unknown, threeRecords(), unknown))
 
-        assertEquals(3, parseFit(file).points.size)
+        assertEquals(3, parseFit(file, texts = CoreTextsDe).points.size)
     }
 
     @Test
@@ -400,7 +401,7 @@ class FitTest {
                 ),
             ),
         )
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertEquals(2, result.points.size)
         assertEquals(130, result.points[1].hr)
@@ -433,7 +434,7 @@ class FitTest {
                 ),
             ),
         )
-        val point = parseFit(file).points.single()
+        val point = parseFit(file, texts = CoreTextsDe).points.single()
 
         assertEquals(47.0, point.lat, EPS)
         assertEquals(120, point.hr)
@@ -464,7 +465,7 @@ class FitTest {
             ),
         )
 
-        assertEquals(1234.0, parseFit(file).points.single().ele!!, 1e-3)
+        assertEquals(1234.0, parseFit(file, texts = CoreTextsDe).points.single().ele!!, 1e-3)
     }
 
     // -----------------------------------------------------------------------
@@ -474,7 +475,7 @@ class FitTest {
     @Test
     fun `kaputte CRC wird gemeldet aber nicht als Fehler gewertet`() {
         val file = fitFile(cat(threeRecords(), sessionMessages()), breakFileCrc = true)
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertFalse(result.crcValid)
         assertEquals(3, result.points.size)
@@ -482,11 +483,11 @@ class FitTest {
 
     @Test
     fun `14-Byte-Header mit Header-CRC wird gelesen`() {
-        val ok = parseFit(fitFile(threeRecords(), headerSize = 14))
+        val ok = parseFit(fitFile(threeRecords(), headerSize = 14), texts = CoreTextsDe)
         assertEquals(3, ok.points.size)
         assertTrue(ok.crcValid)
 
-        val broken = parseFit(fitFile(threeRecords(), headerSize = 14, breakHeaderCrc = true))
+        val broken = parseFit(fitFile(threeRecords(), headerSize = 14, breakHeaderCrc = true), texts = CoreTextsDe)
         assertEquals(3, broken.points.size)
         assertFalse(broken.crcValid)
     }
@@ -497,8 +498,8 @@ class FitTest {
         val tooBig = fitFile(data, declaredDataSize = 0xFF_FFFFL)
         val zero = fitFile(data, declaredDataSize = 0L)
 
-        assertEquals(3, parseFit(tooBig).points.size)
-        assertEquals(3, parseFit(zero).points.size)
+        assertEquals(3, parseFit(tooBig, texts = CoreTextsDe).points.size)
+        assertEquals(3, parseFit(zero, texts = CoreTextsDe).points.size)
     }
 
     @Test
@@ -509,7 +510,7 @@ class FitTest {
             // halbe Data Message
             cat(u8(0x00), u32(FIT_2024_03_14_10H + 1)),
         )
-        val result = parseFit(fitFile(truncated))
+        val result = parseFit(fitFile(truncated), texts = CoreTextsDe)
 
         assertEquals(1, result.points.size)
     }
@@ -525,7 +526,7 @@ class FitTest {
             ),
         )
 
-        assertEquals(1, parseFit(file).points.size)
+        assertEquals(1, parseFit(file, texts = CoreTextsDe).points.size)
     }
 
     @Test
@@ -537,7 +538,7 @@ class FitTest {
                 dataMessage(0, recordPayload(FIT_2024_03_14_10H + 60, 47.01, 11.01, 700.0, 150)),
             ),
         )
-        val result = parseFit(cat(first, second))
+        val result = parseFit(cat(first, second), texts = CoreTextsDe)
 
         assertEquals(4, result.points.size)
         assertEquals(150, result.points[3].hr)
@@ -553,13 +554,13 @@ class FitTest {
                 dataMessage(0, cat(u32(semicircles(47.1)), u32(semicircles(11.1)))),
             ),
         )
-        val result = parseFit(file, fallbackName = "  activity_42  ")
+        val result = parseFit(file, fallbackName = "  activity_42  ", texts = CoreTextsDe)
 
         assertEquals("activity_42", result.name)
         assertNull(result.points[0].time)
         assertNull(result.startTime)
 
-        val ride = rideFromFit(file, fallbackName = "activity_42", id = "x")
+        val ride = rideFromFit(file, fallbackName = "activity_42", id = "x", texts = CoreTextsDe)
         assertEquals("activity_42", ride.name)
         assertTrue(ride.createdAt > 0L)
     }
@@ -574,7 +575,7 @@ class FitTest {
                 dataMessage(0, recordPayload(FIT_2024_03_14_10H + 1, 47.0, 11.0, 600.0, 120)),
             ),
         )
-        val result = parseFit(file)
+        val result = parseFit(file, texts = CoreTextsDe)
 
         assertEquals(1, result.points.size)
         assertEquals(47.0, result.points[0].lat, EPS)
@@ -594,7 +595,7 @@ class FitTest {
     @Test
     fun `nicht-gz Daten laufen unveraendert durch gunzipIfNeeded`() {
         val raw = byteArrayOf(1, 2, 3, 4)
-        assertTrue(raw.contentEquals(gunzipIfNeeded(raw)))
-        assertTrue(fitFile(threeRecords()).contentEquals(gunzipIfNeeded(fitFile(threeRecords()))))
+        assertTrue(raw.contentEquals(gunzipIfNeeded(raw, texts = CoreTextsDe)))
+        assertTrue(fitFile(threeRecords()).contentEquals(gunzipIfNeeded(fitFile(threeRecords()), texts = CoreTextsDe)))
     }
 }

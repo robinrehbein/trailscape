@@ -3,10 +3,15 @@ package de.trailscape.app.record
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
+import de.trailscape.app.R
+import de.trailscape.app.i18n.localized
 import de.trailscape.core.SensorSample
 import de.trailscape.core.TrackPoint
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
@@ -132,6 +137,23 @@ object RecordingRepository {
      */
     val lastFinishedRideId: StateFlow<String?> = _lastFinishedRideId.asStateFlow()
 
+    private val _finishedRides = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
+
+    /**
+     * Jede fertig gespeicherte Tour als Ereignis — dieselben Meldungen wie
+     * [lastFinishedRideId] (Beenden und Wiederherstellung), aber ohne dass ein
+     * anderer Sammler sie wegquittieren kann.
+     *
+     * Warum neben [lastFinishedRideId]: Das ViewModel setzt jenen Wert nach
+     * dem Verarbeiten per [clearFinishedRide] zurueck, und ein [StateFlow]
+     * verschluckt Zwischenstaende. Ein zweiter Sammler (der Strava-Auto-Upload
+     * in `TrailscapeApplication`) koennte eine Tour so verpassen. `replay = 1`,
+     * weil dieser Sammler beim App-Start erst anlaeuft, waehrend die
+     * Wiederherstellung eines Journals schon melden kann; eine doppelt
+     * gesehene Tour faengt der Empfaenger ab.
+     */
+    val finishedRides: SharedFlow<String> = _finishedRides.asSharedFlow()
+
     /**
      * Zuletzt von einer gekoppelten Uhr gemeldete Herzfrequenz in Schlaegen
      * pro Minute, oder `null` ohne Uhr bzw. ohne HF-Sensor-Kontakt.
@@ -141,7 +163,8 @@ object RecordingRepository {
      * schickt ihre Proben ohnehin nur, waehrend sie selbst gerade aufzeichnet.
      * Wird NICHT automatisch geloescht, wenn [watchConnected] auf `false`
      * faellt — wer einen „live"-Wert braucht (siehe `RideModeScreen`), prueft
-     * beide Flows gemeinsam.
+     * beide Flows gemeinsam. Geloescht wird er nur beim Start einer neuen
+     * Aufzeichnung ([clearHeartRate]).
      */
     val heartRateBpm: StateFlow<Int?> = _heartRateBpm.asStateFlow()
 
@@ -225,8 +248,7 @@ object RecordingRepository {
             // Ab Android 12 kann das System den Start eines Vordergrunddienstes
             // aus dem Hintergrund ablehnen (ForegroundServiceStartNotAllowedException).
             // Das darf die App nicht abstuerzen lassen.
-            _lastError.value = "Die Aufzeichnung konnte nicht gestartet werden. " +
-                "Bitte oeffne Trailscape und versuche es erneut."
+            _lastError.value = context.localized().getString(R.string.shell_recording_start_blocked_error)
         }
     }
 
@@ -250,6 +272,16 @@ object RecordingRepository {
         _lastPoint.value = points.lastOrNull()
         _pointCount.value = points.size
         _lastError.value = null
+    }
+
+    /**
+     * Vergisst den letzten Uhr-Puls. Beim Start einer NEUEN Aufzeichnung
+     * aufgerufen: Ein Wert aus einer frueheren Fahrt im selben Prozess darf
+     * nicht als Rueckfall in die neue Fahrt rutschen — eine laufende Uhr
+     * meldet sich ohnehin sekuendlich neu.
+     */
+    internal fun clearHeartRate() {
+        _heartRateBpm.value = null
     }
 
     internal fun publishPaused(paused: Boolean, auto: Boolean = false) {
@@ -283,6 +315,7 @@ object RecordingRepository {
         _speedKmh.value = null
         if (finishedRideId != null) {
             _lastFinishedRideId.value = finishedRideId
+            _finishedRides.tryEmit(finishedRideId)
         }
     }
 
@@ -292,6 +325,7 @@ object RecordingRepository {
 
     internal fun publishFinishedRide(rideId: String) {
         _lastFinishedRideId.value = rideId
+        _finishedRides.tryEmit(rideId)
     }
 
     /**

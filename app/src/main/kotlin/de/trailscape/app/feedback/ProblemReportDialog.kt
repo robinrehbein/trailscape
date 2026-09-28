@@ -19,7 +19,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.R
 import de.trailscape.core.DiagLog
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
@@ -77,14 +79,13 @@ fun ProblemReportDialog(
     )
 
     ReportDialog(
-        title = "Problem melden",
-        intro = "Trailscape hat keine Fehler-Telemetrie — ohne deine Meldung erfährt " +
-            "niemand von einem Problem. Angehängt werden App-Version, Gerät, " +
-            "Android-Version und – solange der Haken unten gesetzt ist – die technische " +
-            "Diagnose. Du siehst den kompletten Text, bevor du ihn absendest; ohne " +
-            "deinen Klick verlässt nichts das Gerät.",
+        title = stringResource(R.string.more_report_title),
+        intro = stringResource(R.string.more_report_intro),
         reportText = report,
         issueTitle = PROBLEM_ISSUE_TITLE,
+        // Ueberschrift im Issue-Text und Betreff beim Teilen gehoeren zum
+        // Bericht an den Entwickler und bleiben deshalb deutsch (siehe
+        // docs/i18n.md, „Diagnose bleibt Deutsch").
         reportHeading = "Technische Angaben",
         shareSubject = "Trailscape-Problembericht",
         onDismiss = onDismiss,
@@ -95,18 +96,18 @@ fun ProblemReportDialog(
                     scope.launch {
                         withContext(Dispatchers.IO) { AppDiagnostics.clear() }
                         diagLines = emptyList()
-                        showFeedbackToast(context, "Diagnose-Protokoll gelöscht.")
+                        showFeedbackToast(context, context.getString(R.string.more_report_diag_cleared_status))
                     }
                 },
                 contentPadding = PaddingValues(0.dp),
             ) {
-                Text("Diagnose-Protokoll löschen")
+                Text(stringResource(R.string.more_report_diag_clear_action))
             }
             if (healthDiagnostics.isNotEmpty()) {
                 LabeledCheckbox(
                     checked = attachHealth,
                     onCheckedChange = { attachHealth = it },
-                    label = "Health-Sync-Diagnose anhängen",
+                    label = stringResource(R.string.more_report_health_attach_label),
                 )
             }
         },
@@ -114,26 +115,22 @@ fun ProblemReportDialog(
 }
 
 /**
- * Text, der ehrlich sagt, was die technische Diagnose enthaelt — und was
- * nicht. Gemeinsam fuer Problem- und Absturzbericht, damit beide Dialoge
- * dasselbe versprechen.
+ * Die vorausgewaehlte Diagnose-Checkbox samt Erklaerung — einem Text, der
+ * ehrlich sagt, was die technische Diagnose enthaelt und was nicht
+ * (`more_report_diag_explanation`). Gemeinsam fuer Problem- und
+ * Absturzbericht, damit beide Dialoge dasselbe versprechen. Das Beispiel
+ * darin („GPS-Start fehlgeschlagen") bleibt auch im Englischen deutsch: So
+ * steht der Ereignisname tatsaechlich im Protokoll.
  */
-const val DIAG_ATTACHMENT_EXPLANATION: String =
-    "Enthält feste Ereignisnamen (z. B. „GPS-Start fehlgeschlagen“), Uhrzeiten, " +
-        "Zähler, Fehlercodes und die Namen von Fehlerklassen der letzten Tage. " +
-        "Nicht enthalten: Standorte, Touren und ihre Namen, Gesundheitswerte, " +
-        "Server-Adressen oder Zugangsdaten."
-
-/** Die vorausgewaehlte Diagnose-Checkbox samt Erklaerung. */
 @Composable
 internal fun DiagAttachmentCheckbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     LabeledCheckbox(
         checked = checked,
         onCheckedChange = onCheckedChange,
-        label = "Technische Diagnose anhängen",
+        label = stringResource(R.string.more_report_diag_attach_label),
     )
     Text(
-        text = DIAG_ATTACHMENT_EXPLANATION,
+        text = stringResource(R.string.more_report_diag_explanation),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

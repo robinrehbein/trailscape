@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Heute-Tabs (ui/today/**, ui/TodayRouteTarget.kt, ui/ReadyToRideDialog.kt).
+
+    Eigentuemer: i18n-today · Schluessel-Praefix: today_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_today.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- TodayWording.kt: Angebot (Karte, Hero-Knopf, Losfahren-Dialog). %1$d = ganze Kilometer -->
+    <string name="today_offer_chip_label">Heute %1$d km</string>
+    <string name="today_offer_chip_rest_label">Locker · %1$d km</string>
+    <string name="today_offer_rest_action">Locker rollen · %1$d km</string>
+    <string name="today_offer_first_round_action">Runde bauen · %1$d km</string>
+    <string name="today_offer_action">Runde für heute bauen</string>
+    <!-- %1$s = Ruhetag-Schlagzeile (today_rest_headline_*), %2$d = Kilometer -->
+    <string name="today_offer_rest_hint">%1$s Wenn du trotzdem fahren magst: %2$d km locker rollen.</string>
+    <string name="today_offer_hint">Heute stehen %1$d km an.</string>
+    <string name="today_offer_dialog_rest_action">Locker rollen</string>
+    <string name="today_offer_dialog_action">Passende Runde bauen</string>
+
+    <!-- TodayWording.kt: Wort unter der Zahl im Ring -->
+    <string name="today_readiness_word_hard">erholt</string>
+    <string name="today_readiness_word_normal">normal</string>
+    <string name="today_readiness_word_easy">müde</string>
+    <string name="today_readiness_word_rest">Ruhe</string>
+
+    <!-- TodayWording.kt: Schlagzeile. Erster Halbsatz nur mit Gesamtwert -->
+    <string name="today_headline_lead_hard">Gut erholt.</string>
+    <string name="today_headline_lead_normal">Normal erholt.</string>
+    <string name="today_headline_lead_easy">Etwas müde.</string>
+    <string name="today_headline_lead_rest">Ziemlich müde.</string>
+    <!-- %1$s = today_headline_lead_*, %2$s = die eigentliche Schlagzeile -->
+    <string name="today_headline_with_lead">%1$s %2$s</string>
+    <string name="today_rest_headline_skipped">Heute lieber Pause statt Training.</string>
+    <string name="today_rest_headline_plan">Heute ist Ruhetag.</string>
+    <string name="today_rest_headline_readiness">Heute lieber ein Ruhetag.</string>
+    <string name="today_headline_event">Heute ist dein großer Tag.</string>
+    <string name="today_headline_long">Heute steht die lange Fahrt an.</string>
+    <string name="today_headline_hard">Heute darf es hart werden.</string>
+    <string name="today_headline_first_round">Für den Anfang: eine ruhige Runde.</string>
+    <string name="today_headline_downgraded_easy">Heute weniger als geplant: eine lockere Runde.</string>
+    <string name="today_headline_downgraded_moderate">Heute weniger als geplant: eine normale Runde.</string>
+    <string name="today_headline_easy">Heute eine lockere Runde.</string>
+    <string name="today_headline_moderate">Heute eine normale Runde.</string>
+
+    <!-- TodayWording.kt: Satz unter der Schlagzeile. %1$s = Kilometerangabe (today_sentence_km…) -->
+    <string name="today_sentence_km">%1$d km</string>
+    <string name="today_sentence_km_instead">%1$d km statt %2$d km</string>
+    <string name="today_sentence_easy_spin">%1$s ganz locker rollen, mit leichten Gängen und ohne Druck.</string>
+    <string name="today_sentence_easy">%1$s ruhig fahren, so dass du dich noch unterhalten kannst.</string>
+    <string name="today_sentence_moderate">%1$s in gleichmäßigem Tempo, ohne Sprints.</string>
+    <string name="today_sentence_hard">%1$s mit ein paar kräftigen Abschnitten, dazwischen locker rollen.</string>
+    <string name="today_sentence_long">%1$s in ruhigem Tempo. Iss und trink unterwegs genug.</string>
+    <string name="today_sentence_rest_skipped">Im Plan standen %1$d km. Schieb die Fahrt lieber um einen Tag – oder roll nur kurz und locker.</string>
+    <string name="today_sentence_rest">Kein Training heute. Wenn du trotzdem aufs Rad willst: kurz und locker.</string>
+    <string name="today_sentence_event">%1$d km, die Strecke steht schon. Viel Erfolg!</string>
+
+    <!-- TodayWording.kt: Titel des „Warum?"-Blatts -->
+    <string name="today_why_title_event">Heute zählt es</string>
+    <string name="today_why_title_rest">Warum heute Pause?</string>
+    <string name="today_why_title_first_round">Warum diese Runde?</string>
+    <string name="today_why_title_downgraded">Warum weniger als geplant?</string>
+    <string name="today_why_title_easy">Warum eine lockere Runde?</string>
+    <string name="today_why_title_moderate">Warum eine normale Runde?</string>
+    <string name="today_why_title_hard">Warum eine harte Einheit?</string>
+    <string name="today_why_title_long">Warum die lange Fahrt?</string>
+
+    <!-- TodayWording.kt: Signalzeilen im „Warum?"-Blatt -->
+    <string name="today_signal_no_data_word">keine Daten</string>
+    <string name="today_signal_no_data_body">Noch keine Daten von der Uhr.</string>
+    <string name="today_signal_collecting_word">sammelt noch</string>
+    <string name="today_signal_collecting_body">Noch zu wenige Werte von der Uhr für eine Einschätzung.</string>
+
+    <string name="today_signal_sleep_label">Schlaf</string>
+    <string name="today_signal_sleep_good_word">gut</string>
+    <string name="today_signal_sleep_bit_short_word">etwas kurz</string>
+    <string name="today_signal_sleep_short_word">zu kurz</string>
+    <string name="today_signal_sleep_very_short_word">viel zu kurz</string>
+    <!-- %1$s = Schlafdauer („7 h 40 min"), %2$s = Differenz zum Schnitt -->
+    <string name="today_signal_sleep_same_body">%1$s, etwa so viel wie sonst.</string>
+    <string name="today_signal_sleep_more_body">%1$s, etwas mehr als dein Schnitt.</string>
+    <string name="today_signal_sleep_less_body">%1$s, %2$s weniger als dein Schnitt.</string>
+
+    <string name="today_signal_resting_hr_label">Ruhepuls</string>
+    <string name="today_signal_resting_hr_normal_word">normal</string>
+    <string name="today_signal_resting_hr_slightly_raised_word">leicht erhöht</string>
+    <string name="today_signal_resting_hr_raised_word">erhöht</string>
+    <string name="today_signal_resting_hr_clearly_raised_word">deutlich erhöht</string>
+    <!-- %1$d = Ruhepuls, %2$d = Abweichung in Schlägen -->
+    <string name="today_signal_resting_hr_same_body">%1$d Schläge pro Minute, wie sonst auch.</string>
+    <string name="today_signal_resting_hr_higher_body">%1$d Schläge pro Minute, %2$d mehr als sonst.</string>
+    <string name="today_signal_resting_hr_lower_body">%1$d Schläge pro Minute, etwas niedriger als sonst.</string>
+
+    <string name="today_signal_hrv_label">Erholung (HRV)</string>
+    <string name="today_signal_hrv_normal_word">normal</string>
+    <string name="today_signal_hrv_good_word">gut</string>
+    <string name="today_signal_hrv_bit_low_word">etwas niedrig</string>
+    <string name="today_signal_hrv_low_word">niedrig</string>
+    <string name="today_signal_hrv_unusual_word">auffällig</string>
+    <!-- %1$s = heutiger Wert („48 ms"), %2$s = Normalbereich („42–61 ms") -->
+    <string name="today_signal_hrv_in_range_body">%1$s, in deinem Normalbereich von %2$s.</string>
+    <string name="today_signal_hrv_above_body">%1$s, über deinem Normalbereich von %2$s.</string>
+    <string name="today_signal_hrv_slightly_below_body">%1$s, leicht unter deinem Normalbereich von %2$s.</string>
+    <string name="today_signal_hrv_clearly_below_body">%1$s, deutlich unter deinem Normalbereich von %2$s.</string>
+    <string name="today_signal_hrv_saturation_body">%1$s, hoch bei zugleich erhöhtem Ruhepuls. Das kommt auch bei starker Müdigkeit vor.</string>
+
+    <string name="today_signal_load_label">Belastung</string>
+    <string name="today_signal_load_no_data_body">Noch zu wenige Fahrten, um die Belastung einzuschätzen.</string>
+    <string name="today_signal_load_very_fresh_word">sehr frisch</string>
+    <string name="today_signal_load_very_fresh_body">Du bist zuletzt wenig gefahren. Die Beine sind ausgeruht.</string>
+    <string name="today_signal_load_fresh_word">frisch</string>
+    <string name="today_signal_load_fresh_body">Die Beine sind ausgeruht und bereit.</string>
+    <string name="today_signal_load_balanced_word">ausgeglichen</string>
+    <string name="today_signal_load_balanced_body">Training und Erholung halten sich die Waage.</string>
+    <string name="today_signal_load_tired_word">etwas müde</string>
+    <string name="today_signal_load_tired_body">Die letzten Tage waren intensiv. Der Körper baut gerade auf.</string>
+    <string name="today_signal_load_very_tired_word">sehr müde</string>
+    <string name="today_signal_load_very_tired_body">Die letzten Wochen waren sehr hart. Der Körper braucht Erholung.</string>
+
+    <!-- TodayWording.kt: Einordnung unter den Signalen. %1$s = Dauer („1½ h") -->
+    <string name="today_why_first_round_hours_body">Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg über etwa %1$s.</string>
+    <string name="today_why_first_round_body">Noch keine gefahrene Tour — deshalb ein ruhiger Einstieg.</string>
+    <string name="today_why_first_round_adapts_body">Mit jeder Fahrt richtet sich die Empfehlung mehr nach deinem Tempo und deiner Form.</string>
+    <string name="today_why_plan_rest_day_body">Laut Plan ist heute frei. Erholung gehört zum Training dazu.</string>
+    <!-- %1$s = Wochentag („Samstag"), %2$d = Kilometer -->
+    <string name="today_why_upcoming_event_body">%1$s steht dein Zielevent mit %2$d km an.</string>
+    <string name="today_why_upcoming_hard_body">%1$s steht eine harte Einheit mit %2$d km an.</string>
+    <string name="today_why_upcoming_long_body">%1$s steht die lange Fahrt mit %2$d km an.</string>
+    <string name="today_why_upcoming_longer_body">%1$s steht eine längere Fahrt mit %2$d km an.</string>
+    <!-- %1$s = einer der Sätze today_why_upcoming_*_body -->
+    <string name="today_why_upcoming_save_energy_body">%1$s Heute nicht überziehen, dann hast du dafür genug Kraft.</string>
+    <string name="today_why_deload_body">Deine Werte sprechen dafür, diese Woche etwas kürzer zu treten.</string>
+    <string name="today_why_no_plan_body">Ohne Trainingsziel richtet sich die Empfehlung nach deiner Tagesform und deinen letzten Fahrten.</string>
+
+    <!-- TodayWording.kt: Wochenstreifen (Vorlesetext). %1$s = Wochentag -->
+    <string name="today_strip_today_name">%1$s, heute</string>
+    <string name="today_strip_ridden_cd">%1$s: %2$d km gefahren</string>
+    <string name="today_strip_planned_cd">%1$s: %2$d km geplant</string>
+    <string name="today_strip_rest_day_cd">%1$s: Ruhetag</string>
+    <string name="today_strip_no_ride_cd">%1$s: keine Fahrt</string>
+
+    <!-- TodayWording.kt: Kopfzeile der Wochenkarte -->
+    <string name="today_week_km_label">%1$d km diese Woche</string>
+    <string name="today_week_rides_none">noch keine Fahrt</string>
+    <plurals name="today_week_rides_count">
+        <item quantity="one">%1$d Fahrt</item>
+        <item quantity="other">%1$d Fahrten</item>
+    </plurals>
+    <string name="today_week_progress_label">%1$d von %2$d km</string>
+    <string name="today_week_goal_reached_status">Wochenziel geschafft</string>
+    <plurals name="today_week_open_rides_count">
+        <item quantity="one">noch %1$d Fahrt</item>
+        <item quantity="other">noch %1$d Fahrten</item>
+    </plurals>
+
+    <!-- TodayWording.kt: Zielzeile -->
+    <string name="today_goal_countdown_past">vorbei</string>
+    <string name="today_goal_countdown_today">heute</string>
+    <string name="today_goal_countdown_tomorrow">morgen</string>
+    <plurals name="today_goal_countdown_days_count">
+        <item quantity="one">noch %1$d Tag</item>
+        <item quantity="other">noch %1$d Tage</item>
+    </plurals>
+    <plurals name="today_goal_countdown_weeks_count">
+        <item quantity="one">noch %1$d Woche</item>
+        <item quantity="other">noch %1$d Wochen</item>
+    </plurals>
+    <!-- %1$s = Wochentag kurz („Sa"), %2$d = Tag, %3$s = Monat („Dezember"), %4$d = Jahr -->
+    <string name="today_goal_date">%1$s, %2$d. %3$s</string>
+    <string name="today_goal_date_year">%1$s, %2$d. %3$s %4$d</string>
+    <string name="today_goal_plan_week_label">Woche %1$d von %2$d</string>
+    <!-- %1$s = Zeit „2:10" -->
+    <string name="today_goal_target_time_label">Ziel %1$s h</string>
+    <string name="today_goal_current_time_label">Stand heute ca. %1$s h</string>
+
+    <!-- TodayCards.kt -->
+    <string name="today_hero_connect_watch_hint">Verbinde deine Uhr, um deine Tagesform zu sehen.</string>
+    <string name="today_hero_open_health_action">Gesundheitsdaten öffnen</string>
+    <string name="today_hero_collecting_hint">Deine Uhr sammelt noch Werte. In ein paar Tagen siehst du hier deine Tagesform.</string>
+    <string name="today_hero_why_action">Warum diese Empfehlung?</string>
+    <!-- %1$d = Wert 0–100, %2$s = Ring-Wort (today_readiness_word_*) -->
+    <string name="today_ring_cd">Tagesform %1$d von 100, %2$s</string>
+    <string name="today_goal_prompt_title">Ziel festlegen</string>
+    <string name="today_goal_prompt_body">Sag Trailscape, worauf du hinfährst. Daraus entsteht dein Wochenplan.</string>
+    <string name="today_goal_open_training_action">Training öffnen</string>
+    <string name="today_why_sheet_dismiss_action">Verstanden</string>
+
+    <!-- TodayScreen.kt -->
+    <string name="today_screen_title">Heute</string>
+    <string name="today_week_eyebrow">Diese Woche</string>
+    <string name="today_goal_eyebrow">Dein Ziel</string>
+    <string name="today_first_ride_title">Noch keine Touren</string>
+    <string name="today_first_ride_offer_body">Bau dir oben eine Runde und fahr los — oder hol deine bisherigen Touren aus Strava, Garmin oder Wahoo. Danach siehst du hier deine Woche.</string>
+    <string name="today_first_ride_body">Sobald die erste Tour gefahren oder importiert ist, siehst du hier deine Woche.</string>
+    <string name="today_first_ride_import_action">Touren importieren</string>
+    <string name="today_first_ride_record_action">Tour aufzeichnen</string>
+
+    <!-- ReadyToRideDialog.kt -->
+    <string name="today_ready_title">Losfahren</string>
+    <string name="today_ready_free_body">Die App zeichnet auf, die Route entsteht unterwegs.</string>
+    <string name="today_ready_start_recording_action">Aufzeichnung starten</string>
+    <!-- %1$s = Länge der Route („42,3") -->
+    <string name="today_ready_planned_body">Route · %1$s km, mit Abbiegehinweisen.</string>
+    <string name="today_ready_with_route_action">Mit Route starten</string>
+    <string name="today_ready_without_route_action">Ohne Route starten</string>
+</resources>

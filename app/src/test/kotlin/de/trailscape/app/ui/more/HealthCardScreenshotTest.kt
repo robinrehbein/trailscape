@@ -13,12 +13,20 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureRoboImage
+import androidx.compose.runtime.CompositionLocalProvider
+import de.trailscape.app.R
+import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.Ride
 import de.trailscape.core.RideStats
 import de.trailscape.core.RouteConsentRequest
+import de.trailscape.core.i18n.AppLanguage
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import java.time.LocalDateTime
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -41,7 +49,7 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35], qualifiers = "w411dp-h891dp-xxhdpi", application = ScreenshotApplication::class)
+@Config(sdk = [35], qualifiers = TestLocales.S25_DE, application = ScreenshotApplication::class)
 class HealthCardScreenshotTest {
 
     @get:Rule
@@ -60,6 +68,22 @@ class HealthCardScreenshotTest {
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/61-health-historie.png")
     }
 
+    /** Dieselben Bausteine auf Englisch — Plurals und die laengeren englischen Saetze. */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun historieUndBerichtEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        show(dark = false, coreTexts = CoreTextsEn)
+        val context = compose.activity
+        compose.onNodeWithText(context.getString(R.string.more_health_history_action)).assertExists()
+        compose.onNodeWithText(
+            context.resources.getQuantityString(R.plurals.more_health_summary_found_count, 14, 14, 2),
+        ).assertExists()
+        compose.onNodeWithText("14 rides found · 2 already imported").assertExists()
+        compose.onNodeWithText("12 rides imported", substring = true).assertExists()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/61-health-historie-en.png")
+    }
+
     @Test
     @Config(qualifiers = "+night")
     fun historieUndBerichtDunkel() {
@@ -67,14 +91,20 @@ class HealthCardScreenshotTest {
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/62-health-historie-dunkel.png")
     }
 
-    private fun show(dark: Boolean) {
+    /**
+     * Ohne `TrailscapeApp` stellt niemand die `:core`-Texte bereit (Vorgabe:
+     * Deutsch) — die englische Methode reicht sie deshalb selbst herein.
+     */
+    private fun show(dark: Boolean, coreTexts: CoreTexts = CoreTextsDe) {
         compose.setContent {
-            TrailscapeTheme(darkTheme = dark) {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        HealthSyncSummary(sampleReport())
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HealthHistoryNotice(enabled = true, onRequest = {})
+            CompositionLocalProvider(LocalCoreTexts provides coreTexts) {
+                TrailscapeTheme(darkTheme = dark) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            HealthSyncSummary(sampleReport())
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HealthHistoryNotice(enabled = true, onRequest = {})
+                        }
                     }
                 }
             }

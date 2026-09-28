@@ -1,5 +1,7 @@
 package de.trailscape.app.ui.map
 
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.MapStyle
 import de.trailscape.app.ui.mapStyles
 import kotlin.math.PI
@@ -203,16 +205,16 @@ sealed interface OfflineDownloadPlan {
     ) : OfflineDownloadPlan {
 
         /** „Zoomstufen 14–16" bzw. „Zoomstufe 14" — fuer Meldungen. */
-        val zoomLabel: String
+        val zoomLabel: UiText
             get() = if (tileZooms.first == tileZooms.last) {
-                "Zoomstufe ${tileZooms.first}"
+                UiText.Res(R.string.map_offline_zoom_level, listOf(tileZooms.first))
             } else {
-                "Zoomstufen ${tileZooms.first}–${tileZooms.last}"
+                UiText.Res(R.string.map_offline_zoom_levels, listOf(tileZooms.first, tileZooms.last))
             }
     }
 
     /** Der Ausschnitt wird abgelehnt; [message] ist fertig fuer die Snackbar. */
-    data class Rejected(val message: String) : OfflineDownloadPlan
+    data class Rejected(val message: UiText) : OfflineDownloadPlan
 }
 
 /**
@@ -242,15 +244,16 @@ fun planOfflineDownload(
         return OfflineDownloadPlan.Rejected(offlineNotAllowedMessage(style))
     }
     if (east < west || north < south) {
-        return OfflineDownloadPlan.Rejected("Dieser Ausschnitt lässt sich nicht speichern.")
+        return OfflineDownloadPlan.Rejected(UiText.Res(R.string.map_offline_invalid_area_error))
     }
 
     val edgeKm = max(boundsWidthKm(north, south, east, west), boundsHeightKm(north, south))
     if (edgeKm > MAX_OFFLINE_EDGE_KM) {
         return OfflineDownloadPlan.Rejected(
-            "Der sichtbare Bereich ist ${edgeKm.roundToInt()} km groß und enthält offline " +
-                "keine brauchbaren Details. Zoome näher heran, um einen Bereich " +
-                "herunterzuladen (höchstens ${MAX_OFFLINE_EDGE_KM.roundToInt()} km).",
+            UiText.Res(
+                R.string.map_offline_area_too_wide_error,
+                listOf(edgeKm.roundToInt(), MAX_OFFLINE_EDGE_KM.roundToInt()),
+            ),
         )
     }
 
@@ -258,12 +261,11 @@ fun planOfflineDownload(
     val tileZooms = offlineTileZoomRange(definitionZooms, style)
     val tiles = estimateTileCount(north, south, east, west, tileZooms.first, tileZooms.last)
     if (tiles <= 0) {
-        return OfflineDownloadPlan.Rejected("Dieser Ausschnitt lässt sich nicht speichern.")
+        return OfflineDownloadPlan.Rejected(UiText.Res(R.string.map_offline_invalid_area_error))
     }
     if (tiles > MAX_TILES_PER_DOWNLOAD) {
         return OfflineDownloadPlan.Rejected(
-            "Bereich zu groß: ca. $tiles Kacheln (höchstens $MAX_TILES_PER_DOWNLOAD). " +
-                "Zoome näher heran.",
+            UiText.Res(R.string.map_offline_too_many_tiles_error, listOf(tiles, MAX_TILES_PER_DOWNLOAD)),
         )
     }
 
@@ -280,9 +282,11 @@ fun planOfflineDownload(
  * mit dem Ausweg im selben Satz. Steht hier (und nicht im Screen), damit
  * Snackbar und Stil-Blatt dieselbe Begruendung geben.
  */
-fun offlineNotAllowedMessage(style: MapStyle): String =
-    "„${style.label}“ lässt sich nicht offline speichern: Der Kartenserver erlaubt " +
-        "keine Vorab-Downloads. Wähle dafür „${offlineStyle().label}“."
+fun offlineNotAllowedMessage(style: MapStyle): UiText =
+    UiText.Res(
+        R.string.map_offline_not_allowed_error,
+        listOf(UiText.Res(style.labelRes), UiText.Res(offlineStyle().labelRes)),
+    )
 
 /** Der (einzige) Stil, dessen Anbieter Offline-Downloads erlaubt. */
 fun offlineStyle(): MapStyle = mapStyles.first { it.offlineAllowed }
@@ -304,13 +308,12 @@ const val STALL_TIMEOUT_MS: Long = 20_000L
 const val STALL_CHECK_INTERVAL_MS: Long = 1_000L
 
 /** Meldung der Aufsicht — mit der zuletzt gemeldeten Ursache, wenn es eine gab. */
-fun stalledMessage(lastError: String?): String {
-    val seconds = STALL_TIMEOUT_MS / 1000
-    val base = "Download abgebrochen: seit $seconds Sekunden kein Fortschritt"
+fun stalledMessage(lastError: String?): UiText {
+    val seconds = (STALL_TIMEOUT_MS / 1000).toInt()
     return if (lastError.isNullOrBlank()) {
-        "$base. Bitte Internetverbindung prüfen und erneut versuchen."
+        UiText.Res(R.string.map_offline_stalled_error, listOf(seconds))
     } else {
-        "$base ($lastError)."
+        UiText.Res(R.string.map_offline_stalled_detail_error, listOf(seconds, lastError))
     }
 }
 

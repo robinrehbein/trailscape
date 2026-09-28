@@ -1,5 +1,7 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.sessionTitle
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -227,6 +229,7 @@ fun dueReminder(
     state: ReminderState,
     plan: TrainingPlan?,
     rides: List<RideInfo>,
+    texts: CoreTexts,
 ): ReminderNotice? {
     val today = now.toLocalDate()
     val timeOfDay = now.toLocalTime()
@@ -236,7 +239,7 @@ fun dueReminder(
         !timeOfDay.isBefore(settings.weeklyReviewTime) &&
         state.lastWeeklyReviewOn != today
     ) {
-        weeklyReviewNotice(now, plan, rides)?.let { return it }
+        weeklyReviewNotice(now, plan, rides, texts)?.let { return it }
     }
 
     // Tageseinheit und Anstupser teilen sich die Morgen-Uhrzeit, siehe
@@ -244,11 +247,11 @@ fun dueReminder(
     val morningReached = !timeOfDay.isBefore(settings.dailySessionTime)
 
     if (settings.dailySessionEnabled && morningReached && state.lastDailySessionOn != today) {
-        dailySessionNotice(now, plan)?.let { return it }
+        dailySessionNotice(now, plan, texts)?.let { return it }
     }
 
     if (settings.nudgeEnabled && morningReached && nudgeAllowed(state, today)) {
-        nudgeNotice(today, rides)?.let { return it }
+        nudgeNotice(today, rides, texts)?.let { return it }
     }
 
     return null
@@ -311,7 +314,7 @@ fun nextReminderRun(now: LocalDateTime, settings: ReminderSettings): LocalDateTi
  * Benachrichtigung, die nichts fordert) ist gering und jederzeit mit dem
  * Schalter abstellbar.
  */
-private fun dailySessionNotice(now: LocalDateTime, plan: TrainingPlan?): ReminderNotice? {
+private fun dailySessionNotice(now: LocalDateTime, plan: TrainingPlan?, texts: CoreTexts): ReminderNotice? {
     if (plan == null) return null
     val nowMs = dartEpochMs(now)
     if (activeWeek(plan, nowMs) == null) return null
@@ -321,14 +324,14 @@ private fun dailySessionNotice(now: LocalDateTime, plan: TrainingPlan?): Reminde
     val session = sessionsForDay(plan, nowMs).firstOrNull()
         ?: return ReminderNotice(
             kind = ReminderKind.TAGESEINHEIT,
-            title = "Heute",
-            text = "Ruhetag — im Plan steht heute keine Einheit.",
+            title = texts.today.reminderTodayTitle(),
+            text = texts.today.reminderRestDay(),
         )
 
     return ReminderNotice(
         kind = ReminderKind.TAGESEINHEIT,
-        title = "Heute",
-        text = "${session.title}, ${session.targetKm} km",
+        title = texts.today.reminderTodayTitle(),
+        text = texts.today.reminderSession(sessionTitle(session, texts), session.targetKm),
     )
 }
 
@@ -346,6 +349,7 @@ private fun weeklyReviewNotice(
     now: LocalDateTime,
     plan: TrainingPlan?,
     rides: List<RideInfo>,
+    texts: CoreTexts,
 ): ReminderNotice? {
     if (plan == null) return null
     val week = activeWeek(plan, dartEpochMs(now)) ?: return null
@@ -353,8 +357,8 @@ private fun weeklyReviewNotice(
 
     return ReminderNotice(
         kind = ReminderKind.WOCHENRUECKSCHAU,
-        title = "Wochenrückschau",
-        text = "Diese Woche: $ridden von ${week.targetKm} km gefahren.",
+        title = texts.today.reminderWeeklyReviewTitle(),
+        text = texts.today.reminderWeeklyReview(ridden, week.targetKm),
     )
 }
 
@@ -372,7 +376,7 @@ private fun weeklyReviewNotice(
  * nicht — sie ist keine Fahrt, und der Anstupser darf nicht verstummen, weil
  * jemand eine Route abgelegt hat.
  */
-private fun nudgeNotice(today: LocalDate, rides: List<RideInfo>): ReminderNotice? {
+private fun nudgeNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreTexts): ReminderNotice? {
     val lastRideOn = riddenRides(rides).maxOfOrNull { it.createdAt }
         ?.let { dartLocalOf(it).toLocalDate() }
         ?: return null
@@ -382,9 +386,8 @@ private fun nudgeNotice(today: LocalDate, rides: List<RideInfo>): ReminderNotice
 
     return ReminderNotice(
         kind = ReminderKind.ANSTUPSER,
-        title = "Seit $days Tagen keine Tour",
-        text = "Wenn du wieder unterwegs bist, zeichnet Trailscape die Runde auf — " +
-            "auch eine kurze zählt für die Auswertung.",
+        title = texts.today.reminderNudgeTitle(days.toInt()),
+        text = texts.today.reminderNudgeText(),
     )
 }
 

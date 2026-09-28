@@ -1,5 +1,6 @@
 package de.trailscape.core
 
+import de.trailscape.core.i18n.CoreTexts
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
@@ -157,48 +158,52 @@ data class SegmentTile(
     val centerLon: Double get() = westLon + segmentGridDeg / 2.0
 
     /**
-     * Das Gradfeld in lesbarer Form, z. B. `50°–55° N, 10°–15° O`.
+     * Das Gradfeld in lesbarer Form, z. B. `50°–55° N, 10°–15° O` (Englisch
+     * `… E`).
      *
      * Die Grenzen stehen immer mit dem kleineren Betrag zuerst; die Halbkugel
      * steht als Buchstabe dahinter. Weil das Raster bei 0° ansetzt, liegt eine
      * Kachel nie halb auf beiden Halbkugeln — der Buchstabe gilt also fuer
      * beide Grenzen.
      */
-    val boundsLabel: String
-        get() {
-            val lat = if (northLat <= 0) {
-                "${abs(northLat)}°–${abs(southLat)}° S"
-            } else {
-                "$southLat°–$northLat° N"
-            }
-            val lon = if (eastLon <= 0) {
-                "${abs(eastLon)}°–${abs(westLon)}° W"
-            } else {
-                "$westLon°–$eastLon° O"
-            }
-            return "$lat, $lon"
+    fun boundsLabel(texts: CoreTexts): String {
+        val lat = if (northLat <= 0) {
+            "${abs(northLat)}°–${abs(southLat)}° S"
+        } else {
+            "$southLat°–$northLat° N"
         }
+        val lon = if (eastLon <= 0) {
+            "${abs(eastLon)}°–${abs(westLon)}° W"
+        } else {
+            "$westLon°–$eastLon° ${texts.routing.hemisphereEast()}"
+        }
+        return "$lat, $lon"
+    }
 
     /**
      * Bis zu drei bekannte Orte **innerhalb** dieser Kachel, nach Bekanntheit
-     * geordnet. Leer, wenn die Kachel keinen der hinterlegten Orte enthaelt
-     * (etwa mitten im Atlantik oder in duenn besiedelten Gegenden).
+     * geordnet, mit ihrem deutschen Namen. Leer, wenn die Kachel keinen der
+     * hinterlegten Orte enthaelt (etwa mitten im Atlantik oder in duenn
+     * besiedelten Gegenden).
      */
     val landmarks: List<String> get() = landmarksByTile[name].orEmpty()
+
+    /** [landmarks] in der Sprache von [texts] („München" → „Munich"). */
+    fun landmarks(texts: CoreTexts): List<String> = landmarks.map { texts.routing.landmarkName(it) }
 
     /**
      * Kurze Bezeichnung fuer Listen: die Beispielorte, sonst das Gradfeld.
      * Nie leer, nie erfunden — siehe Klassendoc.
      */
-    val title: String
-        get() = if (landmarks.isEmpty()) boundsLabel else "${landmarks.joinToString(", ")} u. a."
+    fun title(texts: CoreTexts): String =
+        if (landmarks.isEmpty()) boundsLabel(texts) else texts.routing.tileLandmarks(landmarks(texts))
 
     /**
      * Vollstaendige Bezeichnung: Beispielorte **und** Gradfeld. Fuer die
      * Detailanzeige, in der beides Platz hat.
      */
-    val description: String
-        get() = if (landmarks.isEmpty()) boundsLabel else "$title · $boundsLabel"
+    fun description(texts: CoreTexts): String =
+        if (landmarks.isEmpty()) boundsLabel(texts) else "${title(texts)} · ${boundsLabel(texts)}"
 }
 
 /** Die Kachel, in der [lat]/[lon] liegt. Gegenstueck zu [segmentFileName]. */
