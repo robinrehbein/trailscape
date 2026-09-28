@@ -462,6 +462,9 @@ jobs:
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/trailscape-play-upload.jks
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEYSTORE_PASSWORD }}
+          # Wie im build-Job: ohne sie fehlt der Strava-Upload im Play-Build.
+          STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
+          STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
         run: ./gradlew --no-daemon :app:bundleRelease
 
       - name: Im internen Play-Test veroeffentlichen
