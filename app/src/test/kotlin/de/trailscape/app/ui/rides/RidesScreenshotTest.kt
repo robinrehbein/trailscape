@@ -7,7 +7,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -33,9 +33,9 @@ import de.trailscape.core.i18n.AppLanguage
 import java.io.File
 import kotlin.math.cos
 import kotlin.math.sin
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.After
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -64,6 +64,12 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = TestLocales.S25_EN, application = ScreenshotApplication::class)
 class RidesScreenshotTest {
 
+    // Die v2-Regel (StandardTestDispatcher): Die alte fuehrte Effekte auf
+    // einem sofort laufenden Dispatcher aus. `produceState` im Teilen-Dialog
+    // schrieb sein Ergebnis dann vom Hintergrund-Thread in den globalen
+    // Snapshot, ohne dass die Komposition davon erfuhr — `teilenEnglisch`
+    // wartete allein gestartet immer, im Verbund zufaellig ins Leere
+    // (Fehlschlag auf main nach #74, Play-Upload uebersprungen).
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
 
