@@ -715,6 +715,16 @@ internal class MapController {
     private var obscuredBottomPx = 0
 
     /**
+     * Wie viele Pixel am oberen Rand verdeckt sind (Abbiegeschild der
+     * Navigation, Hinweise) — fuer die Navi-Kamera ([moveToNavCamera]).
+     */
+    private var obscuredTopPx = 0
+
+    fun setObscuredTop(px: Int) {
+        obscuredTopPx = px.coerceAtLeast(0)
+    }
+
+    /**
      * Die Punkte des letzten [fitToPoints] mit `followObscured = true` —
      * solange gesetzt, wird bei jeder spuerbaren Aenderung von
      * [obscuredBottomPx] neu eingepasst.
@@ -837,10 +847,11 @@ internal class MapController {
      *
      * ## Wie der Versatz ins untere Drittel funktioniert
      * Ueber das Kamera-Padding von MapLibre 11 ([CameraPosition.Builder.padding]):
-     * Ein oberes Padding von [NAV_CAMERA_VERSATZ_ANTEIL] der Kartenhoehe
-     * verschiebt die Mitte des nutzbaren Ausschnitts nach unten — bei 0,4
-     * liegt der Zielpunkt auf 70 % der Hoehe, also im unteren Drittel, und
-     * die Fahrtrichtung bekommt den grossen Rest des Bildes. Das Padding
+     * Oberer und unterer Rand ([navCameraPadding]) legen den Zielpunkt auf
+     * [NAV_POSITION_ANTEIL] des **freien** Bereichs zwischen Abbiegeschild
+     * ([setObscuredTop]) und Live-Leiste ([setObscuredBottom]) — also ins
+     * untere Drittel dessen, was man wirklich sieht; die Fahrtrichtung
+     * bekommt den grossen Rest darueber. Das Padding
      * haengt an der Kameraposition selbst, nicht am View, und wird von
      * [resetNavCamera] wieder auf null gesetzt — ausserhalb der Navigation
      * bleibt alles zentriert wie bisher.
@@ -864,7 +875,15 @@ internal class MapController {
     ) {
         stopFollowingFit()
         run(afterReady = false) { map ->
-            val topPad = if (versatz) map.height * NAV_CAMERA_VERSATZ_ANTEIL else 0.0
+            // Position im freien Bereich zwischen Abbiegeschild und
+            // Live-Leiste — nicht mehr bei 70 % der ganzen Karte, wo die
+            // Leiste sie verdeckte (siehe [navCameraPadding]).
+            val (topPad, bottomPad) = navCameraPadding(
+                mapHeightPx = map.height.toInt(),
+                obscuredTopPx = obscuredTopPx,
+                obscuredBottomPx = obscuredBottomPx,
+                versatz = versatz,
+            )
             map.easeCamera(
                 CameraUpdateFactory.newCameraPosition(
                     CameraPosition.Builder()
@@ -872,7 +891,7 @@ internal class MapController {
                         .zoom(zoom)
                         .bearing(bearingGrad)
                         .tilt(if (versatz) NAV_KAMERA_NEIGUNG_GRAD else 0.0)
-                        .padding(0.0, topPad, 0.0, 0.0)
+                        .padding(0.0, topPad, 0.0, bottomPad)
                         .build(),
                 ),
                 NAV_CAMERA_EASE_MS,
@@ -1287,7 +1306,6 @@ private const val REFIT_DELAY_MS = 250L
  * untere Drittel schiebt (siehe [MapController.moveToNavCamera]): Mitte des
  * Rests = (0,4 + 1,0) / 2 = 70 % der Hoehe.
  */
-private const val NAV_CAMERA_VERSATZ_ANTEIL = 0.4
 
 /**
  * Dauer der Kamerafahrt je Navi-Update — knapp unter dem GPS-Sekundentakt,
