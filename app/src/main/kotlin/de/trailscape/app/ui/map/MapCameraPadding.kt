@@ -81,3 +81,43 @@ internal fun fitCameraPadding(padding: DoubleArray?): DoubleArray {
     }
     return doubleArrayOf(padding[0], padding[1], padding[2], padding[3])
 }
+
+/**
+ * Wo die eigene Position in der Navi-Kamera steht: als Anteil des **freien**
+ * Kartenbereichs zwischen oberem Rand (Abbiegeschild) und unterem Rand
+ * (Live-Leiste, Kapsel). 0,65 = im unteren Drittel, mit Luft zur Leiste —
+ * vorher waren es 70 % der ganzen Kartenhoehe, und damit lag der Punkt
+ * genau unter der Live-Leiste.
+ */
+internal const val NAV_POSITION_ANTEIL = 0.65
+
+/**
+ * Oberer und unterer Kamera-Rand der Navi-Kamera, so dass die Position im
+ * freien Bereich zwischen [obscuredTopPx] und [obscuredBottomPx] steht — mit
+ * [versatz] („Fahrtrichtung oben") bei [NAV_POSITION_ANTEIL] seiner Hoehe,
+ * sonst in seiner Mitte.
+ *
+ * MapLibre setzt das Ziel in die Mitte des nach Abzug des Rands bleibenden
+ * Streifens `[oben, Hoehe - unten]`. Fuer die Wunschhoehe `y` gilt also
+ * `oben = 2y - Hoehe + unten`.
+ *
+ * @return oben und unten in Pixeln.
+ */
+internal fun navCameraPadding(
+    mapHeightPx: Int,
+    obscuredTopPx: Int,
+    obscuredBottomPx: Int,
+    versatz: Boolean,
+): Pair<Double, Double> {
+    if (mapHeightPx <= 0) return 0.0 to 0.0
+    val h = mapHeightPx.toDouble()
+    val bottom = clampObscuredBottom(obscuredBottomPx, mapHeightPx).toDouble()
+    val top = obscuredTopPx.coerceIn(0, mapHeightPx).toDouble()
+    val frei = h - top - bottom
+    if (frei < MIN_FIT_AREA_PX) return 0.0 to 0.0
+    val anteil = if (versatz) NAV_POSITION_ANTEIL else 0.5
+    val y = top + anteil * frei
+    val oben = (2 * y - h + bottom).coerceIn(0.0, max(0.0, h - bottom - MIN_FIT_AREA_PX))
+    return oben to bottom
+}
+

@@ -90,4 +90,33 @@ class FitPaddingTest {
         assertArrayEquals(null4, fitCameraPadding(doubleArrayOf(1.0, 2.0)), 0.0)
         assertArrayEquals(null4, fitCameraPadding(doubleArrayOf(0.0, Double.NaN, 0.0, 10.0)), 0.0)
     }
+
+    /** Wo MapLibre das Ziel hinsetzt: Mitte des Streifens [oben, Hoehe - unten]. */
+    private fun zielY(h: Int, pad: Pair<Double, Double>) = (pad.first + h - pad.second) / 2
+
+    @Test
+    fun naviPositionLiegtUeberDerLiveLeiste() {
+        // Masse wie auf dem Geraet: Abbiegeschild oben, Live-Leiste + Kapsel unten.
+        val h = 1900
+        val oben = 380
+        val unten = 625
+        val y = zielY(h, navCameraPadding(h, oben, unten, versatz = true))
+        assertTrue("Position $y muss ueber der Leiste (${h - unten}) liegen", y < h - unten - 100)
+        assertTrue("Position $y muss unter dem Schild ($oben) liegen", y > oben)
+        // Unteres Drittel des freien Bereichs, nicht die Mitte.
+        assertEquals(oben + NAV_POSITION_ANTEIL * (h - oben - unten), y, 0.5)
+    }
+
+    @Test
+    fun naviNordObenStehtMittigImFreienBereich() {
+        val h = 1900
+        val y = zielY(h, navCameraPadding(h, 380, 625, versatz = false))
+        assertEquals(380 + (1900 - 380 - 625) / 2.0, y, 0.5)
+    }
+
+    @Test
+    fun naviOhneFreienBereichKeinRand() {
+        assertEquals(0.0 to 0.0, navCameraPadding(0, 100, 100, versatz = true))
+        assertEquals(0.0 to 0.0, navCameraPadding(300, 200, 100, versatz = true))
+    }
 }

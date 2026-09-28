@@ -2896,11 +2896,17 @@ fun MapScreen(appViewModel: AppViewModel) {
             }
 
             // ------------------------------------------------------------ oben
+            // Was oben verdeckt ist (Abbiegeschild, Hinweise), meldet die
+            // Spalte samt Rand der Kamera — die Navi-Kamera setzt die Position
+            // in den freien Bereich darunter.
+            var topOverlayPx by remember { mutableIntStateOf(0) }
+            LaunchedEffect(topOverlayPx) { controller.setObscuredTop(topOverlayPx) }
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .widthIn(max = ContentMaxWidth)
                     .fillMaxWidth()
+                    .onSizeChanged { topOverlayPx = it.height }
                     .padding(OverlayScreenPadding),
                 verticalArrangement = Arrangement.spacedBy(OverlayGap),
             ) {
@@ -3048,11 +3054,17 @@ fun MapScreen(appViewModel: AppViewModel) {
             // verstellen (Beenden/Pause wohnen in der Leiste, „Re-zentrieren"
             // ersetzt den Positions-Knopf).
             if (naviKarteAktiv) {
+                // Auch hier meldet der Stapel, was er unten verdeckt — sonst
+                // rechnete die Navi-Kamera mit dem Wert des zuletzt offenen
+                // Blatts und setzte die Position unter die Live-Leiste.
+                var naviBottomPx by remember { mutableIntStateOf(0) }
+                LaunchedEffect(naviBottomPx) { controller.setObscuredBottom(naviBottomPx) }
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .widthIn(max = ContentMaxWidth)
                         .fillMaxWidth()
+                        .onSizeChanged { naviBottomPx = it.height }
                         .padding(OverlayScreenPadding)
                         // Dieselbe Bodenfreiheit fuer die schwebende
                         // Navigationskapsel wie beim normalen Stapel.
