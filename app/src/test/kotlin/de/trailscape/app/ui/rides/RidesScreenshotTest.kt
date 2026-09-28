@@ -5,10 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -65,6 +64,12 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35], qualifiers = TestLocales.S25_EN, application = ScreenshotApplication::class)
 class RidesScreenshotTest {
 
+    // Die v2-Regel (StandardTestDispatcher): Die alte fuehrte Effekte auf
+    // einem sofort laufenden Dispatcher aus. `produceState` im Teilen-Dialog
+    // schrieb sein Ergebnis dann vom Hintergrund-Thread in den globalen
+    // Snapshot, ohne dass die Komposition davon erfuhr — `teilenEnglisch`
+    // wartete allein gestartet immer, im Verbund zufaellig ins Leere
+    // (Fehlschlag auf main nach #74, Play-Upload uebersprungen).
     @get:Rule
     val compose = createAndroidComposeRule<ComponentActivity>()
 
@@ -174,13 +179,6 @@ class RidesScreenshotTest {
             hint,
         )
         compose.waitUntil(timeoutMillis = 10_000) {
-            // Die alte Testregel fuehrt Effekte auf einem sofort laufenden
-            // Dispatcher aus: `produceState` schreibt sein Ergebnis darum vom
-            // Hintergrund-Thread in den globalen Snapshot, und ohne diese
-            // Meldung erfuhr die Komposition nie davon — allein gestartet hing
-            // der Test so immer, im Verbund nur, wenn kein anderer Test
-            // zufaellig gerade meldete (Fehlschlag auf main nach #74).
-            Snapshot.sendApplyNotifications()
             compose.onAllNodesWithText(hint).fetchSemanticsNodes().isNotEmpty() &&
                 compose.onAllNodesWithContentDescription(string(R.string.rides_share_preview_cd))
                     .fetchSemanticsNodes().isNotEmpty()
