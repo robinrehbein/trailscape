@@ -2146,6 +2146,25 @@ fun MapScreen(appViewModel: AppViewModel) {
         generateRoutes()
     }
 
+    /**
+     * „Heute X km" im Blatt „Wohin?": das Trainingsziel des Tages als Runde.
+     *
+     * Bewusst direkt hier und nicht ueber
+     * [AppViewModel.requestRouteGeneration]: Der Umweg bittet die Huelle um
+     * den Karten-Tab, auf dem wir schon stehen — und ein Tab-Wechsel auf das
+     * sichtbare Ziel legte die Karte still (siehe `navigateToTab` in
+     * `TrailscapeApp.kt` und die zwei Effekte in `MapViewHost`). Derselbe Weg
+     * wie „Runde ab hier" ([startRoundTrip]), der diesen Fehler nie hatte:
+     * Panel oeffnen, Blatt einklappen, sofort suchen.
+     */
+    fun startTodayRound(target: RouteTarget) {
+        if (mode == MapMode.PLANEN) exitPlanning()
+        appViewModel.select(null)
+        RouteGenerationController.open(target)
+        planSheetExpanded = false
+        generateRoutes()
+    }
+
     /** „Vorschläge zeigen" im Blatt „Runde ab hier". */
     fun confirmRoundTripSetup() {
         roundTripSetupOpen = false
@@ -3485,7 +3504,7 @@ fun MapScreen(appViewModel: AppViewModel) {
                             },
                             todayOffer = todayOffer,
                             onTodayRoute = {
-                                todayOffer?.let { appViewModel.requestRouteGeneration(it.target) }
+                                todayOffer?.let { startTodayRound(it.target) }
                             },
                             onRoundTripHere = { openRoundTripSetup(null) },
                             expanded = exploreSheetExpanded,
