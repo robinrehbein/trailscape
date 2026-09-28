@@ -1381,6 +1381,20 @@ fun MapScreen(appViewModel: AppViewModel) {
         if (mode == MapMode.NAVIGIEREN) mode = MapMode.ERKUNDEN
     }
 
+    // Endet die Aufzeichnung waehrend einer Navigation („Beenden" in der
+    // Live-Leiste, auf der Datenseite oder in der Notification), endet die
+    // Fuehrung mit ihr. Sonst blieben Abbiegeschild und Navi-Kamera nach
+    // der Fahrt stehen, obwohl unten schon wieder „Fahren" stand.
+    // Nur beim Wechsel laeuft → gestoppt: Eine Navigation ohne Aufzeichnung
+    // (Berechtigung abgelehnt, siehe [starteNavigationsAnsicht]) bleibt
+    // unberuehrt. Umgekehrt beendet das X im Schild weiterhin nur die
+    // Fuehrung, nie die Aufzeichnung.
+    var warAufzeichnung by remember { mutableStateOf(isRecording) }
+    LaunchedEffect(isRecording) {
+        if (warAufzeichnung && !isRecording && navTarget != null) stopNavigation()
+        warAufzeichnung = isRecording
+    }
+
     /**
      * Beendet die Planung und wirft alles weg — Wegpunkte, Route, Suchtreffer.
      *
