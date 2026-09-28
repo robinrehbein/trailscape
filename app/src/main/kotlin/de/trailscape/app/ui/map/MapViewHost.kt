@@ -796,8 +796,13 @@ internal class MapController {
                     CameraPosition.Builder()
                         .target(center)
                         .zoom(zoom)
-                        // Das Ziel ist fuer die ungepolsterte Karte gerechnet.
-                        .padding(0.0, 0.0, 0.0, 0.0)
+                        // MapLibre 11 rechnet den Rand NICHT in das Ziel ein:
+                        // `target` ist die Mitte der Route, der Rand kommt als
+                        // eigenes Feld zurueck und gehoert mit in die Kamera.
+                        // Mit Rand null (so stand es hier bis 2.0.23x) stimmte
+                        // zwar der Zoom, aber die Runde sass mittig auf der
+                        // ganzen Karte — halb unter dem Blatt.
+                        .padding(fitCameraPadding(target.padding))
                         .build(),
                 ),
                 CAMERA_ANIMATION_MS,
