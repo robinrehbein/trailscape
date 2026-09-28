@@ -1,11 +1,13 @@
 package de.trailscape.app.ui.more
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -17,10 +19,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
@@ -38,7 +45,8 @@ import kotlinx.coroutines.launch
  *
  * Aufbau nach Zustand:
  *  * **Nicht verbunden:** ein Satz, was die Funktion tut und dass ohne
- *    Verbindung nichts das Geraet verlaesst, darunter „Mit Strava verbinden".
+ *    Verbindung nichts das Geraet verlaesst, darunter der offizielle Knopf
+ *    „Connect with Strava".
  *  * **Beim Verbinden:** Fortschritt, solange der Code getauscht wird.
  *  * **Verbunden:** „Verbunden als …", der Schalter fuer den Auto-Upload (ab
  *    Werk aus) und „Trennen" mit Rueckfrage.
@@ -85,8 +93,21 @@ internal fun StravaCardBody(
     Spacer(modifier = Modifier.height(12.dp))
 
     when (connection) {
-        StravaConnection.Disconnected -> Button(onClick = onConnect) {
-            Text(stringResource(R.string.strava_connect))
+        // Der offizielle Knopf aus Stravas Markenrichtlinien statt eines
+        // eigenen Textknopfs: Beim Review fuer mehr als einen Athleten prueft
+        // Strava genau das. Das Bild gibt es nur englisch; die Ansage fuer
+        // TalkBack kommt aus [R.string.strava_connect].
+        StravaConnection.Disconnected -> {
+            val label = stringResource(R.string.strava_connect)
+            Image(
+                painter = painterResource(R.drawable.btn_strava_connect_with_orange),
+                contentDescription = null,
+                modifier = Modifier
+                    .height(48.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable(onClickLabel = label, role = Role.Button, onClick = onConnect)
+                    .semantics { contentDescription = label },
+            )
         }
         StravaConnection.Connecting -> Row(
             verticalAlignment = Alignment.CenterVertically,

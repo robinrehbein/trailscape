@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -72,7 +73,9 @@ class StravaCardScreenshotTest {
                 )
             }
         }
-        compose.onNodeWithText("Mit Strava verbinden").assertExists()
+        // Das offizielle Knopfbild traegt keinen Text; gefunden wird es ueber
+        // seine Beschreibung fuer TalkBack.
+        compose.onNodeWithContentDescription("Mit Strava verbinden").assertExists()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/71-strava-nicht-verbunden.png")
     }
 

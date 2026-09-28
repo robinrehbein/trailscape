@@ -2,21 +2,6 @@
 
 Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 
-## Bugs
-
-- **Vorschlagswahl „Passende Runde“: Route fehlt auf der Karte, Karte
-  lässt sich nicht bewegen.** Gemeldet am 27.09.2026 (Android, Einstieg über
-  die Tagesempfehlung, „aus: Erste Runde (Tagesempfehlung)“). Das Blatt zeigt
-  drei Kandidaten (SO/N/SW, „Beste“ ist ausgewählt), aber auf der Karte ist
-  keine Linie für den ausgewählten Kandidaten zu sehen. Außerdem reagiert die
-  Karte nicht auf Wischen oder Zoomen, solange das Blatt offen ist. Erwartet:
-  Der gewählte Kandidat wird als Vorschau gezeichnet und die Kamera zeigt ihn,
-  die Karte bleibt bedienbar. Einstieg zum Nachsehen:
-  `RouteGenerationSheet` (`app/.../ui/map/RouteGenerationSheet.kt`) und der
-  Aufruf in `MapScreen.kt` (`DockedSheet.VORSCHLAEGE`). Zu prüfen ist, ob die
-  Vorschau-Ebene beim Start über die Tagesempfehlung gesetzt wird und ob das
-  Blatt oder eine Ebene darüber die Gesten der Karte abfängt.
-
 ## Vor dem öffentlichen Release (Blocker)
 
 - **OpenFreeMap: Offline-Download bestätigen lassen.** Die Nutzungsbedingungen
@@ -60,8 +45,11 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   4. Bei Strava den Review für mehr als einen Athleten beantragen (neue Apps:
      Kapazität 1 = nur der Entwickler) und ggf. höhere Ratenlimits
      (Standard 200 Anfragen/15 min, 2000/Tag für die ganze App).
-  5. Markenrichtlinien von Strava prüfen: offizielles „Connect with
-     Strava“-Knopfbild statt Textknopf, „View on Strava“-Gestaltung.
+  5. Markenrichtlinien von Strava: Der offizielle orange „Connect with
+     Strava“-Knopf (`res/drawable/btn_strava_connect_with_orange.xml`) und
+     ein fetter „View on Strava“-Link sind eingebaut. Offen ist nur noch die
+     Frage, ob Strava beim Review die deutsche Beschriftung „Auf Strava
+     ansehen“ akzeptiert. Die Richtlinie nennt wörtlich „View on Strava“.
   6. Google-Play-Datensicherheit: nutzerinitiierte Weitergabe von Standort-
      und Fitnessdaten an Strava angeben.
   7. Auf dem Gerät prüfen: Verbinden, Ablehnen, Häkchen „Aktivitäten

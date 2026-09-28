@@ -568,8 +568,17 @@ private fun TrailscapeAppContent() {
 /**
  * Wechselt zu einem Tab, ohne den Backstack wachsen zu lassen — derselbe
  * Weg fuer die Navigationsleiste und fuer [AppViewModel.requestTab].
+ *
+ * Steht der Tab schon vorn, passiert nichts. Navigation legt sonst auch fuer
+ * das bereits sichtbare Ziel einen **neuen** `NavBackStackEntry` an (ueber
+ * `popUpTo`/`restoreState` wie ueber `launchSingleTop`); die Komposition
+ * bleibt wegen derselben ID stehen, aber `LocalLifecycleOwner` wechselt unter
+ * ihr. Genau das legte die Karte still, sobald „Passende Runde" auf der Karte
+ * selbst `requestTab(MAP)` rief: keine Vorschau-Linie, keine Gesten (siehe
+ * `MapViewHost`).
  */
 private fun NavHostController.navigateToTab(route: String) {
+    if (currentDestination?.hierarchy?.any { it.route == route } == true) return
     navigate(route) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true

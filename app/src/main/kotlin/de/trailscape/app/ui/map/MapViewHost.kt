@@ -191,6 +191,14 @@ internal fun MapViewHost(
     fun effective(state: Lifecycle.State): Lifecycle.State =
         if (currentRendering) state else minOf(state, Lifecycle.State.STARTED)
 
+    // Zwei Effekte, bewusst getrennt: Der Lifecycle-Owner kann unter
+    // derselben Komposition wechseln (Navigation legt fuer das bereits
+    // sichtbare Ziel einen neuen `NavBackStackEntry` an). Hing das Zerstoeren
+    // der MapView mit an diesem Schluessel, lief `onDestroy` — die
+    // `AndroidView` zeigte aber weiter dieselbe, nun tote MapView: letztes
+    // Bild, keine neuen Linien, keine Gesten. Ein Owner-Wechsel haengt jetzt
+    // nur den Beobachter um; zerstoert wird erst, wenn die Karte die
+    // Komposition verlaesst.
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { source, _ ->
             sync(effective(source.lifecycle.currentState))
@@ -200,6 +208,11 @@ internal fun MapViewHost(
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    DisposableEffect(mapView) {
+        onDispose {
             controller.rememberCamera()?.let { camera ->
                 savedLat = camera.lat
                 savedLon = camera.lon
