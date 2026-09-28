@@ -71,4 +71,23 @@ class FitPaddingTest {
     fun ohneHoeheKeineAenderung() {
         assertNull(reclampedCameraPadding(doubleArrayOf(0.0, 0.0, 0.0, 1400.0), 0))
     }
+
+    @Test
+    fun einpassenUebernimmtDenRandVonMapLibre() {
+        // Der Rand unten (vom Blatt verdeckt) muss mit in die Kamera, sonst
+        // sitzt die Runde mittig auf der ganzen Karte statt ueber dem Blatt.
+        assertArrayEquals(
+            doubleArrayOf(48.0, 48.0, 48.0, 1100.0),
+            fitCameraPadding(doubleArrayOf(48.0, 48.0, 48.0, 1100.0)),
+            0.0,
+        )
+    }
+
+    @Test
+    fun einpassenOhneBrauchbarenRandNimmtKeinen() {
+        val null4 = doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+        assertArrayEquals(null4, fitCameraPadding(null), 0.0)
+        assertArrayEquals(null4, fitCameraPadding(doubleArrayOf(1.0, 2.0)), 0.0)
+        assertArrayEquals(null4, fitCameraPadding(doubleArrayOf(0.0, Double.NaN, 0.0, 10.0)), 0.0)
+    }
 }

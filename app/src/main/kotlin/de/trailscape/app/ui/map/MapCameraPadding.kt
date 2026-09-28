@@ -70,3 +70,14 @@ internal fun reclampedCameraPadding(padding: DoubleArray, mapHeightPx: Int): Dou
     if (bottom == padding[3] && top == padding[1]) return null
     return doubleArrayOf(padding[0], top, padding[2], bottom)
 }
+
+/**
+ * Der Rand aus `getCameraForLatLngBounds` fuer die Kamera — ohne Angabe (oder
+ * mit unbrauchbaren Werten) keiner.
+ */
+internal fun fitCameraPadding(padding: DoubleArray?): DoubleArray {
+    if (padding == null || padding.size < 4 || padding.any { !it.isFinite() || it < 0.0 }) {
+        return doubleArrayOf(0.0, 0.0, 0.0, 0.0)
+    }
+    return doubleArrayOf(padding[0], padding[1], padding[2], padding[3])
+}
