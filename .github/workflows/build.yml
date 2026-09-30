@@ -458,14 +458,29 @@ jobs:
           printf '%s' "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/trailscape-play-upload.jks"
           chmod 600 "$RUNNER_TEMP/trailscape-play-upload.jks"
 
-      - name: Play-Bundle bauen
+      - name: Play-Bundles fuer Handy und Wear OS bauen
         env:
           RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/trailscape-play-upload.jks
           RELEASE_KEYSTORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEYSTORE_PASSWORD }}
           # Wie im build-Job: ohne sie fehlt der Strava-Upload im Play-Build.
           STRAVA_CLIENT_ID: ${{ secrets.STRAVA_CLIENT_ID }}
           STRAVA_CLIENT_SECRET: ${{ secrets.STRAVA_CLIENT_SECRET }}
-        run: ./gradlew --no-daemon :app:bundleRelease
+        run: ./gradlew --no-daemon :app:bundleRelease :wear:bundleRelease
+
+      # Diese Bundles tragen den Play-Upload-Schluessel. Die AABs im
+      # GitHub-Release tragen dagegen den Schluessel der direkt verteilten APK.
+      - name: Play-Bundles zum manuellen Upload bereitstellen
+        run: |
+          mkdir -p play-bundles
+          cp app/build/outputs/bundle/release/app-release.aab play-bundles/trailscape-phone-play.aab
+          cp wear/build/outputs/bundle/release/wear-release.aab play-bundles/trailscape-wear-play.aab
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trailscape-play-bundles-${{ github.run_number }}
+          path: play-bundles/*.aab
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Im internen Play-Test veroeffentlichen
         env:

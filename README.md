@@ -268,12 +268,19 @@ steht auf der [Releases-Seite](https://github.com/robinrehbein/trailscape/releas
 Dieselbe Nummer trägt die installierte App unter **Mehr → Über**.
 
 **Die `.aab`-Dateien am versionierten Release.** Neben der APK hängen dort
-`trailscape-phone.aab` und `trailscape-wear.aab` — Android App Bundles, das
-einzige Format, das die Google Play Console annimmt. Auf einem Gerät sind sie
-nicht installierbar; sie liegen dort, damit zu jeder veröffentlichten
-Lauf-Nummer dauerhaft das passende Upload-Artefakt greifbar ist (Actions-Artefakte
-verfallen nach 90 Tagen, ein verbrauchter versionCode lässt sich aber nicht
-neu bauen). Der Vertriebsweg dieses Projekts bleibt der direkte APK-Download.
+`trailscape-phone.aab` und `trailscape-wear.aab` — Android App Bundles mit
+dem GitHub-Release-Schlüssel. Auf einem Gerät sind sie nicht installierbar.
+Die bestehende Play-App erwartet einen anderen Upload-Schlüssel; diese
+Release-Dateien können dort deshalb **nicht hochgeladen werden**.
+
+**Bundles für Google Play.** Der Job `play_internal` baut bei jedem Push auf
+`main` Handy- und Wear-Bundle mit dem vorhandenen Play-Upload-Schlüssel.
+Unter **Actions → Build → erfolgreicher main-Lauf → Artifacts** liegt
+`trailscape-play-bundles-<Lauf-Nummer>` mit `trailscape-phone-play.aab` und
+`trailscape-wear-play.aab`. Diese Dateien sind für die Play Console bestimmt
+und bleiben 90 Tage verfügbar. Das Handy-Bundle wird weiterhin automatisch
+im internen Test veröffentlicht; das Wear-Bundle kann im separaten
+Wear-OS-Test-Track manuell hochgeladen werden.
 
 > **Vor dem ersten Play-Upload lesen:** Play signiert die ausgelieferten APKs
 > standardmäßig mit einem eigenen Schlüssel und degradiert den Projektschlüssel
