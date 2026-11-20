@@ -93,6 +93,7 @@ class TrainingScreenshotTest {
         savePlan(goal(distanceKm = 60.0), CoreTextsEn)
         start()
         openTraining()
+        openPlan()
         assertVisible(R.string.training_goal_explain_action)
         assertVisible(R.string.training_screen_all_weeks_action)
         assertEquals("How is this calculated?", string(R.string.training_goal_explain_action))
@@ -102,6 +103,30 @@ class TrainingScreenshotTest {
         shot("training-alle-wochen-en")
     }
 
+    /** Die Sicht „Fortschritt": Verlauf, Jahresziel, Bestwerte, Meilensteine, Gesamt, Form, Koerperwerte. */
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w411dp-h2400dp-xxhdpi")
+    fun fortschrittEnglisch() {
+        AppServices.rideStorage.saveRides(sampleRides())
+        start()
+        openTraining()
+        assertVisible(R.string.progress_trend_eyebrow)
+        assertVisible(R.string.progress_records_title)
+        assertVisible(R.string.progress_milestones_title)
+        shot("training-fortschritt-en")
+
+        click(R.string.progress_year_goal_prompt_title)
+        assertVisible(R.string.progress_year_goal_dialog_body)
+        shot("training-jahresziel-dialog-en")
+        tap(R.string.common_action_save)
+        assertVisible(R.string.progress_year_goal_edit_action)
+        shot("training-jahresziel-en")
+        // Wieder entfernen: `AppServices` lebt ueber die Tests der Klasse hinweg.
+        click(R.string.progress_year_goal_edit_action)
+        tap(R.string.progress_year_goal_remove_action)
+        assertVisible(R.string.progress_year_goal_prompt_title)
+    }
+
     /** Tragfaehigkeit als eine Warnkarte, Profil als ruhige Zeile, Anpassungs-Notiz. */
     @Test
     @Config(qualifiers = "${TestLocales.EN}-w411dp-h2400dp-xxhdpi")
@@ -109,6 +134,7 @@ class TrainingScreenshotTest {
         savePlan(goal(distanceKm = 120.0), CoreTextsEn, startedWeeksAgo = 3)
         start()
         openTraining()
+        openPlan()
         assertVisible(R.string.training_plan_feasibility_title)
         assertVisible(R.string.training_notice_profile_action)
         shot("training-hinweise-en")
@@ -155,6 +181,7 @@ class TrainingScreenshotTest {
         savePlan(goal(distanceKm = 60.0), CoreTextsEn)
         start()
         openTraining()
+        openPlan()
         click(R.string.training_goal_explain_action)
         assertVisible(R.string.training_prognosis_title)
         shot("training-prognose-en")
@@ -166,6 +193,7 @@ class TrainingScreenshotTest {
         savePlan(goal(distanceKm = 60.0), CoreTextsEn)
         start()
         openTraining()
+        openPlan()
         click(R.string.training_goal_edit_action)
         assertVisible(R.string.training_goal_editor_ascent_label)
         shot("training-ziel-en")
@@ -176,6 +204,7 @@ class TrainingScreenshotTest {
         savePlan(goal(distanceKm = 60.0), CoreTextsDe)
         start()
         openTraining()
+        openPlan()
         click(R.string.training_goal_edit_action)
         shot("training-ziel")
     }
@@ -204,6 +233,7 @@ class TrainingScreenshotTest {
         savePlan(goal(distanceKm = 60.0), CoreTextsEn)
         start()
         openTraining()
+        openPlan()
         assertVisible(R.string.training_goal_current_label)
         shot("training-gross-en")
     }
@@ -239,6 +269,18 @@ class TrainingScreenshotTest {
 
     private fun openTraining() {
         compose.onAllNodesWithText(string(R.string.training_screen_title))[0].performClick()
+        settle()
+    }
+
+    /** Wechselt im Training-Tab von der Sicht „Fortschritt" (Vorgabe) auf „Plan". */
+    private fun openPlan() {
+        compose.onAllNodesWithText(string(R.string.progress_segment_plan))[0].performClick()
+        settle()
+    }
+
+    /** Wie [click], aber ohne Hinscrollen — fuer Knoepfe in Dialogen. */
+    private fun tap(id: Int) {
+        compose.onAllNodesWithText(string(id))[0].performClick()
         settle()
     }
 

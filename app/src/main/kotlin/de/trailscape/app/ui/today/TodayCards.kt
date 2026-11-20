@@ -346,7 +346,11 @@ private val RingStroke = 7.dp
  * vorgelesen ([StripDay.description]) statt als Kuerzel und nackte Zahl.
  */
 @Composable
-internal fun WeekCard(summary: Pair<UiText, UiText?>, strip: List<StripDay>) {
+internal fun WeekCard(
+    summary: Pair<UiText, UiText?>,
+    strip: List<StripDay>,
+    footer: (@Composable () -> Unit)? = null,
+) {
     val first = summary.first.asString()
     val second = summary.second?.asString()
     val summarySpoken = second?.let { "$first, $it" } ?: first
@@ -378,6 +382,12 @@ internal fun WeekCard(summary: Pair<UiText, UiText?>, strip: List<StripDay>) {
                 strip.forEachIndexed { index, day ->
                     StripDayCell(day = day, index = index, modifier = Modifier.weight(1f))
                 }
+            }
+            if (footer != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(12.dp))
+                footer()
             }
         }
     }

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte rund ums Dranbleiben (ui/progress/**): Wochenserie, naechste Bestweite,
+    Jahresziel, Meilensteine, Bestwerte, Verlauf der letzten Wochen, Erfolge je Tour.
+
+    Schluessel-Praefix: progress_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_progress.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- Wochenserie (Fusszeile der Wochenkarte auf „Heute") -->
+    <plurals name="progress_streak_weeks_count">
+        <item quantity="one">%1$d Woche in Folge</item>
+        <item quantity="other">%1$d Wochen in Folge</item>
+    </plurals>
+    <string name="progress_streak_done_hint">Diese Woche ist gesichert.</string>
+    <string name="progress_streak_longest_hint">Deine längste Serie bisher.</string>
+    <plurals name="progress_streak_risk_days_count">
+        <item quantity="one">Heute ist der letzte Tag, um sie zu halten.</item>
+        <item quantity="other">Noch %1$d Tage, um sie zu halten.</item>
+    </plurals>
+    <string name="progress_streak_start_title">Neue Serie starten</string>
+    <string name="progress_streak_start_hint">Eine Tour diese Woche, und sie läuft.</string>
+    <!-- %1$d = längste Serie in Wochen -->
+    <string name="progress_streak_start_best_hint">Eine Tour diese Woche, und sie läuft. Dein Bestwert: %1$d Wochen.</string>
+
+    <!-- Naechste Bestweite. %1$d = Zielkilometer -->
+    <string name="progress_next_eyebrow">Als Nächstes</string>
+    <string name="progress_challenge_label">Nächste Bestweite</string>
+    <string name="progress_challenge_title">%1$d km am Stück</string>
+    <!-- %1$s = bisherige Weite in km, %2$d = Kilometer mehr -->
+    <string name="progress_challenge_body">Deine weiteste Tour der letzten Wochen: %1$s km. %2$d km mehr sind drin.</string>
+    <string name="progress_challenge_all_time_body">Deine weiteste Tour der letzten Wochen: %1$s km. Mit %2$d km mehr fährst du weiter als je zuvor.</string>
+    <string name="progress_challenge_action">Runde mit %1$d km bauen</string>
+    <string name="progress_challenge_route_label">Nächste Bestweite</string>
+
+    <!-- Jahresziel. %1$d = Jahr -->
+    <string name="progress_year_goal_title">Jahresziel %1$d</string>
+    <!-- %1$s = gefahren, %2$s = Ziel -->
+    <string name="progress_year_goal_value">%1$s von %2$s km</string>
+    <string name="progress_year_goal_ahead_hint">%1$s km vor dem Soll</string>
+    <!-- %1$s = Rückstand in km, %2$s = km je Woche -->
+    <string name="progress_year_goal_behind_hint">%1$s km hinter dem Soll · %2$s km pro Woche reichen</string>
+    <string name="progress_year_goal_on_track_hint">Genau im Soll</string>
+    <string name="progress_year_goal_reached_hint">Geschafft. Alles ab jetzt ist Zugabe.</string>
+    <string name="progress_year_goal_prompt_title">Jahresziel setzen</string>
+    <!-- %1$d = vorgeschlagene Kilometer -->
+    <string name="progress_year_goal_prompt_body">Vorschlag aus deinen letzten Wochen: %1$d km.</string>
+    <string name="progress_year_goal_prompt_empty_body">Ein Ziel fürs Jahr, an dem jede Tour zählt.</string>
+    <!-- %1$s = hochgerechnete Kilometer -->
+    <string name="progress_year_goal_projection">Wenn du so weiterfährst: %1$s km bis Jahresende</string>
+    <string name="progress_year_goal_edit_action">Ändern</string>
+    <string name="progress_year_goal_dialog_title">Jahresziel</string>
+    <string name="progress_year_goal_dialog_body">Wie viele Kilometer willst du dieses Jahr fahren?</string>
+    <!-- %1$s = km je Woche -->
+    <string name="progress_year_goal_dialog_per_week">Dafür brauchst du bis Jahresende rund %1$s km pro Woche.</string>
+    <string name="progress_year_goal_dialog_slider_cd">Jahresziel in Kilometern</string>
+    <string name="progress_year_goal_remove_action">Entfernen</string>
+    <string name="progress_year_goal_open_cd">Jahresziel öffnen</string>
+
+    <!-- Meilensteine. Ziele: %1$s = Schwelle -->
+    <string name="progress_milestone_total_km">%1$s km gesamt</string>
+    <string name="progress_milestone_total_ascent">%1$s Höhenmeter gesamt</string>
+    <string name="progress_milestone_everest">Einmal Everest-Höhe gesamt</string>
+    <string name="progress_milestone_earth">Einmal um die Erde</string>
+    <plurals name="progress_milestone_ride_count">
+        <item quantity="one">Erste Tour</item>
+        <item quantity="other">%1$d Touren</item>
+    </plurals>
+    <string name="progress_milestone_longest_ride">%1$s km am Stück</string>
+    <!-- Rest bis zur Stufe: %1$s = was fehlt, %2$s = Stufe (einer der Texte oben) -->
+    <string name="progress_milestone_remaining_km">Noch %1$s km bis: %2$s</string>
+    <string name="progress_milestone_remaining_ascent">Noch %1$s Hm bis: %2$s</string>
+    <plurals name="progress_milestone_remaining_rides">
+        <item quantity="one">Noch %1$d Tour bis: %2$s</item>
+        <item quantity="other">Noch %1$d Touren bis: %2$s</item>
+    </plurals>
+    <string name="progress_milestone_open_cd">Fortschritt öffnen</string>
+    <string name="progress_milestones_title">Meilensteine</string>
+    <string name="progress_milestone_kind_total_km">Kilometer gesamt</string>
+    <string name="progress_milestone_kind_total_ascent">Höhenmeter gesamt</string>
+    <string name="progress_milestone_kind_ride_count">Touren</string>
+    <string name="progress_milestone_kind_longest_ride">Weiteste Tour</string>
+    <string name="progress_milestone_all_done">Alle Stufen erreicht</string>
+
+    <!-- Fortschritt im Training-Tab -->
+    <string name="progress_segment_progress">Fortschritt</string>
+    <string name="progress_segment_plan">Plan</string>
+    <string name="progress_trend_eyebrow">Letzte 12 Wochen</string>
+    <!-- %1$s = Kilometer der letzten vier Wochen -->
+    <string name="progress_trend_headline">%1$s km in 4 Wochen</string>
+    <string name="progress_trend_up">+%1$d %% gegenüber den 4 Wochen davor</string>
+    <string name="progress_trend_down">−%1$d %% gegenüber den 4 Wochen davor</string>
+    <string name="progress_trend_same">So viel wie in den 4 Wochen davor</string>
+    <string name="progress_trend_first">Dein erster Vergleichszeitraum läuft.</string>
+    <string name="progress_trend_axis_start">vor 12 Wochen</string>
+    <string name="progress_trend_axis_end">diese Woche</string>
+    <!-- %1$s = Kilometer der stärksten Woche -->
+    <string name="progress_trend_peak">stärkste Woche: %1$s km</string>
+    <!-- Sprachausgabe für das Diagramm. %1$s = Kilometer in 4 Wochen, %2$s = Kilometer stärkste Woche -->
+    <string name="progress_trend_chart_cd">Kilometer je Woche über 12 Wochen. Letzte 4 Wochen: %1$s km. Stärkste Woche: %2$s km.</string>
+    <string name="progress_fact_rides">Touren</string>
+    <string name="progress_fact_hours">Stunden</string>
+    <string name="progress_fact_ascent">Höhenmeter</string>
+    <string name="progress_fact_km">Kilometer</string>
+
+    <string name="progress_records_title">Bestwerte</string>
+    <string name="progress_record_distance">Weiteste Tour</string>
+    <string name="progress_record_ascent">Meiste Höhenmeter</string>
+    <string name="progress_record_time">Längste Fahrzeit</string>
+    <string name="progress_record_speed">Schnellster Schnitt</string>
+    <string name="progress_record_speed_note">ab 20 km</string>
+    <string name="progress_record_open_cd">Tour öffnen</string>
+    <string name="progress_records_empty">Nach deiner zweiten Tour stehen hier deine Bestwerte.</string>
+
+    <string name="progress_lifetime_title">Insgesamt</string>
+    <!-- %1$d = Wochen -->
+    <string name="progress_lifetime_best_streak">Längste Serie: %1$d Wochen in Folge</string>
+
+    <!-- Erfolge einer Tour (Tour-Detail) -->
+    <string name="progress_achievements_title">Erfolge dieser Tour</string>
+    <string name="progress_achievement_milestone">Meilenstein: %1$s</string>
+    <!-- %1$s = neuer Wert mit Einheit, %2$s = alter Wert mit Einheit -->
+    <string name="progress_achievement_record_distance">Deine bis dahin weiteste Tour: %1$s statt %2$s</string>
+    <string name="progress_achievement_record_ascent">Bis dahin die meisten Höhenmeter: %1$s statt %2$s</string>
+    <string name="progress_achievement_record_time">Deine bis dahin längste Fahrzeit: %1$s statt %2$s</string>
+    <string name="progress_achievement_record_speed">Dein bis dahin schnellster Schnitt: %1$s statt %2$s</string>
+    <!-- Meldung nach dem Speichern einer Aufzeichnung. %1$s = Kilometer -->
+    <string name="progress_snack_record_distance">Neue Bestweite: %1$s km</string>
+    <string name="progress_snack_record">Neuer Bestwert. Die Auswertung zeigt, welcher.</string>
+    <string name="progress_snack_milestone">Meilenstein erreicht. Die Auswertung zeigt, welcher.</string>
+    <string name="progress_value_ascent">%1$s&#160;Hm</string>
+    <!-- %1$d = Stunden, %2$s = Minuten zweistellig -->
+    <string name="progress_duration_hm">%1$d:%2$s h</string>
+</resources>

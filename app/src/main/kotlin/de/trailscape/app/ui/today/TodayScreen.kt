@@ -50,7 +50,23 @@ import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.progress.ChallengeCard
+import de.trailscape.app.ui.progress.NextGoalsCard
+import de.trailscape.app.ui.progress.StreakFooter
+import de.trailscape.app.ui.progress.YearGoalDialog
+import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.core.AscentPreference
+import de.trailscape.core.ReadinessBand
+import de.trailscape.core.RouteTarget
+import de.trailscape.core.RouteTargetSource
+import de.trailscape.core.SessionIntensity
+import de.trailscape.core.nearestMilestone
+import de.trailscape.core.planningSpeedKmh
 import de.trailscape.core.predictGoalFinish
+import de.trailscape.core.stretchChallenge
+import de.trailscape.core.suggestYearGoalKm
+import de.trailscape.core.weekStreak
+import de.trailscape.core.yearGoalProgress
 import de.trailscape.core.projectedEventCtl
 import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
@@ -80,6 +96,11 @@ import kotlin.math.roundToInt
  *     ruhigere „Locker rollen", siehe [offeredTarget]), „Warum diese
  *     Empfehlung?" ([WhySheet]).
  *  3. **Diese Woche** ([WeekCard]) — bzw. am Erststart „Los geht's".
+ *     Am Fuss der Wochenkarte die Wochenserie ([StreakFooter]).
+ *  3b. **Als Naechstes** — die naechste Bestweite ([ChallengeCard], nicht am
+ *     Zieltag und nicht bei „Ruhe") sowie Jahresziel und naechster Meilenstein
+ *     ([NextGoalsCard]). Gerechnet in `core/…/Motivation.kt`. Erst ab der
+ *     ersten Tour: Davor gibt es nichts, woran sich etwas steigern liesse.
  *  4. **Dein Ziel** ([GoalCard]) — ohne Plan die Einladung
  *     ([GoalPromptCard]). Tippen oeffnet Training.
  *
@@ -180,6 +201,25 @@ fun TodayScreen(appViewModel: AppViewModel) {
 
     var showWhy by rememberSaveable { mutableStateOf(false) }
 
+    // Dranbleiben: Serie, naechste Bestweite, Jahresziel, naechster
+    // Meilenstein — alles aus `core/…/Motivation.kt`, hier nur abgeholt.
+    val facts = rememberRideFacts(rides)
+    val streak = remember(facts, today) { weekStreak(facts, today) }
+    val yearGoalSetting by appViewModel.yearGoal.collectAsStateWithLifecycle()
+    val yearGoal = remember(facts, yearGoalSetting, today) {
+        yearGoalSetting?.let { yearGoalProgress(facts, it, today) }
+    }
+    val suggestedYearGoalKm = remember(facts, today) { suggestYearGoalKm(facts, today) }
+    val milestone = remember(facts) { nearestMilestone(facts) }
+    // Die Bestweite ist ein Angebot fuer einen guten Tag: nicht am Zieltag
+    // und nicht, wenn die Erholung „Ruhe" sagt.
+    val challenge = remember(facts, today, effort, band) {
+        stretchChallenge(facts, today)
+            ?.takeIf { effort != TodayEffort.ZIELTAG && band != ReadinessBand.RUHE }
+    }
+    val challengeLabel = stringResource(R.string.progress_challenge_route_label)
+    var showYearGoal by rememberSaveable { mutableStateOf(false) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -258,7 +298,42 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     }
                 } else {
                     item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
-                    item(key = "woche") { WeekCard(summary = weekSummaryText, strip = strip) }
+                    item(key = "woche") {
+                        WeekCard(summary = weekSummaryText, strip = strip, footer = { StreakFooter(streak) })
+                    }
+
+                    item(key = "sec-naechstes") { SectionEyebrow(stringResource(R.string.progress_next_eyebrow)) }
+                    challenge?.let { stretch ->
+                        item(key = "bestweite") {
+                            ChallengeCard(
+                                challenge = stretch,
+                                onBuild = {
+                                    val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
+                                    appViewModel.requestRouteGeneration(
+                                        RouteTarget(
+                                            distanceKm = stretch.targetKm.toDouble(),
+                                            ascentPreference = AscentPreference.MODERAT,
+                                            durationH = stretch.targetKm / speed,
+                                            speedKmh = speed,
+                                            intensity = SessionIntensity.GRUNDLAGE,
+                                            label = challengeLabel,
+                                            source = RouteTargetSource.SELBST_GEWAEHLT,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    item(key = "ziele") {
+                        NextGoalsCard(
+                            yearGoal = yearGoal,
+                            year = today.year,
+                            suggestedKm = suggestedYearGoalKm,
+                            milestone = milestone,
+                            onYearGoal = { showYearGoal = true },
+                            onOpenProgress = { appViewModel.requestTab(AppTab.TRAINING) },
+                        )
+                    }
                 }
 
                 item(key = "sec-ziel") { SectionEyebrow(stringResource(R.string.today_goal_eyebrow)) }
@@ -300,6 +375,24 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 }
             }
         }
+    }
+
+    if (showYearGoal) {
+        YearGoalDialog(
+            currentKm = yearGoalSetting?.targetKm,
+            suggestedKm = suggestedYearGoalKm,
+            weeksLeft = (today.lengthOfYear() - today.dayOfYear) / 7.0,
+            riddenKm = facts.filter { it.date.year == today.year }.sumOf { it.distanceKm },
+            onSave = {
+                appViewModel.setYearGoalKm(it)
+                showYearGoal = false
+            },
+            onRemove = {
+                appViewModel.setYearGoalKm(null)
+                showYearGoal = false
+            },
+            onDismiss = { showYearGoal = false },
+        )
     }
 
     if (showWhy) {

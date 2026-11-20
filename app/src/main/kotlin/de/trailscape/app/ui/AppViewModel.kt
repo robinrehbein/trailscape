@@ -32,6 +32,14 @@ import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
+import de.trailscape.core.RecordKind
+import de.trailscape.core.YearGoal
+import de.trailscape.core.i18n.formatDistanceKm
+import de.trailscape.core.maxYearGoalKm
+import de.trailscape.core.milestonesReachedBy
+import de.trailscape.core.recordsSetBy
+import de.trailscape.core.rideFacts
+import de.trailscape.core.minYearGoalKm
 import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
@@ -75,6 +83,7 @@ import de.trailscape.core.withVitalsDiagnostics
 import de.trailscape.core.writeBackupJson
 import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
@@ -1908,6 +1917,77 @@ class AppViewModel(
     }.getOrNull()
 
     // -------------------------------------------------------------------------
+    // Jahresziel
+    // -------------------------------------------------------------------------
+
+    private val _yearGoal = MutableStateFlow<YearGoal?>(null)
+
+    /**
+     * Das selbst gesetzte Jahresziel — `null`, solange keines gesetzt ist.
+     * Es gilt ueber den Jahreswechsel hinweg weiter: Wer sich 4000 km
+     * vornimmt, meint das im Januar wieder; der Stand dazu
+     * ([de.trailscape.core.yearGoalProgress]) beginnt mit dem Kalenderjahr
+     * von selbst bei null.
+     */
+    val yearGoal: StateFlow<YearGoal?> = _yearGoal.asStateFlow()
+
+    /**
+     * Setzt das Jahresziel; `null` entfernt es. Wer nur die Zahl aendert,
+     * behaelt den Tag, ab dem das Soll laeuft ([YearGoal.since]) — sonst
+     * liesse sich ein Rueckstand durch erneutes Speichern wegklicken.
+     */
+    fun setYearGoalKm(km: Int?) {
+        val today = LocalDate.now()
+        val value = km?.let {
+            val since = _yearGoal.value?.since?.takeIf { it.year == today.year } ?: today
+            YearGoal(targetKm = it.coerceIn(minYearGoalKm, maxYearGoalKm), since = since)
+        }
+        _yearGoal.value = value
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    if (value == null) {
+                        keyValueStore.remove(YEAR_GOAL_STORAGE_KEY)
+                    } else {
+                        keyValueStore.setString(YEAR_GOAL_STORAGE_KEY, value.encode())
+                    }
+                }
+            }
+        }
+    }
+
+    private fun readYearGoal(): YearGoal? = runCatching {
+        YearGoal.decode(keyValueStore.getString(YEAR_GOAL_STORAGE_KEY))
+    }.getOrNull()
+
+    /**
+     * Meldet nach dem Speichern einer Aufzeichnung, was sie an Bestwerten
+     * gesetzt oder an Meilensteinen ueberschritten hat — **eine** Meldung, die
+     * wichtigste: Bestweite vor anderen Bestwerten vor Meilensteinen. Die
+     * Einzelheiten stehen in der Auswertung der Tour („Erfolge dieser Tour").
+     */
+    private fun announceAchievements(rideId: String) {
+        val facts = rideFacts(_rides.value) { localOfEpochMs(it).toLocalDate() }
+        val records = recordsSetBy(rideId, facts)
+        val distance = records.firstOrNull { it.kind == RecordKind.DISTANCE }
+        when {
+            distance != null -> showMessage(
+                UiText.Res(
+                    R.string.progress_snack_record_distance,
+                    listOf(formatDistanceKm(distance.value, AppServices.appLanguage.value)),
+                ),
+            )
+            records.isNotEmpty() -> showMessage(UiText.Res(R.string.progress_snack_record))
+            milestonesReachedBy(rideId, facts).isNotEmpty() ->
+                showMessage(UiText.Res(R.string.progress_snack_milestone))
+        }
+    }
+
+    private fun readYearGoalKm(): Int? = runCatching {
+        keyValueStore.getString(YEAR_GOAL_STORAGE_KEY)?.toIntOrNull()?.takeIf { it > 0 }
+    }.getOrNull()
+
+    // -------------------------------------------------------------------------
     // Erinnerungen
     // -------------------------------------------------------------------------
 
@@ -2554,6 +2634,7 @@ class AppViewModel(
                 select(rideId)
                 RecordingRepository.clearFinishedRide()
                 showMessage(UiText.Res(R.string.rides_record_saved_status))
+                announceAchievements(rideId)
                 // Nach der Fahrt: die Entdeckt-Kacheln nachziehen und melden,
                 // wie viele davon neu sind — der eigentliche Reiz des Layers
                 // ist ja, dass eine Fahrt ihn veraendert. Der Vergleich
@@ -2599,6 +2680,7 @@ class AppViewModel(
                     vitalsHistory = readVitalsHistory(keyValueStore),
                     shortSleeperHintShownAt = readShortSleeperHintShownAt(),
                     planFeasibilityAckKey = readPlanFeasibilityAckKey(),
+                    yearGoal = readYearGoal(),
                     placeSearchHistory = readPlaceSearchHistory(),
                 )
             }
@@ -2606,6 +2688,7 @@ class AppViewModel(
             _profileConfirmed.value = restored.profileConfirmed
             _plan.value = restored.plan
             _planFeasibilityAckKey.value = restored.planFeasibilityAckKey
+            _yearGoal.value = restored.yearGoal
             _mapStyle.value = restored.mapStyle
             _explorerTilesEnabled.value = restored.explorerTilesEnabled
             _placeSearchHistory.value = restored.placeSearchHistory
@@ -2661,6 +2744,7 @@ class AppViewModel(
         val vitalsHistory: VitalsHistory,
         val shortSleeperHintShownAt: LocalDateTime?,
         val planFeasibilityAckKey: String?,
+        val yearGoal: YearGoal?,
         val placeSearchHistory: List<PlaceSearchHistoryEntry>,
     )
 }
@@ -2724,6 +2808,9 @@ const val SHORT_SLEEPER_HINT_STORAGE_KEY: String = "trailscape.hint.shortsleeper
  * [AppViewModel.planFeasibilityAckKey] und [planFeasibilityIdentityKey]).
  */
 const val PLAN_FEASIBILITY_ACK_STORAGE_KEY: String = "trailscape.today.planfeasibility.ack.v1"
+
+/** Schluessel im [KeyValueStore] fuer das Jahresziel ([AppViewModel.yearGoal], Format [YearGoal.encode]). */
+const val YEAR_GOAL_STORAGE_KEY: String = "trailscape.progress.yeargoal.v1"
 
 /**
  * Ein zuletzt gewaehlter Ort der Kartensuche (siehe [AppViewModel.placeSearchHistory]).

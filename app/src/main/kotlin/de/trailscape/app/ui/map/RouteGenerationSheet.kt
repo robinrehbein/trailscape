@@ -489,6 +489,23 @@ private fun CandidateRow(
                         color = theme.onSurfaceVariant,
                     )
                 }
+                // Ehrlich sagen, wenn die „Runde" zu einem guten Teil hin und
+                // zurueck ueber denselben Weg fuehrt (`core/…/RouteQuality.kt`).
+                // Kurze Stichstrecken sind da schon herausgeschnitten; was
+                // bleibt, liess sich nicht vermeiden und kostet die Runde
+                // bereits Punkte — verschweigen sollte die Liste es nicht.
+                if (candidate.retraceShare >= RETRACE_NOTICE_SHARE) {
+                    Text(
+                        text = stringResource(
+                            R.string.map_generation_retrace_label,
+                            (candidate.retraceShare * 100).roundToInt(),
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalSignalColors.current.caution,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -680,3 +697,6 @@ private val COMPASS_LABELS = listOf(
     R.string.map_generation_compass_w,
     R.string.map_generation_compass_nw,
 )
+
+/** Ab diesem doppelt befahrenen Anteil nennt die Rundenwahl ihn beim Namen. */
+private const val RETRACE_NOTICE_SHARE = 0.15

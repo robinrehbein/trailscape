@@ -135,6 +135,9 @@ class ScreenshotTest {
         shot("11-heute-lang")
         tab("Training")
         shot("13-training-lang")
+        compose.onAllNodesWithText("Plan")[0].performClick()
+        settle()
+        shot("13b-training-plan-lang")
         tab("Verlauf")
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
@@ -171,6 +174,8 @@ class ScreenshotTest {
         )
         start()
         tab("Training")
+        compose.onAllNodesWithText("Plan")[0].performClick()
+        settle()
         shot("16-training-hinweise")
     }
 

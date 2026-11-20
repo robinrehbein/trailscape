@@ -78,6 +78,10 @@ import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.components.TileAction
 import de.trailscape.app.ui.components.screenContentPadding
+import de.trailscape.app.ui.progress.AchievementsCard
+import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.core.milestonesReachedBy
+import de.trailscape.core.recordsSetBy
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.ElevationProfile
 import de.trailscape.app.ui.map.ElevationSample
@@ -246,6 +250,12 @@ internal fun RideDetailScreen(
         )
     }
 
+    // Erfolge dieser Tour: gesetzte Bestwerte und ueberschrittene
+    // Meilensteine (`core/…/Motivation.kt`), verglichen mit allem davor.
+    val facts = rememberRideFacts(rides)
+    val recordGains = remember(facts, ride.id) { recordsSetBy(ride.id, facts) }
+    val milestonesReached = remember(facts, ride.id) { milestonesReachedBy(ride.id, facts) }
+
     // Aufgeklappt bleibt aufgeklappt, auch ueber eine Drehung hinweg.
     var allValues by rememberSaveable(ride.id) { mutableStateOf(false) }
 
@@ -301,6 +311,7 @@ internal fun RideDetailScreen(
                     )
                 } else {
                     note?.let { RideNoteBox(it) }
+                    AchievementsCard(records = recordGains, milestones = milestonesReached)
                     impact?.let { RideImpactCard(rideImpactLines(it, LocalCoreTexts.current)) }
                 }
 

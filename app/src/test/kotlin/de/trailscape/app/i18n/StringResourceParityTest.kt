@@ -37,6 +37,7 @@ class StringResourceParityTest {
         "strings_common.xml" to "common_",
         "strings_ble_sensors.xml" to "ble_",
         "strings_strava.xml" to "strava_",
+        "strings_progress.xml" to "progress_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

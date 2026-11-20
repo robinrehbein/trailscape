@@ -30,6 +30,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
+import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.progress.LifetimeCard
+import de.trailscape.app.ui.progress.MilestonesCard
+import de.trailscape.app.ui.progress.RecordsCard
+import de.trailscape.app.ui.progress.TrendCard
+import de.trailscape.app.ui.progress.YearGoalCard
+import de.trailscape.app.ui.progress.YearGoalDialog
+import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.app.ui.rememberNow
+import de.trailscape.core.lifetimeTotals
+import de.trailscape.core.milestoneProgress
+import de.trailscape.core.personalRecords
+import de.trailscape.core.recentTrend
+import de.trailscape.core.suggestYearGoalKm
+import de.trailscape.core.weekStreak
+import de.trailscape.core.weeklyBuckets
+import de.trailscape.core.yearGoalProgress
+import androidx.compose.runtime.mutableIntStateOf
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.AppTab
 import de.trailscape.app.ui.AppViewModel
@@ -184,6 +202,27 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     var showVitals by rememberSaveable { mutableStateOf(false) }
     var allWeeks by rememberSaveable { mutableStateOf(false) }
 
+    // Zwei Sichten: „Fortschritt" (was war und wohin es geht — Verlauf,
+    // Jahresziel, Bestwerte, Meilensteine, Form, Koerperwerte) und „Plan"
+    // (das Ziel-Event und seine Wochen). Fortschritt steht vorn: Den hat
+    // jeder, einen Plan nicht.
+    var segment by rememberSaveable { mutableIntStateOf(SEGMENT_PROGRESS) }
+    val now = rememberNow()
+    val today = now.toLocalDate()
+    val facts = rememberRideFacts(rides)
+    val buckets = remember(facts, today) { weeklyBuckets(facts, today) }
+    val trend = remember(facts, today) { recentTrend(facts, today) }
+    val records = remember(facts) { personalRecords(facts) }
+    val milestones = remember(facts) { milestoneProgress(facts) }
+    val lifetime = remember(facts) { lifetimeTotals(facts) }
+    val bestStreak = remember(facts, today) { weekStreak(facts, today).best }
+    val yearGoalSetting by appViewModel.yearGoal.collectAsStateWithLifecycle()
+    val yearGoal = remember(facts, yearGoalSetting, today) {
+        yearGoalSetting?.let { yearGoalProgress(facts, it, today) }
+    }
+    val suggestedYearGoalKm = remember(facts, today) { suggestYearGoalKm(facts, today) }
+    var showYearGoal by rememberSaveable { mutableStateOf(false) }
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     LaunchedEffect(appViewModel) {
@@ -239,6 +278,16 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                         },
                     )
                 }
+                item(key = "sicht") {
+                    PillSegments(
+                        options = listOf(
+                            stringResource(R.string.progress_segment_progress),
+                            stringResource(R.string.progress_segment_plan),
+                        ),
+                        selectedIndex = segment,
+                        onSelect = { segment = it },
+                    )
+                }
                 if (rides.isEmpty()) {
                     item(key = "empty") {
                         TrainingEmptyState(
@@ -260,8 +309,28 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 }
 
                 // ---------------------------------------------------- Dein Ziel
-                val shownPlan = displayPlan
-                if (shownPlan != null && prediction != null) {
+                if (segment == SEGMENT_PROGRESS && facts.isNotEmpty()) {
+                    item(key = "sec-trend") { SectionEyebrow(stringResource(R.string.progress_trend_eyebrow)) }
+                    item(key = "trend") { TrendCard(buckets = buckets, trend = trend) }
+                    item(key = "jahresziel") {
+                        YearGoalCard(
+                            progress = yearGoal,
+                            year = today.year,
+                            suggestedKm = suggestedYearGoalKm,
+                            onEdit = { showYearGoal = true },
+                        )
+                    }
+                    item(key = "bestwerte") {
+                        RecordsCard(records = records, onOpenRide = appViewModel::requestRideDetail)
+                    }
+                    item(key = "meilensteine") { MilestonesCard(milestones) }
+                    item(key = "gesamt") { LifetimeCard(totals = lifetime, bestStreak = bestStreak) }
+                }
+
+                val shownPlan = displayPlan.takeIf { segment == SEGMENT_PLAN }
+                if (segment == SEGMENT_PROGRESS) {
+                    Unit
+                } else if (shownPlan != null && prediction != null) {
                     item(key = "sec-goal") { SectionEyebrow(stringResource(R.string.training_screen_goal_eyebrow)) }
                     item(key = "goal") {
                         GoalOverviewCard(
@@ -282,7 +351,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
 
                 // Die Tragfaehigkeit ist die wichtigste Warnung
                 // (trainingNoticeLayout) und steht deshalb immer als Karte.
-                openFeasibility?.let { verdict ->
+                openFeasibility?.takeIf { segment == SEGMENT_PLAN }?.let { verdict ->
                     item(key = "plan-tragfaehigkeit") {
                         TrainingPlanFeasibilityCard(
                             feasibility = verdict,
@@ -316,7 +385,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             )
                         }
                     }
-                    if (adaptedPlan.adapted) {
+                    if (adaptedPlan?.adapted == true) {
                         adaptedPlan.reason?.let { reason ->
                             item(key = "plan-adaption") { PlanAdaptionNote(reason) }
                         }
@@ -350,7 +419,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 }
 
                 // --------------------------------------------------- Deine Form
-                if (rides.isNotEmpty() || insights.fitness.latest != null) {
+                if (segment == SEGMENT_PROGRESS && (rides.isNotEmpty() || insights.fitness.latest != null)) {
                     item(key = "sec-form") { SectionEyebrow(stringResource(R.string.training_screen_form_eyebrow)) }
                     item(key = "form") {
                         FormSummaryCard(insights, onClick = { showForm = true })
@@ -358,18 +427,40 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 }
 
                 // -------------------------------------------------- Koerperwerte
-                item(key = "sec-werte") { SectionEyebrow(stringResource(R.string.training_screen_vitals_eyebrow)) }
-                item(key = "vitals") {
-                    VitalsTiles(
-                        insights = insights,
-                        syncedAt = vitalsSyncedAt,
-                        onOpenDetails = { showVitals = true },
-                        showShortSleeperHint = showShortSleeperHint,
-                        onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
-                    )
+                if (segment == SEGMENT_PROGRESS) {
+                    item(key = "sec-werte") {
+                        SectionEyebrow(stringResource(R.string.training_screen_vitals_eyebrow))
+                    }
+                    item(key = "vitals") {
+                        VitalsTiles(
+                            insights = insights,
+                            syncedAt = vitalsSyncedAt,
+                            onOpenDetails = { showVitals = true },
+                            showShortSleeperHint = showShortSleeperHint,
+                            onShortSleeperHintShown = appViewModel::markShortSleeperHintShown,
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (showYearGoal) {
+        YearGoalDialog(
+            currentKm = yearGoalSetting?.targetKm,
+            suggestedKm = suggestedYearGoalKm,
+            weeksLeft = (today.lengthOfYear() - today.dayOfYear) / 7.0,
+            riddenKm = facts.filter { it.date.year == today.year }.sumOf { it.distanceKm },
+            onSave = {
+                appViewModel.setYearGoalKm(it)
+                showYearGoal = false
+            },
+            onRemove = {
+                appViewModel.setYearGoalKm(null)
+                showYearGoal = false
+            },
+            onDismiss = { showYearGoal = false },
+        )
     }
 
     if (showGoalEditor) {
@@ -427,3 +518,9 @@ private fun TrainingEmptyState(onRecord: () -> Unit, onImport: () -> Unit) {
         },
     )
 }
+
+/** Sicht „Fortschritt" des Training-Tabs (Index in den [PillSegments]). */
+private const val SEGMENT_PROGRESS = 0
+
+/** Sicht „Plan" des Training-Tabs. */
+private const val SEGMENT_PLAN = 1
