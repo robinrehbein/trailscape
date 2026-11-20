@@ -16,6 +16,7 @@ import de.trailscape.core.Waypoint
 import de.trailscape.core.WindConditions
 import de.trailscape.core.fetchCurrentWind
 import de.trailscape.core.generateRoutes
+import de.trailscape.core.maxSearchRounds
 import de.trailscape.core.readRouteWindEnabled
 import de.trailscape.core.shouldReuseWind
 import de.trailscape.core.windCacheKey
@@ -35,7 +36,8 @@ import kotlinx.coroutines.launch
  * Grund, aus dem das auch [OfflineDownloadController] tut.
  *
  * `generateRoutes` aus `:core` macht bis zu neun sequenzielle Routing-Aufrufe
- * und braucht real 20–40 s. Ein `rememberCoroutineScope()` des Karten-Screens
+ * und braucht real 20–40 s — mit der Nachsuche bei einem schwachen Ergebnis
+ * (Schritt 9 dort) bis zu achtzehn und entsprechend laenger. Ein `rememberCoroutineScope()` des Karten-Screens
  * stirbt aber, sobald der `NavHost` den Screen beim Tab-Wechsel entsorgt: Wer
  * waehrend der Suche kurz in den Trainings-Tab schaut, kaeme zurueck und faende
  * nichts vor. Deshalb laeuft die Suche in [AppServices.appScope] (der ohnehin
@@ -421,7 +423,7 @@ object RouteGenerationController {
     }
 
     /**
-     * Naechster Satz Vorschlaege: `seed + 1` (in `:core` der goldene Winkel —
+     * Naechster Satz Vorschlaege: `seed + maxSearchRounds` (in `:core` der goldene Winkel —
      * die Runden liegen dadurch maximal weit auseinander) mit demselben
      * Startpunkt, demselben Profil und demselben Angebots-Kanal. Ohne
      * vorherigen Durchlauf passiert nichts.
@@ -431,7 +433,11 @@ object RouteGenerationController {
         val context = lastContext ?: return
         if (_state.value.running) return
         val fromMapCenter = _state.value.fromMapCenter
-        _state.update { it.copy(seed = it.seed + 1) }
+        // Um [maxSearchRounds] weiter, nicht um 1: Die Suche haengt bei einem
+        // schwachen Ergebnis selbst eine Runde mit `seed + 1` an. Wer danach
+        // „Andere Vorschlaege" tippt, bekaeme mit `seed + 1` genau diese Runde
+        // noch einmal — dieselben Routen fuer drei bis neun weitere Aufrufe.
+        _state.update { it.copy(seed = it.seed + maxSearchRounds) }
         start(
             context = context,
             start = startPoint,

@@ -4,11 +4,13 @@
 # den R8 sonst entfernen wuerde — Regeln ohne nachgewiesenen Grund kosten
 # APK-Groesse und verstecken echte Probleme. Was hier NICHT steht und warum:
 #
-#  * kotlinx-serialization: :core und :app bauen JSON ausschliesslich von Hand
-#    ueber JsonObject/JsonPrimitive auf (siehe core/.../JsonSupport.kt). Es gibt
-#    keine @Serializable-Klasse, keinen generierten Serializer und damit auch
-#    keine Reflexion, die R8 uebersehen koennte. Die bekannten
-#    -keep-Regeln fuer @Serializable-Typen waeren hier reine Zierde.
+#  * kotlinx-serialization: JSON entsteht fast ueberall von Hand ueber
+#    JsonObject/JsonPrimitive (siehe core/.../JsonSupport.kt). Die eine
+#    Ausnahme sind die @Serializable-DTOs des Runden-Caches in
+#    core/.../RouteMatch.kt (gestreamtes Lesen und Schreiben). Deren
+#    Serializer werden direkt referenziert, nicht per Reflexion gesucht, und
+#    kotlinx-serialization bringt seine R8-Regeln selbst mit — eigene
+#    -keep-Regeln sind deshalb weiterhin nicht noetig.
 #  * MapLibre, OkHttp, Health Connect, AndroidX/Compose: alle
 #    liefern ihre notwendigen Regeln als consumer-rules in der AAR/JAR mit,
 #    AGP bindet sie automatisch ein. Insbesondere haelt MapLibre selbst alles,
