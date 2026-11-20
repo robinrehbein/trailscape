@@ -234,4 +234,31 @@
     </plurals>
     <!-- %1$s = Kachelzahl („37 Kacheln") -->
     <string name="rides_summary_cluster_status">Größte Fläche: %1$s</string>
+
+    <!-- RouteComparisonCard.kt -->
+    <string name="rides_route_title">Diese Runde</string>
+    <plurals name="rides_route_ridden_count">
+        <item quantity="one">%1$d× gefahren</item>
+        <item quantity="other">%1$d× gefahren</item>
+    </plurals>
+    <string name="rides_route_new_best_title">Neue Bestzeit auf dieser Runde</string>
+    <!-- Beste Zeit, aber ohne frühere Fahrt, die sie geschlagen hätte (erste Fahrt der Runde) -->
+    <string name="rides_route_best_title">Bestzeit auf dieser Runde</string>
+    <!-- %1$d = Platz nach Zeit, %2$d = Zahl der Fahrten -->
+    <string name="rides_route_rank_title">%1$d. schnellste von %2$d</string>
+    <!-- %1$s = Abstand („3:12 min"), %2$s = Datum der letzten Fahrt („12.10.") -->
+    <string name="rides_route_previous_faster">%1$s schneller als beim letzten Mal (%2$s)</string>
+    <string name="rides_route_previous_slower">%1$s langsamer als beim letzten Mal (%2$s)</string>
+    <string name="rides_route_previous_equal">Gleich schnell wie beim letzten Mal (%1$s)</string>
+    <!-- %1$s = Bestzeit („1:21:40"), %2$s = Datum, %3$s = Abstand („2:05 min") -->
+    <string name="rides_route_best_line">Bestzeit: %1$s am %2$s (%3$s schneller)</string>
+    <string name="rides_route_best_line_equal">Bestzeit: %1$s am %2$s (gleich schnell)</string>
+    <string name="rides_route_delta_seconds">%1$d s</string>
+    <string name="rides_route_delta_minutes">%1$s min</string>
+    <string name="rides_route_delta_hours">%1$s h</string>
+    <string name="rides_route_recent_label">Letzte Fahrten</string>
+    <!-- %1$s = Datum -->
+    <string name="rides_route_effort_this">%1$s · diese Fahrt</string>
+    <string name="rides_route_effort_open_cd">Fahrt öffnen</string>
+    <string name="rides_route_caption">Verglichen werden ganze Fahrten auf (fast) derselben Strecke, nach Bewegungszeit – Ampelstopps zählen also nicht.</string>
 </resources>

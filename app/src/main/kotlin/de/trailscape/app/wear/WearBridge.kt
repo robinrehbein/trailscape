@@ -10,9 +10,15 @@ import de.trailscape.app.record.RecordingRepository
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
+import de.trailscape.core.AbschlussInfo
+import de.trailscape.core.Befehl
 import de.trailscape.core.FAEHIGKEIT_UHR
+import de.trailscape.core.PFAD_ABSCHLUSS
+import de.trailscape.core.PFAD_BEFEHL_AN_UHR
 import de.trailscape.core.PFAD_ZUSTAND
+import de.trailscape.core.kodiereAbschlussInfo
 import de.trailscape.core.kodiereAufzeichnungsZustand
+import de.trailscape.core.kodiereBefehl
 
 /**
  * Telefon-seitiges Gegenstueck zur Wear-OS-Datenschicht — der einzige Ort in
@@ -44,8 +50,13 @@ import de.trailscape.core.kodiereAufzeichnungsZustand
  *    zwar sowohl bei jeder Zustandsaenderung (Start/Pause/Weiter/Stop) als
  *    auch angehaengt an dessen bestehenden 5-Sekunden-Notification-Takt —
  *    eine eigene Drosselung braucht dieser Aufruf deshalb nicht.
+ *  * [sendAbschluss] schickt nach einer gespeicherten Tour einmal die
+ *    Zeilen „was die Tour gebracht hat" ([WearAbschluss]).
  *
- * Beide Methoden schlucken jede Ausnahme: Ein Geraet ohne Play Services, ohne
+ *  * [sendTelefonBeendet] meldet das regulaere Ende einer Tour am Telefon,
+ *    damit die Uhr mitendet (siehe dort).
+ *
+ * Alle Sende-Methoden schlucken jede Ausnahme: Ein Geraet ohne Play Services, ohne
  * gekoppelte Uhr oder mit vorruebergehend gestoerter Verbindung darf die
  * Aufzeichnung nie zum Absturz bringen — dieselbe Haltung wie ueberall sonst
  * in `record/` gegenueber Notifications und Journal-IO.
@@ -57,6 +68,23 @@ object WearBridge {
 
     @Volatile
     private var erreichbareKnotenIds: Set<String> = emptySet()
+
+    /**
+     * Wanddatum (ms seit Epoch) der letzten Nachricht, die die Uhr diesem
+     * Prozess geschickt hat (Sensorprobe oder Befehl), `0` = noch keine.
+     * Nur fuer [WearAbschluss]: Hat die Uhr seit dem Start einer Tour etwas
+     * geschickt, hat sie an ihr teilgenommen. Prozessgebunden — eine nach
+     * einem Absturz aus dem Journal gerettete Tour sieht `0` und geht nicht
+     * an die Uhr.
+     */
+    @Volatile
+    var letzteUhrNachrichtMs: Long = 0L
+        private set
+
+    /** Notiert eine eingegangene Uhr-Nachricht (siehe [letzteUhrNachrichtMs]). */
+    fun merkeUhrNachricht() {
+        letzteUhrNachrichtMs = System.currentTimeMillis()
+    }
 
     private val capabilityListener = CapabilityClient.OnCapabilityChangedListener { info ->
         aktualisiereErreichbareKnoten(info)
@@ -147,5 +175,70 @@ object WearBridge {
             // das Log mit identischen Eintraegen flutet.
             DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
         }
+    }
+
+    /**
+     * Schickt [info] einmal an alle gerade erreichbaren Uhr-Knoten
+     * ([PFAD_ABSCHLUSS]). Ohne erreichbare Uhr oder ohne Zeilen ein Nop. Keine
+     * Wiederholung: Geht die Nachricht verloren, fehlt auf der Uhr nur die
+     * Zugabe. Wirft nie (siehe Klassendoc). `sendMessage` liefert einen
+     * `Task` und blockiert nicht.
+     */
+    fun sendAbschluss(context: Context, info: AbschlussInfo) {
+        try {
+            attach(context)
+            val knotenIds = erreichbareKnotenIds
+            if (knotenIds.isEmpty()) return
+            val bytes = kodiereAbschlussInfo(info) ?: return
+            val ctx = appContext ?: context.applicationContext
+            val messageClient = Wearable.getMessageClient(ctx)
+            knotenIds.forEach { id -> messageClient.sendMessage(id, PFAD_ABSCHLUSS, bytes) }
+        } catch (e: Exception) {
+            DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
+        }
+    }
+
+    /**
+     * Meldet einmal [Befehl.TELEFON_BEENDET] mit [endeMs] an alle gerade
+     * erreichbaren Uhr-Knoten ([PFAD_BEFEHL_AN_UHR]), damit eine laufende
+     * Uhr-Aufzeichnung mitendet. Ob sie das tut, entscheidet die Uhr
+     * (`telefonEndeBeendetUhr` in `:core`) — der Zeitstempel ist dafuer der
+     * Bezug. Ohne erreichbare Uhr ein Nop, keine Wiederholung: Geht die
+     * Nachricht verloren, stoppt die Fahrerin die Uhr wie bisher selbst. Wirft
+     * nie, blockiert nicht (`sendMessage` liefert einen `Task`).
+     *
+     * Kam der Stopp gerade von der Uhr selbst ([merkeUhrStopp]), wird nichts
+     * gesendet: Die Uhr ist laengst fertig, und startet die Fahrerin dort
+     * sofort neu, beendete das verspaetete Echo sonst ihre neue Aufzeichnung.
+     */
+    fun sendTelefonBeendet(context: Context, endeMs: Long) {
+        if (endeMs - uhrStoppMs in 0 until UHR_STOPP_ECHO_MS) return
+        try {
+            attach(context)
+            val knotenIds = erreichbareKnotenIds
+            if (knotenIds.isEmpty()) return
+            val bytes = kodiereBefehl(Befehl(Befehl.TELEFON_BEENDET, zeitMs = endeMs))
+            val ctx = appContext ?: context.applicationContext
+            val messageClient = Wearable.getMessageClient(ctx)
+            knotenIds.forEach { id -> messageClient.sendMessage(id, PFAD_BEFEHL_AN_UHR, bytes) }
+        } catch (e: Exception) {
+            DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
+        }
+    }
+
+    /**
+     * So lange gilt ein Stopp am Telefon als Folge des Stopp-Befehls der Uhr.
+     * Der Befehl wird sofort an den Aufzeichnungsdienst gereicht; zehn
+     * Sekunden decken auch ein traeges Telefon, und ein eigener Stopp am
+     * Telefon faellt praktisch nie in dieses Fenster.
+     */
+    private const val UHR_STOPP_ECHO_MS = 10_000L
+
+    @Volatile
+    private var uhrStoppMs = 0L
+
+    /** Die Uhr hat „Stopp" geschickt; siehe [sendTelefonBeendet]. */
+    fun merkeUhrStopp() {
+        uhrStoppMs = System.currentTimeMillis()
     }
 }

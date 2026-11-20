@@ -71,6 +71,11 @@ import kotlinx.coroutines.launch
  * [de.trailscape.wear.comm.CommandListenerService]) ihn ausgeloest hat —
  * siehe [RecordingStatus]s Klassen-KDoc fuer die Begruendung dieser
  * Symmetrie.
+ *
+ * Einzige Ausnahme: Ein Ende, das vom Telefon kommt („Tour am Telefon
+ * beendet", [ACTION_STOP_VOM_TELEFON]), wird nicht zurueckgemeldet — das
+ * Telefon weiss es schon, und ein `stopp` von hier liefe dort ein zweites
+ * Mal durch den Stopp-Pfad.
  */
 class RecordingService : Service() {
 
@@ -134,6 +139,7 @@ class RecordingService : Service() {
             ACTION_PAUSE -> scope.launch { pausiere() }
             ACTION_RESUME -> scope.launch { setzeFort() }
             ACTION_STOP -> scope.launch { beendeVersuch("benutzer") }
+            ACTION_STOP_VOM_TELEFON -> scope.launch { beendeVersuch("telefon", telefonMelden = false) }
             else -> stopSelf()
         }
         // Kein START_STICKY: siehe Klassendoc.
@@ -160,6 +166,7 @@ class RecordingService : Service() {
         letzteHf = null
 
         startMs = System.currentTimeMillis()
+        RecordingStatus.setzeStart(startMs)
         startElapsedMs = SystemClock.elapsedRealtime()
         bootZeitpunkt = Instant.ofEpochMilli(startMs - startElapsedMs)
 
@@ -343,7 +350,16 @@ class RecordingService : Service() {
         benachrichtigeTelefon(Befehl.WEITER)
     }
 
-    private suspend fun beendeVersuch(grund: String) {
+    /**
+     * Der eine Weg zum Ende: Sensoren aus, Uebung beenden, Journal schliessen,
+     * [RecordingStatus.Phase.BEENDET] (Abschlussbild), Dienst beenden.
+     *
+     * @param telefonMelden `false` nur, wenn das Ende vom Telefon kommt
+     *   ([ACTION_STOP_VOM_TELEFON]): Das Telefon hat dann schon beendet und
+     *   gespeichert, ein `stopp` zurueck wuerde dort nur einen zweiten
+     *   Stopp-Durchlauf anstossen.
+     */
+    private suspend fun beendeVersuch(grund: String, telefonMelden: Boolean = true) {
         if (!laeuft) {
             stopSelf()
             return
@@ -357,7 +373,7 @@ class RecordingService : Service() {
 
         journal.ende(System.currentTimeMillis(), grund)
         RecordingStatus.setzePhase(RecordingStatus.Phase.BEENDET)
-        benachrichtigeTelefon(Befehl.STOPP)
+        if (telefonMelden) benachrichtigeTelefon(Befehl.STOPP)
 
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -488,6 +504,9 @@ class RecordingService : Service() {
         const val ACTION_PAUSE = "de.trailscape.wear.PAUSE"
         const val ACTION_RESUME = "de.trailscape.wear.RESUME"
         const val ACTION_STOP = "de.trailscape.wear.STOP"
+
+        /** Wie [ACTION_STOP], aber vom Telefon ausgeloest — ohne Rueckmeldung (siehe [beendeVersuch]). */
+        const val ACTION_STOP_VOM_TELEFON = "de.trailscape.wear.STOP_VOM_TELEFON"
 
         private const val CHANNEL_ID = "aufzeichnung"
         private const val NOTIFICATION_ID = 1

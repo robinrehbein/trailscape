@@ -1,0 +1,34 @@
+<!-- Vorschau der Kachel in der Kachelauswahl: dunkler Grund, Fortschrittsring in
+     der Akzentfarbe (AccentGreen), darin drei Zeilen als Platzhalter fuer Status,
+     Serie und Kilometer. Ein Vektor statt eines Screenshots; der Systemdialog
+     zeigt ihn rund beschnitten. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M96,0A96,96 0,1 1,96,192A96,96 0,1 1,96,0z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2B3036"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:pathData="M42.2,149.8A76,76 0,1 1,149.8,149.8" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#6BD69C"
+        android:strokeWidth="9"
+        android:strokeLineCap="round"
+        android:pathData="M42.2,149.8A76,76 0,0 1,20,96" />
+    <path
+        android:fillColor="#BFC3C9"
+        android:pathData="M70,66h52v6h-52z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M64,82h64v22h-64z" />
+    <path
+        android:fillColor="#6BD69C"
+        android:pathData="M74,116h44v8h-44z" />
+</vector>

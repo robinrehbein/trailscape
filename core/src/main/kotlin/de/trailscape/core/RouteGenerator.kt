@@ -104,11 +104,54 @@ import kotlin.math.sin
  * der Wind entscheidet nur deren Gleichstand. Ohne Wind (oder unter
  * 10 km/h) bleiben Kurse und Scores exakt wie ohne diesen Schritt.
  *
+ * **8. Rundenguete** (`RouteQuality.kt`). Ein Via-Punkt ist nur eine
+ * Koordinate; liegt er neben dem Wegenetz, faehrt BRouter in eine Sackgasse
+ * hinein und denselben Weg zurueck. Solche Stichstrecken schneidet
+ * [trimSpurs] aus jedem Routing-Ergebnis, **bevor** dessen Distanz mit dem
+ * Ziel verglichen wird. Was danach noch doppelt befahren wird (lange
+ * Hin-und-zurueck-Stuecke, die kein Stachel mehr sind), misst
+ * [retraceShare] und kostet [retraceScore]: `40 × Anteil`, ein Viertel
+ * doppelt also 10 Punkte — so viel wie 10 % Distanzabweichung. Dazu kommt
+ * die Passung des Untergrunds zum Fahrprofil ([surfaceScore]): Schotter
+ * kostet im Asphalt-Profil (`40 × Anteil`) und bringt im Gravel-Profil bis zu
+ * 10 Punkte Bonus.
+ *
+ * **9. Guete-Schwelle und Nachsuche.** Der Score ordnet nur relativ — er
+ * stellt auch dann eine Runde nach vorn, wenn alle drei 18 % daneben liegen
+ * oder zur Haelfte hin und zurueck fuehren, weil der Start am Seeufer, an
+ * einem Fluss mit einer einzigen Bruecke oder am Rand des Wegenetzes liegt.
+ * Deshalb bekommt jeder Kandidat ein absolutes Urteil
+ * [RouteCandidate.quality] (gut / brauchbar / schwach, Schwellen und
+ * Begruendung bei [routeQualityVerdict]). Ist nach dem regulaeren Durchgang
+ * kein einziger Kandidat gut (weniger als [minGoodCandidates]), laeuft
+ * **genau ein** weiterer Durchgang mit `seed + 1` — exakt das, was ein
+ * „Neu wuerfeln" taete: alle Kurse um den goldenen Winkel gedreht, der
+ * Umlaufsinn gewechselt. Zurueck kommen die besten [candidates] aus beiden
+ * Durchgaengen, sortiert wie immer nach Score; das Urteil sortiert nicht mit.
+ *
+ * Warum nur **ein** weiterer Durchgang: Liegt es an der Richtung, hilft die
+ * gedrehte Rosette fast immer schon beim ersten Mal (die Kurse fallen genau
+ * zwischen die alten). Liegt es am Ort selbst — eine Halbinsel, ein Tal mit
+ * einer Strasse —, findet auch der fuenfte Durchgang nichts Besseres, kostet
+ * aber jedes Mal bis zu [maxRadiusAttempts]` × `[candidates] Aufrufe am
+ * geteilten Server und eine halbe Minute Warten. Die Obergrenze
+ * [maxRoutingCallsPerSearch] (doppelt so viele Aufrufe wie bisher) ist hart;
+ * ist dann noch nichts gut, sagt die Oberflaeche das ehrlich, statt weiter zu
+ * suchen. Ist schon der regulaere Durchgang gut, aendert sich nichts: keine
+ * zusaetzlichen Aufrufe, bitgenau dieselbe Liste.
+ *
+ * Keine Nachsuche, wenn der regulaere Durchgang **gar keinen** Kandidaten
+ * lieferte: Scheitern alle Aufrufe, liegt das fast immer am Backend (kein
+ * Netz, keine Kacheln, Server lehnt ab) und nicht an der Richtung — drei
+ * weitere Fehlversuche verzoegerten nur die Fehlermeldung und belasteten
+ * einen Server, der vielleicht gerade drosselt.
+ *
  * ## Betrieb
  *
  * **Streng sequenziell** — laeuft das Routing ueber den oeffentlichen
  * BRouter-Server, ist der eine Gemeinschaftsressource. Zwischen zwei
- * Routing-Aufrufen liegt deshalb eine Pause von [defaultRequestPauseMs]; sie
+ * Routing-Aufrufen liegt deshalb eine Pause von [defaultRequestPauseMs] —
+ * auch vor dem ersten Aufruf der Nachsuche (Schritt 9); sie
  * ist ueber den Parameter `sleeper` injizierbar, damit Tests nicht real
  * warten. Wie geroutet wird, weiss die Generierung selbst nicht mehr: Sie
  * bekommt ein [RoutingBackend] hereingereicht (in der App das
@@ -136,6 +179,29 @@ const val circuitDetourFactor: Double = 1.25
 
 /** Pause zwischen zwei Routing-Aufrufen in ms (Ruecksicht auf den geteilten Server). */
 const val defaultRequestPauseMs: Long = 250
+
+/**
+ * So viele Kandidaten muessen [RouteQualityLevel.GUT] sein, damit der
+ * regulaere Durchgang genuegt (Schritt 9). Eine gute Runde reicht: Die
+ * Liste soll *eine* Empfehlung tragen, die man ungesehen faehrt; die
+ * Alternativen duerfen schwaecher sein.
+ */
+const val minGoodCandidates: Int = 1
+
+/**
+ * Hoechstens so viele Durchgaenge je Suche: der regulaere plus **eine**
+ * Nachsuche mit dem naechsten Seed (Begruendung siehe Datei-KDoc, Schritt 9).
+ */
+const val maxSearchRounds: Int = 2
+
+/**
+ * Harte Obergrenze der Routing-Aufrufe einer Suche mit [candidates]
+ * Kandidaten (auf 1…8 geklemmt wie in [generateRoutes]):
+ * [maxSearchRounds]` × Kandidaten × `[maxRadiusAttempts] — bei drei
+ * Kandidaten 18 statt vorher 9.
+ */
+fun maxRoutingCallsPerSearch(candidates: Int): Int =
+    maxSearchRounds * candidates.coerceIn(1, 8) * maxRadiusAttempts
 
 /** Goldener Winkel in Grad — verteilt aufeinanderfolgende Seeds maximal gleichmaessig. */
 private const val GOLDEN_ANGLE_DEG = 137.50776405003785
@@ -183,6 +249,17 @@ data class RouteCandidate(
      * [windMinKmh].
      */
     val windShape: Double? = null,
+    /**
+     * Anteil der Strecke, der doppelt befahren wird (0…1, [retraceShare]) —
+     * nach dem Herausschneiden der Stichstrecken.
+     */
+    val retraceShare: Double = 0.0,
+    /**
+     * Fahrprofil, mit dem die Runde gerechnet wurde. Nur fuer das Belags-
+     * Kriterium von [quality] gebraucht; `null` (z. B. in Vorschau-Daten)
+     * laesst dieses Kriterium aus.
+     */
+    val profile: RouteProfile? = null,
 ) {
     /** Anteil neuer Kacheln an allen Kacheln der Route (0…1, 0 ohne Kacheln). */
     val newTileShare: Double get() = if (totalTileCount > 0) newTileCount.toDouble() / totalTileCount else 0.0
@@ -192,6 +269,23 @@ data class RouteCandidate(
 
     /** Relative Abweichung vom Ziel (0,1 = 10 % zu lang oder zu kurz). */
     val distanceDeviation: Double get() = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 0.0
+
+    /**
+     * Guete-Urteil samt Ursache ([routeQualityVerdict]) — abgeleitet, nicht
+     * gespeichert, damit es nie gegen Distanz, Rueckweg-Anteil und Belag
+     * auseinanderlaufen kann.
+     */
+    val qualityVerdict: RouteQualityVerdict
+        get() = routeQualityVerdict(distanceDeviation, retraceShare, route.unpavedPercent, profile)
+
+    /**
+     * Gut / brauchbar / schwach (Schritt 9). Ein Tor und eine Beschriftung,
+     * **keine** Rangfolge: sortiert wird weiter allein nach [score].
+     */
+    val quality: RouteQualityLevel get() = qualityVerdict.level
+
+    /** Das Kriterium, das [quality] unter [RouteQualityLevel.GUT] drueckt; `null` bei guten Runden. */
+    val qualityIssue: RouteQualityIssue? get() = qualityVerdict.issue
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +406,9 @@ fun noveltyScore(newTileShare: Double): Double {
  * `newTileShare = 0` und `windBonus = 0` ist das Ergebnis identisch mit der
  * Bewertung ohne Entdecker-Modus und ohne Wind. Ein nicht endlicher
  * [windBonus] zaehlt als 0 — er darf nie die Sortierung kippen.
+ * [retraceShare] ist der doppelt befahrene Anteil ([retraceScore]),
+ * [surfaceScore] die Passung des Untergrunds zum Fahrprofil (gleichnamige
+ * Funktion in `RouteQuality.kt`).
  */
 fun scoreRoute(
     distanceKm: Double,
@@ -320,11 +417,14 @@ fun scoreRoute(
     preference: AscentPreference,
     newTileShare: Double = 0.0,
     windBonus: Double = 0.0,
+    retraceShare: Double = 0.0,
+    surfaceScore: Double = 0.0,
 ): Double {
     val deviation = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 1.0
     val perKm = if (distanceKm > 0) ascentM / distanceKm else 0.0
     val wind = if (windBonus.isFinite()) windBonus else 0.0
-    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind
+    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind +
+        retraceScore(retraceShare) + (if (surfaceScore.isFinite()) surfaceScore else 0.0)
 }
 
 /**
@@ -394,7 +494,16 @@ private class Attempt(val route: PlannedRoute, val deviation: Double)
  * @param pauseMs Pause zwischen zwei Routing-Aufrufen.
  * @param sleeper Wartefunktion, injizierbar fuer Tests und fuer den Abbruch
  *   von aussen (wirft sie, verlaesst die Generierung sofort).
- * @param onProgress Fortschritt `(erledigt, gesamt)` nach jedem Kandidaten.
+ * @param onProgress Fortschritt `(erledigt, gesamt)` nach jedem Kandidaten,
+ *   beginnend mit `(0, gesamt)`. `gesamt` ist zunaechst die Kandidatenzahl
+ *   eines Durchgangs. Faellt nach dessen letztem Kandidaten die Entscheidung
+ *   fuer die Nachsuche (Schritt 9), lautet die naechste Meldung nicht
+ *   `(n, n)`, sondern gleich `(n, 2n)`, und es geht mit `(n + 1, 2n)` …
+ *   `(2n, 2n)` weiter. `erledigt` faellt also nie, `gesamt` waechst hoechstens
+ *   einmal, und `erledigt == gesamt` heisst immer „fertig". Der Anteil
+ *   `erledigt / gesamt` sinkt beim Wechsel einmal (von `(n−1)/n` auf `1/2`) —
+ *   eine Fortschrittsanzeige, die nicht zuruecklaufen soll, haelt ihren
+ *   Hoechststand (so tut es das Rundenwahl-Blatt).
  * @param exploredTiles Bereits entdeckte Kacheln (z. B. aus
  *   [collectExplorerTiles]); daraus ergibt sich [RouteCandidate.newTileCount].
  * @param preferNewAreas Schalter „Neue Gegenden bevorzugen": Bonus fuer neue
@@ -403,6 +512,9 @@ private class Attempt(val route: PlannedRoute, val deviation: Double)
  * @param wind Aktueller Wind am Start (Schritt 7), z. B. aus
  *   [fetchCurrentWind]. `null` (Vorgabe) oder unter [windMinKmh]: Kurse und
  *   Scores bleiben exakt wie ohne Wind, [RouteCandidate.windShape] ist `null`.
+ * @param followUpSearch Nachsuche mit `seed + 1`, wenn der regulaere
+ *   Durchgang keine gute Runde liefert (Schritt 9). Aus, verhaelt sich die
+ *   Suche exakt wie vor diesem Schritt.
  */
 suspend fun generateRoutes(
     backend: RoutingBackend,
@@ -418,6 +530,7 @@ suspend fun generateRoutes(
     preferNewAreas: Boolean = false,
     wind: WindConditions? = null,
     texts: CoreTexts,
+    followUpSearch: Boolean = true,
 ): List<RouteCandidate> {
     val hints = mutableListOf<String>()
     val rawKm = if (target.distanceKm.isFinite()) target.distanceKm else 0.0
@@ -432,9 +545,7 @@ suspend fun generateRoutes(
     }
 
     val total = candidates.coerceIn(1, 8)
-    val seedOffset = (seed * GOLDEN_ANGLE_DEG) % 360.0
-    // Umlaufsinn wechselt mit der Seed-Paritaet (Math.floorMod: auch fuer negative Seeds).
-    val clockwise = Math.floorMod(seed, 2) == 0
+    val callBudget = maxRoutingCallsPerSearch(total)
 
     val results = mutableListOf<RouteCandidate>()
     var requestsMade = 0
@@ -447,12 +558,19 @@ suspend fun generateRoutes(
     // konkreteste Auskunft ueber das Warum und gehoert in die Fehlermeldung.
     var lastFailure: Exception? = null
 
-    onProgress?.invoke(0, total)
+    /**
+     * Kandidat [i] eines Durchgangs mit [roundSeed] — der regulaere Durchgang
+     * rechnet mit `seed`, die Nachsuche (Schritt 9) mit `seed + 1`. `null`,
+     * wenn kein Versuch eine Route lieferte.
+     */
+    suspend fun candidateAt(roundSeed: Int, i: Int): RouteCandidate? {
+        val seedOffset = (roundSeed * GOLDEN_ANGLE_DEG) % 360.0
+        // Umlaufsinn wechselt mit der Seed-Paritaet (Math.floorMod: auch fuer negative Seeds).
+        val clockwise = Math.floorMod(roundSeed, 2) == 0
 
-    for (i in 0 until total) {
         val baseBearing = ((i * 360.0 / total) + seedOffset).mod(360.0)
         // 3 oder 4 Via-Punkte, deterministisch wechselnd — aendert die Rundenform.
-        val viaCount = 3 + Math.floorMod(seed + i, 2)
+        val viaCount = 3 + Math.floorMod(roundSeed + i, 2)
 
         var radiusM = targetKm * 1000 / (2 * PI * circuitDetourFactor)
 
@@ -483,13 +601,17 @@ suspend fun generateRoutes(
         var best: Attempt? = null
 
         for (attempt in 0 until maxRadiusAttempts) {
+            // Harte Obergrenze (Schritt 9). Bei hoechstens zwei Durchgaengen
+            // greift sie nie; sie haelt das Versprechen an den geteilten
+            // Server, falls hier spaeter jemand mehr Durchgaenge einbaut.
+            if (requestsMade >= callBudget) break
             if (requestsMade > 0) {
                 sleeper(pauseMs)
             }
             requestsMade += 1
 
             val waypoints = loopWaypoints(start, radiusM, bearing, viaCount, clockwise)
-            val route = try {
+            val routed = try {
                 backend.route(waypoints, profile)
             } catch (e: CancellationException) {
                 // Ein Abbruch der umgebenden Coroutine ist kein gescheiterter
@@ -501,9 +623,13 @@ suspend fun generateRoutes(
                 break
             }
 
-            if (!route.distanceKm.isFinite() || route.distanceKm <= 0) {
+            if (!routed.distanceKm.isFinite() || routed.distanceKm <= 0) {
                 break
             }
+            // Stichstrecken zu den Via-Punkten herausschneiden (Schritt 8) —
+            // vor dem Distanzvergleich, damit der Radius auf die Laenge
+            // nachgefuehrt wird, die am Ende wirklich gefahren wird.
+            val route = trimSpurs(routed).route
 
             val deviation = abs(route.distanceKm - targetKm) / targetKm
             if (best == null || deviation < best.deviation) {
@@ -517,36 +643,60 @@ suspend fun generateRoutes(
             radiusM *= clamp(targetKm / route.distanceKm, 0.5, 2.0)
         }
 
-        val found = best
-        if (found != null) {
-            val (newTiles, totalTiles) = countNewTiles(found.route.points, exploredTiles)
-            val share = if (totalTiles > 0) newTiles.toDouble() / totalTiles else 0.0
-            val shape = windFrom?.let { windShape(found.route.points, it) }
-            val windBonus = if (windFrom != null && wind != null) windScore(found.route.points, wind) else 0.0
-            results.add(
-                RouteCandidate(
-                    route = found.route,
-                    distanceKm = found.route.distanceKm,
-                    ascentM = found.route.ascentM,
-                    score = scoreRoute(
-                        distanceKm = found.route.distanceKm,
-                        ascentM = found.route.ascentM,
-                        targetKm = targetKm,
-                        preference = target.ascentPreference,
-                        newTileShare = if (preferNewAreas) share else 0.0,
-                        windBonus = windBonus,
-                    ),
-                    bearingDeg = bearing,
-                    targetKm = targetKm,
-                    hints = hints.toList(),
-                    newTileCount = newTiles,
-                    totalTileCount = totalTiles,
-                    windShape = shape,
-                ),
-            )
-        }
+        val found = best ?: return null
+        val (newTiles, totalTiles) = countNewTiles(found.route.points, exploredTiles)
+        val share = if (totalTiles > 0) newTiles.toDouble() / totalTiles else 0.0
+        val shape = windFrom?.let { windShape(found.route.points, it) }
+        val windBonus = if (windFrom != null && wind != null) windScore(found.route.points, wind) else 0.0
+        val retraced = retraceShare(found.route.points)
+        return RouteCandidate(
+            route = found.route,
+            distanceKm = found.route.distanceKm,
+            ascentM = found.route.ascentM,
+            score = scoreRoute(
+                distanceKm = found.route.distanceKm,
+                ascentM = found.route.ascentM,
+                targetKm = targetKm,
+                preference = target.ascentPreference,
+                newTileShare = if (preferNewAreas) share else 0.0,
+                windBonus = windBonus,
+                retraceShare = retraced,
+                surfaceScore = surfaceScore(profile, found.route),
+            ),
+            bearingDeg = bearing,
+            targetKm = targetKm,
+            hints = hints.toList(),
+            newTileCount = newTiles,
+            totalTileCount = totalTiles,
+            windShape = shape,
+            retraceShare = retraced,
+            profile = profile,
+        )
+    }
 
-        onProgress?.invoke(i + 1, total)
+    onProgress?.invoke(0, total)
+
+    // Regulaerer Durchgang. Die Meldung nach dem letzten Kandidaten wartet
+    // auf die Entscheidung ueber die Nachsuche (siehe `onProgress`).
+    for (i in 0 until total) {
+        candidateAt(seed, i)?.let(results::add)
+        if (i < total - 1) onProgress?.invoke(i + 1, total)
+    }
+
+    // Guete-Schwelle (Schritt 9): ohne gute Runde genau eine Nachsuche mit
+    // dem naechsten Seed — nicht, wenn gar nichts zustande kam (Backend-Problem).
+    val needsFollowUp = followUpSearch &&
+        results.isNotEmpty() &&
+        results.count { it.quality == RouteQualityLevel.GUT } < minGoodCandidates
+    if (!needsFollowUp) {
+        onProgress?.invoke(total, total)
+    } else {
+        val grandTotal = total * maxSearchRounds
+        onProgress?.invoke(total, grandTotal)
+        for (i in 0 until total) {
+            candidateAt(seed + 1, i)?.let(results::add)
+            onProgress?.invoke(total + i + 1, grandTotal)
+        }
     }
 
     if (results.isEmpty()) {
@@ -560,5 +710,7 @@ suspend fun generateRoutes(
         }
     }
 
-    return results.sortedWith(compareBy({ it.score }, { it.bearingDeg }))
+    // Ohne Nachsuche sind es hoechstens `total` Kandidaten, `take` aendert
+    // dann nichts; mit Nachsuche gewinnen die besten aus beiden Durchgaengen.
+    return results.sortedWith(compareBy({ it.score }, { it.bearingDeg })).take(total)
 }

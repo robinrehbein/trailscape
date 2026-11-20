@@ -768,10 +768,20 @@ class RecordingService : Service() {
      * [vereinigePunkte] fuer die Begruendung.
      */
     private fun finishAndStop() {
+        val warAktiv = active
         stopUpdates()
         cancelWatchdogAlarm()
         handler.removeCallbacks(ticker)
         active = false
+        // Eine mitlaufende Uhr soll mitenden, und zwar vor dem Speichern, damit
+        // ihr Abschlussbild steht, bevor die Zeilen dazu (PFAD_ABSCHLUSS) nach
+        // dem Speichern eintreffen. Nur beim regulaeren Ende einer laufenden
+        // Tour — ein STOP ohne Aufzeichnung (z. B. das Echo auf den eigenen
+        // Stopp der Uhr) meldet nichts. Bewusst nicht in [failAndStop] und
+        // nicht bei der Absturz-Rettung: Dort hat niemand am Telefon „Ende"
+        // gesagt, und eine faelschlich beendete Uhr-Aufzeichnung wiegt
+        // schwerer als eine, die die Fahrerin selbst noch stoppt.
+        if (warAktiv) WearBridge.sendTelefonBeendet(this, System.currentTimeMillis())
         RecordingRepository.detachWatchSampleSink()
         BleSensors.release(BleNutzer.AUFZEICHNUNG)
         // Vor dem Speichern angestossen: Die Bestaetigung soll unmittelbar auf

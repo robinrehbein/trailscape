@@ -68,6 +68,7 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
+import de.trailscape.app.ui.progress.WeeklyGoalBar
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ReadinessBand
@@ -333,6 +334,18 @@ private val RingSize = 74.dp
 private val RingStroke = 7.dp
 
 /**
+ * Balken und Satz unter dem Wochenstreifen: wie weit die Woche zum Kilometerziel
+ * ist — beim Plan wie beim mitwachsenden Wochenziel. [caption] gibt es nur fuer
+ * das mitwachsende Ziel (siehe `weeklyGoalCaption`); ein Plan erklaert sich selbst.
+ */
+internal data class WeekGoalLine(
+    val fraction: Float,
+    val reached: Boolean,
+    val description: String,
+    val caption: String? = null,
+)
+
+/**
  * Stufe 2: „Diese Woche" — Stand in einer Zeile, darunter der Streifen Mo–So.
  *
  * Ersetzt Zahlenzeile **und** Plan-Ausblick, die dieselben Wochenkilometer
@@ -346,7 +359,12 @@ private val RingStroke = 7.dp
  * vorgelesen ([StripDay.description]) statt als Kuerzel und nackte Zahl.
  */
 @Composable
-internal fun WeekCard(summary: Pair<UiText, UiText?>, strip: List<StripDay>) {
+internal fun WeekCard(
+    summary: Pair<UiText, UiText?>,
+    strip: List<StripDay>,
+    footer: (@Composable () -> Unit)? = null,
+    goal: WeekGoalLine? = null,
+) {
     val first = summary.first.asString()
     val second = summary.second?.asString()
     val summarySpoken = second?.let { "$first, $it" } ?: first
@@ -378,6 +396,21 @@ internal fun WeekCard(summary: Pair<UiText, UiText?>, strip: List<StripDay>) {
                 strip.forEachIndexed { index, day ->
                     StripDayCell(day = day, index = index, modifier = Modifier.weight(1f))
                 }
+            }
+            if (goal != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                WeeklyGoalBar(
+                    fraction = goal.fraction,
+                    reached = goal.reached,
+                    description = goal.description,
+                    caption = goal.caption,
+                )
+            }
+            if (footer != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(12.dp))
+                footer()
             }
         }
     }

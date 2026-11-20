@@ -14,17 +14,24 @@ import de.trailscape.app.ui.today.TodayEffort
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offeredTarget
 import de.trailscape.app.ui.today.todayEffort
+import de.trailscape.app.widget.ShownWeekTarget
+import de.trailscape.core.RideFact
 import de.trailscape.core.RideSummary
 import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
+import de.trailscape.core.WeeklyGoalProgress
 import de.trailscape.core.adaptPlan
 import de.trailscape.core.currentWeekIndex
 import de.trailscape.core.decideTodayRoute
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.restDayRideTarget
 import de.trailscape.core.sessionsForDay
+import de.trailscape.core.suggestWeeklyGoal
+import de.trailscape.core.weeklyGoalProgress
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.delay
@@ -193,3 +200,63 @@ fun rememberTodayDecision(appViewModel: AppViewModel, now: LocalDateTime = remem
         decideToday(insights, plan, rides, nowMs, ridesLoading, coreTexts)
     }
 }
+
+/**
+ * Das Wochenziel dieser Woche — die EINE Zahl, die „Heute" zeigt und die das
+ * Tourblatt nach der Fahrt meint („Wochenziel geschafft", „Noch 22 km bis zum
+ * Wochenziel"). Vorher stand die Ableitung nur in `today/TodayScreen.kt`;
+ * zwei Kopien liefen frueher oder spaeter auseinander.
+ *
+ * Regel: Eine laufende Planwoche mit Kilometerziel gewinnt. Ohne sie — oder
+ * mit 0 km, dieselbe Regel wie im Widget — gilt das mitwachsende Ziel aus
+ * `core/…/WeeklyGoal.kt` ([suggestWeeklyGoal]).
+ *
+ * @property targetKm das Ziel in km, `null` ohne jedes Ziel.
+ * @property adaptive Stand zum mitwachsenden Ziel; `null`, wenn die Planwoche
+ *   gilt (oder es keins gibt).
+ */
+data class WeekTarget(val targetKm: Int?, val adaptive: WeeklyGoalProgress?)
+
+/** [WeekTarget] als reine Funktion — fuer „Heute" und die Karte dieselbe Rechnung. */
+fun weekTarget(currentWeek: TrainingWeek?, facts: List<RideFact>, today: LocalDate): WeekTarget {
+    val planTargetKm = currentWeek?.targetKm?.takeIf { it > 0 }
+    val adaptive = if (planTargetKm == null) {
+        suggestWeeklyGoal(facts, today)?.let { weeklyGoalProgress(it, facts, today) }
+    } else {
+        null
+    }
+    return WeekTarget(planTargetKm ?: adaptive?.goal?.targetKm, adaptive)
+}
+
+/**
+ * Das Wochenziel in km ausserhalb der Oberflaeche (Dienste, die Uhr nach der
+ * Fahrt) — ohne Trainingsauswertung, also ohne den angepassten Plan, den
+ * [decideToday] fuer „Heute" rechnet.
+ *
+ * Damit trotzdem dieselbe Zahl herauskommt wie auf „Heute":
+ *  1. Hat „Heute" fuer diese Woche schon ein Ziel gezeigt ([shown], notiert
+ *     von `AppViewModel.rememberShownWeekTarget`), gilt genau das — dieselbe
+ *     Vorrangregel wie im Widget (`widget/WidgetState.kt`).
+ *  2. Sonst [weekTarget] mit der rohen Planwoche von [plan] (nur, wenn
+ *     [nowMs] wirklich in ihr liegt): Planziel > 0, sonst [suggestWeeklyGoal].
+ *
+ * @return das Ziel in km, `null` ohne jedes Ziel.
+ */
+fun weekTargetKmOutsideUi(
+    plan: TrainingPlan?,
+    facts: List<RideFact>,
+    today: LocalDate,
+    nowMs: Long,
+    shown: ShownWeekTarget?,
+): Int? {
+    shown?.takeIf { it.monday == today.with(DayOfWeek.MONDAY) && it.targetKm > 0 }?.let { return it.targetKm }
+    val planWeek = plan?.let { p ->
+        p.weeks.getOrNull(currentWeekIndex(p, nowMs))?.takeIf { nowMs >= it.start && nowMs < it.end }
+    }
+    return weekTarget(planWeek, facts, today).targetKm
+}
+
+/** [weekTarget] fuer eine Composable-Stelle, mit der Planwoche aus [decision]. */
+@Composable
+fun rememberWeekTarget(decision: TodayDecision, facts: List<RideFact>, today: LocalDate): WeekTarget =
+    remember(decision.currentWeek, facts, today) { weekTarget(decision.currentWeek, facts, today) }

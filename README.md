@@ -30,10 +30,21 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 **Heute** (Startseite)
 - Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
   dafür eine passende Rundstrecke generiert
-- Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
+- Wochenfortschritt gegen das Planziel, darunter die **Wochenserie**: wie
+  viele Wochen in Folge du gefahren bist und wie viele Tage bleiben, um sie zu
+  halten (bewusst Wochen statt Tage — Ruhetage kosten nichts)
+- **Als Nächstes:** die *nächste Bestweite* (ein Stück weiter als deine
+  weiteste Tour der letzten sechs Wochen, mit Knopf für genau diese Runde),
+  dein **Jahresziel** mit Soll und Ist und der nächstgelegene **Meilenstein**
 - Ohne eine einzige Tour eine ruhige erste Runde nach Zeit (1 h / 1½ h / 2 h),
   die „Runde bauen" direkt ab deinem Standort sucht — auch als letzter Schritt
   der Einführung
+- Auch ohne Trainingsplan gibt es ein Wochenziel in Kilometern. Es entsteht
+  aus deinen letzten Wochen und wächst behutsam: nach drei Aufbauwochen eine
+  leichtere Woche, nach einer Pause ein sanfter Wiedereinstieg. Der Balken
+  unter dem Wochenstreifen zeigt den Stand
+- Montags bis mittwochs ein Rückblick auf die letzte Woche: Kilometer, Touren,
+  Vergleich zur Woche davor, neue Bestwerte und die Wochenserie
 
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
@@ -56,10 +67,16 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
   Pulskurve, Ø Leistung und Ø Trittfrequenz, wo gemessen, dazu Entkopplung
   und VO₂max-Schätzung, wo die Daten es hergeben —
-  und oben „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
+  und oben „Erfolge dieser Tour“ (damals gesetzte Bestwerte, überschrittene
+  Meilensteine; nach einer Aufzeichnung auch als Meldung) sowie
+  „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
   neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
   Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
   Tourblatt der Karte genau diese Ansicht
+- „Diese Runde“: Wer eine Strecke wiederholt, sieht im Tour-Detail den Vergleich
+  mit den früheren Fahrten (Rang, Abstand zum letzten Mal und zur Bestzeit,
+  nach Bewegungszeit). Hin- und Rückweg einer Strecke von A nach B zählen
+  getrennt, Runden unabhängig von der Richtung
 - Umbenennen, Löschen, als GPX (mit Puls, Trittfrequenz und Leistung) oder als
   Bild teilen (Story 9:16 oder Quadrat, mit Spur, Höhenprofil und Kennzahlen;
   Start und Ziel ab Werk ausgeblendet; auch direkt vom Tourblatt der Karte),
@@ -70,8 +87,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Aufzeichnung (Schalter unter Einstellungen → Strava, ab Werk aus). Ohne
   Verbindung geht nichts an Strava. Nur in Builds mit hinterlegten
   Strava-App-Zugangsdaten sichtbar
-- Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
-  wieder importieren
+- Backup: alle Touren, Trainingsprofil und Jahresziel als eine JSON-Datei
+  exportieren und wieder importieren
 
 **Karte & Planung**
 - MapLibre-Karte mit sechs Kartenstilen zur Auswahl (Straßenkarte, CyclOSM,
@@ -87,6 +104,13 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   mit Rückenwind nach Hause führt
   (aktueller Wind von Open-Meteo, nur mit Schalter, Startpunkt auf etwa 1 km
   gerundet)
+- Vorgeschlagene Runden ohne Stichstrecken: Führt das Routing zu einem
+  Hilfspunkt in eine Sackgasse hinein und denselben Weg zurück, wird das Stück
+  herausgeschnitten. Runden, die zu einem guten Teil hin und zurück über
+  denselben Weg führen, rutschen in der Liste nach hinten und sagen es dazu
+- Der Untergrund zählt bei der Reihenfolge der Vorschläge mit: Im Gravel-Profil
+  gewinnt bei ähnlicher Länge die Runde mit mehr unbefestigten Wegen, im
+  Asphalt-Profil die mit weniger
 - Höhenprofil der geplanten Route
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
@@ -97,6 +121,15 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   verwalten
 
 **Training**
+- Zwei Sichten: **Fortschritt** und **Plan**
+- Fortschritt: Kilometer je Woche über zwölf Wochen mit dem Vergleich „letzte
+  vier Wochen gegen die vier davor“, Jahresziel (Soll ab dem Tag, an dem du es
+  setzt; Hochrechnung aus den letzten acht Wochen), Bestwerte (weiteste Tour,
+  meiste Höhenmeter, längste Fahrzeit, schnellster Schnitt ab 20 km — ein Tipp
+  öffnet die Tour), Meilensteine und die Summen aller Touren
+- Monats-Challenges aus der eigenen Historie (Kilometer, Höhenmeter, Tage auf
+  dem Rad, eine lange Tour), jeden Monat neu und etwa 10 % über dem Schnitt der
+  letzten drei Monate
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
 - Trainingsplan mit progressiver Steigerung, Erholungswochen und
   Fortschrittsverfolgung
@@ -109,12 +142,21 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - **Tageseinheit** morgens zur eingestellten Uhrzeit (Vorgabe 7:00): was heute
   ansteht — an Ruhetagen der Hinweis darauf, ohne Trainingsplan gar nichts
 - **Wochenrückblick** sonntagabends (Vorgabe 18:00): gefahrene gegen geplante
-  Kilometer der laufenden Woche
-- **Anstupser** nach fünf Tagen ohne Aufzeichnung, höchstens einmal pro Woche
+  Kilometer der laufenden Woche. Ohne Trainingsplan stattdessen Kilometer,
+  Touren und der Vergleich zur Vorwoche
+- **Anstupser** nach fünf Tagen ohne Aufzeichnung, höchstens einmal pro Woche.
+  Läuft eine Wochenserie seit mindestens zwei Wochen und fehlt diese Woche
+  noch, meldet er sich stattdessen ab Freitag mit den verbleibenden Tagen
 - Jeder Anlass einzeln abschaltbar unter **Mehr → Erinnerungen**. Ein einziger
   täglicher Hintergrundlauf (WorkManager) entscheidet beim Auslösen, was fällig
   ist; die Meldungen entstehen vollständig auf dem Gerät — kein Push-Server,
   kein Konto, kein Netzzugriff. Antippen öffnet den „Heute"-Tab
+
+**Startbildschirm-Widget**
+- Zeigt Wochenserie und Stand zum Wochenziel; ein Tipp öffnet die App
+- Aktualisiert sich nach einer gespeicherten Tour und wenn die App in den
+  Hintergrund geht
+- Rechnet ausschließlich mit den lokal gespeicherten Touren
 
 **Gesundheitsdaten**
 - Anbindung an Health Connect (dorthin spiegelt Samsung Health die
@@ -135,6 +177,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   ans Handy, aufgezeichnet wird dort. Ohne Handy zeichnet sie keine Tour auf
 - Ohne Handy unterwegs? Die Fahrt mit Samsung Health auf der Uhr aufzeichnen —
   Trailscape importiert sie danach über Health Connect
+- Kachel und Zifferblatt-Komplikation zeigen Wochenserie und Fortschritt zum
+  Wochenziel auf einen Blick (rechnet das Handy, lokal, ohne Netz)
 
 **Sprache**
 - Deutsch und Englisch – folgt der Systemsprache (Deutsch, wenn das Gerät auf
@@ -236,6 +280,9 @@ Texte). Robolectric kommt nur für die Screenshot-Tests zum Einsatz; sie laufen
 nur mit `-Pscreenshots`, in der CI also mit, auf Deutsch und — mit „-en“ im
 Dateinamen — auf Englisch. Alles Rechnende liegt ohnehin in `:core`.
 
+Was auf einem echten Gerät geprüft werden muss, steht in der
+[Prüfliste fürs Gerät](docs/geraete-pruefliste.md).
+
 ## Installation und Updates
 
 Der neue Play-Eintrag verwendet `de.robinrehbein.trailscape`. Er wird zunächst
@@ -315,7 +362,7 @@ die alte Version. Einmalig ist eine Neuinstallation nötig:
 3. `trailscape.apk` aus dem `latest`-Release installieren
 4. **Mehr → Daten & Backup → Backup importieren**, die Datei auswählen
 
-Damit sind alle Touren und das Trainingsprofil übernommen. Nicht im Backup
+Damit sind alle Touren, das Trainingsprofil und das Jahresziel übernommen. Nicht im Backup
 enthalten sind heruntergeladene Offline-Karten — die lädt man neu.
 
 Ab Version 2.x sind Updates wieder normale Installationen über die

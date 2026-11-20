@@ -8,6 +8,7 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.ExplorerTilesCacheStore
 import de.trailscape.app.data.RideLoadCacheStore
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.data.RouteSignatureCacheStore
 import de.trailscape.app.data.SegmentStore
 import de.trailscape.app.data.TombstoneStore
 import de.trailscape.app.i18n.UiText
@@ -32,10 +33,15 @@ import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
+import de.trailscape.core.YearGoal
+import de.trailscape.app.widget.ShownWeekTarget
+import de.trailscape.core.maxYearGoalKm
+import de.trailscape.core.minYearGoalKm
 import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
+import de.trailscape.core.RouteComparison
 import de.trailscape.core.RouteConsentRequest
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.SegmentNewBest
@@ -52,6 +58,8 @@ import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.bulkImportFailureText
 import de.trailscape.core.bulkImportMessage
 import de.trailscape.core.collectExplorerTiles
+import de.trailscape.core.collectRouteSignatures
+import de.trailscape.core.compareOnRoute
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.explorerTilesCacheGaps
@@ -64,6 +72,7 @@ import de.trailscape.core.loadPlan
 import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.retainRidesInSegmentRegistry
+import de.trailscape.core.riddenRides
 import de.trailscape.core.ridesNeedingSegmentUpdate
 import de.trailscape.core.routeConsentStorageKey
 import de.trailscape.core.savePlan
@@ -75,6 +84,7 @@ import de.trailscape.core.withVitalsDiagnostics
 import de.trailscape.core.writeBackupJson
 import de.trailscape.core.writeVitalsHistory
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
@@ -197,6 +207,8 @@ class AppViewModel(
     private val rideLoadCache: de.trailscape.core.RideLoadFactsStore = AppServices.rideLoadCacheStore,
     /** Persistenter Kachel-Cache der Entdeckt-Kacheln (siehe [ExplorerTilesCacheStore]). */
     private val explorerTilesStore: ExplorerTilesStore = AppServices.explorerTilesCacheStore,
+    /** Persistenter Signatur-Cache des Rundenvergleichs (siehe [RouteSignatureCacheStore]). */
+    private val routeSignatureStore: RouteSignatureCacheStore = AppServices.routeSignatureCacheStore,
     /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
     private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
     /** Persistente Segment-Registry der lokalen Bestleistungen (siehe [SegmentStore]). */
@@ -767,6 +779,7 @@ class AppViewModel(
                 out = out,
                 rides = summaries.asSequence().mapNotNull { rideStorage.loadRide(it.id) },
                 profile = _profile.value,
+                yearGoal = _yearGoal.value,
             )
         }
     }
@@ -1908,6 +1921,98 @@ class AppViewModel(
     }.getOrNull()
 
     // -------------------------------------------------------------------------
+    // Jahresziel
+    // -------------------------------------------------------------------------
+
+    private val _yearGoal = MutableStateFlow<YearGoal?>(null)
+
+    /**
+     * Das selbst gesetzte Jahresziel — `null`, solange keines gesetzt ist.
+     * Es gilt ueber den Jahreswechsel hinweg weiter: Wer sich 4000 km
+     * vornimmt, meint das im Januar wieder; der Stand dazu
+     * ([de.trailscape.core.yearGoalProgress]) beginnt mit dem Kalenderjahr
+     * von selbst bei null.
+     */
+    val yearGoal: StateFlow<YearGoal?> = _yearGoal.asStateFlow()
+
+    /**
+     * Setzt das Jahresziel; `null` entfernt es. Wer nur die Zahl aendert,
+     * behaelt den Tag, ab dem das Soll laeuft ([YearGoal.since]) — sonst
+     * liesse sich ein Rueckstand durch erneutes Speichern wegklicken.
+     */
+    /**
+     * Stellt ein Jahresziel aus einem Backup wieder her — mit [YearGoal.since]
+     * wie gesichert (anders als [setYearGoalKm], das den Starttag neu setzt).
+     */
+    fun restoreYearGoal(goal: YearGoal) {
+        val value = goal.copy(targetKm = goal.targetKm.coerceIn(minYearGoalKm, maxYearGoalKm))
+        _yearGoal.value = value
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching { keyValueStore.setString(YEAR_GOAL_STORAGE_KEY, value.encode()) }
+            }
+        }
+    }
+
+    fun setYearGoalKm(km: Int?) {
+        val today = LocalDate.now()
+        val value = km?.let {
+            val since = _yearGoal.value?.since?.takeIf { it.year == today.year } ?: today
+            YearGoal(targetKm = it.coerceIn(minYearGoalKm, maxYearGoalKm), since = since)
+        }
+        _yearGoal.value = value
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    if (value == null) {
+                        keyValueStore.remove(YEAR_GOAL_STORAGE_KEY)
+                    } else {
+                        keyValueStore.setString(YEAR_GOAL_STORAGE_KEY, value.encode())
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Notiert das Wochenziel, das die Startseite gerade zeigt, fuer das
+     * Startbildschirm-Widget ([ShownWeekTarget]) — `null` entfernt die Notiz.
+     * Geschrieben wird nur bei einer Aenderung; die Startseite ruft das bei
+     * jedem Aufbau.
+     */
+    fun rememberShownWeekTarget(monday: LocalDate, targetKm: Int?) {
+        val encoded = targetKm?.takeIf { it > 0 }?.let { ShownWeekTarget(monday, it).encode() }
+        if (encoded == lastShownWeekTarget) return
+        lastShownWeekTarget = encoded
+        viewModelScope.launch {
+            // Nacheinander schreiben: Zwei kurz aufeinander folgende Werte
+            // (Plan geladen, Auswertung noch nicht) liefen sonst parallel im
+            // IO-Pool, und der aeltere konnte als letzter landen.
+            shownWeekTargetMutex.withLock {
+                withContext(io) {
+                    runCatching {
+                        if (encoded == null) {
+                            keyValueStore.remove(ShownWeekTarget.STORAGE_KEY)
+                        } else {
+                            keyValueStore.setString(ShownWeekTarget.STORAGE_KEY, encoded)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Haelt die Schreibvorgaenge von [rememberShownWeekTarget] in ihrer Reihenfolge. */
+    private val shownWeekTargetMutex = Mutex()
+
+    /** Zuletzt notierter Wert von [rememberShownWeekTarget]; nur auf dem Hauptthread gelesen und geschrieben. */
+    private var lastShownWeekTarget: String? = null
+
+    private fun readYearGoal(): YearGoal? = runCatching {
+        YearGoal.decode(keyValueStore.getString(YEAR_GOAL_STORAGE_KEY))
+    }.getOrNull()
+
+    // -------------------------------------------------------------------------
     // Erinnerungen
     // -------------------------------------------------------------------------
 
@@ -2217,6 +2322,83 @@ class AppViewModel(
         if (gaps == 0 || gaps > EXPLORER_TILES_CHEAP_REFRESH_MAX) return null
         refreshExplorerTiles()
         return lookup()
+    }
+
+    // ------------------------------------------------- Rundenvergleich
+    // („Diese Runde bist du 5× gefahren — heute die 2. schnellste Zeit")
+
+    /**
+     * Serialisiert die Laeufe von [routeComparisonFor] — es scannt immer
+     * hoechstens einer den Bestand. Zwei Detailansichten kurz nacheinander
+     * (Tippen auf eine fruehere Fahrt in der Rundenkarte) laden so keine Tour
+     * doppelt: Der zweite Lauf findet den Cache vom ersten schon gefuellt.
+     */
+    private val routeComparisonMutex = Mutex()
+
+    /**
+     * Vergleich der Tour [rideId] mit allen anderen gefahrenen Touren auf
+     * derselben Strecke (`:core`/[compareOnRoute]) — fuer die Karte
+     * „Diese Runde" in der Detailansicht. `null`, wenn die Tour keine
+     * Wiederholung hat (oder zu kurz, geplant, ohne Zeit ist) und bei jedem
+     * Fehler: Ein kaputter Cache darf die Detailansicht nie stoeren.
+     *
+     * ## Kosten
+     * Die Signaturen kommen aus dem persistenten Cache
+     * ([routeSignatureStore], `route-cache/route-signatures.json`);
+     * `collectRouteSignatures` laedt nur Touren, deren Eintrag fehlt oder
+     * veraltet ist. **Der allererste Aufruf auf einem grossen Bestand laedt
+     * daher jede gefahrene Tour einmal von der Platte** (nacheinander, nie
+     * alle zugleich im Speicher) — bewusst in Kauf genommen; danach genuegt
+     * die Datei, und nach einer neuen Aufzeichnung fehlt nur diese eine Tour.
+     *
+     * ## Nebenlaeufigkeit
+     * Die Zusammenfassungen werden wie in [refreshExplorerTiles] vor dem
+     * Dispatcher-Wechsel gelesen ([allSummaries] gehoert dem Main-Thread).
+     * Der Lauf selbst steht unter [routeComparisonMutex] auf [io]; der Store
+     * ist zusaetzlich `@Synchronized`. Wird die Ansicht verlassen, laeuft ein
+     * begonnener Scan im Hintergrund zu Ende — sein Ergebnis landet im Cache,
+     * nicht verloren.
+     *
+     * ## Speicher
+     * Weder der Store noch dieser Aufruf halten die Signaturen dauerhaft:
+     * `flush` gibt die Eintraege des Stores frei (und schreibt nur, wenn sich
+     * etwas geaendert hat), und die Map der Signaturen ist eine lokale Variable
+     * — zurueck geht nur der [RouteComparison], der keine Zellen enthaelt. Das
+     * `flush` steht im `finally`, damit auch ein fehlgeschlagener Lauf nichts
+     * festhaelt.
+     *
+     * ## Aufraeumen
+     * Wie beim Kachel-Cache (`collectExplorerTiles` raeumt am Ende jedes
+     * Laufs per `retainAll` ab) wirft jeder Lauf die Eintraege geloeschter und
+     * geplanter Touren weg und schreibt den Stand fest. Gefiltert wird gegen
+     * [allSummaries], nicht gegen die sichtbare Liste: Eine schwebende,
+     * noch rueckgaengig machbare Loeschung behaelt ihren Eintrag. Verglichen
+     * wird dagegen nur mit der sichtbaren Liste ([rides]) — eine gerade
+     * geloeschte Tour taucht in der Karte nicht mehr auf.
+     */
+    suspend fun routeComparisonFor(rideId: String): RouteComparison? {
+        // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
+        val summaries = allSummaries
+        val visible = _rides.value
+        return routeComparisonMutex.withLock {
+            withContext(io) {
+                try {
+                    val signatures = collectRouteSignatures(
+                        rides = summaries,
+                        store = routeSignatureStore,
+                        loadRide = { rideStorage.loadRide(it) },
+                    )
+                    routeSignatureStore.retainAll(riddenRides(summaries).mapTo(HashSet()) { it.id })
+                    compareOnRoute(rideId, visible, signatures)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                } finally {
+                    routeSignatureStore.flush()
+                }
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -2599,6 +2781,7 @@ class AppViewModel(
                     vitalsHistory = readVitalsHistory(keyValueStore),
                     shortSleeperHintShownAt = readShortSleeperHintShownAt(),
                     planFeasibilityAckKey = readPlanFeasibilityAckKey(),
+                    yearGoal = readYearGoal(),
                     placeSearchHistory = readPlaceSearchHistory(),
                 )
             }
@@ -2606,6 +2789,7 @@ class AppViewModel(
             _profileConfirmed.value = restored.profileConfirmed
             _plan.value = restored.plan
             _planFeasibilityAckKey.value = restored.planFeasibilityAckKey
+            _yearGoal.value = restored.yearGoal
             _mapStyle.value = restored.mapStyle
             _explorerTilesEnabled.value = restored.explorerTilesEnabled
             _placeSearchHistory.value = restored.placeSearchHistory
@@ -2661,6 +2845,7 @@ class AppViewModel(
         val vitalsHistory: VitalsHistory,
         val shortSleeperHintShownAt: LocalDateTime?,
         val planFeasibilityAckKey: String?,
+        val yearGoal: YearGoal?,
         val placeSearchHistory: List<PlaceSearchHistoryEntry>,
     )
 }
@@ -2724,6 +2909,9 @@ const val SHORT_SLEEPER_HINT_STORAGE_KEY: String = "trailscape.hint.shortsleeper
  * [AppViewModel.planFeasibilityAckKey] und [planFeasibilityIdentityKey]).
  */
 const val PLAN_FEASIBILITY_ACK_STORAGE_KEY: String = "trailscape.today.planfeasibility.ack.v1"
+
+/** Schluessel im [KeyValueStore] fuer das Jahresziel ([AppViewModel.yearGoal], Format [YearGoal.encode]). */
+const val YEAR_GOAL_STORAGE_KEY: String = "trailscape.progress.yeargoal.v1"
 
 /**
  * Ein zuletzt gewaehlter Ort der Kartensuche (siehe [AppViewModel.placeSearchHistory]).

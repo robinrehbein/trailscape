@@ -323,7 +323,19 @@ object RecordingRepository {
         _lastError.value = message
     }
 
+    /**
+     * Die zuletzt **aus dem Journal gerettete** Tour. Regulaer beendete Touren
+     * laufen ueber [publishStopped]; nur die Rettung nach einem Absturz meldet
+     * hier. Wer nur auf frisch beendete Fahrten reagieren will (der Abschluss
+     * auf der Uhr), erkennt daran die Nachzuegler: Sonst landeten die Saetze
+     * einer alten Tour auf der Uhr, sobald die naechste dort gestartet wird.
+     */
+    @Volatile
+    var lastRecoveredRideId: String? = null
+        private set
+
     internal fun publishFinishedRide(rideId: String) {
+        lastRecoveredRideId = rideId
         _lastFinishedRideId.value = rideId
         _finishedRides.tryEmit(rideId)
     }

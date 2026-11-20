@@ -4,6 +4,7 @@ import de.trailscape.core.i18n.CoreTexts
 import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -158,12 +159,14 @@ fun buildBackupJson(
     rides: List<Ride>,
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
+    yearGoal: YearGoal? = null,
 ): String {
     val json = buildJsonObject {
         put("app", backupAppName)
         put("backupVersion", backupFormatVersion)
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
+        yearGoal?.let { put("yearGoal", it.toBackupJson()) }
         put("rides", buildJsonArray { rides.forEach { add(it.toJson()) } })
     }
     return prettyJson.encodeToString(JsonObject.serializer(), json)
@@ -189,6 +192,7 @@ fun writeBackupJson(
     rides: Sequence<Ride>,
     profile: TrainingProfile?,
     exportedAtMs: Long = System.currentTimeMillis(),
+    yearGoal: YearGoal? = null,
 ) {
     // Kopf als eigenes Objekt serialisieren und die schliessende Klammer
     // abschneiden — so stammen Escaping und Einrueckung aller Kopffelder
@@ -198,6 +202,7 @@ fun writeBackupJson(
         put("backupVersion", backupFormatVersion)
         put("exportedAt", formatIso8601Utc(exportedAtMs))
         put("profile", profile?.toJson() ?: JsonNull)
+        yearGoal?.let { put("yearGoal", it.toBackupJson()) }
     }
     val headText = prettyJson.encodeToString(JsonObject.serializer(), head)
     // "…\n}" → "…" (der Kopf ist nie leer, die Klammer steht immer auf
@@ -241,7 +246,29 @@ fun writeBackupJson(
  * Ergebnis von [parseBackupJson]: die enthaltenen Touren sowie ein
  * optionales Trainingsprofil.
  */
-data class BackupData(val rides: List<Ride>, val profile: TrainingProfile? = null)
+data class BackupData(
+    val rides: List<Ride>,
+    val profile: TrainingProfile? = null,
+    /** Jahresziel aus dem optionalen Feld `yearGoal`; `null`, wenn es fehlt oder unlesbar ist. */
+    val yearGoal: YearGoal? = null,
+)
+
+/**
+ * Das Jahresziel im Backup: `{"targetKm": 4000, "since": "2026-01-05"}`.
+ * Das Feld ist rein additiv — fehlt es, bleibt alles wie vor seiner Einfuehrung.
+ */
+private fun YearGoal.toBackupJson(): JsonObject = buildJsonObject {
+    put("targetKm", targetKm)
+    put("since", since.toString())
+}
+
+/** Gegenstueck zu [toBackupJson]; `null` bei allem, was kein gueltiges Ziel ist (nie ein Fehler). */
+private fun parseYearGoal(element: JsonElement?): YearGoal? {
+    val obj = element as? JsonObject ?: return null
+    val km = (obj["targetKm"] as? JsonPrimitive)?.asDartIntOrNull()?.takeIf { it > 0 } ?: return null
+    val sinceText = (obj["since"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
+    return YearGoal.decode("$km|$sinceText")
+}
 
 private fun JsonPrimitive.asDartIntOrNull(): Int? {
     if (isString) return null
@@ -307,5 +334,5 @@ fun parseBackupJson(raw: String, texts: CoreTexts): BackupData {
         }
     }
 
-    return BackupData(rides = rides, profile = profile)
+    return BackupData(rides = rides, profile = profile, yearGoal = parseYearGoal(decoded["yearGoal"]))
 }

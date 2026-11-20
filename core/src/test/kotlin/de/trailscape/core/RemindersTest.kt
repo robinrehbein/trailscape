@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -309,6 +310,128 @@ class RemindersTest {
         assertEquals("Diese Woche: 0 von ${plan.weeks.first().targetKm} km gefahren.", notice.text)
     }
 
+    // ---- Wochenrueckschau ohne Plan ----------------------------------------
+
+    private fun recapNotice(rides: List<Ride>, plan: TrainingPlan? = null, texts: de.trailscape.core.i18n.CoreTexts = CoreTextsDe) =
+        dueReminder(
+            now = at(SUNDAY, 18, 0),
+            settings = ReminderSettings(weeklyReviewEnabled = true),
+            state = ReminderState(),
+            plan = plan,
+            rides = rides,
+            texts = texts,
+        )
+
+    private fun thisWeek(vararg km: Double): List<Ride> =
+        km.mapIndexed { i, k -> ride(at(MONDAY.plusDays(i + 1L), 10), km = k) }
+
+    @Test
+    fun `ohne Plan kommt die Rueckschau der Woche auf Deutsch`() {
+        val notice = recapNotice(thisWeek(30.0, 33.4, 22.6))
+
+        assertNotNull(notice)
+        assertEquals(ReminderKind.WOCHENRUECKSCHAU, notice.kind)
+        assertEquals("Wochenrückschau", notice.title)
+        assertEquals("Diese Woche: 86 km in 3 Touren.", notice.text)
+    }
+
+    @Test
+    fun `ohne Plan kommt die Rueckschau der Woche auf Englisch`() {
+        val notice = recapNotice(thisWeek(30.0, 33.4, 22.6), texts = CoreTextsEn)
+
+        assertNotNull(notice)
+        assertEquals("Weekly review", notice.title)
+        assertEquals("This week: 86 km in 3 rides.", notice.text)
+    }
+
+    @Test
+    fun `eine einzelne Tour heisst Tour im Singular`() {
+        assertEquals("Diese Woche: 20 km in 1 Tour.", recapNotice(thisWeek(20.0))?.text)
+        assertEquals("This week: 20 km in 1 ride.", recapNotice(thisWeek(20.0), texts = CoreTextsEn)?.text)
+    }
+
+    @Test
+    fun `mehr Kilometer als in der Vorwoche werden genannt`() {
+        val rides = listOf(ride(at(MONDAY.minusDays(3), 10), km = 50.0)) + thisWeek(28.0, 28.0)
+
+        assertEquals(
+            "Diese Woche: 56 km in 2 Touren — 12 % mehr als letzte Woche. 2 Wochen in Folge.",
+            recapNotice(rides)?.text,
+        )
+        assertEquals(
+            "This week: 56 km in 2 rides — 12% more than last week. 2 weeks in a row.",
+            recapNotice(rides, texts = CoreTextsEn)?.text,
+        )
+    }
+
+    @Test
+    fun `weniger Kilometer als in der Vorwoche werden genannt`() {
+        val rides = listOf(ride(at(MONDAY.minusDays(3), 10), km = 80.0)) + thisWeek(60.0)
+
+        assertEquals(
+            "Diese Woche: 60 km in 1 Tour — 25 % weniger als letzte Woche. 2 Wochen in Folge.",
+            recapNotice(rides)?.text,
+        )
+        assertEquals(
+            "This week: 60 km in 1 ride — 25% less than last week. 2 weeks in a row.",
+            recapNotice(rides, texts = CoreTextsEn)?.text,
+        )
+    }
+
+    @Test
+    fun `gleich viele Kilometer wie in der Vorwoche ergeben keinen Vergleich`() {
+        val rides = listOf(ride(at(MONDAY.minusDays(3), 10), km = 40.0)) + thisWeek(40.0)
+
+        assertEquals("Diese Woche: 40 km in 1 Tour. 2 Wochen in Folge.", recapNotice(rides)?.text)
+    }
+
+    @Test
+    fun `ohne Vorwoche gibt es keinen Vergleich und keine Serie`() {
+        // Die Woche davor ist leer, die davor hat eine Tour: kein Vergleich, Serie 1.
+        val rides = listOf(ride(at(MONDAY.minusDays(10), 10), km = 50.0)) + thisWeek(40.0)
+
+        assertEquals("Diese Woche: 40 km in 1 Tour.", recapNotice(rides)?.text)
+    }
+
+    @Test
+    fun `eine laengere Serie wird als zweiter Satz genannt`() {
+        val rides = listOf(
+            ride(at(MONDAY.minusDays(10), 10), km = 10.0),
+            ride(at(MONDAY.minusDays(3), 10), km = 10.0),
+        ) + thisWeek(10.0)
+
+        assertEquals("Diese Woche: 10 km in 1 Tour. 3 Wochen in Folge.", recapNotice(rides)?.text)
+        assertEquals(
+            "This week: 10 km in 1 ride. 3 weeks in a row.",
+            recapNotice(rides, texts = CoreTextsEn)?.text,
+        )
+    }
+
+    @Test
+    fun `ohne Plan und ohne Tour in der Woche bleibt es still`() {
+        assertNull(recapNotice(emptyList()))
+        // Nur die Vorwoche hat eine Tour — diese Woche ist leer.
+        assertNull(recapNotice(listOf(ride(at(MONDAY.minusDays(3), 10), km = 50.0))))
+    }
+
+    @Test
+    fun `ein abgelaufener Plan faellt auf die Rueckschau ohne Plan zurueck`() {
+        val expired = planFrom(MONDAY.minusWeeks(20), goalWeeksAhead = 4)
+
+        assertEquals("Diese Woche: 30 km in 1 Tour.", recapNotice(thisWeek(30.0), plan = expired)?.text)
+    }
+
+    @Test
+    fun `mit aktiver Planwoche bleibt der Text wie bisher`() {
+        val plan = planFrom(MONDAY)
+        val rides = listOf(ride(at(MONDAY.minusDays(3), 10), km = 50.0)) + thisWeek(30.0)
+
+        assertEquals(
+            "Diese Woche: 30 von ${plan.weeks.first().targetKm} km gefahren.",
+            recapNotice(rides, plan = plan)?.text,
+        )
+    }
+
     @Test
     fun `Wochenrueckschau nur am Sonntag`() {
         val notice = dueReminder(
@@ -336,13 +459,13 @@ class RemindersTest {
     }
 
     @Test
-    fun `Wochenrueckschau ohne Plan bleibt still`() {
+    fun `Wochenrueckschau ohne Plan und ohne Tour bleibt still`() {
         val notice = dueReminder(
             now = at(SUNDAY, 18, 0),
             settings = ReminderSettings(weeklyReviewEnabled = true),
             state = ReminderState(),
             plan = null,
-            rides = listOf(ride(at(TUESDAY, 17))),
+            rides = emptyList(),
             texts = CoreTextsDe,
         )
         assertNull(notice)
@@ -462,6 +585,51 @@ class RemindersTest {
         assertEquals(ReminderKind.ANSTUPSER, notice.kind)
         assertEquals("Seit 5 Tagen keine Tour", notice.title)
         assertTrue(notice.text.startsWith("Wenn du wieder unterwegs bist"))
+    }
+
+    @Test
+    fun `Serie in Gefahr meldet sich ab Freitag statt des Anstupsers`() {
+        val friday = TUESDAY.plusDays(3)
+        // Zwei Wochen in Folge gefahren, diese Woche noch nicht.
+        val rides = listOf(ride(at(friday.minusDays(13), 16)), ride(at(friday.minusDays(6), 16)))
+        val settings = ReminderSettings(nudgeEnabled = true)
+
+        val notice = dueReminder(at(friday, 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsDe)
+
+        assertNotNull(notice)
+        assertEquals(ReminderKind.ANSTUPSER, notice.kind)
+        assertEquals("2 Wochen in Folge — diese fehlt noch", notice.title)
+        assertTrue(notice.text.startsWith("Noch 3 Tage bis Sonntag"))
+
+        // Am Donnerstag ist es dafuer noch zu frueh — und der allgemeine
+        // Anstupser („seit 5 Tagen keine Tour") schweigt, damit er der
+        // Serien-Meldung am Freitag nicht die Ruhezeit wegnimmt.
+        val thursday = dueReminder(
+            at(friday.minusDays(1), 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsDe,
+        )
+        assertEquals(null, thursday)
+
+        // Am Sonntag ist es der letzte Tag.
+        val sunday = dueReminder(
+            at(friday.plusDays(2), 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsEn,
+        )
+        assertEquals("2 weeks in a row — this one is still open", sunday?.title)
+        assertTrue(sunday!!.text.startsWith("Today is the last day"))
+    }
+
+    @Test
+    fun `gesicherte oder zu kurze Serie loest keine Serien-Meldung aus`() {
+        val friday = TUESDAY.plusDays(3)
+        val settings = ReminderSettings(nudgeEnabled = true)
+        // Diese Woche schon gefahren: Serie gesichert, letzte Tour gestern.
+        val secured = listOf(
+            ride(at(friday.minusDays(13), 16)), ride(at(friday.minusDays(6), 16)), ride(at(friday.minusDays(1), 16)),
+        )
+        assertEquals(null, dueReminder(at(friday, 7, 0), settings, ReminderState(), null, secured, CoreTextsDe))
+
+        // Nur eine Woche: keine Serie, und fuer den Anstupser zu frisch.
+        val single = listOf(ride(at(friday.minusDays(4), 16)))
+        assertEquals(null, dueReminder(at(friday, 7, 0), settings, ReminderState(), null, single, CoreTextsDe))
     }
 
     @Test

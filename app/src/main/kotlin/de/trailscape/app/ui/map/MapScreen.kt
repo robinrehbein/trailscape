@@ -116,7 +116,10 @@ import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.mapStyleSubtitle
 import de.trailscape.app.ui.mapStyles
 import de.trailscape.app.ui.prepareShareDirectory
+import de.trailscape.app.ui.rememberNow
 import de.trailscape.app.ui.rememberTodayDecision
+import de.trailscape.app.ui.rememberWeekTarget
+import de.trailscape.app.ui.progress.rememberRideFacts
 import de.trailscape.app.ui.rides.RideShareDialog
 import de.trailscape.app.ui.rides.finishMarkers
 import de.trailscape.app.ui.rides.historyTotals
@@ -599,7 +602,16 @@ fun MapScreen(appViewModel: AppViewModel) {
     var historyMode by rememberSaveable { mutableStateOf(false) }
     // Dasselbe Angebot wie „Heute" und der Losfahren-Dialog (siehe
     // [decideToday]): am Ruhetag die lockere Runde, nie die Trainingsrunde.
-    val todayOffer = rememberTodayDecision(appViewModel).offer
+    val now = rememberNow()
+    val todayDecision = rememberTodayDecision(appViewModel, now)
+    val todayOffer = todayDecision.offer
+    // Fuer „Was die Tour gebracht hat" auf dem Tourblatt (`RideHighlights.kt`):
+    // die Touren als Fakten und dasselbe Wochenziel wie auf „Heute"
+    // ([rememberWeekTarget]) — sonst stuende hier „Wochenziel geschafft" bei
+    // einer anderen Zahl als dort.
+    val today = now.toLocalDate()
+    val rideFacts = rememberRideFacts(rides)
+    val weekTargetKm = rememberWeekTarget(todayDecision, rideFacts, today).targetKm
 
     // Der ausgewaehlte Ort — das Google-Maps-Muster „der Ort ist ein Objekt"
     // (siehe `PlaceCard.kt`). Ersetzt den fruehreren `searchMarker: Waypoint?`:
@@ -3454,8 +3466,20 @@ fun MapScreen(appViewModel: AppViewModel) {
                     }
                     DockedSheet.TOUR -> lastRide[0]?.let { card ->
                         Spacer(Modifier.height(OverlayGap))
+                        // Nur fuer die juengste gefahrene Tour von heute —
+                        // also direkt nach dem Stopp (siehe `RideHighlights.kt`).
+                        val highlights = rememberRideHighlights(
+                            appViewModel = appViewModel,
+                            rideId = card.id,
+                            rideUpdatedAt = card.updatedAt,
+                            planned = card.planned,
+                            facts = rideFacts,
+                            today = today,
+                            weekTargetKm = weekTargetKm,
+                        )
                         RideCard(
                             ride = card,
+                            highlights = highlights,
                             navigating = navTarget?.rideId == card.id,
                             onNavigate = { navigateRide(card) },
                             // Gefahrene Touren fragen wie in der Detailansicht

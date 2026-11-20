@@ -46,11 +46,33 @@ import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberNow
 import de.trailscape.app.ui.rememberTodayDecision
+import de.trailscape.app.ui.rememberWeekTarget
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
 import de.trailscape.app.ui.theme.ScreenPadding
+import de.trailscape.app.ui.progress.ChallengeCard
+import de.trailscape.app.ui.progress.NextGoalsCard
+import de.trailscape.app.ui.progress.StreakFooter
+import de.trailscape.app.ui.progress.WeeklyRecapCard
+import de.trailscape.app.ui.progress.nextOpenChallenge
+import de.trailscape.app.ui.progress.weeklyGoalCaption
+import de.trailscape.app.ui.progress.YearGoalDialog
+import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.core.AscentPreference
+import de.trailscape.core.ReadinessBand
+import de.trailscape.core.RouteTarget
+import de.trailscape.core.RouteTargetSource
+import de.trailscape.core.SessionIntensity
+import de.trailscape.core.challengeProgress
+import de.trailscape.core.lastWeekRecap
+import de.trailscape.core.nearestMilestone
+import de.trailscape.core.planningSpeedKmh
 import de.trailscape.core.predictGoalFinish
+import de.trailscape.core.stretchChallenge
+import de.trailscape.core.suggestYearGoalKm
+import de.trailscape.core.weekStreak
+import de.trailscape.core.yearGoalProgress
 import de.trailscape.core.projectedEventCtl
 import de.trailscape.core.riddenRides
 import java.time.DayOfWeek
@@ -79,7 +101,15 @@ import kotlin.math.roundToInt
  *     „Runde für heute bauen" (nicht am Zieltag; am Ruhetag stattdessen das
  *     ruhigere „Locker rollen", siehe [offeredTarget]), „Warum diese
  *     Empfehlung?" ([WhySheet]).
+ *  2b. **Letzte Woche** ([WeeklyRecapCard]) — nur Montag bis Mittwoch und nur,
+ *     wenn in der Woche davor gefahren wurde.
  *  3. **Diese Woche** ([WeekCard]) — bzw. am Erststart „Los geht's".
+ *     Mit Balken zum Wochenziel (Plan oder mitwachsendes Ziel ohne Plan) und am
+ *     Fuss die Wochenserie ([StreakFooter]).
+ *  3b. **Als Naechstes** — die naechste Bestweite ([ChallengeCard], nicht am
+ *     Zieltag und nicht bei „Ruhe") sowie Jahresziel und naechster Meilenstein
+ *     ([NextGoalsCard], mit der offenen Monats-Challenge als dritter Zeile). Gerechnet in `core/…/Motivation.kt`. Erst ab der
+ *     ersten Tour: Davor gibt es nichts, woran sich etwas steigern liesse.
  *  4. **Dein Ziel** ([GoalCard]) — ohne Plan die Einladung
  *     ([GoalPromptCard]). Tippen oeffnet Training.
  *
@@ -171,14 +201,57 @@ fun TodayScreen(appViewModel: AppViewModel) {
             !date.isBefore(monday) && !date.isAfter(monday.plusDays(6))
         }
     }
+    // Dranbleiben: alles aus `core/…/Motivation.kt` und Verwandten, hier nur abgeholt.
+    val facts = rememberRideFacts(rides)
+    // Ohne Plan-Woche gilt das mitwachsende Wochenziel — auch wer ohne Event
+    // faehrt, soll „42 von 60 km" sehen. Die Regel steht in [weekTarget]
+    // (`ui/TodayRouteTarget.kt`), damit das Tourblatt nach der Fahrt
+    // dasselbe Ziel meint.
+    val weekTarget = rememberWeekTarget(decision, facts, today)
+    val adaptiveGoal = weekTarget.adaptive
+    val weekTargetKm = weekTarget.targetKm
+    // Fuers Widget notieren, damit es dieselbe Zahl zeigt (siehe
+    // `widget/WidgetState.kt`, [ShownWeekTarget]).
+    LaunchedEffect(monday, weekTargetKm) { appViewModel.rememberShownWeekTarget(monday, weekTargetKm) }
+    val weekRiddenKm = riddenByDate.values.sum()
     val weekSummaryText = weekSummary(
-        riddenKm = riddenByDate.values.sum(),
-        targetKm = currentWeek?.targetKm,
+        riddenKm = weekRiddenKm,
+        targetKm = weekTargetKm,
         strip = strip,
         rideCount = rideCount,
     )
+    val goalLine = weekTargetKm?.takeIf { it > 0 }?.let { target ->
+        val ridden = adaptiveGoal?.riddenKm ?: weekRiddenKm
+        WeekGoalLine(
+            fraction = (ridden / target).toFloat().coerceIn(0f, 1f),
+            reached = ridden >= target,
+            description = stringResource(R.string.progress_week_goal_bar_cd, ridden.roundToInt(), target),
+            caption = adaptiveGoal?.let { weeklyGoalCaption(it) },
+        )
+    }
+    // Rueckblick nur Montag bis Mittwoch: danach ist die Woche davor kein Thema mehr.
+    val recap = remember(facts, today) {
+        lastWeekRecap(facts, today).takeIf { today.dayOfWeek.value <= DayOfWeek.WEDNESDAY.value }
+    }
 
     var showWhy by rememberSaveable { mutableStateOf(false) }
+
+    val streak = remember(facts, today) { weekStreak(facts, today) }
+    val yearGoalSetting by appViewModel.yearGoal.collectAsStateWithLifecycle()
+    val yearGoal = remember(facts, yearGoalSetting, today) {
+        yearGoalSetting?.let { yearGoalProgress(facts, it, today) }
+    }
+    val suggestedYearGoalKm = remember(facts, today) { suggestYearGoalKm(facts, today) }
+    val milestone = remember(facts) { nearestMilestone(facts) }
+    val nextChallenge = remember(facts, today) { nextOpenChallenge(challengeProgress(facts, today)) }
+    // Die Bestweite ist ein Angebot fuer einen guten Tag: nicht am Zieltag
+    // und nicht, wenn die Erholung „Ruhe" sagt.
+    val challenge = remember(facts, today, effort, band) {
+        stretchChallenge(facts, today)
+            ?.takeIf { effort != TodayEffort.ZIELTAG && band != ReadinessBand.RUHE }
+    }
+    val challengeLabel = stringResource(R.string.progress_challenge_route_label)
+    var showYearGoal by rememberSaveable { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
@@ -257,8 +330,48 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         )
                     }
                 } else {
+                    recap?.let { lastWeek ->
+                        item(key = "sec-rueckblick") { SectionEyebrow(stringResource(R.string.progress_recap_eyebrow)) }
+                        item(key = "rueckblick") { WeeklyRecapCard(lastWeek) }
+                    }
                     item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
-                    item(key = "woche") { WeekCard(summary = weekSummaryText, strip = strip) }
+                    item(key = "woche") {
+                        WeekCard(summary = weekSummaryText, strip = strip, goal = goalLine, footer = { StreakFooter(streak) })
+                    }
+
+                    item(key = "sec-naechstes") { SectionEyebrow(stringResource(R.string.progress_next_eyebrow)) }
+                    challenge?.let { stretch ->
+                        item(key = "bestweite") {
+                            ChallengeCard(
+                                challenge = stretch,
+                                onBuild = {
+                                    val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
+                                    appViewModel.requestRouteGeneration(
+                                        RouteTarget(
+                                            distanceKm = stretch.targetKm.toDouble(),
+                                            ascentPreference = AscentPreference.MODERAT,
+                                            durationH = stretch.targetKm / speed,
+                                            speedKmh = speed,
+                                            intensity = SessionIntensity.GRUNDLAGE,
+                                            label = challengeLabel,
+                                            source = RouteTargetSource.SELBST_GEWAEHLT,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                    item(key = "ziele") {
+                        NextGoalsCard(
+                            yearGoal = yearGoal,
+                            year = today.year,
+                            suggestedKm = suggestedYearGoalKm,
+                            milestone = milestone,
+                            onYearGoal = { showYearGoal = true },
+                            onOpenProgress = { appViewModel.requestTab(AppTab.TRAINING) },
+                            challenge = nextChallenge,
+                        )
+                    }
                 }
 
                 item(key = "sec-ziel") { SectionEyebrow(stringResource(R.string.today_goal_eyebrow)) }
@@ -300,6 +413,24 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 }
             }
         }
+    }
+
+    if (showYearGoal) {
+        YearGoalDialog(
+            currentKm = yearGoalSetting?.targetKm,
+            suggestedKm = suggestedYearGoalKm,
+            weeksLeft = (today.lengthOfYear() - today.dayOfYear) / 7.0,
+            riddenKm = facts.filter { it.date.year == today.year }.sumOf { it.distanceKm },
+            onSave = {
+                appViewModel.setYearGoalKm(it)
+                showYearGoal = false
+            },
+            onRemove = {
+                appViewModel.setYearGoalKm(null)
+                showYearGoal = false
+            },
+            onDismiss = { showYearGoal = false },
+        )
     }
 
     if (showWhy) {

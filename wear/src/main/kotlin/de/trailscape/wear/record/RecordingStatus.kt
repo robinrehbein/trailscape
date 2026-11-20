@@ -5,9 +5,11 @@ import android.content.Intent
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.health.services.client.HealthServices
+import de.trailscape.core.AbschlussInfo
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.Befehl
 import de.trailscape.core.eigenerPulsZaehlt
+import de.trailscape.core.telefonEndeBeendetUhr
 import de.trailscape.wear.R
 import de.trailscape.wear.exercise.FaehigkeitsBericht
 import de.trailscape.wear.exercise.ermittleFaehigkeiten
@@ -83,6 +85,15 @@ object RecordingStatus {
     private val _tempoKmh = MutableStateFlow<Double?>(null)
     private val _letzteHfBpm = MutableStateFlow<Int?>(null)
     private val _fehler = MutableStateFlow<String?>(null)
+    private val _abschlussZeilen = MutableStateFlow<List<String>>(emptyList())
+
+    /**
+     * Wanduhr-Start (ms seit Epoch) der zuletzt begonnenen Aufzeichnung, `null`
+     * = noch keine in diesem Prozess. Nur Bezug fuer ein Ende vom Telefon
+     * (siehe [wendeFerncodeAn]); ob sie noch laeuft, sagt [phase].
+     */
+    @Volatile
+    private var laufenderStartMs: Long? = null
 
     /** `elapsedRealtime` des letzten Pulswerts vom Telefon, `null` = noch keiner (siehe Klassen-KDoc). */
     @Volatile
@@ -108,6 +119,15 @@ object RecordingStatus {
 
     /** Kurzer Fehlertext fuer den Startbildschirm (fehlende Faehigkeiten, gescheiterte Vorbereitung). */
     val fehler: StateFlow<String?> = _fehler.asStateFlow()
+
+    /**
+     * Was die Tour gebracht hat — hoechstens zwei fertige Zeilen vom Telefon
+     * (`PFAD_ABSCHLUSS`), gezeigt auf dem Abschlussbildschirm. Nur im
+     * Speicher: verschwinden mit [zuruecksetzen], also beim Zurueck zum Start
+     * und beim Start einer neuen Aufzeichnung (und mit dem Prozess). Die
+     * Tour-ID wird bewusst nicht gegen die eigene Aufzeichnung geprueft.
+     */
+    val abschlussZeilen: StateFlow<List<String>> = _abschlussZeilen.asStateFlow()
 
     /**
      * Fragt die Geraetefaehigkeiten ab, ohne etwas zu starten — damit der
@@ -149,12 +169,26 @@ object RecordingStatus {
      * Setzt einen vom Telefon empfangenen [Befehl] genauso um, wie es ein Tipp
      * auf den entsprechenden Knopf dieser Uhr getan haette (siehe Klassen-KDoc).
      */
-    internal fun wendeFerncodeAn(context: Context, cmd: String) {
-        when (cmd) {
+    internal fun wendeFerncodeAn(context: Context, befehl: Befehl) {
+        when (befehl.cmd) {
             Befehl.START -> starteLokal(context)
             Befehl.PAUSE -> sendeKommandoLokal(context, RecordingService.ACTION_PAUSE)
             Befehl.WEITER -> sendeKommandoLokal(context, RecordingService.ACTION_RESUME)
             Befehl.STOPP -> sendeKommandoLokal(context, RecordingService.ACTION_STOP)
+
+            // Tour am Telefon regulaer beendet: Ob das diese Aufzeichnung
+            // betrifft, entscheidet `telefonEndeBeendetUhr` (`:core`, dort die
+            // Gruende). Dann derselbe Weg wie der eigene Stopp-Knopf, nur ohne
+            // Rueckmeldung ans Telefon (siehe ACTION_STOP_VOM_TELEFON).
+            Befehl.TELEFON_BEENDET -> {
+                val eigenerStart = laufenderStartMs.takeIf {
+                    _phase.value == Phase.LAEUFT || _phase.value == Phase.PAUSIERT
+                }
+                if (telefonEndeBeendetUhr(befehl, eigenerStart, System.currentTimeMillis())) {
+                    sendeKommandoLokal(context, RecordingService.ACTION_STOP_VOM_TELEFON)
+                }
+            }
+
             // Unbekannter Wert (z. B. von einer neueren `:app`-Version):
             // ignorieren statt zu werfen. Ein Steuerkanal, der bei jedem
             // unbekannten Befehl abstuerzt, ist fragiler als einer, der ihn
@@ -171,6 +205,11 @@ object RecordingStatus {
             _letzteHfBpm.value = it
             hfVomTelefonMs = SystemClock.elapsedRealtime()
         }
+    }
+
+    /** Uebernimmt die Zeilen „was die Tour gebracht hat" vom Telefon (siehe [abschlussZeilen]). */
+    internal fun wendeAbschlussAn(info: AbschlussInfo) {
+        _abschlussZeilen.value = info.zeilen
     }
 
     private fun starteLokal(context: Context) {
@@ -191,6 +230,10 @@ object RecordingStatus {
 
     internal fun setzePhase(phase: Phase) {
         _phase.value = phase
+    }
+
+    internal fun setzeStart(startMs: Long) {
+        laufenderStartMs = startMs
     }
 
     internal fun setzeBericht(bericht: FaehigkeitsBericht) {
@@ -227,5 +270,6 @@ object RecordingStatus {
         _letzteHfBpm.value = null
         hfVomTelefonMs = null
         _fehler.value = null
+        _abschlussZeilen.value = emptyList()
     }
 }

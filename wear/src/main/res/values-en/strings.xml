@@ -25,4 +25,29 @@
     <!-- %1$s = technische Ursache (Fremdtext) -->
     <string name="wear_error_callback">Callback not registered: %1$s</string>
     <string name="wear_error_capabilities">Capabilities unavailable: %1$s</string>
+
+    <!-- glance/GlanceTexts.kt, tile/WochenTileService.kt, complication/WochenComplicationService.kt -->
+    <string name="wear_tile_label">Streak &amp; weekly goal</string>
+    <string name="wear_tile_description">Weekly streak and progress toward the weekly goal</string>
+    <string name="wear_complication_label">Streak &amp; weekly goal</string>
+    <string name="wear_glance_empty">No data yet – open the phone app</string>
+    <string name="wear_glance_empty_short">–</string>
+    <!-- %1$d = weeks of the streak -->
+    <plurals name="wear_glance_weeks">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <string name="wear_glance_weeks_short">%1$d wk</string>
+    <string name="wear_glance_title_short">Streak</string>
+    <!-- %1$s = kilometers ridden, %2$s = weekly goal in kilometers -->
+    <string name="wear_glance_km_of">%1$s of %2$s km</string>
+    <!-- %1$s = kilometers ridden -->
+    <string name="wear_glance_km_only">%1$s km this week</string>
+    <string name="wear_glance_status_goal">Weekly goal reached</string>
+    <string name="wear_glance_status_done">Done this week</string>
+    <string name="wear_glance_status_risk">Streak at risk</string>
+    <string name="wear_glance_status_start">Start your streak</string>
+    <!-- %1$s = streak ("5 weeks"), %2$s = progress ("42 of 60 km"); for screen readers -->
+    <string name="wear_glance_cd">Streak %1$s, %2$s</string>
+    <string name="wear_glance_open_cd">Open Trailscape</string>
 </resources>

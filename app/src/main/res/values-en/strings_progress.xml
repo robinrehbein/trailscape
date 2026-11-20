@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Staying-with-it texts (ui/progress/**): weekly streak, next longest ride,
+    yearly goal, milestones, personal bests, recent weeks, per-ride achievements.
+
+    Key prefix: progress_
+    Rules (key names, placeholders, plurals, glossary): docs/i18n.md.
+    Counterpart of values/strings_progress.xml — same keys, same order.
+-->
+<resources>
+    <!-- Wochenserie (Fusszeile der Wochenkarte auf Heute) -->
+    <plurals name="progress_streak_weeks_count">
+        <item quantity="one">%1$d week in a row</item>
+        <item quantity="other">%1$d weeks in a row</item>
+    </plurals>
+    <string name="progress_streak_done_hint">This week is in the bag.</string>
+    <string name="progress_streak_longest_hint">Your longest streak so far.</string>
+    <plurals name="progress_streak_risk_days_count">
+        <item quantity="one">Today is the last day to keep it going.</item>
+        <item quantity="other">%1$d days left to keep it going.</item>
+    </plurals>
+    <string name="progress_streak_start_title">Start a new streak</string>
+    <string name="progress_streak_start_hint">One ride this week and it\'s on.</string>
+    <!-- %1$d = längste Serie in Wochen -->
+    <string name="progress_streak_start_best_hint">One ride this week and it\'s on. Your best: %1$d weeks.</string>
+
+    <!-- Naechste Bestweite. %1$d = Zielkilometer -->
+    <string name="progress_next_eyebrow">Up next</string>
+    <string name="progress_challenge_label">Next longest ride</string>
+    <string name="progress_challenge_title">%1$d km in one go</string>
+    <!-- %1$s = bisherige Weite in km, %2$d = Kilometer mehr -->
+    <string name="progress_challenge_body">Your longest ride of the last few weeks: %1$s km. You have %2$d km more in you.</string>
+    <string name="progress_challenge_all_time_body">Your longest ride of the last few weeks: %1$s km. Add %2$d km and you ride further than ever.</string>
+    <string name="progress_challenge_action">Build a %1$d km loop</string>
+    <string name="progress_challenge_route_label">Next longest ride</string>
+
+    <!-- Jahresziel. %1$d = Jahr -->
+    <string name="progress_year_goal_title">%1$d goal</string>
+    <!-- %1$s = gefahren, %2$s = Ziel -->
+    <string name="progress_year_goal_value">%1$s of %2$s km</string>
+    <string name="progress_year_goal_ahead_hint">%1$s km ahead of pace</string>
+    <!-- %1$s = Rückstand in km, %2$s = km je Woche -->
+    <string name="progress_year_goal_behind_hint">%1$s km behind pace · %2$s km a week gets you there</string>
+    <string name="progress_year_goal_on_track_hint">Right on pace</string>
+    <string name="progress_year_goal_reached_hint">Done. Everything from here is a bonus.</string>
+    <string name="progress_year_goal_prompt_title">Set a yearly goal</string>
+    <!-- %1$d = vorgeschlagene Kilometer -->
+    <string name="progress_year_goal_prompt_body">Suggested from your recent weeks: %1$d km.</string>
+    <string name="progress_year_goal_prompt_empty_body">A goal for the year that makes every ride count.</string>
+    <!-- %1$s = hochgerechnete Kilometer -->
+    <string name="progress_year_goal_projection">If you keep this up: %1$s km by the end of the year</string>
+    <string name="progress_year_goal_edit_action">Change</string>
+    <string name="progress_year_goal_dialog_title">Yearly goal</string>
+    <string name="progress_year_goal_dialog_body">How many kilometres do you want to ride this year?</string>
+    <!-- %1$s = km je Woche -->
+    <string name="progress_year_goal_dialog_per_week">That takes about %1$s km a week until the end of the year.</string>
+    <string name="progress_year_goal_dialog_slider_cd">Yearly goal in kilometres</string>
+    <string name="progress_year_goal_remove_action">Remove</string>
+    <string name="progress_year_goal_open_cd">Open yearly goal</string>
+
+    <!-- Meilensteine. Ziele: %1$s = Schwelle -->
+    <string name="progress_milestone_total_km">%1$s km in total</string>
+    <string name="progress_milestone_total_ascent">%1$s m of climbing in total</string>
+    <string name="progress_milestone_everest">The height of Everest in total</string>
+    <string name="progress_milestone_earth">Once around the Earth</string>
+    <plurals name="progress_milestone_ride_count">
+        <item quantity="one">First ride</item>
+        <item quantity="other">%1$d rides</item>
+    </plurals>
+    <string name="progress_milestone_longest_ride">%1$s km in one go</string>
+    <!-- Rest bis zur Stufe: %1$s = was fehlt, %2$s = Stufe (einer der Texte oben) -->
+    <string name="progress_milestone_remaining_km">%1$s km to go: %2$s</string>
+    <string name="progress_milestone_remaining_ascent">%1$s m to go: %2$s</string>
+    <plurals name="progress_milestone_remaining_rides">
+        <item quantity="one">%1$d ride to go: %2$s</item>
+        <item quantity="other">%1$d rides to go: %2$s</item>
+    </plurals>
+    <string name="progress_milestone_open_cd">Open progress</string>
+    <string name="progress_milestones_title">Milestones</string>
+    <string name="progress_milestone_kind_total_km">Total distance</string>
+    <string name="progress_milestone_kind_total_ascent">Total climbing</string>
+    <string name="progress_milestone_kind_ride_count">Rides</string>
+    <string name="progress_milestone_kind_longest_ride">Longest ride</string>
+    <string name="progress_milestone_all_done">All steps reached</string>
+
+    <!-- Fortschritt im Training-Tab -->
+    <string name="progress_segment_progress">Progress</string>
+    <string name="progress_segment_plan">Plan</string>
+    <string name="progress_trend_eyebrow">Last 12 weeks</string>
+    <!-- %1$s = Kilometer der letzten vier Wochen -->
+    <string name="progress_trend_headline">%1$s km in 4 weeks</string>
+    <string name="progress_trend_up">+%1$d %% compared with the 4 weeks before</string>
+    <string name="progress_trend_down">−%1$d %% compared with the 4 weeks before</string>
+    <string name="progress_trend_same">Same as the 4 weeks before</string>
+    <string name="progress_trend_first">Your first comparison period is under way.</string>
+    <string name="progress_trend_axis_start">12 weeks ago</string>
+    <string name="progress_trend_axis_end">this week</string>
+    <!-- %1$s = Kilometer der stärksten Woche -->
+    <string name="progress_trend_peak">biggest week: %1$s km</string>
+    <!-- Sprachausgabe für das Diagramm. %1$s = Kilometer in 4 Wochen, %2$s = Kilometer stärkste Woche -->
+    <string name="progress_trend_chart_cd">Kilometres per week over 12 weeks. Last 4 weeks: %1$s km. Biggest week: %2$s km.</string>
+    <!-- FitnessTrendCard.kt -->
+    <string name="progress_fitness_headline_fitter">You are getting fitter</string>
+    <string name="progress_fitness_headline_stable">Your fitness is holding</string>
+    <string name="progress_fitness_headline_declining">A bit weaker right now</string>
+    <string name="progress_fitness_headline_unknown">Not enough comparable rides yet</string>
+    <string name="progress_fitness_unknown_hint">For that I need three flatter rides over 40 minutes in each of the last six weeks and the six before.</string>
+    <!-- %1$d = weeks per period -->
+    <string name="progress_fitness_window">Last %1$d weeks compared with the %1$d before</string>
+    <string name="progress_fitness_efficiency_label">Heart rate and speed</string>
+    <string name="progress_fitness_efficiency_faster">%1$d %% faster at the same heart rate</string>
+    <string name="progress_fitness_efficiency_slower">%1$d %% slower at the same heart rate</string>
+    <string name="progress_fitness_efficiency_same">Same speed at the same heart rate</string>
+    <string name="progress_fitness_pace_label">Pace</string>
+    <!-- %1$s = current average in km/h, %2$s = average before -->
+    <string name="progress_fitness_pace_value">Average on flat rides: %1$s&#160;km/h (before %2$s)</string>
+    <string name="progress_fitness_endurance_label">Endurance</string>
+    <!-- %1$s = longest ride now in km, %2$s = before -->
+    <string name="progress_fitness_endurance_value">Longest ride: %1$s&#160;km (before %2$s)</string>
+    <string name="progress_fitness_no_hr_hint">With heart-rate data (watch or strap) the comparison gets more accurate.</string>
+    <string name="progress_fact_rides">Rides</string>
+    <string name="progress_fact_hours">Hours</string>
+    <string name="progress_fact_ascent">Climbing (m)</string>
+    <string name="progress_fact_km">Kilometres</string>
+
+    <string name="progress_records_title">Personal bests</string>
+    <string name="progress_record_distance">Longest ride</string>
+    <string name="progress_record_ascent">Most climbing</string>
+    <string name="progress_record_time">Longest ride time</string>
+    <string name="progress_record_speed">Fastest average</string>
+    <string name="progress_record_speed_note">20 km and up</string>
+    <string name="progress_record_open_cd">Open ride</string>
+    <string name="progress_records_empty">Your personal bests appear here after your second ride.</string>
+
+    <string name="progress_lifetime_title">All time</string>
+    <!-- %1$d = Wochen -->
+    <string name="progress_lifetime_best_streak">Longest streak: %1$d weeks in a row</string>
+
+    <!-- Erfolge einer Tour (Tour-Detail) -->
+    <string name="progress_achievements_title">Achievements of this ride</string>
+    <string name="progress_achievement_milestone">Milestone: %1$s</string>
+    <!-- %1$s = neuer Wert mit Einheit, %2$s = alter Wert mit Einheit -->
+    <string name="progress_achievement_record_distance">Your longest ride up to then: %1$s instead of %2$s</string>
+    <string name="progress_achievement_record_ascent">Most climbing up to then: %1$s instead of %2$s</string>
+    <string name="progress_achievement_record_time">Your longest ride time up to then: %1$s instead of %2$s</string>
+    <string name="progress_achievement_record_speed">Your fastest average up to then: %1$s instead of %2$s</string>
+    <string name="progress_percent">%1$d%%</string>
+    <string name="progress_value_ascent">%1$s&#160;m</string>
+    <!-- %1$d = Stunden, %2$s = Minuten zweistellig -->
+    <string name="progress_duration_hm">%1$d:%2$s h</string>
+
+    <!-- GoalCards.kt: Wochenziel (Wochenkarte auf Heute) -->
+    <!-- %1$d = gefahrene Kilometer, %2$d = Wochenziel in Kilometern -->
+    <string name="progress_week_goal_bar_cd">Weekly goal: %1$d of %2$d km ridden</string>
+    <!-- %1$d = übliche Woche in Kilometern -->
+    <string name="progress_week_goal_aufbau">A little more than your usual week (%1$d km)</string>
+    <string name="progress_week_goal_entlastung">Deliberately lighter after three build-up weeks</string>
+    <string name="progress_week_goal_halten">Same as your usual week</string>
+    <string name="progress_week_goal_wiedereinstieg">A gentle return</string>
+    <string name="progress_week_goal_einstieg">Your first weekly goal</string>
+    <!-- %1$d = Kilometer, die fehlen, %2$d = Tage bis Sonntag -->
+    <plurals name="progress_week_goal_left_count">
+        <item quantity="one">%1$d km to go today</item>
+        <item quantity="other">%1$d km to go in %2$d days</item>
+    </plurals>
+    <string name="progress_week_goal_done_hint">Weekly goal done – anything more is a bonus</string>
+
+    <!-- GoalCards.kt: Rückblick auf die letzte Woche -->
+    <string name="progress_recap_eyebrow">Last week</string>
+    <!-- %1$s = Kilometer, %2$d = Touren -->
+    <plurals name="progress_recap_headline_count">
+        <item quantity="one">%1$s km in one ride</item>
+        <item quantity="other">%1$s km in %2$d rides</item>
+    </plurals>
+    <string name="progress_recap_change_up">+%1$d %% on the week before</string>
+    <string name="progress_recap_change_down">−%1$d %% on the week before</string>
+    <string name="progress_recap_change_same">Same as the week before</string>
+    <!-- %1$d = Anzahl, %2$s = Namen der Bestwerte, durch Komma getrennt -->
+    <plurals name="progress_recap_records_count">
+        <item quantity="one">New personal best: %2$s</item>
+        <item quantity="other">%1$d new personal bests: %2$s</item>
+    </plurals>
+
+    <!-- GoalCards.kt: Monats-Challenges. %1$s = Monatsname -->
+    <string name="progress_challenges_title">Challenges in %1$s</string>
+    <!-- %1$s = Ziel in km bzw. Hm -->
+    <string name="progress_challenge_month_distance">Ride %1$s km</string>
+    <string name="progress_challenge_month_ascent">Climb %1$s meters</string>
+    <plurals name="progress_challenge_month_days_count">
+        <item quantity="one">Ride on %1$d day</item>
+        <item quantity="other">Ride on %1$d days</item>
+    </plurals>
+    <string name="progress_challenge_month_long_ride">One ride over %1$s km</string>
+    <!-- %1$s = bisher, %2$s = Ziel -->
+    <string name="progress_challenge_month_value">%1$s of %2$s</string>
+    <string name="progress_challenge_month_reached_cd">Reached</string>
+    <plurals name="progress_challenges_days_left_count">
+        <item quantity="one">Last day today</item>
+        <item quantity="other">%1$d days left</item>
+    </plurals>
+    <!-- %1$d = erreicht, %2$d = Challenges des Monats -->
+    <string name="progress_challenges_last_month">Last month: %1$d of %2$d done</string>
+    <!-- Bonus tier after the target is reached (GoalCards.kt). %1$s = bonus target in km or m -->
+    <string name="progress_challenge_bonus_distance">Bonus: ride %1$s km</string>
+    <string name="progress_challenge_bonus_ascent">Bonus: climb %1$s meters</string>
+    <plurals name="progress_challenge_bonus_days_count">
+        <item quantity="one">Bonus: ride on %1$d day</item>
+        <item quantity="other">Bonus: ride on %1$d days</item>
+    </plurals>
+    <string name="progress_challenge_bonus_long_ride">Bonus: one ride over %1$s km</string>
+    <string name="progress_challenge_bonus_reached">Bonus reached</string>
+    <!-- %1$d = reached, %2$d = challenges of the month, %3$d = bonuses reached -->
+    <plurals name="progress_challenge_bonus_last_month_count">
+        <item quantity="one">Last month: %1$d of %2$d done, %3$d bonus</item>
+        <item quantity="other">Last month: %1$d of %2$d done, %3$d bonuses</item>
+    </plurals>
+    <!-- Row in Up next. %1$s = remaining, %2$s = bonus target -->
+    <string name="progress_challenge_bonus_next_distance">%1$s km to go to the bonus of %2$s km</string>
+    <string name="progress_challenge_bonus_next_ascent">%1$s m to go to the bonus of %2$s m</string>
+    <plurals name="progress_challenge_bonus_next_days_count">
+        <item quantity="one">%1$d more riding day for the bonus</item>
+        <item quantity="other">%1$d more riding days for the bonus</item>
+    </plurals>
+    <string name="progress_challenge_bonus_next_long_ride">Bonus: %1$s km to go to a ride over %2$s km</string>
+    <!-- Zeile in Als Nächstes. %1$s = Rest, %2$s = Ziel -->
+    <string name="progress_next_challenge_distance">%1$s km to go to the monthly challenge of %2$s km</string>
+    <string name="progress_next_challenge_ascent">%1$s m to go to the monthly challenge of %2$s m</string>
+    <plurals name="progress_next_challenge_days_count">
+        <item quantity="one">%1$d more riding day for the monthly challenge</item>
+        <item quantity="other">%1$d more riding days for the monthly challenge</item>
+    </plurals>
+    <string name="progress_next_challenge_long_ride">Monthly challenge: %1$s km to go to a ride over %2$s km</string>
+</resources>

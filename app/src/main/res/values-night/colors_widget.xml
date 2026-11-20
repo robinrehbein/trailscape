@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dunkle Gegenstuecke, siehe values/colors_widget.xml (DarkPrimary, DarkOnSurface). -->
+    <color name="widget_preview_accent">#6BD69C</color>
+    <color name="widget_preview_text">#E3E3E7</color>
+</resources>

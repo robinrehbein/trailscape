@@ -80,6 +80,14 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Diagnose-Log | `<filesDir>/diag/diag.log`, `diag.1.log` (zusammen höchstens 128 KB) | technische Ereignisse ohne Nutzerdaten, siehe Abschnitt 6 |
 | Zum Teilen erzeugte GPX-Dateien und Tour-Bilder | `<cacheDir>/geteilte-touren/` | nur der gerade geteilte Export; älter als eine Stunde wird automatisch gelöscht |
 
+Wochenziel, Monats-Challenges, Bestwerte, der Vergleich wiederholter Strecken
+(„Diese Runde“) und das Startbildschirm-Widget werden ausschließlich aus den
+lokal gespeicherten Touren berechnet; dafür verlassen keine Daten das Gerät.
+Ist eine Uhr gekoppelt, gehen der Wochenstand (Serie, gefahrene Kilometer,
+Wochenziel) und nach einer Aufzeichnung bis zu zwei Sätze zu ihren Erfolgen
+vom Handy an deine Uhr (Wear-Datenverbindung, nur lokal), damit Kachel,
+Komplikation und Abschlussbild sie zeigen können.
+
 Gesundheitsdaten aus Health Connect (Puls, Ruhepuls, HRV, Schlaf, VO₂max)
 werden für die Auswertung verwendet und, soweit sie zu einer Tour gehören,
 mit dieser Tour gespeichert. Auch sie verlassen das Gerät nicht — es sei denn,

@@ -325,6 +325,31 @@
             </intent-filter>
         </service>
 
+        <!-- Startbildschirm-Widget (Serie und Wochenziel, siehe
+             widget/TrailscapeWidget.kt). exported="true" ist fuer App-Widget-
+             Empfaenger Pflicht: Der Launcher ist ein fremder Prozess und
+             sendet APPWIDGET_UPDATE an dieses Bauteil; ohne die Freigabe
+             bliebe das Widget leer. Die Gefahr ist gering, weil die
+             Basisklasse nur die System-Aktionen auswertet und das Widget
+             nichts Schreibendes tut. Die drei weiteren Aktionen
+             (Datum/Zeitzone/Sprache) sind vom Verbot impliziter Broadcasts
+             ausgenommen und lassen das Widget nach Mitternacht bzw. einem
+             Sprachwechsel sofort neu zeichnen. -->
+        <receiver
+            android:name=".widget.TrailscapeWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/trailscape_widget_info" />
+        </receiver>
+
         <!-- Kein eigener Dienst, sondern eine Ergaenzung an dem, den
              WorkManager selbst mitbringt: Ab Android 14 muss der Typ eines
              Vordergrunddienstes im Manifest stehen, und WorkManagers eigene

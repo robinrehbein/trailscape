@@ -47,8 +47,23 @@ interface TodayTexts {
     fun reminderSession(sessionTitle: String, km: Int): String
     fun reminderWeeklyReviewTitle(): String
     fun reminderWeeklyReview(riddenKm: Int, targetKm: Int): String
+
+    /**
+     * Wochenrueckschau ohne Plan: Kilometer und Touren der Woche, dazu der
+     * Vergleich mit der Vorwoche. [changePct] `null` oder 0 — kein Vergleich.
+     */
+    fun reminderWeeklyRecap(km: Int, rides: Int, changePct: Int?): String
+
+    /** Zweiter Satz der Rueckschau ab zwei Wochen Serie. */
+    fun reminderWeeklyRecapStreak(weeks: Int): String
     fun reminderNudgeTitle(days: Int): String
     fun reminderNudgeText(): String
+
+    /** [weeks] = Laenge der laufenden Wochenserie (mindestens 2). */
+    fun reminderStreakTitle(weeks: Int): String
+
+    /** [daysLeft] = Tage bis einschliesslich Sonntag, heute mitgezaehlt (1…3). */
+    fun reminderStreakText(daysLeft: Int): String
 }
 
 internal object TodayTextsDe : TodayTexts {
@@ -104,10 +119,28 @@ internal object TodayTextsDe : TodayTexts {
     override fun reminderWeeklyReviewTitle() = "Wochenrückschau"
     override fun reminderWeeklyReview(riddenKm: Int, targetKm: Int) =
         "Diese Woche: $riddenKm von $targetKm km gefahren."
+    override fun reminderWeeklyRecap(km: Int, rides: Int, changePct: Int?): String {
+        val count = if (rides == 1) "1 Tour" else "$rides Touren"
+        val comparison = when {
+            changePct == null || changePct == 0 -> ""
+            changePct > 0 -> " — $changePct % mehr als letzte Woche"
+            else -> " — ${-changePct} % weniger als letzte Woche"
+        }
+        return "Diese Woche: $km km in $count$comparison."
+    }
+
+    override fun reminderWeeklyRecapStreak(weeks: Int) = "$weeks Wochen in Folge."
     override fun reminderNudgeTitle(days: Int) = "Seit $days Tagen keine Tour"
     override fun reminderNudgeText() =
         "Wenn du wieder unterwegs bist, zeichnet Trailscape die Runde auf — " +
             "auch eine kurze zählt für die Auswertung."
+    override fun reminderStreakTitle(weeks: Int) = "$weeks Wochen in Folge — diese fehlt noch"
+    override fun reminderStreakText(daysLeft: Int) =
+        if (daysLeft <= 1) {
+            "Heute ist der letzte Tag, um deine Serie zu halten. Eine kurze Runde reicht."
+        } else {
+            "Noch $daysLeft Tage bis Sonntag. Eine kurze Runde reicht, um deine Serie zu halten."
+        }
 }
 
 internal object TodayTextsEn : TodayTexts {
@@ -163,8 +196,26 @@ internal object TodayTextsEn : TodayTexts {
     override fun reminderWeeklyReviewTitle() = "Weekly review"
     override fun reminderWeeklyReview(riddenKm: Int, targetKm: Int) =
         "This week: $riddenKm of $targetKm km ridden."
+    override fun reminderWeeklyRecap(km: Int, rides: Int, changePct: Int?): String {
+        val count = if (rides == 1) "1 ride" else "$rides rides"
+        val comparison = when {
+            changePct == null || changePct == 0 -> ""
+            changePct > 0 -> " — $changePct% more than last week"
+            else -> " — ${-changePct}% less than last week"
+        }
+        return "This week: $km km in $count$comparison."
+    }
+
+    override fun reminderWeeklyRecapStreak(weeks: Int) = "$weeks weeks in a row."
     override fun reminderNudgeTitle(days: Int) = "No ride for $days days"
     override fun reminderNudgeText() =
         "When you’re out again, Trailscape records the loop — " +
             "even a short one counts for your analysis."
+    override fun reminderStreakTitle(weeks: Int) = "$weeks weeks in a row — this one is still open"
+    override fun reminderStreakText(daysLeft: Int) =
+        if (daysLeft <= 1) {
+            "Today is the last day to keep your streak. A short loop is enough."
+        } else {
+            "$daysLeft days left until Sunday. A short loop is enough to keep your streak."
+        }
 }

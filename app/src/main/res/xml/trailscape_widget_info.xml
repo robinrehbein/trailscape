@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Beschreibung des Startbildschirm-Widgets (siehe widget/TrailscapeWidget.kt).
+
+    updatePeriodMillis = 30 Minuten ist die kleinste Taktung, die Android
+    zulaesst: Der Tages- und Wochenwechsel (Serie in Gefahr, neue Woche, neues
+    Ziel) soll auch ohne App-Start sichtbar werden. Die sofortige
+    Aktualisierung nach einer gespeicherten Tour loest WidgetUpdater aus.
+
+    Groessen: 2 x 1 Zellen als Mindestmass (kleine Stufe), 4 x 2 als Vorgabe
+    (mittlere Stufe); die dp-Werte folgen der Faustregel 70 * n - 30 der
+    Android-Dokumentation.
+
+    initialLayout: die Ladeansicht, die Glance mitbringt — sie steht, bis die
+    erste Komposition fertig ist. previewLayout (Android 12+) ist die
+    Vorschau in der Widget-Auswahl.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="110dp"
+    android:minHeight="40dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:previewLayout="@layout/widget_preview"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="10800000"
+    android:widgetCategory="home_screen" />

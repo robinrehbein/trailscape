@@ -37,6 +37,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -324,11 +325,21 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
     }
 }
 
-/** Kurzer Abschluss: Endstand, ein Knopf zurueck zum Start. */
+/**
+ * Kurzer Abschluss: Endstand, ein Knopf zurueck zum Start.
+ *
+ * Hat das Telefon die Tour gespeichert und gemeldet, was sie gebracht hat
+ * ([RecordingStatus.abschlussZeilen], hoechstens zwei fertige Saetze in der
+ * Sprache der Telefon-App), stehen diese unter dem Endstand — klein, je
+ * hoechstens zwei Zeilen, ohne Ueberschrift: Die Saetze sagen selbst, was sie
+ * sind („Neue Bestweite: …"). Ohne Zeilen sieht der Bildschirm aus wie zuvor.
+ * Weg sind sie mit „Zurueck zum Start" bzw. dem naechsten Start.
+ */
 @Composable
 private fun EndeScreen() {
     val laufzeitMs by RecordingStatus.laufzeitMs.collectAsStateWithLifecycle()
     val distanzKm by RecordingStatus.distanzKm.collectAsStateWithLifecycle()
+    val abschlussZeilen by RecordingStatus.abschlussZeilen.collectAsStateWithLifecycle()
     val sprache = spracheDerKonfiguration()
 
     Column(
@@ -349,7 +360,22 @@ private fun EndeScreen() {
             style = TextStyle(fontFeatureSettings = "tnum"),
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        if (abschlussZeilen.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            abschlussZeilen.forEach { zeile ->
+                Text(
+                    text = zeile,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(if (abschlussZeilen.isEmpty()) 18.dp else 12.dp))
 
         RundKnopf(
             durchmesser = LiveActionButtonSize,

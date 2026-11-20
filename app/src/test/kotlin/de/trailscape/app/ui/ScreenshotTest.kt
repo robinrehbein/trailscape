@@ -2,7 +2,22 @@ package de.trailscape.app.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.progress.FitnessTrendCard
+import de.trailscape.app.ui.progress.WeeklyRecapCard
+import de.trailscape.core.FitnessComparison
+import de.trailscape.core.FitnessSignal
+import de.trailscape.core.FitnessSignalKind
+import de.trailscape.core.FitnessVerdict
+import de.trailscape.core.PeriodTotals
+import de.trailscape.core.RecordKind
+import de.trailscape.core.WeeklyRecap
+import java.time.LocalDate
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -30,6 +45,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.github.takahirom.roborazzi.captureRoboImage
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.map.LONG_PRESS_HINT_CALM_MS
 import de.trailscape.app.ui.map.LONG_PRESS_HINT_STORAGE_KEY
@@ -48,6 +64,7 @@ import de.trailscape.core.savePlan
 import kotlin.math.cos
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -89,14 +106,7 @@ class ScreenshotTest {
         AppServices.keyValueStore.setString(LONG_PRESS_HINT_STORAGE_KEY, "1")
         val rides = sampleRides()
         AppServices.rideStorage.saveRides(rides)
-        val goal = Goal(
-            name = "Alb-Gold",
-            distanceKm = 60.0,
-            ascentM = 700.0,
-            date = NOW + 8 * WEEK_MS,
-            targetDurationMin = 130,
-        )
-        savePlan(AppServices.trainingPlanStore, generatePlan(goal, assessFitness(rides), now = NOW, texts = CoreTextsDe))
+        savePlan(AppServices.trainingPlanStore, generatePlan(SAMPLE_GOAL, assessFitness(rides), now = NOW, texts = CoreTextsDe))
     }
 
     @Test
@@ -135,6 +145,9 @@ class ScreenshotTest {
         shot("11-heute-lang")
         tab("Training")
         shot("13-training-lang")
+        compose.onAllNodesWithText("Plan")[0].performClick()
+        settle()
+        shot("13b-training-plan-lang")
         tab("Verlauf")
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
@@ -171,6 +184,8 @@ class ScreenshotTest {
         )
         start()
         tab("Training")
+        compose.onAllNodesWithText("Plan")[0].performClick()
+        settle()
         shot("16-training-hinweise")
     }
 
@@ -193,6 +208,84 @@ class ScreenshotTest {
         settle()
         tab("Training")
         shot("24-training-gross")
+    }
+
+    /**
+     * Der Wochenrueckblick direkt gerendert: Die App zeigt ihn nur Montag bis
+     * Mittwoch, ein Bild an jedem Wochentag braeuchte eine einschleusbare Uhr.
+     * Hell/dunkel und bei 130 % Schrift untereinander.
+     */
+    @Test
+    fun wochenrueckblickKarte() {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val recap = WeeklyRecap(
+            monday = LocalDate.of(2026, 11, 9),
+            totals = PeriodTotals(km = 86.0, ascentM = 700.0, timeS = 13_000, rides = 3),
+            previous = PeriodTotals(km = 70.0, ascentM = 500.0, timeS = 10_000, rides = 2),
+            activeDays = 3,
+            longestRideKm = 40.0,
+            records = listOf(RecordKind.DISTANCE, RecordKind.ASCENT),
+            streakWeeks = 4,
+        )
+        compose.setContent {
+            Column {
+                for (dark in listOf(false, true)) {
+                    TrailscapeTheme(darkTheme = dark) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Column(Modifier.padding(16.dp)) { WeeklyRecapCard(recap) }
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onAllNodesWithText("86", substring = true)[0].assertExists()
+        shot("15-wochenrueckblick")
+    }
+
+    /**
+     * Die Fitness-Karte („Du wirst fitter") mit allen drei Beobachtungen, dazu
+     * die Variante ohne Puls und „zu wenig Daten" — hell/dunkel bei 130 % Schrift.
+     */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h3200dp-xxhdpi")
+    fun fitnessTrendKarte() {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val fitter = FitnessComparison(
+            verdict = FitnessVerdict.FITTER,
+            signals = listOf(
+                FitnessSignal(FitnessSignalKind.EFFICIENCY, 3.1, 2.98, 4, 5, 4),
+                FitnessSignal(FitnessSignalKind.PACE, 24.1, 23.2, 4, 5, 4),
+                FitnessSignal(FitnessSignalKind.ENDURANCE, 82.0, 61.0, 34, 5, 4),
+            ),
+            windowDays = 42,
+        )
+        val noHr = FitnessComparison(
+            verdict = FitnessVerdict.DECLINING,
+            signals = listOf(FitnessSignal(FitnessSignalKind.PACE, 22.4, 23.2, -3, 4, 5)),
+            windowDays = 42,
+        )
+        val unknown = FitnessComparison(FitnessVerdict.NOT_ENOUGH_DATA, emptyList(), 42)
+        compose.setContent {
+            Column {
+                for (dark in listOf(false, true)) {
+                    TrailscapeTheme(darkTheme = dark) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                FitnessTrendCard(fitter)
+                                if (dark) {
+                                    FitnessTrendCard(noHr)
+                                    FitnessTrendCard(unknown)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onAllNodesWithText("82", substring = true)[0].assertExists()
+        shot("training-fitness-trend")
     }
 
     /**
@@ -272,6 +365,76 @@ class ScreenshotTest {
             .performSemanticsAction(SemanticsActions.Expand)
         settle()
         shot("10-karte-tour-offen")
+    }
+
+    /**
+     * Das Tourblatt direkt nach dem Beenden einer Aufzeichnung: „Was die Tour
+     * gebracht hat" ueber den Aktionen (`ui/map/RideHighlights.kt`).
+     *
+     * Der Uebergang ist der echte: Die fertige Tour liegt in der Ablage und
+     * wird ueber [RecordingRepository.publishFinishedRide] gemeldet — genau
+     * wie der Aufnahmedienst es tut; das ViewModel laedt neu und waehlt sie
+     * aus. Die Touren sind so gelegt, dass mindestens drei Zeilen erscheinen:
+     * drei Wochen mit je einer 30-km-Tour (Serie, mitwachsendes Wochenziel um
+     * 30 km), dann heute 82,4 km — neue Bestweite, und sie bringt die Woche
+     * allein ueber das Ziel.
+     */
+    @Test
+    fun karteTourHighlights() = highlightsShot("karte-tour-highlights")
+
+    @Test
+    @Config(qualifiers = "+night")
+    fun karteTourHighlightsDunkel() = highlightsShot("karte-tour-highlights-dunkel", dark = true)
+
+    /** Wie [schmal]: 360 × 640 dp mit 115 % Schrift — nur zwei Zeilen, damit ueber dem Blatt Karte bleibt. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h640dp-xxhdpi")
+    fun karteTourHighlightsSchmal() {
+        RuntimeEnvironment.setFontScale(1.15f)
+        highlightsShot("karte-tour-highlights-schmal")
+    }
+
+    /** Wie [grosseSchrift]: 130 % Systemschrift. */
+    @Test
+    fun karteTourHighlightsGross() {
+        RuntimeEnvironment.setFontScale(1.3f)
+        highlightsShot("karte-tour-highlights-gross")
+    }
+
+    private fun highlightsShot(name: String, dark: Boolean = false) {
+        // `AppServices` und seine Ablage leben ueber die Tests der Klasse
+        // hinweg: Beispieltouren und Plan aus [seed] weg (ohne Plan gilt das
+        // mitwachsende Wochenziel, dessen Zahl sich aus den Touren hier
+        // ergibt), eigene Touren hinein — und am Ende alles zurueck, damit
+        // kein anderer Test von der Reihenfolge abhaengt.
+        val samples = sampleRides()
+        samples.forEach { AppServices.rideStorage.deleteRide(it.id) }
+        savePlan(AppServices.trainingPlanStore, null)
+        val rides = highlightRides()
+        AppServices.rideStorage.saveRides(rides)
+        try {
+            start(dark)
+            tab("Karte")
+            compose.runOnUiThread { RecordingRepository.publishFinishedRide(HIGHLIGHT_RIDE_ID) }
+            compose.waitUntil(timeoutMillis = 10_000) {
+                compose.onAllNodesWithText("Neue Bestweite", substring = true).fetchSemanticsNodes().isNotEmpty()
+            }
+            settle()
+            compose.onAllNodesWithText("Neue Bestweite: 82,4", substring = true)[0].assertExists()
+            compose.onAllNodesWithText("Wochenziel geschafft", substring = true)[0].assertExists()
+            // Kein Snackbar-Text im Bild: Nach dem Speichern meldet das
+            // ViewModel „Tour gespeichert" — die verschwindet von selbst.
+            compose.mainClock.advanceTimeBy(10_000)
+            settle()
+            shot(name)
+        } finally {
+            rides.forEach { AppServices.rideStorage.deleteRide(it.id) }
+            AppServices.rideStorage.saveRides(samples)
+            savePlan(
+                AppServices.trainingPlanStore,
+                generatePlan(SAMPLE_GOAL, assessFitness(samples), now = NOW, texts = CoreTextsDe),
+            )
+        }
     }
 
     /**
@@ -584,6 +747,31 @@ class ScreenshotTest {
     }
 
     /**
+     * Ohne Trainingsplan: „Diese Woche" bekommt trotzdem ein Ziel — das
+     * mitwachsende Wochenziel aus den Touren, mit Balken und einem ruhigen
+     * Satz darunter (oder, falls die Beispieltouren es diese Woche schon
+     * erfuellen, der Hinweis, dass alles Weitere Zugabe ist).
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteOhnePlanWochenzielEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        // `AppServices` lebt ueber die Tests der Klasse hinweg — der Plan aus
+        // `seed()` muss ausdruecklich weg.
+        savePlan(AppServices.trainingPlanStore, null)
+        start()
+        val context = compose.activity
+        compose.onAllNodesWithText(context.getString(R.string.today_week_eyebrow))[0].assertExists()
+        compose.onAllNodesWithContentDescription("Weekly goal:", substring = true)[0].assertExists()
+        // Der Satz hangt von der Woche ab; eine der beiden Formen muss da sein.
+        val caption = compose.onAllNodesWithText("to go", substring = true).fetchSemanticsNodes().size
+        val done = compose.onAllNodesWithText(context.getString(R.string.progress_week_goal_done_hint))
+            .fetchSemanticsNodes().size
+        assertTrue("Wochenziel-Satz fehlt", caption + done > 0)
+        shot("14-heute-wochenziel-en")
+    }
+
+    /**
      * Der schwebende Aufnahme-Knopf. Seine Beschreibung gehoert dem Bereich
      * der App-Huelle (`RecCapsuleButton.kt`): Solange dort noch der deutsche
      * Text steht, wird nach ihm gesucht; sobald die Huelle ihre eigene
@@ -665,6 +853,61 @@ private const val WEEK_MS = 7 * DAY_MS
  * Pixelvergleich aber erst mit einer einschleusbaren App-Uhr loesbar.
  */
 private val NOW = System.currentTimeMillis()
+
+private val SAMPLE_GOAL = Goal(
+    name = "Alb-Gold",
+    distanceKm = 60.0,
+    ascentM = 700.0,
+    date = NOW + 8 * WEEK_MS,
+    targetDurationMin = 130,
+)
+
+private const val HIGHLIGHT_RIDE_ID = "highlight-today"
+
+/**
+ * Fuer [ScreenshotTest.karteTourHighlights]: je eine 30-km-Tour am Mittwoch
+ * der drei Vorwochen und die gerade beendete Tour von heute (82,4 km). Alles
+ * relativ zum Kalendertag in der Zeitzone des Geraets — dieselbe Umrechnung
+ * wie in der App —, damit „diese Woche" in jedem Fall nur die neue Tour hat.
+ */
+private fun highlightRides(): List<Ride> {
+    val zone = java.time.ZoneId.systemDefault()
+    val monday = java.time.Instant.ofEpochMilli(NOW).atZone(zone).toLocalDate().with(java.time.DayOfWeek.MONDAY)
+    fun ride(id: String, name: String, startMs: Long, km: Double, ascentM: Double, lat: Double): Ride {
+        val durationS = (km / 23.0 * 3600).toInt()
+        return Ride(
+            id = id,
+            name = name,
+            createdAt = startMs,
+            stats = RideStats(
+                distanceKm = km,
+                ascentM = ascentM,
+                descentM = ascentM,
+                durationS = durationS,
+                movingTimeS = durationS,
+                avgSpeedKmh = 23.0,
+            ),
+            points = List(60) { i ->
+                val t = i / 59.0 * 2 * Math.PI
+                TrackPoint(
+                    lat = lat + 0.03 * sin(t),
+                    lon = 9.05 + 0.05 * cos(t),
+                    ele = 500.0 + 30 * sin(2 * t),
+                    time = startMs + durationS * 1000L * i / 59,
+                )
+            },
+        )
+    }
+    val earlier = (1..3).map { weeksAgo ->
+        val wednesdayNoon = monday.minusWeeks(weeksAgo.toLong()).plusDays(2).atTime(12, 0)
+            .atZone(zone).toInstant().toEpochMilli()
+        ride("highlight-week-$weeksAgo", "Mittwochsrunde $weeksAgo", wednesdayNoon, 30.0, 270.0, 48.40)
+    }
+    // Die neue Tour hat weniger Hoehenmeter als die Vorwochen (kein zweiter
+    // Bestwert, der die Wochenziel-Zeile verdraengte) und eine andere Spur
+    // (kein Rundenvergleich).
+    return earlier + ride(HIGHLIGHT_RIDE_ID, "Tour heute", NOW, 82.4, 200.0, 48.60)
+}
 
 /** Sechs gefahrene Touren der letzten Wochen, jede mit einer kleinen Schleife als Spur. */
 private fun sampleRides(): List<Ride> {

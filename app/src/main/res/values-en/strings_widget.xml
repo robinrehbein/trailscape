@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts of the home-screen widget (widget/**): weekly streak, weekly progress,
+    empty state, widget picker.
+
+    Key prefix: widget_
+    Rules (key names, placeholders, plurals, glossary): docs/i18n.md.
+    Counterpart of values/strings_widget.xml — same keys, same order.
+-->
+<resources>
+    <!-- Name and description in the launcher's widget picker -->
+    <string name="widget_label">Trailscape Streak</string>
+    <string name="widget_description">Your weekly streak and weekly goal at a glance.</string>
+    <!-- Preview in the widget picker (fixed sample values) -->
+    <string name="widget_preview_headline">5 weeks in a row</string>
+    <string name="widget_preview_status">This week is in the bag</string>
+    <string name="widget_preview_progress">42 of 60 km this week</string>
+
+    <!-- Small widget: short streak line -->
+    <plurals name="widget_streak_short">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
+    <string name="widget_streak_none_short">New streak</string>
+
+    <!-- Medium widget: headline and status line -->
+    <plurals name="widget_streak_headline">
+        <item quantity="one">%1$d week in a row</item>
+        <item quantity="other">%1$d weeks in a row</item>
+    </plurals>
+    <string name="widget_streak_none_headline">No streak yet</string>
+    <string name="widget_status_secured">This week is in the bag</string>
+    <plurals name="widget_status_days_left">
+        <item quantity="one">Today is the last day to keep it going</item>
+        <item quantity="other">%1$d days left to keep it going</item>
+    </plurals>
+    <string name="widget_status_start">One ride this week starts your streak</string>
+
+    <!-- Progress. %1$d = ridden km, %2$d = weekly goal in km -->
+    <string name="widget_progress_compact">%1$d / %2$d km</string>
+    <string name="widget_progress_compact_no_goal">%1$d km</string>
+    <string name="widget_progress_full">%1$d of %2$d km this week</string>
+    <string name="widget_progress_full_no_goal">%1$d km this week</string>
+
+    <!-- Empty state: no ride yet -->
+    <string name="widget_empty_title">Your first ride is waiting</string>
+    <string name="widget_empty_hint">Hop on and start your streak.</string>
+
+    <!-- Button and accessibility -->
+    <string name="widget_button_ride">Ride</string>
+    <string name="widget_open_app">Open Trailscape</string>
+</resources>

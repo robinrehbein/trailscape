@@ -60,6 +60,7 @@ import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.core.Ride
+import de.trailscape.core.RideHighlight
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.formatDuration
 import kotlin.math.roundToInt
@@ -269,6 +270,9 @@ internal fun LiveRecordingCard(
  * Puls) dazu. Frueher stand das Profil immer offen auf einer schwebenden
  * Karte und nahm der Strecke auf der Karte ein Drittel des Bildes.
  *
+ * @param highlights die zwei, drei Dinge, die diese Tour gebracht hat
+ *   (`RideHighlights.kt`) — nur direkt nach der Fahrt nicht leer. Sie stehen
+ *   zwischen Kennzahlen und Aktionen, damit sie ohne Hochwischen sichtbar sind.
  * @param onOpenDetails oeffnet die Detailansicht mit „Was die Tour gebracht
  *   hat"; `null` blendet die Kachel aus. Nur fuer gefahrene Touren.
  * @param expanded Stufe des Blatts — bleibt beim Aufrufer.
@@ -280,6 +284,7 @@ internal fun RideCard(
     ride: Ride,
     navigating: Boolean,
     onNavigate: () -> Unit,
+    highlights: List<RideHighlight> = emptyList(),
     onShare: () -> Unit,
     onDelete: () -> Unit,
     onOpenDetails: (() -> Unit)? = null,
@@ -371,6 +376,13 @@ internal fun RideCard(
                     modifier = Modifier.padding(end = 8.dp),
                 )
                 Spacer(Modifier.height(12.dp))
+                // Was die Tour gebracht hat — ueber den Aktionen, im Kopf des
+                // Blatts: Gleich nach dem Stopp ist das die Antwort, die man
+                // sucht, und sie soll nicht hinter einem Wisch oder Tipp liegen.
+                if (highlights.isNotEmpty()) {
+                    RideHighlightsBlock(highlights, Modifier.padding(end = 8.dp))
+                    Spacer(Modifier.height(12.dp))
+                }
                 // Dieselbe Ordnung wie im Tourdetail (`ui/rides/RideDetailScreen.kt`):
                 // oben die Hauptaktion gefuellt ueber die volle Breite, darunter
                 // die Nebenaktionen als beschriftete Kacheln in derselben
@@ -382,8 +394,9 @@ internal fun RideCard(
                 // Detail vorbehalten: Das Blatt soll niedrig bleiben, damit die
                 // Karte darueber sichtbar ist. Das Detail selbst ist aber ueber
                 // „Auswertung" erreichbar — dieses Blatt ist das erste, was man
-                // nach dem Beenden einer Aufzeichnung sieht, und die Frage
-                // „Was hat die Tour gebracht?" beantwortet erst das Detail.
+                // nach dem Beenden einer Aufzeichnung sieht. Die kurze Antwort
+                // auf „Was hat die Tour gebracht?" steht darueber
+                // ([RideHighlightsBlock]), die ganze im Detail.
                 Column(modifier = Modifier.padding(end = 8.dp)) {
                     PrimaryButton(
                         text = when {

@@ -251,7 +251,16 @@ fun dueReminder(
     }
 
     if (settings.nudgeEnabled && morningReached && nudgeAllowed(state, today)) {
-        nudgeNotice(today, rides, texts)?.let { return it }
+        // Die Serie zuerst: „Deine Serie endet am Sonntag" ist der konkretere
+        // Anlass als „seit fuenf Tagen keine Tour" — und oft derselbe Tag.
+        streakNotice(today, rides, texts)?.let { return it }
+        // Steht in dieser Woche noch die Serien-Meldung an (Serie laeuft,
+        // Woche offen, aber vor Freitag), schweigt der allgemeine Anstupser:
+        // Er wuerde die gemeinsame Ruhezeit verbrauchen, und am Freitag — wenn
+        // es um die Serie geht — bliebe es still.
+        if (!streakNoticePending(today, rides)) {
+            nudgeNotice(today, rides, texts)?.let { return it }
+        }
     }
 
     return null
@@ -339,8 +348,8 @@ private fun dailySessionNotice(now: LocalDateTime, plan: TrainingPlan?, texts: C
  * Gefahrene gegen geplante Kilometer der laufenden Woche.
  *
  * Ohne laufende Planwoche gibt es keine geplanten Kilometer und damit keinen
- * Vergleich — dann bleibt es still, statt eine nackte Wochensumme zu melden,
- * die niemand bestellt hat.
+ * Vergleich mit dem Plan — dann gibt es stattdessen den Rueckblick auf die
+ * Woche ([weeklyRecapNotice]), auch fuer alle ganz ohne Plan.
  *
  * Gerundet auf ganze Kilometer: In einer Benachrichtigung ist die
  * Nachkommastelle Ballast, und das Planziel ist ohnehin ganzzahlig.
@@ -351,8 +360,8 @@ private fun weeklyReviewNotice(
     rides: List<RideInfo>,
     texts: CoreTexts,
 ): ReminderNotice? {
-    if (plan == null) return null
-    val week = activeWeek(plan, dartEpochMs(now)) ?: return null
+    val week = plan?.let { activeWeek(it, dartEpochMs(now)) }
+        ?: return weeklyRecapNotice(now.toLocalDate(), rides, texts)
     val ridden = dartRound(weekKm(week, rides)).toInt()
 
     return ReminderNotice(
@@ -361,6 +370,40 @@ private fun weeklyReviewNotice(
         text = texts.today.reminderWeeklyReview(ridden, week.targetKm),
     )
 }
+
+/**
+ * Die Wochenrueckschau fuer alle ohne laufende Planwoche: Kilometer und Touren
+ * der laufenden Woche ([weeklyRecap]), verglichen mit der Vorwoche.
+ *
+ * Die Meldung kommt Sonntagabend, die laufende Woche ist also die, die es zu
+ * betrachten gilt. **Ohne Tour in dieser Woche bleibt es still** — „0 km in
+ * 0 Touren" waere eine Rueckschau, die niemand bestellt hat; dafuer ist der
+ * Anstupser da. Eine Serie wird erst ab [reminderRecapStreakMinWeeks] Wochen
+ * erwaehnt: „1 Woche in Folge" ist kein Lob, sondern der Normalfall.
+ */
+private fun weeklyRecapNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreTexts): ReminderNotice? {
+    val recap = weeklyRecap(rideFacts(rides) { dartLocalOf(it).toLocalDate() }, today)
+    if (recap.totals.rides == 0) return null
+
+    val summary = texts.today.reminderWeeklyRecap(
+        km = dartRound(recap.totals.km).toInt(),
+        rides = recap.totals.rides,
+        changePct = recap.kmChangePct,
+    )
+    val text = if (recap.streakWeeks >= reminderRecapStreakMinWeeks) {
+        summary + " " + texts.today.reminderWeeklyRecapStreak(recap.streakWeeks)
+    } else {
+        summary
+    }
+    return ReminderNotice(
+        kind = ReminderKind.WOCHENRUECKSCHAU,
+        title = texts.today.reminderWeeklyReviewTitle(),
+        text = text,
+    )
+}
+
+/** Ab wie vielen Wochen in Folge die Rueckschau die Serie nennt. */
+const val reminderRecapStreakMinWeeks: Int = 2
 
 /**
  * Der Anstupser nach [reminderNudgeAfterDays] Tagen ohne Aufzeichnung.
@@ -390,6 +433,40 @@ private fun nudgeNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreText
         text = texts.today.reminderNudgeText(),
     )
 }
+
+/**
+ * Der Anstupser fuer eine Wochenserie, die zu reissen droht: Die Serie
+ * ([weekStreak]) laeuft seit mindestens [reminderStreakMinWeeks] Wochen, diese
+ * Woche hat noch keine Tour, und es bleiben hoechstens
+ * [reminderStreakDaysLeft] Tage (Freitag bis Sonntag).
+ *
+ * Laeuft unter dem Schalter und der Ruhezeit des Anstupsers
+ * ([ReminderKind.ANSTUPSER]): Es ist dieselbe Sorte Meldung — „fahr mal
+ * wieder" —, nur mit einem besseren Grund.
+ */
+private fun streakNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreTexts): ReminderNotice? {
+    val streak = weekStreak(rideFacts(rides) { dartLocalOf(it).toLocalDate() }, today)
+    if (streak.weeks < reminderStreakMinWeeks || !streak.atRisk || streak.daysLeft > reminderStreakDaysLeft) {
+        return null
+    }
+    return ReminderNotice(
+        kind = ReminderKind.ANSTUPSER,
+        title = texts.today.reminderStreakTitle(streak.weeks),
+        text = texts.today.reminderStreakText(streak.daysLeft),
+    )
+}
+
+/** Ob [streakNotice] spaeter in dieser Woche noch faellig wird (Serie laeuft, Woche offen, noch vor Freitag). */
+private fun streakNoticePending(today: LocalDate, rides: List<RideInfo>): Boolean {
+    val streak = weekStreak(rideFacts(rides) { dartLocalOf(it).toLocalDate() }, today)
+    return streak.weeks >= reminderStreakMinWeeks && streak.atRisk && streak.daysLeft > reminderStreakDaysLeft
+}
+
+/** Ab dieser Laenge ist eine Wochenserie eine Erinnerung wert. */
+const val reminderStreakMinWeeks: Int = 2
+
+/** So viele Tage vor Wochenende meldet sich die Serie fruehestens (3 = ab Freitag). */
+const val reminderStreakDaysLeft: Int = 3
 
 private fun nudgeAllowed(state: ReminderState, today: LocalDate): Boolean {
     val last = state.lastNudgeOn ?: return true

@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,6 +50,8 @@ import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.app.ui.theme.OverlayCardPaddingVertical
 import de.trailscape.core.PlannedRoute
 import de.trailscape.core.RouteCandidate
+import de.trailscape.core.RouteQualityIssue
+import de.trailscape.core.RouteQualityLevel
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.TrackPoint
@@ -65,6 +68,7 @@ import de.trailscape.core.windLine
 import de.trailscape.core.windOptimisedLabel
 import de.trailscape.core.i18n.CoreTexts
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
@@ -114,6 +118,13 @@ import kotlin.math.roundToInt
  * sind Strafpunkte, also ein internes Mass ohne Einheit. Was die Nutzerin
  * braucht, steht ohnehin da — die Reihenfolge (bester zuerst) und die
  * Abweichung vom Ziel in Prozent.
+ *
+ * „Beste" steht nur an einem ersten Vorschlag, der auch absolut gut ist
+ * ([de.trailscape.core.RouteCandidate.quality]). Sonst traegt er wie die
+ * anderen seinen Rang, und unter der Liste sagt eine leise Zeile, warum es
+ * hier nichts Besseres gibt ([qualityNoteRes]) — die Suche hat dann schon in
+ * eine zweite Richtung nachgesehen. Ehrlich statt gelobt: Wer „Beste" liest,
+ * soll die Runde ungesehen fahren koennen.
  *
  * War „Wind berücksichtigen" an und kam der Wind an, steht unter der
  * Quellzeile eine schlichte Windzeile zum gewaehlten Vorschlag („Wind 18 km/h
@@ -326,6 +337,19 @@ internal fun RouteGenerationSheet(
                             }
                         }
 
+                        // Ist auch die erste Runde nicht gut (Schritt 9 in
+                        // `RouteGenerator.kt`: die Nachsuche hat schon
+                        // stattgefunden), sagt eine leise Zeile, warum —
+                        // statt eine schwache Runde „Beste" zu nennen.
+                        qualityNoteRes(state.candidates.firstOrNull())?.let { note ->
+                            Text(
+                                text = stringResource(note),
+                                modifier = Modifier.padding(end = 8.dp, top = 2.dp, bottom = 8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = theme.onSurfaceVariant,
+                            )
+                        }
+
                         Spacer(Modifier.height(2.dp))
                         PrimaryButton(
                             text = stringResource(R.string.map_generation_apply_action),
@@ -396,9 +420,19 @@ internal fun RouteGenerationSheet(
 }
 
 
-/** Fortschritt der laufenden Suche mit Abbruch. */
+/**
+ * Fortschritt der laufenden Suche mit Abbruch.
+ *
+ * Startet `generateRoutes` die Nachsuche (Schritt 9), waechst `total` einmal
+ * von 3 auf 6, waehrend `done` bei 3 steht — der Text zaehlt ehrlich weiter
+ * („Kandidat 4 von 6"), der Anteil fiele aber von zwei Dritteln auf die
+ * Haelfte. Der Balken haelt deshalb seinen Hoechststand, statt
+ * zurueckzulaufen; er verlaesst die Komposition mit jeder Suche und beginnt
+ * die naechste wieder bei null.
+ */
 @Composable
 private fun SearchProgress(done: Int, total: Int, onCancel: () -> Unit) {
+    val highWater = remember { floatArrayOf(0f) }
     Column(modifier = Modifier.padding(end = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -413,10 +447,13 @@ private fun SearchProgress(done: Int, total: Int, onCancel: () -> Unit) {
             TextButton(onClick = onCancel) { Text(stringResource(R.string.map_generation_cancel_action)) }
         }
         if (total > 0) {
+            val fraction = (done.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+            highWater[0] = max(highWater[0], fraction)
+            val shown = highWater[0]
             LinearProgressIndicator(
-                progress = { (done.toFloat() / total.toFloat()).coerceIn(0f, 1f) },
+                progress = { shown },
                 modifier = Modifier.fillMaxWidth(),
-                            )
+            )
         } else {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
@@ -489,11 +526,28 @@ private fun CandidateRow(
                         color = theme.onSurfaceVariant,
                     )
                 }
+                // Ehrlich sagen, wenn die „Runde" zu einem guten Teil hin und
+                // zurueck ueber denselben Weg fuehrt (`core/…/RouteQuality.kt`).
+                // Kurze Stichstrecken sind da schon herausgeschnitten; was
+                // bleibt, liess sich nicht vermeiden und kostet die Runde
+                // bereits Punkte — verschweigen sollte die Liste es nicht.
+                if (candidate.retraceShare >= RETRACE_NOTICE_SHARE) {
+                    Text(
+                        text = stringResource(
+                            R.string.map_generation_retrace_label,
+                            (candidate.retraceShare * 100).roundToInt(),
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalSignalColors.current.caution,
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = if (rank == 1) stringResource(R.string.map_generation_best_label) else "#$rank",
+                    text = if (isBestLabel(candidate, rank)) stringResource(R.string.map_generation_best_label) else "#$rank",
                     style = MaterialTheme.typography.labelSmall,
                     color = theme.onSurfaceVariant,
                 )
@@ -680,3 +734,26 @@ private val COMPASS_LABELS = listOf(
     R.string.map_generation_compass_w,
     R.string.map_generation_compass_nw,
 )
+
+/**
+ * Ob ein Vorschlag „Beste" heissen darf: nur der erste, und nur, wenn er
+ * [RouteQualityLevel.GUT] ist. Sonst steht dort wie bei den anderen der Rang
+ * („#1") — die Reihenfolge stimmt ja, nur das Lob nicht.
+ */
+internal fun isBestLabel(candidate: RouteCandidate, rank: Int): Boolean =
+    rank == 1 && candidate.quality == RouteQualityLevel.GUT
+
+/**
+ * Die leise Zeile unter der Liste, wenn selbst der erste Vorschlag nicht gut
+ * ist — nach der Ursache, an der er scheitert ([RouteCandidate.qualityIssue]).
+ * `null` bei einem guten ersten Vorschlag oder leerer Liste.
+ */
+internal fun qualityNoteRes(top: RouteCandidate?): Int? = when (top?.qualityIssue) {
+    null -> null
+    RouteQualityIssue.DISTANZ -> R.string.map_generation_quality_distance_note
+    RouteQualityIssue.HIN_UND_ZURUECK -> R.string.map_generation_quality_retrace_note
+    RouteQualityIssue.BELAG -> R.string.map_generation_quality_surface_note
+}
+
+/** Ab diesem doppelt befahrenen Anteil nennt die Rundenwahl ihn beim Namen. */
+private const val RETRACE_NOTICE_SHARE = 0.15

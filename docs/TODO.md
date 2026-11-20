@@ -59,7 +59,21 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   Später denkbar: verifizierte App Links statt `trailscape://` (braucht eine
   eigene Domain mit `/.well-known/assetlinks.json`), FIT statt GPX.
 
+- **Stichstrecken-Schnitt auf echten Runden pruefen.** `trimSpurs`
+  (`core/.../RouteQuality.kt`) ist nur an konstruierten Geometrien getestet.
+  Vor dem Release ein Dutzend Runden in bekanntem Gelaende generieren
+  (flach, Mittelgebirge mit Serpentinen, Stadt) und auf der Karte pruefen:
+  keine Stacheln mehr, kein Sprung ueber eine Serpentine, Abbiegehinweise an
+  der Schnittstelle stimmig. Die Schwellen stehen als Konstanten oben in der
+  Datei (`spurToleranceM`, `minSpurM`, `maxSpurFloorM`, `maxSpurShare`).
+
 ## Ideen
+
+- **Jahresziel in den Selfhost-Sync.** Das Jahresziel liegt im
+  Schluessel-Wert-Speicher (`YEAR_GOAL_STORAGE_KEY`); im JSON-Backup ist es
+  (Feld `yearGoal`), im Selfhost-Sync noch nicht.
+- **Motivation auf der Uhr.** Wochenserie und naechste Bestweite als Zeile der
+  Wear-Kachel bzw. der Abschlussanzeige nach einer Uhr-Aufzeichnung.
 
 - **Englisch vor dem Release gegenlesen.** Alle Bereiche liegen jetzt als
   Ressourcen in `values/` und `values-en/` (Regeln in `docs/i18n.md`). Vor

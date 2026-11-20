@@ -39,6 +39,9 @@ class WearListenerService : WearableListenerService() {
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
         when (messageEvent.path) {
+            PFAD_SENSOR, PFAD_BEFEHL_AN_TELEFON -> WearBridge.merkeUhrNachricht()
+        }
+        when (messageEvent.path) {
             PFAD_SENSOR -> verarbeiteSensorBatch(messageEvent.data)
             PFAD_BEFEHL_AN_TELEFON -> verarbeiteBefehl(messageEvent.data)
         }
@@ -76,7 +79,10 @@ class WearListenerService : WearableListenerService() {
             Befehl.START -> RecordingRepository.start(applicationContext)
             Befehl.PAUSE -> RecordingRepository.pause()
             Befehl.WEITER -> RecordingRepository.resume()
-            Befehl.STOPP -> RecordingRepository.stop()
+            Befehl.STOPP -> {
+                WearBridge.merkeUhrStopp()
+                RecordingRepository.stop()
+            }
         }
     }
 }
