@@ -141,18 +141,45 @@ fun routeSignature(points: List<TrackPoint>): RouteSignature? {
 }
 
 /**
+ * Wie weit Start bzw. Ziel zweier Fahrten auseinanderliegen duerfen, in Zellen
+ * je Achse (4 Zellen ≈ 400–600 m): Wer dieselbe Strecke faehrt, startet nicht
+ * immer an derselben Haustuer, aber im selben Viertel.
+ */
+const val ROUTE_ENDPOINT_TOLERANCE_CELLS: Int = 4
+
+private fun cellsNear(a: Long, b: Long): Boolean {
+    val dx = abs((a shr 32).toInt() - (b shr 32).toInt())
+    val dy = abs(a.toInt() - b.toInt())
+    return dx <= ROUTE_ENDPOINT_TOLERANCE_CELLS && dy <= ROUTE_ENDPOINT_TOLERANCE_CELLS
+}
+
+/** Eine Runde endet, wo sie beginnt. */
+private fun RouteSignature.isLoop(): Boolean = cellsNear(startCell, endCell)
+
+/**
  * Gleiche Strecke: Laenge innerhalb [ROUTE_MAX_DISTANCE_DEVIATION] (relativ
  * zur laengeren) UND Jaccard-Aehnlichkeit der Zellen mindestens
  * [ROUTE_MIN_JACCARD].
  *
- * Die Richtung spielt keine Rolle — Zellmengen sind ungeordnet, Start/Ende
- * gehen nicht ein: dieselbe Runde andersherum ist dieselbe Runde. Die
- * Laengenpruefung faengt, was die Zellmenge allein nicht sieht (eine Runde mit
- * zusaetzlicher Schleife im selben Gebiet).
+ * ## Richtung
+ * Bei einer **Runde** spielt die Richtung keine Rolle — dieselbe Runde
+ * andersherum ist dieselbe Runde. Bei einer **Strecke von A nach B** dagegen
+ * schon: Der Arbeitsweg bergab und der Heimweg bergauf beruehren dieselben
+ * Zellen, aber ihre Zeiten zu vergleichen waere Unsinn. Sind beide Fahrten
+ * keine Runde, muessen deshalb Start bei Start und Ziel bei Ziel liegen
+ * ([ROUTE_ENDPOINT_TOLERANCE_CELLS]).
+ *
+ * Die Laengenpruefung faengt, was die Zellmenge allein nicht sieht (eine Runde
+ * mit zusaetzlicher Schleife im selben Gebiet).
  */
 fun sameRoute(a: RouteSignature, b: RouteSignature): Boolean {
     val longer = max(a.distanceKm, b.distanceKm)
     if (longer <= 0.0 || abs(a.distanceKm - b.distanceKm) / longer > ROUTE_MAX_DISTANCE_DEVIATION) return false
+    if (!a.isLoop() && !b.isLoop() &&
+        !(cellsNear(a.startCell, b.startCell) && cellsNear(a.endCell, b.endCell))
+    ) {
+        return false
+    }
     val small = if (a.cells.size <= b.cells.size) a.cells else b.cells
     val large = if (a.cells.size <= b.cells.size) b.cells else a.cells
     val intersection = small.count { it in large }

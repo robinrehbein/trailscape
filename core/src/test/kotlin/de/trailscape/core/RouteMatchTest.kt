@@ -65,6 +65,24 @@ class RouteMatchTest {
     }
 
     @Test
+    fun `Hinweg und Rueckweg einer Strecke sind nicht dieselbe Strecke`() {
+        val way = listOf(0.0 to 0.0, 3000.0 to 0.0, 3000.0 to 3000.0)
+        val out = sig(walk(way, jitterM = 3.0, seed = 1))
+        val outAgain = sig(walk(way, jitterM = 3.0, seed = 2))
+        val back = sig(walk(way.reversed(), jitterM = 3.0, seed = 3))
+        assertTrue(sameRoute(out, outAgain))
+        assertFalse(sameRoute(out, back))
+        assertFalse(sameRoute(back, out))
+    }
+
+    @Test
+    fun `gleiche Strecke mit Start ein paar Haeuser weiter bleibt dieselbe`() {
+        val a = sig(walk(listOf(0.0 to 0.0, 6000.0 to 0.0)))
+        val b = sig(walk(listOf(200.0 to 0.0, 6000.0 to 0.0)))
+        assertTrue(sameRoute(a, b))
+    }
+
+    @Test
     fun `Runde mit nur halber Gemeinsamkeit ist nicht dieselbe Strecke`() {
         // Erste zwei Seiten gleich, danach (gleich lang) in die entgegengesetzte Richtung.
         val a = sig(walk(square(1000.0)))

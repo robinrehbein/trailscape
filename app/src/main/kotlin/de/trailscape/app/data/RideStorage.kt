@@ -464,6 +464,16 @@ class RideStorage(private val ridesDir: File) {
          * Tour gelesen noch in Quarantaene verschoben werden.
          */
         private val RESERVED_FILE_NAMES =
-            setOf(INDEX_FILE_NAME, "tombstones.json", "last-cache.json", "segmente.json")
+            setOf(
+                INDEX_FILE_NAME,
+                "tombstones.json",
+                "last-cache.json",
+                "segmente.json",
+                // Der Kachel-Cache liegt ebenfalls hier. Ohne diesen Eintrag
+                // wurde er bei jedem Auflisten als unlesbare Tour nach
+                // `defekt/` verschoben — der Cache war damit wirkungslos und
+                // die Meldung „unlesbar" falsch.
+                ExplorerTilesCacheStore.FILE_NAME,
+            )
     }
 }

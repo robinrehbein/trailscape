@@ -169,12 +169,14 @@ class RideStorageTest {
         storage.saveRide(ride("a"))
         File(dir, "tombstones.json").writeText("""[{"id":"x","deletedAt":1}]""", Charsets.UTF_8)
         File(dir, RideLoadCacheStore.FILE_NAME).writeText("""{"version":1,"entries":[]}""", Charsets.UTF_8)
+        File(dir, ExplorerTilesCacheStore.FILE_NAME).writeText("""{"version":1,"entries":[]}""", Charsets.UTF_8)
 
         val listing = RideStorage(dir).listSummaries()
         assertEquals(0, listing.quarantinedCount)
         assertEquals(listOf("a"), listing.summaries.map { it.id })
         assertTrue(File(dir, "tombstones.json").exists())
         assertTrue(File(dir, RideLoadCacheStore.FILE_NAME).exists())
+        assertTrue(File(dir, ExplorerTilesCacheStore.FILE_NAME).exists())
     }
 
     // ---------------------------------------------------------- Uebergang
