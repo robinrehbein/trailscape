@@ -1,7 +1,9 @@
 package de.trailscape.core
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -15,7 +17,7 @@ import java.nio.charset.StandardCharsets
  * die Datenschicht spricht nur Pfade (Strings) und rohe Byte-Nutzlasten.
  * Diese Datei ist deshalb der einzige Ort, an dem beide Seiten "wissen"
  * muessen, wie eine Nutzlast aussieht: Pfad-/Faehigkeitskonstanten und die
- * vier Nachrichtentypen samt Kodierung. Weder `:wear` noch `:app` duerfen ihr
+ * Nachrichtentypen samt Kodierung. Weder `:wear` noch `:app` duerfen ihr
  * eigenes JSON-Layout dafuer erfinden — sonst driften sie unbemerkt
  * auseinander, sobald nur eine Seite aktualisiert wird.
  *
@@ -51,6 +53,14 @@ const val PFAD_BEFEHL_AN_UHR = "/trailscape/befehl-an-uhr"
 
 /** Aufzeichnungszustand Telefon → Uhr (fuer die Uhr-Anzeige waehrend der Fahrt). */
 const val PFAD_ZUSTAND = "/trailscape/zustand"
+
+/**
+ * Was die gerade gespeicherte Tour gebracht hat, Telefon → Uhr (ein
+ * [AbschlussInfo] je Tour, siehe dort). Additiv: Eine aeltere Uhr-App kennt
+ * den Pfad nicht und verwirft die Nachricht (`CommandListenerService` hat ein
+ * `when` ohne `else`), ein aelteres Telefon sendet ihn nie.
+ */
+const val PFAD_ABSCHLUSS = "/trailscape/abschluss"
 
 /** Wearable-Capability-Name, unter dem sich das Telefon bei der Uhr anmeldet. */
 const val FAEHIGKEIT_TELEFON = "trailscape_telefon"
@@ -190,6 +200,86 @@ fun kodiereAufzeichnungsZustand(zustand: AufzeichnungsZustand): ByteArray = kodi
 /** Dekodiert eine unter [PFAD_ZUSTAND] empfangene Nachricht. */
 fun dekodiereAufzeichnungsZustand(bytes: ByteArray): AufzeichnungsZustand =
     AufzeichnungsZustand.fromJson(dekodiere(bytes))
+
+// ---------------------------------------------------------------------------
+// Abschluss nach der Fahrt (Telefon → Uhr, Pfad [PFAD_ABSCHLUSS])
+// ---------------------------------------------------------------------------
+
+/**
+ * Hoechstens [MAX_ZEILEN] fertige, bereits lokalisierte Zeilen dazu, was die
+ * Tour [rideId] gebracht hat („Neue Bestweite: 82,4 km (vorher 61,0)"). Das
+ * Telefon rechnet und formuliert (`rideHighlights` in `:core`, Saetze aus den
+ * `map_highlight_*`-Ressourcen der App), die Uhr zeigt nur Text.
+ *
+ * Anders als die uebrigen Typen dekodiert dieser **tolerant**
+ * ([dekodiereAbschlussInfo] liefert `null` statt zu werfen): Die Anzeige ist
+ * reine Zugabe, eine kaputte oder unerwartete Nutzlast soll sie stillschweigend
+ * entfallen lassen. Kuerzen und Zeilenzahl gelten beim Kodieren UND beim
+ * Dekodieren — eine kuenftige Telefonversion mit mehr oder laengeren Zeilen
+ * sprengt den Uhrbildschirm einer heutigen Uhr nicht.
+ */
+data class AbschlussInfo(val rideId: String, val zeilen: List<String>) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("rideId", rideId)
+        put("zeilen", buildJsonArray { zeilen.forEach { add(JsonPrimitive(it)) } })
+    }
+
+    companion object {
+        /** Mehr als zwei Zeilen passen auf eine runde Uhr nicht unter die Zusammenfassung. */
+        const val MAX_ZEILEN = 2
+
+        /** Laenge einer Zeile in Zeichen, danach wird mit „…" gekuerzt. */
+        const val MAX_ZEICHEN = 60
+    }
+}
+
+/**
+ * Die Zeilen so, wie sie uebertragen und angezeigt werden: getrimmt, leere
+ * weg, hoechstens [AbschlussInfo.MAX_ZEILEN], jede hoechstens
+ * [AbschlussInfo.MAX_ZEICHEN] Zeichen (sonst gekuerzt mit „…", ohne ein
+ * Surrogatpaar zu zerschneiden).
+ */
+internal fun bereinigeAbschlussZeilen(zeilen: List<String>): List<String> =
+    zeilen.asSequence()
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .take(AbschlussInfo.MAX_ZEILEN)
+        .map(::kuerzeZeile)
+        .toList()
+
+private fun kuerzeZeile(zeile: String): String {
+    if (zeile.length <= AbschlussInfo.MAX_ZEICHEN) return zeile
+    var ende = AbschlussInfo.MAX_ZEICHEN - 1
+    if (Character.isHighSurrogate(zeile[ende - 1])) ende -= 1
+    return zeile.substring(0, ende).trimEnd() + "…"
+}
+
+/**
+ * Kodiert [info] fuer [PFAD_ABSCHLUSS], mit bereinigten Zeilen (siehe
+ * [bereinigeAbschlussZeilen]). `null`, wenn danach keine Zeile uebrig ist —
+ * dann gibt es nichts zu senden.
+ */
+fun kodiereAbschlussInfo(info: AbschlussInfo): ByteArray? {
+    val zeilen = bereinigeAbschlussZeilen(info.zeilen)
+    if (zeilen.isEmpty()) return null
+    return kodiere(info.copy(zeilen = zeilen).toJson())
+}
+
+/**
+ * Dekodiert eine unter [PFAD_ABSCHLUSS] empfangene Nachricht. Wirft nie:
+ * kaputtes JSON, fehlende Felder, falsche Typen oder keine einzige Zeile
+ * ergeben `null`. Einzelne Nicht-Text-Eintraege in `zeilen` werden
+ * uebersprungen.
+ */
+fun dekodiereAbschlussInfo(bytes: ByteArray): AbschlussInfo? = runCatching {
+    val json = dekodiere(bytes)
+    val rideId = json.optionalString("rideId") ?: return null
+    val roh = (json["zeilen"] as? JsonArray) ?: return null
+    val zeilen = bereinigeAbschlussZeilen(
+        roh.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content },
+    )
+    if (zeilen.isEmpty()) null else AbschlussInfo(rideId, zeilen)
+}.getOrNull()
 
 // ---------------------------------------------------------------------------
 // Gemeinsame Kodierhilfen

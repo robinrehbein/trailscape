@@ -4,6 +4,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -27,14 +29,15 @@ class WearProtocolTest {
         assertEquals("/trailscape/befehl-an-telefon", PFAD_BEFEHL_AN_TELEFON)
         assertEquals("/trailscape/befehl-an-uhr", PFAD_BEFEHL_AN_UHR)
         assertEquals("/trailscape/zustand", PFAD_ZUSTAND)
+        assertEquals("/trailscape/abschluss", PFAD_ABSCHLUSS)
         assertEquals("trailscape_telefon", FAEHIGKEIT_TELEFON)
         assertEquals("trailscape_uhr", FAEHIGKEIT_UHR)
     }
 
     @Test
-    fun `alle vier Pfade sind paarweise verschieden`() {
-        val pfade = setOf(PFAD_SENSOR, PFAD_BEFEHL_AN_TELEFON, PFAD_BEFEHL_AN_UHR, PFAD_ZUSTAND)
-        assertEquals(4, pfade.size)
+    fun `alle Pfade sind paarweise verschieden`() {
+        val pfade = setOf(PFAD_SENSOR, PFAD_BEFEHL_AN_TELEFON, PFAD_BEFEHL_AN_UHR, PFAD_ZUSTAND, PFAD_ABSCHLUSS)
+        assertEquals(5, pfade.size)
     }
 
     // --- SensorSample / SensorBatch ---
@@ -145,6 +148,77 @@ class WearProtocolTest {
         assertFailsWith<MissingOrInvalidFieldException> {
             dekodiereAufzeichnungsZustand("""{"laeuft":true,"pausiert":false,"distanzKm":1.0}""".toByteArray())
         }
+    }
+
+    // --- AbschlussInfo (tolerant) ---
+
+    @Test
+    fun `AbschlussInfo Roundtrip mit zwei Zeilen und Umlauten`() {
+        val info = AbschlussInfo(
+            rideId = "r-42",
+            zeilen = listOf("Neue Bestweite: 82,4\u00A0km (vorher 61,0)", "Wochenziel geschafft: 152 von 150\u00A0km"),
+        )
+        val bytes = assertNotNull(kodiereAbschlussInfo(info))
+        assertEquals(info, dekodiereAbschlussInfo(bytes))
+    }
+
+    @Test
+    fun `AbschlussInfo kuerzt auf zwei Zeilen zu hoechstens 60 Zeichen`() {
+        val lang = "x".repeat(80)
+        val info = AbschlussInfo("r", listOf(lang, "  zwei  ", "drei"))
+        val decoded = assertNotNull(dekodiereAbschlussInfo(assertNotNull(kodiereAbschlussInfo(info))))
+        assertEquals(2, decoded.zeilen.size)
+        assertEquals(AbschlussInfo.MAX_ZEICHEN, decoded.zeilen[0].length)
+        assertTrue(decoded.zeilen[0].endsWith("…"))
+        assertEquals("zwei", decoded.zeilen[1])
+    }
+
+    @Test
+    fun `AbschlussInfo zerschneidet beim Kuerzen kein Surrogatpaar`() {
+        // 58 Zeichen, dann ein Emoji (zwei UTF-16-Einheiten) genau auf der Schnittkante.
+        val zeile = "a".repeat(58) + "\uD83D\uDEB4" + "b".repeat(10)
+        val gekuerzt = bereinigeAbschlussZeilen(listOf(zeile)).single()
+        assertFalse(Character.isHighSurrogate(gekuerzt[gekuerzt.length - 2]))
+        assertTrue(gekuerzt.length <= AbschlussInfo.MAX_ZEICHEN)
+        assertEquals("a".repeat(58) + "…", gekuerzt)
+    }
+
+    @Test
+    fun `AbschlussInfo dekodiert auch zu lange Nutzlasten einer neueren Gegenseite gekuerzt`() {
+        val text = """{"rideId":"r","zeilen":["eins","zwei","drei"],"neu":1}"""
+        assertEquals(AbschlussInfo("r", listOf("eins", "zwei")), dekodiereAbschlussInfo(text.toByteArray()))
+    }
+
+    @Test
+    fun `AbschlussInfo ohne Zeilen wird nicht kodiert`() {
+        assertNull(kodiereAbschlussInfo(AbschlussInfo("r", emptyList())))
+        assertNull(kodiereAbschlussInfo(AbschlussInfo("r", listOf("", "   "))))
+    }
+
+    @Test
+    fun `AbschlussInfo dekodiert leer kaputt oder unvollstaendig zu null statt zu werfen`() {
+        val faelle = listOf(
+            "",
+            "{",
+            "null",
+            "[]",
+            "\"text\"",
+            "{}",
+            """{"rideId":"r"}""",
+            """{"zeilen":["eins"]}""",
+            """{"rideId":"r","zeilen":[]}""",
+            """{"rideId":"r","zeilen":"eins"}""",
+            """{"rideId":7,"zeilen":["eins"]}""",
+            """{"rideId":"r","zeilen":[1,null,{}," "]}""",
+        )
+        for (fall in faelle) assertNull(dekodiereAbschlussInfo(fall.toByteArray()), fall)
+        assertNull(dekodiereAbschlussInfo(byteArrayOf(0xFF.toByte(), 0x00, 0x13)))
+    }
+
+    @Test
+    fun `AbschlussInfo ueberspringt einzelne Nicht-Text-Eintraege`() {
+        val text = """{"rideId":"r","zeilen":[1,"eins",null]}"""
+        assertEquals(AbschlussInfo("r", listOf("eins")), dekodiereAbschlussInfo(text.toByteArray()))
     }
 
     // --- Bytes sind echtes UTF-8-JSON ---

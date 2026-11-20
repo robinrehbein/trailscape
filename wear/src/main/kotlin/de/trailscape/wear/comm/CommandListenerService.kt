@@ -2,8 +2,10 @@ package de.trailscape.wear.comm
 
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
+import de.trailscape.core.PFAD_ABSCHLUSS
 import de.trailscape.core.PFAD_BEFEHL_AN_UHR
 import de.trailscape.core.PFAD_ZUSTAND
+import de.trailscape.core.dekodiereAbschlussInfo
 import de.trailscape.core.dekodiereAufzeichnungsZustand
 import de.trailscape.core.dekodiereBefehl
 import de.trailscape.wear.record.RecordingStatus
@@ -12,7 +14,9 @@ import de.trailscape.wear.record.RecordingStatus
  * Empfaengt, was das Telefon an die Uhr schickt: Steuerbefehle
  * ([PFAD_BEFEHL_AN_UHR] — Start/Pause/Weiter/Stopp) und den Anzeigezustand
  * ([PFAD_ZUSTAND] — Dauer/Distanz/HF, waehrend die Aufzeichnung auf dem
- * Telefon laeuft).
+ * Telefon laeuft) sowie nach einer gespeicherten Tour deren Highlights
+ * ([PFAD_ABSCHLUSS], im Manifest mit eigenem Intent-Filter). Ein unbekannter
+ * Pfad einer neueren `:app` laeuft ohne Wirkung durch das `when`.
  *
  * Im Manifest deklariert, nicht nur zur Laufzeit registriert: Nur so startet
  * das System diesen Dienst zuverlaessig, wenn eine Nachricht ankommt, waehrend
@@ -39,6 +43,10 @@ class CommandListenerService : WearableListenerService() {
 
                 PFAD_ZUSTAND ->
                     RecordingStatus.wendeTelefonZustandAn(dekodiereAufzeichnungsZustand(event.data))
+
+                // Tolerant: eine kaputte Nutzlast ergibt `null` und wird verworfen.
+                PFAD_ABSCHLUSS ->
+                    dekodiereAbschlussInfo(event.data)?.let(RecordingStatus::wendeAbschlussAn)
             }
         }
     }

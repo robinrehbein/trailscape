@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.health.services.client.HealthServices
+import de.trailscape.core.AbschlussInfo
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.Befehl
 import de.trailscape.core.eigenerPulsZaehlt
@@ -83,6 +84,7 @@ object RecordingStatus {
     private val _tempoKmh = MutableStateFlow<Double?>(null)
     private val _letzteHfBpm = MutableStateFlow<Int?>(null)
     private val _fehler = MutableStateFlow<String?>(null)
+    private val _abschlussZeilen = MutableStateFlow<List<String>>(emptyList())
 
     /** `elapsedRealtime` des letzten Pulswerts vom Telefon, `null` = noch keiner (siehe Klassen-KDoc). */
     @Volatile
@@ -108,6 +110,15 @@ object RecordingStatus {
 
     /** Kurzer Fehlertext fuer den Startbildschirm (fehlende Faehigkeiten, gescheiterte Vorbereitung). */
     val fehler: StateFlow<String?> = _fehler.asStateFlow()
+
+    /**
+     * Was die Tour gebracht hat — hoechstens zwei fertige Zeilen vom Telefon
+     * (`PFAD_ABSCHLUSS`), gezeigt auf dem Abschlussbildschirm. Nur im
+     * Speicher: verschwinden mit [zuruecksetzen], also beim Zurueck zum Start
+     * und beim Start einer neuen Aufzeichnung (und mit dem Prozess). Die
+     * Tour-ID wird bewusst nicht gegen die eigene Aufzeichnung geprueft.
+     */
+    val abschlussZeilen: StateFlow<List<String>> = _abschlussZeilen.asStateFlow()
 
     /**
      * Fragt die Geraetefaehigkeiten ab, ohne etwas zu starten — damit der
@@ -173,6 +184,11 @@ object RecordingStatus {
         }
     }
 
+    /** Uebernimmt die Zeilen „was die Tour gebracht hat" vom Telefon (siehe [abschlussZeilen]). */
+    internal fun wendeAbschlussAn(info: AbschlussInfo) {
+        _abschlussZeilen.value = info.zeilen
+    }
+
     private fun starteLokal(context: Context) {
         ContextCompat.startForegroundService(
             context.applicationContext,
@@ -227,5 +243,6 @@ object RecordingStatus {
         _letzteHfBpm.value = null
         hfVomTelefonMs = null
         _fehler.value = null
+        _abschlussZeilen.value = emptyList()
     }
 }

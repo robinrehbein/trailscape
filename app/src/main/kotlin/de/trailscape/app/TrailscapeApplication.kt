@@ -13,6 +13,7 @@ import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderScheduler
 import de.trailscape.app.strava.StravaConfig
 import de.trailscape.app.strava.StravaServices
+import de.trailscape.app.wear.WearAbschluss
 import de.trailscape.app.widget.WidgetUpdater
 import kotlinx.coroutines.launch
 
@@ -51,6 +52,7 @@ class TrailscapeApplication : Application() {
         }
         StravaServices.init(this)
         installWidgetRefresh()
+        installWatchRideSummary()
         if (StravaConfig.available) {
             AppServices.appScope.launch {
                 // Strava-Auto-Upload: haengt am Ende der Aufzeichnung und an
@@ -122,6 +124,26 @@ class TrailscapeApplication : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
+    }
+
+    /**
+     * Nach jeder gespeicherten Tour, an der die Uhr teilgenommen hat: die ein,
+     * zwei wichtigsten Highlights an die Uhr (siehe [WearAbschluss]).
+     *
+     * Derselbe Fluss wie Widget und Strava — er meldet erst nach dem
+     * Speichern, ausserhalb des Aufzeichnungsdienstes. Der Sammler startet je
+     * Tour eine eigene Coroutine und kehrt sofort zurueck: Ein langsamer
+     * Sammler fuellte sonst den geteilten Puffer von `finishedRides`, und
+     * `tryEmit` liesse dann auch fuer die anderen Sammler Touren fallen.
+     */
+    private fun installWatchRideSummary() {
+        AppServices.appScope.launch {
+            RecordingRepository.finishedRides.collect { rideId ->
+                AppServices.appScope.launch {
+                    runCatching { WearAbschluss.nachDerFahrt(this@TrailscapeApplication, rideId) }
+                }
+            }
+        }
     }
 
     /**

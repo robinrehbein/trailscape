@@ -1,7 +1,7 @@
 # Motivation auf der Uhr: Machbarkeit
 
 Frage: (a) ein bis zwei Highlight-Zeilen nach der Fahrt, (b) Wochenserie plus Wochenziel auf einen Blick.
-Nur gelesen, kein Code geändert.
+Ursprünglich nur gelesen; (a) ist inzwischen gebaut (siehe dort), (b) bleibt offen.
 
 ## Was die Uhr-App heute ist
 
@@ -19,23 +19,44 @@ Nur gelesen, kein Code geändert.
   - Handy → Uhr: `PFAD_BEFEHL_AN_UHR`, `PFAD_ZUSTAND` (`AufzeichnungsZustand`: läuft, pausiert, Dauer,
     Distanz, HF), gesendet aus `app/.../record/RecordingService.kt` (`sendeZustandAnUhr`) über
     `app/.../wear/WearBridge.kt`, Empfang `app/.../wear/WearListenerService.kt`.
+  - Neu seit (a): Handy → Uhr `PFAD_ABSCHLUSS` (bis zu zwei Highlight-Zeilen nach der gespeicherten Tour).
   - Nachrichten sind flüchtig: ohne erreichbare Uhr gehen sie verloren.
 
-## (a) Highlights nach der Fahrt
+## (a) Highlights nach der Fahrt — gebaut (Minimalform)
 
-Passt ins Protokoll: `rideHighlights(...)` (`core/.../RideHighlights.kt`) läuft auf dem Handy, die
-Texte kommen aus Android-Ressourcen (`ui/map/RideHighlights.kt`, `highlightText`).
-- Neuer Pfad `PFAD_ABSCHLUSS = "/trailscape/abschluss"` plus Datentyp `AbschlussInfo(zeilen: List<String>)`
-  in `WearProtocol.kt` (Hand-JSON wie die anderen, additiv, alte Gegenseite ignoriert unbekannte Pfade:
-  `CommandListenerService` hat ein `when` auf Pfade und `runCatching`).
-- Handy sendet nach Aufzeichnungsende fertige, bereits lokalisierte Zeilen (max. 2). Die Uhr braucht keine
-  Highlight-Logik und keine eigenen Strings; sie zeigt nach Stopp eine Zeile unter der Zusammenfassung.
-- Stolperstein: Highlights gibt es erst nach dem Speichern der Tour (`facts` neu gebaut); der Sendepunkt
-  liegt danach, nicht im `RecordingService` beim Stopp. Keine neuen Abhängigkeiten, kein Manifest-Eintrag.
-- Aufwand: ca. 4 Dateien (`WearProtocol.kt`, `WearBridge.kt`, `CommandListenerService.kt`,
-  `RecordingScreen.kt`) + `WearProtocolTest`, ~100 neue Zeilen.
+Stand: umgesetzt. Was es tut und wo:
+- **Protokoll** (`core/.../WearProtocol.kt`): `PFAD_ABSCHLUSS = "/trailscape/abschluss"`,
+  `AbschlussInfo(rideId, zeilen)`, Hand-JSON wie die anderen. Höchstens 2 Zeilen à 60 Zeichen
+  (sonst „…"), gekürzt beim Kodieren **und** Dekodieren; `dekodiereAbschlussInfo` ist tolerant
+  (kaputt, leer, fehlende Felder → `null`, wirft nie). Tests in `WearProtocolTest`.
+- **Handy**: `app/.../wear/WearAbschluss.kt`, ausgelöst in `TrailscapeApplication`
+  (`installWatchRideSummary`) über `RecordingRepository.finishedRides` — derselbe Fluss wie Widget
+  und Strava, meldet erst nach dem Speichern, nichts im `RecordingService`. Je Tour eine eigene
+  Coroutine auf IO, alles in `runCatching`, keine Wiederholung. Gesendet wird nur, wenn die Uhr seit
+  dem Start der Tour etwas geschickt hat (`WearBridge.letzteUhrNachrichtMs`, gesetzt in
+  `WearListenerService`), gerade erreichbar ist und es Highlights gibt. Gerechnet:
+  `rideHighlights(..., routeComparison = null, max = 2)` aus den Zusammenfassungen; Wochenziel über
+  `weekTargetKmOutsideUi` (`ui/TodayRouteTarget.kt`: das zuletzt auf „Heute" gezeigte Ziel dieser
+  Woche, sonst `weekTarget` mit der rohen Planwoche bzw. `suggestWeeklyGoal`). Die Sätze kommen aus
+  `rideHighlightText` (`ui/map/RideHighlights.kt`), das auch das Tourblatt rendert.
+- **Uhr**: `CommandListenerService` nimmt den Pfad an (eigener Intent-Filter im Uhr-Manifest —
+  ohne ihn startet Play Services den Dienst für diesen Pfad nicht), `RecordingStatus.abschlussZeilen`
+  hält die Zeilen nur im Speicher, `EndeScreen` (`ui/RecordingScreen.kt`) zeigt sie klein unter dem
+  Endstand, je max. 2 Zeilen, ohne Überschrift. Weg mit „Zurück zum Start" oder dem nächsten Start.
+- **Alt/neu**: Eine alte Uhr hat keinen Intent-Filter für den Pfad (und ihr `when` kein `else`) —
+  die Nachricht verpufft. Ein altes Handy sendet ihn nie; die neue Uhr zeigt dann wie bisher nur den
+  Endstand.
 
-## (b) Serie und Wochenziel auf einen Blick
+Bekannte Grenzen:
+- **Sprache**: Die Zeilen kommen in der Sprache der Telefon-App, nicht der Uhr.
+- **Nur nach Stopp auf der Uhr sichtbar**: Das Handy meldet das Ende nur über
+  `AufzeichnungsZustand(laeuft = false)`, und die Uhr wertet `laeuft` nicht aus; `BEENDET` erreicht
+  sie nur durch ihren eigenen Stopp. Wird am Handy gestoppt, hält die Uhr die Zeilen, bis sie selbst
+  beendet wird (unverändertes Verhalten, nicht Teil dieses Schritts).
+- Ungeprüft ohne Gerätepaar: Zustellzeit, Layout auf runder Anzeige. `:wear` hat keine Tests, die
+  Uhrseite ist nur kompiliert.
+
+## (b) Serie und Wochenziel auf einen Blick — offen
 
 Das braucht einen Zustand, der **ohne laufende Aufzeichnung** auf der Uhr liegt, also Daten, nicht Nachricht:
 - Handy schreibt per `DataClient.putDataItem` (`/trailscape/woche`: `serieWochen`, `wochenKm`, `zielKm`,
@@ -73,7 +94,7 @@ Das braucht einen Zustand, der **ohne laufende Aufzeichnung** auf der Uhr liegt,
 
 ## Empfehlung
 
-Kleinster nützlicher Schritt: **(a) in der Minimalform**: Zeile nach Fahrtende (`PFAD_ABSCHLUSS`),
-~100 Zeilen, ohne neue Abhängigkeit oder Manifest, per Protokolltest abgesichert. Danach (b) als
+Kleinster nützlicher Schritt war **(a) in der Minimalform** — erledigt (ohne neue Abhängigkeit; anders
+als oben geschätzt braucht die Uhr einen Intent-Filter im Manifest). Als Nächstes (b) als
 Complication (RANGED_VALUE = Wochenziel) vor dem Tile: kleiner und immer sichtbar, gleicher Datenpfad.
 Vorher klären, ob die Uhr-App über Play verteilt wird; sonst erreicht (b) nur das Entwicklungsgerät.

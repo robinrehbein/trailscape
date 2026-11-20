@@ -100,6 +100,14 @@
                     android:host="*"
                     android:pathPrefix="/trailscape/zustand" />
             </intent-filter>
+            <!-- Was die gespeicherte Tour gebracht hat (PFAD_ABSCHLUSS). -->
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/trailscape/abschluss" />
+            </intent-filter>
         </service>
     </application>
 

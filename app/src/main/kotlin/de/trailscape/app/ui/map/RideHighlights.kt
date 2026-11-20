@@ -1,5 +1,7 @@
 package de.trailscape.app.ui.map
 
+import android.content.Context
+import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,23 +28,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
+import de.trailscape.app.i18n.AppFormats
+import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.localizedFor
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.progress.IconBubble
-import de.trailscape.app.ui.progress.milestoneName
-import de.trailscape.app.ui.progress.recordValue
-import de.trailscape.app.ui.progress.whole
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ChallengeKind
+import de.trailscape.core.MilestoneKind
 import de.trailscape.core.RecordKind
 import de.trailscape.core.RideFact
 import de.trailscape.core.RideHighlight
 import de.trailscape.core.RouteComparison
+import de.trailscape.core.earthCircumferenceKm
+import de.trailscape.core.everestM
 import de.trailscape.core.formatDuration
 import de.trailscape.core.rideHighlights
 import java.time.LocalDate
@@ -167,91 +171,173 @@ private fun highlightIcon(highlight: RideHighlight): Pair<ImageVector, Color> {
     }
 }
 
+/**
+ * Der Satz zu [highlight] im Tourblatt — derselbe wie [rideHighlightText],
+ * aufgeloest mit den Ressourcen und Zahlformaten der Komposition.
+ * `LocalConfiguration` wird gelesen wie in `stringResource`, damit ein
+ * Konfigurationswechsel neu formuliert.
+ */
 @Composable
-private fun highlightText(highlight: RideHighlight): String = when (highlight) {
-    is RideHighlight.Record -> {
-        val gain = highlight.gain
-        stringResource(
-            when (gain.kind) {
-                RecordKind.DISTANCE -> R.string.map_highlight_record_distance
-                RecordKind.ASCENT -> R.string.map_highlight_record_ascent
-                RecordKind.TIME -> R.string.map_highlight_record_time
-                RecordKind.SPEED -> R.string.map_highlight_record_speed
-            },
-            // Zahl und Einheit bleiben zusammen (geschuetztes Leerzeichen):
-            // Ein einzelnes „km" in der zweiten Zeile kostet Hoehe und liest
-            // sich schlecht. Der alte Wert steht ohne Einheit — „(vorher
-            // 61,0)" ist eindeutig und haelt die Zeile kurz.
-            recordValue(gain.kind, gain.value).replace(' ', '\u00A0'),
-            recordNumber(gain.kind, gain.previous),
-        )
-    }
-
-    is RideHighlight.RouteBest ->
-        stringResource(R.string.map_highlight_route_best, highlightDelta(highlight.deltaToBestOtherS))
-
-    is RideHighlight.RouteFaster ->
-        stringResource(R.string.map_highlight_route_faster, highlightDelta(highlight.deltaToPreviousS))
-
-    is RideHighlight.MilestoneReached ->
-        stringResource(
-            R.string.map_highlight_milestone,
-            milestoneName(highlight.milestone.kind, highlight.milestone.threshold),
-        )
-
-    is RideHighlight.WeekGoalReached ->
-        stringResource(R.string.map_highlight_week_goal_reached, whole(highlight.riddenKm), highlight.targetKm)
-
-    // Der Rest wird aufgerundet wie bei den Meilensteinen: „Noch 0 km" bei
-    // 0,4 fehlenden Kilometern saehe erreicht aus und ist es nicht.
-    is RideHighlight.WeekGoalProgress ->
-        pluralStringResource(
-            R.plurals.map_highlight_week_goal_remaining_count,
-            highlight.daysLeft,
-            highlight.daysLeft,
-            whole(ceil(highlight.remainingKm).coerceAtLeast(1.0)),
-        )
-
-    is RideHighlight.StreakExtended ->
-        pluralStringResource(R.plurals.map_highlight_streak_count, highlight.weeks, highlight.weeks)
-
-    is RideHighlight.ChallengeReached -> {
-        val target = highlight.challenge.target
-        when (highlight.challenge.kind) {
-            ChallengeKind.DISTANCE -> stringResource(R.string.map_highlight_challenge_distance, whole(target))
-            ChallengeKind.ASCENT -> stringResource(R.string.map_highlight_challenge_ascent, whole(target))
-            ChallengeKind.ACTIVE_DAYS ->
-                pluralStringResource(R.plurals.map_highlight_challenge_days_count, target.toInt(), target.toInt())
-            ChallengeKind.LONG_RIDE -> stringResource(R.string.map_highlight_challenge_long_ride, whole(target))
-        }
-    }
+private fun highlightText(highlight: RideHighlight): String {
+    LocalConfiguration.current
+    return rideHighlightText(LocalContext.current.resources, LocalAppFormats.current, highlight)
 }
 
-/** Ein Bestwert als nackte Zahl: „61,0", „1100", „3:05", „27,3". */
-@Composable
-private fun recordNumber(kind: RecordKind, value: Double): String {
-    val formats = LocalAppFormats.current
-    return when (kind) {
-        RecordKind.DISTANCE -> formats.km(value)
-        RecordKind.ASCENT -> whole(value)
+/**
+ * Die Saetze zu [highlights] ausserhalb der Oberflaeche, in der App-Sprache —
+ * fuer die Uhr nach der Fahrt (`wear/WearAbschluss.kt`). [context] wird hier
+ * selbst lokalisiert (`localizedFor`, wie Dienste es tun, docs/i18n.md
+ * „Dienste, Worker, Benachrichtigungen").
+ */
+internal fun rideHighlightTexts(context: Context, highlights: List<RideHighlight>): List<String> {
+    if (highlights.isEmpty()) return emptyList()
+    val language = AppLocale.current(context)
+    val resources = context.localizedFor(language).resources
+    val formats = AppFormats(language)
+    return highlights.map { rideHighlightText(resources, formats, it) }
+}
+
+/**
+ * Der eine Satz zu [highlight] — die einzige Stelle, die die
+ * `map_highlight_*`-Ressourcen waehlt und fuellt. Das Tourblatt
+ * ([highlightText]) und die Uhr ([rideHighlightTexts]) rufen beide hierher.
+ *
+ * Ohne Compose: [resources] und [formats] muessen dieselbe Sprache meinen.
+ */
+internal fun rideHighlightText(resources: Resources, formats: AppFormats, highlight: RideHighlight): String =
+    when (highlight) {
+        is RideHighlight.Record -> {
+            val gain = highlight.gain
+            resources.getString(
+                when (gain.kind) {
+                    RecordKind.DISTANCE -> R.string.map_highlight_record_distance
+                    RecordKind.ASCENT -> R.string.map_highlight_record_ascent
+                    RecordKind.TIME -> R.string.map_highlight_record_time
+                    RecordKind.SPEED -> R.string.map_highlight_record_speed
+                },
+                // Zahl und Einheit bleiben zusammen (geschuetztes Leerzeichen):
+                // Ein einzelnes „km" in der zweiten Zeile kostet Hoehe und liest
+                // sich schlecht. Der alte Wert steht ohne Einheit — „(vorher
+                // 61,0)" ist eindeutig und haelt die Zeile kurz.
+                recordValueText(resources, formats, gain.kind, gain.value).replace(' ', '\u00A0'),
+                recordNumber(formats, gain.kind, gain.previous),
+            )
+        }
+
+        is RideHighlight.RouteBest ->
+            resources.getString(R.string.map_highlight_route_best, highlightDelta(resources, highlight.deltaToBestOtherS))
+
+        is RideHighlight.RouteFaster ->
+            resources.getString(R.string.map_highlight_route_faster, highlightDelta(resources, highlight.deltaToPreviousS))
+
+        is RideHighlight.MilestoneReached ->
+            resources.getString(
+                R.string.map_highlight_milestone,
+                milestoneNameText(resources, formats, highlight.milestone.kind, highlight.milestone.threshold),
+            )
+
+        is RideHighlight.WeekGoalReached ->
+            resources.getString(
+                R.string.map_highlight_week_goal_reached,
+                formats.decimal(highlight.riddenKm, 0),
+                highlight.targetKm,
+            )
+
+        // Der Rest wird aufgerundet wie bei den Meilensteinen: „Noch 0 km" bei
+        // 0,4 fehlenden Kilometern saehe erreicht aus und ist es nicht.
+        is RideHighlight.WeekGoalProgress ->
+            resources.getQuantityString(
+                R.plurals.map_highlight_week_goal_remaining_count,
+                highlight.daysLeft,
+                highlight.daysLeft,
+                formats.decimal(ceil(highlight.remainingKm).coerceAtLeast(1.0), 0),
+            )
+
+        is RideHighlight.StreakExtended ->
+            resources.getQuantityString(R.plurals.map_highlight_streak_count, highlight.weeks, highlight.weeks)
+
+        is RideHighlight.ChallengeReached -> {
+            val target = highlight.challenge.target
+            when (highlight.challenge.kind) {
+                ChallengeKind.DISTANCE ->
+                    resources.getString(R.string.map_highlight_challenge_distance, formats.decimal(target, 0))
+                ChallengeKind.ASCENT ->
+                    resources.getString(R.string.map_highlight_challenge_ascent, formats.decimal(target, 0))
+                ChallengeKind.ACTIVE_DAYS ->
+                    resources.getQuantityString(
+                        R.plurals.map_highlight_challenge_days_count,
+                        target.toInt(),
+                        target.toInt(),
+                    )
+                ChallengeKind.LONG_RIDE ->
+                    resources.getString(R.string.map_highlight_challenge_long_ride, formats.decimal(target, 0))
+            }
+        }
+    }
+
+/**
+ * Ein Bestwert mit Einheit („82,4 km", „1100 Hm", „4:10 h", „27,3 km/h") —
+ * dieselben Ressourcen und Formate wie `recordValue` in
+ * `ui/progress/ProgressFormat.kt`, dort aber nur als Composable zu haben.
+ */
+private fun recordValueText(resources: Resources, formats: AppFormats, kind: RecordKind, value: Double): String =
+    when (kind) {
+        RecordKind.DISTANCE -> resources.getString(R.string.common_value_km, formats.km(value))
+        RecordKind.ASCENT -> resources.getString(R.string.progress_value_ascent, formats.decimal(value, 0))
         RecordKind.TIME -> {
             val totalMin = (value / 60).roundToInt()
-            "${totalMin / 60}:${(totalMin % 60).toString().padStart(2, '0')}"
+            resources.getString(R.string.progress_duration_hm, totalMin / 60, (totalMin % 60).toString().padStart(2, '0'))
         }
-        RecordKind.SPEED -> formats.decimal(value, 1)
+        RecordKind.SPEED -> resources.getString(R.string.common_value_kmh, formats.decimal(value, 1))
     }
+
+/**
+ * Name einer Meilenstein-Stufe — dieselben Ressourcen wie `milestoneName` in
+ * `ui/progress/ProgressFormat.kt` (dort nur als Composable).
+ */
+private fun milestoneNameText(resources: Resources, formats: AppFormats, kind: MilestoneKind, threshold: Double): String =
+    when (kind) {
+        MilestoneKind.TOTAL_KM ->
+            if (threshold == earthCircumferenceKm) {
+                resources.getString(R.string.progress_milestone_earth)
+            } else {
+                resources.getString(R.string.progress_milestone_total_km, formats.decimal(threshold, 0))
+            }
+
+        MilestoneKind.TOTAL_ASCENT ->
+            if (threshold == everestM) {
+                resources.getString(R.string.progress_milestone_everest)
+            } else {
+                resources.getString(R.string.progress_milestone_total_ascent, formats.decimal(threshold, 0))
+            }
+
+        MilestoneKind.RIDE_COUNT ->
+            resources.getQuantityString(R.plurals.progress_milestone_ride_count, threshold.toInt(), threshold.toInt())
+
+        MilestoneKind.LONGEST_RIDE ->
+            resources.getString(R.string.progress_milestone_longest_ride, formats.decimal(threshold, 0))
+    }
+
+/** Ein Bestwert als nackte Zahl: „61,0", „1100", „3:05", „27,3". */
+private fun recordNumber(formats: AppFormats, kind: RecordKind, value: Double): String = when (kind) {
+    RecordKind.DISTANCE -> formats.km(value)
+    RecordKind.ASCENT -> formats.decimal(value, 0)
+    RecordKind.TIME -> {
+        val totalMin = (value / 60).roundToInt()
+        "${totalMin / 60}:${(totalMin % 60).toString().padStart(2, '0')}"
+    }
+    RecordKind.SPEED -> formats.decimal(value, 1)
 }
 
 /**
  * Abstand zweier Zeiten ohne Vorzeichen: „45 s", „3:12 min", „1:02:05 h" —
  * wie `routeDelta` in `ui/rides/RouteComparisonCard.kt` (dort privat).
  */
-@Composable
-private fun highlightDelta(seconds: Int): String {
+private fun highlightDelta(resources: Resources, seconds: Int): String {
     val s = abs(seconds)
     return when {
-        s < 60 -> stringResource(R.string.map_highlight_delta_seconds, s)
-        s < 3600 -> stringResource(R.string.map_highlight_delta_minutes, formatDuration(s))
-        else -> stringResource(R.string.map_highlight_delta_hours, formatDuration(s))
+        s < 60 -> resources.getString(R.string.map_highlight_delta_seconds, s)
+        s < 3600 -> resources.getString(R.string.map_highlight_delta_minutes, formatDuration(s))
+        else -> resources.getString(R.string.map_highlight_delta_hours, formatDuration(s))
     }
 }

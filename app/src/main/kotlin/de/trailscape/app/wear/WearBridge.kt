@@ -10,8 +10,11 @@ import de.trailscape.app.record.RecordingRepository
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
+import de.trailscape.core.AbschlussInfo
 import de.trailscape.core.FAEHIGKEIT_UHR
+import de.trailscape.core.PFAD_ABSCHLUSS
 import de.trailscape.core.PFAD_ZUSTAND
+import de.trailscape.core.kodiereAbschlussInfo
 import de.trailscape.core.kodiereAufzeichnungsZustand
 
 /**
@@ -44,8 +47,10 @@ import de.trailscape.core.kodiereAufzeichnungsZustand
  *    zwar sowohl bei jeder Zustandsaenderung (Start/Pause/Weiter/Stop) als
  *    auch angehaengt an dessen bestehenden 5-Sekunden-Notification-Takt —
  *    eine eigene Drosselung braucht dieser Aufruf deshalb nicht.
+ *  * [sendAbschluss] schickt nach einer gespeicherten Tour einmal die
+ *    Zeilen „was die Tour gebracht hat" ([WearAbschluss]).
  *
- * Beide Methoden schlucken jede Ausnahme: Ein Geraet ohne Play Services, ohne
+ * Alle drei Methoden schlucken jede Ausnahme: Ein Geraet ohne Play Services, ohne
  * gekoppelte Uhr oder mit vorruebergehend gestoerter Verbindung darf die
  * Aufzeichnung nie zum Absturz bringen — dieselbe Haltung wie ueberall sonst
  * in `record/` gegenueber Notifications und Journal-IO.
@@ -57,6 +62,23 @@ object WearBridge {
 
     @Volatile
     private var erreichbareKnotenIds: Set<String> = emptySet()
+
+    /**
+     * Wanddatum (ms seit Epoch) der letzten Nachricht, die die Uhr diesem
+     * Prozess geschickt hat (Sensorprobe oder Befehl), `0` = noch keine.
+     * Nur fuer [WearAbschluss]: Hat die Uhr seit dem Start einer Tour etwas
+     * geschickt, hat sie an ihr teilgenommen. Prozessgebunden — eine nach
+     * einem Absturz aus dem Journal gerettete Tour sieht `0` und geht nicht
+     * an die Uhr.
+     */
+    @Volatile
+    var letzteUhrNachrichtMs: Long = 0L
+        private set
+
+    /** Notiert eine eingegangene Uhr-Nachricht (siehe [letzteUhrNachrichtMs]). */
+    fun merkeUhrNachricht() {
+        letzteUhrNachrichtMs = System.currentTimeMillis()
+    }
 
     private val capabilityListener = CapabilityClient.OnCapabilityChangedListener { info ->
         aktualisiereErreichbareKnoten(info)
@@ -145,6 +167,27 @@ object WearBridge {
             // ohnehin in wenigen Sekunden erneut.
             // Die Wiederholungsbremse des DiagLog verhindert, dass der Takt
             // das Log mit identischen Eintraegen flutet.
+            DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
+        }
+    }
+
+    /**
+     * Schickt [info] einmal an alle gerade erreichbaren Uhr-Knoten
+     * ([PFAD_ABSCHLUSS]). Ohne erreichbare Uhr oder ohne Zeilen ein Nop. Keine
+     * Wiederholung: Geht die Nachricht verloren, fehlt auf der Uhr nur die
+     * Zugabe. Wirft nie (siehe Klassendoc). `sendMessage` liefert einen
+     * `Task` und blockiert nicht.
+     */
+    fun sendAbschluss(context: Context, info: AbschlussInfo) {
+        try {
+            attach(context)
+            val knotenIds = erreichbareKnotenIds
+            if (knotenIds.isEmpty()) return
+            val bytes = kodiereAbschlussInfo(info) ?: return
+            val ctx = appContext ?: context.applicationContext
+            val messageClient = Wearable.getMessageClient(ctx)
+            knotenIds.forEach { id -> messageClient.sendMessage(id, PFAD_ABSCHLUSS, bytes) }
+        } catch (e: Exception) {
             DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
         }
     }

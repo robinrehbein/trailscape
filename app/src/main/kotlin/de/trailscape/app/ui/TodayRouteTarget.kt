@@ -14,6 +14,7 @@ import de.trailscape.app.ui.today.TodayEffort
 import de.trailscape.app.ui.today.TodayOffer
 import de.trailscape.app.ui.today.offeredTarget
 import de.trailscape.app.ui.today.todayEffort
+import de.trailscape.app.widget.ShownWeekTarget
 import de.trailscape.core.RideFact
 import de.trailscape.core.RideSummary
 import de.trailscape.core.TodayRoute
@@ -29,6 +30,7 @@ import de.trailscape.core.restDayRideTarget
 import de.trailscape.core.sessionsForDay
 import de.trailscape.core.suggestWeeklyGoal
 import de.trailscape.core.weeklyGoalProgress
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -224,6 +226,34 @@ fun weekTarget(currentWeek: TrainingWeek?, facts: List<RideFact>, today: LocalDa
         null
     }
     return WeekTarget(planTargetKm ?: adaptive?.goal?.targetKm, adaptive)
+}
+
+/**
+ * Das Wochenziel in km ausserhalb der Oberflaeche (Dienste, die Uhr nach der
+ * Fahrt) — ohne Trainingsauswertung, also ohne den angepassten Plan, den
+ * [decideToday] fuer „Heute" rechnet.
+ *
+ * Damit trotzdem dieselbe Zahl herauskommt wie auf „Heute":
+ *  1. Hat „Heute" fuer diese Woche schon ein Ziel gezeigt ([shown], notiert
+ *     von `AppViewModel.rememberShownWeekTarget`), gilt genau das — dieselbe
+ *     Vorrangregel wie im Widget (`widget/WidgetState.kt`).
+ *  2. Sonst [weekTarget] mit der rohen Planwoche von [plan] (nur, wenn
+ *     [nowMs] wirklich in ihr liegt): Planziel > 0, sonst [suggestWeeklyGoal].
+ *
+ * @return das Ziel in km, `null` ohne jedes Ziel.
+ */
+fun weekTargetKmOutsideUi(
+    plan: TrainingPlan?,
+    facts: List<RideFact>,
+    today: LocalDate,
+    nowMs: Long,
+    shown: ShownWeekTarget?,
+): Int? {
+    shown?.takeIf { it.monday == today.with(DayOfWeek.MONDAY) && it.targetKm > 0 }?.let { return it.targetKm }
+    val planWeek = plan?.let { p ->
+        p.weeks.getOrNull(currentWeekIndex(p, nowMs))?.takeIf { nowMs >= it.start && nowMs < it.end }
+    }
+    return weekTarget(planWeek, facts, today).targetKm
 }
 
 /** [weekTarget] fuer eine Composable-Stelle, mit der Planwoche aus [decision]. */
