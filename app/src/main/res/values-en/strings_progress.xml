@@ -132,4 +132,64 @@
     <string name="progress_value_ascent">%1$s&#160;m</string>
     <!-- %1$d = Stunden, %2$s = Minuten zweistellig -->
     <string name="progress_duration_hm">%1$d:%2$s h</string>
+
+    <!-- GoalCards.kt: Wochenziel (Wochenkarte auf Heute) -->
+    <!-- %1$d = gefahrene Kilometer, %2$d = Wochenziel in Kilometern -->
+    <string name="progress_week_goal_bar_cd">Weekly goal: %1$d of %2$d km ridden</string>
+    <!-- %1$d = übliche Woche in Kilometern -->
+    <string name="progress_week_goal_aufbau">A little more than your usual week (%1$d km)</string>
+    <string name="progress_week_goal_entlastung">Deliberately lighter after three build-up weeks</string>
+    <string name="progress_week_goal_halten">Same as your usual week</string>
+    <string name="progress_week_goal_wiedereinstieg">A gentle return</string>
+    <string name="progress_week_goal_einstieg">Your first weekly goal</string>
+    <!-- %1$d = Kilometer, die fehlen, %2$d = Tage bis Sonntag -->
+    <plurals name="progress_week_goal_left_count">
+        <item quantity="one">%1$d km to go today</item>
+        <item quantity="other">%1$d km to go in %2$d days</item>
+    </plurals>
+    <string name="progress_week_goal_done_hint">Weekly goal done – anything more is a bonus</string>
+
+    <!-- GoalCards.kt: Rückblick auf die letzte Woche -->
+    <string name="progress_recap_eyebrow">Last week</string>
+    <!-- %1$s = Kilometer, %2$d = Touren -->
+    <plurals name="progress_recap_headline_count">
+        <item quantity="one">%1$s km in one ride</item>
+        <item quantity="other">%1$s km in %2$d rides</item>
+    </plurals>
+    <string name="progress_recap_change_up">+%1$d %% on the week before</string>
+    <string name="progress_recap_change_down">−%1$d %% on the week before</string>
+    <string name="progress_recap_change_same">Same as the week before</string>
+    <!-- %1$d = Anzahl, %2$s = Namen der Bestwerte, durch Komma getrennt -->
+    <plurals name="progress_recap_records_count">
+        <item quantity="one">New personal best: %2$s</item>
+        <item quantity="other">%1$d new personal bests: %2$s</item>
+    </plurals>
+
+    <!-- GoalCards.kt: Monats-Challenges. %1$s = Monatsname -->
+    <string name="progress_challenges_title">Challenges in %1$s</string>
+    <!-- %1$s = Ziel in km bzw. Hm -->
+    <string name="progress_challenge_month_distance">Ride %1$s km</string>
+    <string name="progress_challenge_month_ascent">Climb %1$s meters</string>
+    <plurals name="progress_challenge_month_days_count">
+        <item quantity="one">Ride on %1$d day</item>
+        <item quantity="other">Ride on %1$d days</item>
+    </plurals>
+    <string name="progress_challenge_month_long_ride">One ride over %1$s km</string>
+    <!-- %1$s = bisher, %2$s = Ziel -->
+    <string name="progress_challenge_month_value">%1$s of %2$s</string>
+    <string name="progress_challenge_month_reached_cd">Reached</string>
+    <plurals name="progress_challenges_days_left_count">
+        <item quantity="one">Last day today</item>
+        <item quantity="other">%1$d days left</item>
+    </plurals>
+    <!-- %1$d = erreicht, %2$d = Challenges des Monats -->
+    <string name="progress_challenges_last_month">Last month: %1$d of %2$d done</string>
+    <!-- Zeile in Als Nächstes. %1$s = Rest, %2$s = Ziel -->
+    <string name="progress_next_challenge_distance">%1$s km to go to the monthly challenge of %2$s km</string>
+    <string name="progress_next_challenge_ascent">%1$s m to go to the monthly challenge of %2$s m</string>
+    <plurals name="progress_next_challenge_days_count">
+        <item quantity="one">%1$d more riding day for the monthly challenge</item>
+        <item quantity="other">%1$d more riding days for the monthly challenge</item>
+    </plurals>
+    <string name="progress_next_challenge_long_ride">Monthly challenge: %1$s km to go to a ride over %2$s km</string>
 </resources>

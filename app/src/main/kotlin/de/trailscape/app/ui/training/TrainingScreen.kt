@@ -34,11 +34,14 @@ import de.trailscape.app.ui.components.PillSegments
 import de.trailscape.app.ui.progress.LifetimeCard
 import de.trailscape.app.ui.progress.MilestonesCard
 import de.trailscape.app.ui.progress.RecordsCard
+import de.trailscape.app.ui.progress.ChallengesCard
 import de.trailscape.app.ui.progress.TrendCard
 import de.trailscape.app.ui.progress.YearGoalCard
 import de.trailscape.app.ui.progress.YearGoalDialog
 import de.trailscape.app.ui.progress.rememberRideFacts
 import de.trailscape.app.ui.rememberNow
+import de.trailscape.core.challengeHistory
+import de.trailscape.core.challengeProgress
 import de.trailscape.core.lifetimeTotals
 import de.trailscape.core.milestoneProgress
 import de.trailscape.core.personalRecords
@@ -47,6 +50,7 @@ import de.trailscape.core.suggestYearGoalKm
 import de.trailscape.core.weekStreak
 import de.trailscape.core.weeklyBuckets
 import de.trailscape.core.yearGoalProgress
+import java.time.YearMonth
 import androidx.compose.runtime.mutableIntStateOf
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.ui.AppTab
@@ -212,6 +216,11 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val facts = rememberRideFacts(rides)
     val buckets = remember(facts, today) { weeklyBuckets(facts, today) }
     val trend = remember(facts, today) { recentTrend(facts, today) }
+    val challenges = remember(facts, today) { challengeProgress(facts, today) }
+    val lastMonthChallenges = remember(facts, today) {
+        val lastMonth = YearMonth.from(today).minusMonths(1)
+        challengeHistory(facts, today).firstOrNull { it.month == lastMonth }
+    }
     val records = remember(facts) { personalRecords(facts) }
     val milestones = remember(facts) { milestoneProgress(facts) }
     val lifetime = remember(facts) { lifetimeTotals(facts) }
@@ -312,6 +321,13 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                 if (segment == SEGMENT_PROGRESS && facts.isNotEmpty()) {
                     item(key = "sec-trend") { SectionEyebrow(stringResource(R.string.progress_trend_eyebrow)) }
                     item(key = "trend") { TrendCard(buckets = buckets, trend = trend) }
+                    item(key = "challenges") {
+                        ChallengesCard(
+                            progress = challenges,
+                            month = today,
+                            lastMonth = lastMonthChallenges,
+                        )
+                    }
                     item(key = "jahresziel") {
                         YearGoalCard(
                             progress = yearGoal,

@@ -2,7 +2,16 @@ package de.trailscape.app.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.progress.WeeklyRecapCard
+import de.trailscape.core.PeriodTotals
+import de.trailscape.core.RecordKind
+import de.trailscape.core.WeeklyRecap
+import java.time.LocalDate
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
@@ -48,6 +57,7 @@ import de.trailscape.core.savePlan
 import kotlin.math.cos
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -198,6 +208,39 @@ class ScreenshotTest {
         settle()
         tab("Training")
         shot("24-training-gross")
+    }
+
+    /**
+     * Der Wochenrueckblick direkt gerendert: Die App zeigt ihn nur Montag bis
+     * Mittwoch, ein Bild an jedem Wochentag braeuchte eine einschleusbare Uhr.
+     * Hell/dunkel und bei 130 % Schrift untereinander.
+     */
+    @Test
+    fun wochenrueckblickKarte() {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val recap = WeeklyRecap(
+            monday = LocalDate.of(2026, 11, 9),
+            totals = PeriodTotals(km = 86.0, ascentM = 700.0, timeS = 13_000, rides = 3),
+            previous = PeriodTotals(km = 70.0, ascentM = 500.0, timeS = 10_000, rides = 2),
+            activeDays = 3,
+            longestRideKm = 40.0,
+            records = listOf(RecordKind.DISTANCE, RecordKind.ASCENT),
+            streakWeeks = 4,
+        )
+        compose.setContent {
+            Column {
+                for (dark in listOf(false, true)) {
+                    TrailscapeTheme(darkTheme = dark) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Column(Modifier.padding(16.dp)) { WeeklyRecapCard(recap) }
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onAllNodesWithText("86", substring = true)[0].assertExists()
+        shot("15-wochenrueckblick")
     }
 
     /**
@@ -586,6 +629,31 @@ class ScreenshotTest {
         compose.onAllNodesWithText(context.getString(R.string.today_first_ride_title))[0].assertIsDisplayed()
         compose.onAllNodesWithText(context.getString(R.string.today_first_ride_import_action))[0].assertExists()
         shot("19-heute-erststart-en")
+    }
+
+    /**
+     * Ohne Trainingsplan: „Diese Woche" bekommt trotzdem ein Ziel — das
+     * mitwachsende Wochenziel aus den Touren, mit Balken und einem ruhigen
+     * Satz darunter (oder, falls die Beispieltouren es diese Woche schon
+     * erfuellen, der Hinweis, dass alles Weitere Zugabe ist).
+     */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun heuteOhnePlanWochenzielEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        // `AppServices` lebt ueber die Tests der Klasse hinweg — der Plan aus
+        // `seed()` muss ausdruecklich weg.
+        savePlan(AppServices.trainingPlanStore, null)
+        start()
+        val context = compose.activity
+        compose.onAllNodesWithText(context.getString(R.string.today_week_eyebrow))[0].assertExists()
+        compose.onAllNodesWithContentDescription("Weekly goal:", substring = true)[0].assertExists()
+        // Der Satz hangt von der Woche ab; eine der beiden Formen muss da sein.
+        val caption = compose.onAllNodesWithText("to go", substring = true).fetchSemanticsNodes().size
+        val done = compose.onAllNodesWithText(context.getString(R.string.progress_week_goal_done_hint))
+            .fetchSemanticsNodes().size
+        assertTrue("Wochenziel-Satz fehlt", caption + done > 0)
+        shot("14-heute-wochenziel-en")
     }
 
     /**

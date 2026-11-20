@@ -70,6 +70,7 @@ import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.Milestone
+import de.trailscape.core.ChallengeProgress
 import de.trailscape.core.MilestoneKind
 import de.trailscape.core.MilestoneProgress
 import de.trailscape.core.PeriodTotals
@@ -110,7 +111,7 @@ import kotlin.math.roundToInt
 
 /** Rundes, getoentes Symbol am Zeilenanfang. */
 @Composable
-private fun IconBubble(icon: ImageVector, tint: Color, size: Dp = 40.dp) {
+internal fun IconBubble(icon: ImageVector, tint: Color, size: Dp = 40.dp) {
     Box(
         modifier = Modifier
             .size(size)
@@ -123,7 +124,7 @@ private fun IconBubble(icon: ImageVector, tint: Color, size: Dp = 40.dp) {
 }
 
 @Composable
-private fun ProgressBar(fraction: Float, color: Color = MaterialTheme.colorScheme.primary) {
+internal fun ProgressBar(fraction: Float, color: Color = MaterialTheme.colorScheme.primary) {
     LinearProgressIndicator(
         progress = { fraction.coerceIn(0f, 1f) },
         color = color,
@@ -142,7 +143,7 @@ private fun ProgressBar(fraction: Float, color: Color = MaterialTheme.colorSchem
  * Pfeil. Mit [onClick] wird die ganze Zeile zur Schaltflaeche.
  */
 @Composable
-private fun ProgressRow(
+internal fun ProgressRow(
     icon: ImageVector,
     tint: Color,
     title: String,
@@ -204,7 +205,7 @@ private fun ProgressRow(
 
 /** Trennlinie zwischen zwei Zeilen, eingerueckt bis zur Textkante. */
 @Composable
-private fun RowDivider() {
+internal fun RowDivider() {
     HorizontalDivider(
         color = MaterialTheme.colorScheme.outlineVariant,
         modifier = Modifier.padding(start = CardPadding + 54.dp, end = CardPadding),
@@ -212,7 +213,7 @@ private fun RowDivider() {
 }
 
 @Composable
-private fun CardTitle(text: String, modifier: Modifier = Modifier) {
+internal fun CardTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleMedium,
@@ -373,6 +374,8 @@ private fun yearGoalTint(progress: YearGoalProgress?): Color =
  *   laedt die Zeile dazu ein, eines zu setzen ([suggestedKm]).
  * @param suggestedKm Vorschlag fuers Jahresziel; `null` ohne Touren.
  * @param milestone die naechste Stufe, `null` oberhalb aller Leitern.
+ * @param challenge die offene Monats-Challenge mit dem groessten Fortschritt
+ *   ([nextOpenChallenge]) als dritte Zeile; `null`, wenn alle erreicht sind.
  */
 @Composable
 internal fun NextGoalsCard(
@@ -383,6 +386,7 @@ internal fun NextGoalsCard(
     onYearGoal: () -> Unit,
     onOpenProgress: () -> Unit,
     modifier: Modifier = Modifier,
+    challenge: ChallengeProgress? = null,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
         Column {
@@ -423,6 +427,18 @@ internal fun NextGoalsCard(
                     title = remaining,
                     subtitle = null,
                     fraction = milestone.fraction.toFloat(),
+                    onClick = onOpenProgress,
+                    onClickLabel = stringResource(R.string.progress_milestone_open_cd),
+                )
+            }
+            if (challenge != null) {
+                RowDivider()
+                ProgressRow(
+                    icon = challengeNextIcon(challenge.challenge.kind),
+                    tint = MaterialTheme.colorScheme.primary,
+                    title = challengeNextTitle(challenge),
+                    subtitle = null,
+                    fraction = challenge.fraction.toFloat(),
                     onClick = onOpenProgress,
                     onClickLabel = stringResource(R.string.progress_milestone_open_cd),
                 )
@@ -760,7 +776,7 @@ internal fun YearGoalDialog(
 // Bestwerte, Meilensteine, Gesamt
 // ---------------------------------------------------------------------------
 
-private fun recordIcon(kind: RecordKind): ImageVector = when (kind) {
+internal fun recordIcon(kind: RecordKind): ImageVector = when (kind) {
     RecordKind.DISTANCE -> Icons.Rounded.Straighten
     RecordKind.ASCENT -> Icons.Rounded.Terrain
     RecordKind.TIME -> Icons.Rounded.Timer
@@ -768,7 +784,7 @@ private fun recordIcon(kind: RecordKind): ImageVector = when (kind) {
 }
 
 @Composable
-private fun recordLabel(kind: RecordKind): String = stringResource(
+internal fun recordLabel(kind: RecordKind): String = stringResource(
     when (kind) {
         RecordKind.DISTANCE -> R.string.progress_record_distance
         RecordKind.ASCENT -> R.string.progress_record_ascent

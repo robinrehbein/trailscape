@@ -34,7 +34,9 @@ import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.i18n.CoreTextsEn
+import de.trailscape.core.i18n.formatMonthName
 import de.trailscape.core.savePlan
+import java.time.LocalDate
 import kotlin.math.cos
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
@@ -111,6 +113,10 @@ class TrainingScreenshotTest {
         start()
         openTraining()
         assertVisible(R.string.progress_trend_eyebrow)
+        // Die Monats-Challenges stehen direkt unter dem Verlauf; die erste ist immer die Kilometer-Challenge.
+        val month = formatMonthName(LocalDate.now(), AppLanguage.EN)
+        compose.onAllNodesWithText(compose.activity.getString(R.string.progress_challenges_title, month))[0].assertExists()
+        compose.onAllNodesWithText(" of ", substring = true)[0].assertExists()
         assertVisible(R.string.progress_records_title)
         assertVisible(R.string.progress_milestones_title)
         shot("training-fortschritt-en")
