@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Weisse, gerundete Flaeche fuer das Widget: Glance faerbt sie je nach
+    Hell/Dunkel per Farbfilter ein (siehe widget/TrailscapeWidget.kt) — so
+    stehen die Farben an EINER Stelle (ui/theme/Color.kt), nicht noch einmal
+    in XML. Der Radius folgt dem System (values-v31).
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFFFF" />
+    <corners android:radius="@dimen/widget_corner_radius" />
+</shape>

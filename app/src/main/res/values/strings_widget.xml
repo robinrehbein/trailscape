@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Startbildschirm-Widgets (widget/**): Wochenserie, Wochenfortschritt,
+    Leerzustand, Widget-Auswahl.
+
+    Schluessel-Praefix: widget_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_widget.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- Name und Beschreibung in der Widget-Auswahl des Launchers -->
+    <string name="widget_label">Trailscape Serie</string>
+    <string name="widget_description">Deine Wochenserie und dein Wochenziel auf einen Blick.</string>
+    <!-- Vorschau in der Widget-Auswahl (feste Beispielwerte) -->
+    <string name="widget_preview_headline">5 Wochen in Folge</string>
+    <string name="widget_preview_status">Diese Woche gesichert</string>
+    <string name="widget_preview_progress">42 von 60 km diese Woche</string>
+
+    <!-- Kleines Widget: kurze Serienzeile -->
+    <plurals name="widget_streak_short">
+        <item quantity="one">%1$d Woche</item>
+        <item quantity="other">%1$d Wochen</item>
+    </plurals>
+    <string name="widget_streak_none_short">Neue Serie</string>
+
+    <!-- Mittleres Widget: Kopfzeile und Statuszeile -->
+    <plurals name="widget_streak_headline">
+        <item quantity="one">%1$d Woche in Folge</item>
+        <item quantity="other">%1$d Wochen in Folge</item>
+    </plurals>
+    <string name="widget_streak_none_headline">Noch keine Serie</string>
+    <string name="widget_status_secured">Diese Woche gesichert</string>
+    <plurals name="widget_status_days_left">
+        <item quantity="one">Heute ist der letzte Tag, um sie zu halten</item>
+        <item quantity="other">Noch %1$d Tage, um sie zu halten</item>
+    </plurals>
+    <string name="widget_status_start">Eine Tour diese Woche startet deine Serie</string>
+
+    <!-- Fortschritt. %1$d = gefahrene km, %2$d = Wochenziel in km -->
+    <string name="widget_progress_compact">%1$d / %2$d km</string>
+    <string name="widget_progress_compact_no_goal">%1$d km</string>
+    <string name="widget_progress_full">%1$d von %2$d km diese Woche</string>
+    <string name="widget_progress_full_no_goal">%1$d km diese Woche</string>
+
+    <!-- Leerzustand: noch keine Tour -->
+    <string name="widget_empty_title">Deine erste Tour wartet</string>
+    <string name="widget_empty_hint">Steig auf und starte deine Serie.</string>
+
+    <!-- Schaltflaeche und Bedienhilfe -->
+    <string name="widget_button_ride">Fahren</string>
+    <string name="widget_open_app">Trailscape öffnen</string>
+</resources>

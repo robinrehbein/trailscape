@@ -1,7 +1,9 @@
 package de.trailscape.app
 
+import android.app.Activity
 import android.app.Application
 import android.content.res.Configuration
+import android.os.Bundle
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.feedback.AppDiagnostics
 import de.trailscape.app.feedback.CrashReporter
@@ -11,6 +13,7 @@ import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.reminder.ReminderScheduler
 import de.trailscape.app.strava.StravaConfig
 import de.trailscape.app.strava.StravaServices
+import de.trailscape.app.widget.WidgetUpdater
 import kotlinx.coroutines.launch
 
 /**
@@ -47,6 +50,7 @@ class TrailscapeApplication : Application() {
             RecordingService.recoverIfNeeded(this@TrailscapeApplication, AppServices.rideStorage)
         }
         StravaServices.init(this)
+        installWidgetRefresh()
         if (StravaConfig.available) {
             AppServices.appScope.launch {
                 // Strava-Auto-Upload: haengt am Ende der Aufzeichnung und an
@@ -72,6 +76,52 @@ class TrailscapeApplication : Application() {
                 settings = AppServices.reminderStore.readSettings(),
             )
         }
+    }
+
+    /**
+     * Haelt das Startbildschirm-Widget (`widget/`) aktuell, ohne dass
+     * ViewModel oder Speicherschicht davon wissen.
+     *
+     * Zwei Ausloeser, bewusst hier in der Application:
+     *  - **Aufzeichnung fertig** ([RecordingRepository.finishedRides]): Die
+     *    Tour ist gespeichert, das Widget soll die neue Serie zeigen, noch
+     *    bevor der Fahrer die App wieder oeffnet — genau dann schaut er
+     *    aufs Handy. Der Fluss kommt vom Dienst (auch bei der Wiederherstellung
+     *    eines Journals) und ist unabhaengig davon, ob ein ViewModel lebt.
+     *  - **App geht in den Hintergrund** (letzte Activity gestoppt): Fangt
+     *    alles auf, was nur in der Oberflaeche passiert — Import, Health-Sync,
+     *    Loeschen, Bearbeiten, Planaenderung, Sprachwechsel. Diese
+     *    Schreibzugriffe laufen im `AppViewModel`; ein Haken je Aufrufstelle
+     *    waere fehleranfaellig und wuerde bei jeder neuen vergessen. Ein
+     *    Aufruf pro Verlassen der App ist guenstig und trifft den Moment, in
+     *    dem das Widget wieder sichtbar wird.
+     */
+    private fun installWidgetRefresh() {
+        AppServices.appScope.launch {
+            RecordingRepository.finishedRides.collect {
+                WidgetUpdater.request(this@TrailscapeApplication)
+            }
+        }
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            private var started = 0
+
+            override fun onActivityStarted(activity: Activity) {
+                started += 1
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                started = (started - 1).coerceAtLeast(0)
+                // Beim Drehen/Sprachwechsel wird die Activity neu erzeugt und
+                // zaehlt kurz auf 0 — das ist ein harmloser Zusatzaufruf.
+                if (started == 0) WidgetUpdater.request(this@TrailscapeApplication)
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
     }
 
     /**

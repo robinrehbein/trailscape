@@ -261,6 +261,19 @@ dependencies {
     // erst im RC) und loest gegen AGP 9.0.1 / compileSdk 36 konfliktfrei auf.
     implementation("androidx.work:work-runtime-ktx:2.11.2")
 
+    // Startbildschirm-Widget (`widget/`): Serie und Wochenziel auf einen
+    // Blick. Glance statt handgeschriebener RemoteViews, weil es dieselbe
+    // Kotlin-Schreibweise (Composables, Farb-Provider fuer hell/dunkel,
+    // `SizeMode.Responsive` fuer die Groessenstufen) bietet und die
+    // RemoteViews-Details versteckt. Bewusst NUR `glance-appwidget`, nicht
+    // `glance-material3`: Die Farben kommen direkt aus `ui/theme/Color.kt`
+    // (siehe `widget/TrailscapeWidget.kt`), ein Material-3-Schema kaeme als
+    // zweite Wahrheit daneben. 1.2.0 ist die neueste stabile Version (1.3.x
+    // steht erst in der Alpha) und loest gegen die Compose-BOM 2026.06.01 /
+    // AGP 9.0.1 / compileSdk 36 konfliktfrei auf. Das Widget braucht kein
+    // Netz und keine Berechtigung — alles liest aus den lokalen Touren.
+    implementation("androidx.glance:glance-appwidget:1.2.0")
+
     // Kartendarstellung (Vektor-/Rasterkacheln, OpenGL). Bewusst die 11.x-Reihe:
     // Sie ist die letzte Serie mit der etablierten `org.maplibre.android.*`-API,
     // auf der die gesamte oeffentliche Dokumentation beruht — 12.x/13.x bringen

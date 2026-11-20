@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Ecke des Widget-Hintergrunds. Bis Android 11 gibt es keinen
+        Systemwert, dort gilt dieser Ersatz (26 dp); ab Android 12
+        ueberschreibt values-v31/dimens_widget.xml ihn mit dem Radius, den
+        der Launcher fuer alle Widgets vorgibt.
+    -->
+    <dimen name="widget_corner_radius">26dp</dimen>
+</resources>

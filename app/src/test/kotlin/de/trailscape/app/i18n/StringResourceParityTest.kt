@@ -38,6 +38,7 @@ class StringResourceParityTest {
         "strings_ble_sensors.xml" to "ble_",
         "strings_strava.xml" to "strava_",
         "strings_progress.xml" to "progress_",
+        "strings_widget.xml" to "widget_",
     )
 
     /** Schluessel aus der Zeit vor den Bereichsdateien — sie behalten ihren Namen. */

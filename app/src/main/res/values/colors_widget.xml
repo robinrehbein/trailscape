@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Nur fuer die statische Vorschau in der Widget-Auswahl
+        (layout/widget_preview.xml). Das echte Widget holt seine Farben aus
+        ui/theme/Color.kt (Glance-ColorProvider). WER dort LightPrimary,
+        LightOnSurface bzw. die dunklen Gegenstuecke aendert, aendert diese
+        Werte mit (dunkel: values-night/colors_widget.xml).
+    -->
+    <color name="widget_preview_accent">#0D7A42</color>
+    <color name="widget_preview_text">#1A1B1E</color>
+</resources>
