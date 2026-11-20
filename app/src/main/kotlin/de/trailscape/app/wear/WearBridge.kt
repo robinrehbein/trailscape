@@ -206,8 +206,13 @@ object WearBridge {
      * Bezug. Ohne erreichbare Uhr ein Nop, keine Wiederholung: Geht die
      * Nachricht verloren, stoppt die Fahrerin die Uhr wie bisher selbst. Wirft
      * nie, blockiert nicht (`sendMessage` liefert einen `Task`).
+     *
+     * Kam der Stopp gerade von der Uhr selbst ([merkeUhrStopp]), wird nichts
+     * gesendet: Die Uhr ist laengst fertig, und startet die Fahrerin dort
+     * sofort neu, beendete das verspaetete Echo sonst ihre neue Aufzeichnung.
      */
     fun sendTelefonBeendet(context: Context, endeMs: Long) {
+        if (endeMs - uhrStoppMs in 0 until UHR_STOPP_ECHO_MS) return
         try {
             attach(context)
             val knotenIds = erreichbareKnotenIds
@@ -219,5 +224,21 @@ object WearBridge {
         } catch (e: Exception) {
             DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = e)
         }
+    }
+
+    /**
+     * So lange gilt ein Stopp am Telefon als Folge des Stopp-Befehls der Uhr.
+     * Der Befehl wird sofort an den Aufzeichnungsdienst gereicht; zehn
+     * Sekunden decken auch ein traeges Telefon, und ein eigener Stopp am
+     * Telefon faellt praktisch nie in dieses Fenster.
+     */
+    private const val UHR_STOPP_ECHO_MS = 10_000L
+
+    @Volatile
+    private var uhrStoppMs = 0L
+
+    /** Die Uhr hat „Stopp" geschickt; siehe [sendTelefonBeendet]. */
+    fun merkeUhrStopp() {
+        uhrStoppMs = System.currentTimeMillis()
     }
 }

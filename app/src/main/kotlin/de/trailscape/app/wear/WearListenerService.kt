@@ -79,7 +79,10 @@ class WearListenerService : WearableListenerService() {
             Befehl.START -> RecordingRepository.start(applicationContext)
             Befehl.PAUSE -> RecordingRepository.pause()
             Befehl.WEITER -> RecordingRepository.resume()
-            Befehl.STOPP -> RecordingRepository.stop()
+            Befehl.STOPP -> {
+                WearBridge.merkeUhrStopp()
+                RecordingRepository.stop()
+            }
         }
     }
 }

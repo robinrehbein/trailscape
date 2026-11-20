@@ -80,8 +80,9 @@ die Uhr ihre Aufzeichnung und zeigt ihr Abschlussbild.
 - **Nicht** bei Abbruch mit Fehler (`failAndStop`) und **nicht** bei der Absturz-Rettung: Dort hat
   niemand „Ende" gesagt; im Zweifel läuft die Uhr weiter und wird von Hand gestoppt. Ein „Verwerfen"
   gibt es am Handy nicht.
-- **Echo**: Stoppt die Uhr selbst, stoppt sie das Handy (`stopp`), und das Handy meldet
-  `telefon-beendet` zurück. Die Uhr ist dann schon `BEENDET` und ignoriert es.
+- **Echo**: Stoppt die Uhr selbst, stoppt sie das Handy (`stopp`). Das Handy meldet dann nichts
+  zurück (`WearBridge.merkeUhrStopp`, 10 s Fenster) — sonst könnte das verspätete Echo eine Aufzeichnung
+  beenden, die an der Uhr sofort neu gestartet wurde. Käme es doch an: Die Uhr ist `BEENDET` und ignoriert es.
 - **Alt/neu**: Der Pfad hat seit jeher einen Intent-Filter im Uhr-Manifest, es braucht keinen neuen.
   Alte Uhr + neues Handy: Wert unbekannt, nichts passiert (wie bisher). Neue Uhr + altes Handy: Es
   kommt nichts, die Uhr läuft wie bisher weiter. Das Zusatzfeld `zeitMs` lesen alte Seiten nicht.
