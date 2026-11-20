@@ -7,6 +7,7 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.core.ExplorerTile
+import de.trailscape.core.RiddenWaysIndex
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.RouteTarget
@@ -113,6 +114,8 @@ object RouteGenerationController {
     private var lastOfferMissingSegments: (List<String>) -> Unit = {}
     private var lastPreferNewAreas: Boolean = false
     private var lastExploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() }
+    private var lastPreferNewWays: Boolean = false
+    private var lastRiddenWays: suspend () -> RiddenWaysIndex? = { null }
 
     private val _windEnabled = MutableStateFlow(false)
 
@@ -237,6 +240,9 @@ object RouteGenerationController {
      *   Kacheln — dieselbe Stelle wie bei der manuellen Planung
      *   ([de.trailscape.app.ui.AppViewModel.offerMissingSegments]); eine leere
      *   Liste wird gar nicht erst gemeldet.
+     * @param preferNewWays „Neue Wege" (Blatt *Runde ab hier*): Nur dann wird
+     *   [riddenWays] ueberhaupt geholt — der Index kostet beim ersten Mal einen
+     *   Lauf ueber den Bestand — und jeder Vorschlag traegt „davon N km neu".
      */
     fun start(
         context: Context,
@@ -247,6 +253,8 @@ object RouteGenerationController {
         onOfferMissingSegments: (List<String>) -> Unit = {},
         preferNewAreas: Boolean = false,
         exploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() },
+        preferNewWays: Boolean = false,
+        riddenWays: suspend () -> RiddenWaysIndex? = { null },
     ) {
         val current = _state.value
         val target = current.target ?: return
@@ -259,6 +267,8 @@ object RouteGenerationController {
         lastOfferMissingSegments = onOfferMissingSegments
         lastPreferNewAreas = preferNewAreas
         lastExploredTiles = exploredTiles
+        lastPreferNewWays = preferNewWays
+        lastRiddenWays = riddenWays
         val flag = AtomicBoolean(false)
         cancelFlag = flag
         // Schalterstand jetzt, auf dem Aufruf-Thread, festhalten — nicht erst
@@ -302,6 +312,11 @@ object RouteGenerationController {
                 // Vorschlag zeigt „+N neu", und das stimmt nur gegen den
                 // echten Bestand. Bevorzugt wird nur mit Schalter.
                 val explored = runCatching { exploredTiles() }.getOrDefault(emptySet())
+                // Die Wege dagegen nur mit „Neue Wege": Der erste Aufbau
+                // laeuft ueber den ganzen Bestand. Scheitert er, sucht die
+                // Runde ohne — „Neue Wege" ist eine Vorliebe, kein Muss.
+                val ways = if (preferNewWays) runCatching { riddenWays() }.getOrNull() else null
+                if (flag.get()) throw GenerationCancelled()
                 // Wind nur mit Schalter (siehe „Wind (Opt-in)"): der beim
                 // Start festgehaltene Stand, sonst der gespeicherte — so wird
                 // jeder Einstieg gleich behandelt.
@@ -332,6 +347,11 @@ object RouteGenerationController {
                     },
                     exploredTiles = explored,
                     preferNewAreas = preferNewAreas && explored.isNotEmpty(),
+                    // Auch ein leerer Index wird uebergeben: Ohne gefahrene
+                    // Tour ist eben jeder Kilometer neu, und die Karte sagt
+                    // das. Bevorzugt wird nur, wenn es etwas zu meiden gibt.
+                    riddenWays = ways,
+                    preferNewWays = ways != null && !ways.isEmpty,
                     wind = wind,
                     texts = AppServices.coreTexts(),
                 )
@@ -447,6 +467,8 @@ object RouteGenerationController {
             onOfferMissingSegments = lastOfferMissingSegments,
             preferNewAreas = lastPreferNewAreas,
             exploredTiles = lastExploredTiles,
+            preferNewWays = lastPreferNewWays,
+            riddenWays = lastRiddenWays,
         )
     }
 

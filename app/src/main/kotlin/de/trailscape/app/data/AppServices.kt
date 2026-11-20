@@ -155,6 +155,15 @@ object AppServices {
     }
 
     /**
+     * Persistenter Cache der gefahrenen Wege fuer „Neue Wege" (siehe
+     * [RiddenWaysCacheStore]) — `<filesDir>/route-cache/ridden-ways.bin`,
+     * aus demselben Grund wie der Signatur-Cache nicht im Touren-Verzeichnis.
+     */
+    val riddenWaysCacheStore: RiddenWaysCacheStore by lazy {
+        RiddenWaysCacheStore(File(appContext.filesDir, RiddenWaysCacheStore.DIR_NAME))
+    }
+
+    /**
      * Persistente Segment-Registry der lokalen Bestleistungen (siehe
      * [SegmentStore]) — `<filesDir>/rides/segmente.json`, im selben
      * Verzeichnis wie die Tour-Dateien.

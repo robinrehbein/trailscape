@@ -56,6 +56,34 @@ gelten.
       schwache Runde nicht „Beste“?
 - [ ] „Andere Vorschläge“ liefert wirklich andere Runden.
 
+## Neue Wege
+
+- [ ] *Runde ab hier* → „Neu entdecken: Wege“ wählen, Runde von der
+      Haustür. Führen die Vorschläge über Wege, die du wirklich noch nie
+      gefahren bist? Stimmt „davon N km neu“ ungefähr mit deinem Gefühl und
+      mit der Karte „Alle Touren“ überein?
+- [ ] Die Hausstrecke, in beide Richtungen gefahren, zählt als bekannt — auch
+      wo die Aufzeichnung auf der anderen Straßenseite lag.
+- [ ] Eine Parallelstraße oder ein Feldweg 50–100 m neben einer oft
+      gefahrenen Straße zählt als neu.
+- [ ] Großer Bestand (mehrere Tausend km, viele Jahre): Wie lange dauert die
+      erste Suche mit „Wege“ (der Index wird einmal aufgebaut)? Ist die zweite
+      Suche und „Andere Vorschläge“ spürbar schneller? Kein Ruckeln, kein
+      Absturz wegen Speicher.
+- [ ] Nach einer neuen Fahrt: Die gerade gefahrenen Wege zählen bei der
+      nächsten Suche als bekannt. Nach dem Löschen einer Tour wieder als neu.
+- [ ] Ohne gefahrene Tour (frische Installation): Die Suche klappt, jede Runde
+      zeigt ihre ganze Länge als neu.
+- [ ] Die Wahl „Aus / Wege / Gegenden“ bleibt beim Tab-Wechsel und Drehen
+      erhalten; „Gegenden“ verhält sich wie der frühere Schalter „Neue Gegenden
+      bevorzugen“ (Pille „+N neu“), bei „Wege“ verschwindet die Pille.
+- [ ] Flugmodus: Die Suche mit „Wege“ geht kein Netz an, außer dem Routing
+      selbst (Offline-Kacheln) und, falls an, dem Wind.
+- [ ] TalkBack: Überschrift, die drei Segmente samt Auswahl und der Hinweis
+      darunter werden vorgelesen; „davon N km neu“ gehört zur Vorschlagszeile.
+- [ ] Englisch: „Discover something new: Off / New roads / New areas“ und
+      „23 km of it new“ passen auf ein schmales Gerät.
+
 ## Startbildschirm-Widget
 
 - [ ] In beiden Größen hinzufügen: Darstellung hell und dunkel, Text nicht

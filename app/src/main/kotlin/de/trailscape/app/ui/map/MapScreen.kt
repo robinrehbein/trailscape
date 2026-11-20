@@ -584,13 +584,14 @@ fun MapScreen(appViewModel: AppViewModel) {
     var exploreSearching by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
-    // „Runde ab hier" (Fuehrung „Klartext"): offen, von wo aus, wie lang, ob
-    // neue Gegenden bevorzugt werden. Der Startort ist `null` fuer „ab meinem
+    // „Runde ab hier" (Fuehrung „Klartext"): offen, von wo aus, wie lang, was
+    // sie Neues entdecken soll (Aus / Neue Wege / Neue Gegenden, gemerkt wie
+    // vorher der Schalter). Der Startort ist `null` fuer „ab meinem
     // Standort" — dann bestimmt [runGenerateRoutes] ihn wie gehabt.
     var roundTripSetupOpen by rememberSaveable { mutableStateOf(false) }
     var roundTripStart by remember { mutableStateOf<Place?>(null) }
     var roundTripKm by rememberSaveable { mutableIntStateOf(DEFAULT_ROUND_TRIP_KM) }
-    var preferNewAreas by rememberSaveable { mutableStateOf(true) }
+    var discoveryMode by rememberSaveable { mutableStateOf(DiscoveryMode.NEW_AREAS) }
     // „Wind berücksichtigen": gemerkt im Controller — hier nur der Spiegel
     // fuer den Schalter im Setup-Blatt und den Tipp im Vorschlagsblatt.
     // Einmal laden genuegt (idempotent, liest nur die Prefs, kein Netz).
@@ -1959,8 +1960,10 @@ fun MapScreen(appViewModel: AppViewModel) {
             fromMapCenter = false,
             onMessage = appViewModel::showMessage,
             onOfferMissingSegments = appViewModel::offerMissingSegments,
-            preferNewAreas = preferNewAreas,
+            preferNewAreas = discoveryMode.preferNewAreas,
             exploredTiles = appViewModel::exploredTilesForPlanning,
+            preferNewWays = discoveryMode.preferNewWays,
+            riddenWays = appViewModel::riddenWaysForPlanning,
         )
     }
 
@@ -2121,8 +2124,10 @@ fun MapScreen(appViewModel: AppViewModel) {
                 fromMapCenter = position == null,
                 onMessage = appViewModel::showMessage,
                 onOfferMissingSegments = appViewModel::offerMissingSegments,
-                preferNewAreas = preferNewAreas,
+                preferNewAreas = discoveryMode.preferNewAreas,
                 exploredTiles = appViewModel::exploredTilesForPlanning,
+                preferNewWays = discoveryMode.preferNewWays,
+                riddenWays = appViewModel::riddenWaysForPlanning,
             )
         }
     }
@@ -3532,8 +3537,8 @@ fun MapScreen(appViewModel: AppViewModel) {
                             onDistanceChange = { roundTripKm = it },
                             profile = routeProfile,
                             onProfileChange = { routeProfile = it },
-                            preferNewAreas = preferNewAreas,
-                            onPreferNewAreasChange = { preferNewAreas = it },
+                            discoveryMode = discoveryMode,
+                            onDiscoveryModeChange = { discoveryMode = it },
                             considerWind = considerWind,
                             onConsiderWindChange = RouteGenerationController::setWindEnabled,
                             onShowSuggestions = ::confirmRoundTripSetup,
