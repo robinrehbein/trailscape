@@ -35,13 +35,16 @@ import de.trailscape.app.ui.progress.LifetimeCard
 import de.trailscape.app.ui.progress.MilestonesCard
 import de.trailscape.app.ui.progress.RecordsCard
 import de.trailscape.app.ui.progress.ChallengesCard
+import de.trailscape.app.ui.progress.FitnessTrendCard
 import de.trailscape.app.ui.progress.TrendCard
 import de.trailscape.app.ui.progress.YearGoalCard
 import de.trailscape.app.ui.progress.YearGoalDialog
 import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberNow
 import de.trailscape.core.challengeHistory
 import de.trailscape.core.challengeProgress
+import de.trailscape.core.fitnessComparison
 import de.trailscape.core.lifetimeTotals
 import de.trailscape.core.milestoneProgress
 import de.trailscape.core.personalRecords
@@ -214,6 +217,9 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     val now = rememberNow()
     val today = now.toLocalDate()
     val facts = rememberRideFacts(rides)
+    val fitnessTrend = remember(rides, today) {
+        fitnessComparison(rides, { localOfEpochMs(it).toLocalDate() }, today)
+    }
     val buckets = remember(facts, today) { weeklyBuckets(facts, today) }
     val trend = remember(facts, today) { recentTrend(facts, today) }
     val challenges = remember(facts, today) { challengeProgress(facts, today) }
@@ -436,6 +442,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
 
                 // --------------------------------------------------- Deine Form
                 if (segment == SEGMENT_PROGRESS && (rides.isNotEmpty() || insights.fitness.latest != null)) {
+                    item(key = "fitness-trend") { FitnessTrendCard(fitnessTrend) }
                     item(key = "sec-form") { SectionEyebrow(stringResource(R.string.training_screen_form_eyebrow)) }
                     item(key = "form") {
                         FormSummaryCard(insights, onClick = { showForm = true })

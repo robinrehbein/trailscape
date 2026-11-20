@@ -121,6 +121,9 @@ class TrainingScreenshotTest {
         compose.onAllNodesWithText("Bonus: ", substring = true)[0].assertExists()
         assertVisible(R.string.progress_records_title)
         assertVisible(R.string.progress_milestones_title)
+        // Die Beispieltouren liegen alle im juengeren Zeitraum: Der Fitness-Vergleich hat nichts „davor".
+        assertVisible(R.string.progress_fitness_headline_unknown)
+        assertVisible(R.string.progress_fitness_unknown_hint)
         shot("training-fortschritt-en")
 
         click(R.string.progress_year_goal_prompt_title)

@@ -2,12 +2,18 @@ package de.trailscape.app.ui
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.unit.dp
+import de.trailscape.app.ui.progress.FitnessTrendCard
 import de.trailscape.app.ui.progress.WeeklyRecapCard
+import de.trailscape.core.FitnessComparison
+import de.trailscape.core.FitnessSignal
+import de.trailscape.core.FitnessSignalKind
+import de.trailscape.core.FitnessVerdict
 import de.trailscape.core.PeriodTotals
 import de.trailscape.core.RecordKind
 import de.trailscape.core.WeeklyRecap
@@ -241,6 +247,51 @@ class ScreenshotTest {
         settle()
         compose.onAllNodesWithText("86", substring = true)[0].assertExists()
         shot("15-wochenrueckblick")
+    }
+
+    /**
+     * Die Fitness-Karte („Du wirst fitter") mit allen drei Beobachtungen, dazu
+     * die Variante ohne Puls und „zu wenig Daten" — hell/dunkel bei 130 % Schrift.
+     */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h3200dp-xxhdpi")
+    fun fitnessTrendKarte() {
+        RuntimeEnvironment.setFontScale(1.3f)
+        val fitter = FitnessComparison(
+            verdict = FitnessVerdict.FITTER,
+            signals = listOf(
+                FitnessSignal(FitnessSignalKind.EFFICIENCY, 3.1, 2.98, 4, 5, 4),
+                FitnessSignal(FitnessSignalKind.PACE, 24.1, 23.2, 4, 5, 4),
+                FitnessSignal(FitnessSignalKind.ENDURANCE, 82.0, 61.0, 34, 5, 4),
+            ),
+            windowDays = 42,
+        )
+        val noHr = FitnessComparison(
+            verdict = FitnessVerdict.DECLINING,
+            signals = listOf(FitnessSignal(FitnessSignalKind.PACE, 22.4, 23.2, -3, 4, 5)),
+            windowDays = 42,
+        )
+        val unknown = FitnessComparison(FitnessVerdict.NOT_ENOUGH_DATA, emptyList(), 42)
+        compose.setContent {
+            Column {
+                for (dark in listOf(false, true)) {
+                    TrailscapeTheme(darkTheme = dark) {
+                        Surface(color = MaterialTheme.colorScheme.background) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                FitnessTrendCard(fitter)
+                                if (dark) {
+                                    FitnessTrendCard(noHr)
+                                    FitnessTrendCard(unknown)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        settle()
+        compose.onAllNodesWithText("82", substring = true)[0].assertExists()
+        shot("training-fitness-trend")
     }
 
     /**

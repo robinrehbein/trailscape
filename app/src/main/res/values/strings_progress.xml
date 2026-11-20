@@ -99,6 +99,25 @@
     <string name="progress_trend_peak">stärkste Woche: %1$s km</string>
     <!-- Sprachausgabe für das Diagramm. %1$s = Kilometer in 4 Wochen, %2$s = Kilometer stärkste Woche -->
     <string name="progress_trend_chart_cd">Kilometer je Woche über 12 Wochen. Letzte 4 Wochen: %1$s km. Stärkste Woche: %2$s km.</string>
+    <!-- FitnessTrendCard.kt -->
+    <string name="progress_fitness_headline_fitter">Du wirst fitter</string>
+    <string name="progress_fitness_headline_stable">Deine Form hält</string>
+    <string name="progress_fitness_headline_declining">Gerade etwas schwächer</string>
+    <string name="progress_fitness_headline_unknown">Noch zu wenig vergleichbare Fahrten</string>
+    <string name="progress_fitness_unknown_hint">Ab drei Fahrten über 40 Minuten in sechs Wochen kann ich vergleichen.</string>
+    <!-- %1$d = Wochen je Zeitraum -->
+    <string name="progress_fitness_window">Letzte %1$d Wochen gegenüber den %1$d davor</string>
+    <string name="progress_fitness_efficiency_label">Puls und Tempo</string>
+    <string name="progress_fitness_efficiency_faster">Bei gleichem Puls %1$d %% schneller</string>
+    <string name="progress_fitness_efficiency_slower">Bei gleichem Puls %1$d %% langsamer</string>
+    <string name="progress_fitness_efficiency_same">Bei gleichem Puls gleich schnell</string>
+    <string name="progress_fitness_pace_label">Tempo</string>
+    <!-- %1$s = aktueller Schnitt in km/h, %2$s = Schnitt davor -->
+    <string name="progress_fitness_pace_value">Schnitt auf flachen Runden: %1$s&#160;km/h (vorher %2$s)</string>
+    <string name="progress_fitness_endurance_label">Ausdauer</string>
+    <!-- %1$s = längste Tour jetzt in km, %2$s = davor -->
+    <string name="progress_fitness_endurance_value">Längste Tour: %1$s&#160;km (vorher %2$s)</string>
+    <string name="progress_fitness_no_hr_hint">Mit Pulsmessung (Uhr oder Gurt) wird der Vergleich genauer.</string>
     <string name="progress_fact_rides">Touren</string>
     <string name="progress_fact_hours">Stunden</string>
     <string name="progress_fact_ascent">Höhenmeter</string>

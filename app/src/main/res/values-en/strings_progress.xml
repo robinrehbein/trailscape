@@ -99,6 +99,25 @@
     <string name="progress_trend_peak">biggest week: %1$s km</string>
     <!-- Sprachausgabe für das Diagramm. %1$s = Kilometer in 4 Wochen, %2$s = Kilometer stärkste Woche -->
     <string name="progress_trend_chart_cd">Kilometres per week over 12 weeks. Last 4 weeks: %1$s km. Biggest week: %2$s km.</string>
+    <!-- FitnessTrendCard.kt -->
+    <string name="progress_fitness_headline_fitter">You are getting fitter</string>
+    <string name="progress_fitness_headline_stable">Your fitness is holding</string>
+    <string name="progress_fitness_headline_declining">A bit weaker right now</string>
+    <string name="progress_fitness_headline_unknown">Not enough comparable rides yet</string>
+    <string name="progress_fitness_unknown_hint">With three rides over 40 minutes in six weeks, I can compare.</string>
+    <!-- %1$d = weeks per period -->
+    <string name="progress_fitness_window">Last %1$d weeks compared with the %1$d before</string>
+    <string name="progress_fitness_efficiency_label">Heart rate and speed</string>
+    <string name="progress_fitness_efficiency_faster">%1$d %% faster at the same heart rate</string>
+    <string name="progress_fitness_efficiency_slower">%1$d %% slower at the same heart rate</string>
+    <string name="progress_fitness_efficiency_same">Same speed at the same heart rate</string>
+    <string name="progress_fitness_pace_label">Pace</string>
+    <!-- %1$s = current average in km/h, %2$s = average before -->
+    <string name="progress_fitness_pace_value">Average on flat rides: %1$s&#160;km/h (before %2$s)</string>
+    <string name="progress_fitness_endurance_label">Endurance</string>
+    <!-- %1$s = longest ride now in km, %2$s = before -->
+    <string name="progress_fitness_endurance_value">Longest ride: %1$s&#160;km (before %2$s)</string>
+    <string name="progress_fitness_no_hr_hint">With heart-rate data (watch or strap) the comparison gets more accurate.</string>
     <string name="progress_fact_rides">Rides</string>
     <string name="progress_fact_hours">Hours</string>
     <string name="progress_fact_ascent">Climbing (m)</string>
