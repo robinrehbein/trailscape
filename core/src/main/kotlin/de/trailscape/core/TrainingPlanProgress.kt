@@ -290,7 +290,7 @@ fun adaptPlan(
         weekRideList.all { rideLoads.containsKey(it.id) }
 
     val ratio = if (loadKnown) {
-        weekRideList.sumOf { rideLoads.getValue(it.id) } / budget!!
+        weekRideList.sumOf { rideLoads.getValue(it.id) } / budget
     } else {
         if (last.targetKm <= 0) return unchanged
         weekKm(last, rides) / last.targetKm

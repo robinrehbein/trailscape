@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -59,12 +60,17 @@ import de.trailscape.app.ui.progress.nextOpenChallenge
 import de.trailscape.app.ui.progress.weeklyGoalCaption
 import de.trailscape.app.ui.progress.YearGoalDialog
 import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.app.ui.progress.flooredTowards
 import de.trailscape.core.AscentPreference
 import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
+import de.trailscape.core.WeekPlanInput
+import de.trailscape.core.WeekPlanStatus
 import de.trailscape.core.challengeProgress
+import de.trailscape.core.planWeek
+import de.trailscape.core.ridingHabits
 import de.trailscape.core.lastWeekRecap
 import de.trailscape.core.nearestMilestone
 import de.trailscape.core.planningSpeedKmh
@@ -106,6 +112,9 @@ import kotlin.math.roundToInt
  *  3. **Diese Woche** ([WeekCard]) — bzw. am Erststart „Los geht's".
  *     Mit Balken zum Wochenziel (Plan oder mitwachsendes Ziel ohne Plan) und am
  *     Fuss die Wochenserie ([StreakFooter]).
+ *  3a. **Wochen-Fahrplan** ([WeekPlanCard]) — nur zum offenen mitwachsenden
+ *     Wochenziel ohne Trainingsplan: an welchen Tagen wie weit, mit „Runde
+ *     planen" je Tag. Gerechnet in `core/…/WeekPlan.kt`.
  *  3b. **Als Naechstes** — die naechste Bestweite ([ChallengeCard], nicht am
  *     Zieltag und nicht bei „Ruhe") sowie Jahresziel und naechster Meilenstein
  *     ([NextGoalsCard], mit der offenen Monats-Challenge als dritter Zeile). Gerechnet in `core/…/Motivation.kt`. Erst ab der
@@ -214,18 +223,26 @@ fun TodayScreen(appViewModel: AppViewModel) {
     // `widget/WidgetState.kt`, [ShownWeekTarget]).
     LaunchedEffect(monday, weekTargetKm) { appViewModel.rememberShownWeekTarget(monday, weekTargetKm) }
     val weekRiddenKm = riddenByDate.values.sum()
+    // Dieselbe Zahl in Kopfzeile, Balken und Wochen-Fahrplan: der Stand des
+    // mitwachsenden Ziels, auf dem Weg dorthin abgerundet ([flooredTowards]),
+    // damit „42 von 60 km" und „Noch 18 km" zusammenpassen.
+    val weekGoalRiddenKm = adaptiveGoal?.riddenKm ?: weekRiddenKm
     val weekSummaryText = weekSummary(
-        riddenKm = weekRiddenKm,
+        riddenKm = weekGoalRiddenKm,
         targetKm = weekTargetKm,
         strip = strip,
         rideCount = rideCount,
     )
     val goalLine = weekTargetKm?.takeIf { it > 0 }?.let { target ->
-        val ridden = adaptiveGoal?.riddenKm ?: weekRiddenKm
+        val ridden = weekGoalRiddenKm
         WeekGoalLine(
             fraction = (ridden / target).toFloat().coerceIn(0f, 1f),
             reached = ridden >= target,
-            description = stringResource(R.string.progress_week_goal_bar_cd, ridden.roundToInt(), target),
+            description = stringResource(
+                R.string.progress_week_goal_bar_cd,
+                flooredTowards(ridden, target.toDouble()),
+                target,
+            ),
             caption = adaptiveGoal?.let { weeklyGoalCaption(it) },
         )
     }
@@ -252,6 +269,43 @@ fun TodayScreen(appViewModel: AppViewModel) {
     }
     val challengeLabel = stringResource(R.string.progress_challenge_route_label)
     var showYearGoal by rememberSaveable { mutableStateOf(false) }
+
+    // Wochen-Fahrplan (`core/…/WeekPlan.kt`): nur zum offenen mitwachsenden
+    // Wochenziel und nie neben einem Trainingsplan — der hat Vorrang, auch
+    // wenn er erst naechste Woche beginnt.
+    val trainingPlanActive = displayPlan != null &&
+        (currentWeek != null || !localOfEpochMs(displayPlan.goal.date).toLocalDate().isBefore(today))
+    val weekPlanRemainingKm = adaptiveGoal?.takeIf { !it.reached }?.remainingKm
+    val weekPlanEligible = !ridesLoading && hasRiddenRide && !trainingPlanActive && weekPlanRemainingKm != null
+    // Tag der Seite und stuendliche Uhr laufen mit eigenem Wecker; um
+    // Mitternacht gleicht [weekPlanNow] sie ab.
+    val planNow = weekPlanNow(today, rememberHourNow())
+    val habits = remember(facts, today) { ridingHabits(facts, today) }
+    val rodeToday = (riddenByDate[today] ?: 0.0) > 0.0
+    // Erst ohne Wetter planen: Nur wenn es danach Fahrtage gibt, wird nach
+    // einer Vorhersage gefragt — kein Plan (Rest zu klein) und „keine Tage"
+    // brauchen keine.
+    val basePlan = remember(weekPlanEligible, weekPlanRemainingKm, planNow, habits, rodeToday, trainingPlanActive) {
+        weekPlanRemainingKm?.takeIf { weekPlanEligible }?.let { remainingKm ->
+            planWeek(WeekPlanInput(remainingKm, planNow, habits, emptyList(), trainingPlanActive, rodeToday))
+        }
+    }
+    val weekPlanWeather = rememberWeekPlanWeather(
+        active = basePlan != null && basePlan.status != WeekPlanStatus.KEINE_TAGE,
+        today = today,
+        rides = rides,
+    )
+    val weekPlanForecastDays = weekPlanWeather.forecast?.days.orEmpty()
+    val weekPlan = remember(basePlan, weekPlanForecastDays) {
+        if (basePlan == null || weekPlanForecastDays.isEmpty() || weekPlanRemainingKm == null) {
+            basePlan
+        } else {
+            planWeek(
+                WeekPlanInput(weekPlanRemainingKm, planNow, habits, weekPlanForecastDays, trainingPlanActive, rodeToday),
+            )
+        }
+    }
+    val context = LocalContext.current
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
@@ -337,6 +391,31 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
                     item(key = "woche") {
                         WeekCard(summary = weekSummaryText, strip = strip, goal = goalLine, footer = { StreakFooter(streak) })
+                    }
+                    weekPlan?.let { plan ->
+                        item(key = "wochenplan") {
+                            WeekPlanCard(
+                                plan = plan,
+                                today = today,
+                                weather = weekPlanWeather.ui,
+                                onWeatherEnabledChange = { weekPlanWeather.setEnabled(it) },
+                                onPlanRide = { ride ->
+                                    val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
+                                    val day = weekPlanDayLong(ride.date, today, coreTexts).resolve(context)
+                                    appViewModel.requestRouteGeneration(
+                                        RouteTarget(
+                                            distanceKm = ride.km.toDouble(),
+                                            ascentPreference = AscentPreference.MODERAT,
+                                            durationH = ride.km / speed,
+                                            speedKmh = speed,
+                                            intensity = SessionIntensity.GRUNDLAGE,
+                                            label = context.getString(R.string.today_week_plan_route_label, day),
+                                            source = RouteTargetSource.SELBST_GEWAEHLT,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     item(key = "sec-naechstes") { SectionEyebrow(stringResource(R.string.progress_next_eyebrow)) }

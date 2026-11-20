@@ -20,6 +20,36 @@ gelten.
 - [ ] Montags bis mittwochs: Erscheint der Rückblick auf die letzte Woche mit
       richtigen Zahlen?
 
+## Wochen-Fahrplan
+
+- [ ] Ohne Trainingsplan, Wochenziel offen: Erscheint unter „Diese Woche“ die
+      Karte „Wochen-Fahrplan“ mit ein bis drei Tagen? Passen die Tage zu den
+      eigenen üblichen Fahrtagen, die Längen zur eigenen typischen Runde?
+- [ ] Mit Trainingsplan (auch einem, der erst nächste Woche beginnt) und nach
+      geschafftem Wochenziel: Die Karte fehlt.
+- [ ] Nach 18 Uhr steht heute nicht mehr im Plan; nach einer Fahrt heute
+      ebenfalls nicht. Sonntagabend: „kein Fahrtag mehr“ statt Vorschlägen,
+      der Wetter-Schalter lässt sich trotzdem umlegen, und es geht keine
+      Anfrage raus.
+- [ ] Großer Rest am Wochenende: Erscheint „Knapp“ mit einer plausiblen
+      Obergrenze statt einer Mammutrunde?
+- [ ] „Runde planen“ öffnet die Karte und baut eine Runde in genau der
+      genannten Länge.
+- [ ] Schalter „Wetter für den Wochenplan“ ist ab Werk aus. Eingeschaltet:
+      Stehen nach kurzer Zeit „trocken, 14 °C“ o. ä. und „Wetter: Open-Meteo“
+      da? Passen Temperatur und Regen grob zum Wetterbericht?
+- [ ] Mit Netzwerk-Mitschnitt (z. B. PCAPdroid): genau eine Anfrage an
+      `api.open-meteo.com` mit zwei Nachkommastellen; erneutes Öffnen von
+      *Heute* innerhalb von 3 Stunden fragt nicht erneut.
+- [ ] Ohne Standortfreigabe, aber mit Touren: Wetter kommt für den Start der
+      letzten Tour (nur, wenn sie höchstens 14 Tage alt ist), es erscheint
+      kein Berechtigungsdialog. Ganz ohne Ort:
+      „Kein Standort bekannt“. Im Flugmodus: „Vorhersage gerade nicht
+      erreichbar“, der Plan steht trotzdem.
+- [ ] Ausschalten: Die Wetterzeilen verschwinden sofort, auch wenn gerade
+      noch eine Anfrage lief.
+- [ ] Englisch: Wochentage („Thu“) und Texte passen, nichts abgeschnitten.
+
 ## Nach der Fahrt
 
 - [ ] Aufzeichnung beenden, einmal in der App und einmal über die
@@ -55,6 +85,34 @@ gelten.
       App einmal in anderer Richtung nach? Wie lange dauert das? Nennt sie eine
       schwache Runde nicht „Beste“?
 - [ ] „Andere Vorschläge“ liefert wirklich andere Runden.
+
+## Neue Wege
+
+- [ ] *Runde ab hier* → „Neu entdecken: Wege“ wählen, Runde von der
+      Haustür. Führen die Vorschläge über Wege, die du wirklich noch nie
+      gefahren bist? Stimmt „davon N km neu“ ungefähr mit deinem Gefühl und
+      mit der Karte „Alle Touren“ überein?
+- [ ] Die Hausstrecke, in beide Richtungen gefahren, zählt als bekannt — auch
+      wo die Aufzeichnung auf der anderen Straßenseite lag.
+- [ ] Eine Parallelstraße oder ein Feldweg 50–100 m neben einer oft
+      gefahrenen Straße zählt als neu.
+- [ ] Großer Bestand (mehrere Tausend km, viele Jahre): Wie lange dauert die
+      erste Suche mit „Wege“ (der Index wird einmal aufgebaut)? Ist die zweite
+      Suche und „Andere Vorschläge“ spürbar schneller? Kein Ruckeln, kein
+      Absturz wegen Speicher.
+- [ ] Nach einer neuen Fahrt: Die gerade gefahrenen Wege zählen bei der
+      nächsten Suche als bekannt. Nach dem Löschen einer Tour wieder als neu.
+- [ ] Ohne gefahrene Tour (frische Installation): Die Suche klappt, jede Runde
+      zeigt ihre ganze Länge als neu.
+- [ ] Die Wahl „Aus / Wege / Gegenden“ bleibt beim Tab-Wechsel und Drehen
+      erhalten; „Gegenden“ verhält sich wie der frühere Schalter „Neue Gegenden
+      bevorzugen“ (Pille „+N neu“), bei „Wege“ verschwindet die Pille.
+- [ ] Flugmodus: Die Suche mit „Wege“ geht kein Netz an, außer dem Routing
+      selbst (Offline-Kacheln) und, falls an, dem Wind.
+- [ ] TalkBack: Überschrift, die drei Segmente samt Auswahl und der Hinweis
+      darunter werden vorgelesen; „davon N km neu“ gehört zur Vorschlagszeile.
+- [ ] Englisch: „Discover something new: Off / New roads / New areas“ und
+      „23 km of it new“ passen auf ein schmales Gerät.
 
 ## Startbildschirm-Widget
 

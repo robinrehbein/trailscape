@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.ui.components.PillSegments
@@ -301,6 +302,8 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                         ),
                         selectedIndex = segment,
                         onSelect = { segment = it },
+                        // Wechselt die Ansicht, ist also ein Tab und keine Auswahl.
+                        role = Role.Tab,
                     )
                 }
                 if (rides.isEmpty()) {

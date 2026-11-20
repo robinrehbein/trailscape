@@ -1,8 +1,11 @@
 package de.trailscape.core
 
+import java.time.LocalDate
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.round
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
@@ -25,6 +28,12 @@ import kotlinx.serialization.json.doubleOrNull
  * bei einer Coroutine-Cancellation) und liefert bei Offline, Timeout,
  * Nicht-2xx oder unerwarteter Antwort einfach `null` — die Suche rechnet dann
  * still ohne Wind weiter.
+ *
+ * ## Tagesvorhersage
+ * Unten in dieser Datei steht dieselbe Anfrage noch einmal fuer `daily`
+ * ([fetchDailyForecast]) — fuer den Wochen-Fahrplan auf „Heute", mit eigenem
+ * Schalter und Zwischenspeicher (`WeekPlanWeather.kt`). Gleiche Regeln:
+ * gerundeter Punkt, keine Header, wirft nie.
  */
 
 /**
@@ -135,4 +144,122 @@ fun shouldReuseWind(cachedKey: String?, cachedAtMs: Long, key: String, nowMs: Lo
     if (cachedKey == null || cachedKey != key) return false
     val age = nowMs - cachedAtMs
     return age in 0 until WIND_REUSE_MS
+}
+
+// ---------------------------------------------------------------------------
+// Tagesvorhersage fuer den Wochen-Fahrplan
+// ---------------------------------------------------------------------------
+
+/**
+ * Vorhersage fuer einen Kalendertag am (gerundeten) Ort, wie sie der
+ * Wochen-Fahrplan ([planWeek]) braucht. Jeder Wert darf fehlen — Open-Meteo
+ * liefert fuer spaete Tage gelegentlich `null`, und ein fehlender Wert ist
+ * besser als ein geratener.
+ *
+ * @property precipProbabilityPct hoechste stuendliche Regenwahrscheinlichkeit des Tages (0…100).
+ * @property precipMm Niederschlagssumme des Tages in mm.
+ * @property windMaxKmh staerkster Mittelwind des Tages in 10 m Hoehe, km/h.
+ * @property tempMinC Tiefstwert in °C.
+ * @property tempMaxC Hoechstwert in °C.
+ */
+data class DayForecast(
+    val date: LocalDate,
+    val precipProbabilityPct: Int? = null,
+    val precipMm: Double? = null,
+    val windMaxKmh: Double? = null,
+    val tempMinC: Double? = null,
+    val tempMaxC: Double? = null,
+)
+
+/** Mehr Tage fragt der Wochen-Fahrplan nie ab: Er plant hoechstens bis Sonntag. */
+const val DAILY_FORECAST_DAYS: Int = 7
+
+/**
+ * Die Open-Meteo-URL fuer die Tagesvorhersage am (gerundeten) [point]:
+ * fuenf Tageswerte, [DAILY_FORECAST_DAYS] Tage, Zeitzone `auto` (die
+ * Kalendertage gelten dann am Ort selbst, nicht in UTC).
+ */
+fun dailyForecastUrl(point: TrackPoint): String =
+    "$OPEN_METEO_FORECAST_URL?latitude=${roundedCoordinate(point.lat)}" +
+        "&longitude=${roundedCoordinate(point.lon)}" +
+        "&daily=precipitation_probability_max,precipitation_sum,wind_speed_10m_max," +
+        "temperature_2m_min,temperature_2m_max" +
+        "&wind_speed_unit=kmh&timezone=auto&forecast_days=$DAILY_FORECAST_DAYS"
+
+/**
+ * Liest `daily` aus einer Open-Meteo-Antwort.
+ *
+ * `null`, wenn die Antwort kaputt ist, `daily.time` fehlt oder eine gemeldete
+ * Einheit nicht passt (Wind nicht km/h, Temperatur nicht °C, Regen nicht mm)
+ * — dann lieber ohne Wetter planen als mit falschem. Einzelne unbrauchbare
+ * Werte (fehlend, `null`, nicht endlich, ausserhalb des Sinnvollen) werden
+ * nur fuer sich `null`. Mehr als [DAILY_FORECAST_DAYS] Tage werden
+ * abgeschnitten, Tage mit unlesbarem Datum uebersprungen.
+ */
+fun parseDailyForecast(body: String): List<DayForecast>? {
+    val root = runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject ?: return null
+
+    val units = root["daily_units"] as? JsonObject
+    fun unitOf(key: String): String? = (units?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
+    val expectedUnits = mapOf(
+        "wind_speed_10m_max" to "km/h",
+        "temperature_2m_min" to "°C",
+        "temperature_2m_max" to "°C",
+        "precipitation_sum" to "mm",
+    )
+    if (expectedUnits.any { (key, unit) -> unitOf(key).let { it != null && it != unit } }) return null
+
+    val daily = root["daily"] as? JsonObject ?: return null
+    val times = daily["time"] as? JsonArray ?: return null
+
+    fun numberAt(key: String, index: Int): Double? {
+        val array = daily[key] as? JsonArray ?: return null
+        val primitive = array.getOrNull(index) as? JsonPrimitive ?: return null
+        if (primitive.isString) return null
+        return primitive.doubleOrNull?.takeIf { it.isFinite() }
+    }
+
+    return times.take(DAILY_FORECAST_DAYS).mapIndexedNotNull { index, element ->
+        val text = (element as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapIndexedNotNull null
+        val date = runCatching { LocalDate.parse(text) }.getOrNull() ?: return@mapIndexedNotNull null
+        val min = numberAt("temperature_2m_min", index)?.takeIf { it in -60.0..60.0 }
+        val max = numberAt("temperature_2m_max", index)?.takeIf { it in -60.0..60.0 }
+        // Vertauschte Werte waeren ein Lesefehler: dann beide verwerfen.
+        val swapped = min != null && max != null && min > max
+        DayForecast(
+            date = date,
+            precipProbabilityPct = numberAt("precipitation_probability_max", index)
+                ?.takeIf { it in 0.0..100.0 }
+                ?.let { round(it).toInt() },
+            precipMm = numberAt("precipitation_sum", index)?.takeIf { it >= 0 },
+            windMaxKmh = numberAt("wind_speed_10m_max", index)?.takeIf { it >= 0 },
+            tempMinC = min.takeUnless { swapped },
+            tempMaxC = max.takeUnless { swapped },
+        )
+    }
+}
+
+/** Ergebnis von [fetchDailyForecast]: die Antwort wie geliefert und ihre Tage. */
+data class FetchedForecast(val body: String, val days: List<DayForecast>)
+
+/**
+ * Holt die Tagesvorhersage am gerundeten [point] — genau eine GET-Anfrage
+ * ohne Header und ohne Body, gleiche Regeln wie [fetchCurrentWind]: wirft nie
+ * (ausser [CancellationException]), liefert bei jedem Fehler `null`.
+ * Blockiert; gehoert auf einen IO-Dispatcher.
+ *
+ * @return die rohe Antwort (zum Zwischenspeichern) und die gelesenen Tage.
+ */
+fun fetchDailyForecast(point: TrackPoint, client: HttpClient): FetchedForecast? {
+    if (!point.lat.isFinite() || !point.lon.isFinite()) return null
+    return try {
+        val response = client.execute(HttpRequest(method = HttpMethod.GET, url = dailyForecastUrl(point)))
+        if (response.statusCode !in 200..299) return null
+        val days = parseDailyForecast(response.body) ?: return null
+        FetchedForecast(body = response.body, days = days)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
 }

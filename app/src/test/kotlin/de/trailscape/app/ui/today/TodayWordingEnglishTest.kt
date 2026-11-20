@@ -151,11 +151,12 @@ class TodayWordingEnglishTest {
 
         fun summary(km: Double, target: Int?, rides: Int) =
             weekSummary(km, target, strip, rides).let { en(it.first) to it.second?.let(::en) }
-        assertEquals("32 of 120 km" to "2 rides to go", summary(31.6, 120, 1))
+        assertEquals("31 of 120 km" to "2 rides to go", summary(31.6, 120, 1))
         assertEquals("32 km this week" to "1 ride", summary(31.6, null, 1))
         assertEquals("32 km this week" to "3 rides", summary(31.6, null, 3))
         assertEquals("0 km this week" to "no rides yet", summary(0.0, null, 0))
-        assertEquals("40 of 40 km" to "Weekly goal reached", summary(39.6, 40, 2))
+        assertEquals("39 of 40 km" to "2 rides to go", summary(39.6, 40, 2))
+        assertEquals("40 of 40 km" to "Weekly goal reached", summary(40.2, 40, 2))
     }
 
     @Test

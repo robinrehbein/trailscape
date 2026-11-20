@@ -23,13 +23,13 @@ sealed interface UiText {
     data class Plain(val text: String) : UiText
 
     /** Ein String-Ressourcen-Text mit positionsbezogenen Argumenten. */
-    data class Res(@StringRes val id: Int, val args: List<Any> = emptyList()) : UiText
+    data class Res(@param:StringRes val id: Int, val args: List<Any> = emptyList()) : UiText
 
     /**
      * Ein Plural-Text. [args] sind die Formatargumente; ohne Angabe ist das
      * einzige Argument [count] selbst (`%1$d`).
      */
-    data class Plural(@PluralsRes val id: Int, val count: Int, val args: List<Any> = listOf(count)) : UiText
+    data class Plural(@param:PluralsRes val id: Int, val count: Int, val args: List<Any> = listOf(count)) : UiText
 
     /** Loest den Text ueber die Ressourcen von [context] auf. */
     fun resolve(context: Context): String = when (this) {

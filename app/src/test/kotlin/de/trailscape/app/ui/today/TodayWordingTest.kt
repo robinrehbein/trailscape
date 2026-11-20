@@ -407,7 +407,7 @@ class TodayWordingTest {
         assertEquals("Mittwoch: keine Fahrt", de(strip[2].description))
         assertEquals("Freitag: Ruhetag", de(strip[4].description))
 
-        assertEquals("32 von 120 km" to "noch 2 Fahrten", de(weekSummary(31.6, 120, strip, rideCount = 1)))
+        assertEquals("31 von 120 km" to "noch 2 Fahrten", de(weekSummary(31.6, 120, strip, rideCount = 1)))
         assertEquals("32 km diese Woche" to "1 Fahrt", de(weekSummary(31.6, null, strip, rideCount = 1)))
     }
 
@@ -417,8 +417,9 @@ class TodayWordingTest {
         // Noch eine Fahrt geplant (Samstag) — trotzdem kein Rueckstand.
         val strip = weekStrip(thursday, week, emptyMap(), todayKm = null, texts = CoreTextsDe)
         assertEquals("79 von 40 km" to "Wochenziel geschafft", de(weekSummary(79.0, 40, strip, rideCount = 3)))
-        // Angezeigt wird die gerundete Zahl — „40 von 40 km" ist geschafft.
-        assertEquals("40 von 40 km" to "Wochenziel geschafft", de(weekSummary(39.6, 40, strip, rideCount = 2)))
+        // Auf dem Weg zum Ziel abgerundet: „40 von 40 km" erst, wenn es geschafft ist.
+        assertEquals("39 von 40 km" to "noch 1 Fahrt", de(weekSummary(39.6, 40, strip, rideCount = 2)))
+        assertEquals("40 von 40 km" to "Wochenziel geschafft", de(weekSummary(40.0, 40, strip, rideCount = 2)))
         // Knapp darunter bleibt es beim Offenen.
         assertEquals("39 von 40 km" to "noch 1 Fahrt", de(weekSummary(39.4, 40, strip, rideCount = 2)))
     }

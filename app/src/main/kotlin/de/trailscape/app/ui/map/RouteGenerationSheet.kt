@@ -543,6 +543,24 @@ private fun CandidateRow(
                         color = LocalSignalColors.current.caution,
                     )
                 }
+                // „Neue Wege" (`core/…/RiddenWays.kt`): wie viel der Runde
+                // ueber noch nie gefahrene Wege fuehrt. Nur mit der Option —
+                // sonst rechnet der Controller die Zahl gar nicht erst.
+                candidate.newWayKm?.let { km ->
+                    Text(
+                        text = newWaysLabel(km, LocalAppFormats.current.language).asString(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall,
+                        // Gruen auf dem gruenen Container der Auswahl waere im
+                        // Dunkelmodus zu blass — dort die Vordergrundfarbe.
+                        color = when {
+                            km < NEW_WAYS_MIN_KM -> theme.onSurfaceVariant
+                            selected -> theme.onPrimaryContainer
+                            else -> theme.primary
+                        },
+                    )
+                }
             }
             Spacer(Modifier.width(8.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -553,7 +571,10 @@ private fun CandidateRow(
                 )
                 // Neue Kacheln der Runde (Squadrats-Idee): „+9 neu" gruen,
                 // eine Runde ganz durch Bekanntes heisst „bekannt".
-                if (candidate.totalTileCount > 0) {
+                // Mit „Neue Wege" spricht die Zeile „davon N km neu" — eine
+                // Pille „bekannt" daneben (Kachel bekannt, Weg neu) waere ein
+                // Widerspruch auf den ersten Blick.
+                if (candidate.totalTileCount > 0 && candidate.newWayKm == null) {
                     val novel = candidate.newTileCount > 0
                     Surface(
                         shape = MaterialTheme.shapes.small,
@@ -635,6 +656,23 @@ internal fun newTilesLabel(newTileCount: Int): UiText =
     } else {
         UiText.Res(R.string.map_generation_known_tiles_label)
     }
+
+/** Unter dieser Strecke (km) gilt eine Runde als ganz bekannt — 50 m sind Kreuzungsrauschen. */
+internal const val NEW_WAYS_MIN_KM: Double = 0.05
+
+/**
+ * „davon 23 km neu" bzw. „nur bekannte Wege". Unter 10 km mit einer
+ * Nachkommastelle („davon 4,3 km neu"), darueber ganze Kilometer — bei einer
+ * 60-km-Runde sagt „23,4" nicht mehr als „23".
+ */
+internal fun newWaysLabel(newKm: Double, language: AppLanguage): UiText = when {
+    !newKm.isFinite() || newKm < NEW_WAYS_MIN_KM -> UiText.Res(R.string.map_generation_new_ways_none_label)
+    else -> UiText.Res(
+        R.string.map_generation_new_ways_label,
+        // Die Grenze am gerundeten Wert: 9,96 km heisst „10", nicht „10,0".
+        listOf(formatDecimal(newKm, if (newKm < 9.95) 1 else 0, language)),
+    )
+}
 
 /** „≈ 45 km · Flach · locker · ca. 2,5 h" */
 internal fun targetLine(target: RouteTarget, texts: CoreTexts): UiText {

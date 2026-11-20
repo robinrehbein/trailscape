@@ -142,6 +142,8 @@ class RouteGeneratorTest {
         onProgress: ((Int, Int) -> Unit)? = null,
         exploredTiles: Set<ExplorerTile> = emptySet(),
         preferNewAreas: Boolean = false,
+        riddenWays: RiddenWaysIndex? = null,
+        preferNewWays: Boolean = false,
         wind: WindConditions? = null,
         followUpSearch: Boolean = true,
     ): List<RouteCandidate> = runSync {
@@ -157,6 +159,8 @@ class RouteGeneratorTest {
             onProgress = onProgress,
             exploredTiles = exploredTiles,
             preferNewAreas = preferNewAreas,
+            riddenWays = riddenWays,
+            preferNewWays = preferNewWays,
             wind = wind,
             texts = CoreTextsDe,
             followUpSearch = followUpSearch,
@@ -738,6 +742,111 @@ class RouteGeneratorTest {
             wind = WindConditions(speedKmh = 30.0, fromDeg = 240.0, gustsKmh = null),
         )
         assertEquals(setOf(330.0, 150.0, 240.0), withWind.map { it.bearingDeg }.toSet())
+    }
+
+    // --- Neue Wege (RiddenWays.kt) ---
+
+    /**
+     * Die Bewertung genau so, wie sie vor „Neue Wege" im Generator stand —
+     * als unabhaengige Abschrift, damit der Vergleich nicht gegen den neuen
+     * Code selbst laeuft.
+     */
+    private fun scoreAsBefore(r: RouteCandidate, newTileShare: Double = 0.0): Double {
+        val deviation = abs(r.distanceKm - r.targetKm) / r.targetKm
+        val perKm = if (r.distanceKm > 0) r.ascentM / r.distanceKm else 0.0
+        val surface = surfaceScore(r.profile!!, r.route)
+        return 100.0 * deviation + ascentScore(perKm, AscentPreference.FLACH) + noveltyScore(newTileShare) + 0.0 +
+            retraceScore(r.retraceShare) + (if (surface.isFinite()) surface else 0.0)
+    }
+
+    /**
+     * Die Fake-Runden sind Luftlinien-Polygone mit kilometerlangen Segmenten;
+     * als „gefahrener" Track braucht es dichte Punkte wie aus dem GPS (lange
+     * Segmente gelten dort als GPS-Sprung und werden nicht interpoliert).
+     */
+    private fun dense(points: List<TrackPoint>): List<TrackPoint> = buildList {
+        add(points.first())
+        for (i in 1 until points.size) {
+            val a = points[i - 1]
+            val b = points[i]
+            val n = (haversineM(a, b) / 7.0).toInt().coerceAtLeast(1)
+            for (k in 1..n) {
+                val t = k.toDouble() / n
+                add(TrackPoint(lat = a.lat + (b.lat - a.lat) * t, lon = a.lon + (b.lon - a.lon) * t))
+            }
+        }
+    }
+
+    @Test
+    fun `ohne beide Optionen bleibt die Bewertung bitgenau beim bisherigen Stand`() {
+        for (seed in 0..3) {
+            val plain = generate(FakeBackend(), target(40.0), seed = seed)
+            val index = RiddenWaysIndex.fromTracks(listOf(dense(plain.first().route.points)))
+            val withIndex = generate(FakeBackend(), target(40.0), seed = seed, riddenWays = index)
+
+            assertEquals(plain.map { it.bearingDeg }, withIndex.map { it.bearingDeg })
+            assertEquals(plain.map { it.score.toBits() }, withIndex.map { it.score.toBits() })
+            for (r in plain) {
+                assertEquals(scoreAsBefore(r).toBits(), r.score.toBits(), "Seed $seed, Kurs ${r.bearingDeg}")
+                assertEquals(null, r.newWayKm)
+                assertEquals(null, r.newWayShare)
+            }
+            // Mit Index, aber ohne Option: Kilometer stehen dran, zaehlen aber nicht.
+            assertTrue(withIndex.all { it.newWayKm != null && it.newWayShare != null })
+        }
+    }
+
+    @Test
+    fun `scoreRoute ohne Wege-Anteil ist bitgleich`() {
+        val a = scoreRoute(42.3, 310.0, 40.0, AscentPreference.MODERAT, 0.3, windBonus = -1.7, retraceShare = 0.1)
+        val b = scoreRoute(
+            42.3, 310.0, 40.0, AscentPreference.MODERAT, 0.3,
+            windBonus = -1.7, retraceShare = 0.1, newWayShare = 0.0,
+        )
+        assertEquals(a.toBits(), b.toBits())
+        assertEquals(a - 6.0, scoreRoute(42.3, 310.0, 40.0, AscentPreference.MODERAT, 0.3, -1.7, 0.1, newWayShare = 0.5), EPS)
+    }
+
+    @Test
+    fun `Wege-Bonus ist gedeckelt und robust`() {
+        assertEquals(-newWayScoreWeight, newWayScore(1.0), EPS)
+        assertEquals(-newWayScoreWeight, newWayScore(7.0), EPS)
+        assertEquals(0.0, newWayScore(-0.5), EPS)
+        assertEquals(0.0, newWayScore(Double.NaN), EPS)
+        assertEquals(0.0, newWayScore(Double.POSITIVE_INFINITY), EPS)
+    }
+
+    @Test
+    fun `mit Neue Wege gewinnt die Runde ueber ungefahrene Wege`() {
+        // Gleichstand ohne Option: alle treffen die Distanz exakt.
+        val plain = generate(FakeBackend(fixedDistanceKm = 40.0), target(40.0))
+        assertEquals(listOf(0.0, 120.0, 240.0), plain.map { it.bearingDeg })
+        val index = RiddenWaysIndex.fromTracks(listOf(dense(plain[0].route.points), dense(plain[1].route.points)))
+
+        val results = generate(
+            FakeBackend(fixedDistanceKm = 40.0),
+            target(40.0),
+            riddenWays = index,
+            preferNewWays = true,
+        )
+
+        val best = results.first()
+        assertEquals(240.0, best.bearingDeg)
+        assertTrue(best.newWayShare!! > 0.8, "Anteil ${best.newWayShare}")
+        // Die beiden gefahrenen Runden sind (fast) ganz bekannt.
+        assertTrue(results.drop(1).all { it.newWayShare!! < 0.05 }, results.map { it.newWayShare }.toString())
+        for (r in results) {
+            assertEquals(scoreAsBefore(r) + newWayScore(r.newWayShare!!), r.score, EPS)
+            assertEquals(r.newWayShare!!, r.newWayKm!! / newWayDistance(r.route.points, RiddenWaysIndex.EMPTY).totalKm, 1e-6)
+        }
+    }
+
+    @Test
+    fun `Neue Wege neigt den Kurs nicht`() {
+        val plain = generate(FakeBackend(), target(40.0))
+        val index = RiddenWaysIndex.fromTracks(listOf(dense(plain[0].route.points)))
+        val ways = generate(FakeBackend(), target(40.0), riddenWays = index, preferNewWays = true)
+        assertEquals(plain.map { it.bearingDeg }.toSet(), ways.map { it.bearingDeg }.toSet())
     }
 
     @Test

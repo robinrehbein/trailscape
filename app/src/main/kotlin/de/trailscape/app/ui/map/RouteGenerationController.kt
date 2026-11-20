@@ -7,6 +7,7 @@ import de.trailscape.app.i18n.UiText
 import de.trailscape.app.routing.missingSegmentsFor
 import de.trailscape.app.routing.planRouteOfflineFirst
 import de.trailscape.core.ExplorerTile
+import de.trailscape.core.RiddenWaysIndex
 import de.trailscape.core.RouteCandidate
 import de.trailscape.core.RouteProfile
 import de.trailscape.core.RouteTarget
@@ -92,6 +93,12 @@ object RouteGenerationController {
     /** Wie viele Vorschlaege je Durchlauf gesucht werden. */
     const val CANDIDATE_COUNT: Int = 3
 
+    // Vor den `last…`-Feldern, die damit vorbelegt werden (Initialisierung in
+    // Textreihenfolge). Feste Instanzen, damit [holdsPlanningSources] sie
+    // erkennt.
+    private val NO_EXPLORED_TILES: suspend () -> Set<ExplorerTile> = { emptySet() }
+    private val NO_RIDDEN_WAYS: suspend (() -> Boolean) -> RiddenWaysIndex? = { null }
+
     private val _state = MutableStateFlow(RouteGenerationState())
 
     /** Zustand des Generierungs-Panels; `target == null` heisst „Panel zu". */
@@ -112,7 +119,9 @@ object RouteGenerationController {
     /** Kachel-Angebots-Kanal des letzten Durchlaufs (fuer [nextSuggestions]). */
     private var lastOfferMissingSegments: (List<String>) -> Unit = {}
     private var lastPreferNewAreas: Boolean = false
-    private var lastExploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() }
+    private var lastExploredTiles: suspend () -> Set<ExplorerTile> = NO_EXPLORED_TILES
+    private var lastPreferNewWays: Boolean = false
+    private var lastRiddenWays: suspend (isCancelled: () -> Boolean) -> RiddenWaysIndex? = NO_RIDDEN_WAYS
 
     private val _windEnabled = MutableStateFlow(false)
 
@@ -214,6 +223,24 @@ object RouteGenerationController {
         _state.value = RouteGenerationState()
     }
 
+    /**
+     * Vergisst die Quellen des letzten Durchlaufs, die am ViewModel haengen
+     * (Kacheln, Wege, Kachel-Angebot). Der Controller ist ein Singleton; die
+     * gemerkten Methodenreferenzen hielten sonst das ViewModel samt seinem
+     * Wege-Index (bei grossem Bestand rund 5 MB) ueber dessen Ende hinaus fest.
+     * Gerufen aus `AppViewModel.onCleared`. Ein spaeteres „Andere Vorschläge"
+     * sucht dann ohne Kacheln und Wege — mit „Wege" steht das im Hinweis.
+     */
+    fun releasePlanningSources() {
+        lastOfferMissingSegments = {}
+        lastExploredTiles = NO_EXPLORED_TILES
+        lastRiddenWays = NO_RIDDEN_WAYS
+    }
+
+    /** Ob noch Quellen eines ViewModels gemerkt sind (fuer Tests von [releasePlanningSources]). */
+    internal val holdsPlanningSources: Boolean
+        get() = lastExploredTiles !== NO_EXPLORED_TILES || lastRiddenWays !== NO_RIDDEN_WAYS
+
     private fun clearLastRun() {
         lastStart = null
         lastContext = null
@@ -237,6 +264,12 @@ object RouteGenerationController {
      *   Kacheln — dieselbe Stelle wie bei der manuellen Planung
      *   ([de.trailscape.app.ui.AppViewModel.offerMissingSegments]); eine leere
      *   Liste wird gar nicht erst gemeldet.
+     * @param preferNewWays „Neue Wege" (Blatt *Runde ab hier*): Nur dann wird
+     *   [riddenWays] ueberhaupt geholt — der Index kostet beim ersten Mal einen
+     *   Lauf ueber den Bestand — und jeder Vorschlag traegt „davon N km neu".
+     *   [riddenWays] bekommt das Abbruch-Flag dieses Durchlaufs und fragt es
+     *   je Tour; scheitert der Aufbau, steht in den Hinweisen der Vorschlaege,
+     *   dass „Wege" diesmal nicht beruecksichtigt werden konnte.
      */
     fun start(
         context: Context,
@@ -247,6 +280,8 @@ object RouteGenerationController {
         onOfferMissingSegments: (List<String>) -> Unit = {},
         preferNewAreas: Boolean = false,
         exploredTiles: suspend () -> Set<ExplorerTile> = { emptySet() },
+        preferNewWays: Boolean = false,
+        riddenWays: suspend (isCancelled: () -> Boolean) -> RiddenWaysIndex? = NO_RIDDEN_WAYS,
     ) {
         val current = _state.value
         val target = current.target ?: return
@@ -259,6 +294,8 @@ object RouteGenerationController {
         lastOfferMissingSegments = onOfferMissingSegments
         lastPreferNewAreas = preferNewAreas
         lastExploredTiles = exploredTiles
+        lastPreferNewWays = preferNewWays
+        lastRiddenWays = riddenWays
         val flag = AtomicBoolean(false)
         cancelFlag = flag
         // Schalterstand jetzt, auf dem Aufruf-Thread, festhalten — nicht erst
@@ -301,7 +338,14 @@ object RouteGenerationController {
                 // Immer holen, auch ohne „Neue Gegenden bevorzugen": Jeder
                 // Vorschlag zeigt „+N neu", und das stimmt nur gegen den
                 // echten Bestand. Bevorzugt wird nur mit Schalter.
-                val explored = runCatching { exploredTiles() }.getOrDefault(emptySet())
+                val explored = optionalInput(flag) { exploredTiles() } ?: emptySet()
+                // Die Wege dagegen nur mit „Neue Wege": Der erste Aufbau
+                // laeuft ueber den ganzen Bestand und fragt je Tour das
+                // Abbruch-Flag. Scheitert er, sucht die Runde ohne — „Neue
+                // Wege" ist eine Vorliebe, kein Muss —, sagt es aber.
+                val ways = if (preferNewWays) optionalInput(flag) { riddenWays { flag.get() } } else null
+                val newWaysUnavailable = preferNewWays && ways == null
+                if (flag.get()) throw GenerationCancelled()
                 // Wind nur mit Schalter (siehe „Wind (Opt-in)"): der beim
                 // Start festgehaltene Stand, sonst der gespeicherte — so wird
                 // jeder Einstieg gleich behandelt.
@@ -332,6 +376,11 @@ object RouteGenerationController {
                     },
                     exploredTiles = explored,
                     preferNewAreas = preferNewAreas && explored.isNotEmpty(),
+                    // Auch ein leerer Index wird uebergeben: Ohne gefahrene
+                    // Tour ist eben jeder Kilometer neu, und die Karte sagt
+                    // das. Bevorzugt wird nur, wenn es etwas zu meiden gibt.
+                    riddenWays = ways,
+                    preferNewWays = ways != null && !ways.isEmpty,
                     wind = wind,
                     texts = AppServices.coreTexts(),
                 )
@@ -344,7 +393,14 @@ object RouteGenerationController {
                         // nach Strafpunkten, der erste ist also die Empfehlung
                         // — und wird gleich auf der Karte gezeigt.
                         selectedIndex = 0,
-                        hints = result.firstOrNull()?.hints.orEmpty(),
+                        hints = generationHints(
+                            candidateHints = result.firstOrNull()?.hints.orEmpty(),
+                            newWaysUnavailable = newWaysUnavailable,
+                            newWaysUnavailableText = {
+                                AppServices.localizedContext()
+                                    .getString(R.string.map_generation_new_ways_unavailable_hint)
+                            },
+                        ),
                         error = null,
                         wind = wind,
                     )
@@ -382,6 +438,23 @@ object RouteGenerationController {
             }
         }
     }
+
+    /**
+     * Holt eine optionale Zutat der Suche (Kacheln, Wege). Ein Fehler ergibt
+     * `null` — die Suche laeuft ohne weiter. Eine `CancellationException`
+     * wird dagegen nie verschluckt: Kam sie vom eigenen Abbruch-Flag, wird
+     * daraus [GenerationCancelled] (derselbe Weg samt Meldung wie ueber den
+     * `sleeper`), sonst geht sie unveraendert weiter.
+     */
+    private suspend fun <T> optionalInput(flag: AtomicBoolean, block: suspend () -> T): T? =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            if (flag.get()) throw GenerationCancelled()
+            throw e
+        } catch (e: Exception) {
+            null
+        }
 
     /**
      * Sammelt fuer alle in diesem Durchlauf versuchten Runden die lokal
@@ -447,6 +520,8 @@ object RouteGenerationController {
             onOfferMissingSegments = lastOfferMissingSegments,
             preferNewAreas = lastPreferNewAreas,
             exploredTiles = lastExploredTiles,
+            preferNewWays = lastPreferNewWays,
+            riddenWays = lastRiddenWays,
         )
     }
 
@@ -491,3 +566,15 @@ data class RouteGenerationState(
 
 /** Signal des Abbruchs — verlaesst `generateRoutes` ueber dessen `sleeper`. */
 private class GenerationCancelled : Exception("Routensuche abgebrochen.")
+
+/**
+ * Die Hinweise unter den Vorschlaegen: die aus `:core` ([candidateHints]) und,
+ * wenn „Wege" gewaehlt war, der Index aber nicht aufgebaut werden konnte,
+ * ein Satz dazu — sonst suchte die Runde still ohne „Neue Wege", und die
+ * Nutzerin hielte die Vorschlaege fuer bevorzugt neue Wege.
+ */
+internal fun generationHints(
+    candidateHints: List<String>,
+    newWaysUnavailable: Boolean,
+    newWaysUnavailableText: () -> String,
+): List<String> = if (newWaysUnavailable) candidateHints + newWaysUnavailableText() else candidateHints

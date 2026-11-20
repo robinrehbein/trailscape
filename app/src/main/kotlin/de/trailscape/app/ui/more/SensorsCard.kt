@@ -451,7 +451,7 @@ internal fun geraeteLabel(typ: BleSensorTyp): Int = when (typ) {
 }
 
 /** Eine Statuszeile als Ressource plus optionale Zahl — reine Logik, getestet in `SensorsStatusTest`. */
-internal data class StatusZeile(@StringRes val res: Int, val arg: Int? = null, val warnung: Boolean = false)
+internal data class StatusZeile(@param:StringRes val res: Int, val arg: Int? = null, val warnung: Boolean = false)
 
 /**
  * Was unter einem gekoppelten Sensor steht: der Verbindungszustand und, wenn

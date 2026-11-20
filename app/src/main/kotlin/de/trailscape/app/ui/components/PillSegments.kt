@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.intl.LocaleList
@@ -47,6 +49,16 @@ import androidx.compose.ui.unit.dp
  * (Index wie [options], `null` = UI-Sprache). Noetig fuer Endonyme wie
  * „Deutsch"/„English" in der Sprachwahl: Ohne Sprachmarke liest TalkBack sie
  * mit der Stimme der UI-Sprache und spricht sie falsch aus.
+ *
+ * [optionDescriptions] ersetzt fuer TalkBack die Beschriftung einzelner
+ * Segmente (Index wie [options], `null` = die Beschriftung selbst). Fuer
+ * kurze Segmente, die erst mit ihrer Ueberschrift einen Sinn ergeben: „Wege"
+ * allein sagt nichts, „Neu entdecken: Wege" schon.
+ *
+ * [role]: Ab Werk [Role.RadioButton] — fast ueberall ist der Umschalter eine
+ * Auswahl unter Optionen (Untergrund, Sprache, Format, Dauer), und TalkBack
+ * sagt dann „Optionsfeld, ausgewaehlt, 2 von 3". [Role.Tab] nur dort, wo er
+ * zwischen zwei Ansichten wechselt (Training: „Fortschritt | Plan").
  */
 @Composable
 fun PillSegments(
@@ -56,6 +68,8 @@ fun PillSegments(
     modifier: Modifier = Modifier,
     trackColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     optionLocales: List<LocaleList?> = emptyList(),
+    optionDescriptions: List<String?> = emptyList(),
+    role: Role = Role.RadioButton,
 ) {
     val haptics = LocalHapticFeedback.current
     Surface(
@@ -69,6 +83,7 @@ fun PillSegments(
         ) {
             options.forEachIndexed { index, label ->
                 val selected = index == selectedIndex
+                val description = optionDescriptions.getOrNull(index)
                 Surface(
                     modifier = Modifier
                         .weight(1f)
@@ -76,12 +91,19 @@ fun PillSegments(
                         .clip(CircleShape)
                         .selectable(
                             selected = selected,
-                            role = Role.Tab,
+                            role = role,
                             onClick = {
                                 if (!selected) {
                                     haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
                                     onSelect(index)
                                 }
+                            },
+                        )
+                        .then(
+                            if (description != null) {
+                                Modifier.semantics { contentDescription = description }
+                            } else {
+                                Modifier
                             },
                         ),
                     shape = CircleShape,

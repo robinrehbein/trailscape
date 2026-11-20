@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import de.trailscape.app.R
 import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.localOfEpochMs
+import de.trailscape.app.ui.progress.flooredTowards
 import de.trailscape.core.HrvAssessment
 import de.trailscape.core.HrvStatus
 import de.trailscape.core.ReadinessBand
@@ -832,16 +833,18 @@ fun weekSummary(
     val open = strip.count {
         it.state == StripState.PLANNED || (it.state == StripState.TODAY && it.km != null)
     }
+    // Auf dem Weg zum Ziel abgerundet ([flooredTowards]): So passt die Zahl zum
+    // aufgerundeten Rest im Wochen-Fahrplan („42 von 60 km" und „Noch 18 km"),
+    // und „40 von 40 km" steht erst da, wenn es wirklich geschafft ist.
+    val towards = flooredTowards(riddenKm, targetKm.toDouble())
     // Erreicht schlaegt offen: „79 von 40 km · noch 1 Fahrt" las sich wie ein
-    // Rueckstand, obwohl das Ziel doppelt erfuellt war. Verglichen wird die
-    // gerundete Zahl — dieselbe, die davor steht; „40 von 40 km" ohne
-    // „geschafft" waere derselbe Widerspruch in klein.
+    // Rueckstand, obwohl das Ziel doppelt erfuellt war.
     val extra = when {
-        km >= targetKm -> UiText.Res(R.string.today_week_goal_reached_status)
+        towards >= targetKm -> UiText.Res(R.string.today_week_goal_reached_status)
         open > 0 -> UiText.Plural(R.plurals.today_week_open_rides_count, open)
         else -> null
     }
-    return UiText.Res(R.string.today_week_progress_label, listOf(km, targetKm)) to extra
+    return UiText.Res(R.string.today_week_progress_label, listOf(towards, targetKm)) to extra
 }
 
 // ---------------------------------------------------------------------------

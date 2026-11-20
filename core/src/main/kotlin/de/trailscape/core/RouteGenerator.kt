@@ -78,6 +78,15 @@ import kotlin.math.sin
  *    die passendere — die Zieldistanz bleibt das Hauptkriterium, auch knapp
  *    jenseits der 10-%-Toleranz aus Schritt 3. Ohne den Schalter bleibt der
  *    Score exakt wie zuvor.
+ *  * Neue Wege (nur mit `preferNewWays = true` und einem Wege-Index, siehe
+ *    `RiddenWays.kt`): `−12 × Anteil neuer Strecke`, gemessen in Kilometern
+ *    statt Kacheln ([newWayDistance]). Dieselbe Deckelung und dieselbe
+ *    Begruendung wie bei den Kacheln: Anteil statt absoluter Kilometer, damit
+ *    eine laengere Runde nicht nur fuer ihre Laenge belohnt wird, und
+ *    hoechstens 12 Prozentpunkte Distanzabweichung wert. Die Oberflaeche
+ *    bietet „Neue Wege" und „Neue Gegenden" als Entweder-oder an; hier
+ *    duerfen beide zugleich an sein, die Boni addieren sich dann. Ohne den
+ *    Schalter bleibt der Score bitgenau wie zuvor (der Summand ist `−0,0`).
  *
  * **6. Kursneigung zu neuen Gegenden.** Mit `preferNewAreas = true` (und einer
  * nicht leeren Menge entdeckter Kacheln) prueft der Generator je Kandidat vor
@@ -86,7 +95,9 @@ import kotlin.math.sin
  * die meisten unentdeckten Kacheln streift ([unexploredTilesAlong]). Das kostet
  * keinen einzigen zusaetzlichen Routing-Aufruf. Das Fenster ist klein genug,
  * dass sich benachbarte Kandidaten nie ueberholen und "Neu wuerfeln" weiterhin
- * andere Runden liefert; bei Gleichstand bleibt es bei `β`.
+ * andere Runden liefert; bei Gleichstand bleibt es bei `β`. „Neue Wege"
+ * neigt den Kurs bewusst **nicht**: Ob ein Weg gefahren ist, sagt das
+ * Luftlinien-Polygon nicht — es liegt fast nie auf einem Weg.
  *
  * **7. Wind** (nur mit `wind`, siehe `WindScore.kt`). Kommt der aktuelle Wind
  * mit, soll die empfohlene Runde gegen den Wind hinaus- und mit Rueckenwind
@@ -216,6 +227,13 @@ private const val DISTANCE_WEIGHT = 100.0
  */
 const val noveltyScoreWeight: Double = 12.0
 
+/**
+ * Maximaler Bonus in Strafpunkten fuer eine Runde, die **ganz** ueber noch nie
+ * gefahrene Wege fuehrt (nur mit `preferNewWays`). Bewusst gleich
+ * [noveltyScoreWeight] — Begruendung siehe Datei-KDoc, Schritt 5.
+ */
+const val newWayScoreWeight: Double = 12.0
+
 /** Fehlermeldung, wenn kein einziger Kandidat zustande kommt. */
 fun errorNoRouteFound(texts: CoreTexts): String = texts.routing.noRouteFound()
 
@@ -260,6 +278,14 @@ data class RouteCandidate(
      * laesst dieses Kriterium aus.
      */
     val profile: RouteProfile? = null,
+    /**
+     * Kilometer dieser Runde ueber noch nie gefahrene Wege ([newWayDistance]) —
+     * die Zahl hinter „davon 23 km neu". `null`, wenn kein Wege-Index
+     * uebergeben wurde (Option „Neue Wege" aus).
+     */
+    val newWayKm: Double? = null,
+    /** Anteil neuer Wege an der Strecke (0…1); `null` wie [newWayKm]. */
+    val newWayShare: Double? = null,
 ) {
     /** Anteil neuer Kacheln an allen Kacheln der Route (0…1, 0 ohne Kacheln). */
     val newTileShare: Double get() = if (totalTileCount > 0) newTileCount.toDouble() / totalTileCount else 0.0
@@ -400,6 +426,16 @@ fun noveltyScore(newTileShare: Double): Double {
 }
 
 /**
+ * Bonus (als negative Strafpunkte) fuer den Anteil neuer Wege:
+ * `−`[newWayScoreWeight]` × Anteil`, Anteil auf 0…1 geklemmt, nicht endliche
+ * Werte zaehlen als 0 — wie [noveltyScore].
+ */
+fun newWayScore(newWayShare: Double): Double {
+    val share = if (newWayShare.isFinite()) newWayShare.coerceIn(0.0, 1.0) else 0.0
+    return -newWayScoreWeight * share
+}
+
+/**
  * Gesamtstrafe eines Kandidaten: Distanzabweichung (stark gewichtet) plus
  * [ascentScore] plus — nur wenn uebergeben — [noveltyScore] fuer den Anteil
  * neuer Kacheln und der [windBonus] aus [windScore]. Mit den Vorgabewerten
@@ -408,7 +444,9 @@ fun noveltyScore(newTileShare: Double): Double {
  * [windBonus] zaehlt als 0 — er darf nie die Sortierung kippen.
  * [retraceShare] ist der doppelt befahrene Anteil ([retraceScore]),
  * [surfaceScore] die Passung des Untergrunds zum Fahrprofil (gleichnamige
- * Funktion in `RouteQuality.kt`).
+ * Funktion in `RouteQuality.kt`). [newWayShare] ist der Anteil noch nie
+ * gefahrener Strecke ([newWayScore]); mit der Vorgabe 0 ist sein Summand
+ * `−0,0` und aendert die Summe nicht einmal im letzten Bit.
  */
 fun scoreRoute(
     distanceKm: Double,
@@ -419,11 +457,13 @@ fun scoreRoute(
     windBonus: Double = 0.0,
     retraceShare: Double = 0.0,
     surfaceScore: Double = 0.0,
+    newWayShare: Double = 0.0,
 ): Double {
     val deviation = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 1.0
     val perKm = if (distanceKm > 0) ascentM / distanceKm else 0.0
     val wind = if (windBonus.isFinite()) windBonus else 0.0
-    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind +
+    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) +
+        newWayScore(newWayShare) + wind +
         retraceScore(retraceShare) + (if (surfaceScore.isFinite()) surfaceScore else 0.0)
 }
 
@@ -509,6 +549,12 @@ private class Attempt(val route: PlannedRoute, val deviation: Double)
  * @param preferNewAreas Schalter „Neue Gegenden bevorzugen": Bonus fuer neue
  *   Kacheln im Score (Schritt 5) und Kursneigung (Schritt 6). Aus (Vorgabe),
  *   bleiben Bearings und Scores unveraendert.
+ * @param riddenWays Index der gefahrenen Wege (`RiddenWays.kt`); daraus
+ *   ergeben sich [RouteCandidate.newWayKm] und [RouteCandidate.newWayShare].
+ *   `null` (Vorgabe): beide bleiben `null`, es wird nichts gerechnet.
+ * @param preferNewWays „Neue Wege": Bonus fuer den Anteil neuer Strecke im
+ *   Score (Schritt 5), nur zusammen mit [riddenWays]. Aus (Vorgabe), bleiben
+ *   die Scores bitgenau unveraendert.
  * @param wind Aktueller Wind am Start (Schritt 7), z. B. aus
  *   [fetchCurrentWind]. `null` (Vorgabe) oder unter [windMinKmh]: Kurse und
  *   Scores bleiben exakt wie ohne Wind, [RouteCandidate.windShape] ist `null`.
@@ -528,6 +574,8 @@ suspend fun generateRoutes(
     onProgress: ((done: Int, total: Int) -> Unit)? = null,
     exploredTiles: Set<ExplorerTile> = emptySet(),
     preferNewAreas: Boolean = false,
+    riddenWays: RiddenWaysIndex? = null,
+    preferNewWays: Boolean = false,
     wind: WindConditions? = null,
     texts: CoreTexts,
     followUpSearch: Boolean = true,
@@ -649,6 +697,7 @@ suspend fun generateRoutes(
         val shape = windFrom?.let { windShape(found.route.points, it) }
         val windBonus = if (windFrom != null && wind != null) windScore(found.route.points, wind) else 0.0
         val retraced = retraceShare(found.route.points)
+        val ways = riddenWays?.let { newWayDistance(found.route.points, it) }
         return RouteCandidate(
             route = found.route,
             distanceKm = found.route.distanceKm,
@@ -662,6 +711,7 @@ suspend fun generateRoutes(
                 windBonus = windBonus,
                 retraceShare = retraced,
                 surfaceScore = surfaceScore(profile, found.route),
+                newWayShare = if (preferNewWays && ways != null) ways.share else 0.0,
             ),
             bearingDeg = bearing,
             targetKm = targetKm,
@@ -671,6 +721,8 @@ suspend fun generateRoutes(
             windShape = shape,
             retraceShare = retraced,
             profile = profile,
+            newWayKm = ways?.newKm,
+            newWayShare = ways?.share,
         )
     }
 

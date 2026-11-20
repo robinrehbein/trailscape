@@ -38,6 +38,9 @@ import de.trailscape.app.widget.ShownWeekTarget
 import de.trailscape.core.maxYearGoalKm
 import de.trailscape.core.minYearGoalKm
 import de.trailscape.core.ReminderSettings
+import de.trailscape.core.RiddenWaysIndex
+import de.trailscape.core.RiddenWaysSnapshot
+import de.trailscape.core.RiddenWaysStore
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
@@ -209,6 +212,8 @@ class AppViewModel(
     private val explorerTilesStore: ExplorerTilesStore = AppServices.explorerTilesCacheStore,
     /** Persistenter Signatur-Cache des Rundenvergleichs (siehe [RouteSignatureCacheStore]). */
     private val routeSignatureStore: RouteSignatureCacheStore = AppServices.routeSignatureCacheStore,
+    /** Persistenter Wege-Cache fuer „Neue Wege" (siehe `data/RiddenWaysCacheStore.kt`). */
+    private val riddenWaysStore: RiddenWaysStore = AppServices.riddenWaysCacheStore,
     /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
     private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
     /** Persistente Segment-Registry der lokalen Bestleistungen (siehe [SegmentStore]). */
@@ -2277,12 +2282,99 @@ class AppViewModel(
      * Die entdeckten Kacheln fuer die Rundkurs-Suche — auch dann, wenn der
      * Kachel-Layer auf der Karte aus ist. Ist der Bestand noch nicht
      * gerechnet, wird er es jetzt (der Cache in [explorerTilesStore] macht
-     * das ab dem zweiten Mal billig). Laeuft auf dem Aufrufer-Dispatcher bis
-     * auf die eigentliche Rechnung, die auf [io] wechselt.
+     * das ab dem zweiten Mal billig).
+     *
+     * Der Aufrufer ist meist der Routen-Controller auf `Dispatchers.IO`;
+     * [refreshExplorerTiles] liest aber [allSummaries], das dem Main-Thread
+     * gehoert. Deshalb wechselt der Aufruf dafuer auf Main (vom Main-Thread
+     * aus ohne Umweg), die eigentliche Rechnung laeuft dort wie immer auf [io].
+     * Touren in der Gnadenfrist einer Loeschung zaehlen hier noch mit — der
+     * Kachelbestand ist derselbe wie der des Layers.
      */
     suspend fun exploredTilesForPlanning(): Set<ExplorerTile> {
-        if (_explorerTiles.value.isEmpty()) refreshExplorerTiles()
+        if (_explorerTiles.value.isEmpty()) {
+            withContext(Dispatchers.Main.immediate) { refreshExplorerTiles() }
+        }
         return _explorerTiles.value
+    }
+
+    // ------------------------------------------------ Wege fuer die Routenwahl
+    // („Neue Wege" im Blatt „Runde ab hier", `core/…/RiddenWays.kt`)
+
+    /**
+     * Der Routen-Controller ist ein Singleton und merkt sich fuer „Andere
+     * Vorschläge" Methodenreferenzen auf dieses ViewModel — samt
+     * [riddenWaysSnapshot] (bei grossem Bestand rund 5 MB). Mit dem Ende des
+     * ViewModels laesst er sie los.
+     */
+    override fun onCleared() {
+        de.trailscape.app.ui.map.RouteGenerationController.releasePlanningSources()
+        super.onCleared()
+    }
+
+    /** Serialisiert [riddenWaysForPlanning] — „Andere Vorschläge" kurz nacheinander rechnet nicht doppelt. */
+    private val riddenWaysMutex = Mutex()
+
+    /**
+     * Zuletzt gerechneter Wege-Index samt Fingerabdruecken. Bleibt am
+     * ViewModel haengen (bei 10 000 km Bestand knapp 5 MB), damit jede
+     * weitere Suche nur noch vergleicht oder neue Touren dazumischt.
+     * Gefuellt wird er erst, wenn jemand „Neue Wege" waehlt.
+     */
+    @Volatile
+    private var riddenWaysSnapshot: RiddenWaysSnapshot? = null
+
+    /**
+     * Der Index der gefahrenen Wege fuer die Rundkurs-Suche
+     * (`:core`/[de.trailscape.core.updateRiddenWays]): beim ersten Mal aus
+     * dem Cache aufgebaut (Touren ohne Eintrag werden einmal geladen), danach
+     * inkrementell. `null` bei einem Fehler — die Suche laeuft dann ohne
+     * „Neue Wege" weiter, statt zu scheitern (und sagt das in ihren Hinweisen).
+     *
+     * ## Welche Touren
+     * Die sichtbare Liste [rides], nicht [allSummaries]: Eine Tour in der
+     * Gnadenfrist einer Loeschung ([pendingDeletionIds]) ist fuer die
+     * Nutzerin schon weg und soll ihre Wege nicht mehr als „bekannt" melden.
+     * Wird die Loeschung rueckgaengig gemacht, rechnet der naechste Aufruf
+     * nur diese eine Tour nach.
+     *
+     * ## Thread
+     * Der Aufrufer ist der [de.trailscape.app.ui.map.RouteGenerationController]
+     * auf `Dispatchers.IO`, nicht der Main-Thread. Deshalb wird nicht
+     * [allSummaries] (gehoert dem Main-Thread, siehe [publishRides]) gelesen,
+     * sondern der `StateFlow` [_rides], der von jedem Thread aus sicher ist.
+     *
+     * ## Abbruch
+     * [isCancelled] wird vor jeder Tour gefragt (der Controller reicht sein
+     * Abbruch-Flag hinein). Ein Abbruch wirft eine `CancellationException`
+     * weiter; der bisherige [riddenWaysSnapshot] bleibt, und der Store gibt
+     * seine Eintraege frei, ohne abzuraeumen — ein halber Index landet nirgends.
+     */
+    suspend fun riddenWaysForPlanning(isCancelled: () -> Boolean = { false }): RiddenWaysIndex? {
+        val summaries = _rides.value
+        return riddenWaysMutex.withLock {
+            withContext(io) {
+                try {
+                    de.trailscape.core.updateRiddenWays(
+                        previous = riddenWaysSnapshot,
+                        summaries = summaries,
+                        store = riddenWaysStore,
+                        loadRide = { rideStorage.loadRide(it) },
+                        isCancelled = isCancelled,
+                    ).also { riddenWaysSnapshot = it }.index
+                } catch (e: CancellationException) {
+                    // Nichts abraeumen, aber die Eintraege nicht am Singleton
+                    // haengen lassen (die schon gerechneten sind je Tour
+                    // vollstaendig und duerfen in die Datei).
+                    runCatching { riddenWaysStore.flush() }
+                    throw e
+                } catch (e: Exception) {
+                    // Auch nach einem Fehler nichts im Store festhalten.
+                    runCatching { riddenWaysStore.flush() }
+                    null
+                }
+            }
+        }
     }
 
     /**

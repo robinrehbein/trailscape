@@ -69,12 +69,16 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 
 ## Ideen
 
+- **GPX ohne Zeitstempel als geplante Route öffnen.** Wer eine Route aus
+  Komoot o. Ä. als GPX exportiert und per „Teilen“ öffnet, bekommt sie heute
+  als gefahrene Tour: Sie zählt in der Statistik und bei „Neue Wege“ als
+  bekannt. Besser: Dateien ohne Zeitstempel (nur Strecke) als geplante Route
+  auf der Karte öffnen, Dateien mit Zeitstempeln weiter als Tour. Auf
+  Wunsch des Eigentümers vorerst zurückgestellt.
+
 - **Jahresziel in den Selfhost-Sync.** Das Jahresziel liegt im
   Schluessel-Wert-Speicher (`YEAR_GOAL_STORAGE_KEY`); im JSON-Backup ist es
   (Feld `yearGoal`), im Selfhost-Sync noch nicht.
-- **Motivation auf der Uhr.** Wochenserie und naechste Bestweite als Zeile der
-  Wear-Kachel bzw. der Abschlussanzeige nach einer Uhr-Aufzeichnung.
-
 - **Englisch vor dem Release gegenlesen.** Alle Bereiche liegen jetzt als
   Ressourcen in `values/` und `values-en/` (Regeln in `docs/i18n.md`). Vor
   dem Release einmal die App komplett auf Englisch durchklicken

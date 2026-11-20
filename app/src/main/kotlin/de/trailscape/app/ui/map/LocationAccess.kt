@@ -200,6 +200,18 @@ private fun lastKnownLocation(manager: LocationManager): Location? =
         ?.maxByOrNull { it.time }
 
 /**
+ * Die zuletzt bekannte Position — **nur**, wenn die Standortfreigabe schon
+ * erteilt ist, und ohne einen frischen Fix anzustossen. Fuer Stellen, die
+ * nur eine ungefaehre Gegend brauchen und dafuer keine Berechtigung anfragen
+ * duerfen (Wetter des Wochen-Fahrplans auf „Heute").
+ */
+internal fun lastKnownLocationIfPermitted(context: Context): Location? {
+    if (!hasLocationPermission(context)) return null
+    val manager = locationManager(context) ?: return null
+    return lastKnownLocation(manager)
+}
+
+/**
  * Fortlaufende Positionen fuer die Navigation — dieselben Parameter wie im
  * Flutter-Original (`LocationAccuracy.best`, `distanceFilter: 5`).
  *

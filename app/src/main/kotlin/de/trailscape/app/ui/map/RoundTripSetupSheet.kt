@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.map
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -55,8 +57,10 @@ import kotlin.math.roundToInt
  *    [RouteProfile.ASPHALT] und [RouteProfile.SCHOTTER] (echtes Gravel); die
  *    beiden Sonderprofile Radwege/Kuerzeste bleiben der Planung von Hand
  *    vorbehalten und erscheinen hier als „Gemischt".
- *  * **Neue Gegenden bevorzugen** — bevorzugt Runden durch noch nicht
- *    befahrene Kacheln (Squadrats-Idee, siehe `core/.../ExplorerTiles.kt`).
+ *  * **Neu entdecken: Aus / Wege / Gegenden** — eine Wahl statt zweier
+ *    Schalter, siehe [DiscoveryMode] und [DiscoveryChoice]. Deutsch ohne
+ *    „Neue" vor jedem Segment: „Neue Gegenden" passt auf einem 360-dp-Geraet
+ *    nicht in ein Drittel der Breite, und die Ueberschrift sagt es schon.
  *  * **Wind berücksichtigen** — hin gegen den Wind, heim mit Rueckenwind
  *    (`core/.../WindScore.kt`). Die einzige Netzanfrage dieses Blatts
  *    (aktueller Wind bei Open-Meteo, Startpunkt auf etwa 1 km gerundet),
@@ -73,8 +77,8 @@ internal fun RoundTripSetupSheet(
     onDistanceChange: (Int) -> Unit,
     profile: RouteProfile,
     onProfileChange: (RouteProfile) -> Unit,
-    preferNewAreas: Boolean,
-    onPreferNewAreasChange: (Boolean) -> Unit,
+    discoveryMode: DiscoveryMode,
+    onDiscoveryModeChange: (DiscoveryMode) -> Unit,
     considerWind: Boolean,
     onConsiderWindChange: (Boolean) -> Unit,
     onShowSuggestions: () -> Unit,
@@ -144,12 +148,7 @@ internal fun RoundTripSetupSheet(
                 onSelect = { onProfileChange(surfaces[it].first) },
             )
 
-            SetupSwitchRow(
-                title = stringResource(R.string.map_round_trip_new_areas_title),
-                note = stringResource(R.string.map_round_trip_new_areas_body),
-                checked = preferNewAreas,
-                onCheckedChange = onPreferNewAreasChange,
-            )
+            DiscoveryChoice(mode = discoveryMode, onModeChange = onDiscoveryModeChange)
 
             SetupSwitchRow(
                 title = stringResource(R.string.map_round_trip_wind_title),
@@ -197,6 +196,84 @@ private fun SetupSwitchRow(
         Spacer(Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = null)
     }
+}
+
+/**
+ * Was „Neues entdecken" bevorzugt.
+ *
+ * ## Warum eine Wahl und nicht zwei Schalter
+ * Zwei Schalter („Neue Wege", „Neue Gegenden") liessen beide zugleich zu,
+ * und dann waere nicht mehr zu erklaeren, was gewinnt: Eine Runde ueber
+ * neue Feldwege in der bekannten Kachel oder eine ueber bekannte Strassen
+ * in einer neuen Kachel? Die beiden Ziele ziehen oft in verschiedene
+ * Richtungen. Als Entweder-oder ist jede Stellung ein klarer Satz, der
+ * Hinweis darunter erklaert genau die gewaehlte, und „Aus" ist sichtbar
+ * eine eigene Antwort statt zweier ausgeschalteter Schalter.
+ *
+ * Ab Werk [NEW_AREAS] — so verhielt sich der fruehere Schalter „Neue
+ * Gegenden bevorzugen", der ab Werk an war.
+ */
+internal enum class DiscoveryMode {
+    OFF,
+    NEW_WAYS,
+    NEW_AREAS,
+    ;
+
+    /** An `RouteGenerationController.start` als `preferNewAreas`. */
+    val preferNewAreas: Boolean get() = this == NEW_AREAS
+
+    /** An `RouteGenerationController.start` als `preferNewWays`. */
+    val preferNewWays: Boolean get() = this == NEW_WAYS
+}
+
+/** Hinweiszeile unter der Wahl — erklaert genau die gewaehlte Stellung. */
+@StringRes
+internal fun discoveryNoteRes(mode: DiscoveryMode): Int = when (mode) {
+    DiscoveryMode.OFF -> R.string.map_round_trip_discover_off_body
+    DiscoveryMode.NEW_WAYS -> R.string.map_round_trip_discover_ways_body
+    DiscoveryMode.NEW_AREAS -> R.string.map_round_trip_discover_areas_body
+}
+
+/**
+ * „Neues entdecken" — Ueberschrift, drei Segmente, ein Hinweis. Die
+ * Ueberschrift ist fuer TalkBack eine Ueberschrift (`heading()`), die
+ * Segmente sind Optionsfelder in einer `selectableGroup` ([PillSegments]) und
+ * tragen die Ueberschrift in ihrer Beschreibung mit („Neu entdecken: Wege") —
+ * wer per Wischen direkt auf einem Segment landet, hoert sonst nur „Wege".
+ */
+@Composable
+private fun DiscoveryChoice(mode: DiscoveryMode, onModeChange: (DiscoveryMode) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            stringResource(R.string.map_round_trip_discover_title),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() },
+        )
+        val modes = DiscoveryMode.entries
+        PillSegments(
+            options = listOf(
+                stringResource(R.string.map_round_trip_discover_off),
+                stringResource(R.string.map_round_trip_discover_ways),
+                stringResource(R.string.map_round_trip_discover_areas),
+            ),
+            optionDescriptions = modes.map { stringResource(discoveryDescriptionRes(it)) },
+            selectedIndex = modes.indexOf(mode),
+            onSelect = { onModeChange(modes[it]) },
+        )
+        Text(
+            stringResource(discoveryNoteRes(mode)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** TalkBack-Beschreibung eines Segments — Ueberschrift und Stellung in einem Satz. */
+@StringRes
+internal fun discoveryDescriptionRes(mode: DiscoveryMode): Int = when (mode) {
+    DiscoveryMode.OFF -> R.string.map_round_trip_discover_off_cd
+    DiscoveryMode.NEW_WAYS -> R.string.map_round_trip_discover_ways_cd
+    DiscoveryMode.NEW_AREAS -> R.string.map_round_trip_discover_areas_cd
 }
 
 /** Untergrund-Segment zu einem Profil — Sonderprofile zaehlen als „Gemischt". */
