@@ -33,14 +33,9 @@ import de.trailscape.core.HealthSyncReport
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
-import de.trailscape.core.RecordKind
 import de.trailscape.core.YearGoal
 import de.trailscape.app.widget.ShownWeekTarget
-import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.maxYearGoalKm
-import de.trailscape.core.milestonesReachedBy
-import de.trailscape.core.recordsSetBy
-import de.trailscape.core.rideFacts
 import de.trailscape.core.minYearGoalKm
 import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
@@ -1994,33 +1989,6 @@ class AppViewModel(
         YearGoal.decode(keyValueStore.getString(YEAR_GOAL_STORAGE_KEY))
     }.getOrNull()
 
-    /**
-     * Meldet nach dem Speichern einer Aufzeichnung, was sie an Bestwerten
-     * gesetzt oder an Meilensteinen ueberschritten hat — **eine** Meldung, die
-     * wichtigste: Bestweite vor anderen Bestwerten vor Meilensteinen. Die
-     * Einzelheiten stehen in der Auswertung der Tour („Erfolge dieser Tour").
-     */
-    private fun announceAchievements(rideId: String) {
-        val facts = rideFacts(_rides.value) { localOfEpochMs(it).toLocalDate() }
-        val records = recordsSetBy(rideId, facts)
-        val distance = records.firstOrNull { it.kind == RecordKind.DISTANCE }
-        when {
-            distance != null -> showMessage(
-                UiText.Res(
-                    R.string.progress_snack_record_distance,
-                    listOf(formatDistanceKm(distance.value, AppServices.appLanguage.value)),
-                ),
-            )
-            records.isNotEmpty() -> showMessage(UiText.Res(R.string.progress_snack_record))
-            milestonesReachedBy(rideId, facts).isNotEmpty() ->
-                showMessage(UiText.Res(R.string.progress_snack_milestone))
-        }
-    }
-
-    private fun readYearGoalKm(): Int? = runCatching {
-        keyValueStore.getString(YEAR_GOAL_STORAGE_KEY)?.toIntOrNull()?.takeIf { it > 0 }
-    }.getOrNull()
-
     // -------------------------------------------------------------------------
     // Erinnerungen
     // -------------------------------------------------------------------------
@@ -2745,7 +2713,6 @@ class AppViewModel(
                 select(rideId)
                 RecordingRepository.clearFinishedRide()
                 showMessage(UiText.Res(R.string.rides_record_saved_status))
-                announceAchievements(rideId)
                 // Nach der Fahrt: die Entdeckt-Kacheln nachziehen und melden,
                 // wie viele davon neu sind — der eigentliche Reiz des Layers
                 // ist ja, dass eine Fahrt ihn veraendert. Der Vergleich

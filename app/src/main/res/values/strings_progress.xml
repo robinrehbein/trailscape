@@ -144,10 +144,6 @@
     <string name="progress_achievement_record_ascent">Bis dahin die meisten Höhenmeter: %1$s statt %2$s</string>
     <string name="progress_achievement_record_time">Deine bis dahin längste Fahrzeit: %1$s statt %2$s</string>
     <string name="progress_achievement_record_speed">Dein bis dahin schnellster Schnitt: %1$s statt %2$s</string>
-    <!-- Meldung nach dem Speichern einer Aufzeichnung. %1$s = Kilometer -->
-    <string name="progress_snack_record_distance">Neue Bestweite: %1$s km</string>
-    <string name="progress_snack_record">Neuer Bestwert. Die Auswertung zeigt, welcher.</string>
-    <string name="progress_snack_milestone">Meilenstein erreicht. Die Auswertung zeigt, welcher.</string>
     <string name="progress_percent">%1$d&#160;%%</string>
     <string name="progress_value_ascent">%1$s&#160;Hm</string>
     <!-- %1$d = Stunden, %2$s = Minuten zweistellig -->

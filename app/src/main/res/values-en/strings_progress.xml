@@ -144,10 +144,6 @@
     <string name="progress_achievement_record_ascent">Most climbing up to then: %1$s instead of %2$s</string>
     <string name="progress_achievement_record_time">Your longest ride time up to then: %1$s instead of %2$s</string>
     <string name="progress_achievement_record_speed">Your fastest average up to then: %1$s instead of %2$s</string>
-    <!-- Meldung nach dem Speichern einer Aufzeichnung. %1$s = Kilometer -->
-    <string name="progress_snack_record_distance">New longest ride: %1$s km</string>
-    <string name="progress_snack_record">New personal best. The ride summary shows which.</string>
-    <string name="progress_snack_milestone">Milestone reached. The ride summary shows which.</string>
     <string name="progress_percent">%1$d%%</string>
     <string name="progress_value_ascent">%1$s&#160;m</string>
     <!-- %1$d = Stunden, %2$s = Minuten zweistellig -->
