@@ -52,14 +52,14 @@ jobs:
       # `:brouter` hat keinen eigenen Quellcode, sondern uebersetzt direkt
       # `third_party/brouter` (BRouter v1.7.10). Ohne das Submodul bricht
       # schon die Konfiguration von :brouter ab.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
       # Die GitHub-Ubuntu-Runner bringen das Android SDK mit (ANDROID_HOME ist
       # gesetzt); ein local.properties wird deshalb nicht gebraucht und darf
       # auch nicht existieren.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
@@ -145,7 +145,7 @@ jobs:
       # Kompilieren), gibt es keine Bilder, und das soll nicht den
       # eigentlichen Fehler ueberdecken. 14 Tage genuegen fuer einen
       # Blick darauf; die Bilder entstehen bei jedem Lauf neu.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trailscape-screenshots
@@ -153,7 +153,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trailscape-apk
           path: app/build/outputs/apk/release/app-release.apk
@@ -162,7 +162,7 @@ jobs:
       # Das Play-Bundle der Telefon-App. Als eigenes Artefakt und nicht mit
       # der APK zusammen, damit ein Download nicht ungefragt beides zieht —
       # wer die APK will, will fast nie das Bundle und umgekehrt.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trailscape-aab
           path: app/build/outputs/bundle/release/app-release.aab
@@ -171,7 +171,7 @@ jobs:
       # Die R8-Mapping-Datei ist die einzige Moeglichkeit, spaeter gemeldete
       # Stacktraces des minifizierten Builds zurueckzuuebersetzen. Sie gehoert
       # nicht ins Release (Downloadseite), aber sehr wohl in die Artefakte.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trailscape-mapping
           path: app/build/outputs/mapping/release/
@@ -183,7 +183,7 @@ jobs:
       # Nutzer installierbar — auf der Releases-Seite (`latest`, `v2.0.x`)
       # wuerde eine Wear-APK also nur verwirren. Deshalb bewusst NUR hier als
       # Actions-Artefakt und NICHT im release-Job unten mit hochgeladen.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trailscape-wear-apk
           path: wear/build/outputs/apk/release/wear-release.apk
@@ -194,7 +194,7 @@ jobs:
       # installierbar, es kann also auch niemanden zu einer Fehlinstallation
       # verleiten. Es geht darum weiter unten mit auf das versionierte
       # Release — siehe die Begruendung dort.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trailscape-wear-aab
           path: wear/build/outputs/bundle/release/wear-release.aab
@@ -258,11 +258,11 @@ jobs:
       # Releases sind der `git log` seit dem letzten `v2.0.*`-Tag. Ohne
       # `fetch-depth: 0` kennt der Klon weder die alten Tags noch genug
       # Historie dafuer.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: trailscape-apk
 
@@ -270,11 +270,11 @@ jobs:
       # (app-release.aab, wear-release.aab) sind bereits eindeutig, und ein
       # eigenes Verzeichnis haelt sie von der APK im Arbeitsverzeichnis
       # getrennt.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: trailscape-aab
           path: bundles
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: trailscape-wear-aab
           path: bundles
@@ -433,17 +433,17 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
           cache: gradle
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -477,7 +477,7 @@ jobs:
           cp app/build/outputs/bundle/release/app-release.aab play-bundles/trailscape-phone-play.aab
           cp wear/build/outputs/bundle/release/wear-release.aab play-bundles/trailscape-wear-play.aab
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: trailscape-play-bundles-${{ github.run_number }}
           path: play-bundles/*.aab
