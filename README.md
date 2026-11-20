@@ -278,6 +278,9 @@ Texte). Robolectric kommt nur für die Screenshot-Tests zum Einsatz; sie laufen
 nur mit `-Pscreenshots`, in der CI also mit, auf Deutsch und — mit „-en“ im
 Dateinamen — auf Englisch. Alles Rechnende liegt ohnehin in `:core`.
 
+Was auf einem echten Gerät geprüft werden muss, steht in der
+[Prüfliste fürs Gerät](docs/geraete-pruefliste.md).
+
 ## Installation und Updates
 
 Der neue Play-Eintrag verwendet `de.robinrehbein.trailscape`. Er wird zunächst
