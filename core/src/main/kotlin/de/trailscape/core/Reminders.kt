@@ -251,6 +251,9 @@ fun dueReminder(
     }
 
     if (settings.nudgeEnabled && morningReached && nudgeAllowed(state, today)) {
+        // Die Serie zuerst: „Deine Serie endet am Sonntag" ist der konkretere
+        // Anlass als „seit fuenf Tagen keine Tour" — und oft derselbe Tag.
+        streakNotice(today, rides, texts)?.let { return it }
         nudgeNotice(today, rides, texts)?.let { return it }
     }
 
@@ -390,6 +393,34 @@ private fun nudgeNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreText
         text = texts.today.reminderNudgeText(),
     )
 }
+
+/**
+ * Der Anstupser fuer eine Wochenserie, die zu reissen droht: Die Serie
+ * ([weekStreak]) laeuft seit mindestens [reminderStreakMinWeeks] Wochen, diese
+ * Woche hat noch keine Tour, und es bleiben hoechstens
+ * [reminderStreakDaysLeft] Tage (Freitag bis Sonntag).
+ *
+ * Laeuft unter dem Schalter und der Ruhezeit des Anstupsers
+ * ([ReminderKind.ANSTUPSER]): Es ist dieselbe Sorte Meldung — „fahr mal
+ * wieder" —, nur mit einem besseren Grund.
+ */
+private fun streakNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreTexts): ReminderNotice? {
+    val streak = weekStreak(rideFacts(rides) { dartLocalOf(it).toLocalDate() }, today)
+    if (streak.weeks < reminderStreakMinWeeks || !streak.atRisk || streak.daysLeft > reminderStreakDaysLeft) {
+        return null
+    }
+    return ReminderNotice(
+        kind = ReminderKind.ANSTUPSER,
+        title = texts.today.reminderStreakTitle(streak.weeks),
+        text = texts.today.reminderStreakText(streak.daysLeft),
+    )
+}
+
+/** Ab dieser Laenge ist eine Wochenserie eine Erinnerung wert. */
+const val reminderStreakMinWeeks: Int = 2
+
+/** So viele Tage vor Wochenende meldet sich die Serie fruehestens (3 = ab Freitag). */
+const val reminderStreakDaysLeft: Int = 3
 
 private fun nudgeAllowed(state: ReminderState, today: LocalDate): Boolean {
     val last = state.lastNudgeOn ?: return true

@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.CoreTextsEn
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -462,6 +463,50 @@ class RemindersTest {
         assertEquals(ReminderKind.ANSTUPSER, notice.kind)
         assertEquals("Seit 5 Tagen keine Tour", notice.title)
         assertTrue(notice.text.startsWith("Wenn du wieder unterwegs bist"))
+    }
+
+    @Test
+    fun `Serie in Gefahr meldet sich ab Freitag statt des Anstupsers`() {
+        val friday = TUESDAY.plusDays(3)
+        // Zwei Wochen in Folge gefahren, diese Woche noch nicht.
+        val rides = listOf(ride(at(friday.minusDays(13), 16)), ride(at(friday.minusDays(6), 16)))
+        val settings = ReminderSettings(nudgeEnabled = true)
+
+        val notice = dueReminder(at(friday, 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsDe)
+
+        assertNotNull(notice)
+        assertEquals(ReminderKind.ANSTUPSER, notice.kind)
+        assertEquals("2 Wochen in Folge — diese fehlt noch", notice.title)
+        assertTrue(notice.text.startsWith("Noch 3 Tage bis Sonntag"))
+
+        // Am Donnerstag ist es dafuer noch zu frueh, und fuer den normalen
+        // Anstupser liegt die letzte Tour erst fuenf Tage zurueck … der kommt.
+        val thursday = dueReminder(
+            at(friday.minusDays(1), 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsDe,
+        )
+        assertEquals("Seit 5 Tagen keine Tour", thursday?.title)
+
+        // Am Sonntag ist es der letzte Tag.
+        val sunday = dueReminder(
+            at(friday.plusDays(2), 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsEn,
+        )
+        assertEquals("2 weeks in a row — this one is still open", sunday?.title)
+        assertTrue(sunday!!.text.startsWith("Today is the last day"))
+    }
+
+    @Test
+    fun `gesicherte oder zu kurze Serie loest keine Serien-Meldung aus`() {
+        val friday = TUESDAY.plusDays(3)
+        val settings = ReminderSettings(nudgeEnabled = true)
+        // Diese Woche schon gefahren: Serie gesichert, letzte Tour gestern.
+        val secured = listOf(
+            ride(at(friday.minusDays(13), 16)), ride(at(friday.minusDays(6), 16)), ride(at(friday.minusDays(1), 16)),
+        )
+        assertEquals(null, dueReminder(at(friday, 7, 0), settings, ReminderState(), null, secured, CoreTextsDe))
+
+        // Nur eine Woche: keine Serie, und fuer den Anstupser zu frisch.
+        val single = listOf(ride(at(friday.minusDays(4), 16)))
+        assertEquals(null, dueReminder(at(friday, 7, 0), settings, ReminderState(), null, single, CoreTextsDe))
     }
 
     @Test

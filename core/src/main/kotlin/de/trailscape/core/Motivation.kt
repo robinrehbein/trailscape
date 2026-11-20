@@ -341,12 +341,38 @@ fun milestonesReachedBy(rideId: String, facts: List<RideFact>): List<Milestone> 
 // ---------------------------------------------------------------------------
 
 /**
+ * Ein gesetztes Jahresziel.
+ *
+ * @property since der Tag, an dem es gesetzt wurde. Von dort laeuft das Soll
+ *   los: Wer sich im September 2000 km vornimmt, liegt nicht am ersten Tag
+ *   1400 km „hinter dem Soll". Im Folgejahr gilt dasselbe Ziel weiter, dann
+ *   ab dem 1. Januar.
+ */
+data class YearGoal(val targetKm: Int, val since: LocalDate) {
+    /** Eine Zeile fuer den Schluessel-Wert-Speicher: `km|JJJJ-MM-TT`. */
+    fun encode(): String = "$targetKm|$since"
+
+    companion object {
+        /** `null` bei allem, was keine gueltige Zeile ist. */
+        fun decode(text: String?): YearGoal? {
+            val parts = text?.split('|') ?: return null
+            if (parts.size != 2) return null
+            val km = parts[0].toIntOrNull()?.takeIf { it > 0 } ?: return null
+            val since = runCatching { LocalDate.parse(parts[1]) }.getOrNull() ?: return null
+            return YearGoal(km, since)
+        }
+    }
+}
+
+/**
  * Stand zum Jahresziel in Kilometern.
  *
- * @property expectedKm wo man heute bei gleichmaessigem Tempo stehen muesste.
+ * @property expectedKm wo man heute bei gleichmaessigem Tempo stehen muesste —
+ *   gerechnet ab [YearGoal.since] und dem Stand von damals.
  * @property aheadKm Vorsprung (positiv) oder Rueckstand (negativ) dazu.
  * @property neededPerWeekKm was ab heute je Woche noetig ist, um anzukommen.
- * @property projectedKm Hochrechnung aus dem bisherigen Jahresschnitt.
+ * @property projectedKm Hochrechnung: Stand heute plus der Wochenschnitt der
+ *   letzten acht Wochen fuer den Rest des Jahres.
  */
 data class YearGoalProgress(
     val year: Int,
@@ -362,41 +388,83 @@ data class YearGoalProgress(
     val reached: Boolean get() = targetKm > 0 && riddenKm >= targetKm
 }
 
-fun yearGoalProgress(facts: List<RideFact>, targetKm: Double, today: LocalDate): YearGoalProgress {
+/** Wochenschnitt der letzten acht Wochen in km. */
+private fun recentWeeklyKm(facts: List<RideFact>, today: LocalDate): Double {
+    val from = today.minusDays(55)
+    return facts.filter { !it.date.isBefore(from) && !it.date.isAfter(today) }.sumOf { it.distanceKm } / 8.0
+}
+
+private fun riddenInYear(facts: List<RideFact>, year: Int, until: LocalDate): Double =
+    facts.filter { it.date.year == year && !it.date.isAfter(until) }.sumOf { it.distanceKm }
+
+fun yearGoalProgress(facts: List<RideFact>, goal: YearGoal, today: LocalDate): YearGoalProgress {
     val year = today.year
-    val ridden = facts.filter { it.date.year == year && !it.date.isAfter(today) }.sumOf { it.distanceKm }
-    val daysInYear = today.lengthOfYear()
-    val dayOfYear = today.dayOfYear
-    val daysLeft = daysInYear - dayOfYear
+    val targetKm = goal.targetKm.toDouble()
+    val ridden = riddenInYear(facts, year, today)
+    val yearEnd = LocalDate.of(year, 12, 31)
+    val daysLeft = ChronoUnit.DAYS.between(today, yearEnd).toInt()
     val remaining = (targetKm - ridden).coerceAtLeast(0.0)
+
+    // Das Soll laeuft vom Tag des Setzens (und dem Stand am Vorabend) linear
+    // zum Ziel am 31. Dezember. Ein Ziel aus einem frueheren Jahr beginnt am
+    // 1. Januar bei null.
+    val startsThisYear = goal.since.year == year && !goal.since.isAfter(today)
+    val start = if (startsThisYear) goal.since else LocalDate.of(year, 1, 1)
+    val riddenAtStart = if (startsThisYear) riddenInYear(facts, year, start.minusDays(1)) else 0.0
+    // Am Starttag selbst ist das Soll der Stand von damals — niemand liegt am
+    // Tag, an dem er sich etwas vornimmt, schon zurueck. Am 31. Dezember ist
+    // es das Ziel.
+    val span = ChronoUnit.DAYS.between(start, yearEnd).toInt()
+    val elapsed = ChronoUnit.DAYS.between(start, today).toInt()
+    val gap = (targetKm - riddenAtStart).coerceAtLeast(0.0)
+    val expected = riddenAtStart + if (span <= 0) gap else gap * elapsed / span
+
     return YearGoalProgress(
         year = year,
         targetKm = targetKm,
         riddenKm = ridden,
-        expectedKm = targetKm * dayOfYear / daysInYear,
+        expectedKm = expected,
         // Am letzten Tag des Jahres ist „je Woche" der Rest selbst.
         neededPerWeekKm = if (daysLeft <= 0) remaining else remaining / (daysLeft / 7.0).coerceAtLeast(1.0),
-        projectedKm = ridden * daysInYear / dayOfYear,
+        projectedKm = ridden + recentWeeklyKm(facts, today) * daysLeft / 7.0,
     )
 }
 
 /**
- * Vorschlag fuer ein Jahresziel: der Wochenschnitt der letzten acht Wochen
- * aufs Jahr hochgerechnet, plus [yearGoalStretch] — erreichbar, aber nicht
- * geschenkt. Auf volle 250 km gerundet, mindestens [minYearGoalKm]. Ohne
- * Touren der Mindestwert.
+ * Vorschlag fuer ein Jahresziel **fuer den Rest des laufenden Jahres**: der
+ * Stand heute plus der Wochenschnitt der letzten acht Wochen fuer die
+ * verbleibenden Wochen, mit [yearGoalStretch] obendrauf — erreichbar, aber
+ * nicht geschenkt. Im Januar ist das eine Jahreshochrechnung, im November der
+ * Stand plus ein ehrgeiziger Endspurt.
+ *
+ * Gerundet wie [roundYearGoalKm], mindestens [minYearGoalKm] und immer ueber
+ * dem, was schon gefahren ist.
  */
 fun suggestYearGoalKm(facts: List<RideFact>, today: LocalDate): Int {
-    val from = today.minusDays(55)
-    val recentKm = facts.filter { !it.date.isBefore(from) && !it.date.isAfter(today) }.sumOf { it.distanceKm }
-    val perWeek = recentKm / 8.0
-    val raw = perWeek * 52 * yearGoalStretch
-    val rounded = (raw / 250.0).roundToInt() * 250
-    return rounded.coerceIn(minYearGoalKm, maxYearGoalKm)
+    val ridden = riddenInYear(facts, today.year, today)
+    val weeksLeft = ChronoUnit.DAYS.between(today, LocalDate.of(today.year, 12, 31)) / 7.0
+    val raw = ridden + recentWeeklyKm(facts, today) * weeksLeft * yearGoalStretch
+    var suggestion = roundYearGoalKm(raw)
+    while (suggestion <= ridden) suggestion = roundYearGoalKm(suggestion + 50.0)
+    return suggestion
+}
+
+/**
+ * Rundet ein Jahresziel auf eine Zahl, die man sich merken kann: unter
+ * 1000 km auf 50, unter 3000 km auf 100, darueber auf 250 — und in die
+ * Grenzen [minYearGoalKm]…[maxYearGoalKm].
+ */
+fun roundYearGoalKm(km: Double): Int {
+    val step = when {
+        km < 1000 -> 50
+        km < 3000 -> 100
+        else -> 250
+    }
+    return ((km / step).roundToInt() * step).coerceIn(minYearGoalKm, maxYearGoalKm)
 }
 
 const val yearGoalStretch: Double = 1.15
-const val minYearGoalKm: Int = 500
+const val minYearGoalKm: Int = 100
 const val maxYearGoalKm: Int = 30000
 
 // ---------------------------------------------------------------------------

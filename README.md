@@ -30,7 +30,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 **Heute** (Startseite)
 - Tagesbereitschaft, die heute anstehende Einheit und ein Knopf, der genau
   dafür eine passende Rundstrecke generiert
-- Wochenfortschritt gegen das Planziel und die zuletzt gefahrene Tour
+- Wochenfortschritt gegen das Planziel, darunter die **Wochenserie**: wie
+  viele Wochen in Folge du gefahren bist und wie viele Tage bleiben, um sie zu
+  halten (bewusst Wochen statt Tage — Ruhetage kosten nichts)
+- **Als Nächstes:** die *nächste Bestweite* (ein Stück weiter als deine
+  weiteste Tour der letzten sechs Wochen, mit Knopf für genau diese Runde),
+  dein **Jahresziel** mit Soll und Ist und der nächstgelegene **Meilenstein**
 - Ohne eine einzige Tour eine ruhige erste Runde nach Zeit (1 h / 1½ h / 2 h),
   die „Runde bauen" direkt ab deinem Standort sucht — auch als letzter Schritt
   der Einführung
@@ -56,7 +61,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Detailansicht je Tour: gefahrene Spur auf der Karte, Höhenprofil, Tempo- und
   Pulskurve, Ø Leistung und Ø Trittfrequenz, wo gemessen, dazu Entkopplung
   und VO₂max-Schätzung, wo die Daten es hergeben —
-  und oben „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
+  und oben „Erfolge dieser Tour“ (damals gesetzte Bestwerte, überschrittene
+  Meilensteine; nach einer Aufzeichnung auch als Meldung) sowie
+  „Was die Tour gebracht hat“: Fitness/Frische, Stand zum Wochenziel,
   neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
   Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
   Tourblatt der Karte genau diese Ansicht
@@ -87,6 +94,10 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   mit Rückenwind nach Hause führt
   (aktueller Wind von Open-Meteo, nur mit Schalter, Startpunkt auf etwa 1 km
   gerundet)
+- Vorgeschlagene Runden ohne Stichstrecken: Führt das Routing zu einem
+  Hilfspunkt in eine Sackgasse hinein und denselben Weg zurück, wird das Stück
+  herausgeschnitten. Runden, die zu einem guten Teil hin und zurück über
+  denselben Weg führen, rutschen in der Liste nach hinten und sagen es dazu
 - Höhenprofil der geplanten Route
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
@@ -97,6 +108,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   verwalten
 
 **Training**
+- Zwei Sichten: **Fortschritt** und **Plan**
+- Fortschritt: Kilometer je Woche über zwölf Wochen mit dem Vergleich „letzte
+  vier Wochen gegen die vier davor“, Jahresziel (Soll ab dem Tag, an dem du es
+  setzt; Hochrechnung aus den letzten acht Wochen), Bestwerte (weiteste Tour,
+  meiste Höhenmeter, längste Fahrzeit, schnellster Schnitt ab 20 km — ein Tipp
+  öffnet die Tour), Meilensteine und die Summen aller Touren
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
 - Trainingsplan mit progressiver Steigerung, Erholungswochen und
   Fortschrittsverfolgung
@@ -110,7 +127,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   ansteht — an Ruhetagen der Hinweis darauf, ohne Trainingsplan gar nichts
 - **Wochenrückblick** sonntagabends (Vorgabe 18:00): gefahrene gegen geplante
   Kilometer der laufenden Woche
-- **Anstupser** nach fünf Tagen ohne Aufzeichnung, höchstens einmal pro Woche
+- **Anstupser** nach fünf Tagen ohne Aufzeichnung, höchstens einmal pro Woche.
+  Läuft eine Wochenserie seit mindestens zwei Wochen und fehlt diese Woche
+  noch, meldet er sich stattdessen ab Freitag mit den verbleibenden Tagen
 - Jeder Anlass einzeln abschaltbar unter **Mehr → Erinnerungen**. Ein einziger
   täglicher Hintergrundlauf (WorkManager) entscheidet beim Auslösen, was fällig
   ist; die Meldungen entstehen vollständig auf dem Gerät — kein Push-Server,

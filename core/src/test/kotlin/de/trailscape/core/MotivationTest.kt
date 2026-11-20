@@ -236,28 +236,47 @@ class MotivationTest {
     // ----------------------------------------------------------- Jahresziel
 
     @Test
-    fun yearGoalProgressKnowsWhereYouShouldBe() {
-        // 1. Juli 2026 = Tag 182 von 365.
+    fun yearGoalFromAnEarlierYearRunsFromJanuary() {
+        // 1. Juli 2026: 181 von 364 Tagen zwischen Neujahr und Silvester sind um.
         val day = LocalDate.of(2026, 7, 1)
         val facts = listOf(
             fact("alt", LocalDate.of(2025, 12, 30), km = 500.0),
             fact("a", LocalDate.of(2026, 3, 1), km = 1000.0),
             fact("b", LocalDate.of(2026, 6, 30), km = 1000.0),
         )
-        val progress = yearGoalProgress(facts, targetKm = 3650.0, today = day)
+        val progress = yearGoalProgress(facts, YearGoal(3650, LocalDate.of(2025, 5, 1)), day)
         assertEquals(2000.0, progress.riddenKm)
-        assertEquals(1820.0, progress.expectedKm, 0.01)
-        assertEquals(180.0, progress.aheadKm, 0.01)
+        assertEquals(3650.0 * 181 / 364, progress.expectedKm, 0.01)
+        assertEquals(2000.0 - 3650.0 * 181 / 364, progress.aheadKm, 0.01)
         assertEquals(1650.0, progress.remainingKm)
         // 183 Tage = 26,14 Wochen übrig.
         assertEquals(1650.0 / (183 / 7.0), progress.neededPerWeekKm, 0.01)
-        assertEquals(2000.0 * 365 / 182, progress.projectedKm, 0.01)
+        // Letzte acht Wochen: 1000 km → 125 km/Woche für den Rest.
+        assertEquals(2000.0 + 125.0 * 183 / 7.0, progress.projectedKm, 0.01)
         assertFalse(progress.reached)
     }
 
     @Test
+    fun yearGoalSetInAutumnDoesNotStartBehind() {
+        // Am 2. Dezember gesetzt, bis dahin 700 km; 29 Tage bis Silvester.
+        val since = LocalDate.of(2026, 12, 2)
+        val facts = listOf(fact("a", LocalDate.of(2026, 6, 1), km = 700.0))
+        val goal = YearGoal(1000, since)
+
+        val firstDay = yearGoalProgress(facts, goal, since)
+        // Am Tag des Setzens ist das Soll der Stand von heute.
+        assertEquals(700.0, firstDay.expectedKm, 0.01)
+        assertEquals(0.0, firstDay.aheadKm, 0.01)
+
+        // Zehn Tage spaeter mit 150 km mehr: 700 + 300 × 10/29 Soll, 850 Ist.
+        val later = yearGoalProgress(facts + fact("b", since.plusDays(5), km = 150.0), goal, since.plusDays(10))
+        assertEquals(700.0 + 300.0 * 10 / 29, later.expectedKm, 0.01)
+        assertTrue(later.aheadKm > 40)
+    }
+
+    @Test
     fun yearGoalReached() {
-        val progress = yearGoalProgress(listOf(fact("a", today, km = 1200.0)), 1000.0, today)
+        val progress = yearGoalProgress(listOf(fact("a", today, km = 1200.0)), YearGoal(1000, today), today)
         assertTrue(progress.reached)
         assertEquals(1.0, progress.fraction)
         assertEquals(0.0, progress.neededPerWeekKm)
@@ -265,16 +284,45 @@ class MotivationTest {
 
     @Test
     fun yearGoalOnNewYearsEveNeedsTheRest() {
-        val progress = yearGoalProgress(listOf(fact("a", LocalDate.of(2026, 6, 1), km = 900.0)), 1000.0, LocalDate.of(2026, 12, 31))
+        val facts = listOf(fact("a", LocalDate.of(2026, 6, 1), km = 900.0))
+        val progress = yearGoalProgress(facts, YearGoal(1000, LocalDate.of(2026, 1, 1)), LocalDate.of(2026, 12, 31))
         assertEquals(100.0, progress.neededPerWeekKm)
+        assertEquals(1000.0, progress.expectedKm, 0.01)
     }
 
     @Test
-    fun suggestedYearGoalFollowsRecentVolume() {
-        // 8 Wochen à 60 km → 3120 km/Jahr × 1,15 = 3588 → 3500.
+    fun suggestedYearGoalCoversTheRestOfTheYear() {
+        // 8 Wochen à 60 km = 480 km gefahren; bis 31.12. bleiben 43 Tage:
+        // 480 + 60 × 43/7 × 1,15 = 903,9 → 900.
         val facts = (0 until 8).map { fact("w$it", today.minusWeeks(it.toLong()), km = 60.0) }
-        assertEquals(3500, suggestYearGoalKm(facts, today))
+        assertEquals(900, suggestYearGoalKm(facts, today))
         assertEquals(minYearGoalKm, suggestYearGoalKm(emptyList(), today))
+    }
+
+    @Test
+    fun suggestedYearGoalIsAlwaysAboveWhatIsRidden() {
+        // Alles im Fruehjahr gefahren, seit Wochen nichts: Vorschlag liegt trotzdem darueber.
+        val facts = listOf(fact("a", LocalDate.of(2026, 4, 1), km = 1500.0))
+        assertTrue(suggestYearGoalKm(facts, today) > 1500)
+    }
+
+    @Test
+    fun yearGoalRounding() {
+        assertEquals(450, roundYearGoalKm(431.0))
+        assertEquals(1700, roundYearGoalKm(1740.0))
+        assertEquals(3500, roundYearGoalKm(3588.0))
+        assertEquals(minYearGoalKm, roundYearGoalKm(3.0))
+        assertEquals(maxYearGoalKm, roundYearGoalKm(99999.0))
+    }
+
+    @Test
+    fun yearGoalSurvivesEncoding() {
+        val goal = YearGoal(2500, LocalDate.of(2026, 9, 14))
+        assertEquals("2500|2026-09-14", goal.encode())
+        assertEquals(goal, YearGoal.decode(goal.encode()))
+        for (broken in listOf(null, "", "2500", "x|2026-09-14", "2500|gestern", "0|2026-09-14", "1|2|3")) {
+            assertNull(YearGoal.decode(broken), "Eingabe $broken")
+        }
     }
 
     // ----------------------------------------------------------- Bestweite

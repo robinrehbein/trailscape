@@ -49,6 +49,12 @@ interface TodayTexts {
     fun reminderWeeklyReview(riddenKm: Int, targetKm: Int): String
     fun reminderNudgeTitle(days: Int): String
     fun reminderNudgeText(): String
+
+    /** [weeks] = Laenge der laufenden Wochenserie (mindestens 2). */
+    fun reminderStreakTitle(weeks: Int): String
+
+    /** [daysLeft] = Tage bis einschliesslich Sonntag, heute mitgezaehlt (1…3). */
+    fun reminderStreakText(daysLeft: Int): String
 }
 
 internal object TodayTextsDe : TodayTexts {
@@ -108,6 +114,13 @@ internal object TodayTextsDe : TodayTexts {
     override fun reminderNudgeText() =
         "Wenn du wieder unterwegs bist, zeichnet Trailscape die Runde auf — " +
             "auch eine kurze zählt für die Auswertung."
+    override fun reminderStreakTitle(weeks: Int) = "$weeks Wochen in Folge — diese fehlt noch"
+    override fun reminderStreakText(daysLeft: Int) =
+        if (daysLeft <= 1) {
+            "Heute ist der letzte Tag, um deine Serie zu halten. Eine kurze Runde reicht."
+        } else {
+            "Noch $daysLeft Tage bis Sonntag. Eine kurze Runde reicht, um deine Serie zu halten."
+        }
 }
 
 internal object TodayTextsEn : TodayTexts {
@@ -167,4 +180,11 @@ internal object TodayTextsEn : TodayTexts {
     override fun reminderNudgeText() =
         "When you’re out again, Trailscape records the loop — " +
             "even a short one counts for your analysis."
+    override fun reminderStreakTitle(weeks: Int) = "$weeks weeks in a row — this one is still open"
+    override fun reminderStreakText(daysLeft: Int) =
+        if (daysLeft <= 1) {
+            "Today is the last day to keep your streak. A short loop is enough."
+        } else {
+            "$daysLeft days left until Sunday. A short loop is enough to keep your streak."
+        }
 }
