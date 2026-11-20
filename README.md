@@ -39,6 +39,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Ohne eine einzige Tour eine ruhige erste Runde nach Zeit (1 h / 1½ h / 2 h),
   die „Runde bauen" direkt ab deinem Standort sucht — auch als letzter Schritt
   der Einführung
+- Auch ohne Trainingsplan gibt es ein Wochenziel in Kilometern. Es entsteht
+  aus deinen letzten Wochen und wächst behutsam: nach drei Aufbauwochen eine
+  leichtere Woche, nach einer Pause ein sanfter Wiedereinstieg. Der Balken
+  unter dem Wochenstreifen zeigt den Stand
+- Montags bis mittwochs ein Rückblick auf die letzte Woche: Kilometer, Touren,
+  Vergleich zur Woche davor, neue Bestwerte und die Wochenserie
 
 **Aufzeichnen**
 - GPS-Aufzeichnung als Vordergrunddienst — läuft bei gesperrtem Display und
@@ -67,6 +73,10 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   neu entdeckte Kacheln und neue Bestzeiten, jeweils nur, wo es Daten gibt.
   Nach dem Beenden einer Aufzeichnung öffnet die Kachel „Auswertung“ auf dem
   Tourblatt der Karte genau diese Ansicht
+- „Diese Runde“: Wer eine Strecke wiederholt, sieht im Tour-Detail den Vergleich
+  mit den früheren Fahrten (Rang, Abstand zum letzten Mal und zur Bestzeit,
+  nach Bewegungszeit). Hin- und Rückweg einer Strecke von A nach B zählen
+  getrennt, Runden unabhängig von der Richtung
 - Umbenennen, Löschen, als GPX (mit Puls, Trittfrequenz und Leistung) oder als
   Bild teilen (Story 9:16 oder Quadrat, mit Spur, Höhenprofil und Kennzahlen;
   Start und Ziel ab Werk ausgeblendet; auch direkt vom Tourblatt der Karte),
@@ -98,6 +108,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Hilfspunkt in eine Sackgasse hinein und denselben Weg zurück, wird das Stück
   herausgeschnitten. Runden, die zu einem guten Teil hin und zurück über
   denselben Weg führen, rutschen in der Liste nach hinten und sagen es dazu
+- Der Untergrund zählt bei der Reihenfolge der Vorschläge mit: Im Gravel-Profil
+  gewinnt bei ähnlicher Länge die Runde mit mehr unbefestigten Wegen, im
+  Asphalt-Profil die mit weniger
 - Höhenprofil der geplanten Route
 - Navigation auf einer gespeicherten oder geplanten Route mit Restdistanz und
   Vibrationswarnung beim Verlassen des Wegs
@@ -114,6 +127,9 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   setzt; Hochrechnung aus den letzten acht Wochen), Bestwerte (weiteste Tour,
   meiste Höhenmeter, längste Fahrzeit, schnellster Schnitt ab 20 km — ein Tipp
   öffnet die Tour), Meilensteine und die Summen aller Touren
+- Monats-Challenges aus der eigenen Historie (Kilometer, Höhenmeter, Tage auf
+  dem Rad, eine lange Tour), jeden Monat neu und etwa 10 % über dem Schnitt der
+  letzten drei Monate
 - Automatische Fitnesseinschätzung aus den aufgezeichneten Touren
 - Trainingsplan mit progressiver Steigerung, Erholungswochen und
   Fortschrittsverfolgung
@@ -126,7 +142,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - **Tageseinheit** morgens zur eingestellten Uhrzeit (Vorgabe 7:00): was heute
   ansteht — an Ruhetagen der Hinweis darauf, ohne Trainingsplan gar nichts
 - **Wochenrückblick** sonntagabends (Vorgabe 18:00): gefahrene gegen geplante
-  Kilometer der laufenden Woche
+  Kilometer der laufenden Woche. Ohne Trainingsplan stattdessen Kilometer,
+  Touren und der Vergleich zur Vorwoche
 - **Anstupser** nach fünf Tagen ohne Aufzeichnung, höchstens einmal pro Woche.
   Läuft eine Wochenserie seit mindestens zwei Wochen und fehlt diese Woche
   noch, meldet er sich stattdessen ab Freitag mit den verbleibenden Tagen
@@ -134,6 +151,12 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   täglicher Hintergrundlauf (WorkManager) entscheidet beim Auslösen, was fällig
   ist; die Meldungen entstehen vollständig auf dem Gerät — kein Push-Server,
   kein Konto, kein Netzzugriff. Antippen öffnet den „Heute"-Tab
+
+**Startbildschirm-Widget**
+- Zeigt Wochenserie und Stand zum Wochenziel; ein Tipp öffnet die App
+- Aktualisiert sich nach einer gespeicherten Tour und wenn die App in den
+  Hintergrund geht
+- Rechnet ausschließlich mit den lokal gespeicherten Touren
 
 **Gesundheitsdaten**
 - Anbindung an Health Connect (dorthin spiegelt Samsung Health die
