@@ -1,19 +1,22 @@
 package de.trailscape.app.data
 
+import de.trailscape.core.ROUTE_SIGNATURE_CACHE_VERSION
 import de.trailscape.core.RouteSignature
 import de.trailscape.core.StoredRouteSignature
 import java.io.File
 import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
  * Tests fuer [RouteSignatureCacheStore] — die dateigestuetzte Ablage der
- * Strecken-Signaturen je Tour (`rides/route-signatures.json`). Gleicher
+ * Strecken-Signaturen je Tour (`route-cache/route-signatures.json`). Gleicher
  * Zuschnitt wie `ExplorerTilesCacheStoreTest` nebenan: Roundtrip, Aufraeumen,
  * kaputte Datei, kaputter Einzeleintrag.
  */
@@ -30,10 +33,10 @@ class RouteSignatureCacheStoreTest {
         updatedAt = 1700000000000L,
         pointCount = 720,
         signature = RouteSignature(
-            cells = cells.toSet(),
+            cells = cells.sortedArray(),
             distanceKm = 32.4,
-            startCell = cells.first(),
-            endCell = cells.last(),
+            startCell = cells.min(),
+            endCell = cells.max(),
         ),
     )
 
@@ -91,22 +94,83 @@ class RouteSignatureCacheStoreTest {
     }
 
     @Test
-    fun `ein Eintrag mit schiefer Zellliste wird verworfen, der Rest bleibt`() {
-        val store = RouteSignatureCacheStore(dir)
-        store.write("gut", entry(9, 10))
-        store.flush()
+    fun `ein Eintrag mit unsortierter Zellliste wird verworfen, der Rest bleibt`() {
         val file = File(dir, RouteSignatureCacheStore.FILE_NAME)
         file.writeText(
-            file.readText(Charsets.UTF_8).replace(
-                """{"id":"gut"""",
+            """{"version":$ROUTE_SIGNATURE_CACHE_VERSION,"entries":[""" +
                 """{"id":"kaputt","updatedAt":1,"pointCount":2,""" +
-                    """"signature":{"distanceKm":3.0,"startCell":1,"endCell":1,"cells":["x"]}},{"id":"gut"""",
-            ),
+                """"signature":{"distanceKm":3.0,"startCell":1,"endCell":1,"cells":[7,3]}},""" +
+                """{"id":"gut","updatedAt":1,"pointCount":2,""" +
+                """"signature":{"distanceKm":3.0,"startCell":9,"endCell":10,"cells":[9,10]}}]}""",
             Charsets.UTF_8,
         )
 
         val reloaded = RouteSignatureCacheStore(dir)
         assertNull(reloaded.read("kaputt"))
-        assertEquals(setOf(9L, 10L), assertNotNull(reloaded.read("gut")).signature?.cells)
+        assertContentEquals(longArrayOf(9, 10), assertNotNull(reloaded.read("gut")).signature?.cells)
+    }
+
+    @Test
+    fun `die Datei traegt die Formatversion`() {
+        val store = RouteSignatureCacheStore(dir)
+        store.write("a", entry(1, 2))
+        store.flush()
+        val text = File(dir, RouteSignatureCacheStore.FILE_NAME).readText(Charsets.UTF_8)
+        assertTrue(""""version":$ROUTE_SIGNATURE_CACHE_VERSION""" in text, text)
+    }
+
+    @Test
+    fun `eine Datei mit alter oder fehlender Version gilt als leer und wird ersetzt`() {
+        val file = File(dir, RouteSignatureCacheStore.FILE_NAME)
+        val old = """{"id":"a","updatedAt":1,"pointCount":2,""" +
+            """"signature":{"distanceKm":3.0,"startCell":1,"endCell":2,"cells":[1,2]}}"""
+        for (header in listOf("""{"version":1,""", """{""")) {
+            file.writeText("""$header"entries":[$old]}""", Charsets.UTF_8)
+            val store = RouteSignatureCacheStore(dir)
+            assertNull(store.read("a"), header)
+            store.flush()
+            // Die Altlast ist ersetzt: Eine neue Instanz sieht eine gueltige, leere Datei.
+            assertTrue(""""version":$ROUTE_SIGNATURE_CACHE_VERSION""" in file.readText(Charsets.UTF_8))
+            assertNull(RouteSignatureCacheStore(dir).read("a"))
+        }
+    }
+
+    @Test
+    fun `flush ohne Aenderung schreibt nicht`() {
+        val store = RouteSignatureCacheStore(dir)
+        store.write("a", entry(1, 2))
+        store.flush()
+        val file = File(dir, RouteSignatureCacheStore.FILE_NAME)
+        // Marker: Wuerde flush neu schreiben, verschwaende er.
+        file.setLastModified(1_000_000L)
+        val before = file.lastModified()
+
+        assertNotNull(store.read("a"))
+        store.retainAll(setOf("a"))
+        store.remove("gibts-nicht")
+        store.flush()
+        assertEquals(before, file.lastModified())
+        assertFalse(File(dir, "${RouteSignatureCacheStore.FILE_NAME}.tmp").exists())
+    }
+
+    @Test
+    fun `nach flush liegt nichts mehr im Speicher - die naechste Benutzung liest die Datei neu`() {
+        val store = RouteSignatureCacheStore(dir)
+        store.write("a", entry(1, 2))
+        store.flush()
+        // Von aussen ausgetauscht: Haette der Store seine Eintraege behalten, saehe er weiter „a".
+        File(dir, RouteSignatureCacheStore.FILE_NAME).writeText(
+            """{"version":$ROUTE_SIGNATURE_CACHE_VERSION,"entries":[]}""",
+            Charsets.UTF_8,
+        )
+        assertNull(store.read("a"))
+        // Auch nach reiner Lesebenutzung wird freigegeben.
+        File(dir, RouteSignatureCacheStore.FILE_NAME).writeText(
+            """{"version":$ROUTE_SIGNATURE_CACHE_VERSION,"entries":[""" +
+                """{"id":"b","updatedAt":1,"pointCount":2,"signature":null}]}""",
+            Charsets.UTF_8,
+        )
+        store.flush()
+        assertNotNull(store.read("b"))
     }
 }

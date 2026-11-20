@@ -2,14 +2,9 @@ package de.trailscape.app.data
 
 import de.trailscape.core.RouteSignatureStore
 import de.trailscape.core.StoredRouteSignature
+import de.trailscape.core.readRouteSignatureCache
+import de.trailscape.core.writeRouteSignatureCache
 import java.io.File
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 
 /**
  * Persistenter Cache der Strecken-Signaturen je Tour (siehe `:core`,
@@ -26,7 +21,7 @@ import kotlinx.serialization.json.put
  *
  * ## Warum persistent
  * Dieselbe Rechnung wie beim Kachel-Cache nebenan ([ExplorerTilesCacheStore]):
- * Durch welche ~100-m-Zellen eine Tour fuehrte, faellt erst beim Durchlaufen
+ * Durch welche ~200-m-Zellen eine Tour fuehrte, faellt erst beim Durchlaufen
  * ihrer GPS-Punkte ab. Ohne Cache muesste „Diese Runde bist du 5× gefahren"
  * bei jedem Oeffnen einer Tour den ganzen Bestand laden. Mit Cache passiert
  * der Punktdurchlauf je Tour genau einmal; danach genuegen die
@@ -40,16 +35,31 @@ import kotlinx.serialization.json.put
  * bei jedem Lauf erneut geladen.
  *
  * ## Dateiformat
- * `{"version":1,"entries":[{"id":"…", …}]}`; jeder Eintrag ist die
- * `:core`-Form [StoredRouteSignature.toJson] plus `id`. Die Zellen stehen dort
- * als sortiertes Zahlenfeld — bei einer 40-km-Runde einige hundert Zahlen.
- * Gelesen wird je Eintrag tolerant ([StoredRouteSignature.fromJson]): Ein
- * kaputter Eintrag faellt weg und wird neu berechnet, der Rest bleibt.
+ * `{"version":2,"entries":[{"id":"…","updatedAt":…,"pointCount":…,"signature":{…}}]}`;
+ * Aufbau und Lesen/Schreiben stehen in `:core` (`readRouteSignatureCache`,
+ * `writeRouteSignatureCache`) — dort ist das Serialisierungs-Plugin
+ * angewandt, und es bleibt eine reine JVM-Sache. Die Zellen stehen als
+ * sortiertes Zahlenfeld; bei einer 40-km-Runde ein paar hundert Zahlen.
+ * Gelesen und geschrieben wird **gestreamt** (kein JSON-Baum, kein ganzer Text
+ * im Speicher): Bei tausenden Touren waere das sonst ein Mehrfaches der Daten
+ * und ein Speicherspitzenwert.
  *
- * Geschrieben wird gesammelt in [flush] (der Aufrufer ruft es einmal nach dem
- * Sammellauf), atomar per tmp + rename und ohne `fsync`: Ein im Absturz
- * verlorener Cache kostet nur Neuberechnung, nie Daten. Eine kaputte Datei
- * liest sich als leerer Cache — gleicher Effekt.
+ * Eine Datei mit anderer (oder fehlender) `version` — etwa die mit dem alten
+ * Zellraster — gilt als leerer Cache und wird neu aufgebaut; alte und neue
+ * Zellen werden nie gegeneinander verglichen. Dasselbe gilt fuer eine kaputte
+ * Datei. Ein einzelner Eintrag mit unbrauchbaren Werten faellt weg, der Rest
+ * bleibt.
+ *
+ * ## Speicher
+ * Die Eintraege stehen nur **waehrend einer Benutzung** im Speicher: [flush]
+ * (das der Aufrufer am Ende jedes Sammellaufs ruft, auch ohne Aenderung)
+ * wirft sie wieder weg, die naechste Benutzung liest die Datei neu. Der
+ * Store lebt im `AppServices`-Singleton, ein dauerhaft gehaltener Bestand
+ * wuerde bei tausenden Touren dauerhaft Speicher belegen.
+ *
+ * Geschrieben wird nur bei Aenderungen, gesammelt in [flush], atomar per tmp +
+ * rename und ohne `fsync`: Ein im Absturz verlorener Cache kostet nur
+ * Neuberechnung, nie Daten.
  *
  * Alle Methoden sind synchron und `@Synchronized`; der Sammellauf laeuft auf
  * `Dispatchers.IO`.
@@ -63,27 +73,18 @@ class RouteSignatureCacheStore(private val dir: File) : RouteSignatureStore {
 
     private fun entries(): MutableMap<String, StoredRouteSignature> {
         entriesCache?.let { return it }
-        val loaded = LinkedHashMap<String, StoredRouteSignature>()
         val file = cacheFile()
+        var loaded: MutableMap<String, StoredRouteSignature>? = null
         if (file.exists()) {
-            try {
-                val root = Json.parseToJsonElement(file.readText(Charsets.UTF_8)) as JsonObject
-                val list = root["entries"] as? JsonArray ?: JsonArray(emptyList())
-                for (element in list) {
-                    val obj = element as? JsonObject ?: continue
-                    val id = (obj["id"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: continue
-                    val entry = StoredRouteSignature.fromJson(obj) ?: continue
-                    loaded[id] = entry
-                }
+            loaded = try {
+                file.inputStream().buffered().use { readRouteSignatureCache(it) }
             } catch (e: Exception) {
-                // Kaputter Cache = leerer Cache; die Signaturen werden neu
-                // gerechnet und die Datei beim naechsten flush ersetzt.
-                loaded.clear()
-                dirty = true
+                null
             }
+            // Kaputt oder andere Version = leerer Cache; die Datei wird beim naechsten flush ersetzt.
+            if (loaded == null) dirty = true
         }
-        entriesCache = loaded
-        return loaded
+        return (loaded ?: LinkedHashMap()).also { entriesCache = it }
     }
 
     @Synchronized
@@ -111,37 +112,35 @@ class RouteSignatureCacheStore(private val dir: File) : RouteSignatureStore {
         }
     }
 
-    /** Schreibt den Stand fest, falls sich seit dem letzten Mal etwas geaendert hat. */
+    /**
+     * Schreibt den Stand fest, falls sich etwas geaendert hat, und gibt die
+     * Eintraege in jedem Fall frei (naechste Benutzung liest neu von der Platte).
+     */
     @Synchronized
     fun flush() {
-        if (!dirty) return
-        val map = entries()
+        val map = entriesCache
         try {
-            if (!dir.exists()) {
-                dir.mkdirs()
+            if (map != null && dirty) {
+                if (!dir.exists()) {
+                    dir.mkdirs()
+                }
+                val file = cacheFile()
+                val tmp = File(dir, "${file.name}.tmp")
+                tmp.outputStream().buffered().use { writeRouteSignatureCache(map, it) }
+                if (!tmp.renameTo(file)) {
+                    tmp.copyTo(file, overwrite = true)
+                    tmp.delete()
+                }
             }
-            val json = buildJsonObject {
-                put("version", 1)
-                put(
-                    "entries",
-                    buildJsonArray {
-                        map.forEach { (id, entry) ->
-                            add(JsonObject(mapOf("id" to JsonPrimitive(id)) + entry.toJson()))
-                        }
-                    },
-                )
-            }
-            val file = cacheFile()
-            val tmp = File(dir, "${file.name}.tmp")
-            tmp.writeText(json.toString(), Charsets.UTF_8)
-            if (!tmp.renameTo(file)) {
-                file.writeText(json.toString(), Charsets.UTF_8)
-                tmp.delete()
-            }
-            dirty = false
         } catch (e: Exception) {
             // Bewusst geschluckt: Ein nicht geschriebener Cache kostet nur
             // Neuberechnung beim naechsten Mal.
+        } finally {
+            // Auch nach einem Fehlschlag weg: Die Eintraege sind sonst die
+            // einzige Kopie im Speicher, und ein haengender dirty-Zustand
+            // wuerde sie dauerhaft halten.
+            entriesCache = null
+            dirty = false
         }
     }
 

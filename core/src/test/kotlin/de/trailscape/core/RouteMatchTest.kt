@@ -1,9 +1,12 @@
 package de.trailscape.core
 
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.random.Random
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -112,8 +115,8 @@ class RouteMatchTest {
     fun `duenne GPS-Punkte lassen keine Zellen aus`() {
         val sparse = sig(walk(listOf(0.0 to 0.0, 3000.0 to 0.0), stepM = 3000.0))
         val dense = sig(walk(listOf(0.0 to 0.0, 3000.0 to 0.0), stepM = 20.0))
-        assertEquals(dense.cells, sparse.cells)
-        assertTrue(sparse.cells.size > 20)
+        assertContentEquals(dense.cells, sparse.cells)
+        assertTrue(sparse.cells.size > 10)
     }
 
     @Test
@@ -123,29 +126,89 @@ class RouteMatchTest {
         assertTrue(a.startCell in a.cells)
     }
 
-    // ---------------------------------------------------------------- JSON
-
     @Test
-    fun `JSON Rundlauf mit und ohne Signatur`() {
-        val withSig = StoredRouteSignature(5L, 40, sig(walk(square(1000.0))))
-        assertEquals(withSig, StoredRouteSignature.fromJson(withSig.toJson()))
-        assertEquals(withSig, StoredRouteSignature.fromJsonString(withSig.toJson().toString()))
-
-        val without = StoredRouteSignature(7L, 3, null)
-        assertEquals(without, StoredRouteSignature.fromJson(without.toJson()))
-        assertEquals(without, StoredRouteSignature.fromJsonString(without.toJson().toString()))
+    fun `Zellen sind sortiert und eindeutig, Signaturen vergleichen nach Inhalt`() {
+        val a = sig(walk(square(1000.0)))
+        assertTrue(a.cells.toList().zipWithNext().all { (x, y) -> x < y })
+        val b = sig(walk(square(1000.0)))
+        assertEquals(a, b)
+        assertEquals(a.hashCode(), b.hashCode())
+        assertFalse(a == a.copy(cells = a.cells.copyOf(a.cells.size - 1)))
     }
 
     @Test
-    fun `kaputtes JSON ergibt null`() {
-        assertNull(StoredRouteSignature.fromJson(null))
-        assertNull(StoredRouteSignature.fromJsonString("keine json"))
-        assertNull(StoredRouteSignature.fromJsonString("[1,2]"))
-        assertNull(StoredRouteSignature.fromJsonString("""{"updatedAt":1,"pointCount":2}"""))
-        assertNull(StoredRouteSignature.fromJsonString("""{"updatedAt":1,"pointCount":2,"signature":5}"""))
-        assertNull(StoredRouteSignature.fromJsonString("""{"updatedAt":1,"pointCount":2,"signature":{"cells":["a"],"distanceKm":3,"startCell":1,"endCell":1}}"""))
-        assertNull(StoredRouteSignature.fromJsonString("""{"updatedAt":1,"pointCount":2,"signature":{"cells":[1],"startCell":1,"endCell":1}}"""))
-        assertNull(StoredRouteSignature.fromJsonString("""{"pointCount":2,"signature":null}"""))
+    fun `Schnittmenge per Merge entspricht der Mengenrechnung`() {
+        // Zwei gegeneinander verschobene Strecken: Jaccard haendisch nachgerechnet.
+        val a = sig(walk(listOf(0.0 to 0.0, 6000.0 to 0.0)))
+        val b = sig(walk(listOf(1000.0 to 0.0, 7000.0 to 0.0)))
+        val common = a.cells.toSet().intersect(b.cells.toSet()).size
+        val jaccard = common.toDouble() / (a.cells.size + b.cells.size - common)
+        assertEquals(jaccard >= ROUTE_MIN_JACCARD, sameRoute(a, b))
+        assertTrue(common > 0)
+    }
+
+    @Test
+    fun `Start mehrere Zellen weiter ist keine gleiche A-nach-B-Strecke mehr`() {
+        // 1,2 km Versatz = ~6 Zellen: weit ueber ROUTE_ENDPOINT_TOLERANCE_CELLS.
+        val a = sig(walk(listOf(0.0 to 0.0, 6000.0 to 0.0)))
+        val b = sig(walk(listOf(1200.0 to 0.0, 7200.0 to 0.0)))
+        assertFalse(sameRoute(a, b))
+    }
+
+    // ------------------------------------------------------------- Cache-Datei
+
+    private fun encode(entries: Map<String, StoredRouteSignature>): ByteArray =
+        ByteArrayOutputStream().also { writeRouteSignatureCache(entries, it) }.toByteArray()
+
+    private fun decode(raw: String) = readRouteSignatureCache(ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)))
+
+    @Test
+    fun `Cache-Datei Rundlauf mit und ohne Signatur`() {
+        val entries = linkedMapOf(
+            "a" to StoredRouteSignature(5L, 40, sig(walk(square(1000.0)))),
+            "b" to StoredRouteSignature(7L, 3, null),
+        )
+        val back = assertNotNull(readRouteSignatureCache(ByteArrayInputStream(encode(entries))))
+        assertEquals(entries, back)
+        assertEquals(listOf("a", "b"), back.keys.toList())
+    }
+
+    @Test
+    fun `Cache-Datei traegt die Formatversion`() {
+        val text = String(encode(emptyMap()), Charsets.UTF_8)
+        assertTrue("\"version\":$ROUTE_SIGNATURE_CACHE_VERSION" in text, text)
+    }
+
+    @Test
+    fun `Cache-Datei mit anderer oder fehlender Version gilt als leer`() {
+        val entry = """{"id":"a","updatedAt":1,"pointCount":2,"signature":null}"""
+        assertNotNull(decode("""{"version":$ROUTE_SIGNATURE_CACHE_VERSION,"entries":[$entry]}"""))
+        assertNull(decode("""{"version":${ROUTE_SIGNATURE_CACHE_VERSION - 1},"entries":[$entry]}"""))
+        assertNull(decode("""{"version":${ROUTE_SIGNATURE_CACHE_VERSION + 1},"entries":[$entry]}"""))
+        assertNull(decode("""{"entries":[$entry]}"""))
+    }
+
+    @Test
+    fun `kaputte Cache-Datei ergibt null`() {
+        assertNull(decode("keine json"))
+        assertNull(decode("[1,2]"))
+        assertNull(decode(""))
+        assertNull(decode("""{"version":$ROUTE_SIGNATURE_CACHE_VERSION}"""))
+        assertNull(
+            decode(
+                """{"version":$ROUTE_SIGNATURE_CACHE_VERSION,"entries":[{"id":"a","updatedAt":1,"pointCount":2,""" +
+                    """"signature":{"distanceKm":3,"startCell":1,"endCell":1,"cells":["x"]}}]}""",
+            ),
+        )
+    }
+
+    @Test
+    fun `Eintrag mit unsortierten Zellen faellt weg, der Rest bleibt`() {
+        val good = """{"id":"gut","updatedAt":1,"pointCount":2,"signature":{"distanceKm":3.0,"startCell":1,"endCell":1,"cells":[1,2,5]}}"""
+        val unsorted = """{"id":"schief","updatedAt":1,"pointCount":2,"signature":{"distanceKm":3.0,"startCell":1,"endCell":1,"cells":[5,2]}}"""
+        val dupes = """{"id":"doppelt","updatedAt":1,"pointCount":2,"signature":{"distanceKm":3.0,"startCell":1,"endCell":1,"cells":[2,2]}}"""
+        val back = assertNotNull(decode("""{"version":$ROUTE_SIGNATURE_CACHE_VERSION,"entries":[$unsorted,$dupes,$good]}"""))
+        assertEquals(setOf("gut"), back.keys)
     }
 
     // ------------------------------------------------------------- Collect
@@ -317,10 +380,11 @@ class RouteMatchTest {
         )
         val sigs = rides.associate { it.id to loopSig }
         val c = assertNotNull(compareOnRoute("r2", rides, sigs))
-        assertEquals(listOf("r1", "dur", "r2"), c.efforts.map { it.rideId })
-        assertEquals(1400, c.efforts[1].timeS)
+        // „dur" hat nur eine Gesamtdauer, keine Bewegungszeit: zaehlt nicht (Pausen waeren mit drin).
+        assertEquals(listOf("r1", "r2"), c.efforts.map { it.rideId })
         assertEquals(1, c.rank)
         assertNull(compareOnRoute("noTime", rides, sigs))
+        assertNull(compareOnRoute("dur", rides, sigs))
         assertNull(compareOnRoute("planned", rides, sigs))
     }
 }

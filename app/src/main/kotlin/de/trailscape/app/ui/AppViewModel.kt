@@ -2368,6 +2368,14 @@ class AppViewModel(
      * begonnener Scan im Hintergrund zu Ende — sein Ergebnis landet im Cache,
      * nicht verloren.
      *
+     * ## Speicher
+     * Weder der Store noch dieser Aufruf halten die Signaturen dauerhaft:
+     * `flush` gibt die Eintraege des Stores frei (und schreibt nur, wenn sich
+     * etwas geaendert hat), und die Map der Signaturen ist eine lokale Variable
+     * — zurueck geht nur der [RouteComparison], der keine Zellen enthaelt. Das
+     * `flush` steht im `finally`, damit auch ein fehlgeschlagener Lauf nichts
+     * festhaelt.
+     *
      * ## Aufraeumen
      * Wie beim Kachel-Cache (`collectExplorerTiles` raeumt am Ende jedes
      * Laufs per `retainAll` ab) wirft jeder Lauf die Eintraege geloeschter und
@@ -2383,16 +2391,21 @@ class AppViewModel(
         val visible = _rides.value
         return routeComparisonMutex.withLock {
             withContext(io) {
-                runCatching {
+                try {
                     val signatures = collectRouteSignatures(
                         rides = summaries,
                         store = routeSignatureStore,
                         loadRide = { rideStorage.loadRide(it) },
                     )
                     routeSignatureStore.retainAll(riddenRides(summaries).mapTo(HashSet()) { it.id })
-                    routeSignatureStore.flush()
                     compareOnRoute(rideId, visible, signatures)
-                }.getOrNull()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                } finally {
+                    routeSignatureStore.flush()
+                }
             }
         }
     }

@@ -56,8 +56,11 @@ private const val ROUTE_RECENT_EFFORTS = 5
  *
  * Aufbau:
  *  1. Titel „Diese Runde" und rechts „5× gefahren".
- *  2. Ein Satz: „Neue Bestzeit auf dieser Runde" (Pokal, gruen) oder
- *     „2. schnellste von 5" (Stoppuhr).
+ *  2. Ein Satz: „Neue Bestzeit auf dieser Runde" (Pokal, gruen; die Fahrt
+ *     ist die schnellste und hat eine fruehere geschlagen), „Bestzeit auf
+ *     dieser Runde" (Pokal, gruen; schnellste, aber die erste Fahrt — „neu"
+ *     waere falsch, wenn sie spaeter angesehen wird, ohne je etwas geschlagen
+ *     zu haben) oder „2. schnellste von 5" (Stoppuhr).
  *  3. Gegen das letzte Mal: „3:12 min schneller als beim letzten Mal (12.10.)"
  *     — entfaellt, wenn dies die erste Fahrt der Runde war.
  *  4. Gegen die Bestzeit, wenn diese Fahrt sie nicht haelt.
@@ -70,8 +73,8 @@ private const val ROUTE_RECENT_EFFORTS = 5
  * Bausteine sind hier im Kleinen nachgebaut statt geteilt — die Datei gehoert
  * einem anderen Bereich.
  *
- * Gezeigt wird die Zeit als Bewegungszeit (`movingTimeS`, sonst Dauer) —
- * dieselbe Groesse, nach der `:core` sortiert.
+ * Gezeigt wird die Bewegungszeit (`movingTimeS`) — dieselbe Groesse, nach der
+ * `:core` sortiert; Fahrten ohne Bewegungszeit zaehlen dort nicht mit.
  */
 @Composable
 internal fun RouteComparisonCard(
@@ -81,7 +84,10 @@ internal fun RouteComparisonCard(
 ) {
     val formats = LocalAppFormats.current
     val signals = LocalSignalColors.current
-    val newBest = comparison.isBest && comparison.count >= 2
+    val isBest = comparison.isBest
+    // „Neu" nur, wenn es etwas zu schlagen gab: Die erste Fahrt der Runde ist
+    // zwar (noch) die schnellste, aber nie eine neue Bestzeit gewesen.
+    val newBest = isBest && comparison.previous != null
 
     Card(modifier = modifier.fillMaxWidth()) {
         Column(
@@ -105,20 +111,20 @@ internal fun RouteComparisonCard(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (newBest) {
+                if (isBest) {
                     RouteIconBubble(Icons.Rounded.EmojiEvents, signals.good)
                 } else {
                     RouteIconBubble(Icons.Rounded.Timer, MaterialTheme.colorScheme.primary)
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = if (newBest) {
-                        stringResource(R.string.rides_route_new_best_title)
-                    } else {
-                        stringResource(R.string.rides_route_rank_title, comparison.rank, comparison.count)
+                    text = when {
+                        newBest -> stringResource(R.string.rides_route_new_best_title)
+                        isBest -> stringResource(R.string.rides_route_best_title)
+                        else -> stringResource(R.string.rides_route_rank_title, comparison.rank, comparison.count)
                     },
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (newBest) signals.good else MaterialTheme.colorScheme.onSurface,
+                    color = if (isBest) signals.good else MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
             }

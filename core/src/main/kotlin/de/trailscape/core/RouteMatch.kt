@@ -1,13 +1,12 @@
 package de.trailscape.core
 
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.decodeFromStream
+import kotlinx.serialization.json.encodeToStream
+import java.io.InputStream
+import java.io.OutputStream
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -25,22 +24,29 @@ import kotlin.math.tan
  *
  * Die Tourenliste kennt nur Zusammenfassungen (keine Punkte). Jede Tour
  * bekommt deshalb eine kompakte [RouteSignature]: die Menge der
- * ~100-150-m-Rasterzellen, durch die der Track fuehrte, plus Laenge, Start-
+ * ~200-m-Rasterzellen, durch die der Track fuehrte, plus Laenge, Start-
  * und Endzelle. Zwei Touren sind dieselbe Strecke ([sameRoute]), wenn Laenge
  * und Zellmenge zusammenpassen — ohne je wieder Punkte zu laden. Aufbau wie
  * `ExplorerTiles.kt`: abgeleiteter Wert je Tour, [StoredRouteSignature] mit
  * Fingerabdruck, Store-Schnittstelle, inkrementelles [collectRouteSignatures].
+ *
+ * Zellen liegen als sortiertes, duplikatfreies `LongArray` vor (kein Boxing):
+ * Bei tausenden Touren im Speicher zaehlt jedes Byte je Zelle, und der
+ * Vergleich zweier Signaturen ist ein linearer Merge ohne Hilfsmengen.
  *
  * Rein Kotlin: keine Android-Abhaengigkeit, keine Uhr, keine Zeitzone, keine
  * ausformulierten Saetze — nur Daten.
  */
 
 /**
- * Zoomstufe des Zellrasters. Stufe 18 misst am Aequator ~150 m, bei 48° N
- * rund 100 m: fein genug, dass eine Parallelstrasse eine andere Zelle trifft,
- * grob genug, dass GPS-Rauschen von wenigen Metern kaum Zellen kippt.
+ * Zoomstufe des Zellrasters. Stufe 17 misst am Aequator ~300 m, bei 48° N
+ * rund 200 m (40 075 km · cos 48° / 2^17): grob genug, dass GPS-Rauschen von
+ * wenigen Metern kaum Zellen kippt und eine Tour nur ~6 Zellen je km kostet
+ * (Stufe 18 waere doppelt so viel Speicher bei tausenden Touren), fein genug,
+ * dass eine Parallelstrasse im Abstand einiger Hundert Meter eine andere
+ * Zelle trifft. Laengenpruefung und Jaccard-Schwelle fangen den Rest ab.
  */
-const val ROUTE_CELL_ZOOM: Int = 18
+const val ROUTE_CELL_ZOOM: Int = 17
 
 private const val ROUTE_CELL_COUNT: Int = 1 shl ROUTE_CELL_ZOOM
 
@@ -72,14 +78,51 @@ const val ROUTE_MIN_JACCARD: Double = 0.75
 
 private const val ROUTE_METERS_PER_DEG = 111_320.0
 
-/** Kompakte Form eines gefahrenen Tracks. */
+/**
+ * Kompakte Form eines gefahrenen Tracks.
+ *
+ * [cells] ist **aufsteigend sortiert und ohne Duplikate** (Vorbedingung von
+ * [sameRoute], das die Mengen per Merge schneidet). Arrays vergleicht Kotlin
+ * sonst nach Identitaet; deshalb stehen `equals`/`hashCode` hier von Hand
+ * (Inhalt), sonst waeren zwei gleiche Signaturen nie gleich.
+ */
 data class RouteSignature(
-    /** Rasterzellen (~150 m), durch die der Track fuehrte; x/y gepackt (`x shl 32 or y`). */
-    val cells: Set<Long>,
+    /** Rasterzellen (~200 m), durch die der Track fuehrte; x/y gepackt (`x shl 32 or y`), sortiert, eindeutig. */
+    val cells: LongArray,
     val distanceKm: Double,
     val startCell: Long,
     val endCell: Long,
-)
+) {
+    override fun equals(other: Any?): Boolean =
+        this === other || (
+            other is RouteSignature &&
+                distanceKm == other.distanceKm &&
+                startCell == other.startCell &&
+                endCell == other.endCell &&
+                cells.contentEquals(other.cells)
+            )
+
+    override fun hashCode(): Int {
+        var h = cells.contentHashCode()
+        h = 31 * h + distanceKm.hashCode()
+        h = 31 * h + startCell.hashCode()
+        h = 31 * h + endCell.hashCode()
+        return h
+    }
+
+    override fun toString(): String =
+        "RouteSignature(cells=${cells.size}, distanceKm=$distanceKm, startCell=$startCell, endCell=$endCell)"
+}
+
+/** Sortiert und entdoppelt die ersten [size] Werte von [cells] (sie entstehen beim Abtasten ungeordnet). */
+private fun sortedDistinct(cells: LongArray, size: Int): LongArray {
+    java.util.Arrays.sort(cells, 0, size)
+    var n = 0
+    for (i in 0 until size) {
+        if (n == 0 || cells[i] != cells[n - 1]) cells[n++] = cells[i]
+    }
+    return cells.copyOf(n)
+}
 
 private fun cellX(lon: Double): Int =
     floor((lon.coerceIn(-180.0, 180.0) + 180.0) / 360.0 * ROUTE_CELL_COUNT).toInt()
@@ -110,8 +153,16 @@ private fun segmentMeters(a: TrackPoint, b: TrackPoint): Double {
 fun routeSignature(points: List<TrackPoint>): RouteSignature? {
     if (points.size < 2) return null
 
-    val cells = LinkedHashSet<Long>()
-    cells += cellAt(points[0].lat, points[0].lon)
+    // Zellen wachsen in einem Primitiv-Array (kein Boxing); am Ende einmal sortiert + entdoppelt.
+    var buffer = LongArray(256)
+    var size = 0
+    fun add(cell: Long) {
+        // Aufeinanderfolgende Stuetzstellen treffen meist dieselbe Zelle — gar nicht erst speichern.
+        if (size > 0 && buffer[size - 1] == cell) return
+        if (size == buffer.size) buffer = buffer.copyOf(size * 2)
+        buffer[size++] = cell
+    }
+    add(cellAt(points[0].lat, points[0].lon))
     var meters = 0.0
 
     for (i in 1 until points.size) {
@@ -119,21 +170,21 @@ fun routeSignature(points: List<TrackPoint>): RouteSignature? {
         val b = points[i]
         val d = segmentMeters(a, b)
         if (d > ROUTE_MAX_SEGMENT_M) {
-            cells += cellAt(b.lat, b.lon)
+            add(cellAt(b.lat, b.lon))
             continue
         }
         meters += d
         val steps = ceil(d / ROUTE_SAMPLE_STEP_M).toInt().coerceAtLeast(1)
         for (step in 1..steps) {
             val t = step.toDouble() / steps
-            cells += cellAt(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t)
+            add(cellAt(a.lat + (b.lat - a.lat) * t, a.lon + (b.lon - a.lon) * t))
         }
     }
 
     val distanceKm = meters / 1000.0
     if (distanceKm < ROUTE_MIN_DISTANCE_KM) return null
     return RouteSignature(
-        cells = cells,
+        cells = sortedDistinct(buffer, size),
         distanceKm = distanceKm,
         startCell = cellAt(points.first().lat, points.first().lon),
         endCell = cellAt(points.last().lat, points.last().lon),
@@ -142,10 +193,15 @@ fun routeSignature(points: List<TrackPoint>): RouteSignature? {
 
 /**
  * Wie weit Start bzw. Ziel zweier Fahrten auseinanderliegen duerfen, in Zellen
- * je Achse (4 Zellen ≈ 400–600 m): Wer dieselbe Strecke faehrt, startet nicht
- * immer an derselben Haustuer, aber im selben Viertel.
+ * je Achse: Wer dieselbe Strecke faehrt, startet nicht immer an derselben
+ * Haustuer, aber im selben Viertel.
+ *
+ * Rechnung: Eine Zelle misst bei Stufe 17 und 48° N ~200 m. Zwei Zellen
+ * Indexabstand heissen je nach Lage innerhalb der Zellen gut 200 bis 600 m
+ * Luftlinie, im Mittel ≈ 400 m — dasselbe „400–600 m" wie frueher mit 4 Zellen
+ * a ~100 m bei Stufe 18.
  */
-const val ROUTE_ENDPOINT_TOLERANCE_CELLS: Int = 4
+const val ROUTE_ENDPOINT_TOLERANCE_CELLS: Int = 2
 
 private fun cellsNear(a: Long, b: Long): Boolean {
     val dx = abs((a shr 32).toInt() - (b shr 32).toInt())
@@ -180,12 +236,31 @@ fun sameRoute(a: RouteSignature, b: RouteSignature): Boolean {
     ) {
         return false
     }
-    val small = if (a.cells.size <= b.cells.size) a.cells else b.cells
-    val large = if (a.cells.size <= b.cells.size) b.cells else a.cells
-    val intersection = small.count { it in large }
+    val intersection = sortedIntersectionSize(a.cells, b.cells)
     val union = a.cells.size + b.cells.size - intersection
     if (union == 0) return false
     return intersection.toDouble() / union >= ROUTE_MIN_JACCARD
+}
+
+/** Groesse der Schnittmenge zweier aufsteigend sortierter, eindeutiger Arrays — linearer Merge. */
+private fun sortedIntersectionSize(a: LongArray, b: LongArray): Int {
+    var i = 0
+    var j = 0
+    var common = 0
+    while (i < a.size && j < b.size) {
+        val x = a[i]
+        val y = b[j]
+        when {
+            x < y -> i++
+            x > y -> j++
+            else -> {
+                common++
+                i++
+                j++
+            }
+        }
+    }
+    return common
 }
 
 // ---------------------------------------------------------------- Cache
@@ -195,65 +270,92 @@ fun sameRoute(a: RouteSignature, b: RouteSignature): Boolean {
  * [pointCount] wie [StoredExplorerTiles]. [signature] ist `null`, wenn die
  * Tour keine ergibt (zu kurz): so wird sie nicht bei jedem Lauf neu geladen.
  */
-data class StoredRouteSignature(val updatedAt: Long, val pointCount: Int, val signature: RouteSignature?) {
-    /** Kompakt: Zellen als Zahlenfeld (sortiert, damit die Ausgabe stabil ist). */
-    fun toJson(): JsonObject = buildJsonObject {
-        put("updatedAt", updatedAt)
-        put("pointCount", pointCount)
-        val sig = signature
-        if (sig == null) {
-            put("signature", JsonNull)
-        } else {
-            put(
-                "signature",
-                buildJsonObject {
-                    put("distanceKm", sig.distanceKm)
-                    put("startCell", sig.startCell)
-                    put("endCell", sig.endCell)
-                    put("cells", JsonArray(sig.cells.sorted().map { JsonPrimitive(it) }))
+data class StoredRouteSignature(val updatedAt: Long, val pointCount: Int, val signature: RouteSignature?)
+
+/**
+ * Formatversion der Cache-Datei. **Hochzaehlen, sobald sich die Bedeutung der
+ * Zellen aendert** (Zoomstufe, Abtastschritt, Packung): Eine Datei mit anderer
+ * Version gilt als leer und wird neu aufgebaut — Zellen verschiedener Raster
+ * duerfen nie gegeneinander verglichen werden. Version 1 war Zoom 18.
+ */
+const val ROUTE_SIGNATURE_CACHE_VERSION: Int = 2
+
+/** Die Cache-Datei als Ganzes; bewusst ein flaches DTO, damit sie sich streamen laesst. */
+@Serializable
+private class RouteSignatureCacheFile(val version: Int, val entries: List<RouteSignatureCacheEntry>)
+
+@Serializable
+private class RouteSignatureCacheEntry(
+    val id: String,
+    val updatedAt: Long,
+    val pointCount: Int,
+    /** `null` = Tour ohne Signatur (zu kurz). */
+    val signature: RouteSignatureCacheSignature?,
+)
+
+@Serializable
+private class RouteSignatureCacheSignature(
+    val distanceKm: Double,
+    val startCell: Long,
+    val endCell: Long,
+    val cells: LongArray,
+)
+
+private val routeCacheJson = Json { ignoreUnknownKeys = true }
+
+/** Aufsteigend und ohne Duplikate — sonst traegt der Merge in [sameRoute] nicht. */
+private fun LongArray.isStrictlySorted(): Boolean {
+    for (i in 1 until size) if (this[i - 1] >= this[i]) return false
+    return true
+}
+
+/**
+ * Schreibt [entries] als Cache-Datei auf [out] — gestreamt, ohne JSON-Baum und
+ * ohne den ganzen Text im Speicher (bei tausenden Touren sonst ein Mehrfaches
+ * der Daten). Schliesst [out] nicht.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+fun writeRouteSignatureCache(entries: Map<String, StoredRouteSignature>, out: OutputStream) {
+    val file = RouteSignatureCacheFile(
+        version = ROUTE_SIGNATURE_CACHE_VERSION,
+        entries = entries.map { (id, e) ->
+            RouteSignatureCacheEntry(
+                id = id,
+                updatedAt = e.updatedAt,
+                pointCount = e.pointCount,
+                signature = e.signature?.let {
+                    RouteSignatureCacheSignature(it.distanceKm, it.startCell, it.endCell, it.cells)
                 },
             )
-        }
-    }
+        },
+    )
+    routeCacheJson.encodeToStream(file, out)
+}
 
-    companion object {
-        /** Tolerant: jedes kaputte oder unvollstaendige Element ergibt `null` (Eintrag wird neu berechnet). */
-        fun fromJson(json: JsonElement?): StoredRouteSignature? {
-            val obj = json as? JsonObject ?: return null
-            return try {
-                val signature = when (val sig = obj["signature"]) {
-                    // Fehlender Schluessel = kaputt; explizites JsonNull = „keine Signatur".
-                    null -> return null
-                    is JsonNull -> null
-                    is JsonObject -> RouteSignature(
-                        cells = sig.requiredArray("cells").map {
-                            (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.content?.toLongOrNull()
-                                ?: return null
-                        }.toSet(),
-                        distanceKm = sig.requiredDouble("distanceKm"),
-                        startCell = sig.requiredLong("startCell"),
-                        endCell = sig.requiredLong("endCell"),
-                    )
-                    else -> return null
-                }
-                StoredRouteSignature(
-                    updatedAt = obj.requiredLong("updatedAt"),
-                    pointCount = obj.requiredInt("pointCount"),
-                    signature = signature,
-                )
-            } catch (_: MissingOrInvalidFieldException) {
-                null
-            }
-        }
-
-        /** Wie [fromJson], aber aus dem Rohtext; unlesbares JSON ergibt `null`. */
-        fun fromJsonString(raw: String): StoredRouteSignature? =
-            try {
-                fromJson(Json.parseToJsonElement(raw))
-            } catch (_: Exception) {
-                null
-            }
+/**
+ * Liest eine Cache-Datei von [input] (gestreamt). `null`, wenn sie unlesbar
+ * ist oder eine andere [ROUTE_SIGNATURE_CACHE_VERSION] hat — der Aufrufer
+ * behandelt das als leeren Cache. Einzelne Eintraege mit unbrauchbaren Werten
+ * (Zellen nicht sortiert, Laenge nicht endlich) fallen weg und werden neu
+ * berechnet; der Rest bleibt. Schliesst [input] nicht.
+ */
+@OptIn(ExperimentalSerializationApi::class)
+fun readRouteSignatureCache(input: InputStream): MutableMap<String, StoredRouteSignature>? {
+    val file = try {
+        routeCacheJson.decodeFromStream<RouteSignatureCacheFile>(input)
+    } catch (_: Exception) {
+        return null
     }
+    if (file.version != ROUTE_SIGNATURE_CACHE_VERSION) return null
+    val result = LinkedHashMap<String, StoredRouteSignature>(file.entries.size * 2)
+    for (e in file.entries) {
+        val sig = e.signature?.let {
+            if (!it.distanceKm.isFinite() || it.distanceKm < 0.0 || !it.cells.isStrictlySorted()) continue
+            RouteSignature(it.cells, it.distanceKm, it.startCell, it.endCell)
+        }
+        result[e.id] = StoredRouteSignature(e.updatedAt, e.pointCount, sig)
+    }
+    return result
 }
 
 /** Speicher fuer die Signaturen, je Tour-ID ein Eintrag. `:app` haengt eine Datei an, Tests eine Map. */
@@ -345,7 +447,9 @@ data class RouteComparison(
 }
 
 private fun effortOf(info: RideInfo, signature: RouteSignature): RouteEffort? {
-    val time = info.stats.movingTimeS ?: info.stats.durationS
+    // Nur Bewegungszeit: Eine Gesamtdauer enthielte Pausen (Cafe) und waere
+    // nicht mit den Bewegungszeiten der anderen Fahrten vergleichbar.
+    val time = info.stats.movingTimeS
     if (time == null || time <= 0) return null
     return RouteEffort(info.id, info.createdAt, time, signature.distanceKm / (time / 3600.0))
 }
@@ -355,8 +459,9 @@ private fun effortOf(info: RideInfo, signature: RouteSignature): RouteEffort? {
  * [sameRoute] zu der dieser Tour ist (bezogen auf diese Tour, keine
  * transitive Gruppierung). `null`, wenn die Tour fehlt, geplant ist, keine
  * Signatur oder keine brauchbare Zeit hat oder keine weitere passende Tour
- * existiert. Zeit = `movingTimeS ?: durationS`; Touren ohne Zeit zaehlen
- * nicht als Fahrt.
+ * existiert. Zeit = `movingTimeS`, nie die Gesamtdauer (Pausen
+ * wuerden sonst mit Bewegungszeiten gemischt); Touren ohne Bewegungszeit
+ * (fehlend oder 0) zaehlen nicht als Fahrt.
  */
 fun compareOnRoute(
     rideId: String,

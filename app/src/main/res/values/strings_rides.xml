@@ -242,6 +242,8 @@
         <item quantity="other">%1$d× gefahren</item>
     </plurals>
     <string name="rides_route_new_best_title">Neue Bestzeit auf dieser Runde</string>
+    <!-- Beste Zeit, aber ohne frühere Fahrt, die sie geschlagen hätte (erste Fahrt der Runde) -->
+    <string name="rides_route_best_title">Bestzeit auf dieser Runde</string>
     <!-- %1$d = Platz nach Zeit, %2$d = Zahl der Fahrten -->
     <string name="rides_route_rank_title">%1$d. schnellste von %2$d</string>
     <!-- %1$s = Abstand („3:12 min"), %2$s = Datum der letzten Fahrt („12.10.") -->

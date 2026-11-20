@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -244,6 +245,32 @@ class RidesScreenshotTest {
         shot("tour-runden-vergleich-en")
     }
 
+    /**
+     * Die erste Fahrt der Runde ist die schnellste (hier die aelteste, 1:20:00):
+     * Sie hat nie etwas geschlagen, also steht dort „Bestzeit" — nicht
+     * „Neue Bestzeit" — und keine Zeile „gegen das letzte Mal".
+     */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
+    fun tourRundenVergleichErsteFahrtIstBestzeit() {
+        openLoopRide(index = 3, specs = listOf(1 to 5_040, 8 to 5_232, 15 to 4_980, 22 to 4_800))
+        assertEquals("Bestzeit auf dieser Runde", string(R.string.rides_route_best_title))
+        compose.onAllNodesWithText(string(R.string.rides_route_best_title)).onFirst().assertIsDisplayed()
+        compose.onAllNodesWithText(string(R.string.rides_route_new_best_title)).assertCountEquals(0)
+        compose.onAllNodesWithText("beim letzten Mal", substring = true).assertCountEquals(0)
+        shot("tour-runden-vergleich-erste-bestzeit")
+    }
+
+    /** Die aelteste Fahrt der Standardreihe ist die langsamste: weder „Bestzeit" noch „Neue Bestzeit", sondern Rang. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
+    fun tourRundenVergleichErsteFahrtOhneBestzeit() {
+        openLoopRide(index = 3)
+        compose.onAllNodesWithText("4. schnellste von 4").onFirst().assertIsDisplayed()
+        compose.onAllNodesWithText(string(R.string.rides_route_best_title)).assertCountEquals(0)
+        compose.onAllNodesWithText(string(R.string.rides_route_new_best_title)).assertCountEquals(0)
+    }
+
     /** Leerer Verlauf: Satz und die zwei Wege zu Daten. */
     @Test
     fun leerEnglisch() {
@@ -264,8 +291,12 @@ class RidesScreenshotTest {
      * wartet, bis der Rundenvergleich da ist — der kommt vom IO-Dispatcher
      * nach (`AppViewModel.routeComparisonFor`).
      */
-    private fun openLoopRide(dark: Boolean = false, index: Int = 0) {
-        AppServices.rideStorage.saveRides(loopRides())
+    private fun openLoopRide(
+        dark: Boolean = false,
+        index: Int = 0,
+        specs: List<Pair<Int, Int>> = DEFAULT_LOOP_SPECS,
+    ) {
+        AppServices.rideStorage.saveRides(loopRides(specs))
         startInHistory(dark)
         compose.onAllNodesWithText("Hausrunde")[index].performClick()
         settle()
@@ -281,9 +312,8 @@ class RidesScreenshotTest {
      * die neueste ist also die zweitschnellste und 3:12 min schneller als die
      * davor, die dritte die Bestzeit.
      */
-    private fun loopRides(): List<Ride> {
+    private fun loopRides(specs: List<Pair<Int, Int>>): List<Ride> {
         val day = 24L * 60 * 60 * 1000
-        val specs = listOf(1 to 5_040, 8 to 5_232, 15 to 4_980, 22 to 5_400)
         return specs.mapIndexed { index, (daysAgo, movingS) ->
             val start = now - daysAgo * day - 3 * 60 * 60 * 1000L
             val points = List(240) { i ->
@@ -395,5 +425,10 @@ class RidesScreenshotTest {
                 TrackPoint(lat = 48.30 + 0.04 * sin(t), lon = 9.40 + 0.06 * cos(t), ele = 700.0 + 60 * sin(t))
             },
         )
+    }
+
+    private companion object {
+        /** (Tage zurueck, Bewegungszeit s), neueste zuerst — siehe [loopRides]. */
+        val DEFAULT_LOOP_SPECS = listOf(1 to 5_040, 8 to 5_232, 15 to 4_980, 22 to 5_400)
     }
 }
