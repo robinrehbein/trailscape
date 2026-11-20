@@ -70,20 +70,30 @@ def pick_track(alternatives, existing):
     return None
 
 
-def track_codes(track):
-    return [
+# Wear OS codes are phone codes + 1000000 (wear/build.gradle.kts).
+CODE_RANGE = 1_000_000
+
+
+def track_codes(track, code_offset):
+    """Version codes of this bundle's kind (phone or Wear) on the track.
+
+    A track can list the other form factor's codes too (seen: phone "alpha"
+    listing the Wear code 1002272), and those must not count as newer.
+    """
+    codes = [
         int(code)
         for release in track.get("releases", [])
         for code in release.get("versionCodes", [])
     ]
+    return [code for code in codes if code_offset <= code < code_offset + CODE_RANGE]
 
 
-def publish_to_track(session, bundle, track_name, expected_code, release_name, notes):
+def publish_to_track(session, bundle, track_name, expected_code, code_offset, release_name, notes):
     """Returns a one-line result. Raises on failure."""
     edit_id = request(session, "POST", f"{API}/edits", json={})["id"]
     track_url = f"{API}/edits/{edit_id}/tracks/{quote(track_name, safe='')}"
     try:
-        current_codes = track_codes(request(session, "GET", track_url))
+        current_codes = track_codes(request(session, "GET", track_url), code_offset)
         if current_codes and max(current_codes) >= expected_code:
             return f"{track_name}: already has versionCode {max(current_codes)}; skipped {expected_code}."
 
@@ -141,7 +151,7 @@ def list_tracks(session):
             print(f"Warning: could not clean up Play edit {edit_id}: {exc}")
 
 
-def publish(session, bundle, targets, expected_code, release_name, notes):
+def publish(session, bundle, targets, expected_code, code_offset, release_name, notes):
     """Publishes to every target; returns the number of failed targets."""
     existing = list_tracks(session)
     print(f"Tracks of this app: {', '.join(existing) or '(none)'}")
@@ -154,7 +164,7 @@ def publish(session, bundle, targets, expected_code, release_name, notes):
             print(f"ERROR {wanted}: no such track. Create it in the Play Console or adjust --tracks.")
             continue
         try:
-            print(publish_to_track(session, bundle, track_name, expected_code, release_name, notes))
+            print(publish_to_track(session, bundle, track_name, expected_code, code_offset, release_name, notes))
         except Exception as exc:
             failures += 1
             print(f"ERROR {track_name}: {exc}")
@@ -200,6 +210,7 @@ def main():
         args.bundle,
         targets,
         expected_code=args.run_number + 2000 + args.code_offset,
+        code_offset=args.code_offset,
         release_name=f"{args.label} 2.0.{args.run_number}",
         notes=args.notes,
     )
