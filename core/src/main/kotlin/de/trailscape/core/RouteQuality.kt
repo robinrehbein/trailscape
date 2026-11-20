@@ -25,6 +25,10 @@ import kotlin.math.max
  *    herausschnitte, haette keine Runde mehr); sie kosten stattdessen
  *    Strafpunkte in der Bewertung ([retraceScore]).
  *
+ * Dazu das absolute Urteil [routeQualityVerdict] (gut / brauchbar / schwach):
+ * Strafpunkte ordnen nur, das Urteil sagt, ob die beste Runde ueberhaupt gut
+ * genug ist — Grundlage der Nachsuche (`RouteGenerator.kt`, Schritt 9).
+ *
  * ## Arbeitsweise
  * Beide Funktionen tasten die Route in festen Schritten ab ([sampleStepM]),
  * weil BRouter Punkte ungleichmaessig liefert (dicht in Kurven, auf Geraden
@@ -150,6 +154,152 @@ fun surfaceScore(profile: RouteProfile, route: PlannedRoute): Double {
         RouteProfile.GRAVEL -> -mixedUnpavedBonus * (share / mixedUnpavedSaturation).coerceAtMost(1.0)
         RouteProfile.RADWEGE, RouteProfile.KUERZESTER -> 0.0
     }
+}
+
+// ---------------------------------------------------------------------------
+// Guete-Urteil
+// ---------------------------------------------------------------------------
+
+/**
+ * Wie gut eine vorgeschlagene Runde ist — gemessen an der Frage „wuerde ich sie
+ * ungesehen fahren?". Die Reihenfolge ist die Rangfolge: [GUT] vor
+ * [BRAUCHBAR] vor [SCHWACH].
+ *
+ * Der [RouteCandidate.score] sortiert, sagt aber nichts Absolutes: Er stellt
+ * immer *irgendeine* Runde nach vorn, auch wenn alle drei 18 % daneben liegen
+ * oder zur Haelfte hin und zurueck fuehren. Das Urteil ist die fehlende
+ * absolute Schwelle — ein Tor (darf die Liste „Beste" sagen, braucht es eine
+ * Nachsuche?), **keine** zweite Rangfolge.
+ */
+enum class RouteQualityLevel {
+    /** Ungesehen fahrbar: trifft die Laenge, ist eine echte Runde, passt zum Profil. */
+    GUT,
+
+    /** Fahrbar mit Abstrichen, die man vorher wissen sollte. */
+    BRAUCHBAR,
+
+    /** Erfuellt das Versprechen „passende Runde" nicht. */
+    SCHWACH,
+}
+
+/** Das Kriterium, an dem eine Runde ihr Urteil verliert — fuer eine ehrliche Begruendung. */
+enum class RouteQualityIssue {
+    /** Die Zieldistanz wird deutlich verfehlt. */
+    DISTANZ,
+
+    /** Ein guter Teil der Strecke fuehrt hin und denselben Weg zurueck. */
+    HIN_UND_ZURUECK,
+
+    /** Zu viel unbefestigter Weg fuer das Asphalt-Profil. */
+    BELAG,
+}
+
+/**
+ * Urteil samt Ursache. [issue] ist `null` genau dann, wenn [level] [RouteQualityLevel.GUT] ist.
+ */
+data class RouteQualityVerdict(val level: RouteQualityLevel, val issue: RouteQualityIssue?)
+
+/**
+ * Bis zu dieser relativen Distanzabweichung ist eine Runde [RouteQualityLevel.GUT] —
+ * dieselbe Schwelle wie die Toleranz der Radius-Iteration
+ * ([routeToleranceRatio]): Was der Generator selbst als „getroffen" ansieht,
+ * soll die Oberflaeche nicht anders nennen. 10 % sind bei 50 km fuenf
+ * Kilometer, also etwa eine Viertelstunde — das plant man ein.
+ */
+const val qualityDistanceGoodMax: Double = 0.10
+
+/**
+ * Bis hier ist die Abweichung noch [RouteQualityLevel.BRAUCHBAR]. Jenseits von
+ * 20 % ist aus der 2-Stunden-Einheit eine von zweieinhalb geworden (oder eine
+ * von gut anderthalb) — das ist eine andere Trainingseinheit, nicht dieselbe
+ * mit Abweichung.
+ */
+const val qualityDistanceUsableMax: Double = 0.20
+
+/**
+ * Bis zu diesem doppelt befahrenen Anteil ([retraceShare]) ist eine Runde
+ * [RouteQualityLevel.GUT]. Einige Prozent sind normal und kein Makel: der
+ * gemeinsame Weg aus dem Ort hinaus und wieder hinein, eine Bruecke, die
+ * beide Richtungen benutzen. Das Mass zaehlt beide Befahrungen — 10 % heissen
+ * also nur 5 % der Strecke als einfacher Weg.
+ */
+const val qualityRetraceGoodMax: Double = 0.10
+
+/**
+ * Bis hier ist der Anteil noch [RouteQualityLevel.BRAUCHBAR]. Darueber ist fast
+ * ein Drittel der Fahrt Wiederholung — das ist keine Runde mehr, sondern eine
+ * Pendelstrecke mit Schleife. Die Liste nennt den Anteil schon ab 15 % beim
+ * Namen (`RETRACE_NOTICE_SHARE` im Blatt), also innerhalb von „brauchbar".
+ */
+const val qualityRetraceUsableMax: Double = 0.30
+
+/**
+ * Bis zu diesem unbefestigten Anteil in Prozent ([unpavedPercent]) ist eine
+ * Runde im Asphalt-Profil [RouteQualityLevel.GUT]. Nicht 0, weil die
+ * Belagsdaten Freiwilligendaten sind und bis zur Haelfte hochgerechnet
+ * (siehe [unpavedPercent]): Ein falsch getaggter Wirtschaftsweg oder ein
+ * gepflasterter Ortskern soll eine sonst gute Rennrad-Runde nicht kippen.
+ * Im Score kosten 10 % genau 4 Punkte ([roadUnpavedPenaltyWeight]).
+ */
+const val qualityRoadUnpavedGoodMaxPercent: Int = 10
+
+/**
+ * Bis hier ist eine Asphalt-Runde noch [RouteQualityLevel.BRAUCHBAR]. Ein
+ * Viertel Schotter kostet im Score 10 Punkte — so viel wie die
+ * [qualityDistanceGoodMax]-Grenze der Distanz. Darueber ist es mit schmalen
+ * Reifen kein Abschnitt mehr, den man durchrollt, sondern ein Grund
+ * umzudrehen.
+ */
+const val qualityRoadUnpavedUsableMaxPercent: Int = 25
+
+/** Stufe eines einzelnen Kriteriums: `≤ good` gut, `≤ usable` brauchbar, sonst schwach. */
+private fun levelOf(value: Double, good: Double, usable: Double): RouteQualityLevel = when {
+    !value.isFinite() -> RouteQualityLevel.SCHWACH
+    value <= good -> RouteQualityLevel.GUT
+    value <= usable -> RouteQualityLevel.BRAUCHBAR
+    else -> RouteQualityLevel.SCHWACH
+}
+
+/**
+ * Das Guete-Urteil einer Runde: Das **schlechteste** Kriterium entscheidet —
+ * eine Runde, die die Laenge exakt trifft, aber zur Haelfte hin und zurueck
+ * fuehrt, ist nicht „im Schnitt brauchbar", sondern schwach.
+ *
+ *  * Distanz: [distanceDeviation] gegen [qualityDistanceGoodMax] /
+ *    [qualityDistanceUsableMax].
+ *  * Hin und zurueck: [retraceShare] gegen [qualityRetraceGoodMax] /
+ *    [qualityRetraceUsableMax].
+ *  * Belag: **nur** im Asphalt-Profil und **nur** mit Belagsdaten
+ *    ([unpavedPercent] nicht `null`) gegen [qualityRoadUnpavedGoodMaxPercent] /
+ *    [qualityRoadUnpavedUsableMaxPercent]. Fehlende Daten machen eine Runde
+ *    nie schlechter — dieselbe Regel wie bei [surfaceScore]. In den anderen
+ *    Profilen ist Schotter erwuenscht oder egal.
+ *
+ * Bei gleich schlechten Kriterien nennt [RouteQualityVerdict.issue] das erste
+ * in dieser Reihenfolge: Die Distanz ist das Hauptversprechen der Suche.
+ */
+fun routeQualityVerdict(
+    distanceDeviation: Double,
+    retraceShare: Double,
+    unpavedPercent: Int?,
+    profile: RouteProfile?,
+): RouteQualityVerdict {
+    val criteria = buildList {
+        add(RouteQualityIssue.DISTANZ to levelOf(distanceDeviation, qualityDistanceGoodMax, qualityDistanceUsableMax))
+        add(RouteQualityIssue.HIN_UND_ZURUECK to levelOf(retraceShare, qualityRetraceGoodMax, qualityRetraceUsableMax))
+        if (profile == RouteProfile.ASPHALT && unpavedPercent != null) {
+            add(
+                RouteQualityIssue.BELAG to levelOf(
+                    unpavedPercent.toDouble(),
+                    qualityRoadUnpavedGoodMaxPercent.toDouble(),
+                    qualityRoadUnpavedUsableMaxPercent.toDouble(),
+                ),
+            )
+        }
+    }
+    // maxBy behaelt das erste Maximum — das ist der Tie-Break aus dem KDoc.
+    val (issue, level) = criteria.maxBy { it.second.ordinal }
+    return RouteQualityVerdict(level, if (level == RouteQualityLevel.GUT) null else issue)
 }
 
 private const val EARTH_RADIUS_M = 6371000.0

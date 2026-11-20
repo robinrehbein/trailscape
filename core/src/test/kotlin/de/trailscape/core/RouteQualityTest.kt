@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -220,5 +221,123 @@ class RouteQualityTest {
         assertEquals(0.0, surfaceScore(RouteProfile.SCHOTTER, surfaced(5.0, 5.0)))
         assertEquals(0.0, surfaceScore(RouteProfile.RADWEGE, surfaced(10.0, 30.0)))
         assertEquals(0.0, surfaceScore(RouteProfile.KUERZESTER, surfaced(10.0, 30.0)))
+    }
+
+    // ---------------------------------------------------- Guete-Urteil
+
+    private fun verdict(
+        deviation: Double = 0.0,
+        retrace: Double = 0.0,
+        unpaved: Int? = null,
+        profile: RouteProfile? = RouteProfile.ASPHALT,
+    ) = routeQualityVerdict(deviation, retrace, unpaved, profile)
+
+    /** Knapp jenseits einer Schwelle — der Abstand ist kleiner als jede Messgenauigkeit. */
+    private fun above(threshold: Double) = threshold + 1e-9
+
+    @Test
+    fun distanceThresholdEdges() {
+        assertEquals(RouteQualityVerdict(RouteQualityLevel.GUT, null), verdict(deviation = 0.0))
+        assertEquals(RouteQualityLevel.GUT, verdict(deviation = qualityDistanceGoodMax).level)
+        // 44 km bei 40 km Ziel sind genau 10 % — und damit noch gut.
+        assertEquals(RouteQualityLevel.GUT, verdict(deviation = abs(44.0 - 40.0) / 40.0).level)
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.BRAUCHBAR, RouteQualityIssue.DISTANZ),
+            verdict(deviation = above(qualityDistanceGoodMax)),
+        )
+        assertEquals(RouteQualityLevel.BRAUCHBAR, verdict(deviation = qualityDistanceUsableMax).level)
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.SCHWACH, RouteQualityIssue.DISTANZ),
+            verdict(deviation = above(qualityDistanceUsableMax)),
+        )
+        assertEquals(RouteQualityLevel.SCHWACH, verdict(deviation = Double.NaN).level)
+        assertEquals(RouteQualityLevel.SCHWACH, verdict(deviation = Double.POSITIVE_INFINITY).level)
+    }
+
+    @Test
+    fun retraceThresholdEdges() {
+        assertEquals(RouteQualityLevel.GUT, verdict(retrace = qualityRetraceGoodMax).level)
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.BRAUCHBAR, RouteQualityIssue.HIN_UND_ZURUECK),
+            verdict(retrace = above(qualityRetraceGoodMax)),
+        )
+        assertEquals(RouteQualityLevel.BRAUCHBAR, verdict(retrace = qualityRetraceUsableMax).level)
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.SCHWACH, RouteQualityIssue.HIN_UND_ZURUECK),
+            verdict(retrace = above(qualityRetraceUsableMax)),
+        )
+        // Eine reine Pendelstrecke.
+        assertEquals(RouteQualityLevel.SCHWACH, verdict(retrace = 1.0).level)
+    }
+
+    @Test
+    fun unpavedShareCountsOnlyForTheRoadProfileWithData() {
+        val good = qualityRoadUnpavedGoodMaxPercent
+        val usable = qualityRoadUnpavedUsableMaxPercent
+        assertEquals(RouteQualityLevel.GUT, verdict(unpaved = good).level)
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.BRAUCHBAR, RouteQualityIssue.BELAG),
+            verdict(unpaved = good + 1),
+        )
+        assertEquals(RouteQualityLevel.BRAUCHBAR, verdict(unpaved = usable).level)
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.SCHWACH, RouteQualityIssue.BELAG),
+            verdict(unpaved = usable + 1),
+        )
+        // Ohne Belagsdaten wird nie schlechter geurteilt …
+        assertEquals(RouteQualityLevel.GUT, verdict(unpaved = null).level)
+        // … und ausserhalb des Asphalt-Profils ist Schotter kein Makel.
+        for (profile in RouteProfile.entries - RouteProfile.ASPHALT) {
+            assertEquals(RouteQualityLevel.GUT, verdict(unpaved = 90, profile = profile).level, "$profile")
+        }
+        assertEquals(RouteQualityLevel.GUT, verdict(unpaved = 90, profile = null).level)
+    }
+
+    @Test
+    fun theWorstCriterionDecidesAndNamesTheCause() {
+        // Distanz brauchbar, Rueckweg schwach -> schwach wegen Rueckweg.
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.SCHWACH, RouteQualityIssue.HIN_UND_ZURUECK),
+            verdict(deviation = 0.15, retrace = 0.5),
+        )
+        // Beide brauchbar -> die Distanz wird genannt (Hauptversprechen).
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.BRAUCHBAR, RouteQualityIssue.DISTANZ),
+            verdict(deviation = 0.15, retrace = 0.2, unpaved = 20),
+        )
+        // Nur der Belag kippt.
+        assertEquals(
+            RouteQualityVerdict(RouteQualityLevel.SCHWACH, RouteQualityIssue.BELAG),
+            verdict(deviation = 0.05, retrace = 0.05, unpaved = 40),
+        )
+    }
+
+    @Test
+    fun candidateQualityIsDerivedFromItsFields() {
+        val plain = PlannedRoute(points = square.toList(), distanceKm = 46.0, ascentM = 0.0)
+        fun candidate(route: PlannedRoute, retrace: Double = 0.0, profile: RouteProfile? = RouteProfile.ASPHALT) =
+            RouteCandidate(
+                route = route,
+                distanceKm = route.distanceKm,
+                ascentM = 0.0,
+                score = 0.0,
+                bearingDeg = 0.0,
+                targetKm = 40.0,
+                retraceShare = retrace,
+                profile = profile,
+            )
+
+        // 15 % zu lang.
+        assertEquals(RouteQualityLevel.BRAUCHBAR, candidate(plain).quality)
+        assertEquals(RouteQualityIssue.DISTANZ, candidate(plain).qualityIssue)
+        val exact = plain.copy(distanceKm = 40.0)
+        assertEquals(RouteQualityLevel.GUT, candidate(exact).quality)
+        assertEquals(null, candidate(exact).qualityIssue)
+        assertEquals(RouteQualityLevel.SCHWACH, candidate(exact, retrace = 0.4).quality)
+        // 40 % Schotter: im Asphalt-Profil schwach, ohne bekanntes Profil gut.
+        val gravelly = exact.copy(pavedKm = 24.0, unpavedKm = 16.0)
+        assertEquals(RouteQualityLevel.SCHWACH, candidate(gravelly).quality)
+        assertEquals(RouteQualityLevel.GUT, candidate(gravelly, profile = null).quality)
+        assertEquals(RouteQualityLevel.GUT, candidate(gravelly, profile = RouteProfile.SCHOTTER).quality)
     }
 }

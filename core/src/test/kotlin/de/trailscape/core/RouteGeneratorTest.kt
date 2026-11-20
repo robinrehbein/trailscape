@@ -143,6 +143,7 @@ class RouteGeneratorTest {
         exploredTiles: Set<ExplorerTile> = emptySet(),
         preferNewAreas: Boolean = false,
         wind: WindConditions? = null,
+        followUpSearch: Boolean = true,
     ): List<RouteCandidate> = runSync {
         generateRoutes(
             backend = backend,
@@ -158,6 +159,7 @@ class RouteGeneratorTest {
             preferNewAreas = preferNewAreas,
             wind = wind,
             texts = CoreTextsDe,
+            followUpSearch = followUpSearch,
         )
     }
 
@@ -219,7 +221,9 @@ class RouteGeneratorTest {
         // Die gemeldete Laenge haengt nicht vom Radius ab -> nie konvergent.
         val backend = FakeBackend(fixedDistanceKm = 100.0)
 
-        val results = generate(backend, target(40.0), candidates = 1)
+        // Ohne Nachsuche (Schritt 9): Die Runde liegt 150 % daneben und loeste
+        // sonst einen zweiten Durchgang aus — hier geht es um einen Kandidaten.
+        val results = generate(backend, target(40.0), candidates = 1, followUpSearch = false)
 
         assertEquals(maxRadiusAttempts, backend.calls)
         assertEquals(1, results.size)
@@ -830,5 +834,185 @@ class RouteGeneratorTest {
         assertTrue(northFirst(RouteProfile.GRAVEL))
         val road = generate(backend, target(40.0), profile = RouteProfile.ASPHALT)
         assertEquals(24.0, road.last().route.unpavedKm)
+    }
+
+    // ------------------------------------------------------------------
+    // Guete-Schwelle und Nachsuche (Schritt 9)
+    // ------------------------------------------------------------------
+
+    /** Kurse des regulaeren Durchgangs bei Seed 0 und drei Kandidaten. */
+    private val seed0Bearings = listOf(0.0, 120.0, 240.0)
+
+    /** Ob [points] eine Runde unter einem der Kurse von Seed 0 ist (Schwerpunkt der Via-Punkte). */
+    private fun isSeed0Loop(points: List<TrackPoint>): Boolean {
+        val bearing = bearingTo(START, viaCentroid(points))
+        return seed0Bearings.any { angleBetween(bearing, it) < 10.0 }
+    }
+
+    /**
+     * Ein Start am Seeufer: Die drei Kurse von Seed 0 laufen schlecht — mit
+     * [poorKm] als feste Laenge (die Radius-Iteration hilft nicht, drei
+     * Versuche je Kandidat) oder, ohne [poorKm], als exakt passende
+     * Pendelstrecke. Alle anderen Kurse verhalten sich wie [FakeBackend].
+     */
+    private class LakeShoreBackend(
+        val isPoor: (List<TrackPoint>) -> Boolean,
+        val poorKm: Double? = null,
+        val targetKm: Double = 40.0,
+    ) : RoutingBackend {
+        var calls = 0
+        private val fake = FakeBackend()
+
+        override suspend fun route(waypoints: List<Waypoint>, profile: RouteProfile): PlannedRoute {
+            calls += 1
+            val points = waypoints.map { TrackPoint(lat = it.lat, lon = it.lon, ele = 500.0) }
+            if (!isPoor(points)) return fake.route(waypoints, profile)
+            if (poorKm != null) return PlannedRoute(points = points, distanceKm = poorKm, ascentM = 0.0)
+            val far = destinationPoint(START, bearingTo(START, viaCentroid(points)), targetKm * 500).copy(ele = 500.0)
+            return PlannedRoute(points = listOf(START, far, START), distanceKm = targetKm, ascentM = 0.0)
+        }
+    }
+
+    @Test
+    fun `ist der erste Durchgang gut, gibt es keine Nachsuche und bitgenau dasselbe Ergebnis`() {
+        for (seed in 0..3) {
+            val withFollowUp = FakeBackend()
+            val without = FakeBackend()
+            val a = generate(withFollowUp, target(40.0), seed = seed)
+            val b = generate(without, target(40.0), seed = seed, followUpSearch = false)
+
+            assertEquals(b, a)
+            assertTrue(a.first().quality == RouteQualityLevel.GUT)
+            // Mit Umwegfaktor 1,3 ein Aufruf je Kandidat — keiner mehr.
+            assertEquals(3, withFollowUp.calls)
+            assertEquals(without.calls, withFollowUp.calls)
+        }
+    }
+
+    @Test
+    fun `liegt der erste Durchgang 18 Prozent daneben, gewinnt die gedrehte Runde`() {
+        val backend = LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18)
+        val pauses = mutableListOf<Long>()
+
+        val results = generate(backend, target(40.0), sleeper = { pauses.add(it) })
+
+        assertEquals(3, results.size)
+        val best = results.first()
+        assertEquals(RouteQualityLevel.GUT, best.quality)
+        assertTrue(seed0Bearings.none { angleBetween(best.bearingDeg, it) < 1.0 }, "Kurs ${best.bearingDeg}")
+        // Die Nachsuche dreht um den goldenen Winkel: 137,5°, 257,5°, 17,5°.
+        val rotated = listOf(137.50776405003785, 257.50776405003785, 17.50776405003785)
+        assertTrue(rotated.any { abs(it - best.bearingDeg) < 1e-6 }, "Kurs ${best.bearingDeg}")
+        assertTrue(results.zipWithNext().all { (x, y) -> x.score <= y.score })
+        // 3 × 3 Versuche im ersten Durchgang (die Laenge haengt nicht am
+        // Radius), dann je einer — innerhalb der harten Grenze.
+        assertEquals(9 + 3, backend.calls)
+        assertTrue(backend.calls <= maxRoutingCallsPerSearch(3))
+        // Die Pause gilt auch fuer die Nachsuche: vor jedem Aufruf ausser dem ersten.
+        assertEquals(backend.calls - 1, pauses.size)
+        assertTrue(pauses.all { it == 0L })
+    }
+
+    @Test
+    fun `eine Pendelstrecke im ersten Durchgang loest die Nachsuche aus`() {
+        val backend = LakeShoreBackend(::isSeed0Loop)
+
+        val results = generate(backend, target(40.0))
+
+        // Die Pendelstrecken treffen die Distanz exakt, aber keine ist gut.
+        assertEquals(3 + 3, backend.calls)
+        assertEquals(RouteQualityLevel.GUT, results.first().quality)
+        assertTrue(results.first().retraceShare < 0.01)
+        assertTrue(results.none { it.retraceShare > 0.9 }, "die Pendelstrecken fallen aus der Liste")
+    }
+
+    @Test
+    fun `abgeschaltet bleibt es beim alten Verhalten`() {
+        val backend = LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18)
+
+        val results = generate(backend, target(40.0), followUpSearch = false)
+
+        assertEquals(9, backend.calls)
+        assertEquals(seed0Bearings, results.map { it.bearingDeg }.sorted())
+        assertTrue(results.all { it.quality == RouteQualityLevel.BRAUCHBAR })
+        assertTrue(results.all { it.qualityIssue == RouteQualityIssue.DISTANZ })
+    }
+
+    @Test
+    fun `hoechstens eine Nachsuche, auch wenn sie nichts Besseres findet`() {
+        for (candidates in listOf(1, 3, 8)) {
+            // Nie konvergent, nie gut.
+            val backend = FakeBackend(fixedDistanceKm = 100.0)
+            val pauses = mutableListOf<Long>()
+
+            val results = generate(backend, target(40.0), candidates = candidates, sleeper = { pauses.add(it) })
+
+            assertEquals(maxRoutingCallsPerSearch(candidates), backend.calls)
+            assertEquals(2 * candidates * maxRadiusAttempts, backend.calls)
+            assertEquals(backend.calls - 1, pauses.size)
+            assertEquals(candidates, results.size)
+            assertTrue(results.all { it.quality == RouteQualityLevel.SCHWACH })
+        }
+    }
+
+    @Test
+    fun `scheitert der erste Durchgang ganz, gibt es keine Nachsuche`() {
+        val backend = FakeBackend(failAt = setOf(0, 1, 2))
+
+        assertFailsWith<Exception> { generate(backend, target(40.0)) }
+        assertEquals(3, backend.calls)
+    }
+
+    @Test
+    fun `ein Abbruch in der Nachsuche verlaesst die Suche sofort`() {
+        class Abort : Exception("Routensuche abgebrochen.")
+        val backend = LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18)
+        var pauses = 0
+
+        assertFailsWith<Abort> {
+            // Der erste Durchgang braucht 9 Aufrufe und 8 Pausen; die 9. Pause
+            // steht vor dem ersten Aufruf der Nachsuche.
+            generate(backend, target(40.0), sleeper = { if (++pauses == 9) throw Abort() })
+        }
+        assertEquals(9, backend.calls)
+
+        // Ebenso eine Coroutine-Cancellation aus dem Backend mitten in der Nachsuche.
+        var calls = 0
+        val cancelling = RoutingBackend { waypoints, profile ->
+            calls += 1
+            if (calls == 11) throw CancellationException("abgebrochen")
+            LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18).route(waypoints, profile)
+        }
+        assertFailsWith<CancellationException> { generate(cancelling, target(40.0)) }
+        assertEquals(11, calls)
+    }
+
+    @Test
+    fun `onProgress waechst mit der Nachsuche, ohne zurueckzulaufen`() {
+        val progress = mutableListOf<Pair<Int, Int>>()
+
+        generate(
+            LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18),
+            target(40.0),
+            onProgress = { done, total -> progress.add(done to total) },
+        )
+
+        assertEquals(listOf(0 to 3, 1 to 3, 2 to 3, 3 to 6, 4 to 6, 5 to 6, 6 to 6), progress)
+        assertTrue(progress.zipWithNext().all { (a, b) -> b.first >= a.first && b.second >= a.second })
+    }
+
+    @Test
+    fun `die Nachsuche ist deterministisch`() {
+        val a = generate(LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18), target(40.0))
+        val b = generate(LakeShoreBackend(::isSeed0Loop, poorKm = 40.0 * 1.18), target(40.0))
+
+        assertEquals(a, b)
+    }
+
+    @Test
+    fun `Kandidaten tragen das Profil fuer das Belags-Urteil`() {
+        val results = generate(FakeBackend(), target(40.0), profile = RouteProfile.ASPHALT)
+
+        assertTrue(results.all { it.profile == RouteProfile.ASPHALT })
     }
 }

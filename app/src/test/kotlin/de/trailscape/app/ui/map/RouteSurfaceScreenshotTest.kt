@@ -78,13 +78,14 @@ class RouteSurfaceScreenshotTest {
         return PlannedRoute(points, distanceKm, ascentM, pavedKm = paved, unpavedKm = unpaved)
     }
 
-    private fun candidate(route: PlannedRoute, bearing: Double) = RouteCandidate(
+    private fun candidate(route: PlannedRoute, bearing: Double, retraceShare: Double = 0.0) = RouteCandidate(
         route = route,
         distanceKm = route.distanceKm,
         ascentM = route.ascentM,
         score = 0.0,
         bearingDeg = bearing,
         targetKm = target.distanceKm,
+        retraceShare = retraceShare,
     )
 
     @Test
@@ -122,15 +123,41 @@ class RouteSurfaceScreenshotTest {
         compose.onNodeWithText(context.getString(R.string.map_planning_start_action)).assertExists()
     }
 
-    private fun rundenwahl(file: String) {
-        val candidates = listOf(
-            // 62 % unbefestigt
-            candidate(route(46.2, 540.0, paved = 17.5, unpaved = 28.7), 0.0),
-            // flach, fast nur Asphalt
-            candidate(route(43.1, 210.0, paved = 41.0, unpaved = 2.1), 120.0),
-            // bergig, Belag ueberwiegend unbekannt → keine Belagszeile
-            candidate(route(48.9, 890.0, paved = 5.0, unpaved = 10.0), 240.0),
-        )
+    /**
+     * Kein Vorschlag ist gut (Start an einem Seeufer, auch nach der Nachsuche):
+     * kein „Beste", sondern „#1", und unter der Liste die leise Zeile zur
+     * Ursache des ersten Vorschlags — hier die verfehlte Laenge.
+     */
+    @Test
+    fun rundenwahlNichtGutGenug() {
+        rundenwahl("60-rundenwahl-belag-nicht-gut.png", weakCandidates())
+        val context = compose.activity
+        compose.onNodeWithText(context.getString(R.string.map_generation_quality_distance_note)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_generation_best_label)).assertDoesNotExist()
+        compose.onNodeWithText("#1").assertExists()
+    }
+
+    /** Dasselbe auf Englisch — die laengere Zeile darf nicht abgeschnitten werden. */
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun rundenwahlNichtGutGenugEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        rundenwahl("60-rundenwahl-belag-nicht-gut-en.png", weakCandidates())
+        val context = compose.activity
+        compose.onNodeWithText(context.getString(R.string.map_generation_quality_distance_note)).assertExists()
+        compose.onNodeWithText(context.getString(R.string.map_generation_best_label)).assertDoesNotExist()
+    }
+
+    private fun weakCandidates() = listOf(
+        // 17,6 % zu lang → brauchbar wegen der Distanz
+        candidate(route(52.9, 610.0, paved = 30.0, unpaved = 22.9), 20.0),
+        // trifft die Laenge, aber 40 % hin und zurueck → schwach
+        candidate(route(45.8, 380.0, paved = 40.0, unpaved = 5.8), 140.0, retraceShare = 0.4),
+        // 17,6 % zu kurz
+        candidate(route(37.1, 290.0, paved = 33.0, unpaved = 4.1), 260.0),
+    )
+
+    private fun rundenwahl(file: String, candidates: List<RouteCandidate> = surfaceCandidates()) {
         compose.setContent {
             TrailscapeTheme {
                 ProvideTestLanguage {
@@ -163,6 +190,15 @@ class RouteSurfaceScreenshotTest {
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/$file")
     }
+
+    private fun surfaceCandidates() = listOf(
+        // 62 % unbefestigt
+        candidate(route(46.2, 540.0, paved = 17.5, unpaved = 28.7), 0.0),
+        // flach, fast nur Asphalt
+        candidate(route(43.1, 210.0, paved = 41.0, unpaved = 2.1), 120.0),
+        // bergig, Belag ueberwiegend unbekannt → keine Belagszeile
+        candidate(route(48.9, 890.0, paved = 5.0, unpaved = 10.0), 240.0),
+    )
 
     @Test
     fun planungsblatt() {
