@@ -806,4 +806,29 @@ class RouteGeneratorTest {
         val plain = scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT)
         assertEquals(plain + 10.0, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, retraceShare = 0.25), EPS)
     }
+
+    @Test
+    fun `im Gravel-Profil gewinnt die Runde mit mehr Schotter, im Asphalt-Profil die ohne`() {
+        // Alle drei Runden sind gleich lang; nur die nach Norden ist zu 60 % unbefestigt.
+        val backend = RoutingBackend { waypoints, _ ->
+            val points = waypoints.map { TrackPoint(lat = it.lat, lon = it.lon, ele = 500.0) }
+            val north = angleBetween(bearingTo(START, viaCentroid(points)), 0.0) < 45
+            PlannedRoute(
+                points = points,
+                distanceKm = 40.0,
+                ascentM = 0.0,
+                pavedKm = if (north) 16.0 else 40.0,
+                unpavedKm = if (north) 24.0 else 0.0,
+            )
+        }
+        fun northFirst(profile: RouteProfile): Boolean {
+            val results = generate(backend, target(40.0), profile = profile)
+            return results.first().route.unpavedKm == 24.0
+        }
+
+        assertTrue(northFirst(RouteProfile.SCHOTTER))
+        assertTrue(northFirst(RouteProfile.GRAVEL))
+        val road = generate(backend, target(40.0), profile = RouteProfile.ASPHALT)
+        assertEquals(24.0, road.last().route.unpavedKm)
+    }
 }

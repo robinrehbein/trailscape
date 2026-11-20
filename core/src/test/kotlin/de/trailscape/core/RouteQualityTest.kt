@@ -191,4 +191,34 @@ class RouteQualityTest {
         // zwar, aber eine Route nur aus Stichstrecke bleibt sinnvollerweise … weg.
         assertTrue(trimSpurs(pureOutAndBack).route.points.size >= 2)
     }
+
+    // -------------------------------------------------------- surfaceScore
+
+    private fun surfaced(pavedKm: Double?, unpavedKm: Double?) =
+        PlannedRoute(points = emptyList(), distanceKm = 40.0, ascentM = 0.0, pavedKm = pavedKm, unpavedKm = unpavedKm)
+
+    @Test
+    fun roadProfilePaysForGravel() {
+        assertEquals(0.0, surfaceScore(RouteProfile.ASPHALT, surfaced(40.0, 0.0)))
+        assertEquals(10.0, surfaceScore(RouteProfile.ASPHALT, surfaced(30.0, 10.0)), 1e-9)
+    }
+
+    @Test
+    fun gravelProfileIsRewardedUpToSaturation() {
+        assertEquals(0.0, surfaceScore(RouteProfile.SCHOTTER, surfaced(40.0, 0.0)))
+        assertEquals(-5.0, surfaceScore(RouteProfile.SCHOTTER, surfaced(26.0, 14.0)), 1e-9)
+        assertEquals(-gravelUnpavedBonus, surfaceScore(RouteProfile.SCHOTTER, surfaced(12.0, 28.0)), 1e-9)
+        assertEquals(-gravelUnpavedBonus, surfaceScore(RouteProfile.SCHOTTER, surfaced(0.0, 40.0)), 1e-9)
+        // Gemischtes Profil: halber Bonus, schon bei 40 % satt.
+        assertEquals(-mixedUnpavedBonus, surfaceScore(RouteProfile.GRAVEL, surfaced(20.0, 20.0)), 1e-9)
+    }
+
+    @Test
+    fun noSurfaceDataOrNoPreferenceMeansNoScore() {
+        assertEquals(0.0, surfaceScore(RouteProfile.ASPHALT, surfaced(null, null)))
+        // Mehr als die Haelfte unklassifiziert: nicht verlaesslich.
+        assertEquals(0.0, surfaceScore(RouteProfile.SCHOTTER, surfaced(5.0, 5.0)))
+        assertEquals(0.0, surfaceScore(RouteProfile.RADWEGE, surfaced(10.0, 30.0)))
+        assertEquals(0.0, surfaceScore(RouteProfile.KUERZESTER, surfaced(10.0, 30.0)))
+    }
 }

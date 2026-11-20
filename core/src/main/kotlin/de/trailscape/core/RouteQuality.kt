@@ -7,7 +7,7 @@ import kotlin.math.floor
 import kotlin.math.max
 
 /**
- * # Rundenguete — Stichstrecken und doppelt befahrene Wege
+ * # Rundenguete — Stichstrecken, doppelt befahrene Wege, passender Untergrund
  *
  * Die Rundkurs-Generierung (`RouteGenerator.kt`) legt Via-Punkte auf einen
  * Kreis und laesst BRouter sie abfahren. Ein Via-Punkt ist aber nur eine
@@ -93,6 +93,63 @@ const val retraceScoreWeight: Double = 40.0
 fun retraceScore(share: Double): Double {
     val clamped = if (share.isFinite()) share.coerceIn(0.0, 1.0) else 0.0
     return retraceScoreWeight * clamped
+}
+
+// ---------------------------------------------------------------------------
+// Untergrund
+// ---------------------------------------------------------------------------
+
+/**
+ * Strafpunkte je vollstaendig unbefestigter Runde im Asphalt-Profil. 40 heisst:
+ * 10 % Schotter kosten eine Rennrad-Runde 4 Punkte, ein Viertel Schotter 10 —
+ * so viel wie 10 % Distanzabweichung. Wer Asphalt waehlt, faehrt schmale
+ * Reifen; ein Feldweg ist dort kein Schoenheitsfehler, sondern ein Grund
+ * umzudrehen.
+ */
+const val roadUnpavedPenaltyWeight: Double = 40.0
+
+/**
+ * Hoechster Bonus fuer unbefestigte Wege im echten Gravel-Profil
+ * ([RouteProfile.SCHOTTER]), erreicht ab [gravelUnpavedSaturation]. Bewusst
+ * schwaecher als die Distanz: Der Untergrund sortiert annaehernd gleich lange
+ * Runden um, macht aber keine 15 % zu lange Runde zur Empfehlung.
+ */
+const val gravelUnpavedBonus: Double = 10.0
+
+/** Anteil, ab dem mehr Schotter im Gravel-Profil nicht weiter belohnt wird. */
+const val gravelUnpavedSaturation: Double = 0.7
+
+/** Dasselbe fuer das gemischte Profil ([RouteProfile.GRAVEL], Trekking): halber Bonus, frueher satt. */
+const val mixedUnpavedBonus: Double = 5.0
+
+/** Saettigung des gemischten Profils. */
+const val mixedUnpavedSaturation: Double = 0.4
+
+/**
+ * Strafpunkte (negativ = Bonus) dafuer, wie gut der Untergrund einer Runde zum
+ * gewaehlten Fahrprofil passt.
+ *
+ * BRouter gewichtet den Belag schon beim Routen — aber nur *entlang* der
+ * vorgegebenen Via-Punkte. Welche der drei Runden am Ende vorn steht,
+ * entschied bisher allein Distanz und Hoehenprofil: Eine Gravel-Runde mit 5 %
+ * Schotter schlug eine mit 60 %, wenn sie die Zieldistanz um einen Kilometer
+ * besser traf. Genau dafuer hat man die App aber nicht geoeffnet.
+ *
+ * Ohne verlaessliche Belagsdaten ([unpavedPercent] ist `null`) ist das
+ * Ergebnis 0 — eine Runde wird nie fuer fehlende Daten bestraft oder belohnt.
+ * Fuer [RouteProfile.RADWEGE] und [RouteProfile.KUERZESTER] gibt es keine
+ * Vorliebe.
+ */
+fun surfaceScore(profile: RouteProfile, route: PlannedRoute): Double {
+    val share = (route.unpavedPercent ?: return 0.0) / 100.0
+    // Ohne Schotter gibt es weder Strafe noch Bonus — und kein „−0,0".
+    if (share <= 0) return 0.0
+    return when (profile) {
+        RouteProfile.ASPHALT -> roadUnpavedPenaltyWeight * share
+        RouteProfile.SCHOTTER -> -gravelUnpavedBonus * (share / gravelUnpavedSaturation).coerceAtMost(1.0)
+        RouteProfile.GRAVEL -> -mixedUnpavedBonus * (share / mixedUnpavedSaturation).coerceAtMost(1.0)
+        RouteProfile.RADWEGE, RouteProfile.KUERZESTER -> 0.0
+    }
 }
 
 private const val EARTH_RADIUS_M = 6371000.0

@@ -111,7 +111,10 @@ import kotlin.math.sin
  * Ziel verglichen wird. Was danach noch doppelt befahren wird (lange
  * Hin-und-zurueck-Stuecke, die kein Stachel mehr sind), misst
  * [retraceShare] und kostet [retraceScore]: `40 × Anteil`, ein Viertel
- * doppelt also 10 Punkte — so viel wie 10 % Distanzabweichung.
+ * doppelt also 10 Punkte — so viel wie 10 % Distanzabweichung. Dazu kommt
+ * die Passung des Untergrunds zum Fahrprofil ([surfaceScore]): Schotter
+ * kostet im Asphalt-Profil (`40 × Anteil`) und bringt im Gravel-Profil bis zu
+ * 10 Punkte Bonus.
  *
  * ## Betrieb
  *
@@ -326,7 +329,9 @@ fun noveltyScore(newTileShare: Double): Double {
  * `newTileShare = 0` und `windBonus = 0` ist das Ergebnis identisch mit der
  * Bewertung ohne Entdecker-Modus und ohne Wind. Ein nicht endlicher
  * [windBonus] zaehlt als 0 — er darf nie die Sortierung kippen.
- * [retraceShare] ist der doppelt befahrene Anteil ([retraceScore]).
+ * [retraceShare] ist der doppelt befahrene Anteil ([retraceScore]),
+ * [surfaceScore] die Passung des Untergrunds zum Fahrprofil (gleichnamige
+ * Funktion in `RouteQuality.kt`).
  */
 fun scoreRoute(
     distanceKm: Double,
@@ -336,12 +341,13 @@ fun scoreRoute(
     newTileShare: Double = 0.0,
     windBonus: Double = 0.0,
     retraceShare: Double = 0.0,
+    surfaceScore: Double = 0.0,
 ): Double {
     val deviation = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 1.0
     val perKm = if (distanceKm > 0) ascentM / distanceKm else 0.0
     val wind = if (windBonus.isFinite()) windBonus else 0.0
     return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind +
-        retraceScore(retraceShare)
+        retraceScore(retraceShare) + (if (surfaceScore.isFinite()) surfaceScore else 0.0)
 }
 
 /**
@@ -558,6 +564,7 @@ suspend fun generateRoutes(
                         newTileShare = if (preferNewAreas) share else 0.0,
                         windBonus = windBonus,
                         retraceShare = retraced,
+                        surfaceScore = surfaceScore(profile, found.route),
                     ),
                     bearingDeg = bearing,
                     targetKm = targetKm,
