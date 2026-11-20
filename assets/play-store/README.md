@@ -18,14 +18,31 @@ unter dem Dienst `trailscape-play-upload-key-password` gespeichert. Der
 Schlüssel und sein Passwort gehören nicht ins Repository. Der Schlüssel muss
 für spätere Uploads gesichert bleiben.
 
-## Automatische interne Releases
+## Automatische Test-Releases
 
 Jeder erfolgreiche Push auf `main` erstellt weiterhin das GitHub-Release und
-veröffentlicht danach ein separat signiertes Telefon-Bundle im internen
-Play-Test. Der Workflow liegt in `.github/workflows/build.yml`; der API-Upload
-in `tool/publish_play_internal.py`. Pull Requests, andere Branches und manuelle
+veröffentlicht danach separat signierte Bundles in Google Play:
+
+| Bundle | Tracks |
+| --- | --- |
+| Telefon | interner Test (`internal`) und geschlossener Test (`alpha`) |
+| Wear OS | `wear:internal` und `wear:alpha` |
+
+Der Workflow liegt in `.github/workflows/build.yml`; der API-Upload in
+`tool/publish_play_internal.py`. Pull Requests, andere Branches und manuelle
 Workflow-Läufe veröffentlichen nichts. Bereits veröffentlichte oder neuere
-Versionscodes werden übersprungen.
+Versionscodes werden je Track übersprungen.
+
+Jeder Track bekommt seinen eigenen Commit. Der interne Test geht ohne Prüfung
+raus; den geschlossenen Test prüft Google je nach Konto vorher. Scheitert ein
+Track, bleiben die anderen aktuell und der Schritt endet rot. Alle Tester des
+geschlossenen Tests bekommen damit jeden Merge nach `main`.
+
+Die Wear-OS-Tracks existieren erst, wenn in der Play Console unter
+*Testen → Erweiterte Einstellungen → Formfaktoren* Wear OS mit eigenen Tracks
+eingerichtet ist. Fehlen sie oder heißt der geschlossene Test anders als
+`alpha`, listet das Skript die vorhandenen Tracks im Log; die Namen stehen in
+`--tracks` im Workflow.
 
 Für den Play-Job werden diese verschlüsselten GitHub-Repository-Secrets benötigt:
 
@@ -42,8 +59,8 @@ aktiv sein. Die Pipeline bricht mit einer klaren Fehlermeldung ab, falls eines
 der Secrets fehlt. Der bestehende GitHub-APK-Schlüssel bleibt separat, damit
 direkt installierte APKs weiterhin aktualisierbar sind.
 
-Der Versionscode ist `2000 + GITHUB_RUN_NUMBER`. Die Pipeline veröffentlicht
-gezielt nur den internen Play-Test; weitere Play-Tracks werden nicht automatisch
+Der Versionscode ist `2000 + GITHUB_RUN_NUMBER`, für Wear OS zusätzlich
+`+ 1 000 000`. Offener Test und Produktion werden nicht automatisch
 hochgestuft. Status und Fehlermeldungen sind im GitHub-Actions-Lauf sichtbar.
 
 Die Store-Screenshots sollen aus der echten Compose-Oberfläche kommen:
