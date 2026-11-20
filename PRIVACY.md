@@ -83,6 +83,10 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 Wochenziel, Monats-Challenges, Bestwerte, der Vergleich wiederholter Strecken
 („Diese Runde“) und das Startbildschirm-Widget werden ausschließlich aus den
 lokal gespeicherten Touren berechnet; dafür verlassen keine Daten das Gerät.
+Ist eine Uhr gekoppelt, gehen der Wochenstand (Serie, gefahrene Kilometer,
+Wochenziel) und nach einer Aufzeichnung bis zu zwei Sätze zu ihren Erfolgen
+vom Handy an deine Uhr (Wear-Datenverbindung, nur lokal), damit Kachel,
+Komplikation und Abschlussbild sie zeigen können.
 
 Gesundheitsdaten aus Health Connect (Puls, Ruhepuls, HRV, Schlaf, VO₂max)
 werden für die Auswertung verwendet und, soweit sie zu einer Tour gehören,
