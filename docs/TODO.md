@@ -72,9 +72,6 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 - **Jahresziel in den Selfhost-Sync.** Das Jahresziel liegt im
   Schluessel-Wert-Speicher (`YEAR_GOAL_STORAGE_KEY`); im JSON-Backup ist es
   (Feld `yearGoal`), im Selfhost-Sync noch nicht.
-- **Motivation auf der Uhr.** Wochenserie und naechste Bestweite als Zeile der
-  Wear-Kachel bzw. der Abschlussanzeige nach einer Uhr-Aufzeichnung.
-
 - **Englisch vor dem Release gegenlesen.** Alle Bereiche liegen jetzt als
   Ressourcen in `values/` und `values-en/` (Regeln in `docs/i18n.md`). Vor
   dem Release einmal die App komplett auf Englisch durchklicken
