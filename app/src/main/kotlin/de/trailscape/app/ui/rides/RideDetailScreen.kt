@@ -102,6 +102,7 @@ import de.trailscape.core.Confidence
 import de.trailscape.core.DecouplingResult
 import de.trailscape.core.Ride
 import de.trailscape.core.RideCurve
+import de.trailscape.core.RouteComparison
 import de.trailscape.core.RideLoad
 import de.trailscape.core.SegmentEffortView
 import de.trailscape.core.TrainingProfile
@@ -143,6 +144,9 @@ import kotlinx.coroutines.withContext
  *  3. Karte mit der Spur, darunter km · Std. · Hm · Ø Puls.
  *  4. Ein Satz in Klartext ([rideNote]): passt die Tour zum Plan, oder wie
  *     hart war sie?
+ *  4a. Erfolge (`AchievementsCard`) und — nur bei wiederholter Strecke —
+ *     der Rundenvergleich ([RouteComparisonCard]): „2. schnellste von 5,
+ *     3:12 min schneller als beim letzten Mal".
  *  4b. Was die Tour gebracht hat ([RideImpactCard]) — Fitness/Frische,
  *     Wochenziel, neue Kacheln, neue Bestzeiten; entfaellt ganz ohne Daten.
  *  5. Die eine Hauptaktion **„Diese Tour nochmal fahren"** — die Spur als
@@ -256,6 +260,14 @@ internal fun RideDetailScreen(
     val recordGains = remember(facts, ride.id) { recordsSetBy(ride.id, facts) }
     val milestonesReached = remember(facts, ride.id) { milestonesReachedBy(ride.id, facts) }
 
+    // Dieselbe Runde schon einmal gefahren? Kommt nach, sobald der
+    // Signatur-Cache steht (beim allerersten Mal einmal der ganze Bestand).
+    // `rides` als Schluessel: Eine neue, geloeschte oder umbenannte Fahrt
+    // auf derselben Strecke aendert den Vergleich.
+    val routeComparison by produceState<RouteComparison?>(null, ride.id, ride.updatedAt, rides) {
+        value = if (ride.planned) null else appViewModel.routeComparisonFor(ride.id)
+    }
+
     // Aufgeklappt bleibt aufgeklappt, auch ueber eine Drehung hinweg.
     var allValues by rememberSaveable(ride.id) { mutableStateOf(false) }
 
@@ -312,6 +324,9 @@ internal fun RideDetailScreen(
                 } else {
                     note?.let { RideNoteBox(it) }
                     AchievementsCard(records = recordGains, milestones = milestonesReached)
+                    routeComparison?.let {
+                        RouteComparisonCard(comparison = it, onOpenRide = appViewModel::requestRideDetail)
+                    }
                     impact?.let { RideImpactCard(rideImpactLines(it, LocalCoreTexts.current)) }
                 }
 

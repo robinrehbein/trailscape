@@ -8,6 +8,7 @@ import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.ExplorerTilesCacheStore
 import de.trailscape.app.data.RideLoadCacheStore
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.data.RouteSignatureCacheStore
 import de.trailscape.app.data.SegmentStore
 import de.trailscape.app.data.TombstoneStore
 import de.trailscape.app.i18n.UiText
@@ -44,6 +45,7 @@ import de.trailscape.core.ReminderSettings
 import de.trailscape.core.Ride
 import de.trailscape.core.RideLoad
 import de.trailscape.core.RideSummary
+import de.trailscape.core.RouteComparison
 import de.trailscape.core.RouteConsentRequest
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.SegmentNewBest
@@ -60,6 +62,8 @@ import de.trailscape.core.attachRouteToRide
 import de.trailscape.core.bulkImportFailureText
 import de.trailscape.core.bulkImportMessage
 import de.trailscape.core.collectExplorerTiles
+import de.trailscape.core.collectRouteSignatures
+import de.trailscape.core.compareOnRoute
 import de.trailscape.core.decodeRouteConsentRequests
 import de.trailscape.core.encodeRouteConsentRequests
 import de.trailscape.core.explorerTilesCacheGaps
@@ -72,6 +76,7 @@ import de.trailscape.core.loadPlan
 import de.trailscape.core.mergeRouteConsentRequests
 import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.retainRidesInSegmentRegistry
+import de.trailscape.core.riddenRides
 import de.trailscape.core.ridesNeedingSegmentUpdate
 import de.trailscape.core.routeConsentStorageKey
 import de.trailscape.core.savePlan
@@ -206,6 +211,8 @@ class AppViewModel(
     private val rideLoadCache: de.trailscape.core.RideLoadFactsStore = AppServices.rideLoadCacheStore,
     /** Persistenter Kachel-Cache der Entdeckt-Kacheln (siehe [ExplorerTilesCacheStore]). */
     private val explorerTilesStore: ExplorerTilesStore = AppServices.explorerTilesCacheStore,
+    /** Persistenter Signatur-Cache des Rundenvergleichs (siehe [RouteSignatureCacheStore]). */
+    private val routeSignatureStore: RouteSignatureCacheStore = AppServices.routeSignatureCacheStore,
     /** Loesch-Merkzettel des Selfhost-Syncs (siehe [TombstoneStore]). */
     private val tombstoneStore: TombstoneStore = AppServices.tombstoneStore,
     /** Persistente Segment-Registry der lokalen Bestleistungen (siehe [SegmentStore]). */
@@ -2297,6 +2304,70 @@ class AppViewModel(
         if (gaps == 0 || gaps > EXPLORER_TILES_CHEAP_REFRESH_MAX) return null
         refreshExplorerTiles()
         return lookup()
+    }
+
+    // ------------------------------------------------- Rundenvergleich
+    // („Diese Runde bist du 5× gefahren — heute die 2. schnellste Zeit")
+
+    /**
+     * Serialisiert die Laeufe von [routeComparisonFor] — es scannt immer
+     * hoechstens einer den Bestand. Zwei Detailansichten kurz nacheinander
+     * (Tippen auf eine fruehere Fahrt in der Rundenkarte) laden so keine Tour
+     * doppelt: Der zweite Lauf findet den Cache vom ersten schon gefuellt.
+     */
+    private val routeComparisonMutex = Mutex()
+
+    /**
+     * Vergleich der Tour [rideId] mit allen anderen gefahrenen Touren auf
+     * derselben Strecke (`:core`/[compareOnRoute]) — fuer die Karte
+     * „Diese Runde" in der Detailansicht. `null`, wenn die Tour keine
+     * Wiederholung hat (oder zu kurz, geplant, ohne Zeit ist) und bei jedem
+     * Fehler: Ein kaputter Cache darf die Detailansicht nie stoeren.
+     *
+     * ## Kosten
+     * Die Signaturen kommen aus dem persistenten Cache
+     * ([routeSignatureStore], `route-cache/route-signatures.json`);
+     * `collectRouteSignatures` laedt nur Touren, deren Eintrag fehlt oder
+     * veraltet ist. **Der allererste Aufruf auf einem grossen Bestand laedt
+     * daher jede gefahrene Tour einmal von der Platte** (nacheinander, nie
+     * alle zugleich im Speicher) — bewusst in Kauf genommen; danach genuegt
+     * die Datei, und nach einer neuen Aufzeichnung fehlt nur diese eine Tour.
+     *
+     * ## Nebenlaeufigkeit
+     * Die Zusammenfassungen werden wie in [refreshExplorerTiles] vor dem
+     * Dispatcher-Wechsel gelesen ([allSummaries] gehoert dem Main-Thread).
+     * Der Lauf selbst steht unter [routeComparisonMutex] auf [io]; der Store
+     * ist zusaetzlich `@Synchronized`. Wird die Ansicht verlassen, laeuft ein
+     * begonnener Scan im Hintergrund zu Ende — sein Ergebnis landet im Cache,
+     * nicht verloren.
+     *
+     * ## Aufraeumen
+     * Wie beim Kachel-Cache (`collectExplorerTiles` raeumt am Ende jedes
+     * Laufs per `retainAll` ab) wirft jeder Lauf die Eintraege geloeschter und
+     * geplanter Touren weg und schreibt den Stand fest. Gefiltert wird gegen
+     * [allSummaries], nicht gegen die sichtbare Liste: Eine schwebende,
+     * noch rueckgaengig machbare Loeschung behaelt ihren Eintrag. Verglichen
+     * wird dagegen nur mit der sichtbaren Liste ([rides]) — eine gerade
+     * geloeschte Tour taucht in der Karte nicht mehr auf.
+     */
+    suspend fun routeComparisonFor(rideId: String): RouteComparison? {
+        // Wie in [refreshExplorerTiles] vor dem Dispatcher-Wechsel gelesen.
+        val summaries = allSummaries
+        val visible = _rides.value
+        return routeComparisonMutex.withLock {
+            withContext(io) {
+                runCatching {
+                    val signatures = collectRouteSignatures(
+                        rides = summaries,
+                        store = routeSignatureStore,
+                        loadRide = { rideStorage.loadRide(it) },
+                    )
+                    routeSignatureStore.retainAll(riddenRides(summaries).mapTo(HashSet()) { it.id })
+                    routeSignatureStore.flush()
+                    compareOnRoute(rideId, visible, signatures)
+                }.getOrNull()
+            }
+        }
     }
 
     // -------------------------------------------------------------------------

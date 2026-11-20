@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -56,6 +57,9 @@ import org.robolectric.annotation.GraphicsMode
  * ein Klick auf „History" braeche vor dessen Merge, einer auf „Verlauf" danach.
  * Angetippt werden nur Tournamen (Daten) und Texte aus `strings_rides.xml`,
  * gelesen ueber `getString`.
+ *
+ * Ausnahme: der Rundenvergleich im Tourdetail (`tour-runden-vergleich*`) —
+ * deutsch, dunkel und englisch, mit eigenen Fahrten auf derselben Spur.
  *
  * Laeuft nur mit `-Pscreenshots`; die PNGs landen in `app/build/outputs/roborazzi/`.
  */
@@ -203,6 +207,43 @@ class RidesScreenshotTest {
         saveBitmap(renderShareCard(square, ShareCardFormat.SQUARE), "77-tourbild-square-en")
     }
 
+    /**
+     * Rundenvergleich: vier Fahrten „Hausrunde" auf derselben Spur — die
+     * juengste ist die zweitschnellste, 3:12 min schneller als beim letzten
+     * Mal. Deutsch (wie der Name des Bildes), hoher Bildschirm, damit die
+     * Karte unter Kopf, Karte und Satz noch ganz drauf ist.
+     */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
+    fun tourRundenVergleich() {
+        TestLocales.assertTestLocale(AppLanguage.DE)
+        openLoopRide()
+        assertEquals("Diese Runde", string(R.string.rides_route_title))
+        compose.onAllNodesWithText(string(R.string.rides_route_title)).onFirst().assertIsDisplayed()
+        compose.onAllNodesWithText("2. schnellste von 4").onFirst().assertIsDisplayed()
+        compose.onAllNodesWithText("3:12 min schneller als beim letzten Mal", substring = true)
+            .onFirst().assertIsDisplayed()
+        shot("tour-runden-vergleich")
+    }
+
+    /** Dieselbe Karte im Dunkelmodus — die Hervorhebung der eigenen Zeile muss dort auch tragen. */
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-night-xxhdpi")
+    fun tourRundenVergleichDunkel() {
+        openLoopRide(dark = true)
+        compose.onAllNodesWithText(string(R.string.rides_route_title)).onFirst().assertIsDisplayed()
+        shot("tour-runden-vergleich-dunkel")
+    }
+
+    /** Englisch, mit neuer Bestzeit: die dritte Fahrt von oben ist die schnellste — dort steht der Pokal. */
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w411dp-h2400dp-xxhdpi")
+    fun tourRundenVergleichEnglisch() {
+        openLoopRide(index = 2)
+        compose.onAllNodesWithText(string(R.string.rides_route_new_best_title)).onFirst().assertIsDisplayed()
+        shot("tour-runden-vergleich-en")
+    }
+
     /** Leerer Verlauf: Satz und die zwei Wege zu Daten. */
     @Test
     fun leerEnglisch() {
@@ -217,10 +258,69 @@ class RidesScreenshotTest {
 
     private fun string(id: Int): String = compose.activity.getString(id)
 
-    private fun startInHistory() {
+    /**
+     * Legt vier Fahrten „Hausrunde" auf derselben Spur an (1, 8, 15 und 22
+     * Tage zurueck), oeffnet die [index]-te von oben (neueste zuerst) und
+     * wartet, bis der Rundenvergleich da ist — der kommt vom IO-Dispatcher
+     * nach (`AppViewModel.routeComparisonFor`).
+     */
+    private fun openLoopRide(dark: Boolean = false, index: Int = 0) {
+        AppServices.rideStorage.saveRides(loopRides())
+        startInHistory(dark)
+        compose.onAllNodesWithText("Hausrunde")[index].performClick()
+        settle()
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText(string(R.string.rides_route_title)).fetchSemanticsNodes().isNotEmpty()
+        }
+        settle()
+    }
+
+    /**
+     * Vier Fahrten derselben ~32-km-Runde mit wenigen Metern GPS-Versatz.
+     * Bewegungszeiten (neueste zuerst): 1:24:00, 1:27:12, 1:23:00, 1:30:00 —
+     * die neueste ist also die zweitschnellste und 3:12 min schneller als die
+     * davor, die dritte die Bestzeit.
+     */
+    private fun loopRides(): List<Ride> {
+        val day = 24L * 60 * 60 * 1000
+        val specs = listOf(1 to 5_040, 8 to 5_232, 15 to 4_980, 22 to 5_400)
+        return specs.mapIndexed { index, (daysAgo, movingS) ->
+            val start = now - daysAgo * day - 3 * 60 * 60 * 1000L
+            val points = List(240) { i ->
+                val t = i / 239.0 * 2 * Math.PI
+                // Ein paar Meter Versatz je Fahrt, wie bei echtem GPS.
+                val jitter = 0.00004 * sin(i * 1.7 + index)
+                TrackPoint(
+                    lat = 48.45 + 0.045 * sin(t) + jitter,
+                    lon = 9.10 + 0.07 * cos(t) - jitter,
+                    ele = 480.0 + 35 * sin(2 * t),
+                    time = start + (movingS * 1000L * i / 239),
+                    hr = 130 + (8 * sin(t)).toInt(),
+                )
+            }
+            Ride(
+                id = "rides-loop-$index",
+                name = "Hausrunde",
+                createdAt = start,
+                stats = RideStats(
+                    distanceKm = 31.9,
+                    ascentM = 290.0,
+                    descentM = 290.0,
+                    durationS = movingS + 240,
+                    movingTimeS = movingS,
+                    avgSpeedKmh = 31.9 / (movingS / 3600.0),
+                    avgHrBpm = 134,
+                    maxHrBpm = 166,
+                ),
+                points = points,
+            )
+        }
+    }
+
+    private fun startInHistory(dark: Boolean = false) {
         compose.setContent {
             CompositionLocalProvider(LocalMapRenderingAvailable provides false) {
-                TrailscapeTheme {
+                TrailscapeTheme(darkTheme = dark) {
                     Surface(modifier = Modifier.fillMaxSize()) { TrailscapeApp() }
                 }
             }

@@ -52,7 +52,7 @@ import okhttp3.OkHttpClient
  * `AppServices.healthSyncStore`, `AppServices.trainingPlanStore`,
  * `AppServices.healthGateway`, `AppServices.healthSyncService`,
  * `AppServices.updateChecker`, `AppServices.reminderStore`,
- * `AppServices.explorerTilesCacheStore`,
+ * `AppServices.explorerTilesCacheStore`, `AppServices.routeSignatureCacheStore`,
  * `AppServices.appScope`, `AppServices.segmentInventory`,
  * `AppServices.segmentDownloader`, `AppServices.segmentSettings`,
  * `AppServices.routingServerSettings`, `AppServices.weatherHttpClient`.
@@ -141,6 +141,17 @@ object AppServices {
      */
     val explorerTilesCacheStore: ExplorerTilesCacheStore by lazy {
         ExplorerTilesCacheStore(File(appContext.filesDir, "rides"))
+    }
+
+    /**
+     * Persistenter Cache der Strecken-Signaturen fuer den Rundenvergleich
+     * (siehe [RouteSignatureCacheStore]) —
+     * `<filesDir>/route-cache/route-signatures.json`, bewusst NICHT im
+     * Touren-Verzeichnis: Das liest jede fremde `.json` als Tour und schoebe
+     * den Cache in die Quarantaene.
+     */
+    val routeSignatureCacheStore: RouteSignatureCacheStore by lazy {
+        RouteSignatureCacheStore(File(appContext.filesDir, RouteSignatureCacheStore.DIR_NAME))
     }
 
     /**

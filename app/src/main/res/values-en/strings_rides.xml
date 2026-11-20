@@ -234,4 +234,29 @@
     </plurals>
     <!-- %1$s = Kachelzahl („37 Kacheln") -->
     <string name="rides_summary_cluster_status">Largest area: %1$s</string>
+
+    <!-- RouteComparisonCard.kt -->
+    <string name="rides_route_title">This loop</string>
+    <plurals name="rides_route_ridden_count">
+        <item quantity="one">ridden %1$d time</item>
+        <item quantity="other">ridden %1$d times</item>
+    </plurals>
+    <string name="rides_route_new_best_title">New best time on this loop</string>
+    <!-- %1$d = Platz nach Zeit, %2$d = Zahl der Fahrten -->
+    <string name="rides_route_rank_title">Time rank %1$d of %2$d</string>
+    <!-- %1$s = Abstand („3:12 min"), %2$s = Datum der letzten Fahrt („12.10.") -->
+    <string name="rides_route_previous_faster">%1$s faster than last time (%2$s)</string>
+    <string name="rides_route_previous_slower">%1$s slower than last time (%2$s)</string>
+    <string name="rides_route_previous_equal">Same time as last time (%1$s)</string>
+    <!-- %1$s = Bestzeit („1:21:40"), %2$s = Datum, %3$s = Abstand („2:05 min") -->
+    <string name="rides_route_best_line">Best time: %1$s on %2$s (%3$s faster)</string>
+    <string name="rides_route_best_line_equal">Best time: %1$s on %2$s (same time)</string>
+    <string name="rides_route_delta_seconds">%1$d s</string>
+    <string name="rides_route_delta_minutes">%1$s min</string>
+    <string name="rides_route_delta_hours">%1$s h</string>
+    <string name="rides_route_recent_label">Recent rides</string>
+    <!-- %1$s = Datum -->
+    <string name="rides_route_effort_this">%1$s · this ride</string>
+    <string name="rides_route_effort_open_cd">Open ride</string>
+    <string name="rides_route_caption">Compares whole rides on (nearly) the same route by moving time – stops at traffic lights don’t count.</string>
 </resources>
