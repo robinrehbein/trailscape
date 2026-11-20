@@ -56,9 +56,17 @@ def parse_tracks(spec):
 
 
 def pick_track(alternatives, existing):
+    """Returns the app's own spelling of the first matching track.
+
+    Custom track names keep the case they were created with in the Play
+    Console (e.g. "wear:Alpha"), so the match ignores case.
+    """
+    by_lower = {name.lower(): name for name in existing}
     for name in alternatives:
         if name in existing:
             return name
+        if name.lower() in by_lower:
+            return by_lower[name.lower()]
     return None
 
 
