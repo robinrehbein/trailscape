@@ -50,6 +50,16 @@ object WearGlanceSender {
 
     private val lock = Mutex()
 
+    /**
+     * Pause nach einem gescheiterten Senden. Ohne Play Services oder ohne
+     * Uhr scheitert jeder Versuch gleich; ohne Pause schriebe jedes
+     * Verlassen der App einen weiteren Fehler ins Diagnose-Log.
+     */
+    private const val FEHLER_PAUSE_MS = 60_000L
+
+    @Volatile
+    private var letzterFehlerMs = 0L
+
     /** Stoesst eine Pruefung und ggf. das Senden an. Kehrt sofort zurueck, wirft nie. */
     fun request(context: Context) {
         val app = context.applicationContext
@@ -61,6 +71,7 @@ object WearGlanceSender {
 
     private fun sendeWennGeaendert(context: Context) {
         val jetzt = System.currentTimeMillis()
+        if (jetzt - letzterFehlerMs in 0 until FEHLER_PAUSE_MS) return
         val heute = LocalDate.now(ZoneId.systemDefault())
         val neu = glanceVon(loadWidgetState(context), heute, jetzt)
 
@@ -74,7 +85,10 @@ object WearGlanceSender {
             .addOnSuccessListener {
                 runCatching { AppServices.keyValueStore.setString(STORAGE_KEY, bytes.toString(Charsets.UTF_8)) }
             }
-            .addOnFailureListener { DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = it) }
+            .addOnFailureListener {
+                letzterFehlerMs = System.currentTimeMillis()
+                DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = it)
+            }
     }
 
     /** Uebersetzt den Widget-Stand in den Draht-Stand; ohne Touren: Serie 0, kein Ziel. */

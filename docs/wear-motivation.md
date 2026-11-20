@@ -118,7 +118,7 @@ Stand: umgesetzt als Kachel und Komplikation. Was es tut und wo:
   die Uhr-App; Leerzustand „Noch keine Daten – Handy-App öffnen". Freshness bis kurz nach Mitternacht.
 - **Komplikation** (`complication/WochenComplicationService.kt`): SHORT_TEXT („5 W", Titel „Serie"),
   RANGED_VALUE (gefahrene km von Ziel-km) und LONG_TEXT („5 Wochen" / „42 von 60 km"), Vorschaudaten,
-  Tipp öffnet die App. Kein Abfragetakt (`UPDATE_PERIOD_SECONDS = 0`).
+  Tipp öffnet die App. Stündlicher Abfragetakt (`UPDATE_PERIOD_SECONDS = 3600`), damit der Wochenwechsel auch ohne Telefon ankommt; ohne Wochenziel bleibt der Bogen leer.
 - **Abhängigkeiten** (`wear/build.gradle.kts`): `androidx.wear.tiles:tiles:1.6.2`,
   `androidx.wear.protolayout:protolayout`, `-expression`, `-material3` je `1.4.2`,
   `androidx.wear.watchface:watchface-complications-data-source-ktx:1.3.0`. Keine neue Berechtigung.

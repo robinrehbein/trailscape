@@ -126,8 +126,11 @@
         </service>
 
         <!-- Datums-, Zeitzonen- und Sprachwechsel: am Montag darf die Kachel
-             nicht den Stand der Vorwoche behaupten. Vom Verbot impliziter
-             Broadcasts ausgenommene Ereignisse, deshalb im Manifest. -->
+             nicht den Stand der Vorwoche behaupten. Zeitzonen- und
+             Sprachwechsel sind vom Verbot impliziter Broadcasts ausgenommen;
+             DATE_CHANGED ist es vermutlich nicht. Deshalb verlaesst sich der
+             Wochenwechsel nicht darauf: Die Kachel laeuft kurz nach
+             Mitternacht ab, die Komplikation fragt stuendlich nach. -->
         <receiver
             android:name=".glance.TagWechselReceiver"
             android:exported="false">
@@ -170,7 +173,7 @@
                 android:value="SHORT_TEXT,RANGED_VALUE,LONG_TEXT" />
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
-                android:value="0" />
+                android:value="3600" />
         </service>
     </application>
 

@@ -40,9 +40,12 @@ import java.time.LocalDate
  * noch Daten fehlen), statt eine Null zu behaupten.
  *
  * ## Aktualisierung
- * Kein Abfragetakt (`UPDATE_PERIOD_SECONDS` = 0 im Manifest): Neu gezeichnet
- * wird auf Anforderung ([de.trailscape.wear.glance.GlanceUpdater]) — nach einem
- * neuen Stand vom Telefon und beim Datumswechsel.
+ * Neu gezeichnet wird auf Anforderung
+ * ([de.trailscape.wear.glance.GlanceUpdater]) nach einem neuen Stand vom
+ * Telefon. Dazu fragt das System stuendlich nach (`UPDATE_PERIOD_SECONDS` im
+ * Manifest): Ob der Datumswechsel die Uhr-App weckt, ist nicht sicher, und
+ * ohne den Takt stuende am Montag noch „diese Woche geschafft" da, bis das
+ * Telefon wieder sendet. Die Anfrage liest nur den lokalen Speicher.
  */
 class WochenComplicationService : SuspendingComplicationDataSourceService() {
 
@@ -78,8 +81,12 @@ class WochenComplicationService : SuspendingComplicationDataSourceService() {
 
             ComplicationType.RANGED_VALUE -> {
                 // Ohne Ziel gibt es nichts zu fuellen: leerer Bogen, Text zeigt die Kilometer.
-                val max = (anzeige?.zielKm ?: 1).coerceAtLeast(1).toFloat()
-                val wert = (anzeige?.wochenKm?.toFloat() ?: 0f).coerceIn(0f, max)
+                // Der Bogen bleibt dann wirklich leer — ein Ersatz-Maximum
+                // waere ab dem ersten Kilometer voll und saehe nach einem
+                // erreichten Ziel aus.
+                val ziel = anzeige?.zielKm
+                val max = (ziel ?: 1).coerceAtLeast(1).toFloat()
+                val wert = if (ziel == null) 0f else (anzeige.wochenKm.toFloat()).coerceIn(0f, max)
                 RangedValueComplicationData.Builder(
                     value = wert,
                     min = 0f,
