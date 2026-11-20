@@ -361,9 +361,42 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
 
+// Robolectric laedt die Android-Laufzeit (`android-all-instrumented`) sonst bei
+// jedem frischen Lauf zur Laufzeit von Maven Central; ein einziger
+// Verbindungsabbruch dort endet im Testlauf als `AssertionError` in
+// `MavenArtifactFetcher`. Darum loest Gradle die Jars selbst auf (dann liegen
+// sie im Gradle-Cache, den `setup-java` mit `cache: gradle` in der CI
+// mitnimmt) und Robolectric bekommt sie offline aus einem Verzeichnis.
+//
+// Die Koordinaten haengen an der Robolectric-Version (4.17) und an den SDK-
+// Stufen der Tests (`@Config(sdk = ...)`: 35, ein Test nutzt 32). Wer
+// Robolectric hebt oder eine andere Stufe verwendet, muss sie hier nachziehen;
+// fehlt ein Jar, bricht der Test im Offline-Modus sofort und mit klarer
+// Meldung ab, statt zu laden.
+// Je SDK-Stufe eine eigene Configuration: Gradle wuerde zwei Versionen
+// desselben Moduls in einer Configuration zu der neueren zusammenfuehren.
+val robolectricAndroidAll = listOf(
+    "robolectricAndroidAll32" to "org.robolectric:android-all-instrumented:12.1-robolectric-8229987-i7",
+    "robolectricAndroidAll35" to "org.robolectric:android-all-instrumented:15-robolectric-13954326-i7",
+).map { (name, coordinates) ->
+    configurations.create(name) {
+        isCanBeConsumed = false
+        isCanBeResolved = true
+        isTransitive = false
+    }.also { dependencies.add(name, coordinates) }
+}
+val robolectricJarsDir = layout.buildDirectory.dir("robolectric-android-all")
+val syncRobolectricJars by tasks.registering(Sync::class) {
+    robolectricAndroidAll.forEach { from(it) }
+    into(robolectricJarsDir)
+}
+
 // Gleiche Test-Engine wie in `:core` (siehe core/build.gradle.kts).
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    dependsOn(syncRobolectricJars)
+    systemProperty("robolectric.offline", "true")
+    systemProperty("robolectric.dependency.dir", robolectricJarsDir.get().asFile.absolutePath)
     // Screenshots nur auf Wunsch:
     // `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*ScreenshotTest*'`
     // schreibt die PNGs nach app/build/outputs/roborazzi/.
