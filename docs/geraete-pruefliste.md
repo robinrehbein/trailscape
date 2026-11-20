@@ -97,11 +97,26 @@ gelten.
       weiter. Danach am Handy fortsetzen und beenden.
 - [ ] Am Handy beenden, sofort an der Uhr eine neue Aufzeichnung starten:
       Die neue läuft weiter.
+- [ ] **Kachel hinzufügen**: Auf der Uhr in der Kachelauswahl „Serie & Wochenziel" anlegen. Vorschau
+      sichtbar? Ohne vorherige Daten: „Noch keine Daten – Handy-App öffnen"; nach dem Öffnen der
+      Handy-App erscheinen Serie und Kilometer.
+- [ ] Kachel: Serie groß, „x von y km" und der Bogen passen aufs runde Display, nichts wird
+      abgeschnitten; ein Tipp öffnet die Uhr-App. Deutsch und Englisch (Uhrsprache umstellen).
+- [ ] **Komplikation aufs Zifferblatt**: Als Kurztext („5 W"), als Bereichswert (Bogen mit km) und
+      als Langtext einrichten. Zeigt jedes Feld etwas Lesbares, öffnet ein Tipp die App?
+- [ ] **Zahlen stimmen** mit der Heute-Seite am Handy überein (Serie in Wochen, gefahrene km,
+      Wochenziel) — auch mit aktivem Trainingsplan.
+- [ ] **Aktualisiert nach der Fahrt**: Tour am Handy speichern. Ändern sich Kachel und Komplikation
+      binnen Sekunden bis Minuten, auch wenn die Uhr-App zu ist?
+- [ ] Handy aus oder außer Reichweite: Kachel und Komplikation zeigen den letzten Stand weiter;
+      nach Wiederverbindung zieht er nach.
+- [ ] **Montag**: Über Mitternacht von Sonntag auf Montag (Uhr nicht mit dem Handy verbunden
+      lassen): Zeigt die Uhr nicht mehr „Diese Woche geschafft", 0 km, die Serie als „in Gefahr"
+      (war die Vorwoche geschafft) bzw. 0 Wochen (war sie es nicht)? Nach dem nächsten Öffnen der
+      Handy-App stehen neues Ziel und Kilometer da.
 
 ## Bekannte offene Punkte
 
-- Die Uhr zeigt Serie und Wochenziel noch nicht auf einen Blick. Der Vorschlag
-  dafür steht in `docs/wear-motivation.md`.
 - Das Jahresziel ist nicht Teil des Selfhost-Syncs.
 - `PRIVACY.md` hat einen neuen Absatz zur lokalen Berechnung erhalten. Die
   Angabe „Stand“ wurde nicht geändert. Die Entscheidung darüber liegt beim

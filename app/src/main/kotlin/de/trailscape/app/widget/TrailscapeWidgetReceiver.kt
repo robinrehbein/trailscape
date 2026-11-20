@@ -6,6 +6,7 @@ import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.updateAll
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.wear.WearGlanceSender
 import kotlinx.coroutines.launch
 
 /**
@@ -41,6 +42,8 @@ class TrailscapeWidgetReceiver : GlanceAppWidgetReceiver() {
 /**
  * Der eine Einstieg, um das Widget neu zeichnen zu lassen.
  *
+ * Stoesst zugleich [WearGlanceSender] an (Uhr-Kachel und Komplikation).
+ *
  * Aufrufer: [de.trailscape.app.TrailscapeApplication] (nach jeder gespeicherten
  * Aufzeichnung und wenn die App in den Hintergrund geht — dort steht, warum
  * genau dort) und [TrailscapeWidgetReceiver]. Kostet ohne platziertes Widget
@@ -55,5 +58,7 @@ object WidgetUpdater {
         AppServices.appScope.launch {
             runCatching { TrailscapeWidget().updateAll(app) }
         }
+        // Dieselben Zahlen gehen an die Uhr (Kachel/Komplikation); nur bei Aenderung.
+        WearGlanceSender.request(app)
     }
 }

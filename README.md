@@ -177,6 +177,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   ans Handy, aufgezeichnet wird dort. Ohne Handy zeichnet sie keine Tour auf
 - Ohne Handy unterwegs? Die Fahrt mit Samsung Health auf der Uhr aufzeichnen —
   Trailscape importiert sie danach über Health Connect
+- Kachel und Zifferblatt-Komplikation zeigen Wochenserie und Fortschritt zum
+  Wochenziel auf einen Blick (rechnet das Handy, lokal, ohne Netz)
 
 **Sprache**
 - Deutsch und Englisch – folgt der Systemsprache (Deutsch, wenn das Gerät auf

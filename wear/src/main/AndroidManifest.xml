@@ -109,6 +109,69 @@
                     android:pathPrefix="/trailscape/abschluss" />
             </intent-filter>
         </service>
+
+        <!-- Serie und Wochenziel auf einen Blick (docs/wear-motivation.md, b).
+             Das Telefon schreibt den Stand als DataItem; dieser Dienst nimmt ihn
+             an, merkt ihn und laesst Kachel und Komplikation neu zeichnen. -->
+        <service
+            android:name=".glance.WochenListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:path="/trailscape/woche" />
+            </intent-filter>
+        </service>
+
+        <!-- Datums-, Zeitzonen- und Sprachwechsel: am Montag darf die Kachel
+             nicht den Stand der Vorwoche behaupten. Vom Verbot impliziter
+             Broadcasts ausgenommene Ereignisse, deshalb im Manifest. -->
+        <receiver
+            android:name=".glance.TagWechselReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.LOCALE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Kachel. Die Berechtigung sorgt dafuer, dass nur das System sie bindet. -->
+        <service
+            android:name=".tile.WochenTileService"
+            android:description="@string/wear_tile_description"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher"
+            android:label="@string/wear_tile_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW"
+                android:resource="@drawable/tile_preview" />
+        </service>
+
+        <!-- Komplikation (Kurztext, Bereichswert, Langtext). UPDATE_PERIOD 0:
+             kein Abfragetakt, aktualisiert wird auf Anforderung. -->
+        <service
+            android:name=".complication.WochenComplicationService"
+            android:exported="true"
+            android:icon="@drawable/ic_complication_streak"
+            android:label="@string/wear_complication_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SHORT_TEXT,RANGED_VALUE,LONG_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="0" />
+        </service>
     </application>
 
     <queries>

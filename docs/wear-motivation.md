@@ -1,7 +1,7 @@
 # Motivation auf der Uhr: Machbarkeit
 
 Frage: (a) ein bis zwei Highlight-Zeilen nach der Fahrt, (b) Wochenserie plus Wochenziel auf einen Blick.
-Ursprünglich nur gelesen; (a) ist inzwischen gebaut (siehe dort), (b) bleibt offen.
+Ursprünglich nur gelesen; (a) und (b) sind inzwischen gebaut (siehe dort).
 
 ## Was die Uhr-App heute ist
 
@@ -12,7 +12,8 @@ Ursprünglich nur gelesen; (a) ist inzwischen gebaut (siehe dort), (b) bleibt of
 - Sie ist eine Begleiterin (README „Galaxy Watch“): Health Services liefert Puls und GPS
   (`exercise/ExerciseRecorder.kt`), `comm/SensorSender.kt` schickt sie gebündelt ans Handy; die
   Tour entsteht dort. Auf der Uhr bleibt nur ein Journal (`record/RecordingJournal.kt`).
-- Nur die Aufzeichnungsansicht (`ui/RecordingScreen.kt`); kein Tile, keine Complication, kein Wochenwissen.
+- Die Aufzeichnungsansicht (`ui/RecordingScreen.kt`); dazu seit (b) Kachel und Komplikation mit dem
+  Wochenstand des Telefons (`glance/`, `tile/`, `complication/`).
 - Datenfluss, alles `MessageClient`/`CapabilityClient` aus `play-services-wearable` (Verträge in
   `core/.../WearProtocol.kt`):
   - Uhr → Handy: `PFAD_SENSOR` (SensorBatch), `PFAD_BEFEHL_AN_TELEFON` (start/pause/weiter/stopp).
@@ -87,23 +88,56 @@ die Uhr ihre Aufzeichnung und zeigt ihr Abschlussbild.
 - Ungeprüft ohne Gerätepaar: Zustellung bei geschlossener Uhr-App, Reihenfolge gegenüber
   `PFAD_ABSCHLUSS` (die Zeilen bleiben ohnehin stehen, egal was zuerst ankommt).
 
-## (b) Serie und Wochenziel auf einen Blick — offen
+## (b) Serie und Wochenziel auf einen Blick — gebaut
 
-Das braucht einen Zustand, der **ohne laufende Aufzeichnung** auf der Uhr liegt, also Daten, nicht Nachricht:
-- Handy schreibt per `DataClient.putDataItem` (`/trailscape/woche`: `serieWochen`, `wochenKm`, `zielKm`,
-  `stand`) – bleibt auf der Uhr erhalten und wird bei Wiederverbindung abgeglichen. `MessageClient` taugt
-  dafür nicht. Neu im Protokoll: `WochenStand` mit kodiere/dekodiere.
-- Berechnet wird er auf dem Handy aus `weekStreak` (`core/.../Motivation.kt`) und dem Wochenziel von
-  „Heute“ (Planwoche oder `suggestWeeklyGoal`, `core/.../WeeklyGoal.kt`); neu anstoßen nach jeder
-  gespeicherten Tour und beim Wochenwechsel (ein Mal am Montag, auch ohne Fahrt!).
-- Tile: neue Abhängigkeiten `androidx.wear.tiles:tiles` und `androidx.wear.protolayout:protolayout(-material3)`,
-  im Manifest ein `<service>` mit `BIND_TILE_PROVIDER`, Action `androidx.wear.tiles.action.BIND_TILE_PROVIDER`
-  und Vorschau-Ressource. Ein `TileService` rendert aus dem lokal gespeicherten `WochenStand`.
-- Complication: `androidx.wear.watchface:watchface-complications-data-source-ktx`, `<service>` mit
-  `BIND_COMPLICATION_PROVIDER`; Typen SHORT_TEXT („3 Wo.“) und RANGED_VALUE (km/Ziel). Welches Zifferblatt
-  sie zeigt, wählt die Nutzerin.
-- Aufwand: Tile ca. 5 Dateien / 250 Zeilen; Complication ca. 3 Dateien / 150 Zeilen; Datenpfad
-  (Protokoll, Handy-Seite, Uhr-Seite) ca. 4 Dateien / 150 Zeilen, gemeinsam für beide.
+Stand: umgesetzt als Kachel und Komplikation. Was es tut und wo:
+- **Protokoll** (`core/.../WearGlance.kt`): `PFAD_WOCHE = "/trailscape/woche"` als **DataItem** (nicht
+  Nachricht: der Stand muss auch ankommen, wenn die Uhr gerade nicht verbunden ist). `WochenGlance`
+  (Version `v`, Serie in Wochen, Woche erledigt, km, Ziel-km optional, Montag der Woche als Epochentag,
+  Stand-Zeitstempel). Grenzen: Serie 0…5200, km 0…10 000 (auf 0,1 gerundet), Ziel 1…10 000, Montag muss
+  ein Montag sein. `dekodiereWochenGlance` wirft nie: kaputt, fremde Version oder außerhalb der Grenzen
+  → `null`. Tests in `WearGlanceTest`.
+- **Veraltete Daten** (`glanceFuerHeute`, rein, getestet): Gleiche Kalenderwoche (Montag-Start) →
+  unverändert. Eine Woche älter und dort erledigt → Serie lebt, diese Woche nicht erledigt, 0 km
+  („in Gefahr", wie `weekStreak` am Montag). Sonst → Serie 0. Die Uhr behauptet nie „diese Woche
+  geschafft" aus einer früheren Woche.
+- **Handy** (`app/.../wear/WearGlanceSender.kt`): rechnet mit `loadWidgetState` (dieselbe Rechnung und
+  dasselbe Wochenziel wie das Widget; aus `TrailscapeWidget` herausgehoben nach
+  `widget/WidgetStateLoader.kt`) und wird aus `WidgetUpdater.request` angestoßen, also an genau den
+  Stellen der Widget-Aktualisierung (Tour gespeichert, App im Hintergrund, Datums-/Zeitzonen-/
+  Sprachwechsel). Gesendet wird nur bei geändertem Inhalt (der zuletzt erfolgreich geschriebene Stand
+  liegt im Schlüssel-Wert-Speicher; der Zeitstempel zählt nicht). Alles auf IO in `runCatching`,
+  Fehler nur als `WEAR_SEND_FAILED` im Diagnose-Log.
+- **Uhr** (`wear/.../glance/`): `WochenListenerService` (`DATA_CHANGED`, eigener Dienst, die
+  Aufzeichnung bleibt unberührt) speichert den letzten dekodierbaren Stand in SharedPreferences
+  (`GlanceStore`) und stößt Kachel und Komplikation an (`GlanceUpdater`). Fehlt jeder Stand, fragt die
+  Anzeige den Data Layer einmal aktiv ab (`nachziehen`, 2 s Timeout). `TagWechselReceiver` (Datums-,
+  Zeitzonen-, Sprachwechsel) zeichnet am Montag ohne Telefon neu.
+- **Kachel** (`tile/WochenTileService.kt`, `Material3TileService` mit klassischen ProtoLayout-Bausteinen):
+  Status klein, Serie groß („5 Wochen"), „42 von 60 km", Bogen am Rand in der Akzentfarbe; Tipp öffnet
+  die Uhr-App; Leerzustand „Noch keine Daten – Handy-App öffnen". Freshness bis kurz nach Mitternacht.
+- **Komplikation** (`complication/WochenComplicationService.kt`): SHORT_TEXT („5 W", Titel „Serie"),
+  RANGED_VALUE (gefahrene km von Ziel-km) und LONG_TEXT („5 Wochen" / „42 von 60 km"), Vorschaudaten,
+  Tipp öffnet die App. Kein Abfragetakt (`UPDATE_PERIOD_SECONDS = 0`).
+- **Abhängigkeiten** (`wear/build.gradle.kts`): `androidx.wear.tiles:tiles:1.6.2`,
+  `androidx.wear.protolayout:protolayout`, `-expression`, `-material3` je `1.4.2`,
+  `androidx.wear.watchface:watchface-complications-data-source-ktx:1.3.0`. Keine neue Berechtigung.
+- **Release**: `:wear` ist weiter nicht minimiert (`isMinifyEnabled = false`), die Dienste können
+  also nicht von R8 entfernt werden; `:wear:assembleRelease` baut.
+
+Bekannte Grenzen:
+- **Montag ohne Telefon**: Die Uhr rechnet nur fort, was sie weiß: Serie lebt (falls die Vorwoche
+  erledigt war), 0 km, das alte Ziel. Das neue Wochenziel (Planwoche!) und echte Kilometer kennt erst
+  das nächste Senden des Telefons; das geschieht, sobald die Handy-App einmal läuft oder das Widget
+  am Datumswechsel neu zeichnet.
+- **Nur die Handy-Seite rechnet**: Die Uhr zeigt, was das Telefon zuletzt gesendet hat. Eine Tour,
+  die erst später importiert wird (Health Connect), erscheint erst nach dem nächsten Senden.
+- **Ein Stand, kein Verlauf**; eine neuere Telefon-App mit höherer Protokollversion lässt die Uhr beim
+  letzten bekannten Stand, bis die Uhr-App aktualisiert ist.
+- **Sprache**: Die Texte der Uhr folgen der Uhrsprache; Zahlen kommen vom Telefon.
+- Ungeprüft ohne Gerätepaar: Zustellzeit des DataItems, Rendering der Kachel auf runder Anzeige,
+  Komplikationsfelder verschiedener Zifferblätter, Verhalten über den Datumswechsel. `:wear` hat keine
+  Tests, die Uhrseite ist nur kompiliert (Prüfpunkte: `docs/geraete-pruefliste.md`).
 
 ## Testbarkeit
 
@@ -125,7 +159,6 @@ Das braucht einen Zustand, der **ohne laufende Aufzeichnung** auf der Uhr liegt,
 
 ## Empfehlung
 
-Kleinster nützlicher Schritt war **(a) in der Minimalform** — erledigt (ohne neue Abhängigkeit; anders
-als oben geschätzt braucht die Uhr einen Intent-Filter im Manifest). Als Nächstes (b) als
-Complication (RANGED_VALUE = Wochenziel) vor dem Tile: kleiner und immer sichtbar, gleicher Datenpfad.
-Vorher klären, ob die Uhr-App über Play verteilt wird; sonst erreicht (b) nur das Entwicklungsgerät.
+(a) in der Minimalform und (b) als Kachel plus Komplikation sind gebaut. Offen bleibt die Geräteprüfung
+(`docs/geraete-pruefliste.md`) und die Frage, ob die Uhr-App über Play verteilt wird; sonst erreicht (b)
+nur das Entwicklungsgerät.

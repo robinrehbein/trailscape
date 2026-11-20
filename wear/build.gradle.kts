@@ -194,5 +194,18 @@ dependencies {
     // damit kein zweiter Serialisierungs-Stack entsteht.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
+    // Kachel (Tile) und Komplikation: Serie und Wochenziel auf einen Blick
+    // (siehe docs/wear-motivation.md, Option b). Die Kachel nutzt den
+    // Kotlin-Dienst `Material3TileService` samt Material3-Bausteinen von
+    // ProtoLayout; `protolayout` und `-expression` sind dessen Grundlage
+    // und stehen der Klarheit halber mit derselben Version daneben.
+    implementation("androidx.wear.tiles:tiles:1.6.2")
+    implementation("androidx.wear.protolayout:protolayout:1.4.2")
+    implementation("androidx.wear.protolayout:protolayout-expression:1.4.2")
+    implementation("androidx.wear.protolayout:protolayout-material3:1.4.2")
+    // Komplikationen: `SuspendingComplicationDataSourceService` und die
+    // Datentypen (ShortText, RangedValue, LongText).
+    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.3.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

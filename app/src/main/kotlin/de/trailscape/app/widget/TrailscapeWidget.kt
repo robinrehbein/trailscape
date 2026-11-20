@@ -39,7 +39,6 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import de.trailscape.app.MainActivity
 import de.trailscape.app.R
-import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.localized
 import de.trailscape.app.ui.theme.DarkOnPrimary
 import de.trailscape.app.ui.theme.DarkOnSurface
@@ -53,10 +52,6 @@ import de.trailscape.app.ui.theme.LightOnSurfaceVariant
 import de.trailscape.app.ui.theme.LightOutlineVariant
 import de.trailscape.app.ui.theme.LightPrimary
 import de.trailscape.app.ui.theme.LightSurface
-import de.trailscape.core.loadPlan
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
 import kotlin.math.floor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -105,26 +100,8 @@ class TrailscapeWidget : GlanceAppWidget() {
         provideContent { WidgetContent(texts, state) }
     }
 
-    private suspend fun loadState(context: Context): WidgetState = withContext(Dispatchers.IO) {
-        runCatching {
-            // Das Widget kann einen Prozess wecken, dessen Application gerade
-            // erst hochfaehrt; `init` ist idempotent (siehe AppServices).
-            AppServices.init(context)
-            val zone = ZoneId.systemDefault()
-            buildWidgetState(
-                // Zusammenfassungen genuegen: Die Rechnung braucht nur
-                // Kennzahlen und Zeitstempel, nie GPS-Punkte.
-                rides = AppServices.rideStorage.listSummaries().summaries,
-                plan = loadPlan(AppServices.trainingPlanStore),
-                now = LocalDateTime.now(zone),
-                zoneDateOf = { ms -> Instant.ofEpochMilli(ms).atZone(zone).toLocalDate() },
-                zone = zone,
-                shownTarget = ShownWeekTarget.decode(
-                    runCatching { AppServices.keyValueStore.getString(ShownWeekTarget.STORAGE_KEY) }.getOrNull(),
-                ),
-            )
-        }.getOrDefault(WidgetState.Empty)
-    }
+    private suspend fun loadState(context: Context): WidgetState =
+        withContext(Dispatchers.IO) { loadWidgetState(context) }
 
     companion object {
         /** Mindestmass 2 x 1 Zellen (siehe `trailscape_widget_info.xml`). */

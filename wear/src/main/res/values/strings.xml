@@ -26,4 +26,29 @@
     <!-- %1$s = technische Ursache (Fremdtext) -->
     <string name="wear_error_callback">Callback nicht registriert: %1$s</string>
     <string name="wear_error_capabilities">Fähigkeiten nicht abrufbar: %1$s</string>
+
+    <!-- glance/GlanceTexts.kt, tile/WochenTileService.kt, complication/WochenComplicationService.kt -->
+    <string name="wear_tile_label">Serie &amp; Wochenziel</string>
+    <string name="wear_tile_description">Wochenserie und Fortschritt zum Wochenziel</string>
+    <string name="wear_complication_label">Serie &amp; Wochenziel</string>
+    <string name="wear_glance_empty">Noch keine Daten – Handy-App öffnen</string>
+    <string name="wear_glance_empty_short">–</string>
+    <!-- %1$d = Wochen der Serie -->
+    <plurals name="wear_glance_weeks">
+        <item quantity="one">%1$d Woche</item>
+        <item quantity="other">%1$d Wochen</item>
+    </plurals>
+    <string name="wear_glance_weeks_short">%1$d W</string>
+    <string name="wear_glance_title_short">Serie</string>
+    <!-- %1$s = gefahrene Kilometer, %2$s = Wochenziel in Kilometern -->
+    <string name="wear_glance_km_of">%1$s von %2$s km</string>
+    <!-- %1$s = gefahrene Kilometer -->
+    <string name="wear_glance_km_only">%1$s km diese Woche</string>
+    <string name="wear_glance_status_goal">Wochenziel erreicht</string>
+    <string name="wear_glance_status_done">Diese Woche geschafft</string>
+    <string name="wear_glance_status_risk">Serie in Gefahr</string>
+    <string name="wear_glance_status_start">Starte deine Serie</string>
+    <!-- %1$s = Serie („5 Wochen“), %2$s = Fortschritt („42 von 60 km“); für Screenreader -->
+    <string name="wear_glance_cd">Serie %1$s, %2$s</string>
+    <string name="wear_glance_open_cd">Trailscape öffnen</string>
 </resources>
