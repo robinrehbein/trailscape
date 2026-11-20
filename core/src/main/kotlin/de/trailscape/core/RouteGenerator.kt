@@ -104,6 +104,15 @@ import kotlin.math.sin
  * der Wind entscheidet nur deren Gleichstand. Ohne Wind (oder unter
  * 10 km/h) bleiben Kurse und Scores exakt wie ohne diesen Schritt.
  *
+ * **8. Rundenguete** (`RouteQuality.kt`). Ein Via-Punkt ist nur eine
+ * Koordinate; liegt er neben dem Wegenetz, faehrt BRouter in eine Sackgasse
+ * hinein und denselben Weg zurueck. Solche Stichstrecken schneidet
+ * [trimSpurs] aus jedem Routing-Ergebnis, **bevor** dessen Distanz mit dem
+ * Ziel verglichen wird. Was danach noch doppelt befahren wird (lange
+ * Hin-und-zurueck-Stuecke, die kein Stachel mehr sind), misst
+ * [retraceShare] und kostet [retraceScore]: `40 × Anteil`, ein Viertel
+ * doppelt also 10 Punkte — so viel wie 10 % Distanzabweichung.
+ *
  * ## Betrieb
  *
  * **Streng sequenziell** — laeuft das Routing ueber den oeffentlichen
@@ -183,6 +192,11 @@ data class RouteCandidate(
      * [windMinKmh].
      */
     val windShape: Double? = null,
+    /**
+     * Anteil der Strecke, der doppelt befahren wird (0…1, [retraceShare]) —
+     * nach dem Herausschneiden der Stichstrecken.
+     */
+    val retraceShare: Double = 0.0,
 ) {
     /** Anteil neuer Kacheln an allen Kacheln der Route (0…1, 0 ohne Kacheln). */
     val newTileShare: Double get() = if (totalTileCount > 0) newTileCount.toDouble() / totalTileCount else 0.0
@@ -312,6 +326,7 @@ fun noveltyScore(newTileShare: Double): Double {
  * `newTileShare = 0` und `windBonus = 0` ist das Ergebnis identisch mit der
  * Bewertung ohne Entdecker-Modus und ohne Wind. Ein nicht endlicher
  * [windBonus] zaehlt als 0 — er darf nie die Sortierung kippen.
+ * [retraceShare] ist der doppelt befahrene Anteil ([retraceScore]).
  */
 fun scoreRoute(
     distanceKm: Double,
@@ -320,11 +335,13 @@ fun scoreRoute(
     preference: AscentPreference,
     newTileShare: Double = 0.0,
     windBonus: Double = 0.0,
+    retraceShare: Double = 0.0,
 ): Double {
     val deviation = if (targetKm > 0) abs(distanceKm - targetKm) / targetKm else 1.0
     val perKm = if (distanceKm > 0) ascentM / distanceKm else 0.0
     val wind = if (windBonus.isFinite()) windBonus else 0.0
-    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind
+    return DISTANCE_WEIGHT * deviation + ascentScore(perKm, preference) + noveltyScore(newTileShare) + wind +
+        retraceScore(retraceShare)
 }
 
 /**
@@ -489,7 +506,7 @@ suspend fun generateRoutes(
             requestsMade += 1
 
             val waypoints = loopWaypoints(start, radiusM, bearing, viaCount, clockwise)
-            val route = try {
+            val routed = try {
                 backend.route(waypoints, profile)
             } catch (e: CancellationException) {
                 // Ein Abbruch der umgebenden Coroutine ist kein gescheiterter
@@ -501,9 +518,13 @@ suspend fun generateRoutes(
                 break
             }
 
-            if (!route.distanceKm.isFinite() || route.distanceKm <= 0) {
+            if (!routed.distanceKm.isFinite() || routed.distanceKm <= 0) {
                 break
             }
+            // Stichstrecken zu den Via-Punkten herausschneiden (Schritt 8) —
+            // vor dem Distanzvergleich, damit der Radius auf die Laenge
+            // nachgefuehrt wird, die am Ende wirklich gefahren wird.
+            val route = trimSpurs(routed).route
 
             val deviation = abs(route.distanceKm - targetKm) / targetKm
             if (best == null || deviation < best.deviation) {
@@ -523,6 +544,7 @@ suspend fun generateRoutes(
             val share = if (totalTiles > 0) newTiles.toDouble() / totalTiles else 0.0
             val shape = windFrom?.let { windShape(found.route.points, it) }
             val windBonus = if (windFrom != null && wind != null) windScore(found.route.points, wind) else 0.0
+            val retraced = retraceShare(found.route.points)
             results.add(
                 RouteCandidate(
                     route = found.route,
@@ -535,6 +557,7 @@ suspend fun generateRoutes(
                         preference = target.ascentPreference,
                         newTileShare = if (preferNewAreas) share else 0.0,
                         windBonus = windBonus,
+                        retraceShare = retraced,
                     ),
                     bearingDeg = bearing,
                     targetKm = targetKm,
@@ -542,6 +565,7 @@ suspend fun generateRoutes(
                     newTileCount = newTiles,
                     totalTileCount = totalTiles,
                     windShape = shape,
+                    retraceShare = retraced,
                 ),
             )
         }

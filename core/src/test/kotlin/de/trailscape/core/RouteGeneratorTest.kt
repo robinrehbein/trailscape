@@ -743,4 +743,67 @@ class RouteGeneratorTest {
         assertEquals(plain, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, 0.3, windBonus = Double.NaN))
         assertEquals(plain - 4.0, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, 0.3, windBonus = -4.0), EPS)
     }
+
+    // ------------------------------------------------------------------
+    // Rundenguete (Schritt 8)
+    // ------------------------------------------------------------------
+
+    /** Wie [FakeBackend], faehrt aber jeden Via-Punkt als 200-m-Sackgasse an. */
+    private val spurBackend = RoutingBackend { waypoints, _ ->
+        val points = mutableListOf<TrackPoint>()
+        waypoints.forEachIndexed { index, w ->
+            val at = TrackPoint(lat = w.lat, lon = w.lon, ele = 500.0)
+            points.add(at)
+            if (index in 1 until waypoints.size - 1) {
+                points.add(destinationPoint(at, bearingTo(START, at), 200.0).copy(ele = 500.0))
+                points.add(at)
+            }
+        }
+        val km = points.zipWithNext { a, b -> haversineM(a, b) }.sum() / 1000
+        PlannedRoute(points = points, distanceKm = km, ascentM = 0.0)
+    }
+
+    @Test
+    fun `Stichstrecken zu den Via-Punkten werden herausgeschnitten`() {
+        val results = generate(spurBackend, target(40.0))
+
+        assertEquals(3, results.size)
+        for (r in results) {
+            // Kein Punkt wird mehr zweimal angefahren, die Runde ist sauber.
+            assertTrue(r.retraceShare < 0.01, "Anteil ${r.retraceShare}")
+            assertEquals(r.route.distanceKm, r.distanceKm, EPS)
+            // Die Zieldistanz gilt fuer die bereinigte Runde.
+            assertTrue(r.distanceDeviation <= routeToleranceRatio, "Abweichung ${r.distanceDeviation}")
+            val measured = r.route.points.zipWithNext { a, b -> haversineM(a, b) }.sum() / 1000
+            assertEquals(measured, r.distanceKm, 0.05)
+        }
+    }
+
+    @Test
+    fun `eine Hin-und-zurueck-Strecke verliert gegen eine echte Runde`() {
+        // Der Kandidat Richtung Norden kommt als reine Pendelstrecke zurueck
+        // und trifft die Distanz genau; die Runden liegen 5 % daneben.
+        val backend = RoutingBackend { waypoints, _ ->
+            val loop = waypoints.map { TrackPoint(lat = it.lat, lon = it.lon, ele = 500.0) }
+            val north = angleBetween(bearingTo(START, viaCentroid(loop)), 0.0) < 45
+            if (north) {
+                val far = destinationPoint(START, 0.0, 20_000.0).copy(ele = 500.0)
+                PlannedRoute(points = listOf(START, far, START), distanceKm = 40.0, ascentM = 0.0)
+            } else {
+                PlannedRoute(points = loop, distanceKm = 42.0, ascentM = 0.0)
+            }
+        }
+
+        val results = generate(backend, target(40.0))
+
+        val pendel = results.single { it.retraceShare > 0.9 }
+        assertEquals(results.last(), pendel)
+        assertTrue(results.first().retraceShare < 0.01)
+    }
+
+    @Test
+    fun `scoreRoute rechnet den doppelt befahrenen Anteil ein`() {
+        val plain = scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT)
+        assertEquals(plain + 10.0, scoreRoute(42.0, 300.0, 40.0, AscentPreference.MODERAT, retraceShare = 0.25), EPS)
+    }
 }
