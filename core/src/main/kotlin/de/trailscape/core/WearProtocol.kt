@@ -48,7 +48,7 @@ const val PFAD_SENSOR = "/trailscape/sensor"
 /** Befehl Uhr → Telefon (z. B. Aufzeichnung auf der Uhr gestartet). */
 const val PFAD_BEFEHL_AN_TELEFON = "/trailscape/befehl-an-telefon"
 
-/** Befehl Telefon → Uhr (z. B. Pause vom Telefon aus ausgeloest). */
+/** Befehl Telefon → Uhr (bisher nur [Befehl.TELEFON_BEENDET]: Tour am Telefon beendet). */
 const val PFAD_BEFEHL_AN_UHR = "/trailscape/befehl-an-uhr"
 
 /** Aufzeichnungszustand Telefon → Uhr (fuer die Uhr-Anzeige waehrend der Fahrt). */
@@ -139,9 +139,19 @@ fun dekodiereSensorBatch(bytes: ByteArray): SensorBatch = SensorBatch.fromJson(d
 // Befehle (beide Richtungen, Pfade [PFAD_BEFEHL_AN_TELEFON]/[PFAD_BEFEHL_AN_UHR])
 // ---------------------------------------------------------------------------
 
-/** Ein Steuerbefehl fuer die Aufzeichnung. [cmd] ist eine der [Befehl]-Konstanten. */
-data class Befehl(val cmd: String) {
-    fun toJson(): JsonObject = buildJsonObject { put("cmd", cmd) }
+/**
+ * Ein Steuerbefehl fuer die Aufzeichnung. [cmd] ist eine der [Befehl]-Konstanten.
+ *
+ * [zeitMs] (Wanduhr des Absenders, ms seit Epoch) ist optional und wird nur
+ * geschrieben, wenn gesetzt — bisher nur bei [TELEFON_BEENDET], siehe
+ * [telefonEndeBeendetUhr]. Aeltere Gegenseiten lesen ausschliesslich `cmd`
+ * und uebergehen das Zusatzfeld.
+ */
+data class Befehl(val cmd: String, val zeitMs: Long? = null) {
+    fun toJson(): JsonObject = buildJsonObject {
+        put("cmd", cmd)
+        zeitMs?.let { put("zeitMs", it) }
+    }
 
     companion object {
         const val START = "start"
@@ -149,8 +159,76 @@ data class Befehl(val cmd: String) {
         const val WEITER = "weiter"
         const val STOPP = "stopp"
 
-        fun fromJson(json: JsonObject): Befehl = Befehl(cmd = json.requiredString("cmd"))
+        /**
+         * Telefon → Uhr: Die Tour am Telefon wurde regulaer beendet (Knopf in
+         * der App oder in der Benachrichtigung), immer mit [zeitMs].
+         *
+         * Bewusst NICHT [STOPP]: Eine heutige Uhr setzt `stopp` sofort und
+         * ohne jede Pruefung um und meldet ihr Ende anschliessend selbst mit
+         * `stopp` ans Telefon zurueck — das gaebe auf alten Uhren eine
+         * Schleife (das Telefon startete fuer den Rueckmelde-Stopp seinen
+         * Dienst noch einmal) und keinerlei Schutz gegen eine verspaetete
+         * Nachricht. Ein neuer Wert faellt auf alten Uhren in deren `else`
+         * und bleibt folgenlos; nur eine neue Uhr wertet ihn aus, und zwar
+         * ueber [telefonEndeBeendetUhr].
+         */
+        const val TELEFON_BEENDET = "telefon-beendet"
+
+        fun fromJson(json: JsonObject): Befehl = Befehl(
+            cmd = json.requiredString("cmd"),
+            zeitMs = json.optionalLong("zeitMs"),
+        )
     }
+}
+
+/**
+ * Wie alt (nach der Uhr der Uhr) ein [Befehl.TELEFON_BEENDET] hoechstens sein
+ * darf, um noch zu wirken. Eine Data-Layer-Nachricht kommt normalerweise
+ * binnen Sekunden an oder gar nicht; was deutlich spaeter eintrifft (der
+ * Listener wurde erst spaet geweckt), gehoert mit hoher Wahrscheinlichkeit zu
+ * einer Lage, die sich inzwischen geaendert hat. Eine Minute laesst Raum fuer
+ * das Speichern der Tour vor dem Senden und fuer einen kurzen Funkaussetzer.
+ */
+const val TELEFON_ENDE_MAX_ALTER_MS = 60_000L
+
+/**
+ * Wie weit die Uhrzeit des Telefons der der Uhr voraus sein darf, ohne dass
+ * ein [Befehl.TELEFON_BEENDET] als unplausibel verworfen wird. Wear OS stellt
+ * die Uhrzeit der Uhr ueber das gekoppelte Telefon; ein paar Sekunden
+ * Abweichung sind normal, eine halbe Minute ist grosszuegig.
+ */
+const val TELEFON_ENDE_UHRZEIT_TOLERANZ_MS = 30_000L
+
+/**
+ * Soll die Uhr ihre Aufzeichnung beenden, weil das Telefon [befehl] geschickt
+ * hat? Reine Entscheidung, damit sie testbar in `:core` liegt; die Uhr ruft
+ * sie in `RecordingStatus` auf und geht bei `true` denselben Weg wie ihr
+ * eigener Stopp-Knopf.
+ *
+ * Im Zweifel nein — eine faelschlich beendete Aufzeichnung wiegt schwerer als
+ * eine, die die Fahrerin selbst noch stoppen muss:
+ *  * nur [Befehl.TELEFON_BEENDET] mit [Befehl.zeitMs] (ohne Zeitstempel kein
+ *    Nachweis, worauf er sich bezieht);
+ *  * nur, wenn auf der Uhr gerade eine Aufzeichnung laeuft oder pausiert
+ *    ([eigenerStartMs] nicht `null`) — sonst ist nichts zu beenden, und das
+ *    Echo auf einen Stopp, den die Uhr selbst ausgeloest hat, verpufft;
+ *  * nur, wenn diese Aufzeichnung **vor** dem Ende am Telefon begann. Eine
+ *    verspaetete Nachricht von der vorigen Tour beendet so keine neue;
+ *  * nur, wenn die Nachricht hoechstens [TELEFON_ENDE_MAX_ALTER_MS] alt ist
+ *    und nicht mehr als [TELEFON_ENDE_UHRZEIT_TOLERANZ_MS] aus der Zukunft
+ *    kommt (sonst sind die beiden Uhrzeiten nicht vergleichbar).
+ *
+ * @param eigenerStartMs Wanduhr-Start der laufenden Uhr-Aufzeichnung, `null`
+ *   wenn keine laeuft oder pausiert.
+ * @param jetztMs Wanduhr der Uhr beim Empfang.
+ */
+fun telefonEndeBeendetUhr(befehl: Befehl, eigenerStartMs: Long?, jetztMs: Long): Boolean {
+    if (befehl.cmd != Befehl.TELEFON_BEENDET) return false
+    val endeMs = befehl.zeitMs ?: return false
+    val start = eigenerStartMs ?: return false
+    if (start >= endeMs) return false
+    val alterMs = jetztMs - endeMs
+    return alterMs in -TELEFON_ENDE_UHRZEIT_TOLERANZ_MS..TELEFON_ENDE_MAX_ALTER_MS
 }
 
 /** Kodiert [befehl] als UTF-8-JSON-Bytes. */

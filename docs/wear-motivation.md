@@ -49,12 +49,43 @@ Stand: umgesetzt. Was es tut und wo:
 
 Bekannte Grenzen:
 - **Sprache**: Die Zeilen kommen in der Sprache der Telefon-App, nicht der Uhr.
-- **Nur nach Stopp auf der Uhr sichtbar**: Das Handy meldet das Ende nur über
-  `AufzeichnungsZustand(laeuft = false)`, und die Uhr wertet `laeuft` nicht aus; `BEENDET` erreicht
-  sie nur durch ihren eigenen Stopp. Wird am Handy gestoppt, hält die Uhr die Zeilen, bis sie selbst
-  beendet wird (unverändertes Verhalten, nicht Teil dieses Schritts).
+- **Ende am Handy**: Seit „Uhr endet mit dem Handy" (unten) erreicht die Uhr ihr Abschlussbild auch,
+  wenn die Tour am Handy beendet wird — mit einem neuen Handy und einer neuen Uhr. Mit einer alten
+  Seite bleibt es beim alten Verhalten: Die Uhr hält die Zeilen, bis sie selbst gestoppt wird.
 - Ungeprüft ohne Gerätepaar: Zustellzeit, Layout auf runder Anzeige. `:wear` hat keine Tests, die
   Uhrseite ist nur kompiliert.
+
+### Uhr endet mit dem Handy
+
+Wird die Tour am Handy regulär beendet (Knopf in der App oder in der Benachrichtigung), beendet auch
+die Uhr ihre Aufzeichnung und zeigt ihr Abschlussbild.
+- **Mechanismus**: ein expliziter Befehl, nicht das Auswerten von `AufzeichnungsZustand.laeuft`. Der
+  Zustand geht im 5-s-Takt und auch bei Pause, Startfehler und Absturz-Rettung mit `laeuft = false`
+  raus; „Ende" ließe sich daraus nur raten, und eine alte oder verspätete Nachricht trüge keinen
+  Bezug. Stattdessen `Befehl(cmd = "telefon-beendet", zeitMs = <Ende am Handy>)` auf
+  `PFAD_BEFEHL_AN_UHR` (`WearBridge.sendTelefonBeendet`, einmal, ohne Wiederholung), gesendet in
+  `RecordingService.finishAndStop`, nur wenn dort wirklich eine Tour lief.
+- **Bewusst nicht `stopp`**: Eine heutige Uhr setzt `stopp` ungeprüft um und meldet ihr Ende mit
+  `stopp` zurück — auf alten Uhren gäbe das eine Schleife und keinen Schutz vor alten Nachrichten.
+  Den neuen Wert verwirft eine alte Uhr im `else`.
+- **Entscheidung der Uhr** (`telefonEndeBeendetUhr` in `core/.../WearProtocol.kt`, Tests in
+  `WearProtocolTest`): nur wenn die Uhr gerade aufzeichnet oder pausiert, ihre Aufzeichnung **vor**
+  dem Ende am Handy begann, die Nachricht höchstens 60 s alt ist (`TELEFON_ENDE_MAX_ALTER_MS`) und
+  höchstens 30 s „aus der Zukunft" kommt (`TELEFON_ENDE_UHRZEIT_TOLERANZ_MS`, Uhrzeitversatz).
+  Dann derselbe Weg wie der eigene Stopp-Knopf (`RecordingService.beendeVersuch`: Sensoren aus,
+  Übung beenden, Journal, `BEENDET`, Dienst beenden), nur ohne `stopp` zurück ans Handy
+  (`ACTION_STOP_VOM_TELEFON`). Die Uhr speichert nichts, also auch nichts doppelt.
+- **Pause** am Handy schickt keinen Befehl; die Uhr läuft weiter wie bisher.
+- **Nicht** bei Abbruch mit Fehler (`failAndStop`) und **nicht** bei der Absturz-Rettung: Dort hat
+  niemand „Ende" gesagt; im Zweifel läuft die Uhr weiter und wird von Hand gestoppt. Ein „Verwerfen"
+  gibt es am Handy nicht.
+- **Echo**: Stoppt die Uhr selbst, stoppt sie das Handy (`stopp`), und das Handy meldet
+  `telefon-beendet` zurück. Die Uhr ist dann schon `BEENDET` und ignoriert es.
+- **Alt/neu**: Der Pfad hat seit jeher einen Intent-Filter im Uhr-Manifest, es braucht keinen neuen.
+  Alte Uhr + neues Handy: Wert unbekannt, nichts passiert (wie bisher). Neue Uhr + altes Handy: Es
+  kommt nichts, die Uhr läuft wie bisher weiter. Das Zusatzfeld `zeitMs` lesen alte Seiten nicht.
+- Ungeprüft ohne Gerätepaar: Zustellung bei geschlossener Uhr-App, Reihenfolge gegenüber
+  `PFAD_ABSCHLUSS` (die Zeilen bleiben ohnehin stehen, egal was zuerst ankommt).
 
 ## (b) Serie und Wochenziel auf einen Blick — offen
 

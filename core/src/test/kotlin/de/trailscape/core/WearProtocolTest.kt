@@ -114,6 +114,77 @@ class WearProtocolTest {
         assertEquals("pause", Befehl.PAUSE)
         assertEquals("weiter", Befehl.WEITER)
         assertEquals("stopp", Befehl.STOPP)
+        assertEquals("telefon-beendet", Befehl.TELEFON_BEENDET)
+    }
+
+    // --- Ende am Telefon (Befehl.TELEFON_BEENDET) ---
+
+    @Test
+    fun `Befehl mit Zeitstempel Roundtrip, ohne Zeitstempel kein zeitMs im JSON`() {
+        val mit = Befehl(Befehl.TELEFON_BEENDET, zeitMs = 1_700_000_000_000L)
+        assertEquals(mit, dekodiereBefehl(kodiereBefehl(mit)))
+        assertFalse(String(kodiereBefehl(Befehl(Befehl.STOPP)), Charsets.UTF_8).contains("zeitMs"))
+    }
+
+    @Test
+    fun `eine alte Uhr liest beim Ende-Befehl nur cmd, und den Wert kennt sie nicht`() {
+        // So dekodiert eine heutige Uhr: nur `cmd`, unbekannte Felder egal.
+        val json = kotlinx.serialization.json.Json.parseToJsonElement(
+            String(kodiereBefehl(Befehl(Befehl.TELEFON_BEENDET, zeitMs = 5L)), Charsets.UTF_8),
+        ) as kotlinx.serialization.json.JsonObject
+        val cmd = (json["cmd"] as kotlinx.serialization.json.JsonPrimitive).content
+        assertFalse(cmd in setOf(Befehl.START, Befehl.PAUSE, Befehl.WEITER, Befehl.STOPP))
+    }
+
+    @Test
+    fun `ein Befehl einer alten Gegenseite ohne zeitMs dekodiert weiter`() {
+        val befehl = dekodiereBefehl("""{"cmd":"stopp"}""".toByteArray(Charsets.UTF_8))
+        assertEquals(Befehl(Befehl.STOPP), befehl)
+        assertNull(befehl.zeitMs)
+    }
+
+    private val start = 1_700_000_000_000L
+    private val ende = start + 3_600_000L
+    private fun endeBefehl(zeitMs: Long? = ende) = Befehl(Befehl.TELEFON_BEENDET, zeitMs)
+
+    @Test
+    fun `frisches Ende am Telefon beendet eine vorher gestartete Uhr-Aufzeichnung`() {
+        assertTrue(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = start, jetztMs = ende + 2_000L))
+        assertTrue(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = start, jetztMs = ende))
+    }
+
+    @Test
+    fun `ohne laufende Uhr-Aufzeichnung passiert nichts`() {
+        assertFalse(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = null, jetztMs = ende + 1_000L))
+    }
+
+    @Test
+    fun `eine nach dem Ende gestartete neue Uhr-Aufzeichnung bleibt unberuehrt`() {
+        // Verspaetete Nachricht der vorigen Tour, die neue begann 10 s danach.
+        assertFalse(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = ende + 10_000L, jetztMs = ende + 20_000L))
+        assertFalse(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = ende, jetztMs = ende + 1_000L))
+    }
+
+    @Test
+    fun `zu alte Nachricht wirkt nicht mehr, die Grenze selbst noch`() {
+        val grenze = ende + TELEFON_ENDE_MAX_ALTER_MS
+        assertTrue(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = start, jetztMs = grenze))
+        assertFalse(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = start, jetztMs = grenze + 1L))
+    }
+
+    @Test
+    fun `Telefonuhr leicht voraus wird toleriert, weit voraus nicht`() {
+        val knapp = ende - TELEFON_ENDE_UHRZEIT_TOLERANZ_MS
+        assertTrue(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = start, jetztMs = knapp))
+        assertFalse(telefonEndeBeendetUhr(endeBefehl(), eigenerStartMs = start, jetztMs = knapp - 1L))
+    }
+
+    @Test
+    fun `ohne Zeitstempel oder mit anderem Befehl passiert nichts`() {
+        assertFalse(telefonEndeBeendetUhr(endeBefehl(zeitMs = null), eigenerStartMs = start, jetztMs = ende))
+        for (cmd in listOf(Befehl.START, Befehl.PAUSE, Befehl.WEITER, Befehl.STOPP, "unbekannt")) {
+            assertFalse(telefonEndeBeendetUhr(Befehl(cmd, ende), eigenerStartMs = start, jetztMs = ende))
+        }
     }
 
     // --- AufzeichnungsZustand ---

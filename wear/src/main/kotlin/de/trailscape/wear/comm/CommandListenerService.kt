@@ -39,7 +39,7 @@ class CommandListenerService : WearableListenerService() {
         runCatching {
             when (event.path) {
                 PFAD_BEFEHL_AN_UHR ->
-                    RecordingStatus.wendeFerncodeAn(applicationContext, dekodiereBefehl(event.data).cmd)
+                    RecordingStatus.wendeFerncodeAn(applicationContext, dekodiereBefehl(event.data))
 
                 PFAD_ZUSTAND ->
                     RecordingStatus.wendeTelefonZustandAn(dekodiereAufzeichnungsZustand(event.data))

@@ -89,12 +89,17 @@ gelten.
 - [ ] Sprache der Zeilen: Sie folgen der Sprache der Handy-App, nicht der der
       Uhr.
 - [ ] Die Uhr-App geschlossen, Tour beendet: Kommen die Zeilen trotzdem an?
+- [ ] Tour mit der Uhr starten und **am Handy** beenden (App-Knopf, ein zweites
+      Mal über die Benachrichtigung): Beendet die Uhr ihre Aufzeichnung von
+      selbst und zeigt ihr Abschlussbild, mit den Zeilen, wenn die Tour etwas
+      gebracht hat? Bleibt am Handy genau eine Tour gespeichert?
+- [ ] Am Handy **pausieren**: Die Uhr beendet nicht, ihre Aufzeichnung läuft
+      weiter. Danach am Handy fortsetzen und beenden.
+- [ ] Am Handy beenden, sofort an der Uhr eine neue Aufzeichnung starten:
+      Die neue läuft weiter.
 
 ## Bekannte offene Punkte
 
-- Wird die Tour am Handy beendet, erreicht die Uhr ihr Abschlussbild nicht von
-  selbst (war schon vorher so) und zeigt die Zeilen erst, wenn auch sie
-  gestoppt wird.
 - Die Uhr zeigt Serie und Wochenziel noch nicht auf einen Blick. Der Vorschlag
   dafür steht in `docs/wear-motivation.md`.
 - Das Jahresziel ist nicht Teil des Selfhost-Syncs.
