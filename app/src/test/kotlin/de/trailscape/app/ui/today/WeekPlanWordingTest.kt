@@ -1,11 +1,14 @@
 package de.trailscape.app.ui.today
 
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.core.DayForecast
 import de.trailscape.core.PlannedRide
 import de.trailscape.core.WeekForecastStatus
 import de.trailscape.core.WeekPlan
 import de.trailscape.core.WeekPlanReason
 import de.trailscape.core.WeekPlanStatus
+import de.trailscape.core.WeekPlanTightCause
 import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.i18n.CoreTextsEn
 import java.time.LocalDate
@@ -54,6 +57,47 @@ class WeekPlanWordingTest {
             "Noch 70 km bis zum Wochenziel. So passt es:",
             TodayStrings.de(weekPlanSummary(plan(WeekPlanStatus.MACHBAR))),
         )
+    }
+
+    @Test
+    fun `knapp nennt den Grund`() {
+        val days = plan(WeekPlanStatus.KNAPP).copy(tightCause = WeekPlanTightCause.ZU_WENIGE_TAGE)
+        assertEquals(
+            "Knapp: Diese Woche bleiben zu wenige Tage, und mehr als 60 km pro Fahrt wären deutlich mehr als " +
+                "deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch 20 km.",
+            TodayStrings.de(weekPlanTightNote(days)!!),
+        )
+        assertTrue(TodayStrings.en(weekPlanTightNote(days)!!).startsWith("Tight: too few days are left this week"))
+
+        val rides = (0 until 5).map { PlannedRide(wednesday.plusDays(it.toLong()), 60, WeekPlanReason.FREIER_TAG) }
+        val cap = plan(WeekPlanStatus.KNAPP).copy(rides = rides, tightCause = WeekPlanTightCause.OBERGRENZE)
+        assertEquals(
+            "Knapp: Selbst mit 5 Fahrten bräuchte jede mehr als 60 km – deutlich mehr als deine längste Fahrt " +
+                "der letzten Wochen. Mit diesem Plan fehlen am Ende noch 20 km.",
+            TodayStrings.de(weekPlanTightNote(cap)!!),
+        )
+        assertTrue(TodayStrings.en(weekPlanTightNote(cap)!!).startsWith("Tight: even with 5 rides, each would need more than 60 km"))
+    }
+
+    @Test
+    fun `jetzt fuer den Plan gleicht Tag und Stunde um Mitternacht ab`() {
+        val hour = wednesday.atTime(17, 0)
+        assertEquals(hour, weekPlanNow(wednesday, hour))
+        // Stunde hinkt hinterher: Tagesanfang des neuen Tags.
+        assertEquals(thursday.atStartOfDay(), weekPlanNow(thursday, wednesday.atTime(23, 0)))
+        // Stunde ist schon im naechsten Tag: der Tag der Seite ist vorbei.
+        assertEquals(wednesday.atTime(23, 59), weekPlanNow(wednesday, thursday.atTime(0, 0)))
+    }
+
+    @Test
+    fun `Einwilligung nennt Rueckfall auf die Tour und den Zeitpunkt`() {
+        val de = TodayStrings.de(UiText.Res(R.string.today_week_plan_weather_switch_hint))
+        assertTrue(de.contains("Start deiner letzten Tour"))
+        assertTrue(de.contains("beim Öffnen von „Heute“"))
+        assertTrue(de.contains("3 Stunden"))
+        val en = TodayStrings.en(UiText.Res(R.string.today_week_plan_weather_switch_hint))
+        assertTrue(en.contains("start of your last ride"))
+        assertTrue(en.contains("When you open Today"))
     }
 
     @Test

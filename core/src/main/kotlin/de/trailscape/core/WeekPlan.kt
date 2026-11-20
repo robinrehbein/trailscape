@@ -14,7 +14,7 @@ import kotlin.math.min
  *
  * Das mitwachsende Wochenziel (`WeeklyGoal.kt`) sagt *wie viel*, aber nicht
  * *wann*. Diese Datei schlaegt fuer die restlichen Tage der Woche ein bis drei
- * Fahrten vor — bevorzugt an Tagen, an denen die Nutzerin ohnehin faehrt, und
+ * (notfalls fuenf) Fahrten vor — bevorzugt an Tagen, an denen die Nutzerin ohnehin faehrt, und
  * an Tagen mit gutem Wetter, wenn eine Vorhersage vorliegt.
  *
  * Reine Rechnung wie `Motivation.kt`: kein Android, keine Uhr, keine
@@ -28,12 +28,18 @@ import kotlin.math.min
  *     Heute nur bis [WEEK_PLAN_LAST_HOUR_TODAY] Uhr und nur, wenn heute noch
  *     nicht gefahren wurde.
  *  3. **Anzahl**: so viele Fahrten in der typischen Laenge, wie es fuer den
- *     Rest braucht — hoechstens [WEEK_PLAN_MAX_RIDES], hoechstens so viele wie
- *     Tage bleiben, und keine Fahrt unter [WEEK_PLAN_MIN_RIDE_KM].
+ *     Rest braucht — ueblicherweise hoechstens [WEEK_PLAN_MAX_RIDES],
+ *     hoechstens so viele wie Tage bleiben, und keine Fahrt unter
+ *     [WEEK_PLAN_MIN_RIDE_KM] (auch nicht die einzige: Ein Rest von 7 km wird
+ *     eine Runde ueber 10 km). Unter [WEEK_PLAN_MIN_REMAINING_KM] Rest gibt es
+ *     keinen Plan — das ist keine eigene Runde mehr, und die Zeile unter dem
+ *     Balken nennt den Rest ohnehin.
  *  4. **Obergrenze**: keine Fahrt laenger als das [WEEK_PLAN_MAX_FACTOR]-Fache
- *     der laengsten Fahrt der letzten [WEEK_PLAN_HISTORY_WEEKS] Wochen. Reicht
- *     das nicht, heisst der Plan [WeekPlanStatus.KNAPP] und nennt den Rest,
- *     statt eine Ueberforderung vorzuschlagen.
+ *     der laengsten Fahrt der letzten [WEEK_PLAN_HISTORY_WEEKS] Wochen. Reichen
+ *     drei Fahrten bis zur Obergrenze nicht, sind aber noch Tage frei, werden
+ *     es bis zu [WEEK_PLAN_MAX_RIDES_TIGHT] Fahrten — mehr Fahrten statt einer
+ *     Ueberforderung. Reicht auch das nicht, heisst der Plan
+ *     [WeekPlanStatus.KNAPP] und nennt den Rest samt Grund ([WeekPlanTightCause]).
  *  5. **Tagwahl**: Punkte fuer den ueblichen Fahrtag, Abzug fuer Regen, Sturm,
  *     Kaelte und Hitze. Schlechtes Wetter wird gemieden, aber nie verboten —
  *     bleibt nur ein verregneter Tag, steht er mit [WeekPlanReason.REGEN_MOEGLICH]
@@ -43,8 +49,15 @@ import kotlin.math.min
 /** Wie weit die Historie zurueckreicht: lang genug fuer ein Muster, kurz genug fuer die aktuelle Form. */
 const val WEEK_PLAN_HISTORY_WEEKS: Int = 8
 
-/** Mehr Fahrten schlaegt der Plan nicht vor — eine Woche ist kein Trainingsplan. */
+/** Mehr Fahrten schlaegt der Plan normalerweise nicht vor — eine Woche ist kein Trainingsplan. */
 const val WEEK_PLAN_MAX_RIDES: Int = 3
+
+/**
+ * So viele Fahrten werden es hoechstens, wenn [WEEK_PLAN_MAX_RIDES] Fahrten bis
+ * zur Obergrenze nicht reichen und noch Tage frei sind. Fuenf Fahrten in einer
+ * Woche sind viel, aber machbar — und ehrlicher als „knapp" bei freien Tagen.
+ */
+const val WEEK_PLAN_MAX_RIDES_TIGHT: Int = 5
 
 /** Keine Fahrt laenger als dieses Vielfache der laengsten Fahrt der letzten Wochen. */
 const val WEEK_PLAN_MAX_FACTOR: Double = 1.5
@@ -52,8 +65,21 @@ const val WEEK_PLAN_MAX_FACTOR: Double = 1.5
 /** Ab dieser Stunde wird fuer heute nichts mehr vorgeschlagen. */
 const val WEEK_PLAN_LAST_HOUR_TODAY: Int = 18
 
-/** Kuerzer lohnt das Aufsatteln nicht — dann lieber eine Fahrt weniger. */
+/**
+ * Kuerzer lohnt das Aufsatteln nicht — dann lieber eine Fahrt weniger, und
+ * eine einzelne Fahrt wird auf diese Laenge aufgerundet. Der Rundkurs-Generator
+ * plant ab [minRouteTargetKm] ohne Sonderbehandlung (darunter hebt er das Ziel
+ * mit Hinweis an); 10 km liegen sicher darueber und sind dieselbe Untergrenze
+ * wie bei der ersten Runde ([FIRST_ROUND_MIN_KM]).
+ */
 const val WEEK_PLAN_MIN_RIDE_KM: Int = 10
+
+/**
+ * Unter diesem Rest gibt es keinen Plan: Fuer weniger als die kleinste Runde,
+ * die der Rundkurs-Generator ueberhaupt plant ([minRouteTargetKm]), lohnt
+ * keine eigene Karte.
+ */
+const val WEEK_PLAN_MIN_REMAINING_KM: Double = minRouteTargetKm
 
 /** Typische Fahrt ohne jede Historie — dieselbe Groessenordnung wie die erste Runde. */
 const val WEEK_PLAN_DEFAULT_RIDE_KM: Double = 25.0
@@ -187,15 +213,31 @@ enum class WeekPlanStatus {
     KEINE_TAGE,
 }
 
+/** Warum ein Plan [WeekPlanStatus.KNAPP] ist — die Oberflaeche sagt es dazu. */
+enum class WeekPlanTightCause {
+    /**
+     * Es bleiben weniger Tage, als es Fahrten bis zur Obergrenze braucht —
+     * jeder verbleibende Tag hat schon eine Fahrt.
+     */
+    ZU_WENIGE_TAGE,
+
+    /**
+     * Tage waeren frei, aber selbst [WEEK_PLAN_MAX_RIDES_TIGHT] Fahrten bis zur
+     * Obergrenze reichen nicht.
+     */
+    OBERGRENZE,
+}
+
 /**
  * Der Wochen-Fahrplan.
  *
- * @property rides ein bis drei Fahrten nach Datum; leer nur bei [WeekPlanStatus.KEINE_TAGE].
+ * @property rides ein bis drei (notfalls fuenf) Fahrten nach Datum; leer nur bei [WeekPlanStatus.KEINE_TAGE].
  * @property remainingKm der Rest zum Wochenziel, auf ganze km aufgerundet.
  * @property shortfallKm was nach den Vorschlaegen noch fehlt (0 ausser bei [WeekPlanStatus.KNAPP]
  *   und [WeekPlanStatus.KEINE_TAGE]).
  * @property maxRideKm die Obergrenze je Fahrt (Regel 4).
  * @property withWeather ob fuer mindestens einen der moeglichen Tage eine Vorhersage vorlag.
+ * @property tightCause warum es knapp ist; `null` ausser bei [WeekPlanStatus.KNAPP].
  */
 data class WeekPlan(
     val rides: List<PlannedRide>,
@@ -204,6 +246,7 @@ data class WeekPlan(
     val shortfallKm: Int,
     val maxRideKm: Int,
     val withWeather: Boolean,
+    val tightCause: WeekPlanTightCause? = null,
 )
 
 /**
@@ -314,11 +357,12 @@ private const val EARLY_BONUS_PER_DAY = 0.02
 
 /**
  * Der Wochen-Fahrplan, oder `null`, wenn es keinen braucht: Ziel geschafft
- * (Rest unter 0,5 km) oder Trainingsplan aktiv. Regeln siehe Datei-KDoc.
+ * oder fast (Rest unter [WEEK_PLAN_MIN_REMAINING_KM]) oder Trainingsplan
+ * aktiv. Regeln siehe Datei-KDoc.
  */
 fun planWeek(input: WeekPlanInput): WeekPlan? {
     if (input.trainingPlanActive) return null
-    if (!input.remainingKm.isFinite() || input.remainingKm < 0.5) return null
+    if (!input.remainingKm.isFinite() || input.remainingKm < WEEK_PLAN_MIN_REMAINING_KM) return null
     val remaining = ceil(input.remainingKm - 1e-9).toInt()
 
     val habits = input.habits
@@ -333,9 +377,11 @@ fun planWeek(input: WeekPlanInput): WeekPlan? {
         return WeekPlan(emptyList(), WeekPlanStatus.KEINE_TAGE, remaining, remaining, cap, withWeather)
     }
 
-    // Anzahl: typische Laenge, dann so lange mehr, bis die Obergrenze passt.
+    // Anzahl: typische Laenge (hoechstens drei), dann so lange mehr, bis die
+    // Obergrenze passt — notfalls bis zu fuenf Fahrten (Regel 4).
     var count = ceil(remaining / typical - 1e-9).toInt().coerceIn(1, WEEK_PLAN_MAX_RIDES)
-    while (count < WEEK_PLAN_MAX_RIDES && remaining.toDouble() / count > cap) count++
+    while (count < WEEK_PLAN_MAX_RIDES_TIGHT && remaining.toDouble() / count > cap) count++
+    val limitedByDays = count > days.size
     count = min(count, days.size)
     while (count > 1 && remaining.toDouble() / count < WEEK_PLAN_MIN_RIDE_KM) count--
 
@@ -354,7 +400,8 @@ fun planWeek(input: WeekPlanInput): WeekPlan? {
         chosen += best
     }
 
-    val kms = splitKm(remaining, chosen.map { baseScore.getValue(it) }, cap)
+    // Auch eine einzelne Fahrt hat mindestens die Mindestlaenge (Regel 3).
+    val kms = splitKm(max(remaining, WEEK_PLAN_MIN_RIDE_KM), chosen.map { baseScore.getValue(it) }, cap)
     val rides = chosen.zip(kms)
         .map { (day, km) ->
             val forecast = forecastByDate[day]
@@ -363,6 +410,11 @@ fun planWeek(input: WeekPlanInput): WeekPlan? {
         .sortedBy { it.date }
     val planned = rides.sumOf { it.km }
     val shortfall = (remaining - planned).coerceAtLeast(0)
+    val tightCause = when {
+        shortfall == 0 -> null
+        limitedByDays -> WeekPlanTightCause.ZU_WENIGE_TAGE
+        else -> WeekPlanTightCause.OBERGRENZE
+    }
     return WeekPlan(
         rides = rides,
         status = if (shortfall > 0) WeekPlanStatus.KNAPP else WeekPlanStatus.MACHBAR,
@@ -370,6 +422,7 @@ fun planWeek(input: WeekPlanInput): WeekPlan? {
         shortfallKm = shortfall,
         maxRideKm = cap,
         withWeather = withWeather,
+        tightCause = tightCause,
     )
 }
 

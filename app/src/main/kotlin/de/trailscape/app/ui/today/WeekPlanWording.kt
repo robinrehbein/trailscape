@@ -7,8 +7,10 @@ import de.trailscape.core.WeekForecastStatus
 import de.trailscape.core.WeekPlan
 import de.trailscape.core.WeekPlanReason
 import de.trailscape.core.WeekPlanStatus
+import de.trailscape.core.WeekPlanTightCause
 import de.trailscape.core.i18n.CoreTexts
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 /**
@@ -96,13 +98,37 @@ fun weekPlanSummary(plan: WeekPlan): UiText = when (plan.status) {
     else -> UiText.Res(R.string.today_week_plan_summary, listOf(plan.remainingKm))
 }
 
-/** Hinweis „knapp" unter den Zeilen, sonst `null`. */
-fun weekPlanTightNote(plan: WeekPlan): UiText? =
-    if (plan.status == WeekPlanStatus.KNAPP) {
-        UiText.Res(R.string.today_week_plan_tight, listOf(plan.maxRideKm, plan.shortfallKm))
-    } else {
-        null
+/**
+ * Hinweis „knapp" unter den Zeilen, sonst `null`. Nennt den Grund
+ * ([WeekPlanTightCause]): zu wenige Tage — oder Tage waeren frei, aber selbst
+ * fuenf Fahrten bis zur Obergrenze reichen nicht.
+ */
+fun weekPlanTightNote(plan: WeekPlan): UiText? {
+    if (plan.status != WeekPlanStatus.KNAPP) return null
+    return when (plan.tightCause) {
+        WeekPlanTightCause.ZU_WENIGE_TAGE ->
+            UiText.Res(R.string.today_week_plan_tight_days, listOf(plan.maxRideKm, plan.shortfallKm))
+
+        WeekPlanTightCause.OBERGRENZE, null ->
+            UiText.Res(R.string.today_week_plan_tight, listOf(plan.maxRideKm, plan.shortfallKm, plan.rides.size))
     }
+}
+
+/**
+ * „Jetzt" fuer den Wochenplan aus dem Kalendertag der Seite ([today]) und der
+ * stuendlich getakteten Uhr ([hourNow]). Beide laufen mit eigenem Wecker und
+ * koennen um Mitternacht kurz auseinanderliegen: Hinkt die Stunde hinterher,
+ * gilt der Tagesanfang; ist sie schon im naechsten Tag, gilt 23:59 — der Tag
+ * der Seite ist dann vorbei, fuer ihn wird nichts mehr vorgeschlagen.
+ */
+fun weekPlanNow(today: LocalDate, hourNow: LocalDateTime): LocalDateTime {
+    val hourDate = hourNow.toLocalDate()
+    return when {
+        hourDate == today -> hourNow
+        hourDate.isAfter(today) -> today.atTime(23, 59)
+        else -> today.atStartOfDay()
+    }
+}
 
 /**
  * Die kleine Wetterzeile: Quelle, wenn mit Wetter geplant wurde; sonst, warum

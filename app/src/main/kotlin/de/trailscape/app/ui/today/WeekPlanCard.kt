@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +55,7 @@ import de.trailscape.core.WeekForecastStatus
 import de.trailscape.core.WeekPlan
 import de.trailscape.core.WeekPlanStatus
 import de.trailscape.core.loadWeekForecast
+import de.trailscape.core.pruneExpiredWeekForecast
 import de.trailscape.core.readWeekPlanWeatherEnabled
 import de.trailscape.core.riddenRides
 import de.trailscape.core.weekPlanWeatherPoint
@@ -64,6 +66,8 @@ import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -136,12 +140,14 @@ internal fun WeekPlanCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = theme.onSurfaceVariant,
                 )
-                HorizontalDivider(color = theme.outlineVariant)
-                WeatherSwitchRow(
-                    checked = weather != WeekPlanWeatherUi.AUS,
-                    onCheckedChange = onWeatherEnabledChange,
-                )
             }
+            // Der Schalter steht auch ohne Fahrtage da: Wer das Wetter wieder
+            // ausschalten will, soll das nicht erst naechste Woche koennen.
+            HorizontalDivider(color = theme.outlineVariant)
+            WeatherSwitchRow(
+                checked = weather != WeekPlanWeatherUi.AUS,
+                onCheckedChange = onWeatherEnabledChange,
+            )
         }
     }
 }
@@ -220,16 +226,27 @@ internal class WeekPlanWeatherHolder(enabled: Boolean) {
     var enabled by mutableStateOf(enabled)
     var forecast by mutableStateOf<WeekForecast?>(null)
 
+    /**
+     * Single-flight: Es laeuft hoechstens ein Laden zugleich. Beim Oeffnen
+     * startet der Effekt einmal mit der Komposition und gleich noch einmal mit
+     * dem ersten Resume; die abgebrochene Anfrage laeuft auf dem IO-Thread
+     * aber weiter. Der zweite Durchlauf wartet deshalb, bis der erste fertig
+     * ist, und findet dann den frischen Zwischenspeicher statt eine zweite
+     * Anfrage zu schicken.
+     */
+    val loadMutex = Mutex()
+
     val ui: WeekPlanWeatherUi get() = weekPlanWeatherUi(enabled, forecast?.status)
 }
 
 /**
- * Schalter lesen und — nur wenn er an ist und die Karte ueberhaupt erscheint
+ * Schalter lesen und — nur wenn er an ist und die Karte Fahrtage zeigt
  * ([active]) — die Vorhersage laden: aus dem Zwischenspeicher oder mit einer
  * Anfrage (`core/…/WeekPlanWeather.kt`, [loadWeekForecast]). Erneut beim
  * Umschalten, bei einem neuen Tag und beim Zurueckkehren in die App; der
  * Zwischenspeicher sorgt dafuer, dass das hoechstens alle paar Stunden
- * wirklich ins Netz geht.
+ * wirklich ins Netz geht. Eine abgelaufene Vorhersage wird bei jedem Durchlauf
+ * geloescht, auch ohne Karte ([pruneExpiredWeekForecast]).
  */
 @Composable
 internal fun rememberWeekPlanWeather(active: Boolean, today: LocalDate, rides: List<RideInfo>): WeekPlanWeatherHolder {
@@ -242,30 +259,39 @@ internal fun rememberWeekPlanWeather(active: Boolean, today: LocalDate, rides: L
         resumeTick++
         onPauseOrDispose { }
     }
-    val lastRideId = remember(rides) { riddenRides(rides).maxByOrNull { it.createdAt }?.id }
+    val lastRide = remember(rides) { riddenRides(rides).maxByOrNull { it.createdAt } }
+    val currentLastRide by rememberUpdatedState(lastRide)
     LaunchedEffect(holder.enabled, active, today, resumeTick) {
+        withContext(Dispatchers.IO) { pruneExpiredWeekForecast(AppServices.keyValueStore, System.currentTimeMillis()) }
         if (!holder.enabled) {
             holder.forecast = WeekForecast(emptyList(), WeekForecastStatus.AUS)
             return@LaunchedEffect
         }
         if (!active) return@LaunchedEffect
+        val ride = currentLastRide
         val loaded = withContext(Dispatchers.IO) {
-            val point = weekPlanWeatherPoint(
-                lastKnown = lastKnownPoint(context),
-                lastRideStart = lastRideId?.let { id ->
-                    runCatching { AppServices.rideStorage.loadRide(id)?.points?.firstOrNull() }.getOrNull()
-                },
-            )
-            runCatching {
-                loadWeekForecast(
-                    store = AppServices.keyValueStore,
-                    point = point,
-                    nowMs = System.currentTimeMillis(),
-                    client = AppServices.weatherHttpClient,
+            holder.loadMutex.withLock {
+                val nowMs = System.currentTimeMillis()
+                // Die Tour wird nur gelesen, wenn keine frische Position vorliegt.
+                val point = weekPlanWeatherPoint(
+                    nowMs = nowMs,
+                    lastKnown = lastKnownPoint(context),
+                    lastRideAtMs = ride?.createdAt,
+                    lastRideStart = { ride?.id?.let(::rideStartPoint) },
                 )
-            }.getOrElse { WeekForecast(emptyList(), WeekForecastStatus.NICHT_ERREICHBAR) }
+                runCatching {
+                    loadWeekForecast(
+                        store = AppServices.keyValueStore,
+                        point = point,
+                        nowMs = nowMs,
+                        client = AppServices.weatherHttpClient,
+                    )
+                }.getOrElse { WeekForecast(emptyList(), WeekForecastStatus.NICHT_ERREICHBAR) }
+            }
         }
-        holder.forecast = loaded
+        // Nur uebernehmen, wenn der Schalter noch an ist — sonst stuende nach dem
+        // Ausschalten wieder eine Vorhersage auf der Karte.
+        if (holder.enabled) holder.forecast = loaded
     }
     return holder
 }
@@ -277,8 +303,29 @@ internal fun WeekPlanWeatherHolder.setEnabled(value: Boolean) {
     enabled = value
 }
 
+/** Zuletzt bekannte Position samt Zeitpunkt des Fixes (fuer die Altersgrenze). */
 private fun lastKnownPoint(context: Context): TrackPoint? =
-    runCatching { lastKnownLocationIfPermitted(context) }.getOrNull()?.let { TrackPoint(lat = it.latitude, lon = it.longitude) }
+    runCatching { lastKnownLocationIfPermitted(context) }.getOrNull()
+        ?.let { TrackPoint(lat = it.latitude, lon = it.longitude, time = it.time) }
+
+/**
+ * Startpunkt je Tour, einmal gelesen und gemerkt: Der Index der Touren kennt
+ * keine Koordinaten, also muss die Tour-Datei einmal geparst werden — aber
+ * nicht bei jedem Resume. Gemerkt wird nur die juengste Tour (ein Eintrag);
+ * eine neue Tour hat eine neue ID und wird dann einmal gelesen. Ein
+ * Lesefehler wird nicht gemerkt.
+ */
+private object RideStartMemo {
+    @Volatile
+    var entry: Pair<String, TrackPoint?>? = null
+}
+
+private fun rideStartPoint(rideId: String): TrackPoint? {
+    RideStartMemo.entry?.let { (id, point) -> if (id == rideId) return point }
+    val loaded = runCatching { AppServices.rideStorage.loadRide(rideId)?.points?.firstOrNull() }
+    loaded.onSuccess { RideStartMemo.entry = rideId to it }
+    return loaded.getOrNull()
+}
 
 /**
  * „Jetzt" auf die volle Stunde — fuer die 18-Uhr-Regel des Wochenplans. Wie
@@ -286,12 +333,17 @@ private fun lastKnownPoint(context: Context): TrackPoint? =
  * Zurueckkehren in die App neu gelesen und, solange die Seite sichtbar ist,
  * puenktlich zur naechsten vollen Stunde. Der Plan aendert sich damit nur
  * stuendlich, nicht bei jeder Recomposition.
+ *
+ * Der Wecker haengt an einem Zaehler, nicht am Wert: In der doppelten Stunde
+ * der Herbst-Zeitumstellung ergibt die volle Stunde zweimal dasselbe „02:00",
+ * und ein Schluessel auf dem Wert wuerde den naechsten Wecker nie stellen.
  */
 @Composable
 internal fun rememberHourNow(): LocalDateTime {
     var now by remember { mutableStateOf(LocalDateTime.now().truncatedTo(ChronoUnit.HOURS)) }
+    var tick by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
-    LifecycleResumeEffect(now) {
+    LifecycleResumeEffect(tick) {
         val fresh = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS)
         if (fresh != now) now = fresh
         val alarm = scope.launch {
@@ -300,6 +352,7 @@ internal fun rememberHourNow(): LocalDateTime {
             // Eine Sekunde Luft, damit `now()` sicher schon in der neuen Stunde liegt.
             delay(ChronoUnit.MILLIS.between(current, next).coerceAtLeast(0) + 1_000)
             now = LocalDateTime.now().truncatedTo(ChronoUnit.HOURS)
+            tick++
         }
         onPauseOrDispose { alarm.cancel() }
     }

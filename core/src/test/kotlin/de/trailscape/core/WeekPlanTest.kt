@@ -111,6 +111,23 @@ class WeekPlanTest {
     }
 
     @Test
+    fun `Rest unter der kleinsten Runde ergibt keinen Plan`() {
+        assertNull(planWeek(WeekPlanInput(WEEK_PLAN_MIN_REMAINING_KM - 0.1, at(WEDNESDAY), habits())))
+        assertNotNull(planWeek(WeekPlanInput(WEEK_PLAN_MIN_REMAINING_KM, at(WEDNESDAY), habits())))
+        // Auch am Sonntagabend: dann keine Karte statt „kein Fahrtag mehr" fuer 3 km.
+        assertNull(planWeek(WeekPlanInput(3.0, at(SUNDAY, 20), habits())))
+    }
+
+    @Test
+    fun `einzelne Fahrt hat mindestens die Mindestlaenge`() {
+        val plan = assertNotNull(planWeek(WeekPlanInput(7.0, at(WEDNESDAY), habits())))
+        assertEquals(7, plan.remainingKm)
+        assertEquals(WEEK_PLAN_MIN_RIDE_KM, plan.rides.single().km)
+        assertEquals(WeekPlanStatus.MACHBAR, plan.status)
+        assertEquals(0, plan.shortfallKm)
+    }
+
+    @Test
     fun `aktiver Trainingsplan hat Vorrang`() {
         assertNull(planWeek(WeekPlanInput(60.0, at(WEDNESDAY), habits(), trainingPlanActive = true)))
     }
@@ -189,12 +206,23 @@ class WeekPlanTest {
     }
 
     @Test
-    fun `reicht die Obergrenze nicht, wird es knapp`() {
+    fun `reichen drei Fahrten bis zur Obergrenze nicht, werden es mehr, solange Tage frei sind`() {
         val plan = assertNotNull(planWeek(WeekPlanInput(200.0, at(MONDAY), habits(typical = 30.0, longest = 40.0))))
+        assertEquals(WeekPlanStatus.MACHBAR, plan.status)
+        assertEquals(4, plan.rides.size)
+        assertTrue(plan.rides.all { it.km <= 60 })
+        assertEquals(200, plan.rides.sumOf { it.km })
+        assertNull(plan.tightCause)
+    }
+
+    @Test
+    fun `reichen auch fuenf Fahrten nicht, ist die Obergrenze der Grund`() {
+        val plan = assertNotNull(planWeek(WeekPlanInput(400.0, at(MONDAY), habits(typical = 30.0, longest = 40.0))))
         assertEquals(WeekPlanStatus.KNAPP, plan.status)
-        assertEquals(3, plan.rides.size)
+        assertEquals(WEEK_PLAN_MAX_RIDES_TIGHT, plan.rides.size)
         assertTrue(plan.rides.all { it.km == 60 })
-        assertEquals(20, plan.shortfallKm)
+        assertEquals(100, plan.shortfallKm)
+        assertEquals(WeekPlanTightCause.OBERGRENZE, plan.tightCause)
     }
 
     @Test
@@ -203,6 +231,16 @@ class WeekPlanTest {
         assertEquals(WeekPlanStatus.KNAPP, plan.status)
         assertEquals(listOf(PlannedRide(SUNDAY, 60, WeekPlanReason.FREIER_TAG)), plan.rides)
         assertEquals(30, plan.shortfallKm)
+        assertEquals(WeekPlanTightCause.ZU_WENIGE_TAGE, plan.tightCause)
+    }
+
+    @Test
+    fun `jeder verbleibende Tag bekommt eine Fahrt, bevor es knapp heisst`() {
+        // Donnerstag bis Sonntag: vier Tage, gebraucht wuerden fuenf Fahrten bis 60 km.
+        val plan = assertNotNull(planWeek(WeekPlanInput(250.0, at(THURSDAY), habits(typical = 30.0, longest = 40.0))))
+        assertEquals(listOf(THURSDAY, FRIDAY, SATURDAY, SUNDAY), plan.rides.map { it.date })
+        assertEquals(10, plan.shortfallKm)
+        assertEquals(WeekPlanTightCause.ZU_WENIGE_TAGE, plan.tightCause)
     }
 
     @Test

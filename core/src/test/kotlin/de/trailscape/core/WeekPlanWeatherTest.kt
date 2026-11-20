@@ -36,6 +36,7 @@ class WeekPlanWeatherTest {
             "temperature_2m_max":[13.6,9.2,4.0]}}"""
 
         const val NOW = 1_800_000_000_000L
+        const val DAY_MS = 24 * 60 * 60_000L
     }
 
     private class FakeKeyValueStore : KeyValueStore {
@@ -165,11 +166,40 @@ class WeekPlanWeatherTest {
     @Test
     fun `Ort ist die zuletzt bekannte Position, sonst der Start der letzten Tour`() {
         val ride = TrackPoint(lat = 52.5, lon = 13.4)
-        assertEquals(MUNICH, weekPlanWeatherPoint(MUNICH, ride))
-        assertEquals(ride, weekPlanWeatherPoint(null, ride))
-        assertEquals(ride, weekPlanWeatherPoint(TrackPoint(lat = 0.0, lon = 0.0), ride))
-        assertEquals(ride, weekPlanWeatherPoint(TrackPoint(lat = Double.NaN, lon = 1.0), ride))
-        assertNull(weekPlanWeatherPoint(null, null))
+        val known = MUNICH.copy(time = NOW - 60_000)
+        val rideAt = NOW - DAY_MS
+        assertEquals(known, weekPlanWeatherPoint(NOW, known, rideAt) { ride })
+        assertEquals(ride, weekPlanWeatherPoint(NOW, null, rideAt) { ride })
+        assertEquals(ride, weekPlanWeatherPoint(NOW, TrackPoint(lat = 0.0, lon = 0.0, time = NOW), rideAt) { ride })
+        assertEquals(ride, weekPlanWeatherPoint(NOW, TrackPoint(lat = Double.NaN, lon = 1.0, time = NOW), rideAt) { ride })
+        assertNull(weekPlanWeatherPoint(NOW, null, null) { ride })
+        assertNull(weekPlanWeatherPoint(NOW, null, rideAt) { TrackPoint(lat = 0.0, lon = 0.0) })
+    }
+
+    @Test
+    fun `zuletzt bekannte Position zaehlt hoechstens zwei Tage`() {
+        val ride = TrackPoint(lat = 52.5, lon = 13.4)
+        val fresh = MUNICH.copy(time = NOW - WEEK_PLAN_LAST_KNOWN_MAX_AGE_MS)
+        val stale = MUNICH.copy(time = NOW - WEEK_PLAN_LAST_KNOWN_MAX_AGE_MS - 1)
+        assertEquals(fresh, weekPlanWeatherPoint(NOW, fresh, null) { ride })
+        assertNull(weekPlanWeatherPoint(NOW, stale, null) { ride })
+        assertEquals(ride, weekPlanWeatherPoint(NOW, stale, NOW) { ride })
+        // Ohne Zeitstempel ist das Alter unbekannt: zaehlt nicht.
+        assertNull(weekPlanWeatherPoint(NOW, MUNICH, null) { ride })
+    }
+
+    @Test
+    fun `Tour-Start zaehlt hoechstens vierzehn Tage und wird nur bei Bedarf gelesen`() {
+        var reads = 0
+        val ride = TrackPoint(lat = 52.5, lon = 13.4)
+        val read = { reads++; ride }
+        assertEquals(ride, weekPlanWeatherPoint(NOW, null, NOW - WEEK_PLAN_RIDE_START_MAX_AGE_MS, read))
+        assertEquals(1, reads)
+        assertNull(weekPlanWeatherPoint(NOW, null, NOW - WEEK_PLAN_RIDE_START_MAX_AGE_MS - 1, read))
+        assertEquals(1, reads)
+        // Frische Position: die Tour wird gar nicht erst gelesen.
+        weekPlanWeatherPoint(NOW, MUNICH.copy(time = NOW), NOW, read)
+        assertEquals(1, reads)
     }
 
     // --- Zwischenspeicher und Laden ---
@@ -188,9 +218,74 @@ class WeekPlanWeatherTest {
         val cached = CachedForecast("48.14,11.58", NOW, SAMPLE)
         assertTrue(shouldReuseForecast(cached, "48.14,11.58", NOW + WEEK_FORECAST_REUSE_MS - 1))
         assertFalse(shouldReuseForecast(cached, "48.14,11.58", NOW + WEEK_FORECAST_REUSE_MS))
-        assertFalse(shouldReuseForecast(cached, "48.15,11.58", NOW))
         assertFalse(shouldReuseForecast(cached, "48.14,11.58", NOW - 1))
         assertFalse(shouldReuseForecast(null, "48.14,11.58", NOW))
+    }
+
+    @Test
+    fun `Cache gilt auch im Umkreis von 0,05 Grad`() {
+        val cached = CachedForecast("48.14,11.58", NOW, SAMPLE)
+        assertTrue(shouldReuseForecast(cached, "48.15,11.58", NOW))
+        assertTrue(shouldReuseForecast(cached, "48.19,11.53", NOW))
+        assertFalse(shouldReuseForecast(cached, "48.20,11.58", NOW))
+        assertFalse(shouldReuseForecast(cached, "48.14,11.64", NOW))
+        assertFalse(shouldReuseForecast(cached.copy(key = "kaputt"), "48.14,11.58", NOW))
+    }
+
+    @Test
+    fun `springender Ort fragt nicht erneut`() {
+        val store = FakeKeyValueStore().also { writeWeekPlanWeatherEnabled(it, true) }
+        var calls = 0
+        val client = HttpClient { calls++; HttpResponse(200, SAMPLE) }
+        loadWeekForecast(store, MUNICH, NOW, client)
+        loadWeekForecast(store, TrackPoint(lat = 48.17, lon = 11.61), NOW + 60_000, client)
+        assertEquals(1, calls)
+        loadWeekForecast(store, TrackPoint(lat = 52.5, lon = 13.4), NOW + 120_000, client)
+        assertEquals(2, calls)
+    }
+
+    @Test
+    fun `abgelaufene Vorhersage wird geloescht, frische bleibt`() {
+        val store = FakeKeyValueStore()
+        store.setString(WEEK_PLAN_FORECAST_CACHE_KEY, CachedForecast("48.14,11.58", NOW, SAMPLE).encode())
+        pruneExpiredWeekForecast(store, NOW + WEEK_FORECAST_REUSE_MS - 1)
+        assertNotNull(store.getString(WEEK_PLAN_FORECAST_CACHE_KEY))
+        pruneExpiredWeekForecast(store, NOW + WEEK_FORECAST_REUSE_MS)
+        assertNull(store.getString(WEEK_PLAN_FORECAST_CACHE_KEY))
+        // Unlesbares und zurueckgestellte Uhr verschwinden ebenfalls.
+        store.setString(WEEK_PLAN_FORECAST_CACHE_KEY, "kaputt")
+        pruneExpiredWeekForecast(store, NOW)
+        assertNull(store.getString(WEEK_PLAN_FORECAST_CACHE_KEY))
+        store.setString(WEEK_PLAN_FORECAST_CACHE_KEY, CachedForecast("48.14,11.58", NOW, SAMPLE).encode())
+        pruneExpiredWeekForecast(store, NOW - 1)
+        assertNull(store.getString(WEEK_PLAN_FORECAST_CACHE_KEY))
+    }
+
+    @Test
+    fun `Ausschalten waehrend der Anfrage verwirft die Antwort`() {
+        val store = FakeKeyValueStore().also { writeWeekPlanWeatherEnabled(it, true) }
+        val result = loadWeekForecast(store, MUNICH, NOW, HttpClient { error("nie") }) { point, client ->
+            // Die Nutzerin schaltet aus, waehrend die Antwort unterwegs ist.
+            writeWeekPlanWeatherEnabled(store, false)
+            fetchDailyForecast(point, HttpClient { HttpResponse(200, SAMPLE) }).also { assertNotNull(client) }
+        }
+        assertEquals(WeekForecastStatus.AUS, result.status)
+        assertTrue(result.days.isEmpty())
+        assertTrue(store.values.isEmpty(), "weder Schalter noch Vorhersage samt Ort: ${store.values}")
+    }
+
+    @Test
+    fun `Ausschalten aus einem anderen Thread ueberholt das Schreiben nicht`() {
+        repeat(50) {
+            val store = FakeKeyValueStore().also { writeWeekPlanWeatherEnabled(it, true) }
+            val switcher = Thread { writeWeekPlanWeatherEnabled(store, false) }
+            loadWeekForecast(store, MUNICH, NOW, HttpClient { HttpResponse(200, SAMPLE) }) { point, client ->
+                switcher.start()
+                fetchDailyForecast(point, client)
+            }
+            switcher.join()
+            assertNull(store.getString(WEEK_PLAN_FORECAST_CACHE_KEY))
+        }
     }
 
     @Test

@@ -227,8 +227,10 @@
     <string name="today_week_plan_build_cd">Runde über %1$d km für %2$s planen</string>
     <!-- %1$s = Wochentag ausgeschrieben -->
     <string name="today_week_plan_route_label">Wochen-Fahrplan · %1$s</string>
-    <!-- %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km -->
-    <string name="today_week_plan_tight">Knapp: Mehr als %1$d km pro Fahrt wären deutlich mehr als deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
+    <!-- Grund Obergrenze: Tage wären frei. %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km, %3$d = Zahl der Fahrten (immer 5) -->
+    <string name="today_week_plan_tight">Knapp: Selbst mit %3$d Fahrten bräuchte jede mehr als %1$d km – deutlich mehr als deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
+    <!-- Grund zu wenige Tage. %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km -->
+    <string name="today_week_plan_tight_days">Knapp: Diese Woche bleiben zu wenige Tage, und mehr als %1$d km pro Fahrt wären deutlich mehr als deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
     <!-- %1$d = fehlende km -->
     <string name="today_week_plan_no_days">Diese Woche bleibt kein Fahrtag mehr, bis zum Ziel fehlen %1$d km. Nächste Woche geht es weiter.</string>
     <string name="today_week_plan_weather_off">Ohne Wetter geplant.</string>
@@ -237,5 +239,5 @@
     <string name="today_week_plan_weather_unavailable">Ohne Wetter geplant: Vorhersage gerade nicht erreichbar.</string>
     <string name="today_week_plan_weather_source">Wetter: Open-Meteo</string>
     <string name="today_week_plan_weather_switch">Wetter für den Wochenplan</string>
-    <string name="today_week_plan_weather_switch_hint">Fragt bei Open-Meteo die Vorhersage für deine ungefähre Gegend ab (letzter bekannter Standort, auf etwa 1 km gerundet), höchstens alle 3 Stunden.</string>
+    <string name="today_week_plan_weather_switch_hint">Fragt beim Öffnen von „Heute“, höchstens alle 3 Stunden, bei Open-Meteo die Vorhersage für deine ungefähre Gegend ab (letzter bekannter Standort, sonst Start deiner letzten Tour; auf etwa 1 km gerundet).</string>
 </resources>

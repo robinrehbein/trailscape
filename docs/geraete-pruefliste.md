@@ -28,7 +28,9 @@ gelten.
 - [ ] Mit Trainingsplan (auch einem, der erst nächste Woche beginnt) und nach
       geschafftem Wochenziel: Die Karte fehlt.
 - [ ] Nach 18 Uhr steht heute nicht mehr im Plan; nach einer Fahrt heute
-      ebenfalls nicht. Sonntagabend: „kein Fahrtag mehr“ statt Vorschlägen.
+      ebenfalls nicht. Sonntagabend: „kein Fahrtag mehr“ statt Vorschlägen,
+      der Wetter-Schalter lässt sich trotzdem umlegen, und es geht keine
+      Anfrage raus.
 - [ ] Großer Rest am Wochenende: Erscheint „Knapp“ mit einer plausiblen
       Obergrenze statt einer Mammutrunde?
 - [ ] „Runde planen“ öffnet die Karte und baut eine Runde in genau der
@@ -40,10 +42,12 @@ gelten.
       `api.open-meteo.com` mit zwei Nachkommastellen; erneutes Öffnen von
       *Heute* innerhalb von 3 Stunden fragt nicht erneut.
 - [ ] Ohne Standortfreigabe, aber mit Touren: Wetter kommt für den Start der
-      letzten Tour, es erscheint kein Berechtigungsdialog. Ganz ohne Ort:
+      letzten Tour (nur, wenn sie höchstens 14 Tage alt ist), es erscheint
+      kein Berechtigungsdialog. Ganz ohne Ort:
       „Kein Standort bekannt“. Im Flugmodus: „Vorhersage gerade nicht
       erreichbar“, der Plan steht trotzdem.
-- [ ] Ausschalten: Die Wetterzeilen verschwinden sofort.
+- [ ] Ausschalten: Die Wetterzeilen verschwinden sofort, auch wenn gerade
+      noch eine Anfrage lief.
 - [ ] Englisch: Wochentage („Thu“) und Texte passen, nichts abgeschnitten.
 
 ## Nach der Fahrt

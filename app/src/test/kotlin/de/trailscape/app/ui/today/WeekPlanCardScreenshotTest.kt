@@ -27,6 +27,7 @@ import de.trailscape.core.PlannedRide
 import de.trailscape.core.RidingHabits
 import de.trailscape.core.WeekPlan
 import de.trailscape.core.WeekPlanInput
+import de.trailscape.core.WeekPlanTightCause
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.i18n.CoreTextsEn
@@ -126,9 +127,21 @@ class WeekPlanCardScreenshotTest {
     fun knapp() {
         val plan = plan(240.0, withForecast = false, day = TODAY.plusDays(3))
         show(plan, WeekPlanWeatherUi.NICHT_ERREICHBAR, today = TODAY.plusDays(3))
-        compose.onNodeWithText("Knapp", substring = true).assertExists()
+        assertEquals(WeekPlanTightCause.ZU_WENIGE_TAGE, plan.tightCause)
+        compose.onNodeWithText("zu wenige Tage", substring = true).assertExists()
         compose.onNodeWithText("nicht erreichbar", substring = true).assertExists()
         shot("heute-wochenplan-knapp")
+    }
+
+    @Test
+    fun knappObergrenze() {
+        // Mittwoch bis Sonntag frei, aber selbst fuenf Fahrten bis zur Obergrenze reichen nicht.
+        val plan = plan(450.0, withForecast = false)
+        show(plan, WeekPlanWeatherUi.AUS)
+        assertEquals(WeekPlanTightCause.OBERGRENZE, plan.tightCause)
+        assertEquals(5, plan.rides.size)
+        compose.onNodeWithText("Selbst mit 5 Fahrten", substring = true).assertExists()
+        shot("heute-wochenplan-knapp-obergrenze")
     }
 
     @Test
@@ -136,6 +149,8 @@ class WeekPlanCardScreenshotTest {
         val plan = plan(25.0, withForecast = false, hour = 20, day = TODAY.plusDays(4))
         show(plan, WeekPlanWeatherUi.AUS, today = TODAY.plusDays(4))
         compose.onNodeWithText("kein Fahrtag mehr", substring = true).assertExists()
+        // Ausschalten geht auch ohne Fahrtage.
+        compose.onNodeWithText("Wetter für den Wochenplan").assertExists()
         shot("heute-wochenplan-keine-tage")
     }
 

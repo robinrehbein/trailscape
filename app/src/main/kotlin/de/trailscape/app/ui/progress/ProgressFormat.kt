@@ -41,6 +41,14 @@ internal fun whole(value: Double): String = LocalAppFormats.current.decimal(valu
 internal fun wholeTowards(value: Double, target: Double): String =
     whole(if (value >= target) value else kotlin.math.floor(value + 1e-9))
 
+/**
+ * Dieselbe Regel wie [wholeTowards] als Zahl: **abgerundet**, solange [target]
+ * nicht erreicht ist, sonst kaufmaennisch. So passen „42 von 60 km" und der
+ * aufgerundete Rest („Noch 18 km") zusammen — 42 + 18 = 60, nicht 61.
+ */
+internal fun flooredTowards(value: Double, target: Double): Int =
+    if (value >= target) value.roundToInt() else kotlin.math.floor(value + 1e-9).toInt()
+
 /** Fahrzeit als „3:05 h". */
 @Composable
 internal fun durationHm(seconds: Double): String {

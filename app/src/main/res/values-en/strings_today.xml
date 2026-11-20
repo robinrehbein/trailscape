@@ -227,8 +227,10 @@
     <string name="today_week_plan_build_cd">Plan a %1$d km loop for %2$s</string>
     <!-- %1$s = Wochentag ausgeschrieben -->
     <string name="today_week_plan_route_label">Weekly ride plan · %1$s</string>
-    <!-- %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km -->
-    <string name="today_week_plan_tight">Tight: more than %1$d km per ride would be well beyond your longest ride of recent weeks. With this plan you’d still be %2$d km short.</string>
+    <!-- Grund Obergrenze: Tage wären frei. %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km, %3$d = Zahl der Fahrten (immer 5) -->
+    <string name="today_week_plan_tight">Tight: even with %3$d rides, each would need more than %1$d km – well beyond your longest ride of recent weeks. With this plan you’d still be %2$d km short.</string>
+    <!-- Grund zu wenige Tage. %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km -->
+    <string name="today_week_plan_tight_days">Tight: too few days are left this week, and more than %1$d km per ride would be well beyond your longest ride of recent weeks. With this plan you’d still be %2$d km short.</string>
     <!-- %1$d = fehlende km -->
     <string name="today_week_plan_no_days">No ride days left this week, %1$d km short of the goal. Next week is a fresh start.</string>
     <string name="today_week_plan_weather_off">Planned without weather.</string>
@@ -237,5 +239,5 @@
     <string name="today_week_plan_weather_unavailable">Planned without weather: forecast not reachable right now.</string>
     <string name="today_week_plan_weather_source">Weather: Open-Meteo</string>
     <string name="today_week_plan_weather_switch">Weather for the weekly plan</string>
-    <string name="today_week_plan_weather_switch_hint">Asks Open-Meteo for the forecast for your rough area (last known location, rounded to about 1 km), at most every 3 hours.</string>
+    <string name="today_week_plan_weather_switch_hint">When you open Today, asks Open-Meteo for the forecast for your rough area at most every 3 hours (last known location, otherwise the start of your last ride; rounded to about 1 km).</string>
 </resources>

@@ -21,9 +21,14 @@ import kotlinx.serialization.json.put
  *    eine beim Oeffnen der Startseite.
  *  * **Nur der gerundete Ort** verlaesst das Geraet (zwei Nachkommastellen,
  *    siehe [dailyForecastUrl]).
- *  * **Hoechstens alle [WEEK_FORECAST_REUSE_MS]** fuer denselben gerundeten
- *    Ort; dazwischen kommt die Vorhersage aus dem Zwischenspeicher. Beim
- *    Ausschalten wird er geloescht.
+ *  * **Hoechstens alle [WEEK_FORECAST_REUSE_MS]** fuer denselben ungefaehren
+ *    Ort (bis [WEEK_FORECAST_NEAR_DEG] daneben zaehlt als derselbe); dazwischen
+ *    kommt die Vorhersage aus dem Zwischenspeicher. Beim Ausschalten wird er
+ *    geloescht, nach Ablauf beim naechsten Oeffnen von „Heute" ebenso
+ *    ([pruneExpiredWeekForecast]) — auch wenn die Karte gar nicht erscheint.
+ *  * **Nur frische Orte**: die zuletzt bekannte Position bis
+ *    [WEEK_PLAN_LAST_KNOWN_MAX_AGE_MS], der Start der juengsten Tour bis
+ *    [WEEK_PLAN_RIDE_START_MAX_AGE_MS] alt.
  *
  * Reine Logik ohne Android — die App liefert nur Ort, Uhrzeit und Speicher.
  */
@@ -41,6 +46,39 @@ const val WEEK_PLAN_FORECAST_CACHE_KEY: String = "trailscape.weekplan.forecast.v
  */
 const val WEEK_FORECAST_REUSE_MS: Long = 3 * 60 * 60_000L
 
+/**
+ * So weit (in Grad, je Achse) darf der Ort neben dem zwischengespeicherten
+ * liegen, damit die Vorhersage trotzdem gilt — gut 5 km. Die zuletzt bekannte
+ * Position springt zwischen Funkzelle, WLAN und GPS gern um ein, zwei
+ * Rundungsstufen; fuer eine Tagesvorhersage ist das derselbe Ort.
+ */
+const val WEEK_FORECAST_NEAR_DEG: Double = 0.05
+
+/**
+ * Bis zu diesem Alter zaehlt die zuletzt bekannte Position des Geraets. Zwei
+ * Tage: Wer seitdem verreist ist, hat die App meist mit Standort geoeffnet;
+ * eine Position aus dem letzten Urlaub ist kein Ort fuer die Vorhersage.
+ */
+const val WEEK_PLAN_LAST_KNOWN_MAX_AGE_MS: Long = 2 * 24 * 60 * 60_000L
+
+/**
+ * Bis zu diesem Alter zaehlt der Start der juengsten Tour. Zwei Wochen: Wer
+ * regelmaessig faehrt, startet meist in derselben Gegend; aeltere Touren
+ * sagen wenig darueber, wo man jetzt ist.
+ */
+const val WEEK_PLAN_RIDE_START_MAX_AGE_MS: Long = 14 * 24 * 60 * 60_000L
+
+/** Kleiner Spielraum fuer Zeitstempel knapp in der Zukunft (Uhrabgleich). */
+private const val FUTURE_TOLERANCE_MS: Long = 10 * 60_000L
+
+/**
+ * Sperre fuer Schalter und Zwischenspeicher: Das Ausschalten (Schluessel und
+ * Cache loeschen) und das Schreiben einer gerade angekommenen Antwort duerfen
+ * sich nicht ueberholen — sonst stuende nach dem Ausschalten wieder ein Ort
+ * auf dem Geraet.
+ */
+private val weekPlanWeatherLock = Any()
+
 /** `true` genau dann, wenn der Schalter eingeschaltet wurde (Wert „1"). */
 fun readWeekPlanWeatherEnabled(store: KeyValueStore): Boolean =
     store.getString(WEEK_PLAN_WEATHER_STORAGE_KEY) == "1"
@@ -48,29 +86,56 @@ fun readWeekPlanWeatherEnabled(store: KeyValueStore): Boolean =
 /**
  * An schreibt „1"; aus entfernt den Schluessel **und** die zwischengespeicherte
  * Vorhersage — mit dem Ausschalten soll auch der (grobe) Ort vom Geraet
- * verschwinden, der in ihr steckt.
+ * verschwinden, der in ihr steckt. Gesperrt gegen das Schreiben in
+ * [loadWeekForecast].
  */
 fun writeWeekPlanWeatherEnabled(store: KeyValueStore, enabled: Boolean) {
-    if (enabled) {
-        store.setString(WEEK_PLAN_WEATHER_STORAGE_KEY, "1")
-    } else {
-        store.remove(WEEK_PLAN_WEATHER_STORAGE_KEY)
-        store.remove(WEEK_PLAN_FORECAST_CACHE_KEY)
+    synchronized(weekPlanWeatherLock) {
+        if (enabled) {
+            store.setString(WEEK_PLAN_WEATHER_STORAGE_KEY, "1")
+        } else {
+            store.remove(WEEK_PLAN_WEATHER_STORAGE_KEY)
+            store.remove(WEEK_PLAN_FORECAST_CACHE_KEY)
+        }
     }
 }
 
+/** Brauchbare Koordinate: endlich, im Wertebereich, nicht genau (0, 0). */
+private fun isUsableCoordinate(point: TrackPoint): Boolean =
+    point.lat.isFinite() && point.lon.isFinite() &&
+        point.lat in -90.0..90.0 && point.lon in -180.0..180.0 &&
+        !(point.lat == 0.0 && point.lon == 0.0)
+
+/** Ob [atMs] hoechstens [maxAgeMs] vor [nowMs] liegt (und nicht deutlich danach). */
+private fun isRecent(atMs: Long?, nowMs: Long, maxAgeMs: Long): Boolean =
+    atMs != null && (nowMs - atMs) in -FUTURE_TOLERANCE_MS..maxAgeMs
+
 /**
  * Der Ort fuer die Vorhersage: die zuletzt bekannte Position des Geraets,
- * sonst der Startpunkt der juengsten Tour. Beides sind Orte, die die App
- * schon hat — fuer den Wochenplan wird weder eine Berechtigung angefragt noch
- * ein frischer GPS-Fix geholt. Unbrauchbare Koordinaten zaehlen nicht.
+ * wenn sie hoechstens [WEEK_PLAN_LAST_KNOWN_MAX_AGE_MS] alt ist (Alter aus
+ * [TrackPoint.time]); sonst der Startpunkt der juengsten Tour, wenn diese
+ * hoechstens [WEEK_PLAN_RIDE_START_MAX_AGE_MS] alt ist ([lastRideAtMs]).
+ * Beides sind Orte, die die App schon hat — fuer den Wochenplan wird weder
+ * eine Berechtigung angefragt noch ein frischer GPS-Fix geholt. Unbrauchbare
+ * Koordinaten zaehlen nicht.
+ *
+ * [lastRideStart] wird nur aufgerufen, wenn die Position nicht taugt und die
+ * Tour jung genug ist — das Lesen einer Tour kostet.
  */
-fun weekPlanWeatherPoint(lastKnown: TrackPoint?, lastRideStart: TrackPoint?): TrackPoint? =
-    listOfNotNull(lastKnown, lastRideStart).firstOrNull { point ->
-        point.lat.isFinite() && point.lon.isFinite() &&
-            point.lat in -90.0..90.0 && point.lon in -180.0..180.0 &&
-            !(point.lat == 0.0 && point.lon == 0.0)
+fun weekPlanWeatherPoint(
+    nowMs: Long,
+    lastKnown: TrackPoint?,
+    lastRideAtMs: Long?,
+    lastRideStart: () -> TrackPoint?,
+): TrackPoint? {
+    if (lastKnown != null && isUsableCoordinate(lastKnown) &&
+        isRecent(lastKnown.time, nowMs, WEEK_PLAN_LAST_KNOWN_MAX_AGE_MS)
+    ) {
+        return lastKnown
     }
+    if (!isRecent(lastRideAtMs, nowMs, WEEK_PLAN_RIDE_START_MAX_AGE_MS)) return null
+    return lastRideStart()?.takeIf(::isUsableCoordinate)
+}
 
 /** Eine zwischengespeicherte Vorhersage: gerundeter Ort ([windCacheKey]), Zeitpunkt, Antwort. */
 data class CachedForecast(val key: String, val atMs: Long, val body: String) {
@@ -93,14 +158,57 @@ data class CachedForecast(val key: String, val atMs: Long, val body: String) {
     }
 }
 
+/** Liest einen Schluessel „48.14,11.58" zurueck; `null`, wenn er nicht so aussieht. */
+private fun parseForecastKey(key: String): Pair<Double, Double>? {
+    val parts = key.split(',')
+    if (parts.size != 2) return null
+    val lat = parts[0].toDoubleOrNull()?.takeIf { it.isFinite() } ?: return null
+    val lon = parts[1].toDoubleOrNull()?.takeIf { it.isFinite() } ?: return null
+    return lat to lon
+}
+
 /**
- * Ob eine zwischengespeicherte Vorhersage noch gilt: derselbe gerundete Ort
- * und juenger als [WEEK_FORECAST_REUSE_MS]. Eine zurueckgestellte Uhr ergibt
- * `false` — lieber einmal zu oft fragen als eine uralte Vorhersage zeigen.
+ * Ob zwei gerundete Orte ([windCacheKey]) fuer die Vorhersage derselbe sind:
+ * je Achse hoechstens [WEEK_FORECAST_NEAR_DEG] auseinander.
+ */
+fun isNearForecastKey(a: String, b: String): Boolean {
+    if (a == b) return true
+    val (latA, lonA) = parseForecastKey(a) ?: return false
+    val (latB, lonB) = parseForecastKey(b) ?: return false
+    return kotlin.math.abs(latA - latB) <= WEEK_FORECAST_NEAR_DEG + 1e-9 &&
+        kotlin.math.abs(lonA - lonB) <= WEEK_FORECAST_NEAR_DEG + 1e-9
+}
+
+/** Ob eine zwischengespeicherte Vorhersage juenger als [WEEK_FORECAST_REUSE_MS] ist. */
+private fun isFresh(cached: CachedForecast, nowMs: Long): Boolean =
+    (nowMs - cached.atMs) in 0 until WEEK_FORECAST_REUSE_MS
+
+/**
+ * Ob eine zwischengespeicherte Vorhersage noch gilt: ungefaehr derselbe Ort
+ * ([isNearForecastKey]) und juenger als [WEEK_FORECAST_REUSE_MS]. Eine
+ * zurueckgestellte Uhr ergibt `false` — lieber einmal zu oft fragen als eine
+ * uralte Vorhersage zeigen.
  */
 fun shouldReuseForecast(cached: CachedForecast?, key: String, nowMs: Long): Boolean {
-    if (cached == null || cached.key != key) return false
-    return (nowMs - cached.atMs) in 0 until WEEK_FORECAST_REUSE_MS
+    if (cached == null || !isNearForecastKey(cached.key, key)) return false
+    return isFresh(cached, nowMs)
+}
+
+/**
+ * Loescht die zwischengespeicherte Vorhersage, sobald sie nicht mehr genutzt
+ * wuerde (aelter als [WEEK_FORECAST_REUSE_MS], Uhr zurueckgestellt oder
+ * unlesbar). Laeuft bei jedem Oeffnen von „Heute" — auch wenn die Karte gar
+ * nicht erscheint (Ziel geschafft, Trainingsplan), damit der grobe Ort nicht
+ * liegen bleibt. Wirft nie.
+ */
+fun pruneExpiredWeekForecast(store: KeyValueStore, nowMs: Long) {
+    runCatching {
+        synchronized(weekPlanWeatherLock) {
+            val text = store.getString(WEEK_PLAN_FORECAST_CACHE_KEY) ?: return@synchronized
+            val cached = CachedForecast.decode(text)
+            if (cached == null || !isFresh(cached, nowMs)) store.remove(WEEK_PLAN_FORECAST_CACHE_KEY)
+        }
+    }
 }
 
 /** Warum der Wochenplan ohne Wetter rechnet — die Oberflaeche sagt es klein dazu. */
@@ -123,11 +231,16 @@ data class WeekForecast(val days: List<DayForecast>, val status: WeekForecastSta
 
 /**
  * Die Vorhersage fuer den Wochenplan — aus dem Zwischenspeicher, wenn sie
- * dort fuer denselben gerundeten Ort noch gilt, sonst mit genau einer Anfrage
+ * dort fuer ungefaehr denselben Ort noch gilt, sonst mit genau einer Anfrage
  * ueber [fetch] (Vorgabe: [fetchDailyForecast]). Fragt **nichts**, wenn der
  * Schalter aus ist oder kein Ort bekannt ist. Wirft nie (ausser bei
  * Coroutine-Cancellation aus [fetch]); blockiert, gehoert auf einen
  * IO-Dispatcher.
+ *
+ * Wurde der Schalter waehrend der Anfrage ausgeschaltet, wird die Antwort
+ * verworfen: nichts gespeichert, Ergebnis [WeekForecastStatus.AUS]. Die
+ * Pruefung direkt vor dem Schreiben ist gegen [writeWeekPlanWeatherEnabled]
+ * gesperrt.
  */
 fun loadWeekForecast(
     store: KeyValueStore,
@@ -144,6 +257,15 @@ fun loadWeekForecast(
         parseDailyForecast(cached!!.body)?.let { return WeekForecast(it, WeekForecastStatus.VORHANDEN) }
     }
     val fresh = fetch(point, client) ?: return WeekForecast(emptyList(), WeekForecastStatus.NICHT_ERREICHBAR)
-    runCatching { store.setString(WEEK_PLAN_FORECAST_CACHE_KEY, CachedForecast(key, nowMs, fresh.body).encode()) }
+    val stillEnabled = synchronized(weekPlanWeatherLock) {
+        val enabled = runCatching { readWeekPlanWeatherEnabled(store) }.getOrDefault(false)
+        if (enabled) {
+            runCatching {
+                store.setString(WEEK_PLAN_FORECAST_CACHE_KEY, CachedForecast(key, nowMs, fresh.body).encode())
+            }
+        }
+        enabled
+    }
+    if (!stillEnabled) return WeekForecast(emptyList(), WeekForecastStatus.AUS)
     return WeekForecast(fresh.days, WeekForecastStatus.VORHANDEN)
 }

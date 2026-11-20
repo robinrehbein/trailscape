@@ -60,12 +60,14 @@ import de.trailscape.app.ui.progress.nextOpenChallenge
 import de.trailscape.app.ui.progress.weeklyGoalCaption
 import de.trailscape.app.ui.progress.YearGoalDialog
 import de.trailscape.app.ui.progress.rememberRideFacts
+import de.trailscape.app.ui.progress.flooredTowards
 import de.trailscape.core.AscentPreference
 import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.WeekPlanInput
+import de.trailscape.core.WeekPlanStatus
 import de.trailscape.core.challengeProgress
 import de.trailscape.core.planWeek
 import de.trailscape.core.ridingHabits
@@ -221,18 +223,26 @@ fun TodayScreen(appViewModel: AppViewModel) {
     // `widget/WidgetState.kt`, [ShownWeekTarget]).
     LaunchedEffect(monday, weekTargetKm) { appViewModel.rememberShownWeekTarget(monday, weekTargetKm) }
     val weekRiddenKm = riddenByDate.values.sum()
+    // Dieselbe Zahl in Kopfzeile, Balken und Wochen-Fahrplan: der Stand des
+    // mitwachsenden Ziels, auf dem Weg dorthin abgerundet ([flooredTowards]),
+    // damit „42 von 60 km" und „Noch 18 km" zusammenpassen.
+    val weekGoalRiddenKm = adaptiveGoal?.riddenKm ?: weekRiddenKm
     val weekSummaryText = weekSummary(
-        riddenKm = weekRiddenKm,
+        riddenKm = weekGoalRiddenKm,
         targetKm = weekTargetKm,
         strip = strip,
         rideCount = rideCount,
     )
     val goalLine = weekTargetKm?.takeIf { it > 0 }?.let { target ->
-        val ridden = adaptiveGoal?.riddenKm ?: weekRiddenKm
+        val ridden = weekGoalRiddenKm
         WeekGoalLine(
             fraction = (ridden / target).toFloat().coerceIn(0f, 1f),
             reached = ridden >= target,
-            description = stringResource(R.string.progress_week_goal_bar_cd, ridden.roundToInt(), target),
+            description = stringResource(
+                R.string.progress_week_goal_bar_cd,
+                flooredTowards(ridden, target.toDouble()),
+                target,
+            ),
             caption = adaptiveGoal?.let { weeklyGoalCaption(it) },
         )
     }
@@ -266,25 +276,32 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val trainingPlanActive = displayPlan != null &&
         (currentWeek != null || !localOfEpochMs(displayPlan.goal.date).toLocalDate().isBefore(today))
     val weekPlanRemainingKm = adaptiveGoal?.takeIf { !it.reached }?.remainingKm
-    val weekPlanShown = !ridesLoading && hasRiddenRide && !trainingPlanActive && weekPlanRemainingKm != null
-    val weekPlanWeather = rememberWeekPlanWeather(active = weekPlanShown, today = today, rides = rides)
-    val hourNow = rememberHourNow()
+    val weekPlanEligible = !ridesLoading && hasRiddenRide && !trainingPlanActive && weekPlanRemainingKm != null
+    // Tag der Seite und stuendliche Uhr laufen mit eigenem Wecker; um
+    // Mitternacht gleicht [weekPlanNow] sie ab.
+    val planNow = weekPlanNow(today, rememberHourNow())
     val habits = remember(facts, today) { ridingHabits(facts, today) }
-    val weekPlanForecast = weekPlanWeather.forecast
-    val weekPlan = remember(weekPlanShown, weekPlanRemainingKm, hourNow, today, habits, weekPlanForecast, riddenByDate) {
-        if (!weekPlanShown || weekPlanRemainingKm == null) {
-            null
+    val rodeToday = (riddenByDate[today] ?: 0.0) > 0.0
+    // Erst ohne Wetter planen: Nur wenn es danach Fahrtage gibt, wird nach
+    // einer Vorhersage gefragt — kein Plan (Rest zu klein) und „keine Tage"
+    // brauchen keine.
+    val basePlan = remember(weekPlanEligible, weekPlanRemainingKm, planNow, habits, rodeToday, trainingPlanActive) {
+        weekPlanRemainingKm?.takeIf { weekPlanEligible }?.let { remainingKm ->
+            planWeek(WeekPlanInput(remainingKm, planNow, habits, emptyList(), trainingPlanActive, rodeToday))
+        }
+    }
+    val weekPlanWeather = rememberWeekPlanWeather(
+        active = basePlan != null && basePlan.status != WeekPlanStatus.KEINE_TAGE,
+        today = today,
+        rides = rides,
+    )
+    val weekPlanForecastDays = weekPlanWeather.forecast?.days.orEmpty()
+    val weekPlan = remember(basePlan, weekPlanForecastDays) {
+        if (basePlan == null || weekPlanForecastDays.isEmpty() || weekPlanRemainingKm == null) {
+            basePlan
         } else {
             planWeek(
-                WeekPlanInput(
-                    remainingKm = weekPlanRemainingKm,
-                    // Um Mitternacht kann die Stunde dem Tag kurz hinterherhinken.
-                    now = if (hourNow.toLocalDate() == today) hourNow else today.atStartOfDay(),
-                    habits = habits,
-                    forecast = weekPlanForecast?.days.orEmpty(),
-                    trainingPlanActive = trainingPlanActive,
-                    rodeToday = (riddenByDate[today] ?: 0.0) > 0.0,
-                ),
+                WeekPlanInput(weekPlanRemainingKm, planNow, habits, weekPlanForecastDays, trainingPlanActive, rodeToday),
             )
         }
     }
