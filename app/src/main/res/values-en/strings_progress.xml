@@ -104,7 +104,7 @@
     <string name="progress_fitness_headline_stable">Your fitness is holding</string>
     <string name="progress_fitness_headline_declining">A bit weaker right now</string>
     <string name="progress_fitness_headline_unknown">Not enough comparable rides yet</string>
-    <string name="progress_fitness_unknown_hint">With three rides over 40 minutes in six weeks, I can compare.</string>
+    <string name="progress_fitness_unknown_hint">For that I need three flatter rides over 40 minutes in each of the last six weeks and the six before.</string>
     <!-- %1$d = weeks per period -->
     <string name="progress_fitness_window">Last %1$d weeks compared with the %1$d before</string>
     <string name="progress_fitness_efficiency_label">Heart rate and speed</string>

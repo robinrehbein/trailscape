@@ -104,7 +104,7 @@
     <string name="progress_fitness_headline_stable">Deine Form hält</string>
     <string name="progress_fitness_headline_declining">Gerade etwas schwächer</string>
     <string name="progress_fitness_headline_unknown">Noch zu wenig vergleichbare Fahrten</string>
-    <string name="progress_fitness_unknown_hint">Ab drei Fahrten über 40 Minuten in sechs Wochen kann ich vergleichen.</string>
+    <string name="progress_fitness_unknown_hint">Dafür brauche ich je drei flachere Fahrten über 40 Minuten in den letzten sechs Wochen und in den sechs davor.</string>
     <!-- %1$d = Wochen je Zeitraum -->
     <string name="progress_fitness_window">Letzte %1$d Wochen gegenüber den %1$d davor</string>
     <string name="progress_fitness_efficiency_label">Puls und Tempo</string>

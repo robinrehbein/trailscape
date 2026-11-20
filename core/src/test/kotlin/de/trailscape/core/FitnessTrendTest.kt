@@ -122,7 +122,10 @@ class FitnessTrendTest {
         )
         assertEquals(FitnessVerdict.FITTER, t(110.0).verdict) // +10 %
         assertEquals(FitnessVerdict.STABLE, t(109.0).verdict) // +9 %
-        assertEquals(FitnessVerdict.DECLINING, t(90.0).verdict)
+        // Eine kuerzere laengste Tour ist Gelegenheit, nicht Form: Das Signal
+        // bewegt sich (−10 %), loest allein aber kein „schwaecher" aus.
+        assertEquals(-10, assertNotNull(t(90.0).signal(FitnessSignalKind.ENDURANCE)).changePct)
+        assertEquals(FitnessVerdict.STABLE, t(90.0).verdict)
         assertEquals(FitnessVerdict.STABLE, t(91.0).verdict)
     }
 
@@ -138,18 +141,27 @@ class FitnessTrendTest {
     }
 
     @Test
-    fun unmovedEfficiencyLetsOthersDecide() {
-        // Puls und Tempo steigen im gleichen Verhältnis: EFFICIENCY ≈ 0, PACE +8 % → FITTER.
+    fun unmovedEfficiencyDecidesAlone() {
+        // Puls und Tempo steigen im gleichen Verhältnis: EFFICIENCY ≈ 0, PACE +8 %.
+        // Schneller bei entsprechend hoeherem Puls heisst haerter gefahren,
+        // nicht fitter — und die Ueberschrift darf der Puls-Zeile nicht widersprechen.
         val rides = listOf(5, 15, 30).map { ride(it, kmh = 26.0, hr = 151, id = "n$it") } +
             listOf(50, 60, 75).map { ride(it, kmh = 24.0, hr = 140, id = "v$it") }
         val t = trend(rides)
         assertEquals(0, assertNotNull(t.signal(FitnessSignalKind.EFFICIENCY)).changePct)
-        assertEquals(FitnessVerdict.FITTER, t.verdict)
+        assertEquals(8, assertNotNull(t.signal(FitnessSignalKind.PACE)).changePct)
+        assertEquals(FitnessVerdict.STABLE, t.verdict)
+
+        // Dasselbe in die andere Richtung: langsamer bei entsprechend
+        // niedrigerem Puls ist kein Formverlust.
+        val slower = listOf(5, 15, 30).map { ride(it, kmh = 22.0, hr = 128, id = "n$it") } +
+            listOf(50, 60, 75).map { ride(it, kmh = 24.0, hr = 140, id = "v$it") }
+        assertEquals(FitnessVerdict.STABLE, trend(slower).verdict)
     }
 
     @Test
-    fun conflictingMovesWithoutEfficiencyAreStable() {
-        // PACE +8 %, ENDURANCE −20 %, kein Puls.
+    fun shorterLongestRideDoesNotCancelAFasterPace() {
+        // PACE +8 %, ENDURANCE −20 %, kein Puls: Die kuerzere laengste Tour zaehlt nicht dagegen.
         val rides = listOf(
             ride(5, kmh = 26.0, km = 20.0, hr = null), ride(15, kmh = 26.0, km = 20.0, hr = null),
             ride(30, kmh = 26.0, km = 20.0, hr = null),
@@ -158,7 +170,7 @@ class FitnessTrendTest {
         )
         val t = trend(rides)
         assertEquals(-20, assertNotNull(t.signal(FitnessSignalKind.ENDURANCE)).changePct)
-        assertEquals(FitnessVerdict.STABLE, t.verdict)
+        assertEquals(FitnessVerdict.FITTER, t.verdict)
     }
 
     @Test

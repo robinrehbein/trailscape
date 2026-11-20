@@ -134,11 +134,22 @@ fun fitnessComparison(rides: List<RideInfo>, dateOf: (Long) -> LocalDate, today:
 private fun verdict(signals: List<FitnessSignal>): FitnessVerdict {
     if (signals.isEmpty()) return FitnessVerdict.NOT_ENOUGH_DATA
     val efficiency = signals.firstOrNull { it.kind == FitnessSignalKind.EFFICIENCY }
-    if (efficiency != null && efficiency.moves()) {
-        return if (efficiency.changePct > 0) FitnessVerdict.FITTER else FitnessVerdict.DECLINING
+    // Gibt es den Puls-Vergleich, entscheidet er allein — auch wenn er
+    // „unveraendert" sagt: Ein langsamerer Schnitt bei gleichem Puls-zu-Tempo
+    // ist Wind oder Gelaende, kein Formverlust, und die Ueberschrift darf der
+    // Zeile darunter nicht widersprechen.
+    if (efficiency != null) {
+        return when {
+            !efficiency.moves() -> FitnessVerdict.STABLE
+            efficiency.changePct > 0 -> FitnessVerdict.FITTER
+            else -> FitnessVerdict.DECLINING
+        }
     }
     val up = signals.any { it.moves() && it.changePct > 0 }
-    val down = signals.any { it.moves() && it.changePct < 0 }
+    // Die laengste Tour haengt an der Gelegenheit (ein Event im Vorzeitraum),
+    // nicht an der Form: Sie darf ein „fitter" stuetzen, aber allein kein
+    // „schwaecher" ausloesen.
+    val down = signals.any { it.kind != FitnessSignalKind.ENDURANCE && it.moves() && it.changePct < 0 }
     return when {
         up && !down -> FitnessVerdict.FITTER
         down && !up -> FitnessVerdict.DECLINING

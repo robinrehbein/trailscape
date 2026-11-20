@@ -366,9 +366,10 @@ internal fun ChallengesCard(
             progress.forEachIndexed { index, item ->
                 if (index > 0) RowDivider()
                 val rowModifier = Modifier.semantics(mergeDescendants = true) {
-                    if (item.bonusReached && item.hasBonus) {
-                        stateDescription = bonusReachedText
-                    } else if (item.reached) {
+                    // „Bonus geschafft" steht in diesem Fall schon als
+                    // Unterzeile da — als Zustand zusaetzlich gesetzt, laese
+                    // die Sprachausgabe es doppelt.
+                    if (item.reached && !(item.bonusReached && item.hasBonus)) {
                         stateDescription = reachedText
                     }
                 }

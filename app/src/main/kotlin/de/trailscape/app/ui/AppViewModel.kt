@@ -1985,17 +1985,25 @@ class AppViewModel(
         if (encoded == lastShownWeekTarget) return
         lastShownWeekTarget = encoded
         viewModelScope.launch {
-            withContext(io) {
-                runCatching {
-                    if (encoded == null) {
-                        keyValueStore.remove(ShownWeekTarget.STORAGE_KEY)
-                    } else {
-                        keyValueStore.setString(ShownWeekTarget.STORAGE_KEY, encoded)
+            // Nacheinander schreiben: Zwei kurz aufeinander folgende Werte
+            // (Plan geladen, Auswertung noch nicht) liefen sonst parallel im
+            // IO-Pool, und der aeltere konnte als letzter landen.
+            shownWeekTargetMutex.withLock {
+                withContext(io) {
+                    runCatching {
+                        if (encoded == null) {
+                            keyValueStore.remove(ShownWeekTarget.STORAGE_KEY)
+                        } else {
+                            keyValueStore.setString(ShownWeekTarget.STORAGE_KEY, encoded)
+                        }
                     }
                 }
             }
         }
     }
+
+    /** Haelt die Schreibvorgaenge von [rememberShownWeekTarget] in ihrer Reihenfolge. */
+    private val shownWeekTargetMutex = Mutex()
 
     /** Zuletzt notierter Wert von [rememberShownWeekTarget]; nur auf dem Hauptthread gelesen und geschrieben. */
     private var lastShownWeekTarget: String? = null

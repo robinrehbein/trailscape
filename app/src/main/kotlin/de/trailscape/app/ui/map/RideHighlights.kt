@@ -99,7 +99,14 @@ internal fun rememberRideHighlights(
     today: LocalDate,
     weekTargetKm: Int?,
 ): List<RideHighlight> {
-    val eligible = !planned && facts.lastOrNull()?.let { it.id == rideId && it.date == today } == true
+    // „Von heute oder gestern": Der Tag einer Tour ist der ihres STARTS. Wer
+    // um 23:30 losfaehrt und nach Mitternacht stoppt, hat eine Tour „von
+    // gestern" — ebenso eine Aufzeichnung, die erst beim naechsten App-Start
+    // aus dem Journal gerettet wird. Deren Bestwerte sollen nicht
+    // verschwinden. Wochenziel und Challenge pruefen ihre Woche bzw. ihren
+    // Monat in `:core` selbst und behaupten deshalb nichts Falsches.
+    val eligible = !planned &&
+        facts.lastOrNull()?.let { it.id == rideId && !it.date.isBefore(today.minusDays(1)) } == true
     val comparison by produceState<RouteComparison?>(null, rideId, rideUpdatedAt, eligible) {
         value = if (eligible) appViewModel.routeComparisonFor(rideId) else null
     }
