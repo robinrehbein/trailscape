@@ -32,6 +32,15 @@ fun rememberRideFacts(rides: List<RideInfo>): List<RideFact> =
 @Composable
 internal fun whole(value: Double): String = LocalAppFormats.current.decimal(value, 0)
 
+/**
+ * Ein Stand auf dem Weg zu [target] als ganze Zahl — **abgerundet**, solange
+ * das Ziel nicht erreicht ist. Kaufmaennisch gerundet stuende bei 149,6 von
+ * 150 km „150 von 150" da, ohne Haken daneben.
+ */
+@Composable
+internal fun wholeTowards(value: Double, target: Double): String =
+    whole(if (value >= target) value else kotlin.math.floor(value + 1e-9))
+
 /** Fahrzeit als „3:05 h". */
 @Composable
 internal fun durationHm(seconds: Double): String {

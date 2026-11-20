@@ -310,7 +310,7 @@ internal fun ChallengesCard(
                     fraction = item.fraction.toFloat(),
                     trailing = stringResource(
                         R.string.progress_challenge_month_value,
-                        whole(item.current),
+                        wholeTowards(item.current, item.challenge.target),
                         whole(item.challenge.target),
                     ),
                     modifier = Modifier.semantics(mergeDescendants = true) {
@@ -342,7 +342,13 @@ internal fun ChallengesCard(
  * anzubieten, und die Karte bleibt bei ihren zwei Zeilen.
  */
 internal fun nextOpenChallenge(progress: List<ChallengeProgress>): ChallengeProgress? =
-    progress.filter { !it.reached }.maxByOrNull { it.fraction }
+    progress
+        .filter { !it.reached }
+        // Was sich in diesem Monat nicht mehr schaffen laesst, wird nicht
+        // mehr angeboten: „noch 4 Tage aufs Rad" bei drei verbleibenden
+        // Tagen waere eine Einladung zum Scheitern.
+        .filterNot { it.challenge.kind == ChallengeKind.ACTIVE_DAYS && ceil(it.remaining) > it.daysLeft }
+        .maxByOrNull { it.fraction }
 
 /**
  * „Noch 38 km bis zur Monats-Challenge 150 km" — der Titel der Zeile in

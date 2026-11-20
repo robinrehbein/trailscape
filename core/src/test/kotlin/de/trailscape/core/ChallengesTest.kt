@@ -99,14 +99,21 @@ class ChallengesTest {
     }
 
     @Test
-    fun longRideUsesMaxRoundedUpTo5AndCapped() {
+    fun longRideUsesAverageOfMonthlyLongestRoundedUpTo5AndCapped() {
         val facts = listOf(
             fact(d(2026, 10, 3), 40.0, id = "a"),
             fact(d(2026, 9, 3), 80.0, id = "b"),
             fact(d(2026, 8, 3), 60.0, id = "c"),
         )
-        // 80 × 1,05 = 84 -> 85
-        assertEquals(85.0, target(monthlyChallenges(facts, nov), ChallengeKind.LONG_RIDE))
+        // Schnitt der Monatslaengsten: (40 + 80 + 60) / 3 = 60; × 1,05 = 63 -> 65
+        assertEquals(65.0, target(monthlyChallenges(facts, nov), ChallengeKind.LONG_RIDE))
+        // Ein Ausreisser praegt nicht drei Monate: (180 + 60 + 60) / 3 = 100 -> 105, nicht 190.
+        val withEvent = listOf(
+            fact(d(2026, 10, 3), 60.0, id = "a"),
+            fact(d(2026, 9, 3), 180.0, id = "b"),
+            fact(d(2026, 8, 3), 60.0, id = "c"),
+        )
+        assertEquals(105.0, target(monthlyChallenges(withEvent, nov), ChallengeKind.LONG_RIDE))
         // 100 × 1,05 = 105 (Gleitkomma 105,00000000000001) -> 105
         assertEquals(105.0, target(monthlyChallenges(listOf(fact(d(2026, 10, 3), 100.0)), nov), ChallengeKind.LONG_RIDE))
         // 300 km -> gedeckelt

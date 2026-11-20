@@ -601,12 +601,13 @@ class RemindersTest {
         assertEquals("2 Wochen in Folge — diese fehlt noch", notice.title)
         assertTrue(notice.text.startsWith("Noch 3 Tage bis Sonntag"))
 
-        // Am Donnerstag ist es dafuer noch zu frueh, und fuer den normalen
-        // Anstupser liegt die letzte Tour erst fuenf Tage zurueck … der kommt.
+        // Am Donnerstag ist es dafuer noch zu frueh — und der allgemeine
+        // Anstupser („seit 5 Tagen keine Tour") schweigt, damit er der
+        // Serien-Meldung am Freitag nicht die Ruhezeit wegnimmt.
         val thursday = dueReminder(
             at(friday.minusDays(1), 7, 0), settings, ReminderState(), plan = null, rides = rides, texts = CoreTextsDe,
         )
-        assertEquals("Seit 5 Tagen keine Tour", thursday?.title)
+        assertEquals(null, thursday)
 
         // Am Sonntag ist es der letzte Tag.
         val sunday = dueReminder(

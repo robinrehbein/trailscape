@@ -396,7 +396,7 @@ internal fun NextGoalsCard(
                     tint = yearGoalTint(yearGoal),
                     title = stringResource(
                         R.string.progress_year_goal_value,
-                        whole(yearGoal.riddenKm),
+                        wholeTowards(yearGoal.riddenKm, yearGoal.targetKm),
                         whole(yearGoal.targetKm),
                     ),
                     subtitle = stringResource(R.string.progress_year_goal_title, year) + " · " + yearGoalHint(yearGoal),
@@ -455,10 +455,11 @@ internal fun NextGoalsCard(
  * Kilometer je Woche als Balken, darueber die Summe der letzten vier Wochen
  * und der Vergleich mit den vier davor.
  *
- * Die letzten vier Balken tragen die Primaerfarbe, die aelteren eine
- * abgeschwaechte — so sieht man ohne Achsenbeschriftung, welche Balken die
- * Zahl darueber meint. Die laufende Woche ist angeschnitten und waechst noch;
- * sie ist deshalb heller gefuellt als die drei abgeschlossenen.
+ * Die Zahl darueber ist ein **gleitender** Zeitraum (die letzten 28 Tage),
+ * die Balken sind **Kalenderwochen** — beides deckt sich nur sonntags. Die
+ * Balken heben deshalb bewusst keine „vier Wochen" hervor: Alle
+ * abgeschlossenen Wochen tragen dieselbe Farbe, nur die laufende ist heller,
+ * weil sie angeschnitten ist und noch waechst.
  */
 @Composable
 internal fun TrendCard(buckets: List<WeekBucket>, trend: RecentTrend, modifier: Modifier = Modifier) {
@@ -500,8 +501,7 @@ internal fun TrendCard(buckets: List<WeekBucket>, trend: RecentTrend, modifier: 
             WeekBars(
                 values = buckets.map { it.totals.km },
                 recentColor = theme.primary,
-                olderColor = theme.primary.copy(alpha = 0.28f),
-                currentColor = theme.primary.copy(alpha = 0.6f),
+                currentColor = theme.primary.copy(alpha = 0.5f),
                 baseline = theme.outlineVariant,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -572,7 +572,6 @@ private fun TotalsRow(totals: PeriodTotals, withKm: Boolean = false) {
 private fun WeekBars(
     values: List<Double>,
     recentColor: Color,
-    olderColor: Color,
     currentColor: Color,
     baseline: Color,
     modifier: Modifier = Modifier,
@@ -593,8 +592,7 @@ private fun WeekBars(
             val color = when {
                 value <= 0 -> baseline
                 index == count - 1 -> currentColor
-                index >= count - 4 -> recentColor
-                else -> olderColor
+                else -> recentColor
             }
             drawRoundRect(
                 color = color,
@@ -663,7 +661,8 @@ internal fun YearGoalCard(
                         )
                     }
                     Text(
-                        text = "${(progress.fraction * 100).roundToInt()} %",
+                        // Abgerundet: 99,6 % sind noch nicht 100.
+                        text = stringResource(R.string.progress_percent, (progress.fraction * 100).toInt()),
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
@@ -672,7 +671,7 @@ internal fun YearGoalCard(
                     Text(
                         text = stringResource(
                             R.string.progress_year_goal_value,
-                            whole(progress.riddenKm),
+                            wholeTowards(progress.riddenKm, progress.targetKm),
                             whole(progress.targetKm),
                         ),
                         style = MaterialTheme.typography.titleLarge,

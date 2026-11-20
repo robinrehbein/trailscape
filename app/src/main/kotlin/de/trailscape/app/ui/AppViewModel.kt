@@ -35,6 +35,7 @@ import de.trailscape.core.HttpClient
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.RecordKind
 import de.trailscape.core.YearGoal
+import de.trailscape.app.widget.ShownWeekTarget
 import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.maxYearGoalKm
 import de.trailscape.core.milestonesReachedBy
@@ -1962,6 +1963,32 @@ class AppViewModel(
             }
         }
     }
+
+    /**
+     * Notiert das Wochenziel, das die Startseite gerade zeigt, fuer das
+     * Startbildschirm-Widget ([ShownWeekTarget]) — `null` entfernt die Notiz.
+     * Geschrieben wird nur bei einer Aenderung; die Startseite ruft das bei
+     * jedem Aufbau.
+     */
+    fun rememberShownWeekTarget(monday: LocalDate, targetKm: Int?) {
+        val encoded = targetKm?.takeIf { it > 0 }?.let { ShownWeekTarget(monday, it).encode() }
+        if (encoded == lastShownWeekTarget) return
+        lastShownWeekTarget = encoded
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching {
+                    if (encoded == null) {
+                        keyValueStore.remove(ShownWeekTarget.STORAGE_KEY)
+                    } else {
+                        keyValueStore.setString(ShownWeekTarget.STORAGE_KEY, encoded)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Zuletzt notierter Wert von [rememberShownWeekTarget]; nur auf dem Hauptthread gelesen und geschrieben. */
+    private var lastShownWeekTarget: String? = null
 
     private fun readYearGoal(): YearGoal? = runCatching {
         YearGoal.decode(keyValueStore.getString(YEAR_GOAL_STORAGE_KEY))

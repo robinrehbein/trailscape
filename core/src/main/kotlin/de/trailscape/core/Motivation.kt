@@ -414,10 +414,12 @@ fun yearGoalProgress(facts: List<RideFact>, goal: YearGoal, today: LocalDate): Y
     // Am Starttag selbst ist das Soll der Stand von damals — niemand liegt am
     // Tag, an dem er sich etwas vornimmt, schon zurueck. Am 31. Dezember ist
     // es das Ziel.
-    val span = ChronoUnit.DAYS.between(start, yearEnd).toInt()
+    // Gezaehlt werden abgeschlossene Tage: Das Ziel selbst ist erst mit dem
+    // Ende des 31. Dezember faellig, nicht schon an dessen Morgen.
+    val span = ChronoUnit.DAYS.between(start, yearEnd).toInt() + 1
     val elapsed = ChronoUnit.DAYS.between(start, today).toInt()
     val gap = (targetKm - riddenAtStart).coerceAtLeast(0.0)
-    val expected = riddenAtStart + if (span <= 0) gap else gap * elapsed / span
+    val expected = riddenAtStart + gap * elapsed / span
 
     return YearGoalProgress(
         year = year,
@@ -444,9 +446,37 @@ fun suggestYearGoalKm(facts: List<RideFact>, today: LocalDate): Int {
     val ridden = riddenInYear(facts, today.year, today)
     val weeksLeft = ChronoUnit.DAYS.between(today, LocalDate.of(today.year, 12, 31)) / 7.0
     val raw = ridden + recentWeeklyKm(facts, today) * weeksLeft * yearGoalStretch
-    var suggestion = roundYearGoalKm(raw)
-    while (suggestion <= ridden) suggestion = roundYearGoalKm(suggestion + 50.0)
-    return suggestion
+    return maxOf(roundYearGoalKm(raw), nextYearGoalAbove(ridden))
+}
+
+/**
+ * Die kleinste runde Zahl ([yearGoalStep]) **ueber** [km] — die Untergrenze
+ * des Vorschlags, wenn die Hochrechnung nicht ueber das schon Gefahrene
+ * hinauskommt (Jahresende, lange Pause).
+ *
+ * Bewusst eine geschlossene Rechnung und keine Schleife „so lange erhoehen,
+ * bis es passt": Ein fester Schritt von 50 km wird ab 3000 km vom Runden auf
+ * 250 wieder verschluckt, und eine solche Schleife liefe dort endlos — auf
+ * dem Hauptthread, beim Oeffnen der Startseite.
+ */
+internal fun nextYearGoalAbove(km: Double): Int {
+    if (!km.isFinite() || km >= maxYearGoalKm) return maxYearGoalKm
+    if (km < minYearGoalKm) return minYearGoalKm
+    val step = yearGoalStep(km)
+    val next = (kotlin.math.floor(km / step + 1e-9) + 1) * step
+    // Die Stufe waechst an 1000 und 3000 km. Liegt die naechste Zahl jenseits
+    // einer solchen Grenze, gilt dort schon die groebere Stufe — auf ihr
+    // aufrunden (2960 → 3000, nicht 3000 → 3100).
+    val coarser = yearGoalStep(next)
+    val result = if (coarser == step) next else ceil(next / coarser - 1e-9) * coarser
+    return result.toInt().coerceAtMost(maxYearGoalKm)
+}
+
+/** Schrittweite, auf die Jahresziele gerundet werden: unter 1000 km 50, unter 3000 km 100, darueber 250. */
+private fun yearGoalStep(km: Double): Int = when {
+    km < 1000 -> 50
+    km < 3000 -> 100
+    else -> 250
 }
 
 /**
@@ -455,11 +485,7 @@ fun suggestYearGoalKm(facts: List<RideFact>, today: LocalDate): Int {
  * Grenzen [minYearGoalKm]…[maxYearGoalKm].
  */
 fun roundYearGoalKm(km: Double): Int {
-    val step = when {
-        km < 1000 -> 50
-        km < 3000 -> 100
-        else -> 250
-    }
+    val step = yearGoalStep(km)
     return ((km / step).roundToInt() * step).coerceIn(minYearGoalKm, maxYearGoalKm)
 }
 

@@ -254,7 +254,13 @@ fun dueReminder(
         // Die Serie zuerst: „Deine Serie endet am Sonntag" ist der konkretere
         // Anlass als „seit fuenf Tagen keine Tour" — und oft derselbe Tag.
         streakNotice(today, rides, texts)?.let { return it }
-        nudgeNotice(today, rides, texts)?.let { return it }
+        // Steht in dieser Woche noch die Serien-Meldung an (Serie laeuft,
+        // Woche offen, aber vor Freitag), schweigt der allgemeine Anstupser:
+        // Er wuerde die gemeinsame Ruhezeit verbrauchen, und am Freitag — wenn
+        // es um die Serie geht — bliebe es still.
+        if (!streakNoticePending(today, rides)) {
+            nudgeNotice(today, rides, texts)?.let { return it }
+        }
     }
 
     return null
@@ -448,6 +454,12 @@ private fun streakNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreTex
         title = texts.today.reminderStreakTitle(streak.weeks),
         text = texts.today.reminderStreakText(streak.daysLeft),
     )
+}
+
+/** Ob [streakNotice] spaeter in dieser Woche noch faellig wird (Serie laeuft, Woche offen, noch vor Freitag). */
+private fun streakNoticePending(today: LocalDate, rides: List<RideInfo>): Boolean {
+    val streak = weekStreak(rideFacts(rides) { dartLocalOf(it).toLocalDate() }, today)
+    return streak.weeks >= reminderStreakMinWeeks && streak.atRisk && streak.daysLeft > reminderStreakDaysLeft
 }
 
 /** Ab dieser Laenge ist eine Wochenserie eine Erinnerung wert. */

@@ -206,14 +206,20 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val facts = rememberRideFacts(rides)
     // Ohne Plan-Woche gilt das mitwachsende Wochenziel — auch wer ohne Event
     // faehrt, soll „42 von 60 km" sehen.
-    val adaptiveGoal = remember(facts, today, currentWeek) {
-        if (currentWeek?.targetKm == null) {
+    // Eine Plan-Woche ohne Kilometerziel (0 km) zaehlt wie keine: Auch dann
+    // gilt das mitwachsende Ziel — dieselbe Regel wie im Widget.
+    val planTargetKm = currentWeek?.targetKm?.takeIf { it > 0 }
+    val adaptiveGoal = remember(facts, today, planTargetKm) {
+        if (planTargetKm == null) {
             suggestWeeklyGoal(facts, today)?.let { weeklyGoalProgress(it, facts, today) }
         } else {
             null
         }
     }
-    val weekTargetKm = currentWeek?.targetKm ?: adaptiveGoal?.goal?.targetKm
+    val weekTargetKm = planTargetKm ?: adaptiveGoal?.goal?.targetKm
+    // Fuers Widget notieren, damit es dieselbe Zahl zeigt (siehe
+    // `widget/WidgetState.kt`, [ShownWeekTarget]).
+    LaunchedEffect(monday, weekTargetKm) { appViewModel.rememberShownWeekTarget(monday, weekTargetKm) }
     val weekRiddenKm = riddenByDate.values.sum()
     val weekSummaryText = weekSummary(
         riddenKm = weekRiddenKm,

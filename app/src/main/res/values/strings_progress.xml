@@ -129,6 +129,7 @@
     <string name="progress_snack_record_distance">Neue Bestweite: %1$s km</string>
     <string name="progress_snack_record">Neuer Bestwert. Die Auswertung zeigt, welcher.</string>
     <string name="progress_snack_milestone">Meilenstein erreicht. Die Auswertung zeigt, welcher.</string>
+    <string name="progress_percent">%1$d&#160;%%</string>
     <string name="progress_value_ascent">%1$s&#160;Hm</string>
     <!-- %1$d = Stunden, %2$s = Minuten zweistellig -->
     <string name="progress_duration_hm">%1$d:%2$s h</string>

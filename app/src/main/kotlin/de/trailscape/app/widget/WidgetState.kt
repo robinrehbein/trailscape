@@ -91,6 +91,7 @@ fun buildWidgetState(
     now: LocalDateTime,
     zoneDateOf: (Long) -> LocalDate,
     zone: ZoneId = ZoneId.systemDefault(),
+    shownTarget: ShownWeekTarget? = null,
 ): WidgetState {
     val today = now.toLocalDate()
     val facts = rideFacts(rides, zoneDateOf)
@@ -101,9 +102,18 @@ fun buildWidgetState(
         ?.let { p -> p.weeks.getOrNull(currentWeekIndex(p, nowMs)) }
         ?.takeIf { nowMs >= it.start && nowMs < it.end && it.targetKm > 0 }
 
+    // Hat die Startseite fuer diese Woche schon ein Ziel gezeigt, gilt genau
+    // das: Sie rechnet mit dem an die gefahrene Realitaet angepassten Plan
+    // (`adaptPlan`), den das Widget ohne die Trainingsauswertung nicht
+    // nachbauen kann. Zwei verschiedene Wochenziele waeren schlimmer als keins.
+    val shownKm = shownTarget?.takeIf { it.monday == today.with(DayOfWeek.MONDAY) && it.targetKm > 0 }?.targetKm
+
     val riddenKm: Double
     val targetKm: Int?
-    if (planWeek != null) {
+    if (shownKm != null) {
+        riddenKm = if (planWeek != null) weekKm(planWeek, rides) else periodTotals(facts, today.with(DayOfWeek.MONDAY), today).km
+        targetKm = shownKm
+    } else if (planWeek != null) {
         riddenKm = weekKm(planWeek, rides)
         targetKm = planWeek.targetKm
     } else {
@@ -132,4 +142,28 @@ fun buildWidgetState(
         targetKm = targetKm,
         fraction = fraction,
     )
+}
+
+/**
+ * Das Wochenziel, das die Startseite zuletzt gezeigt hat — der Abgleich
+ * zwischen App und Widget (siehe [buildWidgetState]). Gilt nur fuer die Woche,
+ * fuer die es notiert wurde.
+ */
+data class ShownWeekTarget(val monday: LocalDate, val targetKm: Int) {
+    /** Eine Zeile fuer den Schluessel-Wert-Speicher: `JJJJ-MM-TT|km`. */
+    fun encode(): String = "$monday|$targetKm"
+
+    companion object {
+        /** Schluessel im Schluessel-Wert-Speicher. */
+        const val STORAGE_KEY: String = "trailscape.widget.weektarget.v1"
+
+        /** `null` bei allem, was keine gueltige Zeile ist. */
+        fun decode(text: String?): ShownWeekTarget? {
+            val parts = text?.split('|') ?: return null
+            if (parts.size != 2) return null
+            val monday = runCatching { LocalDate.parse(parts[0]) }.getOrNull() ?: return null
+            val km = parts[1].toIntOrNull()?.takeIf { it > 0 } ?: return null
+            return ShownWeekTarget(monday, km)
+        }
+    }
 }

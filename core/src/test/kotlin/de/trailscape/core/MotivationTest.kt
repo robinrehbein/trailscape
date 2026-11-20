@@ -237,7 +237,7 @@ class MotivationTest {
 
     @Test
     fun yearGoalFromAnEarlierYearRunsFromJanuary() {
-        // 1. Juli 2026: 181 von 364 Tagen zwischen Neujahr und Silvester sind um.
+        // 1. Juli 2026: 181 von 365 Tagen des Jahres sind abgeschlossen.
         val day = LocalDate.of(2026, 7, 1)
         val facts = listOf(
             fact("alt", LocalDate.of(2025, 12, 30), km = 500.0),
@@ -246,8 +246,8 @@ class MotivationTest {
         )
         val progress = yearGoalProgress(facts, YearGoal(3650, LocalDate.of(2025, 5, 1)), day)
         assertEquals(2000.0, progress.riddenKm)
-        assertEquals(3650.0 * 181 / 364, progress.expectedKm, 0.01)
-        assertEquals(2000.0 - 3650.0 * 181 / 364, progress.aheadKm, 0.01)
+        assertEquals(3650.0 * 181 / 365, progress.expectedKm, 0.01)
+        assertEquals(2000.0 - 3650.0 * 181 / 365, progress.aheadKm, 0.01)
         assertEquals(1650.0, progress.remainingKm)
         // 183 Tage = 26,14 Wochen übrig.
         assertEquals(1650.0 / (183 / 7.0), progress.neededPerWeekKm, 0.01)
@@ -258,7 +258,7 @@ class MotivationTest {
 
     @Test
     fun yearGoalSetInAutumnDoesNotStartBehind() {
-        // Am 2. Dezember gesetzt, bis dahin 700 km; 29 Tage bis Silvester.
+        // Am 2. Dezember gesetzt, bis dahin 700 km; 30 Tage einschliesslich Silvester.
         val since = LocalDate.of(2026, 12, 2)
         val facts = listOf(fact("a", LocalDate.of(2026, 6, 1), km = 700.0))
         val goal = YearGoal(1000, since)
@@ -268,10 +268,10 @@ class MotivationTest {
         assertEquals(700.0, firstDay.expectedKm, 0.01)
         assertEquals(0.0, firstDay.aheadKm, 0.01)
 
-        // Zehn Tage spaeter mit 150 km mehr: 700 + 300 × 10/29 Soll, 850 Ist.
+        // Zehn Tage spaeter mit 150 km mehr: 700 + 300 × 10/30 = 800 Soll, 850 Ist.
         val later = yearGoalProgress(facts + fact("b", since.plusDays(5), km = 150.0), goal, since.plusDays(10))
-        assertEquals(700.0 + 300.0 * 10 / 29, later.expectedKm, 0.01)
-        assertTrue(later.aheadKm > 40)
+        assertEquals(800.0, later.expectedKm, 0.01)
+        assertEquals(50.0, later.aheadKm, 0.01)
     }
 
     @Test
@@ -287,7 +287,36 @@ class MotivationTest {
         val facts = listOf(fact("a", LocalDate.of(2026, 6, 1), km = 900.0))
         val progress = yearGoalProgress(facts, YearGoal(1000, LocalDate.of(2026, 1, 1)), LocalDate.of(2026, 12, 31))
         assertEquals(100.0, progress.neededPerWeekKm)
-        assertEquals(1000.0, progress.expectedKm, 0.01)
+        // Faellig ist das Ziel mit dem Ende des Tages: 364 von 365 Tagen sind um.
+        assertEquals(1000.0 * 364 / 365, progress.expectedKm, 0.01)
+    }
+
+    @Test
+    fun yearGoalSetOnNewYearsEveIsNotBehind() {
+        val day = LocalDate.of(2026, 12, 31)
+        val progress = yearGoalProgress(listOf(fact("a", LocalDate.of(2026, 6, 1), km = 900.0)), YearGoal(1000, day), day)
+        assertEquals(900.0, progress.expectedKm, 0.01)
+        assertEquals(0.0, progress.aheadKm, 0.01)
+    }
+
+    @Test
+    fun suggestedYearGoalTerminatesAndLiesAboveWhatIsRiddenAtEveryScale() {
+        // Frueher eine Schleife mit festem 50-km-Schritt, die ab 3000 km am
+        // Runden auf 250 haengen blieb. Jahresende und lange Pause sind die
+        // Faelle, in denen die Hochrechnung nicht ueber das Gefahrene kommt.
+        val newYearsEve = LocalDate.of(2026, 12, 31)
+        for (ridden in listOf(40.0, 990.0, 1000.0, 2960.0, 3000.0, 3050.0, 4010.0, 5100.0, 29900.0, 30000.0, 45000.0)) {
+            val facts = listOf(fact("a", LocalDate.of(2026, 3, 1), km = ridden))
+            for (day in listOf(today, newYearsEve)) {
+                val suggestion = suggestYearGoalKm(facts, day)
+                assertTrue(suggestion <= maxYearGoalKm, "ridden $ridden")
+                if (ridden < maxYearGoalKm) assertTrue(suggestion > ridden, "ridden $ridden → $suggestion")
+            }
+        }
+        assertEquals(4250, suggestYearGoalKm(listOf(fact("a", LocalDate.of(2026, 3, 1), km = 4010.0)), newYearsEve))
+        assertEquals(3000, suggestYearGoalKm(listOf(fact("a", LocalDate.of(2026, 3, 1), km = 2960.0)), newYearsEve))
+        assertEquals(3250, suggestYearGoalKm(listOf(fact("a", LocalDate.of(2026, 3, 1), km = 3000.0)), newYearsEve))
+        assertEquals(1100, suggestYearGoalKm(listOf(fact("a", LocalDate.of(2026, 3, 1), km = 1000.0)), newYearsEve))
     }
 
     @Test

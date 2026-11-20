@@ -166,7 +166,10 @@ fun monthlyChallenges(facts: List<RideFact>, month: YearMonth): List<Challenge> 
     val avgKm = stats.map { it.km }.average()
     val avgAscent = stats.map { it.ascentM }.average()
     val avgDays = stats.map { it.activeDays }.average()
-    val longest = stats.maxOf { it.longestKm }
+    // Der Schnitt der laengsten Touren je Monat, nicht das Maximum: Ein
+    // einzelnes 180-km-Event im September machte sonst drei Monate lang
+    // „eine Tour ueber 190 km" zur Challenge — fuer jemanden, der sonst 60 faehrt.
+    val longest = stats.map { it.longestKm }.average()
 
     val result = mutableListOf<Challenge>()
 

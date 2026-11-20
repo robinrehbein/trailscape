@@ -119,6 +119,9 @@ class TrailscapeWidget : GlanceAppWidget() {
                 now = LocalDateTime.now(zone),
                 zoneDateOf = { ms -> Instant.ofEpochMilli(ms).atZone(zone).toLocalDate() },
                 zone = zone,
+                shownTarget = ShownWeekTarget.decode(
+                    runCatching { AppServices.keyValueStore.getString(ShownWeekTarget.STORAGE_KEY) }.getOrNull(),
+                ),
             )
         }.getOrDefault(WidgetState.Empty)
     }

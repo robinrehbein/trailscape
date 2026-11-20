@@ -180,4 +180,34 @@ class WidgetStateTest {
         assertEquals(1, s.daysLeft)
         assertTrue(s.streakAtRisk)
     }
+
+    @Test
+    fun `das von der Startseite gezeigte Wochenziel gilt - aber nur fuer seine Woche`() {
+        val rides = steadyHistory() + ride(monday, 20.0)
+        val own = buildWidgetState(rides, planWithTarget(150), now, ::dateOf, zone)
+        assertEquals(150, own.targetKm)
+
+        // Die Startseite hat den angepassten Plan gezeigt: 120 statt 150.
+        val shown = buildWidgetState(
+            rides, planWithTarget(150), now, ::dateOf, zone, shownTarget = ShownWeekTarget(monday, 120),
+        )
+        assertEquals(120, shown.targetKm)
+        assertEquals(own.riddenKm, shown.riddenKm)
+
+        // Eine Notiz der Vorwoche ist veraltet und zaehlt nicht.
+        val stale = buildWidgetState(
+            rides, planWithTarget(150), now, ::dateOf, zone, shownTarget = ShownWeekTarget(monday.minusWeeks(1), 120),
+        )
+        assertEquals(150, stale.targetKm)
+    }
+
+    @Test
+    fun `Notiz des Wochenziels uebersteht das Speichern`() {
+        val target = ShownWeekTarget(monday, 90)
+        assertEquals("2026-11-16|90", target.encode())
+        assertEquals(target, ShownWeekTarget.decode(target.encode()))
+        for (broken in listOf(null, "", "90", "gestern|90", "2026-11-16|0", "2026-11-16|x", "a|b|c")) {
+            assertNull(ShownWeekTarget.decode(broken), "Eingabe $broken")
+        }
+    }
 }
