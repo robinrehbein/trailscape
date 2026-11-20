@@ -416,4 +416,36 @@
     <string name="map_name_dialog_cancel_action">Cancel</string>
     <string name="map_share_chooser_title">Share route</string>
     <string name="map_layers_cd">Map, tiles and offline</string>
+    <!-- RideHighlights.kt: was die Tour gebracht hat, auf dem Tourblatt nach der Fahrt -->
+    <!-- %1$s = neuer Wert mit Einheit, %2$s = bisheriger Bestwert als Zahl ohne Einheit -->
+    <string name="map_highlight_record_distance">New longest ride: %1$s (before %2$s)</string>
+    <string name="map_highlight_record_ascent">Most climbing yet: %1$s (before %2$s)</string>
+    <string name="map_highlight_record_time">Longest ride time yet: %1$s (before %2$s)</string>
+    <string name="map_highlight_record_speed">Fastest average yet: %1$s (before %2$s)</string>
+    <!-- %1$s = Abstand, z. B. „2:05 min" -->
+    <string name="map_highlight_route_best">Fastest time on this loop – %1$s under your best</string>
+    <string name="map_highlight_route_faster">%1$s faster than last time</string>
+    <string name="map_highlight_delta_seconds">%1$d s</string>
+    <string name="map_highlight_delta_minutes">%1$s min</string>
+    <string name="map_highlight_delta_hours">%1$s h</string>
+    <!-- %1$s = gefahrene km der Woche, %2$d = Wochenziel in km -->
+    <string name="map_highlight_week_goal_reached">Weekly goal reached: %1$s of %2$d&#160;km</string>
+    <!-- %1$d = Tage bis Sonntag (heute zaehlt mit), %2$s = fehlende km -->
+    <plurals name="map_highlight_week_goal_remaining_count">
+        <item quantity="one">%2$s&#160;km to your weekly goal (%1$d day left)</item>
+        <item quantity="other">%2$s&#160;km to your weekly goal (%1$d days left)</item>
+    </plurals>
+    <plurals name="map_highlight_streak_count">
+        <item quantity="one">%1$d week in a row</item>
+        <item quantity="other">%1$d weeks in a row</item>
+    </plurals>
+    <string name="map_highlight_challenge_distance">Monthly challenge done: %1$s&#160;km</string>
+    <string name="map_highlight_challenge_ascent">Monthly challenge done: %1$s&#160;m of climbing</string>
+    <plurals name="map_highlight_challenge_days_count">
+        <item quantity="one">Monthly challenge done: %1$d day on the bike</item>
+        <item quantity="other">Monthly challenge done: %1$d days on the bike</item>
+    </plurals>
+    <string name="map_highlight_challenge_long_ride">Monthly challenge done: ride over %1$s&#160;km</string>
+    <!-- %1$s = Name der Stufe, z. B. „1000 km gesamt" -->
+    <string name="map_highlight_milestone">Milestone reached: %1$s</string>
 </resources>

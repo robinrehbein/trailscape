@@ -46,6 +46,7 @@ import de.trailscape.app.ui.components.screenContentPadding
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberNow
 import de.trailscape.app.ui.rememberTodayDecision
+import de.trailscape.app.ui.rememberWeekTarget
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.ContentMaxWidth
@@ -66,8 +67,6 @@ import de.trailscape.core.SessionIntensity
 import de.trailscape.core.challengeProgress
 import de.trailscape.core.lastWeekRecap
 import de.trailscape.core.nearestMilestone
-import de.trailscape.core.suggestWeeklyGoal
-import de.trailscape.core.weeklyGoalProgress
 import de.trailscape.core.planningSpeedKmh
 import de.trailscape.core.predictGoalFinish
 import de.trailscape.core.stretchChallenge
@@ -205,18 +204,12 @@ fun TodayScreen(appViewModel: AppViewModel) {
     // Dranbleiben: alles aus `core/…/Motivation.kt` und Verwandten, hier nur abgeholt.
     val facts = rememberRideFacts(rides)
     // Ohne Plan-Woche gilt das mitwachsende Wochenziel — auch wer ohne Event
-    // faehrt, soll „42 von 60 km" sehen.
-    // Eine Plan-Woche ohne Kilometerziel (0 km) zaehlt wie keine: Auch dann
-    // gilt das mitwachsende Ziel — dieselbe Regel wie im Widget.
-    val planTargetKm = currentWeek?.targetKm?.takeIf { it > 0 }
-    val adaptiveGoal = remember(facts, today, planTargetKm) {
-        if (planTargetKm == null) {
-            suggestWeeklyGoal(facts, today)?.let { weeklyGoalProgress(it, facts, today) }
-        } else {
-            null
-        }
-    }
-    val weekTargetKm = planTargetKm ?: adaptiveGoal?.goal?.targetKm
+    // faehrt, soll „42 von 60 km" sehen. Die Regel steht in [weekTarget]
+    // (`ui/TodayRouteTarget.kt`), damit das Tourblatt nach der Fahrt
+    // dasselbe Ziel meint.
+    val weekTarget = rememberWeekTarget(decision, facts, today)
+    val adaptiveGoal = weekTarget.adaptive
+    val weekTargetKm = weekTarget.targetKm
     // Fuers Widget notieren, damit es dieselbe Zahl zeigt (siehe
     // `widget/WidgetState.kt`, [ShownWeekTarget]).
     LaunchedEffect(monday, weekTargetKm) { appViewModel.rememberShownWeekTarget(monday, weekTargetKm) }
