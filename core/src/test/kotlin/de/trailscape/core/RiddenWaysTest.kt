@@ -8,6 +8,7 @@ import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -319,19 +320,112 @@ class RiddenWaysTest {
         assertTrue(changed.index.isKnown(newA.lat, newA.lon))
     }
 
+    /** Zaehlt jeden Store-Zugriff — beim echten Store liest der erste davon die ganze Datei. */
+    private class CountingStore(val inner: InMemoryRiddenWaysStore = InMemoryRiddenWaysStore()) : RiddenWaysStore {
+        var accesses = 0
+        override fun get(id: String): StoredRiddenWays? { accesses++; return inner.get(id) }
+        override fun put(id: String, entry: StoredRiddenWays) { accesses++; inner.put(id, entry) }
+        override fun retainAll(ids: Set<String>) { accesses++; inner.retainAll(ids) }
+        override fun flush() { accesses++; inner.flush() }
+    }
+
     @Test
-    fun `eine nicht ladbare Tour wird uebersprungen und spaeter erneut versucht`() {
+    fun `eine nicht ladbare Tour wird erst nach einer Aenderung erneut versucht`() {
         val a = ride("a", road(0.0, 0.0, 1000.0, 0.0))
         val b = ride("b", road(0.0, 500.0, 1000.0, 500.0))
-        val store = InMemoryRiddenWaysStore()
+        val store = CountingStore()
         val missingB = CountingLoader(mapOf("a" to a))
         val first = updateRiddenWays(null, listOf(a, b).map { it.toSummary() }, store, missingB::load)
         assertEquals(1, first.rideCount)
-        assertFalse("b" in store.entries)
+        assertEquals(1, first.failedCount)
+        assertFalse("b" in store.inner.entries)
 
-        val withB = CountingLoader(mapOf("a" to a, "b" to b))
-        val second = updateRiddenWays(first, listOf(a, b).map { it.toSummary() }, store, withB::load)
+        // Dieselbe kaputte Tour, unveraendert: derselbe Stand, kein Laden und
+        // vor allem kein Store-Zugriff (der echte Store laese dafuer die
+        // ganze Cache-Datei).
+        missingB.loads.clear()
+        val accesses = store.accesses
+        repeat(3) {
+            assertSame(first, updateRiddenWays(first, listOf(a, b).map { it.toSummary() }, store, missingB::load))
+        }
+        assertTrue(missingB.loads.isEmpty())
+        assertEquals(accesses, store.accesses)
+
+        // Kommt eine neue Tour dazu, wird die kaputte trotzdem nicht erneut geladen.
+        val c = ride("c", road(0.0, 1000.0, 1000.0, 1000.0))
+        val withC = CountingLoader(mapOf("a" to a, "c" to c))
+        val added = updateRiddenWays(first, listOf(a, b, c).map { it.toSummary() }, store, withC::load)
+        assertEquals(listOf("c"), withC.loads)
+        assertEquals(2, added.rideCount)
+        assertEquals(1, added.failedCount)
+
+        // Neuer Fingerabdruck (die Tour wurde repariert/geaendert): erneut versucht.
+        val b2 = ride("b", b.points, updatedAt = 2L)
+        val withB = CountingLoader(mapOf("a" to a, "b" to b2, "c" to c))
+        val repaired = updateRiddenWays(added, listOf(a, b2, c).map { it.toSummary() }, store, withB::load)
         assertEquals(listOf("b"), withB.loads)
-        assertEquals(2, second.rideCount)
+        assertEquals(3, repaired.rideCount)
+        assertEquals(0, repaired.failedCount)
+        val bPoint = at(500.0, 500.0)
+        assertTrue(repaired.index.isKnown(bPoint.lat, bPoint.lon))
+
+        // Ohne vorigen Stand (Neustart) wird ebenfalls erneut versucht.
+        val again = CountingLoader(mapOf("a" to a, "b" to b))
+        val fresh = updateRiddenWays(null, listOf(a, b).map { it.toSummary() }, InMemoryRiddenWaysStore(), again::load)
+        assertEquals(2, fresh.rideCount)
+    }
+
+    @Test
+    fun `Abbruch je Tour - wirft, behaelt den alten Stand und raeumt nichts ab`() {
+        val rides = (0 until 6).map { i -> ride("r$i", road(0.0, i * 300.0, 1500.0, i * 300.0)) }
+        val store = InMemoryRiddenWaysStore()
+        val loader = CountingLoader(rides.associateBy { it.id })
+        val base = updateRiddenWays(null, rides.take(2).map { it.toSummary() }, store, loader::load)
+        store.entries["weg"] = StoredRiddenWays(1L, 1, LongArray(1))
+        val flushes = store.flushes
+
+        // Nach zwei weiteren Touren abbrechen.
+        loader.loads.clear()
+        var asked = 0
+        assertFailsWith<kotlin.coroutines.cancellation.CancellationException> {
+            updateRiddenWays(base, rides.map { it.toSummary() }, store, loader::load, isCancelled = { asked++ >= 2 })
+        }
+        assertEquals(listOf("r2", "r3"), loader.loads)
+        // Kein flush, kein retainAll: der fremde Eintrag ist noch da.
+        assertEquals(flushes, store.flushes)
+        assertTrue("weg" in store.entries)
+        // Die gerechneten Eintraege sind je Tour vollstaendig.
+        assertContentEquals(riddenWayCells(rides[2].points), store.entries.getValue("r2").cells)
+        // Der alte Stand ist unberuehrt; der naechste Lauf rechnet korrekt
+        // weiter und laedt die schon gerechneten Touren nicht erneut.
+        assertEquals(2, base.rideCount)
+        loader.loads.clear()
+        val full = updateRiddenWays(base, rides.map { it.toSummary() }, store, loader::load)
+        assertEquals(listOf("r4", "r5"), loader.loads)
+        assertEquals(RiddenWaysIndex.fromTracks(rides.map { it.points }).size, full.index.size)
+        assertFalse("weg" in store.entries)
+
+        // Auch der Neuaufbau bricht ab.
+        assertFailsWith<kotlin.coroutines.cancellation.CancellationException> {
+            updateRiddenWays(null, rides.map { it.toSummary() }, store, loader::load, isCancelled = { true })
+        }
+    }
+
+    @Test
+    fun `viele neue Touren auf einmal ergeben denselben Index wie ein Neuaufbau`() {
+        val rides = (0 until 40).map { i -> ride("r$i", road(i * 50.0, 0.0, i * 50.0 + 800.0, 600.0, seed = i)) }
+        val store = InMemoryRiddenWaysStore()
+        val loader = CountingLoader(rides.associateBy { it.id })
+        val base = updateRiddenWays(null, rides.take(1).map { it.toSummary() }, store, loader::load)
+        val added = updateRiddenWays(base, rides.map { it.toSummary() }, store, loader::load)
+        val rebuilt = updateRiddenWays(null, rides.map { it.toSummary() }, InMemoryRiddenWaysStore(), loader::load)
+        val expected = RiddenWaysIndex.fromTracks(rides.map { it.points })
+        assertEquals(expected.size, added.index.size)
+        assertEquals(expected.size, rebuilt.index.size)
+        for (r in rides) {
+            for (p in r.points) assertTrue(added.index.isKnown(p.lat, p.lon))
+        }
+        // Der Neuaufbau sortiert nicht die Cache-Eintraege selbst um (Fahrtreihenfolge bleibt).
+        assertContentEquals(riddenWayCells(rides[0].points), store.entries.getValue("r0").cells)
     }
 }

@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -235,13 +236,19 @@ internal fun discoveryNoteRes(mode: DiscoveryMode): Int = when (mode) {
 
 /**
  * „Neues entdecken" — Ueberschrift, drei Segmente, ein Hinweis. Die
- * Segmente sind `Role.Tab` in einer `selectableGroup` ([PillSegments]);
- * TalkBack liest die Ueberschrift davor und den Hinweis danach.
+ * Ueberschrift ist fuer TalkBack eine Ueberschrift (`heading()`), die
+ * Segmente sind Optionsfelder in einer `selectableGroup` ([PillSegments]) und
+ * tragen die Ueberschrift in ihrer Beschreibung mit („Neu entdecken: Wege") —
+ * wer per Wischen direkt auf einem Segment landet, hoert sonst nur „Wege".
  */
 @Composable
 private fun DiscoveryChoice(mode: DiscoveryMode, onModeChange: (DiscoveryMode) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(stringResource(R.string.map_round_trip_discover_title), style = MaterialTheme.typography.titleSmall)
+        Text(
+            stringResource(R.string.map_round_trip_discover_title),
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.semantics { heading() },
+        )
         val modes = DiscoveryMode.entries
         PillSegments(
             options = listOf(
@@ -249,6 +256,7 @@ private fun DiscoveryChoice(mode: DiscoveryMode, onModeChange: (DiscoveryMode) -
                 stringResource(R.string.map_round_trip_discover_ways),
                 stringResource(R.string.map_round_trip_discover_areas),
             ),
+            optionDescriptions = modes.map { stringResource(discoveryDescriptionRes(it)) },
             selectedIndex = modes.indexOf(mode),
             onSelect = { onModeChange(modes[it]) },
         )
@@ -258,6 +266,14 @@ private fun DiscoveryChoice(mode: DiscoveryMode, onModeChange: (DiscoveryMode) -
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+/** TalkBack-Beschreibung eines Segments — Ueberschrift und Stellung in einem Satz. */
+@StringRes
+internal fun discoveryDescriptionRes(mode: DiscoveryMode): Int = when (mode) {
+    DiscoveryMode.OFF -> R.string.map_round_trip_discover_off_cd
+    DiscoveryMode.NEW_WAYS -> R.string.map_round_trip_discover_ways_cd
+    DiscoveryMode.NEW_AREAS -> R.string.map_round_trip_discover_areas_cd
 }
 
 /** Untergrund-Segment zu einem Profil — Sonderprofile zaehlen als „Gemischt". */

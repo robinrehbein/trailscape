@@ -6,7 +6,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -26,6 +32,7 @@ import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrackPoint
 import de.trailscape.core.i18n.AppLanguage
 import kotlin.math.sin
+import kotlin.test.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -93,7 +100,18 @@ class NewWaysScreenshotTest {
         compose.onNodeWithText(c.getString(R.string.map_round_trip_discover_title)).assertExists()
         compose.onNodeWithText(c.getString(R.string.map_round_trip_discover_ways)).assertIsSelected()
         compose.onNodeWithText(c.getString(R.string.map_round_trip_discover_ways_body)).assertExists()
+        // Bedienungshilfen: Ueberschrift als Ueberschrift, Segmente als
+        // Optionsfelder mit der Ueberschrift in der Beschreibung.
+        compose.onNode(hasText(c.getString(R.string.map_round_trip_discover_title)) and isHeading()).assertExists()
+        compose.onNode(hasContentDescription("Neu entdecken: Wege") and hasRole(Role.RadioButton)).assertIsSelected()
+        compose.onNode(hasContentDescription("Neu entdecken: Aus") and hasRole(Role.RadioButton)).assertIsNotSelected()
+        // Auch der Untergrund ist jetzt eine Auswahl, kein Tab.
+        assertEquals(0, compose.onAllNodes(hasRole(Role.Tab)).fetchSemanticsNodes().size)
     }
+
+    private fun hasRole(role: Role) = SemanticsMatcher.expectValue(SemanticsProperties.Role, role)
+
+    private fun isHeading() = SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)
 
     @Test
     @Config(qualifiers = "+night")
@@ -108,6 +126,7 @@ class NewWaysScreenshotTest {
         setup(DiscoveryMode.NEW_WAYS, "70-runde-neue-wege-en.png")
         compose.onNodeWithText("Discover something new").assertExists()
         compose.onNodeWithText("New roads").assertIsSelected()
+        compose.onNode(hasContentDescription("Discover: new roads") and hasRole(Role.RadioButton)).assertIsSelected()
     }
 
     /** Die Vorgabe (wie der fruehere Schalter): Neue Gegenden. */
@@ -163,7 +182,7 @@ class NewWaysScreenshotTest {
         newWayShare = newKm / route.distanceKm,
     )
 
-    private fun suggestions(file: String) {
+    private fun suggestions(file: String, hints: List<String> = emptyList()) {
         val list = candidates()
         compose.setContent {
             TrailscapeTheme {
@@ -171,7 +190,7 @@ class NewWaysScreenshotTest {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         Box(contentAlignment = Alignment.BottomCenter) {
                             RouteGenerationSheet(
-                                state = RouteGenerationState(target = target, candidates = list, selectedIndex = 0),
+                                state = RouteGenerationState(target = target, candidates = list, selectedIndex = 0, hints = hints),
                                 expanded = false,
                                 onExpandedChange = {},
                                 route = list[0].route,
@@ -215,5 +234,13 @@ class NewWaysScreenshotTest {
         suggestions("73-vorschlaege-neue-wege-en.png")
         compose.onNodeWithText("23 km of it new").assertExists()
         compose.onNodeWithText("only roads you know").assertExists()
+    }
+
+    /** Konnte der Wege-Index nicht aufgebaut werden, sagt es der Hinweis (statt still ohne „Wege" zu suchen). */
+    @Test
+    fun vorschlaegeWegeNichtBeruecksichtigt() {
+        val hint = compose.activity.getString(R.string.map_generation_new_ways_unavailable_hint)
+        suggestions("74-vorschlaege-wege-nicht-beruecksichtigt.png", hints = listOf(hint))
+        compose.onNodeWithText("„Wege“ konnte diesmal nicht berücksichtigt werden.").assertExists()
     }
 }

@@ -75,6 +75,9 @@
     <string name="map_round_trip_discover_off">Off</string>
     <string name="map_round_trip_discover_ways">New roads</string>
     <string name="map_round_trip_discover_areas">New areas</string>
+    <string name="map_round_trip_discover_off_cd">Discover: off</string>
+    <string name="map_round_trip_discover_ways_cd">Discover: new roads</string>
+    <string name="map_round_trip_discover_areas_cd">Discover: new areas</string>
     <string name="map_round_trip_discover_off_body">Loops don’t take into account where you’ve already ridden.</string>
     <string name="map_round_trip_discover_ways_body">Prefers roads and paths you’ve never ridden – even in areas you know well.</string>
     <string name="map_round_trip_discover_areas_body">Leads through tiles (about 1.5 km) you haven’t explored yet.</string>
@@ -85,6 +88,7 @@
     <!-- RouteGenerationController.kt -->
     <string name="map_generation_cancelled_status">Route search cancelled.</string>
     <string name="map_generation_failed_error">The route search failed.</string>
+    <string name="map_generation_new_ways_unavailable_hint">“New roads” couldn’t be taken into account this time.</string>
 
     <!-- RouteGenerationSheet.kt -->
     <string name="map_generation_title">Matching loop</string>

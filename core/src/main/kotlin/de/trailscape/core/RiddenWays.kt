@@ -5,6 +5,7 @@ import java.io.DataOutputStream
 import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.PI
 import kotlin.math.ceil
 import kotlin.math.cos
@@ -209,12 +210,28 @@ class RiddenWaysIndex private constructor(private val cells: LongArray) {
             if (cells.isEmpty()) EMPTY else RiddenWaysIndex(sortedDistinct(cells))
 
         /** Index direkt aus Tracks — fuer Tests und kleine Bestaende ohne Cache. */
-        fun fromTracks(tracks: List<List<TrackPoint>>): RiddenWaysIndex {
-            var all = LongArray(0)
-            for (t in tracks) all = all + riddenWayCells(t)
-            return of(all)
-        }
+        fun fromTracks(tracks: List<List<TrackPoint>>): RiddenWaysIndex =
+            of(concatCells(tracks.map(::riddenWayCells)))
     }
+}
+
+/**
+ * Haengt [parts] in einem einzigen Feld aneinander — einmal kopiert. Ein
+ * `all += part` je Tour kopierte den wachsenden Bestand bei jeder Tour neu,
+ * bei vielen Touren also quadratisch. Liefert immer ein neues Feld (auch bei
+ * nur einem Teil): [RiddenWaysIndex.of] sortiert an Ort und Stelle, und die
+ * Teile koennen die Zellen eines Cache-Eintrags in Fahrtreihenfolge sein.
+ */
+internal fun concatCells(parts: List<LongArray>): LongArray {
+    var total = 0
+    for (p in parts) total += p.size
+    val all = LongArray(total)
+    var at = 0
+    for (p in parts) {
+        p.copyInto(all, at)
+        at += p.size
+    }
+    return all
 }
 
 /** Sortiert [cells] an Ort und Stelle und gibt die duplikatfreie Kopie zurueck. */
@@ -371,13 +388,28 @@ class InMemoryRiddenWaysStore : RiddenWaysStore {
  * Ein gerechneter Index samt den Fingerabdruecken der Touren, aus denen er
  * besteht — damit [updateRiddenWays] beim naechsten Mal entscheiden kann, ob
  * es nur neue Touren dazumischt oder neu aufbaut.
+ *
+ * [failed] haelt die Touren, die sich beim Rechnen nicht laden liessen, mit
+ * ihrem Fingerabdruck. Sie gehoeren zum Stand dazu: Solange sich ihr
+ * Fingerabdruck nicht aendert, gilt der Snapshot als aktuell und eine
+ * kaputte Tour loest nicht bei jeder Suche einen Lauf ueber den ganzen Cache
+ * aus. Beide Maps sind disjunkt.
  */
 class RiddenWaysSnapshot internal constructor(
     val index: RiddenWaysIndex,
     internal val fingerprints: Map<String, Pair<Long, Int>>,
+    internal val failed: Map<String, Pair<Long, Int>> = emptyMap(),
 ) {
     /** Zahl der Touren im Index. */
     val rideCount: Int get() = fingerprints.size
+
+    /** Zahl der Touren, die sich nicht laden liessen und erst nach einer Aenderung erneut versucht werden. */
+    val failedCount: Int get() = failed.size
+
+    /** Ob dieser Stand genau die Touren [current] abdeckt (im Index oder als nicht ladbar vermerkt). */
+    internal fun covers(current: Map<String, Pair<Long, Int>>): Boolean =
+        fingerprints.size + failed.size == current.size &&
+            current.all { (id, fp) -> fingerprints[id] == fp || failed[id] == fp }
 }
 
 /**
@@ -395,68 +427,88 @@ class RiddenWaysSnapshot internal constructor(
  *    dem Cache ist aber nur Sortieren, kein Laden.
  *
  * Liefert [loadRide] `null` (Datei weg, Quarantaene), wird die Tour
- * uebersprungen und beim naechsten Mal erneut versucht. Am Ende eines Laufs
- * mit Store-Zugriff raeumt [RiddenWaysStore.retainAll] ab und
- * [RiddenWaysStore.flush] schreibt fest.
+ * uebersprungen und samt Fingerabdruck im Snapshot vermerkt
+ * ([RiddenWaysSnapshot.failed]). Erneut versucht wird sie erst, wenn sich ihr
+ * Fingerabdruck aendert (oder ohne [previous], etwa nach einem Neustart) —
+ * eine dauerhaft kaputte Datei kostet also nicht jede Suche einen Lauf ueber
+ * den Cache. Am Ende eines Laufs mit Store-Zugriff raeumt
+ * [RiddenWaysStore.retainAll] ab und [RiddenWaysStore.flush] schreibt fest.
+ *
+ * ## Abbruch
+ * [isCancelled] wird vor jeder Tour gefragt. Meldet es `true`, wirft der
+ * Aufruf eine [CancellationException] — ohne `retainAll`, ohne `flush` und
+ * ohne Snapshot: Der Aufrufer behaelt seinen alten Stand. Im [store] liegen
+ * dann hoechstens die Eintraege der schon gerechneten Touren, jeder fuer sich
+ * vollstaendig; den Store freizugeben ([RiddenWaysStore.flush]) ist Sache des
+ * Aufrufers, wie nach jedem anderen Fehler.
  */
 fun updateRiddenWays(
     previous: RiddenWaysSnapshot?,
     summaries: List<RideInfo>,
     store: RiddenWaysStore,
     loadRide: (String) -> Ride?,
+    isCancelled: () -> Boolean = { false },
 ): RiddenWaysSnapshot {
     val ridden = riddenRides(summaries)
     val current = LinkedHashMap<String, Pair<Long, Int>>(ridden.size * 2)
     for (r in ridden) current[r.id] = r.updatedAt to r.pointCount
-    if (previous != null && previous.fingerprints == current) return previous
+    if (previous != null && previous.covers(current)) return previous
 
     val onlyAdditions = previous != null &&
         previous.fingerprints.all { (id, fp) -> current[id] == fp }
 
+    val failed = LinkedHashMap<String, Pair<Long, Int>>()
+
     fun cellsOf(ride: RideInfo): LongArray? {
+        if (isCancelled()) throw CancellationException("Wege-Index abgebrochen")
+        val fingerprint = ride.updatedAt to ride.pointCount
+        // Schon beim letzten Mal nicht ladbar, seitdem unveraendert: nicht
+        // erneut im Store nachsehen (der ihn dafuer ganz lesen muesste) und
+        // nicht erneut laden.
+        if (previous != null && previous.failed[ride.id] == fingerprint) {
+            failed[ride.id] = fingerprint
+            return null
+        }
         val cached = store.get(ride.id)
         if (cached != null && cached.updatedAt == ride.updatedAt && cached.pointCount == ride.pointCount) {
             return cached.cells
         }
-        val loaded = loadRide(ride.id) ?: return null
+        val loaded = loadRide(ride.id)
+        if (loaded == null) {
+            failed[ride.id] = fingerprint
+            return null
+        }
         val cells = riddenWayCells(loaded.points)
         store.put(ride.id, StoredRiddenWays(ride.updatedAt, ride.pointCount, cells))
         return cells
     }
 
     val included = LinkedHashMap<String, Pair<Long, Int>>()
+    val parts = ArrayList<LongArray>()
     val index: RiddenWaysIndex
+    // Beide Zweige sammeln die Zellen je Tour und kopieren sie einmal
+    // ([concatCells]) — nie den wachsenden Bestand je Tour neu.
     if (onlyAdditions && previous != null) {
         included.putAll(previous.fingerprints)
-        var add = LongArray(0)
         for (ride in ridden) {
             if (ride.id in previous.fingerprints) continue
             val cells = cellsOf(ride) ?: continue
-            add += cells
+            parts += cells
             included[ride.id] = ride.updatedAt to ride.pointCount
         }
-        index = previous.index.plus(add)
+        index = previous.index.plus(concatCells(parts))
     } else {
-        val parts = ArrayList<LongArray>(ridden.size)
-        var total = 0
         for (ride in ridden) {
             val cells = cellsOf(ride) ?: continue
             parts += cells
-            total += cells.size
             included[ride.id] = ride.updatedAt to ride.pointCount
         }
-        val all = LongArray(total)
-        var at = 0
-        for (p in parts) {
-            p.copyInto(all, at)
-            at += p.size
-        }
-        index = RiddenWaysIndex.of(all)
+        index = RiddenWaysIndex.of(concatCells(parts))
     }
 
     store.retainAll(current.keys)
     store.flush()
-    return RiddenWaysSnapshot(index, included)
+    return RiddenWaysSnapshot(index, included, failed)
 }
 
 /** Formatversion des Wege-Caches. Hochzaehlen, sobald sich Raster oder Kodierung aendern. */

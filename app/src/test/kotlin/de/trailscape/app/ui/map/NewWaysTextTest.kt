@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.map
 
 import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.map.MapTestStrings.de
 import de.trailscape.app.ui.map.MapTestStrings.en
 import de.trailscape.core.i18n.AppLanguage
@@ -48,5 +49,31 @@ class NewWaysTextTest {
         assertEquals(R.string.map_round_trip_discover_off_body, discoveryNoteRes(DiscoveryMode.OFF))
         assertEquals(R.string.map_round_trip_discover_ways_body, discoveryNoteRes(DiscoveryMode.NEW_WAYS))
         assertEquals(R.string.map_round_trip_discover_areas_body, discoveryNoteRes(DiscoveryMode.NEW_AREAS))
+    }
+
+    @Test
+    fun `jedes Segment sagt TalkBack auch die Ueberschrift`() {
+        assertEquals(
+            listOf("Neu entdecken: Aus", "Neu entdecken: Wege", "Neu entdecken: Gegenden"),
+            DiscoveryMode.entries.map { de(UiText.Res(discoveryDescriptionRes(it))) },
+        )
+        assertEquals(
+            listOf("Discover: off", "Discover: new roads", "Discover: new areas"),
+            DiscoveryMode.entries.map { en(UiText.Res(discoveryDescriptionRes(it))) },
+        )
+    }
+
+    @Test
+    fun `scheitert der Wege-Index, sagt es ein Hinweis - sonst nicht`() {
+        val text = { de(UiText.Res(R.string.map_generation_new_ways_unavailable_hint)) }
+        assertEquals("„Wege“ konnte diesmal nicht berücksichtigt werden.", text())
+        assertEquals(
+            "“New roads” couldn’t be taken into account this time.",
+            en(UiText.Res(R.string.map_generation_new_ways_unavailable_hint)),
+        )
+        val core = listOf("Zieldistanz auf 15 km angehoben.")
+        assertEquals(core + text(), generationHints(core, newWaysUnavailable = true, newWaysUnavailableText = text))
+        assertEquals(core, generationHints(core, newWaysUnavailable = false, newWaysUnavailableText = text))
+        assertEquals(listOf(text()), generationHints(emptyList(), newWaysUnavailable = true, newWaysUnavailableText = text))
     }
 }

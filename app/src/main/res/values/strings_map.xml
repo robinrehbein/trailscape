@@ -75,6 +75,9 @@
     <string name="map_round_trip_discover_off">Aus</string>
     <string name="map_round_trip_discover_ways">Wege</string>
     <string name="map_round_trip_discover_areas">Gegenden</string>
+    <string name="map_round_trip_discover_off_cd">Neu entdecken: Aus</string>
+    <string name="map_round_trip_discover_ways_cd">Neu entdecken: Wege</string>
+    <string name="map_round_trip_discover_areas_cd">Neu entdecken: Gegenden</string>
     <string name="map_round_trip_discover_off_body">Die Runden achten nicht darauf, was du schon gefahren bist.</string>
     <string name="map_round_trip_discover_ways_body">Bevorzugt Wege, die du noch nie gefahren bist – auch mitten in bekannter Gegend.</string>
     <string name="map_round_trip_discover_areas_body">Führt durch Kacheln (etwa 1,5 km), die du noch nicht kennst.</string>
@@ -85,6 +88,7 @@
     <!-- RouteGenerationController.kt -->
     <string name="map_generation_cancelled_status">Routensuche abgebrochen.</string>
     <string name="map_generation_failed_error">Die Routensuche ist fehlgeschlagen.</string>
+    <string name="map_generation_new_ways_unavailable_hint">„Wege“ konnte diesmal nicht berücksichtigt werden.</string>
 
     <!-- RouteGenerationSheet.kt -->
     <string name="map_generation_title">Passende Runde</string>
