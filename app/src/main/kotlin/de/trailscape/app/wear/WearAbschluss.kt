@@ -2,6 +2,7 @@ package de.trailscape.app.wear
 
 import android.content.Context
 import de.trailscape.app.data.AppServices
+import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.map.rideHighlightTexts
 import de.trailscape.app.ui.weekTargetKmOutsideUi
@@ -59,8 +60,11 @@ object WearAbschluss {
         }.onFailure { DiagLog.shared.log(DiagEvent.WEAR_SEND_FAILED, error = it) }
     }
 
-    /** `null`, wenn die Uhr nicht teilgenommen hat oder die Tour fehlt. */
+    /** `null`, wenn die Uhr nicht teilgenommen hat, die Tour fehlt oder nur gerettet wurde. */
     private fun zeilenFuer(context: Context, rideId: String): List<String>? {
+        // Aus dem Journal gerettet: keine frisch beendete Fahrt, die Uhr
+        // zeigt laengst etwas anderes (oder schon die naechste Tour).
+        if (RecordingRepository.lastRecoveredRideId == rideId) return null
         val uhrZuletztMs = WearBridge.letzteUhrNachrichtMs
         if (uhrZuletztMs == 0L) return null
         val summaries = AppServices.rideStorage.listSummaries().summaries
