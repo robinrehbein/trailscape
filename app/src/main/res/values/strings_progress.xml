@@ -185,6 +185,28 @@
     </plurals>
     <!-- %1$d = erreicht, %2$d = Challenges des Monats -->
     <string name="progress_challenges_last_month">Letzter Monat: %1$d von %2$d geschafft</string>
+    <!-- Bonus-Stufe nach erreichtem Ziel (GoalCards.kt). %1$s = Bonusziel in km bzw. Hm -->
+    <string name="progress_challenge_bonus_distance">Bonus: %1$s km fahren</string>
+    <string name="progress_challenge_bonus_ascent">Bonus: %1$s Höhenmeter sammeln</string>
+    <plurals name="progress_challenge_bonus_days_count">
+        <item quantity="one">Bonus: %1$d Tag aufs Rad</item>
+        <item quantity="other">Bonus: %1$d Tage aufs Rad</item>
+    </plurals>
+    <string name="progress_challenge_bonus_long_ride">Bonus: Eine Tour über %1$s km</string>
+    <string name="progress_challenge_bonus_reached">Bonus geschafft</string>
+    <!-- %1$d = erreicht, %2$d = Challenges des Monats, %3$d = erreichte Boni -->
+    <plurals name="progress_challenge_bonus_last_month_count">
+        <item quantity="one">Letzter Monat: %1$d von %2$d geschafft, %3$d Bonus</item>
+        <item quantity="other">Letzter Monat: %1$d von %2$d geschafft, %3$d Boni</item>
+    </plurals>
+    <!-- Zeile in „Als Nächstes". %1$s = Rest, %2$s = Bonusziel -->
+    <string name="progress_challenge_bonus_next_distance">Noch %1$s km bis zum Bonus %2$s km</string>
+    <string name="progress_challenge_bonus_next_ascent">Noch %1$s Hm bis zum Bonus %2$s Hm</string>
+    <plurals name="progress_challenge_bonus_next_days_count">
+        <item quantity="one">Noch %1$d Tag aufs Rad bis zum Bonus</item>
+        <item quantity="other">Noch %1$d Tage aufs Rad bis zum Bonus</item>
+    </plurals>
+    <string name="progress_challenge_bonus_next_long_ride">Bonus: Noch %1$s km bis zur Tour über %2$s km</string>
     <!-- Zeile in „Als Nächstes". %1$s = Rest, %2$s = Ziel -->
     <string name="progress_next_challenge_distance">Noch %1$s km bis zur Monats-Challenge %2$s km</string>
     <string name="progress_next_challenge_ascent">Noch %1$s Hm bis zur Monats-Challenge %2$s Hm</string>

@@ -375,7 +375,7 @@ private fun yearGoalTint(progress: YearGoalProgress?): Color =
  * @param suggestedKm Vorschlag fuers Jahresziel; `null` ohne Touren.
  * @param milestone die naechste Stufe, `null` oberhalb aller Leitern.
  * @param challenge die offene Monats-Challenge mit dem groessten Fortschritt
- *   ([nextOpenChallenge]) als dritte Zeile; `null`, wenn alle erreicht sind.
+ *   ([nextOpenChallenge]) als dritte Zeile, nach den Zielen deren Bonus; `null`, wenn alles erreicht ist.
  */
 @Composable
 internal fun NextGoalsCard(
@@ -435,10 +435,10 @@ internal fun NextGoalsCard(
                 RowDivider()
                 ProgressRow(
                     icon = challengeNextIcon(challenge.challenge.kind),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = if (challenge.reached) LocalSignalColors.current.accentBlue else MaterialTheme.colorScheme.primary,
                     title = challengeNextTitle(challenge),
                     subtitle = null,
-                    fraction = challenge.fraction.toFloat(),
+                    fraction = (if (challenge.reached) challenge.bonusFraction else challenge.fraction).toFloat(),
                     onClick = onOpenProgress,
                     onClickLabel = stringResource(R.string.progress_milestone_open_cd),
                 )

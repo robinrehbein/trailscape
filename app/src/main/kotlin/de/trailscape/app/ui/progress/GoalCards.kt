@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,6 +48,7 @@ import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ChallengeKind
 import de.trailscape.core.ChallengeMonth
 import de.trailscape.core.ChallengeProgress
+import de.trailscape.core.ChallengeTier
 import de.trailscape.core.WeeklyGoalKind
 import de.trailscape.core.WeeklyGoalProgress
 import de.trailscape.core.WeeklyRecap
@@ -271,6 +273,56 @@ private fun challengeName(progress: ChallengeProgress): String {
     }
 }
 
+/** Name des Bonus als Aufgabe: „Bonus: 160 km fahren". */
+@Composable
+private fun challengeBonusName(progress: ChallengeProgress): String {
+    val target = progress.bonusTarget
+    return when (progress.challenge.kind) {
+        ChallengeKind.DISTANCE -> stringResource(R.string.progress_challenge_bonus_distance, whole(target))
+        ChallengeKind.ASCENT -> stringResource(R.string.progress_challenge_bonus_ascent, whole(target))
+        ChallengeKind.ACTIVE_DAYS ->
+            pluralStringResource(R.plurals.progress_challenge_bonus_days_count, target.toInt(), target.toInt())
+
+        ChallengeKind.LONG_RIDE -> stringResource(R.string.progress_challenge_bonus_long_ride, whole(target))
+    }
+}
+
+/**
+ * Zeile einer Challenge in der Bonus-Stufe, Bonus noch offen: Das Haekchen
+ * des erreichten Ziels bleibt gruen, der Balken daneben ist blau und laeuft
+ * vom Ziel zum Bonus. Eigene Zeile statt [ProgressRow], weil Symbol und
+ * Balken hier zwei Farben haben.
+ */
+@Composable
+private fun BonusProgressRow(item: ChallengeProgress, modifier: Modifier = Modifier) {
+    val signals = LocalSignalColors.current
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .padding(horizontal = CardPadding, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconBubble(Icons.Rounded.CheckCircle, signals.good)
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = challengeBonusName(item), style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            ProgressBar(item.bonusFraction.toFloat(), signals.accentBlue)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = stringResource(
+                R.string.progress_challenge_month_value,
+                wholeTowards(item.current, item.bonusTarget),
+                whole(item.bonusTarget),
+            ),
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+        )
+    }
+}
+
 /**
  * Die Monats-Challenges als Karte im Fortschritt-Segment des Training-Tabs.
  *
@@ -280,6 +332,17 @@ private fun challengeName(progress: ChallengeProgress): String {
  * nennt die Tage, die der Monat noch hat, und — falls es einen gibt — den
  * Vormonat, damit „3 von 4" Gewicht bekommt, ohne dass ein Rueckstand
  * vorgehalten wird.
+ *
+ * ## Bonus
+ * Wer ein Ziel frueh erreicht, soll nicht bis zum Ersten vor einer vollen
+ * Zeile stehen. Die Zeile bekommt deshalb ein zweites Ziel (den Bonus), das
+ * Haekchen bleibt. Der Balken **setzt fort statt neu anzufangen**: Er laeuft
+ * vom erreichten Ziel zum Bonus und wechselt dafuer die Farbe (blau wie bei
+ * den Meilensteinen statt gut-gruen). So ist es sichtbar eine zweite Runde —
+ * ein leerer gruener Balken wuerde aussehen, als waere das Ziel wieder offen
+ * und der Erfolg zurueckgenommen. Ist auch der Bonus erreicht, zeigt die
+ * Zeile einen Pokal und „Bonus geschafft"; Challenges ohne moeglichen Bonus
+ * (Obergrenze) bleiben bei ihrem Haekchen.
  *
  * @param month ein Tag des betrachteten Monats (nur fuer den Namen).
  * @param lastMonth Bilanz des Vormonats, `null` ohne Touren darin.
@@ -293,6 +356,7 @@ internal fun ChallengesCard(
 ) {
     val signals = LocalSignalColors.current
     val reachedText = stringResource(R.string.progress_challenge_month_reached_cd)
+    val bonusReachedText = stringResource(R.string.progress_challenge_bonus_reached)
     Card(modifier = modifier.fillMaxWidth()) {
         Column {
             CardTitle(
@@ -301,28 +365,57 @@ internal fun ChallengesCard(
             )
             progress.forEachIndexed { index, item ->
                 if (index > 0) RowDivider()
-                val tint = if (item.reached) signals.good else MaterialTheme.colorScheme.primary
-                ProgressRow(
-                    icon = if (item.reached) Icons.Rounded.CheckCircle else challengeIcon(item.challenge.kind),
-                    tint = tint,
-                    title = challengeName(item),
-                    subtitle = null,
-                    fraction = item.fraction.toFloat(),
-                    trailing = stringResource(
-                        R.string.progress_challenge_month_value,
-                        wholeTowards(item.current, item.challenge.target),
-                        whole(item.challenge.target),
-                    ),
-                    modifier = Modifier.semantics(mergeDescendants = true) {
-                        if (item.reached) stateDescription = reachedText
-                    },
-                )
+                val rowModifier = Modifier.semantics(mergeDescendants = true) {
+                    if (item.bonusReached && item.hasBonus) {
+                        stateDescription = bonusReachedText
+                    } else if (item.reached) {
+                        stateDescription = reachedText
+                    }
+                }
+                when {
+                    item.hasBonus && item.bonusReached -> ProgressRow(
+                        icon = Icons.Rounded.EmojiEvents,
+                        tint = signals.accentBlue,
+                        title = challengeBonusName(item),
+                        subtitle = bonusReachedText,
+                        fraction = 1f,
+                        modifier = rowModifier,
+                    )
+
+                    item.hasBonus && item.tier == ChallengeTier.BONUS -> BonusProgressRow(item, rowModifier)
+
+                    else -> ProgressRow(
+                        icon = if (item.reached) Icons.Rounded.CheckCircle else challengeIcon(item.challenge.kind),
+                        tint = if (item.reached) signals.good else MaterialTheme.colorScheme.primary,
+                        title = challengeName(item),
+                        subtitle = null,
+                        fraction = item.fraction.toFloat(),
+                        trailing = stringResource(
+                            R.string.progress_challenge_month_value,
+                            wholeTowards(item.current, item.challenge.target),
+                            whole(item.challenge.target),
+                        ),
+                        modifier = rowModifier,
+                    )
+                }
             }
             val footer = listOfNotNull(
                 progress.firstOrNull()?.daysLeft?.takeIf { it > 0 }?.let {
                     pluralStringResource(R.plurals.progress_challenges_days_left_count, it, it)
                 },
-                lastMonth?.let { stringResource(R.string.progress_challenges_last_month, it.reached, it.total) },
+                lastMonth?.let {
+                    if (it.bonusReached > 0) {
+                        pluralStringResource(
+                            R.plurals.progress_challenge_bonus_last_month_count,
+                            it.bonusReached,
+                            it.reached,
+                            it.total,
+                            it.bonusReached,
+                        )
+                    } else {
+                        stringResource(R.string.progress_challenges_last_month, it.reached, it.total)
+                    }
+                },
             )
             if (footer.isNotEmpty()) {
                 Text(
@@ -338,39 +431,66 @@ internal fun ChallengesCard(
 
 /**
  * Die offene Challenge, die am weitesten ist — der Kandidat fuer „Als
- * Naechstes". `null`, wenn alle erreicht sind: Dann gibt es nichts mehr
- * anzubieten, und die Karte bleibt bei ihren zwei Zeilen.
+ * Naechstes".
+ *
+ * Solange ein Ziel offen und noch machbar ist, kommt es zuerst. Sind alle
+ * Ziele erreicht (oder die offenen nicht mehr zu schaffen), wird der offene
+ * **Bonus** mit dem groessten [ChallengeProgress.bonusFraction] angeboten:
+ * Wer gut im Lauf ist, soll nicht bis zum Ersten ohne naechstes Ziel
+ * dastehen. Ob eine Rueckgabe ein Ziel oder ein Bonus meint, zeigt
+ * [ChallengeProgress.reached] (erreicht = Bonus-Stufe). `null`, wenn auch
+ * alle machbaren Boni erreicht sind.
  */
-internal fun nextOpenChallenge(progress: List<ChallengeProgress>): ChallengeProgress? =
-    progress
+internal fun nextOpenChallenge(progress: List<ChallengeProgress>): ChallengeProgress? {
+    val base = progress
         .filter { !it.reached }
         // Was sich in diesem Monat nicht mehr schaffen laesst, wird nicht
         // mehr angeboten: „noch 4 Tage aufs Rad" bei drei verbleibenden
         // Tagen waere eine Einladung zum Scheitern.
         .filterNot { it.challenge.kind == ChallengeKind.ACTIVE_DAYS && ceil(it.remaining) > it.daysLeft }
         .maxByOrNull { it.fraction }
+    if (base != null) return base
+    return progress
+        .filter { it.reached && it.hasBonus && !it.bonusReached }
+        .filterNot { it.challenge.kind == ChallengeKind.ACTIVE_DAYS && ceil(it.bonusRemaining) > it.daysLeft }
+        .maxByOrNull { it.bonusFraction }
+}
 
 /**
  * „Noch 38 km bis zur Monats-Challenge 150 km" — der Titel der Zeile in
- * „Als Naechstes". Der Rest wird aufgerundet (wie bei den Meilensteinen): „Noch
- * 0 km" sah erreicht aus, ohne es zu sein.
+ * „Als Naechstes"; in der Bonus-Stufe „Noch 28 km bis zum Bonus 160 km". Der
+ * Rest wird aufgerundet (wie bei den Meilensteinen): „Noch 0 km" sah erreicht
+ * aus, ohne es zu sein.
  */
 @Composable
 internal fun challengeNextTitle(progress: ChallengeProgress): String {
-    val remaining = ceil(progress.remaining).coerceAtLeast(1.0)
-    val target = progress.challenge.target
+    val bonus = progress.reached
+    val remaining = ceil(if (bonus) progress.bonusRemaining else progress.remaining).coerceAtLeast(1.0)
+    val target = if (bonus) progress.bonusTarget else progress.challenge.target
     return when (progress.challenge.kind) {
-        ChallengeKind.DISTANCE ->
-            stringResource(R.string.progress_next_challenge_distance, whole(remaining), whole(target))
+        ChallengeKind.DISTANCE -> stringResource(
+            if (bonus) R.string.progress_challenge_bonus_next_distance else R.string.progress_next_challenge_distance,
+            whole(remaining),
+            whole(target),
+        )
 
-        ChallengeKind.ASCENT ->
-            stringResource(R.string.progress_next_challenge_ascent, whole(remaining), whole(target))
+        ChallengeKind.ASCENT -> stringResource(
+            if (bonus) R.string.progress_challenge_bonus_next_ascent else R.string.progress_next_challenge_ascent,
+            whole(remaining),
+            whole(target),
+        )
 
-        ChallengeKind.ACTIVE_DAYS ->
-            pluralStringResource(R.plurals.progress_next_challenge_days_count, remaining.toInt(), remaining.toInt())
+        ChallengeKind.ACTIVE_DAYS -> pluralStringResource(
+            if (bonus) R.plurals.progress_challenge_bonus_next_days_count else R.plurals.progress_next_challenge_days_count,
+            remaining.toInt(),
+            remaining.toInt(),
+        )
 
-        ChallengeKind.LONG_RIDE ->
-            stringResource(R.string.progress_next_challenge_long_ride, whole(remaining), whole(target))
+        ChallengeKind.LONG_RIDE -> stringResource(
+            if (bonus) R.string.progress_challenge_bonus_next_long_ride else R.string.progress_next_challenge_long_ride,
+            whole(remaining),
+            whole(target),
+        )
     }
 }
 

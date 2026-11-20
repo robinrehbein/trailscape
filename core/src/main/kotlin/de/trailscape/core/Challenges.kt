@@ -50,8 +50,18 @@ data class Challenge(
     val target: Double,
 )
 
+/** Welche Stufe einer Challenge gerade gilt: das Ziel oder die Zugabe danach. */
+enum class ChallengeTier { BASE, BONUS }
+
 /**
  * Stand einer [Challenge].
+ *
+ * Jede Challenge hat zwei Stufen: das Ziel ([Challenge.target]) und danach
+ * einen Bonus ([bonusTarget]). Wer das Ziel frueh erreicht, hat sonst bis zum
+ * Ersten nichts mehr vor sich — ausgerechnet dann, wenn er in Form ist. Der
+ * Bonus laeuft **von dort weiter**: [bonusFraction] misst den Weg vom Ziel zum
+ * Bonus, nicht von null. [fraction], [reached] und [remaining] beziehen sich
+ * unveraendert auf das Ziel.
  *
  * @property current km / m / Tage bisher im Monat; bei [ChallengeKind.LONG_RIDE]
  *   die weiteste Tour des Monats (nicht die Summe).
@@ -67,6 +77,32 @@ data class ChallengeProgress(
         get() = if (challenge.target > 0) (current / challenge.target).coerceIn(0.0, 1.0) else 0.0
     val reached: Boolean get() = challenge.target > 0 && current >= challenge.target
     val remaining: Double get() = (challenge.target - current).coerceAtLeast(0.0)
+
+    /**
+     * Das Bonusziel dieser Challenge, siehe [bonusTargetFor]. Ist es gleich
+     * dem Ziel, gibt es keinen Bonus.
+     */
+    val bonusTarget: Double get() = bonusTargetFor(challenge)
+
+    /** Gibt es einen Bonus oberhalb des Ziels? */
+    val hasBonus: Boolean get() = bonusTarget > challenge.target
+
+    /** [ChallengeTier.BASE], solange das Ziel offen ist; danach [ChallengeTier.BONUS]. */
+    val tier: ChallengeTier get() = if (reached) ChallengeTier.BONUS else ChallengeTier.BASE
+
+    /** Bonus erreicht. Ohne Bonus (siehe [hasBonus]) ist das genau [reached]. */
+    val bonusReached: Boolean
+        get() = if (hasBonus) current >= bonusTarget else reached
+
+    /** Fortschritt vom Ziel zum Bonus, 0…1; 0, solange das Ziel offen ist oder es keinen Bonus gibt. */
+    val bonusFraction: Double
+        get() {
+            if (!hasBonus || !reached) return 0.0
+            return ((current - challenge.target) / (bonusTarget - challenge.target)).coerceIn(0.0, 1.0)
+        }
+
+    /** Was bis zum Bonus fehlt, >= 0; ohne Bonus ist das Bonusziel das Ziel, also [remaining]. */
+    val bonusRemaining: Double get() = (bonusTarget - current).coerceAtLeast(0.0)
 }
 
 /** Wie viele Monate vor dem Zielmonat die Referenz umfasst. */
@@ -113,6 +149,49 @@ const val starterLongRideKm: Double = 30.0
  * spraenge (wie bei [stretchChallenge]).
  */
 private fun roundUp(value: Double, step: Double): Double = ceil(value / step - 1e-9) * step
+
+/**
+ * Bonus auf Kilometer und Hoehenmeter: ein Viertel obendrauf. Das Ziel ist
+ * schon +10 %; der Bonus muss sich nach einem guten Lauf wie eine zweite Runde
+ * anfuehlen, nicht wie ein paar Meter Nachschlag.
+ */
+const val challengeBonusVolumeFactor: Double = 1.25
+
+/** Bonus der aktiven Tage: drei Tage mehr — in einem Monat eine Woche-Haelfte, kein neuer Rhythmus. */
+const val challengeBonusActiveDays: Int = 3
+
+/** Bonus der weitesten Tour: 15 %, weil eine einzelne Tour weniger streckbar ist als ein Monatsvolumen. */
+const val challengeBonusLongRideFactor: Double = 1.15
+
+/**
+ * Das Bonusziel zu [challenge]. Immer strikt groesser als das Ziel — ausser
+ * eine Obergrenze (Monatslaenge bei den Tagen, [challengeMaxLongRideKm] bei
+ * der Tour) verhindert das; dann gibt es keinen Bonus und das Ergebnis ist
+ * gleich [Challenge.target].
+ */
+fun bonusTargetFor(challenge: Challenge): Double {
+    val base = challenge.target
+    if (base <= 0) return base
+    return when (challenge.kind) {
+        ChallengeKind.DISTANCE -> {
+            val raw = base * challengeBonusVolumeFactor
+            val step = if (raw < challengeDistanceFineBelowKm) challengeDistanceFineStepKm else challengeDistanceStepKm
+            roundUp(raw, step)
+        }
+
+        ChallengeKind.ASCENT -> {
+            val raw = base * challengeBonusVolumeFactor
+            val step = if (raw < challengeAscentFineBelowM) challengeAscentFineStepM else challengeAscentStepM
+            roundUp(raw, step)
+        }
+
+        ChallengeKind.ACTIVE_DAYS ->
+            min(base + challengeBonusActiveDays, challenge.month.lengthOfMonth().toDouble())
+
+        ChallengeKind.LONG_RIDE ->
+            min(roundUp(base * challengeBonusLongRideFactor, challengeLongRideStepKm), challengeMaxLongRideKm)
+    }.coerceAtLeast(base)
+}
 
 private data class MonthStats(
     val km: Double,
@@ -229,8 +308,10 @@ fun challengeProgress(facts: List<RideFact>, today: LocalDate): List<ChallengePr
  *
  * @property reached erreichte Challenges.
  * @property total Challenges dieses Monats (je nach Historie 3 oder 4).
+ * @property bonusReached davon Challenges, deren Bonus erreicht wurde (nur
+ *   echte Boni; eine Challenge ohne Bonus zaehlt hier nicht mit).
  */
-data class ChallengeMonth(val month: YearMonth, val reached: Int, val total: Int)
+data class ChallengeMonth(val month: YearMonth, val reached: Int, val total: Int, val bonusReached: Int = 0)
 
 /**
  * Wie viele Challenges in den vergangenen Monaten erreicht wurden, neuester
@@ -246,6 +327,11 @@ fun challengeHistory(facts: List<RideFact>, today: LocalDate, months: Int = 12):
         val rides = ridesIn(facts, month)
         if (rides.isEmpty()) return@mapNotNull null
         val progress = progressOf(monthlyChallenges(facts, month), rides, daysLeft = 0)
-        ChallengeMonth(month, reached = progress.count { it.reached }, total = progress.size)
+        ChallengeMonth(
+            month,
+            reached = progress.count { it.reached },
+            total = progress.size,
+            bonusReached = progress.count { it.hasBonus && it.bonusReached },
+        )
     }
 }

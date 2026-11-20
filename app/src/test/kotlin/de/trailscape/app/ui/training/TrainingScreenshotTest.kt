@@ -117,6 +117,8 @@ class TrainingScreenshotTest {
         val month = formatMonthName(LocalDate.now(), AppLanguage.EN)
         compose.onAllNodesWithText(compose.activity.getString(R.string.progress_challenges_title, month))[0].assertExists()
         compose.onAllNodesWithText(" of ", substring = true)[0].assertExists()
+        // Die Beispieldaten haben alle Ziele erreicht: Die Zeilen zeigen jetzt den Bonus als zweites Ziel.
+        compose.onAllNodesWithText("Bonus: ", substring = true)[0].assertExists()
         assertVisible(R.string.progress_records_title)
         assertVisible(R.string.progress_milestones_title)
         shot("training-fortschritt-en")

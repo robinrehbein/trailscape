@@ -185,6 +185,28 @@
     </plurals>
     <!-- %1$d = erreicht, %2$d = Challenges des Monats -->
     <string name="progress_challenges_last_month">Last month: %1$d of %2$d done</string>
+    <!-- Bonus tier after the target is reached (GoalCards.kt). %1$s = bonus target in km or m -->
+    <string name="progress_challenge_bonus_distance">Bonus: ride %1$s km</string>
+    <string name="progress_challenge_bonus_ascent">Bonus: climb %1$s meters</string>
+    <plurals name="progress_challenge_bonus_days_count">
+        <item quantity="one">Bonus: ride on %1$d day</item>
+        <item quantity="other">Bonus: ride on %1$d days</item>
+    </plurals>
+    <string name="progress_challenge_bonus_long_ride">Bonus: one ride over %1$s km</string>
+    <string name="progress_challenge_bonus_reached">Bonus reached</string>
+    <!-- %1$d = reached, %2$d = challenges of the month, %3$d = bonuses reached -->
+    <plurals name="progress_challenge_bonus_last_month_count">
+        <item quantity="one">Last month: %1$d of %2$d done, %3$d bonus</item>
+        <item quantity="other">Last month: %1$d of %2$d done, %3$d bonuses</item>
+    </plurals>
+    <!-- Row in Up next. %1$s = remaining, %2$s = bonus target -->
+    <string name="progress_challenge_bonus_next_distance">%1$s km to go to the bonus of %2$s km</string>
+    <string name="progress_challenge_bonus_next_ascent">%1$s m to go to the bonus of %2$s m</string>
+    <plurals name="progress_challenge_bonus_next_days_count">
+        <item quantity="one">%1$d more riding day for the bonus</item>
+        <item quantity="other">%1$d more riding days for the bonus</item>
+    </plurals>
+    <string name="progress_challenge_bonus_next_long_ride">Bonus: %1$s km to go to a ride over %2$s km</string>
     <!-- Zeile in Als Nächstes. %1$s = Rest, %2$s = Ziel -->
     <string name="progress_next_challenge_distance">%1$s km to go to the monthly challenge of %2$s km</string>
     <string name="progress_next_challenge_ascent">%1$s m to go to the monthly challenge of %2$s m</string>

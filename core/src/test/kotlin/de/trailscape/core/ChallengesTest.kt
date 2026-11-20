@@ -221,7 +221,7 @@ class ChallengesTest {
         val jan = listOf(fact(d(2026, 1, 10), 20.0, id = "j1"))
         val h = challengeHistory(dec + jan, d(2026, 2, 15))
         assertEquals(listOf(YearMonth.of(2026, 1), YearMonth.of(2025, 12)), h.map { it.month })
-        assertEquals(ChallengeMonth(YearMonth.of(2025, 12), reached = 3, total = 3), h[1])
+        assertEquals(ChallengeMonth(YearMonth.of(2025, 12), reached = 3, total = 3, bonusReached = 1), h[1])
         assertEquals(0, h[0].reached)
         assertEquals(4, h[0].total)
     }
@@ -238,5 +238,148 @@ class ChallengesTest {
         // Nur die letzten 2 Kalendermonate vor dem laufenden: Oktober (leer) und September.
         assertEquals(listOf(YearMonth.of(2026, 9)), challengeHistory(facts, d(2026, 11, 10), months = 2).map { it.month })
         assertEquals(emptyList(), challengeHistory(emptyList(), d(2026, 11, 10)))
+    }
+
+    // --- Bonus-Stufe -------------------------------------------------------
+
+    private fun ch(kind: ChallengeKind, target: Double, month: YearMonth = nov) = Challenge(kind, month, target)
+
+    private fun bonus(kind: ChallengeKind, target: Double, month: YearMonth = nov) =
+        bonusTargetFor(ch(kind, target, month))
+
+    @Test
+    fun bonusDistanceRoundsUpWithSameStepRule() {
+        // 125 × 1,25 = 156,25 -> 175 (grober Schritt)
+        assertEquals(175.0, bonus(ChallengeKind.DISTANCE, 125.0))
+        // 100 × 1,25 = 125 exakt -> bleibt 125, kein Sprung
+        assertEquals(125.0, bonus(ChallengeKind.DISTANCE, 100.0))
+        // 60 × 1,25 = 75 < 100 -> feiner Schritt 10 -> 80
+        assertEquals(80.0, bonus(ChallengeKind.DISTANCE, 60.0))
+        // 10 × 1,25 = 12,5 -> 20, strikt groesser
+        assertEquals(20.0, bonus(ChallengeKind.DISTANCE, 10.0))
+        // 80 × 1,25 = 100 -> nicht unter 100: grober Schritt, 100 bleibt 100
+        assertEquals(100.0, bonus(ChallengeKind.DISTANCE, 80.0))
+    }
+
+    @Test
+    fun bonusAscentRoundsUpWithSameStepRule() {
+        // 800 × 1,25 = 1000 -> grober Schritt, 1000
+        assertEquals(1000.0, bonus(ChallengeKind.ASCENT, 800.0))
+        // 900 × 1,25 = 1125 -> 1250
+        assertEquals(1250.0, bonus(ChallengeKind.ASCENT, 900.0))
+        // 400 × 1,25 = 500 -> feiner Schritt 100 -> 500
+        assertEquals(500.0, bonus(ChallengeKind.ASCENT, 400.0))
+        // 300 × 1,25 = 375 -> 400
+        assertEquals(400.0, bonus(ChallengeKind.ASCENT, 300.0))
+    }
+
+    @Test
+    fun bonusActiveDaysAddsThreeCappedByMonthLength() {
+        assertEquals(10.0, bonus(ChallengeKind.ACTIVE_DAYS, 7.0))
+        // November hat 30 Tage: 28 + 3 -> 30
+        assertEquals(30.0, bonus(ChallengeKind.ACTIVE_DAYS, 28.0))
+        // Februar 2027 hat 28 Tage: 20 + 3 = 23, unter der Kappe
+        assertEquals(23.0, bonus(ChallengeKind.ACTIVE_DAYS, 20.0, YearMonth.of(2027, 2)))
+    }
+
+    @Test
+    fun bonusLongRideRoundsUpToFiveAndIsCapped() {
+        // 40 × 1,15 = 46 -> 50
+        assertEquals(50.0, bonus(ChallengeKind.LONG_RIDE, 40.0))
+        // 100 × 1,15 = 115 (Gleitkomma 114,99999…) -> 115, nicht 120
+        assertEquals(115.0, bonus(ChallengeKind.LONG_RIDE, 100.0))
+        // 180 × 1,15 = 207 -> gekappt auf 200
+        assertEquals(200.0, bonus(ChallengeKind.LONG_RIDE, 180.0))
+        // 5 × 1,15 = 5,75 -> 10
+        assertEquals(10.0, bonus(ChallengeKind.LONG_RIDE, 5.0))
+    }
+
+    @Test
+    fun bonusIsStrictlyGreaterUnlessCapped() {
+        for (kind in listOf(ChallengeKind.DISTANCE, ChallengeKind.ASCENT)) {
+            var t = 10.0
+            while (t < 3000) {
+                assertTrue(bonus(kind, t) > t, "$kind $t")
+                t += 10.0
+            }
+        }
+        for (t in 4..27) assertTrue(bonus(ChallengeKind.ACTIVE_DAYS, t.toDouble()) > t)
+        var t = 5.0
+        while (t < 200.0) {
+            assertTrue(bonus(ChallengeKind.LONG_RIDE, t) > t, "long $t")
+            t += 5.0
+        }
+    }
+
+    @Test
+    fun noBonusWhenCapMakesItImpossible() {
+        // Tour: Kappe 200 = Ziel
+        val long = ChallengeProgress(ch(ChallengeKind.LONG_RIDE, 200.0), current = 150.0, daysLeft = 5)
+        assertEquals(200.0, long.bonusTarget)
+        assertFalse(long.hasBonus)
+        assertFalse(long.bonusReached)
+        assertEquals(0.0, long.bonusFraction)
+        val longDone = long.copy(current = 210.0)
+        assertTrue(longDone.reached)
+        assertEquals(longDone.reached, longDone.bonusReached)
+        assertEquals(0.0, longDone.bonusFraction)
+        // Tage: Ziel = Monatslaenge
+        val days = ChallengeProgress(ch(ChallengeKind.ACTIVE_DAYS, 30.0), current = 30.0, daysLeft = 1)
+        assertEquals(30.0, days.bonusTarget)
+        assertFalse(days.hasBonus)
+        assertEquals(days.reached, days.bonusReached)
+    }
+
+    @Test
+    fun tierSwitchesExactlyAtBaseTarget() {
+        val base = ch(ChallengeKind.DISTANCE, 100.0) // Bonus 125
+        val below = ChallengeProgress(base, 99.99, 10)
+        assertEquals(ChallengeTier.BASE, below.tier)
+        assertEquals(0.0, below.bonusFraction)
+        val at = ChallengeProgress(base, 100.0, 10)
+        assertEquals(ChallengeTier.BONUS, at.tier)
+        assertFalse(at.bonusReached)
+        assertEquals(0.0, at.bonusFraction)
+        assertEquals(25.0, at.bonusRemaining)
+    }
+
+    @Test
+    fun bonusFractionRunsFromTargetToBonus() {
+        val base = ch(ChallengeKind.DISTANCE, 100.0) // Bonus 125
+        assertEquals(0.4, ChallengeProgress(base, 110.0, 10).bonusFraction, 1e-9)
+        assertEquals(15.0, ChallengeProgress(base, 110.0, 10).bonusRemaining, 1e-9)
+        val done = ChallengeProgress(base, 130.0, 10)
+        assertTrue(done.bonusReached)
+        assertEquals(1.0, done.bonusFraction)
+        assertEquals(0.0, done.bonusRemaining)
+        // Basis-Member bleiben unveraendert
+        assertEquals(1.0, done.fraction)
+        assertEquals(0.0, done.remaining)
+    }
+
+    @Test
+    fun historyCountsBonusReached() {
+        // Oktober: Startsatz (100 km / 4 Tage / 30 km), Boni 125 km / 7 Tage / 35 km.
+        // 9 Touren an 9 Tagen, 5 km mehr als... 130 km gesamt, Spitze 40 km.
+        val oct = (1..9).map { fact(d(2026, 10, it), 10.0, id = "o$it") } +
+            fact(d(2026, 10, 20), 40.0, id = "long")
+        val h = challengeHistory(oct, d(2026, 11, 10)).single()
+        // km 130 >= 125 (Bonus), Tage 10 >= 7 (Bonus), Tour 40 >= 35 (Bonus)
+        assertEquals(3, h.reached)
+        assertEquals(3, h.bonusReached)
+    }
+
+    @Test
+    fun historyBonusNotCountedWhenOnlyBaseReached() {
+        // 4 Tage, 120 km, Spitze 35: Ziele erreicht, Bonus 125 km / 7 Tage nicht, Tour-Bonus 35 ja.
+        val dec = listOf(
+            fact(d(2025, 12, 1), 35.0, id = "d1"),
+            fact(d(2025, 12, 2), 35.0, id = "d2"),
+            fact(d(2025, 12, 3), 25.0, id = "d3"),
+            fact(d(2025, 12, 4), 25.0, id = "d4"),
+        )
+        val h = challengeHistory(dec, d(2026, 1, 15)).single()
+        assertEquals(3, h.reached)
+        assertEquals(1, h.bonusReached)
     }
 }
