@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -64,7 +65,10 @@ import de.trailscape.core.ReadinessBand
 import de.trailscape.core.RouteTarget
 import de.trailscape.core.RouteTargetSource
 import de.trailscape.core.SessionIntensity
+import de.trailscape.core.WeekPlanInput
 import de.trailscape.core.challengeProgress
+import de.trailscape.core.planWeek
+import de.trailscape.core.ridingHabits
 import de.trailscape.core.lastWeekRecap
 import de.trailscape.core.nearestMilestone
 import de.trailscape.core.planningSpeedKmh
@@ -106,6 +110,9 @@ import kotlin.math.roundToInt
  *  3. **Diese Woche** ([WeekCard]) — bzw. am Erststart „Los geht's".
  *     Mit Balken zum Wochenziel (Plan oder mitwachsendes Ziel ohne Plan) und am
  *     Fuss die Wochenserie ([StreakFooter]).
+ *  3a. **Wochen-Fahrplan** ([WeekPlanCard]) — nur zum offenen mitwachsenden
+ *     Wochenziel ohne Trainingsplan: an welchen Tagen wie weit, mit „Runde
+ *     planen" je Tag. Gerechnet in `core/…/WeekPlan.kt`.
  *  3b. **Als Naechstes** — die naechste Bestweite ([ChallengeCard], nicht am
  *     Zieltag und nicht bei „Ruhe") sowie Jahresziel und naechster Meilenstein
  *     ([NextGoalsCard], mit der offenen Monats-Challenge als dritter Zeile). Gerechnet in `core/…/Motivation.kt`. Erst ab der
@@ -253,6 +260,36 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val challengeLabel = stringResource(R.string.progress_challenge_route_label)
     var showYearGoal by rememberSaveable { mutableStateOf(false) }
 
+    // Wochen-Fahrplan (`core/…/WeekPlan.kt`): nur zum offenen mitwachsenden
+    // Wochenziel und nie neben einem Trainingsplan — der hat Vorrang, auch
+    // wenn er erst naechste Woche beginnt.
+    val trainingPlanActive = displayPlan != null &&
+        (currentWeek != null || !localOfEpochMs(displayPlan.goal.date).toLocalDate().isBefore(today))
+    val weekPlanRemainingKm = adaptiveGoal?.takeIf { !it.reached }?.remainingKm
+    val weekPlanShown = !ridesLoading && hasRiddenRide && !trainingPlanActive && weekPlanRemainingKm != null
+    val weekPlanWeather = rememberWeekPlanWeather(active = weekPlanShown, today = today, rides = rides)
+    val hourNow = rememberHourNow()
+    val habits = remember(facts, today) { ridingHabits(facts, today) }
+    val weekPlanForecast = weekPlanWeather.forecast
+    val weekPlan = remember(weekPlanShown, weekPlanRemainingKm, hourNow, today, habits, weekPlanForecast, riddenByDate) {
+        if (!weekPlanShown || weekPlanRemainingKm == null) {
+            null
+        } else {
+            planWeek(
+                WeekPlanInput(
+                    remainingKm = weekPlanRemainingKm,
+                    // Um Mitternacht kann die Stunde dem Tag kurz hinterherhinken.
+                    now = if (hourNow.toLocalDate() == today) hourNow else today.atStartOfDay(),
+                    habits = habits,
+                    forecast = weekPlanForecast?.days.orEmpty(),
+                    trainingPlanActive = trainingPlanActive,
+                    rodeToday = (riddenByDate[today] ?: 0.0) > 0.0,
+                ),
+            )
+        }
+    }
+    val context = LocalContext.current
+
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(appViewModel) {
         appViewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -337,6 +374,31 @@ fun TodayScreen(appViewModel: AppViewModel) {
                     item(key = "sec-woche") { SectionEyebrow(stringResource(R.string.today_week_eyebrow)) }
                     item(key = "woche") {
                         WeekCard(summary = weekSummaryText, strip = strip, goal = goalLine, footer = { StreakFooter(streak) })
+                    }
+                    weekPlan?.let { plan ->
+                        item(key = "wochenplan") {
+                            WeekPlanCard(
+                                plan = plan,
+                                today = today,
+                                weather = weekPlanWeather.ui,
+                                onWeatherEnabledChange = { weekPlanWeather.setEnabled(it) },
+                                onPlanRide = { ride ->
+                                    val speed = planningSpeedKmh(SessionIntensity.GRUNDLAGE, insights.profile, rides)
+                                    val day = weekPlanDayLong(ride.date, today, coreTexts).resolve(context)
+                                    appViewModel.requestRouteGeneration(
+                                        RouteTarget(
+                                            distanceKm = ride.km.toDouble(),
+                                            ascentPreference = AscentPreference.MODERAT,
+                                            durationH = ride.km / speed,
+                                            speedKmh = speed,
+                                            intensity = SessionIntensity.GRUNDLAGE,
+                                            label = context.getString(R.string.today_week_plan_route_label, day),
+                                            source = RouteTargetSource.SELBST_GEWAEHLT,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     item(key = "sec-naechstes") { SectionEyebrow(stringResource(R.string.progress_next_eyebrow)) }

@@ -20,6 +20,32 @@ gelten.
 - [ ] Montags bis mittwochs: Erscheint der Rückblick auf die letzte Woche mit
       richtigen Zahlen?
 
+## Wochen-Fahrplan
+
+- [ ] Ohne Trainingsplan, Wochenziel offen: Erscheint unter „Diese Woche“ die
+      Karte „Wochen-Fahrplan“ mit ein bis drei Tagen? Passen die Tage zu den
+      eigenen üblichen Fahrtagen, die Längen zur eigenen typischen Runde?
+- [ ] Mit Trainingsplan (auch einem, der erst nächste Woche beginnt) und nach
+      geschafftem Wochenziel: Die Karte fehlt.
+- [ ] Nach 18 Uhr steht heute nicht mehr im Plan; nach einer Fahrt heute
+      ebenfalls nicht. Sonntagabend: „kein Fahrtag mehr“ statt Vorschlägen.
+- [ ] Großer Rest am Wochenende: Erscheint „Knapp“ mit einer plausiblen
+      Obergrenze statt einer Mammutrunde?
+- [ ] „Runde planen“ öffnet die Karte und baut eine Runde in genau der
+      genannten Länge.
+- [ ] Schalter „Wetter für den Wochenplan“ ist ab Werk aus. Eingeschaltet:
+      Stehen nach kurzer Zeit „trocken, 14 °C“ o. ä. und „Wetter: Open-Meteo“
+      da? Passen Temperatur und Regen grob zum Wetterbericht?
+- [ ] Mit Netzwerk-Mitschnitt (z. B. PCAPdroid): genau eine Anfrage an
+      `api.open-meteo.com` mit zwei Nachkommastellen; erneutes Öffnen von
+      *Heute* innerhalb von 3 Stunden fragt nicht erneut.
+- [ ] Ohne Standortfreigabe, aber mit Touren: Wetter kommt für den Start der
+      letzten Tour, es erscheint kein Berechtigungsdialog. Ganz ohne Ort:
+      „Kein Standort bekannt“. Im Flugmodus: „Vorhersage gerade nicht
+      erreichbar“, der Plan steht trotzdem.
+- [ ] Ausschalten: Die Wetterzeilen verschwinden sofort.
+- [ ] Englisch: Wochentage („Thu“) und Texte passen, nichts abgeschnitten.
+
 ## Nach der Fahrt
 
 - [ ] Aufzeichnung beenden, einmal in der App und einmal über die

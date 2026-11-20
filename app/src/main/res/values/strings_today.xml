@@ -204,4 +204,38 @@
     <string name="today_ready_planned_body">Route · %1$s km, mit Abbiegehinweisen.</string>
     <string name="today_ready_with_route_action">Mit Route starten</string>
     <string name="today_ready_without_route_action">Ohne Route starten</string>
+
+    <!-- WeekPlanCard.kt, WeekPlanWording.kt -->
+    <string name="today_week_plan_title">Wochen-Fahrplan</string>
+    <!-- %1$d = Rest zum Wochenziel in km -->
+    <string name="today_week_plan_summary">Noch %1$d km bis zum Wochenziel. So passt es:</string>
+    <string name="today_week_plan_today">Heute</string>
+    <!-- %1$s = Wochentag („Do") oder „Heute", %2$d = km -->
+    <string name="today_week_plan_row">%1$s · %2$d km</string>
+    <string name="today_week_plan_reason_dry">trocken</string>
+    <string name="today_week_plan_reason_calm">wenig Wind</string>
+    <string name="today_week_plan_reason_usual">dein üblicher Fahrtag</string>
+    <string name="today_week_plan_reason_free">freier Tag</string>
+    <string name="today_week_plan_reason_rain">Regen möglich</string>
+    <string name="today_week_plan_reason_windy">windig</string>
+    <string name="today_week_plan_reason_cold">sehr kalt</string>
+    <string name="today_week_plan_reason_hot">sehr heiß</string>
+    <!-- %1$s = Grund (today_week_plan_reason_*), %2$d = Höchsttemperatur in °C -->
+    <string name="today_week_plan_reason_with_temp">%1$s, %2$d °C</string>
+    <string name="today_week_plan_build_action">Runde planen</string>
+    <!-- %1$d = km, %2$s = Wochentag ausgeschrieben oder „Heute" -->
+    <string name="today_week_plan_build_cd">Runde über %1$d km für %2$s planen</string>
+    <!-- %1$s = Wochentag ausgeschrieben -->
+    <string name="today_week_plan_route_label">Wochen-Fahrplan · %1$s</string>
+    <!-- %1$d = Obergrenze je Fahrt in km, %2$d = fehlende km -->
+    <string name="today_week_plan_tight">Knapp: Mehr als %1$d km pro Fahrt wären deutlich mehr als deine längste Fahrt der letzten Wochen. Mit diesem Plan fehlen am Ende noch %2$d km.</string>
+    <!-- %1$d = fehlende km -->
+    <string name="today_week_plan_no_days">Diese Woche bleibt kein Fahrtag mehr, bis zum Ziel fehlen %1$d km. Nächste Woche geht es weiter.</string>
+    <string name="today_week_plan_weather_off">Ohne Wetter geplant.</string>
+    <string name="today_week_plan_weather_loading">Vorhersage wird geladen …</string>
+    <string name="today_week_plan_weather_no_location">Ohne Wetter geplant: Kein Standort bekannt.</string>
+    <string name="today_week_plan_weather_unavailable">Ohne Wetter geplant: Vorhersage gerade nicht erreichbar.</string>
+    <string name="today_week_plan_weather_source">Wetter: Open-Meteo</string>
+    <string name="today_week_plan_weather_switch">Wetter für den Wochenplan</string>
+    <string name="today_week_plan_weather_switch_hint">Fragt bei Open-Meteo die Vorhersage für deine ungefähre Gegend ab (letzter bekannter Standort, auf etwa 1 km gerundet), höchstens alle 3 Stunden.</string>
 </resources>
