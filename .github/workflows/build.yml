@@ -420,7 +420,9 @@ jobs:
   # Google Play bekommt ein separat mit dem Play-Upload-Schluessel signiertes
   # Bundle. Die GitHub-APK behaelt ihren bisherigen Schluessel und bleibt fuer
   # bestehende Installationen updatefaehig. Nur main nach erfolgreichem Build
-  # und GitHub-Release darf den internen Test-Track aktualisieren.
+  # und GitHub-Release darf die Test-Tracks aktualisieren (intern und
+  # geschlossen, Handy und Wear OS). Produktion und offener Test bleiben
+  # Handarbeit in der Play Console.
   play_internal:
     needs: [build, release]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -469,7 +471,7 @@ jobs:
 
       # Diese Bundles tragen den Play-Upload-Schluessel. Die AABs im
       # GitHub-Release tragen dagegen den Schluessel der direkt verteilten APK.
-      - name: Play-Bundles zum manuellen Upload bereitstellen
+      - name: Play-Bundles zusaetzlich als Artefakt bereitstellen
         run: |
           mkdir -p play-bundles
           cp app/build/outputs/bundle/release/app-release.aab play-bundles/trailscape-phone-play.aab
@@ -482,7 +484,11 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Im internen Play-Test veroeffentlichen
+      # Handy: interner Test (ohne Pruefung, in Minuten da) und geschlossener
+      # Test ("alpha"). Jeder Track hat seinen eigenen Commit: Lehnt Google
+      # den geschlossenen Test ab, bleibt der interne trotzdem aktuell, und
+      # der Schritt endet rot.
+      - name: Handy im internen und geschlossenen Play-Test veroeffentlichen
         env:
           PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
@@ -492,6 +498,29 @@ jobs:
           python tool/publish_play_internal.py \
             app/build/outputs/bundle/release/app-release.aab \
             --run-number "$GITHUB_RUN_NUMBER" \
+            --tracks 'internal|qa,alpha' \
+            --notes "Version 2.0.${GITHUB_RUN_NUMBER}: ${summary}"
+
+      # Uhr: dieselbe applicationId, eigener versionCode (+1 000 000, siehe
+      # wear/build.gradle.kts) und eigene Tracks mit dem Praefix "wear:". Die
+      # gibt es erst, wenn in der Play Console der Formfaktor Wear OS mit
+      # eigenen Tracks eingerichtet ist; fehlen sie, nennt das Skript die
+      # vorhandenen Tracks und der Schritt endet rot. `!cancelled()`: Ein
+      # gescheiterter Handy-Upload soll den der Uhr nicht verhindern.
+      - name: Wear OS im internen und geschlossenen Play-Test veroeffentlichen
+        if: ${{ !cancelled() }}
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          python -m pip install 'google-auth>=2.30,<3' 'requests>=2.31,<3'
+          summary="$(git log -1 --format=%s | cut -c1-300)"
+          python tool/publish_play_internal.py \
+            wear/build/outputs/bundle/release/wear-release.aab \
+            --run-number "$GITHUB_RUN_NUMBER" \
+            --code-offset 1000000 \
+            --label "Trailscape Wear" \
+            --tracks 'wear:internal|wear:qa,wear:alpha' \
             --notes "Version 2.0.${GITHUB_RUN_NUMBER}: ${summary}"
 
       - name: Upload-Schluessel entfernen
