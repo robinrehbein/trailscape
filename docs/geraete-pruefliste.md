@@ -1,6 +1,6 @@
 # Prüfliste fürs Gerät
 
-Diese Funktionen wurden nur auf dem JVM getestet: mit Unit-Tests, gerenderten
+Diese Funktionen wurden nur auf der JVM getestet: mit Unit-Tests, gerenderten
 Screenshots und dem Release-Build. Diese Liste beschreibt, was auf einem echten
 Telefon (und einer Uhr) geprüft werden muss, bevor die Funktionen als fertig
 gelten.
