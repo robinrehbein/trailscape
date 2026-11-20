@@ -96,7 +96,7 @@ class OkHttpClientAdapter(
                 request.headers.forEach { (name, value) ->
                     // Der Typ steckt schon im Body (siehe oben); doppelt
                     // gesetzt gewaenne ohnehin der des Bodys.
-                    if (body != null && explicitType != null && name == contentTypeHeader?.key) return@forEach
+                    if (body != null && explicitType != null && name == contentTypeHeader.key) return@forEach
                     addHeader(name, value)
                 }
             }

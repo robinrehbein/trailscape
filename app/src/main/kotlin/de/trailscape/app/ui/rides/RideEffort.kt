@@ -44,7 +44,7 @@ import de.trailscape.core.weekSessionProgress
  * Biergarten mitten in der Tour macht sie nicht lockerer. Fehlt die Fahrzeit,
  * springt die Gesamtdauer ein.
  */
-internal enum class RideEffort(@StringRes val labelRes: Int) {
+internal enum class RideEffort(@param:StringRes val labelRes: Int) {
     LOCKER(R.string.rides_effort_easy_label),
     MITTEL(R.string.rides_effort_moderate_label),
     HART(R.string.rides_effort_hard_label),

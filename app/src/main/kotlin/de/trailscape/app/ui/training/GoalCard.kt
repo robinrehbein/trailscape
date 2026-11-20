@@ -388,7 +388,7 @@ private fun RowScope.TimeTile(
  * Die Markierungen der Prognose-Skala, in der Reihenfolge der Legende.
  * [labelRes] steht in der Legendenzeile unter der Skala.
  */
-internal enum class PrognosisMarker(@StringRes val labelRes: Int) {
+internal enum class PrognosisMarker(@param:StringRes val labelRes: Int) {
     TODAY(R.string.training_goal_marker_today),
     EVENT(R.string.training_goal_marker_event),
     TARGET(R.string.training_goal_marker_target),
@@ -774,7 +774,7 @@ fun GoalEditorSheet(
                 val dateMs = goalDate!!.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 return Goal(
                     name = trimmedName,
-                    distanceKm = distance!!,
+                    distanceKm = distance,
                     ascentM = ascent,
                     date = dateMs,
                     targetDurationMin = target,
@@ -797,7 +797,7 @@ fun GoalEditorSheet(
     fun save() {
         val goal = readGoal() ?: return
         if (onlyMeta) {
-            onSetPlan(plan!!.copy(goal = goal))
+            onSetPlan(plan.copy(goal = goal))
             onMessage(resources.getString(R.string.training_goal_editor_saved_status))
             onDismiss()
             return

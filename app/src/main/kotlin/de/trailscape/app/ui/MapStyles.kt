@@ -34,7 +34,7 @@ data class MapStyle(
      */
     val label: String,
     /** Anzeigename in der Stil-Auswahl, in der App-Sprache (`strings_map.xml`). */
-    @StringRes val labelRes: Int,
+    @param:StringRes val labelRes: Int,
     /**
      * Kachel-URL mit den Platzhaltern `{z}`, `{x}` und `{y}` in beliebiger
      * Reihenfolge (Esri nutzt etwa `{z}/{y}/{x}`). Leer bei einem

@@ -250,7 +250,7 @@ fun MoreScreen(appViewModel: AppViewModel, onBack: (() -> Unit)? = null) {
  * Die Seiten der Einstellungen, in der Reihenfolge der Liste. [titleRes]
  * steht in der Listenzeile und in der Kopfzeile der Seite.
  */
-internal enum class SettingsPage(@StringRes val titleRes: Int) {
+internal enum class SettingsPage(@param:StringRes val titleRes: Int) {
     PROFILE(R.string.more_page_profile_title),
     HEALTH(R.string.more_page_health_title),
     SENSORS(R.string.more_page_sensors_title),

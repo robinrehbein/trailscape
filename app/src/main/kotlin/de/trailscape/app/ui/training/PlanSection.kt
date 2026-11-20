@@ -375,7 +375,7 @@ fun CurrentWeekCard(
                     }
                     when {
                         done -> {
-                            val c = if (entry?.status == PlanSessionStatus.ERLEDIGT) trainingGood else trainingCaution
+                            val c = if (entry.status == PlanSessionStatus.ERLEDIGT) trainingGood else trainingCaution
                             TagPill(
                                 text = "✓",
                                 containerColor = c.copy(alpha = 0.15f),

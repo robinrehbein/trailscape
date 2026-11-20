@@ -400,7 +400,7 @@ internal fun onboardingEyebrow(index: Int, pageCount: Int): UiText =
  * koennen.
  */
 private enum class OnboardingPage(
-    @StringRes val titleRes: Int,
+    @param:StringRes val titleRes: Int,
     val paragraphRes: List<Int>,
 ) {
     WELCOME(
@@ -604,7 +604,7 @@ private fun HealthConnectStep(appViewModel: AppViewModel) {
                         },
                     )
                 } catch (e: HealthSyncException) {
-                    status = e.message?.let(UiText::Plain)
+                    status = e.message.let(UiText::Plain)
                 } finally {
                     busy = false
                 }

@@ -237,7 +237,7 @@ import de.trailscape.core.i18n.coreTexts
 private enum class TopLevelDestination(
     val tab: AppTab,
     val route: String,
-    @StringRes val labelRes: Int,
+    @param:StringRes val labelRes: Int,
     val icon: ImageVector,
 ) {
     HOME(AppTab.HOME, "heute", R.string.shell_nav_today_label, Icons.Outlined.Today),

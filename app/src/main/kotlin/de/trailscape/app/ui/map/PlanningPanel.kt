@@ -242,7 +242,7 @@ internal fun PlanningSheet(
                 if (hasRoute) {
                     Column {
                         ElevationProfile(
-                            points = route!!.points,
+                            points = route.points,
                             lineColor = MaterialTheme.colorScheme.primary,
                             onHover = onHoverPoint,
                         )
