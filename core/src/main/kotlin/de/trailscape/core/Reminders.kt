@@ -342,8 +342,8 @@ private fun dailySessionNotice(now: LocalDateTime, plan: TrainingPlan?, texts: C
  * Gefahrene gegen geplante Kilometer der laufenden Woche.
  *
  * Ohne laufende Planwoche gibt es keine geplanten Kilometer und damit keinen
- * Vergleich — dann bleibt es still, statt eine nackte Wochensumme zu melden,
- * die niemand bestellt hat.
+ * Vergleich mit dem Plan — dann gibt es stattdessen den Rueckblick auf die
+ * Woche ([weeklyRecapNotice]), auch fuer alle ganz ohne Plan.
  *
  * Gerundet auf ganze Kilometer: In einer Benachrichtigung ist die
  * Nachkommastelle Ballast, und das Planziel ist ohnehin ganzzahlig.
@@ -354,8 +354,8 @@ private fun weeklyReviewNotice(
     rides: List<RideInfo>,
     texts: CoreTexts,
 ): ReminderNotice? {
-    if (plan == null) return null
-    val week = activeWeek(plan, dartEpochMs(now)) ?: return null
+    val week = plan?.let { activeWeek(it, dartEpochMs(now)) }
+        ?: return weeklyRecapNotice(now.toLocalDate(), rides, texts)
     val ridden = dartRound(weekKm(week, rides)).toInt()
 
     return ReminderNotice(
@@ -364,6 +364,40 @@ private fun weeklyReviewNotice(
         text = texts.today.reminderWeeklyReview(ridden, week.targetKm),
     )
 }
+
+/**
+ * Die Wochenrueckschau fuer alle ohne laufende Planwoche: Kilometer und Touren
+ * der laufenden Woche ([weeklyRecap]), verglichen mit der Vorwoche.
+ *
+ * Die Meldung kommt Sonntagabend, die laufende Woche ist also die, die es zu
+ * betrachten gilt. **Ohne Tour in dieser Woche bleibt es still** — „0 km in
+ * 0 Touren" waere eine Rueckschau, die niemand bestellt hat; dafuer ist der
+ * Anstupser da. Eine Serie wird erst ab [reminderRecapStreakMinWeeks] Wochen
+ * erwaehnt: „1 Woche in Folge" ist kein Lob, sondern der Normalfall.
+ */
+private fun weeklyRecapNotice(today: LocalDate, rides: List<RideInfo>, texts: CoreTexts): ReminderNotice? {
+    val recap = weeklyRecap(rideFacts(rides) { dartLocalOf(it).toLocalDate() }, today)
+    if (recap.totals.rides == 0) return null
+
+    val summary = texts.today.reminderWeeklyRecap(
+        km = dartRound(recap.totals.km).toInt(),
+        rides = recap.totals.rides,
+        changePct = recap.kmChangePct,
+    )
+    val text = if (recap.streakWeeks >= reminderRecapStreakMinWeeks) {
+        summary + " " + texts.today.reminderWeeklyRecapStreak(recap.streakWeeks)
+    } else {
+        summary
+    }
+    return ReminderNotice(
+        kind = ReminderKind.WOCHENRUECKSCHAU,
+        title = texts.today.reminderWeeklyReviewTitle(),
+        text = text,
+    )
+}
+
+/** Ab wie vielen Wochen in Folge die Rueckschau die Serie nennt. */
+const val reminderRecapStreakMinWeeks: Int = 2
 
 /**
  * Der Anstupser nach [reminderNudgeAfterDays] Tagen ohne Aufzeichnung.
