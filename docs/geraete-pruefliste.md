@@ -82,12 +82,19 @@ gelten.
 ## Galaxy Watch
 
 - [ ] Aufzeichnung mit der Uhr starten und beenden funktioniert unverändert.
-- [ ] Nach dem Beenden zeigt die Uhr kurz, was die Tour gebracht hat (falls
-      dieser Stand die Funktion schon enthält, siehe
-      `docs/wear-motivation.md`).
+- [ ] Aufzeichnung **an der Uhr** beenden, wenn die Tour etwas gebracht hat
+      (Bestwert, Wochenziel, Serie): Stehen auf dem Abschlussbild der Uhr bis
+      zu zwei Zeilen dazu? Passen sie auf das runde Display? Kommen sie an,
+      solange das Abschlussbild noch offen ist?
+- [ ] Sprache der Zeilen: Sie folgen der Sprache der Handy-App, nicht der der
+      Uhr.
+- [ ] Die Uhr-App geschlossen, Tour beendet: Kommen die Zeilen trotzdem an?
 
 ## Bekannte offene Punkte
 
+- Wird die Tour am Handy beendet, erreicht die Uhr ihr Abschlussbild nicht von
+  selbst (war schon vorher so) und zeigt die Zeilen erst, wenn auch sie
+  gestoppt wird.
 - Die Uhr zeigt Serie und Wochenziel noch nicht auf einen Blick. Der Vorschlag
   dafür steht in `docs/wear-motivation.md`.
 - Das Jahresziel ist nicht Teil des Selfhost-Syncs.
