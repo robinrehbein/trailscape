@@ -219,6 +219,45 @@ class ExportTest {
     }
 
     @Test
+    fun `Roundtrip erhaelt das Jahresziel samt Starttag`() {
+        val goal = YearGoal(targetKm = 4000, since = LocalDate.of(2026, 3, 9))
+        val json = buildBackupJson(listOf(ride()), null, yearGoal = goal)
+        assertEquals(goal, parseBackupJson(json, texts = CoreTextsDe).yearGoal)
+
+        val at = 1_700_000_000_000L
+        val streamed = StringBuilder()
+        writeBackupJson(streamed, listOf(ride()).asSequence(), null, exportedAtMs = at, yearGoal = goal)
+        assertEquals(buildBackupJson(listOf(ride()), null, exportedAtMs = at, yearGoal = goal), streamed.toString())
+    }
+
+    @Test
+    fun `Backup ohne Jahresziel hat kein Feld und liest sich wie bisher`() {
+        val json = buildBackupJson(listOf(ride()), null)
+        assertTrue(!json.contains("yearGoal"))
+        val data = parseBackupJson(json, texts = CoreTextsDe)
+        assertNull(data.yearGoal)
+        assertEquals(1, data.rides.size)
+    }
+
+    @Test
+    fun `unlesbares Jahresziel wird ignoriert und der Import gelingt`() {
+        val bad = listOf(
+            "\"nope\"",
+            "{\"targetKm\": \"viel\", \"since\": \"2026-01-01\"}",
+            "{\"targetKm\": 4000, \"since\": \"gestern\"}",
+            "{\"targetKm\": -5, \"since\": \"2026-01-01\"}",
+            "{\"targetKm\": 4000}",
+            "null",
+        )
+        for (value in bad) {
+            val raw = """{"app": "trailscape", "backupVersion": 1, "yearGoal": $value, "rides": []}"""
+            val data = parseBackupJson(raw, texts = CoreTextsDe)
+            assertNull(data.yearGoal, value)
+            assertTrue(data.rides.isEmpty())
+        }
+    }
+
+    @Test
     fun `leere Tourenliste erzeugt gueltiges Backup mit leerer Liste`() {
         val json = buildBackupJson(emptyList(), null)
         val data = parseBackupJson(json, texts = CoreTextsDe)

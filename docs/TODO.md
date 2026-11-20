@@ -69,9 +69,9 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
 
 ## Ideen
 
-- **Jahresziel ins Backup.** Das Jahresziel liegt im Schluessel-Wert-Speicher
-  (`YEAR_GOAL_STORAGE_KEY`) und wandert bisher weder ins JSON-Backup noch in
-  den Selfhost-Sync.
+- **Jahresziel in den Selfhost-Sync.** Das Jahresziel liegt im
+  Schluessel-Wert-Speicher (`YEAR_GOAL_STORAGE_KEY`); im JSON-Backup ist es
+  (Feld `yearGoal`), im Selfhost-Sync noch nicht.
 - **Motivation auf der Uhr.** Wochenserie und naechste Bestweite als Zeile der
   Wear-Kachel bzw. der Abschlussanzeige nach einer Uhr-Aufzeichnung.
 

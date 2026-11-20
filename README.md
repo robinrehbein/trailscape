@@ -87,8 +87,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Aufzeichnung (Schalter unter Einstellungen → Strava, ab Werk aus). Ohne
   Verbindung geht nichts an Strava. Nur in Builds mit hinterlegten
   Strava-App-Zugangsdaten sichtbar
-- Backup: alle Touren plus Trainingsprofil als eine JSON-Datei exportieren und
-  wieder importieren
+- Backup: alle Touren, Trainingsprofil und Jahresziel als eine JSON-Datei
+  exportieren und wieder importieren
 
 **Karte & Planung**
 - MapLibre-Karte mit sechs Kartenstilen zur Auswahl (Straßenkarte, CyclOSM,
@@ -357,7 +357,7 @@ die alte Version. Einmalig ist eine Neuinstallation nötig:
 3. `trailscape.apk` aus dem `latest`-Release installieren
 4. **Mehr → Daten & Backup → Backup importieren**, die Datei auswählen
 
-Damit sind alle Touren und das Trainingsprofil übernommen. Nicht im Backup
+Damit sind alle Touren, das Trainingsprofil und das Jahresziel übernommen. Nicht im Backup
 enthalten sind heruntergeladene Offline-Karten — die lädt man neu.
 
 Ab Version 2.x sind Updates wieder normale Installationen über die

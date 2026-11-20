@@ -779,6 +779,7 @@ class AppViewModel(
                 out = out,
                 rides = summaries.asSequence().mapNotNull { rideStorage.loadRide(it.id) },
                 profile = _profile.value,
+                yearGoal = _yearGoal.value,
             )
         }
     }
@@ -1939,6 +1940,20 @@ class AppViewModel(
      * behaelt den Tag, ab dem das Soll laeuft ([YearGoal.since]) — sonst
      * liesse sich ein Rueckstand durch erneutes Speichern wegklicken.
      */
+    /**
+     * Stellt ein Jahresziel aus einem Backup wieder her — mit [YearGoal.since]
+     * wie gesichert (anders als [setYearGoalKm], das den Starttag neu setzt).
+     */
+    fun restoreYearGoal(goal: YearGoal) {
+        val value = goal.copy(targetKm = goal.targetKm.coerceIn(minYearGoalKm, maxYearGoalKm))
+        _yearGoal.value = value
+        viewModelScope.launch {
+            withContext(io) {
+                runCatching { keyValueStore.setString(YEAR_GOAL_STORAGE_KEY, value.encode()) }
+            }
+        }
+    }
+
     fun setYearGoalKm(km: Int?) {
         val today = LocalDate.now()
         val value = km?.let {
