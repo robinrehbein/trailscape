@@ -22,3 +22,6 @@ local.properties
 /keystore.jks
 *.jks
 *.keystore
+
+# Arbeitsverzeichnisse paralleler Claude-Agenten (git worktrees) — nie einchecken.
+.claude/worktrees/
