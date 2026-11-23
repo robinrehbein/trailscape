@@ -28,7 +28,10 @@ import kotlin.system.exitProcess
  * testworld --out <dir> [--quality …]
  * check <dir>
  * models --out <dir>
+ * catalog-routes [--only a,b]
+ * catalog-build --out <dir> [--only a,b] [--quality …] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]
  * ```
+ * Katalog bekannter Strecken: `Catalog.kt`, docs/indoor/catalog.md.
  * Relative Pfade gelten ab dem Projektverzeichnis (`:indoor-dev:run` startet dort).
  * Exit-Code 0 = in Ordnung, 1 = Bau gescheitert oder Vertragsverstoesse, 2 = falscher Aufruf.
  */
@@ -51,10 +54,12 @@ private const val USAGE = """Aufruf:
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
   check <dir>
-  models --out <dir>"""
+  models --out <dir>
+  catalog-routes [--only a,b]
+  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]"""
 
 /** Cache der Geodaten (git-ignoriert). */
-private const val CACHE_DIR = "tool/indoor-dev/cache"
+private const val CACHE_DIR = CACHE_DIR_TOOL
 
 private class UsageError(message: String) : Exception(message)
 
@@ -98,6 +103,18 @@ private fun run(all: List<String>): Int {
         "testworld" -> testworld(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "models" -> models(Args(rest, emptySet()))
+        "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
+        "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline")).let { a ->
+            catalogBuild(
+                out = File(a.req("out")),
+                only = a.opt("only"),
+                qualityOverride = a.opt("quality")?.let { a.quality() },
+                appCatalog = a.opt("app-catalog")?.let(::File),
+                keepGoing = a.flag("keep-going"),
+                noAerial = a.flag("no-aerial"),
+                offline = a.flag("offline"),
+            )
+        }
         else -> throw UsageError("unbekannter Befehl: $cmd")
     }
 }
