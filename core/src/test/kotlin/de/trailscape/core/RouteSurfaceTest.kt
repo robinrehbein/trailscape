@@ -395,4 +395,144 @@ class RouteSurfaceTest {
         }
         fail("lookups.dat nicht gefunden (BRouter-Submodul fehlt?)")
     }
+
+    // -----------------------------------------------------------------------
+    // Wegabschnitte (PlannedRoute.waySections) fuer das Indoor-Training
+    // -----------------------------------------------------------------------
+
+    private val allFixtures = listOf(
+        "online-gravel.geojson", "online-trekking.geojson", "online-shortest.geojson",
+        "offline-gravel.geojson", "offline-shortest.geojson",
+    )
+
+    @Test
+    fun `echte Antworten fuellen die Wegabschnitte, Summe ist track-length`() {
+        for (name in allFixtures) {
+            val route = parseBrouterGeoJson(fixture(name), texts = CoreTextsDe)
+            val sections = assertNotNull(route.waySections, name)
+            assertTrue(sections.size > 5, name)
+            assertTrue(sections.all { it.lengthM > 0 && it.wayTags.isNotBlank() }, name)
+            assertEquals(route.distanceKm * 1000, sections.sumOf { it.lengthM }, 1e-6, name)
+        }
+    }
+
+    @Test
+    fun `Wegabschnitte ergeben dieselben Belagssummen wie surfaceBreakdownFromMessages`() {
+        for (name in allFixtures) {
+            val route = parseBrouterGeoJson(fixture(name), texts = CoreTextsDe)
+            val sections = assertNotNull(route.waySections, name)
+            val paved = sections.filter { classifySurface(it.wayTags) == SurfaceClass.PAVED }.sumOf { it.lengthM }
+            val unpaved = sections.filter { classifySurface(it.wayTags) == SurfaceClass.UNPAVED }.sumOf { it.lengthM }
+            assertEquals(assertNotNull(route.pavedKm), paved / 1000, 1e-9, name)
+            assertEquals(assertNotNull(route.unpavedKm), unpaved / 1000, 1e-9, name)
+        }
+    }
+
+    @Test
+    fun `erster Wegabschnitt der Gravel-Antwort wie in der Tabelle`() {
+        val route = parseBrouterGeoJson(fixture("online-gravel.geojson"), texts = CoreTextsDe)
+        val first = assertNotNull(route.waySections).first()
+        assertEquals(42.0, first.lengthM)
+        assertEquals("highway=track surface=grass tracktype=grade5 foot=yes bicycle=yes", first.wayTags)
+    }
+
+    @Test
+    fun `Engine und Server liefern dieselben Wegabschnitte`() {
+        val online = parseBrouterGeoJson(fixture("online-gravel.geojson"), texts = CoreTextsDe)
+        val offline = parseBrouterGeoJson(fixture("offline-gravel.geojson"), texts = CoreTextsDe)
+        assertEquals(online.waySections, offline.waySections)
+    }
+
+    @Test
+    fun `Minimaltabelle ergibt die Wegabschnitte in Reihenfolge`() {
+        val route = parseBrouterGeoJson(
+            geoJson("[$header, ${row("600", "highway=track surface=gravel")}, ${row("400", "highway=tertiary")}]"),
+            texts = CoreTextsDe,
+        )
+        assertEquals(
+            listOf(RouteWaySection(600.0, "highway=track surface=gravel"), RouteWaySection(400.0, "highway=tertiary")),
+            route.waySections,
+        )
+    }
+
+    @Test
+    fun `Zeilen mit Laenge 0 entfallen`() {
+        val sections = waySectionsFromMessages(
+            Json.parseToJsonElement(
+                "[$header, ${row("0", "highway=path")}, ${row("250", "surface=sand")}, ${row("0", "surface=asphalt")}]",
+            ),
+        )
+        assertEquals(listOf(RouteWaySection(250.0, "surface=sand")), sections)
+    }
+
+    @Test
+    fun `kaputte messages ergeben keine Wegabschnitte, die Route bleibt`() {
+        val broken = listOf(
+            null,
+            "null",
+            "\"kaputt\"",
+            "{}",
+            "[]",
+            "[$header]",
+            """[["Longitude","Latitude","Distance"], ["1","2","300"]]""",
+            """[["Longitude","WayTags"], ["1","highway=track"]]""",
+            "[$header, \"x\"]",
+            """[$header, ["13000000","51000000","100","300"]]""",
+            "[$header, ${row("abc", "highway=track surface=gravel")}]",
+            "[$header, ${row("-5", "highway=track surface=gravel")}]",
+            "[$header, ${row("NaN", "highway=track surface=gravel")}]",
+            "[$header, ${row("Infinity", "highway=track surface=gravel")}]",
+            "[$header, ${row("500", "surface=gravel")}, ${row("x", "surface=asphalt")}]",
+            """[$header, ["13000000","51000000","100","300","1000","0","0","0","0",{},"","0","0"]]""",
+            "[$header, ${row("0", "highway=track surface=gravel")}]",
+        )
+        for (messages in broken) {
+            val route = parseBrouterGeoJson(geoJson(messages), texts = CoreTextsDe)
+            assertEquals(2, route.points.size, "messages=$messages")
+            assertNull(route.waySections, "messages=$messages")
+            // Gleiches Urteil wie der Schotteranteil.
+            assertNull(route.pavedKm, "messages=$messages")
+        }
+        assertNull(waySectionsFromMessages(null))
+    }
+
+    @Test
+    fun `fetchRoute reicht die Wegabschnitte durch`() {
+        val body = fixture("online-trekking.geojson")
+        val route = fetchRoute(
+            waypoints = listOf(Waypoint(51.093, 13.78), Waypoint(51.066, 13.88)),
+            profileId = "trekking",
+            client = { HttpResponse(200, body) },
+            sleeper = {},
+            texts = CoreTextsDe,
+        )
+        assertEquals(parseBrouterGeoJson(body, texts = CoreTextsDe).waySections, route.waySections)
+    }
+
+    private fun legWith(lat: Double, sections: List<RouteWaySection>?) =
+        leg(lat, 4.0, 6.0).copy(waySections = sections)
+
+    @Test
+    fun `concatRouteLegs haengt die Wegabschnitte aller Legs aneinander`() {
+        val a = listOf(RouteWaySection(4000.0, "highway=tertiary"), RouteWaySection(6000.0, "highway=track"))
+        val b = listOf(RouteWaySection(10000.0, "surface=gravel"))
+        val c = listOf(RouteWaySection(3000.0, "surface=sand"), RouteWaySection(7000.0, "highway=path"))
+        val merged = concatRouteLegs(listOf(legWith(50.0, a), legWith(50.1, b), legWith(50.2, c)))
+        assertEquals(a + b + c, merged.waySections)
+        assertEquals(merged.distanceKm * 1000, assertNotNull(merged.waySections).sumOf { it.lengthM }, 1e-9)
+    }
+
+    @Test
+    fun `ein Leg ohne Wegabschnitte macht alle null`() {
+        val a = listOf(RouteWaySection(10000.0, "highway=tertiary"))
+        val merged = concatRouteLegs(listOf(legWith(50.0, a), legWith(50.1, null), legWith(50.2, a)))
+        assertNull(merged.waySections)
+        assertEquals(30.0, merged.distanceKm, 1e-9)
+        // Der grobe Belag bleibt davon unberuehrt (eigene Regel).
+        assertEquals(12.0, assertNotNull(merged.pavedKm), 1e-9)
+        assertNull(concatRouteLegs(emptyList()).waySections)
+        // Ein einzelnes Leg: unveraendert.
+        assertEquals(a, concatRouteLegs(listOf(legWith(50.0, a))).waySections)
+        assertEquals(emptyList(), concatRouteLegs(listOf(legWith(50.0, emptyList()))).waySections)
+    }
 }

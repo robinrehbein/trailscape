@@ -12,14 +12,11 @@ import de.trailscape.core.Waypoint
  * EINSTIEGSDATEI (docs/indoor.md, Abschnitt 3). Besitzer: Slice indoor-core.
  *
  * Die **Signaturen** hier sind Vertrag: Die anderen Slices rufen genau diese
- * Funktionen auf, waehrend indoor-core sie parallel umsetzt. Der Architekt hat
- * nur Platzhalter hinterlegt, die werfen — indoor-core ersetzt die Ruempfe
- * (die Umsetzung selbst gehoert in eigene Dateien dieses Pakets) und laesst
- * Namen, Parameter und Rueckgabetypen unveraendert.
+ * Funktionen auf. Die Ruempfe leiten nur weiter; die Umsetzung steht in
+ * eigenen Dateien dieses Pakets (IndoorRouteBuilder.kt, RiderSetupFrom.kt,
+ * ErgWorkouts.kt, IndoorSessionImpl.kt, FtmsTrainer.kt, DemoTrainerImpl.kt,
+ * ZwiftClickShifter.kt). Entscheidungen und Annahmen: docs/indoor/core.md.
  */
-
-private fun offen(was: String): Nothing =
-    throw NotImplementedError("Indoor: $was ist noch nicht umgesetzt (Slice indoor-core)")
 
 /**
  * Baut aus den Punkten einer geplanten Runde oder gefahrenen Tour die
@@ -39,7 +36,7 @@ fun buildIndoorRoute(
     points: List<TrackPoint>,
     waySections: List<RouteWaySection>?,
     source: IndoorRouteSource,
-): IndoorRoute? = offen("buildIndoorRoute")
+): IndoorRoute? = buildIndoorRouteImpl(name, points, waySections, source)
 
 /**
  * Stuetzpunkte fuer den nachtraeglichen Belagsabgleich einer gespeicherten
@@ -49,10 +46,10 @@ fun buildIndoorRoute(
  * dass der Router der Spur folgt, und hoechstens so viele, wie eine
  * Routing-Anfrage vertraegt. Leer, wenn die Spur dafuer nicht taugt.
  */
-fun surfaceRematchWaypoints(points: List<TrackPoint>): List<Waypoint> = offen("surfaceRematchWaypoints")
+fun surfaceRematchWaypoints(points: List<TrackPoint>): List<Waypoint> = surfaceRematchWaypointsImpl(points)
 
 /** Fahrer und Rad aus dem Trainingsprofil (Gewicht, Setup-Masse, CdA, Crr, FTP, Wirkungsgrad). */
-fun riderSetupFrom(profile: TrainingProfile): RiderSetup = offen("riderSetupFrom")
+fun riderSetupFrom(profile: TrainingProfile): RiderSetup = riderSetupFromImpl(profile)
 
 /**
  * Die ERG-Einheit zur Planeinheit [session] — Aufwaermen, Belastungen nach
@@ -61,16 +58,16 @@ fun riderSetupFrom(profile: TrainingProfile): RiderSetup = offen("riderSetupFrom
  * @param title Titel fuer die Anzeige (`sessionTitle(session, texts)`).
  * @return `null`, wenn sich die Einheit nicht fuer die Rolle eignet (das Zielevent selbst).
  */
-fun ergWorkoutFor(session: TrainingSession, title: String): ErgWorkout? = offen("ergWorkoutFor")
+fun ergWorkoutFor(session: TrainingSession, title: String): ErgWorkout? = ergWorkoutForImpl(session, title)
 
 /** Eine neue Sitzung in der Phase [IndoorPhase.READY]. */
-fun createIndoorSession(config: IndoorSessionConfig): IndoorSession = offen("createIndoorSession")
+fun createIndoorSession(config: IndoorSessionConfig): IndoorSession = indoorSession(config)
 
 /** Der FTMS-Trainer hinter dem Rohr [link] (Indoor Bike Data, Control Point, Wiederholen). */
-fun createFtmsTrainer(link: BleLink): IndoorTrainer = offen("createFtmsTrainer")
+fun createFtmsTrainer(link: BleLink): IndoorTrainer = ftmsTrainer(link)
 
 /** Der simulierte Trainer — braucht kein Rohr und keine Berechtigung. */
-fun createDemoTrainer(): DemoTrainer = offen("createDemoTrainer")
+fun createDemoTrainer(): DemoTrainer = demoTrainer()
 
 /** Der Zwift-Click-Schalttaster hinter dem Rohr [link]. */
-fun createZwiftClickShifter(link: BleLink): IndoorShifter = offen("createZwiftClickShifter")
+fun createZwiftClickShifter(link: BleLink): IndoorShifter = zwiftClickShifter(link)

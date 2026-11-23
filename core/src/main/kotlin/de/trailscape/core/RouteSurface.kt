@@ -188,6 +188,45 @@ internal fun surfaceBreakdownFromMessages(messages: JsonElement?): SurfaceBreakd
 }
 
 /**
+ * Liest die `messages`-Tabelle einer BRouter-Antwort als Folge von
+ * Wegabschnitten in Fahrtrichtung — Grundlage der feinen Belagsklassen des
+ * Indoor-Trainings (`PlannedRoute.waySections`, docs/indoor.md Abschnitt 4).
+ *
+ * Dieselben **Alles-oder-nichts**-Regeln wie [surfaceBreakdownFromMessages]
+ * (und bewusst eine eigene Funktion, damit jene im Verhalten unangetastet
+ * bleibt): `null` bei fehlender oder falsch getypter Tabelle, Kopfzeile ohne
+ * `Distance`/`WayTags`, einer Zeile, die zu kurz ist, keine endliche,
+ * nichtnegative Laenge oder keine `WayTags`-Zelle traegt, und bei einer
+ * Gesamtlaenge von 0. Zeilen mit Laenge 0 sind gueltig, entfallen aber — sie
+ * tragen nichts zur Strecke bei. Die `WayTags` bleiben roh (Format siehe
+ * [parseWayTags]); die Summe der Laengen ist exakt `track-length`.
+ */
+internal fun waySectionsFromMessages(messages: JsonElement?): List<RouteWaySection>? {
+    val rows = messages as? JsonArray ?: return null
+    val header = rows.firstOrNull() as? JsonArray ?: return null
+    val names = header.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+    val distanceIdx = names.indexOf("Distance")
+    val tagsIdx = names.indexOf("WayTags")
+    if (distanceIdx < 0 || tagsIdx < 0) return null
+
+    val out = ArrayList<RouteWaySection>(rows.size - 1)
+    var totalM = 0.0
+    for (i in 1 until rows.size) {
+        val row = rows[i] as? JsonArray ?: return null
+        if (row.size <= max(distanceIdx, tagsIdx)) return null
+        val distanceM = (row[distanceIdx] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: return null
+        if (!distanceM.isFinite() || distanceM < 0) return null
+        val tags = (row[tagsIdx] as? JsonPrimitive)?.content ?: return null
+        if (distanceM > 0) {
+            out.add(RouteWaySection(lengthM = distanceM, wayTags = tags))
+            totalM += distanceM
+        }
+    }
+    if (totalM <= 0) return null
+    return out
+}
+
+/**
  * Hoechster Anteil unklassifizierter Strecke, bei dem der Schotteranteil noch
  * angezeigt wird. Darueber waere die Zahl mehr Vermutung als Messung —
  * typisch fuer `shortest`, das `surface` gar nicht ausgibt, oder fuer Gegenden
