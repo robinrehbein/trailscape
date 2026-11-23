@@ -21,6 +21,8 @@
     <string name="indoor_ble_scan_running_label">Suche läuft …</string>
     <string name="indoor_ble_scan_stop_action">Stopp</string>
     <string name="indoor_ble_scan_hint">Die Suche dauert 20 Sekunden und findet Trainer (FTMS) und Schalttaster. Tritt kurz in die Pedale, damit der Trainer aufwacht, und drücke den Schalttaster einmal.</string>
+    <string name="indoor_ble_scan_blocked_hint">Erst die Berechtigung erteilen und Bluetooth einschalten – die Hinweise dazu stehen oben auf dieser Seite.</string>
+    <string name="indoor_ble_location_off_hint">Ohne eingeschalteten Standort findet Android unter Android 11 und älter keine Geräte. Schalte den Standort für die Suche kurz ein.</string>
     <string name="indoor_ble_scan_error">Die Suche ist fehlgeschlagen (Fehler %1$d). Versuche es in einer halben Minute noch einmal.</string>
     <string name="indoor_ble_found_title">Gefunden</string>
     <string name="indoor_ble_found_empty_hint">Noch nichts gefunden …</string>

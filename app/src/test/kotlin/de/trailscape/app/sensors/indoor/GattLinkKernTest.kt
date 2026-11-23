@@ -101,38 +101,94 @@ class GattLinkKernTest {
     }
 
     @Test
-    fun operationOhneAntwortScheitertNachFuenfSekunden() {
+    fun operationOhneAntwortScheitertNachFuenfSekundenUndVerbindetNeu() {
         bereit()
         kern.enqueue(GattOp.Lesen(svc, feature))
         kern.enqueue(GattOp.Lesen(svc, bikeData))
         takt.weiter(4_999)
         assertTrue(log.ergebnisse.isEmpty())
         takt.weiter(1)
-        assertEquals(listOf("READ $feature fail -1"), log.ergebnisse)
-        // Die naechste laeuft, die Verbindung bleibt.
-        assertEquals(2, port.gestartet.size)
-        assertEquals(0, port.schliessAufrufe)
-        // Eine spaete Antwort der abgelaufenen gehoert nicht zur laufenden.
+        // Haengender Stack: beide gescheitert, GATT geschlossen, Neuversuch geplant.
+        assertEquals(listOf("READ $feature fail -1", "READ $bikeData fail -1"), log.ergebnisse)
+        assertEquals(1, port.gestartet.size)
+        assertEquals(1, port.schliessAufrufe)
+        assertEquals(BleLinkState.RECONNECTING, kern.zustand)
+        // Die spaete Antwort der alten Verbindung geht ins Leere.
         kern.onGelesen(feature, byteArrayOf(1), 0)
-        assertEquals(1, log.ergebnisse.size)
-        kern.onGelesen(bikeData, byteArrayOf(2), 0)
-        assertEquals("READ $bikeData ok", log.ergebnisse.last())
+        assertEquals(2, log.ergebnisse.size)
+        takt.weiter(2_000)
+        assertEquals(2, port.verbindeAufrufe)
     }
 
     @Test
-    fun zweiFristablaeufeInFolgeVerbindenNeu() {
+    fun dreiSofortigeAblehnungenInFolgeVerbindenNeu() {
+        bereit()
+        port.startCode = 1201 // z. B. ERROR_GATT_WRITE_REQUEST_BUSY, verschoben
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0), mitAntwort = true))
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0), mitAntwort = true))
+        assertEquals(BleLinkState.READY, kern.zustand)
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0), mitAntwort = true))
+        assertEquals(List(3) { "WRITE $cp fail 1201" }, log.ergebnisse)
+        assertEquals(BleLinkState.RECONNECTING, kern.zustand)
+        assertEquals(1, port.schliessAufrufe)
+    }
+
+    @Test
+    fun eineAntwortPerCallbackSetztDieSofortAblehnungenZurueck() {
+        bereit()
+        port.startCode = 1201
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        port.startCode = 0
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        kern.onGelesen(feature, byteArrayOf(), 3)
+        port.startCode = 1201
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        assertEquals(BleLinkState.READY, kern.zustand)
+    }
+
+    @Test
+    fun erfolgreicheOperationenSetzenDenTaktNichtZurueck() {
+        // Ein Schalttaster, der nach dem Handschlag jedesmal trennt, soll nicht im 2-s-Takt haemmern.
+        bereit()
+        kern.onVerbindung(19, verbunden = false)
+        takt.weiter(2_000)
+        kern.onVerbindung(0, verbunden = true)
+        kern.onDiensteErkannt(0)
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        kern.onGelesen(feature, byteArrayOf(1), 0)
+        kern.onWert(bikeData, byteArrayOf(1), 1)
+        kern.onVerbindung(19, verbunden = false)
+        takt.weiter(4_999)
+        assertEquals(2, port.verbindeAufrufe)
+        takt.weiter(1)
+        assertEquals(3, port.verbindeAufrufe)
+    }
+
+    @Test
+    fun eineVerbindungDieFuenfzehnSekundenHieltSetztDenTaktZurueck() {
+        bereit()
+        kern.onVerbindung(19, verbunden = false)
+        takt.weiter(2_000)
+        kern.onVerbindung(0, verbunden = true)
+        kern.onDiensteErkannt(0)
+        takt.weiter(15_000)
+        kern.onVerbindung(19, verbunden = false)
+        takt.weiter(2_000)
+        assertEquals(3, port.verbindeAufrufe)
+    }
+
+    @Test
+    fun bluetoothAusOhneAbbruchMeldungWirdBemerkt() {
         bereit()
         kern.enqueue(GattOp.Lesen(svc, feature))
-        kern.enqueue(GattOp.Lesen(svc, bikeData))
-        kern.enqueue(GattOp.Mtu(247))
-        takt.weiter(5_000)
-        takt.weiter(5_000)
-        assertEquals(
-            listOf("READ $feature fail -1", "READ $bikeData fail -1", "MTU null fail -1"),
-            log.ergebnisse,
-        )
-        assertEquals(BleLinkState.RECONNECTING, kern.zustand)
-        assertTrue(port.schliessAufrufe >= 1)
+        port.bluetooth = false
+        takt.weiter(2_000)
+        assertEquals(BleLinkState.BLUETOOTH_OFF, kern.zustand)
+        assertEquals(listOf("READ $feature fail -9"), log.ergebnisse)
+        assertEquals(1, port.schliessAufrufe)
+        port.bluetooth = true
         takt.weiter(2_000)
         assertEquals(2, port.verbindeAufrufe)
     }
@@ -196,20 +252,6 @@ class GattLinkKernTest {
         takt.weiter(4_999)
         assertEquals(2, port.verbindeAufrufe)
         takt.weiter(1)
-        assertEquals(3, port.verbindeAufrufe)
-    }
-
-    @Test
-    fun ersteErfolgreicheOperationSetztDenTaktZurueck() {
-        bereit()
-        kern.onVerbindung(19, verbunden = false)
-        takt.weiter(2_000)
-        kern.onVerbindung(0, verbunden = true)
-        kern.onDiensteErkannt(0)
-        kern.enqueue(GattOp.Lesen(svc, feature))
-        kern.onGelesen(feature, byteArrayOf(1), 0)
-        kern.onVerbindung(19, verbunden = false)
-        takt.weiter(2_000)
         assertEquals(3, port.verbindeAufrufe)
     }
 

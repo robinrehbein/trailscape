@@ -58,6 +58,7 @@ import de.trailscape.app.sensors.locationServicesNeeded
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
+import de.trailscape.app.ui.map.isLocationEnabled
 import de.trailscape.app.ui.more.SettingsHint
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.indoor.IndoorDeviceRole
@@ -90,6 +91,7 @@ internal fun IndoorDevicesSectionMitZustand(modifier: Modifier = Modifier, syste
     var bluetoothOn by remember { mutableStateOf(bluetoothEnabled(context)) }
     var permissionGranted by remember { mutableStateOf(hasBluetoothPermissions(context)) }
     var permanentlyDenied by remember { mutableStateOf(false) }
+    var standortAn by remember { mutableStateOf(isLocationEnabled(context)) }
     val supported = remember { bluetoothLeSupported(context) }
 
     LifecycleStartEffect(scanner) {
@@ -103,6 +105,7 @@ internal fun IndoorDevicesSectionMitZustand(modifier: Modifier = Modifier, syste
             while (true) {
                 bluetoothOn = bluetoothEnabled(context)
                 permissionGranted = hasBluetoothPermissions(context)
+                standortAn = isLocationEnabled(context)
                 delay(1_000)
             }
         }
@@ -140,6 +143,7 @@ internal fun IndoorDevicesSectionMitZustand(modifier: Modifier = Modifier, syste
             scanning = scanning,
             scanFehler = scanFehler,
             funde = funde,
+            standortAus = locationServicesNeeded(Build.VERSION.SDK_INT) && !standortAn,
         ),
         modifier = modifier,
         onScan = { scanner.start() },
@@ -181,6 +185,8 @@ internal data class IndoorDevicesUiState(
     val scanning: Boolean,
     val scanFehler: Int?,
     val funde: List<IndoorFund>,
+    /** Unter Android 12 ist der Standortdienst aus — dann findet die Suche nichts. */
+    val standortAus: Boolean = false,
 )
 
 /**
@@ -317,6 +323,18 @@ internal fun IndoorDevicesContent(
             }
         }
         Spacer(Modifier.height(8.dp))
+        when {
+            // Unter Mehr → Sensoren steht der Hinweis oben auf der Seite, oft
+            // ausserhalb des Bildes — der gesperrte Knopf sagt, wo es weitergeht.
+            !state.systemHinweise && (!state.permissionGranted || !state.bluetoothOn) -> {
+                SettingsHint(stringResource(R.string.indoor_ble_scan_blocked_hint), color = warnung)
+                Spacer(Modifier.height(4.dp))
+            }
+            state.permissionGranted && state.standortAus -> {
+                SettingsHint(stringResource(R.string.indoor_ble_location_off_hint), color = warnung)
+                Spacer(Modifier.height(4.dp))
+            }
+        }
         SettingsHint(stringResource(R.string.indoor_ble_scan_hint))
         state.scanFehler?.let { code ->
             Spacer(Modifier.height(8.dp))

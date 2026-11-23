@@ -38,22 +38,37 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
 **Verbindung (Rohr)**
 - Thread ist der vorhandene „trailscape-ble“ (`BleSensors.bleThreadHandler()`).
 - Blockaden (Bluetooth aus, keine Berechtigung) werden alle 2 s neu geprüft statt
-  per `BroadcastReceiver`: kein Receiver, nichts abzumelden.
+  per `BroadcastReceiver`: kein Receiver, nichts abzumelden. Ebenso prüft der Kern
+  in den aktiven Phasen (Aufbau, Diensterkennung, READY) alle 2 s, ob Bluetooth
+  noch an ist — nicht jedes Gerät meldet beim Ausschalten einen
+  Verbindungsabbruch, und ohne diese Wache bliebe das Rohr für immer „READY“.
 - Zustandsmeldung `CONNECTING` beim ersten Aufbau und nach dem Ende einer
   Blockade, `RECONNECTING` nach einem Abbruch und während der Neuversuche. Kein
   Wechsel bei jedem Versuch.
-- Der Fehlversuchszähler fällt auf null bei der ersten erfolgreichen Operation
-  oder dem ersten Wert (wie bei den Sensoren bei Daten). Takt
-  `neuerVersuchNachMs`: 2/5/10/30 s.
+- Der Fehlversuchszähler fällt erst auf null, wenn eine Verbindung 15 s lang
+  READY gehalten hat — nicht schon bei einer erfolgreichen Operation oder einem
+  Wert: Ein Schalttaster, der nach dem Handschlag jedesmal trennt, würde sonst im
+  2-s-Takt neu verbunden (Gefahr von Status 133). Takt `neuerVersuchNachMs`:
+  2/5/10/30 s.
 - Frist 20 s für Verbindungsaufbau und Diensterkennung.
-- Operationsfrist 5 s. Zwei Fristabläufe in Folge bedeuten: Der Stack hängt,
-  also trennen und neu verbinden.
+- Operationsfrist 5 s. Schon **ein** Fristablauf heißt: Der Stack hängt. Android
+  hält intern „beschäftigt“, bis der Callback doch noch kommt; jede weitere
+  Operation scheiterte sofort, und ein später Callback könnte der nächsten
+  gleichartigen Operation (bei FTMS immer der Control Point) zugeordnet werden.
+  Das Rohr meldet die Operation nach 5 s als gescheitert, trennt und verbindet
+  neu; die neue GATT-Instanz verwirft alles Späte sicher. Ebenso drei synchrone
+  Ablehnungen in Folge (Stack beschäftigt, `ERROR_GATT_WRITE_REQUEST_BUSY`); eine
+  Antwort per Callback setzt diese Zählung zurück.
 - Bei einem Abbruch werden alle offenen Operationen mit `ok = false` gemeldet,
   danach der Zustand. Nach `close()` kommt kein Ergebnis mehr, nur `CLOSED`.
 - Status 133 gilt als Abbruch: `disconnect` und `close`, Neuversuch nach dem Takt.
-- Späte Antworten nach einem Fristablauf werden über Art und Characteristic dem
-  laufenden Auftrag zugeordnet und sonst verworfen. Callbacks einer ersetzten
-  GATT-Instanz werden verworfen.
+- Antworten werden über Art und Characteristic dem laufenden Auftrag zugeordnet,
+  sonst verworfen. Callbacks einer ersetzten GATT-Instanz werden verworfen.
+- Ein `IllegalArgumentException` der Plattform beim Start (etwa ein Write über
+  512 Byte ab API 33) wird zur Ablehnung, nicht zum Absturz.
+- Unter Mehr → Sensoren zeigt der gesperrte Suchknopf eine Zeile, dass die
+  Hinweise oben stehen; unter Android 12 warnt der Abschnitt, wenn der
+  Standortdienst aus ist (sonst bliebe die Suche wortlos leer).
 - `subscribe` prüft die Property (NOTIFY/INDICATE) und den CCCD vor dem
   Schreiben.
 - Eigene negative Statuscodes; `BluetoothStatusCodes`-Fehler ab API 33 als
@@ -66,8 +81,10 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
 - `BleSensors.kt` bekam `bleThreadHandler()`, damit das Rohr den vorhandenen
   Thread „trailscape-ble“ teilt (Vertrag: „dem vorhandenen Thread“). Die Datei
   gehört zum Slice (`sensors/**`).
-- „Status 133 wie `BleSensorConnection`“ (Abschnitt 5.1) ist um zwei
-  Fristabläufe in Folge ergänzt: Auch sie führen zum Trennen und Neuverbinden.
+- „Status 133 wie `BleSensorConnection`“ (Abschnitt 5.1) ist ergänzt: Auch ein
+  Fristablauf einer Operation und drei synchrone Ablehnungen in Folge führen zum
+  Trennen und Neuverbinden. „Nach 5 s als Fehler melden“ bleibt erfüllt; die
+  Verbindung ist danach zusätzlich neu.
 
 ## Annahmen
 
@@ -102,6 +119,17 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
 - [ ] **Gerät mit leerem Namen:** „Unbenanntes Gerät“ in Liste und Dialogen.
 - [ ] **Drosselung:** Mehr als 5 Suchen in 30 s; die Fehlermeldung erscheint, die
       Suche geht danach wieder.
+- [ ] **Neuverbinden ohne vorherige Suche** (Risiko aus dem Review): Koppeln, Handy
+      neu starten oder Bluetooth aus/an, dann Indoor-Fahrt ohne neue Suche.
+      `getRemoteDevice(adresse)` kennt den Adresstyp nicht; Geräte mit
+      Random-Static-Adresse könnten dann bis zur nächsten Suche nicht verbinden
+      (20-s-Frist bzw. 133 in Schleife). Falls ja: vor dem ersten Versuch eine
+      kurze, auf die Adresse gefilterte Suche vorschalten (Bitte an indoor-ble
+      in der nächsten Runde) oder ab API 33 den Adresstyp beim Koppeln merken.
+- [ ] **Bluetooth am Handy aus, während der Trainer READY ist:** Meldet das Rohr
+      binnen etwa 2 s `BLUETOOTH_OFF`, auch wenn kein Abbruch-Callback kommt?
+- [ ] **Einzelner Fristablauf** (z. B. Trainer reagiert nicht auf ein Write):
+      Neuverbinden statt Folge von Sofort-Fehlern; FTMS richtet sich danach neu ein.
 - [ ] **30 Minuten Dauerverbindung** ohne Abbruch (Trainer und Schalttaster).
 - [ ] **MTU-Anfrage des Schalttasters:** Stört ein ungefragtes `onMtuChanged` die
       Warteschlange nicht?

@@ -21,6 +21,8 @@
     <string name="indoor_ble_scan_running_label">Searching …</string>
     <string name="indoor_ble_scan_stop_action">Stop</string>
     <string name="indoor_ble_scan_hint">The search takes 20 seconds and finds trainers (FTMS) and shifters. Pedal briefly to wake the trainer, and press the shifter once.</string>
+    <string name="indoor_ble_scan_blocked_hint">First grant the permission and turn on Bluetooth – the notes for both are at the top of this page.</string>
+    <string name="indoor_ble_location_off_hint">On Android 11 and older, Android finds no devices while location is off. Turn location on briefly for the search.</string>
     <string name="indoor_ble_scan_error">The search failed (error %1$d). Try again in half a minute.</string>
     <string name="indoor_ble_found_title">Found</string>
     <string name="indoor_ble_found_empty_hint">Nothing found yet …</string>

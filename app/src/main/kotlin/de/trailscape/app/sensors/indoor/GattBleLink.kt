@@ -48,8 +48,10 @@ import java.util.UUID
  * Ab Android 13 die neuen `writeCharacteristic(ch, wert, typ)` /
  * `writeDescriptor(d, wert)` mit Statuscode, darunter die alten mit
  * `value`-Feld. Fuer `onCharacteristicChanged`/`onCharacteristicRead` gibt es
- * beide Ueberladungen; die alte kehrt ab API 33 sofort zurueck, sonst kaeme
- * jeder Wert doppelt.
+ * beide Ueberladungen: Ab API 33 ruft Android die neue, deren
+ * Standard-Umsetzung die alte ruft — die hier aber ueberschrieben ist. Die
+ * Sperre in der alten ist deshalb nur Absicherung gegen Hersteller-Stacks,
+ * die beide rufen.
  *
  * Der Geraetename kommt nur aus dem gemerkten Eintrag; `device.name` wird nie
  * gelesen.
@@ -132,7 +134,15 @@ internal class GattBleLink(
         override fun serviceUuids(): Set<String> =
             gatt?.services.orEmpty().map { it.uuid.toString().lowercase() }.toSet()
 
-        override fun starte(op: GattOp): Int {
+        override fun starte(op: GattOp): Int = try {
+            starteAufGatt(op)
+        } catch (e: IllegalArgumentException) {
+            // z. B. writeCharacteristic mit mehr als 512 Byte ab API 33 —
+            // ein Fehler der Protokollschicht, kein Grund zum Absturz.
+            GattLinkKern.STATUS_ABGELEHNT
+        }
+
+        private fun starteAufGatt(op: GattOp): Int {
             val g = gatt ?: return GattLinkKern.STATUS_NICHT_BEREIT
             return when (op) {
                 is GattOp.Mtu -> if (g.requestMtu(op.mtu)) OK else GattLinkKern.STATUS_ABGELEHNT
