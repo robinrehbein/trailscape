@@ -10,7 +10,7 @@ Quellen unter `app/src/main/kotlin/de/trailscape/app/sensors/indoor/`:
 |---|---|
 | `GattLinkKern.kt` | Plattformfreier Automat des Rohrs: Warteschlange, Fristen, Zustände, Neuversuche. |
 | `GattBleLink.kt` | Android-Hülle (`BluetoothGatt`, Callbacks) um den Automaten; implementiert `BleLink`. |
-| `IndoorScanner.kt` | Suche nach Trainern und Schalttastern (drei Filter, 20 s). |
+| `IndoorScanner.kt` | Suche nach Trainern und Schalttastern (vier Filter, 20 s). |
 | `IndoorGeraeteLogik.kt` | Speicherformat der gemerkten Geräte und Rollen aus der Werbung, ohne Android. |
 | `IndoorDevices.kt` | Gemerkte Geräte (`IndoorDeviceRef`), Koppeln, Vergessen, `openLink`. |
 | `IndoorDevicesUi.kt` | Abschnitt „Indoor-Training“ (zustandslos: `IndoorDevicesContent`). |
@@ -30,8 +30,9 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
   `{rolle, adresse, name}`, je Rolle ein Eintrag.
 
 **Suche**
-- Drei Filter: FTMS-Dienst, Zwift-Dienst, Zwift-Firmenkennung mit leerem
-  Datenmuster. Dauer 20 s.
+- Vier Filter: FTMS-Dienst, Zwift-Dienst, der neuere Dienst `fc82`
+  (`ZWIFT_RIDE_SERVICE`) und die Zwift-Firmenkennung mit leerem Datenmuster
+  (gesperrte Click V2 verbergen den Dienst). Dauer 20 s.
 - Die Rollen kommen aus der Werbung. Ein Gerät, das beides bewirbt, kann in
   beiden Listen stehen.
 
@@ -60,7 +61,15 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
   Ablehnungen in Folge (Stack beschäftigt, `ERROR_GATT_WRITE_REQUEST_BUSY`); eine
   Antwort per Callback setzt diese Zählung zurück.
 - Bei einem Abbruch werden alle offenen Operationen mit `ok = false` gemeldet,
-  danach der Zustand. Nach `close()` kommt kein Ergebnis mehr, nur `CLOSED`.
+  danach der Zustand. Nach `close()` kommt kein Ergebnis mehr, nur `CLOSED`
+  (sofort).
+- `close()` in READY arbeitet bereits eingereihte **Writes** noch still ab, bevor
+  es trennt (der Stopp-Befehl aus `IndoorTrainer.stop()` darf nicht verloren
+  gehen), höchstens 2 s; andere eingereihte Operationen verfallen. Abbruch,
+  Fristablauf, Bluetooth aus oder fehlende Berechtigung beenden das Abarbeiten
+  sofort, ohne Neuversuch (Bitte von indoor-core).
+- `READY` meldet die Dienst-UUIDs immer klein geschrieben, auch wenn die
+  Plattform sie anders liefert.
 - Status 133 gilt als Abbruch: `disconnect` und `close`, Neuversuch nach dem Takt.
 - Antworten werden über Art und Characteristic dem laufenden Auftrag zugeordnet,
   sonst verworfen. Callbacks einer ersetzten GATT-Instanz werden verworfen.
@@ -134,13 +143,24 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
 - [ ] **MTU-Anfrage des Schalttasters:** Stört ein ungefragtes `onMtuChanged` die
       Warteschlange nicht?
 
+## Zusammenspiel mit dem Kern
+
+`GattLinkFtmsZusammenspielTest` fährt den echten `createFtmsTrainer` aus `:core`
+gegen `GattLinkKern`; Attrappe ist nur das Android-GATT (antwortet wie ein
+FTMS-Trainer). Geprüft: Einrichtung bis `READY` in der Reihenfolge Feature →
+Power Range → Abos → Request Control; Großbuchstaben-Dienste aus der Plattform;
+**Fristablauf im Rohr** (verschluckter Write) → Neuaufbau → der Trainer richtet
+sich neu ein, fordert die Kontrolle neu an und schickt die gemerkte Zielleistung
+nach, ohne `onCommandFailed`; Abbruch durch das Gerät mitten in der Fahrt;
+`stop()` → der Stopp-Write `08 01` geht raus, erst danach wird getrennt.
+
 ## Teststand
 
+Nach dem Merge von `claude/indoor-core` (fbef95b), 23.11.2026:
 `./gradlew :core:test :app:testDebugUnitTest -Pscreenshots :app:assembleDebug`
-am 23.11.2026: 2481 Tests, davon einer rot — `ScreenshotTest.heuteEnglischSchmal`
-(„Your goal“ nicht sichtbar). Er scheitert genauso auf dem unveränderten
-Ausgangsstand e0c4afe, hängt also nicht an diesem Slice (vermutlich am Datum:
-montags bis mittwochs steht der Wochenrückblick oben auf „Heute“). Die Datei
-gehört indoor-app. Alle Tests unter `sensors/**`, `StringResourceParityTest`,
-`:core:test` und `:app:assembleDebug` sind grün; die Screenshots
-`indoor-ble-*.png` sind angesehen.
+→ `:core` 2062 Tests grün, `:app` 802 Tests mit einem roten:
+`ScreenshotTest.heuteEnglischSchmal` („Your goal“ nicht sichtbar). Er scheitert
+genauso auf dem unveränderten Ausgangsstand e0c4afe, gehört indoor-app und ist
+laut Orchestrator auf `claude/trusting-heisenberg-mbokzx` behoben — hier bewusst
+nicht angefasst. Alle Tests unter `sensors/**`, `StringResourceParityTest` und
+`:app:assembleDebug` sind grün; die Screenshots `indoor-ble-*.png` sind angesehen.

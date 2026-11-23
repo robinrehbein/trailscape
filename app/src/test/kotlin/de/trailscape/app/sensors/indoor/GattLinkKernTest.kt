@@ -383,6 +383,72 @@ class GattLinkKernTest {
     }
 
     @Test
+    fun closeArbeitetEingereihteWritesNochAbUndMeldetNichtsMehr() {
+        bereit()
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0x08, 0x01), mitAntwort = true))
+        kern.enqueue(GattOp.Abonnieren(svc, bikeData, indicate = false))
+        kern.close()
+        // CLOSED sofort, danach still.
+        assertEquals(BleLinkState.CLOSED, log.zustaende.last())
+        assertEquals(0, port.schliessAufrufe)
+        val vorher = log.reihenfolge.size
+        kern.onGelesen(feature, byteArrayOf(1), 0)
+        // Der Stopp-Write laeuft noch, das Abonnement ist verfallen.
+        assertEquals("WRITE $cp", port.gestartet.last())
+        kern.onGeschrieben(cp, 0)
+        assertEquals(1, port.schliessAufrufe)
+        assertEquals(2, port.gestartet.size)
+        assertEquals(vorher, log.reihenfolge.size)
+        takt.weiter(60_000)
+        assertEquals(1, port.verbindeAufrufe)
+        kern.close()
+        assertEquals(1, port.schliessAufrufe)
+    }
+
+    @Test
+    fun closeOhneWritesTrenntSofort() {
+        bereit()
+        kern.enqueue(GattOp.Lesen(svc, feature))
+        kern.close()
+        assertEquals(1, port.schliessAufrufe)
+    }
+
+    @Test
+    fun closeWartetHoechstensZweiSekundenAufDieWrites() {
+        bereit()
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0x08, 0x01), mitAntwort = true))
+        kern.close()
+        takt.weiter(1_999)
+        assertEquals(0, port.schliessAufrufe)
+        takt.weiter(1)
+        assertEquals(1, port.schliessAufrufe)
+        takt.weiter(60_000)
+        assertEquals(1, port.verbindeAufrufe)
+        assertEquals(BleLinkState.CLOSED, log.zustaende.last())
+    }
+
+    @Test
+    fun abbruchWaehrendDesAbarbeitensSchliesstOhneNeuversuch() {
+        bereit()
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0x08, 0x01), mitAntwort = true))
+        kern.enqueue(GattOp.Schreiben(svc, cp, byteArrayOf(0x01), mitAntwort = true))
+        kern.close()
+        kern.onVerbindung(8, verbunden = false)
+        assertEquals(1, port.schliessAufrufe)
+        takt.weiter(60_000)
+        assertEquals(1, port.verbindeAufrufe)
+        assertEquals(listOf(BleLinkState.CONNECTING, BleLinkState.READY, BleLinkState.CLOSED), log.zustaende)
+    }
+
+    @Test
+    fun readyMeldetDiensteInKleinschreibung() {
+        port.dienste = setOf(IndoorUuids.FTMS_SERVICE.uppercase(), "0000180A-0000-1000-8000-00805F9B34FB")
+        bereit()
+        assertEquals(setOf(svc, "0000180a-0000-1000-8000-00805f9b34fb"), log.dienste.last())
+    }
+
+    @Test
     fun closeGibtFreiMeldetNurNochClosedUndStopptAlleFristen() {
         bereit()
         kern.enqueue(GattOp.Lesen(svc, feature))
@@ -553,7 +619,9 @@ class GattLinkKernTest {
             return dienstsucheGeht
         }
 
-        override fun serviceUuids() = setOf(IndoorUuids.FTMS_SERVICE)
+        var dienste = setOf(IndoorUuids.FTMS_SERVICE)
+
+        override fun serviceUuids() = dienste
 
         override fun starte(op: GattOp): Int {
             if (wirftBeimStart) throw SecurityException("test")

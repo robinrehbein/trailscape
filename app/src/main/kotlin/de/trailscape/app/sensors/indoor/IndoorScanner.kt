@@ -24,9 +24,9 @@ import java.util.UUID
  * Die Suche nach Rollentrainer und Schalttaster — nur auf Knopfdruck, nur
  * solange die Seite offen ist, nach [DAUER_MS] von selbst zu Ende.
  *
- * Drei [ScanFilter]: der Fitness Machine Service, der Zwift-Dienst und die
- * Zwift-Firmenkennung in den Herstellerdaten (manche Schalttaster bewerben
- * ihren Dienst nicht). Andere Geraete in der Naehe tauchen gar nicht erst
+ * Vier [ScanFilter]: der Fitness Machine Service, der Zwift-Dienst, der
+ * neuere Dienst `fc82` und die Zwift-Firmenkennung in den Herstellerdaten
+ * (gesperrte Click V2 bewerben keinen Dienst). Andere Geraete in der Naehe tauchen gar nicht erst
  * auf — deshalb darf BLUETOOTH_SCAN `neverForLocation` tragen. Ein leeres
  * Datenmuster beim Herstellerfilter heisst: jede Nutzlast mit dieser
  * Kennung passt.
@@ -77,6 +77,7 @@ internal class IndoorScanner(private val context: Context) {
         val filter = listOf(
             ScanFilter.Builder().setServiceUuid(ParcelUuid(UUID.fromString(IndoorUuids.FTMS_SERVICE))).build(),
             ScanFilter.Builder().setServiceUuid(ParcelUuid(UUID.fromString(IndoorUuids.ZWIFT_SERVICE))).build(),
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(UUID.fromString(IndoorUuids.ZWIFT_RIDE_SERVICE))).build(),
             ScanFilter.Builder().setManufacturerData(IndoorUuids.ZWIFT_COMPANY_ID, ByteArray(0)).build(),
         )
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()

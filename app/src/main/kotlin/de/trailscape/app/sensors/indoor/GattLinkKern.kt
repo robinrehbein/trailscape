@@ -61,7 +61,7 @@ internal class GattLinkKern(
     private val port: GattPort,
     private val takt: LinkTakt,
 ) {
-    private enum class Phase { NEU, VERBINDE, ENTDECKE, BEREIT, WARTET, KEINE_BERECHTIGUNG, BLUETOOTH_AUS, ZU }
+    private enum class Phase { NEU, VERBINDE, ENTDECKE, BEREIT, WARTET, KEINE_BERECHTIGUNG, BLUETOOTH_AUS, SCHLIESST, ZU }
 
     private var phase = Phase.NEU
     private var listener: BleLinkListener? = null
@@ -83,6 +83,7 @@ internal class GattLinkKern(
     private var blockadePruefung: Abbrechbar? = null
     private var operationsFrist: Abbrechbar? = null
     private var wache: Abbrechbar? = null
+    private var schliessFrist: Abbrechbar? = null
 
     private val schlange = ArrayDeque<GattOp>()
     private var unterwegs: GattOp? = null
@@ -111,9 +112,28 @@ internal class GattLinkKern(
         starteNaechste()
     }
 
+    /**
+     * Schliesst das Rohr. `CLOSED` kommt sofort, danach nichts mehr. Sind in
+     * READY noch Writes eingereiht (etwa der Stopp-Befehl, den
+     * `IndoorTrainer.stop()` direkt vor `close()` schreibt), arbeitet der Kern
+     * sie still ab, bevor er trennt — hoechstens [SCHLIESS_FRIST_MS] lang;
+     * alles andere in der Schlange verfaellt.
+     */
     fun close() {
-        if (phase == Phase.ZU) return
+        if (phase == Phase.ZU || phase == Phase.SCHLIESST) return
         val warOffen = phase != Phase.NEU
+        if (phase == Phase.BEREIT && (unterwegs is GattOp.Schreiben || schlange.any { it is GattOp.Schreiben })) {
+            phase = Phase.SCHLIESST
+            melde(BleLinkState.CLOSED)
+            listener = null
+            schlange.retainAll { it is GattOp.Schreiben }
+            neuversuch?.abbrechen()
+            blockadePruefung?.abbrechen()
+            verbindungsFrist?.abbrechen()
+            schliessFrist = takt.nach(SCHLIESS_FRIST_MS) { endgueltigSchliessen() }
+            starteNaechste()
+            return
+        }
         phase = Phase.ZU
         alleFristenAbbrechen()
         schlange.clear()
@@ -121,6 +141,16 @@ internal class GattLinkKern(
         port.schliessen()
         if (warOffen) melde(BleLinkState.CLOSED)
         listener = null
+    }
+
+    /** Ende des stillen Abarbeitens beim Schliessen (fertig, Frist, Abbruch). */
+    private fun endgueltigSchliessen() {
+        if (phase != Phase.SCHLIESST) return
+        phase = Phase.ZU
+        alleFristenAbbrechen()
+        schlange.clear()
+        unterwegs = null
+        port.schliessen()
     }
 
     // ----------------------------------------------------------- GATT-Ereignisse
@@ -136,6 +166,7 @@ internal class GattLinkKern(
             // Jede Meldung ausser „verbunden" ist hier ein Abbruch; ein
             // doppeltes „verbunden" ignorieren wir.
             Phase.ENTDECKE, Phase.BEREIT -> if (!verbunden || status != GATT_SUCCESS) scheitern(status)
+            Phase.SCHLIESST -> if (!verbunden || status != GATT_SUCCESS) endgueltigSchliessen()
             else -> Unit
         }
     }
@@ -146,7 +177,7 @@ internal class GattLinkKern(
             scheitern(status)
             return
         }
-        val dienste = plattform { port.serviceUuids() } ?: return
+        val dienste = plattform { port.serviceUuids() }?.mapTo(mutableSetOf()) { it.lowercase() } ?: return
         verbindungsFrist?.abbrechen()
         verbindungsFrist = null
         phase = Phase.BEREIT
@@ -168,7 +199,7 @@ internal class GattLinkKern(
         if (status == GATT_SUCCESS) {
             // Erst der Wert, dann das Ergebnis — so steht er beim Abschluss schon da.
             listener?.onValue(op.characteristicUuid, wert, takt.jetztMs())
-            if (phase != Phase.BEREIT || unterwegs !== op) return
+            if (unterwegs !== op) return
         }
         abschliessen(op, status == GATT_SUCCESS, status)
     }
@@ -193,6 +224,7 @@ internal class GattLinkKern(
     /** Die Plattform hat eine `SecurityException` geworfen (Berechtigung entzogen). */
     fun onKeineBerechtigung() {
         if (phase == Phase.ZU || phase == Phase.NEU) return
+        if (phase == Phase.SCHLIESST) return endgueltigSchliessen()
         blockiert(Phase.KEINE_BERECHTIGUNG)
     }
 
@@ -275,6 +307,10 @@ internal class GattLinkKern(
         wache?.abbrechen()
         wache = takt.nach(WACHE_MS) {
             wache = null
+            if (phase == Phase.SCHLIESST) {
+                if (!port.bluetoothEin()) endgueltigSchliessen() else planeWache()
+                return@nach
+            }
             if (phase != Phase.VERBINDE && phase != Phase.ENTDECKE && phase != Phase.BEREIT) return@nach
             if (!port.bluetoothEin()) blockiert(Phase.BLUETOOTH_AUS) else planeWache()
         }
@@ -283,8 +319,12 @@ internal class GattLinkKern(
     // ------------------------------------------------------------ Warteschlange
 
     private fun starteNaechste() {
-        if (phase != Phase.BEREIT || unterwegs != null) return
-        val op = schlange.removeFirstOrNull() ?: return
+        if ((phase != Phase.BEREIT && phase != Phase.SCHLIESST) || unterwegs != null) return
+        val op = schlange.removeFirstOrNull()
+        if (op == null) {
+            if (phase == Phase.SCHLIESST) endgueltigSchliessen()
+            return
+        }
         unterwegs = op
         operationsFrist = takt.nach(OPERATIONS_FRIST_MS) {
             operationsFrist = null
@@ -292,6 +332,7 @@ internal class GattLinkKern(
         }
         val code = plattform { port.starte(op) } ?: return
         if (code == GATT_SUCCESS) return
+        if (phase == Phase.SCHLIESST) return abschliessen(op, ok = false, status = code, sofort = true)
         if (++sofortAblehnungenInFolge >= SOFORT_ABLEHNUNGEN_BIS_NEUVERBINDEN) {
             scheitern(code)
         } else {
@@ -301,6 +342,7 @@ internal class GattLinkKern(
 
     private fun fristAbgelaufen(op: GattOp) {
         if (unterwegs !== op) return
+        if (phase == Phase.SCHLIESST) return endgueltigSchliessen()
         // Der Stack antwortet nicht — neu verbinden raeumt ihn auf (siehe Klassenkommentar).
         scheitern(STATUS_ZEITUEBERSCHREITUNG)
     }
@@ -348,6 +390,8 @@ internal class GattLinkKern(
         operationsFrist?.abbrechen()
         wache?.abbrechen()
         wache = null
+        schliessFrist?.abbrechen()
+        schliessFrist = null
         verbindungsFrist = null
         neuversuch = null
         blockadePruefung = null
@@ -362,7 +406,7 @@ internal class GattLinkKern(
         block()
     } catch (e: SecurityException) {
         DiagLog.shared.log(DiagEvent.BLE_NO_PERMISSION, error = e)
-        blockiert(Phase.KEINE_BERECHTIGUNG)
+        if (phase == Phase.SCHLIESST) endgueltigSchliessen() else blockiert(Phase.KEINE_BERECHTIGUNG)
         null
     }
 
@@ -377,6 +421,9 @@ internal class GattLinkKern(
 
         /** Takt, in dem eine Blockade (Bluetooth aus, keine Berechtigung) neu geprueft wird. */
         const val BLOCKADE_PRUEFUNG_MS = 2_000L
+
+        /** Hoechstdauer, in der `close()` eingereihte Writes noch abarbeitet. */
+        const val SCHLIESS_FRIST_MS = 2_000L
 
         /** Synchrone Ablehnungen in Folge, ab denen der Kern neu verbindet. */
         const val SOFORT_ABLEHNUNGEN_BIS_NEUVERBINDEN = 3

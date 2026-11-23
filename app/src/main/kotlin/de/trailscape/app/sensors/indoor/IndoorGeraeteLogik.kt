@@ -62,9 +62,10 @@ private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive
  * Welche Rollen ein Geraet nach seiner Werbung spielen kann.
  *
  *  * **Trainer:** bewirbt den Fitness Machine Service (0x1826).
- *  * **Schalttaster:** bewirbt den Zwift-Dienst **oder** traegt die
- *    Zwift-Firmenkennung in den Herstellerdaten — manche Firmware nennt den
- *    Dienst nicht in der Werbung (docs/indoor.md, Abschnitt 5.1).
+ *  * **Schalttaster:** bewirbt den Zwift-Dienst, den neueren Dienst `fc82`
+ *    ([IndoorUuids.ZWIFT_RIDE_SERVICE]) **oder** traegt die Zwift-Firmenkennung
+ *    in den Herstellerdaten — gesperrte Click V2 nennen keinen Dienst in der
+ *    Werbung (docs/indoor/core.md, „Bitten").
  *
  * Ein Geraet, das beides bewirbt (etwa ein Trainer mit eigener
  * Bedienschnittstelle), steht in beiden Listen; gekoppelt wird je Rolle.
@@ -76,7 +77,9 @@ internal fun indoorRollenAusWerbung(dienste: Collection<String>, herstellerIds: 
     val klein = dienste.map { it.lowercase() }.toSet()
     return buildSet {
         if (IndoorUuids.FTMS_SERVICE in klein) add(IndoorDeviceRole.TRAINER)
-        if (IndoorUuids.ZWIFT_SERVICE in klein || IndoorUuids.ZWIFT_COMPANY_ID in herstellerIds) {
+        if (IndoorUuids.ZWIFT_SERVICE in klein || IndoorUuids.ZWIFT_RIDE_SERVICE in klein ||
+            IndoorUuids.ZWIFT_COMPANY_ID in herstellerIds
+        ) {
             add(IndoorDeviceRole.SHIFTER)
         }
     }

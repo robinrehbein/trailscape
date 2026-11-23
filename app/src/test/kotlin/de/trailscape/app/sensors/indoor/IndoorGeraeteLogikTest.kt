@@ -63,6 +63,10 @@ class IndoorGeraeteLogikTest {
     fun schalttasterAmDienstOderAnDerFirmenkennung() {
         assertEquals(setOf(IndoorDeviceRole.SHIFTER), indoorRollenAusWerbung(listOf(IndoorUuids.ZWIFT_SERVICE), emptyList()))
         assertEquals(setOf(IndoorDeviceRole.SHIFTER), indoorRollenAusWerbung(emptyList(), listOf(0x004C, 0x094A)))
+        assertEquals(
+            setOf(IndoorDeviceRole.SHIFTER),
+            indoorRollenAusWerbung(listOf(IndoorUuids.ZWIFT_RIDE_SERVICE.uppercase()), emptyList()),
+        )
     }
 
     @Test
