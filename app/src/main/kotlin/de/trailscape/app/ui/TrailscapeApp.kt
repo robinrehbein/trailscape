@@ -433,18 +433,17 @@ private fun TrailscapeAppContent() {
             NavHost(
                 navController = navController,
                 startDestination = TopLevelDestination.HOME.route,
-                // Oben und seitlich loest die Huelle die System-Insets auf (das
-                // taten vorher die `innerPadding` des `Scaffold`); unten
-                // ausdruecklich nicht — dort soll der Inhalt bis unter die
-                // Kapsel laufen. `imePadding` haelt Eingabefelder ueber der
+                // Oben und seitlich loest jedes Ziel die System-Insets ueber
+                // [InsetPadded] auf (das taten vorher die `innerPadding` des
+                // `Scaffold`, danach der `NavHost` selbst); unten ausdruecklich
+                // nicht — dort soll der Inhalt bis unter die Kapsel laufen.
+                // Ausnahme ist der Indoor-Ablauf: Seine Fahransicht legt die
+                // 3D-Welt randlos unter Status- und Navigationsleiste und
+                // loest die Insets selbst auf (`IndoorRideScreen`,
+                // `IndoorPage`). `imePadding` haelt Eingabefelder ueber der
                 // Tastatur, was zuvor am `contentWindowInsets` des Scaffold hing.
                 modifier = Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(
-                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
-                        ),
-                    )
                     .imePadding(),
                 // Uebergaenge nach M3 (siehe [M3Transitions]): zwischen den
                 // Tabs „Top level" (Fade through), in die Einstellungen und
@@ -486,16 +485,16 @@ private fun TrailscapeAppContent() {
                     }
                 },
             ) {
-                composable(TopLevelDestination.HOME.route) { TodayScreen(appViewModel) }
-                composable(TopLevelDestination.MAP.route) { MapScreen(appViewModel) }
-                composable(TopLevelDestination.RIDES.route) { RidesScreen(appViewModel) }
-                composable(TopLevelDestination.TRAINING.route) { TrainingScreen(appViewModel) }
+                composable(TopLevelDestination.HOME.route) { InsetPadded { TodayScreen(appViewModel) } }
+                composable(TopLevelDestination.MAP.route) { InsetPadded { MapScreen(appViewModel) } }
+                composable(TopLevelDestination.RIDES.route) { InsetPadded { RidesScreen(appViewModel) } }
+                composable(TopLevelDestination.TRAINING.route) { InsetPadded { TrainingScreen(appViewModel) } }
                 // Zweite Ebene, kein Tab: Der Zurueck-Pfeil in der Kopfzeile
                 // und die Systemzurueckgeste (die der `NavHost` fuer ein
                 // gepushtes Ziel von selbst bedient) fuehren zurueck dorthin,
                 // von wo das Zahnrad angetippt wurde.
                 composable(MORE_ROUTE) {
-                    MoreScreen(appViewModel, onBack = { navController.popBackStack() })
+                    InsetPadded { MoreScreen(appViewModel, onBack = { navController.popBackStack() }) }
                 }
                 // Indoor (docs/indoor.md 10.1): der Ablauf haelt sein
                 // ViewModel am eigenen Backstack-Eintrag; die Diagnose ist
@@ -512,10 +511,10 @@ private fun TrailscapeAppContent() {
                     )
                 }
                 composable(INDOOR_WORLDS_ROUTE) {
-                    IndoorWorldsDestination(onBack = { navController.popBackStack() })
+                    InsetPadded { IndoorWorldsDestination(onBack = { navController.popBackStack() }) }
                 }
                 composable(INDOOR_DIAGNOSTICS_ROUTE) {
-                    IndoorDiagnosticsScreen(onBack = { navController.popBackStack() })
+                    InsetPadded { IndoorDiagnosticsScreen(onBack = { navController.popBackStack() }) }
                 }
             }
         }
@@ -634,6 +633,24 @@ private fun TrailscapeAppContent() {
  * selbst `requestTab(MAP)` rief: keine Vorschau-Linie, keine Gesten (siehe
  * `MapViewHost`).
  */
+/**
+ * Oben und seitlich die System-Insets (Statusleiste, Ausschnitt, seitliche
+ * Navigationsleiste) fuer ein Ziel des `NavHost` — unten bewusst nicht, dort
+ * laeuft der Inhalt unter die Kapsel.
+ */
+@Composable
+private fun InsetPadded(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+        // Wie zuvor am `NavHost`: Das Ziel bekommt die volle Flaeche als Mindestmass.
+        propagateMinConstraints = true,
+    ) {
+        content()
+    }
+}
+
 private fun NavHostController.navigateToTab(route: String) {
     if (currentDestination?.hierarchy?.any { it.route == route } == true) return
     navigate(route) {

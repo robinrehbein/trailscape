@@ -238,8 +238,6 @@
     <string name="indoor_app_ride_position_loop">%1$s von %2$s km · Runde %3$d</string>
     <string name="indoor_app_ride_pause_action">Pause</string>
     <string name="indoor_app_ride_resume_action">Weiter</string>
-    <string name="indoor_app_ride_finish_hold">Fahrt beenden</string>
-    <string name="indoor_app_ride_finish_hint">Gedrückt halten</string>
     <string name="indoor_app_hud_power">Leistung</string>
     <string name="indoor_app_hud_speed">Tempo</string>
     <string name="indoor_app_hud_cadence">Kadenz</string>
@@ -265,11 +263,19 @@
     <string name="indoor_app_hud_trainer_status">Trainer: %1$s · %2$s</string>
     <string name="indoor_app_hud_shifter_status">Schalttaster: %1$s</string>
     <string name="indoor_app_hud_shifter_status_battery">Schalttaster: %1$s · Batterie %2$d %%</string>
+    <string name="indoor_app_hud_metric_cd">%1$s: %2$s %3$s</string>
+    <string name="indoor_app_hud_elapsed_cd">Fahrzeit %1$s</string>
+    <string name="indoor_app_hud_finish_cd">Fahrt beenden, gedrückt halten</string>
+    <string name="indoor_app_hud_finish_hold_hint">Zum Beenden gedrückt halten</string>
+    <string name="indoor_app_hud_devices_cd">Geräte und Quellenangaben anzeigen</string>
+    <string name="indoor_app_hud_devices_problem_cd">Problem mit einem Gerät, Details anzeigen</string>
+    <string name="indoor_app_hud_devices_title">Geräte</string>
+    <string name="indoor_app_hud_chrome_hide_cd">Nebenanzeigen ausblenden</string>
+    <string name="indoor_app_hud_chrome_show_cd">Nebenanzeigen einblenden</string>
     <string name="indoor_app_demo_power">Leistung (Demo): %1$d W</string>
     <string name="indoor_app_demo_cadence">Trittfrequenz (Demo): %1$d U/min</string>
     <string name="indoor_app_demo_power_cd">Leistung des Demo-Trainers</string>
     <string name="indoor_app_demo_cadence_cd">Trittfrequenz des Demo-Trainers</string>
-    <string name="indoor_app_attribution_open_cd">Quellenangaben anzeigen</string>
     <string name="indoor_app_attribution_title">Quellenangaben</string>
     <!-- IndoorSummaryScreen.kt -->
     <string name="indoor_app_summary_title">Auswertung</string>
