@@ -1,0 +1,90 @@
+{
+"source": "BROUTER_WAY_TAGS",
+"lengthM": 3011,
+"sections": [
+{
+"fromM": 0,
+"toM": 109,
+"kind": "UNKNOWN",
+"highway": "footway"
+},
+{
+"fromM": 109,
+"toM": 156,
+"kind": "GRAVEL",
+"highway": "service"
+},
+{
+"fromM": 156,
+"toM": 192,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 192,
+"toM": 242,
+"kind": "COBBLESTONE",
+"highway": "path"
+},
+{
+"fromM": 242,
+"toM": 299,
+"kind": "COBBLESTONE",
+"highway": "footway"
+},
+{
+"fromM": 299,
+"toM": 379,
+"kind": "COBBLESTONE",
+"highway": "living_street"
+},
+{
+"fromM": 379,
+"toM": 597,
+"kind": "COBBLESTONE",
+"highway": "unclassified"
+},
+{
+"fromM": 597,
+"toM": 652,
+"kind": "ASPHALT",
+"highway": "unclassified"
+},
+{
+"fromM": 652,
+"toM": 1176,
+"kind": "ASPHALT",
+"highway": "path"
+},
+{
+"fromM": 1176,
+"toM": 1877,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 1877,
+"toM": 2250,
+"kind": "ASPHALT",
+"highway": "path"
+},
+{
+"fromM": 2250,
+"toM": 2901,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 2901,
+"toM": 2964,
+"kind": "GRAVEL",
+"highway": "service"
+},
+{
+"fromM": 2964,
+"toM": 3011,
+"kind": "COMPACTED",
+"highway": "track"
+}
+]
+}

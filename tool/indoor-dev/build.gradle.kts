@@ -23,6 +23,11 @@ application {
     mainClass.set("de.trailscape.tool.indoor.MainKt")
 }
 
+// Relative Pfade der Aufrufe (`--gpx tool/indoor-dev/samples/…`, Cache) gelten ab dem Projektverzeichnis.
+tasks.named<JavaExec>("run") {
+    workingDir = rootProject.projectDir
+}
+
 dependencies {
     implementation(project(":core"))
     // Wie in `:app`: `:core` reicht kotlinx-serialization-json nicht durch.
