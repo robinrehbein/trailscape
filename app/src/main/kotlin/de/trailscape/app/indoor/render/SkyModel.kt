@@ -102,7 +102,11 @@ object SkyModel {
             zenith = zenith,
             horizon = horizon,
             ground = ground,
-            ambientLux = 22_000.0 + 10_000.0 * high,
+            // Unter dem Kronendach (Waldweg im Schatten) gibt es nur dieses Licht —
+            // Filament verdeckt das Umgebungslicht nicht durch Geometrie, nur die
+            // Sonne durch Schatten. Bei tiefer Sonne deshalb nicht unter 26 000:
+            // der Weg im Wald bleibt lesbar (Bitte aus docs/indoor/world.md).
+            ambientLux = 26_000.0 + 8_000.0 * high,
             fogDensity = 3.9 / visibilityM,
         )
     }

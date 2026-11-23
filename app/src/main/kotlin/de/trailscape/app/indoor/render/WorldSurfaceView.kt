@@ -76,7 +76,7 @@ internal fun FilamentSurface(renderer: FilamentWorldRenderer, modifier: Modifier
                 renderer.attach(view)
             }
         },
-        onRelease = { renderer.detach() },
+        onRelease = { view -> renderer.detach(view) },
         modifier = modifier,
     )
 }

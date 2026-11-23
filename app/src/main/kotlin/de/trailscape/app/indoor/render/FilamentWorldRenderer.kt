@@ -102,8 +102,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private var readySent = false
     private var lastProgress: Pair<Int, Int>? = null
     private var deviceInfo: RenderDeviceInfo? = null
-    private var swapChainSinceMs = 0L
-    private var lastGoodFrameMs = 0L
+    /** Seit wann (ms) bei laufender Schleife und vorhandener Swapchain kein Bild durchkam; 0 = zuletzt gezeichnet. */
+    private var noFrameSinceMs = 0L
     private var stage = RenderStage.ENGINE
 
     /** Fuer `WorldSurface`: `null` = alles gut, sonst warum die 2D-Ersatzansicht laeuft. */
@@ -138,7 +138,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     }
 
     override fun loadWorld(worldDir: File, manifest: WorldManifest) = guardApi("loadWorld") {
-        if (destroyed || failure != null) return@guardApi
+        if (destroyed) return@guardApi
+        // Auch nach einem frueheren Ausfall: die 2D-Ersatzansicht zeigt dann das Profil dieser Welt.
+        if (manifest.track.sampleCount >= 2) fallbackTrack = manifest.track
+        if (failure != null) return@guardApi
         stage = RenderStage.MANIFEST
         val problem = manifestProblem(manifest) ?: if (!worldDir.isDirectory) "Weltverzeichnis fehlt" else null
         if (problem != null) {
@@ -252,6 +255,15 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         }
     }
 
+    /**
+     * Loest [view], falls sie noch die angehaengte Flaeche ist. Compose kann
+     * beim Umbau die neue View anhaengen, bevor es die alte freigibt — deren
+     * `onRelease` darf dann die neue nicht abhaengen.
+     */
+    fun detach(view: SurfaceView) {
+        if (view === surfaceView) detach()
+    }
+
     /** Loest die Flaeche (Compose entfernt die View, Drehung). Engine und Welt bleiben. */
     fun detach() {
         try {
@@ -286,8 +298,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
                 val c = core ?: return@guardFrame
                 val h = uiHelper ?: return@guardFrame
                 c.createSwapChain(surface, h.swapChainFlags)
-                swapChainSinceMs = SystemClock.elapsedRealtime()
-                lastGoodFrameMs = 0L
+                noFrameSinceMs = 0L
                 updateLoop()
             }
         }
@@ -542,6 +553,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             frameScheduled = false
         }
         lastFrameNs = 0L
+        // Die Frist fuer „kein Bild" zaehlt nur, solange die Schleife laeuft: Nach einer
+        // Pause (Hintergrund, Dialog) beginnt sie neu, ein einzelnes ausgelassenes Bild
+        // beim Wiederanlauf ist kein Ausfall.
+        noFrameSinceMs = 0L
         meter.reset()
     }
 
@@ -615,12 +630,13 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         val drawn = c.render(frameTimeNanos)
         if (drawn) {
             lastRenderedNs = frameTimeNanos
-            lastGoodFrameMs = nowMs
+            noFrameSinceMs = 0L
             meter.frame(frameTimeNanos)?.let { (fps, p95) -> reportStats(fps, p95) }
-        } else if (c.swapChain != null && swapChainSinceMs > 0) {
+        } else if (c.swapChain != null) {
             // Eine Flaeche ist da, aber seit langem kommt kein Bild durch: nicht schwarz schweigen.
-            val since = if (lastGoodFrameMs > 0) lastGoodFrameMs else swapChainSinceMs
-            if (nowMs - since > NO_FRAME_TIMEOUT_MS) {
+            if (noFrameSinceMs == 0L) {
+                noFrameSinceMs = nowMs
+            } else if (nowMs - noFrameSinceMs > NO_FRAME_TIMEOUT_MS) {
                 fail(RenderFailure.NO_GRAPHICS, "Darstellung, Stufe „${RenderStage.FRAME.label}“: seit ${NO_FRAME_TIMEOUT_MS / 1000} s kein Bild gezeichnet")
             }
         }
