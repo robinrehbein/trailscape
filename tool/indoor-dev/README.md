@@ -94,8 +94,8 @@ stehen in `viewer/README.md`.
 
 ## Hinweis zum Stand
 
-`createWorldBuilder()` baut die Kacheln derzeit mit der schlichten
-Rückfall-Umsetzung (`SimpleWorldParts`: Gelände mit Luftbild oder erzeugter
-Bodentextur, ein einfaches Fahrbahnband). Die echten Erzeuger (Weg, Straßen,
-Gebäude, Vegetation, Wasser, Kleinteile) hängen hinter derselben
-Schnittstelle (`WorldParts`).
+`createWorldBuilder()` baut mit allen Erzeugern (`FullWorldParts`): Gelände
+mit Luftbild oder erzeugter Bodentextur, befahrener Weg je Belag, übrige
+Straßen, Gebäude, Bäume und Waldkörper, Wasserflächen, Kleinteile.
+`SimpleWorldParts` bleibt als schlichte Umsetzung für einzelne Tests. Stand,
+Lücken und Bilder: `docs/indoor/world.md`.
