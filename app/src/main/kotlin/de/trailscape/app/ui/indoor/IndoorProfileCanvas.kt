@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -20,12 +21,44 @@ import androidx.compose.ui.unit.dp
 private const val MIN_ELEVATION_SPAN_M = 20f
 
 /**
+ * Farben des Hoehenprofils. Der gefahrene Teil ([riddenLine], [riddenFill])
+ * hebt sich vom Rest der Strecke ([line], [fill]) ab.
+ */
+data class IndoorProfileColors(
+    val line: Color,
+    val fill: Color,
+    val riddenLine: Color,
+    val riddenFill: Color,
+    val rider: Color,
+    val riderRing: Color,
+    val ghost: Color,
+    val baseline: Color,
+)
+
+/** Vorgabe aus dem Farbschema (helle oder dunkle Flaeche der App). */
+@Composable
+fun indoorProfileColors(): IndoorProfileColors {
+    val primary = MaterialTheme.colorScheme.primary
+    return IndoorProfileColors(
+        line = primary.copy(alpha = 0.55f),
+        fill = primary.copy(alpha = 0.12f),
+        riddenLine = primary,
+        riddenFill = primary.copy(alpha = 0.30f),
+        rider = primary,
+        riderRing = MaterialTheme.colorScheme.surface,
+        ghost = MaterialTheme.colorScheme.tertiary,
+        baseline = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f),
+    )
+}
+
+/**
  * Das Hoehenprofil der Strecke mit der Position des Fahrers (und des Geists).
  *
  * Eigene Zeichnung aus [IndoorProfileUi]: Flaeche und Linie ueber den
  * Laufmetern, ein Punkt bei [routeDistM] (Meter auf der Strecke, in Runden
- * bereits auf die Strecke zurueckgefuehrt). Der Geist ist ein kleinerer Punkt
- * in der Zweitfarbe bei [ghostRouteDistM].
+ * bereits auf die Strecke zurueckgefuehrt); links davon ist der gefahrene Teil
+ * kraeftiger gezeichnet. Der Geist ist ein kleinerer Punkt in der Zweitfarbe
+ * bei [ghostRouteDistM].
  *
  * @param description Text fuer die Bedienungshilfe („Höhenprofil, du bist bei 3,2 km").
  */
@@ -37,12 +70,8 @@ fun IndoorProfileCanvas(
     description: String,
     modifier: Modifier = Modifier,
     height: Dp = 64.dp,
+    colors: IndoorProfileColors = indoorProfileColors(),
 ) {
-    val lineColor = MaterialTheme.colorScheme.primary
-    val fillColor = lineColor.copy(alpha = 0.20f)
-    val riderRing = MaterialTheme.colorScheme.surface
-    val ghostColor = MaterialTheme.colorScheme.tertiary
-    val gridColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -62,7 +91,7 @@ fun IndoorProfileCanvas(
         }
         val span = maxOf(hi - lo, MIN_ELEVATION_SPAN_M)
         // Luft ueber und unter der Linie, damit Punkt und Strich nicht am Rand kleben.
-        val pad = 6.dp.toPx()
+        val pad = 8.dp.toPx()
         val usableH = h - 2 * pad
         val mid = (hi + lo) / 2f
         fun xAt(distM: Double): Float = (distM / profile.lengthM).toFloat().coerceIn(0f, 1f) * w
@@ -85,9 +114,19 @@ fun IndoorProfileCanvas(
         area.lineTo(xAt(profile.distM[n - 1].toDouble()), h)
         area.close()
 
-        drawLine(gridColor, Offset(0f, h - 0.5f), Offset(w, h - 0.5f), strokeWidth = 1.dp.toPx())
-        drawPath(area, color = fillColor)
-        drawPath(line, color = lineColor, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+        val rx = xAt(routeDistM)
+        val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+        drawLine(colors.baseline, Offset(0f, h - 0.5f), Offset(w, h - 0.5f), strokeWidth = 1.dp.toPx())
+        // Vor dem Fahrer: der Rest der Strecke, zurueckhaltend.
+        clipRect(left = rx) {
+            drawPath(area, color = colors.fill)
+            drawPath(line, color = colors.line, style = stroke)
+        }
+        // Hinter dem Fahrer: der gefahrene Teil, kraeftig.
+        clipRect(right = rx) {
+            drawPath(area, color = colors.riddenFill)
+            drawPath(line, color = colors.riddenLine, style = stroke)
+        }
 
         fun eleAtDist(distM: Double): Float {
             val d = distM.coerceIn(0.0, profile.lengthM).toFloat()
@@ -100,11 +139,12 @@ fun IndoorProfileCanvas(
         }
 
         if (ghostRouteDistM != null) {
-            drawCircle(ghostColor, radius = 4.dp.toPx(), center = Offset(xAt(ghostRouteDistM), yAt(eleAtDist(ghostRouteDistM))))
+            val ghostAt = Offset(xAt(ghostRouteDistM), yAt(eleAtDist(ghostRouteDistM)))
+            drawCircle(colors.riderRing, radius = 5.5.dp.toPx(), center = ghostAt)
+            drawCircle(colors.ghost, radius = 4.dp.toPx(), center = ghostAt)
         }
-        val rx = xAt(routeDistM)
-        val ry = yAt(eleAtDist(routeDistM))
-        drawCircle(riderRing, radius = 7.dp.toPx(), center = Offset(rx, ry))
-        drawCircle(lineColor, radius = 5.dp.toPx(), center = Offset(rx, ry))
+        val riderAt = Offset(rx, yAt(eleAtDist(routeDistM)))
+        drawCircle(colors.riderRing, radius = 7.dp.toPx(), center = riderAt)
+        drawCircle(colors.rider, radius = 5.dp.toPx(), center = riderAt)
     }
 }

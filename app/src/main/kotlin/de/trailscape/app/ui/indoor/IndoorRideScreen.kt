@@ -1,6 +1,14 @@
 package de.trailscape.app.ui.indoor
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -8,21 +16,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BluetoothConnected
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -30,79 +43,84 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import de.trailscape.app.R
-import de.trailscape.app.i18n.LocalAppFormats
-import de.trailscape.app.ui.components.HoldToEndButton
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.map.KeepScreenOn
 import de.trailscape.app.ui.theme.LocalSignalColors
-import de.trailscape.core.indoor.GhostState
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorPhase
 import de.trailscape.core.indoor.IndoorSessionState
+import de.trailscape.core.indoor.ShifterConnection
 import de.trailscape.core.indoor.ShifterEvent
+import de.trailscape.core.indoor.TrainerConnection
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.WorldAttribution
-import kotlin.math.roundToInt
 
 /** ERG: Schritt der Plus/Minus-Knoepfe in Prozentpunkten der FTP. */
 private const val ERG_ADJUST_STEP_PCT = 5
 
-/** Reglerbereiche des Demo-Trainers. */
-private const val DEMO_POWER_MAX_W = 600
-private const val DEMO_CADENCE_MAX_RPM = 130
-
-/** Deckkraft der HUD-Flaechen ueber der 3D-Welt. */
-private const val HUD_ALPHA = 0.84f
+/** Hoehe des schmalen Hoehenprofils unten (mit der Welt dahinter). */
+private val PROFILE_STRIP_HEIGHT = 56.dp
 
 /**
  * # Schritt 4: Fahren
  *
- * Die 3D-Flaeche liegt vollflaechig ([worldSurface] ist ein Slot — der echte
- * `WorldSurface` oder ein Platzhalter im Screenshot-Test), das HUD darueber.
- * Zustandslos: Alles, was angezeigt wird, steckt in [ui].
+ * Die 3D-Flaeche fuellt den ganzen Bildschirm, auch unter Status- und
+ * Navigationsleiste ([worldSurface] ist ein Slot — der echte `WorldSurface`
+ * oder ein Platzhalter im Screenshot-Test). Darueber ein schlankes HUD auf
+ * dunklem, auslaufendem Schleier, wie man es von Indoor-Apps kennt:
+ *
+ *  * oben die Kernwerte — Leistung gross, Tempo, Trittfrequenz, Puls kompakt —,
+ *    darunter klein Steigung (farbig) und Belag, der Abstand zum Geist als Chip;
+ *  * unten der Gang mit grossen −/+-Tasten am Rand (der Ersatz fuer die
+ *    Schalthebel; im ERG-Modus stattdessen die Zielleistung), darunter das
+ *    schmale Hoehenprofil mit „x von y km" und der Fahrzeit;
+ *  * Kamera, Pause, Beenden (gedrueckt halten) und der Geraetestatus als
+ *    kleine runde Symbolknoepfe am rechten Rand (quer: oben rechts).
+ *
+ * Ein Tipp auf die Welt blendet die Nebensachen aus und wieder ein (Knoepfe,
+ * Profil, Geist, Demo-Regler); Kernwerte und Schalten bleiben. Zustandslos bis
+ * auf diese Sichtbarkeit und offene Dialoge: Alles andere steckt in [ui].
  *
  * Verhalten bei Fehlern (docs/indoor.md 10.1):
  *  * [IndoorRenderUi.Failed] — verstaendliche Meldung statt der 3D-Flaeche, das
  *    HUD und das Hoehenprofil laufen weiter;
- *  * [IndoorRenderUi.NoWorld] — das Hoehenprofil nimmt den Platz der 3D-Flaeche ein;
+ *  * [IndoorRenderUi.NoWorld] — das grosse Hoehenprofil nimmt den Platz der 3D-Flaeche ein;
  *  * `session == null` mit `startProblem` — Fehlerseite mit „Zurück".
- *
- * Hoch- und Querformat: Im Querformat stehen die Kacheln links, die Bedienung
- * rechts und die Welt dazwischen.
  *
  * @param onShift Schaltwunsch von den Knoepfen (der Taster geht ueber die Laufzeit).
  * @param onErgAdjust Prozentpunkte der FTP, `±5`.
  * @param onRideWithoutWorld wenn gesetzt, bietet die Fehlermeldung der 3D-Flaeche
  *   „Ohne Welt fahren" an; `null` = kein Angebot.
  * @param onBack nur fuer die Fehlerseite (Start gescheitert).
+ * @param initialChromeHidden nur fuer Screenshot-Tests: Nebensachen schon ausgeblendet.
  */
 @Composable
 fun IndoorRideScreen(
@@ -118,6 +136,7 @@ fun IndoorRideScreen(
     onDismissNotice: () -> Unit,
     onRideWithoutWorld: (() -> Unit)? = null,
     onBack: () -> Unit = {},
+    initialChromeHidden: Boolean = false,
 ) {
     val session = ui.session
     if (session == null) {
@@ -126,60 +145,103 @@ fun IndoorRideScreen(
     }
 
     KeepScreenOn()
-    var showAttribution by rememberSaveable { mutableStateOf(false) }
+    LightSystemBarIcons()
+    var showDevices by rememberSaveable { mutableStateOf(false) }
+    var chromeHidden by rememberSaveable { mutableStateOf(initialChromeHidden) }
     val showWorld = ui.render is IndoorRenderUi.Ready || ui.render is IndoorRenderUi.Loading
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-      androidx.compose.runtime.CompositionLocalProvider(LocalHudAlpha provides if (showWorld) HUD_ALPHA else 1f) {
+    val actions = HudActions(
+        onShift = onShift,
+        onTogglePause = onTogglePause,
+        onFinish = onFinish,
+        onCameraChange = onCameraChange,
+        onDemoPower = onDemoPower,
+        onDemoCadence = onDemoCadence,
+        onErgAdjust = onErgAdjust,
+        onDismissNotice = onDismissNotice,
+        onRideWithoutWorld = onRideWithoutWorld,
+        onShowDevices = { showDevices = true },
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (showWorld) Modifier.background(Color.Black) else Modifier.background(HudColors.backdrop)),
+    ) {
+        if (showWorld) {
+            worldSurface(Modifier.fillMaxSize())
+        }
+        // Ein Tipp irgendwo auf die Welt (nicht auf ein Bedienelement) blendet
+        // die Nebensachen aus bzw. ein. Liegt unter dem HUD: Knoepfe gehen vor.
+        val toggleLabel = stringResource(
+            if (chromeHidden) R.string.indoor_app_hud_chrome_show_cd else R.string.indoor_app_hud_chrome_hide_cd,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClickLabel = toggleLabel,
+                ) { chromeHidden = !chromeHidden }
+                .semantics { contentDescription = toggleLabel },
+        )
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val landscape = maxWidth > maxHeight
-            val boxWidth = maxWidth
-            if (showWorld) {
-                worldSurface(Modifier.fillMaxSize())
-            }
-            Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars)) {
-                if (landscape) {
-                    LandscapeHud(
-                        ui = ui,
-                        session = session,
-                        showWorld = showWorld,
-                        availableWidth = boxWidth,
-                        onShift = onShift,
-                        onTogglePause = onTogglePause,
-                        onFinish = onFinish,
-                        onCameraChange = onCameraChange,
-                        onDemoPower = onDemoPower,
-                        onDemoCadence = onDemoCadence,
-                        onErgAdjust = onErgAdjust,
-                        onDismissNotice = onDismissNotice,
-                        onRideWithoutWorld = onRideWithoutWorld,
-                        onShowAttribution = { showAttribution = true },
-                    )
-                } else {
-                    PortraitHud(
-                        ui = ui,
-                        session = session,
-                        showWorld = showWorld,
-                        onShift = onShift,
-                        onTogglePause = onTogglePause,
-                        onFinish = onFinish,
-                        onCameraChange = onCameraChange,
-                        onDemoPower = onDemoPower,
-                        onDemoCadence = onDemoCadence,
-                        onErgAdjust = onErgAdjust,
-                        onDismissNotice = onDismissNotice,
-                        onRideWithoutWorld = onRideWithoutWorld,
-                        onShowAttribution = { showAttribution = true },
-                    )
-                }
+            if (maxWidth > maxHeight) {
+                LandscapeHud(ui, session, showWorld, chromeHidden, actions)
+            } else {
+                PortraitHud(ui, session, showWorld, chromeHidden, actions)
             }
         }
-      }
     }
 
-    if (showAttribution) {
-        AttributionDialog(attribution = ui.attribution, onDismiss = { showAttribution = false })
+    if (showDevices) {
+        DevicesDialog(ui = ui, onDismiss = { showDevices = false })
     }
+}
+
+/** Alle Rueckrufe des HUD gebuendelt, damit die Layouts schlank bleiben. */
+private class HudActions(
+    val onShift: (ShifterEvent) -> Unit,
+    val onTogglePause: () -> Unit,
+    val onFinish: () -> Unit,
+    val onCameraChange: (CameraMode) -> Unit,
+    val onDemoPower: (Int) -> Unit,
+    val onDemoCadence: (Int) -> Unit,
+    val onErgAdjust: (Int) -> Unit,
+    val onDismissNotice: () -> Unit,
+    val onRideWithoutWorld: (() -> Unit)?,
+    val onShowDevices: () -> Unit,
+)
+
+/**
+ * Helle Symbole in Status- und Navigationsleiste, solange die Fahransicht
+ * steht — darunter liegt der dunkle Schleier. Beim Verlassen wie vorher.
+ */
+@Composable
+private fun LightSystemBarIcons() {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = view.context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val lightStatus = controller?.isAppearanceLightStatusBars
+        val lightNav = controller?.isAppearanceLightNavigationBars
+        controller?.isAppearanceLightStatusBars = false
+        controller?.isAppearanceLightNavigationBars = false
+        onDispose {
+            if (lightStatus != null) controller.isAppearanceLightStatusBars = lightStatus
+            if (lightNav != null) controller.isAppearanceLightNavigationBars = lightNav
+        }
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 // ---------------------------------------------------------------------------
@@ -234,48 +296,102 @@ private fun PortraitHud(
     ui: IndoorRideUi,
     session: IndoorSessionState,
     showWorld: Boolean,
-    onShift: (ShifterEvent) -> Unit,
-    onTogglePause: () -> Unit,
-    onFinish: () -> Unit,
-    onCameraChange: (CameraMode) -> Unit,
-    onDemoPower: (Int) -> Unit,
-    onDemoCadence: (Int) -> Unit,
-    onErgAdjust: (Int) -> Unit,
-    onDismissNotice: () -> Unit,
-    onRideWithoutWorld: (() -> Unit)?,
-    onShowAttribution: () -> Unit,
+    chromeHidden: Boolean,
+    actions: HudActions,
 ) {
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-    // Die untere Bedienung (Demo-Regler, ERG, Gang, Knoepfe) hat eine
-    // Hoechsthoehe und scrollt dann — so bleibt der Mitte (Welt bzw. das grosse
-    // Hoehenprofil) auch auf kleinen Geraeten oder mit grosser Schrift Platz.
-    // Ohne Welt braucht das Profil in der Mitte mehr Raum.
-    val maxPanelHeight = maxHeight * if (showWorld) 0.58f else 0.42f
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp)) {
-        ui.notice?.let { NoticeBanner(it, onDismissNotice) }
-        MainTilesRow(session = session, ui = ui)
-        StateChips(ui = ui, session = session, modifier = Modifier.padding(top = 6.dp))
-        // Mitte: die Welt scheint durch; fehlt sie, steht hier die Ersatzanzeige.
-        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 6.dp)) {
-            if (!showWorld) {
-                FallbackArea(ui = ui, session = session, onRideWithoutWorld = onRideWithoutWorld)
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Oben: Kernwerte auf dem Schleier, der unter die Statusleiste reicht.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(HudColors.topScrim)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            HudMetrics(session = session, powerColor = powerColor(session))
+            HudGradeLine(session = session)
+            TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
+        }
+
+        // Mitte: die Welt (bzw. die Ersatzanzeige), unten rechts die Knoepfe.
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(horizontal = 12.dp),
+        ) {
+            if (showWorld) {
+                Row(
+                    modifier = Modifier.align(Alignment.BottomEnd).fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    Box(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                    }
+                    ChromeVisibility(visible = !chromeHidden) {
+                        HudButtons(ui = ui, session = session, showCamera = true, vertical = true, actions = actions)
+                    }
+                }
+            } else {
+                // Ohne Welt: Meldung oben, darunter fuellt das grosse Profil
+                // den Platz; die Knoepfe stehen rechts daneben, damit das
+                // Profil auch auf kleinen Geraeten Hoehe behaelt.
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(top = 4.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    RenderFailedCard(ui = ui, actions = actions)
+                    Row(modifier = Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            BigProfilePanel(ui = ui, session = session, modifier = Modifier.weight(1f))
+                            DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                        }
+                        ChromeVisibility(visible = !chromeHidden, modifier = Modifier.padding(start = 12.dp)) {
+                            HudButtons(ui = ui, session = session, showCamera = false, vertical = true, actions = actions)
+                        }
+                    }
+                }
+            }
+            PhaseCard(
+                session = session,
+                onTogglePause = actions.onTogglePause,
+                modifier = if (showWorld) {
+                    // Mit Welt oben in der Mitte: frei von der Knopfspalte unten rechts.
+                    Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
+                } else {
+                    Modifier.align(Alignment.Center)
+                },
+            )
+        }
+
+        // Unten: Gang bzw. Zielleistung, darunter das schmale Hoehenprofil.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(HudColors.bottomScrim)
+                .windowInsetsPadding(
+                    WindowInsets.navigationBars.union(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+                )
+                .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            ShiftRow(ui = ui, session = session, actions = actions) { pill ->
+                pill()
+            }
+            if (showWorld && ui.profile != null) {
+                ChromeVisibility(visible = !chromeHidden) {
+                    Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                        HudProfileHeader(ui = ui, session = session)
+                        HudProfileCanvas(ui = ui, session = session, height = PROFILE_STRIP_HEIGHT)
+                    }
+                }
             }
         }
-        BottomPanel(
-            ui = ui,
-            session = session,
-            showProfile = showWorld,
-            maxHeight = maxPanelHeight,
-            onShift = onShift,
-            onTogglePause = onTogglePause,
-            onFinish = onFinish,
-            onCameraChange = onCameraChange,
-            onDemoPower = onDemoPower,
-            onDemoCadence = onDemoCadence,
-            onErgAdjust = onErgAdjust,
-            onShowAttribution = onShowAttribution,
-        )
-    }
     }
 }
 
@@ -288,340 +404,323 @@ private fun LandscapeHud(
     ui: IndoorRideUi,
     session: IndoorSessionState,
     showWorld: Boolean,
-    availableWidth: Dp,
-    onShift: (ShifterEvent) -> Unit,
-    onTogglePause: () -> Unit,
-    onFinish: () -> Unit,
-    onCameraChange: (CameraMode) -> Unit,
-    onDemoPower: (Int) -> Unit,
-    onDemoCadence: (Int) -> Unit,
-    onErgAdjust: (Int) -> Unit,
-    onDismissNotice: () -> Unit,
-    onRideWithoutWorld: (() -> Unit)?,
-    onShowAttribution: () -> Unit,
+    chromeHidden: Boolean,
+    actions: HudActions,
 ) {
-    val sideWidth = (availableWidth * 0.30f).coerceIn(200.dp, 340.dp)
-    Row(modifier = Modifier.fillMaxSize().padding(8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        // Links: die vier grossen Kacheln als 2×2 und die Strecken-Angaben.
-        Column(
-            modifier = Modifier.width(sideWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            MainTilesGrid(session = session, ui = ui)
-            DetailRow(session = session, ui = ui, onShift = onShift)
-            StateChips(ui = ui, session = session)
-        }
-        // Mitte: Welt bzw. Ersatzanzeige, oben der Hinweis.
-        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            ui.notice?.let { NoticeBanner(it, onDismissNotice) }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (!showWorld) {
-                    FallbackArea(ui = ui, session = session, onRideWithoutWorld = onRideWithoutWorld)
-                }
-            }
-            if (showWorld) {
-                ProfilePanel(ui = ui, session = session, height = 56.dp)
-            }
-        }
-        // Rechts: Bedienung.
-        Column(
-            modifier = Modifier.width(sideWidth).fillMaxHeight().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            ControlsColumn(
-                ui = ui,
-                session = session,
-                showCamera = showWorld,
-                onTogglePause = onTogglePause,
-                onFinish = onFinish,
-                onCameraChange = onCameraChange,
-                onDemoPower = onDemoPower,
-                onDemoCadence = onDemoCadence,
-                onErgAdjust = onErgAdjust,
-                onShowAttribution = onShowAttribution,
-            )
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Bausteine
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun hudColor(): Color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = LocalHudAlpha.current)
-
-/** Deckkraft der HUD-Flaechen: ueber der Welt leicht durchscheinend, ohne Welt voll deckend. */
-private val LocalHudAlpha = androidx.compose.runtime.compositionLocalOf { HUD_ALPHA }
-
-/** Eine HUD-Kachel: Beschriftung, grosse Zahl, Einheit. */
-@Composable
-private fun HudTile(
-    label: String,
-    value: String,
-    unit: String?,
-    modifier: Modifier = Modifier,
-    valueColor: Color = Color.Unspecified,
-    valueSize: Int = 28,
-) {
-    Surface(
-        color = hudColor(),
-        shape = MaterialTheme.shapes.medium,
-        modifier = modifier,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = valueSize.sp, fontWeight = FontWeight.SemiBold),
-                    color = valueColor,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-                if (unit != null) {
-                    Text(
-                        text = unit,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(start = 3.dp, bottom = 4.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun powerTile(session: IndoorSessionState): Triple<String, String, Color> {
-    val erg = session.erg
-    val power = formatIndoorInt(session.powerW)
-    // Im ERG-Modus faerbt die Abweichung vom Ziel die Zahl — ruhig, ohne Alarm.
-    val watts = session.powerW
-    val color = if (erg != null && !erg.done && watts != null) {
-        val diff = kotlin.math.abs(watts - erg.targetW)
-        if (diff <= maxOf(erg.targetW / 20, 5)) LocalSignalColors.current.good else Color.Unspecified
-    } else {
-        Color.Unspecified
-    }
-    return Triple(stringResource(R.string.indoor_app_hud_power), power, color)
-}
-
-/** Leistung, Tempo, Trittfrequenz, Puls in einer Reihe (Hochformat). */
-@Composable
-private fun MainTilesRow(session: IndoorSessionState, ui: IndoorRideUi) {
-    val formats = LocalAppFormats.current
-    val (powerLabel, power, powerColor) = powerTile(session)
-    // Schmales Geraet (360 dp): alle vier Zahlen gleich etwas kleiner, damit
-    // "km/h" nicht abgeschnitten wird und die Kacheln gleich hoch bleiben.
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-    val tileValueSize = if (maxWidth < 380.dp) 23 else 28
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-        HudTile(
-            label = powerLabel,
-            value = power,
-            unit = stringResource(R.string.indoor_app_unit_watts),
-            valueColor = powerColor,
-            valueSize = tileValueSize,
-            modifier = Modifier.weight(1.15f),
-        )
-        HudTile(
-            label = stringResource(R.string.indoor_app_hud_speed),
-            value = formats.indoorSpeedKmh(session.speedMps),
-            unit = stringResource(R.string.indoor_app_unit_kmh),
-            valueSize = tileValueSize,
-            modifier = Modifier.weight(1.25f),
-        )
-        HudTile(
-            label = stringResource(R.string.indoor_app_hud_cadence),
-            value = formatIndoorInt(session.cadenceRpm),
-            unit = null,
-            valueSize = tileValueSize,
-            modifier = Modifier.weight(0.9f),
-        )
-        HudTile(
-            label = stringResource(R.string.indoor_app_hud_heart_rate),
-            value = formatIndoorInt(session.hrBpm),
-            unit = null,
-            valueSize = tileValueSize,
-            modifier = Modifier.weight(0.9f),
-        )
-    }
-    }
-}
-
-/** Dieselben vier Kacheln als 2×2 (Querformat, links). */
-@Composable
-private fun MainTilesGrid(session: IndoorSessionState, ui: IndoorRideUi) {
-    val formats = LocalAppFormats.current
-    val (powerLabel, power, powerColor) = powerTile(session)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            HudTile(
-                label = powerLabel,
-                value = power,
-                unit = stringResource(R.string.indoor_app_unit_watts),
-                valueColor = powerColor,
-                modifier = Modifier.weight(1f),
-            )
-            HudTile(
-                label = stringResource(R.string.indoor_app_hud_speed),
-                value = formats.indoorSpeedKmh(session.speedMps),
-                unit = stringResource(R.string.indoor_app_unit_kmh),
-                modifier = Modifier.weight(1f),
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            HudTile(
-                label = stringResource(R.string.indoor_app_hud_cadence),
-                value = formatIndoorInt(session.cadenceRpm),
-                unit = stringResource(R.string.indoor_app_unit_rpm),
-                modifier = Modifier.weight(1f),
-            )
-            HudTile(
-                label = stringResource(R.string.indoor_app_hud_heart_rate),
-                value = formatIndoorInt(session.hrBpm),
-                unit = stringResource(R.string.indoor_app_unit_bpm),
-                modifier = Modifier.weight(1f),
-            )
-        }
-    }
-}
-
-/** Steigung, Belag und Gang mit Knoepfen. */
-@Composable
-private fun DetailRow(session: IndoorSessionState, ui: IndoorRideUi, onShift: (ShifterEvent) -> Unit) {
-    val formats = LocalAppFormats.current
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-            HudTile(
-                label = stringResource(R.string.indoor_app_hud_grade),
-                value = formats.indoorGrade(session.gradePct),
-                unit = stringResource(R.string.indoor_app_unit_percent),
-                modifier = Modifier.weight(1f),
-            )
-            HudTile(
-                label = stringResource(R.string.indoor_app_hud_surface),
-                value = surfaceLabel(session.surface),
-                unit = null,
-                valueSize = 16,
-                modifier = Modifier.weight(1.4f),
-            )
-        }
-        // Im ERG-Modus haengt der Widerstand nicht am Gang — die Knoepfe entfallen.
-        if (session.mode == IndoorMode.SIM) {
-            GearControl(session = session, onShift = onShift)
-        }
-    }
-}
-
-/** Gang mit − und + (leichter / schwerer). */
-@Composable
-private fun GearControl(session: IndoorSessionState, onShift: (ShifterEvent) -> Unit) {
-    val gear = session.gear
-    Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Oben links die Kernwerte, oben rechts die Knoepfe in einer Reihe.
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(HudColors.topScrim)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 20.dp),
+            verticalAlignment = Alignment.Top,
         ) {
-            IconButton(onClick = { onShift(ShifterEvent.DOWN) }, enabled = gear.index > 1) {
-                Icon(Icons.Filled.Remove, contentDescription = stringResource(R.string.indoor_app_hud_gear_easier_cd))
+            Column(
+                modifier = Modifier.weight(1f).widthIn(max = 560.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                HudMetrics(session = session, powerColor = powerColor(session), modifier = Modifier.widthIn(max = 520.dp))
+                HudGradeLine(session = session)
+                TopExtras(ui = ui, session = session, chromeHidden = chromeHidden, actions = actions)
             }
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = stringResource(R.string.indoor_app_hud_gear_value, gear.index, gear.count),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = stringResource(R.string.indoor_app_hud_gear_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = { onShift(ShifterEvent.UP) }, enabled = gear.index < gear.count) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.indoor_app_hud_gear_harder_cd))
+            ChromeVisibility(visible = !chromeHidden, modifier = Modifier.padding(start = 16.dp)) {
+                HudButtons(ui = ui, session = session, showCamera = showWorld, vertical = false, actions = actions)
             }
         }
-    }
-}
 
-/** Pause-Hinweis, Ladeanzeige der Welt, Geist-Abstand. */
-@Composable
-private fun StateChips(ui: IndoorRideUi, session: IndoorSessionState, modifier: Modifier = Modifier) {
-    val phase = phaseLabel(session.phase)
-    val loading = ui.render as? IndoorRenderUi.Loading
-    val ghost = session.ghost
-    if (phase == null && loading == null && ghost == null) return
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (phase != null) {
-            Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = phase,
-                    style = MaterialTheme.typography.titleSmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(8.dp),
-                )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                .padding(horizontal = 12.dp),
+        ) {
+            if (showWorld) {
+                Box(modifier = Modifier.align(Alignment.BottomStart).widthIn(max = 340.dp)) {
+                    DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RenderFailedCard(ui = ui, actions = actions)
+                    Row(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        BigProfilePanel(ui = ui, session = session, modifier = Modifier.weight(1f).fillMaxHeight())
+                        if (ui.demoPowerW != null || ui.demoCadenceRpm != null) {
+                            Box(modifier = Modifier.width(300.dp)) {
+                                DemoPanel(ui = ui, chromeHidden = chromeHidden, actions = actions)
+                            }
+                        }
+                    }
+                }
             }
+            PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
         }
-        if (loading != null) {
-            Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                    Text(
-                        text = if (loading.neededTiles > 0) {
-                            stringResource(R.string.indoor_app_ride_world_loading_count, loading.loadedTiles, loading.neededTiles)
-                        } else {
-                            stringResource(R.string.indoor_app_ride_world_loading)
-                        },
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    if (loading.neededTiles > 0) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = { (loading.loadedTiles.toFloat() / loading.neededTiles).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+
+        // Unten: −/+ an den Raendern, dazwischen Gang und Hoehenprofil.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(HudColors.bottomScrim)
+                .windowInsetsPadding(
+                    WindowInsets.navigationBars.union(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
+                )
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
+        ) {
+            ShiftRow(ui = ui, session = session, actions = actions) { pill ->
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    pill()
+                    if (showWorld && ui.profile != null) {
+                        ChromeVisibility(visible = !chromeHidden) {
+                            Column {
+                                HudProfileHeader(ui = ui, session = session)
+                                HudProfileCanvas(ui = ui, session = session, height = 44.dp)
+                            }
+                        }
                     }
                 }
             }
         }
-        if (ghost != null) {
-            GhostChip(ghost = ghost, label = ui.ghostLabel)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Gemeinsame Teile der beiden Layouts
+// ---------------------------------------------------------------------------
+
+/** Im ERG-Modus faerbt die Naehe zum Ziel die Leistung gruen — ruhig, ohne Alarm. */
+private fun powerColor(session: IndoorSessionState): Color {
+    val erg = session.erg
+    val watts = session.powerW
+    if (erg == null || erg.done || watts == null) return HudColors.ink
+    val diff = kotlin.math.abs(watts - erg.targetW)
+    return if (diff <= maxOf(erg.targetW / 20, 5)) HudColors.accent else HudColors.ink
+}
+
+/** Unter den Kernwerten: Geist (ausblendbar), Laden der Welt, Hinweis. */
+@Composable
+private fun TopExtras(ui: IndoorRideUi, session: IndoorSessionState, chromeHidden: Boolean, actions: HudActions) {
+    val ghost = session.ghost
+    if (ghost != null) {
+        ChromeVisibility(visible = !chromeHidden) {
+            HudGhostChip(ghost = ghost, label = ui.ghostLabel, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+    (ui.render as? IndoorRenderUi.Loading)?.let { loading ->
+        HudLoadingChip(loading = loading, modifier = Modifier.padding(top = 4.dp))
+    }
+    ui.notice?.let { notice ->
+        NoticeBanner(notice = notice, onDismiss = actions.onDismissNotice, modifier = Modifier.padding(top = 6.dp))
+    }
+}
+
+/** Ein- und Ausblenden der Nebensachen, weich. */
+@Composable
+private fun ChromeVisibility(visible: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    AnimatedVisibility(visible = visible, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {
+        content()
+    }
+}
+
+/**
+ * Die grossen −/+-Tasten an den Raendern; dazwischen [middle] mit der Pille
+ * (Gang oder Zielleistung). Im ERG-Modus verschieben die Tasten das Ziel.
+ */
+@Composable
+private fun ShiftRow(
+    ui: IndoorRideUi,
+    session: IndoorSessionState,
+    actions: HudActions,
+    middle: @Composable (pill: @Composable () -> Unit) -> Unit,
+) {
+    val erg = session.erg
+    val gear = session.gear
+    val ergMode = session.mode == IndoorMode.ERG && erg != null
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (ergMode) {
+            HudStepButton(
+                icon = Icons.Filled.Remove,
+                contentDescription = stringResource(R.string.indoor_app_hud_erg_less_cd),
+                enabled = true,
+                onClick = { actions.onErgAdjust(-ERG_ADJUST_STEP_PCT) },
+            )
+        } else {
+            HudStepButton(
+                icon = Icons.Filled.Remove,
+                contentDescription = stringResource(R.string.indoor_app_hud_gear_easier_cd),
+                enabled = gear.index > 1,
+                onClick = { actions.onShift(ShifterEvent.DOWN) },
+            )
+        }
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            middle {
+                if (ergMode && erg != null) {
+                    HudErgPill(
+                        title = ui.ergTitle,
+                        targetW = erg.targetW,
+                        remainingS = erg.stepRemainingS,
+                        done = erg.done,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    )
+                } else {
+                    HudGearPill(index = gear.index, count = gear.count)
+                }
+            }
+        }
+        if (ergMode) {
+            HudStepButton(
+                icon = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.indoor_app_hud_erg_more_cd),
+                enabled = true,
+                onClick = { actions.onErgAdjust(ERG_ADJUST_STEP_PCT) },
+            )
+        } else {
+            HudStepButton(
+                icon = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.indoor_app_hud_gear_harder_cd),
+                enabled = gear.index < gear.count,
+                onClick = { actions.onShift(ShifterEvent.UP) },
+            )
         }
     }
 }
 
+/** Ob Trainer oder Schalttaster gerade ein Problem haben (Warnfarbe am Geraeteknopf). */
+private fun devicesHaveProblem(ui: IndoorRideUi): Boolean =
+    ui.trainer != TrainerConnection.READY ||
+        ui.shifter == ShifterConnection.NO_PERMISSION ||
+        ui.shifter == ShifterConnection.BLUETOOTH_OFF ||
+        ui.shifter == ShifterConnection.UNSUPPORTED
+
+/**
+ * Die runden Symbolknoepfe: Geraete, Kamera (nur mit 3D-Welt), Pause/Weiter,
+ * Beenden (gedrueckt halten). [vertical] = Spalte am rechten Rand, sonst Reihe.
+ */
 @Composable
-private fun GhostChip(ghost: GhostState, label: String?) {
-    val name = label ?: stringResource(R.string.indoor_app_hud_ghost_default)
-    val ahead = ghost.gapM >= 0.0
-    val gapS = ghost.gapS
-    val text = if (gapS != null) {
-        val time = formatIndoorGapSeconds(gapS)
-        stringResource(if (ahead) R.string.indoor_app_hud_ghost_ahead else R.string.indoor_app_hud_ghost_behind, name, time)
-    } else {
-        val meters = indoorGapMeters(ghost.gapM)
-        stringResource(if (ahead) R.string.indoor_app_hud_ghost_ahead_m else R.string.indoor_app_hud_ghost_behind_m, name, meters)
+private fun HudButtons(
+    ui: IndoorRideUi,
+    session: IndoorSessionState,
+    showCamera: Boolean,
+    vertical: Boolean,
+    actions: HudActions,
+) {
+    // Beschriftung und Aktion aus derselben Bedingung (IndoorFlowScreen setzt
+    // nur bei PAUSED fort): Bei Auto-Pause pausiert ein Tipp.
+    val paused = session.phase == IndoorPhase.PAUSED
+    val problem = devicesHaveProblem(ui)
+    val buttons: List<@Composable () -> Unit> = buildList {
+        add {
+            HudRoundButton(
+                icon = if (problem) Icons.Filled.Warning else Icons.Filled.BluetoothConnected,
+                contentDescription = stringResource(
+                    if (problem) R.string.indoor_app_hud_devices_problem_cd else R.string.indoor_app_hud_devices_cd,
+                ),
+                onClick = actions.onShowDevices,
+                container = if (problem) HudColors.warning else HudColors.panelStrong,
+                tint = if (problem) Color.Black else HudColors.ink,
+            )
+        }
+        if (showCamera) {
+            add {
+                val cameraName = cameraLabel(ui.camera)
+                HudRoundButton(
+                    icon = Icons.Filled.Videocam,
+                    contentDescription = stringResource(R.string.indoor_app_hud_camera_cd, cameraName),
+                    onClick = { actions.onCameraChange(nextCamera(ui.camera)) },
+                )
+            }
+        }
+        add { HudHoldToFinishButton(onFinish = actions.onFinish) }
+        add {
+            HudRoundButton(
+                icon = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                contentDescription = stringResource(
+                    if (paused) R.string.indoor_app_ride_resume_action else R.string.indoor_app_ride_pause_action,
+                ),
+                onClick = actions.onTogglePause,
+            )
+        }
     }
-    Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-        Text(text = text, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
+    if (vertical) {
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            buttons.forEach { it() }
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            buttons.forEach { it() }
+        }
+    }
+}
+
+/** Naechste Kamera in der Reihenfolge des Enums. */
+private fun nextCamera(current: CameraMode): CameraMode {
+    val all = CameraMode.entries
+    return all[(all.indexOf(current) + 1) % all.size]
+}
+
+/** Demo-Regler, wenn der Demo-Trainer faehrt (ausblendbar). */
+@Composable
+private fun DemoPanel(ui: IndoorRideUi, chromeHidden: Boolean, actions: HudActions) {
+    if (ui.demoPowerW == null && ui.demoCadenceRpm == null) return
+    ChromeVisibility(visible = !chromeHidden) {
+        HudDemoSliders(
+            powerW = ui.demoPowerW,
+            cadenceRpm = ui.demoCadenceRpm,
+            onDemoPower = actions.onDemoPower,
+            onDemoCadence = actions.onDemoCadence,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * Pause, Auto-Pause, Bereit, Ziel: eine ruhige Karte in der Mitte. Bei harter
+ * Pause mit „Weiter" — dort, wo der Blick ohnehin hingeht.
+ */
+@Composable
+private fun PhaseCard(session: IndoorSessionState, onTogglePause: () -> Unit, modifier: Modifier = Modifier) {
+    val phase = phaseLabel(session.phase) ?: return
+    Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.widthIn(max = 320.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+        ) {
+            Text(
+                text = phase,
+                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)),
+                textAlign = TextAlign.Center,
+            )
+            if (session.phase == IndoorPhase.PAUSED) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = onTogglePause,
+                    colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(stringResource(R.string.indoor_app_ride_resume_action))
+                }
+            }
+        }
     }
 }
 
 /** Hinweis oben: antippen schliesst ihn; er verschwindet auch von selbst (Sache des ViewModels). */
 @Composable
-private fun NoticeBanner(notice: IndoorNotice, onDismiss: () -> Unit) {
+private fun NoticeBanner(notice: IndoorNotice, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val signals = LocalSignalColors.current
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp).clickable(onClick = onDismiss),
+        modifier = modifier.fillMaxWidth().clickable(onClick = onDismiss),
     ) {
         NoticeBox(
             icon = if (notice.isGood()) Icons.Filled.Info else Icons.Filled.Warning,
@@ -634,353 +733,104 @@ private fun NoticeBanner(notice: IndoorNotice, onDismiss: () -> Unit) {
     }
 }
 
-/** Ersatz fuer die 3D-Flaeche: Meldung bei Fehler und/oder das grosse Hoehenprofil. */
+/** Statt der 3D-Flaeche bei einem Fehler der Darstellung: Meldung und Hinweis, dass es weitergeht. */
 @Composable
-private fun FallbackArea(ui: IndoorRideUi, session: IndoorSessionState, onRideWithoutWorld: (() -> Unit)?) {
-    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val render = ui.render
-        val withoutWorldAction: (@Composable () -> Unit)? = if (onRideWithoutWorld != null) {
-            ({
-                TextButton(onClick = onRideWithoutWorld) {
-                    Text(stringResource(R.string.indoor_app_world_without_action))
-                }
-            })
-        } else {
-            null
-        }
-        if (render is IndoorRenderUi.Failed) {
+private fun RenderFailedCard(ui: IndoorRideUi, actions: HudActions) {
+    val render = ui.render as? IndoorRenderUi.Failed ?: return
+    val onWithout = actions.onRideWithoutWorld
+    Surface(color = MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.large) {
+        Column(modifier = Modifier.padding(4.dp)) {
             NoticeBox(
                 icon = Icons.Filled.Warning,
                 color = LocalSignalColors.current.warning,
                 title = stringResource(R.string.indoor_app_ride_render_failed_title),
                 text = if (render.failure == null && render.problem != null) problemText(render.problem) else renderFailureText(render.failure),
-                action = withoutWorldAction,
-            )
-            MutedText(stringResource(R.string.indoor_app_ride_render_failed_hint))
-        }
-        if (ui.profile != null) {
-            Surface(color = hudColor(), shape = MaterialTheme.shapes.large, modifier = Modifier.fillMaxWidth().weight(1f)) {
-                BoxWithConstraints {
-                    val canvasHeight = (maxHeight - 72.dp).coerceIn(96.dp, 320.dp)
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.Top) {
-                        Text(
-                            text = stringResource(R.string.indoor_app_ride_profile_title),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ProfileCanvasFor(ui = ui, session = session, height = canvasHeight)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        ProfilePosition(ui = ui, session = session)
+                action = onWithout?.let { action ->
+                    {
+                        TextButton(onClick = action) {
+                            Text(stringResource(R.string.indoor_app_world_without_action))
+                        }
                     }
-                }
-            }
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-        }
-    }
-}
-
-@Composable
-private fun ProfileCanvasFor(ui: IndoorRideUi, session: IndoorSessionState, height: Dp) {
-    val profile = ui.profile ?: return
-    val formats = LocalAppFormats.current
-    val position = formats.indoorKm(session.routeDistM)
-    val ghost = session.ghost?.let { routePositionOf(it.distM, profile) }
-    IndoorProfileCanvas(
-        profile = profile,
-        routeDistM = session.routeDistM,
-        ghostRouteDistM = ghost,
-        description = stringResource(R.string.indoor_app_ride_profile_cd, position),
-        height = height,
-    )
-}
-
-/** Laufmeter des Geists (ueber Runden fortlaufend) auf die Strecke zurueckgefuehrt. */
-private fun routePositionOf(distM: Double, profile: IndoorProfileUi): Double =
-    if (profile.isLoop && profile.lengthM > 0.0) distM % profile.lengthM else distM.coerceIn(0.0, profile.lengthM)
-
-/** „3,2 von 12,4 km" unter dem Profil, in Runden mit der Rundenzahl. */
-@Composable
-private fun ProfilePosition(ui: IndoorRideUi, session: IndoorSessionState) {
-    val profile = ui.profile ?: return
-    val formats = LocalAppFormats.current
-    val text = if (profile.isLoop) {
-        stringResource(
-            R.string.indoor_app_ride_position_loop,
-            formats.indoorKm(session.routeDistM),
-            formats.indoorKm(profile.lengthM),
-            session.lap,
-        )
-    } else {
-        stringResource(
-            R.string.indoor_app_ride_position,
-            formats.indoorKm(session.routeDistM),
-            formats.indoorKm(profile.lengthM),
-        )
-    }
-    Text(text = text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-/** Kleines Profil in einer HUD-Flaeche (mit der Welt dahinter). */
-@Composable
-private fun ProfilePanel(ui: IndoorRideUi, session: IndoorSessionState, height: Dp) {
-    if (ui.profile == null) return
-    Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            ProfileCanvasFor(ui = ui, session = session, height = height)
-            ProfilePosition(ui = ui, session = session)
-        }
-    }
-}
-
-/** Unterer Bereich im Hochformat: ERG, Profil, Gang, Regler, Knoepfe, Status. */
-@Composable
-private fun BottomPanel(
-    ui: IndoorRideUi,
-    session: IndoorSessionState,
-    showProfile: Boolean,
-    maxHeight: Dp,
-    onShift: (ShifterEvent) -> Unit,
-    onTogglePause: () -> Unit,
-    onFinish: () -> Unit,
-    onCameraChange: (CameraMode) -> Unit,
-    onDemoPower: (Int) -> Unit,
-    onDemoCadence: (Int) -> Unit,
-    onErgAdjust: (Int) -> Unit,
-    onShowAttribution: () -> Unit,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState()),
-    ) {
-        DetailRow(session = session, ui = ui, onShift = onShift)
-        if (showProfile) ProfilePanel(ui = ui, session = session, height = 64.dp)
-        ControlsColumn(
-            ui = ui,
-            session = session,
-            showCamera = showProfile,
-            onTogglePause = onTogglePause,
-            onFinish = onFinish,
-            onCameraChange = onCameraChange,
-            onDemoPower = onDemoPower,
-            onDemoCadence = onDemoCadence,
-            onErgAdjust = onErgAdjust,
-            onShowAttribution = onShowAttribution,
-        )
-    }
-}
-
-/** ERG-Abschnitt, Demo-Regler, Kamera/Pause/Beenden und Statuszeile. */
-@Composable
-private fun ControlsColumn(
-    ui: IndoorRideUi,
-    session: IndoorSessionState,
-    showCamera: Boolean,
-    onTogglePause: () -> Unit,
-    onFinish: () -> Unit,
-    onCameraChange: (CameraMode) -> Unit,
-    onDemoPower: (Int) -> Unit,
-    onDemoCadence: (Int) -> Unit,
-    onErgAdjust: (Int) -> Unit,
-    onShowAttribution: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        session.erg?.let { erg ->
-            ErgPanel(ui = ui, targetW = erg.targetW, remainingS = erg.stepRemainingS, done = erg.done, onErgAdjust = onErgAdjust)
-        }
-        if (ui.demoPowerW != null || ui.demoCadenceRpm != null) {
-            DemoSliders(ui = ui, onDemoPower = onDemoPower, onDemoCadence = onDemoCadence)
-        }
-        // Beschriftung und Aktion aus derselben Bedingung (IndoorFlowScreen setzt
-        // nur bei PAUSED fort): Bei Auto-Pause pausiert ein Tipp, der Chip
-        // erklaert die Auto-Pause.
-        val paused = session.phase == IndoorPhase.PAUSED
-        // Schmale Spalte (Querformat): Kamera und Pause untereinander, damit
-        // die Beschriftung "Von hinten" nicht abgeschnitten wird.
-        BoxWithConstraints {
-            val stack = showCamera && maxWidth < 300.dp
-            val cameraButton: @Composable (Modifier) -> Unit = { m ->
-                val cameraName = cameraLabel(ui.camera)
-                val cameraCd = stringResource(R.string.indoor_app_hud_camera_cd, cameraName)
-                NeutralButton(
-                    onClick = { onCameraChange(nextCamera(ui.camera)) },
-                    modifier = m.semantics { contentDescription = cameraCd },
-                ) {
-                    Icon(Icons.Filled.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(cameraName, maxLines = 1)
-                }
-            }
-            val pauseButton: @Composable (Modifier) -> Unit = { m ->
-                Button(onClick = onTogglePause, modifier = m.heightIn(min = 48.dp)) {
-                    Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        stringResource(if (paused) R.string.indoor_app_ride_resume_action else R.string.indoor_app_ride_pause_action),
-                        maxLines = 1,
-                    )
-                }
-            }
-            if (stack) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // Kamera nur mit 3D-Welt — ohne sie waere der Knopf wirkungslos.
-                    cameraButton(Modifier.fillMaxWidth())
-                    pauseButton(Modifier.fillMaxWidth())
-                }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (showCamera) cameraButton(Modifier.weight(1f))
-                    pauseButton(Modifier.weight(1f))
-                }
-            }
-        }
-        HoldToEndButton(
-            onEnd = onFinish,
-            modifier = Modifier.fillMaxWidth(),
-            label = stringResource(R.string.indoor_app_ride_finish_hold),
-            holdHint = stringResource(R.string.indoor_app_ride_finish_hint),
-        )
-        StatusLine(ui = ui, onShowAttribution = onShowAttribution)
-    }
-}
-
-/** Naechste Kamera in der Reihenfolge des Enums. */
-private fun nextCamera(current: CameraMode): CameraMode {
-    val all = CameraMode.entries
-    return all[(all.indexOf(current) + 1) % all.size]
-}
-
-/** ERG: Ziel, Restzeit, Plus/Minus. */
-@Composable
-private fun ErgPanel(
-    ui: IndoorRideUi,
-    targetW: Int,
-    remainingS: Int,
-    done: Boolean,
-    onErgAdjust: (Int) -> Unit,
-) {
-    Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
-            IconButton(onClick = { onErgAdjust(-ERG_ADJUST_STEP_PCT) }) {
-                Icon(Icons.Filled.Remove, contentDescription = stringResource(R.string.indoor_app_hud_erg_less_cd))
-            }
-            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = ui.ergTitle ?: stringResource(R.string.indoor_app_hud_erg_label),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-                Text(
-                    text = stringResource(R.string.indoor_app_hud_erg_target, targetW),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    text = if (done) {
-                        stringResource(R.string.indoor_app_hud_erg_done)
-                    } else {
-                        stringResource(R.string.indoor_app_hud_erg_remaining, formatIndoorRemaining(remainingS))
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = { onErgAdjust(ERG_ADJUST_STEP_PCT) }) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.indoor_app_hud_erg_more_cd))
-            }
-        }
-    }
-}
-
-/** Regler des Demo-Trainers: Leistung 0..600 W, Trittfrequenz 0..130. */
-@Composable
-private fun DemoSliders(ui: IndoorRideUi, onDemoPower: (Int) -> Unit, onDemoCadence: (Int) -> Unit) {
-    Surface(color = hudColor(), shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-            ui.demoPowerW?.let { power ->
-                DemoSliderRow(
-                    label = stringResource(R.string.indoor_app_demo_power, power),
-                    value = power,
-                    max = DEMO_POWER_MAX_W,
-                    description = stringResource(R.string.indoor_app_demo_power_cd),
-                    onChange = onDemoPower,
-                )
-            }
-            ui.demoCadenceRpm?.let { cadence ->
-                DemoSliderRow(
-                    label = stringResource(R.string.indoor_app_demo_cadence, cadence),
-                    value = cadence,
-                    max = DEMO_CADENCE_MAX_RPM,
-                    description = stringResource(R.string.indoor_app_demo_cadence_cd),
-                    onChange = onDemoCadence,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DemoSliderRow(label: String, value: Int, max: Int, description: String, onChange: (Int) -> Unit) {
-    Column {
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(
-            value = value.toFloat().coerceIn(0f, max.toFloat()),
-            onValueChange = { onChange(it.roundToInt()) },
-            valueRange = 0f..max.toFloat(),
-            modifier = Modifier.semantics { contentDescription = description },
-        )
-    }
-}
-
-/** Trainer- und Schalttaster-Status, rechts das „ⓘ" fuer die Quellenangaben. */
-@Composable
-private fun StatusLine(ui: IndoorRideUi, onShowAttribution: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(hudColor(), MaterialTheme.shapes.medium)
-            .padding(start = 12.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.indoor_app_hud_trainer_status, ui.trainerName, trainerStatusLabel(ui.trainer)),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                },
             )
-            ui.shifter?.let { shifter ->
-                val battery = ui.shifterBatteryPct
-                Text(
-                    text = if (battery != null) {
-                        stringResource(R.string.indoor_app_hud_shifter_status_battery, shifterStatusLabel(shifter), battery)
-                    } else {
-                        stringResource(R.string.indoor_app_hud_shifter_status, shifterStatusLabel(shifter))
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
+            MutedText(
+                stringResource(R.string.indoor_app_ride_render_failed_hint),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
         }
-        if (ui.attribution.isNotEmpty() || ui.render !is IndoorRenderUi.NoWorld) {
-            IconButton(onClick = onShowAttribution) {
-                Icon(Icons.Filled.Info, contentDescription = stringResource(R.string.indoor_app_attribution_open_cd))
+    }
+}
+
+/**
+ * Ohne 3D-Welt: das grosse Hoehenprofil fuellt den freien Platz. Wird der
+ * Platz knapp (kleines Geraet, Hinweis, Demo-Regler), entfaellt die
+ * Ueberschrift und das Profil schrumpft, bleibt aber sichtbar.
+ */
+@Composable
+private fun BigProfilePanel(ui: IndoorRideUi, session: IndoorSessionState, modifier: Modifier = Modifier) {
+    if (ui.profile == null) {
+        Spacer(modifier = modifier)
+        return
+    }
+    Surface(color = HudColors.panel, shape = RoundedCornerShape(24.dp), modifier = modifier.fillMaxWidth()) {
+        BoxWithConstraints {
+            val roomy = maxHeight >= 160.dp
+            val chrome = if (roomy) 88.dp else 48.dp
+            val canvasHeight = (maxHeight - chrome).coerceIn(24.dp, 360.dp)
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = if (roomy) 16.dp else 8.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                if (roomy) {
+                    Text(
+                        text = stringResource(R.string.indoor_app_ride_profile_title),
+                        style = hudStyle(MaterialTheme.typography.labelLarge, HudColors.inkMuted),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                HudProfileCanvas(ui = ui, session = session, height = canvasHeight)
+                Spacer(modifier = Modifier.height(if (roomy) 8.dp else 4.dp))
+                HudProfileHeader(ui = ui, session = session)
             }
         }
     }
 }
 
-/** Die Quellenangaben der Welt (ueber das „ⓘ" erreichbar). */
+
+/** Trainer, Schalttaster und die Quellenangaben der Welt (ueber den Geraeteknopf). */
 @Composable
-private fun AttributionDialog(attribution: List<WorldAttribution>, onDismiss: () -> Unit) {
+private fun DevicesDialog(ui: IndoorRideUi, onDismiss: () -> Unit) {
     OneUiDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.indoor_app_attribution_title)) },
+        title = { Text(stringResource(R.string.indoor_app_hud_devices_title)) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                AttributionList(attribution)
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.indoor_app_hud_trainer_status, ui.trainerName, trainerStatusLabel(ui.trainer)),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                ui.shifter?.let { shifter ->
+                    val battery = ui.shifterBatteryPct
+                    Text(
+                        text = if (battery != null) {
+                            stringResource(R.string.indoor_app_hud_shifter_status_battery, shifterStatusLabel(shifter), battery)
+                        } else {
+                            stringResource(R.string.indoor_app_hud_shifter_status, shifterStatusLabel(shifter))
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (ui.attribution.isNotEmpty() || ui.render !is IndoorRenderUi.NoWorld) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.indoor_app_attribution_title),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    AttributionList(ui.attribution)
+                }
             }
         },
         confirmButton = {

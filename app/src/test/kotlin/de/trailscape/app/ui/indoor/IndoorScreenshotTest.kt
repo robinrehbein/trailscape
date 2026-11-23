@@ -1,6 +1,7 @@
 package de.trailscape.app.ui.indoor
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,13 +13,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import de.trailscape.app.R
@@ -62,6 +70,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -94,6 +103,79 @@ class IndoorScreenshotTest {
         }
         compose.waitForIdle()
         captureScreenRoboImage("build/outputs/roborazzi/$name.png")
+    }
+
+    /**
+     * Platzhalter fuer die 3D-Welt: eine gezeichnete Landschaft mit hellem
+     * Himmel bis zum Horizont, Huegeln, Wiese und Strasse — damit sich die
+     * Lesbarkeit des HUD ueber einem echten Bild beurteilen laesst (der
+     * schwierigste Fall ist der fast weisse Himmel am Horizont).
+     */
+    @Composable
+    private fun WorldPlaceholder(modifier: Modifier = Modifier) {
+        Canvas(modifier = modifier) {
+            val w = size.width
+            val h = size.height
+            val horizon = h * 0.46f
+            drawRect(
+                Brush.verticalGradient(
+                    0f to Color(0xFF5E9BD6), 0.55f to Color(0xFFA9CDED), 1f to Color(0xFFEAF3F9),
+                    startY = 0f, endY = horizon,
+                ),
+                size = Size(w, horizon),
+            )
+            // Wolken
+            listOf(Offset(w * 0.22f, h * 0.12f), Offset(w * 0.70f, h * 0.20f), Offset(w * 0.45f, h * 0.31f)).forEach { c ->
+                val u = minOf(w, h)
+                for (i in -2..2) drawCircle(Color.White.copy(alpha = 0.85f), radius = u * 0.06f, center = Offset(c.x + i * u * 0.05f, c.y + abs(i) * u * 0.012f))
+            }
+            // Ferne und nahe Huegel
+            fun hills(base: Float, amp: Float, freq: Float, phase: Float, color: Color) {
+                val path = Path().apply {
+                    moveTo(0f, h)
+                    for (i in 0..60) {
+                        val x = w * i / 60f
+                        lineTo(x, base - amp * (0.6f + 0.4f * sin(x / w * freq + phase)))
+                    }
+                    lineTo(w, h)
+                    close()
+                }
+                drawPath(path, color)
+            }
+            hills(horizon + h * 0.01f, h * 0.06f, 7f, 0.4f, Color(0xFF8FA9BE))
+            hills(horizon + h * 0.04f, h * 0.05f, 5f, 2.1f, Color(0xFF6E9A5B))
+            drawRect(
+                Brush.verticalGradient(0f to Color(0xFF6FA34E), 1f to Color(0xFF3F7A2C), startY = horizon + h * 0.03f, endY = h),
+                topLeft = Offset(0f, horizon + h * 0.03f),
+                size = Size(w, h - horizon),
+            )
+            // Strasse in die Tiefe
+            val vx = w * 0.52f
+            val vy = horizon + h * 0.035f
+            val road = Path().apply {
+                moveTo(vx - w * 0.01f, vy)
+                lineTo(vx + w * 0.01f, vy)
+                lineTo(w * 0.95f, h)
+                lineTo(w * 0.05f, h)
+                close()
+            }
+            drawPath(road, Brush.verticalGradient(0f to Color(0xFF8C8C8C), 1f to Color(0xFF4B4B4B), startY = vy, endY = h))
+            var t = 0.05f
+            while (t < 1f) {
+                val t2 = t + 0.025f + t * 0.05f
+                val y1 = vy + (h - vy) * t * t
+                val y2 = vy + (h - vy) * t2 * t2
+                drawLine(Color(0xFFF2F2F2), Offset(vx + (w * 0.5f - vx) * t * t, y1), Offset(vx + (w * 0.5f - vx) * t2 * t2, y2), strokeWidth = 2f + 10f * t)
+                t = t2 + 0.03f + t * 0.06f
+            }
+            // Baeume links und rechts
+            listOf(0.12f to 0.62f, 0.2f to 0.56f, 0.82f to 0.58f, 0.9f to 0.66f, 0.3f to 0.52f).forEach { (fx, fy) ->
+                val u = minOf(w, h)
+                val r = u * 0.03f + (fy - 0.5f) * u * 0.25f
+                drawRect(Color(0xFF5A4030), topLeft = Offset(w * fx - r * 0.12f, h * fy), size = Size(r * 0.24f, r * 1.1f))
+                drawCircle(Color(0xFF2F6B2A), radius = r, center = Offset(w * fx, h * fy - r * 0.2f))
+            }
+        }
     }
 
     @Composable
@@ -168,12 +250,13 @@ class IndoorScreenshotTest {
     )
 
     @Composable
-    private fun RideScreen(ui: IndoorRideUi) {
+    private fun RideScreen(ui: IndoorRideUi, chromeHidden: Boolean = false) {
         IndoorRideScreen(
             ui = ui,
-            worldSurface = { m -> Placeholder("3D-Darstellung", m) },
+            worldSurface = { m -> WorldPlaceholder(m) },
             onShift = {}, onTogglePause = {}, onFinish = {}, onCameraChange = {},
             onDemoPower = {}, onDemoCadence = {}, onErgAdjust = {}, onDismissNotice = {},
+            initialChromeHidden = chromeHidden,
         )
     }
 
@@ -259,6 +342,40 @@ class IndoorScreenshotTest {
                 ghostLabel = null, ergTitle = "Schwelle 3 x 8 Min",
             ),
         )
+    }
+
+    @Test
+    fun fahrenAusgeblendet() = shot("112-indoor-fahren-ausgeblendet") {
+        // Nach einem Tipp auf die Welt: nur Kernwerte und Schalten.
+        RideScreen(ride(), chromeHidden = true)
+    }
+
+    @Test
+    fun fahrenGrosseSchrift() = shot("113-indoor-fahren-grosse-schrift") {
+        // Systemschrift 130 %: nichts bricht um oder wird abgeschnitten.
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.3f)) {
+            RideScreen(ride())
+        }
+    }
+
+    @Test
+    fun fahrenPause() = shot("114-indoor-fahren-pause") {
+        RideScreen(ride(session = session(phase = IndoorPhase.PAUSED)))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w891dp-h411dp-xxhdpi")
+    fun fahrenQuerErg() = shot("115-indoor-fahren-quer-erg") {
+        val density = LocalDensity.current
+        CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.3f)) {
+            RideScreen(
+                ride(
+                    session = session(IndoorMode.ERG, ghost = null, erg = ErgState(2, 220, 214, false)),
+                    ghostLabel = null, ergTitle = "Schwelle 3 x 8 Min",
+                ),
+            )
+        }
     }
 
     @Test
@@ -398,7 +515,7 @@ class IndoorScreenshotTest {
         TestLocales.assertTestLocale(AppLanguage.EN)
         shot("106-indoor-fahren-en") { RideScreen(ride()) }
         val text = RuntimeEnvironment.getApplication().getString(R.string.indoor_app_ride_pause_action)
-        compose.onAllNodesWithText(text, substring = true).onFirst().assertExists()
+        compose.onAllNodesWithContentDescription(text).onFirst().assertExists()
     }
 
     @Test
