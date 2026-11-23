@@ -453,7 +453,6 @@ internal object SimpleWorldParts : WorldParts {
 
 /** Kennung und Version des Weltbaus (Manifest-Feld `builder`). */
 internal const val WORLD_BUILDER_VERSION: Int = 1
-internal const val WORLD_BUILDER_ID: String = "indoor-world/$WORLD_BUILDER_VERSION"
 
 // ---------------------------------------------------------------------------
 // Landnutzung ueber Punkt-in-Polygon
