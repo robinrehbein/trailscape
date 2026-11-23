@@ -16,8 +16,8 @@ als Soll-Zustand des Prototyps.
   statt des `HttpClient`-Interface (Kacheln sind Bytes, das Interface liefert
   Text). Keine Weiterleitungen, User-Agent `Trailscape/<Version>`.
 - **Nach Prozesstod beginnt der Ablauf neu bei „Koppeln“.** Es wird weder die
-  laufende Fahrt noch die Auswahl wiederhergestellt (nur der Demo-Schalter
-  und das Kettenblatt bleiben in den SharedPreferences). Der Vertrag verlangt mehr nicht.
+  laufende Fahrt noch die Auswahl wiederhergestellt (nur der Demo-Schalter,
+  das Kettenblatt und die Gangtabelle bleiben in den SharedPreferences). Der Vertrag verlangt mehr nicht.
 - **Zurück während der Fahrt** verlässt den Ablauf nie: Die Fahrt hält an, ein
   Dialog bietet „Weiterfahren“ oder „Fahrt beenden“ (dann Auswertung, dort
   speichern oder verwerfen). In der Auswertung fragt Zurück bei einer
@@ -67,9 +67,39 @@ als Soll-Zustand des Prototyps.
   (`IndoorViewModel.ZWIFT_COG_TEETH`). Beim Start der Fahrt bekommt die
   Sitzung `IndoorParts.riderSetup(...).copy(realGearRatio = Kettenblatt / 14)`
   — auch auf dem Ersatzweg, wenn der Kern `riderSetup` nicht liefert.
-  `RiderSetup` selbst bleibt unverändert (Vertrag). Bietet der Kern später eine
-  Gangtabelle an, ist diese Einstellung dort anbindbar; bis dahin bezieht der
-  Kern seine virtuellen Gänge allein auf `realGearRatio`.
+  `RiderSetup` selbst bleibt unverändert (Vertrag).
+- Gangtabelle (seit der Integration): Karte „Virtuelle Gänge“ im Schritt
+  *Koppeln* mit „Gleichmäßig (24 Gänge)“ (`VirtualGearTable.EVEN`, Vorgabe)
+  und „Wie am Rad (2 × 12)“ (`BIKE_GRX_2X12`); Schlüssel
+  `trailscape.indoor.gear_table` (Enum-Name, Unbekanntes → Vorgabe). Die
+  Sitzung bekommt `riderSetup(...).copy(realGearRatio = …, gearTable = …)`.
+  Die Grenzen der Ersatzsteigung (`minSimGradePct`/`maxSimGradePct`) bleiben
+  bei der Vorgabe des Kerns (−40..+40 %); der Trainer klemmt ohnehin selbst
+  (KICKR −10..+20 %). Eine Einstellung dafür lohnt erst nach der Kalibrierung
+  auf dem Gerät.
+- Fähigkeiten des Trainers (seit der Integration): Die Sitzung startet mit der
+  Annahme `TrainerCapabilities(simulation = true, targetPower = true)`
+  (`IndoorViewModel.ASSUMED_CAPABILITIES`), weil `IndoorSessionConfig` sie beim
+  Anlegen verlangt und der Trainer sie erst mit `READY` meldet. Meldet er
+  andere, solange die Sitzung noch in `READY` auf den ersten Tritt wartet,
+  tauscht die Laufzeit die Sitzung **einmal** gegen eine neue mit den
+  gemeldeten Fähigkeiten (`IndoorRideRuntime.rebuildSession`); Schalten und
+  ERG-Verschiebungen bis dahin werden übertragen. Kommen sie erst nach dem
+  ersten Tritt (z. B. weil ein FTMS-Trainer schon vor „Request Control“
+  Leistung meldet) oder nach einem Neuverbinden mitten in der Fahrt, bleibt es
+  bei der Annahme: Eine laufende Sitzung lässt sich ohne Vertragsänderung
+  (`IndoorSession` hat keinen Setter) nicht umstellen. Wirkung heute nur die
+  Klemmung der ERG-Zielleistung auf `min/maxPowerW`.
+- Rohre: Jedes `openLink`-Rohr gehört dem Trainer bzw. Schalttaster, der es
+  bekommt; dessen `stop()` schließt es (die Laufzeit ruft `stop()` beim
+  Beenden und Verwerfen der Fahrt, `onCleared` verwirft). Scheitert der Start,
+  bevor ein Trainer/Taster das Rohr übernommen oder gestartet hat, schließt
+  `startRide` es selbst. `IndoorDevices.forget()` schließt kein Rohr — muss es
+  auch nicht: Während einer Fahrt ist der Abschnitt zum Koppeln nicht
+  erreichbar, und die Fahrt gibt ihr Rohr am Ende selbst frei.
+- Schalttaster: je Fahrt eine neue Instanz. Meldet er `UNSUPPORTED`, bleibt er
+  es für diese Fahrt (er schließt sein Rohr dann selbst); der nächste Versuch
+  ist die nächste Fahrt.
 - Laufzeit (`IndoorRideRuntime`): 10-Hz-Schleife auf einem eigenen seriellen
   Dispatcher, Uhr injizierbar (Vorgabe `SystemClock.elapsedRealtime`).
   Telemetrie und Schaltereignisse vom BLE-Thread werden nur abgelegt. Jeder
@@ -176,20 +206,30 @@ aus `IndoorScreenshotTest`. Die Slots der anderen Slices (Geräteliste, 3D-Fläc
 sind darin blaue Platzhalter; echte Darstellung und Geräteliste zeigen erst
 die Bilder aus dem Gerätetest.
 
-90 Karte auf *Heute*, 91 Koppeln (Kettenblatt 48), 92 Strecke (freie Fahrt,
+90 Karte auf *Heute*, 91 Koppeln (Kettenblatt 48, Gangtabelle), 92 Strecke (freie Fahrt,
 Frühere Fahrt), 93 Strecke (Einheit des Tages, feste Leistung), 94 Voranschlag
 der Welt, 95 Bau mit Fortschritt, 96 Fehler beim Bau, 97 Fahren mit
 Mitfahrer, 98 Fahren im ERG-Modus, 99 Fahren ohne Darstellung, 100 Fahren
 ohne Welt, 101 Hinweis bei Trainerverlust, 102 Querformat (Kamera und Pause
 untereinander), 103 Auswertung gespeichert, 104 Auswertung unter 60 s,
 105 Weltverwaltung, 106 und 107 Englisch, 108 kleines Gerät (360 × 640 dp) mit
-Demo-Reglern, 109 Koppeln mit Demo-Trainer.
+Demo-Reglern, 109 Koppeln mit Demo-Trainer. Nur in
+`app/build/outputs/roborazzi/` (nicht unter `docs/`): 110 und 111 Koppeln mit
+dem echten Abschnitt von indoor-ble (ohne Berechtigung bzw. gekoppelt mit
+laufender Suche), als hohes Bild der ganzen Seite.
+
+Integration: Im Schritt *Koppeln* stand zuerst unter dem Abschnitt von
+indoor-ble eine zweite Liste der gemerkten Geräte samt Hinweis „Schalttaster
+optional“ — doppelt zum Abschnitt selbst. Sie ist entfernt; der Abschnitt
+steht jetzt in einer Karte wie die übrigen.
 
 ## Bitte an andere Slices
 
-- **indoor-core:** `IndoorParts`-Einstiege (`riderSetup`, Sitzung, Aufzeichnung)
-  liefern; sie werfen auf diesem Branch `NotImplementedError`. Eine Gangtabelle
-  anbieten, an die das Kettenblatt anbindbar ist (bisher nur `realGearRatio`).
+- **indoor-core:** ~~`IndoorParts`-Einstiege liefern; Gangtabelle anbieten~~ —
+  erledigt mit dem Merge (Einstiege echt, `RiderSetup.gearTable` angebunden).
+  Offen, falls gewünscht: `IndoorSession` könnte die Fähigkeiten des Trainers
+  auch nach dem ersten Tritt übernehmen (heute nur über eine neue Sitzung vor
+  dem Start, siehe Entscheidungen).
 - **indoor-world:** Weltbau, `isCancelled()` zügig abfragen (der Slice wartet
   auf das Ende des abgelösten Baus), Weltverzeichnis und Manifest.
 - **indoor-ble:** die Geräteliste im Schritt *Koppeln* (`devicesSection`) und die
