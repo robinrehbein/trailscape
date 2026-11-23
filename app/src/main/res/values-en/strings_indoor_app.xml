@@ -65,16 +65,16 @@
     <string name="indoor_app_pair_demo_title">Demo trainer</string>
     <string name="indoor_app_pair_demo_body">A simulated trainer whose power and cadence you set yourself.</string>
     <string name="indoor_app_pair_demo_notice">With the demo trainer you set power and cadence during the ride using two sliders.</string>
-    <string name="indoor_app_pair_demo_name">Demo trainer</string>
     <string name="indoor_app_pair_chainring_title">Chainring on the trainer</string>
     <string name="indoor_app_pair_chainring_value">%1$d teeth</string>
     <string name="indoor_app_pair_chainring_body">The chainring your chain runs on. With the trainer’s single sprocket (%2$d teeth) this gives a ratio of %1$d/%2$d, which the virtual gears build on.</string>
     <string name="indoor_app_pair_chainring_less_cd">Smaller chainring</string>
     <string name="indoor_app_pair_chainring_more_cd">Larger chainring</string>
-    <string name="indoor_app_pair_remembered_trainer">Trainer</string>
-    <string name="indoor_app_pair_remembered_shifter">Shifter</string>
-    <string name="indoor_app_pair_none">not paired</string>
-    <string name="indoor_app_pair_shifter_optional">The shifter is optional. Without it you change gear with the buttons on the screen.</string>
+    <string name="indoor_app_pair_gears_title">Virtual gears</string>
+    <string name="indoor_app_pair_gears_even_label">Even (24 gears)</string>
+    <string name="indoor_app_pair_gears_even_body">24 gears in even steps from very easy to very hard.</string>
+    <string name="indoor_app_pair_gears_bike_label">Like your bike (2 × 12)</string>
+    <string name="indoor_app_pair_gears_bike_body">The ratios of a gravel bike with 48/31 chainrings and an 11–34 cassette, sorted from easy to hard.</string>
     <string name="indoor_app_pair_continue_hint">Pair a trainer or switch on the demo trainer to continue.</string>
     <string name="indoor_app_pair_diagnostics_action">Open diagnostics</string>
     <!-- IndoorRouteScreen.kt -->

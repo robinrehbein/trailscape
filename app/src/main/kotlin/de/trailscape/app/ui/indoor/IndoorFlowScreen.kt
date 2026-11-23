@@ -116,6 +116,7 @@ private fun PairStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenDiagnostics
         devicesSection = { IndoorDevicesSection() },
         onDemoChange = vm::setDemoTrainer,
         onChainringChange = vm::setChainringTeeth,
+        onGearTableChange = vm::setGearTable,
         onContinue = vm::continueFromPair,
         onBack = onExit,
         onOpenDiagnostics = onOpenDiagnostics,

@@ -6,6 +6,7 @@ import de.trailscape.core.indoor.IndoorRouteSource
 import de.trailscape.core.indoor.IndoorSessionState
 import de.trailscape.core.indoor.ShifterConnection
 import de.trailscape.core.indoor.TrainerConnection
+import de.trailscape.core.indoor.VirtualGearTable
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderFailure
@@ -36,6 +37,7 @@ enum class IndoorStage { PAIR, ROUTE, WORLD, RIDE, SUMMARY }
  * @property shifterName Name des gemerkten Schalttasters, `null` = keiner.
  * @property chainringTeeth Kettenblatt am Trainer in Zaehnen (Ritzel: Zwift
  *   Cog, 14 Zaehne) — Bezug der virtuellen Gaenge.
+ * @property gearTable Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`).
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
@@ -43,6 +45,7 @@ data class IndoorPairUi(
     val trainerName: String?,
     val shifterName: String?,
     val chainringTeeth: Int = IndoorViewModel.CHAINRING_DEFAULT_TEETH,
+    val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }

@@ -244,7 +244,8 @@ class IndoorViewModelDemoFlowTest {
 
     @Test
     fun demoDurchlaufMitEchtenTeilenWennVorhanden() {
-        val parts = RealOrFakeIndoorParts()
+        val fake = FakeIndoorParts()
+        val parts = RealOrFakeIndoorParts(fake)
         val vm = viewModel(parts)
         vm.pairWithDemo()
         vm.selectRoute(IndoorRouteOption.TestWorld)
@@ -260,6 +261,84 @@ class IndoorViewModelDemoFlowTest {
         assertTrue(saved.indoor)
         assertTrue(saved.points.size >= 2)
         assertTrue(saved.stats.distanceKm > 0.0)
+    }
+
+    /**
+     * Nagelt fest, dass der Demo-Durchlauf nach dem Zusammenfuehren mit den
+     * **echten** Teilen aus `:core` faehrt (Demo-Trainer, Sitzung, Fahrer-
+     * Aufbau) — keine Attrappe springt still ein. Die Welt darf noch die
+     * Attrappe sein, solange der Weltbau fehlt.
+     */
+    @Test
+    fun demoDurchlaufNutztEchtenDemoTrainerUndEchteSitzung() {
+        val fake = FakeIndoorParts()
+        val parts = RealOrFakeIndoorParts(fake)
+        val vm = viewModel(parts)
+        vm.setGearTable(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12)
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        vm.startRide(withWorld = true)
+        vm.rideFor(120)
+
+        assertTrue(
+            parts.realParts.containsAll(listOf("createDemoTrainer", "createIndoorSession", "riderSetupFrom")),
+            "echt: ${parts.realParts}",
+        )
+        val trainer = fake.trainers.single()
+        assertFalse(trainer is de.trailscape.app.indoor.testing.FakeDemoTrainer, "echter Demo-Trainer: ${trainer::class}")
+        assertTrue(fake.sessions.none { it is de.trailscape.app.indoor.testing.FakeIndoorSession }, "echte Sitzung")
+
+        // Die Sitzung faehrt mit den Faehigkeiten, die der Demo-Trainer meldet
+        // (Leistungsbereich), nicht mit der Annahme vom Start.
+        assertEquals(2, fake.sessionConfigs.size, "Annahme vom Start, dann einmal mit den gemeldeten Faehigkeiten")
+        assertEquals(IndoorViewModel.ASSUMED_CAPABILITIES, fake.sessionConfigs.first().capabilities)
+        val effective = fake.sessionConfigs.last()
+        assertNotNull(effective.capabilities.maxPowerW, "Leistungsbereich des Demo-Trainers: ${effective.capabilities}")
+        // Einstellungen aus dem Schritt „Koppeln“ und echte Fahrerdaten aus riderSetupFrom.
+        assertEquals(48.0 / 14.0, effective.rider.realGearRatio, 1e-9)
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12, effective.rider.gearTable)
+        assertEquals(75.0, effective.rider.riderMassKg, 1e-9)
+
+        val session = assertNotNull(vm.ride.value?.session)
+        assertEquals(de.trailscape.core.indoor.IndoorPhase.RUNNING, session.phase)
+        assertTrue(session.distM > 100.0, "echte Physik mit 180 W, distM=${session.distM}")
+        assertEquals(de.trailscape.core.indoor.TrainerConnection.READY, vm.ride.value?.trainer)
+
+        val saved = vm.finishAndSave()
+        assertTrue(saved.indoor)
+        assertTrue(saved.points.size >= 60, "ein Punkt je gefahrener Sekunde, hier ${saved.points.size}")
+        assertTrue(saved.points.any { (it.power ?: 0) > 0 }, "Leistung steht an den Punkten")
+    }
+
+    @Test
+    fun gangtabelleWirdGemerktUndGehtAnDieSitzung() {
+        val store = MemoryKeyValueStore()
+        val first = viewModel(FakeIndoorParts(), store = store)
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.EVEN, first.pair.value.gearTable, "Vorgabe gleichmaessig")
+        first.setGearTable(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12)
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12, first.pair.value.gearTable)
+        assertEquals("BIKE_GRX_2X12", store.getString(IndoorViewModel.KEY_GEAR_TABLE))
+
+        val parts = FakeIndoorParts()
+        val vm = viewModel(parts, store = store)
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12, vm.pair.value.gearTable)
+        val config = vm.startTestWorldRide(parts)
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12, config.rider.gearTable)
+        assertEquals(48.0 / 14.0, config.rider.realGearRatio, 1e-9, "Kettenblatt bleibt daneben erhalten")
+
+        // Unbekannter Wert im Speicher → Vorgabe.
+        store.setString(IndoorViewModel.KEY_GEAR_TABLE, "KASSETTE_11_50")
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.EVEN, viewModel(FakeIndoorParts(), store = store).pair.value.gearTable)
+    }
+
+    @Test
+    fun gangtabelleGiltAuchWennRiderSetupDesKernsWirft() {
+        val parts = FakeIndoorParts(riderSetupFactory = { throw NotImplementedError("Kern fehlt") })
+        val vm = viewModel(parts)
+        vm.setGearTable(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12)
+        val config = vm.startTestWorldRide(parts)
+        assertEquals(de.trailscape.core.indoor.VirtualGearTable.BIKE_GRX_2X12, config.rider.gearTable)
     }
 
     @Test

@@ -24,12 +24,17 @@ import com.github.takahirom.roborazzi.captureScreenRoboImage
 import de.trailscape.app.R
 import de.trailscape.app.indoor.IndoorPart
 import de.trailscape.app.indoor.IndoorProblem
+import de.trailscape.app.sensors.indoor.IndoorDeviceRef
+import de.trailscape.app.sensors.indoor.IndoorDevicesContent
+import de.trailscape.app.sensors.indoor.IndoorDevicesUiState
+import de.trailscape.app.sensors.indoor.IndoorFund
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.map.ProvideTestLanguage
 import de.trailscape.app.ui.theme.TrailscapeTheme
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.indoor.ErgState
+import de.trailscape.core.indoor.IndoorDeviceRole
 import de.trailscape.core.indoor.GearState
 import de.trailscape.core.indoor.GhostState
 import de.trailscape.core.indoor.IndoorMode
@@ -40,6 +45,7 @@ import de.trailscape.core.indoor.IndoorTotals
 import de.trailscape.core.indoor.ShifterConnection
 import de.trailscape.core.indoor.SurfaceKind
 import de.trailscape.core.indoor.TrainerConnection
+import de.trailscape.core.indoor.VirtualGearTable
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.GeoSourceKind
 import de.trailscape.core.indoor.world.IndoorQuality
@@ -199,7 +205,7 @@ class IndoorScreenshotTest {
                 chainringTeeth = 48,
             ),
             devicesSection = { Placeholder("Geräteliste", Modifier.fillMaxWidth().height(180.dp)) },
-            onDemoChange = {}, onChainringChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+            onDemoChange = {}, onChainringChange = {}, onGearTableChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
         )
     }
 
@@ -286,7 +292,68 @@ class IndoorScreenshotTest {
         IndoorPairScreen(
             ui = IndoorPairUi(demoTrainer = true, trainerName = null, shifterName = null, chainringTeeth = 50),
             devicesSection = { Placeholder("Geräteliste", Modifier.fillMaxWidth().height(180.dp)) },
-            onDemoChange = {}, onChainringChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+            onDemoChange = {}, onChainringChange = {}, onGearTableChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+        )
+    }
+
+    // Koppeln mit dem echten Abschnitt des Slices indoor-ble (zustandslos,
+    // Beispieldaten statt Bluetooth) — prueft, dass im eingebetteten Zustand
+    // nichts doppelt steht oder abgeschnitten ist. Hohes Bild, damit die ganze
+    // Seite ohne Scrollen zu sehen ist.
+
+    private val bleState = IndoorDevicesUiState(
+        bleSupported = true,
+        bluetoothOn = true,
+        permissionGranted = true,
+        permissionPermanentlyDenied = false,
+        legacyPermission = false,
+        systemHinweise = true,
+        gemerkt = emptyMap(),
+        scanning = false,
+        scanFehler = null,
+        funde = emptyList(),
+    )
+
+    @Composable
+    private fun PairWithDevices(ui: IndoorPairUi, state: IndoorDevicesUiState) {
+        IndoorPairScreen(
+            ui = ui,
+            devicesSection = {
+                IndoorDevicesContent(
+                    state = state,
+                    onScan = {}, onStopScan = {}, onPair = { _, _ -> }, onForget = {}, onGrant = {}, onEnableBluetooth = {},
+                )
+            },
+            onDemoChange = {}, onChainringChange = {}, onGearTableChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1900dp-xxhdpi")
+    fun koppelnMitGeraeteabschnittOhneBerechtigung() = shot("110-indoor-koppeln-geraete-berechtigung") {
+        PairWithDevices(
+            ui = IndoorPairUi(demoTrainer = false, trainerName = null, shifterName = null),
+            state = bleState.copy(permissionGranted = false),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1900dp-xxhdpi")
+    fun koppelnMitGeraeteabschnittGekoppelt() = shot("111-indoor-koppeln-geraete-gekoppelt") {
+        val trainer = IndoorDeviceRef(IndoorDeviceRole.TRAINER, "AA:BB:CC:DD:EE:01", "KICKR CORE 7B2F")
+        val shifter = IndoorDeviceRef(IndoorDeviceRole.SHIFTER, "AA:BB:CC:DD:EE:04", "Zwift Click")
+        PairWithDevices(
+            ui = IndoorPairUi(
+                demoTrainer = false,
+                trainerName = trainer.name,
+                shifterName = shifter.name,
+                gearTable = VirtualGearTable.BIKE_GRX_2X12,
+            ),
+            state = bleState.copy(
+                gemerkt = mapOf(IndoorDeviceRole.TRAINER to trainer, IndoorDeviceRole.SHIFTER to shifter),
+                scanning = true,
+                funde = listOf(IndoorFund("AA:BB:CC:DD:EE:02", "Wahoo KICKR 0C2D", setOf(IndoorDeviceRole.TRAINER), -63)),
+            ),
         )
     }
 

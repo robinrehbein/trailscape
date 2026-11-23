@@ -11,10 +11,12 @@ import de.trailscape.app.ui.indoor.IndoorNotice
 import de.trailscape.app.ui.indoor.IndoorRenderUi
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorPhase
+import de.trailscape.core.indoor.IndoorSession
 import de.trailscape.core.indoor.IndoorSessionConfig
 import de.trailscape.core.indoor.IndoorTrainer
 import de.trailscape.core.indoor.RiderSetup
 import de.trailscape.core.indoor.ShifterEvent
+import de.trailscape.core.indoor.TrainerCapabilities
 import de.trailscape.core.indoor.TrainerCommand
 import de.trailscape.core.indoor.TrainerConnection
 import de.trailscape.core.indoor.TrainerListener
@@ -291,5 +293,94 @@ class IndoorRideRuntimeTest {
         rt.tickOnce() // Uhr steht
         assertEquals(5, session.stepCount)
         assertNull(rt.state.value.problem)
+    }
+
+    // -----------------------------------------------------------------------
+    // Faehigkeiten des Trainers (docs/indoor/app.md, Zusammenspiel)
+    // -----------------------------------------------------------------------
+
+    private val reported = TrainerCapabilities(simulation = true, targetPower = true, minPowerW = 0, maxPowerW = 1_500)
+
+    private fun swappingRuntime(
+        first: FakeIndoorSession,
+        trainer: IndoorTrainer,
+        rebuild: (TrainerCapabilities) -> IndoorSession?,
+    ) = IndoorRideRuntime(
+        session = first,
+        trainer = trainer,
+        shifter = null,
+        renderer = null,
+        dispatcher = Dispatchers.Unconfined,
+        clock = clock,
+        autoLoop = false,
+        rebuildSession = rebuild,
+    )
+
+    @Test
+    fun `Faehigkeiten vor dem ersten Tritt - neue Sitzung mit den gemeldeten, Schalten bleibt erhalten`() {
+        val first = session()
+        val rebuilt = mutableListOf<FakeIndoorSession>()
+        val trainer = FakeDemoTrainer(readyAfterMs = 1_000L, readyCapabilities = reported)
+        val rt = swappingRuntime(first, trainer) { caps ->
+            FakeIndoorSession(first.config.copy(capabilities = caps)).also { rebuilt += it }
+        }
+        rt.start()
+        rt.ticks(3)
+        rt.shift(ShifterEvent.UP)
+        rt.shift(ShifterEvent.UP)
+        rt.adjustErg(5)
+        rt.ticks(3)
+        assertEquals(IndoorPhase.READY, assertNotNull(rt.state.value.session).phase, "noch kein Tritt")
+        assertTrue(rebuilt.isEmpty())
+
+        rt.ticks(10) // READY des Trainers mit den echten Faehigkeiten, dann der erste Tritt
+
+        val second = rebuilt.single()
+        assertEquals(reported, second.config.capabilities)
+        assertEquals(listOf(ShifterEvent.UP, ShifterEvent.UP), second.shifts, "Schalten vor dem Start wird uebertragen")
+        assertEquals(5, second.ergDeltaPct)
+        assertEquals(IndoorPhase.RUNNING, assertNotNull(rt.state.value.session).phase)
+        assertTrue(second.stepCount > 0)
+        val oldSteps = first.stepCount
+        rt.ticks(5)
+        assertEquals(oldSteps, first.stepCount, "die alte Sitzung bekommt keine Schritte mehr")
+        assertNotNull(runBlocking { rt.finish() })
+        assertEquals(1, second.finishCalls)
+        assertEquals(0, first.finishCalls)
+    }
+
+    @Test
+    fun `Faehigkeiten nach dem ersten Tritt - die Sitzung bleibt`() {
+        val first = session()
+        val calls = mutableListOf<TrainerCapabilities>()
+        val trainer = FakeDemoTrainer(readyAfterMs = 0L, readyCapabilities = reported)
+        val rt = swappingRuntime(first, trainer) { caps ->
+            calls += caps
+            null // passt schon
+        }
+        rt.start()
+        rt.ticks(30)
+        assertEquals(listOf(reported), calls)
+        assertEquals(IndoorPhase.RUNNING, assertNotNull(rt.state.value.session).phase)
+
+        // Neuverbinden mitten in der Fahrt: kein Tausch mehr.
+        trainer.dropConnection()
+        rt.ticks(30)
+        assertEquals(TrainerConnection.READY, rt.state.value.trainer)
+        assertEquals(listOf(reported), calls)
+        assertTrue(first.stepCount >= 60)
+    }
+
+    @Test
+    fun `Neubau der Sitzung scheitert - die alte faehrt still weiter`() {
+        val first = session()
+        val trainer = FakeDemoTrainer(readyAfterMs = 0L, readyCapabilities = reported)
+        val rt = swappingRuntime(first, trainer) { throw IllegalStateException("Attrappe") }
+        rt.start()
+        rt.ticks(20)
+        assertEquals(20, first.stepCount)
+        assertEquals(IndoorPhase.RUNNING, assertNotNull(rt.state.value.session).phase)
+        assertNull(rt.state.value.problem)
+        assertNull(rt.state.value.notice)
     }
 }

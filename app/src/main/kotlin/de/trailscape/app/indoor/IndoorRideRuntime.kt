@@ -66,6 +66,18 @@ import kotlinx.coroutines.launch
  *  * Die Darstellung meldet ihre Ereignisse auf dem Hauptthread
  *    ([rendererListener]); sie aendern nur den [state].
  *
+ * ## Faehigkeiten des Trainers
+ * Die Sitzung bekommt ihre [TrainerCapabilities] beim Anlegen
+ * (`IndoorSessionConfig.capabilities`, unveraenderlich), der Trainer meldet
+ * die echten aber erst mit `READY`. Deshalb tauscht die Laufzeit die Sitzung
+ * **einmal** gegen eine mit den gemeldeten Faehigkeiten ([rebuildSession]),
+ * solange sie noch in [IndoorPhase.READY] auf den ersten Tritt wartet.
+ * Schaltvorgaenge und ERG-Verschiebungen, die die alte Sitzung bis dahin
+ * bekommen hat, werden auf die neue uebertragen. Meldet der Trainer seine
+ * Faehigkeiten erst nach dem ersten Tritt (oder nach einem Neuverbinden
+ * mitten in der Fahrt), bleibt es bei der Annahme vom Start — eine laufende
+ * Sitzung laesst sich ohne Aenderung des Vertrags nicht umstellen.
+ *
  * ## Robustheit
  * Jeder Aufruf eines fremden Teils (Sitzung, Trainer, Schalttaster,
  * Darstellung, Puls) steckt in `try/catch`: Ein Fehler wird zum Hinweis
@@ -82,9 +94,12 @@ import kotlinx.coroutines.launch
  *   erzeugen liess (dann sagt [initialRender], warum).
  * @param dispatcher der serielle Dispatcher der Schleife; `null` = ein eigener
  *   Einzelthread, den die Laufzeit am Ende selbst schliesst.
+ * @param rebuildSession baut zu den vom Trainer gemeldeten Faehigkeiten eine
+ *   neue Sitzung, oder liefert `null`, wenn die vorhandene schon passt;
+ *   `null` = nie tauschen. Wird nur auf dem Takt-Thread gerufen.
  */
 class IndoorRideRuntime(
-    private val session: IndoorSession,
+    session: IndoorSession,
     private val trainer: IndoorTrainer,
     private val shifter: IndoorShifter?,
     private val renderer: WorldRenderer?,
@@ -94,7 +109,11 @@ class IndoorRideRuntime(
     private val clock: () -> Long = { SystemClock.elapsedRealtime() },
     private val autoLoop: Boolean = true,
     private val noticeDurationMs: Long = NOTICE_DURATION_MS,
+    private val rebuildSession: ((TrainerCapabilities) -> IndoorSession?)? = null,
 ) {
+    /** Die aktuelle Sitzung; nur vom Takt-Thread (bzw. nach dem Anhalten der Schleife). */
+    private var session: IndoorSession = session
+
     private val ownDispatcher: ExecutorCoroutineDispatcher? =
         if (dispatcher == null) newIndoorLoopDispatcher() else null
     private val loopDispatcher: CoroutineDispatcher = dispatcher ?: ownDispatcher!!
@@ -114,12 +133,22 @@ class IndoorRideRuntime(
     @Volatile private var trainerLost = false
     private val shiftEvents = ConcurrentLinkedQueue<ShifterEvent>()
 
+    /** Faehigkeiten aus dem letzten `READY`, die der Takt noch nicht uebernommen hat. */
+    @Volatile private var pendingCapabilities: TrainerCapabilities? = null
+
     // --- Wuensche der Oberflaeche --------------------------------------------
-    private val actions = ConcurrentLinkedQueue<(IndoorSession) -> Unit>()
+    private val actions = ConcurrentLinkedQueue<SessionAction>()
 
     // --- nur vom Takt-Thread ---------------------------------------------------
     private var lastStepNow = Long.MIN_VALUE
     private var started = false
+
+    /**
+     * Was die Sitzung vor dem ersten Tritt bekommen hat (Schalten, ERG) — fuer
+     * den Tausch gegen eine Sitzung mit den echten Faehigkeiten. `null`, sobald
+     * kein Tausch mehr in Frage kommt.
+     */
+    private var preStartLog: MutableList<(IndoorSession) -> Unit>? = if (rebuildSession != null) mutableListOf() else null
 
     @Volatile private var renderEnabled = renderer != null
 
@@ -162,6 +191,7 @@ class IndoorRideRuntime(
             _state.update { it.copy(trainer = state, capabilities = capabilities) }
             when (state) {
                 TrainerConnection.READY -> {
+                    pendingCapabilities = capabilities
                     if (trainerLost) {
                         trainerLost = false
                         postNotice(IndoorNotice.TRAINER_BACK)
@@ -284,7 +314,7 @@ class IndoorRideRuntime(
     }
 
     /** ERG-Ziel dauerhaft um [deltaPct] Prozentpunkte verschieben. */
-    fun adjustErg(deltaPct: Int) = enqueue { it.adjustErg(deltaPct) }
+    fun adjustErg(deltaPct: Int) = enqueue(replayBeforeStart = true) { it.adjustErg(deltaPct) }
 
     /** Reglerstand des Demo-Trainers. Ohne Demo-Trainer ohne Wirkung. */
     fun setDemoInput(powerW: Int, cadenceRpm: Int) {
@@ -330,13 +360,19 @@ class IndoorRideRuntime(
         // Wuensche der Oberflaeche zuerst, damit eine Pause noch in diesem Takt wirkt.
         while (true) {
             val action = actions.poll() ?: break
-            guard(IndoorPart.CORE) { action(session) }
+            guard(IndoorPart.CORE) { action.block(session) }
+            if (action.replayBeforeStart) preStartLog?.add(action.block)
         }
         guard(IndoorPart.CORE) { trainer.tick(now) }
         shifter?.let { s -> guard(IndoorPart.CORE) { s.tick(now) } }
+        pendingCapabilities?.let { caps ->
+            pendingCapabilities = null
+            adoptCapabilities(caps)
+        }
         while (true) {
             val event = shiftEvents.poll() ?: break
             guard(IndoorPart.CORE) { session.shift(event) }
+            preStartLog?.add { s -> s.shift(event) }
         }
         if (now <= lastStepNow) {
             // Die Sitzung verlangt streng steigende Zeit; dieser Takt faellt aus.
@@ -352,6 +388,8 @@ class IndoorRideRuntime(
         )
         val step = guard(IndoorPart.CORE) { session.step(now, input) }
         if (step != null) {
+            // Nach dem ersten Tritt (oder einer Pause) wird nicht mehr getauscht.
+            if (step.state.phase != IndoorPhase.READY) preStartLog = null
             for (command in step.commands) {
                 guard(IndoorPart.CORE) { trainer.send(command) }
             }
@@ -430,9 +468,32 @@ class IndoorRideRuntime(
     // Intern
     // -----------------------------------------------------------------------
 
-    private fun enqueue(action: (IndoorSession) -> Unit) {
+    private class SessionAction(val replayBeforeStart: Boolean, val block: (IndoorSession) -> Unit)
+
+    private fun enqueue(replayBeforeStart: Boolean = false, action: (IndoorSession) -> Unit) {
         if (finished) return
-        actions.add(action)
+        actions.add(SessionAction(replayBeforeStart, action))
+    }
+
+    /**
+     * Tauscht die Sitzung gegen eine mit [caps], solange sie noch vor dem
+     * ersten Tritt steht (siehe Klassen-KDoc). Scheitert der Neubau, faehrt
+     * die alte Sitzung mit der Annahme vom Start weiter — ohne Hinweis, die
+     * Fahrt ist davon nicht beeintraechtigt.
+     */
+    private fun adoptCapabilities(caps: TrainerCapabilities) {
+        val rebuild = rebuildSession ?: return
+        val log = preStartLog ?: return
+        val phase = indoorCatching(IndoorPart.CORE) { session.state.phase }.getOrNull()
+        if (phase != IndoorPhase.READY) {
+            preStartLog = null
+            return
+        }
+        val fresh = indoorCatching(IndoorPart.CORE) { rebuild(caps) }.getOrNull() ?: return
+        for (replay in log) guard(IndoorPart.CORE) { replay(fresh) }
+        session = fresh
+        // Der Trainer meldet seine Faehigkeiten je Verbindung neu; getauscht wird einmal.
+        preStartLog = null
     }
 
     private fun pushToRenderer(now: Long, s: IndoorSessionState) {

@@ -308,7 +308,12 @@ class RealOrFakeIndoorParts(private val fake: FakeIndoorParts = FakeIndoorParts(
 
     override fun createSession(config: IndoorSessionConfig): IndoorSession = pick(
         "createIndoorSession",
-        { de.trailscape.core.indoor.createIndoorSession(config).also { fake.sessions += it } },
+        {
+            de.trailscape.core.indoor.createIndoorSession(config).also {
+                fake.sessionConfigs += config
+                fake.sessions += it
+            }
+        },
         { fake.createSession(config) },
     )
 
@@ -351,6 +356,8 @@ class RealOrFakeWorldBuilder(private val real: WorldBuilder, private val fake: W
 class FakeDemoTrainer(
     override val name: String = "Demo-Trainer",
     private val readyAfterMs: Long = 1_000L,
+    /** Was der Trainer mit `READY` meldet. */
+    private val readyCapabilities: TrainerCapabilities = TrainerCapabilities(simulation = true, targetPower = true),
 ) : DemoTrainer {
     @Volatile override var riderPowerW: Int = 180
 
@@ -384,7 +391,7 @@ class FakeDemoTrainer(
         val start = startedAtMs ?: nowMs.also { startedAtMs = it }
         if (!ready && nowMs - start >= readyAfterMs) {
             ready = true
-            l.onConnection(TrainerConnection.READY, TrainerCapabilities(simulation = true, targetPower = true))
+            l.onConnection(TrainerConnection.READY, readyCapabilities)
         }
         if (ready && (lastTelemetryMs == null || nowMs - lastTelemetryMs!! >= 1_000L)) {
             lastTelemetryMs = nowMs

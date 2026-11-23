@@ -32,6 +32,7 @@ import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
+import de.trailscape.core.indoor.BleLink
 import de.trailscape.core.indoor.DemoTrainer
 import de.trailscape.core.indoor.ErgWorkout
 import de.trailscape.core.indoor.GhostSpec
@@ -46,6 +47,7 @@ import de.trailscape.core.indoor.RiderSetup
 import de.trailscape.core.indoor.ShifterEvent
 import de.trailscape.core.indoor.TrainerCapabilities
 import de.trailscape.core.indoor.TrainerConnection
+import de.trailscape.core.indoor.VirtualGearTable
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderFailure
@@ -88,8 +90,8 @@ import kotlinx.coroutines.withContext
  * **Nach einem Prozesstod** beginnt der Ablauf neu bei „Koppeln" — eine
  * Fahrt wird nicht wiederhergestellt (ohne Vordergrunddienst pausiert sie im
  * Hintergrund ohnehin, docs/indoor.md 11.2 Nr. 4). Gemerkt wird allein der
- * Demo-Schalter ([KEY_DEMO_TRAINER]) und das Kettenblatt am Trainer
- * ([KEY_CHAINRING_TEETH]), beide im [store].
+ * Demo-Schalter ([KEY_DEMO_TRAINER]), das Kettenblatt am Trainer
+ * ([KEY_CHAINRING_TEETH]) und die Gangtabelle ([KEY_GEAR_TABLE]), alle im [store].
  *
  * ## Fremde Teile
  * Alles aus anderen Slices kommt ueber [parts] und steckt in [indoorCatching]:
@@ -159,6 +161,7 @@ class IndoorViewModel(
             trainerName = null,
             shifterName = null,
             chainringTeeth = readChainringTeeth(),
+            gearTable = readGearTable(),
         ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
@@ -281,6 +284,15 @@ class IndoorViewModel(
         _pair.update { it.copy(chainringTeeth = clamped) }
     }
 
+    /**
+     * Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`) — gemerkt in
+     * den Einstellungen; gespeichert wird der Enum-Name.
+     */
+    fun setGearTable(table: VirtualGearTable) {
+        runCatching { store.setString(KEY_GEAR_TABLE, table.name) }
+        _pair.update { it.copy(gearTable = table) }
+    }
+
     /** Weiter zur Streckenwahl (nur wenn [IndoorPairUi.canContinue]). */
     fun continueFromPair() {
         if (!_pair.value.canContinue) return
@@ -294,6 +306,11 @@ class IndoorViewModel(
         runCatching { store.getString(KEY_CHAINRING_TEETH)?.trim()?.toIntOrNull() }.getOrNull()
             ?.coerceIn(CHAINRING_MIN_TEETH, CHAINRING_MAX_TEETH)
             ?: CHAINRING_DEFAULT_TEETH
+
+    private fun readGearTable(): VirtualGearTable =
+        runCatching { store.getString(KEY_GEAR_TABLE)?.trim() }.getOrNull()
+            ?.let { name -> VirtualGearTable.entries.firstOrNull { it.name == name } }
+            ?: VirtualGearTable.EVEN
 
     private fun publishPair() {
         val trainer = remembered[IndoorDeviceRole.TRAINER]
@@ -671,15 +688,22 @@ class IndoorViewModel(
         )
         _stage.value = IndoorStage.RIDE
 
-        // Trainer
+        // Trainer. Ein Rohr, das kein Trainer oder Schalttaster uebernommen hat,
+        // schliesst der Start selbst wieder (ein uebernommenes schliesst
+        // dessen `stop()`, bzw. die Laufzeit am Ende der Fahrt).
+        var trainerLink: BleLink? = null
         val trainerResult: Result<IndoorTrainer> = if (demo) {
             indoorCatching(IndoorPart.CORE) { parts.createDemoTrainer() }
         } else {
             indoorCatching(IndoorPart.BLE) { parts.openLink(IndoorDeviceRole.TRAINER) }.mapCatching { link ->
                 link ?: throw IllegalStateException("kein Trainer gemerkt")
-            }.mapCatching { link -> indoorCatching(IndoorPart.CORE) { parts.createFtmsTrainer(link) }.getOrThrow() }
+            }.mapCatching { link ->
+                trainerLink = link
+                indoorCatching(IndoorPart.CORE) { parts.createFtmsTrainer(link) }.getOrThrow()
+            }
         }
         val trainer = trainerResult.getOrElse {
+            trainerLink?.let { l -> indoorCatching(IndoorPart.BLE) { l.close() } }
             showStartProblem(problemOf(IndoorPart.CORE, it))
             return
         }
@@ -694,34 +718,49 @@ class IndoorViewModel(
             }
         }
 
-        // Schalttaster (optional)
+        // Schalttaster (optional). Je Fahrt eine neue Instanz: Ein Taster, der
+        // UNSUPPORTED meldet, bleibt es fuer seine Instanz endgueltig (und
+        // schliesst sein Rohr selbst); der naechste Versuch ist die naechste Fahrt.
+        var shifterLink: BleLink? = null
         val shifter: IndoorShifter? = if (remembered[IndoorDeviceRole.SHIFTER] != null) {
             indoorCatching(IndoorPart.BLE) { parts.openLink(IndoorDeviceRole.SHIFTER) }.getOrNull()?.let { link ->
-                indoorCatching(IndoorPart.CORE) { parts.createShifter(link) }.getOrNull()
+                shifterLink = link
+                indoorCatching(IndoorPart.CORE) { parts.createShifter(link) }
+                    .onFailure { indoorCatching(IndoorPart.BLE) { link.close() } }
+                    .getOrNull()
             }
         } else {
             null
         }
 
         // Sitzung
-        // Echte Uebersetzung am Trainer: gewaehltes Kettenblatt auf dem Zwift Cog.
+        // Echte Uebersetzung am Trainer (gewaehltes Kettenblatt auf dem Zwift
+        // Cog) und Gangtabelle aus den Einstellungen.
         val rider = indoorCatching(IndoorPart.CORE) { parts.riderSetup(profile()) }
             .getOrElse { fallbackRiderSetup(profile()) }
-            .copy(realGearRatio = realGearRatioOf(_pair.value.chainringTeeth))
+            .copy(
+                realGearRatio = realGearRatioOf(_pair.value.chainringTeeth),
+                gearTable = _pair.value.gearTable,
+            )
         val config = IndoorSessionConfig(
             route = route,
             mode = mode,
             rider = rider,
             workout = if (mode == IndoorMode.ERG) ergWorkout else null,
             ghost = ghostSpecOf(routeUi.ghost),
-            // Die Faehigkeiten eines FTMS-Trainers kennt erst die Verbindung;
-            // die Sitzung bekommt die Annahme „SIM und ERG" (Abschnitt 5.2).
-            capabilities = TrainerCapabilities(simulation = true, targetPower = true),
+            // Die Faehigkeiten eines Trainers kennt erst die Verbindung; bis
+            // dahin gilt die Annahme „SIM und ERG" (Abschnitt 5.2). Meldet der
+            // Trainer sie vor dem ersten Tritt, tauscht die Laufzeit die
+            // Sitzung gegen eine mit den echten ([rebuildSession] unten).
+            capabilities = ASSUMED_CAPABILITIES,
             startedAtEpochMs = wallClock(),
         )
         val session = indoorCatching(IndoorPart.CORE) { parts.createSession(config) }.getOrElse {
             indoorCatching(IndoorPart.CORE) { trainer.stop() }
             shifter?.let { s -> indoorCatching(IndoorPart.CORE) { s.stop() } }
+            // Noch nicht gestartet: stop() schliesst ein Rohr dann nicht selbst.
+            trainerLink?.let { l -> indoorCatching(IndoorPart.BLE) { l.close() } }
+            shifterLink?.let { l -> indoorCatching(IndoorPart.BLE) { l.close() } }
             showStartProblem(problemOf(IndoorPart.CORE, it))
             return
         }
@@ -749,6 +788,9 @@ class IndoorViewModel(
             dispatcher = runtimeDispatcher,
             clock = clock,
             autoLoop = autoLoop,
+            rebuildSession = { caps ->
+                if (caps == config.capabilities) null else parts.createSession(config.copy(capabilities = caps))
+            },
         )
         activeRuntime = runtime
         renderer?.let { r ->
@@ -1069,6 +1111,12 @@ class IndoorViewModel(
 
         /** Schluessel des Kettenblatts am Trainer (Zaehne) im [KeyValueStore]. */
         const val KEY_CHAINRING_TEETH = "trailscape.indoor.chainring_teeth"
+
+        /** Schluessel der Gangtabelle (Enum-Name von [VirtualGearTable]) im [KeyValueStore]. */
+        const val KEY_GEAR_TABLE = "trailscape.indoor.gear_table"
+
+        /** Annahme ueber den Trainer, bis er seine Faehigkeiten meldet. */
+        val ASSUMED_CAPABILITIES = TrainerCapabilities(simulation = true, targetPower = true)
 
         /** Das einzige Ritzel am Trainer: der Zwift Cog hat 14 Zaehne. */
         const val ZWIFT_COG_TEETH = 14
