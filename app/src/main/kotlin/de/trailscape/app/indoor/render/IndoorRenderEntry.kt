@@ -20,10 +20,9 @@ import java.io.File
  * EINSTIEGSDATEI (docs/indoor.md, Abschnitt 3). Besitzer: Slice indoor-render.
  *
  * Die **Signaturen** der drei Funktionen hier sind Vertrag: Der Slice
- * indoor-app ruft genau sie auf. Der Architekt hat Platzhalter hinterlegt, die
- * bauen und laufen, aber nichts zeichnen — indoor-render ersetzt die Ruempfe
- * (Umsetzung in eigenen Dateien dieses Pakets) und laesst Namen, Parameter und
- * Rueckgabetypen unveraendert.
+ * indoor-app ruft genau sie auf. Die Umsetzung liegt in eigenen Dateien
+ * dieses Pakets (`FilamentWorldRenderer`, `FilamentSurface`,
+ * `DiagnosticsScreen`); Notizen in `docs/indoor/render.md`.
  */
 
 /**
@@ -32,16 +31,28 @@ import java.io.File
  * Start (kein OpenGL ES 3.0, Treiberfehler), kommt das ueber
  * `WorldRendererListener.onFailure` — diese Funktion wirft nie.
  */
-fun createWorldRenderer(context: Context): WorldRenderer = PlatzhalterRenderer()
+fun createWorldRenderer(context: Context): WorldRenderer = try {
+    FilamentWorldRenderer(context)
+} catch (t: Throwable) {
+    // Kann praktisch nicht passieren (der Konstruktor beruehrt nichts Natives) — aber nie werfen.
+    AusfallRenderer("Darstellung, Stufe „Engine starten“: ${t.javaClass.simpleName}: ${t.message}")
+}
 
 /**
  * Die Zeichenflaeche zu [renderer]. Fuellt [modifier]; die Oberflaeche legt ihr
  * HUD darueber. Haengt den Renderer an den Lebenszyklus (pausiert im
  * Hintergrund), zerstoert ihn aber nicht — das tut, wer ihn erzeugt hat.
+ *
+ * Faellt die Darstellung aus, zeigt die Flaeche selbst eine schlichte
+ * 2D-Ersatzansicht (Hoehenprofil mit Position und kurzer Hinweis).
  */
 @Composable
 fun WorldSurface(renderer: WorldRenderer, modifier: Modifier = Modifier) {
-    Box(modifier)
+    when (renderer) {
+        is FilamentWorldRenderer -> FilamentSurface(renderer = renderer, modifier = modifier)
+        // Fremde Umsetzung (Attrappe im Test) oder der Ausfall-Platzhalter: nichts zu zeichnen.
+        else -> Box(modifier)
+    }
 }
 
 /**
@@ -51,19 +62,20 @@ fun WorldSurface(renderer: WorldRenderer, modifier: Modifier = Modifier) {
  */
 @Composable
 fun IndoorDiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier)
+    DiagnosticsScreen(onBack = onBack, modifier = modifier)
 }
 
-/** Zeichnet nichts und meldet das ehrlich — bis indoor-render die echte Darstellung einsetzt. */
-private class PlatzhalterRenderer : WorldRenderer {
+/** Meldet ehrlich, dass nichts geht — nur fuer den unmoeglichen Fall, dass der Konstruktor scheitert. */
+private class AusfallRenderer(private val detail: String) : WorldRenderer {
     private var listener: WorldRendererListener? = null
 
     private fun melde() {
-        listener?.onFailure(RenderFailure.INTERNAL, "Die 3D-Darstellung ist noch nicht umgesetzt (Slice indoor-render).")
+        listener?.onFailure(RenderFailure.NO_GRAPHICS, detail)
     }
 
     override fun setListener(listener: WorldRendererListener?) {
         this.listener = listener
+        melde()
     }
 
     override fun loadWorld(worldDir: File, manifest: WorldManifest) = melde()
