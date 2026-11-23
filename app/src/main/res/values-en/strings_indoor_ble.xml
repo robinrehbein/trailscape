@@ -8,4 +8,35 @@
     Counterpart of values/strings_indoor_ble.xml — same keys, same order.
 -->
 <resources>
+    <!-- IndoorDevicesUi.kt -->
+    <string name="indoor_ble_section_title">Indoor training</string>
+    <string name="indoor_ble_section_intro">Trainer and shifter for training at home. Trailscape remembers one device per role. It connects only during an indoor ride, not on this page.</string>
+    <string name="indoor_ble_role_trainer_label">Trainer</string>
+    <string name="indoor_ble_role_shifter_label">Shifter</string>
+    <string name="indoor_ble_trainer_none_hint">Nothing paired. Trailscape controls smart trainers that use the Bluetooth standard FTMS.</string>
+    <string name="indoor_ble_shifter_none_hint">Nothing paired. Optional: without a shifter you change gears with the on-screen buttons.</string>
+    <string name="indoor_ble_unnamed_label">Unnamed device</string>
+    <string name="indoor_ble_forget_action">Forget</string>
+    <string name="indoor_ble_scan_action">Search for trainer</string>
+    <string name="indoor_ble_scan_running_label">Searching …</string>
+    <string name="indoor_ble_scan_stop_action">Stop</string>
+    <string name="indoor_ble_scan_hint">The search takes 20 seconds and finds trainers (FTMS) and shifters. Pedal briefly to wake the trainer, and press the shifter once.</string>
+    <string name="indoor_ble_scan_error">The search failed (error %1$d). Try again in half a minute.</string>
+    <string name="indoor_ble_found_title">Found</string>
+    <string name="indoor_ble_found_empty_hint">Nothing found yet …</string>
+    <string name="indoor_ble_pair_action">Pair</string>
+    <string name="indoor_ble_paired_label">Paired</string>
+    <string name="indoor_ble_replace_confirm_title">Replace “%1$s”?</string>
+    <string name="indoor_ble_replace_confirm_body">Trailscape remembers one device per role. “%1$s” takes the place of “%2$s”.</string>
+    <string name="indoor_ble_replace_action">Replace</string>
+    <string name="indoor_ble_cancel_action">Cancel</string>
+    <string name="indoor_ble_forget_confirm_title">Forget “%1$s”?</string>
+    <string name="indoor_ble_forget_confirm_body">You will have to pair it again for indoor rides.</string>
+    <string name="indoor_ble_permission_body">To search, Trailscape needs the “Nearby devices” permission.</string>
+    <string name="indoor_ble_permission_legacy_body">On Android 11 and older, Android only searches with location permission and location switched on. Trailscape does not use your location for this.</string>
+    <string name="indoor_ble_permission_grant_action">Allow</string>
+    <string name="indoor_ble_permission_settings_action">Open settings</string>
+    <string name="indoor_ble_bluetooth_off_body">Bluetooth is off.</string>
+    <string name="indoor_ble_bluetooth_enable_action">Turn on</string>
+    <string name="indoor_ble_not_supported_body">This phone has no Bluetooth LE. Trainer and shifter cannot be paired, but the demo trainer still works.</string>
 </resources>
