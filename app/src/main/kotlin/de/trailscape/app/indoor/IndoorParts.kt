@@ -156,7 +156,8 @@ enum class IndoorPart {
  * Ein abgefangener Fehler eines Teils.
  *
  * @property notImplemented der Teil ist (auf diesem Stand) nur ein Platzhalter.
- * @property detail deutscher Diagnosetext — nie ungefiltert in die Oberflaeche.
+ * @property detail deutscher Diagnosetext — nicht als Satz in die Oberflaeche; die
+ *   Fehlerkarten zeigen ihn nur als kopierbare „Technische Einzelheit".
  */
 data class IndoorProblem(val part: IndoorPart, val notImplemented: Boolean, val detail: String)
 
@@ -187,3 +188,67 @@ fun problemOf(part: IndoorPart, e: Throwable): IndoorProblem = when (e) {
 
 /** Das [IndoorProblem] eines gescheiterten `Result` aus [indoorCatching]. */
 fun Result<*>.problemOrNull(): IndoorProblem? = exceptionOrNull()?.let { problemOf(IndoorPart.APP, it) }
+
+/** Obergrenze der technischen Einzelheit in der Oberflaeche ([technicalDetailOf]). */
+const val TECHNICAL_DETAIL_MAX_CHARS: Int = 300
+
+/** Pakete, deren Stack-Zeilen nichts ueber die eigene Stelle sagen. */
+private val FOREIGN_FRAME_PREFIXES = listOf(
+    "java.", "javax.", "jdk.", "sun.", "kotlin.", "kotlinx.", "android.", "androidx.", "dalvik.",
+    "libcore.", "com.android.", "okhttp3.", "okio.", "org.json.",
+)
+
+/**
+ * Die **technische Einzelheit** eines Fehlers fuer die Fehlerkarten — kurz,
+ * kopierbar und so, dass ein Nutzer sie melden kann:
+ * `<Klasse der innersten Ursache>: <Meldung> @ <erste eigene Stack-Zeile>`.
+ *
+ * * Innerste Ursache: die Kette ueber `cause` bis zum Ende (hoechstens 16
+ *   Glieder, Zyklen abgefangen). Hat sie keine Meldung, steht die Meldung
+ *   des naechsten aeusseren Glieds mit Meldung dahinter in Klammern —
+ *   sonst bliebe von `WorldBuildFailed("Budget …", NullPointerException())`
+ *   nur „NullPointerException".
+ * * Stack-Zeile: die erste aus `de.trailscape…` (erst der innersten
+ *   Ursache, dann der aeusseren Glieder); gibt es keine (im Release
+ *   benennt R8 die Klassen um), die erste ausserhalb von JDK, Kotlin,
+ *   Android und OkHttp — mit `mapping.txt` rueckuebersetzbar.
+ * * Gekuerzt auf [maxChars] Zeichen (mit „…").
+ *
+ * Wirft nie.
+ */
+fun technicalDetailOf(e: Throwable, maxChars: Int = TECHNICAL_DETAIL_MAX_CHARS): String = try {
+    val chain = ArrayList<Throwable>()
+    var current: Throwable? = e
+    while (current != null && chain.size < 16 && chain.none { it === current }) {
+        chain += current
+        current = current.cause
+    }
+    val root = chain.last()
+    val name = root.javaClass.name.removePrefix("java.lang.")
+    val rootMessage = root.message?.trim()?.takeIf { it.isNotEmpty() }
+    val outerMessage = if (rootMessage == null) {
+        chain.asReversed().drop(1)
+            .firstOrNull { it !is IndoorPartException && !it.message.isNullOrBlank() }
+            ?.message?.trim()
+    } else {
+        null
+    }
+    val frames = root.stackTrace.orEmpty()
+    val frame = frames.firstOrNull { it.className.startsWith("de.trailscape.") }
+        ?: chain.asReversed().drop(1).firstNotNullOfOrNull { t ->
+            t.stackTrace.orEmpty().firstOrNull { it.className.startsWith("de.trailscape.") }
+        }
+        ?: frames.firstOrNull { f -> FOREIGN_FRAME_PREFIXES.none { f.className.startsWith(it) } }
+    val text = buildString {
+        append(name)
+        if (rootMessage != null) append(": ").append(rootMessage)
+        if (outerMessage != null) append(" (").append(outerMessage).append(')')
+        if (frame != null) {
+            append(" @ ").append(frame.className).append('.').append(frame.methodName)
+            if (frame.lineNumber >= 0) append(':').append(frame.lineNumber)
+        }
+    }.replace(Regex("\\s+"), " ")
+    if (text.length <= maxChars) text else text.take((maxChars - 1).coerceAtLeast(1)) + "…"
+} catch (_: Throwable) {
+    e.javaClass.name
+}

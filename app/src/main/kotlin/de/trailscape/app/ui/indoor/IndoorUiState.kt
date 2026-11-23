@@ -165,9 +165,15 @@ sealed interface IndoorWorldUi {
      * Kein Weltbau moeglich oder gescheitert — „Ohne Welt fahren" bleibt.
      *
      * @property reason Grund des Weltbaus, `null` = ein anderer Fehler ([problem]).
+     * @property detail technische Einzelheit zum Melden (`technicalDetailOf`),
+     *   kopierbar unter dem Text; `null` = keine bekannt.
      */
-    data class Failed(val reason: WorldBuildFailed.Reason?, val problem: IndoorProblem?, val canRetry: Boolean) :
-        IndoorWorldUi
+    data class Failed(
+        val reason: WorldBuildFailed.Reason?,
+        val problem: IndoorProblem?,
+        val canRetry: Boolean,
+        val detail: String? = null,
+    ) : IndoorWorldUi
 
     /** Strecke liess sich gar nicht aufbereiten — zurueck zur Streckenwahl. */
     data class RouteUnavailable(val problem: IndoorProblem?) : IndoorWorldUi

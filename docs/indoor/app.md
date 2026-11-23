@@ -134,9 +134,44 @@ als Soll-Zustand des Prototyps.
   keinen Streckentipp, sondern den Hinweis, dass sich das Indoor-Training in
   dieser Version noch nicht vollständig nutzen lässt. `RouteUnavailable` hat
   nie eine Strecke, daher dort kein „Ohne Welt fahren“.
-- HUD: Pause-Knopf zeigt „Weiter“ nur bei harter Pause (bei Auto-Pause
-  pausiert ein Tipp); Kamera-Knopf nur mit 3D-Welt; im Hochformat hat die
-  untere Bedienung eine Höchsthöhe und scrollt (Bild 108).
+- HUD (neu gestaltet 23.11.2026, Bilder 97, 98, 112–115): Die 3D-Welt füllt
+  den ganzen Bildschirm, auch unter Status- und Navigationsleiste. Der
+  `NavHost` löst die System-Insets dafür nicht mehr für alle Ziele auf,
+  sondern jedes Ziel selbst (`InsetPadded` in `TrailscapeApp.kt`); der
+  Indoor-Ablauf tut es in `IndoorPage` bzw. im HUD. Während der Fahrt sind
+  die Symbole der Systemleisten hell (`LightSystemBarIcons`).
+  - Oben ein dunkler, nach unten auslaufender Schleier mit weißer Schrift
+    (mit Schatten, Ziffern gleich breit): Leistung groß, daneben Tempo,
+    Trittfrequenz, Puls kompakt; die Zahlen passen sich dem Platz an
+    (`TextAutoSize`), so bricht auch Schrift 130 % nichts (Bild 113).
+    Darunter klein die Steigung mit Pfeil, gefärbt nach Vorzeichen und
+    Stärke (flach weiß, bergab blau, bergauf grün < 4 %, gelb < 7 %,
+    orange < 10 %, sonst rot), und der Belag; der Abstand zum Geist als Chip
+    mit blauem Punkt (wie im Profil).
+  - Unten auf einem zweiten Schleier der Gang als Pille zwischen zwei
+    runden −/+-Tasten mit 64 dp am Rand (Ersatz für die Schalthebel), im
+    ERG-Modus stattdessen Zielleistung, Abschnitt und Restzeit (die Tasten
+    verschieben das Ziel um 5 % FTP); darunter das 56 dp hohe Höhenprofil,
+    gefahrener Teil grün abgesetzt, mit „x von y km“ und der Fahrzeit.
+  - Geräte, Kamera, Beenden, Pause als runde Symbolknöpfe (52 dp) in einer
+    Spalte rechts über den Schalt-Tasten, quer als Reihe oben rechts.
+    Beenden: Finger 1,1 s halten, ein Ring läuft um den Knopf; ein kurzer
+    Tipp zeigt „Zum Beenden gedrückt halten“. Der Geräteknopf ist orange mit
+    Warnsymbol, wenn der Trainer nicht bereit ist oder der Schalttaster ein
+    Problem meldet; ein Tipp öffnet Trainer- und Tasterstatus samt
+    Quellenangaben der Welt (vorher eigene Statuszeile und „ⓘ“).
+  - Ein Tipp auf die Welt blendet Geist, Profil, Knöpfe und Demo-Regler
+    aus und wieder ein (Bild 112); Kernwerte, Steigung, Schalten und
+    Hinweise bleiben. Für TalkBack ist die Fläche ein Knopf
+    „Nebenanzeigen aus-/einblenden“.
+  - Pause, Auto-Pause, „Bereit“, „Ziel erreicht“ als Karte oben in der
+    Weltmitte, bei harter Pause mit „Weiter“ (Bild 114); der Pause-Knopf
+    zeigt „Weiter“ ebenfalls nur bei harter Pause.
+  - Ohne Welt oder bei Ausfall der Darstellung liegt ein dunkler Grund
+    hinter demselben HUD; das große Höhenprofil füllt den Platz, die Knöpfe
+    stehen rechts daneben. Wird es eng (kleines Gerät, Hinweis,
+    Demo-Regler), entfällt die Überschrift und das Profil schrumpft, bleibt
+    aber sichtbar (Bild 108).
 - Testwelt als Streckenoption: `WorldBuilder.buildTestWorld` schreibt nach
   `<filesDir>/indoor/worlds/testwelt/`, sofern dort noch nichts liegt; die
   Strecke ist `manifest.track.toIndoorRoute(...)`.
@@ -194,7 +229,17 @@ als Soll-Zustand des Prototyps.
 - [ ] Diagnoseseite aus dem Ablauf und aus *Mehr* erreichbar
 - [ ] Englisch: der gesamte Ablauf mit Systemsprache Englisch
 - [ ] Kleines Handy bzw. große Schrift mit Demo-Reglern und Hinweis: Höhenprofil
-      bleibt sichtbar, die untere Bedienung lässt sich scrollen
+      bleibt sichtbar, nichts ist abgeschnitten
+- [ ] Fahransicht randlos: Welt unter Status- und Navigationsleiste, Symbole
+      der Leisten hell und lesbar, Kamera-Ausschnitt (Notch) und Gestenleiste
+      verdecken keine Werte und keine Taste; nach der Fahrt sind die Symbole
+      wieder wie vorher, die übrigen Seiten (Tabs, Mehr, Indoor-Schritte)
+      sitzen unverändert unter der Statusleiste
+- [ ] HUD über der echten 3D-Welt bei hellem Himmel und Mittagslicht gut
+      lesbar; Tipp auf die Welt blendet Nebensachen aus und ein, ohne die
+      Kamera der Darstellung zu stören
+- [ ] Runder Beenden-Knopf: 1,1 s halten beendet, kurzer Tipp zeigt den
+      Hinweis; −/+ mit dem Daumen ohne Umgreifen erreichbar
 - [ ] Welt laden, Zurück, andere Strecke, Welt laden: es läuft nur ein Bau,
       gefahren wird die zuletzt gewählte Strecke
 
@@ -202,18 +247,21 @@ als Soll-Zustand des Prototyps.
 
 Alle unter `docs/indoor/bilder/app/` (JPEG, Breite 540, quer 900), erzeugt mit
 `./gradlew :app:testDebugUnitTest -Pscreenshots --tests '*IndoorScreenshotTest*'`
-aus `IndoorScreenshotTest`. Die Slots der anderen Slices (Geräteliste, 3D-Fläche)
-sind darin blaue Platzhalter; echte Darstellung und Geräteliste zeigen erst
-die Bilder aus dem Gerätetest.
+aus `IndoorScreenshotTest`. Die Geräteliste des Slices indoor-ble ist darin ein
+blauer Platzhalter; statt der 3D-Fläche liegt eine gezeichnete Landschaft
+(heller Himmel bis zum Horizont, Wiese, Straße) unter dem HUD, damit sich die
+Lesbarkeit beurteilen lässt. Echte Darstellung und Geräteliste zeigen erst die
+Bilder aus dem Gerätetest.
 
 90 Karte auf *Heute*, 91 Koppeln (Kettenblatt 48, Gangtabelle), 92 Strecke (freie Fahrt,
 Frühere Fahrt), 93 Strecke (Einheit des Tages, feste Leistung), 94 Voranschlag
 der Welt, 95 Bau mit Fortschritt, 96 Fehler beim Bau, 97 Fahren mit
 Mitfahrer, 98 Fahren im ERG-Modus, 99 Fahren ohne Darstellung, 100 Fahren
-ohne Welt, 101 Hinweis bei Trainerverlust, 102 Querformat (Kamera und Pause
-untereinander), 103 Auswertung gespeichert, 104 Auswertung unter 60 s,
+ohne Welt, 101 Hinweis bei Trainerverlust (Auto-Pause), 102 Querformat,
+103 Auswertung gespeichert, 104 Auswertung unter 60 s,
 105 Weltverwaltung, 106 und 107 Englisch, 108 kleines Gerät (360 × 640 dp) mit
-Demo-Reglern, 109 Koppeln mit Demo-Trainer. Nur in
+Demo-Reglern, 109 Koppeln mit Demo-Trainer, 112 Nebenanzeigen ausgeblendet,
+113 Schrift 130 %, 114 harte Pause, 115 Querformat ERG mit Schrift 130 %. Nur in
 `app/build/outputs/roborazzi/` (nicht unter `docs/`): 110 und 111 Koppeln mit
 dem echten Abschnitt von indoor-ble (ohne Berechtigung bzw. gekoppelt mit
 laufender Suche), als hohes Bild der ganzen Seite.

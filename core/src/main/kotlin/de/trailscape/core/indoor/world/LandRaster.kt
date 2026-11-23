@@ -30,7 +30,8 @@ internal class LandRaster(
     private val blockCells: Int = 128,
 ) : LandMap, WaterMask {
     private val blockM = cellM * blockCells
-    private val blocks = ConcurrentHashMap<Long, ByteArray>()
+    /** Je Block (bei 2 m Zellen 256 m Kante) 16 KB; hoechstens [MAX_BLOCKS] gleichzeitig. */
+    private val blocks = BoundedCache<Long, ByteArray>(MAX_BLOCKS)
     private val canopy = ConcurrentHashMap<TileSpec, CanopyGrid>()
 
     private class Last(var key: Long = Long.MIN_VALUE, var data: ByteArray? = null)
@@ -52,7 +53,7 @@ internal class LandRaster(
         val data = if (l.key == key) {
             l.data!!
         } else {
-            val d = blocks.computeIfAbsent(key) { build(bx, by) }
+            val d = blocks.getOrPut(key) { build(bx, by) }
             l.key = key
             l.data = d
             d
@@ -223,6 +224,8 @@ internal class LandRaster(
     }
 
     companion object {
+        /** 1024 Bloecke = 16 MB: reicht fuer die Kacheln, die gleichzeitig in Arbeit sind. */
+        const val MAX_BLOCKS = 1024
         const val CLASS_MASK = 0x0F
         const val ROAD_BIT = 0x10
         const val BUILDING_BIT = 0x20

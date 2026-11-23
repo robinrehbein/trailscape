@@ -628,3 +628,30 @@ internal fun distanceToLine(line: DoubleArray, e: Double, n: Double): Double {
 
 /** `true`, wenn |a − b| ≤ eps. */
 internal fun near(a: Double, b: Double, eps: Double = 1e-9): Boolean = abs(a - b) <= eps
+
+/**
+ * Begrenzter Zwischenspeicher (LRU) fuer abgeleitete Daten, die sich jederzeit
+ * neu rechnen lassen (Landnutzungs-Bloecke, Strassenprofile). Ein
+ * unbegrenzter Speicher wuchs mit der Streckenlaenge: Bei 40–100 km und
+ * 256 MB Heap endete der Weltbau so gegen Ende im `OutOfMemoryError`.
+ *
+ * Gerechnet wird ausserhalb der Sperre; rechnen zwei Threads denselben
+ * Schluessel, gewinnt der erste (die Werte sind deterministisch, also gleich).
+ */
+internal class BoundedCache<K : Any, V : Any>(private val capacity: Int) {
+    private val map = object : LinkedHashMap<K, V>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean = size > capacity
+    }
+
+    fun getOrPut(key: K, make: () -> V): V {
+        synchronized(map) { map[key] }?.let { return it }
+        val value = make()
+        synchronized(map) {
+            map[key]?.let { return it }
+            map[key] = value
+        }
+        return value
+    }
+
+    val size: Int get() = synchronized(map) { map.size }
+}

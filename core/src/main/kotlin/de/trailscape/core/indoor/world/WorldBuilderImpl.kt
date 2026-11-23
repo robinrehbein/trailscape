@@ -59,7 +59,7 @@ internal class WorldBuilderImpl(
     private val parts: WorldParts,
     private val aerialRegister: List<AerialSource> = aerialSources,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val threads: Int = min(Runtime.getRuntime().availableProcessors(), 4).coerceAtLeast(1),
+    private val threads: Int = defaultWorldThreads(),
 ) : WorldBuilder {
 
     // -----------------------------------------------------------------------
@@ -129,27 +129,32 @@ internal class WorldBuilderImpl(
             val route0 = plan.route
             val quality = plan.quality
             val pre = preliminary(route0, quality)
-            val loader = GeoLoader(deps, pre.origin, listener, threads)
+            // Laden ist Netz und wenig Speicher: so parallel, wie die Huelle drosselt.
+            val loader = GeoLoader(deps, pre.origin, listener, maxOf(threads, MAX_PARALLEL))
 
             loader.loadElevation(GeoTileSets.of(pre.origin, pre.tiles.map { it.spec }))
-            val heights0 = loader.heights(fineCellsOf(pre.tiles.map { it.spec }))
-            val origin = parts.origin(route0, heights0::aboveSeaLatLon)
-            if (origin.lat != pre.origin.lat || origin.lon != pre.origin.lon) {
-                throw WorldBuildFailed(WorldBuildFailed.Reason.INTERNAL, "Ursprung haengt von den Hoehen ab (${pre.origin} → $origin)")
-            }
+            // `var` und spaeter `null`: Die vorlaeufigen Felder sollen nicht neben den endgueltigen im Speicher bleiben.
+            var heights0: TerrainHeights? = loader.heights(fineCellsOf(pre.tiles.map { it.spec }))
+            val origin = originFor(route0, pre.origin, heights0!!)
 
             loader.loadVector(GeoTileSets.of(pre.origin, pre.tiles.map { it.spec }))
-            val map0 = loader.mapData()
-            val route = if (needsVectorSurfaces(route0)) withVectorSurfaces(route0, origin, map0) else route0
-            val isBridge = bridgeLookup(route, origin, map0)
-            val track = parts.fitTrack(route, origin, { e, n -> heights0.aboveSea(e, n) - origin.eleM }, isBridge)
+            var map: MapData = loader.mapData()
+            val route = if (needsVectorSurfaces(route0)) withVectorSurfaces(route0, origin, map) else route0
+            val isBridge = bridgeLookup(route, origin, map)
+            val prelimHeights = heights0
+            val track = parts.fitTrack(route, origin, { e, n -> prelimHeights.aboveSea(e, n) - origin.eleM }, isBridge)
+            heights0 = null
             val planned = parts.planTiles(TrackLine(track), track.loop, quality)
             val specs = planned.map { it.spec }
             val finalSets = GeoTileSets.of(origin, specs)
             loader.loadElevation(finalSets)
             val vectorAdded = loader.loadVector(finalSets)
             val heights = loader.heights(fineCellsOf(specs))
-            val map = if (vectorAdded) loader.mapData() else map0
+            if (vectorAdded) map = loader.mapData()
+            // Ab hier zaehlen nur die abgeleiteten Daten; die rohen Kacheln (bei 40 km
+            // rund 100 MB Vektor-Merkmale samt Tags) duerfen weg — auf dem Handy
+            // ist das der Unterschied zwischen fertiger Welt und OutOfMemoryError.
+            loader.releaseRawTiles()
 
             val attribution = ArrayList<WorldAttribution>()
             attribution += WorldAttribution(GeoSourceKind.ELEVATION, ELEVATION_ATTRIBUTION, ELEVATION_LICENSE, ELEVATION_ATTRIBUTION_URL)
@@ -176,7 +181,9 @@ internal class WorldBuilderImpl(
             throw e
         } catch (e: WorldBuildFailed) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Auch Errors (OutOfMemoryError, StackOverflowError, LinkageError …):
+            // Der Aufrufer zeigt sie samt Ursache an, statt dass die App abstuerzt.
             throw WorldBuildFailed(WorldBuildFailed.Reason.INTERNAL, e.message ?: e.javaClass.simpleName, e)
         }
     }
@@ -352,13 +359,12 @@ internal class WorldBuilderImpl(
                 aerial = m.aerial, degraded = m.degraded,
             )
         }
+        // Ueberschreitet die fertige Welt das Budget der Qualitaet (nur moeglich,
+        // wenn planTiles keine passende Kachelgroesse fand), wird sie trotzdem
+        // geschrieben: Der Wert steht im Manifest, checkWorld meldet ihn, und die
+        // Darstellung laedt ohnehin nur, was sie braucht. Nach dem Bau aller
+        // Kacheln die ganze Arbeit zu verwerfen, half niemandem.
         val (maxTex, maxTri) = worldBudgetOf(tiles, inputs.track.lengthM)
-        if (maxTex > quality.maxTextureBytes || maxTri > quality.maxTriangles) {
-            throw WorldBuildFailed(
-                WorldBuildFailed.Reason.INTERNAL,
-                "Budget ueberschritten: $maxTex Texturbytes (erlaubt ${quality.maxTextureBytes}), $maxTri Dreiecke (erlaubt ${quality.maxTriangles}) — Fehler der Kachelplanung",
-            )
-        }
         val usedAerial = done.values.mapNotNull { it.aerialSource }.toSet()
         val attribution = inputs.baseAttribution + inputs.aerialSources.filter { it.id in usedAerial }.map {
             WorldAttribution(GeoSourceKind.AERIAL, it.attribution, it.license, it.licenseUrl)
@@ -421,6 +427,19 @@ internal class WorldBuilderImpl(
     // -----------------------------------------------------------------------
 
     private class Preliminary(val origin: GeoOrigin, val tiles: List<PlannedTile>)
+
+    /**
+     * Der endgueltige Ursprung: Lage aus der vorlaeufigen Planung (danach
+     * richten sich die geladenen Kacheln), Hoehe aus den Hoehendaten. Liefert
+     * ein [WorldParts] doch eine andere Lage (Vertragsverstoss, oder `NaN`
+     * aus kaputten Punkten), wird nicht abgebrochen, sondern die Lage der
+     * vorlaeufigen Planung behalten — die Kacheln passen nur zu ihr.
+     */
+    private fun originFor(route: IndoorRoute, pre: GeoOrigin, heights: TerrainHeights): GeoOrigin {
+        val o = parts.origin(route, heights::aboveSeaLatLon)
+        val ele = if (o.eleM.isFinite()) o.eleM else pre.eleM
+        return if (o.lat == pre.lat && o.lon == pre.lon) o.copy(eleM = ele) else GeoOrigin(pre.lat, pre.lon, ele)
+    }
 
     /**
      * Planung ohne Netz: Ursprung mit der Hoehe des Streckenstarts aus der
@@ -576,6 +595,7 @@ private class GeoLoader(
     fun heights(fineCells: Set<TileSpec>): TerrainHeights {
         val key = "${elevNear.size}/${elevFar.size}"
         if (key != fieldsKey) {
+            check(!released) { "Hoehenkacheln schon freigegeben" }
             fields = Pair(
                 if (elevNear.isEmpty()) null else ElevationField(origin, ELEVATION_ZOOM_NEAR, elevNear.values, ELEVATION_SMOOTHING_PX),
                 if (elevFar.isEmpty()) null else ElevationField(origin, ELEVATION_ZOOM_FAR, elevFar.values, ELEVATION_SMOOTHING_PX),
@@ -619,6 +639,7 @@ private class GeoLoader(
     }
 
     fun mapData(): MapData {
+        check(!released) { "Vektorkacheln schon freigegeben" }
         val near = vecNear.values.filterNotNull()
         val far = vecFar.values.filterNotNull()
         return VectorMapData(
@@ -629,6 +650,22 @@ private class GeoLoader(
         )
     }
 
+    /**
+     * Gibt die rohen Hoehen- und Vektorkacheln frei, sobald Hoehenfelder und
+     * [mapData] endgueltig gebaut sind. Was geladen war, bleibt bekannt
+     * ([vectorUsed], [vectorMissing]); Nachladen oder neues [mapData] geht
+     * danach nicht mehr.
+     */
+    fun releaseRawTiles() {
+        released = true
+        for (k in vecNear.keys.toList()) vecNear[k]?.let { vecNear[k] = VectorTileData(k, EMPTY_MVT) }
+        for (k in vecFar.keys.toList()) vecFar[k]?.let { vecFar[k] = VectorTileData(k, EMPTY_MVT) }
+        for (k in elevNear.keys.toList()) elevNear.getValue(k).let { elevNear[k] = ElevationTile(k, it.size, null) }
+        for (k in elevFar.keys.toList()) elevFar.getValue(k).let { elevFar[k] = ElevationTile(k, it.size, null) }
+    }
+
+    private var released = false
+
     /** Fehlt einer Kachel eine ihrer Vektorkacheln? */
     fun vectorMissing(spec: TileSpec): Boolean {
         val near = spec.level <= 1
@@ -638,7 +675,31 @@ private class GeoLoader(
     }
 
     private class Box<T>(val value: T)
+
+    private companion object {
+        val EMPTY_MVT = MvtTile(emptyMap(), emptyList())
+    }
 }
+
+/**
+ * Threads des Weltbaus: `min(Kerne, 4)`, aber nur so viele, wie der Heap
+ * hergibt. Eine Kachel in Arbeit belegt kurzzeitig rund
+ * [WORLD_BYTES_PER_THREAD] (Luftbild dekodiert und als Textur, Netz, GLB);
+ * [WORLD_BASE_HEAP_BYTES] bleiben fuer Geodaten und App. Ein Handy ohne
+ * `largeHeap` hat oft nur 256 MB — dort sind vier parallele Kacheln der
+ * Weg in den `OutOfMemoryError`.
+ */
+internal fun defaultWorldThreads(
+    cores: Int = Runtime.getRuntime().availableProcessors(),
+    maxHeapBytes: Long = Runtime.getRuntime().maxMemory(),
+): Int {
+    val byCores = min(cores, 4)
+    val byHeap = if (maxHeapBytes == Long.MAX_VALUE) byCores else ((maxHeapBytes - WORLD_BASE_HEAP_BYTES) / WORLD_BYTES_PER_THREAD).toInt()
+    return min(byCores, byHeap).coerceAtLeast(1)
+}
+
+internal const val WORLD_BASE_HEAP_BYTES: Long = 160L * 1024 * 1024
+internal const val WORLD_BYTES_PER_THREAD: Long = 48L * 1024 * 1024
 
 // ---------------------------------------------------------------------------
 // Parallele Ausfuehrung mit Fortschritt und Abbruch vom aufrufenden Thread

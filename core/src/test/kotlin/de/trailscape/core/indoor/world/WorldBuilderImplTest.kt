@@ -17,6 +17,16 @@ class WorldBuilderImplTest {
     private val quality = IndoorQuality.LOW
 
     @Test
+    fun `Threads richten sich nach dem Heap, nicht nur nach den Kernen`() {
+        val mb = 1024L * 1024
+        assertEquals(4, defaultWorldThreads(cores = 8, maxHeapBytes = 512 * mb))
+        assertEquals(2, defaultWorldThreads(cores = 8, maxHeapBytes = 256 * mb), "Handy ohne largeHeap")
+        assertEquals(1, defaultWorldThreads(cores = 8, maxHeapBytes = 128 * mb))
+        assertEquals(2, defaultWorldThreads(cores = 2, maxHeapBytes = 4096 * mb))
+        assertEquals(4, defaultWorldThreads(cores = 16, maxHeapBytes = Long.MAX_VALUE))
+    }
+
+    @Test
     fun `baut eine kurze Welt mit Luftbild, die die Pruefung besteht, Fortschritt monoton je Phase`() {
         val geo = FakeGeo()
         val plan = builder.plan(shortRoute(), quality)

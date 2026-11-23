@@ -129,8 +129,15 @@
          localeConfig: Die Sprachen der App (res/xml/locales_config.xml) fuer
          die per-App-Sprachwahl ab Android 13 (siehe i18n/AppLocale.kt). Bewusst
          KEIN "locale" in configChanges: Nach einem Sprachwechsel wird die
-         Activity neu erzeugt und liest ihre Texte frisch. -->
+         Activity neu erzeugt und liest ihre Texte frisch.
+
+         largeHeap: Der Indoor-Weltbau haelt fuer eine lange Strecke Hoehen-
+         und Vektordaten des ganzen Gebiets (bei 40 km rund 100 MB) und baut
+         daneben Kacheln mit 1024er-Luftbildern. Mit den ueblichen 256 MB ohne
+         largeHeap endete das bei langen Strecken im OutOfMemoryError; der Bau
+         richtet seine Parallelitaet zusaetzlich nach Runtime.maxMemory(). -->
     <application
+        android:largeHeap="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
