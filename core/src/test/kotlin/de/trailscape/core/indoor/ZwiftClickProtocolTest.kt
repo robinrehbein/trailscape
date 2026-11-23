@@ -100,9 +100,10 @@ class ZwiftClickProtocolTest {
 
     @Test
     fun `Click V1 fehlendes Feld gilt als losgelassen`() {
-        assertEquals(buttons(true, false, ClickVariant.V1), frame("37 08 00"))
-        assertEquals(buttons(false, true, ClickVariant.V1), frame("37 10 00"))
-        assertEquals(buttons(false, false, ClickVariant.V1), frame("37"))
+        assertEquals(ClickFrame.Buttons(true, false, ClickVariant.V1, missingFields = 1), frame("37 08 00"))
+        assertEquals(ClickFrame.Buttons(false, true, ClickVariant.V1, missingFields = 1), frame("37 10 00"))
+        assertEquals(ClickFrame.Buttons(false, false, ClickVariant.V1, missingFields = 2), frame("37"))
+        assertEquals(0, assertIs<ClickFrame.Buttons>(frame("37 08 01 10 01")).missingFields)
     }
 
     @Test

@@ -132,10 +132,10 @@ class ZwiftClickShifterTest {
     @Test
     fun `Frist 5 s, eine Wiederholung, dann UNSUPPORTED`() {
         shifter.start(rec)
-        shifter.tick(1_000)
         link.ready(IndoorUuids.ZWIFT_SERVICE)
         assertEquals(v1Setup, link.ops)
         link.ops.clear()
+        shifter.tick(1_000) // verankert die Frist
 
         shifter.tick(5_999)
         assertTrue(link.ops.isEmpty())
@@ -155,8 +155,8 @@ class ZwiftClickShifterTest {
     @Test
     fun `Echo im zweiten Versuch reicht`() {
         shifter.start(rec)
-        shifter.tick(0)
         link.ready(IndoorUuids.ZWIFT_SERVICE)
+        shifter.tick(0)
         shifter.tick(5_000)
         link.syncTx(echo)
         shifter.tick(20_000)
@@ -196,8 +196,9 @@ class ZwiftClickShifterTest {
         link.ready(IndoorUuids.ZWIFT_SERVICE)
         link.async(v1Minus, 1_000)
         assertEquals(listOf("conn CONNECTING", "conn READY", "shift DOWN"), rec.take())
-        shifter.tick(20_000) // keine Frist mehr
+        shifter.tick(1_500)
         assertEquals(listOf("shift DOWN"), rec.take(), "nur die Wiederholung der gehaltenen Taste")
+        shifter.tick(20_000) // keine Frist mehr
         link.async(v1None, 20_001)
         shifter.tick(30_000)
         assertEquals(emptyList(), rec.take())
@@ -253,12 +254,61 @@ class ZwiftClickShifterTest {
     }
 
     @Test
-    fun `spaetere Antworten auf SyncTX nach READY stoeren nicht`() {
+    fun `weiteres Echo oder Unbekanntes auf SyncTX nach READY stoert nicht`() {
         readyV1()
-        link.syncTx("FF 01")
-        link.syncTx("52 69 64 65 4F 6E 01 03 01 02 03 04 05 06 07 08 09 0A 0B 0C")
+        link.syncTx(echo)
+        link.syncTx("01 02")
         assertEquals(emptyList(), rec.take())
         assertTrue(link.ops.isEmpty())
+    }
+
+    @Test
+    fun `Leerlauf vor dem Echo macht nicht READY, Sperre danach wirkt`() {
+        shifter.start(rec)
+        link.ready(IndoorUuids.ZWIFT_RIDE_SERVICE)
+        link.async("23 08 FF FF FF FF 0F", 100)
+        link.async("37 08 01 10 01", 150)
+        assertEquals(listOf("conn CONNECTING"), rec.take())
+        link.syncTx("FF 04 00 0A")
+        assertEquals(listOf("conn UNSUPPORTED"), rec.take())
+        assertEquals("close", link.ops.last())
+    }
+
+    @Test
+    fun `Sperr-Antwort nach READY durch Tastendruck - UNSUPPORTED`() {
+        shifter.start(rec)
+        link.ready(IndoorUuids.ZWIFT_RIDE_SERVICE)
+        link.async("23 08 FF BF FF 7F", 100)
+        assertEquals(listOf("conn CONNECTING", "conn READY", "shift UP"), rec.take())
+        link.syncTx("FF 04 00 0A")
+        assertEquals(listOf("conn UNSUPPORTED"), rec.take())
+        assertTrue(shifter.diagnose!!.contains("gesperrt"))
+        shifter.tick(5_000)
+        assertEquals(emptyList(), rec.take(), "keine Wiederholung mehr")
+    }
+
+    @Test
+    fun `Schluessel-Antwort nach READY - UNSUPPORTED`() {
+        readyV1()
+        link.syncTx("52 69 64 65 4F 6E 01 03 01 02 03 04 05 06 07 08 09 0A 0B 0C")
+        assertEquals(listOf("conn UNSUPPORTED"), rec.take())
+        assertEquals(listOf("close"), link.ops)
+    }
+
+    @Test
+    fun `veraltete tick-Zeit verankert die Frist nicht`() {
+        shifter.start(rec)
+        shifter.tick(0)
+        // tick-Schleife pausiert lange; dann meldet das Rohr READY
+        link.ready(IndoorUuids.ZWIFT_SERVICE)
+        link.ops.clear()
+        shifter.tick(60_000) // verankert erst jetzt, kein Versuch verloren
+        assertTrue(link.ops.isEmpty())
+        shifter.tick(64_999)
+        assertTrue(link.ops.isEmpty())
+        shifter.tick(65_000)
+        assertEquals(v1Setup, link.ops)
+        assertEquals(listOf("conn CONNECTING"), rec.take())
     }
 
     // ------------------------------------------------------------ Tasten
@@ -289,6 +339,7 @@ class ZwiftClickShifterTest {
     fun `spaeter tick holt nicht nach - keine Salven, Abstand mindestens 250 ms`() {
         readyV1()
         link.async(v1Minus, 1_000)
+        link.async(v1Minus, 2_900) // Geraet wiederholt den Zustand
         rec.take()
         shifter.tick(3_000) // lange kein tick
         assertEquals(listOf("shift DOWN"), rec.take())
@@ -304,6 +355,7 @@ class ZwiftClickShifterTest {
         link.async(v1Plus, 0)
         var t = 0L
         while (t <= 2_000) {
+            if (t % 500 == 0L) link.async(v1Plus, t) // Wiederholung bestaetigt den Druck
             shifter.tick(t)
             t += 100
         }
@@ -332,6 +384,45 @@ class ZwiftClickShifterTest {
         link.async(v1Plus, 1_100)
         assertEquals(listOf("shift UP"), rec.take())
         assertTrue(shifter.diagnose!!.contains("verworfen"))
+        // Danach geht das Loslassen verloren (nur noch kaputte Rahmen):
+        link.async("37 08 01 10", 1_300)
+        shifter.tick(1_600)
+        assertEquals(listOf("shift UP"), rec.take())
+        for (t in listOf(1_850L, 2_100L, 2_350L, 2_600L, 2_850L, 3_099L)) shifter.tick(t)
+        assertEquals(List(5) { "shift UP" }, rec.take()) // 1850 … 2850; 3099 liegt vor 3100
+        shifter.tick(3_100) // 2 s ohne bestaetigenden Tastenrahmen seit 1100
+        shifter.tick(10_000)
+        assertEquals(emptyList(), rec.take())
+        assertTrue(shifter.diagnose!!.contains("losgelassen"))
+        link.async(v1Plus, 10_100)
+        assertEquals(listOf("shift UP"), rec.take(), "naechster Druck ist wieder eine Flanke")
+    }
+
+    @Test
+    fun `Haltezeit-Obergrenze gilt auch fuer beide Tasten`() {
+        readyV1()
+        link.async(v1Both, 1_000)
+        rec.take()
+        shifter.tick(3_000)
+        link.async(v1Minus, 3_100) // nach der Freigabe: Minus ist eine neue Flanke
+        assertEquals(listOf("shift DOWN"), rec.take())
+    }
+
+    @Test
+    fun `Leerlaufrahmen loest gehaltene Taste nicht`() {
+        readyV1()
+        link.async(v1Plus, 1_000)
+        link.async("15", 1_100)
+        link.async(v1Plus, 1_200)
+        assertEquals(listOf("shift UP"), rec.take())
+    }
+
+    @Test
+    fun `Click-Rahmen mit fehlendem Feld landet in der Diagnose`() {
+        readyV1()
+        link.async("37 08 00", 1_000)
+        assertEquals(listOf("shift UP"), rec.take())
+        assertTrue(shifter.diagnose!!.contains("Tastenfeld"))
     }
 
     @Test
@@ -419,16 +510,17 @@ class ZwiftClickShifterTest {
     @Test
     fun `Neuverbinden waehrend des Handschlags setzt die Frist zurueck`() {
         shifter.start(rec)
-        shifter.tick(0)
         link.ready(IndoorUuids.ZWIFT_SERVICE)
+        shifter.tick(0)
         shifter.tick(5_000) // Versuch 2
         link.state(BleLinkState.RECONNECTING)
         shifter.tick(10_000)
         assertEquals(listOf("conn CONNECTING"), rec.take())
         link.ops.clear()
         link.ready(IndoorUuids.ZWIFT_SERVICE)
-        shifter.tick(14_999)
-        shifter.tick(15_000) // wieder Versuch 2, nicht UNSUPPORTED
+        shifter.tick(10_001)
+        shifter.tick(15_000)
+        shifter.tick(15_001) // wieder Versuch 2, nicht UNSUPPORTED
         assertEquals(v1Setup + v1Setup, link.ops)
         assertEquals(emptyList(), rec.take())
     }

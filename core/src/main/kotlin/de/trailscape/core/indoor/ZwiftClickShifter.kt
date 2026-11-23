@@ -29,8 +29,12 @@ internal fun zwiftClickShifter(link: BleLink): IndoorShifter = ZwiftClickShifter
  * 5. Frist 5 s je Versuch (ueber [tick]); nach Ablauf die Einrichtung einmal
  *    komplett wiederholen, danach `UNSUPPORTED`.
  *
- * **Annahme:** Kommen Tastenrahmen (0x37/0x23) schon vor dem Echo, gilt der
- * Taster ebenfalls als `READY` — er spricht dann offensichtlich Klartext.
+ * **Annahme:** Kommt schon vor dem Echo ein Tastenrahmen (0x37/0x23) mit
+ * echtem Druck, gilt der Taster ebenfalls als `READY` — er spricht dann
+ * offensichtlich Klartext. Ein Rahmen ohne Druck (etwa der V2-Leerlauf) reicht
+ * dafuer NICHT: Auch ein gesperrtes Geraet kann solche Rahmen schicken, bevor
+ * seine 0xFF-Antwort kommt. Eine Sperr- oder Schluessel-Antwort auf SyncTX
+ * wird deshalb auch nach `READY` noch ausgewertet und fuehrt zu `UNSUPPORTED`.
  * Einige Firmware echot moeglicherweise nicht (die Laenge des Echos ist in den
  * Quellen schon unsicher); nichts in den Quellen spricht dagegen, den
  * Tastenrahmen als Beweis zu nehmen.
@@ -61,10 +65,25 @@ internal fun zwiftClickShifter(link: BleLink): IndoorShifter = ZwiftClickShifter
  * gehalten sind (wohl ein Griff, kein Wunsch nach zehn Gaengen). Bleibt danach
  * eine gehalten, beginnt deren Wiederholung wieder mit 500 ms Vorlauf.
  *
+ * **Haltezeit-Obergrenze:** Kommt [HOLD_CONFIRM_MS] (2 s) lang kein
+ * Tastenrahmen, gilt jede gehaltene Taste als losgelassen (ohne Ereignis).
+ * Sonst schaltete ein verlorener oder kaputter Loslass-Rahmen endlos weiter.
+ * Laut Quellen wiederholt das Geraet den Zustand, solange gedrueckt ist
+ * (jat255); jede Wiederholung bestaetigt den Druck. Sendet eine Firmware nur
+ * Aenderungen, endet die Wiederholung eben nach 2 s — harmlos (Geraetetest).
+ *
+ * Der Leerlaufrahmen 0x15 wird NICHT als „alles losgelassen“ gewertet: Die
+ * Quellen beschreiben ihn nur als Lebenszeichen etwa im Sekundentakt
+ * (BikeControl ignoriert ihn), nicht als Zustand. Kaeme er auch waehrend des
+ * Haltens, loeste der naechste wiederholte Druckrahmen eine zweite Flanke aus
+ * — ein falscher Gangwechsel waere schlimmer als der Verzicht. Die 2-s-Grenze
+ * deckt den Fall des verlorenen Loslassens ohnehin ab.
+ *
  * Die Druckzeit ist `receivedMs` des Rahmens — laut Vertrag dieselbe monotone
- * Uhr wie [tick]. Fristen des Handschlags beginnen bei der letzten bekannten
- * tick-Zeit (das Rohr liefert ausser `receivedMs` keine Zeit); gab es noch
- * keinen tick, beginnt die Frist mit dem ersten.
+ * Uhr wie [tick]. Die Frist des Handschlags wird beim ersten tick NACH dem
+ * Absenden verankert (das Rohr liefert ausser `receivedMs` keine Zeit). Die
+ * letzte bekannte tick-Zeit kann veraltet sein — eine pausierte tick-Schleife
+ * kostete sonst einen der zwei Versuche.
  *
  * ## Threads
  * Ein Lock. Alles, was nach aussen geht (Listener, Rohr), wird unter dem Lock
@@ -101,6 +120,7 @@ internal class ZwiftClickShifter(private val link: BleLink) : IndoorShifter {
     private var minusHeld = false
     private var plusNextMs = 0L
     private var minusNextMs = 0L
+    private var lastButtonsMs = 0L
     private var battery: Int? = null
 
     /** Letzte Diagnose (Deutsch, kein UI-Text) — warum `UNSUPPORTED` oder was zuletzt schiefging. */
@@ -194,7 +214,7 @@ internal class ZwiftClickShifter(private val link: BleLink) : IndoorShifter {
                 variant = v
                 phase = Phase.HANDSHAKE
                 attempt = 1
-                deadlineMs = nowMs?.plus(HANDSHAKE_TIMEOUT_MS)
+                deadlineMs = null // beim naechsten tick verankern
                 report(ShifterConnection.CONNECTING)
                 queueSetup()
             }
@@ -221,22 +241,27 @@ internal class ZwiftClickShifter(private val link: BleLink) : IndoorShifter {
         if (phase != Phase.HANDSHAKE && phase != Phase.READY) return
         when (uuid) {
             IndoorUuids.ZWIFT_SYNC_TX -> {
-                if (phase != Phase.HANDSHAKE) return
                 when (ZwiftClickProtocol.classifyHandshakeAnswer(bytes)) {
-                    HandshakeAnswer.OK -> becomeReady()
+                    HandshakeAnswer.OK -> if (phase == Phase.HANDSHAKE) becomeReady()
                     HandshakeAnswer.ENCRYPTED -> unsupported(
                         "Handschlag-Antwort mit Schluessel: verschluesselte Firmware (ECDH/AES-CCM), nicht unterstuetzt",
                     )
                     HandshakeAnswer.LOCKED -> unsupported(
                         "Handschlag-Antwort beginnt mit 0xFF: Geraet gesperrt (muss erst in Zwift entsperrt werden)",
                     )
-                    HandshakeAnswer.UNKNOWN -> diagnose = "unerwartete Handschlag-Antwort (${bytes.size} Byte), warte weiter"
+                    HandshakeAnswer.UNKNOWN -> if (phase == Phase.HANDSHAKE) {
+                        diagnose = "unerwartete Handschlag-Antwort (${bytes.size} Byte), warte weiter"
+                    }
                 }
             }
             IndoorUuids.ZWIFT_ASYNC -> when (val frame = ZwiftClickProtocol.parseFrame(bytes)) {
                 is ClickFrame.Buttons -> {
-                    if (phase == Phase.HANDSHAKE) becomeReady()
-                    applyButtons(frame.plus, frame.minus, receivedMs)
+                    if (frame.missingFields > 0) {
+                        diagnose = "Click-Rahmen ohne ${frame.missingFields} Tastenfeld(er) als losgelassen gewertet " +
+                            "(proto3 wuerde 0 = gedrueckt weglassen?)"
+                    }
+                    if (phase == Phase.HANDSHAKE && (frame.plus || frame.minus)) becomeReady()
+                    if (phase == Phase.READY) applyButtons(frame.plus, frame.minus, receivedMs)
                 }
                 is ClickFrame.Battery -> if (battery != frame.percent) {
                     battery = frame.percent
@@ -302,9 +327,16 @@ internal class ZwiftClickShifter(private val link: BleLink) : IndoorShifter {
         }
         plusHeld = plus
         minusHeld = minus
+        lastButtonsMs = t
     }
 
     private fun repeatHeld(now: Long) {
+        if ((plusHeld || minusHeld) && now - lastButtonsMs >= HOLD_CONFIRM_MS) {
+            plusHeld = false
+            minusHeld = false
+            diagnose = "gehaltene Taste ohne Bestaetigung seit $HOLD_CONFIRM_MS ms, als losgelassen gewertet"
+            return
+        }
         if (plusHeld == minusHeld) return // keine oder beide: nichts wiederholen
         if (plusHeld && now >= plusNextMs) {
             plusNextMs = now + REPEAT_EVERY_MS
@@ -374,5 +406,8 @@ internal class ZwiftClickShifter(private val link: BleLink) : IndoorShifter {
 
         /** Abstand weiterer Wiederholungen (Vertrag: hoechstens alle 250 ms). */
         const val REPEAT_EVERY_MS = 250L
+
+        /** Ohne bestaetigenden Tastenrahmen gilt eine gehaltene Taste nach dieser Zeit als losgelassen. */
+        const val HOLD_CONFIRM_MS = 2_000L
     }
 }

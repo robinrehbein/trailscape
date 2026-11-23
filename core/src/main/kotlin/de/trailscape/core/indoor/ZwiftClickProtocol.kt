@@ -135,13 +135,19 @@ internal object ZwiftClickProtocol {
      * (jat255) zeigen aber immer beide Felder ausdruecklich, auch die Nullen.
      * Ein unvollstaendiger Rahmen wird verworfen: Er koennte eine gedrueckte
      * Taste als losgelassen vortaeuschen und so einen Doppelschalter ausloesen.
+     * UNSICHER bleibt die Deutung „fehlend = losgelassen“: Sendet eine Firmware
+     * doch proto3-sparsam, hiesse ein fehlendes Feld „gedrueckt“ und die Taste
+     * waere stumm. Deshalb markiert [ClickFrame.Buttons.missingFields] solche
+     * Rahmen; der Automat schreibt sie in seine Diagnose, damit es im
+     * Geraetetest sofort auffaellt.
      */
     private fun parseClickButtons(bytes: ByteArray): ClickFrame {
         val f = parseProtoFields(bytes, 1)
         if (!f.complete) return ClickFrame.Malformed("Click-Rahmen unvollstaendig")
         val plus = f.varints[1]?.let { it == 0L } ?: false
         val minus = f.varints[2]?.let { it == 0L } ?: false
-        return ClickFrame.Buttons(plus = plus, minus = minus, variant = ClickVariant.V1)
+        val missing = (if (1 in f.varints) 0 else 1) + (if (2 in f.varints) 0 else 1)
+        return ClickFrame.Buttons(plus = plus, minus = minus, variant = ClickVariant.V1, missingFields = missing)
     }
 
     /*
@@ -183,8 +189,15 @@ internal sealed interface ClickFrame {
      *
      * @property plus „Plus“ (V1) bzw. ein Hoch-Schalter (V2) ist gedrueckt → [ShifterEvent.UP].
      * @property minus „Minus“ (V1) bzw. ein Runter-Schalter (V2) ist gedrueckt → [ShifterEvent.DOWN].
+     * @property missingFields nur V1: wie viele der beiden Tastenfelder fehlten
+     *   (als losgelassen gewertet, siehe Unsicherheit bei proto3); V2 immer 0.
      */
-    data class Buttons(val plus: Boolean, val minus: Boolean, val variant: ClickVariant) : ClickFrame
+    data class Buttons(
+        val plus: Boolean,
+        val minus: Boolean,
+        val variant: ClickVariant,
+        val missingFields: Int = 0,
+    ) : ClickFrame
 
     /** Ladestand in Prozent (0..100). */
     data class Battery(val percent: Int) : ClickFrame
