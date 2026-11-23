@@ -16,7 +16,7 @@ Stand: 23.11.2026, Branch `claude/indoor-world`. Vertrag: `docs/indoor.md`
 | Bodentextur | Luftbild unverändert (JPEG Baseline, sonst PNG neu angefragt) oder aus Landnutzung erzeugt; Leerbild-Erkennung |
 | Fahrbahn `route` | je Belag kachelnde Textur, weicher Belagswechsel, Ränder nach Belag und Umgebung (Bankett, Bordstein mit Gehweg, Graskante), Böschungsstreifen, Markierung auf Landstraßen |
 | Straßen `roads` | übrige Straßen und Wege der Karte, flach auf dem Gelände |
-| Gebäude `buildings` | Grundriss × Höhe, Satteldächer/Walmdächer, Anbauten, Fassadenatlas, Stufe 1 grob. Dachfarbe je Gebäude (deterministisch): Ziegelrot, Rotbraun, Braun, Anthrazit, Grau, wo möglich aus der Luftbildfarbe; Grau aus dem Luftbild wird bei Ziegeldächern teils als Rotbraun/Braun gedeutet |
+| Gebäude `buildings` | Grundriss × Höhe, Satteldächer/Walmdächer, Anbauten, Fassadenatlas, Stufe 1 grob. Dachfarbe je Gebäude (deterministisch): Ziegelrot, Rotbraun, Braun, Anthrazit, Grau, wo möglich aus der Luftbildfarbe; Grau aus dem Luftbild wird bei Ziegeldächern teils als Rotbraun/Braun gedeutet. Die Vektorkacheln nennen keine Gebäudeart (kein church/warehouse); große Grundrisse (> 800 m²) werden nur in Gewerbe- und Landwirtschaftsflächen zur Wellblechhalle, sonst zu Putz-/Ziegelbauten mit Fenstern und Ziegeldach (Traufe 6,6–9,6 m, wenn die Daten keine Höhe nennen) |
 | Bäume `trees` | **neu:** Einzelbäume in vier Arten (runder Laubbaum, schlanke Pappel/Birke, gestufte Fichte, kleiner Feld-/Obstbaum) bis 70 m neben der Strecke: verbeulte, überlappende Kronenkörper mit geglätteten Normalen, Größen- und Farbvariation, Wurzelanlauf. Drei Detailstufen, budgetabhängig vom Weg nach außen vergeben. Standorte aus der Kronenbedeckung des Luftbilds bzw. der Landnutzung; dahinter und in Stufe 1 Waldkörper (hügeliges Kronendach, das am Waldrand bis zum Boden abfällt, ohne Wände) |
 | Wasser `water` | **neu:** Wasserspiegel auf Uferhöhe über den Wasserflächen der Karte |
 | Kleinteile `props` | Leitpfosten, Laternen, Ortstafel, Weidezäune, Holzpolter, Bänke, Wegweiser |
@@ -38,7 +38,7 @@ SwiftShader), 1600 × 900.
 
 | Bild | Was zu sehen ist |
 |---|---|
-| `dorf-altenberg-fachwerk.jpg` | Altenberg (NRW), Start: Fachwerkhaus direkt am Weg, Laubbäume, Halle dahinter |
+| `dorf-altenberg-fachwerk.jpg` | Altenberg (NRW), Start: Fachwerkhaus direkt am Weg, Laubbäume, großer Putzbau mit Fensterreihen dahinter |
 | `dorf-altenberg-pflaster.jpg` | Altenberg, Kopfsteinpflaster am Ortsrand, Wegweiser, bewaldeter Hang im Hintergrund |
 | `wald-tharandt.jpg` | Tharandter Wald (Sachsen), Schotterweg durch Mischwald mit gestuften Fichten, Luftbild von GeoSN (Sonne 55°) |
 | `wald-tharandt-luft.jpg` | dieselbe Stelle aus der Drohne: Einzelbäume entlang des Wegs, dahinter die Waldkörper |

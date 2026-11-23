@@ -370,7 +370,7 @@ internal class BuildingDesign private constructor(
         }
 
         fun of(b: MapBuilding, ctx: TileContext): BuildingDesign? =
-            of(b, ctx.ground, ctx.track, ctx.level) { e, n, radius -> ctx.aerialMeanAt(e, n, radius) }
+            of(b, ctx.ground, ctx.track, ctx.level, ctx.land) { e, n, radius -> ctx.aerialMeanAt(e, n, radius) }
 
         /**
          * Entwirft ein Gebaeude. `null` fuer Grundrisse, aus denen nichts
@@ -381,6 +381,7 @@ internal class BuildingDesign private constructor(
             ground: GroundSurface,
             track: TrackLine?,
             level: Int,
+            land: LandMap? = null,
             aerial: (Double, Double, Double) -> Int?,
         ): BuildingDesign? {
             val outer0 = FootprintShape.clean(b.rings.firstOrNull() ?: return null) ?: return null
@@ -413,6 +414,10 @@ internal class BuildingDesign private constructor(
             var kind = kindOf(area, width, rnd(1))
             if (!unknown && levels == 0 && b.heightM < 3.6 && kind == BuildingKind.HOUSE) kind = BuildingKind.GARAGE
             if (levels >= 2 && (kind == BuildingKind.GARAGE || kind == BuildingKind.SHED)) kind = BuildingKind.HOUSE
+            // Die Vektorkacheln nennen keine Gebaeudeart. Eine Wellblechhalle ist ein grosser Grundriss nur in
+            // Gewerbe- und Landwirtschaftsflaechen (ohne Landnutzung wie bisher); sonst (Kloster, Schule, Hotel, Wohnblock) ein Putz-/Ziegelbau mit Fenstern.
+            val workLand = (land?.classAt(ce, cn) ?: LandClass.INDUSTRIAL).let { it == LandClass.INDUSTRIAL || it == LandClass.FARMLAND }
+            val civic = kind == BuildingKind.HALL && !workLand
 
             val isRect = sq != null && rings.size == 1 && outer.size == 8
             var form = RoofForm.FLAT
@@ -515,7 +520,7 @@ internal class BuildingDesign private constructor(
             // --- Hoehen ---------------------------------------------------
             var rise = (if (form == RoofForm.PENT) 2 else 1) * hwRef * tanP
             var eaveH = when {
-                unknown -> estimateEave(kind, area, rnd(7), rnd(8))
+                unknown -> if (civic) 6.6 + 3.0 * rnd(8) else estimateEave(kind, area, rnd(7), rnd(8))
                 levels > 0 -> levels * 2.8 + 0.2
                 else -> {
                     // Echte Hoehe = Oberkante Dach. Reicht sie nicht fuer Wand und Dach, wird das Dach flacher.
@@ -571,7 +576,11 @@ internal class BuildingDesign private constructor(
                 BuildingKind.GARAGE -> pick(rnd(10), FacadeStyle.PLASTER to 0.80, FacadeStyle.BRICK to 0.08, FacadeStyle.WOOD to 0.12)
                 BuildingKind.HOUSE -> pick(rnd(10), FacadeStyle.PLASTER to 0.64, FacadeStyle.BRICK to 0.13, FacadeStyle.SLATE to 0.14, FacadeStyle.TIMBER to 0.09)
                 BuildingKind.BARN -> pick(rnd(10), FacadeStyle.PLASTER to 0.30, FacadeStyle.BRICK to 0.22, FacadeStyle.WOOD to 0.30, FacadeStyle.SHEET to 0.18)
-                BuildingKind.HALL -> pick(rnd(10), FacadeStyle.SHEET to 0.70, FacadeStyle.PLASTER to 0.22, FacadeStyle.BRICK to 0.08)
+                BuildingKind.HALL -> if (civic) {
+                    pick(rnd(10), FacadeStyle.PLASTER to 0.68, FacadeStyle.BRICK to 0.22, FacadeStyle.SLATE to 0.10)
+                } else {
+                    pick(rnd(10), FacadeStyle.SHEET to 0.70, FacadeStyle.PLASTER to 0.22, FacadeStyle.BRICK to 0.08)
+                }
             }
             val wallH = eaveH - (if (form == RoofForm.FLAT) 0.0 else thickness)
             var storeys = 0
@@ -590,7 +599,7 @@ internal class BuildingDesign private constructor(
             }
             val cover = when {
                 form == RoofForm.FLAT -> RoofCover.BITUMEN
-                kind == BuildingKind.HALL || style == FacadeStyle.SHEET -> RoofCover.SHEET
+                (kind == BuildingKind.HALL && !civic) || style == FacadeStyle.SHEET -> RoofCover.SHEET
                 kind == BuildingKind.SHED || (form == RoofForm.PENT) -> if (rnd(14) < 0.5) RoofCover.SHEET else RoofCover.BITUMEN
                 kind == BuildingKind.BARN && rnd(14) < 0.3 -> RoofCover.SHEET
                 else -> RoofCover.TILE
