@@ -337,7 +337,7 @@ internal class GeoTileSets(val elevationNear: Set<TileId>, val elevationFar: Set
 // ---------------------------------------------------------------------------
 
 /** Naechste Linie in der Naehe einer Stelle, mit aehnlicher Richtung. */
-private fun nearestAligned(
+internal fun nearestAligned(
     roads: List<MapRoad>,
     e: Double,
     n: Double,

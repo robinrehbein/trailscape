@@ -7,13 +7,10 @@ import java.io.File
  *
  * EINSTIEGSDATEI (docs/indoor.md, Abschnitt 3). Besitzer: Slice indoor-world.
  *
- * Die **Signaturen** hier sind Vertrag; der Architekt hat nur Platzhalter
- * hinterlegt. indoor-world ersetzt die Ruempfe (Umsetzung in eigenen Dateien
- * dieses Pakets) und pflegt das Register [aerialSources].
+ * Die **Signaturen** hier sind Vertrag; die Umsetzung steckt in eigenen
+ * Dateien dieses Pakets ([WorldBuilderImpl], [FullWorldParts], [geoPipeline]).
+ * indoor-world pflegt ausserdem das Register [aerialSources].
  */
-
-private fun offen(was: String): Nothing =
-    throw NotImplementedError("Indoor: $was ist noch nicht umgesetzt (Slice indoor-world)")
 
 /**
  * Das Register der Luftbild-Dienste. Jeder Eintrag ist mit einer echten
@@ -102,5 +99,10 @@ fun createGeoPipeline(
     aerial: List<AerialSource> = aerialSources,
 ): GeoFetcher = geoPipeline(network, cacheDir, aerial)
 
-/** Der Weltbau. */
-fun createWorldBuilder(): WorldBuilder = WorldBuilderImpl(SimpleWorldParts)
+/**
+ * Der Weltbau: Voranschlag ([WorldBuilder.plan]), Bau mit echten Geodaten
+ * ([WorldBuilder.build], fragt `isCancelled()` mindestens alle 50 ms) und die
+ * Testwelt ohne Netz ([WorldBuilder.buildTestWorld]). Threadsicher; ein
+ * Exemplar darf mehrere Welten nacheinander bauen.
+ */
+fun createWorldBuilder(): WorldBuilder = WorldBuilderImpl(FullWorldParts)

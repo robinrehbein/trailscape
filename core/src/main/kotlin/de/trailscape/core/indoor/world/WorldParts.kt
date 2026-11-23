@@ -48,8 +48,18 @@ internal interface WorldParts {
         isBridge: (distM: Double) -> Boolean,
     ): WorldTrack
 
-    /** Der endgueltige Boden (fuer alle Schichten derselbe). */
-    fun ground(rawHeightAt: (Double, Double) -> Double, track: TrackLine, map: MapData): GroundSurface
+    /**
+     * Der endgueltige Boden (fuer alle Schichten derselbe). [land] ist die
+     * Landnutzung aus [landMap] (Wasserflaechen senken den Boden ab), [quality]
+     * bestimmt die Zellenkante des feinsten Gelaendenetzes.
+     */
+    fun ground(
+        rawHeightAt: (Double, Double) -> Double,
+        track: TrackLine,
+        map: MapData,
+        land: LandMap,
+        quality: IndoorQuality,
+    ): GroundSurface
 
     /**
      * Die Landnutzung. [aerialOf] liefert das dekodierte Luftbild einer
@@ -403,7 +413,13 @@ internal object SimpleWorldParts : WorldParts {
         )
     }
 
-    override fun ground(rawHeightAt: (Double, Double) -> Double, track: TrackLine, map: MapData): GroundSurface =
+    override fun ground(
+        rawHeightAt: (Double, Double) -> Double,
+        track: TrackLine,
+        map: MapData,
+        land: LandMap,
+        quality: IndoorQuality,
+    ): GroundSurface =
         GroundSurface { e, n ->
             val h = rawHeightAt(e, n)
             val hit = track.nearest(e, n, 40.0) ?: return@GroundSurface h

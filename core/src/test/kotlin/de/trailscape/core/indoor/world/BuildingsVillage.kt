@@ -8,26 +8,6 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.sin
 
-/** Kartendaten aus einer festen Liste von Gebaeuden (Tests und Vorschau). */
-internal class ListMapData(val all: List<MapBuilding>) : MapData {
-    override fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapBuilding> = all.filter { b ->
-        val r = b.rings[0]
-        var loE = Double.MAX_VALUE
-        var hiE = -Double.MAX_VALUE
-        var loN = Double.MAX_VALUE
-        var hiN = -Double.MAX_VALUE
-        for (i in 0 until r.size / 2) {
-            loE = minOf(loE, r[2 * i]); hiE = maxOf(hiE, r[2 * i])
-            loN = minOf(loN, r[2 * i + 1]); hiN = maxOf(hiN, r[2 * i + 1])
-        }
-        !(hiE < minE || loE > maxE || hiN < minN || loN > maxN)
-    }
-
-    override fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double) = emptyList<MapRoad>()
-    override fun areas(minE: Double, minN: Double, maxE: Double, maxN: Double) = emptyList<MapArea>()
-    override fun waterways(minE: Double, minN: Double, maxE: Double, maxN: Double) = emptyList<MapWaterway>()
-}
-
 /**
  * Ein Dorf fuer Vorschau und Tests: echte Grundrisse aus Odenthal (Blecher,
  * Altenberg, Bergisches Land), an eine Dorfstrasse entlang der Vorschau-Strecke

@@ -386,8 +386,8 @@ internal data class TileBudget(
             }
             fun s(v: Int) = (v * f).toInt()
             return when (level) {
-                0 -> TileBudget(s(9_000), s(3_000), s(2_000), s(8_000), s(22_000), s(500), s(3_000))
-                1 -> TileBudget(s(5_000), 0, 0, s(3_000), s(4_000), s(300), 0)
+                0 -> TileBudget(s(9_000), s(3_000), s(2_000), s(8_000), s(20_500), s(2_000), s(3_000))
+                1 -> TileBudget(s(5_000), 0, 0, s(3_000), s(3_700), s(600), 0)
                 else -> TileBudget(s(2_500), 0, 0, 0, 0, 0, 0)
             }
         }

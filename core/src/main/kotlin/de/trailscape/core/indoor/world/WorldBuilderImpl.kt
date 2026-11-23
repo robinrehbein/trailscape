@@ -235,8 +235,8 @@ internal class WorldBuilderImpl(
     private fun assemble(inputs: WorldInputs, outDir: File, listener: WorldBuildListener): WorldManifest {
         val quality = inputs.quality
         val line = TrackLine(inputs.track)
-        val ground = parts.ground(inputs.rawHeightAt, line, inputs.map)
         val land = parts.landMap(inputs.map, line) { spec -> inputs.aerial?.get(spec)?.rgba }
+        val ground = parts.ground(inputs.rawHeightAt, line, inputs.map, land, quality)
         val textures = TextureCache()
 
         val tilesDir = File(outDir, WorldManifest.TILES_DIR)
