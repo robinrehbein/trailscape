@@ -72,6 +72,19 @@ data class RiderSetup(
      * Zwift Cog ein einziges 14er-Ritzel. Bezug der virtuellen Gaenge.
      */
     val realGearRatio: Double = DEFAULT_REAL_GEAR_RATIO,
+    /**
+     * Welche Tabelle der virtuellen Gaenge gilt (siehe [VirtualGearTable]):
+     * gleichmaessig gestuft oder wie am eigenen Rad. Ergaenzt von indoor-core.
+     */
+    val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
+    /**
+     * Untergrenze der an den Trainer gesendeten Ersatzsteigung in Prozent.
+     * Trainer klemmen selbst (KICKR etwa −10..+20 %); die Vorgabe −40 laesst
+     * ihnen den vollen Wert. Ergaenzt von indoor-core.
+     */
+    val minSimGradePct: Double = -40.0,
+    /** Obergrenze der gesendeten Ersatzsteigung in Prozent, siehe [minSimGradePct]. Ergaenzt von indoor-core. */
+    val maxSimGradePct: Double = 40.0,
 ) {
     val totalMassKg: Double get() = riderMassKg + bikeMassKg
 

@@ -64,6 +64,17 @@ object IndoorUuids {
 
     /** Bluetooth-Firmenkennung in den Herstellerdaten der Werbung (zum Erkennen im Scan). */
     const val ZWIFT_COMPANY_ID: Int = 0x094A
+
+    /**
+     * Dienst neuerer Zwift-Bediengeraete (Click V2, Ride) — ergaenzt vom Slice
+     * indoor-core. Darin dieselben Characteristics wie unter [ZWIFT_SERVICE]
+     * (`…0002` Async, `…0003` SyncRX, `…0004` SyncTX). Quellen: BikeControl
+     * `constants.dart` (`ZWIFT_RIDE_CUSTOM_SERVICE_UUID`; `zwift_device.dart`
+     * sucht diesen Dienst zuerst, dann [ZWIFT_SERVICE]) und das GearUp-README.
+     * Gesperrte V2-Geraete koennen ihn verbergen. Auch als Scan-Filter neben
+     * [ZWIFT_SERVICE] und [ZWIFT_COMPANY_ID] gedacht.
+     */
+    const val ZWIFT_RIDE_SERVICE = "0000fc82-0000-1000-8000-00805f9b34fb"
 }
 
 // ---------------------------------------------------------------------------
