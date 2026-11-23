@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -365,7 +366,10 @@ internal fun IndoorDevicesContent(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Filled.DirectionsBike,
+                            when (rolle) {
+                                IndoorDeviceRole.TRAINER -> Icons.AutoMirrored.Filled.DirectionsBike
+                                IndoorDeviceRole.SHIFTER -> Icons.Filled.TouchApp
+                            },
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -133,3 +133,14 @@ Texte: `strings_indoor_ble.xml` (Präfix `indoor_ble_`).
 - [ ] **30 Minuten Dauerverbindung** ohne Abbruch (Trainer und Schalttaster).
 - [ ] **MTU-Anfrage des Schalttasters:** Stört ein ungefragtes `onMtuChanged` die
       Warteschlange nicht?
+
+## Teststand
+
+`./gradlew :core:test :app:testDebugUnitTest -Pscreenshots :app:assembleDebug`
+am 23.11.2026: 2481 Tests, davon einer rot — `ScreenshotTest.heuteEnglischSchmal`
+(„Your goal“ nicht sichtbar). Er scheitert genauso auf dem unveränderten
+Ausgangsstand e0c4afe, hängt also nicht an diesem Slice (vermutlich am Datum:
+montags bis mittwochs steht der Wochenrückblick oben auf „Heute“). Die Datei
+gehört indoor-app. Alle Tests unter `sensors/**`, `StringResourceParityTest`,
+`:core:test` und `:app:assembleDebug` sind grün; die Screenshots
+`indoor-ble-*.png` sind angesehen.
