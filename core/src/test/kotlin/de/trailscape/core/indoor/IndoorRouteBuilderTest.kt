@@ -65,6 +65,13 @@ class IndoorRouteBuilderTest {
         }
         for (p in r.points) {
             assertTrue(p.eleM.isFinite() && p.lat.isFinite() && p.lon.isFinite(), "endlich: $p")
+            assertTrue(p.lon in -180.0..180.0 && p.lat in -90.0..90.0, "WGS84-Bereich: $p")
+        }
+        // Benachbarte Punkte liegen auch geometrisch auseinander (sonst Richtung undefiniert).
+        for (i in 1 until r.points.size) {
+            val a = TrackPoint(lat = r.points[i - 1].lat, lon = r.points[i - 1].lon)
+            val b = TrackPoint(lat = r.points[i].lat, lon = r.points[i].lon)
+            assertTrue(haversineM(a, b) > 1e-3, "Punkte ${i - 1}/$i an derselben Stelle")
         }
         for ((i, g) in grades(r).withIndex()) {
             assertTrue(g >= IndoorRoute.MIN_GRADE_PCT && g <= IndoorRoute.MAX_GRADE_PCT, "Steigung $g bei $i")
@@ -120,8 +127,9 @@ class IndoorRouteBuilderTest {
         assertContract(r)
         assertTrue(r.points.size >= 300)
         // 1 % gleichmaessig — im Inneren unveraendert durch die Glaettung.
-        val mid = grades(r).subList(10, grades(r).size - 10)
-        assertTrue(mid.all { abs(it - 1.0) < 1e-3 }, "Steigung im Inneren $mid")
+        // 1 % gleichmaessig — die Glaettung erhaelt das ueberall, auch am Rand
+        // (symmetrisch schrumpfendes Fenster).
+        assertTrue(grades(r).all { abs(it - 1.0) < 1e-3 }, "Steigung ${grades(r)}")
     }
 
     @Test
@@ -204,7 +212,7 @@ class IndoorRouteBuilderTest {
         val r = assertNotNull(build(pts))
         assertContract(r)
         val g = grades(r)
-        assertTrue(g.subList(10, g.size - 10).all { abs(it - 5.0) < 1e-3 })
+        assertTrue(g.all { abs(it - 5.0) < 1e-3 }, "Steigung $g")
         assertTrue(r.points.all { it.eleM in 100.0..150.0 })
     }
 
@@ -229,7 +237,11 @@ class IndoorRouteBuilderTest {
         val pts = line(1000.0) { x -> 200.0 + if ((x / 10).toInt() % 2 == 0) 3.0 else -3.0 }
         val r = assertNotNull(build(pts))
         assertContract(r)
-        val maxAbs = grades(r).maxOf { abs(it) }
+        // Im Inneren; an Start und Ziel schrumpft das Fenster auf 0 (die
+        // Endpunkte bleiben roh), dort greift nur die Steigungsgrenze.
+        val g = grades(r)
+        val inner = (1 until r.points.size).filter { r.points[it - 1].distM >= 25.0 && r.points[it].distM <= r.lengthM - 25.0 }
+        val maxAbs = inner.maxOf { abs(g[it - 1]) }
         // Roh 60 %; das Fenster von rund 60 m (7 Punkte) laesst bei diesem
         // schlimmsten Fall (Rauschen genau im Abtasttakt) 6/7 m je 10 m stehen.
         assertTrue(maxAbs < 10.0, "nach Glaettung noch $maxAbs %")
@@ -273,18 +285,34 @@ class IndoorRouteBuilderTest {
     fun `clampGrades haelt die Grenze auch mit krummen Schritten`() {
         val dists = DoubleArray(1000) { it * 7.123456789 }
         val eles = DoubleArray(1000) { if (it % 2 == 0) 0.0 else 1e6 }
-        val out = clampGrades(eles, dists)
-        for (i in 1 until out.size) {
-            val g = (out[i] - out[i - 1]) / (dists[i] - dists[i - 1]) * 100
-            assertTrue(g in IndoorRoute.MIN_GRADE_PCT..IndoorRoute.MAX_GRADE_PCT, "Steigung $g bei $i")
+        for (cyclic in listOf(false, true)) {
+            val input = eles.copyOf().also { if (cyclic) it[it.size - 1] = it[0] }
+            val out = clampGrades(input, dists, cyclic)
+            for (i in 1 until out.size) {
+                val g = (out[i] - out[i - 1]) / (dists[i] - dists[i - 1]) * 100
+                assertTrue(g in IndoorRoute.MIN_GRADE_PCT..IndoorRoute.MAX_GRADE_PCT, "Steigung $g bei $i (zyklisch $cyclic)")
+            }
+            // Nie ueber der Eingabe.
+            for (i in out.indices) assertTrue(out[i] <= input[i] + 1e-9)
+            if (cyclic) assertEquals(out.first(), out.last())
         }
     }
 
     @Test
-    fun `smoothElevations laesst eine Gerade im Inneren unveraendert`() {
-        val eles = DoubleArray(50) { it * 0.5 }
-        val s = smoothElevations(eles, 10.0)
-        for (i in 5 until 45) assertEquals(eles[i], s[i], 1e-9)
+    fun `smoothElevations laesst eine Gerade ueberall unveraendert, auch bei ungleichen Schritten`() {
+        val dists = DoubleArray(50) { it * 10.0 + if (it % 3 == 1) 4.0 else 0.0 }
+        val eles = DoubleArray(50) { dists[it] * 0.05 + 7.0 }
+        val s = smoothElevations(eles, dists, cyclic = false)
+        for (i in eles.indices) assertEquals(eles[i], s[i], 1e-9)
+    }
+
+    @Test
+    fun `smoothElevations zyklisch gleicht Start und Ziel an`() {
+        val dists = DoubleArray(101) { it * 10.0 }
+        val eles = DoubleArray(101) { if (it == 100) 20.0 else 10.0 } // Ziel 10 m hoeher als Start
+        val s = smoothElevations(eles, dists, cyclic = true)
+        assertEquals(s.first(), s.last())
+        assertTrue(s.all { it in 10.0..20.0 })
     }
 
     // -----------------------------------------------------------------------
@@ -317,9 +345,9 @@ class IndoorRouteBuilderTest {
             RouteWaySection(250.0, "highway=track surface=gravel tracktype=grade3"),
             RouteWaySection(150.0, "highway=path"),
         )
-        val r = assertNotNull(build(line(1000.0), sections, IndoorRouteSource.BROUTER_REMATCH))
+        val r = assertNotNull(build(line(1000.0), sections, IndoorRouteSource.BROUTER_WAY_TAGS))
         assertContract(r)
-        assertEquals(IndoorRouteSource.BROUTER_REMATCH, r.source)
+        assertEquals(IndoorRouteSource.BROUTER_WAY_TAGS, r.source)
         val f = r.lengthM / 500.0
         assertEquals(3, r.surfaces.size)
         assertEquals(SurfaceKind.ASPHALT, r.surfaces[0].kind)
@@ -332,6 +360,35 @@ class IndoorRouteBuilderTest {
         assertEquals("path", r.surfaces[2].highway)
         assertEquals(r.lengthM, r.surfaces[2].toM)
         assertTrue(r.surfaces.all { it.widthM == null })
+    }
+
+    @Test
+    fun `Abgleich mit unplausiblem Streckfaktor verwirft den Belag`() {
+        val line = line(1000.0)
+        val lengthM = assertNotNull(build(line)).lengthM
+        // Faktor = Linie / Summe der Abschnitte; Grenzen knapp innerhalb.
+        val cases = listOf(
+            1.2 to true, 1.25 * (1 - 1e-9) to true, 1.3 to false,
+            0.85 to true, 0.8 * (1 + 1e-9) to true, 0.75 to false, 2.0 to false,
+        )
+        for ((factor, kept) in cases) {
+            val r = assertNotNull(
+                build(line, listOf(RouteWaySection(lengthM / factor, "surface=gravel")), IndoorRouteSource.BROUTER_REMATCH),
+            )
+            assertContract(r)
+            if (kept) {
+                assertEquals(IndoorRouteSource.BROUTER_REMATCH, r.source, "Faktor $factor")
+                assertEquals(SurfaceKind.GRAVEL, r.surfaces.single().kind, "Faktor $factor")
+            } else {
+                assertEquals(IndoorRouteSource.NONE, r.source, "Faktor $factor")
+                assertEquals(SurfaceKind.UNKNOWN, r.surfaces.single().kind, "Faktor $factor")
+            }
+        }
+        // Fuer die eigenen Wegabschnitte der geplanten Route gilt die Grenze nicht.
+        val planned = assertNotNull(
+            build(line, listOf(RouteWaySection(lengthM / 2, "surface=gravel")), IndoorRouteSource.BROUTER_WAY_TAGS),
+        )
+        assertEquals(IndoorRouteSource.BROUTER_WAY_TAGS, planned.source)
     }
 
     @Test
@@ -417,8 +474,114 @@ class IndoorRouteBuilderTest {
     }
 
     // -----------------------------------------------------------------------
+    // Ecken und Wenden
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `Wende eines Stichwegs wird als Punkt eingerastet`() {
+        // Hin und auf demselben Weg zurueck: ohne Einrasten laege die Wende
+        // zwischen zwei Abtastpunkten an derselben Stelle (z. B. 505 m).
+        for (tipM in listOf(505.0, 503.3, 500.0, 497.0)) {
+            val steps = (tipM / 10).toInt()
+            val pts = (0..steps).map { pt(it * 10.0) } + pt(tipM) +
+                (1..steps).map { pt(tipM - it * 10.0) } + pt(0.0)
+            val r = assertNotNull(build(pts), "Spitze $tipM")
+            assertContract(r)
+            val tipIdx = r.points.indexOfFirst { abs(it.distM - tipM) < 1e-6 }
+            assertTrue(tipIdx > 0, "kein Punkt an der Wende ($tipM)")
+            assertTrue(haversineM(TrackPoint(r.points[tipIdx].lat, r.points[tipIdx].lon), pt(tipM)) < 1e-3)
+            assertEquals(90.0, r.sampleAt(tipM - 3).headingDeg, 0.01)
+            assertEquals(270.0, r.sampleAt(tipM + 3).headingDeg, 0.01)
+            assertEquals(2 * tipM, r.lengthM, 0.01)
+            assertTrue(r.isLoop)
+        }
+    }
+
+    @Test
+    fun `rechtwinklige Ecke wird eingerastet, Schritte bleiben in 1 bis 15 m`() {
+        val pts = listOf(pt(0.0), pt(203.0), pt(203.0, 157.0))
+        val r = assertNotNull(build(pts))
+        assertContract(r)
+        assertTrue(r.points.any { abs(it.distM - 203.0) < 0.01 })
+    }
+
+    @Test
+    fun `dicht beieinanderliegende Ecken werden nicht zu Mini-Schritten`() {
+        // Treppe mit Ecken alle 1,5 m zwischen zwei Geraden.
+        val stairs = (0..20).map { k -> pt(100.0 + ((k + 1) / 2) * 1.5, (k / 2) * 1.5) }
+        val pts = listOf(pt(0.0)) + stairs + listOf(pt(400.0, 15.0))
+        val r = assertNotNull(build(pts))
+        assertContract(r)
+    }
+
+    // -----------------------------------------------------------------------
+    // Datumsgrenze
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `Strecke ueber die Datumsgrenze`() {
+        fun lonAt(xM: Double): Double {
+            var l = 180.0 - 0.005 + xM / mPerDegLat // am Aequator
+            if (l > 180.0) l -= 360.0
+            return l
+        }
+        val pts = (0..100).map { TrackPoint(lat = 0.0, lon = lonAt(it * 10.0), ele = 5.0) }
+        val r = assertNotNull(build(pts))
+        assertContract(r)
+        assertEquals(1000.0, r.lengthM, 0.5)
+        assertTrue(r.points.any { it.lon > 179.9 } && r.points.any { it.lon < -179.9 })
+        for (i in 1 until r.points.size) {
+            val d = haversineM(TrackPoint(r.points[i - 1].lat, r.points[i - 1].lon), TrackPoint(r.points[i].lat, r.points[i].lon))
+            assertTrue(d < 15.0, "Sprung $d m bei $i")
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Runde
     // -----------------------------------------------------------------------
+
+    @Test
+    fun `Runde hat keinen Hoehensprung an der Naht und volle Steigung durch den Start`() {
+        // Quadrat 4 × 300 m, Hoehe als Sinus ueber die Runde: durch den Start
+        // mit 8 % bergauf, Start- und Zielhoehe gleich.
+        val l = 1200.0
+        val amp = 0.08 * l / (2 * Math.PI)
+        fun ele(c: Double) = 300.0 + amp * kotlin.math.sin(2 * Math.PI * c / l)
+        val sq = (0..30).map { pt(it * 10.0, ele = ele(it * 10.0)) } +
+            (1..30).map { pt(300.0, it * 10.0, ele = ele(300.0 + it * 10.0)) } +
+            (1..30).map { pt(300.0 - it * 10.0, 300.0, ele = ele(600.0 + it * 10.0)) } +
+            (1..30).map { pt(0.0, 300.0 - it * 10.0, ele = ele(900.0 + it * 10.0)) }
+        val r = assertNotNull(build(sq))
+        assertContract(r)
+        assertTrue(r.isLoop)
+        assertEquals(r.points.first().eleM, r.points.last().eleM, "Start und Ziel gleich hoch")
+        val g = grades(r)
+        assertEquals(8.0, g.first(), 0.3)
+        assertEquals(8.0, g.last(), 0.3)
+        // Ueber die Naht gelesen laeuft die Runde glatt weiter.
+        assertEquals(r.sampleAt(r.lengthM - 0.01).eleM, r.sampleAt(r.lengthM + 0.01).eleM, 0.01)
+    }
+
+    @Test
+    fun `Runde mit unterschiedlicher Start- und Zielhoehe wird angeglichen`() {
+        // Start 100 m, Ziel 112 m (Hoehendaten driften), sonst flach.
+        val raw = outAndBack(30.0)
+        val pts = raw.mapIndexed { i, t -> t.copy(ele = if (i == raw.size - 1) 112.0 else 100.0) }
+        val r = assertNotNull(build(pts))
+        assertContract(r)
+        assertTrue(r.isLoop)
+        assertEquals(r.points.first().eleM, r.points.last().eleM)
+    }
+
+    @Test
+    fun `Runde mit Steilwand haelt die Grenze auch ueber die Naht`() {
+        val pts = outAndBack(20.0).mapIndexed { i, t -> t.copy(ele = if (i in 40..60) 150.0 else 100.0) }
+        val r = assertNotNull(build(pts))
+        assertContract(r)
+        assertTrue(r.isLoop)
+        assertEquals(r.points.first().eleM, r.points.last().eleM)
+    }
+
 
     /** Hin und zurueck mit [gapM] Meter Versatz nach Norden: Start–Ziel-Abstand = gapM. */
     private fun outAndBack(gapM: Double): List<TrackPoint> =
@@ -535,9 +698,19 @@ class IndoorRouteBuilderTest {
     }
 
     @Test
-    fun `kurze Spur hat nur Start und Ziel`() {
+    fun `kurze Spur hat Start, einen Zwischenpunkt und Ziel`() {
         val wps = surfaceRematchWaypointsImpl(line(250.0))
-        assertEquals(2, wps.size)
+        assertEquals(3, wps.size)
+        assertTrue(haversineM(TrackPoint(wps[1].lat, wps[1].lon), pt(125.0)) <= 5.0 + 1e-6)
+    }
+
+    @Test
+    fun `kurze geschlossene Runde besteht nicht nur aus Start gleich Ziel`() {
+        val sq = (0..6).map { pt(it * 10.0) } + (1..6).map { pt(60.0, it * 10.0) } +
+            (1..6).map { pt(60.0 - it * 10.0, 60.0) } + (1..6).map { pt(0.0, 60.0 - it * 10.0) }
+        val wps = surfaceRematchWaypointsImpl(sq)
+        assertTrue(wps.size >= 3, "$wps")
+        assertEquals(wps.first(), wps.last())
     }
 
     @Test
@@ -549,7 +722,9 @@ class IndoorRouteBuilderTest {
         val gaps = (1 until wps.size).map {
             haversineM(TrackPoint(wps[it - 1].lat, wps[it - 1].lon), TrackPoint(wps[it].lat, wps[it].lon))
         }
-        assertTrue(gaps.all { abs(it - 100_000.0 / (MAX_REMATCH_WAYPOINTS - 1)) <= 50.0 }, "Abstaende $gaps")
+        // Regelpunkte im Abstand ~1010 m, die Haelfte der Luecken danach halbiert.
+        val regular = 100_000.0 / (MAX_REMATCH_REGULAR - 1)
+        assertTrue(gaps.all { it <= regular + 50.0 && it >= regular / 2 - 50.0 }, "Abstaende $gaps")
     }
 
     @Test
@@ -598,6 +773,46 @@ class IndoorRouteBuilderTest {
         val wps = surfaceRematchWaypointsImpl(track)
         assertTrue(wps.size <= MAX_REMATCH_WAYPOINTS)
         assertEquals(MAX_REMATCH_WAYPOINTS, wps.size)
+    }
+
+    @Test
+    fun `lange Hin-und-zurueck-Spur behaelt die Wende und hat keine Duplikate`() {
+        // 30 km hin, auf demselben Weg 30 km zurueck, Punkt alle 50 m.
+        val out = (0..600).map { pt(it * 50.0) }
+        val back = (1..600).map { pt(30_000.0 - it * 50.0) }
+        val wps = surfaceRematchWaypointsImpl(out + back)
+        assertTrue(wps.size <= MAX_REMATCH_WAYPOINTS)
+        assertTrue(
+            wps.any { haversineM(TrackPoint(it.lat, it.lon), pt(30_000.0)) < 1.0 },
+            "Wende fehlt",
+        )
+        for (i in 1 until wps.size) {
+            val d = haversineM(TrackPoint(wps[i - 1].lat, wps[i - 1].lon), TrackPoint(wps[i].lat, wps[i].lon))
+            assertTrue(d >= REMATCH_MERGE_M, "Stuetzpunkte ${i - 1}/$i nur $d m auseinander")
+        }
+    }
+
+    @Test
+    fun `Kurven bekommen auch auf langer Spur Platz`() {
+        // 80 km gerade mit zehn Stichen (je 100 m hin und zurueck) — die
+        // Regelpunkte allein haetten frueher alle 150 Plaetze belegt.
+        val track = ArrayList<TrackPoint>()
+        val tips = ArrayList<TrackPoint>()
+        for (step in 0..1600) {
+            val x = step * 50.0
+            track.add(pt(x))
+            if (step % 160 == 80) {
+                for (k in 1..10) track.add(pt(x, k * 10.0))
+                tips.add(pt(x, 100.0))
+                for (k in 9 downTo 1) track.add(pt(x + 0.6, k * 10.0))
+            }
+        }
+        val wps = surfaceRematchWaypointsImpl(track)
+        assertTrue(wps.size <= MAX_REMATCH_WAYPOINTS)
+        assertEquals(10, tips.size)
+        for (tip in tips) {
+            assertTrue(wps.any { haversineM(TrackPoint(it.lat, it.lon), tip) < 1.0 }, "Stich-Ende fehlt: $tip")
+        }
     }
 
     @Test
