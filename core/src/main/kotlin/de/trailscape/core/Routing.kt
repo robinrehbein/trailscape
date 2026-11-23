@@ -348,12 +348,21 @@ internal fun concatRouteLegs(parts: List<PlannedRoute>): PlannedRoute {
     // einzelnes kaputtes Leg koennte dann einen Anteil erzeugen, der fast
     // nur aus den anderen Legs hochgerechnet ist. Lieber gar keine Angabe.
     val surfaceKnown = parts.all { it.pavedKm != null && it.unpavedKm != null }
+    // Wegabschnitte nach derselben Regel: nur wenn jedes Teilstueck welche
+    // hat — sonst fehlte ein Stueck mittendrin, und die Abschnitte dahinter
+    // laegen an falschen Laufmetern.
+    val waySections = if (parts.isNotEmpty() && parts.all { it.waySections != null }) {
+        parts.flatMap { it.waySections.orEmpty() }
+    } else {
+        null
+    }
     return PlannedRoute(
         points = points,
         distanceKm = parts.sumOf { it.distanceKm },
         ascentM = parts.sumOf { it.ascentM },
         pavedKm = if (surfaceKnown) parts.sumOf { it.pavedKm ?: 0.0 } else null,
         unpavedKm = if (surfaceKnown) parts.sumOf { it.unpavedKm ?: 0.0 } else null,
+        waySections = waySections,
     )
 }
 
@@ -735,5 +744,6 @@ fun parseBrouterGeoJson(body: String, texts: CoreTexts): PlannedRoute {
         ascentM = ascentM,
         pavedKm = surface?.pavedKm,
         unpavedKm = surface?.unpavedKm,
+        waySections = waySectionsFromMessages(props["messages"]),
     )
 }
