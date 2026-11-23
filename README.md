@@ -160,7 +160,7 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   mit fertig gebauter Welt, z. B. Alpe d'Huez, Oude Kwaremont/Koppenberg,
   Wald von Arenberg, Schotter bei Siena, Sa Calobra, Flint Hills, Großer
   Feldberg, Schauinsland, Kahler Asten, Rennsteig. Die Liste ist ohne Netz
-  sichtbar; eine Welt (rund 60–110 MB) wird erst nach „Laden“ aus dem
+  sichtbar; eine Welt (rund 50–115 MB) wird erst nach „Laden“ aus dem
   GitHub-Release geladen — mit Fortschritt, Abbruch, Fortsetzen und
   Prüfsumme — und fährt dann wie eine eigene Welt. Details:
   `docs/indoor/catalog.md`

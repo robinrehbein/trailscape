@@ -24,7 +24,7 @@ GitHub-Release indoor-worlds-v1:  <id>-v<version>.zip  …  catalog.json
 
 - Die **Liste** liegt der App bei (`app/src/main/assets/indoor/catalog.json`)
   und ist ohne Netz sichtbar.
-- Die **Welten** (6–16 MB je km Paket) liegen nicht in der APK, sondern als
+- Die **Welten** (Paket rund 5–8 MB je km, entpackt 8–13 MB je km) liegen nicht in der APK, sondern als
   Assets des Releases `indoor-worlds-v1` des öffentlichen Repos.
 - Die **Strecke der Fahrt** kommt aus dem Manifest der Welt
   (`worldRouteOf(manifest)`, wie bei der Testwelt): Laufmeter, Höhen der
@@ -36,7 +36,20 @@ Gebaut am 23.11.2026 lokal mit `catalog-build` (Qualität `MEDIUM`). Die Pakete
 des Releases baut der Workflow neu; Größen weichen dann leicht ab (Geodaten
 ändern sich), Prüfsummen sowieso.
 
-<!-- TABELLE -->
+| Kennung | Name | Land | Art | km | Hm | Belag | Paket | Platte | Luftbild |
+|---|---|---|---|---|---|---|---|---|---|
+| `alpe-dhuez` | Alpe d'Huez | Frankreich | Rennrad | 15.1 | 1253 | Asphalt 100 % | 77 MB | 132 MB | © IGN – BD ORTHO®, Licence Ouverte Etalab (2026) |
+| `vlaamse-ardennen` | Oude Kwaremont, Paterberg und Koppenberg | Belgien | Pflaster | 9.9 | 179 | Asphalt 59 %, Pflaster 29 %, Beton 13 % | 71 MB | 117 MB | Bron: Luchtopnamen Digitaal Vlaanderen |
+| `arenberg` | Wald von Arenberg | Frankreich | Pflaster | 10.0 | 20 | Asphalt 68 %, Pflaster 23 %, unbekannt 8 % | 82 MB | 148 MB | © IGN – BD ORTHO®, Licence Ouverte Etalab (2026) |
+| `monte-sante-marie` | Schotter von Monte Sante Marie | Italien | Schotter | 12.0 | 284 | fester Weg 85 %, Schotter 14 % | 64 MB | 90 MB | **nein** (erzeugter Boden) |
+| `sa-calobra` | Sa Calobra | Spanien | Rennrad | 10.2 | 869 | Asphalt 100 % | 50 MB | 81 MB | PNOA CC-BY 4.0 scne.es 2026 |
+| `flint-hills` | Schotter der Flint Hills | USA | Schotter | 11.3 | 111 | Schotter 90 %, Asphalt 10 % | 63 MB | 93 MB | USGS, USDA, The National Map: Orthoimagery |
+| `grosser-feldberg` | Großer Feldberg | Deutschland | Rennrad | 11.7 | 584 | Asphalt 100 % | 98 MB | 169 MB | Geobasisdaten © Hessische Verwaltung für Bodenmanagement und Geoinformation, bearbeitet |
+| `schauinsland` | Schauinsland | Deutschland | Rennrad | 15.7 | 1045 | Asphalt 93 %, fester Weg 6 % | 114 MB | 199 MB | LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de |
+| `kahler-asten` | Waldwege am Kahlen Asten | Deutschland | Schotter | 13.2 | 248 | fester Weg 60 %, Asphalt 21 %, Schotter 19 % | 81 MB | 136 MB | © Geobasis NRW |
+| `rennsteig` | Rennsteig bei Oberhof | Deutschland | Schotter | 13.3 | 365 | Schotter 84 %, Asphalt 9 % | 108 MB | 195 MB | © GDI-Th |
+
+Flint Hills: 113 von 162 Kacheln mit Luftbild — NAIP antwortet langsam (15–30 s je Bild), einzelne Anfragen liefen in die Frist des Werkzeugs; dort erzeugter Boden. Pakete gesamt rund 809 MB.
 
 Namen sind **Ortsnamen**, keine Veranstaltermarken („Wald von Arenberg“ statt
 eines Rennnamens); der Text sagt sachlich, wofür der Abschnitt bekannt ist.
@@ -55,7 +68,10 @@ Chromium, Kamera `chase`), 1280 × 720.
 | `monte-sante-marie.jpg` | km 3: heller Schotterweg über offene Hügel, Wegweiser | **ohne Luftbild**: Boden aus der Landnutzung erzeugt (Wiese statt der typischen kahlen Crete-Senesi-Hügel) |
 | `kahler-asten.jpg` | km 4,4: Forstweg durch Fichten- und Laubwald, Luftbild NRW | Unter dem Kronendach dunkel |
 | `rennsteig.jpg` | km 4,4: Schotterweg neben der Straße durch Fichtenwald, Luftbild GDI-Th | — |
-<!-- BILDER-REST -->
+| `sa-calobra.jpg` | km 3,4: Asphaltstraße am Hang, Luftbild PNOA | Der Weltbau setzt Fichten und Laubbäume statt Aleppo-Kiefern; Kalkfels erscheint nur als helle Bodenflecken |
+| `grosser-feldberg.jpg` | km 7,8: Straße durch Fichtenwald nahe dem Sandplacken, Luftbild HVBG | — |
+| `schauinsland.jpg` | km 5,2: Kurve durch Bergwald, Luftbild LGL-BW | Unter dem Kronendach dunkel |
+| `flint-hills.jpg` | km 3,8: breiter Schotterweg durch offenes Grasland mit Weidezaun, Luftbild NAIP | Die Prärie ist zu grün und hat zu viele Bäume (Landnutzung/Kronenschätzung aus dem Luftbild) |
 
 ## Paketformat
 
@@ -208,7 +224,7 @@ alle Quellen.
 5. **OpenFreeMap-Nutzungsbedingungen** (wie `docs/indoor.md` 11.2): Die
    Vektorkacheln der Katalogwelten lädt jetzt einmalig die CI statt jedes
    Handys — eher entlastend, aber vor dem Release mit klären.
-6. **Release-Größe und Bandbreite:** rund 70–110 MB je Strecke; GitHub
+6. **Release-Größe und Bandbreite:** rund 50–115 MB je Strecke, zusammen gut 800 MB; GitHub
    erlaubt 2 GB je Datei, ohne Gesamtgrenze für Releases. Über Mobilfunk
    gibt es keine eigene Warnung (wie bei „Welt laden“), die Größe steht auf
    dem Knopf.
