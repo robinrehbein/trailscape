@@ -171,6 +171,13 @@ object BleSensors {
         handler?.post { verbindeAlle() }
     }
 
+    /**
+     * Der BLE-Thread „trailscape-ble" — auch der Thread der Indoor-Rohre
+     * (`sensors/indoor/GattBleLink`), damit es in der App genau einen Ort
+     * gibt, an dem GATT-Callbacks verarbeitet werden.
+     */
+    internal fun bleThreadHandler(): Handler = bleHandler()
+
     private fun hatNutzer(): Boolean = synchronized(lock) { nutzer.isNotEmpty() }
 
     private fun bleHandler(): Handler = synchronized(lock) {

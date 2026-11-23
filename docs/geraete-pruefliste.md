@@ -173,6 +173,18 @@ gelten.
       (war die Vorwoche geschafft) bzw. 0 Wochen (war sie es nicht)? Nach dem nächsten Öffnen der
       Handy-App stehen neues Ziel und Kilometer da.
 
+## Indoor
+
+Das Indoor-Training hat je Slice eine eigene Liste. Die Punkte aus
+`docs/indoor.md`, Abschnitt 11.1, stehen nur dort.
+
+- [indoor/core.md](indoor/core.md): Logik in `:core` (FTMS, Gänge, Sitzung, Belag).
+- [indoor/ble.md](indoor/ble.md): Funk, also Suche, Koppeln und das GATT-Rohr zu
+  KICKR CORE und Zwift Click.
+- [indoor/world.md](indoor/world.md): Weltbau und Geodaten.
+- [indoor/render.md](indoor/render.md): Darstellung mit Filament.
+- [indoor/app.md](indoor/app.md): Ablauf, Speicherung, Export.
+
 ## Bekannte offene Punkte
 
 - Das Jahresziel ist nicht Teil des Selfhost-Syncs.
