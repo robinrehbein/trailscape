@@ -1,5 +1,6 @@
 package de.trailscape.app.indoor.geo
 
+import android.app.Application
 import android.graphics.Bitmap
 import java.io.ByteArrayOutputStream
 import kotlin.test.assertEquals
@@ -18,7 +19,9 @@ import org.robolectric.annotation.GraphicsMode
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [35])
+// Schlichte Application: Die echte TrailscapeApplication startet WorkManager-Arbeit
+// im Hintergrund, deren Fehler sonst spaeteren Compose-Tests angelastet wuerde.
+@Config(sdk = [35], application = Application::class)
 class BitmapRasterDecoderTest {
 
     private fun png(width: Int, height: Int, pixel: (Int, Int) -> Int): ByteArray {
