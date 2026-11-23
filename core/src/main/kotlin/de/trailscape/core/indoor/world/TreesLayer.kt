@@ -32,7 +32,7 @@ import kotlin.math.sin
  *
  * Materialien: [WorldNames.MAT_TREE_TRUNK] (Vertexfarben) und
  * [WorldNames.MAT_TREE_LEAVES] (Vertexfarben × kachelnde Laubtextur,
- * `MASK`, doppelseitig — einzelne Loecher in der Textur geben der Krone Tiefe).
+ * `MASK`, doppelseitig, wie im Vertrag; die Textur ist voll deckend).
  */
 internal class TreesLayer : TileLayer {
 
@@ -107,19 +107,20 @@ internal class TreesLayer : TileLayer {
 
     private fun emitVolume(ctx: TileContext, out: TileOutput, leaves: TileMaterial, forest: BooleanArray, cells: Int, cell: Double) {
         val s = ctx.spec
-        fun isF(i: Int, j: Int): Boolean = i in 0 until cells && j in 0 until cells && forest[j * cells + i]
-        // Ein Gitterpunkt liegt am Waldrand, wenn eine der vier Zellen um ihn innerhalb der Kachel kein Wald ist.
-        fun edgeVertex(i: Int, j: Int): Boolean {
-            for (dj in -1..0) for (di in -1..0) {
-                val ci = i + di
-                val cj = j + dj
-                if (ci in 0 until cells && cj in 0 until cells && !forest[cj * cells + ci]) return true
-            }
-            return false
+        // Zellen ausserhalb der Kachel werden nach derselben Regel bewertet: Raender passen ueber Kachelgrenzen.
+        val outside = HashMap<Long, Boolean>()
+        fun isF(i: Int, j: Int): Boolean {
+            if (i in 0 until cells && j in 0 until cells) return forest[j * cells + i]
+            val key = (i.toLong() shl 32) xor (j.toLong() and 0xffffffffL)
+            return outside.getOrPut(key) { isVolumeCell(ctx, s.minE + (i + 0.5) * cell, s.minN + (j + 0.5) * cell, cell) }
         }
+        // Ein Gitterpunkt liegt am Waldrand, wenn eine der vier Zellen um ihn kein Wald ist.
+        fun edgeVertex(i: Int, j: Int): Boolean = !(isF(i - 1, j - 1) && isF(i, j - 1) && isF(i - 1, j) && isF(i, j))
         fun topAt(e: Double, n: Double, edge: Boolean): Double {
             val h = canopyHeight(ctx, e, n)
-            return ctx.ground.heightAt(e, n) + if (edge) h * 0.6 else h
+            // Einzelne Kronen ragen heraus: Gitterpunkte (Welt-Gitter) um bis zu ±2,5 m versetzt.
+            val bump = (Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_BUMP) - 0.5) * 5.0
+            return ctx.ground.heightAt(e, n) + if (edge) h * 0.2 else h + bump
         }
         fun normalAt(e: Double, n: Double): Vec3 {
             val d = cell * 0.5
@@ -141,11 +142,12 @@ internal class TreesLayer : TileLayer {
                 val edge = edgeVertex(c[0], c[1])
                 tops[k] = topAt(e, n, edge)
                 val nor = normalAt(e, n)
-                idx[k] = m.vertex(ctx.x(e), ctx.y(tops[k]), ctx.z(n), nor.x, nor.y, nor.z, e / UV_M, -n / UV_M, crownColor(ctx, e, n, 1.0))
+                val shade = 0.55 + 0.3 * Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_TINT)
+                idx[k] = m.vertex(ctx.x(e), ctx.y(tops[k]), ctx.z(n), nor.x, nor.y, nor.z, e / UV_M, -n / UV_M, crownColor(ctx, e, n, shade))
             }
             // (i,j) → (i+1,j) → (i+1,j+1) → (i,j+1) laeuft in (e, n) gegen den Uhrzeigersinn: oben sichtbar.
             m.quad(idx[0], idx[1], idx[2], idx[3])
-            // Waende an Waldraendern und Kachelgrenzen: Kante (a → b) mit Wald links, aussen rechts.
+            // Waende an Waldraendern: Kante (a → b) mit Wald links, aussen rechts.
             val edges = arrayOf(
                 intArrayOf(0, 1, 0, -1), // Sued
                 intArrayOf(1, 2, 1, 0), // Ost
@@ -165,11 +167,11 @@ internal class TreesLayer : TileLayer {
                 val ga = ctx.ground.heightAt(ea, na) - 0.5
                 val gb = ctx.ground.heightAt(eb, nb) - 0.5
                 val len = hypot(eb - ea, nb - na)
-                val dark = crownColor(ctx, ea, na, 0.55)
+                val dark = crownColor(ctx, ea, na, 0.42)
                 val pa = m.vertex(ctx.x(ea), ctx.y(ga), ctx.z(na), nx, 0.0, nz, 0.0, 0.0, dark)
                 val pb = m.vertex(ctx.x(eb), ctx.y(gb), ctx.z(nb), nx, 0.0, nz, len / UV_M, 0.0, dark)
-                val qb = m.vertex(ctx.x(eb), ctx.y(tops[ed[1]]), ctx.z(nb), nx, 0.0, nz, len / UV_M, (tops[ed[1]] - gb) / UV_M, crownColor(ctx, eb, nb, 0.9))
-                val qa = m.vertex(ctx.x(ea), ctx.y(tops[ed[0]]), ctx.z(na), nx, 0.0, nz, 0.0, (tops[ed[0]] - ga) / UV_M, crownColor(ctx, ea, na, 0.9))
+                val qb = m.vertex(ctx.x(eb), ctx.y(tops[ed[1]]), ctx.z(nb), nx, 0.0, nz, len / UV_M, (tops[ed[1]] - gb) / UV_M, crownColor(ctx, eb, nb, 0.7))
+                val qa = m.vertex(ctx.x(ea), ctx.y(tops[ed[0]]), ctx.z(na), nx, 0.0, nz, 0.0, (tops[ed[0]] - ga) / UV_M, crownColor(ctx, ea, na, 0.7))
                 // Von aussen gesehen: unten a, unten b, oben b, oben a — gegen den Uhrzeigersinn.
                 m.quad(pb, pa, qa, qb)
             }
@@ -271,24 +273,24 @@ internal class TreesLayer : TileLayer {
         val z = ctx.z(c.n)
         val tint = 0.85 + 0.3 * r3
         if (conifer) {
-            val trunkColor = lin(Argb.rgb(84, 66, 54))
+            val trunkColor = lin(Argb.rgb(58, 46, 38))
             val leaf = { shade: Double -> crownColorRaw(CONIFER, tint * shade) }
             if (detailed) {
-                trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.4 * h, z), 0.022 * h, 0.014 * h, 5, false, false, trunkColor)
-                cone(crown, x, y + 0.22 * h, z, 0.21 * h, y + 0.82 * h, 8, leaf, r1)
-                cone(crown, x, y + 0.55 * h, z, 0.13 * h, y + h, 7, leaf, r2)
+                trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.3 * h, z), 0.014 * h, 0.009 * h, 5, false, false, trunkColor)
+                cone(crown, x, y + 0.12 * h, z, 0.2 * h, y + 0.78 * h, 8, leaf, r1)
+                cone(crown, x, y + 0.5 * h, z, 0.13 * h, y + h, 7, leaf, r2)
             } else {
-                trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.3 * h, z), 0.02 * h, 0.015 * h, 3, false, false, trunkColor)
-                cone(crown, x, y + 0.25 * h, z, 0.2 * h, y + h, 6, leaf, r1)
+                trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.2 * h, z), 0.013 * h, 0.01 * h, 3, false, false, trunkColor)
+                cone(crown, x, y + 0.13 * h, z, 0.19 * h, y + h, 6, leaf, r1)
             }
         } else {
-            val trunkColor = lin(Argb.rgb(96, 86, 72))
+            val trunkColor = lin(Argb.rgb(70, 62, 52))
             val base = if (inForest) BROADLEAF else BROADLEAF_OPEN
-            val crownBottom = if (inForest) 0.42 * h else 0.32 * h
+            val crownBottom = if (inForest) 0.3 * h else 0.28 * h
             val cy = y + (crownBottom + h) / 2
             val ry = (h - crownBottom) / 2
             val rx = ry * (if (inForest) 0.75 else 0.95) * (0.9 + 0.2 * r3)
-            trunk.addCylinder(Vec3(x, y, z), Vec3(x, cy, z), 0.03 * h, 0.018 * h, if (detailed) 5 else 3, false, false, trunkColor)
+            trunk.addCylinder(Vec3(x, y, z), Vec3(x, cy, z), 0.02 * h, 0.012 * h, if (detailed) 5 else 3, false, false, trunkColor)
             val first = crown.vertexCount
             if (detailed) crown.addEllipsoid(x, cy, z, rx, ry, rx, 8, 4) else crown.addEllipsoid(x, cy, z, rx, ry, rx, 5, 3)
             // Unregelmaessige Krone: Eckpunkte radial verschieben, unten dunkler, UV kacheln.
@@ -393,6 +395,7 @@ internal class TreesLayer : TileLayer {
         private const val SEED_OPEN = 0x7ee2
         private const val SEED_HEIGHT = 0x7ee3
         private const val SEED_TINT = 0x7ee4
+        private const val SEED_BUMP = 0x7ee5
 
         /** Grundfarben in sRGB. */
         val CONIFER = intArrayOf(44, 64, 42)
@@ -401,7 +404,7 @@ internal class TreesLayer : TileLayer {
 
         /**
          * Laubtextur 128², hellgrau gesprenkelt (die Farbe kommt aus den
-         * Eckpunkten), mit einzelnen Loechern (Alpha 0) fuer etwas Tiefe.
+         * Eckpunkten), voll deckend (Loecher zeigten die dunklen Innenseiten als Flecken).
          */
         fun leafTexture(): RgbaImage {
             val size = 128
@@ -411,8 +414,7 @@ internal class TreesLayer : TileLayer {
                 val fine = Noise.hash01(x, y, 0x1eb0)
                 val v = (0.62 + 0.38 * blob - 0.12 * fine).coerceIn(0.0, 1.0)
                 val c = (v * 255).toInt()
-                val hole = blob < 0.16 && fine > 0.35
-                img.argb[y * size + x] = Argb.of(if (hole) 0 else 255, c, min(255, (c * 1.04).toInt()), (c * 0.9).toInt())
+                img.argb[y * size + x] = Argb.of(255, c, min(255, (c * 1.04).toInt()), (c * 0.9).toInt())
             }
             return img
         }
