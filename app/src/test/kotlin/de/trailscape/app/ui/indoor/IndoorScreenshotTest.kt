@@ -249,6 +249,16 @@ class IndoorScreenshotTest {
     }
 
     @Test
+    fun weltFehlerIntern() = shot("96b-indoor-welt-fehler-intern") {
+        World(
+            IndoorWorldUi.Failed(
+                WorldBuildFailed.Reason.INTERNAL, null, canRetry = true,
+                detail = "IllegalStateException: Budget ueberschritten @ de.trailscape.core.indoor.world.WorldBuilderImpl.assemble:356",
+            ),
+        )
+    }
+
+    @Test
     fun fahrenSimGeist() = shot("97-indoor-fahren-sim-geist") { RideScreen(ride()) }
 
     @Test
@@ -263,7 +273,16 @@ class IndoorScreenshotTest {
 
     @Test
     fun fahrenDarstellungFehlt() = shot("99-indoor-fahren-darstellung-fehlt") {
-        RideScreen(ride(render = IndoorRenderUi.Failed(RenderFailure.NO_GRAPHICS, null)))
+        RideScreen(
+            ride(
+                render = IndoorRenderUi.Failed(
+                    RenderFailure.NO_GRAPHICS,
+                    de.trailscape.app.indoor.IndoorProblem(
+                        de.trailscape.app.indoor.IndoorPart.RENDER, false, "GlProbe: OpenGL ES 3.0 fehlt (2.0)",
+                    ),
+                ),
+            ),
+        )
     }
 
     @Test

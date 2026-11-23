@@ -513,6 +513,32 @@ class IndoorViewModelDemoFlowTest {
     }
 
     @Test
+    fun errorImWeltbauWirdZurFehlerkarteMitTechnischerEinzelheit() {
+        val errors = listOf<Throwable>(
+            OutOfMemoryError("Failed to allocate a 67108880 byte allocation"),
+            NoSuchMethodError("No static method foo()V"),
+            StackOverflowError(),
+            WorldBuildFailed(WorldBuildFailed.Reason.INTERNAL, "Kachel kaputt", IllegalStateException("Index 70000")),
+        )
+        for (error in errors) {
+            rideStorage.saveRide(testSavedRide())
+            val builder = FakeWorldBuilder(buildError = error)
+            val vm = viewModel(FakeIndoorParts(worldBuilderFactory = { builder }))
+            vm.pairWithDemo()
+            vm.selectRoute(vm.route.value.options.filterIsInstance<IndoorRouteOption.Saved>().single())
+            vm.continueFromRoute()
+            assertIs<IndoorWorldUi.Plan>(vm.world.value)
+            vm.loadWorld()
+            val failed = assertIs<IndoorWorldUi.Failed>(vm.world.value, "nach ${error.javaClass.simpleName}")
+            assertTrue(failed.canRetry)
+            val detail = assertNotNull(failed.detail)
+            val expected = if (error is WorldBuildFailed) "IllegalStateException: Index 70000" else error.javaClass.simpleName
+            assertTrue(expected in detail, "Einzelheit nennt die Ursache: $detail")
+            assertTrue(detail.length <= de.trailscape.app.indoor.TECHNICAL_DETAIL_MAX_CHARS)
+        }
+    }
+
+    @Test
     fun kurzeFahrtWirdNichtGespeichert() {
         val vm = viewModel(FakeIndoorParts())
         vm.pairWithDemo()

@@ -242,6 +242,7 @@ private fun FailedContent(failed: IndoorWorldUi.Failed) {
         title = stringResource(R.string.indoor_app_world_failed_title),
         text = failed.reason?.let { worldFailureText(it) } ?: problemText(failed.problem),
     )
+    TechnicalDetail(failed.detail ?: failed.problem?.detail)
     MutedText(stringResource(R.string.indoor_app_world_failed_hint))
 }
 
@@ -253,6 +254,7 @@ private fun RouteUnavailableContent(unavailable: IndoorWorldUi.RouteUnavailable)
         title = stringResource(R.string.indoor_app_world_route_unavailable_title),
         text = problemText(unavailable.problem),
     )
+    TechnicalDetail(unavailable.problem?.detail)
     // Den Streckentipp nur bei echten Streckenfehlern — ist ein Teil nur noch
     // nicht fertig, hilft eine andere Strecke nicht.
     MutedText(

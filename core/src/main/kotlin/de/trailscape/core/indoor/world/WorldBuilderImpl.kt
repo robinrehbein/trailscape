@@ -176,7 +176,9 @@ internal class WorldBuilderImpl(
             throw e
         } catch (e: WorldBuildFailed) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Auch Errors (OutOfMemoryError, StackOverflowError, LinkageError …):
+            // Der Aufrufer zeigt sie samt Ursache an, statt dass die App abstuerzt.
             throw WorldBuildFailed(WorldBuildFailed.Reason.INTERNAL, e.message ?: e.javaClass.simpleName, e)
         }
     }

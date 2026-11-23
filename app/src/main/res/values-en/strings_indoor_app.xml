@@ -140,6 +140,9 @@
     <string name="indoor_app_world_failed_no_space">There is not enough space on your device for this world. Free up storage or delete worlds you no longer need under More → Indoor worlds.</string>
     <string name="indoor_app_world_failed_route">This route is too long (over 150 km) or too short for a world.</string>
     <string name="indoor_app_world_failed_internal">An unexpected error occurred while building the world.</string>
+    <string name="indoor_app_technical_detail">Technical detail: %1$s</string>
+    <string name="indoor_app_technical_detail_copy">Copy detail</string>
+    <string name="indoor_app_technical_detail_copied">Copied</string>
     <string name="indoor_app_world_route_unavailable_title">The route could not be prepared</string>
     <string name="indoor_app_world_route_unavailable_hint">Please choose another route.</string>
     <string name="indoor_app_world_other_route_action">Choose another route</string>

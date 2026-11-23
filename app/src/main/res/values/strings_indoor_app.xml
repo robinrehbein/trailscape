@@ -140,6 +140,9 @@
     <string name="indoor_app_world_failed_no_space">Auf dem Gerät ist nicht genug Platz für diese Welt. Gib Speicher frei oder lösche nicht mehr benötigte Welten unter Mehr → Indoor-Welten.</string>
     <string name="indoor_app_world_failed_route">Diese Strecke ist für eine Welt zu lang (über 150 km) oder zu kurz.</string>
     <string name="indoor_app_world_failed_internal">Beim Bau der Welt ist ein unerwarteter Fehler aufgetreten.</string>
+    <string name="indoor_app_technical_detail">Technische Einzelheit: %1$s</string>
+    <string name="indoor_app_technical_detail_copy">Einzelheit kopieren</string>
+    <string name="indoor_app_technical_detail_copied">Kopiert</string>
     <string name="indoor_app_world_route_unavailable_title">Die Strecke lässt sich nicht aufbereiten</string>
     <string name="indoor_app_world_route_unavailable_hint">Wähle eine andere Strecke.</string>
     <string name="indoor_app_world_other_route_action">Andere Strecke wählen</string>

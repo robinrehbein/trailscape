@@ -656,6 +656,7 @@ private fun FallbackArea(ui: IndoorRideUi, session: IndoorSessionState, onRideWi
                 text = if (render.failure == null && render.problem != null) problemText(render.problem) else renderFailureText(render.failure),
                 action = withoutWorldAction,
             )
+            TechnicalDetail(render.problem?.detail)
             MutedText(stringResource(R.string.indoor_app_ride_render_failed_hint))
         }
         if (ui.profile != null) {

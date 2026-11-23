@@ -22,6 +22,7 @@ import de.trailscape.app.indoor.indoorCatching
 import de.trailscape.app.indoor.indoorProfileOf
 import de.trailscape.app.indoor.indoorRideToRide
 import de.trailscape.app.indoor.problemOf
+import de.trailscape.app.indoor.technicalDetailOf
 import de.trailscape.app.indoor.world.WorldLibrary
 import de.trailscape.app.indoor.worldRouteOf
 import de.trailscape.app.sensors.indoor.IndoorDeviceRef
@@ -62,6 +63,7 @@ import de.trailscape.core.indoor.world.WorldRenderer
 import de.trailscape.core.sessionsForDay
 import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -457,9 +459,11 @@ class IndoorViewModel(
             // Ein abgeloester Testwelt-Bau schreibt sonst noch ins selbe Verzeichnis.
             previous?.join()
             val ui = withContext(io) {
-                when (option) {
-                    IndoorRouteOption.TestWorld -> prepareTestWorld(token)
-                    is IndoorRouteOption.Saved -> prepareSaved(option, token)
+                worldGuard(canRetry = false) {
+                    when (option) {
+                        IndoorRouteOption.TestWorld -> prepareTestWorld(token)
+                        is IndoorRouteOption.Saved -> prepareSaved(option, token)
+                    }
                 }
             }
             commitWorld(token, ui)
@@ -559,7 +563,7 @@ class IndoorViewModel(
             // Nie zwei Bauten gleichzeitig: der abgeloeste laeuft bis zur
             // naechsten Abfrage von isCancelled() weiter (ggf. im selben Verzeichnis).
             previous?.join()
-            val ui = withContext(io) { buildWorld(ride, name, token) }
+            val ui = withContext(io) { worldGuard(canRetry = true) { buildWorld(ride, name, token) } }
             commitWorld(token, ui)
         }
     }
@@ -643,7 +647,27 @@ class IndoorViewModel(
 
     private fun failedOf(e: Throwable, canRetry: Boolean): IndoorWorldUi.Failed {
         val reason = causeOf<WorldBuildFailed>(e)?.reason
-        return IndoorWorldUi.Failed(reason = reason, problem = problemOf(IndoorPart.WORLD, e), canRetry = canRetry)
+        return IndoorWorldUi.Failed(
+            reason = reason,
+            problem = problemOf(IndoorPart.WORLD, e),
+            canRetry = canRetry,
+            detail = technicalDetailOf(e),
+        )
+    }
+
+    /**
+     * Letztes Netz um einen Welt-Auftrag: Was trotz der einzelnen
+     * [indoorCatching] noch durchkommt — auch `Error`s wie
+     * `OutOfMemoryError`, `StackOverflowError` oder `NoSuchMethodError` —,
+     * wird zur Fehlerkarte mit technischer Einzelheit statt zum Absturz.
+     * Abbruch der Koroutine geht weiter.
+     */
+    private suspend fun worldGuard(canRetry: Boolean, block: suspend () -> IndoorWorldUi): IndoorWorldUi = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        failedOf(e, canRetry)
     }
 
     private fun readManifest(dir: File): WorldManifest? = runCatching {
