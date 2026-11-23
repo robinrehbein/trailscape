@@ -367,6 +367,8 @@ class IndoorScreenshotTest {
     private val routeCatalog get() = routeSim.copy(
         tab = IndoorRouteTab.CATALOG,
         selected = IndoorRouteOption.Catalog("alpe-dhuez", "Alpe d'Huez", 15.1, 1105.0),
+        ghost = IndoorGhostOption.None,
+        ghostPastRideAvailable = false,
     )
 
     @Test

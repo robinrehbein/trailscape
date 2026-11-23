@@ -156,6 +156,14 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   Ländern aus dem Register (derzeit NRW). Vorher zeigt ein Voranschlag Hosts,
   Datenmenge und Platzbedarf; fertige Welten fahren offline und lassen sich
   unter *Mehr* verwalten. „Ohne Welt fahren“ geht immer
+- **Bekannte Strecken** (zusätzlich zu den eigenen): zehn bekannte Abschnitte
+  mit fertig gebauter Welt, z. B. Alpe d'Huez, Oude Kwaremont/Koppenberg,
+  Wald von Arenberg, Schotter bei Siena, Sa Calobra, Flint Hills, Großer
+  Feldberg, Schauinsland, Kahler Asten, Rennsteig. Die Liste ist ohne Netz
+  sichtbar; eine Welt (rund 60–110 MB) wird erst nach „Laden“ aus dem
+  GitHub-Release geladen — mit Fortschritt, Abbruch, Fortsetzen und
+  Prüfsumme — und fährt dann wie eine eigene Welt. Details:
+  `docs/indoor/catalog.md`
 - Die Fahrt wird als Indoor-Tour gespeichert (mit Leistung und
   Trittfrequenz, als GPX/FIT exportierbar, auf Wunsch zu Strava mit
   Trainer-Kennzeichen). Sie zählt für Belastung, Wochenziel und Serie, nicht
@@ -408,7 +416,8 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 Alles bleibt lokal. Die App spricht mit den Diensten, die für eine konkrete
 Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
 und Kachel-Downloads, die Geodatenquellen für Indoor-Welten (nur nach „Welt
-laden“), Nominatim für die Zielsuche und — wenn eingerichtet —
+laden“), GitHub für vorgebaute Indoor-Welten bekannter Strecken (nur nach
+„Laden“), Nominatim für die Zielsuche und — wenn eingerichtet —
 dem eigenen Sync-Server bzw. Strava (nur nach dem Verbinden des eigenen
 Strava-Kontos). Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
 tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter
