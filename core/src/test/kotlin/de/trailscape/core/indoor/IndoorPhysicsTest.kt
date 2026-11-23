@@ -46,12 +46,39 @@ class IndoorPhysicsTest {
     }
 
     @Test
-    fun `Antriebskraft beim Anfahren ist endlich`() {
-        // v = 0: Kraft wie bei 1 m/s → a = 300·0,97 / 88,5 kg − Rollen ≈ 3,2 m/s².
+    fun `Antriebskraft beim Anfahren ist gekappt und endlich`() {
+        // v = 0: P·η/v waere unendlich; es gilt F_max = 4 m/s² · m_eff.
+        val m = 87 + ROTATING_MASS_KG
         val s = advancePhysics(0.0, 300.0, 0.0, crr, 0.0, 0.0, rider, 0.05)
         val a = s.speedMps / 0.05
-        val expected = (300 * 0.97 - 87 * gravity * crr) / (87 + ROTATING_MASS_KG)
-        assertEquals(expected, a, 1e-9)
+        assertEquals((MAX_DRIVE_ACCEL_MPS2 * m - 87 * gravity * crr) / m, a, 1e-9)
+        // Auch mit riesiger Leistung nicht mehr.
+        val huge = advancePhysics(0.0, 1e6, 0.0, crr, 0.0, 0.0, rider, 0.05)
+        assertEquals(s.speedMps, huge.speedMps, 1e-12)
+    }
+
+    @Test
+    fun `langsames Kriechen am steilen Berg - kein Totbereich unter 1 m pro s`() {
+        // 87 kg, 100 W, 15 %: v = P·η / F_res ≈ 0,73 m/s (frueher fiel das auf 0).
+        val th = atan(0.15)
+        val fRes = 87 * gravity * (sin(th) + crr * cos(th))
+        val expected = 100 * 0.97 / fRes
+        assertEquals(0.728, expected, 0.002)
+        val steady = steadySpeedMps(100.0, 15.0, crr, 0.0, 0.0, rider)
+        assertEquals(expected, steady, 1e-3) // Luft bei 0,7 m/s ist vernachlaessigbar
+        for (dt in listOf(0.1, 2.0)) {
+            val fromStill = run(0.0, 100.0, 15.0, 60.0, dt)
+            assertEquals(steady, fromStill.speedMps, 1e-6, "dt $dt")
+            val fromFast = run(5.0, 100.0, 15.0, 60.0, dt)
+            assertEquals(steady, fromFast.speedMps, 1e-6, "dt $dt")
+        }
+        // Selbst 10 W kommen an 15 % voran (steif bei kleinem v, aber stabil).
+        val tiny = steadySpeedMps(10.0, 15.0, crr, 0.0, 0.0, rider)
+        assertEquals(10 * 0.97 / fRes, tiny, 1e-4)
+        val tinyRun = run(0.0, 10.0, 15.0, 60.0, 2.0)
+        assertEquals(tiny, tinyRun.speedMps, 1e-6)
+        // Jede Leistung > 0 kommt an jeder Stelle voran: 25 % auf Sand.
+        assertTrue(steadySpeedMps(20.0, 25.0, 0.035, 0.0, 0.0, rider) > 0.0)
     }
 
     @Test
@@ -59,7 +86,10 @@ class IndoorPhysicsTest {
         val s = advancePhysics(5.0, 0.0, 0.0, 0.0, 0.0, -5.0, rider, 0.05) // Luft steht relativ, kein Rollen
         assertEquals(5.0, s.speedMps, 1e-12)
         val withPower = advancePhysics(5.0, 500.0, 0.0, 0.0, 0.0, -5.0, rider, 0.05)
-        assertEquals(500 * 0.97 / 5.0 / (87 + 1.5) * 0.05, withPower.speedMps - 5.0, 1e-12)
+        // Halbimplizit: m_eff·(v' − v)/h = P·η/v'.
+        val v1 = withPower.speedMps
+        assertEquals(500 * 0.97 / v1, (87 + 1.5) * (v1 - 5.0) / 0.05, 1e-9)
+        assertEquals(500 * 0.97 / 5.0 / (87 + 1.5) * 0.05, v1 - 5.0, 2e-3)
     }
 
     @Test

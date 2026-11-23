@@ -137,8 +137,14 @@ class IndoorSessionTest {
             repeat(5) { d.step(300, hr = 150) }
         }
         val rec = d.session.finish()
-        assertEquals(30, rec.points.size)
-        rec.points.forEachIndexed { i, p ->
+        // Startpunkt beim ersten Tritt (ohne Leistung), dann 30 volle Sekunden; keine angefangene.
+        assertEquals(31, rec.points.size)
+        val start = rec.points.first()
+        assertEquals(startedAt, start.time)
+        assertNull(start.power)
+        assertEquals(140, start.hr)
+        assertEquals(IndoorTestRoutes.LAT0, start.lat, 1e-12)
+        rec.points.drop(1).forEachIndexed { i, p ->
             assertEquals(startedAt + (i + 1) * 1000L, p.time)
             assertEquals(200, p.power)
             assertEquals(90, p.cad)
@@ -148,10 +154,13 @@ class IndoorSessionTest {
         assertEquals(t0 + 30_000L, d.now)
         // Lage = virtuelle Stelle: Punkte liegen auf der Strecke, Abstand steigt.
         for (i in 1 until rec.points.size) assertTrue(rec.points[i].lat > rec.points[i - 1].lat)
-        // Stats exakt aus den Punkten, Puls ergaenzt.
+        // Stats: Weg, Hoehe, Fahrzeit und Schnitt aus den Summen, Dauer und Puls aus den Punkten.
         val base = computeStats(rec.points)
-        assertEquals(base.distanceKm, rec.stats.distanceKm)
-        assertEquals(29, rec.stats.durationS)
+        assertEquals(rec.totals.distanceM / 1000.0, rec.stats.distanceKm, 1e-12)
+        assertEquals(base.distanceKm, rec.stats.distanceKm, 1e-6) // gerade Strecke: dasselbe
+        assertEquals(30, rec.stats.durationS)
+        assertEquals(30, rec.stats.movingTimeS)
+        assertEquals(rec.totals.distanceM / 1000.0 / (30 / 3600.0), rec.stats.avgSpeedKmh!!, 1e-9)
         assertEquals(150, rec.stats.avgHrBpm)
         assertEquals(150, rec.stats.maxHrBpm)
         assertEquals(rec.totals, d.session.state.totals)
@@ -170,15 +179,16 @@ class IndoorSessionTest {
         d.ride(1.0, 200)
         val before = d.session.state
         val jump = d.step(200, dt = 10_000)
-        assertEquals(before.elapsedS + 2, jump.state.elapsedS)
+        // Verstrichene Zeit ist die echte (Vertrag: Pausen eingeschlossen), gefahren werden 2 s.
+        assertEquals(before.elapsedS + 10, jump.state.elapsedS)
         assertEquals(before.totals.movingS + 2, jump.state.totals.movingS)
         val rec = d.session.finish()
-        assertEquals(3, rec.points.size)
+        assertEquals(4, rec.points.size)
         val wall = startedAt + (d.now - t0)
-        assertEquals(listOf(startedAt + 1000, wall - 1000, wall), rec.points.map { it.time })
+        assertEquals(listOf(startedAt, startedAt + 1000, wall - 1000, wall), rec.points.map { it.time })
         // Zwei Punkte aus einem Schritt: Lage linear dazwischen.
-        val p1 = rec.points[1].lat - rec.points[0].lat
-        val p2 = rec.points[2].lat - rec.points[1].lat
+        val p1 = rec.points[2].lat - rec.points[1].lat
+        val p2 = rec.points[3].lat - rec.points[2].lat
         assertEquals(p1, p2, p1 * 0.5)
     }
 
@@ -241,14 +251,18 @@ class IndoorSessionTest {
     }
 
     @Test
-    fun `Trainer ohne Leistungswert zeigt keine Leistung`() {
+    fun `Kadenz ohne Leistung ist kein Tritt`() {
         val d = startedDriver()
         val s = d.step(power = null, cadence = 80.0)
         assertNull(s.state.powerW)
-        assertEquals(IndoorPhase.RUNNING, s.state.phase) // Kadenz zaehlt als Tritt
-        d.ride(2.0, null)
+        assertEquals(80, s.state.cadenceRpm)
+        // Nur Leistung bewegt die Fahrt; Kadenz allein startet nicht (sonst Scheinfahrzeit).
+        assertEquals(IndoorPhase.READY, s.state.phase)
+        d.ride(5.0, null)
+        assertEquals(IndoorPhase.READY, d.session.state.phase)
+        assertEquals(0, d.session.state.totals.movingS)
         assertNull(d.session.state.totals.avgPowerW)
-        assertTrue(d.session.finish().points.all { it.power == null })
+        assertTrue(d.session.finish().points.isEmpty())
     }
 
     // -------------------------------------------------------------- Auto-Pause
@@ -270,8 +284,37 @@ class IndoorSessionTest {
         assertEquals(paused.distM, later.distM)
         assertEquals(paused.totals.movingS, later.totals.movingS)
         assertEquals(paused.elapsedS + 10, later.elapsedS)
-        // Erster Tritt: weiter.
+        // Kadenz ohne Leistung weckt nicht (gleiches Praedikat wie beim Einschlafen) …
+        repeat(20) { assertEquals(IndoorPhase.AUTO_PAUSED, d.step(0, cadence = 70.0).state.phase) }
+        assertEquals(paused.totals.movingS, d.session.state.totals.movingS)
+        // … erst Leistung.
         assertEquals(IndoorPhase.RUNNING, d.step(150).state.phase)
+    }
+
+    @Test
+    fun `pause und resume ohne Tritt erzeugen keine Fahrzeit`() {
+        val d = startedDriver()
+        d.ride(5.0, 200)
+        repeat(60) { d.step(0, cadence = 0.0) } // ausrollen …
+        val moving = d.session.state.totals.movingS
+        while (d.session.state.phase != IndoorPhase.AUTO_PAUSED) d.step(0, cadence = 0.0)
+        val asleep = d.session.state.totals.movingS
+        d.session.pause()
+        assertEquals(IndoorPhase.PAUSED, d.session.state.phase) // sofort sichtbar
+        d.ride(2.0, 0)
+        d.session.resume()
+        assertEquals(IndoorPhase.AUTO_PAUSED, d.session.state.phase) // sofort, und bis zum Tritt
+        val r = d.step(0)
+        assertEquals(TrainerCommand.Start, r.commands.first())
+        d.ride(10.0, 0)
+        assertEquals(IndoorPhase.AUTO_PAUSED, d.session.state.phase)
+        assertEquals(asleep, d.session.state.totals.movingS)
+        assertTrue(asleep >= moving)
+        // Vor dem ersten Tritt: zurueck nach READY.
+        val e = startedDriver()
+        e.session.pause()
+        e.session.resume()
+        assertEquals(IndoorPhase.READY, e.session.state.phase)
     }
 
     @Test
@@ -303,6 +346,8 @@ class IndoorSessionTest {
         val d = startedDriver()
         d.ride(5.0, 200)
         d.session.pause()
+        assertEquals(IndoorPhase.PAUSED, d.session.state.phase)
+        assertEquals(0.0, d.session.state.speedMps)
         val p = d.step(200)
         assertEquals(listOf<TrainerCommand>(TrainerCommand.Pause), p.commands)
         assertEquals(IndoorPhase.PAUSED, p.state.phase)
@@ -317,6 +362,7 @@ class IndoorSessionTest {
         d.session.pause() // doppelt: ohne Wirkung
         assertTrue(d.step(200).commands.isEmpty())
         d.session.resume()
+        assertEquals(IndoorPhase.AUTO_PAUSED, d.session.state.phase)
         val r = d.step(200)
         assertEquals(2, r.commands.size)
         assertEquals(TrainerCommand.Start, r.commands[0])
@@ -518,7 +564,43 @@ class IndoorSessionTest {
         // Hoehenmeter: je Runde der Anstieg der Sinuswelle (10 m), auch ueber das Ziel hinweg.
         val laps = st.distM / 300.0
         assertTrue(st.totals.ascentM in (laps - 1) * 10.0..(laps + 1) * 10.0, "${st.totals.ascentM}")
-        assertEquals(st.lap, d.session.finish().laps)
+        val rec = d.session.finish()
+        assertEquals(st.lap, rec.laps)
+        // Stats aus den Summen: der Sprung Ziel → Start in den Punkten zaehlt nicht.
+        assertEquals(st.totals.distanceM / 1000.0, rec.stats.distanceKm, 1e-12)
+        assertEquals(st.totals.ascentM, rec.stats.ascentM, 1e-12)
+        assertEquals(rec.stats.ascentM, rec.stats.descentM, 10.0) // Runde: so viel ab wie auf
+        assertEquals(st.totals.movingS, rec.stats.movingTimeS)
+    }
+
+    @Test
+    fun `Runde bei genau vollem Vielfachen`() {
+        val loop = IndoorTestRoutes.loop(lengthM = 300.0)
+        val s = IndoorSessionImpl(config(route = loop))
+        assertEquals(1, s.state.lap)
+        // Auf der Runde haelt der Zaehler bei exakt L die erste Runde (angefangene Runden).
+        val d = startedDriver(config(route = loop))
+        var last = d.step(300)
+        while (last.state.distM < 300.0) last = d.step(300)
+        assertEquals(2, last.state.lap)
+        assertEquals(2, d.session.finish().laps)
+    }
+
+    @Test
+    fun `Wind - Vorgaben erst ab 0,15 m pro s Aenderung`() {
+        val loop = IndoorTestRoutes.loop(lengthM = 2000.0)
+        val d = startedDriver(config(route = loop, wind = IndoorWind(4.0, 0.0)))
+        d.ride(120.0, 250)
+        val sims = d.sent.map { it.second }.filterIsInstance<TrainerCommand.SetSimulation>()
+        assertTrue(sims.size in 3..121, "${sims.size}")
+        for (i in 1 until sims.size) {
+            val a = sims[i]
+            val b = sims[i - 1]
+            assertTrue(
+                kotlin.math.abs(a.windMps - b.windMps) >= 0.15 - 1e-9 || kotlin.math.abs(a.gradePct - b.gradePct) >= 0.2 - 1e-9 ||
+                    kotlin.math.abs(a.cwKgPerM - b.cwKgPerM) > 0.01 || kotlin.math.abs(a.crr - b.crr) > 0.0001,
+            )
+        }
     }
 
     @Test
@@ -544,7 +626,10 @@ class IndoorSessionTest {
         assertSame(rec, d.session.finish())
         assertEquals(listOf<TrainerCommand>(TrainerCommand.Stop), d.step(300).commands)
         assertTrue(d.step(300).commands.isEmpty())
-        assertEquals(rec.totals.movingS, rec.points.size)
+        // Startpunkt, volle Sekunden, Schlusspunkt am Ziel (angefangene Sekunde).
+        assertTrue(rec.points.size in rec.totals.movingS + 1..rec.totals.movingS + 2)
+        val end = rec.points.last()
+        assertEquals(short.points.last().lat, end.lat, 1e-12)
         assertEquals(1, rec.laps)
     }
 
@@ -554,7 +639,10 @@ class IndoorSessionTest {
         d.ride(10.5, 200)
         val rec = d.session.finish()
         assertEquals(IndoorPhase.FINISHED, d.session.state.phase)
-        assertEquals(10, rec.points.size)
+        // Startpunkt + 10 volle Sekunden + Schlusspunkt fuer die halbe Sekunde (Mittel 200 W).
+        assertEquals(12, rec.points.size)
+        assertEquals(200, rec.points.last().power)
+        assertEquals(rec.points[10].time!! + 500, rec.points.last().time)
         assertSame(rec, d.session.finish())
         assertEquals(listOf<TrainerCommand>(TrainerCommand.Stop), d.step(200).commands)
         val frozen = d.session.state
@@ -601,6 +689,64 @@ class IndoorSessionTest {
         assertTrue(w.gapM < -10.0)
         assertEquals(w.gapM / w.speedMps, w.gapS!!, 1e-9)
         assertEquals(w.gapS, weaker.session.finish().ghostFinalGapS)
+    }
+
+    @Test
+    fun `Endabstand zum Geist auch wenn der Fahrer vor finish steht`() {
+        val d = startedDriver(config(ghost = GhostSpec.ConstantPower(250.0)))
+        d.ride(60.0, 200)
+        d.session.pause()
+        d.step(0)
+        val st = d.session.state
+        val g = st.ghost!!
+        assertNull(g.gapS) // der Hintere (Fahrer) steht
+        val rec = d.session.finish()
+        val avg = st.distM / 60.0
+        assertEquals(g.gapM / avg, rec.ghostFinalGapS!!, 1e-9)
+        assertTrue(rec.ghostFinalGapS!! > 0)
+    }
+
+    @Test
+    fun `frueherer Fahrt vorn - Endabstand aus ihrer Zeit an der Stelle des Fahrers`() {
+        val past = IndoorTestRoutes.pastRide(flat, 600) { s -> 10.0 * s }
+        val d = startedDriver(config(ghost = GhostSpec.PastRide("x", past)))
+        d.ride(60.0, 200)
+        val dist = d.session.state.distM
+        d.session.pause()
+        d.step(0)
+        val rec = d.session.finish()
+        assertEquals(60.0 - dist / 10.0, rec.ghostFinalGapS!!, 1e-6)
+    }
+
+    @Test
+    fun `frueherer Fahrt knapp vor dem Ziel zu Ende - Ankunftsvergleich stimmt`() {
+        val short = IndoorTestRoutes.straight(lengthM = 600.0)
+        val past = IndoorTestRoutes.pastRide(short, 49) { s -> 12.0 * s } // endet bei 588 m nach 49 s
+        val d = startedDriver(config(route = short, ghost = GhostSpec.PastRide("x", past)))
+        var t = 0
+        while (d.session.state.phase != IndoorPhase.FINISHED && t < 3000) {
+            d.step(200)
+            t++
+        }
+        val g = d.session.state.ghost!!
+        assertEquals(600.0, g.distM)
+        assertEquals(0.0, g.gapM)
+        val rec = d.session.finish()
+        // Der Fahrer braucht mit 200 W deutlich laenger als 49 s; positiv = Geist war vorn.
+        assertTrue(rec.ghostFinalGapS!! > 10.0, "${rec.ghostFinalGapS}")
+        assertEquals(g.gapS, rec.ghostFinalGapS)
+    }
+
+    @Test
+    fun `Gangtabelle wie am Rad in der Sitzung`() {
+        val r = rider.copy(realGearRatio = REAL_GEAR_RATIO_GRX_BIG, gearTable = VirtualGearTable.BIKE_GRX_2X12)
+        val d = Driver(IndoorSessionImpl(config(r = r)))
+        val first = d.step(noTelemetry = true)
+        assertEquals(GearState(21, 24, 48.0 / 14), first.state.gear)
+        // k = 1 → die Strecke selbst.
+        assertEquals(simulationCommand(0.0, 0.008, aeroCoefficient(0.38, 0.0), 0.0, 48.0 / 14, r), first.commands[1])
+        d.session.shift(ShifterEvent.UP)
+        assertEquals(48.0 / 13, d.step(200).state.gear.ratio, 1e-12)
     }
 
     @Test

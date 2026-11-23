@@ -35,6 +35,19 @@ internal interface GhostRunner {
      * Fahrers bei [runningMs].
      */
     fun advance(runningMs: Long, dtS: Double)
+
+    /**
+     * Fahrzeit in s, zu der der Geist das Ziel einer Strecke ohne Rundschluss
+     * erreicht hat (innerhalb des Schritts interpoliert); `null`, solange er
+     * nicht da ist, und immer auf einer Runde.
+     */
+    val arrivalS: Double?
+
+    /**
+     * Fahrzeit in s, zu der der Geist an Laufmeter [distM] war; `null`, wenn
+     * das nicht bekannt ist oder er noch nicht dort war.
+     */
+    fun passedAtS(distM: Double): Double? = null
 }
 
 /** Ein gedachter Fahrer mit konstanter Leistung (siehe Dateikopf). */
@@ -48,6 +61,8 @@ internal class ConstantPowerGhost(
     override var distM: Double = 0.0
         private set
     override var speedMps: Double = 0.0
+        private set
+    override var arrivalS: Double? = null
         private set
 
     override fun advance(runningMs: Long, dtS: Double) {
@@ -66,9 +81,12 @@ internal class ConstantPowerGhost(
             rider = rider,
             dtS = dtS,
         )
+        val before = distM
         distM += step.distanceM
         speedMps = step.speedMps
         if (!route.isLoop && distM >= route.lengthM) {
+            val share = if (step.distanceM > 0) (route.lengthM - before) / step.distanceM else 1.0
+            arrivalS = runningMs / 1000.0 - dtS + dtS * share.coerceIn(0.0, 1.0)
             distM = route.lengthM
             speedMps = 0.0
         }
@@ -103,20 +121,46 @@ internal class GhostCurve(val timesS: DoubleArray, val distsM: DoubleArray) {
         val speed = (distsM[hi] - distsM[lo]) / span
         return distsM[lo] + speed * (tS - timesS[lo]) to speed
     }
+
+    /** Erste Zeit, zu der die Kurve [d] erreicht (linear im Stueck); `null`, wenn nie. */
+    fun timeAt(d: Double): Double? {
+        val last = distsM.size - 1
+        if (d > distsM[last]) return null
+        if (d <= distsM[0]) return timesS[0]
+        var lo = 0
+        var hi = last
+        while (hi - lo > 1) {
+            val mid = (lo + hi) ushr 1
+            if (distsM[mid] < d) lo = mid else hi = mid
+        }
+        val span = distsM[hi] - distsM[lo]
+        return if (span > 0) timesS[lo] + (timesS[hi] - timesS[lo]) * (d - distsM[lo]) / span else timesS[hi]
+    }
 }
 
 /** Eine fruehere Fahrt (siehe [pastRideCurve]). */
-internal class PastRideGhost(private val curve: GhostCurve) : GhostRunner {
+internal class PastRideGhost(private val curve: GhostCurve, private val route: IndoorRoute) : GhostRunner {
     override var distM: Double = curve.distsM[0]
         private set
     override var speedMps: Double = 0.0
         private set
+    private val goalS: Double? = if (route.isLoop) null else curve.timeAt(route.lengthM)
+    override var arrivalS: Double? = null
+        private set
 
     override fun advance(runningMs: Long, dtS: Double) {
-        val (d, v) = curve.at(runningMs / 1000.0)
+        val t = runningMs / 1000.0
+        val (d, v) = curve.at(t)
         distM = d
         speedMps = v
+        if (goalS != null && t >= goalS) {
+            arrivalS = goalS
+            distM = route.lengthM
+            speedMps = 0.0
+        }
     }
+
+    override fun passedAtS(distM: Double): Double? = curve.timeAt(distM)
 }
 
 /** Der Geist zu [spec], `null` ohne Geist oder wenn die fruehere Fahrt unbrauchbar ist. */
@@ -124,7 +168,7 @@ internal fun ghostRunner(spec: GhostSpec, route: IndoorRoute, rider: RiderSetup,
     when (spec) {
         GhostSpec.None -> null
         is GhostSpec.ConstantPower -> ConstantPowerGhost(route, rider, wind, spec.watts)
-        is GhostSpec.PastRide -> pastRideCurve(route, spec.points)?.let { PastRideGhost(it) }
+        is GhostSpec.PastRide -> pastRideCurve(route, spec.points)?.let { PastRideGhost(it, route) }
     }
 
 /**
@@ -141,8 +185,24 @@ internal fun ghostState(ghost: GhostRunner, riderDistM: Double, riderSpeedMps: D
 
 internal const val GHOST_MIN_GAP_SPEED_MPS: Double = 0.5
 
-/** Suchfenster der Projektion ab der letzten Stelle, in Laufmetern. */
-internal const val GHOST_SEARCH_WINDOW_M: Double = 500.0
+/**
+ * Suchfenster der Projektion ab der letzten Stelle: so weit, wie man seit dem
+ * letzten passenden Punkt hoechstens gekommen sein kann
+ * ([GHOST_MAX_SPEED_MPS] · Δt), plus [GHOST_WINDOW_RESERVE_M]. Ein festes
+ * Fenster (frueher 500 m) liess die Projektion in Serpentinen auf den
+ * naechsten, nahe parallel liegenden Ast springen.
+ */
+internal const val GHOST_MAX_SPEED_MPS: Double = 25.0
+internal const val GHOST_WINDOW_RESERVE_M: Double = 50.0
+
+/**
+ * Endet die Kurve auf einer Strecke ohne Rundschluss hoechstens so weit vor
+ * dem Ziel (max(50 m, 2 %)), gilt das als Ankunft: Die Kurve wird auf das Ziel
+ * gestreckt. Sonst kaeme der Geist nie an, weil die Projektion des letzten
+ * Punkts selten genau auf dem Ziel liegt.
+ */
+internal const val GHOST_GOAL_TOLERANCE_M: Double = 50.0
+internal const val GHOST_GOAL_TOLERANCE_SHARE: Double = 0.02
 
 /** Groesster Abstand eines Punkts der frueheren Fahrt zur Strecke, damit er zaehlt. */
 internal const val GHOST_MAX_OFFSET_M: Double = 50.0
@@ -170,14 +230,20 @@ private const val GHOST_AHEAD_PENALTY = 0.01
  *  1. Nur Punkte mit Zeitstempel und endlicher Lage, Zeit streng steigend
  *     (andere entfallen); unter zwei solchen Punkten → `null`.
  *  2. Jeder Punkt wird auf die Strecke projiziert, **monoton vorwaerts**: gesucht
- *     wird nur von der letzten Stelle bis [GHOST_SEARCH_WINDOW_M] dahinter (auf
- *     einer Runde ueber das Ziel hinaus), und ein Punkt weiter als
+ *     wird nur von der letzten Stelle so weit, wie man seither kommen konnte
+ *     ([GHOST_MAX_SPEED_MPS], [GHOST_WINDOW_RESERVE_M]; auf einer Runde ueber
+ *     das Ziel hinaus), und ein Punkt weiter als
  *     [GHOST_MAX_OFFSET_M] von der Strecke wird uebersprungen.
  *  3. Passen weniger als [GHOST_MIN_MATCH_SHARE] der Punkte, ist die Fahrt wohl
  *     eine andere Linie: Rueckfall auf die kumulierte Haversine-Distanz der
  *     Punkte, anteilig auf die Streckenlaenge gestreckt.
  *  4. Zeitluecken ueber [GHOST_PAUSE_GAP_S] ohne Fortschritt (gespeicherte
- *     Pausen) werden auf 1 s verkuerzt; die Zeit beginnt bei 0.
+ *     Pausen) werden auf 1 s verkuerzt.
+ *  5. Verankert auf (0 s, 0 m): Zeit und Laufmeter des ersten Punkts werden
+ *     abgezogen — beide starten gemeinsam. Endet die Kurve einer Strecke ohne
+ *     Rundschluss innerhalb von [GHOST_GOAL_TOLERANCE_M] bzw.
+ *     [GHOST_GOAL_TOLERANCE_SHARE] vor dem Ziel, wird sie linear aufs Ziel
+ *     gestreckt.
  */
 internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostCurve? {
     val timed = ArrayList<TrackPoint>(points.size)
@@ -194,9 +260,12 @@ internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostC
     val projTimes = ArrayList<Long>(timed.size)
     val projDists = ArrayList<Double>(timed.size)
     var last = 0.0
+    var lastT = timed[0].time!!
     for (p in timed) {
-        val d = projectForward(route, p.lat, p.lon, last) ?: continue
+        val window = GHOST_MAX_SPEED_MPS * (p.time!! - lastT) / 1000.0 + GHOST_WINDOW_RESERVE_M
+        val d = projectForward(route, p.lat, p.lon, last, window) ?: continue
         last = d
+        lastT = p.time
         projTimes += p.time!!
         projDists += d
     }
@@ -229,19 +298,25 @@ internal fun pastRideCurve(route: IndoorRoute, points: List<TrackPoint>): GhostC
         }
         outT[i] = (times[i] - times[0]) / 1000.0 - offsetS
     }
-    return GhostCurve(outT, dists.toDoubleArray())
+    val d0 = dists[0]
+    val span = dists.last() - d0
+    val len = route.lengthM
+    val tolerance = max(GHOST_GOAL_TOLERANCE_M, GHOST_GOAL_TOLERANCE_SHARE * len)
+    // Kam die fruehere Fahrt (bis auf die Toleranz) ins Ziel, endet auch der Geist genau dort.
+    val scale = if (!route.isLoop && span > 0 && len - dists.last() <= tolerance) len / span else 1.0
+    return GhostCurve(outT, DoubleArray(dists.size) { ((dists[it] - d0) * scale).coerceAtMost(if (route.isLoop) Double.MAX_VALUE else len) })
 }
 
 /**
  * Die naechste Stelle der Strecke zu (lat, lon) im Fenster
- * `from .. from + GHOST_SEARCH_WINDOW_M` (Laufmeter, auf einer Runde
+ * `from .. from + windowM` (Laufmeter, auf einer Runde
  * fortlaufend), nie kleiner als [from]; `null`, wenn der Punkt weiter als
  * [GHOST_MAX_OFFSET_M] von der Strecke liegt.
  */
-private fun projectForward(route: IndoorRoute, lat: Double, lon: Double, from: Double): Double? {
+private fun projectForward(route: IndoorRoute, lat: Double, lon: Double, from: Double, windowM: Double): Double? {
     val pts = route.points
     val len = route.lengthM
-    val to = if (route.isLoop) from + GHOST_SEARCH_WINDOW_M else min(from + GHOST_SEARCH_WINDOW_M, len)
+    val to = if (route.isLoop) from + windowM else min(from + windowM, len)
     val mPerDegLat = Math.toRadians(1.0) * EARTH_RADIUS_M
     val mPerDegLon = mPerDegLat * cos(Math.toRadians(lat))
     var bestScore = Double.MAX_VALUE

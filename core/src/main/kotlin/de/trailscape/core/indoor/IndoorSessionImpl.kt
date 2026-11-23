@@ -36,6 +36,14 @@ internal const val SIM_MIN_INTERVAL_MS: Long = 1000
 /** Ab dieser Aenderung der gesendeten Steigung lohnt eine neue Vorgabe. */
 internal const val SIM_MIN_GRADE_CHANGE_PCT: Double = 0.2
 
+/**
+ * Ab dieser Aenderung des gesendeten Winds lohnt eine neue Vorgabe — eine
+ * Einheit der Kodierung (0,001 m/s) wuerde bei jeder Richtungsaenderung
+ * senden, obwohl 0,15 m/s Gegenwind bei 30 km/h nur rund 2 % der Luftkraft
+ * ausmachen.
+ */
+internal const val SIM_MIN_WIND_CHANGE_MPS: Double = 0.15
+
 /** Bereich von [IndoorSession.adjustErg] in Prozentpunkten der FTP. */
 internal const val ERG_ADJUST_LIMIT_PCT: Int = 30
 
@@ -59,12 +67,20 @@ private const val NP_WINDOW_S = 30
  *     bzw. keine Kadenz. Die
  *     Physik rechnet mit der momentanen Leistung, angezeigt wird das
  *     zeitgewichtete 3-s-Mittel.
- *  5. Phase: READY → RUNNING beim ersten Tritt (Leistung oder Kadenz > 0).
+ *  5. Phase: READY → RUNNING beim ersten Tritt (Leistung > 0).
  *     RUNNING → AUTO_PAUSED nach [AUTO_PAUSE_IDLE_MS] ohne Leistung unter
  *     1 km/h oder nach mehr als [AUTO_PAUSE_NOT_READY_MS] ohne bereiten
- *     Trainer; zurueck beim ersten Tritt mit bereitem Trainer. PAUSED nur ueber
- *     [pause]/[resume]. Physik, Aufzeichnung, ERG-Uhr und Geist laufen nur in
- *     RUNNING; `elapsedS` laeuft ab dem ersten Tritt immer (mit gekapptem dt).
+ *     Trainer; zurueck beim ersten Tritt (Leistung > 0) mit bereitem Trainer.
+ *     Einschlafen und Aufwecken haengen am selben Praedikat „Leistung": Die
+ *     Fahrt bewegt sich nur durch Leistung, eine Kadenz ohne Leistung
+ *     (Leerlauftreten, ein Kadenzwert, der die Leistung ueberdauert) wuerde
+ *     sonst zwischen RUNNING und AUTO_PAUSED flattern und je Wechsel 3 s
+ *     Scheinfahrzeit erzeugen. PAUSED nur ueber [pause]/[resume]; [resume]
+ *     kehrt bis zum ersten Tritt nach READY (vor dem ersten Tritt) bzw.
+ *     AUTO_PAUSED zurueck, erzeugt also keine Fahrzeit. Physik, Aufzeichnung,
+ *     ERG-Uhr und Geist laufen nur in RUNNING. `elapsedS` ist die echte Zeit
+ *     seit dem ersten Tritt, Pausen und Haenger eingeschlossen (`nowMs` minus
+ *     Beginn des Tritt-Schritts); gekappt wird nur die gefahrene Zeit.
  *  6. Am Ziel einer Strecke ohne Rundschluss: Phase FINISHED, einmal `Pause`
  *     (der Widerstand wird frei); `Stop` kommt erst ueber [finish].
  *  7. Vorgaben: SIM hoechstens einmal je Sekunde und nur bei merklicher
@@ -82,15 +98,27 @@ private const val NP_WINDOW_S = 30
  *    Ziel = round(FTP · (Anteil + adj/100)). Der Entwurf schrieb
  *    `Anteil · FTP · (1 + adj/100)` (Prozent der Zielleistung); der Vertrags-KDoc
  *    geht vor.
- *  * [resume] kehrt in die Phase vor der Pause zurueck (READY bleibt READY,
- *    sonst RUNNING — ohne Tritt folgt nach 3 s die Auto-Pause).
  *  * Ein Schritt, in dem der erste Tritt erkannt wird, zaehlt schon als
  *    Fahrzeit (die Leistung kam in diesem Abstand an).
- *  * Ueberquert ein Schritt eine volle Sekunde der Fahrzeit mehrfach (dt bis
- *    2 s), entsteht je Sekunde ein Punkt, Lage linear dazwischen.
- *  * Erreichen auf einer Strecke ohne Rundschluss Geist und Fahrer beide das
- *    Ziel, ist der Endabstand in Sekunden die Differenz der Ankunftszeiten
- *    (positiv = Geist war vorn); der Abstand in Metern ist dann 0.
+ *  * Aufzeichnung: ein Startpunkt beim ersten Tritt (ohne Leistung — es gibt
+ *    kein „seit dem vorigen Punkt"), dann einer je voller Sekunde Fahrzeit;
+ *    ueberquert ein Schritt mehrere (dt bis 2 s), Lage linear dazwischen. Am
+ *    Ziel und bei [finish] ein Schlusspunkt fuer die angefangene Sekunde (mit
+ *    deren mittlerer Leistung).
+ *  * `stats` des Records: Strecke, Hoehenmeter (auf und ab), Fahrzeit und
+ *    Schnitt kommen aus den Summen der Sitzung, nicht aus den Punkten — beim
+ *    Rundenwechsel springen Lage und Hoehe der Punkte vom Ziel zum Start (bis
+ *    [IndoorRoute.LOOP_CLOSE_M]), was `computeStats` als Weg und Hoehe zaehlen
+ *    wuerde. Dauer und Puls kommen aus den Punkten.
+ *  * Runde: `lap` = angefangene Runden (`ceil(distM / Laenge)`, mindestens 1),
+ *    gleich im Zustand und im Record.
+ *  * Endabstand zum Geist ([IndoorRideRecord.ghostFinalGapS]): Sind auf einer
+ *    Strecke ohne Rundschluss beide im Ziel, die Differenz der (im Schritt
+ *    interpolierten) Ankunftszeiten — der Abstand in Metern ist dann 0. Sonst,
+ *    wenn der Geist vorn ist und seine Zeit am Laufmeter des Fahrers kennt
+ *    (fruehere Fahrt), die Zeitdifferenz an dieser Stelle; sonst Abstand durch
+ *    das Tempo des Hinteren und, steht der (Pause vor [finish]), durch dessen
+ *    Durchschnittstempo.
  */
 internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : IndoorSession {
     private val route = config.route
@@ -104,8 +132,9 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     private var firstNowMs: Long? = null
     private var lastNowMs: Long = 0
     private var started = false
-    private var elapsedMs = 0L
+    private var firstStrokeNowMs = 0L
     private var runningMs = 0L
+    private var lastRunWallMs = 0L
 
     // Bewegung
     private var phase = IndoorPhase.READY
@@ -116,7 +145,8 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     private var notReadyMs = 0L
 
     // Gaenge und Befehle
-    private var gearIndex = startGearIndex(rider.realGearRatio)
+    private val gearTable = rider.gearTable
+    private var gearIndex = startGearIndex(rider.realGearRatio, gearTable)
     private val pendingShifts = ArrayList<ShifterEvent>()
     private val pendingCommands = ArrayList<TrainerCommand>()
     private var resendMode = false
@@ -129,8 +159,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     // Ende
     private var stopPending = false
     private var record: IndoorRideRecord? = null
-    private var ghostFinishMs: Long? = null
-    private var riderFinishMs: Long? = null
+    private var riderFinishS: Double? = null
 
     // Leistung
     private var powerSeen = false
@@ -151,6 +180,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     private var hrSum = 0.0
     private var hrMs = 0L
     private var ascentM = 0.0
+    private var descentM = 0.0
     private val npWindow = ArrayDeque<Double>()
     private var npWindowSum = 0.0
     private var np4Sum = 0.0
@@ -226,21 +256,20 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
         }
 
         // Phase
-        val pedaling = power > 0 || (cadence ?: 0.0) > 0
+        val pedaling = power > 0
         when (phase) {
             IndoorPhase.READY -> if (pedaling) {
                 phase = IndoorPhase.RUNNING
                 started = true
+                firstStrokeNowMs = nowMs - dtMs
                 idleMs = 0
+                writeStartPoint(nowMs - dtMs, cadence, input.hrBpm)
             }
             IndoorPhase.AUTO_PAUSED -> if (pedaling && input.trainerReady) {
                 phase = IndoorPhase.RUNNING
                 idleMs = 0
             }
             else -> Unit
-        }
-        if (started) {
-            elapsedMs += dtMs
         }
 
         var reachedGoal = false
@@ -257,6 +286,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
         }
 
         if (reachedGoal) {
+            flushPartialSecond(input.hrBpm)
             phase = IndoorPhase.FINISHED
             commands += TrainerCommand.Pause
         } else if (phase != IndoorPhase.PAUSED) {
@@ -288,9 +318,14 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
         speed = step.speedMps
         val goal = !route.isLoop && to >= lengthM
         if (goal) {
+            val share = if (step.distanceM > 0) ((lengthM - from) / step.distanceM).coerceIn(0.0, 1.0) else 1.0
+            riderFinishS = (runningMs + dtMs * share) / 1000.0
             to = lengthM
         }
-        ascentM += climbM(from, to)
+        val (up, down) = climbM(from, to)
+        ascentM += up
+        descentM += down
+        lastRunWallMs = wallMs(nowMs)
         recordSeconds(nowMs, dtMs, power, from, to, cadence, hr)
         dist = to
         runningMs += dtMs
@@ -306,26 +341,57 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
         if (mode == IndoorMode.ERG) {
             ergMs += dtMs
         }
-        ghost?.let { g ->
-            g.advance(runningMs, dtS)
-            if (!route.isLoop && ghostFinishMs == null && g.distM >= lengthM) {
-                ghostFinishMs = runningMs
-            }
-        }
-        if (goal) {
-            riderFinishMs = runningMs
-        }
+        ghost?.advance(runningMs, dtS)
         return goal
     }
 
-    /** Positive Hoehendifferenz der virtuellen Stelle von [from] nach [to] (auf einer Runde ueber das Ziel hinweg). */
-    private fun climbM(from: Double, to: Double): Double {
-        fun up(a: Double, b: Double) = max(0.0, b - a)
-        if (route.isLoop && lengthM > 0 && floor(to / lengthM) > floor(from / lengthM)) {
-            return up(route.sampleAt(from).eleM, route.points.last().eleM) +
-                up(route.points.first().eleM, route.sampleAt(to).eleM)
+    /**
+     * Hoehenmeter auf und ab der virtuellen Stelle von [from] nach [to] — auf
+     * einer Runde ueber das Ziel hinweg ohne den Versatz zwischen Ziel- und
+     * Starthoehe.
+     */
+    private fun climbM(from: Double, to: Double): Pair<Double, Double> {
+        var up = 0.0
+        var down = 0.0
+        fun add(a: Double, b: Double) {
+            if (b > a) up += b - a else down += a - b
         }
-        return up(route.sampleAt(from).eleM, route.sampleAt(to).eleM)
+        if (route.isLoop && lengthM > 0 && floor(to / lengthM) > floor(from / lengthM)) {
+            add(route.sampleAt(from).eleM, route.points.last().eleM)
+            add(route.points.first().eleM, route.sampleAt(to).eleM)
+        } else {
+            add(route.sampleAt(from).eleM, route.sampleAt(to).eleM)
+        }
+        return up to down
+    }
+
+    /** Wanduhrzeit zu [nowMs]: Start der Sitzung plus verstrichene Zeit seit dem ersten Schritt. */
+    private fun wallMs(nowMs: Long): Long = config.startedAtEpochMs + (nowMs - firstNowMs!!)
+
+    /** Der Startpunkt beim ersten Tritt (ohne Leistung: es gibt kein „seit dem vorigen Punkt"). */
+    private fun writeStartPoint(atNowMs: Long, cadence: Double?, hr: Int?) {
+        val s = route.sampleAt(dist)
+        points += TrackPoint(lat = s.lat, lon = s.lon, ele = s.eleM, time = wallMs(atNowMs), hr = hr, cad = cadence?.roundToInt())
+    }
+
+    /** Schlusspunkt fuer eine angefangene Sekunde (am Ziel, bei [finish]); Leistung = ihr Mittel. */
+    private fun flushPartialSecond(hr: Int?) {
+        if (secondMs <= 0 || !started) {
+            return
+        }
+        val s = route.sampleAt(dist)
+        val avgW = secondEnergyJ * 1000.0 / secondMs
+        points += TrackPoint(
+            lat = s.lat,
+            lon = s.lon,
+            ele = s.eleM,
+            time = lastRunWallMs,
+            hr = hr,
+            power = if (powerSeen) avgW.roundToInt() else null,
+            cad = lastCadence,
+        )
+        secondMs = 0
+        secondEnergyJ = 0.0
     }
 
     /** Ein Punkt je voller Sekunde Fahrzeit; Leistung als Mittel ueber genau diese Sekunde. */
@@ -344,7 +410,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
                     lat = s.lat,
                     lon = s.lon,
                     ele = s.eleM,
-                    time = config.startedAtEpochMs + (nowMs - firstNowMs!!) - (dtMs - consumed),
+                    time = wallMs(nowMs) - (dtMs - consumed),
                     hr = hr,
                     power = if (powerSeen) avgW.roundToInt() else null,
                     cad = cadence?.roundToInt(),
@@ -414,7 +480,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
             crr = effectiveCrr(s.surface.kind, rider.profileCrr),
             cwKgPerM = aeroCoefficient(PhysicsRider.of(rider).cdaM2, s.eleM),
             headwindMps = headwindMps(config.wind, s.headingDeg),
-            gearRatio = gearState(gearIndex).ratio,
+            gearRatio = gearState(gearIndex, gearTable).ratio,
             rider = rider,
         )
     }
@@ -424,7 +490,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
         return abs(a.gradePct - b.gradePct) >= SIM_MIN_GRADE_CHANGE_PCT - eps ||
             abs(a.crr - b.crr) > 0.0001 + eps ||
             abs(a.cwKgPerM - b.cwKgPerM) > 0.01 + eps ||
-            abs(a.windMps - b.windMps) > 0.001 + eps
+            abs(a.windMps - b.windMps) >= SIM_MIN_WIND_CHANGE_MPS - eps
     }
 
     private fun targetW(step: ErgStep): Int {
@@ -455,10 +521,33 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
     private fun ghostNow(): GhostState? {
         val g = ghost ?: return null
         val gs = ghostState(g, dist, speed)
-        val gf = ghostFinishMs
-        val rf = riderFinishMs
-        return if (gf != null && rf != null) gs.copy(gapS = (rf - gf) / 1000.0) else gs
+        val gf = g.arrivalS
+        val rf = riderFinishS
+        return if (gf != null && rf != null) gs.copy(gapS = rf - gf) else gs
     }
+
+    /** Endabstand in Sekunden fuer den Record (Regeln im Klassen-KDoc). */
+    private fun finalGhostGapS(): Double? {
+        val g = ghost ?: return null
+        val gs = ghostNow()!!
+        if (g.arrivalS != null && riderFinishS != null) {
+            return gs.gapS
+        }
+        val runningS = runningMs / 1000.0
+        if (gs.gapM >= 0) {
+            g.passedAtS(dist)?.let { return runningS - it }
+            gs.gapS?.let { return it }
+            val avg = if (runningS > 0) dist / runningS else 0.0
+            return if (avg >= GHOST_MIN_GAP_SPEED_MPS) gs.gapM / avg else null
+        }
+        gs.gapS?.let { return it }
+        val avg = if (runningS > 0) g.distM / runningS else 0.0
+        return if (avg >= GHOST_MIN_GAP_SPEED_MPS) gs.gapM / avg else null
+    }
+
+    /** Angefangene Runden, mindestens 1; ohne Rundschluss immer 1. */
+    private fun lapOf(d: Double): Int =
+        if (route.isLoop && lengthM > 0) max(1, ceil(d / lengthM - 1e-9).toInt()) else 1
 
     private fun totals(): IndoorTotals {
         val runningS = runningMs / 1000.0
@@ -476,12 +565,12 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
 
     private fun buildState(nowMs: Long): IndoorSessionState {
         val s = route.sampleAt(dist)
-        val lap = if (route.isLoop && lengthM > 0) floor(dist / lengthM).toInt() + 1 else 1
+        val lap = lapOf(dist)
         return IndoorSessionState(
             phase = phase,
             mode = mode,
             nowMs = nowMs,
-            elapsedS = (elapsedMs / 1000).toInt(),
+            elapsedS = if (started) ((lastNowMs - firstStrokeNowMs) / 1000).toInt() else 0,
             distM = dist,
             routeDistM = s.distM,
             lap = lap,
@@ -493,7 +582,7 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
             surface = s.surface.kind,
             crr = effectiveCrr(s.surface.kind, rider.profileCrr),
             headwindMps = headwindMps(config.wind, s.headingDeg),
-            gear = gearState(gearIndex),
+            gear = gearState(gearIndex, gearTable),
             ghost = ghostNow(),
             erg = ergState(),
             totals = totals(),
@@ -512,10 +601,12 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
 
     override fun pause() {
         if (phase == IndoorPhase.READY || phase == IndoorPhase.RUNNING || phase == IndoorPhase.AUTO_PAUSED) {
-            pausedFrom = if (phase == IndoorPhase.READY) IndoorPhase.READY else IndoorPhase.RUNNING
+            pausedFrom = if (started) IndoorPhase.AUTO_PAUSED else IndoorPhase.READY
             phase = IndoorPhase.PAUSED
             speed = 0.0
+            idleMs = 0
             pendingCommands += TrainerCommand.Pause
+            state = state.copy(phase = phase, speedMps = 0.0, ghost = ghostNow())
         }
     }
 
@@ -525,20 +616,29 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
             idleMs = 0
             pendingCommands += TrainerCommand.Start
             resendMode = true
+            state = state.copy(phase = phase)
         }
     }
 
     override fun finish(): IndoorRideRecord {
         record?.let { return it }
+        flushPartialSecond(lastHr)
         phase = IndoorPhase.FINISHED
         stopPending = true
         state = state.copy(phase = IndoorPhase.FINISHED)
         val hrs = points.mapNotNull { it.hr }
+        val totals = state.totals
+        val km = totals.distanceM / 1000.0
         val stats = computeStats(points).copy(
+            distanceKm = km,
+            ascentM = totals.ascentM,
+            descentM = descentM,
+            movingTimeS = if (started) totals.movingS else null,
+            avgSpeedKmh = if (totals.movingS > 0) km / (totals.movingS / 3600.0) else null,
             avgHrBpm = if (hrs.isEmpty()) null else (hrs.sum().toDouble() / hrs.size).roundToInt(),
             maxHrBpm = hrs.maxOrNull(),
         )
-        val laps = if (route.isLoop && lengthM > 0) max(1, ceil(dist / lengthM - 1e-9).toInt()) else 1
+        val laps = lapOf(dist)
         val r = IndoorRideRecord(
             startedAtEpochMs = config.startedAtEpochMs,
             routeId = route.id,
@@ -546,9 +646,9 @@ internal class IndoorSessionImpl(private val config: IndoorSessionConfig) : Indo
             mode = mode,
             points = points.toList(),
             stats = stats,
-            totals = state.totals,
+            totals = totals,
             laps = laps,
-            ghostFinalGapS = state.ghost?.gapS,
+            ghostFinalGapS = finalGhostGapS(),
         )
         record = r
         return r

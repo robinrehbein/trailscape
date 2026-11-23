@@ -43,6 +43,57 @@ class VirtualGearsTest {
     }
 
     @Test
+    fun `Tabelle wie am Rad - GRX 48-31 mit 11-34`() {
+        val r = VirtualGearTable.BIKE_GRX_2X12.ratios
+        assertEquals(24, r.size)
+        assertEquals(r.sorted(), r)
+        assertEquals(31.0 / 34, r.first(), 1e-12)
+        assertEquals(48.0 / 11, r.last(), 1e-12)
+        val all = listOf(48, 31).flatMap { a -> listOf(11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34).map { a.toDouble() / it } }
+        assertEquals(all.sorted(), r)
+        // Doppelungen wie am Rad: 31/11 und 48/17 liegen dicht beieinander und bleiben beide.
+        val i = r.indexOfFirst { abs(it - 31.0 / 11) < 1e-12 }
+        assertEquals(48.0 / 17, r[i + 1], 1e-12)
+        // Startgang: 48/14 genau (Gang 21); in der gleichmaessigen Tabelle Gang 19.
+        assertEquals(21, startGearIndex(REAL_GEAR_RATIO_GRX_BIG, VirtualGearTable.BIKE_GRX_2X12))
+        assertEquals(48.0 / 14, gearState(21, VirtualGearTable.BIKE_GRX_2X12).ratio, 1e-12)
+        assertEquals(19, startGearIndex(REAL_GEAR_RATIO_GRX_BIG))
+        assertEquals(VirtualGearTable.EVEN.ratios, VIRTUAL_GEAR_RATIOS)
+        assertEquals(GearState(1, 24, 31.0 / 34), gearState(-3, VirtualGearTable.BIKE_GRX_2X12))
+        // Auf dem kleinen Blatt 31/14 startet man in Gang 9 (31/14 = 2,214).
+        assertEquals(31.0 / 14, gearState(startGearIndex(REAL_GEAR_RATIO_GRX_SMALL, VirtualGearTable.BIKE_GRX_2X12), VirtualGearTable.BIKE_GRX_2X12).ratio, 1e-12)
+    }
+
+    @Test
+    fun `Drehmomentgleichheit auch mit der Radtabelle und 48-14 am Trainer`() {
+        val r = rider.copy(realGearRatio = REAL_GEAR_RATIO_GRX_BIG, gearTable = VirtualGearTable.BIKE_GRX_2X12)
+        for (gv in VirtualGearTable.BIKE_GRX_2X12.ratios) {
+            val sim = simulationCommand(6.0, 0.008, 0.23, 2.0, gv, r)
+            val vReal = 85.0 / 60 * REAL_GEAR_RATIO_GRX_BIG * 2 * Math.PI * wheelRadiusM
+            val vVirt = vReal * gv / REAL_GEAR_RATIO_GRX_BIG
+            val tv = virtualForce(6.0, 0.008, 0.23, 2.0, 1.0, vVirt) * gv * wheelRadiusM
+            val tr = trainerForce(sim, rider.totalMassKg, vReal) * REAL_GEAR_RATIO_GRX_BIG * wheelRadiusM
+            assertEquals(tv, tr, 1e-9 * max(1.0, abs(tv)))
+        }
+    }
+
+    @Test
+    fun `Klemmbereich der Ersatzsteigung ist einstellbar`() {
+        // Gang 24 an +12 %: 23,6 % — das kommt beim Fahren vor.
+        val g24 = simulationCommand(12.0, 0.008, 0.23, 0.0, 5.5, rider)
+        assertEquals(23.6, g24.gradePct, 0.1)
+        val kickr = rider.copy(minSimGradePct = -10.0, maxSimGradePct = 20.0)
+        assertEquals(20.0, simulationCommand(12.0, 0.008, 0.23, 0.0, 5.5, kickr).gradePct)
+        assertEquals(-10.0, simulationCommand(-15.0, 0.008, 0.23, 0.0, 3.0, kickr).gradePct)
+        assertEquals(5.0, simulationCommand(5.0, 0.0, 0.23, 0.0, real, kickr).gradePct, 0.01)
+        // Unbrauchbar → Vorgabe ±40.
+        for (bad in listOf(rider.copy(minSimGradePct = 10.0, maxSimGradePct = 5.0), rider.copy(maxSimGradePct = Double.NaN))) {
+            assertEquals(-40.0 to 40.0, simGradeRange(bad))
+        }
+        assertEquals(-SIM_ENCODABLE_GRADE_PCT to 100.0, simGradeRange(rider.copy(minSimGradePct = -1000.0, maxSimGradePct = 100.0)))
+    }
+
+    @Test
     fun `Schalten klemmt an den Enden`() {
         assertEquals(17, shiftedGearIndex(16, ShifterEvent.UP))
         assertEquals(15, shiftedGearIndex(16, ShifterEvent.DOWN))

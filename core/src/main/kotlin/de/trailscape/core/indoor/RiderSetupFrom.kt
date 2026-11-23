@@ -19,8 +19,15 @@ internal const val FALLBACK_RIDER_MASS_KG: Double = 75.0
  * Unbrauchbare Werte (nicht endlich, nicht positiv; Wirkungsgrad ueber 1)
  * werden durch die Vorgaben aus `TrainingLoad.kt` ersetzt — die Physik soll nie
  * mit NaN oder einer Masse von 0 rechnen. Die FTP wird bei kaputtem Gewicht aus
- * dem Ersatzgewicht neu abgeleitet. `difficulty`, `trainerScale` und
- * `realGearRatio` bleiben auf ihren Vorgaben; sie stellt die App ein.
+ * dem Ersatzgewicht neu abgeleitet.
+ *
+ * `realGearRatio` ist das grosse Kettenblatt des Gruenderrads auf dem Cog
+ * ([REAL_GEAR_RATIO_GRX_BIG], 48/14 — Shimano GRX 820 2×12, 48/31): Das Profil
+ * kennt das Rad nicht, und auf dem Cog faehrt man fast immer auf dem grossen
+ * Blatt. Die eingefrorene Vertragsvorgabe `RiderSetup.DEFAULT_REAL_GEAR_RATIO`
+ * (40/14) bleibt unberuehrt — sie gilt fuer jeden, der `RiderSetup` selbst baut.
+ * `difficulty`, `trainerScale`, `gearTable` und der Klemmbereich der
+ * Ersatzsteigung bleiben auf ihren Vorgaben; sie stellt die App ein.
  */
 internal fun riderSetupFromImpl(profile: TrainingProfile): RiderSetup {
     fun Double.orDefault(default: Double) = if (isFinite() && this > 0) this else default
@@ -36,5 +43,6 @@ internal fun riderSetupFromImpl(profile: TrainingProfile): RiderSetup {
         ftpW = ftp,
         driveEfficiency = profile.driveEfficiency.takeIf { it.isFinite() && it > 0 && it <= 1.0 }
             ?: defaultDriveEfficiency,
+        realGearRatio = REAL_GEAR_RATIO_GRX_BIG,
     )
 }

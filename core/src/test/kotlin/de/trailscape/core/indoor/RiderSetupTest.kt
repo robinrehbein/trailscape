@@ -14,7 +14,15 @@ class RiderSetupTest {
     fun `Werte kommen aus dem Profil`() {
         val p = TrainingProfile(ageYears = 40, weightKg = 82.0, setupMassKg = 11.0, cda = 0.32, crr = 0.006, driveEfficiency = 0.96, eftpOverrideW = 270.0)
         assertEquals(
-            RiderSetup(riderMassKg = 82.0, bikeMassKg = 11.0, cdaM2 = 0.32, profileCrr = 0.006, ftpW = 270.0, driveEfficiency = 0.96),
+            RiderSetup(
+                riderMassKg = 82.0,
+                bikeMassKg = 11.0,
+                cdaM2 = 0.32,
+                profileCrr = 0.006,
+                ftpW = 270.0,
+                driveEfficiency = 0.96,
+                realGearRatio = 48.0 / 14.0, // GRX 48er-Blatt auf dem 14er-Cog
+            ),
             riderSetupFromImpl(p),
         )
         assertEquals(p.eftpW, riderSetupFromImpl(p).ftpW)
@@ -50,6 +58,9 @@ class RiderSetupTest {
         assertEquals(180.0, r.ftpW, 1e-9) // 2,4 W/kg × 75 kg
         assertEquals(1.0, r.difficulty)
         assertEquals(1.0, r.trainerScale)
-        assertEquals(RiderSetup.DEFAULT_REAL_GEAR_RATIO, r.realGearRatio)
+        assertEquals(REAL_GEAR_RATIO_GRX_BIG, r.realGearRatio)
+        assertEquals(VirtualGearTable.EVEN, r.gearTable)
+        assertEquals(-40.0, r.minSimGradePct)
+        assertEquals(40.0, r.maxSimGradePct)
     }
 }

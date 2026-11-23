@@ -348,20 +348,24 @@ class IndoorDemoRideTest {
         assertEquals(ceil(state.distM / route.lengthM).toInt(), rec.laps)
         assertNull(rec.ghostFinalGapS)
 
-        // ~1 Punkt je Sekunde Fahrzeit: genau die ganzen Sekunden der Fahrzeit.
-        assertEquals(rec.totals.movingS, rec.points.size)
+        // ~1 Punkt je Sekunde Fahrzeit: Startpunkt beim ersten Tritt, je ganze Sekunde einer und
+        // bei finish() ein Schlusspunkt fuer die angefangene Sekunde (falls es eine gibt).
+        assertTrue(rec.points.size in rec.totals.movingS + 1..rec.totals.movingS + 2, "${rec.points.size}")
         assertTrue(rec.points.size > 600)
         // Zeitstempel: Wanduhr ab startedAtEpochMs, streng monoton; Auto-Pause zeigt sich als Luecke.
         val times = rec.points.map { assertNotNull(it.time) }
         assertTrue(times.first() > startedAt)
         assertTrue(times.last() <= startedAt + (rig.now - 50_100L), "nicht nach dem Ende der Schleife")
-        val gaps = times.zipWithNext { a, b -> b - a }
+        // Der Schlusspunkt (angefangene Sekunde) darf naeher am vorigen liegen.
+        val gaps = times.zipWithNext { a, b -> b - a }.dropLast(1)
         assertTrue(gaps.all { it >= 1000 }, "Punkte frueher als im Sekundentakt")
         assertTrue(gaps.max() >= 20_000, "die Auto-Pause (>= 20 s) muss als Luecke in der Wanduhr stehen: ${gaps.max()}")
         assertEquals(gaps.count { it == 1000L }, gaps.count { it < 3000 }, "Fahren ist exakt im Sekundentakt")
         // Leistung und Kadenz an jedem Punkt; waehrend des Fahrens genau die vom Trainer.
-        assertTrue(rec.points.all { it.power != null && it.cad != null })
-        val pedaling = rec.points.filter { it.power!! > 0 }
+        // Der Startpunkt hat keine Leistung (kein „seit dem vorigen Punkt"), sonst jeder.
+        assertNull(rec.points.first().power)
+        assertTrue(rec.points.drop(1).all { it.power != null } && rec.points.all { it.cad != null })
+        val pedaling = rec.points.drop(1).filter { it.power!! > 0 }
         assertTrue(pedaling.size > 600)
         assertTrue(pedaling.count { it.power == 200 } >= pedaling.size * 9 / 10, "Leistung ~200 W")
         assertTrue(pedaling.filter { it.power == 200 }.all { it.cad == 85 })
@@ -370,12 +374,12 @@ class IndoorDemoRideTest {
         assertTrue(rec.totals.avgPowerW!! in 100.0..200.5)
         assertEquals(85.0, rec.totals.avgCadenceRpm!!, 1e-6) // Kadenz nur beim Treten gemittelt
 
-        // Strecke aus den Punkten (computeStats) ~ Summe der Sitzung. Toleranz 20 m: Die Punkte
-        // beginnen erst nach der ersten vollen Sekunde (das Anfahrstueck fehlt, hoechstens ~4 m)
-        // und enden bis zu 1 s vor dem letzten Schritt (hoechstens ~12 m bei 12 m/s); die Sehnen
-        // der Runde (240 Stuetzpunkte, 12 m Kreisbogen) sind um weniger als einen Millimeter kuerzer.
+        // Strecke der Stats = Summe der Sitzung: Die Sitzung ueberschreibt Weg, Hoehe und Fahrzeit
+        // aus ihren Summen, weil der Rundenwechsel in den Punkten einen Sprung Ziel → Start zeigt.
         val statsM = rec.stats.distanceKm * 1000.0
-        assertEquals(rec.totals.distanceM, statsM, 20.0)
+        assertEquals(rec.totals.distanceM, statsM, 1e-6)
+        assertEquals(rec.totals.ascentM, rec.stats.ascentM, 1e-9)
+        assertEquals(rec.totals.movingS, rec.stats.movingTimeS)
         assertTrue(statsM <= rec.totals.distanceM + 1.0, "Punkte koennen nur weniger Weg zeigen")
         assertEquals(((times.last() - times.first()) / 1000.0).roundToInt(), rec.stats.durationS)
         assertEquals(140, rec.stats.avgHrBpm)
@@ -580,7 +584,8 @@ class IndoorDemoRideTest {
         // finish(): Aufzeichnung der einen Runde, danach genau einmal Stop.
         val rec = session.finish()
         assertEquals(1, rec.laps)
-        assertEquals(rec.totals.movingS, rec.points.size)
+        // Startpunkt, je ganze Sekunde einer, Schlusspunkt am Ziel fuer die angefangene Sekunde.
+        assertTrue(rec.points.size in rec.totals.movingS + 1..rec.totals.movingS + 2, "${rec.points.size}")
         assertEquals(route.lengthM, rec.totals.distanceM, 1e-9)
         // Punkte: ein letzter Punkt hoechstens ~1 s vor dem Ziel; Strecke wie in Fall 1 mit 25 m Toleranz.
         assertEquals(route.lengthM, rec.stats.distanceKm * 1000.0, 25.0)

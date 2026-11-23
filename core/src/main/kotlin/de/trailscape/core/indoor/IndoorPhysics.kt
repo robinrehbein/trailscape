@@ -9,7 +9,9 @@ import kotlin.math.atan
 import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * # Fahrphysik der virtuellen Fahrt
@@ -31,12 +33,36 @@ import kotlin.math.sin
  *    man faehrt (v + v_w < 0), schiebt;
  *  * m_eff = Gesamtmasse + [ROTATING_MASS_KG] fuer die Drehmasse der Laufraeder.
  *
- * Integriert wird mit dem expliziten Euler-Verfahren in Teilschritten von
- * hoechstens [MAX_SUBSTEP_S]. Die kuerzeste Zeitkonstante des Systems ist die
- * des Luftwiderstands, `m_eff / (2·cw·v)` — bei 90 kg, cw 0,23 kg/m und
- * 20 m/s rund 10 s, also 200-mal laenger als ein Teilschritt: Auch ein
- * Schritt von 2 s (die Kappung der Sitzung) bleibt stabil und weicht kaum von
- * zehn Schritten zu 0,2 s ab (im Test belegt).
+ * ## Antriebskraft beim Anfahren und am steilen Berg
+ *
+ * Die Antriebskraft ist `P·η / v` — bei v → 0 unendlich. Gekappt wird die
+ * **Kraft**, nicht das Tempo: `F = min(P·η / v, F_max)` mit
+ * `F_max = [MAX_DRIVE_ACCEL_MPS2] · m_eff`. (Eine fruehere Fassung nahm
+ * `P·η / max(v, 1 m/s)`; damit fiel jedes Gleichgewicht unter 1 m/s auf 0 —
+ * 87 kg mit 100 W an 15 % blieben stehen statt mit ≈ 0,73 m/s zu kriechen,
+ * gerade in der Erholung einer ERG-Einheit am Berg.) F_max liegt ueber jedem
+ * Widerstand, der auf einer Strecke vorkommen kann (25 % Steigung plus Crr
+ * 0,07 ≈ 3,05 m/s² · m), sodass jede Leistung > 0 an jeder Stelle vorwaerts
+ * kommt, und begrenzt den Antritt aus dem Stand auf etwa 4 m/s².
+ *
+ * ## Integration
+ *
+ * Teilschritte von hoechstens [MAX_SUBSTEP_S]. Der Antrieb wird **halbimplizit**
+ * genommen (mit dem Tempo am Ende des Teilschritts), die Widerstaende explizit:
+ *
+ * ```
+ * m_eff·(v' − v)/h = P·η/v' − F_res(v)   →   v' = (b + √(b² + 4·m_eff·h·P·η)) / (2·m_eff),
+ * b = m_eff·v − h·F_res(v)
+ * ```
+ *
+ * Bei kleinem v ist `P·η/v` sehr steif (Ableitung −P·η/v²); explizit wuerde es
+ * dort schwingen, halbimplizit ist es fuer jedes h stabil und trifft das
+ * Gleichgewicht `F_res·v = P·η` exakt. Ueberschreitet `P·η/v'` die Kappung,
+ * gilt `v' = v + h·(F_max − F_res)/m_eff`. Die uebrige kuerzeste
+ * Zeitkonstante ist die des Luftwiderstands, `m_eff / (2·cw·v)` — bei 90 kg,
+ * cw 0,23 kg/m und 20 m/s rund 10 s, 200-mal laenger als ein Teilschritt:
+ * Auch ein Schritt von 2 s (die Kappung der Sitzung) rechnet genau wie zwanzig
+ * zu 0,1 s (im Test belegt).
  */
 
 /**
@@ -55,12 +81,13 @@ internal const val ROTATING_MASS_KG: Double = 1.5
 internal const val MAX_SUBSTEP_S: Double = 0.05
 
 /**
- * Untergrenze des Tempos in der Antriebskraft `P·η / v` — sonst waere die
- * Kraft beim Anfahren unendlich. Unterhalb von 1 m/s gilt die Kraft, die die
- * Leistung bei 1 m/s ergaebe (ein kraeftiger Antritt aus dem Stand mit 300 W
- * beschleunigt damit mit rund 3 m/s² — plausibel).
+ * Kappung der Antriebskraft als Beschleunigung: `F_max = 4 m/s² · m_eff`
+ * (Begruendung im Dateikopf).
  */
-internal const val MIN_DRIVE_SPEED_MPS: Double = 1.0
+internal const val MAX_DRIVE_ACCEL_MPS2: Double = 4.0
+
+/** Untergrenze des Tempos im Nenner von `P·η / v` (nur gegen Division durch 0; die Kappung greift weit darueber). */
+private const val DRIVE_SPEED_EPS_MPS: Double = 1e-6
 
 /** Obergrenze fuer [steadySpeedMps] (Suchbereich der Bisektion), 360 km/h. */
 private const val MAX_SEARCH_SPEED_MPS: Double = 100.0
@@ -103,13 +130,16 @@ internal fun resistanceForceN(
     return massKg * gravity * (sin(theta) + crr * cos(theta)) + cwKgPerM * air * abs(air)
 }
 
-/** Antriebskraft in N am Rad fuer [powerW] beim Tempo [speedMps] (siehe [MIN_DRIVE_SPEED_MPS]). */
-internal fun driveForceN(powerW: Double, speedMps: Double, efficiency: Double): Double =
-    max(powerW, 0.0) * efficiency / max(speedMps, MIN_DRIVE_SPEED_MPS)
+/** Antriebskraft in N am Rad fuer [powerW] beim Tempo [speedMps], gekappt auf [maxForceN]. */
+internal fun driveForceN(powerW: Double, speedMps: Double, efficiency: Double, maxForceN: Double): Double =
+    min(max(powerW, 0.0) * efficiency / max(speedMps, DRIVE_SPEED_EPS_MPS), maxForceN)
 
 /** Die Werte des Fahrers, die die Physik braucht — einmal geprueft, damit nichts NaN wird. */
 internal data class PhysicsRider(val massKg: Double, val cdaM2: Double, val efficiency: Double) {
     val effectiveMassKg: Double get() = massKg + ROTATING_MASS_KG
+
+    /** Kappung der Antriebskraft in N. */
+    val maxDriveForceN: Double get() = MAX_DRIVE_ACCEL_MPS2 * effectiveMassKg
 
     companion object {
         fun of(rider: RiderSetup): PhysicsRider {
@@ -154,9 +184,17 @@ internal fun advancePhysics(
     val n = max(1, ceil(dtS / MAX_SUBSTEP_S - 1e-9).toInt())
     val h = dtS / n
     var dist = 0.0
+    val m = r.effectiveMassKg
+    val drive = p * r.efficiency
+    val fMax = r.maxDriveForceN
     repeat(n) {
-        val force = driveForceN(p, v, r.efficiency) - resistanceForceN(v, grade, c, cw, wind, r.massKg)
-        val next = max(0.0, v + force / r.effectiveMassKg * h)
+        val res = resistanceForceN(v, grade, c, cw, wind, r.massKg)
+        val b = m * v - h * res
+        var next = (b + sqrt(b * b + 4 * m * h * drive)) / (2 * m)
+        if (drive > 0 && drive > fMax * next) {
+            next = v + h * (fMax - res) / m
+        }
+        next = max(0.0, next)
         dist += (v + next) / 2 * h
         v = next
     }
@@ -165,7 +203,7 @@ internal fun advancePhysics(
 
 /**
  * Gleichgewichtstempo in m/s: das Tempo, bei dem die Antriebskraft (wie in
- * [advancePhysics], also mit [MIN_DRIVE_SPEED_MPS]) die Widerstaende genau
+ * [advancePhysics], also mit Kappung) die Widerstaende genau
  * aufwiegt. Bisektion — die Kraftbilanz faellt mit dem Tempo monoton.
  * 0, wenn man an der Stelle nicht einmal anrollt (bergauf ohne Leistung).
  */
@@ -180,7 +218,7 @@ internal fun steadySpeedMps(
     val r = PhysicsRider.of(rider)
     val cw = aeroCoefficient(r.cdaM2, eleM)
     fun balance(v: Double) =
-        driveForceN(powerW, v, r.efficiency) - resistanceForceN(v, gradePct, crr, cw, headwindMps, r.massKg)
+        driveForceN(powerW, v, r.efficiency, r.maxDriveForceN) - resistanceForceN(v, gradePct, crr, cw, headwindMps, r.massKg)
     if (balance(0.0) <= 0) {
         return 0.0
     }

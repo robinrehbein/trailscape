@@ -66,9 +66,15 @@ import kotlin.math.sin
  * Bei k = 1, Skala 1 und ungeklemmtem crr_s ergibt sich
  * s = 100·(sin θ + crr·cos θ − crr) ≈ Steigung — genau die Strecke.
  *
- * Grenzen: Die Klemmung der Kodierungsbereiche (Steigung ±40 %, cw 0..2,54,
- * crr 0..0,0254, Wind ±32,767 m/s) bricht die Gleichheit erst in Bereichen,
- * die beim Fahren nicht vorkommen (im Test belegt). Die Rechnung setzt voraus,
+ * Grenzen: Jede Klemmung bricht die Gleichheit. Die Ersatzsteigung wird auf
+ * `RiderSetup.minSimGradePct..maxSimGradePct` geklemmt (Vorgabe −40..+40 %);
+ * das kommt **beim Fahren vor** — Gang 24 (k ≈ 1,93 bei 40/14) an +12 % ergibt
+ * schon 23,6 %, an +25 % weit ueber 40 %. Die Trainer klemmen ohnehin selbst
+ * (KICKR etwa −10..+20 %), deshalb ist der Bereich einstellbar: Wer ihn auf den
+ * Bereich seines Trainers setzt, weiss, ab wo der Gang nicht mehr schwerer
+ * wird. cw (0..2,54), crr (0..0,0254) und Wind (±32,767 m/s) sind die Grenzen
+ * der FTMS-Kodierung; sie greifen nur in Extremfaellen (im Test belegt). Die
+ * Rechnung setzt voraus,
  * dass das gemeldete Schwungradtempo dem Radaequivalent der echten
  * Uebersetzung entspricht — das ist die Konvention von FTMS (`speedKmh`) und
  * auf dem Geraet zu pruefen (docs/indoor/core.md).
@@ -81,7 +87,11 @@ internal const val MIN_VIRTUAL_RATIO: Double = 0.75
 internal const val MAX_VIRTUAL_RATIO: Double = 5.5
 
 /** Wertebereiche der FTMS-Kodierung von „Set Indoor Bike Simulation Parameters". */
+/** Vorgabe der Klemmung der Ersatzsteigung (`RiderSetup.minSimGradePct`/`maxSimGradePct`). */
 internal const val SIM_MAX_ABS_GRADE_PCT: Double = 40.0
+
+/** Obergrenze, die die FTMS-Kodierung (sint16 × 0,01 %) ueberhaupt fasst. */
+internal const val SIM_ENCODABLE_GRADE_PCT: Double = 327.67
 internal const val SIM_MAX_CRR: Double = 0.0254
 internal const val SIM_MAX_CW: Double = 2.54
 internal const val SIM_MAX_ABS_WIND_MPS: Double = 32.767
@@ -95,20 +105,64 @@ internal val VIRTUAL_GEAR_RATIOS: List<Double> = List(VIRTUAL_GEAR_COUNT) { i ->
     MIN_VIRTUAL_RATIO * (MAX_VIRTUAL_RATIO / MIN_VIRTUAL_RATIO).pow(i / (VIRTUAL_GEAR_COUNT - 1.0))
 }
 
+/**
+ * Echte Uebersetzungen des Gruenderrads (Shimano GRX 820 2×12, Kettenblaetter
+ * 48/31) auf dem 14er-Ritzel des Zwift Cog. Die eingefrorene Vorgabe
+ * [RiderSetup.DEFAULT_REAL_GEAR_RATIO] (40/14) bleibt; `riderSetupFrom` setzt
+ * das grosse Blatt.
+ */
+internal const val REAL_GEAR_RATIO_GRX_BIG: Double = 48.0 / 14.0
+internal const val REAL_GEAR_RATIO_GRX_SMALL: Double = 31.0 / 14.0
+
+/** Kettenblaetter und Kassette der Tabelle [VirtualGearTable.BIKE_GRX_2X12]. */
+internal val GRX_2X12_CHAINRINGS: List<Int> = listOf(48, 31)
+internal val GRX_2X12_CASSETTE: List<Int> = listOf(11, 12, 13, 14, 15, 17, 19, 21, 24, 27, 30, 34)
+
+/**
+ * Welche 24 Uebersetzungen die virtuellen Gaenge haben.
+ *
+ *  * [EVEN]: [VIRTUAL_GEAR_RATIOS], geometrisch gleichmaessig 0,75..5,5.
+ *  * [BIKE_GRX_2X12]: wie am Rad — 48/31 vorn × Kassette 11-12-13-14-15-17-19-
+ *    21-24-27-30-34, das sind genau 2 × 12 = 24 Uebersetzungen, nach Groesse
+ *    aufsteigend sortiert (Gang 1 = 31/34, Gang 24 = 48/11). Nahe Doppelungen
+ *    (31/11 = 2,818 und 48/17 = 2,824; 31/13 und 48/21) bleiben bewusst stehen:
+ *    Am echten Rad liegen diese Gaenge genauso dicht, und wer „sein" Rad
+ *    faehrt, soll beim Durchschalten dieselben Spruenge spueren. Die
+ *    Reihenfolge ueberspringt dabei den Umwerfer — ein Schalttaster kennt nur
+ *    schwerer und leichter.
+ */
+enum class VirtualGearTable {
+    EVEN,
+    BIKE_GRX_2X12,
+    ;
+
+    /** Die 24 Uebersetzungen, aufsteigend. */
+    val ratios: List<Double>
+        get() = when (this) {
+            EVEN -> VIRTUAL_GEAR_RATIOS
+            BIKE_GRX_2X12 -> GRX_2X12_RATIOS
+        }
+}
+
+private val GRX_2X12_RATIOS: List<Double> =
+    GRX_2X12_CHAINRINGS.flatMap { ring -> GRX_2X12_CASSETTE.map { ring.toDouble() / it } }.sorted()
+
 /** Gang [index] (1-basiert, geklemmt) als [GearState]. */
-internal fun gearState(index: Int): GearState {
+internal fun gearState(index: Int, table: VirtualGearTable = VirtualGearTable.EVEN): GearState {
     val i = index.coerceIn(1, VIRTUAL_GEAR_COUNT)
-    return GearState(i, VIRTUAL_GEAR_COUNT, VIRTUAL_GEAR_RATIOS[i - 1])
+    return GearState(i, VIRTUAL_GEAR_COUNT, table.ratios[i - 1])
 }
 
 /**
  * Startgang: der Gang, dessen Uebersetzung der echten am naechsten liegt
- * (im logarithmischen Mass, denn die Stufung ist geometrisch). Bei 40/14
- * ≈ 2,857 ist das Gang 16 (2,75); Gang 17 waere 3,0 (genauer 2,9992).
+ * (im logarithmischen Mass, denn die Stufung ist geometrisch). Gleichmaessige
+ * Tabelle: bei 40/14 ≈ 2,857 Gang 16 (2,75; Gang 17 waere 2,9992), bei 48/14
+ * ≈ 3,43 Gang 19 (3,57). Tabelle wie am Rad: bei 48/14 genau Gang 21 (48/14).
  */
-internal fun startGearIndex(realGearRatio: Double): Int {
+internal fun startGearIndex(realGearRatio: Double, table: VirtualGearTable = VirtualGearTable.EVEN): Int {
     val real = realGearRatio.takeIf { it.isFinite() && it > 0 } ?: RiderSetup.DEFAULT_REAL_GEAR_RATIO
-    return VIRTUAL_GEAR_RATIOS.indices.minBy { abs(ln(VIRTUAL_GEAR_RATIOS[it] / real)) } + 1
+    val ratios = table.ratios
+    return ratios.indices.minBy { abs(ln(ratios[it] / real)) } + 1
 }
 
 /** Ein Gang weiter, an den Enden geklemmt. */
@@ -143,13 +197,30 @@ internal fun simulationCommand(
     val cw = if (cwKgPerM.isFinite() && cwKgPerM > 0) cwKgPerM else 0.0
     val wind = if (headwindMps.isFinite()) headwindMps else 0.0
 
+    val (lo, hi) = simGradeRange(rider)
     val thetaD = atan(difficulty * grade / 100.0)
     val crrS = c.coerceIn(0.0, SIM_MAX_CRR)
     val gradeS = 100.0 * (k * scale * (sin(thetaD) + c * cos(thetaD)) - crrS)
     return TrainerCommand.SetSimulation(
         windMps = (wind / k).coerceIn(-SIM_MAX_ABS_WIND_MPS, SIM_MAX_ABS_WIND_MPS),
-        gradePct = gradeS.coerceIn(-SIM_MAX_ABS_GRADE_PCT, SIM_MAX_ABS_GRADE_PCT),
+        gradePct = gradeS.coerceIn(lo, hi),
         crr = crrS,
         cwKgPerM = (cw * k * k * k).coerceIn(0.0, SIM_MAX_CW),
     )
+}
+
+/**
+ * Klemmbereich der Ersatzsteigung aus [RiderSetup.minSimGradePct] und
+ * [RiderSetup.maxSimGradePct]; unbrauchbare Angaben (nicht endlich, min ≥ max)
+ * fallen auf ±[SIM_MAX_ABS_GRADE_PCT], alles innerhalb dessen, was die
+ * Kodierung fasst.
+ */
+internal fun simGradeRange(rider: RiderSetup): Pair<Double, Double> {
+    val lo = rider.minSimGradePct
+    val hi = rider.maxSimGradePct
+    if (!lo.isFinite() || !hi.isFinite() || lo >= hi) {
+        return -SIM_MAX_ABS_GRADE_PCT to SIM_MAX_ABS_GRADE_PCT
+    }
+    return lo.coerceIn(-SIM_ENCODABLE_GRADE_PCT, SIM_ENCODABLE_GRADE_PCT) to
+        hi.coerceIn(-SIM_ENCODABLE_GRADE_PCT, SIM_ENCODABLE_GRADE_PCT)
 }

@@ -1,6 +1,7 @@
 package de.trailscape.core.indoor
 
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.haversineM
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -46,6 +47,7 @@ class IndoorGhostTest {
             override val distM = 150.0
             override val speedMps = 9.0
             override fun advance(runningMs: Long, dtS: Double) = Unit
+            override val arrivalS: Double? = null
         }
         val s = ghostState(ahead, 100.0, 8.0)
         assertEquals(50.0, s.gapM)
@@ -115,6 +117,82 @@ class IndoorGhostTest {
         for (i in 5 until moving.size) moving[i] = moving[i].copy(time = moving[i].time!! + 40_000L)
         val mc = pastRideCurve(route, moving)!!
         assertEquals(50.0, mc.timesS.last(), 1e-9)
+    }
+
+    @Test
+    fun `Kurve beginnt bei 0 s und 0 m`() {
+        val pts = IndoorTestRoutes.pastRide(route, 100) { s -> 30.0 + 5.0 * s }
+        val c = pastRideCurve(route, pts)!!
+        assertEquals(0.0, c.timesS[0])
+        assertEquals(0.0, c.distsM[0], 1e-9)
+        assertEquals(500.0, c.distsM[100], 1e-6)
+    }
+
+    @Test
+    fun `endet die Kurve knapp vor dem Ziel, kommt der Geist trotzdem an`() {
+        val short = IndoorTestRoutes.straight(lengthM = 600.0)
+        val pts = IndoorTestRoutes.pastRide(short, 58) { s -> 10.0 * s } // bis 580 m
+        val c = pastRideCurve(short, pts)!!
+        assertEquals(600.0, c.distsM.last(), 1e-9)
+        val g = PastRideGhost(c, short)
+        g.advance(30_000L, 0.1)
+        assertNull(g.arrivalS)
+        g.advance(58_000L, 0.1)
+        assertEquals(58.0, g.arrivalS!!, 1e-9)
+        assertEquals(600.0, g.distM)
+        assertEquals(0.0, g.speedMps)
+        assertEquals(29.0, g.passedAtS(300.0)!!, 1e-9)
+        // Weiter als die Toleranz vor dem Ziel: keine Ankunft, keine Streckung.
+        val far = IndoorTestRoutes.pastRide(short, 40) { s -> 10.0 * s } // bis 400 m
+        val fc = pastRideCurve(short, far)!!
+        assertEquals(400.0, fc.distsM.last(), 1e-6)
+        val fg = PastRideGhost(fc, short)
+        fg.advance(100_000L, 0.1)
+        assertNull(fg.arrivalS)
+        assertNull(fg.passedAtS(500.0))
+    }
+
+    @Test
+    fun `konstante Leistung - Ankunft im Schritt interpoliert`() {
+        val short = IndoorTestRoutes.straight(lengthM = 300.0)
+        val g = ConstantPowerGhost(short, rider, IndoorWind.CALM, 300.0)
+        var t = 0L
+        var prev = 0.0
+        while (g.arrivalS == null) {
+            prev = g.distM
+            t += 2000
+            g.advance(t, 2.0)
+        }
+        val arrival = g.arrivalS!!
+        assertTrue(arrival > (t - 2000) / 1000.0 && arrival <= t / 1000.0, "$arrival")
+        assertTrue(prev < 300.0)
+    }
+
+    @Test
+    fun `Projektion springt in Serpentinen nicht auf den Nachbarast`() {
+        // Haarnadel: 500 m nach Norden, 30 m nach Osten, 500 m zurueck nach Sueden.
+        val pts = ArrayList<IndoorRoutePoint>()
+        var d = 0.0
+        fun add(lat: Double, lon: Double) {
+            if (pts.isNotEmpty()) {
+                val a = pts.last()
+                d += haversineM(TrackPoint(a.lat, a.lon), TrackPoint(lat, lon))
+            }
+            pts += IndoorRoutePoint(d, lat, lon, 0.0)
+        }
+        for (i in 0..50) IndoorTestRoutes.offset(10.0 * i, 0.0).let { add(it.first, it.second) }
+        val top = IndoorTestRoutes.offset(500.0, 0.0)
+        for (i in 1..3) IndoorTestRoutes.offset(10.0 * i, 90.0, top.first, top.second).let { add(it.first, it.second) }
+        val east = IndoorTestRoutes.offset(30.0, 90.0, top.first, top.second)
+        for (i in 1..50) IndoorTestRoutes.offset(10.0 * i, 180.0, east.first, east.second).let { add(it.first, it.second) }
+        val hairpin = IndoorRoute("rh", "", pts, listOf(SurfaceSection(0.0, d, SurfaceKind.UNKNOWN)), false, IndoorRouteSource.NONE)
+        val ride = IndoorTestRoutes.pastRide(hairpin, 100) { s -> 5.0 * s }.toMutableList()
+        // GPS-Ausreisser bei 450 m: 20 m nach Osten, also naeher am Rueckweg (10 m) als am Hinweg.
+        val (lat, lon) = IndoorTestRoutes.offset(20.0, 90.0, ride[90].lat, ride[90].lon)
+        ride[90] = ride[90].copy(lat = lat, lon = lon)
+        val c = pastRideCurve(hairpin, ride)!!
+        assertEquals(450.0, c.distsM[90], 1.0)
+        for (i in 1 until c.distsM.size) assertTrue(c.distsM[i] - c.distsM[i - 1] < 20.0, "Sprung bei $i")
     }
 
     @Test

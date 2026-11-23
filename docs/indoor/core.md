@@ -136,12 +136,29 @@ Geschaltet wird mit `ShifterEvent.UP/DOWN` durch die sortierte Liste.
   Schalten; ERG am Abschnittswechsel und nach `adjustErg`; `Pause` bei
   `pause()` und am Ziel einer offenen Strecke; `Stop` genau einmal im ersten
   Schritt nach `finish()`.
-- Aufzeichnung: ein Punkt je gefahrener Sekunde (virtuelle Lage, Wanduhrzeit,
-  Sekundenmittel der Leistung, Kadenz, Puls). Distanz und Höhenmeter der
-  `stats` kommen aus den Summen der Sitzung, damit der Sprung vom Ziel zum
-  Start einer Runde nicht mitzählt.
-- Geist „frühere Fahrt“: Punkte monoton auf die Strecke projiziert (Rückfall:
-  anteilig gestreckt), gespeicherte Pausen herausgenommen.
+- Erster Tritt und Aufwecken nur mit Leistung > 0: Kadenz allein bewegt die
+  Fahrt nicht und ließe die Auto-Pause flattern (je Wechsel 3 s Scheinfahrzeit).
+  `resume()` kehrt bis zum ersten Tritt nach `READY` bzw. `AUTO_PAUSED` zurück.
+- `elapsedS` ist die echte Zeit seit dem ersten Tritt (Pausen und Hänger
+  eingeschlossen); auf 2 s je Schritt gekappt wird nur die gefahrene Zeit.
+- Aufzeichnung: Startpunkt beim ersten Tritt (ohne Leistung), dann ein Punkt
+  je gefahrener Sekunde (virtuelle Lage, Wanduhrzeit, Sekundenmittel der
+  Leistung, Kadenz, Puls), am Ziel und bei `finish()` ein Schlusspunkt für die
+  angefangene Sekunde. Distanz, Höhenmeter (auf und ab), Fahrzeit und Schnitt
+  der `stats` kommen aus den Summen der Sitzung, damit der Sprung vom Ziel zum
+  Start einer Runde nicht mitzählt; Dauer und Puls aus den Punkten.
+- Runden: `lap` und `laps` = angefangene Runden (`ceil(distM / Länge)`).
+- SIM-Sparsamkeit: neue Vorgabe ab 0,2 Prozentpunkten Steigung, 0,15 m/s Wind
+  oder einer Kodierungseinheit bei Crr/cw.
+- Geist „frühere Fahrt“: Punkte monoton auf die Strecke projiziert, im Fenster
+  `25 m/s · Δt + 50 m` ab der letzten Stelle (gegen Sprünge auf den
+  Nachbarast einer Serpentine); Rückfall: anteilig gestreckt. Gespeicherte
+  Pausen herausgenommen, auf (0 s, 0 m) verankert, und endet die Fahrt bis
+  max(50 m, 2 %) vor dem Ziel, aufs Ziel gestreckt (sonst käme der Geist nie an).
+- Endabstand zum Geist: beide im Ziel → Differenz der im Schritt
+  interpolierten Ankunftszeiten; Geist vorn mit bekannter Kurve → Zeitdifferenz
+  an der Stelle des Fahrers; sonst Abstand durch das Tempo des Hinteren bzw.,
+  steht der vor `finish()`, durch dessen Durchschnittstempo.
 
 ### FTMS-Trainer (Abschnitt 5.2)
 
