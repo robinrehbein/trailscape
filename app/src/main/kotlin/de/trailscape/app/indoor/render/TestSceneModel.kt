@@ -103,11 +103,13 @@ object TestSceneModel {
             }
             val ri = RADIUS_M - ROAD_WIDTH_M / 2
             val ro = RADIUS_M + ROAD_WIDTH_M / 2
-            road.quad(ring(a0, ro, ROAD_LIFT_M), ring(a1, ro, ROAD_LIFT_M), ring(a1, ri, ROAD_LIFT_M), ring(a0, ri, ROAD_LIFT_M), normal)
+            // Gegen den Uhrzeigersinn von oben: innen a0 → innen a1 → aussen a1 → aussen a0.
+            road.quad(ring(a0, ri, ROAD_LIFT_M), ring(a1, ri, ROAD_LIFT_M), ring(a1, ro, ROAD_LIFT_M), ring(a0, ro, ROAD_LIFT_M), normal)
             if (k % 2 == 0) {
+                val lift = ROAD_LIFT_M + 0.005
                 line.quad(
-                    ring(a0, RADIUS_M + 0.06, ROAD_LIFT_M + 0.005), ring(a1, RADIUS_M + 0.06, ROAD_LIFT_M + 0.005),
-                    ring(a1, RADIUS_M - 0.06, ROAD_LIFT_M + 0.005), ring(a0, RADIUS_M - 0.06, ROAD_LIFT_M + 0.005), normal,
+                    ring(a0, RADIUS_M - 0.06, lift), ring(a1, RADIUS_M - 0.06, lift),
+                    ring(a1, RADIUS_M + 0.06, lift), ring(a0, RADIUS_M + 0.06, lift), normal,
                 )
             }
         }

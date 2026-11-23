@@ -74,9 +74,12 @@ class MotionSmoother {
     fun advance(nowMs: Long, dtS: Double) {
         val t = target ?: return
         val dt = dtS.coerceIn(0.0, MAX_FRAME_S)
-        val speed = if (paused) 0.0 else t.speedMps.coerceIn(0.0, MAX_SPEED_MPS)
-        val ahead = ((nowMs - targetTimeMs) / 1000.0).coerceIn(0.0, MAX_EXTRAPOLATION_S)
-        val goal = if (paused) t.distM else t.distM + speed * ahead
+        val reported = if (paused) 0.0 else t.speedMps.coerceIn(0.0, MAX_SPEED_MPS)
+        val ageS = (nowMs - targetTimeMs) / 1000.0
+        val ahead = ageS.coerceIn(0.0, MAX_EXTRAPOLATION_S)
+        val goal = t.distM + reported * ahead
+        // Kommt laenger nichts Neues (Laufzeit steht), nicht weiterrollen: am Ziel stehen bleiben.
+        val speed = if (ageS > MAX_EXTRAPOLATION_S) 0.0 else reported
 
         if (abs(goal - distM) > JUMP_M) {
             distM = goal
@@ -88,7 +91,7 @@ class MotionSmoother {
         }
         speedMps = speed
 
-        val cadence = if (paused) 0.0 else t.cadenceRpm.coerceIn(0.0, MAX_CADENCE_RPM)
+        val cadence = if (paused || ageS > MAX_EXTRAPOLATION_S) 0.0 else t.cadenceRpm.coerceIn(0.0, MAX_CADENCE_RPM)
         crankPhase = wrap01(crankPhase + cadence / 60.0 * dt)
         wheelPhase = wrap01(wheelPhase + speed / WorldModels.WHEEL_CIRCUMFERENCE_M * dt)
     }

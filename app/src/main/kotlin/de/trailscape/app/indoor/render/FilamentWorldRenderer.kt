@@ -60,6 +60,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
 
     private var listener: WorldRendererListener? = null
     private var settings: RenderSettings = RenderSettings.forQuality(IndoorQuality.MEDIUM)
+    private var settingsExplicit = false
     private var sky: SkySetting = SkySetting.DEFAULT
     private var cameraMode: CameraMode = CameraMode.CHASE
 
@@ -146,6 +147,11 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         }
         request = Request.World(worldDir, manifest)
         fallbackTrack = manifest.track
+        // Ohne ausdrueckliche Einstellungen gilt die Voreinstellung der Qualitaet, mit der die Welt gebaut ist.
+        if (!settingsExplicit) {
+            settings = RenderSettings.forQuality(manifest.quality)
+            core?.let { c -> runStage(RenderStage.SCENE) { applySettings(c); applyResolution() } }
+        }
         applyRequestIfPossible()
     }
 
@@ -179,6 +185,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     }
 
     override fun setSettings(settings: RenderSettings) = guardApi("setSettings") {
+        settingsExplicit = true
         val skyChanged = settings.sky != this.settings.sky
         this.settings = settings.copy(
             resolutionScale = settings.resolutionScale.coerceIn(0.5, 1.0),
