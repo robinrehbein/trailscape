@@ -25,7 +25,9 @@ private fun offen(was: String): Nothing =
  * Abschlussbericht, damit der Slice indoor-app ihn dort nachtraegt.
  */
 val aerialSources: List<AerialSource> = listOf(
-    // Geprueft am 23.11.2026 (Architekt): GetMap 1.3.0, EPSG:3857, image/jpeg → 200.
+    // Geprueft am 23.11.2026: GetCapabilities + GetMap 1.3.0, CRS=EPSG:4326 mit
+    // BBOX=minLat,minLon,maxLat,maxLon (Altenberger Dom mittig), JPEG Baseline, bis 5000 px,
+    // ausserhalb weisses Leerbild, Fehler als ServiceExceptionReport mit Status 200.
     AerialSource(
         id = "nw",
         label = "Nordrhein-Westfalen",
@@ -39,6 +41,53 @@ val aerialSources: List<AerialSource> = listOf(
         license = "dl-de/zero-2-0",
         licenseUrl = "https://www.govdata.de/dl-de/zero-2-0",
     ),
+    // Geprueft am 23.11.2026: GetCapabilities + GetMap 1.3.0, EPSG:4326 lat/lon (Frauenkirche
+    // Dresden mittig), Nachbarbilder nahtlos, JPEG Baseline, bis 4096 px, ausserhalb weiss.
+    // Nutzungsbedingungen: https://www.landesvermessung.sachsen.de/allgemeine-nutzungsbedingungen-8954.html
+    AerialSource(
+        id = "sn",
+        label = "Sachsen",
+        wmsUrl = "https://geodienste.sachsen.de/wms_geosn_dop-rgb/guest",
+        layer = "sn_dop_020",
+        minLat = 50.15,
+        minLon = 11.78,
+        maxLat = 51.73,
+        maxLon = 15.09,
+        attribution = "Luftbild: Quelle: GeoSN, dl-de/by-2-0",
+        license = "dl-de/by-2-0",
+        licenseUrl = "https://www.govdata.de/dl-de/by-2-0",
+    ),
+    // Geprueft am 23.11.2026: GetMap 1.3.0, EPSG:4326 lat/lon (Erfurter Altstadt), nahtlos,
+    // Baseline, bis 5000 px. Lizenz laut GetCapabilities (Fees): CC BY 4.0, Namensnennung „© GDI-Th".
+    AerialSource(
+        id = "th",
+        label = "Thüringen",
+        wmsUrl = "https://www.geoproxy.geoportal-th.de/geoproxy/services/DOP",
+        layer = "th_dop",
+        minLat = 50.14,
+        minLon = 9.79,
+        maxLat = 51.70,
+        maxLon = 12.89,
+        attribution = "Luftbild: © GDI-Th",
+        license = "CC BY 4.0",
+        licenseUrl = "https://creativecommons.org/licenses/by/4.0/deed.de",
+    ),
+    // Geprueft am 23.11.2026: GetMap 1.3.0, EPSG:4326 lat/lon (Schloss Sanssouci mittig), nahtlos,
+    // Baseline, bis 8000 px; die Ebene deckt Brandenburg und Berlin. Lizenz laut GetCapabilities
+    // (AccessConstraints): dl-de/by-2-0.
+    AerialSource(
+        id = "bb",
+        label = "Brandenburg und Berlin",
+        wmsUrl = "https://isk.geobasis-bb.de/mapproxy/dop20c/service/wms",
+        layer = "bebb_dop20c",
+        minLat = 51.26,
+        minLon = 11.15,
+        maxLat = 53.62,
+        maxLon = 15.01,
+        attribution = "Luftbild: © GeoBasis-DE/LGB, dl-de/by-2-0; © Geoportal Berlin, dl-de/by-2-0",
+        license = "dl-de/by-2-0",
+        licenseUrl = "https://www.govdata.de/dl-de/by-2-0",
+    ),
 )
 
 /**
@@ -51,7 +100,7 @@ fun createGeoPipeline(
     network: GeoFetcher,
     cacheDir: File,
     aerial: List<AerialSource> = aerialSources,
-): GeoFetcher = offen("createGeoPipeline")
+): GeoFetcher = geoPipeline(network, cacheDir, aerial)
 
 /** Der Weltbau. */
 fun createWorldBuilder(): WorldBuilder = offen("createWorldBuilder")
