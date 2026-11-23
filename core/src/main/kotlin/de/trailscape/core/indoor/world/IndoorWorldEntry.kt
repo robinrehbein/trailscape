@@ -103,4 +103,4 @@ fun createGeoPipeline(
 ): GeoFetcher = geoPipeline(network, cacheDir, aerial)
 
 /** Der Weltbau. */
-fun createWorldBuilder(): WorldBuilder = offen("createWorldBuilder")
+fun createWorldBuilder(): WorldBuilder = WorldBuilderImpl(SimpleWorldParts)
