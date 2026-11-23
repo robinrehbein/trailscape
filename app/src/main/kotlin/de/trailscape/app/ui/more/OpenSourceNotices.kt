@@ -186,4 +186,19 @@ val dataNotices: List<LicenseNotice> = listOf(
         license = UiText.Plain("Datenlizenz Deutschland Zero 2.0 (dl-de/zero-2-0)"),
         url = "https://www.govdata.de/dl-de/zero-2-0",
     ),
+    LicenseNotice(
+        name = UiText.Plain("GeoSN Sachsen (Digitale Orthophotos)"),
+        license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — Quelle: GeoSN"),
+        url = "https://www.govdata.de/dl-de/by-2-0",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("GDI-Th Thüringen (Digitale Orthophotos)"),
+        license = UiText.Plain("CC BY 4.0 — © GDI-Th"),
+        url = "https://creativecommons.org/licenses/by/4.0/deed.de",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("GeoBasis-DE/LGB und Geoportal Berlin (Digitale Orthophotos)"),
+        license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — © GeoBasis-DE/LGB; © Geoportal Berlin"),
+        url = "https://www.govdata.de/dl-de/by-2-0",
+    ),
 )

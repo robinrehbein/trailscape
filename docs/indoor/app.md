@@ -43,8 +43,8 @@ als Soll-Zustand des Prototyps.
   selbst weiter; eine Pause des Nutzers bleibt bestehen.
 - Ein Ausfall eines fremden Teils (Kern, Weltbau, Funk, Darstellung) ist ein
   erwarteter Fall: Er erscheint als verständliche Meldung (`IndoorNotice`), die
-  Fahrt läuft mit HUD und Höhenprofil weiter. Auf diesem Branch werfen die
-  Kern- und Welt-Einstiege bis zur Integration `NotImplementedError`.
+  Fahrt läuft mit HUD und Höhenprofil weiter. Seit der Integration sind alle
+  vier Einstiege echt; der Fall bleibt für Programm- und Treiberfehler.
 - Der Belagsabgleich über den vorhandenen Router darf scheitern; dann gilt die
   grobe Schätzung aus den Vektorkacheln.
 - Die Testwelt (`WorldBuilder.buildTestWorld`) braucht kein Netz.
@@ -230,9 +230,35 @@ steht jetzt in einer Karte wie die übrigen.
   Offen, falls gewünscht: `IndoorSession` könnte die Fähigkeiten des Trainers
   auch nach dem ersten Tritt übernehmen (heute nur über eine neue Sitzung vor
   dem Start, siehe Entscheidungen).
-- **indoor-world:** Weltbau, `isCancelled()` zügig abfragen (der Slice wartet
-  auf das Ende des abgelösten Baus), Weltverzeichnis und Manifest.
+- **indoor-world:** ~~Weltbau, `isCancelled()` zügig abfragen, Weltverzeichnis
+  und Manifest~~ — erledigt mit dem Merge (Abfrage alle 50 ms; eine laufende
+  Kachel wird noch fertig, deshalb zeigt der Ablauf „Wird abgebrochen …“).
 - **indoor-ble:** die Geräteliste im Schritt *Koppeln* (`devicesSection`) und die
   Diagnoseseite; Trainer- und Schalttaster-Namen für die Statuszeile.
-- **indoor-render:** `onFailure` bei jedem Ausfall; Flächen-Slot mit Kamera
-  `CameraMode` (Von hinten, Lenker, Von oben).
+- **indoor-render:** ~~`onFailure` bei jedem Ausfall; Flächen-Slot mit Kamera~~ —
+  erledigt mit dem Merge; ein Ausfall unter Robolectric (`NO_GRAPHICS`) ist im
+  Demo-Durchlauf getestet.
+
+## Integration mit Weltbau und Darstellung (23.11.2026)
+
+- `DefaultIndoorParts` ruft die echten Einstiege: `createWorldBuilder`,
+  `createGeoPipeline`, `createWorldRenderer`, `WorldSurface`,
+  `IndoorDiagnosticsScreen`; in keiner der vier Einstiegsdateien steht noch ein
+  Platzhalter.
+- `IndoorViewModelDemoFlowTest.demoDurchlaufMitEchterTestweltUndEchterDarstellung`:
+  echter Weltbau (Testwelt ohne Netz, GLB-Kacheln aller drei Stufen unter
+  `indoor/worlds/testwelt/`), die Sitzung fährt auf `worldRouteOf(manifest)`,
+  die echte Filament-Darstellung bekommt eine `SurfaceView`, meldet ohne
+  native Bibliothek `NO_GRAPHICS`, das HUD zeigt die Meldung, die Fahrt läuft
+  weiter und wird als Indoor-Tour mit Punkten in der Testwelt gespeichert.
+  Ein echtes 3D-Bild kann nur das Gerät zeigen.
+- „Abbrechen“ während „Welt laden“ zeigt sofort „Wird abgebrochen …“
+  (`IndoorWorldUi.Building.cancelling`, Knopf aus), bis der Weltbau seine
+  laufenden Kacheln fertig hat; danach der Voranschlag mit „Fortsetzen“
+  (Test `abbruchDesWeltbausIstSofortSichtbar`).
+- `PRIVACY.md` nennt alle sechs Hosts der Positivliste; `OpenSourceNotices`
+  die Luftbild-Lizenzen aller vier Länder.
+- `filament-utils-android` ist entfallen (die Darstellung braucht es nicht).
+- Offen: Tageszeit und Qualität der Darstellung sind nicht einstellbar
+  (`setSky`/`setSettings` werden nicht gerufen; es gilt `SkySetting.DEFAULT`
+  und die Qualität der Welt).

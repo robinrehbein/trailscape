@@ -1,0 +1,15 @@
+{
+  "name": "trailscape-indoor-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Betrachter und Screenshot-Werkzeug fuer Indoor-Welten (three.js, headless Chromium)",
+  "type": "module",
+  "scripts": {
+    "mock": "node mockworld.mjs",
+    "shots": "node shots.mjs",
+    "serve": "node shots.mjs --serve"
+  },
+  "dependencies": {
+    "three": "0.187.0"
+  }
+}

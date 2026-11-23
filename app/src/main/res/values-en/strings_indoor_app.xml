@@ -129,6 +129,7 @@
     <string name="indoor_app_world_building_count">%1$d of %2$d</string>
     <string name="indoor_app_world_building_hint">This can take a few minutes. You can cancel at any time; finished parts are kept for the next attempt.</string>
     <string name="indoor_app_world_cancel_action">Cancel</string>
+    <string name="indoor_app_world_cancelling">Cancelling…</string>
     <string name="indoor_app_world_ready_title">The world is ready</string>
     <string name="indoor_app_world_ready_body">The world for “%1$s” is stored on your device. You can ride it without a network.</string>
     <string name="indoor_app_world_ride_action">Start riding</string>

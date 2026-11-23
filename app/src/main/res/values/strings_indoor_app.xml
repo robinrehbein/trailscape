@@ -129,6 +129,7 @@
     <string name="indoor_app_world_building_count">%1$d von %2$d</string>
     <string name="indoor_app_world_building_hint">Das kann einige Minuten dauern. Du kannst jederzeit abbrechen; Fertiges bleibt für den nächsten Versuch liegen.</string>
     <string name="indoor_app_world_cancel_action">Abbrechen</string>
+    <string name="indoor_app_world_cancelling">Wird abgebrochen …</string>
     <string name="indoor_app_world_ready_title">Die Welt ist fertig</string>
     <string name="indoor_app_world_ready_body">Die Welt zu „%1$s“ liegt auf deinem Gerät. Du kannst sie ohne Netz befahren.</string>
     <string name="indoor_app_world_ride_action">Losfahren</string>

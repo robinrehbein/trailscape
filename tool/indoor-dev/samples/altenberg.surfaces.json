@@ -1,0 +1,216 @@
+{
+"source": "BROUTER_WAY_TAGS",
+"lengthM": 14200,
+"sections": [
+{
+"fromM": 0,
+"toM": 109,
+"kind": "UNKNOWN",
+"highway": "footway"
+},
+{
+"fromM": 109,
+"toM": 156,
+"kind": "GRAVEL",
+"highway": "service"
+},
+{
+"fromM": 156,
+"toM": 192,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 192,
+"toM": 242,
+"kind": "COBBLESTONE",
+"highway": "path"
+},
+{
+"fromM": 242,
+"toM": 299,
+"kind": "COBBLESTONE",
+"highway": "footway"
+},
+{
+"fromM": 299,
+"toM": 379,
+"kind": "COBBLESTONE",
+"highway": "living_street"
+},
+{
+"fromM": 379,
+"toM": 597,
+"kind": "COBBLESTONE",
+"highway": "unclassified"
+},
+{
+"fromM": 597,
+"toM": 652,
+"kind": "ASPHALT",
+"highway": "unclassified"
+},
+{
+"fromM": 652,
+"toM": 1549,
+"kind": "ASPHALT",
+"highway": "path"
+},
+{
+"fromM": 1549,
+"toM": 2200,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 2200,
+"toM": 2263,
+"kind": "GRAVEL",
+"highway": "service"
+},
+{
+"fromM": 2263,
+"toM": 3962,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 3962,
+"toM": 5225,
+"kind": "ASPHALT",
+"highway": "unclassified"
+},
+{
+"fromM": 5225,
+"toM": 5477,
+"kind": "ASPHALT",
+"highway": "residential"
+},
+{
+"fromM": 5477,
+"toM": 5595,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 5595,
+"toM": 6183,
+"kind": "ASPHALT",
+"highway": "residential"
+},
+{
+"fromM": 6183,
+"toM": 7026,
+"kind": "ASPHALT",
+"highway": "secondary"
+},
+{
+"fromM": 7026,
+"toM": 8926,
+"kind": "ASPHALT",
+"highway": "tertiary"
+},
+{
+"fromM": 8926,
+"toM": 9617,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 9617,
+"toM": 9883,
+"kind": "ASPHALT",
+"highway": "track"
+},
+{
+"fromM": 9883,
+"toM": 10002,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 10002,
+"toM": 10646,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 10646,
+"toM": 11394,
+"kind": "DIRT",
+"highway": "path"
+},
+{
+"fromM": 11394,
+"toM": 11422,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 11422,
+"toM": 11726,
+"kind": "GRAVEL",
+"highway": "path"
+},
+{
+"fromM": 11726,
+"toM": 11775,
+"kind": "GRAVEL",
+"highway": "track"
+},
+{
+"fromM": 11775,
+"toM": 12746,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 12746,
+"toM": 12996,
+"kind": "ASPHALT",
+"highway": "unclassified"
+},
+{
+"fromM": 12996,
+"toM": 13108,
+"kind": "ASPHALT",
+"highway": "secondary"
+},
+{
+"fromM": 13108,
+"toM": 13893,
+"kind": "ASPHALT",
+"highway": "path"
+},
+{
+"fromM": 13893,
+"toM": 13928,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 13928,
+"toM": 13993,
+"kind": "COBBLESTONE",
+"highway": "service"
+},
+{
+"fromM": 13993,
+"toM": 14044,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 14044,
+"toM": 14091,
+"kind": "GRAVEL",
+"highway": "service"
+},
+{
+"fromM": 14091,
+"toM": 14200,
+"kind": "UNKNOWN",
+"highway": "footway"
+}
+]
+}

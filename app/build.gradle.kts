@@ -337,12 +337,14 @@ dependencies {
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
 
     // Indoor-Training (docs/indoor.md): die 3D-Welt wird nativ mit Googles
-    // Filament gezeichnet (Apache-2.0) — keine WebView. Drei Artefakte in
-    // derselben Version: die Engine, `gltfio` (laedt die zur Laufzeit erzeugten
-    // GLB-Kacheln mit dem mitgelieferten UbershaderProvider; eigene
-    // .filamat-Materialien gibt es bewusst nicht, weil `matc` hier nicht
-    // baubar ist) und `filament-utils` (`Utils.init()`, Mathe-Typen,
-    // `UiHelper`-Beiwerk). 1.75.1 ist die neueste Version, die gegen
+    // Filament gezeichnet (Apache-2.0) — keine WebView. Zwei Artefakte in
+    // derselben Version: die Engine (samt `UiHelper`) und `gltfio` (laedt die
+    // zur Laufzeit erzeugten GLB-Kacheln mit dem mitgelieferten
+    // UbershaderProvider; eigene .filamat-Materialien gibt es bewusst nicht,
+    // weil `matc` hier nicht baubar ist; `Gltfio.init()` laedt auch die
+    // Engine). `filament-utils` braucht die Darstellung nicht und ist bei der
+    // Integration entfallen (je ABI rund 1,4 MB weniger, docs/indoor/render.md).
+    // 1.75.1 ist die neueste Version, die gegen
     // compileSdk 36 / AGP 9.0.1 baut: Ab 1.76.0 verlangen die AARs
     // compileSdk 37 (aar-metadata `minCompileSdk=37`; neueste Version auf
     // Maven Central ist 1.81.0, Stand 23.11.2026) — ein Anheben waere ein
@@ -355,7 +357,6 @@ dependencies {
     // wird, ist eine offene Entscheidung des Gruenders (docs/indoor.md §11).
     implementation("com.google.android.filament:filament-android:1.75.1")
     implementation("com.google.android.filament:gltfio-android:1.75.1")
-    implementation("com.google.android.filament:filament-utils-android:1.75.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
