@@ -8,4 +8,74 @@
     Gegenstueck in values-en/strings_indoor_render.xml — gleiche Schluessel, gleiche Reihenfolge.
 -->
 <resources>
+    <!-- WorldSurfaceView.kt: 2D-Ersatzansicht, wenn die 3D-Darstellung ausfällt -->
+    <string name="indoor_render_fallback_title">Keine 3D-Ansicht</string>
+    <string name="indoor_render_fallback_no_graphics">Dieses Gerät kann die 3D-Welt nicht zeichnen. Die Fahrt läuft mit dem Höhenprofil weiter.</string>
+    <string name="indoor_render_fallback_bad_world">Die Welt ist unvollständig oder beschädigt. Die Fahrt läuft mit dem Höhenprofil weiter.</string>
+    <string name="indoor_render_fallback_bad_assets">Das Fahrermodell lässt sich nicht laden. Die Fahrt läuft mit dem Höhenprofil weiter.</string>
+    <string name="indoor_render_fallback_memory">Der Grafikspeicher reicht nicht. Eine niedrigere Qualität kann helfen; die Fahrt läuft weiter.</string>
+    <string name="indoor_render_fallback_surface">Die Zeichenfläche ging verloren. Die Fahrt läuft mit dem Höhenprofil weiter.</string>
+    <string name="indoor_render_fallback_internal">Die 3D-Ansicht ist ausgefallen. Die Fahrt läuft mit dem Höhenprofil weiter.</string>
+    <string name="indoor_render_fallback_profile_description">Höhenprofil, du bist bei %1$s km</string>
+    <!-- DiagnosticsScreen.kt -->
+    <string name="indoor_render_diag_title">Indoor-Diagnose</string>
+    <string name="indoor_render_diag_back">Zurück</string>
+    <string name="indoor_render_diag_intro">Hier prüfst du die 3D-Darstellung auf diesem Gerät: Starte die Testszene, schalte einzelne Stufen ab und sieh dir die Bildrate an.</string>
+    <string name="indoor_render_diag_preview_empty">Starte die Testszene oder die Testwelt.</string>
+    <string name="indoor_render_diag_test_scene">Testszene</string>
+    <string name="indoor_render_diag_test_world">Testwelt</string>
+    <string name="indoor_render_diag_testworld_busy">Testwelt wird gebaut …</string>
+    <string name="indoor_render_diag_testworld_failed">Die Testwelt ließ sich nicht bauen (%1$s).</string>
+    <string name="indoor_render_diag_ride_start">Probefahrt</string>
+    <string name="indoor_render_diag_ride_stop">Anhalten</string>
+    <string name="indoor_render_diag_restart">Neu starten</string>
+    <string name="indoor_render_diag_status_idle">Noch nichts geladen.</string>
+    <string name="indoor_render_diag_status_loading">Lädt: %1$d von %2$d Kacheln.</string>
+    <string name="indoor_render_diag_status_ready">Bereit.</string>
+    <string name="indoor_render_diag_status_failed">Ausgefallen: %1$s</string>
+    <plurals name="indoor_render_diag_status_tile_failures">
+        <item quantity="one">Eine Kachel fehlt.</item>
+        <item quantity="other">%1$d Kacheln fehlen.</item>
+    </plurals>
+    <string name="indoor_render_diag_camera">Kamera</string>
+    <string name="indoor_render_diag_camera_chase">Von hinten</string>
+    <string name="indoor_render_diag_camera_handlebar">Lenker</string>
+    <string name="indoor_render_diag_camera_drone">Von oben</string>
+    <string name="indoor_render_diag_time">Tageszeit %1$s Uhr</string>
+    <string name="indoor_render_diag_stats">Messwerte</string>
+    <string name="indoor_render_diag_stat_fps">Bilder je Sekunde</string>
+    <string name="indoor_render_diag_stat_frame" formatted="false">Bildzeit (95 %)</string>
+    <string name="indoor_render_diag_stat_scale">Auflösung</string>
+    <string name="indoor_render_diag_stat_tiles">Kacheln geladen</string>
+    <string name="indoor_render_diag_stat_texture">Texturspeicher</string>
+    <string name="indoor_render_diag_stat_triangles">Dreiecke</string>
+    <string name="indoor_render_diag_device">Gerät und Grafik</string>
+    <string name="indoor_render_diag_dev_model">Gerät</string>
+    <string name="indoor_render_diag_dev_android">Android</string>
+    <string name="indoor_render_diag_dev_backend">Schnittstelle</string>
+    <string name="indoor_render_diag_dev_gl_vendor">Grafik-Hersteller</string>
+    <string name="indoor_render_diag_dev_gl_renderer">Grafikchip</string>
+    <string name="indoor_render_diag_dev_gl_version">OpenGL-ES-Version</string>
+    <string name="indoor_render_diag_dev_filament">Filament</string>
+    <string name="indoor_render_diag_unknown">unbekannt</string>
+    <string name="indoor_render_diag_presets">Voreinstellungen</string>
+    <string name="indoor_render_diag_preset_low">Niedrig</string>
+    <string name="indoor_render_diag_preset_medium">Mittel</string>
+    <string name="indoor_render_diag_preset_high">Hoch</string>
+    <string name="indoor_render_diag_preset_safe">Sicher</string>
+    <string name="indoor_render_diag_switches">Einzelne Stufen</string>
+    <string name="indoor_render_diag_switch_shadows">Schatten</string>
+    <string name="indoor_render_diag_switch_ao">Umgebungsverdeckung</string>
+    <string name="indoor_render_diag_switch_bloom">Überstrahlen</string>
+    <string name="indoor_render_diag_switch_fog">Dunst</string>
+    <string name="indoor_render_diag_switch_aa">Kantenglättung</string>
+    <string name="indoor_render_diag_switch_dynres">Dynamische Auflösung</string>
+    <string name="indoor_render_diag_switch_post">Nachbearbeitung</string>
+    <string name="indoor_render_diag_switch_sky">Himmelsverlauf</string>
+    <string name="indoor_render_diag_switch_trees">Bäume</string>
+    <string name="indoor_render_diag_switch_buildings">Gebäude</string>
+    <string name="indoor_render_diag_switch_props">Kleinteile</string>
+    <string name="indoor_render_diag_switch_fps30">Höchstens 30 Bilder je Sekunde</string>
+    <string name="indoor_render_diag_resolution">Auflösung: %1$d %%</string>
+    <string name="indoor_render_diag_failure_detail">Details für einen Fehlerbericht</string>
 </resources>

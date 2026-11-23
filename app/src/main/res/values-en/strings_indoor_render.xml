@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Texts of indoor training, slice indoor-render: 3D rendering and diagnostics screen (indoor/render/**).
+    Texts of indoor training, slice indoor-render: 3D rendering and diagnostics page (indoor/render/**).
     Created empty by the architect (docs/indoor.md, section 2.5); the slice fills it.
 
     Key prefix: indoor_render_
@@ -8,4 +8,74 @@
     Counterpart of values/strings_indoor_render.xml — same keys, same order.
 -->
 <resources>
+    <!-- WorldSurfaceView.kt: 2D fallback when 3D rendering fails -->
+    <string name="indoor_render_fallback_title">No 3D view</string>
+    <string name="indoor_render_fallback_no_graphics">This device can’t draw the 3D world. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_bad_world">The world is incomplete or damaged. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_bad_assets">The rider model can’t be loaded. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_memory">There isn’t enough graphics memory. A lower quality may help; your ride continues.</string>
+    <string name="indoor_render_fallback_surface">The drawing surface was lost. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_internal">The 3D view has stopped. Your ride continues with the elevation profile.</string>
+    <string name="indoor_render_fallback_profile_description">Elevation profile, you’re at %1$s km</string>
+    <!-- DiagnosticsScreen.kt -->
+    <string name="indoor_render_diag_title">Indoor diagnostics</string>
+    <string name="indoor_render_diag_back">Back</string>
+    <string name="indoor_render_diag_intro">Check 3D rendering on this device: start the test scene, switch individual stages off and watch the frame rate.</string>
+    <string name="indoor_render_diag_preview_empty">Start the test scene or the test world.</string>
+    <string name="indoor_render_diag_test_scene">Test scene</string>
+    <string name="indoor_render_diag_test_world">Test world</string>
+    <string name="indoor_render_diag_testworld_busy">Building test world …</string>
+    <string name="indoor_render_diag_testworld_failed">The test world couldn’t be built (%1$s).</string>
+    <string name="indoor_render_diag_ride_start">Test ride</string>
+    <string name="indoor_render_diag_ride_stop">Stop</string>
+    <string name="indoor_render_diag_restart">Restart</string>
+    <string name="indoor_render_diag_status_idle">Nothing loaded yet.</string>
+    <string name="indoor_render_diag_status_loading">Loading: %1$d of %2$d tiles.</string>
+    <string name="indoor_render_diag_status_ready">Ready.</string>
+    <string name="indoor_render_diag_status_failed">Stopped: %1$s</string>
+    <plurals name="indoor_render_diag_status_tile_failures">
+        <item quantity="one">One tile is missing.</item>
+        <item quantity="other">%1$d tiles missing.</item>
+    </plurals>
+    <string name="indoor_render_diag_camera">Camera</string>
+    <string name="indoor_render_diag_camera_chase">Behind</string>
+    <string name="indoor_render_diag_camera_handlebar">Handlebar</string>
+    <string name="indoor_render_diag_camera_drone">From above</string>
+    <string name="indoor_render_diag_time">Time of day %1$s</string>
+    <string name="indoor_render_diag_stats">Measurements</string>
+    <string name="indoor_render_diag_stat_fps">Frames per second</string>
+    <string name="indoor_render_diag_stat_frame" formatted="false">Frame time (95 %)</string>
+    <string name="indoor_render_diag_stat_scale">Resolution</string>
+    <string name="indoor_render_diag_stat_tiles">Tiles loaded</string>
+    <string name="indoor_render_diag_stat_texture">Texture memory</string>
+    <string name="indoor_render_diag_stat_triangles">Triangles</string>
+    <string name="indoor_render_diag_device">Device and graphics</string>
+    <string name="indoor_render_diag_dev_model">Device</string>
+    <string name="indoor_render_diag_dev_android">Android</string>
+    <string name="indoor_render_diag_dev_backend">Interface</string>
+    <string name="indoor_render_diag_dev_gl_vendor">Graphics vendor</string>
+    <string name="indoor_render_diag_dev_gl_renderer">Graphics chip</string>
+    <string name="indoor_render_diag_dev_gl_version">OpenGL ES version</string>
+    <string name="indoor_render_diag_dev_filament">Filament</string>
+    <string name="indoor_render_diag_unknown">unknown</string>
+    <string name="indoor_render_diag_presets">Presets</string>
+    <string name="indoor_render_diag_preset_low">Low</string>
+    <string name="indoor_render_diag_preset_medium">Medium</string>
+    <string name="indoor_render_diag_preset_high">High</string>
+    <string name="indoor_render_diag_preset_safe">Safe</string>
+    <string name="indoor_render_diag_switches">Individual stages</string>
+    <string name="indoor_render_diag_switch_shadows">Shadows</string>
+    <string name="indoor_render_diag_switch_ao">Ambient occlusion</string>
+    <string name="indoor_render_diag_switch_bloom">Bloom</string>
+    <string name="indoor_render_diag_switch_fog">Haze</string>
+    <string name="indoor_render_diag_switch_aa">Anti-aliasing</string>
+    <string name="indoor_render_diag_switch_dynres">Dynamic resolution</string>
+    <string name="indoor_render_diag_switch_post">Post-processing</string>
+    <string name="indoor_render_diag_switch_sky">Sky gradient</string>
+    <string name="indoor_render_diag_switch_trees">Trees</string>
+    <string name="indoor_render_diag_switch_buildings">Buildings</string>
+    <string name="indoor_render_diag_switch_props">Small details</string>
+    <string name="indoor_render_diag_switch_fps30">At most 30 frames per second</string>
+    <string name="indoor_render_diag_resolution">Resolution: %1$d %%</string>
+    <string name="indoor_render_diag_failure_detail">Details for a bug report</string>
 </resources>
