@@ -2,9 +2,15 @@ package de.trailscape.app.data
 
 import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
+import de.trailscape.app.BuildConfig
 import de.trailscape.app.health.HealthConnectGateway
 import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.localizedFor
+import de.trailscape.app.indoor.DefaultIndoorParts
+import de.trailscape.app.indoor.IndoorParts
+import de.trailscape.app.indoor.geo.BitmapRasterDecoder
+import de.trailscape.app.indoor.geo.OkHttpGeoFetcher
+import de.trailscape.app.indoor.world.WorldLibrary
 import de.trailscape.app.reminder.ReminderStore
 import de.trailscape.app.routing.RoutingServerSettings
 import de.trailscape.app.routing.SegmentDownloadWorker
@@ -55,7 +61,8 @@ import okhttp3.OkHttpClient
  * `AppServices.explorerTilesCacheStore`, `AppServices.routeSignatureCacheStore`,
  * `AppServices.appScope`, `AppServices.segmentInventory`,
  * `AppServices.segmentDownloader`, `AppServices.segmentSettings`,
- * `AppServices.routingServerSettings`, `AppServices.weatherHttpClient`.
+ * `AppServices.routingServerSettings`, `AppServices.weatherHttpClient`,
+ * `AppServices.indoorParts`, `AppServices.indoorWorldLibrary`.
  */
 object AppServices {
     private lateinit var appContext: Context
@@ -293,6 +300,53 @@ object AppServices {
             store = keyValueStore,
             installedRunNumber = { installedRunNumber },
             checkAllowed = { updateChecksAllowed },
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // Indoor (docs/indoor.md, Abschnitte 8.3, 8.4, 10.5)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Eigener OkHttp-Client fuer den rohen Geodaten-Abruf des Weltbaus.
+     *
+     * Warum nicht [httpClient]: Kacheln und Luftbilder sind Bytes, nicht Text,
+     * und der Abruf darf **keinen Weiterleitungen** folgen — eine Umleitung auf
+     * einen anderen Host waere ein Loch in der Positivliste
+     * (`isAllowedGeoUrl`). Timeouts wie der vorhandene Adapter (15 s je Phase).
+     */
+    val geoHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
+            .followRedirects(false)
+            .followSslRedirects(false)
+            .build()
+    }
+
+    /** Fertige und angefangene Welten: `<filesDir>/indoor/worlds` (vom Backup ausgenommen). */
+    val indoorWorldsDir: File by lazy { File(appContext.filesDir, "indoor/worlds") }
+
+    /** Zwischenspeicher der Geodaten: `<cacheDir>/indoor/geo` (legt die Huelle des Weltbaus an). */
+    val indoorGeoCacheDir: File by lazy { File(appContext.cacheDir, "indoor/geo") }
+
+    /** Die Welten auf dem Geraet (Weltverwaltung, Indoor-Ablauf). */
+    val indoorWorldLibrary: WorldLibrary by lazy { WorldLibrary(indoorWorldsDir, indoorGeoCacheDir) }
+
+    /**
+     * Die Teile der anderen Indoor-Slices hinter einer Schnittstelle (siehe
+     * [IndoorParts]). Der rohe Abruf ist [OkHttpGeoFetcher] mit
+     * `User-Agent: Trailscape/<versionName>` ohne Geraetekennung; die Huelle
+     * (Positivliste, Cache, Drosselung) legt `createGeoPipeline` darum, mit
+     * `cacheDir` als Wurzel — darunter entsteht `indoor/geo/…`.
+     */
+    val indoorParts: IndoorParts by lazy {
+        DefaultIndoorParts(
+            context = appContext,
+            geoCacheDir = appContext.cacheDir,
+            rawFetcher = OkHttpGeoFetcher(geoHttpClient, "Trailscape/${BuildConfig.VERSION_NAME}"),
+            decoder = BitmapRasterDecoder(),
         )
     }
 

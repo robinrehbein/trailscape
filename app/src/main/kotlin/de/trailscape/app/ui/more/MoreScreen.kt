@@ -55,6 +55,7 @@ import de.trailscape.app.strava.StravaConfig
 import de.trailscape.app.strava.StravaServices
 import de.trailscape.app.ui.AppViewModel
 import de.trailscape.app.ui.FileImportNoticeEffect
+import de.trailscape.app.ui.IndoorDestination
 import de.trailscape.app.ui.MoreSection
 import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
@@ -406,6 +407,24 @@ private fun SettingsList(
                         Color.Unspecified
                     },
                     onClick = { onOpen(SettingsPage.BACKUP) },
+                )
+            }
+        }
+        // Indoor (docs/indoor.md 10.1, 10.4): eigene Ziele im `NavHost`, keine
+        // Seiten dieses Bereichs — die Huelle oeffnet sie ueber
+        // [AppViewModel.requestIndoor].
+        item {
+            MoreGroup(label = stringResource(R.string.indoor_app_more_group)) {
+                SettingsNavRow(
+                    title = stringResource(R.string.indoor_app_worlds_title),
+                    status = stringResource(R.string.indoor_app_more_worlds_status),
+                    onClick = { appViewModel.requestIndoor(IndoorDestination.WORLDS) },
+                )
+                ListDivider()
+                SettingsNavRow(
+                    title = stringResource(R.string.indoor_app_more_diagnostics_title),
+                    status = stringResource(R.string.indoor_app_more_diagnostics_status),
+                    onClick = { appViewModel.requestIndoor(IndoorDestination.DIAGNOSTICS) },
                 )
             }
         }
