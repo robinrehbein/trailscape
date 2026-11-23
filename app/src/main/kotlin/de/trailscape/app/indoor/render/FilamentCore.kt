@@ -45,7 +45,8 @@ internal class FilamentCore {
     val worldRoot: Int
     private val materialProvider: UbershaderProvider
     val assetLoader: AssetLoader
-    val resourceLoader: ResourceLoader
+    var resourceLoader: ResourceLoader
+        private set
 
     private var indirectLight: IndirectLight? = null
     private var skybox: Skybox? = null
@@ -177,9 +178,10 @@ internal class FilamentCore {
             maxScale = 1.0f
         }
         applyFog(s.fog, fogDensity, fogColor, fogHeight)
+        val hz = runCatching { renderer.displayInfo.refreshRate }.getOrDefault(60f).takeIf { it > 1f } ?: 60f
         renderer.frameRateOptions = renderer.frameRateOptions.apply {
-            // 60 Hz-Anzeige: interval 2 = 30 Bilder je Sekunde (fuer die dynamische Aufloesung).
-            interval = if (s.maxFps <= 30) 2f else 1f
+            // In Einheiten der Anzeigerate: bei 60 Hz und 30 Bildern ist das 2 (fuer die dynamische Aufloesung).
+            interval = (hz / s.maxFps.toFloat()).coerceAtLeast(1f)
         }
     }
 
@@ -228,13 +230,24 @@ internal class FilamentCore {
             tex = buildSkyTexture(l)
             Skybox.Builder().environment(tex).showSun(true).build(engine)
         } else {
-            Skybox.Builder().color(l.horizon.r.toFloat(), l.horizon.g.toFloat(), l.horizon.b.toFloat(), 1f).build(engine)
+            // Die einfarbige Skybox wird (anders als Cubemap und Dunst) nicht mit der
+            // Staerke des Umgebungslichts multipliziert: selbst skalieren, damit Himmel und Dunst gleich hell sind.
+            val k = (l.ambientLux * exposure()).toFloat()
+            Skybox.Builder().color(l.horizon.r.toFloat() * k, l.horizon.g.toFloat() * k, l.horizon.b.toFloat() * k, 1f).build(engine)
         }
         scene.skybox = newSky
         skybox = newSky
         skyTexture = tex
         oldSky?.let { runCatching { engine.destroySkybox(it) } }
         oldTex?.let { runCatching { engine.destroyTexture(it) } }
+    }
+
+    /** Belichtung der Kamera: `1 / (1,2 · 2^EV100)` mit EV100 = log2(N² / t · 100 / ISO). */
+    private fun exposure(): Double {
+        val n = SkyModel.APERTURE.toDouble()
+        val t = SkyModel.SHUTTER_S.toDouble()
+        val ev100 = Math.log(n * n / t * 100.0 / SkyModel.ISO) / Math.log(2.0)
+        return 1.0 / (1.2 * Math.pow(2.0, ev100))
     }
 
     private fun buildSkyTexture(l: SkyLighting): Texture {
@@ -261,6 +274,25 @@ internal class FilamentCore {
             throw t
         }
         return tex
+    }
+
+    /**
+     * Bricht eine laufende asynchrone Ladung ab und ersetzt den `ResourceLoader`.
+     * Noetig, weil `StbProvider::cancelDecoding` abgebrochene Texturen nicht
+     * mitzaehlt: Nach einem Abbruch erreicht `asyncGetLoadProgress` nie
+     * wieder 1 (gltfio 1.75.1, StbProvider.cpp). Ein frischer Lader zaehlt neu.
+     */
+    fun resetResourceLoader() {
+        val old = resourceLoader
+        runCatching { old.asyncCancelLoad() }
+        runCatching { old.destroy() }
+        resourceLoader = ResourceLoader(engine)
+    }
+
+    /** Bildwiederholrate der Anzeige fuer Filaments Taktung (`FrameRateOptions.interval` zaehlt in deren Einheiten). */
+    fun setDisplayRefreshRate(hz: Float) {
+        if (!(hz > 1f)) return
+        renderer.displayInfo = renderer.displayInfo.apply { refreshRate = hz }
     }
 
     /** Setzt die Verschiebung des Weltwurzelknotens (schwebender Ursprung). */

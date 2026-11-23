@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,28 +58,33 @@ internal fun FilamentSurface(renderer: FilamentWorldRenderer, modifier: Modifier
         val lifecycle = lifecycleOwner.lifecycle
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> renderer.setSurfacePaused(false)
-                Lifecycle.Event.ON_PAUSE -> renderer.setSurfacePaused(true)
+                // START/STOP statt RESUME/PAUSE: im Mehrfenster-Modus oder unter einem
+                // Systemdialog ist die Fahrt noch sichtbar und soll weiterlaufen.
+                Lifecycle.Event.ON_START -> renderer.setSurfacePaused(false)
+                Lifecycle.Event.ON_STOP -> renderer.setSurfacePaused(true)
                 else -> Unit
             }
         }
-        renderer.setSurfacePaused(!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        renderer.setSurfacePaused(!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
         lifecycle.addObserver(observer)
         onDispose {
             lifecycle.removeObserver(observer)
         }
     }
 
-    AndroidView(
-        factory = { ctx ->
-            SurfaceView(ctx).also { view ->
-                // Liefert false bei Ausfall; dann zeigt die naechste Komposition die Ersatzansicht.
-                renderer.attach(view)
-            }
-        },
-        onRelease = { view -> renderer.detach(view) },
-        modifier = modifier,
-    )
+    // Neue Darstellung an derselben Stelle = neue SurfaceView (die Fabrik haengt genau eine an).
+    key(renderer) {
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).also { view ->
+                    // Liefert false bei Ausfall; dann zeigt die naechste Komposition die Ersatzansicht.
+                    renderer.attach(view)
+                }
+            },
+            onRelease = { view -> renderer.detach(view) },
+            modifier = modifier,
+        )
+    }
 }
 
 /**

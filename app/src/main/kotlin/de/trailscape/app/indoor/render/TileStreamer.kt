@@ -46,7 +46,7 @@ internal class TileStreamer(
     private sealed class Slot {
         data object Reading : Slot()
         class Read(val buffer: ByteBuffer) : Slot()
-        class Loading(val loaded: LoadedAsset, val buffer: ByteBuffer, val startedMs: Long) : Slot()
+        class Loading(val loaded: LoadedAsset, val startedMs: Long) : Slot()
         class Ready(val loaded: LoadedAsset) : Slot()
     }
 
@@ -115,7 +115,7 @@ internal class TileStreamer(
             loadingId = null
             visibilityDirty = true
         } else if (SystemClock.elapsedRealtime() - slot.startedMs > LOAD_TIMEOUT_MS) {
-            runCatching { core.resourceLoader.asyncCancelLoad() }
+            core.resetResourceLoader()
             slot.loaded.destroy()
             slots.remove(id)
             loadingId = null
@@ -151,16 +151,23 @@ internal class TileStreamer(
             false
         }
         if (!started) {
+            // asyncBeginLoad merkt sich das Asset schon vor dem Fehlschlag: Lader erneuern, bevor es verschwindet.
+            core.resetResourceLoader()
             loaded.destroy()
             slots.remove(next.id)
             fail(next.id, "asyncBeginLoad lehnte ab")
             return
         }
-        slots[next.id] = Slot.Loading(loaded, read.buffer, SystemClock.elapsedRealtime())
+        // createAsset hat die GLB kopiert; der Puffer darf jetzt frei werden.
+        slots[next.id] = Slot.Loading(loaded, SystemClock.elapsedRealtime())
         loadingId = next.id
     }
 
     private fun startReads(distM: Double) {
+        // Gelesene Puffer fuer Kacheln, die gerade nicht mehr gebraucht werden, verwerfen —
+        // sie wuerden sonst die Plaetze fuer neue Lesevorgaenge belegen.
+        val wantedIds = planner.wanted(distM).mapTo(HashSet()) { it.id }
+        slots.entries.removeAll { (id, s) -> s is Slot.Read && id !in wantedIds }
         var reading = slots.values.count { it is Slot.Reading }
         if (reading >= MAX_READS) return
         // Nicht zu weit vorauslesen: hoechstens zwei gelesene Puffer warten.
@@ -200,7 +207,7 @@ internal class TileStreamer(
             when (val s = slots[id]) {
                 is Slot.Ready -> s.loaded.destroy()
                 is Slot.Loading -> {
-                    runCatching { core.resourceLoader.asyncCancelLoad() }
+                    core.resetResourceLoader()
                     s.loaded.destroy()
                     if (loadingId == id) loadingId = null
                 }
@@ -237,7 +244,7 @@ internal class TileStreamer(
     /** Gibt alles frei (neue Welt, Ende). Danach verbraucht. */
     fun destroy() {
         alive = false
-        if (loadingId != null) runCatching { core.resourceLoader.asyncCancelLoad() }
+        if (loadingId != null) runCatching { core.resetResourceLoader() }
         loadingId = null
         for (s in slots.values) {
             when (s) {
