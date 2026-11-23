@@ -582,6 +582,8 @@ class IndoorViewModel(
             override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) {
                 if (token.stopRequested || token !== worldToken) return
                 _world.value = IndoorWorldUi.Building(phase, done, total, buildFraction(phase, done, total))
+                // „Abbrechen" kam genau dazwischen: den Hinweis nicht ueberschreiben.
+                if (token.stopRequested) markCancelling()
             }
 
             override fun isCancelled(): Boolean = token.stopRequested || token !== worldToken
@@ -605,7 +607,14 @@ class IndoorViewModel(
 
     /** Bricht einen laufenden Weltbau ab; fertige Kacheln bleiben liegen. */
     fun cancelWorldBuild() {
-        worldToken?.stopRequested = true
+        val token = worldToken ?: return
+        token.stopRequested = true
+        // Sofort sichtbar machen: Der Bau endet erst, wenn die laufenden Kacheln fertig sind.
+        markCancelling()
+    }
+
+    private fun markCancelling() {
+        _world.update { if (it is IndoorWorldUi.Building) it.copy(cancelling = true) else it }
     }
 
     /** „Erneut versuchen" nach einem Fehler. */

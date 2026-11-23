@@ -1,11 +1,15 @@
 package de.trailscape.app.ui.indoor
 
 import android.app.Application
+import android.os.Looper
+import android.view.SurfaceView
 import androidx.test.core.app.ApplicationProvider
 import de.trailscape.app.data.RideStorage
-import de.trailscape.app.indoor.IndoorParts
 import de.trailscape.app.indoor.IndoorPart
+import de.trailscape.app.indoor.IndoorParts
 import de.trailscape.app.indoor.IndoorRematchRouter
+import de.trailscape.app.indoor.render.FilamentWorldRenderer
+import de.trailscape.app.indoor.render.createWorldRenderer
 import de.trailscape.app.indoor.testing.FakeClock
 import de.trailscape.app.indoor.testing.FakeIndoorParts
 import de.trailscape.app.indoor.testing.FakeWorldBuilder
@@ -13,6 +17,7 @@ import de.trailscape.app.indoor.testing.FakeWorldRenderer
 import de.trailscape.app.indoor.testing.RealOrFakeIndoorParts
 import de.trailscape.app.indoor.testing.testSavedRide
 import de.trailscape.app.indoor.world.WorldLibrary
+import de.trailscape.app.indoor.worldRouteOf
 import de.trailscape.app.testing.MemoryKeyValueStore
 import de.trailscape.app.testing.TestLocales
 import de.trailscape.core.PlannedRoute
@@ -23,8 +28,11 @@ import de.trailscape.core.i18n.CoreTextsDe
 import de.trailscape.core.indoor.IndoorRouteSource
 import de.trailscape.core.indoor.world.RenderFailure
 import de.trailscape.core.indoor.world.WorldBuildFailed
+import de.trailscape.core.indoor.world.WorldManifest
+import de.trailscape.core.indoor.world.WorldRenderer
 import java.io.File
 import kotlin.io.path.createTempDirectory
+import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -40,6 +48,7 @@ import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -261,6 +270,89 @@ class IndoorViewModelDemoFlowTest {
         assertTrue(saved.indoor)
         assertTrue(saved.points.size >= 2)
         assertTrue(saved.stats.distanceKm > 0.0)
+    }
+
+    /**
+     * Abschluss der Integration (docs/indoor.md §12): der Demo-Durchlauf mit
+     * dem **echten** Weltbau (Testwelt ohne Netz, GLB-Kacheln auf der Platte),
+     * der Strecke aus dem Manifest (`worldRouteOf`) und der **echten**
+     * Darstellung. Unter Robolectric fehlt die native Bibliothek: Die
+     * Darstellung meldet `NO_GRAPHICS`, statt die App abstuerzen zu lassen,
+     * die Fahrt laeuft mit HUD weiter und endet als gespeicherte Indoor-Tour
+     * auf den Koordinaten der Testwelt.
+     */
+    @Test
+    fun demoDurchlaufMitEchterTestweltUndEchterDarstellung() {
+        val fake = FakeIndoorParts()
+        val real = RealOrFakeIndoorParts(fake)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val renderers = mutableListOf<WorldRenderer>()
+        val parts = object : IndoorParts by real {
+            override fun createRenderer(): WorldRenderer = createWorldRenderer(app).also { renderers += it }
+        }
+        val vm = viewModel(parts)
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        assertIs<IndoorWorldUi.Ready>(vm.world.value, "Testwelt: ${vm.world.value}")
+        assertTrue("createWorldBuilder" in real.realParts, "echter Weltbau: ${real.realParts}")
+
+        // Die echte Testwelt: Manifest und je Kachel eine GLB-Datei (die Attrappe schreibt keine Kacheln).
+        val dir = worlds.testWorldDir()
+        val manifest = WorldManifest.parse(File(dir, WorldManifest.FILE_NAME).readText(Charsets.UTF_8))
+        assertTrue(manifest.tiles.size >= 10, "Kacheln: ${manifest.tiles.size}")
+        assertEquals(setOf(0, 1, 2), manifest.tiles.map { it.level }.toSet(), "drei Detailstufen")
+        for (tile in manifest.tiles) {
+            val file = File(dir, tile.file)
+            assertTrue(file.isFile, "Kachel ${tile.id} fehlt: ${tile.file}")
+            val magic = file.inputStream().use { it.readNBytes(4) }
+            assertEquals("glTF", String(magic, Charsets.US_ASCII), "GLB-Kennung von ${tile.file}")
+        }
+
+        vm.startRide(withWorld = true)
+        assertNull(vm.ride.value?.startProblem, "Start: ${vm.ride.value?.startProblem}")
+        // Die Sitzung faehrt auf dem Streckenband des Manifests.
+        val expected = worldRouteOf(manifest, "Testwelt")
+        val driven = fake.sessionConfigs.first().route
+        assertEquals(expected.id, driven.id)
+        assertEquals(expected.name, driven.name)
+        assertEquals(expected.isLoop, driven.isLoop)
+        assertEquals(expected.source, driven.source)
+        assertEquals(expected.surfaces, driven.surfaces)
+        assertEquals(expected.points.size, driven.points.size)
+        // Gefahren wird mit dem Manifest, das der Bau zurueckgab; gelesen hier aus der Datei —
+        // gleich bis auf die Rundung der Zahlen im JSON, die Laufmeter genau.
+        for ((e, d) in expected.points.zip(driven.points)) {
+            assertEquals(e.distM, d.distM, 1e-9)
+            assertEquals(e.lat, d.lat, 1e-6)
+            assertEquals(e.lon, d.lon, 1e-6)
+            assertEquals(e.eleM, d.eleM, 0.01)
+        }
+        assertTrue(abs(driven.lengthM - manifest.track.lengthM) < 1.0)
+
+        // Die echte Darstellung bekommt eine Flaeche — und faellt ohne Grafik sauber aus.
+        val renderer = assertIs<FilamentWorldRenderer>(renderers.single())
+        assertEquals(renderer, vm.renderer.value)
+        assertFalse(renderer.attach(SurfaceView(app)), "ohne native Bibliothek keine Engine")
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(RenderFailure.NO_GRAPHICS, renderer.failure)
+        vm.rideFor(1)
+        val failed = assertIs<IndoorRenderUi.Failed>(vm.ride.value?.render)
+        assertEquals(RenderFailure.NO_GRAPHICS, failed.failure)
+
+        vm.rideFor(120)
+        val session = assertNotNull(vm.ride.value?.session)
+        assertTrue(session.distM > 100.0, "die Fahrt laeuft ohne 3D-Bild weiter, distM=${session.distM}")
+
+        val saved = vm.finishAndSave()
+        assertTrue(saved.indoor)
+        assertEquals("Indoor · Testwelt", saved.name)
+        assertTrue(saved.points.size >= 60, "ein Punkt je gefahrener Sekunde, hier ${saved.points.size}")
+        val o = manifest.origin
+        assertTrue(
+            saved.points.all { abs(it.lat - o.lat) < 0.05 && abs(it.lon - o.lon) < 0.05 },
+            "die Punkte liegen in der Testwelt um ${o.lat}, ${o.lon}",
+        )
     }
 
     /**
@@ -538,6 +630,58 @@ class IndoorViewModelDemoFlowTest {
             val route = parts.sessionConfigs.single().route
             val lat = route.points.first().lat
             assertTrue(kotlin.math.abs(lat - tourB.points.first().lat) < 0.01, "Strecke von B erwartet, lat=$lat")
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    /**
+     * „Abbrechen" waehrend „Welt laden": sofort sichtbar („Wird abgebrochen …",
+     * Knopf aus), auch wenn der Weltbau seine laufende Kachel noch zu Ende
+     * rechnet; danach der Voranschlag mit „Fortsetzen".
+     */
+    @Test
+    fun abbruchDesWeltbausIstSofortSichtbar() {
+        rideStorage.saveRide(testSavedRide(id = "a", name = "Tour A"))
+        val entered = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val delegate = FakeWorldBuilder()
+        val builder = object : de.trailscape.core.indoor.world.WorldBuilder by delegate {
+            override fun build(
+                plan: de.trailscape.core.indoor.world.WorldPlan,
+                deps: de.trailscape.core.indoor.world.WorldBuildDeps,
+                outDir: File,
+                listener: de.trailscape.core.indoor.world.WorldBuildListener,
+            ): de.trailscape.core.indoor.world.WorldManifest {
+                listener.onProgress(de.trailscape.core.indoor.world.WorldBuildPhase.MESHING, 3, 10)
+                entered.countDown()
+                // Die laufende Kachel wird noch fertig gerechnet, erst dann zaehlt der Abbruch.
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                listener.onProgress(de.trailscape.core.indoor.world.WorldBuildPhase.MESHING, 4, 10)
+                if (listener.isCancelled()) throw de.trailscape.core.indoor.world.WorldBuildCancelled()
+                return delegate.build(plan, deps, outDir, listener)
+            }
+        }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val vm = viewModel(FakeIndoorParts(worldBuilderFactory = { builder }), io = pool.asCoroutineDispatcher())
+            vm.setDemoTrainer(true)
+            vm.continueFromPair()
+            awaitTrue("Streckenliste") { !vm.route.value.loadingOptions }
+            vm.selectRoute(vm.route.value.options.filterIsInstance<IndoorRouteOption.Saved>().single())
+            vm.continueFromRoute()
+            awaitPlan(vm)
+            vm.loadWorld()
+            assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+            assertFalse(assertIs<IndoorWorldUi.Building>(vm.world.value).cancelling)
+
+            vm.cancelWorldBuild()
+            val building = assertIs<IndoorWorldUi.Building>(vm.world.value)
+            assertTrue(building.cancelling, "Abbruch sofort sichtbar, waehrend die Kachel noch laeuft")
+
+            release.countDown()
+            val plan = awaitPlan(vm)
+            assertTrue(plan.resumable, "nach dem Abbruch laesst sich der Bau fortsetzen")
         } finally {
             pool.shutdownNow()
         }

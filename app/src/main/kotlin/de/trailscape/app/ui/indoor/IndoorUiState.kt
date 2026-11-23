@@ -143,8 +143,20 @@ sealed interface IndoorWorldUi {
         val resumable: Boolean = false,
     ) : IndoorWorldUi
 
-    /** Der Bau laeuft. [fraction] 0..1 ueber alle Phasen. */
-    data class Building(val phase: WorldBuildPhase, val done: Int, val total: Int, val fraction: Float) : IndoorWorldUi
+    /**
+     * Der Bau laeuft. [fraction] 0..1 ueber alle Phasen.
+     *
+     * @property cancelling „Abbrechen" ist getippt; der Weltbau rechnet die
+     *   gerade laufenden Kacheln bzw. Anfragen noch zu Ende (Sekunden), erst
+     *   dann kommt der Voranschlag mit „Fortsetzen" zurueck.
+     */
+    data class Building(
+        val phase: WorldBuildPhase,
+        val done: Int,
+        val total: Int,
+        val fraction: Float,
+        val cancelling: Boolean = false,
+    ) : IndoorWorldUi
 
     /** Die Welt ist fertig (gerade gebaut oder schon vorhanden). */
     data class Ready(val routeName: String, val attribution: List<WorldAttribution>) : IndoorWorldUi

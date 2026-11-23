@@ -73,8 +73,17 @@ fun IndoorWorldScreen(
                     }
                 }
                 is IndoorWorldUi.Building -> {
-                    NeutralButton(onClick = onCancel, modifier = Modifier.fillMaxWidth(), destructive = true) {
-                        Text(stringResource(R.string.indoor_app_world_cancel_action))
+                    NeutralButton(
+                        onClick = onCancel,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !ui.cancelling,
+                        destructive = true,
+                    ) {
+                        Text(
+                            stringResource(
+                                if (ui.cancelling) R.string.indoor_app_world_cancelling else R.string.indoor_app_world_cancel_action,
+                            ),
+                        )
                     }
                 }
                 is IndoorWorldUi.Ready -> {
