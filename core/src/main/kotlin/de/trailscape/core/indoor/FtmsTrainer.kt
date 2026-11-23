@@ -38,22 +38,31 @@ internal fun ftmsTrainer(link: BleLink): IndoorTrainer = FtmsTrainer(link)
  * §4.16). Nach 0xFF meldet der Trainer `CONNECTED`, fordert neu an und
  * schickt danach den letzten Zustand und Modus nach. Nach dem eigenen
  * [TrainerCommand.Stop] (Stopp + Reset) meldet er ebenfalls `CONNECTED` und
- * fordert die Kontrolle erst wieder an, wenn noch ein Befehl kommt — so
- * bleibt der Trainer am Ende einer Fahrt frei.
+ * fordert die Kontrolle erst wieder an, wenn nach dem Stop noch ein Befehl
+ * kommt — so bleibt der Trainer am Ende einer Fahrt frei. `send(Stop)`
+ * verwirft deshalb einen noch wartenden (und den gemerkten) Modus. Meldet der
+ * Trainer waehrend des eigenen Stop (oder danach, ohne neueren Befehl) 0xFF,
+ * ist das der Erfolg des Reset und kein Grund, neu anzufordern.
  *
  * ## Befehle
  * Hoechstens einer ist unterwegs. Zwei Plaetze, je nur der neueste Befehl:
  * ZUSTAND (Start, Pause, Stop) vor MODUS (SetSimulation, SetTargetPower).
  * Jeder Schritt ist ein Write Request auf den Control Point und wartet auf die
  * Indication `80 <opcode> <result>` mit **passendem** Opcode — andere
- * Antworten werden ignoriert. Frist 3 s; bei Frist oder Schreibfehler bis zu
- * zwei Wiederholungen, dann `onCommandFailed`. Ergebnis 0x02/0x03/0x04 →
- * sofort `onCommandFailed`. 0x05 → Kontrolle einmal neu anfordern, der Befehl
- * bleibt gemerkt; ein zweites 0x05 fuer denselben Befehl → `onCommandFailed`.
- * Wartet hinter einem scheiternden Befehl schon ein neuerer derselben Art,
- * verfaellt der alte still (keine Wiederholung, keine Meldung bei
- * Zeitueberschreitung; abgelehnte Befehle werden immer gemeldet).
- * [TrainerCommand.Stop] besteht aus zwei Schritten (08 01, dann 01 Reset).
+ * Antworten werden ignoriert. Frist 3 s; bei Frist oder Schreibfehler
+ * wiederholen. Gezaehlt werden unbeantwortete Versuche je Platz in Folge,
+ * ueber Ersetzungen hinweg; beim dritten → `onCommandFailed` fuer den
+ * neuesten Befehl des Platzes, jede passende Antwort setzt zurueck. Wartet
+ * hinter einem scheiternden Befehl schon ein neuerer derselben Art, verfaellt
+ * der alte (sofern der Zaehler noch nicht bei drei ist) still. Spaete
+ * Doppelantworten nach einer Frist-Wiederholung werden verworfen, damit sie
+ * nicht den naechsten gleichartigen Befehl bestaetigen. Ergebnis
+ * 0x02/0x03/0x04 → sofort `onCommandFailed`. 0x05 → Kontrolle einmal neu
+ * anfordern, der Befehl bleibt gemerkt; ein zweites 0x05 fuer denselben
+ * Befehl → `onCommandFailed`. Endgueltig abgelehnte Befehle werden auch nach
+ * Neuverbinden nicht nachgeschickt. [TrainerCommand.Stop] besteht aus zwei
+ * Schritten (08 01, dann 01 Reset); der Reset geht auch raus, wenn der
+ * Trainer den Stopp ablehnt.
  *
  * Nach einem Neuverbinden oder Kontrollverlust werden der zuletzt gegebene
  * Zustand und Modus nachgeschickt — ausser `Stop` (der Reset wuerde die
@@ -62,8 +71,9 @@ internal fun ftmsTrainer(link: BleLink): IndoorTrainer = FtmsTrainer(link)
  *
  * ## Zeit
  * Einzige Uhr ist [tick]. Rohr-Ereignisse tragen keine eigene Zeit, also
- * beginnt eine Frist bei der **letzten bekannten** tick-Zeit (bei 10 Hz
- * hoechstens ~100 ms zu frueh), vor dem ersten tick beim ersten tick.
+ * wird jede Frist (Antwort 3 s, erneute Kontrollanforderung 1 s) erst beim
+ * **naechsten** tick verankert — nie an einer womoeglich veralteten
+ * tick-Zeit (bei 10 Hz hoechstens ~100 ms zu spaet).
  *
  * ## Threads
  * Ein Lock schuetzt den Zustand. Rohr-Aufrufe und Listener-Aufrufe laufen
@@ -89,9 +99,11 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
 
     private class Unterwegs(val eintrag: Eintrag, val platz: Platz, val schritte: List<ByteArray>) {
         var schritt = 0
-        var versuch = 1
         var token = 0
         var frist: Long? = null
+
+        /** Waehrend dieses Befehls wurde eine Antwort seines Opcodes als Duplikat verworfen. */
+        var verschluckt = false
         val erwarteterOpcode: Int get() = schritte[schritt][0].toInt() and 0xFF
     }
 
@@ -126,11 +138,16 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
     private var letzterModus: TrainerCommand? = null
     private var unterwegs: Unterwegs? = null
 
+    /** Unbeantwortete Versuche je [Platz] in Folge, ueber Ersetzungen hinweg; jede Antwort setzt zurueck. */
+    private val unbeantwortet = IntArray(Platz.entries.size)
+
+    /** Noch erwartete verspaetete Doppelantworten je Opcode (nach Frist-Wiederholungen). */
+    private val duplikate = mutableMapOf<Int, Int>()
+
     /** Tokens der Control-Point-Writes in Rohr-Reihenfolge (das Rohr meldet FIFO). */
     private val schreibTokens = ArrayDeque<Int>()
     private var naechsterToken = 1
 
-    private var letzteZeit: Long? = null
     private var gemeldet: Pair<TrainerConnection, TrainerCapabilities>? = null
 
     private val rohr = object : BleLinkListener {
@@ -161,6 +178,11 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
         if (!gestoppt) {
             val platz = platzVon(command)
             if (platz == Platz.ZUSTAND) letzterZustand = command else letzterModus = command
+            if (command == TrainerCommand.Stop) {
+                // Nach dem Stop zaehlt kein aelterer Modus mehr; er wuerde sonst die Kontrolle zurueckholen.
+                platzModus = null
+                letzterModus = null
+            }
             val grund = dauerhafterHinderungsgrund()
             if (grund != null) {
                 scheitere(command, grund)
@@ -173,11 +195,17 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
 
     override fun tick(nowMs: Long) = ausfuehren {
         if (!gestoppt) {
-            letzteZeit = nowMs
             if (linkZustand == BleLinkState.READY) fristenPruefen(nowMs)
         }
     }
 
+    /**
+     * Schreibt im READY „Stop“ (08 01), ohne auf die Antwort zu warten, und
+     * schliesst gleich danach das Rohr. Damit der Stopp den Trainer erreicht,
+     * sollte das Rohr bereits eingereihte Writes vor dem Trennen noch
+     * abarbeiten (Bitte an indoor-ble); sonst bleibt der Widerstand stehen,
+     * bis der Trainer das Verbindungsende bemerkt.
+     */
     override fun stop() = ausfuehren {
         if (!gestoppt) {
             val warBereit = verbindung() == TrainerConnection.READY
@@ -237,10 +265,20 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
                 if (FtmsCodec.parseMachineStatus(value) == FtmsCodec.STATUS_CONTROL_PERMISSION_LOST &&
                     kontrolle == Kontrolle.ERTEILT
                 ) {
+                    val u = unterwegs
+                    val stopOffen = u?.eintrag?.command == TrainerCommand.Stop ||
+                        (u == null && letzterZustand == TrainerCommand.Stop && letzterModus == null)
                     unterwegs = null
                     kontrolle = Kontrolle.KEINE
                     anforderungsFehlschlaege = 0
-                    fordereKontrolleAn()
+                    if (stopOffen) {
+                        // Der Trainer meldet den Kontrollverlust durch unseren eigenen Reset,
+                        // womoeglich vor dessen Indication: das ist der Erfolg des Stop.
+                        if (platzZustand?.command == TrainerCommand.Stop) platzZustand = null
+                        pumpe()
+                    } else {
+                        fordereKontrolleAn()
+                    }
                 }
             }
             IndoorUuids.FTMS_CONTROL_POINT -> FtmsCodec.parseControlPointResponse(value)?.let { antwortErhalten(it) }
@@ -291,7 +329,7 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
         kontrolle = Kontrolle.ANGEFORDERT
         wiederAnfordernAm = null
         kontrolleToken = schreibe(FtmsCodec.requestControl())
-        kontrolleFrist = letzteZeit?.plus(ANTWORT_FRIST_MS)
+        kontrolleFrist = null // verankert beim naechsten tick
     }
 
     private fun kontrolleBeantwortet(result: Int) {
@@ -319,7 +357,7 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
             kontrolleVerweigert()
         } else {
             kontrolle = Kontrolle.WARTET
-            wiederAnfordernAm = letzteZeit?.plus(WIEDER_ANFORDERN_MS)
+            wiederAnfordernAm = null // verankert beim naechsten tick
         }
     }
 
@@ -359,21 +397,29 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
 
     private fun sendeSchritt(u: Unterwegs) {
         u.token = schreibe(u.schritte[u.schritt])
-        u.frist = letzteZeit?.plus(ANTWORT_FRIST_MS)
+        u.frist = null // verankert beim naechsten tick
     }
 
     private fun antwortErhalten(a: FtmsCodec.Antwort) {
+        val dup = duplikate[a.opcode] ?: 0
+        if (dup > 0) {
+            // Ueberzaehlige spaete Antwort auf einen wiederholten Versuch: verwerfen, damit sie
+            // nicht den naechsten gleichartigen Befehl bestaetigt.
+            if (dup == 1) duplikate.remove(a.opcode) else duplikate[a.opcode] = dup - 1
+            unterwegs?.takeIf { it.erwarteterOpcode == a.opcode }?.verschluckt = true
+            return
+        }
         if (kontrolle == Kontrolle.ANGEFORDERT) {
             if (a.opcode == FtmsCodec.OP_REQUEST_CONTROL) kontrolleBeantwortet(a.result)
             return
         }
         val u = unterwegs ?: return
         if (a.opcode != u.erwarteterOpcode) return
+        unbeantwortet[u.platz.ordinal] = 0
         when (a.result) {
             FtmsCodec.RESULT_SUCCESS -> {
                 if (u.schritt + 1 < u.schritte.size) {
                     u.schritt++
-                    u.versuch = 1
                     sendeSchritt(u)
                 } else {
                     unterwegs = null
@@ -385,6 +431,7 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
             FtmsCodec.RESULT_CONTROL_NOT_PERMITTED -> {
                 unterwegs = null
                 if (u.eintrag.neuAngefordert) {
+                    vergiss(u)
                     scheitere(u.eintrag.command, "Trainer meldet: " + FtmsCodec.resultName(a.result))
                     pumpe()
                 } else {
@@ -394,11 +441,16 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
                 }
             }
             else -> {
-                unterwegs = null
-                if (u.platz == Platz.ZUSTAND && letzterZustand == u.eintrag.command) letzterZustand = null
-                if (u.platz == Platz.MODUS && letzterModus == u.eintrag.command) letzterModus = null
-                scheitere(u.eintrag.command, "Trainer lehnt ab: " + FtmsCodec.resultName(a.result))
-                pumpe()
+                if (u.eintrag.command == TrainerCommand.Stop && u.schritt == 0) {
+                    // Stopp abgelehnt: der Reset gibt den Widerstand trotzdem frei.
+                    u.schritt = 1
+                    sendeSchritt(u)
+                } else {
+                    unterwegs = null
+                    vergiss(u)
+                    scheitere(u.eintrag.command, "Trainer lehnt ab: " + FtmsCodec.resultName(a.result))
+                    pumpe()
+                }
             }
         }
     }
@@ -409,20 +461,46 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
             return
         }
         val u = unterwegs ?: return
-        if (u.token == token) versuchFehlgeschlagen(u)
+        if (u.token == token) versuchFehlgeschlagen(u, zeitueberschreitung = false)
     }
 
-    private fun versuchFehlgeschlagen(u: Unterwegs) {
-        if (platz(u.platz) != null) {
+    /** Endgueltig abgelehnt: der Befehl wird auch nach Neuverbinden nicht wiederholt. */
+    private fun vergiss(u: Unterwegs) {
+        if (u.platz == Platz.ZUSTAND && letzterZustand == u.eintrag.command) letzterZustand = null
+        if (u.platz == Platz.MODUS && letzterModus == u.eintrag.command) letzterModus = null
+    }
+
+    /**
+     * Ein Versuch blieb unbeantwortet ([zeitueberschreitung]) oder liess sich nicht schreiben.
+     *
+     * Gezaehlt wird je Platz ueber Ersetzungen hinweg: Ein Trainer, der nie
+     * antwortet, waehrend die Sitzung jede Sekunde eine neue Steigung schickt,
+     * fuehrt so nach dem dritten unbeantworteten Versuch in Folge zu
+     * `onCommandFailed` fuer den neuesten Befehl, statt dass jeder still
+     * verfaellt. Nach einer Zeitueberschreitung kann die Antwort noch spaet
+     * kommen; sie wird als Duplikat vorgemerkt ([duplikate]), es sei denn,
+     * waehrend dieses Versuchs wurde schon eine Antwort seines Opcodes
+     * verworfen (dann war die wohl seine — so schaukelt sich nichts auf).
+     */
+    private fun versuchFehlgeschlagen(u: Unterwegs, zeitueberschreitung: Boolean) {
+        if (zeitueberschreitung && !u.verschluckt) {
+            duplikate[u.erwarteterOpcode] = (duplikate[u.erwarteterOpcode] ?: 0) + 1
+        }
+        u.verschluckt = false
+        val i = u.platz.ordinal
+        unbeantwortet[i]++
+        val neuer = platz(u.platz)
+        if (unbeantwortet[i] >= MAX_VERSUCHE) {
+            unterwegs = null
+            unbeantwortet[i] = 0
+            if (neuer != null) setzePlatz(u.platz, null)
+            scheitere(neuer?.command ?: u.eintrag.command, "nach $MAX_VERSUCHE Versuchen unbeantwortet")
+            pumpe()
+        } else if (neuer != null) {
             // Ein neuerer Befehl derselben Art wartet schon: der alte verfaellt still.
             unterwegs = null
             pumpe()
-        } else if (u.versuch >= MAX_VERSUCHE) {
-            unterwegs = null
-            scheitere(u.eintrag.command, "nach $MAX_VERSUCHE Versuchen unbeantwortet")
-            pumpe()
         } else {
-            u.versuch++
             sendeSchritt(u)
         }
     }
@@ -441,7 +519,7 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
         }
         val u = unterwegs ?: return
         val f = u.frist
-        if (f == null) u.frist = now + ANTWORT_FRIST_MS else if (now >= f) versuchFehlgeschlagen(u)
+        if (f == null) u.frist = now + ANTWORT_FRIST_MS else if (now >= f) versuchFehlgeschlagen(u, zeitueberschreitung = true)
     }
 
     // ======================================================================
@@ -479,6 +557,8 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
     private fun verbindungWeg() {
         unterwegs = null
         schreibTokens.clear()
+        unbeantwortet.fill(0)
+        duplikate.clear()
         kontrolle = Kontrolle.KEINE
         anforderungsFehlschlaege = 0
         kontrolleFrist = null
@@ -504,7 +584,7 @@ internal class FtmsTrainer(private val link: BleLink) : IndoorTrainer {
 
     private fun platz(p: Platz): Eintrag? = if (p == Platz.ZUSTAND) platzZustand else platzModus
 
-    private fun setzePlatz(p: Platz, e: Eintrag) {
+    private fun setzePlatz(p: Platz, e: Eintrag?) {
         if (p == Platz.ZUSTAND) platzZustand = e else platzModus = e
     }
 

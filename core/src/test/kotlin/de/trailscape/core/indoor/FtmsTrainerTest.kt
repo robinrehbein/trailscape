@@ -291,18 +291,20 @@ class FtmsTrainerTest {
     fun `Frist 3 s, zwei Wiederholungen, dann onCommandFailed`() {
         val a = neu()
         a.bisReady()
-        a.trainer.tick(1000)
         a.trainer.send(TrainerCommand.Start)
+        a.trainer.tick(1000) // verankert die Frist: 4000
         a.trainer.tick(3999)
         assertEquals(1, a.link.writeHex().count { it == "07" })
         a.trainer.tick(4000)
         assertEquals(2, a.link.writeHex().count { it == "07" })
-        a.trainer.tick(6999)
+        a.trainer.tick(4100) // verankert: 7100
+        a.trainer.tick(7099)
         assertEquals(2, a.link.writeHex().count { it == "07" })
-        a.trainer.tick(7000)
+        a.trainer.tick(7100)
         assertEquals(3, a.link.writeHex().count { it == "07" })
         assertTrue(a.l.fehler().isEmpty())
-        a.trainer.tick(10000)
+        a.trainer.tick(7200)
+        a.trainer.tick(10200)
         assertEquals(3, a.link.writeHex().count { it == "07" })
         assertEquals(listOf(TrainerCommand.Start), a.l.fehler().map { it.command })
         // Danach geht der naechste Befehl normal raus.
@@ -351,12 +353,13 @@ class FtmsTrainerTest {
     }
 
     @Test
-    fun `neuerer Befehl ersetzt einen scheiternden still`() {
+    fun `neuerer Befehl ersetzt einen einzelnen scheiternden still`() {
         val a = neu()
         a.bisReady()
         a.trainer.send(sim1)
         a.trainer.send(sim2)
-        a.trainer.tick(3000)
+        a.trainer.tick(100)
+        a.trainer.tick(3100)
         assertEquals(sim2Hex, a.link.writeHex().last())
         assertEquals(2, a.link.writeHex().count { it.startsWith("11") })
         assertTrue(a.l.fehler().isEmpty())
@@ -451,9 +454,10 @@ class FtmsTrainerTest {
         a.einrichten()
         a.antworte(0x00, 0x05)
         assertEquals(TrainerConnection.CONNECTED, a.l.letzterZustand())
-        a.trainer.tick(999)
+        a.trainer.tick(500) // verankert: 1500
+        a.trainer.tick(1499)
         assertEquals(1, a.link.writes().size)
-        a.trainer.tick(1000)
+        a.trainer.tick(1500)
         assertEquals(listOf("00", "00"), a.link.writeHex())
         a.antworte(0x00)
         assertEquals(TrainerConnection.READY, a.l.letzterZustand())
@@ -468,6 +472,7 @@ class FtmsTrainerTest {
         a.einrichten()
         a.antworte(0x00, 0x04)
         a.trainer.tick(1000)
+        a.trainer.tick(2000)
         a.antworte(0x00, 0x05)
         assertEquals(TrainerConnection.UNSUPPORTED, a.l.letzterZustand())
         assertEquals(listOf(sim1), a.l.fehler().map { it.command })
@@ -498,13 +503,16 @@ class FtmsTrainerTest {
         a.trainer.tick(0)
         a.einrichten()
         a.link.result(BleOperation.WRITE, cp)
-        a.trainer.tick(2999)
-        a.trainer.tick(3000) // Frist
-        a.trainer.tick(3999)
+        a.trainer.tick(100) // verankert: 3100
+        a.trainer.tick(3099)
+        a.trainer.tick(3100) // Frist
+        a.trainer.tick(3200) // verankert: 4200
+        a.trainer.tick(4199)
         assertEquals(1, a.link.writes().size)
-        a.trainer.tick(4000)
+        a.trainer.tick(4200)
         assertEquals(2, a.link.writes().size)
-        a.trainer.tick(7000) // zweite Frist → UNSUPPORTED
+        a.trainer.tick(4300)
+        a.trainer.tick(7300) // zweite Frist → UNSUPPORTED
         assertEquals(TrainerConnection.UNSUPPORTED, a.l.letzterZustand())
     }
 
@@ -516,6 +524,7 @@ class FtmsTrainerTest {
         a.einrichten()
         a.link.result(BleOperation.WRITE, cp, ok = false)
         a.trainer.tick(1000)
+        a.trainer.tick(2000)
         assertEquals(2, a.link.writes().size)
         a.antworte(0x00)
         assertEquals(TrainerConnection.READY, a.l.letzterZustand())
@@ -716,6 +725,222 @@ class FtmsTrainerTest {
         a.trainer.send(sim1)
         assertEquals(sim1, a.l.fehler().single().command)
         assertEquals(TrainerConnection.READY, a.l.letzterZustand())
+    }
+
+    // ================================================================== Review-Funde
+
+    @Test
+    fun `Fristen werden nie an einer veralteten tick-Zeit verankert`() {
+        val a = neu()
+        a.trainer.start(a.l)
+        a.trainer.tick(0)
+        a.einrichten() // Request Control lange nach dem letzten tick
+        a.trainer.tick(10_000) // waere bei Verankerung an 0 schon abgelaufen
+        assertEquals(TrainerConnection.CONNECTED, a.l.letzterZustand())
+        a.trainer.tick(12_999)
+        a.antworte(0x00)
+        assertEquals(TrainerConnection.READY, a.l.letzterZustand())
+
+        a.trainer.send(TrainerCommand.Start)
+        a.trainer.tick(20_000)
+        a.trainer.tick(22_999)
+        assertEquals(1, a.link.writeHex().count { it == "07" })
+        a.trainer.tick(23_000)
+        assertEquals(2, a.link.writeHex().count { it == "07" })
+    }
+
+    @Test
+    fun `Stop verwirft einen wartenden Modus und holt die Kontrolle nicht zurueck`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(sim1) // unterwegs
+        a.trainer.send(sim2) // wartet
+        a.trainer.send(TrainerCommand.Stop)
+        a.antworte(0x11)
+        assertEquals("08 01", a.link.writeHex().last())
+        a.antworte(0x08)
+        a.antworte(0x01)
+        assertEquals(TrainerConnection.CONNECTED, a.l.letzterZustand())
+        assertEquals(listOf("00", "11 00 00 64 00 28 33", "08 01", "01"), a.link.writeHex())
+        a.trainer.tick(100)
+        a.trainer.tick(60_000)
+        assertEquals(4, a.link.writes().size)
+
+        // Erst ein Befehl NACH dem Stop holt die Kontrolle zurueck — und nur er geht raus.
+        a.trainer.send(TrainerCommand.SetTargetPower(100))
+        assertEquals("00", a.link.writeHex().last())
+        a.antworte(0x00)
+        a.antworte(0x05)
+        assertEquals(listOf("00", "05 64 00"), a.link.writeHex().drop(4))
+        assertTrue(a.l.fehler().isEmpty())
+    }
+
+    @Test
+    fun `Control Permission Lost vor der Reset-Antwort gilt als Erfolg des Stop`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(sim1)
+        a.antworte(0x11)
+        a.trainer.send(TrainerCommand.Stop)
+        a.antworte(0x08)
+        assertEquals("01", a.link.writeHex().last())
+        a.link.result(BleOperation.WRITE, cp)
+        a.link.value(status, 0xFF) // vor 80 01 01
+        assertEquals(TrainerConnection.CONNECTED, a.l.letzterZustand())
+        a.link.value(cp, 0x80, 0x01, 0x01) // spaete Reset-Antwort: ohne Wirkung
+        a.trainer.tick(100)
+        a.trainer.tick(60_000)
+        assertEquals(listOf("00", "11 00 00 64 00 28 33", "08 01", "01"), a.link.writeHex())
+        assertTrue(a.l.fehler().isEmpty())
+    }
+
+    @Test
+    fun `Control Permission Lost nach der Reset-Antwort fordert nicht neu an`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.Stop)
+        a.antworte(0x08)
+        a.antworte(0x01)
+        a.link.value(status, 0xFF)
+        assertEquals(TrainerConnection.CONNECTED, a.l.letzterZustand())
+        assertEquals(listOf("00", "08 01", "01"), a.link.writeHex())
+    }
+
+    @Test
+    fun `Control Permission Lost waehrend Stop mit neuerem Modus - danach nur der neue`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.Stop)
+        a.antworte(0x08)
+        a.trainer.send(TrainerCommand.SetTargetPower(120)) // nach dem Stop
+        a.link.result(BleOperation.WRITE, cp)
+        a.link.value(status, 0xFF)
+        assertEquals("00", a.link.writeHex().last())
+        a.antworte(0x00)
+        assertEquals("05 78 00", a.link.writeHex().last())
+    }
+
+    @Test
+    fun `Trainer antwortet nie - auch bei laufend ersetzten Befehlen kommt onCommandFailed`() {
+        val a = neu()
+        a.bisReady()
+        var t = 0L
+        while (t <= 20_000) {
+            if (t % 1000 == 0L) a.trainer.send(TrainerCommand.SetSimulation(0.0, t / 1000.0, 0.004, 0.51))
+            a.trainer.tick(t)
+            t += 100
+        }
+        val f = a.l.fehler()
+        assertTrue(f.isNotEmpty(), "kein onCommandFailed")
+        assertTrue(f.all { it.command is TrainerCommand.SetSimulation })
+        // Gemeldet wird der neueste: beim ersten Fehler liegt seine Steigung hinter den gesendeten.
+        val ersterFehler = f.first().command as TrainerCommand.SetSimulation
+        assertTrue(ersterFehler.gradePct >= 2.0, ersterFehler.toString())
+    }
+
+    @Test
+    fun `jede Antwort setzt den Zaehler unbeantworteter Versuche zurueck`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(sim1)
+        a.trainer.send(sim2)
+        a.trainer.tick(100)
+        a.trainer.tick(3100) // sim1 unbeantwortet (1), sim2 geht raus
+        a.trainer.tick(3200)
+        a.trainer.tick(6200) // sim2 unbeantwortet (2), Wiederholung
+        a.link.value(cp, 0x80, 0x11, 0x01) // spaete Antwort auf sim1: Duplikat, verworfen
+        a.link.value(cp, 0x80, 0x11, 0x01) // spaete Antwort auf sim2, Versuch 1: Duplikat, verworfen
+        a.link.value(cp, 0x80, 0x11, 0x01) // Antwort auf sim2, Versuch 2 → angenommen, Zaehler 0
+        assertTrue(a.l.fehler().isEmpty())
+        val sim3 = TrainerCommand.SetSimulation(0.0, 3.0, 0.004, 0.51)
+        a.trainer.send(sim3)
+        a.trainer.tick(6300)
+        a.trainer.tick(9300) // 1
+        a.trainer.tick(9400)
+        a.trainer.tick(12_400) // 2
+        assertTrue(a.l.fehler().isEmpty())
+        a.trainer.tick(12_500)
+        a.trainer.tick(15_500) // 3
+        assertEquals(listOf<TrainerCommand>(sim3), a.l.fehler().map { it.command })
+    }
+
+    @Test
+    fun `spaete Doppelantwort nach Wiederholung bestaetigt nicht den naechsten Befehl`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.SetTargetPower(200))
+        a.trainer.tick(100)
+        a.trainer.tick(3100) // Frist → Wiederholung
+        assertEquals(2, a.link.writeHex().count { it == "05 C8 00" })
+        a.link.value(cp, 0x80, 0x05, 0x01) // Antwort auf Versuch 1 (verspaetet)
+        a.link.value(cp, 0x80, 0x05, 0x01) // Antwort auf Versuch 2
+        a.trainer.send(TrainerCommand.SetTargetPower(210))
+        assertEquals("05 D2 00", a.link.writeHex().last())
+        // Keine stale Antwort mehr unterwegs: 210 bleibt offen, bis seine eigene kommt.
+        a.trainer.send(TrainerCommand.SetTargetPower(220))
+        assertEquals("05 D2 00", a.link.writeHex().last())
+        a.link.value(cp, 0x80, 0x05, 0x01)
+        assertEquals("05 DC 00", a.link.writeHex().last())
+    }
+
+    @Test
+    fun `verworfene Doppelantwort schaukelt sich nicht auf`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.SetTargetPower(200))
+        a.trainer.tick(100)
+        a.trainer.tick(3100) // Wiederholung, eine Doppelantwort vorgemerkt
+        a.link.value(cp, 0x80, 0x05, 0x01) // nur eine Antwort kommt — wird verworfen
+        a.trainer.tick(3200)
+        a.trainer.tick(6200) // Frist; die verworfene war wohl seine: keine neue Vormerkung
+        a.link.value(cp, 0x80, 0x05, 0x01) // Antwort auf Versuch 3 wird angenommen
+        a.trainer.send(TrainerCommand.SetTargetPower(210))
+        a.link.value(cp, 0x80, 0x05, 0x01)
+        a.trainer.send(TrainerCommand.SetTargetPower(220))
+        assertEquals("05 DC 00", a.link.writeHex().last())
+        assertTrue(a.l.fehler().isEmpty())
+    }
+
+    @Test
+    fun `Stop sendet den Reset auch, wenn der Stopp abgelehnt wird`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.Stop)
+        a.antworte(0x08, 0x04)
+        assertEquals("01", a.link.writeHex().last())
+        a.antworte(0x01)
+        assertEquals(TrainerConnection.CONNECTED, a.l.letzterZustand())
+        assertTrue(a.l.fehler().isEmpty())
+    }
+
+    @Test
+    fun `Stop scheitert, wenn auch der Reset abgelehnt wird`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.Stop)
+        a.antworte(0x08, 0x02)
+        a.antworte(0x01, 0x04)
+        assertEquals(TrainerCommand.Stop, a.l.fehler().single().command)
+    }
+
+    @Test
+    fun `endgueltiges Control Not Permitted wird nicht erneut nachgeschickt`() {
+        val a = neu()
+        a.bisReady()
+        a.trainer.send(TrainerCommand.Start)
+        a.antworte(0x07, 0x05)
+        a.antworte(0x00)
+        a.antworte(0x07, 0x05)
+        assertEquals(TrainerCommand.Start, a.l.fehler().single().command)
+        // Kontrollverlust und Neuverbinden schicken den abgelehnten Start nicht nach.
+        a.link.value(status, 0xFF)
+        a.antworte(0x00)
+        a.link.linkState(BleLinkState.RECONNECTING)
+        a.link.clearOps()
+        a.einrichten()
+        a.antworte(0x00)
+        assertEquals(listOf("00"), a.link.writeHex())
+        assertEquals(1, a.l.fehler().size)
     }
 
     // ================================================================== Nebenlaeufigkeit
