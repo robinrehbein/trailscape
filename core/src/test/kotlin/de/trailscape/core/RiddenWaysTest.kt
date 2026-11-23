@@ -320,6 +320,27 @@ class RiddenWaysTest {
         assertTrue(changed.index.isKnown(newA.lat, newA.lon))
     }
 
+    @Test
+    fun `Indoor-Fahrt kommt weder in den Index noch in den Cache`() {
+        val a = ride("a", road(0.0, 0.0, 2000.0, 0.0))
+        val drinnen = ride("i", road(0.0, 3000.0, 2000.0, 3000.0)).copy(indoor = true)
+        val store = InMemoryRiddenWaysStore()
+        val loader = CountingLoader(listOf(a, drinnen).associateBy { it.id })
+
+        val snapshot = updateRiddenWays(null, listOf(a, drinnen).map { it.toSummary() }, store, loader::load)
+        assertEquals(listOf("a"), loader.loads)
+        assertEquals(1, snapshot.rideCount)
+        assertEquals(setOf("a"), store.entries.keys)
+        val virtuell = at(1000.0, 3000.0)
+        assertFalse(snapshot.index.isKnown(virtuell.lat, virtuell.lon))
+
+        // Dazugekommen als Indoor-Fahrt: nichts zu tun, dieselbe Instanz.
+        loader.loads.clear()
+        val again = updateRiddenWays(snapshot, listOf(a, drinnen).map { it.toSummary() }, store, loader::load)
+        assertSame(snapshot, again)
+        assertTrue(loader.loads.isEmpty())
+    }
+
     /** Zaehlt jeden Store-Zugriff — beim echten Store liest der erste davon die ganze Datei. */
     private class CountingStore(val inner: InMemoryRiddenWaysStore = InMemoryRiddenWaysStore()) : RiddenWaysStore {
         var accesses = 0

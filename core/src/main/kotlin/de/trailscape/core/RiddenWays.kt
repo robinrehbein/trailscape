@@ -449,7 +449,10 @@ fun updateRiddenWays(
     loadRide: (String) -> Ride?,
     isCancelled: () -> Boolean = { false },
 ): RiddenWaysSnapshot {
-    val ridden = riddenRides(summaries)
+    // Nur draussen gefahrene Touren: Eine Indoor-Fahrt ([RideInfo.indoor])
+    // war nie auf diesen Wegen und landet deshalb weder im Index noch im
+    // [store] (`docs/indoor.md` 10.2).
+    val ridden = outdoorRides(summaries)
     val current = LinkedHashMap<String, Pair<Long, Int>>(ridden.size * 2)
     for (r in ridden) current[r.id] = r.updatedAt to r.pointCount
     if (previous != null && previous.covers(current)) return previous

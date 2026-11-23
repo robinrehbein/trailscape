@@ -298,6 +298,26 @@ class ExplorerTilesTest {
     }
 
     @Test
+    fun `Indoor-Fahrten zaehlen nicht als entdeckt und landen nicht im Cache`() {
+        val store = FakeExplorerTilesStore()
+        val drinnen = ride(
+            id = "indoor",
+            updatedAt = 100L,
+            points = listOf(TrackPoint(lat = 10.0, lon = 10.0), TrackPoint(lat = 10.1, lon = 10.0)),
+        ).copy(indoor = true)
+        // Ein alter Eintrag (etwa von vor dem Kennzeichen) faellt beim retainAll heraus.
+        store.put("indoor", StoredExplorerTiles(100L, 2, listOf(ExplorerTile(1, 1))))
+        var loadCount = 0
+        val loadRide: (String) -> Ride? = { id -> loadCount++; drinnen.takeIf { id == "indoor" } }
+
+        val tiles = collectExplorerTiles(listOf(drinnen.toSummary()), store, loadRide)
+
+        assertEquals(emptySet(), tiles)
+        assertEquals(0, loadCount, "Eine Indoor-Fahrt darf gar nicht erst geladen werden")
+        assertTrue(store.entries.isEmpty())
+    }
+
+    @Test
     fun `retainAll raeumt Eintraege geloeschter Touren auf`() {
         val store = FakeExplorerTilesStore()
         val a = ride(id = "a", updatedAt = 1L, points = listOf(TrackPoint(lat = 48.0, lon = 11.0)))
@@ -371,6 +391,19 @@ class ExplorerTilesTest {
         store.putTiles(target, 1, 2, 3)
         assertEquals(3, explorerTilesNewInRide("diese", listOf(planned, target), store))
         assertNull(explorerTilesNewInRide("plan", listOf(planned, target), store))
+    }
+
+    @Test
+    fun `Indoor-Fahrten zaehlen nicht als frueher befahren und haben keine neuen Kacheln`() {
+        val store = FakeExplorerTilesStore()
+        val drinnen = summary("indoor", createdAt = 100L).copy(indoor = true)
+        val target = summary("diese", createdAt = 200L)
+        store.putTiles(drinnen, 1, 2)
+        store.putTiles(target, 1, 2, 3)
+        assertEquals(3, explorerTilesNewInRide("diese", listOf(drinnen, target), store))
+        assertNull(explorerTilesNewInRide("indoor", listOf(drinnen, target), store))
+        // Und als Luecke im Cache zaehlt sie auch nicht.
+        assertEquals(0, explorerTilesCacheGaps(listOf(drinnen.copy(updatedAt = 999L), target), store))
     }
 
     @Test

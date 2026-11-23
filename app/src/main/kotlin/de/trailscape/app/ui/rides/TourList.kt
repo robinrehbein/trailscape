@@ -293,7 +293,22 @@ private fun RideRow(
         first = first,
         last = last,
         onClick = onClick,
-        trailing = { effort?.let { EffortPill(it) } },
+        trailing = {
+            // Indoor-Fahrt (`docs/indoor.md` 10.2): Strecke und Kennzahlen
+            // wie jede Tour, dazu eine Marke, damit die virtuelle Strecke
+            // nicht fuer eine Ausfahrt gehalten wird.
+            if (ride.indoor) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TagPill(text = stringResource(R.string.indoor_app_tourlist_pill))
+                    effort?.let { EffortPill(it) }
+                }
+            } else {
+                effort?.let { EffortPill(it) }
+            }
+        },
     )
 }
 

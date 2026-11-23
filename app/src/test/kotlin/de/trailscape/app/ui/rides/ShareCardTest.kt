@@ -1,5 +1,7 @@
 package de.trailscape.app.ui.rides
 
+import de.trailscape.app.R
+import de.trailscape.app.i18n.UiText
 import de.trailscape.app.ui.map.ElevationSample
 import de.trailscape.core.Ride
 import de.trailscape.core.RideStats
@@ -392,6 +394,24 @@ class ShareCardTest {
 
         assertEquals("Dienstag, 23. September 2025", shareCardDateLine(at, planned = false))
         assertEquals("Geplante Route · 23. September 2025", shareCardDateLine(at, planned = true))
+    }
+
+    @Test
+    fun `Indoor-Fahrt sagt Rollentrainer in der Datumszeile`() {
+        val at = LocalDateTime.of(2025, 9, 23, 18, 12)
+        assertEquals(
+            UiText.Res(R.string.indoor_app_share_date_line, listOf("Dienstag, 23. September 2025")),
+            de.trailscape.app.ui.rides.shareCardDateLine(at, planned = false, language = AppLanguage.DE, indoor = true),
+        )
+        // Eine Planung bleibt eine Planung, auch mit Kennzeichen.
+        assertEquals("Geplante Route · 23. September 2025", RidesXmlStrings.DE.resolve(
+            de.trailscape.app.ui.rides.shareCardDateLine(at, planned = true, language = AppLanguage.DE, indoor = true),
+        ))
+        // Die Spur bleibt auf dem Bild.
+        val points = (0 until 100).map { TrackPoint(lat = 53.0 + it * 1e-4, lon = 10.0 + it * 1.6e-4) }
+        val content = shareCardContent(ride(points = points).copy(indoor = true), load = null, toLocal = utc)
+        assertTrue(content.hasTrack)
+        assertTrue(content.dateLine.startsWith("Dienstag, 23. September 2025"), content.dateLine)
     }
 
     @Test

@@ -395,7 +395,9 @@ fun collectRouteSignatures(
     loadRide: (String) -> Ride?,
 ): Map<String, RouteSignature> {
     val result = LinkedHashMap<String, RouteSignature>()
-    for (info in riddenRides(rides)) {
+    // Indoor-Fahrten ([RideInfo.indoor]) bekommen keine Signatur und keinen
+    // Cache-Eintrag: Ihre Zeit ist virtuell (`docs/indoor.md` 10.2).
+    for (info in outdoorRides(rides)) {
         val cached = store.read(info.id)
         val entry = if (cached != null && cached.updatedAt == info.updatedAt && cached.pointCount == info.pointCount) {
             cached
@@ -468,7 +470,9 @@ fun compareOnRoute(
     rides: List<RideInfo>,
     signatures: Map<String, RouteSignature>,
 ): RouteComparison? {
-    val ridden = riddenRides(rides)
+    // Nur draussen gefahrene Touren — eine Indoor-Fahrt ist weder Vergleich
+    // noch Gegenstand eines Vergleichs.
+    val ridden = outdoorRides(rides)
     val own = ridden.firstOrNull { it.id == rideId } ?: return null
     val ownSignature = signatures[rideId] ?: return null
     val current = effortOf(own, ownSignature) ?: return null

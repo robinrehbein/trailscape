@@ -143,8 +143,9 @@ const val minSpeedSampleKm: Double = 3.0
  * Median des Tourenschnitts der letzten [rideCount] Touren mit brauchbarem
  * `avgSpeedKmh`; `null`, wenn keine einzige Tour verwertbar ist.
  *
- * "Brauchbar" heisst: **gefahren** (keine gespeicherte Planung, siehe
- * [riddenRides]), `avgSpeedKmh` gesetzt, endlich, zwischen
+ * "Brauchbar" heisst: **draussen gefahren** (keine gespeicherte Planung und
+ * keine Indoor-Fahrt, deren Tempo virtuell ist, siehe [outdoorRides]),
+ * `avgSpeedKmh` gesetzt, endlich, zwischen
  * [minPlausibleAvgSpeedKmh] und [maxPlausibleAvgSpeedKmh] und die Tour
  * mindestens [minSpeedSampleKm] lang. Median statt Mittelwert, weil eine
  * einzelne Renn- oder Schiebe-Tour den Schnitt sonst verzerrt.
@@ -153,7 +154,7 @@ fun typicalAvgSpeedKmh(recentRides: List<RideInfo>, rideCount: Int = speedHistor
     if (rideCount <= 0) {
         return null
     }
-    val usable = riddenRides(recentRides)
+    val usable = outdoorRides(recentRides)
         .sortedByDescending { it.createdAt }
         .asSequence()
         .mapNotNull { ride ->

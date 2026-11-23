@@ -99,5 +99,13 @@ class FirstRoundTest {
         )
         // Mit Historie (Einfuehrung erneut angesehen): „Später".
         assertEquals(null, onboardingFirstRoundPreselect(profile, listOf(ride(1, 20.0))))
+        // Eine Indoor-Fahrt ist gefahren — auch sie zaehlt als Historie.
+        assertEquals(null, onboardingFirstRoundPreselect(profile, listOf(ride(1, 20.0).copy(indoor = true))))
+    }
+
+    @Test
+    fun `Indoor-Fahrten sind keine Tempoquelle fuer die erste Runde`() {
+        val rides = List(5) { ride(it, speed = 30.0).copy(indoor = true) }
+        assertEquals(26.0, firstRoundTarget(1.5, profile, rides, texts = CoreTextsDe).distanceKm, EPS)
     }
 }
