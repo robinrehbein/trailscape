@@ -16,8 +16,8 @@ Stand: 23.11.2026, Branch `claude/indoor-world`. Vertrag: `docs/indoor.md`
 | Bodentextur | Luftbild unverändert (JPEG Baseline, sonst PNG neu angefragt) oder aus Landnutzung erzeugt; Leerbild-Erkennung |
 | Fahrbahn `route` | je Belag kachelnde Textur, weicher Belagswechsel, Ränder nach Belag und Umgebung (Bankett, Bordstein mit Gehweg, Graskante), Böschungsstreifen, Markierung auf Landstraßen |
 | Straßen `roads` | übrige Straßen und Wege der Karte, flach auf dem Gelände |
-| Gebäude `buildings` | Grundriss × Höhe, Satteldächer/Walmdächer, Anbauten, Fassadenatlas, Stufe 1 grob |
-| Bäume `trees` | **neu:** Einzelbäume (Fichte, Laubbaum) bis 70 m neben der Strecke, Standorte aus der Kronenbedeckung des Luftbilds bzw. der Landnutzung; dahinter und in Stufe 1 Waldkörper (welliges Kronendach mit Rand) |
+| Gebäude `buildings` | Grundriss × Höhe, Satteldächer/Walmdächer, Anbauten, Fassadenatlas, Stufe 1 grob. Dachfarbe je Gebäude (deterministisch): Ziegelrot, Rotbraun, Braun, Anthrazit, Grau, wo möglich aus der Luftbildfarbe; Grau aus dem Luftbild wird bei Ziegeldächern teils als Rotbraun/Braun gedeutet. Die Vektorkacheln nennen keine Gebäudeart (kein church/warehouse); große Grundrisse (> 800 m²) werden nur in Gewerbe- und Landwirtschaftsflächen zur Wellblechhalle, sonst zu Putz-/Ziegelbauten mit Fenstern und Ziegeldach (Traufe 6,6–9,6 m, wenn die Daten keine Höhe nennen) |
+| Bäume `trees` | **neu:** Einzelbäume in vier Arten (runder Laubbaum, schlanke Pappel/Birke, gestufte Fichte, kleiner Feld-/Obstbaum) bis 70 m neben der Strecke: verbeulte, überlappende Kronenkörper mit geglätteten Normalen, Größen- und Farbvariation, Wurzelanlauf. Drei Detailstufen, budgetabhängig vom Weg nach außen vergeben. Standorte aus der Kronenbedeckung des Luftbilds bzw. der Landnutzung; dahinter und in Stufe 1 Waldkörper (hügeliges Kronendach, das am Waldrand bis zum Boden abfällt, ohne Wände) |
 | Wasser `water` | **neu:** Wasserspiegel auf Uferhöhe über den Wasserflächen der Karte |
 | Kleinteile `props` | Leitpfosten, Laternen, Ortstafel, Weidezäune, Holzpolter, Bänke, Wegweiser |
 | Detailstufen | 3 Stufen (256 m / 1 km / 4 km), `show` nach Laufmetern, Budget je Qualität nachgerechnet (Bau bricht ab, falls überschritten) |
@@ -38,9 +38,10 @@ SwiftShader), 1600 × 900.
 
 | Bild | Was zu sehen ist |
 |---|---|
-| `dorf-altenberg-fachwerk.jpg` | Altenberg (NRW), Start: Fachwerkhaus direkt am Weg, Laubbäume, Halle dahinter |
+| `dorf-altenberg-fachwerk.jpg` | Altenberg (NRW), Start: Fachwerkhaus direkt am Weg, Laubbäume, großer Putzbau mit Fensterreihen dahinter |
 | `dorf-altenberg-pflaster.jpg` | Altenberg, Kopfsteinpflaster am Ortsrand, Wegweiser, bewaldeter Hang im Hintergrund |
-| `wald-tharandt.jpg` | Tharandter Wald (Sachsen), Schotterweg durch Misch-/Nadelwald, Luftbild von GeoSN |
+| `wald-tharandt.jpg` | Tharandter Wald (Sachsen), Schotterweg durch Mischwald mit gestuften Fichten, Luftbild von GeoSN (Sonne 55°) |
+| `wald-tharandt-luft.jpg` | dieselbe Stelle aus der Drohne: Einzelbäume entlang des Wegs, dahinter die Waldkörper |
 | `offen-altenberg.jpg` | Dhünntal, offene Wiese mit Weidezaun, Laubbaumreihe, Hügel mit Waldkörpern |
 | `uebersicht-altenberg.jpg` | Drohne über dem Kloster Altenberg: Klostergebäude, Bäume aus dem Luftbild, Waldkörper an den Hängen |
 | `testwelt-dorf.jpg` | Testwelt: Pflasterstraße mit Gehweg, Häuser, Laternen |
@@ -48,14 +49,19 @@ SwiftShader), 1600 × 900.
 
 Was noch nicht stimmt (gesehen und bewusst offen gelassen):
 
-- **Waldkörper aus der Nähe/Höhe:** Ränder folgen dem Zellenraster (8 m in
-  Stufe 0, 32 m in Stufe 1) und wirken aus der Drohnenansicht treppig, mit
-  dunklen Wänden. Aus der Fahrerkamera sind sie nur ferne Waldkanten.
+- **Waldkörper:** Die Ränder fallen jetzt über eine Zelle bis zum Boden ab
+  (keine Wände mehr), folgen im Grundriss aber dem Zellenraster (8 m in
+  Stufe 0, 32 m in Stufe 1). In Stufe 1 ist der Abfall über 32 m aus der
+  Drohne noch als steile Kante zu sehen; das Kronendach ist eine Hügeldecke,
+  keine Einzelkronen.
 - **Wald dunkel:** Unter geschlossenem Kronendach ist der Weg im Betrachter
   sehr dunkel (dort gibt es nur ein schwaches Umgebungslicht); in Filament
   hängt das am `IndirectLight` von indoor-render.
-- **Bäume wirken gleichförmig** (zwei Formen, Gitter mit Zufallsversatz); keine
-  Laubkarten, keine Sträucher, kein Unterholz.
+- **Bäume:** vier Arten mit runden Kronen, aber weiterhin Körper ohne
+  Laubkarten; keine Sträucher, kein Unterholz. In dichtem Wald reicht das
+  Budget nur für die nächsten Reihen in feiner Stufe.
+- **Dächer:** Große Gebäude mit grauem Luftbild (z. B. Schieferdächer des
+  Klosters Altenberg) bleiben grau — das ist dort echt.
 - Wo das Luftbild dunkle Flächen hat (Schatten, nasse Wiesen), setzt die
   Kronenschätzung gelegentlich Bäume in offene Flächen.
 
@@ -71,7 +77,9 @@ Was noch nicht stimmt (gesehen und bewusst offen gelassen):
    unter dem Ufer; das Gelände verdeckt die Zellenkanten.
 3. **Dreiecksbudget je Kachel umverteilt** (`TileBudget`, nur intern): Wasser
    Stufe 0 500 → 2 000, Stufe 1 300 → 600, dafür Vegetation 22 000 → 20 500 bzw.
-   4 000 → 3 700. Die Summe je Kachel und damit die Planung bleiben gleich.
+   4 000 → 3 700. Die Bäume nehmen zusätzlich, was Fahrbahn, Straßen,
+   Gebäude und Wasser derselben Kachel nicht verbraucht haben. Die Summe je
+   Kachel und damit die Planung bleiben gleich.
 4. **Waldkörper auch in Stufe 0** jenseits von 70 m neben der Strecke (der
    Vertrag nennt sie nur für Stufe 1): sonst wäre Wald dort leer.
 5. **Belagsfarben/-texturen von `UNKNOWN`** wie `COMPACTED` (`SurfaceKind.visual`),
@@ -87,8 +95,8 @@ Was noch nicht stimmt (gesehen und bewusst offen gelassen):
 - Kronenbedeckung aus dem Luftbild ist an NRW-Orthofotos abgestimmt; in
   Sachsen sah sie plausibel aus, andere Länder ungesehen.
 - Die Durchschnittsgrößen im Voranschlag (`WorldEstimates`) sind Schätzwerte;
-  gemessen: Altenberg kurz (3 km, MEDIUM) 45,8 MB Platte (15,2 MB/km, genau am
-  Richtwert), Tharandt 4 km 43,9 MB (11 MB/km), Testwelt 27 MB.
+  gemessen: Altenberg kurz (3 km, MEDIUM) 47,9 MB Platte (15,9 MB/km, knapp über
+  dem Richtwert von 15 MB/km), Tharandt 4 km 51,3 MB (12,8 MB/km), Testwelt 30 MB.
 - Bauzeit auf dem Entwicklerrechner: 3 km mit leerem Cache rund 19 s
   (111 Anfragen); auf dem Handy deutlich länger (nicht gemessen).
 
@@ -145,11 +153,15 @@ Gemeinsam mit indoor-render und indoor-app gebaut und geprüft:
   `WorldBuilder.build` auf `Dispatchers.IO` aufrufen; Abbruch über
   `isCancelled()` greift innerhalb von 50 ms, eine laufende Kachel wird aber
   noch zu Ende gerechnet.
-- **indoor-render** (erledigt: Umgebungslicht bei tiefer Sonne 26 000 statt
+- **indoor-render** (teils erledigt: Umgebungslicht bei tiefer Sonne 26 000 statt
   22 000 lx): Laub ist `MASK` + doppelseitig ohne echte Ausschnitte;
-  Waldkörper und Kronen leben von Vertexfarben (`COLOR_0`). Ein kräftigeres
-  Umgebungslicht im Wald (IndirectLight) hilft, sonst ist der Weg unter dem
-  Kronendach sehr dunkel. Wasser hat `roughness 0,6` ohne Spiegelung.
+  Waldkörper und Kronen leben von Vertexfarben (`COLOR_0`) und haben
+  geglättete Normalen. **Wald unter Kronendach ist zu dunkel:** Im Weltbau
+  ist das nicht lösbar, ohne den Vertrag zu brechen (Luftbilder werden
+  unverändert eingebettet, der Boden unter dem Wald ist also das dunkle
+  Orthofoto). Bitte das Umgebungslicht (`IndirectLight`) kräftig genug wählen
+  und die Schattenstärke begrenzen (Schatten nicht schwarz), ggf. Dunst.
+  Wasser hat `roughness 0,6` ohne Spiegelung.
 - **indoor-core:** keine.
 
 ## Auf dem Gerät zu prüfen
