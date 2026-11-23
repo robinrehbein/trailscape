@@ -213,7 +213,8 @@ internal class TreesLayer : TileLayer {
                 val hit = ctx.track.nearest(e, n, to + 1.0) ?: continue
                 if (hit.distance < from || hit.distance >= to) continue
                 if (hit.distance < ctx.track.halfWidthAt(hit.distM) + TRACK_CLEARANCE_M) continue
-                val p = ctx.land.canopyAt(e, n)
+                // Auch geschlossener Wald hat Luecken (Licht auf dem Waldboden).
+                val p = ctx.land.canopyAt(e, n) * 0.85
                 if ((h and 0xFF) / 256.0 >= p) continue
                 when (ctx.land.classAt(e, n)) {
                     LandClass.WATER, LandClass.WETLAND -> continue
@@ -266,7 +267,7 @@ internal class TreesLayer : TileLayer {
         val coniferP = if (inForest) ctx.land.coniferShare(c.e, c.n) else 0.15
         val conifer = r1 < coniferP
         val detailed = c.dist <= DETAIL_M
-        val h = if (inForest) (if (conifer) 15.0 + 9.0 * r2 else 12.0 + 8.0 * r2) else 7.0 + 7.0 * r2
+        val h = if (inForest) (if (conifer) 13.0 + 8.0 * r2 else 11.0 + 7.0 * r2) else 7.0 + 7.0 * r2
         val g = ctx.ground.heightAt(c.e, c.n) - 0.25
         val x = ctx.x(c.e)
         val y = ctx.y(g)
@@ -277,7 +278,7 @@ internal class TreesLayer : TileLayer {
             val leaf = { shade: Double -> crownColorRaw(CONIFER, tint * shade) }
             if (detailed) {
                 trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.3 * h, z), 0.014 * h, 0.009 * h, 5, false, false, trunkColor)
-                cone(crown, x, y + 0.12 * h, z, 0.2 * h, y + 0.78 * h, 8, leaf, r1)
+                cone(crown, x, y + 0.08 * h, z, 0.21 * h, y + 0.78 * h, 8, leaf, r1)
                 cone(crown, x, y + 0.5 * h, z, 0.13 * h, y + h, 7, leaf, r2)
             } else {
                 trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.2 * h, z), 0.013 * h, 0.01 * h, 3, false, false, trunkColor)
@@ -286,7 +287,7 @@ internal class TreesLayer : TileLayer {
         } else {
             val trunkColor = lin(Argb.rgb(70, 62, 52))
             val base = if (inForest) BROADLEAF else BROADLEAF_OPEN
-            val crownBottom = if (inForest) 0.3 * h else 0.28 * h
+            val crownBottom = if (inForest) 0.24 * h else 0.25 * h
             val cy = y + (crownBottom + h) / 2
             val ry = (h - crownBottom) / 2
             val rx = ry * (if (inForest) 0.75 else 0.95) * (0.9 + 0.2 * r3)
@@ -380,8 +381,8 @@ internal class TreesLayer : TileLayer {
         /** Bis hier dicht gesetzt und ausfuehrlich gebaut. */
         const val DENSE_M = 28.0
         const val DETAIL_M = 32.0
-        const val DENSE_SPACING_M = 5.0
-        const val OPEN_SPACING_M = 7.5
+        const val DENSE_SPACING_M = 6.0
+        const val OPEN_SPACING_M = 8.0
 
         /** Mindestabstand des Stamms vom Fahrbahnrand. */
         const val TRACK_CLEARANCE_M = 2.8
