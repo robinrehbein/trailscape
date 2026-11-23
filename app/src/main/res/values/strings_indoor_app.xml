@@ -328,4 +328,43 @@
     <string name="indoor_app_worlds_delete_confirm_title">Welt löschen?</string>
     <string name="indoor_app_worlds_delete_confirm_body">Die Welt zu „%1$s“ (%2$s) wird gelöscht. Du kannst sie später neu laden.</string>
     <!-- END Ablauf-Bildschirme -->
+
+    <!-- Bekannte Strecken (Katalog, docs/indoor/catalog.md) -->
+    <string name="indoor_app_route_tab_own">Eigene Strecken</string>
+    <string name="indoor_app_route_tab_catalog">Bekannte Strecken</string>
+    <string name="indoor_app_catalog_intro">Bekannte Abschnitte mit fertig gebauter 3D-Welt. Eine Strecke wird einmal geladen und liegt danach wie eine eigene Welt auf dem Gerät – auch ohne Netz fahrbar und in den Indoor-Welten löschbar.</string>
+    <string name="indoor_app_catalog_empty">Im Katalog sind noch keine Strecken.</string>
+    <string name="indoor_app_catalog_refresh">Katalog aktualisieren</string>
+    <string name="indoor_app_catalog_refresh_done">Katalog ist auf dem neuesten Stand.</string>
+    <string name="indoor_app_catalog_refresh_not_available">Der Katalog ist noch nicht veröffentlicht. Die Liste oben stammt aus der App.</string>
+    <string name="indoor_app_catalog_refresh_failed">Katalog konnte nicht geladen werden. Prüfe die Verbindung und versuche es noch einmal.</string>
+    <string name="indoor_app_catalog_privacy">Laden und Aktualisieren holen Dateien aus dem öffentlichen GitHub-Release von Trailscape (github.com). Dabei wird nur übertragen, welche Datei du lädst – kein Konto, keine Kennung.</string>
+    <string name="indoor_app_catalog_meta">%1$s km · %2$s Hm · %3$s</string>
+    <string name="indoor_app_catalog_surface_share">%1$s %2$d %%</string>
+    <string name="indoor_app_catalog_aerial_yes">Mit Luftbild</string>
+    <string name="indoor_app_catalog_aerial_no">Ohne Luftbild – der Boden ist aus Kartendaten erzeugt.</string>
+    <string name="indoor_app_catalog_kind_road">Rennrad</string>
+    <string name="indoor_app_catalog_kind_gravel">Schotter</string>
+    <string name="indoor_app_catalog_kind_cobbles">Pflaster</string>
+    <string name="indoor_app_catalog_download">Laden (%1$s)</string>
+    <string name="indoor_app_catalog_download_unknown">Laden</string>
+    <string name="indoor_app_catalog_resume">Fortsetzen</string>
+    <string name="indoor_app_catalog_discard">Verwerfen</string>
+    <string name="indoor_app_catalog_cancelling">Wird abgebrochen …</string>
+    <string name="indoor_app_catalog_installing">Wird geprüft und entpackt …</string>
+    <string name="indoor_app_catalog_ready">Bereit</string>
+    <string name="indoor_app_catalog_ready_hint">Antippen und weiter – kein Laden der Welt nötig.</string>
+    <string name="indoor_app_catalog_update_tag">Update verfügbar</string>
+    <string name="indoor_app_catalog_update_hint">Die geladene Fassung bleibt fahrbar.</string>
+    <string name="indoor_app_catalog_update">Aktualisieren (%1$s)</string>
+    <string name="indoor_app_catalog_update_unknown">Aktualisieren</string>
+    <string name="indoor_app_catalog_progress">%1$d %% · %2$s von %3$s</string>
+    <string name="indoor_app_catalog_progress_unknown">%1$s geladen</string>
+    <string name="indoor_app_catalog_failed_not_available">Paket ist noch nicht verfügbar. Es wird gerade vorbereitet – schau später noch einmal vorbei.</string>
+    <string name="indoor_app_catalog_failed_offline">Keine Verbindung. Der geladene Teil bleibt erhalten, „Fortsetzen“ macht dort weiter.</string>
+    <string name="indoor_app_catalog_failed_checksum">Das geladene Paket war beschädigt und wurde verworfen. Versuche es noch einmal.</string>
+    <string name="indoor_app_catalog_failed_space">Auf dem Gerät ist nicht genug Platz für diese Welt.</string>
+    <string name="indoor_app_catalog_failed_other">Das Paket konnte nicht geladen werden.</string>
+    <string name="indoor_app_catalog_failed_keeps_old">Die vorher geladene Fassung bleibt fahrbar.</string>
+    <string name="indoor_app_worlds_tag_catalog">Bekannte Strecke</string>
 </resources>

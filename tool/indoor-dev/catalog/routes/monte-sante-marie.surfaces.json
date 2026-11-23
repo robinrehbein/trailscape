@@ -1,0 +1,30 @@
+{
+    "source": "BROUTER_WAY_TAGS",
+    "lengthM": 12030.0,
+    "sections": [
+        {
+            "fromM": 0.0,
+            "toM": 75.0,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 75.0,
+            "toM": 9359.8,
+            "kind": "COMPACTED",
+            "highway": "residential"
+        },
+        {
+            "fromM": 9359.8,
+            "toM": 11051.0,
+            "kind": "GRAVEL",
+            "highway": "track"
+        },
+        {
+            "fromM": 11051.0,
+            "toM": 12029.6,
+            "kind": "COMPACTED",
+            "highway": "track"
+        }
+    ]
+}

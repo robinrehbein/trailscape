@@ -1,0 +1,84 @@
+{
+    "source": "BROUTER_WAY_TAGS",
+    "lengthM": 9864.0,
+    "sections": [
+        {
+            "fromM": 0.0,
+            "toM": 100.0,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 100.0,
+            "toM": 1932.4,
+            "kind": "COBBLESTONE",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 1932.4,
+            "toM": 2106.1,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 2106.1,
+            "toM": 2628.1,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 2628.1,
+            "toM": 3312.8,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 3312.8,
+            "toM": 3679.1,
+            "kind": "COBBLESTONE",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 3679.1,
+            "toM": 4536.5,
+            "kind": "CONCRETE",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 4536.5,
+            "toM": 4595.4,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 4595.4,
+            "toM": 4977.7,
+            "kind": "CONCRETE",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 4977.7,
+            "toM": 7342.3,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 7342.3,
+            "toM": 8218.7,
+            "kind": "ASPHALT",
+            "highway": "path"
+        },
+        {
+            "fromM": 8218.7,
+            "toM": 8842.5,
+            "kind": "COBBLESTONE",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 8842.5,
+            "toM": 9863.6,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        }
+    ]
+}

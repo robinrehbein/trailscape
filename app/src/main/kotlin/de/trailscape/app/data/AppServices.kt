@@ -7,6 +7,8 @@ import de.trailscape.app.health.HealthConnectGateway
 import de.trailscape.app.i18n.AppLocale
 import de.trailscape.app.i18n.localizedFor
 import de.trailscape.app.indoor.DefaultIndoorParts
+import de.trailscape.app.indoor.catalog.CatalogDownloader
+import de.trailscape.app.indoor.catalog.CatalogStore
 import de.trailscape.app.indoor.IndoorParts
 import de.trailscape.app.indoor.geo.BitmapRasterDecoder
 import de.trailscape.app.indoor.geo.OkHttpGeoFetcher
@@ -22,6 +24,7 @@ import de.trailscape.app.update.UpdateChecker
 import de.trailscape.app.update.installerPackageName
 import de.trailscape.app.update.isUpdateCheckAllowed
 import de.trailscape.app.update.runNumberFromVersionCode
+import de.trailscape.core.indoor.catalog.IndoorCatalog
 import de.trailscape.core.HealthGateway
 import de.trailscape.core.HealthSyncService
 import de.trailscape.core.HealthSyncStore
@@ -333,6 +336,33 @@ object AppServices {
 
     /** Die Welten auf dem Geraet (Weltverwaltung, Indoor-Ablauf). */
     val indoorWorldLibrary: WorldLibrary by lazy { WorldLibrary(indoorWorldsDir, indoorGeoCacheDir) }
+
+    /**
+     * Katalog bekannter Strecken (docs/indoor/catalog.md): beigelegter Katalog
+     * aus dem Asset `indoor/catalog.json`, Downloads und Entpacken unter
+     * `<filesDir>/indoor/catalog` (vom Backup ausgenommen wie ganz `indoor/`).
+     */
+    val indoorCatalogStore: CatalogStore by lazy {
+        CatalogStore(
+            baseDir = File(appContext.filesDir, "indoor/catalog"),
+            worlds = indoorWorldLibrary,
+            worldsDir = indoorWorldsDir,
+            bundled = {
+                runCatching {
+                    appContext.assets.open("indoor/${IndoorCatalog.CATALOG_FILE}").use { it.readBytes().toString(Charsets.UTF_8) }
+                }.getOrNull()
+            },
+        )
+    }
+
+    /**
+     * Abruf der Katalogpakete aus dem GitHub-Release — nur nach „Laden" bzw.
+     * „Katalog aktualisieren"; Hosts in PRIVACY.md. Weiterleitungen prueft
+     * der Downloader selbst gegen `isAllowedCatalogUrl`.
+     */
+    val indoorCatalogDownloader: CatalogDownloader by lazy {
+        CatalogDownloader(CatalogDownloader.createClient(), "Trailscape/${BuildConfig.VERSION_NAME}")
+    }
 
     /**
      * Die Teile der anderen Indoor-Slices hinter einer Schnittstelle (siehe

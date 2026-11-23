@@ -126,6 +126,7 @@ private fun PairStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenDiagnostics
 @Composable
 private fun RouteStage(vm: IndoorViewModel) {
     val ui by vm.route.collectAsStateWithLifecycle()
+    val catalog by vm.catalog.collectAsStateWithLifecycle()
     BackHandler { vm.back() }
     IndoorRouteScreen(
         ui = ui,
@@ -134,6 +135,12 @@ private fun RouteStage(vm: IndoorViewModel) {
         onGhostChange = vm::setGhost,
         onContinue = vm::continueFromRoute,
         onBack = { vm.back() },
+        catalog = catalog,
+        onTabChange = vm::setRouteTab,
+        onCatalogDownload = vm::downloadCatalog,
+        onCatalogCancel = vm::cancelCatalogDownload,
+        onCatalogDiscard = vm::discardCatalogDownload,
+        onCatalogRefresh = vm::refreshCatalog,
     )
 }
 

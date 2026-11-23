@@ -46,11 +46,19 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
         val manifest: WorldManifest?,
         val source: WorldSource?,
         val bytes: Long,
+        val catalog: CatalogMarker? = null,
     ) {
         /** `manifest.json` liegt vor und ist lesbar. */
         val complete: Boolean get() = manifest != null
         val isTestWorld: Boolean get() = dirName == TEST_WORLD_ID
     }
+
+    /**
+     * Herkunft einer Welt aus dem Katalog bekannter Strecken
+     * (docs/indoor/catalog.md): Kennung und Version des Pakets. Katalogwelten
+     * haben keine Tour und sind deshalb nie verwaist.
+     */
+    data class CatalogMarker(val catalogId: String, val version: Int)
 
     /** Zuordnung einer Welt zur Tour, aus der sie gebaut wurde. */
     data class WorldSource(val rideId: String, val routeName: String)
@@ -148,6 +156,7 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
         attribution = info.manifest?.attribution.orEmpty(),
         orphaned = isOrphaned(info, knownRideIds),
         complete = info.complete,
+        fromCatalog = info.catalog != null,
     )
 
     private fun describe(dir: File): WorldInfo {
@@ -161,6 +170,7 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
             manifest = manifest,
             source = readSource(dir),
             bytes = dirSize(dir),
+            catalog = readCatalogMarker(dir),
         )
     }
 
@@ -170,6 +180,29 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
 
         /** Name der Zuordnungsdatei neben dem Manifest. */
         const val SOURCE_FILE = "app-source.json"
+
+        /** Herkunftsdatei einer Katalogwelt neben dem Manifest. */
+        const val CATALOG_FILE = "app-catalog.json"
+
+        /** Schreibt die Herkunft einer Katalogwelt. */
+        fun writeCatalogMarker(worldDir: File, catalogId: String, version: Int) {
+            worldDir.mkdirs()
+            val text = buildJsonObject {
+                put("catalogId", catalogId)
+                put("version", version)
+            }.toString()
+            File(worldDir, CATALOG_FILE).writeText(text, Charsets.UTF_8)
+        }
+
+        /** Liest die Herkunft einer Katalogwelt; `null` wenn sie fehlt oder unlesbar ist. */
+        fun readCatalogMarker(worldDir: File): CatalogMarker? = runCatching {
+            val file = File(worldDir, CATALOG_FILE)
+            if (!file.isFile) return@runCatching null
+            val obj = Json.parseToJsonElement(file.readText(Charsets.UTF_8)) as? JsonObject ?: return@runCatching null
+            val id = (obj["catalogId"] as? JsonPrimitive)?.contentOrNull ?: return@runCatching null
+            val version = (obj["version"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: return@runCatching null
+            CatalogMarker(id, version)
+        }.getOrNull()
 
         /** Schreibt die Zuordnung Welt → Tour (legt [worldDir] an, falls noetig). */
         fun writeSource(worldDir: File, rideId: String, routeName: String) {

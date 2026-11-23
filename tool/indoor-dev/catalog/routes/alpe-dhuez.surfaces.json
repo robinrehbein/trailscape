@@ -1,0 +1,42 @@
+{
+    "source": "BROUTER_WAY_TAGS",
+    "lengthM": 15115.0,
+    "sections": [
+        {
+            "fromM": 0.0,
+            "toM": 130.0,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 130.0,
+            "toM": 807.9,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 807.9,
+            "toM": 862.9,
+            "kind": "ASPHALT",
+            "highway": "primary"
+        },
+        {
+            "fromM": 862.9,
+            "toM": 14819.5,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 14819.5,
+            "toM": 14996.5,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 14996.5,
+            "toM": 15115.5,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        }
+    ]
+}
