@@ -201,4 +201,42 @@ val dataNotices: List<LicenseNotice> = listOf(
         license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — © GeoBasis-DE/LGB; © Geoportal Berlin"),
         url = "https://www.govdata.de/dl-de/by-2-0",
     ),
+    // Bekannte Strecken (docs/indoor/catalog.md): Streckenverlauf aus OSM,
+    // Luftbilder der vorgebauten Welten (nur beim Vorbauen abgerufen; die
+    // genaue Angabe mit Jahr steht im Manifest jeder Welt).
+    LicenseNotice(
+        name = UiText.Plain("Bekannte Strecken: Streckenverlauf (OpenStreetMap, BRouter)"),
+        license = UiText.Plain("ODbL 1.0 — © OpenStreetMap-Mitwirkende"),
+        url = "https://www.openstreetmap.org/copyright",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("IGN France, BD ORTHO® (bekannte Strecken in Frankreich)"),
+        license = UiText.Plain("Licence Ouverte / Etalab 2.0 — © IGN"),
+        url = "https://www.etalab.gouv.fr/licence-ouverte-open-licence/",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("Digitaal Vlaanderen, Luchtopnamen (bekannte Strecken in Flandern)"),
+        license = UiText.Plain("Modellicentie gratis hergebruik v1.0 — Bron: Digitaal Vlaanderen"),
+        url = "https://www.vlaanderen.be/digitaal-vlaanderen/onze-diensten-en-platformen/open-data/voorwaarden-voor-het-hergebruik-van-overheidsinformatie/modellicentie-gratis-hergebruik",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("PNOA, Instituto Geográfico Nacional (bekannte Strecken in Spanien)"),
+        license = UiText.Plain("CC BY 4.0 — PNOA, scne.es"),
+        url = "https://creativecommons.org/licenses/by/4.0/",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("USGS/USDA NAIP, The National Map (bekannte Strecken in den USA)"),
+        license = UiText.Plain("Public Domain"),
+        url = "https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("HVBG Hessen (Digitale Orthophotos, bekannte Strecken)"),
+        license = UiText.Plain("Datenlizenz Deutschland Zero 2.0 (dl-de/zero-2-0)"),
+        url = "https://www.govdata.de/dl-de/zero-2-0",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("LGL Baden-Württemberg (Digitale Orthophotos, bekannte Strecken)"),
+        license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — LGL-BW, www.lgl-bw.de"),
+        url = "https://www.govdata.de/dl-de/by-2-0",
+    ),
 )

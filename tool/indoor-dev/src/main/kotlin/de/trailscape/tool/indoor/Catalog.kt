@@ -246,11 +246,23 @@ fun surfaceShares(sections: List<SurfaceSection>, lengthM: Double): Map<SurfaceK
         .filterValues { it >= 0.005 }
 }
 
-/** Positive Hoehenmeter des Streckenbands (Band ist schon geglaettet). */
-fun ascentOf(m: WorldManifest): Double {
-    var sum = 0.0
+/**
+ * Positive Hoehenmeter des Streckenbands mit einer Schwelle von
+ * [thresholdM] (wie die „gefilterten" Hoehenmeter der Router): kleine
+ * Wellen des Gelaendemodells zaehlen nicht mit.
+ */
+fun ascentOf(m: WorldManifest, thresholdM: Double = 4.0): Double {
     val u = m.track.u
-    for (i in 1 until u.size) sum += maxOf(0.0, (u[i] - u[i - 1]).toDouble())
+    if (u.isEmpty()) return 0.0
+    var sum = 0.0
+    var ref = u[0].toDouble()
+    for (i in 1 until u.size) {
+        val v = u[i].toDouble()
+        when {
+            v - ref >= thresholdM -> { sum += v - ref; ref = v }
+            v < ref -> ref = v
+        }
+    }
     return sum
 }
 
@@ -300,7 +312,10 @@ fun catalogBuild(
     println("Katalog: ${File(out, IndoorCatalog.CATALOG_FILE).path} (${merged.size} Eintraege)")
     appCatalog?.let {
         it.parentFile?.mkdirs()
-        it.writeText(catalog.toJson() + "\n")
+        // Ohne Pruefsummen: Die App holt Version, Groesse und SHA-256 vor jedem
+        // Laden aus dem Release-Katalog; die Pakete dieses Laufs sind nicht die
+        // des CI-Laufs (Geodaten aendern sich), Groessen bleiben als Richtwert.
+        it.writeText(catalog.copy(entries = catalog.entries.map { e -> e.copy(sha256 = null) }).toJson() + "\n")
         println("App-Katalog: ${it.path}")
     }
     return if (failed == 0) 0 else 1

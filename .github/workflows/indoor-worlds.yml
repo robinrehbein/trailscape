@@ -1,0 +1,98 @@
+name: Indoor-Welten (Katalog)
+
+# Baut die Welten des Katalogs bekannter Strecken vor und haengt sie als
+# Assets an das feste Release-Tag `indoor-worlds-v1` (docs/indoor/catalog.md).
+#
+# Nur manuell (workflow_dispatch): Ein Lauf dauert lange, laedt Geodaten von
+# den Quellen des Weltbaus (Hoehen, OpenFreeMap, amtliche Luftbilder) und
+# ersetzt veroeffentlichte Pakete. Die App laedt ein Paket erst, wenn jemand
+# in der App „Laden" tippt; vorher fragt sie `catalog.json` aus demselben
+# Release ab (Version, Groesse, SHA-256).
+#
+# Ablauf:
+#  1. `catalog.json` des Release holen (falls vorhanden), damit ein Lauf mit
+#     `only` die uebrigen Eintraege behaelt.
+#  2. `:indoor-dev:installDist`, dann `catalog-build` (Bau, checkWorld, Paket).
+#  3. Release anlegen, falls es fehlt, und Pakete + catalog.json hochladen
+#     (`--clobber` ersetzt gleichnamige Assets).
+#
+# Wer eine Strecke neu veroeffentlicht, erhoeht vorher ihre `version` in
+# tool/indoor-dev/catalog/catalog-src.json (neuer Paketname, „Update
+# verfuegbar" in der App).
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Nur diese Strecken (Kennungen mit Komma, leer = alle)"
+        required: false
+        default: ""
+      quality:
+        description: "Qualitaet (leer = je Eintrag, sonst LOW, MEDIUM, HIGH)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indoor-worlds
+  cancel-in-progress: false
+
+env:
+  TAG: indoor-worlds-v1
+
+jobs:
+  worlds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      # Das Modul :brouter uebersetzt das Submodul third_party/brouter; ohne es
+      # bricht schon die Gradle-Konfiguration ab.
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Werkzeug bauen
+        run: ./gradlew --no-daemon :indoor-dev:installDist
+
+      - name: Bisherigen Katalog des Release holen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out
+          gh release download "$TAG" --pattern catalog.json --dir out --clobber || echo "noch kein Release-Katalog"
+
+      - name: Welten bauen, pruefen, packen
+        env:
+          ONLY: ${{ inputs.only }}
+          QUALITY: ${{ inputs.quality }}
+        run: |
+          args=(catalog-build --out out --keep-going)
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          if [ -n "$QUALITY" ]; then args+=(--quality "$QUALITY"); fi
+          JAVA_OPTS="-Xmx6g" tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
+
+      - name: Uebersicht
+        if: always()
+        run: |
+          ls -l out/packages || true
+          cat out/catalog.json || true
+
+      # Auch wenn einzelne Strecken scheiterten (--keep-going): die fertigen hochladen.
+      - name: Release anlegen und Pakete hochladen
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! ls out/packages/*.zip > /dev/null 2>&1; then echo "keine Pakete gebaut"; exit 1; fi
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --title "Indoor-Welten: bekannte Strecken" \
+              --notes "Vorgebaute 3D-Welten fuer das Indoor-Training (Katalog bekannter Strecken). Die App laedt sie nur nach „Laden“. Quellenangaben stehen im manifest.json jeder Welt; Streckenverlauf © OpenStreetMap-Mitwirkende (ODbL). Siehe docs/indoor/catalog.md."
+          fi
+          gh release upload "$TAG" out/packages/*.zip out/catalog.json --clobber

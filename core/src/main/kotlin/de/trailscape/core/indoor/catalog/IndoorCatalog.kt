@@ -242,13 +242,13 @@ data class IndoorCatalog(
          * unlesbare Eintraege werden uebersprungen (ein neuerer Katalog mit
          * Feldern, die diese Version nicht kennt, soll die Liste nicht leeren).
          */
-        fun parse(text: String): IndoorCatalog = try {
+        fun parse(text: String, allowUrl: (String) -> Boolean = ::isAllowedCatalogUrl): IndoorCatalog = try {
             val o = Json.parseToJsonElement(text) as? JsonObject
                 ?: throw IllegalArgumentException("Katalog: kein JSON-Objekt")
             val format = o.requiredInt("format")
             require(format == FORMAT) { "Katalog: Format $format wird nicht unterstuetzt (erwartet $FORMAT)" }
             val base = o.optionalString("baseUrl") ?: DEFAULT_BASE_URL
-            require(isAllowedCatalogUrl(base) && base.endsWith("/")) { "Katalog: unzulaessige Adresse $base" }
+            require(allowUrl(base) && base.endsWith("/")) { "Katalog: unzulaessige Adresse $base" }
             val entries = (o["entries"] as? JsonArray).orEmpty().mapNotNull { e ->
                 runCatching { CatalogEntry.fromJson(e as JsonObject) }.getOrNull()
             }.distinctBy { it.id }

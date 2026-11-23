@@ -7,6 +7,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.data.RideStorage
+import de.trailscape.app.indoor.catalog.CatalogDownloader
+import de.trailscape.app.indoor.catalog.CatalogStore
 import de.trailscape.app.indoor.BleHeartRateSource
 import de.trailscape.app.indoor.IndoorHeartRateSource
 import de.trailscape.app.indoor.IndoorPart
@@ -143,10 +145,18 @@ class IndoorViewModel(
     private val autoLoop: Boolean = true,
     scope: CoroutineScope? = null,
     private val quality: IndoorQuality = IndoorQuality.MEDIUM,
+    catalogStore: CatalogStore? = null,
+    catalogDownloader: CatalogDownloader? = null,
     var onRideSaved: (String) -> Unit = {},
 ) : ViewModel() {
 
     private val scope: CoroutineScope = scope ?: viewModelScope
+
+    /** Bereich „Bekannte Strecken" (docs/indoor/catalog.md). */
+    private val catalogController = IndoorCatalogController(catalogStore, catalogDownloader, this.scope, io)
+
+    /** Zustand der Katalogkarten im Schritt Streckenwahl. */
+    val catalog: StateFlow<IndoorCatalogUi> = catalogController.ui
     private val sourcing = IndoorRouteSourcing(parts, rematchRouter)
 
     // -----------------------------------------------------------------------
@@ -234,6 +244,9 @@ class IndoorViewModel(
         var plan: WorldPlan? = null
         var manifest: WorldManifest? = null
         var dir: File? = null
+
+        /** Katalogwelt bereit → ohne „Welt laden" direkt losfahren. */
+        var autoStart = false
     }
 
     // Fahrt
@@ -336,6 +349,7 @@ class IndoorViewModel(
      */
     fun loadRouteOptions() {
         _route.update { it.copy(loadingOptions = true) }
+        catalogController.load()
         scope.launch {
             val (saved, erg) = withContext(io) { savedOptions() to computeErg() }
             ergWorkout = erg
@@ -343,6 +357,7 @@ class IndoorViewModel(
             _route.update { current ->
                 val options = listOf<IndoorRouteOption>(IndoorRouteOption.TestWorld) + saved
                 val selected = current.selected?.let { sel -> options.firstOrNull { it.key == sel.key } }
+                    ?: current.selected as? IndoorRouteOption.Catalog
                 val mode = if (erg == null) IndoorMode.SIM else current.mode
                 current.copy(
                     options = options,
@@ -437,11 +452,33 @@ class IndoorViewModel(
         _route.update { it.copy(ghost = accepted) }
     }
 
-    /** Weiter zu „Welt laden". */
+    /** Bereich der Streckenwahl: eigene Strecken oder bekannte Strecken. */
+    fun setRouteTab(tab: IndoorRouteTab) {
+        _route.update { it.copy(tab = tab) }
+    }
+
+    /** Nutzeraktion „Laden"/„Fortsetzen"/„Aktualisieren" einer bekannten Strecke. */
+    fun downloadCatalog(id: String) = catalogController.download(id)
+
+    /** Bricht das Laden ab; der geladene Teil bleibt fuer „Fortsetzen". */
+    fun cancelCatalogDownload(id: String) = catalogController.cancel(id)
+
+    /** Verwirft einen angefangenen Download. */
+    fun discardCatalogDownload(id: String) = catalogController.discard(id)
+
+    /** Nutzeraktion „Katalog aktualisieren". */
+    fun refreshCatalog() = catalogController.refreshCatalog()
+
+    fun dismissCatalogRefresh() = catalogController.dismissRefreshResult()
+
+    /**
+     * Weiter zu „Welt laden". Eine bekannte Strecke mit fertiger Welt faehrt
+     * direkt los (ohne Voranschlag und ohne Netz).
+     */
     fun continueFromRoute() {
         if (!_route.value.canContinue) return
         _stage.value = IndoorStage.WORLD
-        prepareWorld()
+        prepareWorld(autoStart = _route.value.selected is IndoorRouteOption.Catalog)
     }
 
     // -----------------------------------------------------------------------
@@ -449,12 +486,15 @@ class IndoorViewModel(
     // -----------------------------------------------------------------------
 
     /** Bereitet die gewaehlte Strecke auf und rechnet den Voranschlag (ohne Netz). */
-    fun prepareWorld() {
+    fun prepareWorld(autoStart: Boolean = false) {
         val option = _route.value.selected ?: return
         val previous = cancelRunningWorldJob()
         resetWorld()
         _world.value = IndoorWorldUi.Preparing
-        val token = WorldJobToken().also { worldToken = it }
+        val token = WorldJobToken().also {
+            it.autoStart = autoStart
+            worldToken = it
+        }
         worldJob = scope.launch {
             // Ein abgeloester Testwelt-Bau schreibt sonst noch ins selbe Verzeichnis.
             previous?.join()
@@ -463,6 +503,7 @@ class IndoorViewModel(
                     when (option) {
                         IndoorRouteOption.TestWorld -> prepareTestWorld(token)
                         is IndoorRouteOption.Saved -> prepareSaved(option, token)
+                        is IndoorRouteOption.Catalog -> prepareCatalog(option, token)
                     }
                 }
             }
@@ -480,6 +521,7 @@ class IndoorViewModel(
         token.manifest?.let { worldManifest = it }
         token.dir?.let { worldDir = it }
         _world.value = ui
+        if (token.autoStart && ui is IndoorWorldUi.Ready && _stage.value == IndoorStage.WORLD) startRide(withWorld = true)
     }
 
     private fun resetWorld() {
@@ -504,6 +546,22 @@ class IndoorViewModel(
         token.manifest = manifest
         token.dir = dir
         return IndoorWorldUi.Ready(routeName, manifest.attribution)
+    }
+
+    /** Bekannte Strecke: Welt liegt fertig vor, die Strecke kommt aus ihrem Manifest. */
+    private fun prepareCatalog(option: IndoorRouteOption.Catalog, token: WorldJobToken): IndoorWorldUi {
+        val routeName = option.name
+        token.routeName = routeName
+        val installed = catalogController.installedWorld(option.catalogId)
+            ?: return IndoorWorldUi.RouteUnavailable(
+                IndoorProblem(IndoorPart.APP, false, "Katalogwelt ${option.catalogId} nicht vorhanden"),
+            )
+        val route = indoorCatching(IndoorPart.CORE) { worldRouteOf(installed.manifest, routeName) }
+            .getOrElse { return IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.CORE, it)) }
+        token.baseRoute = route
+        token.manifest = installed.manifest
+        token.dir = installed.dir
+        return IndoorWorldUi.Ready(routeName, installed.manifest.attribution)
     }
 
     private suspend fun prepareSaved(option: IndoorRouteOption.Saved, token: WorldJobToken): IndoorWorldUi {
@@ -1127,6 +1185,7 @@ class IndoorViewModel(
     /** Gibt alles frei; eine laufende Fahrt wird ohne Aufzeichnung verworfen. */
     fun release() {
         cancelRunningWorldJob()
+        catalogController.release()
         rideCollectJob?.cancel()
         activeRuntime?.close()
         activeRuntime = null
@@ -1220,6 +1279,8 @@ class IndoorViewModel(
                     devices = IndoorDevices.remembered(app),
                     rematchRouter = OfflineFirstRematchRouter(app),
                     heartRate = { BleHeartRateSource(app) },
+                    catalogStore = AppServices.indoorCatalogStore,
+                    catalogDownloader = AppServices.indoorCatalogDownloader,
                     onRideSaved = onRideSaved,
                 ) as T
             }

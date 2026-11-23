@@ -328,4 +328,43 @@
     <string name="indoor_app_worlds_delete_confirm_title">Delete world?</string>
     <string name="indoor_app_worlds_delete_confirm_body">The world for “%1$s” (%2$s) will be deleted. You can load it again later.</string>
     <!-- END flow screens -->
+
+    <!-- Bekannte Strecken (Katalog, docs/indoor/catalog.md) -->
+    <string name="indoor_app_route_tab_own">Your routes</string>
+    <string name="indoor_app_route_tab_catalog">Known routes</string>
+    <string name="indoor_app_catalog_intro">Well-known sections with a ready-built 3D world. A route is downloaded once and then stays on your device like one of your own worlds – rideable offline and removable under Indoor worlds.</string>
+    <string name="indoor_app_catalog_empty">There are no routes in the catalogue yet.</string>
+    <string name="indoor_app_catalog_refresh">Refresh catalogue</string>
+    <string name="indoor_app_catalog_refresh_done">The catalogue is up to date.</string>
+    <string name="indoor_app_catalog_refresh_not_available">The catalogue has not been published yet. The list above comes with the app.</string>
+    <string name="indoor_app_catalog_refresh_failed">Couldn’t load the catalogue. Check your connection and try again.</string>
+    <string name="indoor_app_catalog_privacy">Downloading and refreshing fetch files from Trailscape’s public GitHub release (github.com). Only the file you download is requested – no account, no identifier.</string>
+    <string name="indoor_app_catalog_meta">%1$s km · %2$s m · %3$s</string>
+    <string name="indoor_app_catalog_surface_share">%1$s %2$d %%</string>
+    <string name="indoor_app_catalog_aerial_yes">With aerial imagery</string>
+    <string name="indoor_app_catalog_aerial_no">No aerial imagery – the ground is generated from map data.</string>
+    <string name="indoor_app_catalog_kind_road">Road</string>
+    <string name="indoor_app_catalog_kind_gravel">Gravel</string>
+    <string name="indoor_app_catalog_kind_cobbles">Cobbles</string>
+    <string name="indoor_app_catalog_download">Download (%1$s)</string>
+    <string name="indoor_app_catalog_download_unknown">Download</string>
+    <string name="indoor_app_catalog_resume">Resume</string>
+    <string name="indoor_app_catalog_discard">Discard</string>
+    <string name="indoor_app_catalog_cancelling">Cancelling …</string>
+    <string name="indoor_app_catalog_installing">Checking and unpacking …</string>
+    <string name="indoor_app_catalog_ready">Ready</string>
+    <string name="indoor_app_catalog_ready_hint">Tap and continue – no world to build.</string>
+    <string name="indoor_app_catalog_update_tag">Update available</string>
+    <string name="indoor_app_catalog_update_hint">The downloaded version stays rideable.</string>
+    <string name="indoor_app_catalog_update">Update (%1$s)</string>
+    <string name="indoor_app_catalog_update_unknown">Update</string>
+    <string name="indoor_app_catalog_progress">%1$d %% · %2$s of %3$s</string>
+    <string name="indoor_app_catalog_progress_unknown">%1$s downloaded</string>
+    <string name="indoor_app_catalog_failed_not_available">Package isn’t available yet. It’s being prepared – check back later.</string>
+    <string name="indoor_app_catalog_failed_offline">No connection. The downloaded part is kept, and “Resume” continues from there.</string>
+    <string name="indoor_app_catalog_failed_checksum">The downloaded package was damaged and has been discarded. Please try again.</string>
+    <string name="indoor_app_catalog_failed_space">There isn’t enough space on your device for this world.</string>
+    <string name="indoor_app_catalog_failed_other">Couldn’t download the package.</string>
+    <string name="indoor_app_catalog_failed_keeps_old">The previously downloaded version stays rideable.</string>
+    <string name="indoor_app_worlds_tag_catalog">Known route</string>
 </resources>

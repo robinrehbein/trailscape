@@ -78,6 +78,7 @@ können es nicht lesen; beim Deinstallieren verschwindet es vollständig.
 | Health-Sync-Stand | SharedPreferences, Schlüssel `trailscape.healthsync`, `trailscape.healthsync.historyImportDone` und `trailscape.healthsync.historyImportedUntil` | Zeitstempel des letzten Imports, damit nichts doppelt importiert wird; ein Ja/Nein-Merker, ob der einmalige Import der letzten 12 Monate schon gelaufen ist; solange dieser Import noch nicht fertig ist, der Zeitpunkt, bis zu dem er schon gespeichert hat |
 | Offline-Karten | `<filesDir>/mbgl-offline.db`, `<filesDir>/offline-styles/` | heruntergeladene Kartenkacheln der von dir gewählten Regionen; dazu eine Kopie des öffentlichen Kartenstils der Vektorkarte, damit die gespeicherten Kacheln auch nach einem Datenupdate bei OpenFreeMap passen (enthält nichts über dich) |
 | Indoor-Welten (optional) | `<filesDir>/indoor/worlds/<worldId>/` | nur wenn du „Welt laden“ getippt hast: Manifest mit der Strecke (Punkte, Höhen, Belag), Kacheln des 3D-Geländes, Quellenangaben. Vom Android-Backup ausgenommen; unter *Mehr → Indoor-Welten* einsehbar und löschbar |
+| Indoor: bekannte Strecken (optional) | `<filesDir>/indoor/catalog/` und `<filesDir>/indoor/worlds/<worldId>/` | nur wenn du bei einer bekannten Strecke „Laden“ oder „Katalog aktualisieren“ getippt hast: der zuletzt geholte Katalog (`catalog-remote.json`), angefangene Downloads (`downloads/*.part`, für „Fortsetzen“) und die entpackte Welt wie eine selbst gebaute, mit der Herkunftsdatei `app-catalog.json` (Kennung und Version). Enthält nichts über dich. Vom Android-Backup ausgenommen; unter *Mehr → Indoor-Welten* löschbar |
 | Indoor-Geodaten-Zwischenspeicher | `<cacheDir>/indoor/geo/` | heruntergeladene Höhen-, Vektor- und Luftbildkacheln für den Weltbau; vom System räumbar, vom Android-Backup ausgenommen, unter *Mehr → Indoor-Welten* leerbar. Eine fertige Welt braucht ihn nicht mehr |
 | Indoor-Einstellungen | SharedPreferences | der Schalter „Demo-Trainer“ und die Zähnezahl des Kettenblatts am Trainer (`trailscape.indoor.chainring_teeth`). Gekoppelte Trainer und Schalttaster stehen wie die Sensoren in `trailscape.ble.sensors` (Typ, Bluetooth-Adresse, Name) |
 | Absturzberichte | `<filesDir>/crash/last-crash.txt` | siehe Abschnitt 6 |
@@ -153,13 +154,16 @@ Datenschutzbestimmungen des jeweiligen Betreibers, nicht diese Erklärung.
 | **geodienste.sachsen.de**, nur Pfad `/wms_geosn_dop-rgb/guest` (Luftbild Sachsen, GeoSN) | nur nach „Welt laden“ und nur für Kacheln der Strecke in Sachsen | Kartenausschnitte (Rechteck in Koordinaten und Bildgröße) entlang der gewählten Strecke, also ein Hinweis auf die Strecke; IP-Adresse; User-Agent `Trailscape/<Version>` ohne Gerätekennung |
 | **www.geoproxy.geoportal-th.de**, nur Pfad `/geoproxy/services/DOP` (Luftbild Thüringen, GDI-Th) | nur nach „Welt laden“ und nur für Kacheln der Strecke in Thüringen | Kartenausschnitte (Rechteck in Koordinaten und Bildgröße) entlang der gewählten Strecke, also ein Hinweis auf die Strecke; IP-Adresse; User-Agent `Trailscape/<Version>` ohne Gerätekennung |
 | **isk.geobasis-bb.de**, nur Pfad `/mapproxy/dop20c/service/wms` (Luftbild Brandenburg und Berlin, LGB) | nur nach „Welt laden“ und nur für Kacheln der Strecke in Brandenburg oder Berlin | Kartenausschnitte (Rechteck in Koordinaten und Bildgröße) entlang der gewählten Strecke, also ein Hinweis auf die Strecke; IP-Adresse; User-Agent `Trailscape/<Version>` ohne Gerätekennung |
+| **github.com**, nur Pfad `/robinrehbein/trailscape/releases/download/` (Release `indoor-worlds-v1`), danach per Weiterleitung **release-assets.githubusercontent.com** (früher `objects.githubusercontent.com`; Speicher der Release-Dateien, GitHub, Inc., USA) | nur im Indoor-Ablauf, Bereich „Bekannte Strecken“: wenn du „Laden“, „Fortsetzen“, „Aktualisieren“ oder „Katalog aktualisieren“ tippst | der Abruf von `catalog.json` und gegebenenfalls des gewählten Pakets (z. B. `alpe-dhuez-v1.zip`), beim Fortsetzen mit `Range`-Kopf; daraus ergibt sich, **welche bekannte Strecke du lädst**. User-Agent `Trailscape/<Version>` ohne Gerätekennung, keine Cookies, kein Konto. Weiterleitungen werden nur auf diese Hosts verfolgt (`isAllowedCatalogUrl`). Die Liste der bekannten Strecken selbst liegt der App bei und braucht kein Netz ([Datenschutzerklärung von GitHub](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)) |
 | **brouter.de** (Belagsabgleich, kein neuer Host) | nur im Indoor-Ablauf nach „Welt laden“, wenn der Belag einer Strecke abgeglichen wird | wie bei der Routenberechnung die Koordinaten der Wegpunkte; läuft über denselben Router wie oben, mit Offline-Routing auf dem Gerät ohne Anfrage |
 | **github.com** | nur wenn du auf „Auf GitHub melden" tippst | der Bericht, den du vorher im Dialog gesehen hast. Abgeschickt wird das Formular erst von dir, im Browser |
 | **api.github.com** (Update-Prüfung) | nur bei Installation als APK von GitHub: beim App-Start, höchstens einmal in 24 Stunden — **abschaltbar** unter *Mehr → Über → „Täglich still nach Updates suchen"* —, und beim Tippen auf *„Nach Updates suchen"*; bei Installation über Google Play nie | eine GET-Anfrage auf die Release-Liste dieses Projekts (`/repos/robinrehbein/trailscape/releases`). Mitgesendet werden nur die technisch nötigen Header, darunter der User-Agent `Trailscape-Android` — GitHub erfährt also IP-Adresse, Zeitpunkt und dass irgendein Gerät Trailscape benutzt, aber keine Version, keine Geräte- oder Nutzerkennung und keine sonstigen Daten (`app/…/update/UpdateChecker.kt`, `UpdateLogic.kt`) |
 
 Zu Indoor: Das Feature erzeugt Netzverkehr **ausschließlich** nach deiner
 Aktion „Welt laden“ und nur an die drei Quellenarten oben (Höhen, Karteninhalt,
-Luftbild); jede URL wird unmittelbar vor dem Senden gegen eine feste
+Luftbild) — sowie für bekannte Strecken nach „Laden“ bzw. „Katalog
+aktualisieren“ an GitHub (Zeile oben); die Geodaten dieser Welten hat das
+Entwicklerwerkzeug vorab geladen, die App fragt dafür keine Geodienste an; jede URL wird unmittelbar vor dem Senden gegen eine feste
 Positivliste geprüft (`isAllowedGeoUrl`), Weiterleitungen werden nicht
 verfolgt. Der Voranschlag vor dem Laden nennt die Hosts. Rollentrainer,
 Schalttaster und Pulsgurt sind Bluetooth-Verbindungen (nächster Absatz); eine
@@ -366,8 +370,8 @@ Anfrage an jemanden:
 
 Rechte gegenüber den in Abschnitt 4 genannten Dritten (FOSSGIS, CyclOSM,
 OpenStreetMap Foundation, OpenTopoMap, Esri, OpenFreeMap, Cloudflare,
-brouter.de, GitHub, Google sowie für Indoor Amazon Web Services und die
-Vermessungsverwaltungen der Länder) machst du direkt dort geltend; wir geben ihnen nichts über dich weiter, was über die dort
+brouter.de, GitHub, Google sowie für Indoor Amazon Web Services, die
+Vermessungsverwaltungen der Länder und — für bekannte Strecken — GitHub) machst du direkt dort geltend; wir geben ihnen nichts über dich weiter, was über die dort
 genannten Anfragen hinausgeht.
 
 ---
