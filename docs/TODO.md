@@ -120,6 +120,16 @@ Vertrag und Hintergründe: `docs/indoor.md`, Notizen des Slices:
   Fahrten (Verhalten des Trainers im Simulationsmodus ist eine Annahme).
 - [ ] Health-Import: prüfen, dass eine gleichzeitig von der Uhr aufgezeichnete
   Einheit nicht als zweite Tour entsteht (`findDuplicateRide`).
+- [ ] **Bekannte Strecken veröffentlichen** (`docs/indoor/catalog.md`): nach
+  dem Merge auf `main` den Workflow „Indoor-Welten (Katalog)“ von Hand
+  starten; bis dahin meldet die App bei „Laden“ „Paket ist noch nicht
+  verfügbar“. Danach optional den Release-`catalog.json` (ohne `sha256`) als
+  App-Asset übernehmen.
+- [ ] Bekannte Strecken: ausländische Luftbild-Dienste (FR, Flandern, ES, US,
+  HE, BW) auch für eigene Strecken in der App freischalten? Heute nur beim
+  Vorbauen; bräuchte Jahres-Platzhalter in der Namensnennung,
+  Registereintrag und `PRIVACY.md`. Spanien: Wortlaut „abgeleitetes Werk“
+  klären.
 - [ ] Weitere Luftbild-Länder ins Register, nur nach echter
   `GetCapabilities`-/`GetMap`-Prüfung und mit Lizenz und Quellenangabe, dann
   `PRIVACY.md` ergänzen.

@@ -1,0 +1,18 @@
+{
+    "source": "BROUTER_WAY_TAGS",
+    "lengthM": 10191.0,
+    "sections": [
+        {
+            "fromM": 0.0,
+            "toM": 545.3,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 545.3,
+            "toM": 10191.2,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        }
+    ]
+}

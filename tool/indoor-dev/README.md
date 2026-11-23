@@ -29,6 +29,8 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
+| `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
+| `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
 
 Exit-Codes: 0 in Ordnung, 1 Bau gescheitert / Verstöße, 2 falscher Aufruf.

@@ -1,0 +1,150 @@
+{
+  "format": 1,
+  "baseUrl": "https://github.com/robinrehbein/trailscape/releases/download/indoor-worlds-v1/",
+  "routeSource": "Streckenverlauf: aus OpenStreetMap-Daten (© OpenStreetMap-Mitwirkende, ODbL 1.0) mit BRouter (brouter.de) zwischen den Wegpunkten unten geroutet; siehe docs/indoor/catalog.md",
+  "entries": [
+    {
+      "id": "alpe-dhuez",
+      "version": 1,
+      "name": { "de": "Alpe d'Huez", "en": "Alpe d'Huez" },
+      "region": { "de": "Bourg-d'Oisans, Französische Alpen", "en": "Bourg-d'Oisans, French Alps" },
+      "country": "FR",
+      "kind": "ROAD",
+      "description": {
+        "de": "Die D211 von Bourg-d'Oisans hinauf nach L'Alpe d'Huez: 21 nummerierte Kehren, gleichmäßig um 8 % steil. Einer der bekanntesten Anstiege der großen Landesrundfahrten.",
+        "en": "The D211 from Bourg-d'Oisans up to L'Alpe d'Huez: 21 numbered hairpins at a steady 8 % or so. One of the best-known climbs of the grand tours."
+      },
+      "profile": "fastbike",
+      "waypoints": [[45.0560, 6.0320], [45.0920, 6.0700]]
+    },
+    {
+      "id": "vlaamse-ardennen",
+      "version": 1,
+      "name": { "de": "Oude Kwaremont, Paterberg und Koppenberg", "en": "Oude Kwaremont, Paterberg and Koppenberg" },
+      "region": { "de": "Flämische Ardennen bei Oudenaarde", "en": "Flemish Ardennes near Oudenaarde" },
+      "country": "BE",
+      "kind": "COBBLES",
+      "description": {
+        "de": "Drei kurze, steile Pflasteranstiege der Flämischen Ardennen hintereinander: der lange Oude Kwaremont, der kurze Paterberg und der Koppenberg mit über 20 % auf grobem Kopfsteinpflaster. Bekannt aus den flämischen Frühjahrsklassikern.",
+        "en": "Three short, steep cobbled climbs of the Flemish Ardennes in a row: the long Oude Kwaremont, the short Paterberg and the Koppenberg at over 20 % on rough cobbles. Known from the Flemish spring classics."
+      },
+      "profile": "trekking",
+      "waypoints": [[50.7903, 3.5246], [50.7767, 3.5254], [50.78265, 3.54399], [50.78207, 3.54902], [50.81276, 3.57233], [50.81209, 3.57465], [50.81085, 3.57949], [50.8113, 3.5938]],
+      "surfaceOverrides": [
+        { "fromM": 100, "toM": 1700, "kind": "COBBLESTONE", "onlyUnknown": false, "note": "Oude Kwaremont (Anstieg von der N36 bis Kwaremont): in OSM ohne surface, BRouter nimmt dann Asphalt an; tatsächlich Kopfsteinpflaster" }
+      ]
+    },
+    {
+      "id": "arenberg",
+      "version": 1,
+      "name": { "de": "Wald von Arenberg", "en": "Arenberg Forest" },
+      "region": { "de": "Wallers bei Valenciennes, Nordfrankreich", "en": "Wallers near Valenciennes, northern France" },
+      "country": "FR",
+      "kind": "COBBLES",
+      "description": {
+        "de": "Die Trouée d'Arenberg: 2,3 km schnurgerades, grobes Kopfsteinpflaster durch den Wald von Raismes-Saint-Amand-Wallers, mit Anfahrt von Haveluy. Der bekannteste Pflastersektor der Klassiker im Norden Frankreichs.",
+        "en": "The Trouée d'Arenberg: 2.3 km of dead-straight, rough cobbles through the Raismes-Saint-Amand-Wallers forest, approached from Haveluy. The best-known cobbled sector of the northern French classics."
+      },
+      "profile": "trekking",
+      "waypoints": [[50.3560, 3.4050], [50.38842, 3.42386], [50.40541, 3.40621], [50.4150, 3.3950]]
+    },
+    {
+      "id": "monte-sante-marie",
+      "version": 1,
+      "name": { "de": "Schotter von Monte Sante Marie", "en": "Monte Sante Marie gravel" },
+      "region": { "de": "Crete Senesi bei Asciano, Toskana", "en": "Crete Senesi near Asciano, Tuscany" },
+      "country": "IT",
+      "kind": "GRAVEL",
+      "description": {
+        "de": "Weiße Schotterstraßen über die Hügel der Crete Senesi südöstlich von Siena, vorbei am Weiler Monte Sante Marie. Der Abschnitt gehört zu den längsten Schottersektoren der toskanischen Frühjahrsrennen.",
+        "en": "White gravel roads over the hills of the Crete Senesi south-east of Siena, past the hamlet of Monte Sante Marie. One of the longest gravel sectors of the Tuscan spring races."
+      },
+      "profile": "trekking",
+      "waypoints": [[43.3090, 11.5241], [43.2826, 11.5491], [43.2580, 11.5700]]
+    },
+    {
+      "id": "sa-calobra",
+      "version": 1,
+      "name": { "de": "Sa Calobra", "en": "Sa Calobra" },
+      "region": { "de": "Serra de Tramuntana, Mallorca", "en": "Serra de Tramuntana, Majorca" },
+      "country": "ES",
+      "kind": "ROAD",
+      "description": {
+        "de": "Die Ma-2141 vom Hafen Sa Calobra hinauf zum Coll dels Reis: rund 10 km mit 7 %, Kehren und der berühmten Krawattenknoten-Schleife. Ein Klassiker der Trainingslager im Frühjahr.",
+        "en": "The Ma-2141 from the port of Sa Calobra up to the Coll dels Reis: about 10 km at 7 %, hairpins and the famous tie-knot loop. A classic of spring training camps."
+      },
+      "profile": "fastbike",
+      "waypoints": [[39.8500, 2.8005], [39.8275, 2.8180]]
+    },
+    {
+      "id": "flint-hills",
+      "version": 1,
+      "name": { "de": "Schotter der Flint Hills", "en": "Flint Hills gravel" },
+      "region": { "de": "Cottonwood Falls, Kansas", "en": "Cottonwood Falls, Kansas" },
+      "country": "US",
+      "kind": "GRAVEL",
+      "description": {
+        "de": "Breite Schotterstraßen durch die offene Hochgrasprärie der Flint Hills südwestlich von Cottonwood Falls. Die Gegend um Emporia gilt als Wiege der langen Gravel-Rennen.",
+        "en": "Wide gravel roads through the open tallgrass prairie of the Flint Hills south-west of Cottonwood Falls. The area around Emporia is known as the cradle of long gravel races."
+      },
+      "profile": "gravel",
+      "waypoints": [[38.3700, -96.5450], [38.3000, -96.6000]]
+    },
+    {
+      "id": "grosser-feldberg",
+      "version": 1,
+      "name": { "de": "Großer Feldberg", "en": "Großer Feldberg" },
+      "region": { "de": "Taunus bei Oberursel, Hessen", "en": "Taunus near Oberursel, Hesse" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Von der Hohemark in Oberursel über den Sandplacken hinauf zum Großen Feldberg, dem höchsten Gipfel des Taunus. Bekannt als Anstieg des Frühjahrsrennens rund um Frankfurt.",
+        "en": "From Hohemark in Oberursel via the Sandplacken pass up to the Großer Feldberg, the highest summit of the Taunus. Known as the climb of the spring race around Frankfurt."
+      },
+      "profile": "fastbike",
+      "waypoints": [[50.2155, 8.5360], [50.2447, 8.4880], [50.2318, 8.4580]]
+    },
+    {
+      "id": "schauinsland",
+      "version": 1,
+      "name": { "de": "Schauinsland", "en": "Schauinsland" },
+      "region": { "de": "Freiburg im Breisgau, Schwarzwald", "en": "Freiburg im Breisgau, Black Forest" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Von Freiburg-Günterstal die alte Bergrennstrecke hinauf zum Schauinsland: lange Kurven durch den Bergwald, oben weite Blicke über den Schwarzwald. Ein Hausberg der Freiburger Rennradszene.",
+        "en": "From Freiburg-Günterstal up the old hill-climb road to the Schauinsland: long bends through mountain forest and wide views over the Black Forest at the top. A local favourite of Freiburg road cyclists."
+      },
+      "profile": "fastbike",
+      "waypoints": [[47.9650, 7.8590], [47.9118, 7.8986]]
+    },
+    {
+      "id": "kahler-asten",
+      "version": 1,
+      "name": { "de": "Waldwege am Kahlen Asten", "en": "Forest roads at Kahler Asten" },
+      "region": { "de": "Winterberg, Sauerland", "en": "Winterberg, Sauerland" },
+      "country": "DE",
+      "kind": "GRAVEL",
+      "description": {
+        "de": "Vom Kahlen Asten, dem höchsten Berg des Sauerlands, auf festen Forstwegen durch den Fichten- und Buchenwald des Rothaargebirges nach Norden. Typisches Gravel-Gelände im Hochsauerland.",
+        "en": "From Kahler Asten, the highest hill of the Sauerland, along firm forest roads through the spruce and beech woods of the Rothaar mountains to the north. Typical gravel terrain of the Hochsauerland."
+      },
+      "profile": "gravel",
+      "waypoints": [[51.1793, 8.4893], [51.2000, 8.4500], [51.2150, 8.4800]]
+    },
+    {
+      "id": "rennsteig",
+      "version": 1,
+      "name": { "de": "Rennsteig bei Oberhof", "en": "Rennsteig near Oberhof" },
+      "region": { "de": "Thüringer Wald", "en": "Thuringian Forest" },
+      "country": "DE",
+      "kind": "GRAVEL",
+      "description": {
+        "de": "Ein Abschnitt des Rennsteigs vom Grenzadler bei Oberhof zur Schmücke: Schotterwege auf dem Kamm des Thüringer Waldes, auf denen auch der Rennsteig-Radwanderweg verläuft.",
+        "en": "A section of the Rennsteig from the Grenzadler near Oberhof to the Schmücke: gravel roads along the crest of the Thuringian Forest, shared with the Rennsteig cycle route."
+      },
+      "profile": "gravel",
+      "waypoints": [[50.7056, 10.6941], [50.6546, 10.7737]]
+    }
+  ]
+}

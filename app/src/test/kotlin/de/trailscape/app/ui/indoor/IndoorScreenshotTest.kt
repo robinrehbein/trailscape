@@ -40,6 +40,8 @@ import de.trailscape.app.testing.TestLocales
 import de.trailscape.app.ui.ScreenshotApplication
 import de.trailscape.app.ui.map.ProvideTestLanguage
 import de.trailscape.app.ui.theme.TrailscapeTheme
+import de.trailscape.core.indoor.catalog.CatalogRideKind
+import de.trailscape.core.indoor.catalog.CatalogText
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.indoor.ErgState
 import de.trailscape.core.indoor.IndoorDeviceRole
@@ -306,6 +308,81 @@ class IndoorScreenshotTest {
             ),
             {}, {}, {}, {}, {},
         )
+    }
+
+    private fun catalogItem(
+        id: String, de: String, en: String, regionDe: String, regionEn: String, country: String,
+        kind: CatalogRideKind, km: Double, hm: Double, surfaces: List<Pair<SurfaceKind, Double>>, mb: Long, aerial: Boolean,
+        descDe: String, descEn: String, state: IndoorCatalogState,
+    ) = IndoorCatalogItemUi(
+        id = id, name = CatalogText(de, en), region = CatalogText(regionDe, regionEn), description = CatalogText(descDe, descEn),
+        country = country, kind = kind, distanceKm = km, ascentM = hm, surfaces = surfaces, packageBytes = mb * 1024 * 1024,
+        aerial = aerial, state = state,
+    )
+
+    /** Alle Zustaende einer Katalogkarte untereinander. */
+    private val catalogUi = IndoorCatalogUi(
+        items = listOf(
+            catalogItem(
+                "alpe-dhuez", "Alpe d'Huez", "Alpe d'Huez", "Bourg-d'Oisans, Französische Alpen", "Bourg-d'Oisans, French Alps", "FR",
+                CatalogRideKind.ROAD, 15.1, 1105.0, listOf(SurfaceKind.ASPHALT to 1.0), 77, true,
+                "Die D211 hinauf nach L'Alpe d'Huez: 21 nummerierte Kehren.", "The D211 up to L'Alpe d'Huez: 21 numbered hairpins.",
+                IndoorCatalogState.Ready,
+            ),
+            catalogItem(
+                "vlaamse-ardennen", "Oude Kwaremont, Paterberg und Koppenberg", "Oude Kwaremont, Paterberg and Koppenberg",
+                "Flämische Ardennen bei Oudenaarde", "Flemish Ardennes near Oudenaarde", "BE",
+                CatalogRideKind.COBBLES, 9.9, 180.0, listOf(SurfaceKind.ASPHALT to 0.59, SurfaceKind.COBBLESTONE to 0.29, SurfaceKind.CONCRETE to 0.12), 71, true,
+                "Drei kurze, steile Pflasteranstiege hintereinander.", "Three short, steep cobbled climbs in a row.",
+                IndoorCatalogState.Downloading(doneBytes = 31L * 1024 * 1024, totalBytes = 71L * 1024 * 1024),
+            ),
+            catalogItem(
+                "monte-sante-marie", "Schotter von Monte Sante Marie", "Monte Sante Marie gravel", "Crete Senesi bei Asciano, Toskana",
+                "Crete Senesi near Asciano, Tuscany", "IT", CatalogRideKind.GRAVEL, 12.0, 280.0,
+                listOf(SurfaceKind.COMPACTED to 0.85, SurfaceKind.GRAVEL to 0.14), 64, false,
+                "Weiße Schotterstraßen über die Hügel südöstlich von Siena.", "White gravel roads over the hills south-east of Siena.",
+                IndoorCatalogState.NotLoaded,
+            ),
+            catalogItem(
+                "rennsteig", "Rennsteig bei Oberhof", "Rennsteig near Oberhof", "Thüringer Wald", "Thuringian Forest", "DE",
+                CatalogRideKind.GRAVEL, 13.3, 300.0, listOf(SurfaceKind.GRAVEL to 0.84, SurfaceKind.ASPHALT to 0.09), 108, true,
+                "Schotterwege auf dem Kamm des Thüringer Waldes.", "Gravel roads along the crest of the Thuringian Forest.",
+                IndoorCatalogState.Failed(IndoorCatalogFailure.NOT_AVAILABLE),
+            ),
+            catalogItem(
+                "kahler-asten", "Waldwege am Kahlen Asten", "Forest roads at Kahler Asten", "Winterberg, Sauerland", "Winterberg, Sauerland", "DE",
+                CatalogRideKind.GRAVEL, 13.2, 250.0, listOf(SurfaceKind.COMPACTED to 0.6, SurfaceKind.ASPHALT to 0.21, SurfaceKind.GRAVEL to 0.19), 81, true,
+                "Feste Forstwege durch das Rothaargebirge.", "Firm forest roads through the Rothaar mountains.",
+                IndoorCatalogState.Paused(doneBytes = 12L * 1024 * 1024, totalBytes = 81L * 1024 * 1024),
+            ),
+            catalogItem(
+                "arenberg", "Wald von Arenberg", "Arenberg Forest", "Wallers bei Valenciennes", "Wallers near Valenciennes", "FR",
+                CatalogRideKind.COBBLES, 10.0, 45.0, listOf(SurfaceKind.ASPHALT to 0.68, SurfaceKind.COBBLESTONE to 0.23), 82, true,
+                "2,3 km grobes Kopfsteinpflaster durch den Wald.", "2.3 km of rough cobbles through the forest.",
+                IndoorCatalogState.UpdateAvailable(installedVersion = 1, newVersion = 2),
+            ),
+        ),
+    )
+
+    private val routeCatalog get() = routeSim.copy(
+        tab = IndoorRouteTab.CATALOG,
+        selected = IndoorRouteOption.Catalog("alpe-dhuez", "Alpe d'Huez", 15.1, 1105.0),
+        ghost = IndoorGhostOption.None,
+        ghostPastRideAvailable = false,
+    )
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2600dp-xxhdpi")
+    fun streckeBekannteStrecken() = shot("116-indoor-strecke-katalog") {
+        IndoorRouteScreen(routeCatalog, {}, {}, {}, {}, {}, catalog = catalogUi)
+    }
+
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun streckeBekannteStreckenEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("117-indoor-strecke-katalog-en") { IndoorRouteScreen(routeCatalog, {}, {}, {}, {}, {}, catalog = catalogUi) }
+        compose.onNodeWithText("Known routes").assertExists()
     }
 
     private val plan = IndoorWorldUi.Plan(

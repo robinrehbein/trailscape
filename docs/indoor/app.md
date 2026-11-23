@@ -310,3 +310,18 @@ steht jetzt in einer Karte wie die übrigen.
 - Offen: Tageszeit und Qualität der Darstellung sind nicht einstellbar
   (`setSky`/`setSettings` werden nicht gerufen; es gilt `SkySetting.DEFAULT`
   und die Qualität der Welt).
+
+## Bekannte Strecken (23.11.2026)
+
+Zweiter Bereich der Streckenwahl mit vorgebauten Welten aus einem
+GitHub-Release; alles dazu in `docs/indoor/catalog.md`. Für den Ablauf
+wichtig: Eine bereite bekannte Strecke führt mit „Weiter“ ohne Voranschlag
+direkt in die Fahrt (`continueFromRoute` → `prepareCatalog` → `startRide`),
+gefahren wird auf `worldRouteOf(manifest)`. Bilder 116 (deutsch, alle
+Zustände) und 117 (englisch).
+
+- [ ] Bekannte Strecke laden (nach dem ersten Workflow-Lauf): Größe,
+      Fortschritt, Abbruch und Fortsetzen über Mobilfunk/WLAN, danach offline
+      fahren und in der Weltverwaltung löschen
+- [ ] Vor dem ersten Workflow-Lauf: „Laden“ zeigt „Paket ist noch nicht
+      verfügbar“

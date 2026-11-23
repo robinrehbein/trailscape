@@ -81,6 +81,30 @@ sealed interface IndoorRouteOption {
     ) : IndoorRouteOption {
         override val key: String get() = "ride:$rideId"
     }
+
+    /**
+     * Eine bekannte Strecke aus dem Katalog mit fertig geladener Welt
+     * (docs/indoor/catalog.md). Waehlbar nur, wenn die Welt bereit ist.
+     *
+     * @property name Anzeigename in der aktuellen Sprache.
+     */
+    data class Catalog(
+        val catalogId: String,
+        val name: String,
+        val distanceKm: Double,
+        val ascentM: Double,
+    ) : IndoorRouteOption {
+        override val key: String get() = "catalog:$catalogId"
+    }
+}
+
+/** Die beiden Bereiche der Streckenwahl. */
+enum class IndoorRouteTab {
+    /** Testwelt, gespeicherte Planungen und gefahrene Touren. */
+    OWN,
+
+    /** Bekannte Strecken mit vorgebauter Welt. */
+    CATALOG,
 }
 
 /** Wer mitfaehrt. */
@@ -111,9 +135,102 @@ data class IndoorRouteUi(
     val ghostPastRideAvailable: Boolean,
     val defaultGhostWatts: Int,
     val loadingOptions: Boolean = false,
+    val tab: IndoorRouteTab = IndoorRouteTab.OWN,
 ) {
     val canContinue: Boolean get() = selected != null && (mode == IndoorMode.SIM || ergTitle != null)
 }
+
+// ---------------------------------------------------------------------------
+// Bekannte Strecken (Katalog, docs/indoor/catalog.md)
+// ---------------------------------------------------------------------------
+
+/** Warum ein Katalogpaket nicht geladen werden konnte. */
+enum class IndoorCatalogFailure {
+    /** Das Paket (oder der Katalog im Release) ist noch nicht veroeffentlicht (404). */
+    NOT_AVAILABLE,
+
+    /** Kein Netz oder Verbindung abgebrochen — „Fortsetzen" setzt am Stand fort. */
+    OFFLINE,
+
+    /** Pruefsumme oder Groesse stimmen nicht; das Paket wurde verworfen. */
+    CHECKSUM,
+
+    /** Kein Platz auf dem Geraet. */
+    NO_SPACE,
+
+    /** Paket falsch aufgebaut oder sonst ein Fehler. */
+    OTHER,
+}
+
+/** Zustand einer bekannten Strecke. */
+sealed interface IndoorCatalogState {
+    /** Nichts auf dem Geraet. */
+    data object NotLoaded : IndoorCatalogState
+
+    /** Ein angefangener Download liegt vor; „Fortsetzen" setzt dort an. */
+    data class Paused(val doneBytes: Long, val totalBytes: Long) : IndoorCatalogState
+
+    /** Laedt. [totalBytes] 0 = unbekannt. */
+    data class Downloading(val doneBytes: Long, val totalBytes: Long, val cancelling: Boolean = false) : IndoorCatalogState {
+        val fraction: Float get() = if (totalBytes > 0) (doneBytes.toDouble() / totalBytes).toFloat().coerceIn(0f, 1f) else 0f
+    }
+
+    /** Geladen, wird geprueft und entpackt. */
+    data object Installing : IndoorCatalogState
+
+    /** Welt liegt bereit. */
+    data object Ready : IndoorCatalogState
+
+    /** Welt liegt bereit, im Katalog gibt es eine neuere Version. */
+    data class UpdateAvailable(val installedVersion: Int, val newVersion: Int) : IndoorCatalogState
+
+    /**
+     * Laden scheiterte. [installed]: eine aeltere Version liegt weiter bereit.
+     * [doneBytes] > 0: ein Teil ist geladen und kann fortgesetzt werden.
+     */
+    data class Failed(
+        val reason: IndoorCatalogFailure,
+        val detail: String? = null,
+        val installed: Boolean = false,
+        val doneBytes: Long = 0L,
+    ) : IndoorCatalogState
+}
+
+/**
+ * Eine Karte im Bereich „Bekannte Strecken". Texte in beiden Sprachen; die
+ * Oberflaeche waehlt nach der App-Sprache.
+ *
+ * @property surfaces Anteile der Belagsklassen, groesste zuerst.
+ */
+data class IndoorCatalogItemUi(
+    val id: String,
+    val name: de.trailscape.core.indoor.catalog.CatalogText,
+    val region: de.trailscape.core.indoor.catalog.CatalogText,
+    val description: de.trailscape.core.indoor.catalog.CatalogText,
+    val country: String,
+    val kind: de.trailscape.core.indoor.catalog.CatalogRideKind,
+    val distanceKm: Double,
+    val ascentM: Double,
+    val surfaces: List<Pair<de.trailscape.core.indoor.SurfaceKind, Double>>,
+    val packageBytes: Long,
+    val aerial: Boolean,
+    val state: IndoorCatalogState,
+) {
+    /** Eine Welt liegt bereit (auch wenn es eine neuere gibt). */
+    val ready: Boolean
+        get() = state is IndoorCatalogState.Ready || state is IndoorCatalogState.UpdateAvailable ||
+            (state is IndoorCatalogState.Failed && state.installed)
+}
+
+/** Ergebnis von „Katalog aktualisieren". */
+enum class IndoorCatalogRefresh { UPDATED, NOT_AVAILABLE, FAILED }
+
+data class IndoorCatalogUi(
+    val items: List<IndoorCatalogItemUi>,
+    val loading: Boolean = false,
+    val refreshing: Boolean = false,
+    val refreshResult: IndoorCatalogRefresh? = null,
+)
 
 // ---------------------------------------------------------------------------
 // Welt laden
@@ -314,6 +431,8 @@ data class IndoorWorldEntryUi(
     val attribution: List<WorldAttribution>,
     val orphaned: Boolean,
     val complete: Boolean,
+    /** aus dem Katalog bekannter Strecken geladen (docs/indoor/catalog.md). */
+    val fromCatalog: Boolean = false,
 )
 
 data class IndoorWorldsUi(

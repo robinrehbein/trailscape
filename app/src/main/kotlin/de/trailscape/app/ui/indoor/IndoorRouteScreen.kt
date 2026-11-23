@@ -62,6 +62,12 @@ fun IndoorRouteScreen(
     onGhostChange: (IndoorGhostOption) -> Unit,
     onContinue: () -> Unit,
     onBack: () -> Unit,
+    catalog: IndoorCatalogUi = IndoorCatalogUi(emptyList()),
+    onTabChange: (IndoorRouteTab) -> Unit = {},
+    onCatalogDownload: (String) -> Unit = {},
+    onCatalogCancel: (String) -> Unit = {},
+    onCatalogDiscard: (String) -> Unit = {},
+    onCatalogRefresh: () -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_route_title),
@@ -80,9 +86,27 @@ fun IndoorRouteScreen(
         MutedText(stringResource(R.string.indoor_app_route_intro))
 
         Eyebrow(stringResource(R.string.indoor_app_route_section_route))
-        Card(modifier = Modifier.fillMaxWidth()) {
+        PillSegments(
+            options = listOf(
+                stringResource(R.string.indoor_app_route_tab_own),
+                stringResource(R.string.indoor_app_route_tab_catalog),
+            ),
+            selectedIndex = if (ui.tab == IndoorRouteTab.OWN) 0 else 1,
+            onSelect = { onTabChange(if (it == 0) IndoorRouteTab.OWN else IndoorRouteTab.CATALOG) },
+        )
+        if (ui.tab == IndoorRouteTab.CATALOG) {
+            IndoorCatalogSection(
+                catalog = catalog,
+                selectedKey = ui.selected?.key,
+                onSelect = onSelect,
+                onDownload = onCatalogDownload,
+                onCancel = onCatalogCancel,
+                onDiscard = onCatalogDiscard,
+                onRefresh = onCatalogRefresh,
+            )
+        } else Card(modifier = Modifier.fillMaxWidth()) {
             Column {
-                ui.options.forEach { option ->
+                ui.options.filter { it !is IndoorRouteOption.Catalog }.forEach { option ->
                     RouteOptionRow(
                         option = option,
                         selected = ui.selected?.key == option.key,
@@ -161,6 +185,7 @@ private fun RouteOptionRow(option: IndoorRouteOption, selected: Boolean, onSelec
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                is IndoorRouteOption.Catalog -> Text(text = option.name, style = MaterialTheme.typography.titleSmall)
                 is IndoorRouteOption.Saved -> {
                     Text(
                         text = option.name,
