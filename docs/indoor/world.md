@@ -110,16 +110,43 @@ Kartenausschnitte (Umgebungsrechtecke) entlang der gewählten Strecke.
 Quellenangaben stehen je Welt in `WorldManifest.attribution` (Höhen, Vektor,
 je genutztem Luftbild-Dienst mit Lizenz).
 
+## Integration (23.11.2026)
+
+Gemeinsam mit indoor-render und indoor-app gebaut und geprüft:
+
+- Die App baut mit dem echten Weltbau (`createWorldBuilder` in
+  `DefaultIndoorParts`); `IndoorViewModelDemoFlowTest` fährt die echte
+  Testwelt (ohne Netz, GLB-Kacheln aller drei Stufen) auf dem Band des
+  Manifests (`worldRouteOf`) bis zur gespeicherten Indoor-Tour.
+- `./gradlew :indoor-dev:run --args="testworld --out tool/indoor-dev/out/testwelt --quality MEDIUM"`
+  läuft (9,6 s, 51 Kacheln, 25,7 MB, Budget eingehalten, Prüfung in Ordnung).
+- Die GLBs passen zur Darstellung: Namen, Anker, Teilflächen, Materialien und
+  Texturformate wie in `docs/indoor/render.md` (Abschnitt Integration)
+  beschrieben. Dabei aufgefallen: Ab Stufe 1 hängt aller Inhalt an
+  `terrain_sub_i_j` und gilt der Darstellung damit als Gelände (keine
+  Schatten, Schalter Bäume/Gebäude nur für Stufe 0) — gewollt, damit die
+  Teilfläche samt Waldkörpern verschwindet.
+- Gefahren wird mit dem Manifest, das `buildTestWorld`/`build` zurückgibt;
+  aus `manifest.json` neu gelesen weicht die Lage nur in der Rundung ab
+  (< 1e-6°), die Laufmeter sind gleich.
+- Abbruch: Die App zeigt „Wird abgebrochen …“ sofort, solange
+  `runParallel` die laufenden Kacheln (bis zu vier) bzw. Anfragen noch zu Ende
+  bringt. Ein schnellerer Abbruch innerhalb einer Kachel bleibt offen (siehe
+  „Auf dem Gerät zu prüfen“).
+
 ## Bitten an andere Slices
 
-- **indoor-app:** die sechs Hosts oben in `PRIVACY.md` aufnehmen;
+- **indoor-app** (erledigt bei der Integration: Hosts in `PRIVACY.md`,
+  Lizenzen in `OpenSourceNotices`, ⓘ im HUD, Bau auf `Dispatchers.IO`):
+  die sechs Hosts oben in `PRIVACY.md` aufnehmen;
   Quellenangaben aus `WorldManifest.attribution` in Weltverwaltung, HUD-„ⓘ“
   und `OpenSourceNotices` (dort zusätzlich: Höhen Tilezen/AWS, OpenFreeMap/
   OpenMapTiles/OSM ODbL, Luftbilder dl-de/zero-2-0, dl-de/by-2-0, CC BY 4.0).
   `WorldBuilder.build` auf `Dispatchers.IO` aufrufen; Abbruch über
   `isCancelled()` greift innerhalb von 50 ms, eine laufende Kachel wird aber
   noch zu Ende gerechnet.
-- **indoor-render:** Laub ist `MASK` + doppelseitig ohne echte Ausschnitte;
+- **indoor-render** (erledigt: Umgebungslicht bei tiefer Sonne 26 000 statt
+  22 000 lx): Laub ist `MASK` + doppelseitig ohne echte Ausschnitte;
   Waldkörper und Kronen leben von Vertexfarben (`COLOR_0`). Ein kräftigeres
   Umgebungslicht im Wald (IndirectLight) hilft, sonst ist der Weg unter dem
   Kronendach sehr dunkel. Wasser hat `roughness 0,6` ohne Spiegelung.
@@ -132,5 +159,7 @@ je genutztem Luftbild-Dienst mit Lizenz).
       Teilflächen.
 - [ ] Bauzeit und Datenmenge für eine 30–50-km-Runde über WLAN/Mobilfunk.
 - [ ] Speicher bei HIGH (Texturen bis 400 MB laut Budget).
-- [ ] Abbruch während „Welt laden“ und Fortsetzen.
+- [ ] Abbruch während „Welt laden“ und Fortsetzen; wie lange steht „Wird
+      abgebrochen …“ auf dem Handy (laufende Kacheln/Anfragen)? Bei mehr als
+      einigen Sekunden `isCancelled` auch innerhalb einer Kachel abfragen.
 - [ ] Wirkt der Wald im Gegenlicht und bei tiefer Sonne nicht zu dunkel?

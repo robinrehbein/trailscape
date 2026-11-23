@@ -929,16 +929,20 @@ und ersetzen den Rumpf ihrer Einstiegsdatei; indoor-app berührt die geteilten
 Dateien und kommt deshalb zuletzt. Konflikte kann es nach Vertrag nur geben,
 wenn jemand fremden Besitz geändert hat.
 
-Prüfliste des Abschluss-Agenten:
+Prüfliste des Abschluss-Agenten (abgehakt bei der Integration am 23.11.2026,
+Einzelheiten in den Abschnitten „Integration“ von `docs/indoor/world.md`,
+`render.md` und `app.md`):
 
-- [ ] `./gradlew :core:test`, `:app:testDebugUnitTest`, `:app:assembleDebug`,
+- [x] `./gradlew :core:test`, `:app:testDebugUnitTest`, `:app:assembleDebug`,
       `:app:assembleRelease` (R8 mit Filament), `:indoor-dev:run … testworld`
-- [ ] kein `NotImplementedError("Indoor: …")` und kein Platzhalter mehr in den
+- [x] kein `NotImplementedError("Indoor: …")` und kein Platzhalter mehr in den
       vier Einstiegsdateien
-- [ ] Filament löst in 1.75.1 auf (drei Artefakte, eine Version)
-- [ ] `StringResourceParityTest` grün; drei `strings_indoor_*.xml` je Sprache
-- [ ] `PRIVACY.md` nennt jeden Host aus `aerialSources` und `GeoEndpoints`
-- [ ] „Bitte an <Besitzer>“ aus den fünf Abschlussberichten abgearbeitet
-- [ ] Demo-Fahrt von Einstieg bis gespeicherter Indoor-Tour läuft im Test mit
+- [x] Filament löst in 1.75.1 auf — inzwischen **zwei** Artefakte in einer
+      Version: `filament-utils` ist entfallen (Bitte von indoor-render)
+- [x] `StringResourceParityTest` grün; drei `strings_indoor_*.xml` je Sprache
+- [x] `PRIVACY.md` nennt jeden Host aus `aerialSources` und `GeoEndpoints`
+- [x] „Bitte an <Besitzer>“ aus den fünf Abschlussberichten abgearbeitet,
+      soweit klein und klar; Offenes steht in den Notizen der Slices
+- [x] Demo-Fahrt von Einstieg bis gespeicherter Indoor-Tour läuft im Test mit
       den echten Teilen aus `:core` (Demo-Trainer, Sitzung, Testwelt)
-- [ ] `docs/indoor/*.md` vorhanden und aus `docs/geraete-pruefliste.md` verlinkt
+- [x] `docs/indoor/*.md` vorhanden und aus `docs/geraete-pruefliste.md` verlinkt

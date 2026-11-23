@@ -79,7 +79,8 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   Ursprungs, unter 8° auf 8° angehoben; Schatten mit 3 Kaskaden, 1024², bis
   300 m. Umgebungslicht über `IndirectLight.Builder().radiance(3, sh)` mit
   selbst integrierten SH-Koeffizienten (Basis exakt wie in Filaments
-  `IndirectLight.cpp`, geprüft per „weißer Ofen“-Test). Belichtung f/16,
+  `IndirectLight.cpp`, geprüft per „weißer Ofen“-Test), Stärke 26 000 lx bei
+  tiefer bis 34 000 lx bei hoher Sonne. Belichtung f/16,
   1/125 s, ISO 100.
 - **Himmel:** Cubemap 64² × 6 (`SRGB8_A8`, `setImage(…, depth = 6, …)`),
   Verlauf Horizont → Zenit, **symmetrisch zur Waagrechten** (siehe Annahmen);
@@ -120,8 +121,8 @@ Unter Robolectric geschieht genau das (keine native Bibliothek): Test
 ### Diagnoseseite
 
 Vorschau (260 dp), Status, Testszene, Testwelt (über
-`createWorldBuilder().buildTestWorld` im Cache-Verzeichnis — auf diesem
-Branch noch ein Platzhalter, die Seite zeigt dann den Fehler), Probefahrt ohne
+`createWorldBuilder().buildTestWorld` im Cache-Verzeichnis, seit der
+Integration der echte Weltbau), Probefahrt ohne
 Trainer (8 m/s, 85 U/min, mit Geist), Kamera, Tageszeit, Messwerte, Gerät und
 Treiber, Voreinstellungen LOW/MEDIUM/HIGH/SAFE, jeder Schalter einzeln,
 30 fps, Auflösung, Ausfalldetails für Fehlerberichte, „Neu starten“ nach
@@ -188,7 +189,7 @@ Geprüft durch Lesen der Java-Quellen und Shader im Tag `v1.75.1` und
 ## R8
 
 Keine eigenen Filament-Regeln in `app/proguard-rules.pro`: Die AARs von
-filament, gltfio und filament-utils bringen consumer-rules mit, die alles mit
+filament und gltfio bringen consumer-rules mit, die alles mit
 `@UsedByNative`/`@UsedByReflection` halten. Nachgeprüft im Mapping des
 Release-Builds (`app/build/outputs/mapping/release/mapping.txt`): die per JNI
 benutzten Namen bleiben erhalten.
@@ -226,23 +227,86 @@ benutzten Namen bleiben erhalten.
       löschen während der Fahrt) erscheint die 2D-Ersatzansicht mit Profil.
 - [ ] Release-Build (R8) startet die Darstellung genauso wie Debug.
 
+## Integration (23.11.2026)
+
+Nach dem Zusammenführen mit indoor-world und indoor-app zum ersten Mal
+gemeinsam gebaut. Geändert bzw. geprüft:
+
+- **Frist „kein Bild“** zählt nur bei laufender Schleife. Vorher hätte nach
+  mehr als 8 s im Hintergrund (Swapchain bleibt, z. B. Dialog oder geteilter
+  Bildschirm) ein einziges ausgelassenes Bild beim Wiederanlauf
+  (`beginFrame` = `false`) die Darstellung als `NO_GRAPHICS` abgeschaltet.
+- **`onRelease` der `SurfaceView`** löst nur die eigene Fläche
+  (`detach(view)`); baut Compose die neue View vor dem Freigeben der alten,
+  bleibt die neue angehängt.
+- **Ersatzansicht** bekommt das Profil der Welt auch, wenn die Darstellung
+  schon vor `loadWorld` ausgefallen ist.
+- **Umgebungslicht** bei tiefer Sonne 26 000 statt 22 000 lx (Bitte von
+  indoor-world: Waldweg unter dem Kronendach). In Filament verdeckt Geometrie
+  das Umgebungslicht nicht (nur SSAO dunkelt ab); im Schatten des Kronendachs
+  bleibt genau dieses Licht. Himmel und Dunst werden dadurch um denselben
+  Faktor heller (sie hängen an `IndirectLight.intensity`).
+- **`filament-utils`** entfällt (eigene Bitte unten); `UiHelper` steckt in
+  `filament-android`, `Gltfio.init()` lädt die Engine.
+- **Filament 1.81.0:** Die Signaturen aller hier benutzten Klassen
+  (`Texture`, `View.FogOptions`, `IndirectLight.Builder`, `Skybox.Builder`,
+  `UiHelper`, `Engine`, `LightManager`, `RenderableManager`, `Renderer`,
+  `Camera`, gltfio `AssetLoader`/`ResourceLoader`/`FilamentAsset`/
+  `FilamentInstance`/`Animator`/`UbershaderProvider`) sind per `javap` in
+  1.75.1 und 1.81.0 gleich; ein späteres Anheben (braucht compileSdk 37)
+  ändert an diesem Code nichts.
+- **gltfio-Quellen 1.75.1 nachgelesen:** Der Animator entsteht in
+  `ResourceLoader` beim Laden (`createAnimator`), `releaseSourceData()`
+  danach ist also sicher. `AssetLoader` nimmt den schnellen Weg über
+  `UbershaderProvider.getNativeObject()` (`@UsedByNative`, im
+  Release-Mapping erhalten); die Java-Rückrufe des langsamen Wegs
+  (`createMaterialInstance` …) fehlen im R8-Build, werden aber nie gerufen.
+- **GLBs des Weltbaus gegen die Erwartung geprüft** (Testwelt, 51 Kacheln,
+  dazu `rider.glb`/`ghost.glb`): keine Erweiterungen (auch kein
+  `KHR_materials_unlit` in Benutzung), nur Dreiecke, Indizes 16 Bit,
+  `COLOR_0` als normierte `UNSIGNED_BYTE`×4, Texturen JPEG Baseline (`FF C0`)
+  oder PNG in Zweierpotenzen bis 1024, `metallic = 0`, `roughness ≥ 0,6`,
+  `OPAQUE`/`BLEND`/`MASK`+doppelseitig — alles, was der Ubershader kann.
+  Kachelnamen `tiles/L<L>_<ix>_<iy>.glb`, Eckpunkte relativ zum Anker
+  (`x = e − anchorE`, `y = u − anchorU`, `z = −(n − anchorN)`), Teilflächen
+  `terrain_sub_i_j` mit `i` nach Osten, `j` nach Norden — genau wie
+  `TileStreamer` und `TilePlanner.hiddenSubs` rechnen. Fahrer und Geist
+  tragen die Animationen `pedal` und `roll`.
+- **Folge der Teilflächen-Regel:** Ab Stufe 1 hängt im Weltbau *aller*
+  Inhalt (Waldkörper, grobe Gebäude) an `terrain_sub_i_j`. Die Darstellung
+  ordnet ihn deshalb als Gelände ein: In Stufe 1 und 2 werfen Waldkörper und
+  Gebäude keine Schatten (liegen ohnehin jenseits von 300 m), und die
+  Schalter Bäume/Gebäude wirken nur auf Stufe 0.
+
+Risiken, die nur das Gerät klärt (zusätzlich zur Liste oben):
+
+- Hauptthread: `createAsset` einer Kachel (bis rund 1–2 MB GLB) läuft im
+  Bildtakt auf dem Hauptthread; beim Nachladen sind kurze Ruckler möglich.
+- Ein Absturz im nativen Code (Treiber, `SIGSEGV`) lässt sich nicht fangen;
+  die Ersatzansicht greift nur bei Java-Ausnahmen und bei „kein Bild“.
+- Die Fahrt verlangt OpenGL ES 3.0; `GlProbe` lässt seine EGL-Anzeige
+  bewusst offen (prozessweit, Filament nutzt dieselbe).
+
 ## Bitte an andere Slices
 
 - **indoor-app:**
-  - `filament-utils-android` wird von der Darstellung nicht gebraucht
+  - ~~`filament-utils-android` wird von der Darstellung nicht gebraucht
     (`Gltfio.init()` genügt) — kann aus `app/build.gradle.kts` entfallen
-    (spart je ABI rund 1–2 MB), wenn sonst niemand es nutzt.
+    (spart je ABI rund 1–2 MB), wenn sonst niemand es nutzt.~~ Erledigt bei
+    der Integration (1,4 MB je ABI).
   - Die Darstellung bekommt derzeit weder `setSky` (Tageszeit) noch
     `setSettings` aus den Einstellungen; ohne `setSettings` gilt die Qualität
     der Welt. Wer Tageszeit/Qualität einstellbar machen will: einfach rufen,
-    beides wirkt sofort.
+    beides wirkt sofort. *Offen* (Prototyp: `SkySetting.DEFAULT`, 15:30 Uhr im Juni; Qualität der
+    Welt).
   - `WorldState.timeMs` muss `SystemClock.elapsedRealtime()` sein (so im
     Vertrag) — die Darstellung schreibt damit fort und hält den Fahrer an,
-    wenn länger als 500 ms nichts kommt.
+    wenn länger als 500 ms nichts kommt. *Geprüft:* `IndoorRideRuntime`
+    nimmt `SystemClock.elapsedRealtime()`.
 - **indoor-world:**
   - Knotennamen bitte wie in `WorldNames` direkt an den Knoten mit Netz oder
     an einem Vorfahren — die Darstellung ordnet Renderables über die Kette der
     Vorfahren zu.
   - Die Modelle `rider.glb`/`ghost.glb` werden benutzt, wenn sie in den
     Assets liegen; die Animationen werden **per Name** (`pedal`, `roll`)
-    gesucht.
+    gesucht. *Beides geprüft* (siehe Integration).
