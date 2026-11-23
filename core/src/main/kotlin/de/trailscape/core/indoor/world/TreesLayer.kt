@@ -1,24 +1,22 @@
 package de.trailscape.core.indoor.world
 
-import kotlin.math.PI
-import kotlin.math.cos
+import kotlin.math.abs
 import kotlin.math.floor
-import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
 
 /**
  * # Baeume und Wald (Knoten `trees`)
  *
- * **Stufe 0:** Einzelbaeume im Band bis [NEAR_M] neben der Strecke — Fichten
- * (Stamm und zwei gestapelte Kegel) und Laubbaeume (Stamm und eine unregelmaessige
- * Krone), dichter am Weg ([DENSE_M]), dahinter lockerer und einfacher. Wo ein
- * Baum steht, entscheidet die Kronenbedeckung ([LandMap.canopyAt]): aus dem
- * Luftbild der Kachel geschaetzt ([canopyFromAerial]), sonst aus der
- * Landnutzung (Wald voll, Siedlung und Park vereinzelt). Ausserhalb des Bands
- * steht der Wald als **Waldkoerper**: eine geschlossene, leicht wellige
- * Kronenflaeche in Baumhoehe ueber den Waldzellen, mit Waenden an den
- * Waldraendern.
+ * **Stufe 0:** Einzelbaeume im Band bis [NEAR_M] neben der Strecke, in vier
+ * Arten ([TreeModels]: runder Laubbaum, schlanker Laubbaum, Fichte, kleiner
+ * Feld-/Obstbaum) mit Groessen-, Breiten- und Farbvariation. Wo ein Baum steht,
+ * entscheidet die Kronenbedeckung ([LandMap.canopyAt]): aus dem Luftbild der
+ * Kachel geschaetzt ([canopyFromAerial]), sonst aus der Landnutzung (Wald
+ * voll, Siedlung und Park vereinzelt). Ausserhalb des Bands steht der Wald als
+ * **Waldkoerper**: ein huegeliges Kronendach in Baumhoehe ueber den
+ * Waldzellen, das am Waldrand bis auf den Boden abfaellt (keine senkrechten
+ * Waende), mit geglaetteten Normalen.
  *
  * **Stufe 1:** nur Waldkoerper (aus der Landnutzung), je Teilflaeche
  * gehaengt — sie verschwinden mit ihrem Boden, sobald die Kachel der Stufe 0
@@ -27,8 +25,14 @@ import kotlin.math.sin
  * Alles ist aus Welt-Koordinaten gewuerfelt (Gitter am Ursprung): Nachbar-
  * kacheln setzen dieselben Baeume, jede nur die mit Fusspunkt in ihrem
  * Rechteck. Kein Baum steht auf Fahrbahn, Strasse, Wasser oder in einem
- * Gebaeude. Erst der Waldkoerper, dann die Baeume vom Weg nach aussen, bis
- * [TileBudget.vegetation] erreicht ist.
+ * Gebaeude.
+ *
+ * **Budget:** [TileBudget.vegetation] plus, was Fahrbahn, Strassen, Gebaeude
+ * und Wasser dieser Kachel von ihrem Anteil nicht gebraucht haben (die
+ * Schichten laufen davor; die Summe je Kachel, mit der die Planung rechnet,
+ * bleibt eingehalten). Erst der Waldkoerper, dann bekommen alle Einzelbaeume
+ * die einfachste Stufe, danach werden sie vom Weg nach aussen aufgewertet,
+ * solange das Budget reicht.
  *
  * Materialien: [WorldNames.MAT_TREE_TRUNK] (Vertexfarben) und
  * [WorldNames.MAT_TREE_LEAVES] (Vertexfarben × kachelnde Laubtextur,
@@ -42,9 +46,14 @@ internal class TreesLayer : TileLayer {
         if (ctx.level == 0 && ctx.aerial != null && land is LandRaster) {
             land.setCanopy(ctx.spec, canopyFromAerial(ctx.aerial))
         }
+        val b = ctx.budget
+        fun spare(budget: Int, node: String) = max(0, budget - out.triangles(node))
+        val total = b.vegetation + spare(b.route, WorldNames.NODE_ROUTE) + spare(b.roads, WorldNames.NODE_ROADS) +
+            spare(b.buildings, WorldNames.NODE_BUILDINGS) + spare(b.water, WorldNames.NODE_WATER)
         val leaves = leavesMaterial(ctx)
-        var used = forestVolume(ctx, out, leaves)
-        if (ctx.level == 0) used += singleTrees(ctx, out, leaves, ctx.budget.vegetation - used)
+        val volumeBudget = if (ctx.level == 0) b.vegetation / 4 else total
+        val used = forestVolume(ctx, out, leaves, volumeBudget)
+        if (ctx.level == 0) singleTrees(ctx, out, leaves, total - used)
     }
 
     // -----------------------------------------------------------------------
@@ -52,20 +61,18 @@ internal class TreesLayer : TileLayer {
     // -----------------------------------------------------------------------
 
     /** Baut die Waldkoerper der Kachel; gibt die Zahl der Dreiecke zurueck. */
-    private fun forestVolume(ctx: TileContext, out: TileOutput, leaves: TileMaterial): Int {
+    private fun forestVolume(ctx: TileContext, out: TileOutput, leaves: TileMaterial, budget: Int): Int {
         val s = ctx.spec
-        val budget = if (ctx.level == 0) ctx.budget.vegetation / 4 else ctx.budget.vegetation
         var cell = if (ctx.level == 0) 8.0 else 32.0
         while (true) {
             val cells = (s.cellM / cell).toInt()
             val forest = forestCells(ctx, cells, cell)
             val count = forest.count { it }
-            // Grob: zwei Dreiecke je Zelle plus Waende am Rand.
-            val estimate = count * 2 + edgeCount(forest, cells) * 2
-            if (estimate <= budget || cell >= s.cellM / 4) {
-                if (count == 0 || estimate > budget) return 0
+            val tris = count * 2
+            if (tris <= budget || cell >= s.cellM / 4) {
+                if (count == 0 || tris > budget) return 0
                 emitVolume(ctx, out, leaves, forest, cells, cell)
-                return estimate
+                return tris
             }
             cell *= 2
         }
@@ -93,18 +100,6 @@ internal class TreesLayer : TileLayer {
         return hit == null || hit.distance > NEAR_M
     }
 
-    private fun edgeCount(forest: BooleanArray, cells: Int): Int {
-        var c = 0
-        for (j in 0 until cells) for (i in 0 until cells) {
-            if (!forest[j * cells + i]) continue
-            if (i == 0 || !forest[j * cells + i - 1]) c++
-            if (i == cells - 1 || !forest[j * cells + i + 1]) c++
-            if (j == 0 || !forest[(j - 1) * cells + i]) c++
-            if (j == cells - 1 || !forest[(j + 1) * cells + i]) c++
-        }
-        return c
-    }
-
     private fun emitVolume(ctx: TileContext, out: TileOutput, leaves: TileMaterial, forest: BooleanArray, cells: Int, cell: Double) {
         val s = ctx.spec
         // Zellen ausserhalb der Kachel werden nach derselben Regel bewertet: Raender passen ueber Kachelgrenzen.
@@ -114,19 +109,25 @@ internal class TreesLayer : TileLayer {
             val key = (i.toLong() shl 32) xor (j.toLong() and 0xffffffffL)
             return outside.getOrPut(key) { isVolumeCell(ctx, s.minE + (i + 0.5) * cell, s.minN + (j + 0.5) * cell, cell) }
         }
-        // Ein Gitterpunkt liegt am Waldrand, wenn eine der vier Zellen um ihn kein Wald ist.
+        // Ein Gitterpunkt liegt am Waldrand, wenn eine der vier Zellen um ihn kein Wald ist: dort liegt er am Boden.
         fun edgeVertex(i: Int, j: Int): Boolean = !(isF(i - 1, j - 1) && isF(i, j - 1) && isF(i - 1, j) && isF(i, j))
-        fun topAt(e: Double, n: Double, edge: Boolean): Double {
-            val h = canopyHeight(ctx, e, n)
-            // Einzelne Kronen ragen heraus: Gitterpunkte (Welt-Gitter) um bis zu ±2,5 m versetzt.
-            val bump = (Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_BUMP) - 0.5) * 5.0
-            return ctx.ground.heightAt(e, n) + if (edge) h * 0.2 else h + bump
-        }
-        fun normalAt(e: Double, n: Double): Vec3 {
-            val d = cell * 0.5
-            val de = (topAt(e + d, n, false) - topAt(e - d, n, false)) / (2 * d)
-            val dn = (topAt(e, n + d, false) - topAt(e, n - d, false)) / (2 * d)
-            return Vec3(-de, 1.0, dn).normalized()
+        val tops = HashMap<Long, Double>()
+        fun top(i: Int, j: Int): Double {
+            val key = (i.toLong() shl 32) xor (j.toLong() and 0xffffffffL)
+            return tops.getOrPut(key) {
+                val e = s.minE + i * cell
+                val n = s.minN + j * cell
+                val g = ctx.ground.heightAt(e, n)
+                if (edgeVertex(i, j)) {
+                    g - 0.4
+                } else {
+                    // Kronen ragen heraus: Gitterpunkte (Welt-Gitter) um bis zu ±2,5 m versetzt; am Rand niedriger.
+                    val bump = (Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_BUMP) - 0.5) * 5.0
+                    val nearEdge = edgeVertex(i - 1, j) || edgeVertex(i + 1, j) || edgeVertex(i, j - 1) || edgeVertex(i, j + 1)
+                    val h = canopyHeight(ctx, e, n) + bump
+                    g + if (nearEdge && cell < 16.0) h * 0.8 else h
+                }
+            }
         }
         for (j in 0 until cells) for (i in 0 until cells) {
             if (!forest[j * cells + i]) continue
@@ -135,45 +136,22 @@ internal class TreesLayer : TileLayer {
             val m = out.mesh(WorldNames.NODE_TREES, leaves, e0 + cell / 2, n0 + cell / 2)
             val corners = arrayOf(intArrayOf(i, j), intArrayOf(i + 1, j), intArrayOf(i + 1, j + 1), intArrayOf(i, j + 1))
             val idx = IntArray(4)
-            val tops = DoubleArray(4)
             for ((k, c) in corners.withIndex()) {
                 val e = s.minE + c[0] * cell
                 val n = s.minN + c[1] * cell
-                val edge = edgeVertex(c[0], c[1])
-                tops[k] = topAt(e, n, edge)
-                val nor = normalAt(e, n)
-                val shade = 0.55 + 0.3 * Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_TINT)
-                idx[k] = m.vertex(ctx.x(e), ctx.y(tops[k]), ctx.z(n), nor.x, nor.y, nor.z, e / UV_M, -n / UV_M, crownColor(ctx, e, n, shade))
+                val y = top(c[0], c[1])
+                val de = (top(c[0] + 1, c[1]) - top(c[0] - 1, c[1])) / (2 * cell)
+                val dn = (top(c[0], c[1] + 1) - top(c[0], c[1] - 1)) / (2 * cell)
+                val nor = Vec3(-de, 1.0, dn).normalized()
+                val shade = if (edgeVertex(c[0], c[1])) 0.45 else 0.62 + 0.3 * Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_TINT)
+                idx[k] = m.vertex(ctx.x(e), ctx.y(y), ctx.z(n), nor.x, nor.y, nor.z, e / UV_M, -n / UV_M, crownColor(ctx, e, n, shade))
             }
             // (i,j) → (i+1,j) → (i+1,j+1) → (i,j+1) laeuft in (e, n) gegen den Uhrzeigersinn: oben sichtbar.
-            m.quad(idx[0], idx[1], idx[2], idx[3])
-            // Waende an Waldraendern: Kante (a → b) mit Wald links, aussen rechts.
-            val edges = arrayOf(
-                intArrayOf(0, 1, 0, -1), // Sued
-                intArrayOf(1, 2, 1, 0), // Ost
-                intArrayOf(2, 3, 0, 1), // Nord
-                intArrayOf(3, 0, -1, 0), // West
-            )
-            for (ed in edges) {
-                if (isF(i + ed[2], j + ed[3])) continue
-                val a = corners[ed[0]]
-                val b = corners[ed[1]]
-                val ea = s.minE + a[0] * cell
-                val na = s.minN + a[1] * cell
-                val eb = s.minE + b[0] * cell
-                val nb = s.minN + b[1] * cell
-                val nx = ed[2].toDouble()
-                val nz = -ed[3].toDouble()
-                val ga = ctx.ground.heightAt(ea, na) - 0.5
-                val gb = ctx.ground.heightAt(eb, nb) - 0.5
-                val len = hypot(eb - ea, nb - na)
-                val dark = crownColor(ctx, ea, na, 0.42)
-                val pa = m.vertex(ctx.x(ea), ctx.y(ga), ctx.z(na), nx, 0.0, nz, 0.0, 0.0, dark)
-                val pb = m.vertex(ctx.x(eb), ctx.y(gb), ctx.z(nb), nx, 0.0, nz, len / UV_M, 0.0, dark)
-                val qb = m.vertex(ctx.x(eb), ctx.y(tops[ed[1]]), ctx.z(nb), nx, 0.0, nz, len / UV_M, (tops[ed[1]] - gb) / UV_M, crownColor(ctx, eb, nb, 0.7))
-                val qa = m.vertex(ctx.x(ea), ctx.y(tops[ed[0]]), ctx.z(na), nx, 0.0, nz, 0.0, (tops[ed[0]] - ga) / UV_M, crownColor(ctx, ea, na, 0.7))
-                // Von aussen gesehen: unten a, unten b, oben b, oben a — gegen den Uhrzeigersinn.
-                m.quad(pb, pa, qa, qb)
+            // Diagonale entlang der kleineren Hoehendifferenz, damit Raender nicht zackig einknicken.
+            if (abs(top(i, j) - top(i + 1, j + 1)) <= abs(top(i + 1, j) - top(i, j + 1))) {
+                m.quad(idx[0], idx[1], idx[2], idx[3])
+            } else {
+                m.quad(idx[1], idx[2], idx[3], idx[0])
             }
         }
     }
@@ -189,7 +167,9 @@ internal class TreesLayer : TileLayer {
     // Einzelbaeume
     // -----------------------------------------------------------------------
 
-    private class Candidate(val e: Double, val n: Double, val dist: Double, val rnd: Int)
+    private class Candidate(val e: Double, val n: Double, val dist: Double, val spec: TreeModels.Spec) {
+        var lod = TreeModels.Lod.FAR
+    }
 
     /** Setzt Einzelbaeume (nur Stufe 0) bis [budget] Dreiecke; gibt die verbrauchten zurueck. */
     private fun singleTrees(ctx: TileContext, out: TileOutput, leaves: TileMaterial, budget: Int): Int {
@@ -207,8 +187,8 @@ internal class TreesLayer : TileLayer {
             val j1 = floor(s.maxN / spacing).toInt()
             for (j in j0..j1) for (i in i0..i1) {
                 val h = Noise.hash(i, j, if (spacing == DENSE_SPACING_M) SEED_DENSE else SEED_OPEN)
-                val e = (i + 0.15 + 0.7 * ((h ushr 8 and 0xFFF) / 4096.0)) * spacing
-                val n = (j + 0.15 + 0.7 * ((h ushr 20 and 0xFFF) / 4096.0)) * spacing
+                val e = (i + 0.1 + 0.8 * ((h ushr 8 and 0xFFF) / 4096.0)) * spacing
+                val n = (j + 0.1 + 0.8 * ((h ushr 20 and 0xFFF) / 4096.0)) * spacing
                 if (!s.contains(e, n)) continue
                 val hit = ctx.track.nearest(e, n, to + 1.0) ?: continue
                 if (hit.distance < from || hit.distance >= to) continue
@@ -216,33 +196,84 @@ internal class TreesLayer : TileLayer {
                 // Auch geschlossener Wald hat Luecken (Licht auf dem Waldboden).
                 val p = ctx.land.canopyAt(e, n) * 0.85
                 if ((h and 0xFF) / 256.0 >= p) continue
-                when (ctx.land.classAt(e, n)) {
-                    LandClass.WATER, LandClass.WETLAND -> continue
-                    else -> Unit
-                }
+                val cls = ctx.land.classAt(e, n)
+                if (cls == LandClass.WATER || cls == LandClass.WETLAND) continue
                 if (net.clearance(e, n) < ROAD_CLEARANCE_M) continue
                 if (nearBuilding(buildings, e, n)) continue
-                cands += Candidate(e, n, hit.distance, h)
+                cands += Candidate(e, n, hit.distance, specFor(ctx, cls, e, n, i, j, spacing))
             }
         }
         cands.sortBy { it.dist }
+        // Stufen vergeben: alle einfach, dann vom Weg nach aussen aufwerten, solange das Budget reicht.
+        var used = 0
+        val placed = ArrayList<Candidate>()
+        for (c in cands) {
+            val cost = TreeModels.cost(c.spec.species, TreeModels.Lod.FAR)
+            if (used + cost > budget) break
+            used += cost
+            placed += c
+        }
+        for ((target, maxDist) in listOf(TreeModels.Lod.MID to MID_M, TreeModels.Lod.NEAR to DETAIL_M)) {
+            for (c in placed) {
+                if (c.dist > maxDist) break
+                val delta = TreeModels.cost(c.spec.species, target) - TreeModels.cost(c.spec.species, c.lod)
+                if (used + delta > budget) break
+                used += delta
+                c.lod = target
+            }
+        }
         val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, roughness = 0.95f)
         val trunks = out.mesh(WorldNames.NODE_TREES, trunkMat)
         val crowns = out.mesh(WorldNames.NODE_TREES, leaves)
-        val scratchTrunk = MeshBuilder(32, 32)
-        val scratchCrown = MeshBuilder(64, 64)
-        var used = 0
-        for (c in cands) {
+        val scratchTrunk = MeshBuilder(64, 64)
+        val scratchCrown = MeshBuilder(256, 256)
+        for (c in placed) {
             scratchTrunk.clear()
             scratchCrown.clear()
-            tree(ctx, c, scratchTrunk, scratchCrown)
-            val tris = scratchTrunk.triangleCount + scratchCrown.triangleCount
-            if (used + tris > budget) continue
-            trunks.append(scratchTrunk)
-            crowns.append(scratchCrown)
-            used += tris
+            TreeModels.build(c.spec, c.lod, scratchTrunk, scratchCrown)
+            val g = ctx.ground.heightAt(c.e, c.n)
+            val m = Mat4.translation(ctx.x(c.e), ctx.y(g), ctx.z(c.n))
+            trunks.append(scratchTrunk, m)
+            crowns.append(scratchCrown, m)
         }
         return used
+    }
+
+    /** Art, Groesse und Farbe eines Baums — aus Landnutzung und Zufall des Gitterpunkts. */
+    private fun specFor(ctx: TileContext, cls: LandClass, e: Double, n: Double, i: Int, j: Int, spacing: Double): TreeModels.Spec {
+        val seed = Noise.hash(i, j, (spacing * 10).toInt() + 0x5eed)
+        fun r(k: Int) = Noise.hash01(i, j, seed + k)
+        val inForest = cls == LandClass.FOREST
+        val species = if (inForest) {
+            when {
+                r(1) < ctx.land.coniferShare(e, n) -> TreeModels.Species.CONIFER
+                r(2) < 0.22 -> TreeModels.Species.TALL
+                else -> TreeModels.Species.BROAD
+            }
+        } else {
+            val x = r(1)
+            when {
+                x < 0.08 -> TreeModels.Species.CONIFER
+                x < 0.28 -> TreeModels.Species.TALL
+                x < (if (cls == LandClass.RESIDENTIAL || cls == LandClass.MEADOW) 0.6 else 0.45) -> TreeModels.Species.SMALL
+                else -> TreeModels.Species.BROAD
+            }
+        }
+        val h = when (species) {
+            TreeModels.Species.BROAD -> if (inForest) 12.0 + 7.0 * r(3) else 8.0 + 7.0 * r(3)
+            TreeModels.Species.TALL -> if (inForest) 14.0 + 6.0 * r(3) else 10.0 + 8.0 * r(3)
+            TreeModels.Species.CONIFER -> if (inForest) 13.0 + 8.0 * r(3) else 9.0 + 7.0 * r(3)
+            TreeModels.Species.SMALL -> 4.5 + 3.0 * r(3)
+        }
+        return TreeModels.Spec(
+            species = species,
+            heightM = h,
+            width = 0.85 + 0.3 * r(4),
+            tint = 0.85 + 0.3 * r(5),
+            seed = seed,
+            turn = r(6) * 6.283,
+            pale = species == TreeModels.Species.TALL && r(7) < 0.5,
+        )
     }
 
     private fun nearBuilding(buildings: List<MapBuilding>, e: Double, n: Double): Boolean {
@@ -258,108 +289,17 @@ internal class TreesLayer : TileLayer {
         return false
     }
 
-    /** Ein Baum an [c] in Stamm- und Kronennetz. */
-    private fun tree(ctx: TileContext, c: Candidate, trunk: MeshBuilder, crown: MeshBuilder) {
-        val r1 = ((c.rnd ushr 4) and 0xFF) / 255.0
-        val r2 = ((c.rnd ushr 12) and 0xFF) / 255.0
-        val r3 = ((c.rnd ushr 24) and 0x7F) / 127.0
-        val inForest = ctx.land.classAt(c.e, c.n) == LandClass.FOREST
-        val coniferP = if (inForest) ctx.land.coniferShare(c.e, c.n) else 0.15
-        val conifer = r1 < coniferP
-        val detailed = c.dist <= DETAIL_M
-        val h = if (inForest) (if (conifer) 13.0 + 8.0 * r2 else 11.0 + 7.0 * r2) else 7.0 + 7.0 * r2
-        val g = ctx.ground.heightAt(c.e, c.n) - 0.25
-        val x = ctx.x(c.e)
-        val y = ctx.y(g)
-        val z = ctx.z(c.n)
-        val tint = 0.85 + 0.3 * r3
-        if (conifer) {
-            val trunkColor = lin(Argb.rgb(58, 46, 38))
-            val leaf = { shade: Double -> crownColorRaw(CONIFER, tint * shade) }
-            if (detailed) {
-                trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.3 * h, z), 0.014 * h, 0.009 * h, 5, false, false, trunkColor)
-                cone(crown, x, y + 0.08 * h, z, 0.21 * h, y + 0.78 * h, 8, leaf, r1)
-                cone(crown, x, y + 0.5 * h, z, 0.13 * h, y + h, 7, leaf, r2)
-            } else {
-                trunk.addCylinder(Vec3(x, y, z), Vec3(x, y + 0.2 * h, z), 0.013 * h, 0.01 * h, 3, false, false, trunkColor)
-                cone(crown, x, y + 0.13 * h, z, 0.19 * h, y + h, 6, leaf, r1)
-            }
-        } else {
-            val trunkColor = lin(Argb.rgb(70, 62, 52))
-            val base = if (inForest) BROADLEAF else BROADLEAF_OPEN
-            val crownBottom = if (inForest) 0.24 * h else 0.25 * h
-            val cy = y + (crownBottom + h) / 2
-            val ry = (h - crownBottom) / 2
-            val rx = ry * (if (inForest) 0.75 else 0.95) * (0.9 + 0.2 * r3)
-            trunk.addCylinder(Vec3(x, y, z), Vec3(x, cy, z), 0.02 * h, 0.012 * h, if (detailed) 5 else 3, false, false, trunkColor)
-            val first = crown.vertexCount
-            if (detailed) crown.addEllipsoid(x, cy, z, rx, ry, rx, 8, 4) else crown.addEllipsoid(x, cy, z, rx, ry, rx, 5, 3)
-            // Unregelmaessige Krone: Eckpunkte radial verschieben, unten dunkler, UV kacheln.
-            for (v in first until crown.vertexCount) {
-                val px = crown.positions[v * 3] - x
-                val py = crown.positions[v * 3 + 1] - cy
-                val pz = crown.positions[v * 3 + 2] - z
-                val k = 0.82 + 0.36 * Noise.hash01(Math.round(px * 7).toInt(), Math.round(py * 7 + pz * 13).toInt(), c.rnd)
-                crown.positions[v * 3] = (x + px * k).toFloat()
-                crown.positions[v * 3 + 1] = (cy + py * (0.9 + 0.1 * k)).toFloat()
-                crown.positions[v * 3 + 2] = (z + pz * k).toFloat()
-                val t = ((py / ry) + 1) / 2
-                crown.setColor(v, crownColorRaw(base, tint * (0.6 + 0.45 * t)))
-                crown.uvs[v * 2] *= 3f
-                crown.uvs[v * 2 + 1] *= 2f
-            }
-        }
-    }
-
-    /** Kegel mit Boden: Grundkreis auf [y0] mit Radius [r], Spitze auf [yTop]. */
-    private fun cone(m: MeshBuilder, x: Double, y0: Double, z: Double, r: Double, yTop: Double, seg: Int, color: (Double) -> Int, rot: Double) {
-        val h = yTop - y0
-        val sl = hypot(r, h)
-        val ny = r / sl
-        val nr = h / sl
-        val base = m.vertexCount
-        for (k in 0..seg) {
-            val a = 2 * PI * (k + rot) / seg
-            val ca = cos(a)
-            val sa = sin(a)
-            // Grundkreis leicht gezackt, damit die Silhouette nicht gedrechselt wirkt.
-            val rr = r * (if (k % 2 == 0) 1.0 else 0.86)
-            m.vertex(x + ca * rr, y0 + (if (k % 2 == 0) 0.0 else 0.04 * h), z - sa * rr, ca * nr, ny, -sa * nr, k / seg.toDouble() * 3, 2.0, color(0.62))
-        }
-        for (k in 0 until seg) {
-            val a = 2 * PI * (k + 0.5 + rot) / seg
-            m.vertex(x, yTop, z, cos(a) * nr, ny, -sin(a) * nr, (k + 0.5) / seg * 3, 0.0, color(1.05))
-        }
-        for (k in 0 until seg) m.tri(base + k, base + k + 1, base + seg + 1 + k)
-        // Boden (von unten sichtbar).
-        val center = m.vertex(x, y0 + 0.08 * h, z, 0.0, -1.0, 0.0, 0.5, 0.5, color(0.45))
-        val ring = m.vertexCount
-        for (k in 0..seg) {
-            val a = 2 * PI * (k + rot) / seg
-            val rr = r * (if (k % 2 == 0) 1.0 else 0.86)
-            m.vertex(x + cos(a) * rr, y0 + (if (k % 2 == 0) 0.0 else 0.04 * h), z - sin(a) * rr, 0.0, -1.0, 0.0, 0.5 + cos(a) / 2, 0.5 + sin(a) / 2, color(0.45))
-        }
-        for (k in 0 until seg) m.tri(center, ring + k + 1, ring + k)
-    }
-
     // -----------------------------------------------------------------------
     // Farben und Material
     // -----------------------------------------------------------------------
 
     private fun crownColor(ctx: TileContext, e: Double, n: Double, shade: Double): Int {
-        val conifer = ctx.land.coniferShare(e, n)
+        val conifer = ctx.land.coniferShare(e, n).coerceIn(0.0, 1.0)
         val v = 0.85 + 0.3 * Noise.value(e / 23.0, n / 23.0, SEED_TINT)
-        val c = mix(BROADLEAF, CONIFER, conifer)
-        return crownColorRaw(c, v * shade)
+        val f = (v * shade).coerceIn(0.0, 1.4)
+        fun ch(k: Int) = min(255, ((BROADLEAF[k] + (CONIFER[k] - BROADLEAF[k]) * conifer) * f).toInt())
+        return lin(Argb.rgb(ch(0), ch(1), ch(2)))
     }
-
-    private fun crownColorRaw(srgb: IntArray, factor: Double): Int {
-        val f = factor.coerceIn(0.0, 1.4)
-        return lin(Argb.rgb(min(255, (srgb[0] * f).toInt()), min(255, (srgb[1] * f).toInt()), min(255, (srgb[2] * f).toInt())))
-    }
-
-    private fun mix(a: IntArray, b: IntArray, t: Double): IntArray =
-        IntArray(3) { (a[it] + (b[it] - a[it]) * t.coerceIn(0.0, 1.0)).toInt() }
 
     private fun leavesMaterial(ctx: TileContext): TileMaterial {
         val tex = ctx.textures.get("x_leaves", alpha = true) { leafTexture() }
@@ -378,9 +318,12 @@ internal class TreesLayer : TileLayer {
         /** Einzelbaeume bis zu diesem Abstand von der Mittellinie (Stufe 0). */
         const val NEAR_M = 70.0
 
-        /** Bis hier dicht gesetzt und ausfuehrlich gebaut. */
+        /** Bis hier dicht gesetzt. */
         const val DENSE_M = 28.0
-        const val DETAIL_M = 32.0
+
+        /** Hoechster Abstand fuer die mittlere bzw. feinste Stufe (falls das Budget reicht). */
+        const val MID_M = 45.0
+        const val DETAIL_M = 24.0
         const val DENSE_SPACING_M = 6.0
         const val OPEN_SPACING_M = 8.0
 
@@ -398,10 +341,9 @@ internal class TreesLayer : TileLayer {
         private const val SEED_TINT = 0x7ee4
         private const val SEED_BUMP = 0x7ee5
 
-        /** Grundfarben in sRGB. */
-        val CONIFER = intArrayOf(44, 64, 42)
-        val BROADLEAF = intArrayOf(70, 96, 46)
-        val BROADLEAF_OPEN = intArrayOf(82, 108, 52)
+        /** Grundfarben des Waldkoerpers in sRGB. */
+        val CONIFER = intArrayOf(50, 72, 46)
+        val BROADLEAF = intArrayOf(76, 102, 50)
 
         /**
          * Laubtextur 128², hellgrau gesprenkelt (die Farbe kommt aus den
@@ -413,7 +355,7 @@ internal class TreesLayer : TileLayer {
             for (y in 0 until size) for (x in 0 until size) {
                 val blob = Noise.value(x / 8.0, y / 8.0, 0x1eaf, size / 8)
                 val fine = Noise.hash01(x, y, 0x1eb0)
-                val v = (0.62 + 0.38 * blob - 0.12 * fine).coerceIn(0.0, 1.0)
+                val v = (0.66 + 0.34 * blob - 0.1 * fine).coerceIn(0.0, 1.0)
                 val c = (v * 255).toInt()
                 img.argb[y * size + x] = Argb.of(255, c, min(255, (c * 1.04).toInt()), (c * 0.9).toInt())
             }

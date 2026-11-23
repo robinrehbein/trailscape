@@ -942,17 +942,19 @@ internal class BuildingDesign private constructor(
         }
 
         private fun roofTint(cover: RoofCover, style: FacadeStyle, aerial: Int?, r: Double, r2: Double): Int {
-            val gain = 0.86 + 0.28 * r2
+            val gain = 0.8 + 0.4 * r2
             val seen = aerial?.let { roofToneFromAerial(it) }
             return when (cover) {
                 RoofCover.TILE -> {
-                    val t = seen ?: when {
+                    // Grau im Luftbild ist bei Ziegeldaechern oft nur verblasster Ton oder Dunst: dann teils rotbraun/braun.
+                    val fromAerial = if (seen === GREY && r < 0.6) (if (r < 0.35) RED_BROWN else BROWN) else seen
+                    val t = fromAerial ?: when {
                         style == FacadeStyle.SLATE -> ANTHRACITE
-                        r < 0.44 -> ANTHRACITE
-                        r < 0.68 -> CLAY_RED
-                        r < 0.88 -> RED_BROWN
-                        r < 0.95 -> GREY
-                        else -> BROWN
+                        r < 0.24 -> ANTHRACITE
+                        r < 0.56 -> CLAY_RED
+                        r < 0.80 -> RED_BROWN
+                        r < 0.92 -> BROWN
+                        else -> GREY
                     }
                     tintTo(t[0], t[1], t[2], Band.PANTILE, gain)
                 }
