@@ -157,6 +157,12 @@ interface RideInfo {
      * Startzeitpunkt UND Punktzahl, ohne die Punktlisten selbst zu laden.
      */
     val pointCount: Int
+
+    /**
+     * Siehe [Ride.indoor]. Mit Vorgabe `false`, damit bestehende
+     * Implementierungen (auch Test-Attrappen) unveraendert bleiben.
+     */
+    val indoor: Boolean get() = false
 }
 
 /**
@@ -184,6 +190,8 @@ data class RideSummary(
     override val stats: RideStats,
     override val planned: Boolean = false,
     override val pointCount: Int = 0,
+    /** Siehe [Ride.indoor]; im Index nur geschrieben, wenn `true`. */
+    override val indoor: Boolean = false,
 ) : RideInfo {
     fun toJson(): JsonObject = buildJsonObject {
         put("id", id)
@@ -195,6 +203,10 @@ data class RideSummary(
             put("planned", true)
         }
         put("stats", stats.toJson())
+        // Angehaengt und nur im Ausnahmefall (siehe [Ride.indoor]).
+        if (indoor) {
+            put("indoor", true)
+        }
     }
 
     companion object {
@@ -209,6 +221,7 @@ data class RideSummary(
                 planned = json.optionalBoolean("planned") ?: false,
                 stats = (json.fieldOrNull("stats") as? JsonObject)?.let { RideStats.fromJson(it) }
                     ?: RideStats.empty,
+                indoor = json.optionalBoolean("indoor") ?: false,
             )
         }
     }
@@ -261,6 +274,25 @@ data class Ride(
      * unbekannte Schluessel.
      */
     override val updatedAt: Long = createdAt,
+    /**
+     * `true`, wenn die Fahrt **auf dem Rollentrainer** entstanden ist (Feature
+     * „Indoor", Vertrag in `docs/indoor.md`). Die Punkte tragen dann die
+     * Koordinaten der *virtuell* gefahrenen Strecke samt Leistung und
+     * Trittfrequenz — niemand war dort unterwegs.
+     *
+     * ## Was daraus folgt
+     * Eine Indoor-Fahrt ist **gefahren** ([planned] bleibt `false`): Sie zaehlt
+     * fuer Belastung, Wochenziel und Statistik. Sie zaehlt **nicht** fuer
+     * alles, was „draussen gewesen" meint — Neue Wege, Entdeckt-Kacheln,
+     * gefahrene Wege, Rundenvergleich. Wer das meint, filtert ueber
+     * [outdoorRides].
+     *
+     * ## Rueckwaertskompatibilitaet
+     * Wie [planned]: Der Schluessel `indoor` wird **nur geschrieben, wenn er
+     * `true` ist**, und steht vor `updatedAt` — jede bisherige Tour bleibt
+     * byteweise beim alten Format, alte Dateien lesen sich als `false`.
+     */
+    override val indoor: Boolean = false,
 ) : RideInfo {
     override val pointCount: Int get() = points.size
 
@@ -273,6 +305,7 @@ data class Ride(
         stats = stats,
         planned = planned,
         pointCount = points.size,
+        indoor = indoor,
     )
 
     fun toJson(): JsonObject = buildJsonObject {
@@ -285,6 +318,10 @@ data class Ride(
         // der bestehenden Schluessel bleibt damit unangetastet.
         if (planned) {
             put("planned", true)
+        }
+        // Wie `planned` nur im Ausnahmefall (siehe [indoor]).
+        if (indoor) {
+            put("indoor", true)
         }
         // Immer geschrieben (siehe [updatedAt]) — als letzter Schluessel,
         // damit alles davor byteweise beim alten Format bleibt.
@@ -305,6 +342,7 @@ data class Ride(
                 planned = json.optionalBoolean("planned") ?: false,
                 // Fehlender Schluessel = alte Datei: siehe [updatedAt].
                 updatedAt = json.optionalLong("updatedAt") ?: createdAt,
+                indoor = json.optionalBoolean("indoor") ?: false,
             )
         }
     }
@@ -319,6 +357,16 @@ data class Ride(
  * Kilometer, die nie gefahren wurden.
  */
 fun <T : RideInfo> riddenRides(rides: List<T>): List<T> = rides.filter { !it.planned }
+
+/**
+ * Nur die **draussen** gefahrenen Touren — ohne Planungen ([Ride.planned])
+ * und ohne Fahrten auf dem Rollentrainer ([Ride.indoor]).
+ *
+ * Das Gegenstueck zu [riddenRides] fuer alles, was einen echten Ort meint:
+ * Neue Wege, Entdeckt-Kacheln, gefahrene Wege, Rundenvergleich. Belastung und
+ * Statistik nehmen weiter [riddenRides] — dort zaehlt die Indoor-Fahrt mit.
+ */
+fun <T : RideInfo> outdoorRides(rides: List<T>): List<T> = rides.filter { !it.planned && !it.indoor }
 
 /** Fitness-Stufen wie in der Flutter-App und der Web-Referenz. */
 enum class FitnessLevel(
@@ -622,7 +670,24 @@ data class PlannedRoute(
     val ascentM: Double,
     val pavedKm: Double? = null,
     val unpavedKm: Double? = null,
+    /**
+     * Die Wegabschnitte der Route in Fahrtrichtung, wie BRouter sie in
+     * `properties.messages` liefert — Grundlage der feinen Belagsklassen des
+     * Indoor-Trainings (`de.trailscape.core.indoor.SurfaceKind`, Vertrag in
+     * `docs/indoor.md`). `null` heisst „keine Wegmerkmale" (Antwort ohne
+     * verwertbare `messages`, oder ein Teilstueck kennt sie nicht); die Summe
+     * der Laengen ist sonst die Routenlaenge. Rein In-Memory wie die ganze
+     * Klasse.
+     */
+    val waySections: List<RouteWaySection>? = null,
 )
+
+/**
+ * Ein Wegabschnitt einer [PlannedRoute]: [lengthM] Meter auf einem Weg mit den
+ * OSM-Merkmalen [wayTags] (`highway=track surface=gravel tracktype=grade2 …`,
+ * Format siehe `RouteSurface.kt`).
+ */
+data class RouteWaySection(val lengthM: Double, val wayTags: String)
 
 /** Navigationszustand waehrend einer laufenden Fahrt. Rein In-Memory, siehe [Waypoint]. */
 data class NavState(

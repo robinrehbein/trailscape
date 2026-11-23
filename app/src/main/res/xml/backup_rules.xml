@@ -62,5 +62,7 @@
     <exclude domain="file" path="mbgl-offline.db-shm" />
     <exclude domain="file" path="segments" />
     <exclude domain="file" path="brouter" />
+    <!-- Indoor-Welten (docs/indoor.md): gross und jederzeit neu ladbar. -->
+    <exclude domain="file" path="indoor" />
     <exclude domain="sharedpref" path="trailscape_prefs.xml" />
 </full-backup-content>

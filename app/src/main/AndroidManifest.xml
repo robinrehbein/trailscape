@@ -58,6 +58,18 @@
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="false" />
+    <!-- Indoor-Training (docs/indoor.md): Rollentrainer (Fitness Machine
+         Service 0x1826) und Schalttaster laufen ueber dieselben
+         Bluetooth-Berechtigungen wie die Sensoren oben; auch deren Suche
+         filtert nur nach Dienst-UUIDs und leitet keinen Standort ab. Die
+         3D-Welt (Filament) braucht OpenGL ES 3.0 — mit required="false",
+         damit Play kein Geraet ausfiltert: Ohne ES 3.0 zeigt die
+         Indoor-Seite eine Meldung, der Rest der App laeuft unveraendert.
+         Eigene Berechtigungen braucht das Feature nicht (kein Standort,
+         kein Vordergrunddienst im Prototyp). -->
+    <uses-feature
+        android:glEsVersion="0x00030000"
+        android:required="false" />
     <!-- ACTIVITY_RECOGNITION bewusst NICHT deklariert: Trailscape zaehlt keine
          Schritte und erkennt keine Aktivitaeten selbst — das Aufzeichnen
          beruht ausschliesslich auf GPS-Standortpunkten. -->

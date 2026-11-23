@@ -35,7 +35,17 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.roundToInt
 
 /** Wer die Sensorverbindungen gerade braucht (siehe [BleSensors.acquire]). */
-enum class BleNutzer { AUFZEICHNUNG, EINSTELLUNGEN }
+enum class BleNutzer {
+    AUFZEICHNUNG,
+    EINSTELLUNGEN,
+
+    /**
+     * Die laufende Indoor-Fahrt (Vertrag in `docs/indoor.md`): Sie liest den
+     * Puls des gemerkten Gurts ueber [BleSensors.kanaele]. Trainer und
+     * Schalttaster laufen NICHT hierueber, sondern ueber `sensors/indoor/`.
+     */
+    INDOOR,
+}
 
 /**
  * Die Live-Kanaele aller Sensoren, wie `:core` sie auswertet.

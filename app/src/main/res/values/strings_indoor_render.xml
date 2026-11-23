@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte des Indoor-Trainings, Slice indoor-render: 3D-Darstellung und Diagnoseseite (indoor/render/**).
+    Vom Architekten leer angelegt (docs/indoor.md, Abschnitt 2.5); der Slice fuellt sie.
+
+    Schluessel-Praefix: indoor_render_
+    Regeln (Schluesselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstueck in values-en/strings_indoor_render.xml — gleiche Schluessel, gleiche Reihenfolge.
+-->
+<resources>
+</resources>
