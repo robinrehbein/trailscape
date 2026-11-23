@@ -1,0 +1,204 @@
+{
+"source": "BROUTER_WAY_TAGS",
+"lengthM": 13115,
+"sections": [
+{
+"fromM": 0,
+"toM": 205,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 205,
+"toM": 218,
+"kind": "COBBLESTONE",
+"highway": "track"
+},
+{
+"fromM": 218,
+"toM": 283,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 283,
+"toM": 471,
+"kind": "GRAVEL",
+"highway": "path"
+},
+{
+"fromM": 471,
+"toM": 483,
+"kind": "DIRT",
+"highway": "path"
+},
+{
+"fromM": 483,
+"toM": 511,
+"kind": "GRAVEL",
+"highway": "track"
+},
+{
+"fromM": 511,
+"toM": 2416,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 2416,
+"toM": 2586,
+"kind": "ASPHALT",
+"highway": "track"
+},
+{
+"fromM": 2586,
+"toM": 3721,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 3721,
+"toM": 4442,
+"kind": "ASPHALT",
+"highway": "tertiary"
+},
+{
+"fromM": 4442,
+"toM": 4460,
+"kind": "DIRT",
+"highway": "path"
+},
+{
+"fromM": 4460,
+"toM": 5724,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 5724,
+"toM": 5742,
+"kind": "DIRT",
+"highway": "path"
+},
+{
+"fromM": 5742,
+"toM": 7438,
+"kind": "ASPHALT",
+"highway": "tertiary"
+},
+{
+"fromM": 7438,
+"toM": 7750,
+"kind": "ASPHALT",
+"highway": "living_street"
+},
+{
+"fromM": 7750,
+"toM": 7760,
+"kind": "DIRT",
+"highway": "path"
+},
+{
+"fromM": 7760,
+"toM": 8171,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 8171,
+"toM": 8639,
+"kind": "ASPHALT",
+"highway": "tertiary"
+},
+{
+"fromM": 8639,
+"toM": 9037,
+"kind": "ASPHALT",
+"highway": "residential"
+},
+{
+"fromM": 9037,
+"toM": 9135,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 9135,
+"toM": 9774,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 9774,
+"toM": 9841,
+"kind": "GRAVEL",
+"highway": "path"
+},
+{
+"fromM": 9841,
+"toM": 10135,
+"kind": "COMPACTED",
+"highway": "path"
+},
+{
+"fromM": 10135,
+"toM": 10492,
+"kind": "COMPACTED",
+"highway": "track"
+},
+{
+"fromM": 10492,
+"toM": 10497,
+"kind": "CONCRETE",
+"highway": "residential"
+},
+{
+"fromM": 10497,
+"toM": 10745,
+"kind": "CONCRETE",
+"highway": "living_street"
+},
+{
+"fromM": 10745,
+"toM": 10954,
+"kind": "ASPHALT",
+"highway": "living_street"
+},
+{
+"fromM": 10954,
+"toM": 11400,
+"kind": "ASPHALT",
+"highway": "residential"
+},
+{
+"fromM": 11400,
+"toM": 12635,
+"kind": "ASPHALT",
+"highway": "secondary"
+},
+{
+"fromM": 12635,
+"toM": 12801,
+"kind": "PAVING_STONES",
+"highway": "living_street"
+},
+{
+"fromM": 12801,
+"toM": 12881,
+"kind": "ASPHALT",
+"highway": "service"
+},
+{
+"fromM": 12881,
+"toM": 12997,
+"kind": "PAVING_STONES",
+"highway": "track"
+},
+{
+"fromM": 12997,
+"toM": 13115,
+"kind": "COMPACTED",
+"highway": "path"
+}
+]
+}
