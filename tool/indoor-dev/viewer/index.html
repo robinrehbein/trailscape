@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trailscape Indoor – Betrachter</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #20242a; overflow: hidden; }
+  canvas#view { display: block; width: 100vw; height: 100vh; }
+  /* Quellenangaben: klein unten links, wie es die App zeigen muss (docs/indoor.md 8.6). */
+  #attribution {
+    position: fixed; left: 8px; bottom: 6px; max-width: 70vw;
+    font: 11px/1.3 system-ui, "DejaVu Sans", sans-serif; color: #fff;
+    text-shadow: 0 0 3px rgba(0,0,0,.9), 0 0 1px #000; opacity: .85; pointer-events: none;
+  }
+  #hud {
+    position: fixed; left: 8px; top: 6px; white-space: pre;
+    font: 12px/1.35 ui-monospace, "DejaVu Sans Mono", monospace; color: #fff;
+    background: rgba(0,0,0,.45); padding: 6px 8px; border-radius: 4px; pointer-events: none;
+  }
+  #message {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    font: 15px/1.4 system-ui, sans-serif; color: #fff; background: #20242a; padding: 10vw; white-space: pre-wrap;
+  }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./node_modules/three/build/three.module.js",
+    "three/addons/": "./node_modules/three/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="attribution"></div>
+<div id="hud" hidden></div>
+<div id="message"></div>
+<script type="module" src="./viewer.js"></script>
+</body>
+</html>
