@@ -301,9 +301,10 @@ interface ExplorerTilesStore {
 }
 
 /**
- * Sammelt die entdeckten Kacheln ueber alle **gefahrenen** Touren — geplante
- * Touren ([RideInfo.planned]) zaehlen nicht als entdeckt, denn wer eine Route
- * plant, ist sie noch nicht abgefahren.
+ * Sammelt die entdeckten Kacheln ueber alle **draussen gefahrenen** Touren —
+ * geplante Touren ([RideInfo.planned]) zaehlen nicht als entdeckt, denn wer
+ * eine Route plant, ist sie noch nicht abgefahren; Indoor-Fahrten
+ * ([RideInfo.indoor]) ebenso wenig, siehe [outdoorRides].
  *
  * Arbeitet analog zu [computeInsights]/`RideLoadFacts.kt`: Je Tour wird
  * zunaechst der Cache-Eintrag befragt; stimmen [StoredExplorerTiles.updatedAt]
@@ -323,7 +324,10 @@ fun collectExplorerTiles(
     store: ExplorerTilesStore,
     loadRide: (String) -> Ride?,
 ): Set<ExplorerTile> {
-    val ridden = riddenRides(summaries)
+    // Nur draussen gefahrene Touren: Indoor-Fahrten ([RideInfo.indoor])
+    // entdecken nichts und kommen nicht in den Cache; ein alter Eintrag
+    // faellt beim retainAll heraus (`docs/indoor.md` 10.2).
+    val ridden = outdoorRides(summaries)
     val allTiles = mutableSetOf<ExplorerTile>()
 
     for (summary in ridden) {
@@ -369,10 +373,11 @@ fun collectExplorerTiles(
  * [collectExplorerTiles]) nicht mehr — fuer die Tour selbst oder fuer eine
  * fruehere —, kommt `null` zurueck: lieber keine Zahl als eine falsche.
  *
- * `null` auch, wenn [rideId] keine gefahrene Tour aus [rides] ist.
+ * `null` auch, wenn [rideId] keine draussen gefahrene Tour aus [rides] ist
+ * (geplant oder Indoor, siehe [outdoorRides]).
  */
 fun explorerTilesNewInRide(rideId: String, rides: List<RideInfo>, store: ExplorerTilesStore): Int? {
-    val ridden = riddenRides(rides)
+    val ridden = outdoorRides(rides)
     val target = ridden.firstOrNull { it.id == rideId } ?: return null
 
     fun validTiles(ride: RideInfo): List<ExplorerTile>? {
@@ -412,7 +417,7 @@ const val EXPLORER_TILES_CHEAP_REFRESH_MAX: Int = 3
  * Touren) oder einen ganzen Bestand durchliefe. Laedt selbst nichts.
  */
 fun explorerTilesCacheGaps(rides: List<RideInfo>, store: ExplorerTilesStore): Int =
-    riddenRides(rides).count { ride ->
+    outdoorRides(rides).count { ride ->
         val entry = store.get(ride.id)
         entry == null || entry.updatedAt != ride.updatedAt || entry.pointCount != ride.pointCount
     }

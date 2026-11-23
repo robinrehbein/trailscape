@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts of indoor training, slice indoor-render: 3D rendering and diagnostics screen (indoor/render/**).
+    Created empty by the architect (docs/indoor.md, section 2.5); the slice fills it.
+
+    Key prefix: indoor_render_
+    Rules (key names, placeholders, plurals, glossary): docs/i18n.md.
+    Counterpart of values/strings_indoor_render.xml — same keys, same order.
+-->
+<resources>
+</resources>

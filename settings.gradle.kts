@@ -31,3 +31,9 @@ include(":app")
 // (welche DataTypes kann die Uhr, wie gut ist das GPS, was kostet es Akku)
 // und danach entweder in ein echtes Modul wachsen oder ersatzlos verschwinden.
 include(":wear")
+// Entwicklerwerkzeug des Indoor-Trainings (docs/indoor.md): baut auf der JVM
+// fuer eine Beispielstrecke die 3D-Welt (GLB-Kacheln + Manifest) mit dem
+// Weltbau aus `:core`, damit sie sich ohne Geraet in headless Chromium ansehen
+// laesst. Reines JVM-Modul, kein Bestandteil des APK.
+include(":indoor-dev")
+project(":indoor-dev").projectDir = file("tool/indoor-dev")

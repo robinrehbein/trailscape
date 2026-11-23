@@ -60,6 +60,7 @@ import de.trailscape.app.sensors.bluetoothEnabled
 import de.trailscape.app.sensors.bluetoothLeSupported
 import de.trailscape.app.sensors.bluetoothPermissions
 import de.trailscape.app.sensors.hasBluetoothPermissions
+import de.trailscape.app.sensors.indoor.IndoorDevicesSectionMitZustand
 import de.trailscape.app.sensors.locationServicesNeeded
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.NoticeBox
@@ -200,6 +201,15 @@ fun ColumnScope.SensorsCardContent() {
             runCatching { enableLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
         },
     )
+
+    // Rollentrainer und Schalttaster (Indoor-Training, docs/indoor.md 5.1):
+    // eigener Abschnitt, eigene Suche, keine Verbindung von hier aus. Die
+    // Hinweise zu Berechtigung und Bluetooth stehen oben schon einmal.
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 20.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+    IndoorDevicesSectionMitZustand(systemHinweise = false)
 }
 
 /** Alles, was [SensorsPageContent] zeigt — ohne Plattformbezug. */

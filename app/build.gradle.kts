@@ -336,6 +336,27 @@ dependencies {
     // OpenSourceNotices.kt und die README-Lizenzuebersicht nachgetragen.
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
 
+    // Indoor-Training (docs/indoor.md): die 3D-Welt wird nativ mit Googles
+    // Filament gezeichnet (Apache-2.0) — keine WebView. Drei Artefakte in
+    // derselben Version: die Engine, `gltfio` (laedt die zur Laufzeit erzeugten
+    // GLB-Kacheln mit dem mitgelieferten UbershaderProvider; eigene
+    // .filamat-Materialien gibt es bewusst nicht, weil `matc` hier nicht
+    // baubar ist) und `filament-utils` (`Utils.init()`, Mathe-Typen,
+    // `UiHelper`-Beiwerk). 1.75.1 ist die neueste Version, die gegen
+    // compileSdk 36 / AGP 9.0.1 baut: Ab 1.76.0 verlangen die AARs
+    // compileSdk 37 (aar-metadata `minCompileSdk=37`; neueste Version auf
+    // Maven Central ist 1.81.0, Stand 23.11.2026) — ein Anheben waere ein
+    // eigener Schritt samt AGP-Update. Verwendet wird das ausschliesslich unter
+    // `app/.../indoor/render/`; R8-Regeln dazu stehen in proguard-rules.pro
+    // (Besitzer: Slice indoor-render).
+    //
+    // Kosten: Filament bringt je ABI native Bibliotheken von rund 10 MB mit
+    // (arm64-v8a, armeabi-v7a, x86, x86_64). Ob das APK auf arm64 beschraenkt
+    // wird, ist eine offene Entscheidung des Gruenders (docs/indoor.md §11).
+    implementation("com.google.android.filament:filament-android:1.75.1")
+    implementation("com.google.android.filament:gltfio-android:1.75.1")
+    implementation("com.google.android.filament:filament-utils-android:1.75.1")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Nur Test-Klassenpfad, kein Bestandteil des APK. Die normalen Unit-Tests
@@ -345,6 +366,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.3.20")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+    // Lokaler HTTP-Server fuer die Tests des Geo-Abrufs (Indoor-Weltbau);
+    // Version identisch zu okhttp oben.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     // Screenshot-Tests der Oberflaeche (Robolectric + Roborazzi): rendern die
     // Compose-Screens auf der JVM zu PNGs, ohne Emulator — die einzige

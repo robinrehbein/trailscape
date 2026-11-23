@@ -73,9 +73,9 @@ import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.coreTexts
 import de.trailscape.core.loadPlan
 import de.trailscape.core.mergeRouteConsentRequests
+import de.trailscape.core.outdoorRides
 import de.trailscape.core.readVitalsHistory
 import de.trailscape.core.retainRidesInSegmentRegistry
-import de.trailscape.core.riddenRides
 import de.trailscape.core.ridesNeedingSegmentUpdate
 import de.trailscape.core.routeConsentStorageKey
 import de.trailscape.core.savePlan
@@ -136,6 +136,13 @@ import kotlinx.serialization.json.JsonObject
  * zwischen Tab und gepushtem Ziel nicht zu kennen. Die Huelle loest ihn auf.
  */
 enum class AppTab { HOME, MAP, RIDES, TRAINING, MORE }
+
+/**
+ * Die Indoor-Ziele im `NavHost` (siehe `TrailscapeApp.kt`): der Ablauf
+ * Koppeln → Fahrt, die Weltverwaltung und die Diagnose der Darstellung.
+ * Alle drei ohne Navigationsleiste.
+ */
+enum class IndoorDestination { FLOW, WORLDS, DIAGNOSTICS }
 
 /**
  * Eine Unterseite der Einstellungen als Sprungziel (siehe
@@ -338,6 +345,28 @@ class AppViewModel(
 
     fun consumeTabRequest() {
         _tabRequest.value = null
+    }
+
+    // -------------------------------------------------------------------------
+    // Indoor-Ablauf oeffnen (docs/indoor.md, Abschnitt 10.1)
+    // -------------------------------------------------------------------------
+
+    private val _indoorRequest = MutableStateFlow<IndoorDestination?>(null)
+
+    /**
+     * Bitte an die Navigationshuelle, ein Indoor-Ziel zu oeffnen — dasselbe
+     * Muster wie [tabRequest]: Heute-Karte, Bereit-Dialog und Mehr rufen
+     * [requestIndoor], `TrailscapeApp()` navigiert und quittiert mit
+     * [consumeIndoorRequest].
+     */
+    val indoorRequest: StateFlow<IndoorDestination?> = _indoorRequest.asStateFlow()
+
+    fun requestIndoor(destination: IndoorDestination = IndoorDestination.FLOW) {
+        _indoorRequest.value = destination
+    }
+
+    fun consumeIndoorRequest() {
+        _indoorRequest.value = null
     }
 
     // -------------------------------------------------------------------------
@@ -792,6 +821,31 @@ class AppViewModel(
     /** Laedt alle gespeicherten Touren neu. Die Auswahl bleibt erhalten. */
     fun refreshRides() {
         viewModelScope.launch { reloadRides() }
+    }
+
+    /**
+     * Meldung des Indoor-Ablaufs (`ui/indoor`), dass er eine Indoor-Tour
+     * ([Ride.indoor]) selbst ueber [RideStorage] gespeichert hat: Die Liste
+     * wird aus dem Index neu gelesen, damit Tourenliste, Wochenziel und
+     * Belastung die Fahrt sofort zeigen.
+     *
+     * Bewusst ohne Segment- und Kachel-Lauf: Eine Indoor-Fahrt hat keinen
+     * echten Ort (`docs/indoor.md` 10.2), `ridesNeedingSegmentUpdate` und
+     * `collectExplorerTiles` lassen sie ohnehin aus. Auch die Auswahl bleibt
+     * unangetastet — die Auswertung zeigt der Indoor-Ablauf selbst.
+     *
+     * @param rideId die ID der gespeicherten Tour (fuer kuenftige Zwecke wie
+     *   eine Auswahl; heute nur zur Nachvollziehbarkeit).
+     */
+    fun onIndoorRideSaved(rideId: String) {
+        viewModelScope.launch {
+            reloadRides()
+            if (_rides.value.none { it.id == rideId }) {
+                // Index noch ohne die Tour (z. B. Datei gerade erst atomar
+                // umbenannt): einmal nachlesen schadet nicht.
+                reloadRides()
+            }
+        }
     }
 
     /**
@@ -2135,10 +2189,10 @@ class AppViewModel(
      * koennen, um „+3 neue Kacheln" melden zu duerfen. Wer das nicht braucht,
      * ruft [refreshExplorerTilesIfEnabled].
      *
-     * Geplante Routen zaehlen nicht mit — das filtert `collectExplorerTiles`
-     * in `:core` selbst; hier gehen schlicht die aktuellen Zusammenfassungen
-     * hinein. Fehler sind still: Ein nicht aktualisierter Kachelbestand
-     * kostet nur einen spaeteren Neuversuch.
+     * Geplante Routen und Indoor-Fahrten zaehlen nicht mit — das filtert
+     * `collectExplorerTiles` in `:core` selbst (`outdoorRides`); hier gehen
+     * schlicht die aktuellen Zusammenfassungen hinein. Fehler sind still: Ein
+     * nicht aktualisierter Kachelbestand kostet nur einen spaeteren Neuversuch.
      */
     private suspend fun refreshExplorerTiles() {
         // Vor dem Dispatcher-Wechsel gelesen: [allSummaries] gehoert dem
@@ -2257,12 +2311,13 @@ class AppViewModel(
      * Alle gefahrenen Spuren, je Tour auf hoechstens [HISTORY_TRACK_MAX_POINTS]
      * Punkte ausgeduennt (jeder n-te Punkt, Start und Ziel bleiben) — genug
      * fuer die Uebersicht, klein genug fuer eine einzige GeoJSON-Quelle mit
-     * hunderten Touren. Geplante Routen zaehlen nicht, nur Gefahrenes. Beim
+     * hunderten Touren. Geplante Routen zaehlen nicht, nur Gefahrenes; ebenso
+     * wenig Indoor-Fahrten (`docs/indoor.md` 10.2) — ihre Spur ist virtuell. Beim
      * ersten Aufruf wird jede Tour einmal von der Platte gelesen, danach
      * kommen unveraenderte Touren aus dem Speicher.
      */
     suspend fun historyTracks(): List<List<TrackPoint>> = withContext(io) {
-        val summaries = allSummaries.filterNot { it.planned || it.id in pendingDeletionIds }
+        val summaries = allSummaries.filterNot { it.planned || it.indoor || it.id in pendingDeletionIds }
         historyTrackCache.keys.retainAll(summaries.map { it.id }.toSet())
         summaries.mapNotNull { summary ->
             val cached = historyTrackCache[summary.id]
@@ -2480,7 +2535,9 @@ class AppViewModel(
                         store = routeSignatureStore,
                         loadRide = { rideStorage.loadRide(it) },
                     )
-                    routeSignatureStore.retainAll(riddenRides(summaries).mapTo(HashSet()) { it.id })
+                    // Wie `collectRouteSignatures`: nur draussen gefahrene
+                    // Touren — Planungen und Indoor-Fahrten behalten keinen Eintrag.
+                    routeSignatureStore.retainAll(outdoorRides(summaries).mapTo(HashSet()) { it.id })
                     compareOnRoute(rideId, visible, signatures)
                 } catch (e: CancellationException) {
                     throw e

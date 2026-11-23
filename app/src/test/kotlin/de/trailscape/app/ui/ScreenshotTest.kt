@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -725,7 +727,13 @@ class ScreenshotTest {
         TestLocales.assertTestLocale(AppLanguage.EN)
         RuntimeEnvironment.setFontScale(1.15f)
         start()
-        compose.onAllNodesWithText(compose.activity.getString(R.string.today_goal_eyebrow))[0].assertIsDisplayed()
+        // Montags bis mittwochs steht der Wochenrueckblick oben auf „Heute"
+        // und schiebt die Zielzeile aus dem Bild — erst hinrollen, dann
+        // pruefen. Ohne das war der Test vom Wochentag abhaengig.
+        val zielzeile = compose.activity.getString(R.string.today_goal_eyebrow)
+        compose.onAllNodes(hasScrollToNodeAction())[0].performScrollToNode(hasText(zielzeile))
+        settle()
+        compose.onAllNodesWithText(zielzeile)[0].assertIsDisplayed()
         shot("12-heute-schmal-en")
     }
 

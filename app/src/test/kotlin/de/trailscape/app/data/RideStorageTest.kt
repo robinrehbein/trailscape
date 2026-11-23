@@ -34,6 +34,7 @@ class RideStorageTest {
         createdAt: Long = 1700000000000L,
         updatedAt: Long = createdAt,
         pointCount: Int = 3,
+        indoor: Boolean = false,
     ): Ride = Ride(
         id = id,
         name = name,
@@ -43,6 +44,7 @@ class RideStorageTest {
         },
         stats = RideStats(distanceKm = 10.0, ascentM = 100.0, descentM = 50.0, durationS = 3600),
         updatedAt = updatedAt,
+        indoor = indoor,
     )
 
     // ------------------------------------------------------------- Aufbau
@@ -187,5 +189,62 @@ class RideStorageTest {
         val b = ride("b", createdAt = 2000)
         storage.saveRides(listOf(a, b))
         assertEquals(listOf(b, a), storage.listRides())
+    }
+
+    // ------------------------------------------------------------- Indoor
+
+    @Test
+    fun `Indoor-Tour behaelt ihr Kennzeichen durch den Index`() {
+        storage.saveRide(ride("drinnen", createdAt = 2000, indoor = true))
+        storage.saveRide(ride("draussen", createdAt = 1000))
+
+        // Frische Instanz: liest den geschriebenen Index, nicht die Dateien.
+        val fresh = RideStorage(dir)
+        val summaries = fresh.listSummaries().summaries.associateBy { it.id }
+        assertTrue(summaries.getValue("drinnen").indoor)
+        assertFalse(summaries.getValue("draussen").indoor)
+        assertTrue(fresh.loadRide("drinnen")!!.indoor)
+        val indexText = File(dir, RideStorage.INDEX_FILE_NAME).readText(Charsets.UTF_8)
+        assertTrue(""""version":${RideStorage.INDEX_VERSION}""" in indexText, indexText)
+        assertTrue(""""indoor":true""" in indexText, indexText)
+    }
+
+    @Test
+    fun `alter Index ohne indoor-Schluessel wird neu aufgebaut`() {
+        storage.saveRide(ride("drinnen", indoor = true))
+        val file = File(dir, "drinnen.json")
+
+        // Index der Version 1 mit passendem Fingerabdruck, aber ohne
+        // indoor-Schluessel — so, wie ihn eine App vor dem Feld geschrieben haette.
+        File(dir, RideStorage.INDEX_FILE_NAME).writeText(
+            """{"version":1,"entries":[{"file":"drinnen.json","size":${file.length()},""" +
+                """"mtime":${file.lastModified()},"summary":{"id":"drinnen","name":"Tour drinnen",""" +
+                """"createdAt":1700000000000,"updatedAt":1700000000000,"pointCount":3,""" +
+                """"stats":{"distanceKm":10.0,"ascentM":100.0,"descentM":50.0}}}]}""",
+            Charsets.UTF_8,
+        )
+
+        val summary = RideStorage(dir).listSummaries().summaries.single()
+        assertTrue(summary.indoor)
+        val indexText = File(dir, RideStorage.INDEX_FILE_NAME).readText(Charsets.UTF_8)
+        assertTrue(""""version":${RideStorage.INDEX_VERSION}""" in indexText, indexText)
+    }
+
+    @Test
+    fun `alte Tour-Datei ohne indoor-Schluessel liest sich als draussen`() {
+        val json = ride("alt").toJson().toString()
+        assertFalse("indoor" in json)
+        File(dir, "alt.json").writeText(json, Charsets.UTF_8)
+
+        assertFalse(RideStorage(dir).listSummaries().summaries.single().indoor)
+        assertFalse(RideStorage(dir).loadRide("alt")!!.indoor)
+    }
+
+    @Test
+    fun `Outdoor-Tour wird ohne indoor-Schluessel geschrieben`() {
+        storage.saveRide(ride("a"))
+        val text = File(dir, "a.json").readText(Charsets.UTF_8)
+        assertFalse("indoor" in text, text)
+        assertEquals(ride("a").toJson().toString(), text)
     }
 }

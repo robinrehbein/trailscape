@@ -220,6 +220,7 @@ class RouteMatchTest {
         override val stats: RideStats,
         override val planned: Boolean = false,
         override val pointCount: Int = 0,
+        override val indoor: Boolean = false,
     ) : RideInfo {
         override val name: String get() = id
     }
@@ -278,6 +279,23 @@ class RouteMatchTest {
     }
 
     @Test
+    fun `collect ueberspringt Indoor-Fahrten ohne Laden und ohne Cache-Eintrag`() {
+        val loop = walk(square(1000.0))
+        val drinnen = Info("i", 1, stats = stats(1000), pointCount = loop.size, indoor = true)
+        val ok = Info("ok", 2, stats = stats(1000), pointCount = loop.size)
+        val store = InMemoryRouteSignatureStore()
+        val loaded = ArrayList<String>()
+
+        val result = collectRouteSignatures(listOf(drinnen, ok), store) { id ->
+            loaded += id
+            ride(if (id == "i") drinnen else ok, loop)
+        }
+        assertEquals(setOf("ok"), result.keys)
+        assertEquals(listOf("ok"), loaded)
+        assertNull(store.read("i"))
+    }
+
+    @Test
     fun `collect merkt sich Touren ohne Signatur und entfernt nichts`() {
         val shortTrack = walk(listOf(0.0 to 0.0, 500.0 to 0.0))
         val info = Info("s", 1, stats = stats(100), pointCount = shortTrack.size)
@@ -298,8 +316,14 @@ class RouteMatchTest {
     private val loopSig = sig(walk(square(1000.0)))
     private val otherSig = sig(walk(square(1000.0, ox = 20000.0)))
 
-    private fun info(id: String, createdAt: Long, movingS: Int?, durationS: Int? = null, planned: Boolean = false) =
-        Info(id, createdAt, stats = stats(movingS, durationS), planned = planned)
+    private fun info(
+        id: String,
+        createdAt: Long,
+        movingS: Int?,
+        durationS: Int? = null,
+        planned: Boolean = false,
+        indoor: Boolean = false,
+    ) = Info(id, createdAt, stats = stats(movingS, durationS), planned = planned, indoor = indoor)
 
     @Test
     fun `Rang, Vorgaenger, Bestzeit und Deltas`() {
@@ -386,5 +410,19 @@ class RouteMatchTest {
         assertNull(compareOnRoute("noTime", rides, sigs))
         assertNull(compareOnRoute("dur", rides, sigs))
         assertNull(compareOnRoute("planned", rides, sigs))
+    }
+
+    @Test
+    fun `Indoor-Fahrten zaehlen im Rundenvergleich nicht`() {
+        val rides = listOf(
+            info("r1", 100, 1500),
+            info("indoor", 150, 900, indoor = true),
+            info("r2", 200, 1300),
+        )
+        val sigs = rides.associate { it.id to loopSig }
+        val c = assertNotNull(compareOnRoute("r2", rides, sigs))
+        assertEquals(listOf("r1", "r2"), c.efforts.map { it.rideId })
+        assertEquals("r1", c.previous?.rideId)
+        assertNull(compareOnRoute("indoor", rides, sigs))
     }
 }

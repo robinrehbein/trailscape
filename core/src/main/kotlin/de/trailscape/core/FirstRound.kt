@@ -89,7 +89,8 @@ fun defaultFirstRoundDuration(profile: TrainingProfile): FirstRoundDuration {
  * ungefragt in der Karte landen, nach dem Standort gefragt werden und eine
  * Routensuche am Server ausloesen. Mit Historie ist die Runde deshalb eine
  * bewusste Wahl, keine Vorgabe. Gespeicherte Planungen zaehlen nicht als
- * gefahrene Tour ([riddenRides]).
+ * gefahrene Tour ([riddenRides]); eine Indoor-Fahrt ([Ride.indoor]) dagegen
+ * schon — wer auf dem Rollentrainer gefahren ist, hat Historie.
  */
 fun onboardingFirstRoundPreselect(
     profile: TrainingProfile,

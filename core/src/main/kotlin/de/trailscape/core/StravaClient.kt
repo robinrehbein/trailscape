@@ -183,19 +183,29 @@ class StravaClient(
         return catchingFailure {
             val gpx = withGpxTrackType(rideToGpx(ride), "cycling")
             val multipart = buildMultipartFormData(
-                listOf(
-                    MultipartPart("data_type", "gpx"),
-                    MultipartPart("name", ride.name),
+                buildList {
+                    add(MultipartPart("data_type", "gpx"))
+                    add(MultipartPart("name", ride.name))
                     // external_id macht den Upload bei Strava wiedererkennbar
                     // (die Endung verlangt Strava so).
-                    MultipartPart("external_id", "trailscape-${ride.id}.gpx"),
-                    MultipartPart(
-                        name = "file",
-                        value = gpx,
-                        fileName = "${safeFileName(ride.name)}.gpx",
-                        contentType = "application/gpx+xml",
-                    ),
-                ),
+                    add(MultipartPart("external_id", "trailscape-${ride.id}.gpx"))
+                    // Indoor-Fahrt (`docs/indoor.md` 10.3): Der Upload-Endpunkt
+                    // kennt dafuer genau einen Parameter, `trainer`. Strava
+                    // markiert die Aktivitaet damit als auf dem Rollentrainer
+                    // gefahren. Nur bei `true` gesetzt — jede andere Tour geht
+                    // byteweise wie bisher hinaus.
+                    if (ride.indoor) {
+                        add(MultipartPart("trainer", "1"))
+                    }
+                    add(
+                        MultipartPart(
+                            name = "file",
+                            value = gpx,
+                            fileName = "${safeFileName(ride.name)}.gpx",
+                            contentType = "application/gpx+xml",
+                        ),
+                    )
+                },
             )
             val response = authorized { token ->
                 HttpRequest(

@@ -380,7 +380,15 @@ class RideStorage(private val ridesDir: File) {
         if (file.exists()) {
             try {
                 val root = Json.parseToJsonElement(file.readText(Charsets.UTF_8)) as JsonObject
-                val entries = root["entries"] as? JsonArray ?: JsonArray(emptyList())
+                // Aelterer (oder fremder) Index: nicht uebernehmen, sondern
+                // leer lassen — listSummaries baut ihn dann aus den
+                // Tour-Dateien neu auf (siehe [INDEX_VERSION]).
+                val version = (root["version"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+                val entries = if (version == INDEX_VERSION) {
+                    root["entries"] as? JsonArray ?: JsonArray(emptyList())
+                } else {
+                    JsonArray(emptyList())
+                }
                 for (element in entries) {
                     val obj = element as? JsonObject ?: continue
                     val entry = readIndexEntry(obj) ?: continue
@@ -419,7 +427,7 @@ class RideStorage(private val ridesDir: File) {
         try {
             val dir = ensureDir()
             val json = buildJsonObject {
-                put("version", 1)
+                put("version", INDEX_VERSION)
                 put(
                     "entries",
                     buildJsonArray {
@@ -452,6 +460,20 @@ class RideStorage(private val ridesDir: File) {
     companion object {
         /** Dateiname des Metadaten-Index im Touren-Verzeichnis. */
         const val INDEX_FILE_NAME: String = "index.json"
+
+        /**
+         * Formatstand des Index. Ein Index mit anderer Version wird verworfen
+         * und aus den Tour-Dateien neu aufgebaut (kostet einmal den
+         * Voll-Parse, nie Daten).
+         *
+         * Version 2 kam mit [RideSummary.indoor] (`docs/indoor.md` 10.2):
+         * Ein Index der Version 1 kennt den Schluessel nicht und wuerde eine
+         * Indoor-Tour, deren Datei sich seitdem nicht geaendert hat (etwa nach
+         * Downgrade/Upgrade oder Sync mit gleichem Fingerabdruck), sonst als
+         * draussen gefahren fuehren — mit Folgen fuer Neue Wege, Entdeckt-
+         * Kacheln und Rundenvergleich.
+         */
+        const val INDEX_VERSION: Int = 2
 
         /** Unterverzeichnis fuer unlesbare Tour-Dateien (Quarantaene). */
         const val QUARANTINE_DIR_NAME: String = "defekt"

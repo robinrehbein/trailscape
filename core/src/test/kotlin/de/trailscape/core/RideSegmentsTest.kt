@@ -376,6 +376,27 @@ class RideSegmentsTest {
     }
 
     @Test
+    fun `Indoor-Fahrt ueber denselben Anstieg wird weder Kandidat noch Effort`() {
+        val r1 = climbRide("r1", T0, dtMs = 5000L)
+        val drinnen = climbRide("indoor", T0 + 86_400_000L, dtMs = 4000L, jitterLat = 0.00004).copy(indoor = true)
+
+        val after1 = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe)
+        val after2 = updateSegmentRegistry(after1.registry, drinnen, texts = CoreTextsDe)
+        assertEquals(0, after2.registry.segments.size)
+        assertEquals(listOf("r1"), after2.registry.candidates.map { it.rideId })
+        assertEquals(emptyList(), after2.newBests)
+        // Als verarbeitet vermerkt, damit sie nicht immer wieder ansteht.
+        assertEquals(drinnen.updatedAt, after2.registry.processed["indoor"])
+    }
+
+    @Test
+    fun `ridesNeedingSegmentUpdate laesst Indoor-Fahrten aus`() {
+        val drinnen = climbRide("indoor", T0).copy(indoor = true).toSummary()
+        val draussen = climbRide("r2", T0 + 1000L).toSummary()
+        assertEquals(listOf("r2"), ridesNeedingSegmentUpdate(SegmentRegistry.EMPTY, listOf(drinnen, draussen)).map { it.id })
+    }
+
+    @Test
     fun `ridesNeedingSegmentUpdate erkennt neue und geaenderte Touren`() {
         val r1 = climbRide("r1", T0)
         val registry = updateSegmentRegistry(SegmentRegistry.EMPTY, r1, texts = CoreTextsDe).registry

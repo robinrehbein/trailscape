@@ -1302,6 +1302,20 @@ class HealthSyncTest {
     }
 
     @Test
+    fun `mergeHeartRateIntoRide - eine Indoor-Fahrt bleibt Indoor`() {
+        // Uhr zeichnet gleichzeitig mit der Indoor-Fahrt auf: Der Puls wandert
+        // in die bestehende Tour, das Kennzeichen darf dabei nicht verloren gehen.
+        val r = rideWithPoints(id = "lokal", start = mergeStart).copy(indoor = true)
+        val merged = mergeHeartRateIntoRide(
+            r,
+            listOf(HealthHeartRateSample(time = mergeStart, bpm = 130.0)),
+        )!!
+        assertTrue(merged.indoor)
+        assertFalse(merged.planned)
+        assertFalse(mergeHeartRateIntoRide(r.copy(indoor = false), listOf(HealthHeartRateSample(time = mergeStart, bpm = 130.0)))!!.indoor)
+    }
+
+    @Test
     fun `mergeHeartRateIntoRide - ohne Messwerte passiert nichts`() {
         assertNull(
             mergeHeartRateIntoRide(rideWithPoints(id = "lokal", start = mergeStart), emptyList()),
@@ -1528,6 +1542,33 @@ class HealthSyncTest {
         assertEquals(listOf("lokal"), loaded)
         assertEquals(listOf("lokal"), report.mergedRides.map { it.id })
         assertEquals(listOf(120, 150, 180), report.mergedRides.single().points.map { it.hr })
+    }
+
+    @Test
+    fun `Uhr-Einheit gleichzeitig mit einer Indoor-Fahrt wird keine zweite Tour`() {
+        val heartRate = listOf(
+            HealthHeartRateSample(time = mergeStart.plusMs(seconds(20)), bpm = 120.0),
+            HealthHeartRateSample(time = mergeStart.plusMs(minutes(10)), bpm = 150.0),
+        )
+        val drinnen = rideWithPoints(id = "indoor", start = mergeStart).copy(indoor = true)
+
+        // Indoor-Fahrt ohne Puls: Die Uhr reichert sie an, sie bleibt Indoor.
+        val merged = serviceOf(mergeGatewayWith(heartRate = heartRate), at(2026, 8, 10)).importWithReport(
+            existing = listOf(drinnen.toSummary()),
+            loadRide = { id -> drinnen.takeIf { id == it.id } },
+        )
+        assertTrue(merged.imported.isEmpty())
+        assertTrue(merged.mergedRides.single().indoor)
+
+        // Indoor-Fahrt mit Puls (Brustgurt): Die Uhr-Einheit ist ein Duplikat.
+        val mitPuls = drinnen.copy(points = drinnen.points.map { it.copy(hr = 140) })
+        val skipped = serviceOf(mergeGatewayWith(heartRate = heartRate), at(2026, 8, 10)).importWithReport(
+            existing = listOf(mitPuls.toSummary()),
+            loadRide = { id -> mitPuls.takeIf { id == it.id } },
+        )
+        assertTrue(skipped.imported.isEmpty())
+        assertTrue(skipped.mergedRides.isEmpty())
+        assertEquals(1, skipped.duplicatesSkipped)
     }
 
     @Test

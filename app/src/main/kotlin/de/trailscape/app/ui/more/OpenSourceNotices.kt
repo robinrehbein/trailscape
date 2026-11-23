@@ -86,6 +86,12 @@ val libraryNotices: List<LicenseNotice> = listOf(
         license = UiText.Plain("MIT — Copyright (c) 2019 BRouter contributors"),
         url = "https://github.com/abrensch/brouter",
     ),
+    // Indoor: 3D-Darstellung der Welt (Slice indoor-render), je ABI im APK.
+    LicenseNotice(
+        name = UiText.Plain("Filament (Google)"),
+        license = UiText.Plain("Apache 2.0"),
+        url = "https://github.com/google/filament",
+    ),
 )
 
 /**
@@ -161,5 +167,23 @@ val dataNotices: List<LicenseNotice> = listOf(
         name = UiText.Res(R.string.more_notice_nominatim_name),
         license = UiText.Res(R.string.more_notice_nominatim_license),
         url = "https://operations.osmfoundation.org/policies/nominatim/",
+    ),
+    // Indoor-Welten (`docs/indoor.md` 8.1): Hoehen, Karteninhalt und Luftbild.
+    // Die Texte stehen fest im Code wie die Produkt- und Lizenznamen oben; die
+    // Quellenangaben je Welt kommen aus dem Weltmanifest.
+    LicenseNotice(
+        name = UiText.Plain("Terrarium-Höhenkacheln (Tilezen, AWS Open Data)"),
+        license = UiText.Plain("Quellenmix u. a. SRTM, EU-DEM; Angabe laut Tilezen"),
+        url = "https://github.com/tilezen/joerd/blob/master/docs/attribution.md",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("OpenFreeMap, OpenMapTiles, OpenStreetMap (Indoor-Welten)"),
+        license = UiText.Plain("ODbL 1.0 — © OpenMapTiles, Daten von OpenStreetMap"),
+        url = "https://openfreemap.org/",
+    ),
+    LicenseNotice(
+        name = UiText.Plain("Geobasis NRW (Digitale Orthophotos)"),
+        license = UiText.Plain("Datenlizenz Deutschland Zero 2.0 (dl-de/zero-2-0)"),
+        url = "https://www.govdata.de/dl-de/zero-2-0",
     ),
 )
