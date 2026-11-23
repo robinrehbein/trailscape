@@ -96,6 +96,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private val rig = CameraRig()
     private var offset = V3.ZERO
     private var lastFrameNs = 0L
+    private var fogBaseU = 0.0
     private var lastRenderedNs = 0L
     private var frameScheduled = false
     private val meter = FrameMeter()
@@ -166,6 +167,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         request = null
         fallbackTrack = null
         clearScene()
+        rider?.setVisible(false)
+        ghost?.setVisible(false)
         appliedRequest = null
     }
 
@@ -237,9 +240,11 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             stage = RenderStage.SURFACE
             val helper = UiHelper(UiHelper.ContextErrorPolicy.DONT_CHECK)
             helper.renderCallback = surfaceCallback
-            helper.attachTo(view)
+            // Vor attachTo zuweisen: Ist die Flaeche schon da, ruft attachTo sofort onNativeWindowChanged.
             uiHelper = helper
             surfaceView = view
+            refreshDisplayRate(view)
+            helper.attachTo(view)
             scaledSurface = false
             view.addOnLayoutChangeListener(layoutListener)
             applyResolution()
@@ -251,6 +256,23 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             false
         }
     }
+
+    private fun refreshDisplayRate(view: SurfaceView) {
+        val hz = (if (Build.VERSION.SDK_INT >= 30) runCatching { view.context.display.refreshRate }.getOrNull() else null)
+            ?: runCatching {
+                @Suppress("DEPRECATION")
+                (view.context.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.refreshRate
+            }.getOrNull()
+        if (hz != null && hz > 1f) {
+            displayHz = hz
+            core?.let { c ->
+                runCatching { c.setDisplayRefreshRate(hz) }
+                applySettings(c)
+            }
+        }
+    }
+
+    private var displayHz = 60f
 
     /** Loest die Flaeche (Compose entfernt die View, Drehung). Engine und Welt bleiben. */
     fun detach() {
@@ -420,6 +442,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         runStage(RenderStage.SCENE) { applySky(c) }
         if (failure != null) return
         loadAvatars(c) ?: return
+        rider?.setVisible(true)
 
         when (req) {
             is Request.Test -> {
@@ -474,14 +497,24 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             appContext.assets.open("${WorldModels.ASSET_DIR}/$assetName").use { it.readBytes() }
         }.getOrNull()
         if (fromAssets != null) {
-            val actor = runCatching { AvatarActor(LoadedAsset.loadSync(c, fromAssets)) }
+            val actor = runCatching { actorOf(c, fromAssets) }
                 .onFailure { Log.w(TAG, "Modell $assetName nicht ladbar, nehme den eingebauten Fahrer", it) }
                 .getOrNull()
             if (actor != null) return actor
         }
-        return runCatching { AvatarActor(LoadedAsset.loadSync(c, AvatarModel.buildGlb(palette))) }
+        return runCatching { actorOf(c, AvatarModel.buildGlb(palette)) }
             .onFailure { Log.w(TAG, "Eingebauter Fahrer nicht ladbar", it) }
             .getOrNull()
+    }
+
+    private fun actorOf(c: FilamentCore, glb: ByteArray): AvatarActor {
+        val loaded = LoadedAsset.loadSync(c, glb)
+        return try {
+            AvatarActor(loaded)
+        } catch (t: Throwable) {
+            runCatching { loaded.destroy() }
+            throw t
+        }
     }
 
     /** Raeumt die Welt ab (Kacheln, Testszene); Fahrer und Geist bleiben. */
@@ -542,13 +575,18 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             frameScheduled = false
         }
         lastFrameNs = 0L
+        lastRenderedNs = 0L
         meter.reset()
+        // Nach einer Pause neu messen, sonst gaelte die Pause als „kein Bild“.
+        if (lastGoodFrameMs > 0L) lastGoodFrameMs = SystemClock.elapsedRealtime()
+        if (swapChainSinceMs > 0L) swapChainSinceMs = SystemClock.elapsedRealtime()
     }
 
     private fun frame(frameTimeNanos: Long) {
         val c = core ?: return
         // Bildratengrenze (30 Bilder je Sekunde): zu fruehe Bilder auslassen.
-        val minIntervalNs = if (settings.maxFps <= 30) 1_000_000_000L / 30 - 4_000_000L else 0L
+        // Obergrenze 30 oder 60 Bilder je Sekunde — auch auf 90/120-Hz-Anzeigen.
+        val minIntervalNs = if (displayHz <= settings.maxFps + 1f) 0L else 1_000_000_000L / settings.maxFps - 4_000_000L
         if (lastRenderedNs != 0L && frameTimeNanos - lastRenderedNs < minIntervalNs) return
 
         val dt = if (lastFrameNs == 0L) 0.0 else (frameTimeNanos - lastFrameNs) / 1e9
@@ -573,6 +611,12 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             if ((riderWorld - offset).length() > RECENTER_M) {
                 offset = V3(Math.round(riderWorld.x / 256.0) * 256.0, 0.0, Math.round(riderWorld.z / 256.0) * 256.0)
                 c.setWorldOffset(offset)
+                c.applyFog(settings.fog, skyLighting?.fogDensity ?: 1e-4, skyLighting?.horizon ?: Rgb(0.7, 0.75, 0.8), fogHeight())
+            }
+
+            // Dunsthoehe dem Fahrer nachfuehren (bei langen Anstiegen), alle 25 Hoehenmeter.
+            if (kotlin.math.abs(here.u - fogBaseU) > 25.0) {
+                fogBaseU = here.u
                 c.applyFog(settings.fog, skyLighting?.fogDensity ?: 1e-4, skyLighting?.horizon ?: Rgb(0.7, 0.75, 0.8), fogHeight())
             }
 

@@ -49,7 +49,8 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   eine `AtomicReference`. Kachel-Dateien liest ein eigener E/A-Thread
   (`trailscape-render-io`) in direkte Puffer. Rückrufe an den Listener gehen
   immer per `Handler.post` auf den Hauptthread — nie mitten in einen Aufruf.
-- **Lebenszyklus:** `ON_PAUSE`/`ON_RESUME` der Seite und `pause()`/`resume()`
+- **Lebenszyklus:** `ON_STOP`/`ON_START` der Seite (nicht PAUSE/RESUME: im
+  Mehrfenster-Modus oder unter einem Systemdialog bleibt das Bild lebendig) und `pause()`/`resume()`
   halten die Schleife an. Verliert die `SurfaceView` ihre Fläche, wird nur die
   Swapchain freigegeben (mit `flushAndWait`); Engine, Szene und Kacheln
   bleiben. Drehung = neue `SurfaceView`, dieselbe Engine (der Renderer lebt im
@@ -58,7 +59,10 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   Stufe zuerst; Entladen erst außerhalb ±60 m Hysterese). Höchstens eine neue
   Kachel je Bild beginnen, immer nur eine im asynchronen Laden (ein
   `ResourceLoader` führt eine Ladung), höchstens zwei Dateien gleichzeitig
-  lesen. Fertige Kacheln hängen unter einem Weltknoten an ihrem Anker
+  lesen. Wird eine Ladung abgebrochen (Entladen, Zeitüberschreitung, neue
+  Welt), ersetzt die Darstellung den `ResourceLoader` durch einen neuen:
+  gltfio 1.75.1 zählt abgebrochene Texturen nicht mit (`StbProvider::cancelDecoding`),
+  danach erreichte `asyncGetLoadProgress` nie wieder 100 %. Fertige Kacheln hängen unter einem Weltknoten an ihrem Anker
   `(anchorE, anchorU, −anchorN)`. Teilflächen `terrain_sub_i_j` werden über die
   Ebenenmaske ausgeblendet, solange die feinere Kachel fertig ist; beim
   Entladen kommen sie im selben Bild zurück. Zeitüberschreitung (45 s) oder
@@ -98,7 +102,9 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   Auflösung (0,6–1,0), Nachbearbeitung, Himmelsverlauf, Bäume/Gebäude/
   Kleinteile (Ebenenmaske je Renderable), `resolutionScale` (feste kleinere
   Puffergröße der `SurfaceView`), `maxFps` 30 (Bilder auslassen +
-  `FrameRateOptions.interval = 2`). Ohne `setSettings` gilt die Voreinstellung
+  `FrameRateOptions.interval` in Einheiten der echten Bildwiederholrate, die als
+  `Renderer.displayInfo` gesetzt wird; die Obergrenze gilt auch auf
+  90/120-Hz-Anzeigen). Ohne `setSettings` gilt die Voreinstellung
   der Qualität, mit der die Welt gebaut ist (sonst MEDIUM).
 - **Statistik:** `onStats` etwa einmal je Sekunde (Bildrate, P95 der
   Bildzeit, Kacheln, Texturspeicher und Dreiecke laut Manifest).
@@ -145,7 +151,10 @@ einem Ausfall.
    werden Renderables über `RenderableManager.setLayerMask` aus- und
    eingeblendet (billig, keine Szenenänderung je Bild). Gleiches für die
    Schalter Bäume/Gebäude/Kleinteile.
-4. **Schatten je Knotenart.** `trees` wirft, empfängt aber nicht (Vertrag:
+4. **`RenderStats.resolutionScale`** meldet nur die feste Skalierung aus den
+   Einstellungen; den Stand der dynamischen Auflösung gibt Filaments
+   Java-Schnittstelle nicht heraus.
+5. **Schatten je Knotenart.** `trees` wirft, empfängt aber nicht (Vertrag:
    „wirft“); `props` weder noch; Fahrer und Geist werfen und empfangen.
 
 ## Annahmen (gegen die Quellen von 1.75.1 geprüft)
@@ -183,6 +192,12 @@ Geprüft durch Lesen der Java-Quellen und Shader im Tag `v1.75.1` und
 - **Himmels-Cubemap symmetrisch:** Ob ein Treiber die Seitenflächen senkrecht
   spiegelt, ließ sich ohne Gerät nicht klären. Der Verlauf hängt deshalb nur
   von `|y|` ab — unter dem Horizont liegt ohnehin Gelände.
+- Die einfarbige Skybox (`sky = false`) wird in Filament **nicht** mit der
+  Stärke des Umgebungslichts multipliziert (Cubemap und Dunst schon); die
+  Farbe wird deshalb selbst mit `ambientLux × Belichtung` skaliert.
+- `RenderSettings.SAFE` (Vertragsdatei) schaltet auch die Nachbearbeitung ab;
+  dann fehlen Tonwertabbildung und Gamma — das SAFE-Bild ist dunkler und
+  härter. Das ist gewollt (Rettungsanker), kein Fehler der Darstellung.
 - Kachel-GLBs sind höchstens 96 MB (Schutz gegen kaputte Dateien).
 
 ## R8
@@ -192,6 +207,21 @@ filament, gltfio und filament-utils bringen consumer-rules mit, die alles mit
 `@UsedByNative`/`@UsedByReflection` halten. Nachgeprüft im Mapping des
 Release-Builds (`app/build/outputs/mapping/release/mapping.txt`): die per JNI
 benutzten Namen bleiben erhalten.
+
+## Unabhängiger Review
+
+Ein eigener Unter-Agent hat den Code gegen die Filament-Quellen 1.75.1 (Java,
+JNI, gltfio-C++, Shader) und auf Lebenszyklus/Threads gelesen und R8 8.2 mit
+den consumer-rules nachgestellt. Behoben: der hängende `ResourceLoader` nach
+einem Abbruch (siehe oben), einfarbige Skybox heller als der Dunst,
+60-fps-Grenze auf 90/120 Hz, falscher „kein Bild“-Ausfall nach langer Pause,
+`uiHelper` vor `attachTo` setzen, `key(renderer)` um die `AndroidView`,
+GLB-Puffer früher freigeben, verwaiste gelesene Puffer, Dunsthöhe bei langen
+Anstiegen, Rendern bis `ON_STOP`, Kettenblatt auf der rechten Seite des
+eingebauten Fahrers, Asset-Leck bei Modellfehler, Diagnose löscht nicht mehr
+das Verzeichnis, aus dem gerade gelesen wird, Fahrer nach `unloadWorld`
+ausgeblendet. Ohne Befund: Koordinaten, Wicklung, Sonnenrichtung,
+SH-Konvention, Cubemap, API-Namen, Abbau-Reihenfolge, Threads, R8.
 
 ## Auf dem Gerät zu prüfen
 

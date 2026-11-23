@@ -168,14 +168,15 @@ object AvatarModel {
         val wheelRear = w.node(GlbWriter.Node("x_wheel_rear", mesh = wheelMesh("x_wheel_rear"), translation = rear.arr()), root)
         val wheelFront = w.node(GlbWriter.Node("x_wheel_front", mesh = wheelMesh("x_wheel_front"), translation = front.arr()), root)
 
-        // Kurbel mit Pedalen — dreht um +X; Kurbel rechts zeigt bei 0 nach oben.
+        // Kurbel mit Pedalen — dreht um +X; die rechte Kurbel (−X) zeigt bei 0 nach oben.
+        // Blick nach +Z, oben +Y: rechts vom Fahrer ist −X. Kettenblatt und rechte Kurbel liegen dort.
         val crankMesh = MeshBuilder()
-            .torusX(V3(0.075, 0.0, 0.0), 0.09, 0.008, seg = 20, side = 4) // Kettenblatt
-            .tube(V3(0.09, 0.0, 0.0), V3(0.09, CRANK_M, 0.0), 0.011, seg = 6)
-            .tube(V3(-0.09, 0.0, 0.0), V3(-0.09, -CRANK_M, 0.0), 0.011, seg = 6)
+            .torusX(V3(-0.075, 0.0, 0.0), 0.09, 0.008, seg = 20, side = 4) // Kettenblatt
+            .tube(V3(-0.09, 0.0, 0.0), V3(-0.09, CRANK_M, 0.0), 0.011, seg = 6)
+            .tube(V3(0.09, 0.0, 0.0), V3(0.09, -CRANK_M, 0.0), 0.011, seg = 6)
             .tube(V3(-0.09, 0.0, 0.0), V3(0.09, 0.0, 0.0), 0.015, seg = 6)
-            .box(V3(PEDAL_HALF_WIDTH + 0.02, CRANK_M, 0.0), V3(0.08, 0.02, 0.09))
-            .box(V3(-PEDAL_HALF_WIDTH - 0.02, -CRANK_M, 0.0), V3(0.08, 0.02, 0.09))
+            .box(V3(-PEDAL_HALF_WIDTH - 0.02, CRANK_M, 0.0), V3(0.08, 0.02, 0.09))
+            .box(V3(PEDAL_HALF_WIDTH + 0.02, -CRANK_M, 0.0), V3(0.08, 0.02, 0.09))
         val crank = w.node(GlbWriter.Node("x_crank", mesh = w.mesh("x_crank", listOf(crankMesh.primitive(mMetal))), translation = bb.arr()), root)
 
         // Oberkoerper (fest): Rumpf vorgebeugt, Kopf mit Helm, Arme zum Lenker.
@@ -203,13 +204,14 @@ object AvatarModel {
             val thigh = MeshBuilder().tube(V3.ZERO, V3(0.0, -THIGH_M, 0.0), 0.075, seg = 8, r2 = 0.055)
             val shank = MeshBuilder().tube(V3.ZERO, V3(0.0, -SHANK_M, 0.0), 0.05, seg = 8, r2 = 0.035)
             val shoe = MeshBuilder().box(V3(0.0, -SHANK_M - 0.03, 0.05), V3(0.09, 0.07, 0.25))
-            val s = if (side > 0) "r" else "l"
+            val s = if (side < 0) "r" else "l"
             return w.mesh("x_thigh_$s", listOf(thigh.primitive(mDark))) to
                 w.mesh("x_shank_$s", listOf(shank.primitive(mSkin), shoe.primitive(mDark)))
         }
-        val legNodes = listOf(1.0, -1.0).map { side ->
+        // side = −1: rechtes Bein (−X), side = +1: linkes Bein (+X).
+        val legNodes = listOf(-1.0, 1.0).map { side ->
             val (tm, sm) = legMeshes(side)
-            val s = if (side > 0) "r" else "l"
+            val s = if (side < 0) "r" else "l"
             val x = side * HIP_HALF_WIDTH
             val thigh = w.node(GlbWriter.Node("x_thigh_$s", mesh = tm, translation = doubleArrayOf(x, HIP.y, HIP.z)), root)
             val shank = w.node(GlbWriter.Node("x_shank_$s", mesh = sm, translation = doubleArrayOf(side * 0.02, -THIGH_M, 0.0)), thigh)
@@ -226,7 +228,7 @@ object AvatarModel {
             },
         )
         val legChannels = legNodes.flatMap { (side, thigh, shank) ->
-            val offset = if (side > 0) 0.0 else PI
+            val offset = if (side < 0) 0.0 else PI // rechte Kurbel bei 0 oben, linke gegenueber
             val hipQ = FloatArray((KEYS + 1) * 4)
             val kneeQ = FloatArray((KEYS + 1) * 4)
             for (k in 0..KEYS) {

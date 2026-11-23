@@ -165,8 +165,10 @@ internal fun DiagnosticsScreen(onBack: () -> Unit, modifier: Modifier = Modifier
                 scope.launch {
                     val result = withContext(Dispatchers.IO) {
                         runCatching {
-                            val dir = File(context.cacheDir, "indoor/render-testwelt")
-                            dir.deleteRecursively()
+                            // Jedes Mal ein neues Verzeichnis: die laufende Darstellung liest evtl. noch aus dem alten.
+                            val parent = File(context.cacheDir, "indoor/render-testwelt")
+                            parent.listFiles()?.sortedBy { it.name }?.dropLast(1)?.forEach { it.deleteRecursively() }
+                            val dir = File(parent, System.currentTimeMillis().toString())
                             dir.mkdirs()
                             dir to createWorldBuilder().buildTestWorld(dir, IndoorQuality.MEDIUM)
                         }
