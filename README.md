@@ -146,7 +146,8 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
   vor dem Aufzeichnen oder *Mehr*
 - Zwei Modi: freie Fahrt (der Trainer folgt der Steigung der Strecke samt
   Belag) oder die Einheit des Tages mit festen Wattvorgaben (ERG). Virtuelle
-  Gänge, Gang schalten im HUD, Höhenprofil mit deiner Position
+  Gänge (einstellbares Kettenblatt, Vorgabe 48/14), Gang schalten im HUD,
+  Höhenprofil mit deiner Position
 - Geräte: Rollentrainer mit Bluetooth-FTMS (z. B. Wahoo KICKR CORE), als
   Schalttaster best effort der Zwift Click, dazu ein Pulsgurt. Ohne Trainer
   geht es mit dem **Demo-Trainer** (Regler für Leistung und Trittfrequenz)

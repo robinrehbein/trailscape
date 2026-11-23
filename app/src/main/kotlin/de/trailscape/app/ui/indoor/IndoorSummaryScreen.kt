@@ -64,7 +64,7 @@ fun IndoorSummaryScreen(
         onBack = null,
         bottomBar = {
             when {
-                saved || ui.tooShort -> {
+                saved || ui.tooShort || ui.recordMissing -> {
                     Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.indoor_app_action_done))
                     }
@@ -105,6 +105,15 @@ fun IndoorSummaryScreen(
                 color = LocalSignalColors.current.good,
                 text = stringResource(R.string.indoor_app_summary_saved),
             )
+            ui.recordMissing -> {
+                NoticeBox(
+                    icon = Icons.Filled.Warning,
+                    color = LocalSignalColors.current.warning,
+                    title = stringResource(R.string.indoor_app_summary_record_missing_title),
+                    text = stringResource(R.string.indoor_app_summary_record_missing_body),
+                )
+                ui.recordProblem?.let { MutedText(problemText(it)) }
+            }
             ui.tooShort -> NoticeBox(
                 icon = Icons.Filled.Info,
                 color = MaterialTheme.colorScheme.tertiary,

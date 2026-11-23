@@ -99,8 +99,9 @@ Vertrag und Hintergründe: `docs/indoor.md`, Notizen des Slices:
 - [ ] APK-Größe (Filament je ABI rund 10 MB). Vorgabe: alle ABIs hinnehmen.
 - [ ] Fahrt im Hintergrund. Vorgabe: keiner, Verlassen der App pausiert.
   Später: `connectedDevice`-Dienst samt Play-Prüfung.
-- [ ] Reale Übersetzung. Vorgabe: 40 vorn, 14er-Cog; das Kettenblatt des
-  Gründers in die Einstellungen.
+- [ ] Reale Übersetzung. Umgesetzt: einstellbares Kettenblatt im Schritt
+  *Koppeln*, Vorgabe 48 laut Gründer (Übersetzung 48/14 auf dem Zwift Cog);
+  auf dem Gerät prüfen, ob sich die virtuellen Gänge richtig anfühlen.
 - [ ] Crr-Tabelle. Vorgabe: fest, nicht einstellbar; nach den ersten Fahrten
   justieren oder je Belag einstellbar machen.
 - [ ] Strava. Vorgabe: als Indoor-Fahrt (`trainer`) hochladen, sofern der

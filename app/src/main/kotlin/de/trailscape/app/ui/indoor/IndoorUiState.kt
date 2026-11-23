@@ -34,12 +34,15 @@ enum class IndoorStage { PAIR, ROUTE, WORLD, RIDE, SUMMARY }
  *   echter Trainer gebraucht.
  * @property trainerName Name des gemerkten Trainers, `null` = keiner gemerkt.
  * @property shifterName Name des gemerkten Schalttasters, `null` = keiner.
+ * @property chainringTeeth Kettenblatt am Trainer in Zaehnen (Ritzel: Zwift
+ *   Cog, 14 Zaehne) — Bezug der virtuellen Gaenge.
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
     val demoTrainer: Boolean,
     val trainerName: String?,
     val shifterName: String?,
+    val chainringTeeth: Int = IndoorViewModel.CHAINRING_DEFAULT_TEETH,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }
@@ -234,6 +237,7 @@ data class IndoorRideUi(
     val ergTitle: String?,
     val attribution: List<WorldAttribution>,
     val startProblem: IndoorProblem? = null,
+    val runtimeProblem: IndoorProblem? = null,
 )
 
 // ---------------------------------------------------------------------------
@@ -242,6 +246,8 @@ data class IndoorRideUi(
 
 /**
  * @property tooShort unter 60 s — wird nicht gespeichert.
+ * @property recordMissing die Aufzeichnung fehlt (ein Teil scheiterte beim
+ *   Beenden) — nichts zu speichern; Grund in [recordProblem], falls bekannt.
  * @property ghostGapS Abstand zum Geist am Ende (positiv = Geist vorn), `null` ohne Geist.
  * @property savedRideId gesetzt, sobald gespeichert.
  */
@@ -261,6 +267,8 @@ data class IndoorSummaryUi(
     val ghostLabel: String?,
     val ghostGapS: Double?,
     val tooShort: Boolean,
+    val recordMissing: Boolean = false,
+    val recordProblem: IndoorProblem? = null,
     val saving: Boolean = false,
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,

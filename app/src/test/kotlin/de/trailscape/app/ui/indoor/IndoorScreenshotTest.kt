@@ -105,7 +105,7 @@ class IndoorScreenshotTest {
         createdAt = 1_760_000_000_000, planned = false, hasWorld = true,
     )
     private val planned = IndoorRouteOption.Saved(
-        rideId = "r2", name = "Wochenende Allgaeu", distanceKm = 96.8, ascentM = 1240.0,
+        rideId = "r2", name = "Wochenende Allgäu", distanceKm = 96.8, ascentM = 1240.0,
         createdAt = 1_759_000_000_000, planned = true,
     )
     private val routeSim = IndoorRouteUi(
@@ -150,7 +150,7 @@ class IndoorScreenshotTest {
         session: IndoorSessionState? = session(),
         render: IndoorRenderUi = IndoorRenderUi.Ready,
         notice: IndoorNotice? = null,
-        ghostLabel: String? = "Hausrunde Ammersee",
+        ghostLabel: String? = "Fahrt vom 09.10.",
         ergTitle: String? = null,
         startProblem: IndoorProblem? = null,
     ) = IndoorRideUi(
@@ -174,7 +174,7 @@ class IndoorScreenshotTest {
     private val summary = IndoorSummaryUi(
         routeName = "Hausrunde Ammersee", mode = IndoorMode.SIM, distanceKm = 18.4, movingS = 2_948,
         ascentM = 212.0, avgPowerW = 214, normalizedPowerW = 228, avgCadenceRpm = 88, avgHrBpm = 146,
-        workKj = 631, avgSpeedKmh = 22.5, laps = 1, ghostLabel = "Hausrunde Ammersee", ghostGapS = -42.0,
+        workKj = 631, avgSpeedKmh = 22.5, laps = 1, ghostLabel = "Fahrt vom 09.10.", ghostGapS = -42.0,
         tooShort = false,
     )
 
@@ -192,9 +192,14 @@ class IndoorScreenshotTest {
     @Test
     fun koppeln() = shot("91-indoor-koppeln") {
         IndoorPairScreen(
-            ui = IndoorPairUi(demoTrainer = false, trainerName = "KICKR CORE 7B2F", shifterName = "Zwift Click"),
-            devicesSection = { Placeholder("Geraeteliste", Modifier.fillMaxWidth().height(180.dp)) },
-            onDemoChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+            ui = IndoorPairUi(
+                demoTrainer = false,
+                trainerName = "KICKR CORE 7B2F",
+                shifterName = "Zwift Click",
+                chainringTeeth = 48,
+            ),
+            devicesSection = { Placeholder("Geräteliste", Modifier.fillMaxWidth().height(180.dp)) },
+            onDemoChange = {}, onChainringChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
         )
     }
 
@@ -266,6 +271,26 @@ class IndoorScreenshotTest {
     }
 
     @Test
+    @Config(qualifiers = "${TestLocales.DE}-w360dp-h640dp-xxhdpi")
+    fun fahrenDemoOhneWeltKlein() = shot("108-indoor-fahren-demo-klein") {
+        // Kleines Geraet, Demo-Regler, Hinweis eingeblendet, ohne Welt: Die
+        // untere Bedienung scrollt, das Hoehenprofil behaelt Platz.
+        RideScreen(
+            ride(render = IndoorRenderUi.NoWorld, notice = IndoorNotice.TRAINER_LOST)
+                .copy(demoPowerW = 180, demoCadenceRpm = 85, trainerName = "Demo-Trainer"),
+        )
+    }
+
+    @Test
+    fun koppelnDemo() = shot("109-indoor-koppeln-demo") {
+        IndoorPairScreen(
+            ui = IndoorPairUi(demoTrainer = true, trainerName = null, shifterName = null, chainringTeeth = 50),
+            devicesSection = { Placeholder("Geräteliste", Modifier.fillMaxWidth().height(180.dp)) },
+            onDemoChange = {}, onChainringChange = {}, onContinue = {}, onBack = {}, onOpenDiagnostics = {},
+        )
+    }
+
+    @Test
     @Config(qualifiers = "${TestLocales.DE}-w891dp-h411dp-xxhdpi")
     fun fahrenQuer() = shot("102-indoor-fahren-quer") { RideScreen(ride()) }
 
@@ -288,8 +313,8 @@ class IndoorScreenshotTest {
             IndoorWorldsUi(
                 worlds = listOf(
                     IndoorWorldEntryUi("w1", "Hausrunde Ammersee", IndoorQuality.MEDIUM, 238L * 1024 * 1024, 1_760_000_000_000, attribution, false, true),
+                    IndoorWorldEntryUi("w3", "Alte Runde (Strecke gelöscht)", IndoorQuality.HIGH, 410L * 1024 * 1024, 1_740_000_000_000, attribution, true, true),
                     IndoorWorldEntryUi("testwelt", "Testwelt", IndoorQuality.LOW, 12L * 1024 * 1024, null, emptyList(), false, true),
-                    IndoorWorldEntryUi("w3", "Alte Runde (Strecke geloescht)", IndoorQuality.HIGH, 410L * 1024 * 1024, 1_740_000_000_000, attribution, true, true),
                 ),
                 totalBytes = 660L * 1024 * 1024,
                 cacheBytes = 85L * 1024 * 1024,

@@ -192,7 +192,7 @@ private fun RideStartFailed(ui: IndoorRideUi, onBack: () -> Unit) {
         title = stringResource(R.string.indoor_app_ride_start_title),
         onBack = onBack,
         bottomBar = {
-            if (ui.startProblem != null) {
+            if (ui.startProblem != null || ui.runtimeProblem != null) {
                 NeutralButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.indoor_app_action_back))
                 }
@@ -206,10 +206,21 @@ private fun RideStartFailed(ui: IndoorRideUi, onBack: () -> Unit) {
                 title = stringResource(R.string.indoor_app_ride_start_failed_title),
                 text = problemText(ui.startProblem),
             )
-            MutedText(stringResource(R.string.indoor_app_ride_start_failed_hint))
+            MutedText(startFailedHint(ui.startProblem))
         } else {
             CircularProgressIndicator(modifier = Modifier.size(28.dp))
             MutedText(stringResource(R.string.indoor_app_ride_starting))
+            // Die Laufzeit laeuft, ein Teil scheitert aber, bevor es einen
+            // Sitzungszustand gibt: sichtbar machen statt endlos zu warten.
+            ui.runtimeProblem?.let { problem ->
+                NoticeBox(
+                    icon = Icons.Filled.Warning,
+                    color = LocalSignalColors.current.warning,
+                    title = stringResource(R.string.indoor_app_ride_start_stuck_title),
+                    text = problemText(problem),
+                )
+                MutedText(stringResource(R.string.indoor_app_ride_start_stuck_hint))
+            }
         }
     }
 }
@@ -234,6 +245,12 @@ private fun PortraitHud(
     onRideWithoutWorld: (() -> Unit)?,
     onShowAttribution: () -> Unit,
 ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    // Die untere Bedienung (Demo-Regler, ERG, Gang, Knoepfe) hat eine
+    // Hoechsthoehe und scrollt dann — so bleibt der Mitte (Welt bzw. das grosse
+    // Hoehenprofil) auch auf kleinen Geraeten oder mit grosser Schrift Platz.
+    // Ohne Welt braucht das Profil in der Mitte mehr Raum.
+    val maxPanelHeight = maxHeight * if (showWorld) 0.58f else 0.42f
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 8.dp)) {
         ui.notice?.let { NoticeBanner(it, onDismissNotice) }
         MainTilesRow(session = session, ui = ui)
@@ -248,6 +265,7 @@ private fun PortraitHud(
             ui = ui,
             session = session,
             showProfile = showWorld,
+            maxHeight = maxPanelHeight,
             onShift = onShift,
             onTogglePause = onTogglePause,
             onFinish = onFinish,
@@ -257,6 +275,7 @@ private fun PortraitHud(
             onErgAdjust = onErgAdjust,
             onShowAttribution = onShowAttribution,
         )
+    }
     }
 }
 
@@ -312,6 +331,7 @@ private fun LandscapeHud(
             ControlsColumn(
                 ui = ui,
                 session = session,
+                showCamera = showWorld,
                 onTogglePause = onTogglePause,
                 onFinish = onFinish,
                 onCameraChange = onCameraChange,
@@ -362,6 +382,7 @@ private fun HudTile(
                     style = MaterialTheme.typography.headlineSmall.copy(fontSize = valueSize.sp, fontWeight = FontWeight.SemiBold),
                     color = valueColor,
                     maxLines = 1,
+                    softWrap = false,
                 )
                 if (unit != null) {
                     Text(
@@ -369,6 +390,7 @@ private fun HudTile(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(start = 3.dp, bottom = 4.dp),
                     )
                 }
@@ -397,32 +419,41 @@ private fun powerTile(session: IndoorSessionState): Triple<String, String, Color
 private fun MainTilesRow(session: IndoorSessionState, ui: IndoorRideUi) {
     val formats = LocalAppFormats.current
     val (powerLabel, power, powerColor) = powerTile(session)
+    // Schmales Geraet (360 dp): alle vier Zahlen gleich etwas kleiner, damit
+    // "km/h" nicht abgeschnitten wird und die Kacheln gleich hoch bleiben.
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+    val tileValueSize = if (maxWidth < 380.dp) 23 else 28
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
         HudTile(
             label = powerLabel,
             value = power,
             unit = stringResource(R.string.indoor_app_unit_watts),
             valueColor = powerColor,
+            valueSize = tileValueSize,
             modifier = Modifier.weight(1.15f),
         )
         HudTile(
             label = stringResource(R.string.indoor_app_hud_speed),
             value = formats.indoorSpeedKmh(session.speedMps),
             unit = stringResource(R.string.indoor_app_unit_kmh),
+            valueSize = tileValueSize,
             modifier = Modifier.weight(1.25f),
         )
         HudTile(
             label = stringResource(R.string.indoor_app_hud_cadence),
             value = formatIndoorInt(session.cadenceRpm),
             unit = null,
+            valueSize = tileValueSize,
             modifier = Modifier.weight(0.9f),
         )
         HudTile(
             label = stringResource(R.string.indoor_app_hud_heart_rate),
             value = formatIndoorInt(session.hrBpm),
             unit = null,
+            valueSize = tileValueSize,
             modifier = Modifier.weight(0.9f),
         )
+    }
     }
 }
 
@@ -451,13 +482,13 @@ private fun MainTilesGrid(session: IndoorSessionState, ui: IndoorRideUi) {
             HudTile(
                 label = stringResource(R.string.indoor_app_hud_cadence),
                 value = formatIndoorInt(session.cadenceRpm),
-                unit = null,
+                unit = stringResource(R.string.indoor_app_unit_rpm),
                 modifier = Modifier.weight(1f),
             )
             HudTile(
                 label = stringResource(R.string.indoor_app_hud_heart_rate),
                 value = formatIndoorInt(session.hrBpm),
-                unit = null,
+                unit = stringResource(R.string.indoor_app_unit_bpm),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -709,6 +740,7 @@ private fun BottomPanel(
     ui: IndoorRideUi,
     session: IndoorSessionState,
     showProfile: Boolean,
+    maxHeight: Dp,
     onShift: (ShifterEvent) -> Unit,
     onTogglePause: () -> Unit,
     onFinish: () -> Unit,
@@ -718,12 +750,16 @@ private fun BottomPanel(
     onErgAdjust: (Int) -> Unit,
     onShowAttribution: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState()),
+    ) {
         DetailRow(session = session, ui = ui, onShift = onShift)
         if (showProfile) ProfilePanel(ui = ui, session = session, height = 64.dp)
         ControlsColumn(
             ui = ui,
             session = session,
+            showCamera = showProfile,
             onTogglePause = onTogglePause,
             onFinish = onFinish,
             onCameraChange = onCameraChange,
@@ -740,6 +776,7 @@ private fun BottomPanel(
 private fun ControlsColumn(
     ui: IndoorRideUi,
     session: IndoorSessionState,
+    showCamera: Boolean,
     onTogglePause: () -> Unit,
     onFinish: () -> Unit,
     onCameraChange: (CameraMode) -> Unit,
@@ -755,20 +792,47 @@ private fun ControlsColumn(
         if (ui.demoPowerW != null || ui.demoCadenceRpm != null) {
             DemoSliders(ui = ui, onDemoPower = onDemoPower, onDemoCadence = onDemoCadence)
         }
-        val paused = session.phase == IndoorPhase.PAUSED || session.phase == IndoorPhase.AUTO_PAUSED
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            NeutralButton(onClick = { onCameraChange(nextCamera(ui.camera)) }, modifier = Modifier.weight(1f)) {
-                Icon(Icons.Filled.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(cameraLabel(ui.camera), maxLines = 1)
+        // Beschriftung und Aktion aus derselben Bedingung (IndoorFlowScreen setzt
+        // nur bei PAUSED fort): Bei Auto-Pause pausiert ein Tipp, der Chip
+        // erklaert die Auto-Pause.
+        val paused = session.phase == IndoorPhase.PAUSED
+        // Schmale Spalte (Querformat): Kamera und Pause untereinander, damit
+        // die Beschriftung "Von hinten" nicht abgeschnitten wird.
+        BoxWithConstraints {
+            val stack = showCamera && maxWidth < 300.dp
+            val cameraButton: @Composable (Modifier) -> Unit = { m ->
+                val cameraName = cameraLabel(ui.camera)
+                val cameraCd = stringResource(R.string.indoor_app_hud_camera_cd, cameraName)
+                NeutralButton(
+                    onClick = { onCameraChange(nextCamera(ui.camera)) },
+                    modifier = m.semantics { contentDescription = cameraCd },
+                ) {
+                    Icon(Icons.Filled.Videocam, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(cameraName, maxLines = 1)
+                }
             }
-            Button(onClick = onTogglePause, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    stringResource(if (paused) R.string.indoor_app_ride_resume_action else R.string.indoor_app_ride_pause_action),
-                    maxLines = 1,
-                )
+            val pauseButton: @Composable (Modifier) -> Unit = { m ->
+                Button(onClick = onTogglePause, modifier = m.heightIn(min = 48.dp)) {
+                    Icon(if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        stringResource(if (paused) R.string.indoor_app_ride_resume_action else R.string.indoor_app_ride_pause_action),
+                        maxLines = 1,
+                    )
+                }
+            }
+            if (stack) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Kamera nur mit 3D-Welt — ohne sie waere der Knopf wirkungslos.
+                    cameraButton(Modifier.fillMaxWidth())
+                    pauseButton(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (showCamera) cameraButton(Modifier.weight(1f))
+                    pauseButton(Modifier.weight(1f))
+                }
             }
         }
         HoldToEndButton(

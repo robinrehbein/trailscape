@@ -201,11 +201,23 @@ class FakeIndoorParts(
     var rematchFactory: (List<TrackPoint>) -> List<Waypoint> = { pts ->
         listOf(pts.first(), pts[pts.size / 2], pts.last()).map { Waypoint(it.lat, it.lon) }
     },
+    var riderSetupFactory: (TrainingProfile) -> RiderSetup = { profile ->
+        RiderSetup(
+            riderMassKg = profile.weightKg,
+            bikeMassKg = profile.setupMassKg,
+            cdaM2 = profile.cda,
+            profileCrr = profile.crr,
+            ftpW = profile.eftpW,
+        )
+    },
 ) : IndoorParts {
     val trainers = mutableListOf<IndoorTrainer>()
     val sessions = mutableListOf<IndoorSession>()
     val renderers = mutableListOf<WorldRenderer>()
     val builtRouteSources = mutableListOf<IndoorRouteSource>()
+
+    /** Jede an [createSession] gereichte Konfiguration (auch wenn die Fabrik wirft). */
+    val sessionConfigs = mutableListOf<IndoorSessionConfig>()
 
     override fun buildRoute(
         name: String,
@@ -219,17 +231,14 @@ class FakeIndoorParts(
 
     override fun rematchWaypoints(points: List<TrackPoint>): List<Waypoint> = rematchFactory(points)
 
-    override fun riderSetup(profile: TrainingProfile): RiderSetup = RiderSetup(
-        riderMassKg = profile.weightKg,
-        bikeMassKg = profile.setupMassKg,
-        cdaM2 = profile.cda,
-        profileCrr = profile.crr,
-        ftpW = profile.eftpW,
-    )
+    override fun riderSetup(profile: TrainingProfile): RiderSetup = riderSetupFactory(profile)
 
     override fun ergWorkout(session: TrainingSession, title: String): ErgWorkout? = ergWorkoutFactory(session, title)
 
-    override fun createSession(config: IndoorSessionConfig): IndoorSession = sessionFactory(config).also { sessions += it }
+    override fun createSession(config: IndoorSessionConfig): IndoorSession {
+        sessionConfigs += config
+        return sessionFactory(config).also { sessions += it }
+    }
 
     override fun createDemoTrainer(): DemoTrainer = demoTrainerFactory().also { trainers += it }
 

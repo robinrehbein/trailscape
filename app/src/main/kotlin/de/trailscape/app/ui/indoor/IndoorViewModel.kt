@@ -16,6 +16,7 @@ import de.trailscape.app.indoor.IndoorRematchRouter
 import de.trailscape.app.indoor.IndoorRideRuntime
 import de.trailscape.app.indoor.IndoorRouteSourcing
 import de.trailscape.app.indoor.IndoorRuntimeState
+import de.trailscape.app.indoor.MIN_INDOOR_RIDE_S
 import de.trailscape.app.indoor.OfflineFirstRematchRouter
 import de.trailscape.app.indoor.indoorCatching
 import de.trailscape.app.indoor.indoorProfileOf
@@ -87,7 +88,8 @@ import kotlinx.coroutines.withContext
  * **Nach einem Prozesstod** beginnt der Ablauf neu bei „Koppeln" — eine
  * Fahrt wird nicht wiederhergestellt (ohne Vordergrunddienst pausiert sie im
  * Hintergrund ohnehin, docs/indoor.md 11.2 Nr. 4). Gemerkt wird allein der
- * Demo-Schalter ([KEY_DEMO_TRAINER] im [store]).
+ * Demo-Schalter ([KEY_DEMO_TRAINER]) und das Kettenblatt am Trainer
+ * ([KEY_CHAINRING_TEETH]), beide im [store].
  *
  * ## Fremde Teile
  * Alles aus anderen Slices kommt ueber [parts] und steckt in [indoorCatching]:
@@ -152,7 +154,12 @@ class IndoorViewModel(
 
     private var remembered: Map<IndoorDeviceRole, IndoorDeviceRef> = emptyMap()
     private val _pair = MutableStateFlow(
-        IndoorPairUi(demoTrainer = readDemoFlag(), trainerName = null, shifterName = null),
+        IndoorPairUi(
+            demoTrainer = readDemoFlag(),
+            trainerName = null,
+            shifterName = null,
+            chainringTeeth = readChainringTeeth(),
+        ),
     )
     val pair: StateFlow<IndoorPairUi> = _pair.asStateFlow()
 
@@ -203,8 +210,26 @@ class IndoorViewModel(
     private var worldManifest: WorldManifest? = null
     private var worldDir: File? = null
 
-    @Volatile private var buildCancelled = false
+    /**
+     * Der laufende Welt-Auftrag (Aufbereiten oder Bau). Jeder Auftrag hat sein
+     * eigenes Token: Ergebnisse sammelt er darin und uebernimmt sie erst auf
+     * dem Hauptthread — und nur, solange er noch der aktuelle ist. Ein
+     * abgeloester Auftrag (Zurueck, andere Strecke, neuer Bau) schreibt so nie
+     * in die gemeinsamen Felder oder in [world].
+     */
+    @Volatile private var worldToken: WorldJobToken? = null
     private var worldJob: Job? = null
+
+    private class WorldJobToken {
+        /** Abbruch fuer den Weltbau ([WorldBuildListener.isCancelled]). */
+        @Volatile var stopRequested = false
+        var routeName: String? = null
+        var ride: Ride? = null
+        var baseRoute: IndoorRoute? = null
+        var plan: WorldPlan? = null
+        var manifest: WorldManifest? = null
+        var dir: File? = null
+    }
 
     // Fahrt
     private var rideCollectJob: Job? = null
@@ -245,6 +270,17 @@ class IndoorViewModel(
         _pair.update { it.copy(demoTrainer = enabled) }
     }
 
+    /**
+     * Kettenblatt am Trainer in Zaehnen — gemerkt in den Einstellungen und auf
+     * [CHAINRING_MIN_TEETH]..[CHAINRING_MAX_TEETH] begrenzt. Bezug der
+     * virtuellen Gaenge: `RiderSetup.realGearRatio = Kettenblatt / ZWIFT_COG_TEETH`.
+     */
+    fun setChainringTeeth(teeth: Int) {
+        val clamped = teeth.coerceIn(CHAINRING_MIN_TEETH, CHAINRING_MAX_TEETH)
+        runCatching { store.setString(KEY_CHAINRING_TEETH, clamped.toString()) }
+        _pair.update { it.copy(chainringTeeth = clamped) }
+    }
+
     /** Weiter zur Streckenwahl (nur wenn [IndoorPairUi.canContinue]). */
     fun continueFromPair() {
         if (!_pair.value.canContinue) return
@@ -253,6 +289,11 @@ class IndoorViewModel(
     }
 
     private fun readDemoFlag(): Boolean = runCatching { store.getString(KEY_DEMO_TRAINER) == "true" }.getOrDefault(false)
+
+    private fun readChainringTeeth(): Int =
+        runCatching { store.getString(KEY_CHAINRING_TEETH)?.trim()?.toIntOrNull() }.getOrNull()
+            ?.coerceIn(CHAINRING_MIN_TEETH, CHAINRING_MAX_TEETH)
+            ?: CHAINRING_DEFAULT_TEETH
 
     private fun publishPair() {
         val trainer = remembered[IndoorDeviceRole.TRAINER]
@@ -391,18 +432,33 @@ class IndoorViewModel(
     /** Bereitet die gewaehlte Strecke auf und rechnet den Voranschlag (ohne Netz). */
     fun prepareWorld() {
         val option = _route.value.selected ?: return
-        cancelRunningWorldJob()
+        val previous = cancelRunningWorldJob()
         resetWorld()
         _world.value = IndoorWorldUi.Preparing
+        val token = WorldJobToken().also { worldToken = it }
         worldJob = scope.launch {
+            // Ein abgeloester Testwelt-Bau schreibt sonst noch ins selbe Verzeichnis.
+            previous?.join()
             val ui = withContext(io) {
                 when (option) {
-                    IndoorRouteOption.TestWorld -> prepareTestWorld()
-                    is IndoorRouteOption.Saved -> prepareSaved(option)
+                    IndoorRouteOption.TestWorld -> prepareTestWorld(token)
+                    is IndoorRouteOption.Saved -> prepareSaved(option, token)
                 }
             }
-            _world.value = ui
+            commitWorld(token, ui)
         }
+    }
+
+    /** Uebernimmt das Ergebnis eines Welt-Auftrags — nur, wenn er noch der aktuelle ist. */
+    private fun commitWorld(token: WorldJobToken, ui: IndoorWorldUi) {
+        if (token !== worldToken) return
+        token.routeName?.let { routeName = it }
+        token.ride?.let { selectedRide = it }
+        token.baseRoute?.let { baseRoute = it }
+        token.plan?.let { worldPlan = it }
+        token.manifest?.let { worldManifest = it }
+        token.dir?.let { worldDir = it }
+        _world.value = ui
     }
 
     private fun resetWorld() {
@@ -413,8 +469,9 @@ class IndoorViewModel(
         selectedRide = null
     }
 
-    private fun prepareTestWorld(): IndoorWorldUi {
-        routeName = texts.testWorldName()
+    private fun prepareTestWorld(token: WorldJobToken): IndoorWorldUi {
+        val routeName = texts.testWorldName()
+        token.routeName = routeName
         val dir = worlds.testWorldDir()
         val existing = readManifest(dir)
         val manifest = existing ?: indoorCatching(IndoorPart.WORLD) {
@@ -422,40 +479,41 @@ class IndoorViewModel(
         }.getOrElse { return IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.WORLD, it)) }
         val route = indoorCatching(IndoorPart.CORE) { worldRouteOf(manifest, routeName) }
             .getOrElse { return IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.CORE, it)) }
-        baseRoute = route
-        worldManifest = manifest
-        worldDir = dir
+        token.baseRoute = route
+        token.manifest = manifest
+        token.dir = dir
         return IndoorWorldUi.Ready(routeName, manifest.attribution)
     }
 
-    private suspend fun prepareSaved(option: IndoorRouteOption.Saved): IndoorWorldUi {
+    private suspend fun prepareSaved(option: IndoorRouteOption.Saved, token: WorldJobToken): IndoorWorldUi {
         val ride = runCatching { rideStorage.loadRide(option.rideId) }.getOrNull()
             ?: return IndoorWorldUi.RouteUnavailable(
                 IndoorProblem(IndoorPart.APP, false, "Tour ${option.rideId} nicht lesbar"),
             )
-        selectedRide = ride
-        routeName = ride.name.ifBlank { option.name }
+        val routeName = ride.name.ifBlank { option.name }
+        token.ride = ride
+        token.routeName = routeName
 
         // Vorhandene Welt: direkt weiter, ohne Abgleich und ohne Netz.
         val existing = runCatching { worlds.findWorldForRide(ride.id) }.getOrNull()
         val existingManifest = existing?.manifest
         if (existing != null && existingManifest != null) {
-            worldManifest = existingManifest
-            worldDir = existing.dir
+            token.manifest = existingManifest
+            token.dir = existing.dir
             return IndoorWorldUi.Ready(routeName, existingManifest.attribution)
         }
 
         val sourced = sourcing.fromRide(ride, routeName, rematch = false)
             .getOrElse { return IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.CORE, it)) }
-        baseRoute = sourced.route
+        token.baseRoute = sourced.route
         val planned = indoorCatching(IndoorPart.WORLD) { parts.worldBuilder().plan(sourced.route, quality) }
             .getOrElse { return failedOf(it, canRetry = false) }
-        worldPlan = planned
+        token.plan = planned
         val resumable = runCatching { worlds.get(planned.worldId)?.let { !it.complete } ?: false }.getOrDefault(false)
-        return planUi(planned, resumable)
+        return planUi(planned, resumable, routeName)
     }
 
-    private fun planUi(plan: WorldPlan, resumable: Boolean) = IndoorWorldUi.Plan(
+    private fun planUi(plan: WorldPlan, resumable: Boolean, routeName: String = this.routeName) = IndoorWorldUi.Plan(
         routeName = routeName,
         distanceKm = plan.route.lengthM / 1000.0,
         quality = plan.quality,
@@ -476,24 +534,28 @@ class IndoorViewModel(
         val ride = selectedRide ?: return
         val current = _world.value
         if (current !is IndoorWorldUi.Plan && current !is IndoorWorldUi.Failed) return
-        cancelRunningWorldJob()
-        buildCancelled = false
+        val previous = cancelRunningWorldJob()
         _world.value = IndoorWorldUi.Building(WorldBuildPhase.ELEVATION, 0, 0, 0f)
+        val token = WorldJobToken().also { worldToken = it }
+        val name = routeName
         worldJob = scope.launch {
-            val ui = withContext(io) { buildWorld(ride) }
-            _world.value = ui
+            // Nie zwei Bauten gleichzeitig: der abgeloeste laeuft bis zur
+            // naechsten Abfrage von isCancelled() weiter (ggf. im selben Verzeichnis).
+            previous?.join()
+            val ui = withContext(io) { buildWorld(ride, name, token) }
+            commitWorld(token, ui)
         }
     }
 
-    private suspend fun buildWorld(ride: Ride): IndoorWorldUi {
+    private suspend fun buildWorld(ride: Ride, routeName: String, token: WorldJobToken): IndoorWorldUi {
         val sourced = sourcing.fromRide(ride, routeName, rematch = true)
             .getOrElse { return failedOf(it, canRetry = true) }
-        baseRoute = sourced.route
+        token.baseRoute = sourced.route
         val builder = indoorCatching(IndoorPart.WORLD) { parts.worldBuilder() }
             .getOrElse { return failedOf(it, canRetry = true) }
         val plan = indoorCatching(IndoorPart.WORLD) { builder.plan(sourced.route, quality) }
             .getOrElse { return failedOf(it, canRetry = true) }
-        worldPlan = plan
+        token.plan = plan
         val dir = runCatching { worlds.worldDirFor(plan.worldId) }
             .getOrElse { return failedOf(it, canRetry = false) }
         runCatching { WorldLibrary.writeSource(dir, ride.id, routeName) }
@@ -501,22 +563,22 @@ class IndoorViewModel(
             .getOrElse { return failedOf(it, canRetry = true) }
         val listener = object : WorldBuildListener {
             override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) {
-                if (buildCancelled) return
+                if (token.stopRequested || token !== worldToken) return
                 _world.value = IndoorWorldUi.Building(phase, done, total, buildFraction(phase, done, total))
             }
 
-            override fun isCancelled(): Boolean = buildCancelled
+            override fun isCancelled(): Boolean = token.stopRequested || token !== worldToken
         }
         val built = indoorCatching(IndoorPart.WORLD) { builder.build(plan, deps, dir, listener) }
         return built.fold(
             onSuccess = { manifest ->
-                worldManifest = manifest
-                worldDir = dir
+                token.manifest = manifest
+                token.dir = dir
                 IndoorWorldUi.Ready(routeName, manifest.attribution)
             },
             onFailure = { e ->
-                if (causeOf<WorldBuildCancelled>(e) != null || buildCancelled) {
-                    planUi(plan, resumable = true)
+                if (causeOf<WorldBuildCancelled>(e) != null || token.stopRequested) {
+                    planUi(plan, resumable = true, routeName)
                 } else {
                     failedOf(e, canRetry = true)
                 }
@@ -526,7 +588,7 @@ class IndoorViewModel(
 
     /** Bricht einen laufenden Weltbau ab; fertige Kacheln bleiben liegen. */
     fun cancelWorldBuild() {
-        buildCancelled = true
+        worldToken?.stopRequested = true
     }
 
     /** „Erneut versuchen" nach einem Fehler. */
@@ -538,10 +600,19 @@ class IndoorViewModel(
         }
     }
 
-    private fun cancelRunningWorldJob() {
-        buildCancelled = true
-        worldJob?.cancel()
-        worldJob = null
+    /**
+     * Loest den laufenden Welt-Auftrag ab: Abbruch angefordert, Ergebnisse
+     * werden verworfen. Liefert den Job, damit ein neuer Auftrag auf sein Ende
+     * warten kann (ein blockierender Bau endet erst bei der naechsten Abfrage).
+     */
+    private fun cancelRunningWorldJob(): Job? {
+        worldToken?.stopRequested = true
+        worldToken = null
+        // Der Job bleibt gemerkt (abgebrochen), damit auch ein spaeterer
+        // Auftrag nach „Zurueck" noch auf sein Ende warten kann.
+        val job = worldJob
+        job?.cancel()
+        return job
     }
 
     private fun failedOf(e: Throwable, canRetry: Boolean): IndoorWorldUi.Failed {
@@ -633,8 +704,10 @@ class IndoorViewModel(
         }
 
         // Sitzung
+        // Echte Uebersetzung am Trainer: gewaehltes Kettenblatt auf dem Zwift Cog.
         val rider = indoorCatching(IndoorPart.CORE) { parts.riderSetup(profile()) }
             .getOrElse { fallbackRiderSetup(profile()) }
+            .copy(realGearRatio = realGearRatioOf(_pair.value.chainringTeeth))
         val config = IndoorSessionConfig(
             route = route,
             mode = mode,
@@ -734,6 +807,7 @@ class IndoorViewModel(
             ghostLabel = st.ghostLabel,
             ergTitle = st.ergTitle,
             attribution = st.attribution,
+            runtimeProblem = rs.problem,
         )
     }
 
@@ -877,7 +951,12 @@ class IndoorViewModel(
             laps = record?.laps ?: rs.session?.lap ?: 1,
             ghostLabel = st?.ghostLabel,
             ghostGapS = record?.ghostFinalGapS,
-            tooShort = pendingRide == null,
+            // „Zu kurz" nur bei einer echten Aufzeichnung unter 60 s; fehlt sie
+            // (fremder Teil warf in finish()) oder liess sie sich nicht
+            // umwandeln, ist das ein eigener Zustand mit dem Grund.
+            tooShort = record != null && record.totals.movingS < MIN_INDOOR_RIDE_S,
+            recordMissing = pendingRide == null && (record == null || record.totals.movingS >= MIN_INDOOR_RIDE_S),
+            recordProblem = if (record == null) rs.problem else null,
         )
     }
 
@@ -929,10 +1008,17 @@ class IndoorViewModel(
             _stage.value = IndoorStage.ROUTE
             true
         }
-        IndoorStage.RIDE -> if (activeRuntime == null) {
-            finishRide()
-            true
-        } else {
+        IndoorStage.RIDE -> {
+            val runtime = activeRuntime
+            when {
+                runtime == null -> finishRide()
+                // Die Laufzeit laeuft, die Sitzung liefert aber keinen Zustand
+                // (fremder Teil wirft bei jedem Takt): kein Weg in die Fahrt —
+                // alles freigeben und zurueck zu „Welt laden".
+                runtime.state.value.session == null && !finishing -> abortRideStart()
+                // Laufende Fahrt: beendet wird nur ueber „Beenden".
+                else -> Unit
+            }
             true
         }
         IndoorStage.SUMMARY -> false
@@ -941,6 +1027,18 @@ class IndoorViewModel(
     // -----------------------------------------------------------------------
     // Aufraeumen
     // -----------------------------------------------------------------------
+
+    /** Gibt eine Fahrt frei, die nie einen Sitzungszustand lieferte, und kehrt zu „Welt laden" zurueck. */
+    private fun abortRideStart() {
+        rideCollectJob?.cancel()
+        rideCollectJob = null
+        activeRuntime?.close()
+        activeRuntime = null
+        destroyRenderer()
+        _ride.value = null
+        rideStatic = null
+        _stage.value = IndoorStage.WORLD
+    }
 
     private fun destroyRenderer() {
         val r = _renderer.value ?: return
@@ -968,6 +1066,20 @@ class IndoorViewModel(
     companion object {
         /** Schluessel des Demo-Schalters im [KeyValueStore]. */
         const val KEY_DEMO_TRAINER = "trailscape.indoor.demo_trainer"
+
+        /** Schluessel des Kettenblatts am Trainer (Zaehne) im [KeyValueStore]. */
+        const val KEY_CHAINRING_TEETH = "trailscape.indoor.chainring_teeth"
+
+        /** Das einzige Ritzel am Trainer: der Zwift Cog hat 14 Zaehne. */
+        const val ZWIFT_COG_TEETH = 14
+
+        /** Vorgabe: 48er-Kettenblatt (z. B. GRX 820 2x12, 48/31). */
+        const val CHAINRING_DEFAULT_TEETH = 48
+        const val CHAINRING_MIN_TEETH = 28
+        const val CHAINRING_MAX_TEETH = 60
+
+        /** Echte Uebersetzung am Trainer: Kettenblatt / Zwift Cog. */
+        fun realGearRatioOf(chainringTeeth: Int): Double = chainringTeeth.toDouble() / ZWIFT_COG_TEETH
 
         const val DEMO_DEFAULT_POWER_W = 180
         const val DEMO_DEFAULT_CADENCE_RPM = 85

@@ -120,7 +120,12 @@ fun IndoorRouteScreen(
                     stringResource(R.string.indoor_app_mode_erg_body_no_duration, ui.ergTitle)
                 },
             )
-            else -> NoticeBox(
+            else -> Unit
+        }
+        // Ohne geeignete Einheit bleibt „Einheit des Tages" wirkungslos
+        // (setMode verwirft ERG) — der Hinweis erklaert es, unabhaengig vom Modus.
+        if (ui.ergTitle == null && !ui.loadingOptions) {
+            NoticeBox(
                 icon = Icons.Filled.Info,
                 color = MaterialTheme.colorScheme.tertiary,
                 text = stringResource(R.string.indoor_app_mode_erg_unavailable),

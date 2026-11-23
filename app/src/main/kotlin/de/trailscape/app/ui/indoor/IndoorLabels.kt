@@ -120,15 +120,15 @@ fun noticeText(notice: IndoorNotice): String = stringResource(
 /** Gute Nachricht statt Warnung (Trainer wieder da). */
 fun IndoorNotice.isGood(): Boolean = this == IndoorNotice.TRAINER_BACK
 
-/** Name des Teils, der ein Problem meldet, fuer die Oberflaeche. */
+/** Ganzer Satz „In Teil X ist ein Fehler aufgetreten." — je Teil ein Schluessel (docs/i18n.md C). */
 @Composable
-fun partLabel(part: IndoorPart): String = stringResource(
+private fun partFailedText(part: IndoorPart): String = stringResource(
     when (part) {
-        IndoorPart.CORE -> R.string.indoor_app_part_core
-        IndoorPart.WORLD -> R.string.indoor_app_part_world
-        IndoorPart.BLE -> R.string.indoor_app_part_ble
-        IndoorPart.RENDER -> R.string.indoor_app_part_render
-        IndoorPart.APP -> R.string.indoor_app_part_app
+        IndoorPart.CORE -> R.string.indoor_app_problem_failed_core
+        IndoorPart.WORLD -> R.string.indoor_app_problem_failed_world
+        IndoorPart.BLE -> R.string.indoor_app_problem_failed_ble
+        IndoorPart.RENDER -> R.string.indoor_app_problem_failed_render
+        IndoorPart.APP -> R.string.indoor_app_problem_failed_app
     },
 )
 
@@ -142,8 +142,21 @@ fun problemText(problem: IndoorProblem?): String =
     when {
         problem == null -> stringResource(R.string.indoor_app_problem_unknown)
         problem.notImplemented -> stringResource(R.string.indoor_app_problem_not_ready)
-        else -> stringResource(R.string.indoor_app_problem_failed, partLabel(problem.part))
+        else -> partFailedText(problem.part)
     }
+
+/**
+ * Was der Nutzer nach einem gescheiterten Fahrtstart tun kann. Ist ein Teil
+ * nur noch nicht fertig, hilft weder eine andere Strecke noch Warten.
+ */
+@Composable
+fun startFailedHint(problem: IndoorProblem?): String = stringResource(
+    if (problem?.notImplemented == true) {
+        R.string.indoor_app_problem_not_ready_hint
+    } else {
+        R.string.indoor_app_ride_start_failed_hint
+    },
+)
 
 /** Grund eines gescheiterten Weltbaus mit dem, was der Nutzer tun kann. */
 @Composable

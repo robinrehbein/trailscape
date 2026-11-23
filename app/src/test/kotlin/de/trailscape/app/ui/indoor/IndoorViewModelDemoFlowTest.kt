@@ -34,6 +34,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Test
@@ -79,17 +80,22 @@ class IndoorViewModelDemoFlowTest {
         language = { AppLanguage.DE },
     )
 
-    private fun viewModel(parts: IndoorParts, router: IndoorRematchRouter? = null) = IndoorViewModel(
+    private fun viewModel(
+        parts: IndoorParts,
+        router: IndoorRematchRouter? = null,
+        store: MemoryKeyValueStore = MemoryKeyValueStore(),
+        io: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.Unconfined,
+    ) = IndoorViewModel(
         parts = parts,
         rideStorage = rideStorage,
         worlds = worlds,
-        store = MemoryKeyValueStore(),
+        store = store,
         texts = texts(),
         profile = { TrainingProfile(ageYears = 40, weightKg = 75.0) },
         plan = { null },
         coreTexts = { CoreTextsDe },
         rematchRouter = router,
-        io = Dispatchers.Unconfined,
+        io = io,
         clock = clock,
         wallClock = { 1_765_000_000_000L },
         runtimeDispatcher = Dispatchers.Unconfined,
@@ -168,6 +174,72 @@ class IndoorViewModelDemoFlowTest {
         assertEquals("Indoor · Testwelt", saved.name)
         assertTrue(renderer.destroyed, "die Darstellung wird nach der Fahrt freigegeben")
         assertTrue(rideStorage.listSummaries().summaries.single { it.id == saved.id }.indoor)
+    }
+
+    /** Koppeln (Demo), Testwelt, Start — liefert die Konfiguration der Sitzung. */
+    private fun IndoorViewModel.startTestWorldRide(parts: FakeIndoorParts): de.trailscape.core.indoor.IndoorSessionConfig {
+        pairWithDemo()
+        selectRoute(IndoorRouteOption.TestWorld)
+        continueFromRoute()
+        startRide(withWorld = false)
+        assertEquals(IndoorStage.RIDE, stage.value)
+        return parts.sessionConfigs.single()
+    }
+
+    @Test
+    fun kettenblattVorgabe48AufZwiftCogGehtAnDieSitzung() {
+        val parts = FakeIndoorParts()
+        val vm = viewModel(parts)
+        assertEquals(48, vm.pair.value.chainringTeeth)
+
+        val config = vm.startTestWorldRide(parts)
+
+        assertEquals(48.0 / 14.0, config.rider.realGearRatio, 1e-9)
+        assertEquals(IndoorViewModel.realGearRatioOf(48), config.rider.realGearRatio, 1e-9)
+        // Uebrige Werte aus IndoorParts.riderSetup bleiben unberuehrt.
+        assertEquals(75.0, config.rider.riderMassKg, 1e-9)
+    }
+
+    @Test
+    fun geaendertesKettenblattWirdGemerktUndGehtAnDieSitzung() {
+        val store = MemoryKeyValueStore()
+        val first = viewModel(FakeIndoorParts(), store = store)
+        first.setChainringTeeth(50)
+        assertEquals(50, first.pair.value.chainringTeeth)
+        assertEquals("50", store.getString(IndoorViewModel.KEY_CHAINRING_TEETH))
+
+        // Ein neuer Ablauf liest den gemerkten Wert.
+        val parts = FakeIndoorParts()
+        val vm = viewModel(parts, store = store)
+        assertEquals(50, vm.pair.value.chainringTeeth)
+        val config = vm.startTestWorldRide(parts)
+        assertEquals(50.0 / 14.0, config.rider.realGearRatio, 1e-9)
+    }
+
+    @Test
+    fun kettenblattWirdAufSinnvollenBereichBegrenzt() {
+        val store = MemoryKeyValueStore()
+        val vm = viewModel(FakeIndoorParts(), store = store)
+        vm.setChainringTeeth(100)
+        assertEquals(IndoorViewModel.CHAINRING_MAX_TEETH, vm.pair.value.chainringTeeth)
+        vm.setChainringTeeth(3)
+        assertEquals(IndoorViewModel.CHAINRING_MIN_TEETH, vm.pair.value.chainringTeeth)
+
+        // Unsinn im Speicher faellt auf die Vorgabe zurueck.
+        store.setString(IndoorViewModel.KEY_CHAINRING_TEETH, "kein Wert")
+        assertEquals(48, viewModel(FakeIndoorParts(), store = store).pair.value.chainringTeeth)
+    }
+
+    @Test
+    fun kettenblattGiltAuchWennRiderSetupDesKernsWirft() {
+        val parts = FakeIndoorParts(riderSetupFactory = { throw NotImplementedError("Kern fehlt") })
+        val vm = viewModel(parts)
+        vm.setChainringTeeth(31)
+
+        val config = vm.startTestWorldRide(parts)
+
+        assertEquals(31.0 / 14.0, config.rider.realGearRatio, 1e-9)
+        assertNull(vm.ride.value?.startProblem, "der Ersatz-Aufbau faehrt ohne Startproblem")
     }
 
     @Test
@@ -282,6 +354,7 @@ class IndoorViewModelDemoFlowTest {
         vm.finishRide()
         val summary = assertNotNull(vm.summary.value)
         assertTrue(summary.tooShort)
+        assertFalse(summary.recordMissing)
         vm.saveRide()
         assertNull(vm.summary.value?.savedRideId)
         assertTrue(rideStorage.listSummaries().summaries.isEmpty())
@@ -295,5 +368,173 @@ class IndoorViewModelDemoFlowTest {
         vm.pairWithDemo()
         val ids = vm.route.value.options.filterIsInstance<IndoorRouteOption.Saved>().map { it.rideId }
         assertEquals(listOf("draussen"), ids)
+    }
+
+    // -----------------------------------------------------------------------
+    // Robustheit: Weltbau abloesen, haengende Sitzung, fehlende Aufzeichnung
+    // -----------------------------------------------------------------------
+
+    /** Wartet (echte Zeit), bis [condition] gilt. */
+    private fun awaitTrue(what: String, timeoutMs: Long = 5_000, condition: () -> Boolean) {
+        val until = System.currentTimeMillis() + timeoutMs
+        while (!condition()) {
+            if (System.currentTimeMillis() > until) throw AssertionError("Zeitueberschreitung: $what")
+            Thread.sleep(5)
+        }
+    }
+
+    @Test
+    fun abgeloesterWeltbauSchreibtNichtsMehrUndLaeuftNieParallel() {
+        val tourA = testSavedRide(id = "a", name = "Tour A")
+        val tourB = testSavedRide(id = "b", name = "Tour B").let { r ->
+            r.copy(points = r.points.map { it.copy(lat = it.lat + 0.5) })
+        }
+        rideStorage.saveRide(tourA)
+        rideStorage.saveRide(tourB)
+
+        val firstBuildEntered = java.util.concurrent.CountDownLatch(1)
+        val releaseFirstBuild = java.util.concurrent.CountDownLatch(1)
+        val running = java.util.concurrent.atomic.AtomicInteger(0)
+        val maxRunning = java.util.concurrent.atomic.AtomicInteger(0)
+        val calls = java.util.concurrent.atomic.AtomicInteger(0)
+        val delegate = FakeWorldBuilder()
+        val builder = object : de.trailscape.core.indoor.world.WorldBuilder by delegate {
+            override fun build(
+                plan: de.trailscape.core.indoor.world.WorldPlan,
+                deps: de.trailscape.core.indoor.world.WorldBuildDeps,
+                outDir: File,
+                listener: de.trailscape.core.indoor.world.WorldBuildListener,
+            ): de.trailscape.core.indoor.world.WorldManifest {
+                maxRunning.accumulateAndGet(running.incrementAndGet(), ::maxOf)
+                try {
+                    if (calls.incrementAndGet() == 1) {
+                        // Der erste Bau haengt (langsames Netz) und fragt den Abbruch nicht ab.
+                        firstBuildEntered.countDown()
+                        releaseFirstBuild.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                        listener.onProgress(de.trailscape.core.indoor.world.WorldBuildPhase.WRITING, 1, 1)
+                        return FakeWorldBuilder.manifestFor(plan.worldId, plan.route, plan.quality)
+                    }
+                    return delegate.build(plan, deps, outDir, listener)
+                } finally {
+                    running.decrementAndGet()
+                }
+            }
+        }
+        val parts = FakeIndoorParts(worldBuilderFactory = { builder })
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val vm = viewModel(parts, io = pool.asCoroutineDispatcher())
+            vm.setDemoTrainer(true)
+            vm.continueFromPair()
+            awaitTrue("Streckenliste") { !vm.route.value.loadingOptions }
+            val options = vm.route.value.options.filterIsInstance<IndoorRouteOption.Saved>()
+            val a = options.single { it.rideId == "a" }
+            val b = options.single { it.rideId == "b" }
+
+            // Tour A: Voranschlag, dann „Welt laden" — der Bau haengt.
+            vm.selectRoute(a)
+            vm.continueFromRoute()
+            awaitTrue("Voranschlag A") { vm.world.value is IndoorWorldUi.Plan }
+            vm.loadWorld()
+            assertTrue(firstBuildEntered.await(5, java.util.concurrent.TimeUnit.SECONDS))
+
+            // Zurueck, Tour B waehlen: B wartet, bis der alte Bau endet.
+            assertTrue(vm.back())
+            vm.selectRoute(b)
+            vm.continueFromRoute()
+            Thread.sleep(100)
+            assertEquals(IndoorWorldUi.Preparing, vm.world.value, "B wartet auf das Ende des abgeloesten Baus")
+
+            releaseFirstBuild.countDown()
+            val plan = awaitPlan(vm)
+            assertEquals("Tour B", plan.routeName, "der spaete Bau von A ueberschreibt nichts")
+            vm.loadWorld()
+            awaitTrue("Welt B") { vm.world.value is IndoorWorldUi.Ready }
+            assertEquals("Tour B", (vm.world.value as IndoorWorldUi.Ready).routeName)
+            assertEquals(1, maxRunning.get(), "nie zwei Bauten gleichzeitig")
+            assertEquals(2, calls.get())
+
+            // „Losfahren" faehrt die Welt von B, nicht die von A.
+            vm.startRide(withWorld = true)
+            val route = parts.sessionConfigs.single().route
+            val lat = route.points.first().lat
+            assertTrue(kotlin.math.abs(lat - tourB.points.first().lat) < 0.01, "Strecke von B erwartet, lat=$lat")
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    private fun awaitPlan(vm: IndoorViewModel): IndoorWorldUi.Plan {
+        awaitTrue("Voranschlag") { vm.world.value is IndoorWorldUi.Plan }
+        return vm.world.value as IndoorWorldUi.Plan
+    }
+
+    @Test
+    fun sitzungOhneZustandIstKeineSackgasse() {
+        val parts = FakeIndoorParts(
+            sessionFactory = { config ->
+                object : de.trailscape.core.indoor.IndoorSession by de.trailscape.app.indoor.testing.FakeIndoorSession(config) {
+                    override fun step(nowMs: Long, input: de.trailscape.core.indoor.SessionInput): de.trailscape.core.indoor.IndoorStep =
+                        throw IllegalStateException("Attrappe: jeder Schritt scheitert")
+                }
+            },
+        )
+        val vm = viewModel(parts)
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        vm.startRide(withWorld = false)
+        vm.rideFor(2)
+
+        val ride = assertNotNull(vm.ride.value)
+        assertNull(ride.session, "die Sitzung liefert keinen Zustand")
+        assertNull(ride.startProblem)
+        assertEquals(IndoorPart.CORE, assertNotNull(ride.runtimeProblem, "der Fehler wird sichtbar").part)
+
+        assertTrue(vm.back())
+        assertEquals(IndoorStage.WORLD, vm.stage.value, "Zurueck fuehrt aus der haengenden Fahrt")
+        assertNull(vm.activeRuntime)
+        assertNull(vm.ride.value)
+    }
+
+    @Test
+    fun laufendeFahrtVerschlucktZurueck() {
+        val vm = viewModel(FakeIndoorParts())
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        vm.startRide(withWorld = false)
+        vm.rideFor(2)
+        assertNotNull(vm.ride.value?.session)
+        assertTrue(vm.back())
+        assertEquals(IndoorStage.RIDE, vm.stage.value)
+        assertNotNull(vm.activeRuntime)
+    }
+
+    @Test
+    fun fehlendeAufzeichnungIstNichtZuKurz() {
+        val parts = FakeIndoorParts(
+            sessionFactory = { config ->
+                object : de.trailscape.core.indoor.IndoorSession by de.trailscape.app.indoor.testing.FakeIndoorSession(config) {
+                    override fun finish(): de.trailscape.core.indoor.IndoorRideRecord =
+                        throw IllegalStateException("Attrappe: finish scheitert")
+                }
+            },
+        )
+        val vm = viewModel(parts)
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        vm.startRide(withWorld = false)
+        vm.rideFor(95)
+        vm.finishRide()
+
+        val summary = assertNotNull(vm.summary.value)
+        assertFalse(summary.tooShort, "eine lange Fahrt ist nicht „zu kurz“")
+        assertTrue(summary.recordMissing)
+        assertEquals(IndoorPart.CORE, assertNotNull(summary.recordProblem).part)
+        assertTrue(summary.movingS >= 60, "Kennzahlen aus dem letzten Sitzungszustand")
+        vm.saveRide()
+        assertNull(vm.summary.value?.savedRideId)
     }
 }

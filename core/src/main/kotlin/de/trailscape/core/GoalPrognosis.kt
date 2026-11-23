@@ -213,7 +213,8 @@ fun predictGoalFinish(
 
     data class Sample(val km: Double, val speed: Double, val weight: Double)
 
-    val samples = riddenRides(rides).mapNotNull { ride ->
+    // Keine Indoor-Fahrten: ihr Tempo ist virtuell (wie bei typicalAvgSpeedKmh).
+    val samples = outdoorRides(rides).mapNotNull { ride ->
         if (ride.createdAt < since || ride.createdAt > now) return@mapNotNull null
         val km = ride.stats.distanceKm
         if (!km.isFinite() || km < minKm) return@mapNotNull null

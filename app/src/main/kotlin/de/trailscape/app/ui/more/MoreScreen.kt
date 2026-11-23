@@ -410,24 +410,6 @@ private fun SettingsList(
                 )
             }
         }
-        // Indoor (docs/indoor.md 10.1, 10.4): eigene Ziele im `NavHost`, keine
-        // Seiten dieses Bereichs — die Huelle oeffnet sie ueber
-        // [AppViewModel.requestIndoor].
-        item {
-            MoreGroup(label = stringResource(R.string.indoor_app_more_group)) {
-                SettingsNavRow(
-                    title = stringResource(R.string.indoor_app_worlds_title),
-                    status = stringResource(R.string.indoor_app_more_worlds_status),
-                    onClick = { appViewModel.requestIndoor(IndoorDestination.WORLDS) },
-                )
-                ListDivider()
-                SettingsNavRow(
-                    title = stringResource(R.string.indoor_app_more_diagnostics_title),
-                    status = stringResource(R.string.indoor_app_more_diagnostics_status),
-                    onClick = { appViewModel.requestIndoor(IndoorDestination.DIAGNOSTICS) },
-                )
-            }
-        }
         item {
             MoreGroup(label = stringResource(R.string.more_list_group_app)) {
                 // Strava steht nur da, wenn der Build es kann — sonst gibt es
@@ -464,6 +446,25 @@ private fun SettingsList(
                     title = stringResource(SettingsPage.ABOUT.titleRes),
                     status = stringResource(R.string.more_list_about_status, versionName),
                     onClick = { onOpen(SettingsPage.ABOUT) },
+                )
+            }
+        }
+        // Indoor (docs/indoor.md 10.1, 10.4), bewusst unter der Gruppe "App", damit
+        // deren Zeilen (Sprache, Sync) im Bild der Liste oben bleiben: eigene Ziele im `NavHost`, keine
+        // Seiten dieses Bereichs — die Huelle oeffnet sie ueber
+        // [AppViewModel.requestIndoor].
+        item {
+            MoreGroup(label = stringResource(R.string.indoor_app_more_group)) {
+                SettingsNavRow(
+                    title = stringResource(R.string.indoor_app_worlds_title),
+                    status = stringResource(R.string.indoor_app_more_worlds_status),
+                    onClick = { appViewModel.requestIndoor(IndoorDestination.WORLDS) },
+                )
+                ListDivider()
+                SettingsNavRow(
+                    title = stringResource(R.string.indoor_app_more_diagnostics_title),
+                    status = stringResource(R.string.indoor_app_more_diagnostics_status),
+                    onClick = { appViewModel.requestIndoor(IndoorDestination.DIAGNOSTICS) },
                 )
             }
         }

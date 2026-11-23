@@ -242,6 +242,17 @@ private fun RouteUnavailableContent(unavailable: IndoorWorldUi.RouteUnavailable)
         icon = Icons.Filled.Warning,
         color = LocalSignalColors.current.warning,
         title = stringResource(R.string.indoor_app_world_route_unavailable_title),
-        text = stringResource(R.string.indoor_app_world_route_unavailable_body, problemText(unavailable.problem)),
+        text = problemText(unavailable.problem),
+    )
+    // Den Streckentipp nur bei echten Streckenfehlern — ist ein Teil nur noch
+    // nicht fertig, hilft eine andere Strecke nicht.
+    MutedText(
+        stringResource(
+            if (unavailable.problem?.notImplemented == true) {
+                R.string.indoor_app_problem_not_ready_hint
+            } else {
+                R.string.indoor_app_world_route_unavailable_hint
+            },
+        ),
     )
 }
