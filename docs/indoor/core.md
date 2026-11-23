@@ -35,7 +35,10 @@ Demo-Trainer, 10-Hz-Schleife wie in Abschnitt 5.7).
    Zwift-UUIDs waren laut Quellen richtig und sind unverändert.
 2. **`RiderSetup` um Felder am Ende ergänzt** (mit Vorgabewerten, nur für
    diesen Slice nötig): Wahl der Gangtabelle und Klemmbereich der an den
-   Trainer gesendeten Ersatzsteigung (Abschnitt „Virtuelle Gänge“).
+   Trainer gesendeten Ersatzsteigung (Abschnitt „Virtuelle Gänge“):
+   `gearTable: VirtualGearTable = EVEN` (`EVEN` | `BIKE_GRX_2X12`),
+   `minSimGradePct: Double = -40.0`, `maxSimGradePct: Double = 40.0`.
+   indoor-app kann sie per `copy` setzen, muss aber nicht.
 3. **Reale Übersetzung.** `RiderSetup.DEFAULT_REAL_GEAR_RATIO` bleibt
    eingefroren bei 40/14. Nach Angabe des Gründers (Shimano GRX 820, 2 × 12,
    48/31, Zwift Cog mit 14 Zähnen) setzt `riderSetupFrom` aber **48/14**; 31/14
@@ -76,9 +79,10 @@ Demo-Trainer, 10-Hz-Schleife wie in Abschnitt 5.7).
 `P·η = v·(m·g·(sin θ + Crr·cos θ) + ½ρCdA·(v+v_w)·|v+v_w|) + m_eff·v·dv/dt`,
 m_eff = Gesamtmasse + 1,5 kg (Drehmasse der Laufräder), ρ aus
 `airDensity(Höhe)`, Crr über `effectiveCrr`. Teilschritte von höchstens
-0,05 s, gesamt höchstens 2 s je Schritt. Die Antriebskraft ist nach oben
-begrenzt statt das Tempo nach unten — so fährt man auch mit wenig Leistung
-steil bergauf langsam weiter, statt stehenzubleiben. v wird nie negativ.
+0,05 s, gesamt höchstens 2 s je Schritt. Die Antriebskraft `P·η/v` ist auf
+`4 m/s² · m_eff` begrenzt (statt das Tempo nach unten) und wird halbimplizit
+integriert — so kriecht man auch mit wenig Leistung steil bergauf weiter
+(100 W an 15 % ≈ 0,73 m/s), statt stehenzubleiben. v wird nie negativ.
 
 ### Virtuelle Gänge und Widerstand (Abschnitt 5.3) — Weg (a)
 
@@ -112,7 +116,8 @@ Gangtabellen (je 24 Gänge):
 - **wie am Rad**: GRX 48/31 × Kassette 11–34 (11-12-13-14-15-17-19-21-24-27-30-34),
   nach Übersetzung sortiert.
 
-Startgang: die Übersetzung, die `realGearRatio` am nächsten liegt.
+Startgang: die Übersetzung, die `realGearRatio` am nächsten liegt (bei
+48/14: Gang 19 gleichmäßig, Gang 21 wie am Rad).
 Geschaltet wird mit `ShifterEvent.UP/DOWN` durch die sortierte Liste.
 
 ### ERG-Einheit (`ergWorkoutFor`)
@@ -240,3 +245,22 @@ Geschaltet wird mit `ShifterEvent.UP/DOWN` durch die sortierte Liste.
 - [ ] Gehaltene Taste: 500 ms bis zur ersten, dann etwa 250–300 ms je weitere
       Wiederholung — fühlt sich das richtig an?
 - [ ] Trainer + Schalttaster + Pulsgurt gleichzeitig an einem Handy.
+
+## Bitten an andere Slices
+
+- **indoor-ble:** Scan-Filter für den Schalttaster: `ZWIFT_SERVICE` **oder**
+  `ZWIFT_RIDE_SERVICE` (fc82) **oder** Herstellerdaten mit `ZWIFT_COMPANY_ID`
+  (gesperrte V2-Geräte verbergen den Dienst). Erstes Byte der Herstellerdaten
+  = Gerätetyp: Click V1 `0x09`, Click V2 `0x0A/0x0B` (unbestätigt), Play
+  `0x02/0x03`, Ride `0x07/0x08`. `BleLink.close()` soll eingereihte Writes
+  noch abarbeiten (letzter Stopp). `READY` liefert alle Dienst-UUIDs klein
+  geschrieben. MTU-Anfrage ist nicht nötig.
+- **indoor-app:** Laufzeit reicht die **letzte** Telemetrie durch; die Sitzung
+  hält je Feld den letzten Wert 3 s. Die reale Übersetzung (Vorgabe 48/14),
+  Gangtabelle und Steigungsgrenze gehören in die Einstellungen
+  (`RiderSetup.copy`). Ein `UNSUPPORTED`-Schalttaster bleibt für seine Instanz
+  endgültig — für einen neuen Versuch eine neue Instanz bauen. Der Abgleich
+  über `surfaceRematchWaypoints` kann bei Spuren mit sehr großen Sprüngen über
+  `planRouteLegs` viele Einzelanfragen erzeugen.
+- **indoor-world / indoor-app:** `IndoorRoute.id` hängt nur an der Lage; wer
+  Welten unter der id ablegt, nimmt Quelle/Belag getrennt in den Schlüssel.
