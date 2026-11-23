@@ -366,6 +366,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.3.20")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+    // Lokaler HTTP-Server fuer die Tests des Geo-Abrufs (Indoor-Weltbau);
+    // Version identisch zu okhttp oben.
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     // Screenshot-Tests der Oberflaeche (Robolectric + Roborazzi): rendern die
     // Compose-Screens auf der JVM zu PNGs, ohne Emulator — die einzige

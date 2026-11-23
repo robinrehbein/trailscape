@@ -138,6 +138,33 @@ dahinter (siehe [Selfhost-Sync](#selfhost-sync)).
 - Performance-Management-Chart (Fitness, Ermüdung, Form) über die Trainingslast
 - Tagesempfehlung („Readiness") aus Ruhepuls, HRV (rMSSD) und Schlaf
 
+**Indoor (Prototyp)**
+- Training auf dem Smart-Trainer zu Hause: Du fährst mit einem Avatar durch
+  die nachgebaute 3D-Welt deiner eigenen Strecke — einer gespeicherten
+  Planung, einer gefahrenen Tour (auf Wunsch mit dem Geist deiner früheren
+  Fahrt) oder einer Testwelt. Einstieg über die Karte auf *Heute*, den Dialog
+  vor dem Aufzeichnen oder *Mehr*
+- Zwei Modi: freie Fahrt (der Trainer folgt der Steigung der Strecke samt
+  Belag) oder die Einheit des Tages mit festen Wattvorgaben (ERG). Virtuelle
+  Gänge (einstellbares Kettenblatt, Vorgabe 48/14), Gang schalten im HUD,
+  Höhenprofil mit deiner Position
+- Geräte: Rollentrainer mit Bluetooth-FTMS (z. B. Wahoo KICKR CORE), als
+  Schalttaster best effort der Zwift Click, dazu ein Pulsgurt. Ohne Trainer
+  geht es mit dem **Demo-Trainer** (Regler für Leistung und Trittfrequenz)
+- Die Welt entsteht erst nach „Welt laden“ auf dem Gerät: Höhen aus
+  Terrarium-Kacheln, Gebäude und Landnutzung aus OpenFreeMap, Luftbild nur in
+  Ländern aus dem Register (derzeit NRW). Vorher zeigt ein Voranschlag Hosts,
+  Datenmenge und Platzbedarf; fertige Welten fahren offline und lassen sich
+  unter *Mehr* verwalten. „Ohne Welt fahren“ geht immer
+- Die Fahrt wird als Indoor-Tour gespeichert (mit Leistung und
+  Trittfrequenz, als GPX/FIT exportierbar, auf Wunsch zu Strava mit
+  Trainer-Kennzeichen). Sie zählt für Belastung, Wochenziel und Serie, nicht
+  für Neue Wege oder Entdeckt-Kacheln
+- Grenzen: Prototyp. Die 3D-Darstellung ist auf einem echten Gerät noch
+  ungeprüft; es gibt keinen Hintergrundbetrieb — verlässt du die App,
+  pausiert die Fahrt; Luftbild nur in den Registerländern. Details und
+  Prüfliste: `docs/indoor.md`, `docs/indoor/app.md`
+
 **Erinnerungen** (optional, standardmäßig alle aus)
 - **Tageseinheit** morgens zur eingestellten Uhrzeit (Vorgabe 7:00): was heute
   ansteht — an Ruhetagen der Hinweis darauf, ohne Trainingsplan gar nichts
@@ -380,7 +407,8 @@ Konfiguriert wird die Verbindung in der App unter **Mehr → Sync**.
 
 Alles bleibt lokal. Die App spricht mit den Diensten, die für eine konkrete
 Aktion nötig sind: Kachelserver für die Karte, BRouter für Routenberechnung
-und Kachel-Downloads, Nominatim für die Zielsuche und — wenn eingerichtet —
+und Kachel-Downloads, die Geodatenquellen für Indoor-Welten (nur nach „Welt
+laden“), Nominatim für die Zielsuche und — wenn eingerichtet —
 dem eigenen Sync-Server bzw. Strava (nur nach dem Verbinden des eigenen
 Strava-Kontos). Dazu kommt genau eine Anfrage ohne Nutzeraktion: die
 tägliche stille Update-Prüfung gegen die GitHub-Releases, abschaltbar unter

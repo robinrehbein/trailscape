@@ -120,6 +120,18 @@ class SessionTargetTest {
     }
 
     @Test
+    fun `Indoor-Fahrten sind keine Tempoquelle`() {
+        // Das Tempo auf dem Rollentrainer ist virtuell und gehoert nicht in die Planung.
+        val rides = listOf(
+            ride(createdAt = 3, avgSpeedKmh = 33.0).copy(indoor = true),
+            ride(createdAt = 2, avgSpeedKmh = 34.0).copy(indoor = true),
+            ride(createdAt = 1, avgSpeedKmh = 21.0),
+        )
+        assertEquals(21.0, typicalAvgSpeedKmh(rides)!!, EPS)
+        assertNull(typicalAvgSpeedKmh(rides.take(2)))
+    }
+
+    @Test
     fun `ohne brauchbare Historie gibt es keinen Median`() {
         assertNull(typicalAvgSpeedKmh(emptyList()))
         assertNull(typicalAvgSpeedKmh(listOf(ride(createdAt = 1, avgSpeedKmh = null))))

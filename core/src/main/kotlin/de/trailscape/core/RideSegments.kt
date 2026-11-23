@@ -665,7 +665,9 @@ internal fun segmentPathsMatch(a: List<TrackPoint>, b: List<TrackPoint>): Boolea
  * Efforts verschwinden.
  *
  * Geplante Touren ([Ride.planned]) werden nur als verarbeitet vermerkt —
- * niemand ist sie gefahren.
+ * niemand ist sie gefahren. Ebenso Indoor-Fahrten ([Ride.indoor]): Ihre
+ * Zeiten auf der virtuellen Strecke sind keine Bestzeiten draussen
+ * (`docs/indoor.md` 10.2).
  */
 fun updateSegmentRegistry(registry: SegmentRegistry, ride: Ride, texts: CoreTexts): SegmentRegistryUpdate {
     val segments = registry.segments
@@ -673,7 +675,7 @@ fun updateSegmentRegistry(registry: SegmentRegistry, ride: Ride, texts: CoreText
         .toMutableList()
     val waiting = registry.candidates.filterNot { it.rideId == ride.id }.toMutableList()
 
-    val fresh = if (ride.planned) emptyList() else detectSegmentCandidates(ride)
+    val fresh = if (ride.planned || ride.indoor) emptyList() else detectSegmentCandidates(ride)
     for (candidate in fresh) {
         val candidateBounds = boundsOf(candidate.path)
 
@@ -787,13 +789,14 @@ fun retainRidesInSegmentRegistry(registry: SegmentRegistry, rideIds: Set<String>
 }
 
 /**
- * Welche Touren (neu) eingerechnet werden muessen: gefahrene Touren mit
+ * Welche Touren (neu) eingerechnet werden muessen: draussen gefahrene Touren
+ * ([outdoorRides], ohne Indoor-Fahrten) mit
  * Punkten, deren `updatedAt` die Registry nicht (mehr) kennt — aufsteigend
  * nach Aufnahmezeit, damit „neue Bestzeit" auch beim Nachrechnen eines
  * Bestands chronologisch stimmt.
  */
 fun <T : RideInfo> ridesNeedingSegmentUpdate(registry: SegmentRegistry, rides: List<T>): List<T> =
-    riddenRides(rides)
+    outdoorRides(rides)
         .filter { it.pointCount >= 2 && registry.processed[it.id] != it.updatedAt }
         .sortedBy { it.createdAt }
 

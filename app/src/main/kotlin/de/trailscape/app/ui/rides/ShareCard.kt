@@ -183,7 +183,7 @@ internal fun shareCardContent(
     }
     return ShareCardContent(
         title = ride.name.trim().ifEmpty { resolve(UiText.Res(R.string.rides_share_card_fallback_title)) },
-        dateLine = resolve(shareCardDateLine(toLocal(ride.createdAt), ride.planned, language)),
+        dateLine = resolve(shareCardDateLine(toLocal(ride.createdAt), ride.planned, language, indoor = ride.indoor)),
         stats = shareCardStats(
             stats = ride.stats,
             load = load,
@@ -241,14 +241,23 @@ private val dateLinePlannedEn = DateTimeFormatter.ofPattern("d MMMM yyyy", AppLa
 /**
  * Die Datumszeile, immer **mit** Jahr: Ein geteiltes Bild lebt laenger als
  * die Monatsueberschrift der Liste, und „Dienstag, 23. September" sagt in
- * einem Jahr nichts mehr. Eine Planung sagt, dass sie eine ist.
+ * einem Jahr nichts mehr. Eine Planung sagt, dass sie eine ist — ebenso eine
+ * Indoor-Fahrt ([indoor], `docs/indoor.md` 10.2): Das Bild zeigt die virtuell
+ * gefahrene Strecke, die Zeile sagt, dass sie auf dem Rollentrainer entstand.
  */
-internal fun shareCardDateLine(at: LocalDateTime, planned: Boolean, language: AppLanguage): UiText =
-    if (planned) {
-        val date = (if (language == AppLanguage.DE) dateLinePlannedDe else dateLinePlannedEn).format(at)
-        UiText.Res(R.string.rides_share_card_planned_date_line, listOf(date))
-    } else {
-        UiText.Plain(formatWeekdayDateYear(at, language))
+internal fun shareCardDateLine(
+    at: LocalDateTime,
+    planned: Boolean,
+    language: AppLanguage,
+    indoor: Boolean = false,
+): UiText =
+    when {
+        planned -> {
+            val date = (if (language == AppLanguage.DE) dateLinePlannedDe else dateLinePlannedEn).format(at)
+            UiText.Res(R.string.rides_share_card_planned_date_line, listOf(date))
+        }
+        indoor -> UiText.Res(R.string.indoor_app_share_date_line, listOf(formatWeekdayDateYear(at, language)))
+        else -> UiText.Plain(formatWeekdayDateYear(at, language))
     }
 
 /**

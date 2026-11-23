@@ -57,7 +57,7 @@ import de.trailscape.core.WeekPlanStatus
 import de.trailscape.core.loadWeekForecast
 import de.trailscape.core.pruneExpiredWeekForecast
 import de.trailscape.core.readWeekPlanWeatherEnabled
-import de.trailscape.core.riddenRides
+import de.trailscape.core.outdoorRides
 import de.trailscape.core.weekPlanWeatherPoint
 import de.trailscape.core.writeWeekPlanWeatherEnabled
 import java.time.LocalDate
@@ -259,7 +259,7 @@ internal fun rememberWeekPlanWeather(active: Boolean, today: LocalDate, rides: L
         resumeTick++
         onPauseOrDispose { }
     }
-    val lastRide = remember(rides) { riddenRides(rides).maxByOrNull { it.createdAt } }
+    val lastRide = remember(rides) { outdoorRides(rides).maxByOrNull { it.createdAt } }
     val currentLastRide by rememberUpdatedState(lastRide)
     LaunchedEffect(holder.enabled, active, today, resumeTick) {
         withContext(Dispatchers.IO) { pruneExpiredWeekForecast(AppServices.keyValueStore, System.currentTimeMillis()) }

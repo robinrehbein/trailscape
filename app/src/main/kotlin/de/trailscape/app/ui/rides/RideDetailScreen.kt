@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.PedalBike
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Share
@@ -265,7 +266,9 @@ internal fun RideDetailScreen(
     // `rides` als Schluessel: Eine neue, geloeschte oder umbenannte Fahrt
     // auf derselben Strecke aendert den Vergleich.
     val routeComparison by produceState<RouteComparison?>(null, ride.id, ride.updatedAt, rides) {
-        value = if (ride.planned) null else appViewModel.routeComparisonFor(ride.id)
+        // Indoor-Fahrten vergleicht `:core` ohnehin nicht (`outdoorRides`) —
+        // dann gar nicht erst den Signatur-Cache anwerfen.
+        value = if (ride.planned || ride.indoor) null else appViewModel.routeComparisonFor(ride.id)
     }
 
     // Aufgeklappt bleibt aufgeklappt, auch ueber eine Drehung hinweg.
@@ -308,6 +311,17 @@ internal fun RideDetailScreen(
 
                 if (ride.points.isNotEmpty()) {
                     RideMapCard(ride = ride, style = mapStyle)
+                }
+
+                // Indoor-Fahrt (`docs/indoor.md` 10.2): Die Karte zeigt die
+                // virtuell gefahrene Strecke — gesagt wird, dass niemand dort
+                // draussen unterwegs war.
+                if (ride.indoor) {
+                    NoticeBox(
+                        icon = Icons.Filled.PedalBike,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = stringResource(R.string.indoor_app_detail_notice),
+                    )
                 }
 
                 RideStatsRow(ride = ride)

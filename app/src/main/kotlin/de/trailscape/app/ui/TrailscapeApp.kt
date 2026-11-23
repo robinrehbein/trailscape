@@ -52,6 +52,7 @@ import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.languageOf
+import de.trailscape.app.indoor.render.IndoorDiagnosticsScreen
 import de.trailscape.app.record.RecordingRepository
 import de.trailscape.app.ui.components.LocalFloatingNavigationBarSpace
 import de.trailscape.app.ui.components.OneUiNavigationBar
@@ -60,6 +61,8 @@ import de.trailscape.app.ui.components.OneUiNavigationBarItem
 import de.trailscape.app.ui.components.RecButtonState
 import de.trailscape.app.ui.components.RecCapsuleButton
 import de.trailscape.app.ui.components.RecCapsuleButtonDefaults
+import de.trailscape.app.ui.indoor.IndoorFlowScreen
+import de.trailscape.app.ui.indoor.IndoorWorldsDestination
 import de.trailscape.app.ui.map.MapScreen
 import de.trailscape.app.ui.more.MoreScreen
 import de.trailscape.app.ui.onboarding.OnboardingScreen
@@ -253,6 +256,26 @@ private enum class TopLevelDestination(
 private const val MORE_ROUTE = "mehr"
 
 /**
+ * Die Indoor-Ziele (docs/indoor.md, Abschnitt 10.1): der Ablauf Koppeln →
+ * Fahrt, die Weltverwaltung und die Diagnose der Darstellung. Wie der
+ * Mehr-Bereich gepushte Ziele ohne Kapsel und Aufnahme-Knopf — waehrend
+ * einer Indoor-Fahrt haette eine Navigationsleiste nichts verloren.
+ */
+private const val INDOOR_ROUTE = "indoor"
+private const val INDOOR_WORLDS_ROUTE = "indoor/welten"
+private const val INDOOR_DIAGNOSTICS_ROUTE = "indoor/diagnose"
+
+private fun IndoorDestination.route(): String = when (this) {
+    IndoorDestination.FLOW -> INDOOR_ROUTE
+    IndoorDestination.WORLDS -> INDOOR_WORLDS_ROUTE
+    IndoorDestination.DIAGNOSTICS -> INDOOR_DIAGNOSTICS_ROUTE
+}
+
+/** Gepushte zweite Ebene (Mehr, Indoor): Shared-Axis-Uebergang statt Fade through. */
+private fun isPushedRoute(route: String?): Boolean =
+    route == MORE_ROUTE || route == INDOOR_ROUTE || route == INDOOR_WORLDS_ROUTE || route == INDOOR_DIAGNOSTICS_ROUTE
+
+/**
  * Wurzel der Oberflaeche: stellt die Sprache bereit und zeichnet darin die
  * Navigationshuelle ([TrailscapeAppContent]).
  *
@@ -318,6 +341,15 @@ private fun TrailscapeAppContent() {
         appViewModel.consumeTabRequest()
     }
 
+    // Indoor-Ziele (Heute-Karte, Bereit-Dialog, Mehr): dasselbe Muster wie
+    // der Tab-Wunsch, aufgeloest auf ein gepushtes Ziel mit Zurueck-Weg.
+    val indoorRequest by appViewModel.indoorRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(indoorRequest) {
+        val requested = indoorRequest ?: return@LaunchedEffect
+        navController.navigate(requested.route()) { launchSingleTop = true }
+        appViewModel.consumeIndoorRequest()
+    }
+
     // Ob gerade der Mehr-Bereich offen ist. Er ist die einzige zweite Ebene
     // im `NavHost` und traegt deshalb weder Kapsel noch Aufnahme-Knopf: Eine
     // Navigationsleiste ohne markiertes Ziel behauptete, man sei nirgends,
@@ -333,7 +365,10 @@ private fun TrailscapeAppContent() {
     // Die Tour-Detailansicht ist eine Ebene tiefer und nimmt den ganzen
     // Bildschirm ein — wie die Einstellungen ohne Kapsel.
     val rideDetailOpen by appViewModel.rideDetailOpen.collectAsStateWithLifecycle()
-    val navHidden = settingsOpen || rideDetailOpen || (onMap && mapTaskActive)
+    val indoorOpen = currentDestination?.hierarchy?.any {
+        it.route == INDOOR_ROUTE || it.route == INDOOR_WORLDS_ROUTE || it.route == INDOOR_DIAGNOSTICS_ROUTE
+    } == true
+    val navHidden = settingsOpen || indoorOpen || rideDetailOpen || (onMap && mapTaskActive)
     val mapSheetUnderNav by appViewModel.mapSheetUnderNav.collectAsStateWithLifecycle()
 
     // Bodenfreiheit, die jeder Bildschirm unten einplanen muss: das schwebende
@@ -417,16 +452,18 @@ private fun TrailscapeAppContent() {
                 // Zurueckgeste des Systems spult denselben Uebergang
                 // rueckwaerts ab (Predictive back).
                 enterTransition = {
-                    when (targetState.destination.route) {
-                        MORE_ROUTE -> M3Transitions.sharedAxisXEnter(forward = true, density)
+                    when {
+                        isPushedRoute(targetState.destination.route) ->
+                            M3Transitions.sharedAxisXEnter(forward = true, density)
                         // Die Karte blendet nur ein; ihr Blatt faehrt selbst
                         // von unten herauf (siehe `MapScreen.kt`).
-                        TopLevelDestination.MAP.route -> M3Transitions.topLevelEnter(scale = false)
+                        targetState.destination.route == TopLevelDestination.MAP.route ->
+                            M3Transitions.topLevelEnter(scale = false)
                         else -> M3Transitions.topLevelEnter()
                     }
                 },
                 exitTransition = {
-                    if (targetState.destination.route == MORE_ROUTE) {
+                    if (isPushedRoute(targetState.destination.route)) {
                         M3Transitions.sharedAxisXExit(forward = true, density)
                     } else {
                         M3Transitions.topLevelExit()
@@ -434,7 +471,7 @@ private fun TrailscapeAppContent() {
                 },
                 popEnterTransition = {
                     when {
-                        initialState.destination.route == MORE_ROUTE ->
+                        isPushedRoute(initialState.destination.route) ->
                             M3Transitions.sharedAxisXEnter(forward = false, density)
                         targetState.destination.route == TopLevelDestination.MAP.route ->
                             M3Transitions.topLevelEnter(scale = false)
@@ -442,7 +479,7 @@ private fun TrailscapeAppContent() {
                     }
                 },
                 popExitTransition = {
-                    if (initialState.destination.route == MORE_ROUTE) {
+                    if (isPushedRoute(initialState.destination.route)) {
                         M3Transitions.sharedAxisXExit(forward = false, density)
                     } else {
                         M3Transitions.topLevelExit()
@@ -459,6 +496,26 @@ private fun TrailscapeAppContent() {
                 // von wo das Zahnrad angetippt wurde.
                 composable(MORE_ROUTE) {
                     MoreScreen(appViewModel, onBack = { navController.popBackStack() })
+                }
+                // Indoor (docs/indoor.md 10.1): der Ablauf haelt sein
+                // ViewModel am eigenen Backstack-Eintrag; die Diagnose ist
+                // aus dem Ablauf (Koppeln) und unter Mehr erreichbar.
+                composable(INDOOR_ROUTE) {
+                    IndoorFlowScreen(
+                        appViewModel = appViewModel,
+                        // Gezielt bis einschliesslich `indoor`: Ein doppelt
+                        // ausgeloestes Verlassen raeumt so nie den Tab darunter ab.
+                        onExit = { navController.popBackStack(INDOOR_ROUTE, inclusive = true) },
+                        onOpenDiagnostics = {
+                            navController.navigate(INDOOR_DIAGNOSTICS_ROUTE) { launchSingleTop = true }
+                        },
+                    )
+                }
+                composable(INDOOR_WORLDS_ROUTE) {
+                    IndoorWorldsDestination(onBack = { navController.popBackStack() })
+                }
+                composable(INDOOR_DIAGNOSTICS_ROUTE) {
+                    IndoorDiagnosticsScreen(onBack = { navController.popBackStack() })
                 }
             }
         }

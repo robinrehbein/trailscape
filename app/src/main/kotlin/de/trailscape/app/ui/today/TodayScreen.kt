@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.asString
@@ -44,6 +45,8 @@ import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
+import de.trailscape.app.ui.indoor.IndoorEntryCard
+import de.trailscape.app.ui.indoor.indoorErgTitleFor
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberNow
 import de.trailscape.app.ui.rememberTodayDecision
@@ -161,6 +164,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
     val decision = rememberTodayDecision(appViewModel, now)
     val displayPlan = decision.displayPlan
     val todaySession = decision.todaySession
+    // Einstieg ins Indoor-Training (docs/indoor.md 10.1): mit der Einheit des
+    // Tages, wenn sie sich als ERG-Einheit fahren laesst.
+    val indoorErgTitle = remember(todaySession, coreTexts) {
+        runCatching { indoorErgTitleFor(AppServices.indoorParts, todaySession, coreTexts) }.getOrNull()
+    }
     val currentWeek = decision.currentWeek
     val weekSessions = decision.weekSessions
     val planRestDay = decision.planRestDay
@@ -364,6 +372,10 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         healthHint = healthHint,
                         onOpenHealth = { appViewModel.requestMoreSection(MoreSection.HEALTH) },
                     )
+                }
+
+                item(key = "indoor") {
+                    IndoorEntryCard(ergTitle = indoorErgTitle, onClick = { appViewModel.requestIndoor() })
                 }
 
                 // Solange die Touren noch aus der Datenbank kommen, weder

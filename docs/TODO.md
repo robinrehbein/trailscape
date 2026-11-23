@@ -67,6 +67,63 @@ Festgehaltene Ideen, die bewusst noch nicht umgesetzt sind.
   der Schnittstelle stimmig. Die Schwellen stehen als Konstanten oben in der
   Datei (`spurToleranceM`, `minSpurM`, `maxSpurFloorM`, `maxSpurShare`).
 
+## Indoor (Prototyp)
+
+Vertrag und Hintergründe: `docs/indoor.md`, Notizen des Slices:
+`docs/indoor/app.md`. Gewählte Vorgabe steht jeweils dahinter.
+
+**Auf dem Gerät prüfen (Abschnitt 11.1)**
+
+- [ ] Darstellung überhaupt: Testszene, Testwelt, echte Welt; FPS je
+  Qualitätsstufe; Drehung, Hintergrund/Vordergrund, 30 Minuten Dauerlauf
+  (Speicher, Wärme).
+- [ ] Speicher: hält `HIGH` auf dem Gerät, oder stürzt es beim Laden ab?
+- [ ] KICKR CORE über FTMS: Koppeln, Request Control, SIM- und ERG-Befehle,
+  Kontrollverlust (Hersteller-App parallel), Neuverbinden.
+- [ ] Virtuelle Gänge: Gefühl beim Schalten, Faktor `trainerScale`
+  kalibrieren, Verzögerung zwischen Schalten und Widerstand.
+- [ ] Zwift Click: Finden, Handschlag mit der Firmware, Tasten.
+- [ ] Trainer, Schalttaster und Pulsgurt gleichzeitig an einem Handy.
+- [ ] Belag spürbar: Asphalt, Schotter, Waldboden auf bekannter Strecke.
+- [ ] „Welt laden“ über Mobilfunk/WLAN: Dauer und Datenmenge einer 50-km-Runde,
+  Fortsetzen nach Abbruch, danach offline fahren.
+
+**Entscheidungen des Gründers (Abschnitt 11.2)**
+
+- [ ] OpenFreeMap-Nutzungsbedingungen: Der Weltbau lädt Vektorkacheln entlang
+  einer Strecke. Vorgabe: für den Prototyp in Ordnung; vor dem Release
+  schriftlich bestätigen lassen oder eigene Kachelquelle (gleiche Frage wie
+  beim Offline-Download oben).
+- [ ] Luftbild-Lizenzen je Land. Vorgabe: nur Länder aus dem Register
+  (derzeit NRW), sonst kein Luftbild.
+- [ ] APK-Größe (Filament je ABI rund 10 MB). Vorgabe: alle ABIs hinnehmen.
+- [ ] Fahrt im Hintergrund. Vorgabe: keiner, Verlassen der App pausiert.
+  Später: `connectedDevice`-Dienst samt Play-Prüfung.
+- [ ] Reale Übersetzung. Umgesetzt: einstellbares Kettenblatt im Schritt
+  *Koppeln*, Vorgabe 48 laut Gründer (Übersetzung 48/14 auf dem Zwift Cog);
+  auf dem Gerät prüfen, ob sich die virtuellen Gänge richtig anfühlen.
+- [ ] Crr-Tabelle. Vorgabe: fest, nicht einstellbar; nach den ersten Fahrten
+  justieren oder je Belag einstellbar machen.
+- [ ] Strava. Vorgabe: als Indoor-Fahrt (`trainer`) hochladen, sofern der
+  Upload es kann (er kann es, `StravaClient`); ob Strava sie als virtuelle
+  Fahrt zeigt, auf dem Gerät prüfen, andernfalls `sport_type=VirtualRide`
+  per `PUT /activities/{id}` nachziehen und eine virtuelle Strecke bewusst
+  entscheiden.
+- [ ] Standard-Qualität. Vorgabe: `MEDIUM`, keine eigene Mobilfunk-Warnung;
+  der Voranschlag zeigt die Datenmenge.
+
+**Weiteres**
+
+- [ ] Hintergrunddienst für Indoor (Fahrt läuft bei gesperrtem Display oder
+  anderer App weiter), siehe Fahrt im Hintergrund.
+- [ ] Kalibrierung `trainerScale` und Crr-Justierung nach den ersten echten
+  Fahrten (Verhalten des Trainers im Simulationsmodus ist eine Annahme).
+- [ ] Health-Import: prüfen, dass eine gleichzeitig von der Uhr aufgezeichnete
+  Einheit nicht als zweite Tour entsteht (`findDuplicateRide`).
+- [ ] Weitere Luftbild-Länder ins Register, nur nach echter
+  `GetCapabilities`-/`GetMap`-Prüfung und mit Lizenz und Quellenangabe, dann
+  `PRIVACY.md` ergänzen.
+
 ## Ideen
 
 - **GPX ohne Zeitstempel als geplante Route öffnen.** Wer eine Route aus

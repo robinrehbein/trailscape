@@ -5,6 +5,7 @@ import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -188,6 +189,26 @@ class StravaClientTest {
         assertEquals(HttpMethod.GET, http.requests[1].method)
         assertEquals("Bearer acc", http.requests[2].headers["Authorization"])
         assertEquals(listOf(2000L, 2000L), sleeps)
+    }
+
+    @Test
+    fun `Indoor-Fahrt geht mit trainer=1 hinaus, jede andere ohne`() {
+        val http = ScriptedHttp(
+            respond(201, """{"id":1,"activity_id":77}"""),
+            respond(201, """{"id":2,"activity_id":78}"""),
+        )
+        val strava = client(http, MemoryTokens(freshTokens()))
+
+        assertEquals(StravaUploadOutcome.Uploaded(77L), strava.upload(ride().copy(indoor = true)))
+        assertEquals(StravaUploadOutcome.Uploaded(78L), strava.upload(ride()))
+
+        val indoorBody = http.requests[0].body.orEmpty()
+        assertTrue(indoorBody.contains("name=\"trainer\"\r\n\r\n1\r\n"), indoorBody)
+        // Leistung und Trittfrequenz reisen wie bei jeder Tour im GPX mit.
+        assertTrue(indoorBody.contains("<type>cycling</type>"), indoorBody)
+        val outdoorBody = http.requests[1].body.orEmpty()
+        assertFalse(outdoorBody.contains("name=\"trainer\""), outdoorBody)
+        http.assertDone()
     }
 
     @Test

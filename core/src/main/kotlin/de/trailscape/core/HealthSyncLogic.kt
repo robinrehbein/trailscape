@@ -620,6 +620,10 @@ fun mergeHeartRateIntoRide(
         // Der Merge baut die Tour neu auf; ohne diese Zeile wuerde er einer
         // gespeicherten Planung ihr Kennzeichen abnehmen (siehe [Ride.planned]).
         planned = ride.planned,
+        // Ebenso einer Indoor-Fahrt: Zeichnet die Uhr gleichzeitig auf, wird
+        // ihr Puls in die Indoor-Tour gemischt — die Tour muss Indoor bleiben,
+        // sonst tauchte sie in Neue Wege und Entdeckt-Kacheln auf.
+        indoor = ride.indoor,
     )
 }
 

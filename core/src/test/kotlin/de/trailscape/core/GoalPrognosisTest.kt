@@ -33,6 +33,7 @@ class GoalPrognosisTest {
         daysAgo: Int = 3,
         id: String = "r$km$daysAgo",
         planned: Boolean = false,
+        indoor: Boolean = false,
     ) = RideSummary(
         id = id,
         name = "Tour",
@@ -45,6 +46,7 @@ class GoalPrognosisTest {
             movingTimeS = movingMin?.let { it * 60 },
         ),
         planned = planned,
+        indoor = indoor,
     )
 
     private val goal = Goal(
@@ -130,6 +132,20 @@ class GoalPrognosisTest {
             ride(50.0, 500.0, null, id = "n"),
         )
         assertNull(predictGoalFinish(goal, rides, now = NOW, texts = CoreTextsDe).prognosis)
+    }
+
+    @Test
+    fun `Indoor-Fahrten zaehlen nicht, ihr Tempo ist virtuell`() {
+        val indoorOnly = listOf(
+            ride(60.0, 700.0, 100, daysAgo = 2, id = "i1", indoor = true),
+            ride(60.0, 700.0, 100, daysAgo = 4, id = "i2", indoor = true),
+        )
+        assertNull(predictGoalFinish(goal, indoorOnly, now = NOW, texts = CoreTextsDe).prognosis)
+
+        val outdoor = listOf(ride(60.0, 700.0, 140, daysAgo = 2), ride(60.0, 700.0, 140, daysAgo = 9))
+        val p = assertNotNull(predictGoalFinish(goal, outdoor + indoorOnly, now = NOW, texts = CoreTextsDe).prognosis)
+        assertEquals(140, p.currentMin)
+        assertEquals(2, p.ridesUsed)
     }
 
     @Test
