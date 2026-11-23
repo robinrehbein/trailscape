@@ -9,7 +9,7 @@ Stand: 23.11.2026, Branch `claude/indoor-world`. Vertrag: `docs/indoor.md`
 |---|---|
 | Einstieg `IndoorWorldEntry.kt` | **ohne Platzhalter.** `createWorldBuilder()` → `WorldBuilderImpl(FullWorldParts)`, `createGeoPipeline` → Positivliste, Plattencache, Drosselung; Register `aerialSources` mit NRW, Sachsen, Thüringen, Brandenburg/Berlin |
 | Voranschlag `plan` | ohne Netz: Kacheln, Anfragen je Art, Download, Platz, Hosts, Luftbild-Dienste |
-| Bau `build` | Höhen (Terrarium z13/z11) → Ursprung → Vektorkacheln (TileJSON, z14/z12) → Brücken, Belag aus Vektorkacheln, falls die Strecke keinen hat → Streckenband → endgültige Planung → Kacheln parallel (bis 4 Threads), atomar geschrieben, `manifest.json` zuletzt. Fortsetzen nach Abbruch (fertige Kacheln bleiben). `isCancelled()` wird mindestens alle 50 ms gefragt |
+| Bau `build` | Höhen (Terrarium z13/z11) → Ursprung → Vektorkacheln (TileJSON, z14/z12) → Brücken, Belag aus Vektorkacheln, falls die Strecke keinen hat → Streckenband → endgültige Planung → Kacheln parallel (bis 4 Threads, nach `Runtime.maxMemory()` begrenzt: bei 256 MB Heap 2), atomar geschrieben, `manifest.json` zuletzt. Fortsetzen nach Abbruch (fertige Kacheln bleiben). `isCancelled()` wird mindestens alle 50 ms gefragt |
 | Testwelt `buildTestWorld` | ohne Netz, 3 km Runde mit allen Belagsklassen, Dorf, Laub- und Nadelwald, Felder, Teich, Bach mit Holzbrücke; deterministisch (Byte-gleich) |
 | Streckenband | Lage geglättet (≤ 1,2 m), Höhe vom Gelände (σ 12 m), Brücken überbrückt, Steigung ≤ 24,5 %, Laufmeter unverändert |
 | Gelände | `CarvedGround`: gedämpftes Höhenmodell, Straßen quer eben, Strecke mit Bankett und Böschung (Nachweis im KDoc: kein Dreieck sticht durch die Fahrbahn), Wasser abgesenkt; Stufe 0 Gitter 4 m (MEDIUM), ab Stufe 1 4×4 Teilflächen, Schürzen |
@@ -20,7 +20,7 @@ Stand: 23.11.2026, Branch `claude/indoor-world`. Vertrag: `docs/indoor.md`
 | Bäume `trees` | **neu:** Einzelbäume in vier Arten (runder Laubbaum, schlanke Pappel/Birke, gestufte Fichte, kleiner Feld-/Obstbaum) bis 70 m neben der Strecke: verbeulte, überlappende Kronenkörper mit geglätteten Normalen, Größen- und Farbvariation, Wurzelanlauf. Drei Detailstufen, budgetabhängig vom Weg nach außen vergeben. Standorte aus der Kronenbedeckung des Luftbilds bzw. der Landnutzung; dahinter und in Stufe 1 Waldkörper (hügeliges Kronendach, das am Waldrand bis zum Boden abfällt, ohne Wände) |
 | Wasser `water` | **neu:** Wasserspiegel auf Uferhöhe über den Wasserflächen der Karte |
 | Kleinteile `props` | Leitpfosten, Laternen, Ortstafel, Weidezäune, Holzpolter, Bänke, Wegweiser |
-| Detailstufen | 3 Stufen (256 m / 1 km / 4 km), `show` nach Laufmetern, Budget je Qualität nachgerechnet (Bau bricht ab, falls überschritten) |
+| Detailstufen | 3 Stufen (256 m / 1 km / 4 km), `show` nach Laufmetern, Budget je Qualität nachgerechnet (steht im Manifest, `checkWorld` meldet Überschreitungen; der Bau bricht deswegen nicht mehr ab) |
 | Prüfung | `checkWorld` (Namen, Erweiterungen, Texturformate, Budget, lückenloses `show`) im Werkzeug und als `:core`-Test |
 | Modelle | `rider.glb`, `ghost.glb` (selbst erzeugt, `pedal`/`roll`) unter `app/src/main/assets/indoor/models/` |
 | Werkzeug | `:indoor-dev:run … build|plan|testworld|check|models`; Betrachter `viewer/` (three.js) mit `shots.mjs` |
@@ -142,6 +142,49 @@ Gemeinsam mit indoor-render und indoor-app gebaut und geprüft:
   bringt. Ein schnellerer Abbruch innerhalb einer Kachel bleibt offen (siehe
   „Auf dem Gerät zu prüfen“).
 
+## Lange Strecken auf dem Handy (Fehlerbericht, 23.11.2026)
+
+Der Gründer bekam für eine echte Strecke „Beim Bau der Welt ist ein
+unerwarteter Fehler aufgetreten.“ Nachgestellt mit dem Werkzeug an zwei
+langen Strecken (BRouter `trekking`, echte Wege): Freiberg → Tharandt →
+Dresden (42 km, Luftbild Sachsen, Stadtende) und eine Runde um den Ammersee
+(101 km, Start = Ziel, ohne Luftbild). Zwei Ursachen, beide behoben:
+
+1. **„Hoehenkachel … fehlt“ (INTERNAL)** — bei *beiden* Strecken, unabhängig
+   vom Speicher. `CarvedGround.roadProfile` tastet das Längsprofil einer
+   Straße auf ihrer ganzen Länge ab; über Kachelgrenzen verkettete Straßen
+   reichen weit über die geladenen Höhenkacheln hinaus, und
+   `ElevationField.heightAt` warf dort `ElevationMissingException`. Kurze
+   Strecken (Altenberg, Tharandt) trafen das nicht. Jetzt nimmt
+   `TerrainHeights` das andere Feld bzw. den nächsten geladenen Rand
+   (`heightAtNearest`); das Feld selbst bleibt streng.
+2. **`OutOfMemoryError` bei 256 MB Heap** (Handy ohne `largeHeap`): Der Bau
+   hielt die rohen Vektorkacheln (bei 42 km rund 100 MB Merkmale samt
+   Tag-Maps) neben den abgeleiteten Daten, dazu rohe und geglättete Höhen,
+   12 fertige Luftbilder im Vorrat und unbegrenzt wachsende Zwischenspeicher
+   (Landnutzungs-Blöcke, Straßenprofile). Jetzt: rohe Kacheln nach dem
+   letzten `mapData()` frei (`GeoLoader.releaseRawTiles`), Rohhöhen nur
+   während der Glättung, Luftbild-Vorrat 2, `BoundedCache` (LRU) für
+   `LandRaster` und `CarvedGround`, Threads nach `Runtime.maxMemory()`
+   (`defaultWorldThreads`), und `android:largeHeap="true"` in der App.
+
+Messung (Entwicklerrechner, `-Xmx256m`, 2 Threads, Geodaten aus dem Cache):
+
+| Strecke | vorher | nachher | Kacheln | Platte |
+|---|---|---|---|---|
+| Freiberg–Dresden 42 km | OOM nach 59 Kacheln (Live-Set ~210 MB vor dem ersten Bau), danach „Hoehenkachel fehlt“ | 83 s, Live-Set nach Full-GC 117–131 MB | 496 | 578 MB |
+| Ammersee-Runde 101 km | „Hoehenkachel fehlt“ (auch mit 3 GB) | 270 s, Live-Set ≤ 104 MB | 932 | 922 MB |
+
+Download ohne Cache laut Voranschlag 80 MB (Freiberg–Dresden, davon
+Luftbild ~62 MB) bzw. 17 MB. Auf dem Handy ist mit dem 2–4-Fachen der
+Rechenzeit plus Download zu rechnen.
+
+Außerdem: Weicht der Ursprung nach dem Laden der Höhen in der Lage ab
+(Vertragsverstoß eines `WorldParts`), bleibt die vorläufige Lage statt
+INTERNAL; ein überschrittenes Budget lässt den fertigen Bau nicht mehr
+scheitern; jeder `Throwable` im Bau wird zu `WorldBuildFailed(INTERNAL)` mit
+Ursache, und die App zeigt sie als kopierbare „Technische Einzelheit“.
+
 ## Bitten an andere Slices
 
 - **indoor-app** (erledigt bei der Integration: Hosts in `PRIVACY.md`,
@@ -169,7 +212,8 @@ Gemeinsam mit indoor-render und indoor-app gebaut und geprüft:
 - [ ] Testwelt und eine echte Welt (MEDIUM) in Filament: Bäume, Waldkörper,
       Wasser sichtbar, keine Löcher an Kachelgrenzen und beim Umschalten der
       Teilflächen.
-- [ ] Bauzeit und Datenmenge für eine 30–50-km-Runde über WLAN/Mobilfunk.
+- [ ] Bauzeit und Datenmenge für eine 30–50-km-Runde über WLAN/Mobilfunk
+      (Werkzeug: 42 km in 83 s bei 2 Threads aus dem Cache, s. o.).
 - [ ] Speicher bei HIGH (Texturen bis 400 MB laut Budget).
 - [ ] Abbruch während „Welt laden“ und Fortsetzen; wie lange steht „Wird
       abgebrochen …“ auf dem Handy (laufende Kacheln/Anfragen)? Bei mehr als

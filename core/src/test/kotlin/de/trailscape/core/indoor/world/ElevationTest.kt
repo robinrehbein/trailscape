@@ -109,6 +109,38 @@ class ElevationTest {
     }
 
     @Test
+    fun `TerrainHeights wirft ausserhalb der geladenen Kacheln nicht, sondern nimmt den naechsten Rand`() {
+        // Nachgestellt nach der 42-km-Strecke Freiberg–Dresden: das Laengsprofil einer Strasse
+        // reichte weit ueber die Hoehenkacheln hinaus → „Hoehenkachel … fehlt" → INTERNAL.
+        val west = tile(4258, 2740) { _, _ -> 50f }
+        val east = tile(4259, 2740) { _, _ -> 80f }
+        val coarse = ElevationField(origin, z, listOf(west, east))
+        val fine = ElevationField(origin, z, listOf(west))
+        val heights = TerrainHeights(null, coarse, emptySet())
+        val (inLat, inLon) = latLonAt(4258 * 256 + 10.0, 2740 * 256 + 10.0)
+        assertEquals(50.0, heights.aboveSeaLatLon(inLat, inLon), 1e-3)
+        // weit suedlich der geladenen Kacheln: Rand der naechsten Kachel
+        val (sLat, sLon) = latLonAt(4258 * 256 + 10.0, 2745 * 256 + 10.0)
+        assertEquals(50.0, heights.aboveSeaLatLon(sLat, sLon), 1e-3)
+        val (oLat, oLon) = latLonAt(4262 * 256 + 10.0, 2740 * 256 + 100.0)
+        assertEquals(80.0, heights.aboveSeaLatLon(oLat, oLon), 1e-3)
+        val e = origin.toEast(oLon)
+        val n = origin.toNorth(oLat)
+        assertEquals(80.0, heights.aboveSea(e, n), 1e-3)
+        // feines Feld ohne die Kachel: das grobe springt ein
+        val (eLat, eLon) = latLonAt(4259 * 256 + 128.0, 2740 * 256 + 128.0)
+        val e2 = origin.toEast(eLon)
+        val n2 = origin.toNorth(eLat)
+        val c = worldCellM(1)
+        val cells = (-2..2).flatMap { dx -> (-2..2).map { dy -> TileSpec(1, floor(e2 / c).toInt() + dx, floor(n2 / c).toInt() + dy) } }.toSet()
+        val both = TerrainHeights(fine, coarse, cells)
+        assertEquals(80.0, both.aboveSea(e2, n2), 1e-3)
+        // das Feld selbst bleibt streng
+        assertFailsWith<ElevationMissingException> { coarse.heightAtLatLon(sLat, sLon) }
+        assertEquals(null, coarse.heightAtLatLonOrNull(sLat, sLon))
+    }
+
+    @Test
     fun `echte Terrarium-Kachel Altenberg`() {
         val bytes = resourceBytes("terrarium_13_4258_2740.png")
         val fetcher = GeoFetcher { req ->

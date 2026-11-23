@@ -179,7 +179,10 @@ private fun build(a: Args): Int {
         createWorldBuilder().build(prepared.plan, WorldBuildDeps(counting, ImageIoDecoder), out, ConsoleListener())
     } catch (e: WorldBuildFailed) {
         System.err.println("Bau gescheitert: ${e.message}")
-        e.cause?.let { System.err.println("  Ursache: $it") }
+        e.cause?.let { c ->
+            System.err.println("  Ursache: $c")
+            c.stackTrace.take(12).forEach { System.err.println("    at $it") }
+        }
         return 1
     } catch (e: WorldBuildCancelled) {
         System.err.println("Bau abgebrochen")

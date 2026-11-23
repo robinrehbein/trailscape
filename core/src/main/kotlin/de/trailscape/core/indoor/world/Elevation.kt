@@ -104,26 +104,76 @@ internal class ElevationField(
     private val bicubic: Boolean = true,
 ) : ElevationSource {
     private val size: Int = tiles.firstOrNull()?.size ?: TERRARIUM_TILE_PX
-    private val raw: Map<Long, ElevationTile> = tiles.associateBy { key(it.id.x, it.id.y) }
+    /**
+     * Nur waehrend der Glaettung im `init` gesetzt; danach `null`, damit die
+     * Rohwerte (je Kachel 256 KB) nicht fuer den ganzen Weltbau neben den
+     * geglaetteten liegen bleiben.
+     */
+    private var raw: Map<Long, ElevationTile>? = tiles.associateBy { key(it.id.x, it.id.y) }
     private val data: Map<Long, FloatArray?>
+
+    /** Die geladenen Kacheln. */
+    val tileIds: Set<TileId> = tiles.mapTo(LinkedHashSet()) { it.id }
 
     init {
         require(tiles.all { it.id.z == zoom && it.size == size }) { "Hoehenkacheln mit gemischter Zoomstufe oder Groesse" }
         require(smoothingSigmaPx >= 0.0) { "Glaettung darf nicht negativ sein" }
+        val all = raw!!
         data = if (smoothingSigmaPx > 0.0) {
-            raw.mapValues { (_, t) -> t.heights?.let { smooth(t) } }
+            all.mapValues { (_, t) -> t.heights?.let { smooth(t) } }
         } else {
-            raw.mapValues { it.value.heights }
+            all.mapValues { it.value.heights }
         }
+        raw = null
     }
-
-    /** Die geladenen Kacheln. */
-    val tileIds: Set<TileId> get() = raw.values.mapTo(LinkedHashSet()) { it.id }
 
     override fun heightAt(e: Double, n: Double): Float = heightAtLatLon(origin.toLat(n), origin.toLon(e))
 
     fun heightAtLatLon(lat: Double, lon: Double): Float =
         sampleAt(TileMath.lonToTileX(lon, zoom) * size - 0.5, TileMath.latToTileY(lat, zoom) * size - 0.5)
+
+    /** Wie [heightAt], aber `null` statt [ElevationMissingException], wenn die Kachel der Stelle nicht geladen ist. */
+    fun heightAtOrNull(e: Double, n: Double): Float? = heightAtLatLonOrNull(origin.toLat(n), origin.toLon(e))
+
+    fun heightAtLatLonOrNull(lat: Double, lon: Double): Float? {
+        val px = TileMath.lonToTileX(lon, zoom) * size - 0.5
+        val py = TileMath.latToTileY(lat, zoom) * size - 0.5
+        if (!data.containsKey(homeKeyOf(px, py))) return null
+        return sampleAt(px, py)
+    }
+
+    /**
+     * Hoehe ohne Ausnahme: liegt die Stelle ausserhalb der geladenen Kacheln,
+     * die des naechsten Punkts am Rand der naechstgelegenen geladenen Kachel.
+     * Ohne jede Kachel 0.
+     */
+    fun heightAtNearest(e: Double, n: Double): Float = heightAtNearestLatLon(origin.toLat(n), origin.toLon(e))
+
+    fun heightAtNearestLatLon(lat: Double, lon: Double): Float {
+        val px = TileMath.lonToTileX(lon, zoom) * size - 0.5
+        val py = TileMath.latToTileY(lat, zoom) * size - 0.5
+        if (data.containsKey(homeKeyOf(px, py))) return sampleAt(px, py)
+        if (px.isNaN() || py.isNaN()) return 0f
+        var best: TileId? = null
+        var bestD = Double.MAX_VALUE
+        for (id in tileIds) {
+            val cx = px.coerceIn(id.x * size.toDouble(), id.x * size + size - 1.0)
+            val cy = py.coerceIn(id.y * size.toDouble(), id.y * size + size - 1.0)
+            val d = (cx - px) * (cx - px) + (cy - py) * (cy - py)
+            if (d < bestD) {
+                bestD = d
+                best = id
+            }
+        }
+        val t = best ?: return 0f
+        return sampleAt(
+            px.coerceIn(t.x * size.toDouble(), t.x * size + size - 1.0),
+            py.coerceIn(t.y * size.toDouble(), t.y * size + size - 1.0),
+        )
+    }
+
+    private fun homeKeyOf(px: Double, py: Double): Long =
+        key(Math.floorDiv(floor(px + 0.5).toInt(), size), Math.floorDiv(floor(py + 0.5).toInt(), size))
 
     override fun heightGrid(e0: Double, n0: Double, stepE: Double, stepN: Double, cols: Int, rows: Int): FloatArray {
         // e haengt nur von der Laenge, n nur von der Breite ab: je Spalte und Zeile einmal rechnen.
@@ -188,7 +238,7 @@ internal class ElevationField(
     private fun rawPixel(gx: Int, gy: Int, home: ElevationTile): Float {
         val tx = Math.floorDiv(gx, size)
         val ty = Math.floorDiv(gy, size)
-        val t = raw[key(tx, ty)]
+        val t = raw!![key(tx, ty)]
         if (t != null) {
             val arr = t.heights ?: return 0f
             return arr[(gy - ty * size) * size + (gx - tx * size)]

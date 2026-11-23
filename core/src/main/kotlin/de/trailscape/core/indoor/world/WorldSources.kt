@@ -266,21 +266,38 @@ internal class TerrainHeights(
     private val coarse: ElevationField?,
     private val fineCells: Set<TileSpec>,
 ) {
+    /**
+     * Wirft nie wegen einer fehlenden Kachel: Die Erzeuger fragen auch
+     * ausserhalb des geladenen Gebiets (etwa das Laengsprofil einer Strasse,
+     * die weit ueber die Kacheln hinausreicht — das liess lange Strecken mit
+     * „Hoehenkachel … fehlt" scheitern). Dann gilt das andere Feld, sonst
+     * der naechste geladene Rand ([ElevationField.heightAtNearest]).
+     */
     fun aboveSea(e: Double, n: Double): Double {
         val w = when {
             coarse == null -> 1.0
             fine == null -> 0.0
             else -> fineWeight(e, n)
         }
-        if (w >= 1.0) return fine!!.heightAt(e, n).toDouble()
-        if (w <= 0.0) return coarse!!.heightAt(e, n).toDouble()
-        return coarse!!.heightAt(e, n) + (fine!!.heightAt(e, n) - coarse.heightAt(e, n)) * w
+        if (w >= 1.0) return fine?.heightAtOrNull(e, n)?.toDouble() ?: coarse?.heightAtOrNull(e, n)?.toDouble() ?: nearest(e, n)
+        if (w <= 0.0) return coarse?.heightAtOrNull(e, n)?.toDouble() ?: fine?.heightAtOrNull(e, n)?.toDouble() ?: nearest(e, n)
+        val c = coarse!!.heightAtOrNull(e, n)?.toDouble()
+        val f = fine!!.heightAtOrNull(e, n)?.toDouble()
+        return when {
+            c != null && f != null -> c + (f - c) * w
+            else -> c ?: f ?: nearest(e, n)
+        }
     }
 
     fun aboveSeaLatLon(lat: Double, lon: Double): Double {
         val f = fine ?: coarse ?: error("Keine Hoehendaten geladen")
-        return f.heightAtLatLon(lat, lon).toDouble()
+        f.heightAtLatLonOrNull(lat, lon)?.let { return it.toDouble() }
+        coarse?.heightAtLatLonOrNull(lat, lon)?.let { return it.toDouble() }
+        return f.heightAtNearestLatLon(lat, lon).toDouble()
     }
+
+    private fun nearest(e: Double, n: Double): Double =
+        (coarse ?: fine ?: error("Keine Hoehendaten geladen")).heightAtNearest(e, n).toDouble()
 
     private fun fineWeight(e: Double, n: Double): Double {
         val c = worldCellM(1)
@@ -488,7 +505,9 @@ internal class AerialStore(
     private val origin: GeoOrigin,
     private val sources: List<AerialSource>,
     private val quality: IndoorQuality,
-    private val capacity: Int = 12,
+    // Jede Kachel holt ihr Luftbild genau einmal; ein grosser Vorrat hielte nur
+    // fertige Bilder (je 4 MB bei 1024²) fest. Zwei genuegen fuer Wiederholer.
+    private val capacity: Int = 2,
 ) {
     private class Slot(val tile: AerialTile?)
 

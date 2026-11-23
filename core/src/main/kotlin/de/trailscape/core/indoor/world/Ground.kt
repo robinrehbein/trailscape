@@ -1,6 +1,5 @@
 package de.trailscape.core.indoor.world
 
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -325,9 +324,9 @@ internal class CarvedGround(
         val grid: HashMap<Long, IntArray>,
     )
 
-    private val roadBlocks = ConcurrentHashMap<Long, RoadBlock>()
+    private val roadBlocks = BoundedCache<Long, RoadBlock>(MAX_ROAD_BLOCKS)
 
-    private fun roadBlock(bx: Int, by: Int): RoadBlock = roadBlocks.computeIfAbsent(cellKey(bx, by)) { buildRoadBlock(bx, by) }
+    private fun roadBlock(bx: Int, by: Int): RoadBlock = roadBlocks.getOrPut(cellKey(bx, by)) { buildRoadBlock(bx, by) }
 
     private fun buildRoadBlock(bx: Int, by: Int): RoadBlock {
         val minE = bx * ROAD_BLOCK
@@ -484,6 +483,9 @@ internal class CarvedGround(
         private const val PROMINENCE_M = 3.0
         private const val SEG_CELL = 32.0
         private const val ROAD_BLOCK = 512.0
+
+        /** Strassenbloecke (je 512 m) im Speicher; in der Stadt je Block einige 100 KB. */
+        private const val MAX_ROAD_BLOCKS = 192
         private const val ROAD_CELL = 16.0
         private const val ROAD_FLAT_EXTRA_M = 0.3
         private const val ROAD_BLEND_M = 4.0
