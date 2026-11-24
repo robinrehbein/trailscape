@@ -587,6 +587,31 @@ internal object FoliageAtlas {
     }
 
     // -----------------------------------------------------------------------
+    // Rinde (kachelnd)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Rinde 64 × 128, kachelnd: senkrechte Furchen (gestreckte Perioden-Rauschen), dunkle
+     * Risse, hellere Borkenplatten; grau, die Farbe kommt aus den Eckpunkten. u laeuft einmal
+     * um den Stamm, v 0,5 je Meter.
+     */
+    fun barkImage(): RgbaImage {
+        val w = 64
+        val h = 128
+        val img = RgbaImage(w, h)
+        for (y in 0 until h) for (x in 0 until w) {
+            val furrow = Noise.value(x / 4.0, y / 22.0, 0xba01, w / 4).let { 1 - kotlin.math.abs(it - 0.5) * 2 }
+            val plates = Noise.value(x / 8.0, y / 10.0, 0xba02, w / 8)
+            val fine = Noise.value(x / 2.0, y / 4.0, 0xba03, w / 2)
+            var v = 0.42 + 0.36 * plates + 0.12 * fine
+            v *= 0.55 + 0.45 * smoothstep(0.15, 0.6, furrow)
+            val c = (v.coerceIn(0.0, 1.0) * 255).toInt()
+            img.argb[y * w + x] = Argb.of(255, c, c, (c * 0.94).toInt())
+        }
+        return img
+    }
+
+    // -----------------------------------------------------------------------
     // Kronendach der Waldkoerper (kachelnd)
     // -----------------------------------------------------------------------
 

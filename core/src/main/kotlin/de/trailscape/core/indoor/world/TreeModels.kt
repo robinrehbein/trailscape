@@ -135,12 +135,11 @@ internal object TreeModels {
         val fs = doubleArrayOf(0.0, 0.0, 1.0, 1.0)
         val gs = doubleArrayOf(-1.0, 1.0, 1.0, -1.0)
         val ps = Array(4) { base + along * (len * fs[it]) + across * (wid * 0.5 * gs[it]) }
-        // Richtung vom Kronenmittelpunkt, senkrecht gestaucht: Die Kamera ist fast immer unter den
-        // Kronen; Karten oben zeigen sonst steil nach oben, man saehe ihre Rueckseite mit
-        // umgedrehter (nach unten zeigender) Normale schwarz gegen den Himmel.
+        // Richtung vom Kronenmittelpunkt (unten etwas abgeflacht, damit die Kronenunterseite nicht
+        // ganz ins Umgebungslicht von unten kippt).
         val radials = Array(4) {
             val r = crown.rel(ps[it])
-            Vec3(r.x, r.y * 0.45, r.z).normalized(Vec3(0.0, 1.0, 0.0))
+            Vec3(r.x, if (r.y < 0) r.y * 0.6 else r.y, r.z).normalized(Vec3(0.0, 1.0, 0.0))
         }
         // Vorderseite dorthin, wohin die gebogenen Normalen im Mittel zeigen: Von hinten gesehen
         // dreht Filament die Normale um — sie zeigt dann vom Licht der Kronenoberseite weg (dunkel)
@@ -166,7 +165,19 @@ internal object TreeModels {
             val v = reg.v(inset + t * (1 - 2 * inset))
             idx[k] = m.vertex(p.x, p.y, p.z, n.x, n.y, n.z, u, v, leafColor(leaf, shade, hue))
         }
-        if (front) m.quad(idx[0], idx[1], idx[2], idx[3]) else m.quad(idx[0], idx[3], idx[2], idx[1])
+        bothSides(m, idx)
+    }
+
+    /**
+     * Beide Wicklungen auf denselben Eckpunkten: Das Material ist einseitig, je Blickrichtung
+     * wird genau eine der beiden Flaechen gezeichnet (kein Z-Kampf), und beide tragen dieselbe
+     * gebogene Normale. Damit haengt die Beleuchtung nicht von der Normalenumkehr doppelseitiger
+     * Materialien ab (gl_FrontFacing), die Rueckseiten schwarz oder grell machte. Kostet nur
+     * Indizes (6 × 2 Byte je Karte), keine Eckpunkte.
+     */
+    private fun bothSides(m: MeshBuilder, idx: IntArray) {
+        m.quad(idx[0], idx[1], idx[2], idx[3])
+        m.quad(idx[0], idx[3], idx[2], idx[1])
     }
 
     /** Ein Querachse senkrecht zu [a], zufaellig um [a] gedreht. */
@@ -189,6 +200,18 @@ internal object TreeModels {
         return lin(Argb.rgb(min(255, r.toInt()), min(255, g.toInt()), min(255, b.toInt())))
     }
 
+    /**
+     * Stamm- oder Aststueck mit Rinden-UV (u einmal rundum, v 0,5 je Meter fuer die kachelnde
+     * Rindentextur) und am Fuss dunklerer Farbe (Bodennaehe, Schatten des Bestands).
+     */
+    private fun MeshBuilder.bark(p0: Vec3, p1: Vec3, r0: Double, r1: Double, seg: Int, cap0: Boolean, cap1: Boolean, color: Int) {
+        val foot = if (p0.y < 1.0) scaleColor(color, 0.55) else color
+        addLoft(listOf(p0, p1), doubleArrayOf(r0, r1), seg, cap0, cap1, color, intArrayOf(foot, color), 1.0, 0.5)
+    }
+
+    private fun scaleColor(c: Int, f: Double): Int =
+        Argb.of(Argb.alpha(c), (Argb.red(c) * f).toInt(), (Argb.green(c) * f).toInt(), (Argb.blue(c) * f).toInt())
+
     private fun barkColor(s: Spec): Int =
         if (s.pale) lin(Argb.rgb(142, 138, 130)) else lin(Argb.rgb(78, 66, 54))
 
@@ -200,9 +223,9 @@ internal object TreeModels {
             Lod.FAR -> 3
         }
         if (lod == Lod.NEAR) {
-            m.addCylinder(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.7, 0.0), r * 1.9, r * 1.05, seg, false, false, color)
+            m.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.7, 0.0), r * 1.9, r * 1.05, seg, false, false, color)
         }
-        m.addCylinder(Vec3(0.0, -0.3, 0.0), Vec3(0.0, top, 0.0), r * 1.1, r * 0.55, seg, false, false, color)
+        m.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, top, 0.0), r * 1.1, r * 0.55, seg, false, false, color)
     }
 
     // -----------------------------------------------------------------------
@@ -243,7 +266,7 @@ internal object TreeModels {
         val ry: Double
         val cy: Double
         when (shape) {
-            Shape.BROAD -> { cb = 0.3 * h; val ch = h - cb; rx = ch * 0.48 * w; ry = ch * 0.46; cy = cb + ch * 0.52 }
+            Shape.BROAD -> { cb = (if (s.bare > 0.1) s.bare else 0.3) * h; val ch = h - cb; rx = ch * 0.48 * w; ry = ch * 0.46; cy = cb + ch * 0.52 }
             Shape.TALL -> { cb = 0.22 * h; val ch = h - cb; rx = ch * 0.21 * w; ry = ch * 0.5; cy = cb + ch * 0.5 }
             Shape.SMALL -> { cb = 0.32 * h; val ch = h - cb; rx = ch * 0.62 * w; ry = ch * 0.48; cy = cb + ch * 0.5 }
             Shape.BUSH -> { cb = 0.0; rx = h * 0.62 * w; ry = h * 0.5; cy = h * 0.5 }
@@ -297,7 +320,7 @@ internal object TreeModels {
                 if (shape == Shape.TALL && k == 0) continue
                 val from = Vec3(0.0, cb + (cy - cb) * rnd.range(0.15, 0.55), 0.0)
                 val to = Vec3(c.x * 0.85, c.y - ry * 0.05, c.z * 0.85)
-                trunk.addCylinder(from, to, trunkR * 0.5, trunkR * 0.18, 4, false, false, barkColor(s))
+                trunk.bark(from, to, trunkR * 0.5, trunkR * 0.18, 4, false, false, barkColor(s))
             }
         }
         val (nTwig, nInner, nMass) = counts(shape, lod).let { Triple(it[0], it[1], it[2]) }
@@ -446,6 +469,18 @@ internal object TreeModels {
             idx[k] = m.vertex(p.x, p.y, p.z, n.x, n.y, n.z, reg.u(st[k][0]), reg.v(st[k][1]), leafColor(leaf, shade, hue))
         }
         if (front) m.quad(idx[0], idx[1], idx[2], idx[3]) else m.quad(idx[0], idx[3], idx[2], idx[1])
+        // Unterseite der Schuerze: eigene Eckpunkte, dunkler, Normale nach aussen-unten (von unten
+        // gesehen sonst als helles "Segel").
+        val back = IntArray(4)
+        for (k in 0 until 4) {
+            val p = pts[k]
+            val r = crown.rel(p)
+            val n = Vec3(r.x, 0.0, r.z).normalized(Vec3(1.0, 0.0, 0.0)) * 0.7 + Vec3(0.0, -0.35, 0.0)
+            val nn = n.normalized()
+            val shade = tint * 0.42 * (if (st[k][1] > 0.5) 0.8 else 1.0)
+            back[k] = m.vertex(p.x, p.y, p.z, nn.x, nn.y, nn.z, reg.u(st[k][0]), reg.v(st[k][1]), leafColor(leaf, shade, hue - 0.2))
+        }
+        if (front) m.quad(back[0], back[3], back[2], back[1]) else m.quad(back[0], back[1], back[2], back[3])
     }
 
     /** Senkrechte Karte mit einem ganzen Baum ([reg] von unten nach oben), [inset] Rand im Motiv. */
@@ -462,9 +497,9 @@ internal object TreeModels {
         val lower = lin(Argb.rgb(84, 70, 60))
         val upper = lin(Argb.rgb(124, 86, 62))
         val seg = if (lod == Lod.NEAR) 6 else if (lod == Lod.MID) 4 else 3
-        if (lod == Lod.NEAR) trunk.addCylinder(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.6, 0.0), r * 1.8, r * 1.05, seg, false, false, lower)
-        trunk.addCylinder(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.5 * h, 0.0), r * 1.1, r * 0.85, seg, false, false, lower)
-        trunk.addCylinder(Vec3(0.0, 0.5 * h, 0.0), Vec3(0.0, 0.88 * h, 0.0), r * 0.85, r * 0.45, seg, false, false, upper)
+        if (lod == Lod.NEAR) trunk.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.6, 0.0), r * 1.8, r * 1.05, seg, false, false, lower)
+        trunk.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.5 * h, 0.0), r * 1.1, r * 0.85, seg, false, false, lower)
+        trunk.bark(Vec3(0.0, 0.5 * h, 0.0), Vec3(0.0, 0.88 * h, 0.0), r * 0.85, r * 0.45, seg, false, false, upper)
         val cy = 0.82 * h
         val rx = 0.2 * h * s.width
         val ry = 0.12 * h
@@ -480,7 +515,7 @@ internal object TreeModels {
         if (lod == Lod.NEAR) {
             for (k in 0 until nClump - 1) {
                 val c = clumps[k]
-                trunk.addCylinder(Vec3(0.0, c.y - 0.08 * h, 0.0), Vec3(c.x * 0.85, c.y - 0.01 * h, c.z * 0.85), r * 0.45, r * 0.2, 4, false, false, upper)
+                trunk.bark(Vec3(0.0, c.y - 0.08 * h, 0.0), Vec3(c.x * 0.85, c.y - 0.01 * h, c.z * 0.85), r * 0.45, r * 0.2, 4, false, false, upper)
             }
         }
         val n = when (lod) {
