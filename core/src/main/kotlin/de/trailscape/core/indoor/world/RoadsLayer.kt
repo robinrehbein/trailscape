@@ -151,7 +151,10 @@ internal class RoadsLayer : TileLayer {
             val tn = -r.re[k] * STEP_M / 2
             fun bulge(x: Double, y: Double) = ctx.meshHeightAt(x, y, meshCell) - ctx.ground.heightAt(x, y)
             val g0 = ctx.ground.heightAt(e, n)
-            val mesh = g0 + max(0.0, max(bulge(e, n), max(bulge(e + te, n + tn), bulge(e - te, n - tn))))
+            var mesh = g0 + max(0.0, max(bulge(e, n), max(bulge(e + te, n + tn), bulge(e - te, n - tn))))
+            // Bruecken: geradlinig zwischen den Enden, nie unter das Gelaende — sonst taucht die
+            // Strasse ins Tal unter der Bruecke (das DGM1 kennt keine Brueckendecks).
+            if (r.source.brunnel == "bridge") bridgeDeckAt(r.source.line, e, n)?.let { mesh = max(mesh, it) }
             val v = mesh + BASE_LIFT_M + r.spec.rank * RANK_LIFT_M + dirLift(r, k)
             if (!nearTrack) return v
             val hit = ctx.track.nearest(e, n, 30.0) ?: return v
@@ -163,6 +166,31 @@ internal class RoadsLayer : TileLayer {
             val level = hit.u - RouteLayer.crownOf(kind) * min(hit.distance, hw) + (if (over) OVER_TRACK_M else -UNDER_TRACK_M)
             val w = 1.0 - smoothstep(hw + 0.3, hw + 4.5, hit.distance)
             return v + (level - v) * w
+        }
+
+        /** Hoehe eines Brueckendecks: linear zwischen dem Boden an Anfang und Ende der Linie (hoechstens 400 m lang). */
+        private fun bridgeDeckAt(line: DoubleArray, e: Double, n: Double): Double? {
+            val k = line.size / 2
+            if (k < 2) return null
+            var total = 0.0
+            for (i in 1 until k) total += kotlin.math.hypot(line[2 * i] - line[2 * i - 2], line[2 * i + 1] - line[2 * i - 1])
+            if (total < 1.0 || total > 400.0) return null
+            var best = Double.MAX_VALUE
+            var bestS = 0.0
+            var acc = 0.0
+            for (i in 1 until k) {
+                val ax = line[2 * i - 2]; val ay = line[2 * i - 1]
+                val dx = line[2 * i] - ax; val dy = line[2 * i + 1] - ay
+                val l2 = dx * dx + dy * dy
+                val t = if (l2 > 0) (((e - ax) * dx + (n - ay) * dy) / l2).coerceIn(0.0, 1.0) else 0.0
+                val d = kotlin.math.hypot(ax + dx * t - e, ay + dy * t - n)
+                val sl = kotlin.math.sqrt(l2)
+                if (d < best) { best = d; bestS = acc + t * sl }
+                acc += sl
+            }
+            val h0 = ctx.ground.heightAt(line[0], line[1])
+            val h1 = ctx.ground.heightAt(line[2 * k - 2], line[2 * k - 1])
+            return h0 + (h1 - h0) * (bestS / total)
         }
 
         /**

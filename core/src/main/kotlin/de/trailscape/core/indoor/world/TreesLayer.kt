@@ -235,7 +235,7 @@ internal class TreesLayer : TileLayer {
             if (hit.distance < ctx.track.halfWidthAt(hit.distM) + LASER_TRACK_CLEARANCE_M) return@forEach
             val cls = ctx.land.classAt(t.e, t.n)
             if (cls == LandClass.WATER || net.clearance(t.e, t.n) < ROAD_CLEARANCE_M || nearBuilding(buildings, t.e, t.n)) return@forEach
-            val spec = laserTreeSpec(specFor(ctx, cls, t.e, t.n, floor(t.e).toInt(), floor(t.n).toInt(), 1.0), t, hit.distance - ctx.track.halfWidthAt(hit.distM), ctx.land.coniferShare(t.e, t.n)) ?: return@forEach
+            val spec = laserTreeSpec(specFor(ctx, cls, t.e, t.n, floor(t.e).toInt(), floor(t.n).toInt(), 1.0), t, hit.distance - ctx.track.halfWidthAt(hit.distM), ctx.land.coniferShare(t.e, t.n), ctx.ground.heightAt(t.e, t.n) - ctx.track.poseAt(hit.distM).u) ?: return@forEach
             cands += Candidate(t.e, t.n, hit.distance, spec)
         }
         if (laserTrees == null) for ((spacing, from, to) in listOf(Triple(DENSE_SPACING_M, 0.0, DENSE_M), Triple(OPEN_SPACING_M, DENSE_M, NEAR_M + 4.0))) {

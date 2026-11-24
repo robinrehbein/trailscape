@@ -26,7 +26,7 @@ import kotlin.math.min
  *    keine LoD2-Daten hat, baut [BuildingsLayer] aus OSM mit der LoD2-Hoehe.
  *  * **Gebaeude Stufe 1 und ohne LoD2:** [BuildingsLayer] aus OSM mit der
  *    gemessenen Hoehe — `measuredHeight` des LoD2-Gebaeudes unter dem
- *    OSM-Schwerpunkt, sonst das 90. Perzentil des nDOM im Grundriss (die
+ *    OSM-Schwerpunkt, sonst (nur ausserhalb geladener LoD2-Kacheln) der Median des nDOM im Grundriss (die
  *    Zwischenstufe „Hoehe aus Laserdaten ueber dem OSM-Grundriss").
  */
 internal class LaserWorldParts(
@@ -91,10 +91,16 @@ internal class LaserWorldParts(
     /** Hoehe aus dem nDOM (Zwischenstufe ohne LoD2), falls gemessen. */
     fun ndomHeight(b: MapBuilding): Double? = if (b.rings.isEmpty()) null else ndomHeights[footKey(b)]
 
-    /** 90. Perzentil des nDOM auf dem 1-m-Gitter im Grundriss; `null` bei zu wenig Daten oder unter 2,5 m. */
+    /**
+     * Median des nDOM auf dem 1-m-Gitter im Grundriss; `null` bei zu wenig Daten, unter 2,5 m oder ueber 30 m,
+     * bei schmalen Grundrissen (unter 3 m: Mauer, Laubengang — dort misst das nDOM die Baumkrone darueber) und
+     * wo LoD2 geladen ist (ein OSM-Gebaeude ohne LoD2-Gegenstueck ist dort meist keins mehr).
+     */
     private fun ndomHeightOf(b: MapBuilding): Double? {
         val r = b.rings.firstOrNull() ?: return null
         if (r.size < 6) return null
+        val c = FootprintShape.centroid(r)
+        if (laser.lod2Covered(c[0], c[1])) return null
         var minE = Double.MAX_VALUE; var minN = Double.MAX_VALUE; var maxE = -Double.MAX_VALUE; var maxN = -Double.MAX_VALUE
         for (i in r.indices step 2) { minE = min(minE, r[i]); maxE = max(maxE, r[i]); minN = min(minN, r[i + 1]); maxN = max(maxN, r[i + 1]) }
         val vals = ArrayList<Double>()
@@ -106,9 +112,10 @@ internal class LaserWorldParts(
             if (!v.isNaN()) vals += v
         }
         if (vals.size < 8 || vals.size < inside * 0.6) return null
+        if (min(maxE - minE, maxN - minN) < 3.0) return null
         vals.sort()
-        val h = vals[(vals.size * 0.9).toInt().coerceAtMost(vals.size - 1)]
-        return if (h >= 2.5) h else null
+        val h = vals[vals.size / 2]
+        return if (h in 2.5..30.0) h else null
     }
 
     private fun treesOf(spec: TileSpec): List<LaserTree>? {
@@ -185,12 +192,22 @@ internal class LaserVegetation(
  * Die Kronenradien der Modelle sind etwa `k · Hoehe · width` (k je Art aus
  * [TreeModels]); daraus der Breitenfaktor.
  *
- * [roomM] ist der Abstand des Stamms vom Fahrbahnrand: Kronen, die tiefer als
- * 4,5 m ansetzen (Fichte, Pappel, kleiner Baum), werden so schmal, dass sie
- * nicht ueber die Fahrbahn ragen — sonst stuende die Kamera in der Krone.
- * `null`, wenn der Baum dafuer zu schmal wuerde oder unter 3 m ist.
+ * **Lichtraum:** [roomM] ist der Abstand des Stamms vom Fahrbahnrand,
+ * [baseAboveRoadM] die Hoehe seines Fusspunkts ueber der Fahrbahn (im
+ * Einschnitt positiv, am Damm negativ). Setzt die Krone tiefer als
+ * [CLEARANCE_M] ueber der Fahrbahn an (Fichte fast am Boden, Laubbaum bei
+ * 0,3 · Hoehe; 6 m: Kamera 2,5 m hoch, darueber wirkte ein tiefes Kronendach
+ * im Einschnitt wie ein Tunnel), darf sie nicht in den Streifen Fahrbahn + [CLEAR_STRIP_M]
+ * ragen: Die Breite wird darauf begrenzt; wuerde der Baum dabei schmaler als
+ * halb so breit wie sein Modell, entfaellt er. `null` auch unter 3 m Hoehe.
  */
-internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = Double.MAX_VALUE, conifer: Double = 0.3): TreeModels.Spec? {
+internal fun laserTreeSpec(
+    base: TreeModels.Spec,
+    t: LaserTree,
+    roomM: Double = Double.MAX_VALUE,
+    conifer: Double = 0.3,
+    baseAboveRoadM: Double = 0.0,
+): TreeModels.Spec? {
     val h = t.heightM.coerceAtMost(42.0)
     if (h < LaserData.TREE_MIN_HEIGHT_M) return null
     val slim = t.crownRadiusM / h < 0.13
@@ -201,20 +218,27 @@ internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = 
         else -> TreeModels.Species.BROAD
     }
     if (h < 7.0 && species != TreeModels.Species.CONIFER) species = TreeModels.Species.SMALL
-    val k = when (species) {
-        TreeModels.Species.BROAD -> 0.32
-        TreeModels.Species.TALL -> 0.165
-        TreeModels.Species.CONIFER -> 0.22
-        TreeModels.Species.SMALL -> 0.37
+    // Kronenradius ≈ k · Hoehe · Breite, Kronenansatz ≈ c · Hoehe (aus TreeModels).
+    val (k, c) = when (species) {
+        TreeModels.Species.BROAD -> 0.32 to 0.30
+        TreeModels.Species.TALL -> 0.165 to 0.22
+        TreeModels.Species.CONIFER -> 0.22 to 0.06
+        TreeModels.Species.SMALL -> 0.37 to 0.32
     }
     var width = (t.crownRadiusM / (k * h)).coerceIn(0.6, 1.5)
-    val lowCrown = species != TreeModels.Species.BROAD || 0.3 * h < 4.5
-    if (lowCrown && k * h * width > roomM + 0.3) {
-        width = (roomM + 0.3) / (k * h)
+    val free = roomM - CLEAR_STRIP_M
+    if (c * h + baseAboveRoadM < CLEARANCE_M && k * h * width > free) {
+        width = free / (k * h)
         if (width < 0.5) return null
     }
     return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale)
 }
+
+/** Lichtraum ueber der Fahrbahn: darunter ragt keine Krone in den Streifen der Strecke. */
+internal const val CLEARANCE_M = 6.0
+
+/** Zur Fahrbahn zaehlt fuer den Lichtraum noch dieser Streifen neben der Kante. */
+internal const val CLEAR_STRIP_M = 0.5
 
 /** Raster der LoD2-Grundrisse (64-m-Zellen) fuer schnelle Rechteckabfragen. */
 private class FootprintIndex(list: List<LaserBuilding>) {
@@ -345,7 +369,9 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
             val key = "${Math.round(ce / cnt * 5)}|${Math.round(cn / cnt * 5)}|${Math.round(cu / cnt * 5)}|${Math.round(area * 2)}"
             val id = "${b.id}#$k"
             val prev = seen[key]
-            if (prev != null && prev.second.dot(nrm) < 0) {
+            // Nur zwischen verschiedenen Gebaeuden: Bei schmalen Bauten (Mauer mit Dach, Laubengang) lagen
+            // die beiden Aussenwaende desselben Gebaeudes sonst im selben Schluessel, und das Dach schwebte.
+            if (prev != null && prev.second.dot(nrm) < 0 && !prev.first.startsWith("${b.id}#")) {
                 hidden += prev.first
                 hidden += id
             } else {
@@ -367,10 +393,11 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
             val raw = newell(rings[0])
             if (raw.length() < 0.05) continue
             val n = raw.normalized()
-            if (sf.kind == Lod2SurfaceKind.WALL || abs(n.z) < 0.17) {
-                emitWall(wall, rings, n, b, wallTint)
-            } else {
-                emitRoof(roof, rings, n, roofTint)
+            when {
+                sf.kind == Lod2SurfaceKind.WALL -> emitWall(wall, rings, n, b, wallTint)
+                // Dachflaechen bleiben Dach, auch steile (Mansarde) — nach unten zeigende (Untersicht) schlicht.
+                n.z < 0.05 -> emitBanded(roof, rings, n, Vec3(-n.y, n.x, 0.0).normalized(Vec3(1.0, 0.0, 0.0)), n.cross(Vec3(-n.y, n.x, 0.0).normalized(Vec3(1.0, 0.0, 0.0))).normalized(), roofTint, Band.BITUMEN, b.groundU) { p -> p.x + p.y }
+                else -> emitRoof(roof, rings, n, roofTint)
             }
         }
         if (wall.triangleCount + roof.triangleCount == 0) return null
@@ -478,7 +505,11 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         val r = Noise.hash01(b.id.hashCode(), 0x57e1, 3)
         val area = footprintArea(b)
         if (isSmall(b)) return if (r < 0.3) FacadeStyle.WOOD else FacadeStyle.PLASTER
-        if (area > 600) return if (r < 0.5) FacadeStyle.SHEET else FacadeStyle.PLASTER
+        // Wellblech nur fuer grosse Bauten in Gewerbe- und Landwirtschaftsflaechen (Halle, Stall);
+        // im Ort sind grosse Grundrisse Kirche, Kloster, Schule.
+        val work = ctx.land.classAt(b.ce, b.cn).let { it == LandClass.INDUSTRIAL || it == LandClass.FARMLAND }
+        if (area > 600 && work) return if (r < 0.6) FacadeStyle.SHEET else FacadeStyle.BRICK
+        if (area > 600) return FacadeStyle.PLASTER
         return when {
             r < 0.55 -> FacadeStyle.PLASTER
             r < 0.75 -> FacadeStyle.SLATE
@@ -562,9 +593,13 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
     private fun wallColor(b: LaserBuilding): Int {
         val r = Noise.hash01(b.id.hashCode(), 0x1a5e, 7)
         val q = Noise.hash01(b.id.hashCode(), 0x1a5f, 9)
-        // Die Baender tragen ihre Farbe selbst; die Vertexfarbe toent nur leicht (Weiss bis Sand).
-        val c = 0.86 + 0.14 * r
-        return BuildingDesign.lin(c, c * (0.96 + 0.04 * q), c * (0.88 + 0.1 * q))
+        // Die Baender tragen ihre Farbe selbst; die Vertexfarbe toent gebrochen (Altweiss, Sand, Hellgrau, selten Ocker).
+        val c = 0.68 + 0.2 * r
+        return when {
+            q < 0.2 -> BuildingDesign.lin(c * 0.9, c * 0.9, c * 0.92)
+            q < 0.3 -> BuildingDesign.lin(c, c * 0.86, c * 0.62)
+            else -> BuildingDesign.lin(c, c * (0.95 + 0.04 * q), c * (0.84 + 0.1 * q))
+        }
     }
 
     private fun roofColor(b: LaserBuilding): Int {
@@ -579,9 +614,10 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         } else {
             doubleArrayOf(0.20, 0.07, 0.05)
         }
-        // Luftbildpixel ueber Gauben, Solarflaechen und Oberlichtern sind oft zu hell: Dachhaut hoechstens 0,22 linear hell.
+        // Luftbildpixel ueber Gauben, Solarflaechen und Oberlichtern sind oft zu hell, und die Sonne hellt
+        // die Dachhaut im Bild noch auf: hoechstens 0,12 linear hell (Schiefer/Betonstein dunkelgrau).
         val lum = 0.2126 * target[0] + 0.7152 * target[1] + 0.0722 * target[2]
-        val k = if (lum > 0.22) 0.22 / lum else 1.0
+        val k = if (lum > 0.12) 0.12 / lum else 1.0
         return BuildingDesign.lin(target[0] * k / mean[0], target[1] * k / mean[1], target[2] * k / mean[2])
     }
 

@@ -173,8 +173,14 @@ class LaserWorldTest {
         assertEquals(TreeModels.Species.CONIFER, laserTreeSpec(base, LaserTree(0.0, 0.0, 25.0, 2.5), conifer = 0.8)!!.species)
         assertEquals(TreeModels.Species.TALL, laserTreeSpec(base, LaserTree(0.0, 0.0, 25.0, 2.5), conifer = 0.1)!!.species)
         // Fichte direkt am Weg: Krone nicht ueber die Fahrbahn
-        val c = laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 2.0), roomM = 2.5, conifer = 0.9)!!
-        assertTrue(0.22 * c.heightM * c.width <= 2.8 + 1e-9)
+        val c = laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 2.0), roomM = 3.0, conifer = 0.9)!!
+        assertTrue(0.22 * c.heightM * c.width <= 3.0 - CLEAR_STRIP_M + 1e-9)
+        // Laubbaum mit Kronenansatz ueber dem Lichtraum darf ueberhaengen — am Damm (Fuss 3 m tiefer) nicht.
+        val over = laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 6.4), roomM = 1.5)!!
+        assertEquals(1.0, over.width, 0.05)
+        assertNull(laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 6.4), roomM = 1.5, baseAboveRoadM = -3.0))
+        // Im Einschnitt (Fuss 5,5 m hoeher) darf auch die Fichte ueber den Weg ragen.
+        assertNotNull(laserTreeSpec(base, LaserTree(0.0, 0.0, 20.0, 2.0), roomM = 1.0, conifer = 0.9, baseAboveRoadM = 5.5))
         assertNull(laserTreeSpec(base, LaserTree(0.0, 0.0, 30.0, 3.0), roomM = 0.2, conifer = 0.9))
         assertNull(laserTreeSpec(base, LaserTree(0.0, 0.0, 2.0, 1.0)))
     }
