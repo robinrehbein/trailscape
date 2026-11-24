@@ -135,10 +135,12 @@ internal object TreeModels {
         val fs = doubleArrayOf(0.0, 0.0, 1.0, 1.0)
         val gs = doubleArrayOf(-1.0, 1.0, 1.0, -1.0)
         val ps = Array(4) { base + along * (len * fs[it]) + across * (wid * 0.5 * gs[it]) }
+        // Richtung vom Kronenmittelpunkt, senkrecht gestaucht: Die Kamera ist fast immer unter den
+        // Kronen; Karten oben zeigen sonst steil nach oben, man saehe ihre Rueckseite mit
+        // umgedrehter (nach unten zeigender) Normale schwarz gegen den Himmel.
         val radials = Array(4) {
             val r = crown.rel(ps[it])
-            val rl = r.length()
-            if (rl < 1e-4) Vec3(0.0, 1.0, 0.0) else Vec3(r.x / rl, r.y / rl, r.z / rl)
+            Vec3(r.x, r.y * 0.45, r.z).normalized(Vec3(0.0, 1.0, 0.0))
         }
         // Vorderseite dorthin, wohin die gebogenen Normalen im Mittel zeigen: Von hinten gesehen
         // dreht Filament die Normale um — sie zeigt dann vom Licht der Kronenoberseite weg (dunkel)
@@ -152,7 +154,7 @@ internal object TreeModels {
             val g = gs[k]
             val p = ps[k]
             val rl = crown.rel(p).length()
-            val n = (pn * (1 - bend) + radials[k] * bend + Vec3(0.0, 0.18, 0.0)).normalized()
+            val n = (pn * (1 - bend) + radials[k] * bend + Vec3(0.0, 0.1, 0.0)).normalized()
             // Verschattung: innen und unten dunkler, oben und aussen heller.
             val depth = rl.coerceIn(0.0, 1.15)
             val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
@@ -188,7 +190,7 @@ internal object TreeModels {
     }
 
     private fun barkColor(s: Spec): Int =
-        if (s.pale) lin(Argb.rgb(170, 166, 156)) else lin(Argb.rgb(78, 66, 54))
+        if (s.pale) lin(Argb.rgb(142, 138, 130)) else lin(Argb.rgb(78, 66, 54))
 
     /** Stamm bis [top] mit Radius [r], in der feinsten Stufe mit Wurzelanlauf. */
     private fun stem(m: MeshBuilder, lod: Lod, r: Double, top: Double, color: Int) {
@@ -390,7 +392,7 @@ internal object TreeModels {
             return
         }
         val (tiers, perTier) = when (lod) {
-            Lod.NEAR -> 10 to 7
+            Lod.NEAR -> 12 to 6
             else -> 6 to 5
         }
         stem(trunk, lod, 0.015 * h, 0.9 * h, bark)
@@ -458,7 +460,7 @@ internal object TreeModels {
         val leaf = LEAF.getValue(Species.PINE)
         val r = 0.017 * h
         val lower = lin(Argb.rgb(84, 70, 60))
-        val upper = lin(Argb.rgb(150, 92, 58))
+        val upper = lin(Argb.rgb(124, 86, 62))
         val seg = if (lod == Lod.NEAR) 6 else if (lod == Lod.MID) 4 else 3
         if (lod == Lod.NEAR) trunk.addCylinder(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.6, 0.0), r * 1.8, r * 1.05, seg, false, false, lower)
         trunk.addCylinder(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.5 * h, 0.0), r * 1.1, r * 0.85, seg, false, false, lower)

@@ -499,19 +499,30 @@ internal class TreesLayer : TileLayer {
                     if (hit.distance < tl.halfWidthAt(hit.distM) + 0.4) continue
                     if (net.clearance(e, n) < 0.7) continue
                     if (nearBuilding(buildings, e, n, 1.0)) continue
-                    if (used + TreeModels.TUFT_TRIANGLES > budget) return used
-                    val g = ctx.ground.heightAt(e, n)
                     val toward = Vec3(pose.e - e, 0.0, -(pose.n - n)).normalized(Vec3(0.0, 0.0, -1.0))
                     val fern = forest && h3 < 0.5 || (!forest && h3 < 0.06)
-                    val tint = 0.8 + 0.3 * Noise.hash01(k, side, SEED_UG + 5)
+                    // unter Kronen dunkler (Bewuchs empfaengt keine Schatten)
+                    val shadow = 1.0 - 0.45 * ctx.land.canopyAt(e, n).coerceIn(0.0, 1.0)
+                    val tint = (0.8 + 0.3 * Noise.hash01(k, side, SEED_UG + 5)) * shadow
                     val hue = (Noise.value(e / 23.0, n / 23.0, SEED_UG + 6) - 0.45) * 2.2
-                    if (fern) {
-                        TreeModels.fernTuft(m, ctx.x(e), ctx.y(g), ctx.z(n), 0.7 + 0.6 * h3, h4 * 6.283, toward, fernColor, tint, hue * 0.4)
-                    } else {
-                        val tall = 0.3 + 0.35 * h3 + (if (off > hw + 2.0) 0.15 else 0.0)
-                        TreeModels.grassTuft(m, ctx.x(e), ctx.y(g), ctx.z(n), tall * 1.8, tall, h4 * 6.283, toward, grassColor, tint, hue)
+                    // Gruppen aus 1–3 Bueschen statt einzelner Stempel
+                    val group = 1 + (h3 * 2.99).toInt()
+                    for (q in 0 until group) {
+                        if (used + TreeModels.TUFT_TRIANGLES > budget) return used
+                        val qa = Noise.hash01(k * 3 + q, side, SEED_UG + 7) * 6.283
+                        val qr = if (q == 0) 0.0 else 0.35 + 0.4 * Noise.hash01(k * 3 + q, side, SEED_UG + 8)
+                        val qe = e + kotlin.math.cos(qa) * qr
+                        val qn = n + kotlin.math.sin(qa) * qr
+                        val g = ctx.ground.heightAt(qe, qn)
+                        val sz = 0.75 + 0.35 * Noise.hash01(k * 3 + q, side, SEED_UG + 9)
+                        if (fern) {
+                            TreeModels.fernTuft(m, ctx.x(qe), ctx.y(g), ctx.z(qn), (0.6 + 0.5 * h3) * sz, h4 * 6.283 + q, toward, fernColor, tint, hue * 0.4)
+                        } else {
+                            val tall = (0.26 + 0.3 * h3 + (if (off > hw + 2.0) 0.12 else 0.0)) * sz
+                            TreeModels.grassTuft(m, ctx.x(qe), ctx.y(g), ctx.z(qn), tall * 1.8, tall, h4 * 6.283 + q, toward, grassColor, tint, hue)
+                        }
+                        used += TreeModels.TUFT_TRIANGLES
                     }
-                    used += TreeModels.TUFT_TRIANGLES
                 }
                 k++
             }
@@ -618,7 +629,7 @@ internal class TreesLayer : TileLayer {
         const val MAT_CANOPY = "x_mat_tree_canopy"
 
         /** Abstand der Plaetze fuer Bodenbewuchs entlang der Strecke (je Seite). */
-        const val UG_STEP_M = 1.4
+        const val UG_STEP_M = 2.2
 
         /** Hoechstens so viele Dreiecke Einzelbaeume je Kachel (Stufe 0). */
         const val SINGLE_TREE_MAX = 13_000
