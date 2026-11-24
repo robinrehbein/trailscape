@@ -1,0 +1,156 @@
+{
+    "source": "BROUTER_WAY_TAGS",
+    "lengthM": 33277.0,
+    "sections": [
+        {
+            "fromM": 0.0,
+            "toM": 39.9,
+            "kind": "COBBLESTONE",
+            "highway": "residential"
+        },
+        {
+            "fromM": 39.9,
+            "toM": 168.8,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 168.8,
+            "toM": 637.1,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 637.1,
+            "toM": 2937.0,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 2937.0,
+            "toM": 3748.9,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 3748.9,
+            "toM": 6562.0,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 6562.0,
+            "toM": 10688.4,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 10688.4,
+            "toM": 10888.1,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 10888.1,
+            "toM": 11271.6,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 11271.6,
+            "toM": 15236.2,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 15236.2,
+            "toM": 22297.5,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 22297.5,
+            "toM": 22304.5,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 22304.5,
+            "toM": 22376.4,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 22376.4,
+            "toM": 23518.9,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 23518.9,
+            "toM": 23735.6,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 23735.6,
+            "toM": 23868.4,
+            "kind": "ASPHALT",
+            "highway": "living_street"
+        },
+        {
+            "fromM": 23868.4,
+            "toM": 23894.3,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 23894.3,
+            "toM": 23991.2,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 23991.2,
+            "toM": 24744.2,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 24744.2,
+            "toM": 27886.9,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 27886.9,
+            "toM": 29446.8,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 29446.8,
+            "toM": 30013.0,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 30013.0,
+            "toM": 33183.7,
+            "kind": "ASPHALT",
+            "highway": "tertiary"
+        },
+        {
+            "fromM": 33183.7,
+            "toM": 33263.5,
+            "kind": "ASPHALT",
+            "highway": "residential"
+        },
+        {
+            "fromM": 33263.5,
+            "toM": 33276.5,
+            "kind": "COBBLESTONE",
+            "highway": "residential"
+        }
+    ]
+}
