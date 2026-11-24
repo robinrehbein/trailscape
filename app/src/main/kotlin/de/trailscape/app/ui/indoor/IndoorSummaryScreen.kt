@@ -97,6 +97,9 @@ fun IndoorSummaryScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TagPill(text = stringResource(R.string.indoor_app_tag_indoor))
             TagPill(text = modeLabel(ui.mode))
+            ui.startKm?.let { km ->
+                TagPill(text = stringResource(R.string.indoor_app_summary_start_tag, LocalAppFormats.current.decimal(km, 1)))
+            }
         }
 
         when {

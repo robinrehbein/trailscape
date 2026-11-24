@@ -264,7 +264,8 @@ Demo-Reglern, 109 Koppeln mit Demo-Trainer, 112 Nebenanzeigen ausgeblendet,
 113 Schrift 130 %, 114 harte Pause, 115 Querformat ERG mit Schrift 130 %,
 118 Startpunkt mit „Weiter bei km 7,4“ vor dem Losfahren, 119 Startpunkt in der
 Pause ohne Welt, 120 und 122 dasselbe quer (vor dem Losfahren bzw. in der
-Pause), 121 englisch. Nur in
+Pause), 121 englisch, 123 Startpunkt ohne gemerkte Stelle (km 0, echter
+Trainer), 124 Auswertung „ab km 7,4“. Nur in
 `app/build/outputs/roborazzi/` (nicht unter `docs/`): 110 und 111 Koppeln mit
 dem echten Abschnitt von indoor-ble (ohne Berechtigung bzw. gekoppelt mit
 laufender Suche), als hohes Bild der ganzen Seite.
@@ -347,14 +348,25 @@ immer von vorn zu starten.
   Profil ein Regler (`setProgress`). Hochformat: Karte über die volle Breite,
   darunter der Knopf; Querformat: flacheres Profil, Auswahl und Knopf in einer
   Reihe. Die mittige Phasenkarte entfällt, solange die Startpunkt-Karte steht.
+- **Vor jeder Fahrt** steht die Karte, bis **„Losfahren“** getippt wird —
+  auch ohne gemerkte Stelle (Vorauswahl dann km 0) und auch mit dem
+  Demo-Trainer. So lässt sich jederzeit „erst in der Mitte“ starten.
+- **Echter Trainer:** Der erste Tritt gilt ebenfalls als „Losfahren“, solange
+  der Startpunkt nicht angefasst wurde (Hinweis „… oder tritt einfach los“).
+  Wer einfach lostritt, will an der Vorauswahl starten — eine normale Fahrt
+  braucht so keinen zusätzlichen Tipp. Sobald jemand zieht, tippt, −/+ oder
+  eine Auswahl drückt, startet nur noch „Losfahren“; sonst rollte man beim
+  Wählen schon los. Der Demo-Trainer „tritt“ sofort und wartet deshalb immer
+  auf den Knopf.
 - **Fortsetzen:** Wird eine Fahrt mittendrin beendet, merkt sich die App die
   Stelle je Strecke. Beim nächsten Start derselben Strecke steht der Fahrer
-  schon dort („Weiter bei km x“ ist vorausgewählt), daneben „Von vorn“; die
-  Fahrt wartet auf **„Losfahren“** — vorher bewegt Treten den Fahrer nicht
-  (sonst wäre der Demo-Trainer schon losgefahren, bevor man die Wahl sieht).
-- Ohne gemerkte Stelle startet die Fahrt wie bisher am Anfang ohne
-  zusätzlichen Tipp; die Karte steht bis zum ersten Tritt (echter Trainer)
-  und in jeder Pause. In der Pause trägt sie „Weiter“.
+  schon dort („Weiter bei km x“ ist vorausgewählt), daneben „Von vorn“.
+- In der Pause trägt die Karte „Weiter“.
+- **Auswertung und Tour:** Begann die Fahrt nicht am Anfang (ab 50 m), zeigt
+  die Auswertung ein Kennzeichen „ab km 7,4“, und die gespeicherte Tour heißt
+  „Indoor · <Strecke> (ab km 7,4)“ — so steht es in Liste und Detail, ohne
+  neues Feld im Tour-JSON. Gemeint ist die Stelle des ersten Tritts; ein
+  späterer Versatz in der Pause ändert sie nicht.
 - Nach dem Beenden wird die Stelle neu gemerkt; nach dem Ziel gelöscht.
 
 **Umsetzung**
@@ -369,7 +381,9 @@ immer von vorn zu starten.
   `IndoorResumePoint` die gemerkte Stelle samt JSON.
 - Die Laufzeit versetzt mit `moveStart(d)` im nächsten Takt (wird beim Tausch
   der Sitzung gegen die echten Trainer-Fähigkeiten nachgespielt) und hält mit
-  `holdStart` die Messwerte zurück, bis `releaseStart()` kommt. Versetzt wird
+  `holdStart` (jetzt immer) die Messwerte zurück, bis `releaseStart()` kommt
+  oder — mit echtem Trainer (`releaseOnFirstStroke`) und unberührtem
+  Startpunkt — der erste Tritt. Versetzt wird
   vor dem ersten Schritt: Darstellung (erster `setState`), Kacheln um die
   Stelle, Kamera, die erste SIM-Vorgabe an den Trainer und „x von y km“ gelten
   ab dem ersten Bild der Startstelle (Test
@@ -433,7 +447,11 @@ immer von vorn zu starten.
   zurück, erster Zustand der Darstellung an der Startstelle, gespeicherte
   Tour zählt nur das Gefahrene; über die Ziellinie gefahren löscht;
   kaputter Speicherinhalt.
-- Bilder 118–122 (siehe „Bilder“).
+- `IndoorStartHoldTest` (Laufzeit): Demo wartet trotz Treten auf
+  „Losfahren“; echter Trainer startet mit dem ersten Tritt, nach dem
+  Verschieben nur mit „Losfahren“. Im Ablauftest: „ab km 1,2“ in Auswertung
+  und Tourname.
+- Bilder 118–124 (siehe „Bilder“).
 
 **Auf dem Gerät zu prüfen**
 
@@ -445,6 +463,8 @@ immer von vorn zu starten.
 - [ ] Echter Trainer: der Widerstand passt vom ersten Tritt an zur Steigung
       der Startstelle
 - [ ] Fahrt mittendrin beenden, dieselbe Strecke neu wählen: „Weiter bei km x“
-      steht, Treten vor „Losfahren“ bewegt nichts
+      steht; mit Demo-Trainer bewegt sich vor „Losfahren“ nichts
+- [ ] Echter Trainer: ohne Anfassen startet der erste Tritt an der
+      Vorauswahl; nach dem Verschieben bewegt Treten nichts bis „Losfahren“
 - [ ] Gespeicherte Tour einer fortgesetzten Fahrt: Distanz und Höhenmeter nur
       des gefahrenen Teils in Liste, Detail und Wochenziel

@@ -103,6 +103,10 @@ import kotlinx.coroutines.launch
  *   dahin bekommt die Sitzung keine Messwerte und bleibt in READY, auch wenn
  *   schon jemand tritt — so laesst sich der Startpunkt in Ruhe waehlen
  *   (docs/indoor/app.md, „Startpunkt und Fortsetzen").
+ * @param releaseOnFirstStroke mit echtem Trainer: Der erste Tritt gilt als
+ *   „Losfahren", solange niemand den Startpunkt angefasst hat ([moveStart]).
+ *   Danach startet nur noch [releaseStart] — sonst rollte man waehrend des
+ *   Waehlens schon los.
  */
 class IndoorRideRuntime(
     session: IndoorSession,
@@ -117,6 +121,7 @@ class IndoorRideRuntime(
     private val noticeDurationMs: Long = NOTICE_DURATION_MS,
     private val rebuildSession: ((TrainerCapabilities) -> IndoorSession?)? = null,
     holdStart: Boolean = false,
+    private val releaseOnFirstStroke: Boolean = false,
 ) {
     /** Die aktuelle Sitzung; nur vom Takt-Thread (bzw. nach dem Anhalten der Schleife). */
     private var session: IndoorSession = session
@@ -162,6 +167,9 @@ class IndoorRideRuntime(
     /** Siehe `holdStart`; nur [releaseStart] hebt es auf. */
     @Volatile private var startHeld = holdStart
 
+    /** Der Startpunkt wurde angefasst — dann zaehlt der erste Tritt nicht mehr als „Losfahren". */
+    @Volatile private var startPicked = false
+
     @Volatile private var finished = false
     private var record: IndoorRideRecord? = null
     private var pausedByBackground = false
@@ -181,6 +189,7 @@ class IndoorRideRuntime(
             problem = null,
             finished = false,
             startHeld = holdStart,
+            pedalStarts = holdStart && releaseOnFirstStroke,
         ),
     )
 
@@ -324,7 +333,10 @@ class IndoorRideRuntime(
      * dem ersten Tritt und in der Pause, sonst ohne Wirkung. Wird beim Tausch
      * der Sitzung (echte Faehigkeiten) nachgespielt.
      */
-    fun moveStart(routeDistM: Double) = enqueue(replayBeforeStart = true) { it.moveStartTo(routeDistM) }
+    fun moveStart(routeDistM: Double) {
+        startPicked = true
+        enqueue(replayBeforeStart = true) { it.moveStartTo(routeDistM) }
+    }
 
     /** „Losfahren": ab jetzt zaehlen die Messwerte des Trainers. */
     fun releaseStart() {
@@ -403,6 +415,9 @@ class IndoorRideRuntime(
             return
         }
         lastStepNow = now
+        if (startHeld && releaseOnFirstStroke && !startPicked && (lastTelemetry?.powerW ?: 0) > 0) {
+            startHeld = false
+        }
         val hr = heartRate?.let { source -> guard(IndoorPart.BLE) { source.currentBpm() } }
         val input = SessionInput(
             // Solange „Losfahren" aussteht, sieht die Sitzung keine Leistung und bleibt in READY.
@@ -419,7 +434,14 @@ class IndoorRideRuntime(
             }
             pushToRenderer(now, step.state)
             val movable = (session as? MovableIndoorSession)?.let { s -> guard(IndoorPart.CORE) { s.canMove } } ?: false
-            _state.update { it.copy(session = step.state, canMoveStart = movable, startHeld = startHeld) }
+            _state.update {
+                it.copy(
+                    session = step.state,
+                    canMoveStart = movable,
+                    startHeld = startHeld,
+                    pedalStarts = startHeld && releaseOnFirstStroke && !startPicked,
+                )
+            }
         }
         expireNotice(now)
     }
@@ -605,6 +627,7 @@ class IndoorRideRuntime(
  * @property problem der letzte abgefangene Fehler eines Teils (Diagnose).
  * @property canMoveStart der Fahrer laesst sich gerade versetzen (vor dem ersten Tritt, in der Pause).
  * @property startHeld die Fahrt wartet auf „Losfahren".
+ * @property pedalStarts der erste Tritt gilt (noch) als „Losfahren".
  */
 data class IndoorRuntimeState(
     val session: IndoorSessionState?,
@@ -618,6 +641,7 @@ data class IndoorRuntimeState(
     val finished: Boolean,
     val canMoveStart: Boolean = false,
     val startHeld: Boolean = false,
+    val pedalStarts: Boolean = false,
 )
 
 /**
