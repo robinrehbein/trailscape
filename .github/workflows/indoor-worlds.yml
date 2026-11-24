@@ -9,7 +9,7 @@ name: Indoor-Welten (Katalog)
 # erst, wenn jemand in der App „Laden" tippt; vorher fragt sie `catalog.json`
 # aus demselben Release ab (Version, Groesse, SHA-256).
 #
-# Seit 25.11.2026 in drei Jobs aufgeteilt (20 Strecken, rund 330 km; ein
+# Seit 24.11.2026 in drei Jobs aufgeteilt (20 Strecken, rund 330 km; ein
 # einzelner Runner kaeme mit Welten, Paketen und Laser-Cache an seine
 # Plattengrenze, und die Laufzeit naeherte sich der Frist):
 #  1. `plan`: verteilt die Strecken (alle oder `only`) reihum auf hoechstens
@@ -109,7 +109,7 @@ jobs:
     env:
       ONLY: ${{ matrix.only }}
     steps:
-      # Gemessen 25.11.2026: eine Laser-Strecke BW belegt je km rund 13 MB Welt,
+      # Gemessen 24.11.2026: eine Laser-Strecke BW belegt je km rund 13 MB Welt,
       # 9 MB Paket und 17 MB Laser-Cache (ganze 2-km-Archive). Die vorinstallierten
       # SDKs, die der Bau nicht braucht, machen gut 20 GB frei.
       - name: Platz schaffen
