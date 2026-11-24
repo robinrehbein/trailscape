@@ -198,6 +198,7 @@ internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = 
         slim && conifer >= 0.5 -> TreeModels.Species.CONIFER
         slim -> TreeModels.Species.TALL
         base.species == TreeModels.Species.CONIFER && conifer >= 0.5 -> TreeModels.Species.CONIFER
+        base.species == TreeModels.Species.PINE && conifer >= 0.5 -> TreeModels.Species.PINE
         else -> TreeModels.Species.BROAD
     }
     if (h < 7.0 && species != TreeModels.Species.CONIFER) species = TreeModels.Species.SMALL
@@ -206,6 +207,8 @@ internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = 
         TreeModels.Species.TALL -> 0.165
         TreeModels.Species.CONIFER -> 0.22
         TreeModels.Species.SMALL -> 0.37
+        TreeModels.Species.PINE -> 0.2
+        TreeModels.Species.BUSH -> 0.62
     }
     var width = (t.crownRadiusM / (k * h)).coerceIn(0.6, 1.5)
     val lowCrown = species != TreeModels.Species.BROAD || 0.3 * h < 4.5
@@ -213,7 +216,7 @@ internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = 
         width = (roomM + 0.3) / (k * h)
         if (width < 0.5) return null
     }
-    return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale)
+    return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale, base.bare, base.hue)
 }
 
 /** Raster der LoD2-Grundrisse (64-m-Zellen) fuer schnelle Rechteckabfragen. */
