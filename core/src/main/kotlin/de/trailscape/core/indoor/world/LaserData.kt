@@ -363,6 +363,11 @@ class LaserOptions(
      * ueber dem OSM-Grundriss.
      */
     val lod2RadiusM: Double = 120.0,
+    /**
+     * LoD2 schon auf den Korridor zugeschnitten ([cutLod2Corridor], Format in
+     * `LaserLod2Corridor.kt`): dann werden keine LoD2-Kacheln geladen.
+     */
+    val lod2Corridor: ByteArray? = null,
     val threads: Int = 4,
 )
 
@@ -451,11 +456,19 @@ internal fun loadLaserData(
             b.blended[k] = if (wgt <= 0) outer.toFloat() else (outer + (v - outer) * wgt).toFloat()
         }
     }
-    val lod2Keys = if (options.buildings && source.lod2UrlTemplate != null) lod2Tiles(source, origin, lineE, lineN, options.lod2RadiusM) else emptySet()
-    val lod2 = if (lod2Keys.isNotEmpty()) {
-        loadLod2(source, origin, options.fetcher, blocks.values, lod2Keys, options.threads, isCancelled)
-    } else {
-        Lod2Result(emptyList(), 0, 0L)
+    val corridor = options.lod2Corridor?.takeIf { options.buildings }
+    val lod2Keys = if (corridor == null && options.buildings && source.lod2UrlTemplate != null) lod2Tiles(source, origin, lineE, lineN, options.lod2RadiusM) else emptySet()
+    val lod2 = when {
+        corridor != null -> {
+            val (zone, list) = decodeLod2Corridor(corridor)
+            val keys = blocks.keys
+            val enu = list.mapNotNull { it.toEnu(origin, zone) }.filter { b ->
+                LaserData.key(floor(b.ce / LaserData.LASER_BLOCK_M).toInt(), floor(b.cn / LaserData.LASER_BLOCK_M).toInt()) in keys
+            }
+            Lod2Result(enu.sortedWith(compareBy({ it.ce }, { it.cn }, { it.id })), 0, corridor.size.toLong())
+        }
+        lod2Keys.isNotEmpty() -> loadLod2(source, origin, options.fetcher, blocks.values, lod2Keys, options.threads, isCancelled)
+        else -> Lod2Result(emptyList(), 0, 0L)
     }
     // Unter LoD2-Grundrissen liegt das Gelaende knapp unter dem Gebaeudeboden: Das adaptive Netz bekommt
     // dort eine gerade Kante an der Wand (sonst wellte sich das gemittelte DGM unter dem Haus an der Wand hoch).
@@ -472,8 +485,10 @@ internal fun loadLaserData(
         offsetP95 = pct(0.95) - offset,
     )
     val frame = EnuUtmFrame(origin, source.utmZone, (lineE.min() + lineE.max()) / 2, (lineN.min() + lineN.max()) / 2)
-    val covered = { e: Double, n: Double ->
-        LaserData.key(floor(frame.utmX(e, n) / 1000).toInt(), floor(frame.utmY(e, n) / 1000).toInt()) in lod2Keys
+    val covered = if (corridor != null) {
+        { e: Double, n: Double -> line.distance(e, n, options.lod2RadiusM) <= options.lod2RadiusM }
+    } else {
+        { e: Double, n: Double -> LaserData.key(floor(frame.utmX(e, n) / 1000).toInt(), floor(frame.utmY(e, n) / 1000).toInt()) in lod2Keys }
     }
     return LaserData(source, origin, blocks, offset, lod2.buildings, stats, covered) { e, n -> terrariumAboveSea(e, n) }
 }

@@ -112,16 +112,23 @@ internal fun loadLod2(
 }
 
 /** Liest eine CityGML-Kachel; Koordinaten werden von UTM [zone] nach ENU um [origin] umgerechnet. */
-internal fun parseLod2(bytes: ByteArray, origin: GeoOrigin, zone: Int): List<LaserBuilding> {
+internal fun parseLod2(bytes: ByteArray, origin: GeoOrigin, zone: Int): List<LaserBuilding> =
+    parseLod2Utm(bytes).mapNotNull { it.toEnu(origin, zone) }
+
+/** Ein LoD2-Gebaeude in den Koordinaten der Quelle (UTM-Rechts-/Hochwert, Hoehe ueber NHN). */
+internal class Lod2UtmBuilding(val id: String, val roofType: Int, val measuredHeightM: Double, val surfaces: List<Lod2Surface>)
+
+/** Liest eine CityGML-Kachel, ohne umzurechnen. */
+internal fun parseLod2Utm(bytes: ByteArray): List<Lod2UtmBuilding> {
     val text = String(bytes, Charsets.UTF_8)
-    val out = ArrayList<LaserBuilding>()
+    val out = ArrayList<Lod2UtmBuilding>()
     var p = 0
     while (true) {
         val s = text.indexOf("<bldg:Building ", p).let { if (it < 0) text.indexOf("<bldg:Building>", p) else it }
         if (s < 0) break
         val e = text.indexOf("</bldg:Building>", s)
         if (e < 0) break
-        parseBuilding(text, s, e, origin, zone)?.let { out += it }
+        parseBuilding(text, s, e)?.let { out += it }
         p = e + 16
     }
     return out
@@ -129,14 +136,12 @@ internal fun parseLod2(bytes: ByteArray, origin: GeoOrigin, zone: Int): List<Las
 
 private val SURFACE = Regex("<bldg:(RoofSurface|WallSurface|GroundSurface|ClosureSurface)[\\s>]")
 
-private fun parseBuilding(t: String, s: Int, e: Int, origin: GeoOrigin, zone: Int): LaserBuilding? {
+private fun parseBuilding(t: String, s: Int, e: Int): Lod2UtmBuilding? {
     val head = t.substring(s, min(e, s + 400))
     val id = Regex("gml:id=\"([^\"]+)\"").find(head)?.groupValues?.get(1) ?: "b$s"
     val body = t.substring(s, e)
     val measured = Regex("<bldg:measuredHeight[^>]*>([-0-9.eE]+)<").find(body)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
     val roofType = Regex("<bldg:roofType[^>]*>([0-9]+)<").find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 0
-    // Ein linearer Rahmen je Gebaeude: UTM → ENU auf Millimeter genau.
-    var frame: EnuUtmFrame? = null
     val surfaces = ArrayList<Lod2Surface>()
     for (m in SURFACE.findAll(body)) {
         val kind = when (m.groupValues[1]) {
@@ -163,20 +168,7 @@ private fun parseBuilding(t: String, s: Int, e: Int, origin: GeoOrigin, zone: In
                 val ce = body.indexOf(closeTag, next)
                 if (ce < 0 || ce > pe) break
                 val utm = coords(body, next, ce)
-                if (utm != null && utm.size >= 9) {
-                    if (frame == null) {
-                        val ll = Utm.inverse(utm[0], utm[1], zone)
-                        frame = EnuUtmFrame(origin, zone, origin.toEast(ll[1]), origin.toNorth(ll[0]))
-                    }
-                    val f = frame!!
-                    val ring = DoubleArray(utm.size)
-                    for (i in 0 until utm.size / 3) {
-                        ring[3 * i] = f.east(utm[3 * i], utm[3 * i + 1])
-                        ring[3 * i + 1] = f.north(utm[3 * i], utm[3 * i + 1])
-                        ring[3 * i + 2] = utm[3 * i + 2]
-                    }
-                    rings += dropClosing(ring)
-                }
+                if (utm != null && utm.size >= 9) rings += dropClosing(utm)
                 r = ce
             }
             if (rings.isNotEmpty() && rings[0].size >= 9) surfaces += Lod2Surface(kind, rings)
@@ -184,6 +176,29 @@ private fun parseBuilding(t: String, s: Int, e: Int, origin: GeoOrigin, zone: In
         }
     }
     if (surfaces.isEmpty()) return null
+    return Lod2UtmBuilding(id, roofType, measured, surfaces)
+}
+
+/** Rechnet nach ENU um [origin] um (ein linearer Rahmen je Gebaeude, Millimeter genau) und leitet Grundriss und Hoehen ab. */
+internal fun Lod2UtmBuilding.toEnu(origin: GeoOrigin, zone: Int): LaserBuilding? {
+    val first = surfaces.firstOrNull()?.rings?.firstOrNull() ?: return null
+    val ll = Utm.inverse(first[0], first[1], zone)
+    val f = EnuUtmFrame(origin, zone, origin.toEast(ll[1]), origin.toNorth(ll[0]))
+    val enu = surfaces.map { sf ->
+        Lod2Surface(sf.kind, sf.rings.map { utm ->
+            DoubleArray(utm.size).also { ring ->
+                for (i in 0 until utm.size / 3) {
+                    ring[3 * i] = f.east(utm[3 * i], utm[3 * i + 1])
+                    ring[3 * i + 1] = f.north(utm[3 * i], utm[3 * i + 1])
+                    ring[3 * i + 2] = utm[3 * i + 2]
+                }
+            }
+        })
+    }
+    return laserBuildingOf(id, enu, measuredHeightM, roofType)
+}
+
+private fun laserBuildingOf(id: String, surfaces: List<Lod2Surface>, measured: Double, roofType: Int): LaserBuilding {
     val grounds = surfaces.filter { it.kind == Lod2SurfaceKind.GROUND }
     val footprint = (if (grounds.isNotEmpty()) grounds else surfaces.filter { it.kind == Lod2SurfaceKind.ROOF })
         .map { sf -> sf.rings[0].let { r -> DoubleArray(r.size / 3 * 2) { r[it / 2 * 3 + it % 2] } } }

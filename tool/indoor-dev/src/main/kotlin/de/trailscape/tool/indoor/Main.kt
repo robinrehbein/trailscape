@@ -50,7 +50,8 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m]]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>]]
+  lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
   check <dir>
@@ -105,6 +106,7 @@ private fun run(all: List<String>): Int {
         "overlaps" -> overlaps(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "models" -> models(Args(rest, emptySet()))
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
+        "lod2-cut" -> lod2Cut(Args(rest, setOf("offline")))
         "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline", "laser")).let { a ->
             catalogBuild(
                 out = File(a.req("out")),
@@ -150,10 +152,35 @@ private fun prepare(a: Args): Prepared {
 /** Der Weltbau: mit `--laser` die Datenstufe „Laser" (DGM1, nDOM, LoD2 — NRW). */
 private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder =
     if (a.flag("laser")) {
-        de.trailscape.core.indoor.world.createLaserWorldBuilder(toolLaserOptions(File(CACHE_DIR), a.flag("offline"), a.double("laser-radius")))
+        var opts = toolLaserOptions(File(CACHE_DIR), a.flag("offline"), a.double("laser-radius"))
+        a.opt("lod2-corridor")?.let { f ->
+            val file = File(f)
+            if (!file.isFile) throw UsageError("LoD2-Korridor nicht gefunden: $file")
+            opts = de.trailscape.core.indoor.world.LaserOptions(opts.fetcher, radiusM = opts.radiusM, lod2Corridor = file.readBytes())
+        }
+        de.trailscape.core.indoor.world.createLaserWorldBuilder(opts)
     } else {
         createWorldBuilder()
     }
+
+/** LoD2 auf den Korridor der Strecke zuschneiden und im kompakten Format schreiben (docs/indoor/lidar.md). */
+private fun lod2Cut(a: Args): Int {
+    val gpx = File(a.req("gpx"))
+    if (!gpx.isFile) throw UsageError("GPX-Datei nicht gefunden: $gpx")
+    val out = File(a.req("out"))
+    val (_, points) = readGpx(gpx)
+    val base = toolLaserOptions(File(CACHE_DIR), a.flag("offline"), null)
+    val opts = a.double("lod2-radius")?.let { de.trailscape.core.indoor.world.LaserOptions(base.fetcher, lod2RadiusM = it) } ?: base
+    val res = de.trailscape.core.indoor.world.cutLod2Corridor(opts, points.map { it.lat to it.lon })
+        ?: run { System.err.println("Keine Laser-Quelle mit LoD2 fuer diese Strecke"); return 1 }
+    out.parentFile?.mkdirs()
+    out.writeBytes(res.first)
+    val km = cumulative(points).last() / 1000
+    val s = res.second
+    println("LoD2-Korridor ${out.path}: ${s["gebaeudeKorridor"]} von ${s["gebaeudeKacheln"]} Gebaeuden aus ${s["kacheln"]} Kacheln")
+    println("  Kacheln ${mb(s.getValue("kachelBytes"))} (${mb((s.getValue("kachelBytes") / km).toLong())} je km) → Korridor ${mb(s.getValue("korridorBytes"))} (${mb((s.getValue("korridorBytes") / km).toLong())} je km)")
+    return 0
+}
 
 private fun printPlan(p: Prepared) {
     val plan = p.plan
