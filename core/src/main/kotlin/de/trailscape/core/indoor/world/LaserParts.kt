@@ -206,6 +206,9 @@ internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = 
         TreeModels.Species.TALL -> 0.165
         TreeModels.Species.CONIFER -> 0.22
         TreeModels.Species.SMALL -> 0.37
+        // Kiefer und Busch vergibt diese Funktion nicht selbst; Werte nur der Vollstaendigkeit halber.
+        TreeModels.Species.PINE -> 0.26
+        TreeModels.Species.BUSH -> 0.5
     }
     var width = (t.crownRadiusM / (k * h)).coerceIn(0.6, 1.5)
     val lowCrown = species != TreeModels.Species.BROAD || 0.3 * h < 4.5
@@ -213,7 +216,7 @@ internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = 
         width = (roomM + 0.3) / (k * h)
         if (width < 0.5) return null
     }
-    return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale)
+    return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale, base.bare, base.hue)
 }
 
 /** Raster der LoD2-Grundrisse (64-m-Zellen) fuer schnelle Rechteckabfragen. */
