@@ -117,6 +117,7 @@ private fun PairStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenDiagnostics
         onDemoChange = vm::setDemoTrainer,
         onChainringChange = vm::setChainringTeeth,
         onGearTableChange = vm::setGearTable,
+        onTimeOfDayChange = vm::setTimeOfDay,
         onContinue = vm::continueFromPair,
         onBack = onExit,
         onOpenDiagnostics = onOpenDiagnostics,
@@ -215,6 +216,9 @@ private fun RideStage(vm: IndoorViewModel) {
         onDismissNotice = vm::dismissNotice,
         onRideWithoutWorld = null,
         onBack = { vm.back() },
+        onMoveStart = vm::moveStart,
+        onNudgeStart = vm::nudgeStart,
+        onReleaseStart = vm::releaseStart,
     )
 
     if (askLeave) {
