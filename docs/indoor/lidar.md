@@ -455,10 +455,43 @@ Zuschnitt (wie `lod2-cut` für LoD2) auf einem Server oder als Release-Asset.
 
 **Katalog-Workflow:** `catalog-build` baut die Einträge mit Laser ohne neue
 Eingabe. Der Workflow läuft mit `-Xmx6g`; die Messung oben bleibt mit
-`-Xmx2g` unter 1,1 GB belegtem Heap — keine Anhebung nötig. Platz im Runner:
+`-Xmx2g` unter 1,1 GB belegtem Heap — keine Anhebung nötig. (Stand 24.11.2026 mit acht
+Laser-Strecken: RSS höchstens 2,9 GB mit `-Xmx6g`, weiter keine Änderung;
+Platte und Laufzeit dagegen ja, siehe `catalog.md`, „Workflow-Grenzen“.) Platz im Runner:
 rund 450 MB Laser-Cache für beide Strecken. Die App baut ohne Laser
 unverändert mit ihrem Heap von 256 MB (die Laser-Stufe ist dort nicht
 eingeschaltet).
+
+**Strecken im Großraum Stuttgart (24.11.2026, Version 1, `"laser": true`):**
+`strohgaeu`, `marbach-lemberg`, `bottwartal`, `welzheimer-wald`, `enztal`,
+`schoenbuch` — Verlauf, Belag, Paketgrößen und Bilder in
+`docs/indoor/catalog.md`, „Strecken im Großraum Stuttgart“. Je Strecke
+einmal kalt gebaut (`catalog-build --only <id>`, MEDIUM, Luftbild BW,
+`JAVA_OPTS=-Xmx6g`, ohne parallelen Gradle-Lauf; in der letzten Minute
+rendert der Betrachter die vorige Strecke):
+
+| | km | Bau gesamt | Laser laden (kalt) | Download Raster + LoD2 | je km | Blöcke | LoD2-Kacheln / Gebäude | Versatz DGM1 − Terrarium (Median, P05/P95) | RSS höchstens |
+|---|---|---|---|---|---|---|---|---|---|
+| `strohgaeu` | 17,8 | 266 s | 165 s | 278 + 31 MB | 17,3 MB | 190 | 27 / 7 976 | −0,8 m (−6,2 / +2,8) | 2,27 GB |
+| `marbach-lemberg` | 24,1 | 360 s | 219 s | 335 + 51 MB | 16,0 MB | 247 | 31 / 11 626 | −1,5 m (−7,6 / +4,0) | 2,61 GB |
+| `bottwartal` | 33,3 | 536 s | 346 s | 614 + 41 MB | 19,7 MB | 368 | 43 / 10 295 | −3,2 m (−15,7 / +5,1) | 2,31 GB |
+| `welzheimer-wald` | 30,3 | 483 s | 308 s | 538 + 36 MB | 18,9 MB | 314 | 41 / 6 922 | −2,0 m (−19,0 / +4,2) | 2,19 GB |
+| `enztal` | 24,0 | 430 s | 281 s | 501 + 62 MB | 23,4 MB | 273 | 33 / 11 491 | −1,6 m (−8,5 / +4,5) | 2,93 GB |
+| `schoenbuch` | 19,9 | 290 s | 179 s | 328 + 17 MB | 17,3 MB | 189 | 22 / 690 | −8,2 m (−10,4 / +9,0) | 2,05 GB |
+
+- **Laserabdeckung:** alle sechs vollständig in BW (Quelle `bw`); jede
+  Anfrage hat ein Archiv geliefert (keine Fehlermeldung, 10–14 MB je
+  Anfrage, also DGM1 und DOM1 je 2-km-Kachel). Einen Anteil der Blöcke mit
+  Messwerten gibt das Werkzeug nicht aus; „voll abgedeckt“ ist daraus
+  geschlossen, nicht gezählt.
+- Alle bestehen `checkWorld`; Budgets eingehalten.
+- Der Download je km ist mit 16–23 MB höher als bei Solitude/Maulbronn
+  (14,6/16,2): Die Strecken laufen schräg durch das 2-km-Raster oder am
+  Fluss entlang (Enztal mit Schleifen: 23 MB/km). Zusammen 2,8 GB
+  Laser-Cache — der Grund für die Aufteilung des Workflows
+  (`catalog.md`, „Workflow-Grenzen“).
+- Schönbuch: großer Versatz (Median −8,2 m) wie bei Solitude (−9,6 m) —
+  Terrarium liegt im Wald zu hoch; mit Laser maßgeblich das DGM1.
 
 ### 7.4 Bilder (Betrachter, nicht Gerät)
 
