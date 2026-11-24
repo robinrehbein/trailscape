@@ -33,6 +33,7 @@ class StringResourceParityTest {
         "strings_rides.xml" to "rides_",
         "strings_training.xml" to "training_",
         "strings_more.xml" to "more_",
+        "strings_science.xml" to "science_",
         "strings_shell.xml" to "shell_",
         "strings_common.xml" to "common_",
         "strings_ble_sensors.xml" to "ble_",
