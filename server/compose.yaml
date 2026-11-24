@@ -1,0 +1,44 @@
+# Sync-Server und Bau-Dienst zusammen (docs/indoor/serverbau.md, server/README.md).
+#   cd server && git submodule update --init ../third_party/brouter
+#   echo "SYNC_TOKEN=$(openssl rand -hex 32)" > .env
+#   docker compose up -d --build
+# Die App bekommt nur die Adresse des Sync-Servers (hinter HTTPS!) und den Token;
+# /api/worlds/… reicht der Sync-Server intern an den Bau-Dienst weiter.
+services:
+  sync:
+    build: .
+    restart: unless-stopped
+    environment:
+      SYNC_TOKEN: ${SYNC_TOKEN:?SYNC_TOKEN in .env setzen}
+      WORLDS_URL: http://worlds:8081
+      # TRUST_PROXY: "1"   # hinter einem Reverse-Proxy
+    ports:
+      - "8080:8080"
+    volumes:
+      - sync-data:/app/data
+    depends_on:
+      - worlds
+
+  worlds:
+    build:
+      context: ..
+      dockerfile: server/worlds/Dockerfile
+    restart: unless-stopped
+    environment:
+      SYNC_TOKEN: ${SYNC_TOKEN:?SYNC_TOKEN in .env setzen}
+      JAVA_OPTS: "-Xmx3g -XX:+ExitOnOutOfMemoryError"
+      MAX_ROUTE_KM: "100"
+      KEEP_DAYS: "30"
+      MAX_PACKAGES_GB: "20"
+      CACHE_MAX_GB: "20"
+    # Kein eigener Port nach außen: erreichbar nur über den Sync-Server.
+    expose:
+      - "8081"
+    volumes:
+      - worlds-data:/data
+    mem_limit: 4g
+    stop_grace_period: 20s
+
+volumes:
+  sync-data:
+  worlds-data:

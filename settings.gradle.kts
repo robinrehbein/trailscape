@@ -25,12 +25,15 @@ rootProject.name = "trailscape"
 // `RepositoriesMode.FAIL_ON_PROJECT_REPOS` kein zusaetzliches Repository.
 include(":brouter")
 include(":core")
-include(":app")
+// `-Ptrailscape.toolOnly=true`: nur `:core` und `:indoor-dev` (Bau-Dienst im
+// Container, server/worlds/Dockerfile) — ohne Android-SDK.
+val toolOnly = providers.gradleProperty("trailscape.toolOnly").orNull == "true"
+if (!toolOnly) include(":app")
 // Erkundungs-Prototyp fuer Wear OS. Bewusst ein eigenstaendiges APK und kein
 // Bestandteil der Telefon-App: Der Spike soll Hardwarefragen beantworten
 // (welche DataTypes kann die Uhr, wie gut ist das GPS, was kostet es Akku)
 // und danach entweder in ein echtes Modul wachsen oder ersatzlos verschwinden.
-include(":wear")
+if (!toolOnly) include(":wear")
 // Entwicklerwerkzeug des Indoor-Trainings (docs/indoor.md): baut auf der JVM
 // fuer eine Beispielstrecke die 3D-Welt (GLB-Kacheln + Manifest) mit dem
 // Weltbau aus `:core`, damit sie sich ohne Geraet in headless Chromium ansehen

@@ -715,3 +715,10 @@ Komponente.
 - [ ] Generierte Welt (nach dem Merge der Session „generierte Welt“):
       Intervalle fallen in die Anstiege, die Einheit endet am Ziel, Bauzeit
       gegen die Schätzung; zweiter Aufruf derselben Einheit ohne Neubau
+
+## Server-Bau (24.11.2026)
+
+Im Schritt „Welt laden“ einer eigenen Tour gibt es neben dem Bau auf dem
+Gerät die Wahl „Auf dem Server in Laserqualität bauen“ — nur, wenn ein
+Sync-Server eingerichtet ist und er den Bau-Dienst meldet. Ablauf, Zustände,
+Bilder und offene Punkte: [`serverbau.md`](serverbau.md).

@@ -1,0 +1,45 @@
+# Sync-Server und Bau-Dienst hinter einem Reverse-Proxy, der TLS und die Domain
+# uebernimmt (Coolify, Traefik, Caddy). Unterschied zu compose.yaml: kein Port
+# wird auf dem Host veroeffentlicht, der Proxy erreicht den Sync-Server ueber
+# das interne Netz auf Port 8080.
+#
+# Coolify: Build Pack "Docker Compose", Base Directory "/server",
+# Compose-Datei "/compose.coolify.yaml", Submodule mitklonen, SYNC_TOKEN als
+# Umgebungsvariable setzen und die Domain dem Dienst "sync" (Port 8080) geben.
+services:
+  sync:
+    build: .
+    restart: unless-stopped
+    environment:
+      SYNC_TOKEN: ${SYNC_TOKEN:?SYNC_TOKEN setzen}
+      WORLDS_URL: http://worlds:8081
+      TRUST_PROXY: "1"
+    expose:
+      - "8080"
+    volumes:
+      - sync-data:/app/data
+    depends_on:
+      - worlds
+
+  worlds:
+    build:
+      context: ..
+      dockerfile: server/worlds/Dockerfile
+    restart: unless-stopped
+    environment:
+      SYNC_TOKEN: ${SYNC_TOKEN:?SYNC_TOKEN setzen}
+      JAVA_OPTS: "-Xmx3g -XX:+ExitOnOutOfMemoryError"
+      MAX_ROUTE_KM: "100"
+      KEEP_DAYS: "30"
+      MAX_PACKAGES_GB: "20"
+      CACHE_MAX_GB: "20"
+    expose:
+      - "8081"
+    volumes:
+      - worlds-data:/data
+    mem_limit: 4g
+    stop_grace_period: 20s
+
+volumes:
+  sync-data:
+  worlds-data:

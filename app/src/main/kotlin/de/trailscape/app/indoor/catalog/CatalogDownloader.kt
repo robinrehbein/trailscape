@@ -80,6 +80,9 @@ class CatalogDownloader(
      *
      * @param onProgress (geladen, gesamt) — gesamt 0, wenn unbekannt.
      * @param isCancelled zwischen den Bloecken gefragt.
+     * @param headers zusaetzliche Kopfzeilen (Server-Bau: `Authorization` des
+     *   eigenen Servers). Sie gehen an jede Station, die [isAllowed] erlaubt —
+     *   der Aufrufer erlaubt dann nur die Adresse des eigenen Servers.
      */
     fun download(
         url: String,
@@ -88,6 +91,7 @@ class CatalogDownloader(
         expectedSha256: String,
         onProgress: (Long, Long) -> Unit = { _, _ -> },
         isCancelled: () -> Boolean = { false },
+        headers: Map<String, String> = emptyMap(),
     ): CatalogFetchResult {
         part.parentFile?.mkdirs()
         var have = if (part.isFile) part.length() else 0L
@@ -96,7 +100,7 @@ class CatalogDownloader(
             have = 0L
         }
         val result = try {
-            execute(url, rangeFrom = have) { response -> receive(response, part, have, expectedBytes, onProgress, isCancelled) }
+            execute(url, rangeFrom = have, headers = headers) { response -> receive(response, part, have, expectedBytes, onProgress, isCancelled) }
         } catch (e: IOException) {
             CatalogFetchResult.Failed(e.toString(), offline = true)
         }
@@ -165,7 +169,12 @@ class CatalogDownloader(
     }
 
     /** Fuehrt GET aus und folgt Weiterleitungen nur auf erlaubte Ziele. */
-    private fun execute(url: String, rangeFrom: Long, handle: (Response) -> CatalogFetchResult): CatalogFetchResult {
+    private fun execute(
+        url: String,
+        rangeFrom: Long,
+        headers: Map<String, String> = emptyMap(),
+        handle: (Response) -> CatalogFetchResult,
+    ): CatalogFetchResult {
         var current = url
         repeat(MAX_REDIRECTS + 1) {
             if (!isAllowed(current)) return CatalogFetchResult.Failed("Adresse nicht erlaubt: ${hostOf(current)}")
@@ -174,6 +183,7 @@ class CatalogDownloader(
                 .get()
                 .header("User-Agent", userAgent)
                 .apply { if (rangeFrom > 0) header("Range", "bytes=$rangeFrom-") }
+                .apply { headers.forEach { (k, v) -> header(k, v) } }
                 .build()
             http.newCall(request).execute().use { response ->
                 if (response.code in REDIRECTS) {

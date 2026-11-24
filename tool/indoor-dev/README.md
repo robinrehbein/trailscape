@@ -28,7 +28,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `--no-aerial` | ohne Luftbild (erzeugte Bodentextur aus der Landnutzung) |
 | `--offline` | kein Netz: nur, was im Cache liegt (auch Abgelaufenes) |
 | `--laser [--laser-radius m]` | Datenstufe „Laser" (NRW und Baden-Württemberg, nach Lage der Strecke): Gelände aus DGM1, Bäume aus nDOM, Gebäude aus LoD2 im Korridor (Vorgabe 200 m); auch für `plan` und `catalog-build`. Am Ende eine Zeile `Laser:` mit Blöcken, Anfragen, Bytes, LoD2, Versatz DGM1 − Terrarium. Siehe `docs/indoor/lidar.md` |
-| `--catalog-aerial` | für `build`/`plan`: Luftbild wie beim Katalogbau, also auch die Dienste nur des Werkzeugs (`CatalogAerial.kt`, z. B. Baden-Württemberg) |
+| `--catalog-aerial` | für `build`/`plan`: Luftbild wie beim Katalogbau, also auch die Dienste nur des Werkzeugs (`CatalogAerial.kt`, z. B. Hessen, Frankreich) |
 | `--lod2-corridor <datei>` | mit `--laser`: LoD2 aus einer zugeschnittenen Korridordatei statt aus den 1-km-Kacheln |
 | `lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m]` | LoD2 auf den Streifen um die Strecke zuschneiden (Vorgabe 120 m), kompakt schreiben; gibt Kachel- und Korridorgröße je km aus |
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
@@ -39,6 +39,9 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
 | `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going] [--laser]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `sky --time AUTO\|MORNING\|NOON\|EVENING --out <dir> [--lat --lon --epoch-ms --quality]` | Himmel der Darstellung für den Betrachter (`shots.mjs --sky <dir>`): `sky.json` (Sonne, Licht, Dunst), `sky.f32` (Rundumbild 1024 × 512, szenenlinear) und `preview.png` (durch eine Nachbildung von Filaments `ACES_LEGACY`). Rechnet mit `core/…/indoor/sky`, also genau wie das Gerät; siehe `docs/indoor/render.md`, „Himmel“ |
+| `server-info` | JSON mit Welt-Version, Laser-Quellen und Belagsklassen (für den Bau-Dienst) |
+| `server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]` | Bau für den Bau-Dienst (`server/worlds`, `docs/indoor/serverbau.md`): liest `<job>/request.json`, baut mit Laser (wo vorhanden) und Katalog-Luftbild, prüft, packt nach `<job>/package.zip`, schreibt `<job>/result.json`; Fortschritt als `@progress {…}` |
+| `server-request --gpx <datei> --out <request.json> [--laser] [--from-km a --to-km b]` | Auftrag für den Bau-Dienst aus einer GPX-Datei (Proben) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
 
 Exit-Codes: 0 in Ordnung, 1 Bau gescheitert / Verstöße, 2 falscher Aufruf.
