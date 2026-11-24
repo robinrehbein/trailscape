@@ -116,6 +116,17 @@ tiles/*.glb      alle Kacheln, sortiert
   weg): Vor jedem „Laden“ holt die App `catalog.json` aus dem Release und
   nimmt Version, Größe und SHA-256 von dort. Ein Release-Katalog kann die
   Adresse der Pakete nicht umlenken (die beigelegte `baseUrl` gilt).
+- Stand 24.11.2026 (Welt-Version 10): Der beigelegte Katalog
+  (`app/src/main/assets/indoor/catalog.json`) führt alle **14** Einträge des
+  veröffentlichten Katalogs (Texte, Größen, Welt-IDs aus dem Release), mit den
+  Versionen **nach** dem Anheben (`catalog-src.json`, z. B. `solitude` 2,
+  `alpe-dhuez` 10). Bis der Katalog-Workflow die neuen Pakete hochlädt, liegen im
+  Release noch die alten; das ist unschädlich: Geladen wird immer der Eintrag
+  aus dem frisch geholten Release-Katalog (`IndoorCatalogController`:
+  `fresh.entry(id)`, ohne `sha256` → „nicht verfügbar"), ein beigelegter Eintrag
+  ohne Paket bietet also keinen kaputten Download an. Höchstens zeigt die App
+  vor dem ersten Abruf „Aktualisierung" für eine installierte ältere Version
+  und lädt dann dieselbe Version wie bisher.
 
 ## App
 
