@@ -166,7 +166,7 @@ internal class LaserData(
         val y0 = floor(minN).toInt()
         val x1 = ceil(maxE).toInt() - 1
         val y1 = ceil(maxN).toInt() - 1
-        val m = 6 // Rand fuer Fenster und Glaettung
+        val m = 6 // Rand fuer Fenster, Glaettung und Plateauprobe
         val w = x1 - x0 + 1 + 2 * m
         val h = y1 - y0 + 1 + 2 * m
         if (w <= 2 * m || h <= 2 * m) return emptyList()
@@ -203,7 +203,7 @@ internal class LaserData(
                 }
             }
             if (!isMax) continue
-            if (isFlat(raw, w, x, y)) continue
+            if (isFlat(raw, w, x, y) || isPlateau(raw, w, x, y)) continue
             // Kronenradius: wo das Kronenmodell in 8 Richtungen unter 60 % der Spitze faellt.
             var sum = 0.0
             for (d in 0 until 8) {
@@ -225,6 +225,19 @@ internal class LaserData(
             out += LaserTree((x0 - m + x).toDouble(), (y0 - m + y).toDouble(), top, crown)
         }
         return out
+    }
+
+    /**
+     * Plateau statt Kronenspitze (Flachdach, Hallendach, geschnittene Hecke):
+     * In 7 × 7 m liegen mindestens 40 % der Proben weniger als 25 cm unter der
+     * Spitze. Eine Krone faellt von der Spitze aus nach allen Seiten ab.
+     */
+    private fun isPlateau(raw: FloatArray, w: Int, x: Int, y: Int): Boolean {
+        var top = 0f
+        for (dy in -1..1) for (dx in -1..1) top = max(top, raw[(y + dy) * w + x + dx])
+        var near = 0
+        for (dy in -3..3) for (dx in -3..3) if (raw[(y + dy) * w + x + dx] >= top - 0.25f) near++
+        return near >= 20
     }
 
     /** Ebene Flaeche in 5×5 (Dach, Mauer, Lkw): Restfehler einer Ausgleichsebene unter 12 cm. */
