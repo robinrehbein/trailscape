@@ -158,6 +158,16 @@ nur `MaterialInstance[]`, `MaterialInstance.setParameter` braucht die
 deshalb jetzt ebenfalls ohne (`aniso=1`), damit seine Bilder nicht schöner
 sind als das Gerät.
 
+**Flackern (Rückmeldung vom Gerät):** Die Ursachen lagen fast alle in der
+Geometrie (koplanare Flächen, siehe `docs/indoor/world.md`, Nr. 14) und sind
+dort behoben. In der Darstellung: Kamera `NEAR_M` 0,5 statt 0,3 m (bessere
+Tiefenauflösung in der Ferne; die Lenkerkamera sitzt 1,45 m hoch). Kacheln
+und Teilflächen wechseln weiterhin mit ±60 m Hysterese (`TilePlanner`),
+kein Hin- und Herspringen gesehen. Texturen haben Mipmaps (glTF-Sampler
+`LINEAR_MIPMAP_LINEAR`, gltfio erzeugt sie); dünne Geometrie (Zäune,
+Markierungen) glättet jetzt 4× MSAA. **Nur im Betrachter und geometrisch
+geprüft, nicht in Filament.**
+
 Der Betrachter (`tool/indoor-dev/viewer`) bildet nach: Kameras wie
 `CameraRig` (Verfolger 6 m auf dem Band zurück), weiche Schatten (PCF-Radius 2),
 MSAA, ohne Anisotropie.
