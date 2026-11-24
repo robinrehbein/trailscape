@@ -131,9 +131,11 @@ internal class RoadsLayer : TileLayer {
                 WorldNames.NODE_ROADS,
                 materials.getOrPut(name) {
                     TileMaterial(
-                        name, RouteTextures.surfaceTexture(ctx.textures, kind, ctx.quality == IndoorQuality.LOW),
+                        name,
+                        if (edge) RouteTextures.roadEdgeTexture(ctx.textures, kind) else RouteTextures.surfaceTexture(ctx.textures, kind, ctx.quality == IndoorQuality.LOW),
                         roughness = if (kind.visual == SurfaceKind.ASPHALT) 0.86f else 0.95f,
                         alphaMode = if (edge) GlbAlphaMode.BLEND else GlbAlphaMode.OPAQUE,
+                        clampV = edge,
                     )
                 },
             )
@@ -157,14 +159,19 @@ internal class RoadsLayer : TileLayer {
             if (r.source.brunnel == "bridge") bridgeDeckAt(r.source.line, e, n)?.let { mesh = max(mesh, it) }
             val v = mesh + BASE_LIFT_M + r.spec.rank * RANK_LIFT_M + dirLift(r, k)
             if (!nearTrack) return v
-            val hit = ctx.track.nearest(e, n, 30.0) ?: return v
+            val hit = ctx.track.nearest(e, n, 40.0) ?: return v
             val hw = ctx.track.halfWidthAt(hit.distM)
             val kind = ctx.track.surfaceAt(hit.distM).kind
             // Ein Wiesen- oder Erdweg, der eine befestigte Strasse quert, laeuft nicht als Teppich darueber:
             // Die haertere Strasse liegt dann obenauf.
             val over = hardness(r.spec.kind) > hardness(kind) && !r.spec.rail
             val level = hit.u - RouteLayer.crownOf(kind) * min(hit.distance, hw) + (if (over) OVER_TRACK_M else -UNDER_TRACK_M)
-            val w = 1.0 - smoothstep(hw + 0.3, hw + 4.5, hit.distance)
+            // Ueber JOIN_M stetig von der Fahrbahnkante auf die eigene Hoehe: Neben der Strecke liegt das
+            // Gelaende in einer flachen Mulde (CarvedGround: Bankett 25 cm unter der Fahrbahn) — folgte die
+            // Strasse ihr, wellte sie sich an jeder Einmuendung (frueher Uebergang ueber nur 4,2 m: Rampe).
+            // Liegt die Strecke tiefer (Einschnitt), bleibt es beim kurzen Uebergang: Sonst taeuchte die
+            // Strasse unter die Boeschung.
+            val w = 1.0 - smoothstep(hw + 0.3, hw + (if (level >= v) JOIN_M else 4.5), hit.distance)
             return v + (level - v) * w
         }
 
@@ -221,7 +228,7 @@ internal class RoadsLayer : TileLayer {
                     val sgn = if (side == 0) -1.0 else 1.0
                     val e = r.e[k] + r.re[k] * off * sgn
                     val n = r.n[k] + r.rn[k] * off * sgn
-                    val h = heightAt(e, n, r, r.trackDist[k] < 40.0, k)
+                    val h = heightAt(e, n, r, r.trackDist[k] < 50.0, k)
                     val tone = RouteGeometry.tone(e, n, 0x70e)
                     val c = (if (spec.rail) 0.52 else 0.80) + 0.14 * tone
                     val col = RouteGeometry.linColor(c, c * (if (spec.rail) 0.94 else 1.0), c * (if (spec.rail) 0.88 else 1.0))
@@ -237,7 +244,10 @@ internal class RoadsLayer : TileLayer {
             if (spec.rail) rails(r, i)
         }
 
-        /** Weiche Kanten: je Seite ein Streifen, dessen Deckung nach aussen auf null faellt. */
+        /**
+         * Weiche Kanten: je Seite ein Streifen, dessen Deckung nach aussen auf null faellt — die Deckung
+         * kommt aus der Textur ([RouteTextures.roadEdgeTexture], `v` quer), die Vertexfarben sind deckend.
+         */
         private fun edgeStrips(r: RoadNet.Road, i: Int, kind: SurfaceKind, tex: RouteTextures.Spec, shift: Double, vBase: Double, he: DoubleArray) {
             val m = mesh(kind, true)
             val hw = r.halfWidth
@@ -253,13 +263,13 @@ internal class RoadsLayer : TileLayer {
                         val n = r.n[k] + r.rn[k] * t * mit * sgn
                         // Innenkante knapp unter der Fahrbahn: Wo der Streifen an Knoten und in Kurven auf einer
                         // anderen Fahrbahn liegt, gewinnt die deckende Fahrbahn statt zu flimmern.
-                        val h = if (o == 0) he[q * 2 + side] - EDGE_DROP_M else heightAt(e, n, r, r.trackDist[k] < 40.0, k) - 0.015
+                        val h = if (o == 0) he[q * 2 + side] - EDGE_DROP_M else heightAt(e, n, r, r.trackDist[k] < 50.0, k) - 0.015
                         val tone = RouteGeometry.tone(e, n, 0x70e)
                         val c = (if (r.spec.rail) 0.52 else 0.80) + 0.14 * tone
                         idx[q * 2 + o] = m.vertex(
                             ctx.x(e), ctx.y(h), ctx.z(n), 0.0, 1.0, 0.0,
-                            0.5 + (sgn * t + shift) / tex.widthM, (r.s[k] - vBase) / tex.lengthM,
-                            RouteGeometry.linColor(c, c, c, if (o == 0) 1.0 else 0.0),
+                            (r.s[k] - vBase) / tex.lengthM, o.toDouble(),
+                            RouteGeometry.linColor(c, c, c),
                         )
                     }
                 }
@@ -278,7 +288,7 @@ internal class RoadsLayer : TileLayer {
                 val idx = IntArray(4)
                 for (q in 0..1) {
                     val k = i + q
-                    val h = heightAt(r.e[k], r.n[k], r, r.trackDist[k] < 40.0, k) + 0.16
+                    val h = heightAt(r.e[k], r.n[k], r, r.trackDist[k] < 50.0, k) + 0.16
                     for (o in 0..1) {
                         val t = (RAIL_GAUGE_M / 2 + (o - 0.5) * 0.07) * sgn * min(r.miter[k], 2.0)
                         idx[q * 2 + o] = m.vertex(ctx.x(r.e[k] + r.re[k] * t), ctx.y(h), ctx.z(r.n[k] + r.rn[k] * t), 0.0, 1.0, 0.0, 0.0, 0.0, col)
@@ -309,6 +319,9 @@ internal class RoadsLayer : TileLayer {
 
         /** So tief liegt eine einmuendende Strasse unter der Fahrbahn der Strecke. */
         const val UNDER_TRACK_M = 0.05
+
+        /** Ueber so viele Meter ab dem Fahrbahnrand laeuft eine einmuendende Strasse auf ihre eigene Hoehe. */
+        const val JOIN_M = 12.0
 
         /** So hoch liegt eine haertere Strasse ueber der Fahrbahn der Strecke, die sie quert. */
         const val OVER_TRACK_M = 0.03

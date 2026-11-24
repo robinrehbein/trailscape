@@ -517,7 +517,10 @@ den mitgelieferten Ubershader hat:
 
 - glTF 2.0 binär, eine Datei, alles eingebettet. Nur Kernmaterial
   (Metallic-Roughness) und `KHR_materials_unlit`. `metallicFactor = 0`,
-  `roughnessFactor ≥ 0,6` (es gibt keine Spiegelungs-Umgebung). Keine weiteren
+  `roughnessFactor ≥ 0,6` (es gibt keine Spiegelungs-Umgebung). Zusätzlich
+  erlaubt: `KHR_materials_specular` mit `specularFactor = 0` (nur in
+  `extensionsUsed`) für Vegetation — schaltet den Sonnenglanz auf Blattkarten
+  und Rinde ab; gltfio wertet es im Ubershader aus. Keine weiteren
   Erweiterungen — insbesondere **kein** `EXT_mesh_gpu_instancing`,
   `KHR_texture_basisu`, `KHR_draco_mesh_compression`, `EXT_texture_webp`.
 - Texturen: JPEG **Baseline** (kein progressives JPEG — der Decoder von gltfio

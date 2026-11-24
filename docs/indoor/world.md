@@ -85,7 +85,7 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/5` (vorher `/4`, `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/6` (vorher `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
 Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
@@ -325,6 +325,82 @@ Gegenüber `main` vor der Vegetation (6cd9387): Schauinsland 11,8 → 13,2 MB/km
 `OutOfMemoryError` ab (vor den Kacheln, beim Laden; mit 2 GB Heap nach GC bis
 343 MB). Das liegt in der Laser-Stufe, nicht in der Vegetation.
 
+### Dritte Runde (Kombi-Render Balkantrasse, `--laser`)
+
+Nach dem Zusammenführen mit `main` a80395a (Welt-Version 5). Vorher = dieser
+Stand nach dem Merge, nachher = jetzt; alle Bildpaare ersetzt, neu
+`balkantrasse-laser-chase` (km 4,5, Verfolger).
+
+| Befund | Ursache | Lösung |
+|---|---|---|
+| Stämme fast schwarz und sehr dick | Radius 2,4 % der Höhe (Laserbäume bis 42 m → Durchmesser um 2 m, Wurzelanlauf ×1,9), dunkle Rindenfarbe × Textur, Fuß auf 55 % | Radius aus der Höhe mit Deckel (`trunkRadius`: Laubbaum 0,05 m + 1,2 % · h, höchstens 0,42 m; Fichte 0,9 %, höchstens 0,32 m; Kiefer 1 %, 0,34 m), Wurzelanlauf ×1,45, Rinde heller, Fuß 78 % |
+| Kronen „ausgebleicht“ (weißlich-hellgrün), Schatten fast schwarz | **Spiegelanteil der Sonne bei streifendem Blick:** Die nach oben/außen gebogenen Normalen zeigen für die tief stehende Kamera oft vom Betrachter weg (N·V ≈ 0); dann wird der GGX-/Fresnel-Term groß, und er hängt nicht von der Albedo ab. Die Albedo der Karten war mit linear 0,02–0,05 zudem viel dunkler als echtes Laub, deshalb überdeckte der graue Glanz das Grün. Nachgewiesen im Betrachter: Mit `MeshLambertMaterial` (ohne Spiegelanteil) sind dieselben Kronen satt grün; Materialfarbe, Rauheit 1,0 und Dunst ändern nichts. Filament nutzt dieselbe BRDF-Familie (GGX, Smith, Schlick) und hat keinen Schalter dafür im Kern-glTF | Normalen zusätzlich **zur Strecke hin** gebogen (die Kamera ist immer dort; Richtung je Baum aus der nächsten Stelle der Strecke), weniger nach oben; Albedo der Karten auf ein realistisches Niveau (Helligkeit 0,66–1,06 statt 0,36–0,68), satteres Grün; Laubzweig-Motiv mit geschlossener, dunklerer Laubschicht unter den Blättern (weniger Himmel durch kleine Lücken) |
+| lange schmale Kartenstreifen aus der Krone | Karten nahe der Hülle mit großer Länge | Kartenspitze höchstens 12 % über der Kronenhülle (sonst gekürzt), MID-Karten kürzer |
+| Fichtenäste wie gestapelte Platten | flache, gleich große Trapezkarten | gewölbte Schürzen (drei Eckpunktzeilen, Mitte nach außen), schmalere Karten (7 je Quirl, 10 Quirle), je Karte eigene Weite, Breite, Höhe und Durchhang |
+
+Bildrate: Dreiecksdeckel unverändert, Kartenzahl praktisch gleich (Fichte nah
+280 statt 288 Dreiecke). Fast kantenparallele Karten direkt vor der Kamera
+zeigen weiterhin einen hellen Streifen (N·V ≈ 0 lässt sich ohne eigenen Shader
+nicht ganz vermeiden).
+
+| Welt (`-Xmx256m`) | Dreiecke gleichzeitig | Platte |
+|---|---|---|
+| Schauinsland | 560 017 → 560 553 | 13,2 → 13,2 MB/km |
+| Altenberg kurz | 467 902 → 468 080 | 17,8 → 17,8 MB/km |
+| Tharandt km 2–6 | 466 472 → 473 746 | 13,8 → 13,9 MB/km |
+| Balkantrasse `--laser` (`-Xmx2g`) | 438 434 → 441 606 | 18,4 → 18,5 MB/km |
+
+Die Balkantrasse mit `--laser` scheitert bei `-Xmx256m` weiterhin beim Laden
+(`OutOfMemoryError`, Laser-Stufe, unabhängig von der Vegetation).
+
+### Runde 3b: Spiegelanteil abgeschaltet, Rinde hell
+
+Rückmeldung zu Runde 3: Sonnige Kronen weiterhin grau verschleiert, Stämme
+fast schwarz.
+
+- **`KHR_materials_specular` mit `specularFactor` 0** auf allen
+  Vegetationsmaterialien (`x_mat_tree_cards` samt Bodenbewuchs und
+  Kreuzbildern, `mat_tree_leaves`, `mat_tree_trunk`). In `Glb.kt` als
+  optionale Material-Erweiterung (`GlbMaterial.noSpecular`, nur in
+  `extensionsUsed`, nicht `extensionsRequired`), über
+  `TileMaterial.noSpecular` gesetzt. **Beleg, dass gltfio 1.75.1 sie im
+  Ubershader auswertet** (Tag `v1.75.1`):
+  - `libs/gltfio/include/gltfio/MaterialProvider.h:98` `bool hasSpecular : 1;`
+  - `libs/gltfio/src/AssetLoader.cpp:1462` `.hasSpecular = !!inputMat->has_specular,`;
+    `:1760–1763` setzt `specularColorFactor` und
+    `specularStrength = spConfig.specular_factor`
+  - `libs/gltfio/src/UbershaderProvider.cpp:194`
+    `requirements.features["Specular"] = config.hasSpecular;`; `:74–78`
+    (Unlit und Specular schließen sich aus — hier nicht gebraucht)
+  - `libs/gltfio/CMakeLists.txt:152–154` baut `specular_opaque`,
+    `specular_fade`, **`specular_masked`** ins Archiv;
+    `materials/specular.spec.in`: `VertexColors`, `BaseColorTexture` optional,
+    `Specular = optional`
+  - `materials/specular.mat.in:128`
+    `material.specularFactor = materialParams.specularStrength;` — laut
+    Materials-Doku skaliert `specularFactor` F0 und setzt F90, mit 0 also kein
+    Spiegelanteil, auch nicht bei streifendem Blick.
+
+  Der Betrachter lädt die Erweiterung als `MeshPhysicalMaterial`
+  (`specularIntensity` 0) und erlaubt sie in der Formatprüfung, ebenso
+  `GlbCheck` in `:core`. Auf dem Gerät nicht gesehen: Ob `specular_masked` mit
+  `doubleSided` (Kronendach) und MSAA genauso wie `lit_masked` läuft, sagen die
+  Quellen (gleiche Vorlage `${BLENDING}`/`${DOUBLESIDED}`), geprüft ist es nicht.
+- **Rinde:** Die Albedo war linear rund 0,035 (Textur ~0,2 × Vertexfarbe ~0,15);
+  echte Rinde liegt bei 0,1–0,2. Rindentextur heller (0,45–0,95 sRGB),
+  Rindenfarben angehoben (Laubbaum sRGB 170/152/132, Fichte 158/138/118,
+  Kiefer unten 162/142/126, oben 196/148/110, Birke 214/210/200). Die
+  Stammnormalen sind radial (Loft), Stämme empfangen keine Schatten — der
+  Rest war Albedo und Glanz.
+- **Laub:** Ohne Glanz wurde das Grün zu kräftig; Grundfarben olivgrüner,
+  Helligkeit 0,58–0,94.
+- Die Normalen zur Strecke (Runde 3) bleiben: Sie halten die Schattenseite
+  der Kronen hell genug.
+
+Messwerte unverändert gegenüber Runde 3 (Schauinsland 560 553 Dreiecke,
+13,2 MB/km; Altenberg 17,8; Tharandt 13,9; Balkantrasse 18,5 MB/km). Neu im
+Bildsatz: `balkantrasse-laser-chase-km26`.
+
 ### Bildrate: Overdraw und Stellschrauben
 
 Alpha-getestete Karten überlagern sich (Overdraw), und `discard` hebt Early-Z
@@ -364,12 +440,90 @@ Fällt auf dem Gerät die Bildrate, in dieser Reihenfolge drehen:
 - PNG Grau+Alpha (Farbtyp 4) und normierte `UNSIGNED_SHORT`-UV in gltfio: nach
   den Quellen unterstützt, auf dem Gerät nicht gesehen.
 
+## Kreuzungen und Ortsdurchfahrten (24.11.2026, Branch `claude/indoor-junctions`)
+
+Anlass: erste Fahrt des Gründers in einer **auf dem Handy gebauten** Welt (eigene
+35,6-km-Strecke, Start im Ort, ohne Laser): „schon etwas besser, aber teilweise
+immer noch komisch". Gerätebilder: `docs/indoor/bilder/geraet/01–05`. Geändert:
+`RouteLayer.kt`, `RoadsLayer.kt`, `RouteTextures.kt`, `Ground.kt`,
+`GroundTexture.kt`, `Glb.kt`, `WorldInternals.kt`, `WorldBuilderImpl.kt`,
+`GlbOverlap.kt`, neu `PlanClip.kt`; Werkzeug `overlaps`, Betrachter `hdr`/`clampColor`.
+Keine Vertragsdatei geändert, `WORLD_BUILDER_ID` und Katalogversionen **nicht**
+angehoben (beim Zusammenführen nötig: Ränder, Straßen und Gelände ändern sich in
+jeder Welt).
+
+Bildpaare (gleicher Blickpunkt, Betrachter, Sonne 235°/40°):
+`docs/indoor/bilder/junctions/<welt>-<laufmeter>_<kamera>-vorher.jpg` / `-nachher.jpg` —
+Balkantrasse km 0–3, Kreisel Bergisch Gladbach und Altenberg km 0–4, alle drei
+**ohne Luftbild** (`--no-aerial`, wie die Gerätebilder: erzeugter Boden), dazu
+Altenberg kurz **mit** Luftbild (`altenberg-kurz-luftbild-…`).
+
+### Mängel, Ursache, Stand
+
+| # | Mangel (Gerät) | Ursache im Code | Stand |
+|---|---|---|---|
+| 1 | **Weiße gepunktete Linien** an allen Nähten zwischen Fahrbahn, Gehweg, Nebenstraßen und Gras (01, 02, 04, 05) | Keine Risse: Das Gelände ist lückenlos (jede Kachel ein geschlossenes Gitter mit Schürze). Die Linien liegen genau an den **Außenkanten der weichen Ränder** (Straßenkanten `x_mat_road_*_edge`, Übergangsstreifen `x_mat_route_verge_*`, Belagswechsel `*_fade`), deren Deckung als **Vertex-Alpha** zum Rand auf 0 fiel. Filament zeichnet mit 4× MSAA in einen Float-Puffer und wertet den Shader eines Dreiecks am **Pixelmittelpunkt** aus, auch wenn nur einige Abtastpunkte im Dreieck liegen (keine `centroid`-Interpolation). Dort wird die Deckung über die Kante hinaus **negativ** fortgeschrieben; beim Mischen (`ONE, ONE_MINUS_SRC_ALPHA`, bei FADE zusätzlich das Entmultiplizieren durch `max(a, ε)`) wird der Hintergrund dadurch aufgehellt, bis weiß. Der Betrachter zeichnet in einen 8-Bit-Puffer, der vor dem Mischen auf 0..1 klemmt — deshalb war es dort nie zu sehen | **behoben:** Kein durchsichtiges Primitiv hat mehr Vertex-Deckung < 1. Die Deckung weicher Ränder steckt in der **Textur** (Werte bleiben in 0..1; fortgeschriebene UV landen am geklemmten Rand): Straßenkante `route_<belag>_edge` (PNG 512 × 16, `u` längs kachelnd, `v` quer geklemmt — neuer Sampler `wrapS = REPEAT`, `wrapT = CLAMP_TO_EDGE`, `TileMaterial.clampV`), Auslauf des Übergangsstreifens `verge_<art>_fade` (PNG 256 × 32). Der Übergangsstreifen selbst ist bis `tB` **deckend**; der Belagswechsel ist `MASK` mit unregelmäßiger Kante (negative Werte werden dort nur verworfen). Messbar: `indoor-dev overlaps` zählt „durchsichtige Eckpunkte mit Vertex-Deckung < 1": Balkantrasse 52 930 → **0**, Altenberg kurz 21 188 → **0**; Test `QualityTest` verlangt 0 für die Testwelt |
+| 2a | **Gezackte Graskeile** ragen in Fahrbahn und Einmündungen (03, 05) | Der Rand der Strecke (Gras, Fransen, Gehweg, Bordstein, Bankett) wurde an Nebenstraßen **je Eckpunkt** ausgeblendet (`roadFactor`, Stationen 1–3 m) — dazwischen linear, also Keile; außerdem lag das Gras höher als die Nebenstraße | **behoben:** Die Randgestaltung entsteht je Stück in Zwischennetzen und wird im Grundriss **gegen die Bänder der übrigen Straßen geschnitten** (`PlanMask`/`clipInto`, Sutherland–Hodgman je Dreieck, Attribute linear interpoliert) — genau so abgetastet wie `RoadsLayer` sie zeichnet. Ebenso gegen die Fahrbahn anderer Streckenteile (Kreisel, enge Kurven, Hin- und Rückweg nebeneinander; die eigene Fahrbahn ±4 m bzw. ±15 m für Ränder innerhalb der Fahrbahn zählt nicht). Bahnen sperren nicht (wie vorher). Gras endet jetzt an der Straßenkante; Fransen, Randlinien und Bordstein enden an der Einmündung |
+| 2b | **Brauner Belagfleck mit Zickzackrand** quer auf der eigenen Strecke (03) | Geplante Routen haben an Kreuzungen Wegstücke von wenigen Metern mit anderem Belag/anderer Wegart; gezeichnet mit eigenem Belag, Fransen und Grasrand | **behoben:** `TrackLine.forDrawing` schlägt Belagsabschnitte unter 25 m dem längeren Nachbarn zu — nur für die Zeichnung, das Manifest (Rollwiderstand, Anzeige) bleibt unverändert |
+| 2c | **Nebenstraßen wellen sich**, stoßen mit Stufen/Rampen an (05) | `CarvedGround` legt neben der Fahrbahn eine flache Mulde an (Boden 25 cm unter der Fahrbahn über das Bankett von √2·Zelle + 0,3 m, damit das 4-m-Netz nicht durchsticht; dann Böschung über **mindestens 10 m**). Nebenstraßen folgten dem Boden und wurden nur auf 4,2 m an die Fahrbahn gezogen: Rampe, dann Mulde, dann wieder hoch | **behoben:** Nebenstraßen laufen über `JOIN_M` = 12 m stetig von der Fahrbahnkante auf ihre Höhe (über der Mulde; liegt die Strecke tiefer, bleibt der kurze Übergang, sonst tauchte die Straße unter die Böschung). Flache Böschungen (< 0,5 m) laufen auf 3–10 m aus statt auf ≥ 10 m |
+| 2d | Flächen verschiedener Straßen überlagern sich in verschiedener Höhe | Gras über der Nebenstraße (s. 2a), Straßenkanten über dem Gras | **behoben** mit 2a; die Rangstaffel der Straßen untereinander (1,2 cm) bleibt |
+| 3a | Gehwegpflaster sehr grob | 32-cm-Platten mit dunklen, zwei Pixel breiten Fugen | **behoben:** Betonsteinpflaster im Läuferverband (21 × 10,7 cm), schmale helle Fugen, gleiche Texturgröße |
+| 3b | Bordsteinverlauf an Ecken eckig und abgehackt | Gehweg und Bordstein brachen an Einmündungen ab, sobald die Deckung je Eckpunkt unter 0,35 fiel | **teilweise:** Gehweg und Bordstein enden jetzt genau an der Kante der Nebenstraße (2a). Ausgerundete Bordsteinecken (Radius in die Nebenstraße hinein) gibt es **nicht** |
+| 4 | Gelände am Straßenrand wellig-fleckig, harte Kanten Gras/Grau (04, 05) | (a) Gras folgte der Mulde neben der Fahrbahn: neben dem Gehweg fiel es auf 75 cm um bis zu 30 cm ab; (b) erzeugte Bodentextur: Beete und Hofflecken mit harter Kante (`smoothstep` über 6 % des Rauschens) | **behoben:** (a) Der deckende Übergangsstreifen läuft von der Außenkante des Randstreifens gleichmäßig auf den Boden am Ende hinaus (nie unter dem Boden), die Mulde ist schmaler (2c); (b) weichere Ränder (Beete 0,48–0,66, Hofflecken 0,66–0,80, 85 % Deckung). Jenseits des Übergangsstreifens bleibt die Mulde (max. 19 cm) über einige Meter sichtbar |
+
+**Nebenwirkungen, gesehen und in Kauf genommen:**
+
+- Der Übergangsstreifen hat je Stück **eine** Randtextur (die stärkere); wo Wiese
+  und Waldboden wechseln, ist das jetzt eine Kante statt eines Verlaufs über
+  eine Station.
+- Am Bankett liegt der Einlauf des Grases über dem Schotter weiter weich
+  (Auslauftextur umgekehrt), am Gehweg beginnt das Gras hart an dessen Außenkante.
+- Mit Luftbild sieht der deckende Streifen gegenüber dem Luftbild etwas
+  „gemalter" aus als der alte durchscheinende (Altenberg kurz, km 1,86).
+
+**Offen:**
+
+- **Kreiseleinfahrt** (Kreisel Bergisch Gladbach, km 0,77): Zwischen der
+  Strecke und der Mittelinsel bleibt ein Graskeil (vorher schien dort der in
+  den Boden gemalte Asphalt durch das durchscheinende Gras). Vermutlich ein
+  Stück des Rings, das `RoadNet` als „auf der Strecke" einstuft und deshalb
+  niemand als Straße zeichnet — nicht abschließend untersucht. Ringstücke, die
+  als „auf der Strecke" gelten, aber schon > 1,5 m neben ihr liegen, sperren
+  jetzt Gras und Gehweg; das reichte hier nicht.
+- Ausgerundete Bordsteinecken (3b).
+- Die Nahtlinien sind **nur rechnerisch** als behoben nachgewiesen (Zähler oben,
+  `QualityTest`). Der Betrachter kann sie nicht zeigen: Auch mit `hdr=1`
+  (Float-Puffer mit 4× MSAA, siehe `viewer/README.md`) interpoliert SwiftShader
+  fast überall innerhalb des Dreiecks — im Vergleich mit `clampColor=1` blieben
+  nur einzelne Pixel. **Auf dem Gerät prüfen.**
+
+### Messwerte (vorher = `aa0eb22`, nachher = dieser Branch)
+
+`-Xmx256m`, 2 Threads, MEDIUM, Geodaten aus dem Cache, ohne Laser; Heap = größter
+Wert nach GC im GC-Protokoll.
+
+| Welt | Dreiecke gleichzeitig | Texturen | Platte | Heap nach GC (max) |
+|---|---|---|---|---|
+| Altenberg kurz (3 km, Luftbild) | 467 902 → 466 739 | 177,7 → 179,3 MB | 17,8 → 18,3 MB/km (+2,8 %) | 212 → 214 MB |
+| Balkantrasse (7,7 km, `--no-aerial`) | 430 916 → 428 814 | 176,1 → 177,0 MB | 18,6 → 19,1 MB/km (+2,7 %) | 223 → 223 MB |
+
+Koplanare Überlappungen (`indoor-dev overlaps`, Stufe 0): Balkantrasse 1 134 → 399,
+Altenberg kurz 638 → 436 (der deckende Übergangsstreifen liegt nicht mehr auf
+Gras gleicher Höhe, die Keile über den Nebenstraßen sind weg).
+
 ## Abweichungen vom Vertrag
 
 1. ~~Laub `alphaMode = MASK` ohne Ausschnitte.~~ Seit „Vegetation" (oben)
    Blattkarten mit echtem Alpha-Ausschnitt in `x_mat_tree_cards` (MASK,
    **einseitig**, beide Wicklungen im Netz); `mat_tree_leaves` (MASK,
    doppelseitig, wie im Vertrag) trägt das deckende Kronendach der Waldkörper.
+   **Erweiterung `KHR_materials_specular`** (Vertrag 7.3: „keine weiteren
+   Erweiterungen“): nur `specularFactor` 0 auf Vegetationsmaterialien, nur in
+   `extensionsUsed`. Ohne sie überdeckt der Spiegelanteil der Sonne bei
+   streifendem Blick das Grün (Runde 3/3b). gltfio 1.75.1 unterstützt sie im
+   Ubershader (`specular_masked`, Belege oben). `GlbCheck` und Betrachter
+   lassen genau diese Erweiterung zu. **Bitte an den Vertragsbesitzer:**
+   7.3 entsprechend ergänzen.
 2. **Wasser nur als Flächen.** Schmale Wasserläufe (Linien `waterway`)
    bekommen keinen eigenen Spiegel; sie erscheinen nur im Luftbild bzw. in der
    erzeugten Bodentextur. Wasser liegt als Gitterzellen (4 m in Stufe 0) knapp

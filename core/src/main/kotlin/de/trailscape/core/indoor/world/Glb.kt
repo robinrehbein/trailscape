@@ -39,6 +39,12 @@ internal class GlbMaterial(
     val doubleSided: Boolean = false,
     val unlit: Boolean = false,
     val emissive: FloatArray? = null,
+    /**
+     * Ohne Spiegelanteil: `KHR_materials_specular` mit `specularFactor` 0 (nur in `extensionsUsed`,
+     * nicht `extensionsRequired` — wer die Erweiterung nicht kennt, zeigt das Kernmaterial). gltfio
+     * 1.75.1 waehlt dafuer die Ubershader-Variante `specular_*` und setzt `specularStrength`.
+     */
+    val noSpecular: Boolean = false,
 )
 
 internal enum class GlbPath(val key: String, val width: Int) {
@@ -74,6 +80,7 @@ private const val GL_CLAMP_TO_EDGE = 33071
 
 internal const val GLB_GENERATOR = "Trailscape indoor-world"
 internal const val KHR_MATERIALS_UNLIT = "KHR_materials_unlit"
+internal const val KHR_MATERIALS_SPECULAR = "KHR_materials_specular"
 
 /** Wachsender Little-Endian-Binaerpuffer. */
 private class BinWriter {
@@ -155,11 +162,12 @@ internal class GlbScene(
     private val imageByContent = HashMap<ContentKey, Int>()
     private val textures = ArrayList<IntArray>() // (image, sampler)
     private val textureByKey = HashMap<Long, Int>()
-    private val samplers = arrayOfNulls<Int>(2) // [clamp, repeat] → Sampler-Index
-    private val samplerList = ArrayList<Boolean>() // repeat je Sampler
+    private val samplers = arrayOfNulls<Int>(3) // [clamp, repeat, nur u kachelnd] → Sampler-Index
+    private val samplerList = ArrayList<Int>() // Art je Sampler (Index in [samplers])
     private val materials = ArrayList<JsonObject>()
     private val materialNames = ArrayList<String>()
     private var anyUnlit = false
+    private var anySpecular = false
     private val nodes = ArrayList<NodeEntry>()
     private val animations = ArrayList<JsonObject>()
     private val timeAccessors = HashMap<ContentKey, Int>()
@@ -175,9 +183,10 @@ internal class GlbScene(
      * Bettet ein Bild ein und gibt den Texturindex zurueck. Gleiche Bytes
      * werden nur einmal eingebettet, gleiche Bytes mit gleichem Sampler
      * ergeben denselben Index. Verlangt PNG oder Baseline-JPEG mit
-     * Zweierpotenz-Kanten ≤ 2048 (docs/indoor.md 7.3).
+     * Zweierpotenz-Kanten ≤ 2048 (docs/indoor.md 7.3). [clampV] = nur `u` kachelt
+     * (`wrapT = CLAMP_TO_EDGE`): fuer Randstreifen, deren Deckung quer in der Textur steckt.
      */
-    fun addTexture(bytes: ByteArray, mime: String, repeat: Boolean): Int {
+    fun addTexture(bytes: ByteArray, mime: String, repeat: Boolean, clampV: Boolean = false): Int {
         val info = requireNotNull(imageInfo(bytes)) { "Textur ist weder PNG noch JPEG" }
         require(info.format.mime == mime) { "MIME-Typ $mime passt nicht zum Inhalt (${info.format.mime})" }
         require(info.baseline) { "JPEG ist nicht Baseline (progressiv oder erweitert)" }
@@ -193,9 +202,10 @@ internal class GlbScene(
             images.add(ImageEntry(view, mime, info.width, info.height))
             images.size - 1
         }
-        val sampler = samplers[if (repeat) 1 else 0] ?: run {
-            samplerList.add(repeat)
-            (samplerList.size - 1).also { samplers[if (repeat) 1 else 0] = it }
+        val kind = if (repeat && clampV) 2 else if (repeat) 1 else 0
+        val sampler = samplers[kind] ?: run {
+            samplerList.add(kind)
+            (samplerList.size - 1).also { samplers[kind] = it }
         }
         val tk = (image.toLong() shl 8) or sampler.toLong()
         return textureByKey.getOrPut(tk) {
@@ -226,9 +236,20 @@ internal class GlbScene(
             if (m.alphaMode != GlbAlphaMode.OPAQUE) put("alphaMode", m.alphaMode.name)
             if (m.alphaMode == GlbAlphaMode.MASK) put("alphaCutoff", m.alphaCutoff)
             if (m.doubleSided) put("doubleSided", true)
-            if (m.unlit) put("extensions", buildJsonObject { put(KHR_MATERIALS_UNLIT, JsonObject(emptyMap())) })
+            if (m.unlit || m.noSpecular) {
+                put(
+                    "extensions",
+                    buildJsonObject {
+                        if (m.unlit) put(KHR_MATERIALS_UNLIT, JsonObject(emptyMap()))
+                        if (m.noSpecular && !m.unlit) {
+                            put(KHR_MATERIALS_SPECULAR, buildJsonObject { put("specularFactor", 0) })
+                        }
+                    },
+                )
+            }
         }
         if (m.unlit) anyUnlit = true
+        if (m.noSpecular && !m.unlit) anySpecular = true
         materials.add(obj)
         materialNames.add(m.name)
         return materials.size - 1
@@ -434,7 +455,15 @@ internal class GlbScene(
         val roots = nodes.indices.filter { nodes[it].parent == null }
         val json = buildJsonObject {
             put("asset", buildJsonObject { put("version", "2.0"); put("generator", GLB_GENERATOR) })
-            if (anyUnlit) put("extensionsUsed", buildJsonArray { add(JsonPrimitive(KHR_MATERIALS_UNLIT)) })
+            if (anyUnlit || anySpecular) {
+                put(
+                    "extensionsUsed",
+                    buildJsonArray {
+                        if (anyUnlit) add(JsonPrimitive(KHR_MATERIALS_UNLIT))
+                        if (anySpecular) add(JsonPrimitive(KHR_MATERIALS_SPECULAR))
+                    },
+                )
+            }
             put("scene", 0)
             put(
                 "scenes",
@@ -455,12 +484,12 @@ internal class GlbScene(
             )
             putList(
                 "samplers",
-                samplerList.map { repeat ->
+                samplerList.map { kind ->
                     buildJsonObject {
                         put("magFilter", GL_LINEAR)
                         put("minFilter", GL_LINEAR_MIPMAP_LINEAR)
-                        put("wrapS", if (repeat) GL_REPEAT else GL_CLAMP_TO_EDGE)
-                        put("wrapT", if (repeat) GL_REPEAT else GL_CLAMP_TO_EDGE)
+                        put("wrapS", if (kind >= 1) GL_REPEAT else GL_CLAMP_TO_EDGE)
+                        put("wrapT", if (kind == 1) GL_REPEAT else GL_CLAMP_TO_EDGE)
                     }
                 },
             )

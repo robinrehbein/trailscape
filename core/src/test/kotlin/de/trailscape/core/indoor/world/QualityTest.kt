@@ -83,6 +83,31 @@ class QualityTest {
     }
 
     @Test
+    fun `durchsichtige Flaechen der Testwelt holen ihre Deckung aus der Textur, nicht aus den Eckpunkten`() {
+        // Auf dem Geraet (Filament, MSAA, Float-Puffer) wird eine zum Rand auslaufende Vertex-Deckung jenseits
+        // der Dreieckskante negativ und hellt den Hintergrund auf: weisse gepunktete Naehte. Siehe translucentVertexAlpha.
+        val dir = tempDir("vertexdeckung")
+        val m = createWorldBuilder().buildTestWorld(dir, IndoorQuality.MEDIUM)
+        val low = HashMap<String, Int>()
+        for (t in m.tiles.filter { it.level == 0 }) {
+            for ((k, v) in translucentVertexAlpha(File(dir, t.file).readBytes())) low[k] = (low[k] ?: 0) + v
+        }
+        assertTrue(low.isEmpty(), "BLEND-Eckpunkte mit Deckung < 1: $low")
+    }
+
+    @Test
+    fun `Detektor fuer auslaufende Vertex-Deckung schlaegt an`() {
+        val scene = GlbScene()
+        val mb = MeshBuilder(4, 2)
+        val a = mb.vertex(0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        val b = mb.vertex(4.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+        val c = mb.vertex(4.0, 0.0, -4.0, 0.0, 1.0, 0.0, color = Argb.of(0, 255, 255, 255))
+        mb.tri(a, b, c)
+        scene.addMesh(scene.addNode(WorldNames.NODE_ROUTE), mb, scene.addMaterial(GlbMaterial(name = "x_weich", alphaMode = GlbAlphaMode.BLEND)))
+        assertEquals(mapOf("x_weich" to 1), translucentVertexAlpha(scene.toBytes()))
+    }
+
+    @Test
     fun `Detektor findet zwei uebereinanderliegende Flaechen`() {
         val scene = GlbScene()
         fun quad(name: String, y: Double) {
