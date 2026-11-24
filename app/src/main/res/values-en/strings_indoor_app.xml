@@ -10,6 +10,7 @@
 <resources>
     <!-- IndoorViewModel: name of the saved ride and display names -->
     <string name="indoor_app_ride_name">Indoor · %1$s</string>
+    <string name="indoor_app_ride_name_from">Indoor · %1$s (from km %2$s)</string>
     <string name="indoor_app_route_testworld">Test world</string>
     <string name="indoor_app_trainer_demo_name">Demo trainer</string>
     <string name="indoor_app_ghost_past_label">Ride on %1$s</string>
@@ -370,6 +371,8 @@
     <!-- Start point and resume (docs/indoor/app.md) -->
     <string name="indoor_app_start_title_choose">Where do you start?</string>
     <string name="indoor_app_start_hint_drag">Drag along the profile to start somewhere else.</string>
+    <string name="indoor_app_start_hint_drag_pedal">Drag along the profile to start somewhere else – or just start pedalling.</string>
+    <string name="indoor_app_summary_start_tag">from km %1$s</string>
     <string name="indoor_app_start_hint_drag_pause">Drag along the profile to carry on somewhere else.</string>
     <string name="indoor_app_start_position">km %1$s · %2$s m</string>
     <string name="indoor_app_start_resume_chip">Continue at km %1$s</string>

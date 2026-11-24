@@ -260,6 +260,9 @@ class IndoorViewModel(
     private var finishing = false
     private var pendingRide: Ride? = null
 
+    /** Stelle in der Runde, an der die Fahrt mit dem ersten Tritt begann; `null` vorher. */
+    private var rideStartRouteM: Double? = null
+
     /** Was sich waehrend der Fahrt nicht aus der Laufzeit ergibt. */
     private data class RideStatic(
         val routeName: String,
@@ -776,6 +779,7 @@ class IndoorViewModel(
 
         finishing = false
         pendingRide = null
+        rideStartRouteM = null
         _summary.value = null
         val ghostLabel = ghostLabelOf(routeUi.ghost)
         // Fortsetzen: die gemerkte Stelle dieser Strecke ist die Vorauswahl.
@@ -911,7 +915,12 @@ class IndoorViewModel(
                     parts.createSession(config.copy(capabilities = caps)).also { s -> resumeM?.let { s.moveStartTo(it) } }
                 }
             },
-            holdStart = resumeM != null,
+            // Vor jeder Fahrt steht die Startpunkt-Karte, bis „Losfahren" kommt. Mit
+            // echtem Trainer gilt auch der erste Tritt, solange der Startpunkt
+            // nicht angefasst wurde (wer einfach lostritt, will an der Vorauswahl
+            // starten); der Demo-Trainer „tritt" sofort und wartet deshalb immer.
+            holdStart = true,
+            releaseOnFirstStroke = !demo,
         )
         activeRuntime = runtime
         renderer?.let { r ->
@@ -954,6 +963,14 @@ class IndoorViewModel(
 
     private fun publishRide(rs: IndoorRuntimeState) {
         val st = rideStatic ?: return
+        rs.session?.let { s ->
+            if (rideStartRouteM == null && s.phase != IndoorPhase.READY && !(s.phase == IndoorPhase.PAUSED && s.elapsedS == 0)) {
+                // Beim ersten Tritt: Stelle minus das schon Gefahrene (hier fast 0).
+                var d = s.routeDistM - s.totals.distanceM
+                if (d < 0 && st.routeIsLoop) d += st.routeLengthM
+                rideStartRouteM = d.coerceAtLeast(0.0)
+            }
+        }
         _ride.value = IndoorRideUi(
             routeName = st.routeName,
             session = rs.session,
@@ -986,6 +1003,7 @@ class IndoorViewModel(
             // „Weiter bei …" gilt nur vor dem ersten Tritt; in der Pause wird frei versetzt.
             resumeM = if (s.phase == IndoorPhase.READY) st.resumeM else null,
             held = rs.startHeld,
+            pedalStarts = rs.pedalStarts,
         )
     }
 
@@ -1150,8 +1168,10 @@ class IndoorViewModel(
     private fun summaryOf(record: IndoorRideRecord?, rs: IndoorRuntimeState): IndoorSummaryUi {
         val st = rideStatic
         val name = st?.routeName ?: routeName
+        val startKm = rideStartRouteM?.takeIf { it >= MIN_SHOWN_START_M }?.let { it / 1000.0 }
         pendingRide = record?.let { r ->
-            runCatching { indoorRideToRide(r, texts.rideName(name)) }.getOrNull()
+            val rideName = if (startKm != null) texts.rideNameFrom(name, startKm) else texts.rideName(name)
+            runCatching { indoorRideToRide(r, rideName) }.getOrNull()
         }
         val totals = record?.totals ?: rs.session?.totals
         val movingS = totals?.movingS ?: 0
@@ -1177,6 +1197,7 @@ class IndoorViewModel(
             tooShort = record != null && record.totals.movingS < MIN_INDOOR_RIDE_S,
             recordMissing = pendingRide == null && (record == null || record.totals.movingS >= MIN_INDOOR_RIDE_S),
             recordProblem = if (record == null) rs.problem else null,
+            startKm = startKm,
         )
     }
 
@@ -1296,6 +1317,9 @@ class IndoorViewModel(
          * der Schluessel der Streckenwahl ([IndoorRouteOption.key]).
          */
         const val KEY_RESUME_PREFIX = "trailscape.indoor.resume."
+
+        /** Ab hier zeigen Auswertung und Tourname „ab km …" (darunter gilt es als Start am Anfang). */
+        const val MIN_SHOWN_START_M = 50.0
 
         /** Schluessel der Gangtabelle (Enum-Name von [VirtualGearTable]) im [KeyValueStore]. */
         const val KEY_GEAR_TABLE = "trailscape.indoor.gear_table"

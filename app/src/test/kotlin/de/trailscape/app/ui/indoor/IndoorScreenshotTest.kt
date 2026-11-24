@@ -654,6 +654,26 @@ class IndoorScreenshotTest {
     }
 
     @Test
+    fun startOhneGemerkteStelle() = shot("123-indoor-start-anfang") {
+        // Vor jeder Fahrt: Vorauswahl km 0, echter Trainer (Treten startet ebenso).
+        RideScreen(
+            startRide(
+                IndoorPhase.READY,
+                0.0,
+                IndoorStartUi(selectedM = 0.0, maxM = 11_900.0, resumeM = null, held = true, pedalStarts = true),
+            ),
+        )
+    }
+
+    @Test
+    fun auswertungAbKm() = shot("124-indoor-auswertung-ab-km") {
+        IndoorSummaryScreen(
+            summary.copy(routeName = "Hausrunde Ammersee", distanceKm = 4.6, startKm = 7.4, ghostLabel = null, ghostGapS = null),
+            {}, {}, {},
+        )
+    }
+
+    @Test
     @Config(qualifiers = "+en-rGB")
     fun startEnglisch() {
         TestLocales.assertTestLocale(AppLanguage.EN)

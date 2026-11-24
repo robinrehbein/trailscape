@@ -116,6 +116,8 @@ class IndoorViewModelDemoFlowTest {
     /** Faehrt [seconds] simulierte Sekunden in 100-ms-Takten. */
     private fun IndoorViewModel.rideFor(seconds: Int) {
         val runtime = assertNotNull(activeRuntime, "Fahrt laeuft")
+        // Vor jeder Fahrt wartet die Startpunkt-Karte; der Demo-Trainer braucht „Losfahren".
+        releaseStart()
         repeat(seconds * 10) {
             clock.advance(100)
             runtime.tickOnce()

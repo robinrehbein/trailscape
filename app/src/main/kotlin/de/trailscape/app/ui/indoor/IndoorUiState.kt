@@ -360,9 +360,17 @@ enum class IndoorNotice {
  *   Rundschluss bleibt bis zum Ziel ein Rest).
  * @property resumeM die gemerkte Stelle der letzten Fahrt auf dieser Strecke —
  *   angeboten als „Weiter bei km …" neben „Von vorn"; `null` = kein Angebot.
- * @property held die Fahrt wartet auf „Losfahren" (Treten bewegt noch nichts).
+ * @property held die Fahrt wartet auf „Losfahren".
+ * @property pedalStarts mit echtem Trainer, solange der Startpunkt nicht
+ *   angefasst wurde: der erste Tritt startet ebenso (sonst bewegt Treten nichts).
  */
-data class IndoorStartUi(val selectedM: Double, val maxM: Double, val resumeM: Double?, val held: Boolean)
+data class IndoorStartUi(
+    val selectedM: Double,
+    val maxM: Double,
+    val resumeM: Double?,
+    val held: Boolean,
+    val pedalStarts: Boolean = false,
+)
 
 /**
  * Alles, was das HUD zeigt.
@@ -404,6 +412,8 @@ data class IndoorRideUi(
  *   Beenden) — nichts zu speichern; Grund in [recordProblem], falls bekannt.
  * @property ghostGapS Abstand zum Geist am Ende (positiv = Geist vorn), `null` ohne Geist.
  * @property savedRideId gesetzt, sobald gespeichert.
+ * @property startKm wo die Fahrt begann, wenn nicht am Anfang der Strecke
+ *   (fortgesetzt oder mittendrin gestartet); `null` = am Anfang.
  */
 data class IndoorSummaryUi(
     val routeName: String,
@@ -426,6 +436,7 @@ data class IndoorSummaryUi(
     val saving: Boolean = false,
     val savedRideId: String? = null,
     val saveFailed: Boolean = false,
+    val startKm: Double? = null,
 )
 
 // ---------------------------------------------------------------------------

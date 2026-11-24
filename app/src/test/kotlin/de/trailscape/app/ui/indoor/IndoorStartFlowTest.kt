@@ -105,9 +105,12 @@ class IndoorStartFlowTest {
         val before = assertNotNull(vm.ride.value?.start, "vor dem ersten Tritt laesst sich der Start waehlen")
         assertEquals(0.0, before.selectedM)
         assertNull(before.resumeM)
-        assertEquals(false, before.held, "ohne Angebot wartet die Fahrt nicht")
+        assertTrue(before.held, "auch ohne Angebot wartet die Fahrt auf Losfahren")
+        vm.tick(30) // Demo „tritt", bewegt aber nichts
+        assertEquals(IndoorPhase.READY, session().phase)
 
-        vm.tick(700) // Demo tritt los, 70 s Fahrt
+        vm.releaseStart()
+        vm.tick(700) // 70 s Fahrt
         assertEquals(IndoorPhase.RUNNING, session().phase)
         assertNull(vm.ride.value?.start, "waehrend der Fahrt nicht")
         val ridden = session().totals.distanceM
@@ -127,6 +130,7 @@ class IndoorStartFlowTest {
         vm.finishRide()
         val summary = assertNotNull(vm.summary.value)
         assertEquals(ridden / 1000.0, summary.distanceKm, 1e-6)
+        assertEquals(null, summary.startKm, "am Anfang gestartet")
         val saved = assertNotNull(IndoorResumePoint.fromJson(store.getString(resumeKey)))
         assertEquals(1_600.0, saved.routeDistM, 1e-9)
     }
@@ -167,9 +171,11 @@ class IndoorStartFlowTest {
         vm.finishRide()
         val summary = assertNotNull(vm.summary.value)
         assertEquals(s.totals.distanceM / 1000.0, summary.distanceKm, 0.01)
+        assertEquals(1.2, assertNotNull(summary.startKm), 0.01)
         vm.saveRide()
         val ride = assertNotNull(rideStorage.loadRide(assertNotNull(vm.summary.value?.savedRideId)))
         assertEquals(summary.distanceKm, ride.stats.distanceKm, 1e-9)
+        assertEquals("Indoor · Testwelt (ab km 1,2)", ride.name)
         val saved = assertNotNull(IndoorResumePoint.fromJson(store.getString(resumeKey)))
         assertTrue(saved.routeDistM > 1_200.0, "neue Stelle ${saved.routeDistM}")
     }

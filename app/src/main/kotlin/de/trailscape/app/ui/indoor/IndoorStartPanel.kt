@@ -130,7 +130,11 @@ internal fun IndoorStartPanel(
             if (!compact) {
                 Text(
                     text = stringResource(
-                        if (phase == IndoorPhase.PAUSED) R.string.indoor_app_start_hint_drag_pause else R.string.indoor_app_start_hint_drag,
+                        when {
+                            phase == IndoorPhase.PAUSED -> R.string.indoor_app_start_hint_drag_pause
+                            start.pedalStarts -> R.string.indoor_app_start_hint_drag_pedal
+                            else -> R.string.indoor_app_start_hint_drag
+                        },
                     ),
                     style = hudStyle(MaterialTheme.typography.bodySmall, HudColors.inkMuted),
                 )
