@@ -308,8 +308,14 @@ internal class SyntheticLaser : LaserFetcher {
         val h = y1 - y0
         val data = FloatArray(w * h)
         for (j in 0 until h) for (i in 0 until w) {
-            val x = x0 + i + 0.5
-            val y = y1 - j - 0.5
+            data[j * w + i] = value(x0 + i + 0.5, y1 - j - 0.5, dom).toFloat()
+        }
+        return GeoResponse(200, "image/tiff", floatTiff(w, h, x0.toDouble(), y1.toDouble(), data))
+    }
+
+    companion object {
+        /** DGM bzw. DOM an der Pixelmitte (`x`, `y`) in UTM 32. */
+        fun value(x: Double, y: Double, dom: Boolean): Double {
             val ll = Utm.inverse(x, y, 32)
             var g = FakeGeo.syntheticHeight(ll[0], ll[1]) + 0.4 * sin(x / 13.0) * sin(y / 17.0)
             if (abs(((x + y) % 400.0 + 400.0) % 400.0 - 200.0) < 2.0) g -= 1.0
@@ -319,12 +325,9 @@ internal class SyntheticLaser : LaserFetcher {
                 val d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy)
                 g += max(0.0, 16.0 - d2 * 0.9)
             }
-            data[j * w + i] = g.toFloat()
+            return g
         }
-        return GeoResponse(200, "image/tiff", floatTiff(w, h, x0.toDouble(), y1.toDouble(), data))
-    }
 
-    companion object {
         /** Unkomprimiertes einkanaliges Float32-GeoTIFF (ein Streifen, little-endian). */
         fun floatTiff(w: Int, h: Int, originX: Double, originY: Double, data: FloatArray): ByteArray {
             val tags = 12

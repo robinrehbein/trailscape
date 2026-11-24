@@ -522,8 +522,15 @@ internal class WorldBuilderImpl(
         val source = opts.sources.firstOrNull { s -> route.points.count { s.covers(it.lat, it.lon) } * 2 >= route.points.size } ?: return null
         val line = routeLine(route, origin)
         val blocks = laserBlocksFor(line[0], line[1], opts.radiusM)
-        val km = lod2Tiles(source, origin, line[0], line[1], opts.lod2RadiusM).size
-        val bytes = blocks.size * LASER_BLOCK_BYTES + if (opts.buildings && source.lod2UrlTemplate != null) km * LOD2_TILE_BYTES else 0L
+        val kms = lod2Tiles(source, origin, line[0], line[1], opts.lod2RadiusM)
+        val tiles = source.tiles
+        val bytes = if (tiles != null) {
+            // Kachel-Download: ganze Archive, auch wenn der Korridor nur eine Ecke beruehrt.
+            tileArchivesFor(source, origin, blocks).size * tiles.bytesPerTile +
+                if (opts.buildings && source.lod2UrlTemplate != null) lod2Downloads(source, kms).size * tiles.lod2BytesPerTile else 0L
+        } else {
+            blocks.size * LASER_BLOCK_BYTES + if (opts.buildings && source.lod2UrlTemplate != null) kms.size * LOD2_TILE_BYTES else 0L
+        }
         return LaserEstimate(bytes, source.hosts)
     }
 

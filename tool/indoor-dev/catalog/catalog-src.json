@@ -176,6 +176,36 @@
       },
       "profile": "gravel",
       "waypoints": [[50.7056, 10.6941], [50.6546, 10.7737]]
+    },
+    {
+      "id": "solitude",
+      "version": 1,
+      "name": { "de": "Schloss Solitude und Glemseck", "en": "Solitude Palace and Glemseck" },
+      "region": { "de": "Glemswald zwischen Stuttgart-West und Leonberg", "en": "Glemswald forest between Stuttgart-West and Leonberg" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Vom Parkplatz am Schloss Solitude durch den Glemswald hinab zum Glemseck, dann durch das obere Glemstal und das Mahdental und zum Schluss wieder hinauf zum Schloss: alte Alleen, Buchenwald, Wiesentäler und ein Stück der historischen Solitude-Rennstrecke.",
+        "en": "From the car park at Solitude Palace down through the Glemswald forest to Glemseck, then along the upper Glems valley and the Mahdental and finally back up to the palace: old avenues, beech forest, meadow valleys and part of the historic Solitude race circuit."
+      },
+      "profile": "trekking",
+      "waypoints": [[48.7799, 9.0895], [48.76816, 9.04053], [48.7555, 9.0754], [48.7799, 9.0895]],
+      "laser": true
+    },
+    {
+      "id": "maulbronn",
+      "version": 1,
+      "name": { "de": "Kloster Maulbronn und Stromberg", "en": "Maulbronn Abbey and the Stromberg hills" },
+      "region": { "de": "Maulbronn, Naturpark Stromberg-Heuchelberg", "en": "Maulbronn, Stromberg-Heuchelberg nature park" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Eine hügelige Runde vom Kloster Maulbronn (UNESCO-Welterbe) über die Waldhöhen des Strombergs nach Freudenstein, durch Weinberge und Felder nach Zaisersweiher und über die Höhe zurück zum Kloster.",
+        "en": "A hilly loop from Maulbronn Abbey (UNESCO World Heritage) over the wooded heights of the Stromberg to Freudenstein, through vineyards and fields to Zaisersweiher and back over the ridge to the abbey."
+      },
+      "profile": "trekking",
+      "waypoints": [[49.00094, 8.80975], [49.0309, 8.8223], [49.0068, 8.8586], [49.00094, 8.80975]],
+      "laser": true
     }
   ]
 }
