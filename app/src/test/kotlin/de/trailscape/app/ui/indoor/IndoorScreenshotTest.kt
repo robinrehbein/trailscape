@@ -826,4 +826,28 @@ class IndoorScreenshotTest {
         }
         compose.onAllNodesWithText("Today’s session").onFirst().assertExists()
     }
+
+    private val dayGenerated = IndoorDayGeneratedUi(km = 23.8, climbs = 3, reps = 3, workMinutes = 8, buildMinutes = 4)
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun tageseinheitGeneriert() = shot("$dayFile-08-zwei-wege") {
+        Column(modifier = Modifier.padding(16.dp)) {
+            IndoorDayCard(ui = dayOffer.copy(generated = dayGenerated, path = IndoorDayPath.GENERATED), onRide = {}, onNext = {})
+            Box(modifier = Modifier.padding(6.dp))
+            IndoorDayCard(ui = dayOffer.copy(generated = dayGenerated.copy(ready = true), path = IndoorDayPath.REAL), onRide = {}, onNext = {})
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w411dp-h1500dp-xxhdpi")
+    fun tageseinheitGeneriertEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("$dayFile-09-zwei-wege-en") {
+            Column(modifier = Modifier.padding(16.dp)) {
+                IndoorDayCard(ui = dayOffer.copy(title = "Threshold 3 x 8 min", generated = dayGenerated, path = IndoorDayPath.GENERATED), onRide = {}, onNext = {})
+            }
+        }
+        compose.onAllNodesWithText("Generated world").onFirst().assertExists()
+    }
 }

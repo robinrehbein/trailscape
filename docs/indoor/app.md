@@ -592,6 +592,47 @@ ERG-Fahrt):
   Tages“ warnt schon vorher („Strecke endet 9 min vor der Einheit“), und die
   Bewertung straft solche Strecken ab.
 
+**Zweiter Weg: „Generierte Welt“** (Ergänzung des Orchestrators, vom Gründer
+bestätigt). Auf der Karte stehen zwei Wege zur Wahl: „Echte Strecke“ (die
+Vorschläge oben, durchblätterbar) und „Generierte Welt“ — eine erfundene
+Landschaft genau zur Einheit, auf dem Gerät ohne Netz gebaut.
+
+- *Zielprofil* (`core/…/indoor/DayGenerated.kt`, `dayGeneratedProfile`,
+  `DayGeneratedTest`): je Abschnitt der ERG-Einheit ein Abschnitt des
+  `GeneratedProfile` (Schnittstelle der Session „generierte Welt“, Branch
+  `claude/indoor-generiert`, hier hineingemergt): Intervalle → `CLIMB` mit
+  6 % bei 95 % FTP, 7 % an der Schwelle (4–8 %); Pausen → `DESCENT` −2 %;
+  Grundlage → `ROLLING` um 0 %; Ein- und Ausfahren, locker → `FLAT`.
+  Länge = Dauer × Gleichgewichtstempo bei Sollleistung und Steigung (dieselbe
+  Physik wie die Nachrechnung): Jeder Schritt dauert bei Sollleistung seine
+  Solldauer, die Einheit endet am Ziel (im Test: Fahrzeit auf unter 1 % gleich
+  der Einheitsdauer). Gleichartige Nachbarn werden zusammengelegt.
+  **Abweichung von der Vorgabe** „flach in Pausen“: leicht bergab (−2 %),
+  damit ein Teil der Höhe zurückkommt; der Text auf der Karte sagt
+  „Pausen leicht bergab“.
+- *Seed* (`dayGeneratedSeed`): FNV-1a über Art, Dauer und Anteil jedes
+  Abschnitts — dieselbe Einheit ergibt denselben Seed und (bei gleichem
+  Fahrer) dasselbe Profil, also dieselbe `worldId` und dieselbe Welt. Eine
+  einmal gebaute Welt ist beim nächsten Mal „Welt liegt bereit“.
+- *Vorschlag:* Passt keine echte Strecke ordentlich (keine fertige, ladbare
+  oder eigene Strecke mit `rank ≥ 0,69`, also nicht besser als „Neue Runde“),
+  steht die Karte auf „Generierte Welt“; sonst auf „Echte Strecke“. Umschalten
+  geht jederzeit.
+- *Ablauf:* „Welt bauen“ → neue Streckenoption `IndoorRouteOption.Generated`
+  (nicht in der Liste) → Voranschlag ohne Hosts und ohne Download → Bau über
+  die Abstraktion `IndoorGeneratedWorlds` (in der App
+  `DefaultIndoorGeneratedWorlds` → `generatedWorldPlan`/`buildGeneratedWorld`).
+  Liegt die Welt schon vor, geht es direkt in die Fahrt (ERG). Die Welt
+  bekommt die Zuordnung `generated:<seed>` und gilt in der Weltverwaltung nie
+  als verwaist.
+- *Bauzeit* grob 10 s je km (ohne Netz; `GENERATED_BUILD_SECONDS_PER_KM`),
+  auf dem Gerät zu prüfen.
+- Die Einstiege der Nachbar-Session sind in diesem Branch noch Rümpfe
+  (`TODO`): Ablauftest und Bilder laufen mit einer Attrappe, in der App
+  meldet „Welt bauen“ bis zum Merge dieser Umsetzung „Strecke nicht
+  verfügbar“ (der Fehler wird wie jeder Ausfall eines fremden Teils
+  angezeigt).
+
 **Modus „Gelände“ (nur Vorschlag, nicht umgesetzt)**
 
 Ein zweiter Fahrmodus wäre: Simulation wie bei freier Fahrt (die Steigung der
@@ -603,6 +644,11 @@ Sollleistung, und die Auswertung müsste „Soll getroffen?“ beantworten. Das
 ist mehr als eine kleine Ergänzung und bleibt deshalb offen. Sinnvoll wird
 es mit der Passung: Wenn die Intervalle schon in den Anstiegen liegen, ist
 der Anstieg selbst der Widerstand — das wäre der natürliche nächste Schritt.
+Besonders gut passt er zur generierten Welt: Dort liegt jeder Anstieg genau
+unter einem Intervall und ist so steil, dass die Sollleistung bei Sollzeit
+herauskommt — im Geländemodus fährt man die Einheit also „von selbst“, ohne
+dass der Trainer eine Leistung erzwingt. Die nötige Erweiterung bleibt
+dieselbe wie oben (Sollanzeige im SIM-Modus).
 
 **Entscheidungen und Grenzen**
 
@@ -617,7 +663,8 @@ der Anstieg selbst der Widerstand — das wäre der natürliche nächste Schritt
 - Kein Netzverkehr durch die Suche; geladen oder gebaut wird erst nach dem
   Tipp auf „Laden und fahren“ bzw. „Welt laden“.
 - Weltbau, `WORLD_BUILDER_ID` und Katalogversionen sind unberührt; keine
-  Vertragsdatei geändert.
+  Vertragsdatei geändert. Aus `core/…/indoor/generated/` nur die Schnittstelle
+  der Nachbar-Session übernommen (Merge), nichts daran geändert.
 
 **Tests:** `DayRouteTest` (`:core`, 15 Tests: Einheit je Tagesentscheidung,
 Gelände, Profil aus Stichproben/Track/Schätzung, Nachrechnung gegen die echte
@@ -627,14 +674,19 @@ Sitzung), `IndoorDayFlowTest` (`:app`, ganzer Ablauf: Karte wählt die
 Strecke mit Anstiegen samt Startpunkt, blättern, „Fahren“ → ERG und
 Startstelle in der Sitzung; Ruhetag ohne ERG; Tag ohne Plan; Strecke endet
 vor der Einheit; Einheit endet vor der Strecke mit „Ausfahren“; ohne
-Tagesentscheidung keine Karte).
+Tagesentscheidung keine Karte; ohne passende Strecke ist die generierte Welt
+der Vorschlag, Bau ohne Netz, beim zweiten Mal bereit und direkt in die Fahrt;
+passende echte Strecke bleibt Vorschlag), `DayGeneratedTest` (`:core`:
+Abschnitte je Art, Fahrzeit = Einheitsdauer für vier Einheiten, stabiler Seed).
 
 **Bilder** (`docs/indoor/bilder/tageseinheit/`, aus `IndoorScreenshotTest.tageseinheit*`):
 01 Schritt Strecke mit der Karte (Intervalle, Welt bauen, Start bei km 12,4),
 02 die Karte mit fertiger Welt, Download (Profil geschätzt) und neuer Runde,
 03 gekürzt durch die Tagesform, lockere Runde ohne Plan, Ruhetag, Suche läuft,
 04 und 06 „Einheit geschafft“ hoch und quer, 05 „Strecke zu Ende“,
-07 Schritt Strecke englisch. Die Heute-Karte ist dieselbe Komponente.
+07 Schritt Strecke englisch, 08 beide Wege (generierte Welt gewählt, echte
+Strecke gewählt), 09 generierte Welt englisch. Die Heute-Karte ist dieselbe
+Komponente.
 
 **Auf dem Gerät zu prüfen**
 
@@ -660,3 +712,6 @@ Tagesentscheidung keine Karte).
       spürbar bremsen
 - [ ] Geschätzte Bauzeit gegen die echte Bauzeit (WLAN und Mobilfunk)
 - [ ] Englisch: Karte auf *Heute* und im Schritt Strecke
+- [ ] Generierte Welt (nach dem Merge der Session „generierte Welt“):
+      Intervalle fallen in die Anstiege, die Einheit endet am Ziel, Bauzeit
+      gegen die Schätzung; zweiter Aufruf derselben Einheit ohne Neubau

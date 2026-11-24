@@ -436,6 +436,16 @@
     <string name="indoor_app_day_build_action">Welt bauen</string>
     <string name="indoor_app_day_plan_action">Runde planen</string>
     <string name="indoor_app_day_next_action">Andere Strecke (%1$d/%2$d)</string>
+    <string name="indoor_app_day_path_real">Echte Strecke</string>
+    <string name="indoor_app_day_path_generated">Generierte Welt</string>
+    <string name="indoor_app_day_generated_title">Erfundene Landschaft genau zur Einheit</string>
+    <string name="indoor_app_day_generated_name">Generierte Welt · %1$s</string>
+    <plurals name="indoor_app_day_generated_climbs_count">
+        <item quantity="one">%1$d Anstieg genau unter deinen %2$d × %3$d min, Pausen leicht bergab</item>
+        <item quantity="other">%1$d Anstiege genau unter deinen %2$d × %3$d min, Pausen leicht bergab</item>
+    </plurals>
+    <string name="indoor_app_day_generated_ends">endet mit der Einheit</string>
+    <string name="indoor_app_day_generated_build">Welt bauen ohne Netz: etwa %1$d min</string>
 
     <!-- IndoorRideScreen.kt: Ende der Einheit -->
     <string name="indoor_app_day_end_done_title">Einheit geschafft</string>

@@ -67,6 +67,55 @@ class IndoorDayFlowTest {
     )
     private var vm: IndoorViewModel? = null
 
+    /** Attrappe fuer den Bau der generierten Welt: gerade Strecke mit den Steigungen der Abschnitte. */
+    private val generatedWorlds = object : de.trailscape.app.indoor.IndoorGeneratedWorlds {
+        var builds = 0
+        val plans = mutableListOf<de.trailscape.core.indoor.generated.GeneratedProfile>()
+
+        fun route(profile: de.trailscape.core.indoor.generated.GeneratedProfile): de.trailscape.core.indoor.IndoorRoute {
+            val pts = mutableListOf<TrackPoint>()
+            var d = 0.0
+            var e = 100.0
+            pts += TrackPoint(50.0, 7.0, e)
+            for (leg in profile.legs) {
+                var left = leg.lengthM
+                while (left > 1e-6) {
+                    val step = minOf(10.0, left)
+                    d += step
+                    e += step * leg.gradePct / 100
+                    left -= step
+                    pts += TrackPoint(50.0 + d / 111_195.0, 7.0, e)
+                }
+            }
+            return assertNotNull(de.trailscape.app.indoor.testing.fakeRouteFromPoints("gen", pts, de.trailscape.core.indoor.IndoorRouteSource.NONE))
+        }
+
+        override fun plan(
+            profile: de.trailscape.core.indoor.generated.GeneratedProfile,
+            quality: de.trailscape.core.indoor.world.IndoorQuality,
+            name: String,
+        ): de.trailscape.core.indoor.world.WorldPlan {
+            plans += profile
+            return de.trailscape.core.indoor.world.WorldPlan(
+                worldId = "gen-${java.lang.Long.toHexString(profile.seed)}-${quality.name.lowercase()}",
+                route = route(profile), quality = quality, tileCount = 4, requests = emptyMap(),
+                downloadBytes = 0L, diskBytes = 1_000_000L, hosts = emptyList(), aerial = emptyList(),
+            )
+        }
+
+        override fun build(
+            plan: de.trailscape.core.indoor.world.WorldPlan,
+            profile: de.trailscape.core.indoor.generated.GeneratedProfile,
+            outDir: File,
+            listener: de.trailscape.core.indoor.world.WorldBuildListener,
+        ): de.trailscape.core.indoor.world.WorldManifest {
+            builds++
+            val m = de.trailscape.app.indoor.testing.FakeWorldBuilder.manifestFor(plan.worldId, plan.route, plan.quality)
+            de.trailscape.app.indoor.testing.FakeWorldBuilder.writeManifest(outDir, m)
+            return m
+        }
+    }
+
     @After
     fun cleanup() {
         vm?.release()
@@ -100,6 +149,7 @@ class IndoorDayFlowTest {
         coreTexts = { CoreTextsDe },
         today = { today },
         dayFinder = IndoorDayRouteFinder(rideStorage, worlds, null),
+        generatedWorlds = generatedWorlds,
         io = Dispatchers.Unconfined,
         clock = clock,
         wallClock = { 1_765_000_000_000L },
@@ -261,5 +311,60 @@ class IndoorDayFlowTest {
         val vm = viewModel(null)
         vm.toRoute()
         assertNull(vm.day.value)
+    }
+
+    @Test
+    fun ohnePassendeStreckeIstDieGenerierteWeltDerVorschlag() {
+        rideStorage.saveRide(ride("flach", "Flache Runde", 30_000.0) { 0.0 })
+        val vm = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        vm.toRoute()
+        val offer = assertIs<IndoorDayUi.Offer>(vm.day.value)
+        val gen = assertNotNull(offer.generated)
+        assertEquals(IndoorDayPath.GENERATED, offer.path, "flache Strecke passt nicht zu Intervallen")
+        assertEquals(3, gen.climbs)
+        assertEquals(3, gen.reps)
+        assertTrue(!gen.ready)
+
+        vm.setDayPath(IndoorDayPath.REAL)
+        assertEquals(IndoorDayPath.REAL, (vm.day.value as IndoorDayUi.Offer).path)
+        vm.setDayPath(IndoorDayPath.GENERATED)
+
+        vm.rideDayGenerated()
+        assertEquals(IndoorStage.WORLD, vm.stage.value)
+        assertEquals(IndoorMode.ERG, vm.route.value.mode)
+        val plan = assertIs<IndoorWorldUi.Plan>(vm.world.value)
+        assertTrue(plan.hosts.isEmpty(), "ohne Netz")
+        vm.loadWorld()
+        assertEquals(1, generatedWorlds.builds)
+        assertIs<IndoorWorldUi.Ready>(vm.world.value)
+        val info = worlds.listWorlds().single()
+        assertTrue(!worlds.isOrphaned(info, emptySet()), "generierte Welten sind nie verwaist")
+
+        // Dieselbe Einheit ergibt dieselbe Welt: beim naechsten Mal liegt sie bereit und es geht direkt los.
+        assertTrue(generatedWorlds.plans.distinct().size == 1)
+        vm.startRide(withWorld = true)
+        vm.releaseStart()
+        vm.tick(10)
+        assertEquals(IndoorMode.ERG, vm.ride.value?.session?.mode)
+        vm.release()
+
+        val again = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        again.toRoute()
+        assertTrue(assertNotNull((again.day.value as IndoorDayUi.Offer).generated).ready)
+        again.rideDayGenerated()
+        assertEquals(IndoorStage.RIDE, again.stage.value, "fertige generierte Welt → direkt in die Fahrt")
+        assertEquals(1, generatedWorlds.builds)
+    }
+
+    @Test
+    fun passendeEchteStreckeBleibtVorschlagGenerierteWeltWaehlbar() {
+        rideStorage.saveRide(ride("berge", "Drei Anstiege", 40_000.0, hilly))
+        val vm = viewModel(TodayRoute(target(SessionIntensity.HART), intervals, 25, 1.0, false, null))
+        vm.toRoute()
+        val offer = assertIs<IndoorDayUi.Offer>(vm.day.value)
+        assertEquals(IndoorDayPath.REAL, offer.path)
+        assertNotNull(offer.generated)
+        vm.preferDaySuggestion(INDOOR_DAY_GENERATED_KEY)
+        assertEquals(IndoorDayPath.GENERATED, (vm.day.value as IndoorDayUi.Offer).path)
     }
 }

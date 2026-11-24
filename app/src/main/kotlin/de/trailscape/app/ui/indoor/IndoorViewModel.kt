@@ -12,6 +12,9 @@ import de.trailscape.app.indoor.catalog.CatalogStore
 import de.trailscape.app.indoor.BleHeartRateSource
 import de.trailscape.app.indoor.IndoorDayPlan
 import de.trailscape.app.indoor.IndoorDayRouteFinder
+import de.trailscape.app.indoor.DefaultIndoorGeneratedWorlds
+import de.trailscape.app.indoor.GENERATED_SOURCE_PREFIX
+import de.trailscape.app.indoor.IndoorGeneratedWorlds
 import de.trailscape.app.indoor.IndoorHeartRateSource
 import de.trailscape.app.indoor.indoorDayPlanOf
 import de.trailscape.app.indoor.rank
@@ -162,6 +165,7 @@ class IndoorViewModel(
     private val coreTexts: () -> CoreTexts,
     private val today: () -> TodayRoute? = { null },
     private val dayFinder: IndoorDayRouteFinder? = null,
+    private val generatedWorlds: IndoorGeneratedWorlds = DefaultIndoorGeneratedWorlds,
     devices: Flow<Map<IndoorDeviceRole, IndoorDeviceRef>> = flowOf(emptyMap()),
     rematchRouter: IndoorRematchRouter? = null,
     private val heartRate: () -> IndoorHeartRateSource? = { null },
@@ -300,6 +304,9 @@ class IndoorViewModel(
 
         /** Katalogwelt bereit → ohne „Welt laden" direkt losfahren. */
         var autoStart = false
+
+        /** Generierte Welt der Einheit des Tages, die gerade aufbereitet oder gebaut wird. */
+        var generated: IndoorRouteOption.Generated? = null
     }
 
     // Fahrt
@@ -480,6 +487,7 @@ class IndoorViewModel(
                 val options = listOf<IndoorRouteOption>(IndoorRouteOption.TestWorld) + saved
                 val selected = current.selected?.let { sel -> options.firstOrNull { it.key == sel.key } }
                     ?: current.selected as? IndoorRouteOption.Catalog
+                    ?: current.selected as? IndoorRouteOption.Generated
                 val mode = if (erg == null) IndoorMode.SIM else current.mode
                 current.copy(
                     options = options,
@@ -562,22 +570,56 @@ class IndoorViewModel(
         }
         if (_day.value !is IndoorDayUi.Offer) _day.value = IndoorDayUi.Loading
         scope.launch {
-            val matches = withContext(io) {
-                runCatching { finder.rank(plan, texts.testWorldName(), texts.languageTag(), texts.dayPlanName()) }.getOrDefault(emptyList())
+            val (matches, genReady) = withContext(io) {
+                runCatching { finder.rank(plan, texts.testWorldName(), texts.languageTag(), texts.dayPlanName()) }.getOrDefault(emptyList()) to
+                    generatedReady(plan)
             }
             if (dayPlan !== plan) return@launch
             dayMatches = matches
             val bytes = catalog.value.items.associate { it.id to it.packageBytes }
-            val ui = indoorDayUiOf(plan, matches) { id -> bytes[id] }
+            val ui = indoorDayUiOf(plan, matches, generatedReady = genReady) { id -> bytes[id] }
             val previous = (_day.value as? IndoorDayUi.Offer)?.current?.key
-            _day.value = (ui as? IndoorDayUi.Offer)?.showing(preferredDayKey ?: previous) ?: ui
+            val prev = _day.value as? IndoorDayUi.Offer
+            val shown = (ui as? IndoorDayUi.Offer)?.let { offer ->
+                when {
+                    preferredDayKey != null -> offer.showing(preferredDayKey)
+                    prev?.path == IndoorDayPath.GENERATED && offer.generated != null -> offer.copy(path = IndoorDayPath.GENERATED)
+                    else -> offer.showing(previous)
+                }
+            }
+            preferredDayKey = null
+            _day.value = shown ?: ui
         }
     }
 
     /** Von „Heute": diesen Vorschlag vorauswaehlen, sobald die Karte steht. */
     fun preferDaySuggestion(key: String?) {
-        preferredDayKey = key
-        (_day.value as? IndoorDayUi.Offer)?.let { _day.value = it.showing(key) }
+        val offer = _day.value as? IndoorDayUi.Offer
+        if (offer != null) _day.value = offer.showing(key) else preferredDayKey = key
+    }
+
+    /** Ob die generierte Welt zur Einheit [plan] schon gebaut auf dem Geraet liegt (blockierend). */
+    private fun generatedReady(plan: IndoorDayPlan): Boolean = runCatching {
+        val profile = de.trailscape.core.indoor.dayGeneratedProfile(plan.goal!!)
+        val wp = generatedWorlds.plan(profile, quality, "")
+        worlds.get(wp.worldId)?.complete == true
+    }.getOrDefault(false)
+
+    /** Weg der Karte: echte Strecke oder generierte Welt. */
+    fun setDayPath(path: IndoorDayPath) {
+        (_day.value as? IndoorDayUi.Offer)?.let { if (it.generated != null) _day.value = it.copy(path = path) }
+    }
+
+    /**
+     * „Fahren"/„Welt bauen" auf dem Weg „Generierte Welt": Zielprofil aus der
+     * Einheit, ERG-Modus, weiter zu „Welt laden" (bereit → direkt in die Fahrt).
+     */
+    fun rideDayGenerated() {
+        val goal = dayPlan?.goal ?: return
+        val profile = runCatching { de.trailscape.core.indoor.dayGeneratedProfile(goal) }.getOrNull() ?: return
+        val option = IndoorRouteOption.Generated(profile, texts.dayGeneratedName(dayPlan?.title ?: ""))
+        dayStartPick = null
+        rideDayOn(option, option.key)
     }
 
     /** „Andere Strecke": der naechste Vorschlag. */
@@ -707,7 +749,8 @@ class IndoorViewModel(
     fun continueFromRoute() {
         if (!_route.value.canContinue) return
         _stage.value = IndoorStage.WORLD
-        prepareWorld(autoStart = _route.value.selected is IndoorRouteOption.Catalog)
+        val sel = _route.value.selected
+        prepareWorld(autoStart = sel is IndoorRouteOption.Catalog || sel is IndoorRouteOption.Generated)
     }
 
     // -----------------------------------------------------------------------
@@ -733,6 +776,7 @@ class IndoorViewModel(
                         IndoorRouteOption.TestWorld -> prepareTestWorld(token)
                         is IndoorRouteOption.Saved -> prepareSaved(option, token)
                         is IndoorRouteOption.Catalog -> prepareCatalog(option, token)
+                        is IndoorRouteOption.Generated -> prepareGenerated(option, token)
                     }
                 }
             }
@@ -793,6 +837,66 @@ class IndoorViewModel(
         return IndoorWorldUi.Ready(routeName, installed.manifest.attribution)
     }
 
+    /**
+     * Generierte Welt der Einheit des Tages: Voranschlag ohne Netz; liegt die
+     * Welt schon gebaut vor, ist sie sofort bereit.
+     */
+    private fun prepareGenerated(option: IndoorRouteOption.Generated, token: WorldJobToken): IndoorWorldUi {
+        token.routeName = option.name
+        token.generated = option
+        val plan = indoorCatching(IndoorPart.WORLD) { generatedWorlds.plan(option.profile, quality, option.name) }
+            .getOrElse { return IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.WORLD, it)) }
+        token.plan = plan
+        token.baseRoute = plan.route
+        val dir = runCatching { worlds.worldDirFor(plan.worldId) }
+            .getOrElse { return IndoorWorldUi.RouteUnavailable(problemOf(IndoorPart.APP, it)) }
+        readManifest(dir)?.let { m ->
+            token.manifest = m
+            token.dir = dir
+            return IndoorWorldUi.Ready(option.name, m.attribution)
+        }
+        val resumable = runCatching { worlds.get(plan.worldId)?.let { !it.complete } ?: false }.getOrDefault(false)
+        return planUi(plan, resumable, option.name)
+    }
+
+    private fun buildGenerated(option: IndoorRouteOption.Generated, token: WorldJobToken): IndoorWorldUi {
+        token.generated = option
+        val plan = worldPlan ?: indoorCatching(IndoorPart.WORLD) { generatedWorlds.plan(option.profile, quality, option.name) }
+            .getOrElse { return failedOf(it, canRetry = true) }
+        token.plan = plan
+        token.baseRoute = plan.route
+        val dir = runCatching { worlds.worldDirFor(plan.worldId) }.getOrElse { return failedOf(it, canRetry = false) }
+        runCatching { WorldLibrary.writeSource(dir, GENERATED_SOURCE_PREFIX + java.lang.Long.toHexString(option.profile.seed), option.name) }
+        val listener = buildListener(token)
+        return indoorCatching(IndoorPart.WORLD) { generatedWorlds.build(plan, option.profile, dir, listener) }.fold(
+            onSuccess = { manifest ->
+                token.manifest = manifest
+                token.dir = dir
+                IndoorWorldUi.Ready(option.name, manifest.attribution)
+            },
+            onFailure = { e ->
+                if (causeOf<WorldBuildCancelled>(e) != null || token.stopRequested) {
+                    planUi(plan, resumable = true, option.name)
+                } else {
+                    failedOf(e, canRetry = true)
+                }
+            },
+        )
+    }
+
+    private fun buildListener(token: WorldJobToken): WorldBuildListener {
+        val progress = BuildProgress()
+        return object : WorldBuildListener {
+            override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) {
+                if (token.stopRequested || token !== worldToken) return
+                _world.value = progress.report(phase, done, total)
+                if (token.stopRequested) markCancelling()
+            }
+
+            override fun isCancelled(): Boolean = token.stopRequested || token !== worldToken
+        }
+    }
+
     private suspend fun prepareSaved(option: IndoorRouteOption.Saved, token: WorldJobToken): IndoorWorldUi {
         val ride = runCatching { rideStorage.loadRide(option.rideId) }.getOrNull()
             ?: return IndoorWorldUi.RouteUnavailable(
@@ -839,9 +943,20 @@ class IndoorViewModel(
      * [cancelWorldBuild].
      */
     fun loadWorld() {
-        val ride = selectedRide ?: return
         val current = _world.value
         if (current !is IndoorWorldUi.Plan && current !is IndoorWorldUi.Failed) return
+        (_route.value.selected as? IndoorRouteOption.Generated)?.let { generated ->
+            val previous = cancelRunningWorldJob()
+            _world.value = IndoorWorldUi.Building(WorldBuildPhase.ELEVATION, 0, 0, 0f)
+            val token = WorldJobToken().also { worldToken = it }
+            worldJob = scope.launch {
+                previous?.join()
+                val ui = withContext(io) { worldGuard(canRetry = true) { buildGenerated(generated, token) } }
+                commitWorld(token, ui)
+            }
+            return
+        }
+        val ride = selectedRide ?: return
         val previous = cancelRunningWorldJob()
         _world.value = IndoorWorldUi.Building(WorldBuildPhase.ELEVATION, 0, 0, 0f)
         val token = WorldJobToken().also { worldToken = it }

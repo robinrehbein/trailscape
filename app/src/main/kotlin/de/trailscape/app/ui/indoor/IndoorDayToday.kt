@@ -73,7 +73,12 @@ fun IndoorTodayEntry(
                 val bytes = runCatching {
                     AppServices.indoorCatalogStore.catalog().entries.associate { it.id to it.packageBytes }
                 }.getOrDefault(emptyMap())
-                indoorDayUiOf(plan, matches) { id -> bytes[id] }?.let { plan to it }
+                val genReady = runCatching {
+                    val wp = de.trailscape.app.indoor.DefaultIndoorGeneratedWorlds
+                        .plan(de.trailscape.core.indoor.dayGeneratedProfile(plan.goal!!), de.trailscape.core.indoor.world.IndoorQuality.MEDIUM, "")
+                    AppServices.indoorWorldLibrary.get(wp.worldId)?.complete == true
+                }.getOrDefault(false)
+                indoorDayUiOf(plan, matches, generatedReady = genReady) { id -> bytes[id] }?.let { plan to it }
             }.getOrNull()
         }
     }
@@ -89,6 +94,8 @@ fun IndoorTodayEntry(
                 }
             },
             onNext = { state = current.first to ui.next() },
+            onRideGenerated = { onRideDay(INDOOR_DAY_GENERATED_KEY) },
+            onPathChange = { p -> state = current.first to ui.copy(path = p) },
             modifier = modifier,
         )
         is IndoorDayUi.Rest -> IndoorDayCard(ui = ui, onRide = {}, onNext = {}, onOpenIndoor = onOpen, modifier = modifier)

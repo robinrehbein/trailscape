@@ -360,7 +360,7 @@ fun dayRouteGoal(workout: ErgWorkout, rider: RiderSetup): DayRouteGoal {
         else -> DayTerrain.FLAT
     }
     val ftp = ftpOf(rider)
-    val flat = workout.steps.sumOf { it.durationS * speedAt(it.ftpFraction * ftp, 0.0, rider) }
+    val flat = workout.steps.sumOf { it.durationS * daySpeedMps(it.ftpFraction * ftp, 0.0, rider) }
     return DayRouteGoal(workout, rider, terrain, intervals, flat)
 }
 
@@ -369,7 +369,7 @@ private fun ftpOf(rider: RiderSetup): Double = rider.ftpW.takeIf { it.isFinite()
 /** Untergrenze des Tempos in der Rechnung (auch eine Erholung am steilen Berg kommt voran). */
 private const val MIN_SPEED_MPS: Double = 0.5
 
-private fun speedAt(powerW: Double, gradePct: Double, rider: RiderSetup): Double = max(
+internal fun daySpeedMps(powerW: Double, gradePct: Double, rider: RiderSetup): Double = max(
     MIN_SPEED_MPS,
     steadySpeedMps(powerW, gradePct, effectiveCrr(SurfaceKind.COMPACTED, rider.profileCrr), 0.0, 0.0, rider),
 )
@@ -416,7 +416,7 @@ fun simulateDayRide(goal: DayRouteGoal, profile: DayRouteProfile, startM: Double
     val cache = HashMap<Long, Double>()
     fun speed(fraction: Double, step: Int): Double {
         val key = (Math.round(fraction * 1000) shl 20) or step.toLong()
-        return cache.getOrPut(key) { speedAt(fraction * ftp, profile.gradePct[step], goal.rider) }
+        return cache.getOrPut(key) { daySpeedMps(fraction * ftp, profile.gradePct[step], goal.rider) }
     }
     val length = profile.lengthM
     var lapStart = 0.0
@@ -760,7 +760,7 @@ fun dayClimbs(goal: DayRouteGoal, profile: DayRouteProfile, sim: DayRideSim): Da
         val toM = end * DayRouteProfile.STEP_M + profile.stepLengthM(end)
         if (toM - fromM >= MIN_CLIMB_M) {
             var s = 0.0
-            for (i in k..end) s += profile.stepLengthM(i) / speedAt(power, profile.gradePct[i], goal.rider)
+            for (i in k..end) s += profile.stepLengthM(i) / daySpeedMps(power, profile.gradePct[i], goal.rider)
             climbs += Climb(fromM, toM, s)
         }
         k = end + 1

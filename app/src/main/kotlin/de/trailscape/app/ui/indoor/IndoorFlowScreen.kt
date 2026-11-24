@@ -160,6 +160,8 @@ private fun RouteStage(vm: IndoorViewModel) {
         day = day,
         onDayRide = { vm.rideDaySuggestion() },
         onDayNext = vm::nextDaySuggestion,
+        onDayGenerated = vm::rideDayGenerated,
+        onDayPath = vm::setDayPath,
         onSelect = vm::selectRoute,
         onModeChange = vm::setMode,
         onGhostChange = vm::setGhost,

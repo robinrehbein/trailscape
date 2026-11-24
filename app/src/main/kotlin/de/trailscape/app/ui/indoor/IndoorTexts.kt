@@ -38,6 +38,9 @@ interface IndoorTexts {
     /** Anzeigename der neu zu planenden Runde (Einheit des Tages). */
     fun dayPlanName(): String = "Neue Runde"
 
+    /** Name der generierten Welt zur Einheit [title]. */
+    fun dayGeneratedName(title: String): String = "Generierte Welt · $title"
+
     /** Sprache der Oberflaeche (`de`/`en`), fuer die Namen der Katalogstrecken. */
     fun languageTag(): String = "de"
 }
@@ -76,4 +79,6 @@ class ContextIndoorTexts(
     override fun dayPlanName(): String = context().getString(R.string.indoor_app_day_plan_name)
 
     override fun languageTag(): String = language().tag
+
+    override fun dayGeneratedName(title: String): String = context().getString(R.string.indoor_app_day_generated_name, title)
 }

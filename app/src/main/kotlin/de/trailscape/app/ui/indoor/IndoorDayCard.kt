@@ -41,7 +41,11 @@ import de.trailscape.core.indoor.DayRouteAvailability
 import de.trailscape.core.indoor.DayRouteMatch
 import de.trailscape.core.indoor.DaySessionKind
 import de.trailscape.core.indoor.DayTerrain
+import de.trailscape.core.indoor.DAY_PLAN_SCORE
+import de.trailscape.core.indoor.dayGeneratedProfile
+import de.trailscape.core.indoor.generated.GeneratedProfile
 import de.trailscape.core.indoor.sessionDurationMinutes
+import de.trailscape.app.ui.components.PillSegments
 import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------
@@ -76,6 +80,34 @@ data class IndoorDaySuggestionUi(
     val estimated: Boolean = false,
 )
 
+/** Die beiden Wege der Karte. */
+enum class IndoorDayPath {
+    /** Eine echte Strecke (Vorschlaege zum Durchblaettern). */
+    REAL,
+
+    /** Eine erfundene Landschaft genau zur Einheit, auf dem Geraet gebaut. */
+    GENERATED,
+}
+
+/**
+ * Die generierte Welt zur Einheit (Weg [IndoorDayPath.GENERATED]).
+ *
+ * @property km Laenge = Strecke der Einheit bei Sollleistung (die Einheit endet am Ziel).
+ * @property climbs Anstiege (eins je Intervall), 0 ohne Intervalle.
+ * @property buildMinutes geschaetzte Bauzeit ohne Netz; [ready] = liegt schon gebaut vor.
+ */
+data class IndoorDayGeneratedUi(
+    val km: Double,
+    val climbs: Int,
+    val reps: Int,
+    val workMinutes: Int,
+    val buildMinutes: Int,
+    val ready: Boolean = false,
+)
+
+/** Schluessel, mit dem „Heute" den Weg „Generierte Welt" an den Ablauf weitergibt. */
+const val INDOOR_DAY_GENERATED_KEY: String = "generated"
+
 /** Die Karte „Einheit des Tages". */
 sealed interface IndoorDayUi {
     /** Die passende Strecke wird gesucht. */
@@ -103,6 +135,8 @@ sealed interface IndoorDayUi {
         val terrain: DayTerrain,
         val suggestions: List<IndoorDaySuggestionUi>,
         val index: Int = 0,
+        val generated: IndoorDayGeneratedUi? = null,
+        val path: IndoorDayPath = IndoorDayPath.REAL,
     ) : IndoorDayUi {
         val current: IndoorDaySuggestionUi? get() = suggestions.getOrNull(index)
 
@@ -110,7 +144,10 @@ sealed interface IndoorDayUi {
         fun next(): Offer = if (suggestions.isEmpty()) this else copy(index = (index + 1) % suggestions.size)
 
         /** Den Vorschlag mit [key] zeigen, falls es ihn gibt. */
-        fun showing(key: String?): Offer = suggestions.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { copy(index = it) } ?: this
+        fun showing(key: String?): Offer {
+            if (key == INDOOR_DAY_GENERATED_KEY && generated != null) return copy(path = IndoorDayPath.GENERATED)
+            return suggestions.indexOfFirst { it.key == key }.takeIf { it >= 0 }?.let { copy(index = it, path = IndoorDayPath.REAL) } ?: this
+        }
     }
 }
 
@@ -133,6 +170,7 @@ const val INDOOR_DAY_MAX_SUGGESTIONS: Int = 6
 fun indoorDayUiOf(
     plan: IndoorDayPlan,
     matches: List<DayRouteMatch>,
+    generatedReady: Boolean = false,
     packageBytes: (String) -> Long? = { null },
 ): IndoorDayUi? {
     val kind = plan.day.kind
@@ -167,8 +205,33 @@ fun indoorDayUiOf(
             estimated = c.profile?.estimated == true,
         )
     }
-    return IndoorDayUi.Offer(kind, plan.title ?: workout.title, minutes, plannedMinutes, goal.terrain, suggestions)
+    val generated = runCatching {
+        val profile = dayGeneratedProfile(goal)
+        val km = profile.lengthM / 1000.0
+        IndoorDayGeneratedUi(
+            km = km,
+            climbs = profile.legs.count { it.kind == GeneratedProfile.Kind.CLIMB },
+            reps = goal.intervals.size,
+            workMinutes = goal.intervals.maxOfOrNull { it.durationS }?.let { (it / 60.0).roundToInt() } ?: 0,
+            buildMinutes = ((km * GENERATED_BUILD_SECONDS_PER_KM) / 60.0).roundToInt().coerceAtLeast(1),
+            ready = generatedReady,
+        )
+    }.getOrNull()
+    // Gibt es keine passende echte Strecke, ist die generierte Welt der Vorschlag.
+    val realFits = matches.any {
+        it.candidate.availability != DayRouteAvailability.PLAN &&
+            it.rank >= DAY_PLAN_SCORE - DayRouteAvailability.PLAN.penalty
+    }
+    val path = if (generated != null && !realFits) IndoorDayPath.GENERATED else IndoorDayPath.REAL
+    return IndoorDayUi.Offer(kind, plan.title ?: workout.title, minutes, plannedMinutes, goal.terrain, suggestions, generated = generated, path = path)
 }
+
+/**
+ * Grobe Bauzeit einer generierten Welt in Sekunden je km — ohne Netz, also
+ * etwa die Haelfte der Bauzeit einer echten Strecke
+ * ([IndoorDayRouteFinder.BUILD_SECONDS_PER_KM]); auf dem Geraet zu pruefen.
+ */
+const val GENERATED_BUILD_SECONDS_PER_KM: Int = 10
 
 // ---------------------------------------------------------------------------
 // Texte
@@ -265,6 +328,8 @@ fun IndoorDayCard(
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenIndoor: (() -> Unit)? = null,
+    onRideGenerated: () -> Unit = {},
+    onPathChange: (IndoorDayPath) -> Unit = {},
 ) {
     val formats = LocalAppFormats.current
     Card(modifier = modifier.fillMaxWidth()) {
@@ -305,14 +370,21 @@ fun IndoorDayCard(
                     Text(stringResource(R.string.indoor_app_day_event_title), style = MaterialTheme.typography.titleMedium)
                     MutedText(stringResource(R.string.indoor_app_day_event_body))
                 }
-                is IndoorDayUi.Offer -> OfferBody(ui, formats, onRide, onNext)
+                is IndoorDayUi.Offer -> OfferBody(ui, formats, onRide, onNext, onRideGenerated, onPathChange)
             }
         }
     }
 }
 
 @Composable
-private fun OfferBody(ui: IndoorDayUi.Offer, formats: AppFormats, onRide: (IndoorDaySuggestionUi) -> Unit, onNext: () -> Unit) {
+private fun OfferBody(
+    ui: IndoorDayUi.Offer,
+    formats: AppFormats,
+    onRide: (IndoorDaySuggestionUi) -> Unit,
+    onNext: () -> Unit,
+    onRideGenerated: () -> Unit,
+    onPathChange: (IndoorDayPath) -> Unit,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(text = ui.title, style = MaterialTheme.typography.titleMedium)
         MutedText(
@@ -322,6 +394,21 @@ private fun OfferBody(ui: IndoorDayUi.Offer, formats: AppFormats, onRide: (Indoo
                 else -> stringResource(R.string.indoor_app_day_meta, ui.minutes)
             },
         )
+    }
+    val generated = ui.generated
+    if (generated != null) {
+        PillSegments(
+            options = listOf(
+                stringResource(R.string.indoor_app_day_path_real),
+                stringResource(R.string.indoor_app_day_path_generated),
+            ),
+            selectedIndex = if (ui.path == IndoorDayPath.REAL) 0 else 1,
+            onSelect = { onPathChange(if (it == 0) IndoorDayPath.REAL else IndoorDayPath.GENERATED) },
+        )
+        if (ui.path == IndoorDayPath.GENERATED) {
+            GeneratedBody(generated, ui.terrain, formats, onRideGenerated)
+            return
+        }
     }
     val s = ui.current
     if (s == null) {
@@ -349,5 +436,47 @@ private fun OfferBody(ui: IndoorDayUi.Offer, formats: AppFormats, onRide: (Indoo
                 Text(stringResource(R.string.indoor_app_day_next_action, ui.index + 1, ui.suggestions.size))
             }
         }
+    }
+}
+
+@Composable
+private fun GeneratedBody(g: IndoorDayGeneratedUi, terrain: DayTerrain, formats: AppFormats, onRide: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(text = stringResource(R.string.indoor_app_day_generated_title), style = MaterialTheme.typography.titleSmall)
+        val shape = when {
+            g.climbs > 0 && g.reps > 0 -> pluralStringResource(R.plurals.indoor_app_day_generated_climbs_count, g.climbs, g.climbs, g.reps, g.workMinutes)
+            terrain == DayTerrain.ROLLING -> stringResource(R.string.indoor_app_day_reason_rolling)
+            else -> stringResource(R.string.indoor_app_day_reason_flat)
+        }
+        Text(
+            text = listOf(
+                stringResource(R.string.indoor_app_day_reason_km, formats.km(g.km)),
+                shape,
+                stringResource(R.string.indoor_app_day_generated_ends),
+            ).joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+            Icon(
+                if (g.ready) Icons.Filled.CheckCircle else Icons.Filled.Build,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = if (g.ready) {
+                    stringResource(R.string.indoor_app_day_world_ready)
+                } else {
+                    stringResource(R.string.indoor_app_day_generated_build, g.buildMinutes)
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    Button(onClick = onRide) {
+        Text(stringResource(if (g.ready) R.string.indoor_app_day_ride_action else R.string.indoor_app_day_build_action))
     }
 }
