@@ -3,6 +3,9 @@
 Stand: 23.11.2026, Branch `claude/indoor-world`. Vertrag: `docs/indoor.md`
 (Abschnitte 7.1–7.5, 8, 9).
 
+Datenstufe „Laser" (DGM1, nDOM, LoD2 aus NRW; nur Entwicklerwerkzeug):
+`docs/indoor/lidar.md`.
+
 ## Stand
 
 | Teil | Stand |

@@ -284,6 +284,7 @@ internal class TreesLayer : TileLayer {
 
     /** Hoehe des Kronendachs ueber dem Boden, sanft wellig (Bestaende von einigen hundert Metern). */
     private fun canopyHeight(ctx: TileContext, e: Double, n: Double): Double {
+        ctx.land.canopyHeightAt(e, n).let { if (it.isFinite()) return it.coerceIn(4.0, 40.0) }
         val f = Noise.fbm(e / 160.0, n / 160.0, SEED_HEIGHT, 3)
         val conifer = ctx.land.coniferShare(e, n)
         return (17.0 + 3.0 * conifer + 5.0 * f).coerceIn(11.0, 26.0)
@@ -306,7 +307,17 @@ internal class TreesLayer : TileLayer {
         val net = RoadNet(ctx, marginM = 6.0)
         val buildings = ctx.map.buildings(s.minE - 4, s.minN - 4, s.maxE + 4, s.maxN + 4)
         val cands = ArrayList<Candidate>()
-        for ((spacing, from, to) in listOf(Triple(DENSE_SPACING_M, 0.0, DENSE_M), Triple(OPEN_SPACING_M, DENSE_M, NEAR_M + 4.0))) {
+        // Gemessene Baeume (Laserdaten): echte Lage und Hoehe statt Wuerfelgitter.
+        val laserTrees = ctx.land.laserTrees(s)
+        laserTrees?.forEach { t ->
+            val hit = ctx.track.nearest(t.e, t.n, NEAR_M + 4.0) ?: return@forEach
+            if (hit.distance < ctx.track.halfWidthAt(hit.distM) + LASER_TRACK_CLEARANCE_M) return@forEach
+            val cls = ctx.land.classAt(t.e, t.n)
+            if (cls == LandClass.WATER || net.clearance(t.e, t.n) < ROAD_CLEARANCE_M || nearBuilding(buildings, t.e, t.n)) return@forEach
+            val spec = laserTreeSpec(specFor(ctx, cls, t.e, t.n, floor(t.e).toInt(), floor(t.n).toInt(), 1.0), t, hit.distance - ctx.track.halfWidthAt(hit.distM), ctx.land.coniferShare(t.e, t.n)) ?: return@forEach
+            cands += Candidate(t.e, t.n, hit.distance, spec)
+        }
+        if (laserTrees == null) for ((spacing, from, to) in listOf(Triple(DENSE_SPACING_M, 0.0, DENSE_M), Triple(OPEN_SPACING_M, DENSE_M, NEAR_M + 4.0))) {
             val i0 = floor(s.minE / spacing).toInt()
             val i1 = floor(s.maxE / spacing).toInt()
             val j0 = floor(s.minN / spacing).toInt()
@@ -622,6 +633,9 @@ internal class TreesLayer : TileLayer {
 
         /** Mindestabstand des Stamms vom Fahrbahnrand. */
         const val TRACK_CLEARANCE_M = 2.8
+
+        /** Gemessene Baeume duerfen naeher stehen (Alleen); der Stamm steht dort wirklich. */
+        const val LASER_TRACK_CLEARANCE_M = 1.2
         const val ROAD_CLEARANCE_M = 2.0
         const val BUILDING_CLEARANCE_M = 3.0
 

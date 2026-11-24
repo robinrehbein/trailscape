@@ -149,7 +149,7 @@ internal class RoadsLayer : TileLayer {
             // vor und zurueck (liegt ein Gitterpunkt zwischen zwei Stationen, woelbt es sich dort).
             val te = r.rn[k] * STEP_M / 2
             val tn = -r.re[k] * STEP_M / 2
-            fun bulge(x: Double, y: Double) = terrainMeshHeightAt(ctx.ground, x, y, meshCell) - ctx.ground.heightAt(x, y)
+            fun bulge(x: Double, y: Double) = ctx.meshHeightAt(x, y, meshCell) - ctx.ground.heightAt(x, y)
             val g0 = ctx.ground.heightAt(e, n)
             val mesh = g0 + max(0.0, max(bulge(e, n), max(bulge(e + te, n + tn), bulge(e - te, n - tn))))
             val v = mesh + BASE_LIFT_M + r.spec.rank * RANK_LIFT_M + dirLift(r, k)
