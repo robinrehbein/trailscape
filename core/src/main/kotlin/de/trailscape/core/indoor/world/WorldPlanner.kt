@@ -39,7 +39,7 @@ import kotlin.math.tan
  */
 
 /** Version des Weltbaus — Teil der Welt-ID; erhoehen, sobald sich gebaute Welten aendern. */
-internal const val WORLD_BUILDER_ID: String = "indoor-world/9"
+internal const val WORLD_BUILDER_ID: String = "indoor-world/10"
 
 /** Eine geplante Kachel: wann sie geladen sein soll (Laufmeter innerhalb der Runde, sortiert, zusammengefasst). */
 internal class TilePlan(val spec: TileSpec, val show: List<ShowInterval>) {
