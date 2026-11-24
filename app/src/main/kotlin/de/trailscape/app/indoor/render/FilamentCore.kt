@@ -383,7 +383,9 @@ internal class FilamentCore {
     }
 
     companion object {
-        const val NEAR_M = 0.3
+        // 0,5 statt 0,3 m: Tiefenauflösung in der Ferne fast doppelt so gut (weniger Flimmern von
+        // Strasse auf Gelände); die Lenkerkamera sitzt 1,45 m hoch, nichts kommt näher.
+        const val NEAR_M = 0.5
         const val FAR_M = 25_000.0
         const val FOV_LANDSCAPE_DEG = 50.0
         const val FOV_PORTRAIT_DEG = 72.0

@@ -149,6 +149,34 @@ internal class TerrainLayer(
     }
 }
 
+/**
+ * Hoehe des **gezeichneten** Gelaendenetzes der Stufe 0 an (`e`, `n`): dieselben Gitterpunkte
+ * (Raster [cellM] am Ursprung) und dieselbe Diagonalenwahl wie [TerrainLayer], linear im
+ * Dreieck. Zwischen den Gitterpunkten weicht das Netz vom wahren Boden ab — wer etwas knapp
+ * ueber den Boden legt (Strassen, Wegraender), nimmt das Maximum aus beidem, sonst sticht das
+ * Netz durch und flimmert.
+ */
+internal fun terrainMeshHeightAt(ground: GroundSurface, e: Double, n: Double, cellM: Double): Double {
+    val gi = kotlin.math.floor(e / cellM)
+    val gj = kotlin.math.floor(n / cellM)
+    val fx = e / cellM - gi
+    val fy = n / cellM - gj
+    val e0 = gi * cellM
+    val n0 = gj * cellM
+    val h00 = ground.heightAt(e0, n0)
+    val h10 = ground.heightAt(e0 + cellM, n0)
+    val h01 = ground.heightAt(e0, n0 + cellM)
+    val h11 = ground.heightAt(e0 + cellM, n0 + cellM)
+    val even = ((gi.toLong() + gj.toLong()) and 1L) == 0L
+    return if (even) {
+        // Diagonale (0,0)–(1,1)
+        if (fx >= fy) h00 + fx * (h10 - h00) + fy * (h11 - h10) else h00 + fy * (h01 - h00) + fx * (h11 - h01)
+    } else {
+        // Diagonale (1,0)–(0,1)
+        if (fx + fy <= 1.0) h00 + fx * (h10 - h00) + fy * (h01 - h00) else h11 + (1 - fx) * (h01 - h11) + (1 - fy) * (h10 - h11)
+    }
+}
+
 /** Zellenkante des Gelaendenetzes der Stufe 0 bei [quality] — dieselbe Zahl braucht [CarvedGround]. */
 internal fun level0TerrainCellM(quality: IndoorQuality): Double =
     WORLD_LEVEL0_CELL_M / TerrainLayer.terrainCells(TileBudget.of(quality, 0).terrain, 1)

@@ -535,7 +535,14 @@ private class RouteEmitter(
 
     private fun pointE(st: Station, t: Double): Double = st.e + st.tn * RouteGeometry.limitOffset(t, st.kappa)
     private fun pointN(st: Station, t: Double): Double = st.n - st.te * RouteGeometry.limitOffset(t, st.kappa)
-    private fun groundAt(st: Station, t: Double): Double = ctx.ground.heightAt(pointE(st, t), pointN(st, t))
+    private val meshCell = level0TerrainCellM(ctx.quality)
+
+    /** Boden fuer die Raender: das Maximum aus wahrem Boden und gezeichnetem Netz ([terrainMeshHeightAt]). */
+    private fun groundAt(st: Station, t: Double): Double {
+        val e = pointE(st, t)
+        val n = pointN(st, t)
+        return max(ctx.ground.heightAt(e, n), terrainMeshHeightAt(ctx.ground, e, n, meshCell))
+    }
 
     private fun roadFactor(st: Station, t: Double): Double =
         smoothstep(0.2, 1.8, env.roads.clearance(pointE(st, t), pointN(st, t), withRail = false))
