@@ -105,7 +105,9 @@ private fun run(all: List<String>): Int {
         "plan" -> plan(Args(rest, setOf("no-aerial", "offline", "laser")))
         "testworld" -> testworld(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
-        "overlaps" -> overlaps(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
+        "overlaps" -> Args(rest, emptySet()).let { a ->
+            overlaps(File(a.positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")), a.opt("tol-cm")?.toDoubleOrNull()?.div(100.0) ?: 0.004)
+        }
         "models" -> models(Args(rest, emptySet()))
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
         "lod2-cut" -> lod2Cut(Args(rest, setOf("offline")))
@@ -309,14 +311,14 @@ private fun testworld(a: Args): Int {
 }
 
 /** Koplanare, ueberlappende Flaechen (Ursache fuer Flimmern) in den Kacheln der Stufe 0 auflisten. */
-private fun overlaps(dir: File): Int {
+private fun overlaps(dir: File, tolM: Double = 0.004): Int {
     if (!dir.isDirectory) throw UsageError("Weltverzeichnis nicht gefunden: $dir")
     val m = WorldManifest.parse(File(dir, WorldManifest.FILE_NAME).readText())
     val total = HashMap<String, Int>()
     for (t in m.tiles.filter { it.level == 0 }) {
-        for ((k, v) in de.trailscape.core.indoor.world.coplanarOverlaps(File(dir, t.file).readBytes())) total[k] = (total[k] ?: 0) + v
+        for ((k, v) in de.trailscape.core.indoor.world.coplanarOverlaps(File(dir, t.file).readBytes(), tolM = tolM)) total[k] = (total[k] ?: 0) + v
     }
-    println("Koplanare Ueberlappungen (Stufe 0, ${m.tiles.count { it.level == 0 }} Kacheln): ${total.values.sum()}")
+    println("Koplanare Ueberlappungen unter ${"%.1f".format(tolM * 100)} cm (Stufe 0, ${m.tiles.count { it.level == 0 }} Kacheln): ${total.values.sum()}")
     for ((k, v) in total.entries.sortedByDescending { it.value }) println("  $v  $k")
     // Weiche Raender mit Vertex-Deckung < 1 (BLEND): auf dem Geraet helle Nahtlinien (siehe translucentVertexAlpha).
     val alpha = HashMap<String, Int>()
