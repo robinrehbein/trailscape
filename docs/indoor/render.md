@@ -469,6 +469,222 @@ Gründers (24.11., 18:19 Uhr → Dämmerung bei 8° Sonne).
   nicht Cockpit, Himmelsmaterial, Wasser und Farbweg — maßgeblich für das
   Aussehen ist jetzt `filashots.mjs`.
 
+## Boden aus der Nähe und Leben (24.11.2026, Branch `claude/indoor-boden-leben`)
+
+**Auftrag:** Der Boden direkt neben dem Rad war unscharf und flach, der Waldboden kühl
+blaugrün; die Welt wirkte leblos. **Alles unten ist im Filament-Referenzrenderer gesehen
+(Desktop-GL, llvmpipe), nicht auf dem Gerät** — Bildrate, mediump-Verhalten des Treibers und
+Anisotropie der Hardware sind dort nicht prüfbar.
+
+### Was neben dem Rad tatsächlich zu sehen ist
+
+Nachgeprüft mit einem Diagnose-Shader: In den ersten 5–10 m beiderseits des Wegs liegt
+**nicht** das Gelände, sondern die Randstreifen des Weltbaus (`x_mat_route_verge_*`, Bankett,
+Gehweg) und ihr durchsichtiger Auslauf ins Luftbild (`x_mat_route_*_fade`, bewusst
+weichgezeichnet), dazu der Belag selbst. Diese Texturen sind fein genug (≈ 1 cm je Texel),
+verschwammen aber flach gesehen schon wenige Meter vor dem Rad: **gltfio 1.75.1 übernimmt
+keine Anisotropie** (siehe „Bildqualität“), und die Mip-Stufe richtet sich nach der langen
+Achse der Pixelspur. Das Gelände selbst sieht man erst ab rund 5–10 m, bis zum Rand des
+Details also vor allem in 10–55 m Abstand.
+
+### Eigene Materialien für die Kacheln (`WorldMaterialProvider`)
+
+gltfio ruft für jedes glTF-Material einen `MaterialProvider`. Bisher war das der Ubershader;
+jetzt eine eigene Klasse **über** dem Ubershader, die nach dem Materialnamen der Welt
+(`WorldMaterialRules`, getestet; das Kachelformat ist unverändert) einige Materialien durch
+eigene Filament-Materialien ersetzt — alles andere bleibt Ubershader:
+
+| glTF-Material | eigenes Material | was es kann |
+|---|---|---|
+| `mat_terrain` (deckend) | `terrain.mat` | Luftbild + Boden-Detail nah, wärmerer Waldboden |
+| `x_mat_tree_cards`, `mat_tree_leaves` (Maske) | `foliage.mat` | Aussehen wie Ubershader, Wind im Vertex-Shader |
+| `mat_route_*`, `x_mat_road_*`, `x_mat_route_verge_*`, Bankett, Gehweg (deckend) | `surface.mat` | Software-Anisotropie, Detail auf Randstreifen |
+| `x_mat_route_*_fade`, `x_mat_route_fringe` (durchsichtig) | `surface_blend.mat` | dasselbe, vormultipliziertes Alpha |
+
+gltfio setzt danach auf jede Instanz dieselben Parameter wie beim Ubershader
+(`baseColorFactor`, `emissiveFactor`, `metallicFactor`, `roughnessFactor`, `normalScale`,
+`aoStrength`, bei `KHR_materials_specular` `specularColorFactor`/`specularStrength`,
+AssetLoader.cpp) und bindet Luftbild bzw. Atlas an `baseColorMap` — die eigenen Materialien
+deklarieren diese Parameter alle (unbekannte Namen brechen in Filament ab). Zwei Fallen,
+beide im Referenzrenderer gefunden:
+
+- **`flipUV : false`**: Filament-Materialien spiegeln standardmäßig die V-Koordinate, der
+  gltfio-Ubershader nicht — ohne die Zeile lasen Luftbild und Laubatlas gespiegelt (eckige
+  Blattkarten, verschobenes Luftbild).
+- **JNI**: Ohne `getNativeObject()` nimmt gltfio den langsamen Weg (`JavaMaterialProvider`)
+  und ruft `createMaterialInstance`, `getMaterial`, `getMaterials`, `needsDummyData`,
+  `destroyMaterials` beim Namen auf — `proguard-rules.pro` hält sie. Eine Ausnahme darf nicht
+  in den nativen Code: jeder Fehler fällt auf den Ubershader zurück, das Material wird nicht
+  wieder versucht. Alles läuft auf dem Hauptthread (dort entstehen die Assets).
+
+Der Referenzrenderer tauscht genauso (`WorldProvider` in `filarender.cpp`, Regeln gespiegelt).
+
+### Boden-Detail (`GroundDetail`, `terrain.mat`)
+
+- **Textur:** eigene, im Code gezeichnete RGBA8-Textur 256², kachelbar, **vier Bodenarten in
+  den vier Kanälen** (R Wiese: Büschel und Halme; G Acker/Erde: Schollen und Krümel; B
+  Waldboden: Blätter, Nadeln, Zweige; A Schotter/Fels: gerundete Steine 5–30 cm). Jede eine
+  Höhe mit Mittel 0,5. 5,12 m je Wiederholung (2 cm je Texel) — der erste Versuch mit 1 cm je
+  Texel war in 10–50 m Abstand in den Mip-Stufen verschwunden. Keine fremde Quelle, keine
+  Lizenzfrage; Test `GroundDetailTest` (Mittel, Streuung, Naht, Determinismus).
+- **Bodenart je Pixel** aus dem, was die Kachel weiß — und das ist beim Gelände nur das
+  **Luftbild** (die Gitterpunkte tragen keine Vertexfarbe, die Landnutzung steckt nicht in der
+  Kachel): Wiese = grün, Acker/Erde = braun-beige, Waldboden = dunkel und wenig gesättigt,
+  Schotter/Fels = grau oder steiler als ≈ 37°. Weiche Gewichte, keine harten Grenzen. Auf den
+  Randstreifen ist die Bodenart aus dem Materialnamen bekannt (`verge_grass` → Wiese,
+  `verge_forest` → Waldboden, Bankett → Erde/Schotter).
+- **Farbe bleibt:** Das Detail moduliert nur die Helligkeit (Mittel 1, ±42 %), dazu eine grobe
+  Fleckung aus dem Wolkenrauschen (32 m, ±16 %) gegen sichtbare Wiederholung. Die
+  Detail-Normale kommt aus Differenzen derselben Textur (drei Zugriffe), wird in Weltrichtung
+  aufgebaut und in den (beliebig gedrehten) Tangentenraum der Fläche umgerechnet.
+- **Weich aus** zwischen 30 und 55 m (Gelände) bzw. 19 und 35 m (Randstreifen); dahinter kostet
+  das Material so viel wie der Ubershader.
+- **Genauigkeit:** Detail-UV des Geländes aus der Kachel-UV (0..1 über 256 m, halber Texel
+  Einzug wird herausgerechnet) mal 50 — klein und genau, nahtlos über Kachelgrenzen
+  (ganzzahlige Wiederholungen je 256 m). Auf den Randstreifen aus der Weltlage modulo 5,12 m;
+  die bleibt dank schwebendem Ursprung unter rund 2,5 km. Im erzeugten GLES-Shader (matinfo)
+  kommen `vertex_uv01` und `vertex_worldPosition` als `highp`, die Detail-UV wird in `highp`
+  gerechnet (`precision mediump float` gilt nur für den Rest).
+- **Anisotropie für das Detail:** Die Detailtextur ist unsere eigene — ihr Sampler bekommt
+  `anisotropy = 8` (geht anders als bei gltfio-Texturen).
+
+### Waldboden wärmer
+
+Die Bodentextur unter Wald ist im Luftbild (und nach `ForestFloor`) oft dunkel blaugrün. Im
+Material ohne Weltbau: Pixel der Bodenart Waldboden werden bis 260 m (weich aus ab 156 m)
+zu einem warmen Laubbraun gleicher Helligkeit gezogen (55 %), dazu allgemein dunkle,
+blaugrüne Töne zu Grünbraun (65 %) — auch auf den an das Luftbild angeglichenen Randstreifen.
+Die Ferne (Kronendach von oben in den groben Stufen) bleibt unverändert. Eine bessere
+Waldbodentextur im Weltbau bleibt sinnvoll (Bitte unten).
+
+### Fahrbahnbeläge: Schärfe und Wiederholung
+
+Die Belagstexturen (256 × 1024, ≈ 1 cm je Pixel, 8–16 m bis zur Wiederholung, Vertexfarben
+für die grobe Variation) sind fein genug; die Wiederholung ist in den Bildern nicht
+auffällig. Unscharf waren sie wegen der fehlenden Anisotropie. **Software-Anisotropie** in
+`surface.mat`: bis 45 m (weich aus ab 31,5 m) vier Abtastungen entlang der langen Achse der
+Pixelspur mit `textureLod` in der Mip-Stufe der kurzen Achse, sobald die Spur mehr als
+1,6 : 1 gestreckt ist; sonst ein Zugriff. Asphalt und Schotter bleiben dadurch deutlich weiter
+voraus scharf (`asphalt-*`, `lenker-*`).
+
+### Wind (`foliage.mat`)
+
+Billig im Vertex-Shader: Wiegen aus zwei Sinus mit Phase aus der Weltlage (eine Böe läuft
+durch den Wald, Hüllkurve 20 s), dazu kleines Flattern je Ecke. Das Gewicht kommt aus der Lage
+im Laubatlas (`FoliageAtlas`, 512²): Grasbüschel, Farne und Kreuzbilder ganzer Bäume stehen
+unten fest und wiegen oben (bis ≈ 7 cm), Zweigkarten flattern ab ihrem Ansatz (≈ 2–4 cm), das
+Kronendach wiegt gleichmäßig wenig. Ab 66–110 m steht alles still (auch die Fern-Atlanten der
+Stufe 1). Die Uhr ist Filaments `getUserTime()` — kein Setzen je Bild. Schatten wiegen mit
+(derselbe Vertex-Shader im Schattendurchgang). Im Referenzrenderer: zwischen zwei Zeitpunkten
+0,9 s auseinander ändern sich rund 1,3 % der Pixel (Kronenränder, Grasbüschel).
+
+### Andere Radfahrer (`OtherRiders`, `LifeLayer`, `RiderRecolor`)
+
+- **Modell:** `rider.glb` mit anderen Trikotfarben (Blau, Gelb, Grün, Weiß, Schwarz, Petrol):
+  die rot-dominanten Vertexfarben der Teile mit `x_mat_kit` werden ersetzt, ihre Helligkeit
+  relativ zum Trikotrot bleibt (dunkle Säume bleiben dunkel), Hose, Haut und Rad bleiben. Je
+  Farbe ein eigenes Asset, höchstens eines je Bild nachgeladen.
+- **Tempo je Steigung:** jeder Fahrer hat eine feste Dauerleistung 150–260 W und fährt das
+  Gleichgewichtstempo aus Rollwiderstand, Hangabtrieb und Luftwiderstand (80 kg, Crr 0,005,
+  CdA 0,32; bergab höchstens 15 m/s), Steigung über ±15 m gemittelt, weich (τ 3 s). Flach
+  ≈ 8–10 m/s, 8 % bergauf ≈ 2–3,5 m/s.
+- **Überholen statt Durchfahren:** Gleichgerichtete fahren in der Spur des Nutzers. Kommt einer
+  schneller von hinten, schert er 0,95 m nach links aus; holt der Nutzer einen ein, weicht dieser
+  nach rechts aus (zu schmal: links). Untereinander überholt der Schnellere links.
+  **Gegenverkehr** (35 %) fährt links mit umgekehrter Steigung. Seitenversatz weich (τ 0,8 s),
+  nie über den Wegrand. Test: 20 min Fahrt langsam und schnell, nie eine Überlappung im
+  Abstand < 1,8 m.
+- **Kommen und Gehen:** Fenster 150 m hinter bis 340 m vor dem Nutzer; wer es verlässt,
+  taucht nach 6–30 s am passenden Rand wieder auf (schnellere hinten, langsamere und
+  Gegenverkehr vorn, im Dunst). Ohne Runde nie jenseits der Enden.
+- Rein dekorativ: kein Einfluss auf Physik, Windschatten, Geist oder HUD. Abschaltbar in den
+  Indoor-Einstellungen (`docs/indoor/app.md`).
+
+### Vögel (`BirdFlock`, `BirdModel`)
+
+Alle 35–110 s quert ein Schwarm (3–7) oder ein einzelner Vogel den Himmel 120–200 m voraus,
+25–55 m hoch, quer zur Fahrtrichtung mit 10–13 m/s, leicht wellend, mit Flügelschlag und
+Gleitphasen. Ein Asset mit sieben Vögeln (je zwei Flügel-Knoten, Spannweite 0,7 m, dunkel);
+außerhalb eines Fluges ist alles per Ebenenmaske ausgeblendet. In den Bildern stellt
+`filashots.mjs --birds` einen Schwarm näher (60 m) vor die Kamera, damit man ihn sieht.
+
+### Optional nicht gemacht
+
+Staub/Spritzer auf Schotter und fallende Blätter im Wald: nicht umgesetzt (Budget an die
+Belagsschärfe gegeben, die mehr bringt).
+
+### Qualitätsstufen und Schalter
+
+`RenderSettings` (Vertragsdatei, abwärtsverträgliche Vorgaben) hat vier neue Felder:
+
+| | LOW | MEDIUM | HIGH | SAFE |
+|---|---|---|---|---|
+| `groundDetail` (Boden-Detail + Software-Anisotropie) | aus | an | an | aus |
+| `wind` | aus | an | an | aus |
+| `birds` | an | an | an | aus |
+| `otherRiders` (höchstens) | 2 | 3 | 5 | 0 |
+
+Detail, Anisotropie und Wind schalten über Parameter (`detailRange`, `anisoRange`,
+`windStrength` = 0) sofort auf allen lebenden Instanzen um; der Shader überspringt dann die
+zusätzlichen Zugriffe (gleichförmige Verzweigung). Fehlen die `.filamat`, bleibt alles beim
+Ubershader.
+
+### Leistung (geschätzt; nicht auf dem Gerät gemessen)
+
+| | vorher | nachher (MEDIUM) |
+|---|---|---|
+| Draw Calls, Solitude, je Stelle | 372–417 Renderables, 877–1033 Primitive | unverändert für die Welt (Materialtausch, keine neuen Netze); **+13 Renderables / +23 Primitive je anderem Fahrer** (MEDIUM bis 3 → bis +69 Primitive, HIGH bis 5 → +115), Schattendurchgang nur bis 60 m; **Vögel +2 Primitive je Vogel**, nur während eines Fluges (bis +14) |
+| Texturzugriffe je Pixel, Gelände | 1 | bis 55 m: 5 (Luftbild, 3 × Detail, 1 × Fleckung); dahinter 1 |
+| Belag/Randstreifen | 1 | bis 45 m: 4 (Anisotropie, nur bei gestreckter Spur) + 3 (Detail, nur Randstreifen bis 35 m) = höchstens 7; dahinter 1 |
+| Laub | 1 | 1 (+ rund 25 Rechenschritte im Vertex-Shader bis 110 m) |
+| Texturspeicher | – | +350 kB (Detail 256² RGBA8 mit Mip-Stufen); Wolkenrauschen geteilt |
+| Puffer | – | je anderem Fahrer ≈ 0,8 MB Vertexdaten (MEDIUM ≈ 2,4 MB, HIGH ≈ 4 MB), Vögel ≈ 3 kB |
+| Materialpakete im APK | sky 13 kB, water 206 kB | + terrain 215 kB, foliage 204 kB, surface 220 kB, surface_blend 199 kB (im APK komprimiert zusammen ≈ 164 kB) |
+| APK (Release) | APK_VORHER | APK_NACHHER |
+
+Teuerster neuer Teil ist die Software-Anisotropie: Der Belag deckt in der Verfolgerkamera im
+Hochformat rund ein Drittel des Bildes, nah also vier statt einem Zugriff. Auf einem
+Mittelklasse-Gerät mit 60 fps zu prüfen; zu teuer → `groundDetail` in MEDIUM aus oder
+`SURFACE_ANISO_RANGE_M` kürzen. Das Detail auf dem Gelände liegt meist auf wenigen Prozent der
+Pixel (Gelände sieht man nah kaum).
+
+### Bilder (`docs/indoor/bilder/boden-leben/`, Referenzrenderer, Solitude km 1,5–7, MEDIUM)
+
+Je Bild links/oben vorher (Ubershader, ohne Mitfahrer), rechts/unten nachher; Hochformat
+900 × 1200, Querformat 1600 × 900 (auf 1280 verkleinert). Erzeugt mit
+`tool/indoor-dev/filament/boden-leben.sh`, Laufmeter des Ausschnitts:
+
+- `wald-hoch|quer-00700_chase.jpg` — Waldweg (Schotter), Waldboden warm statt blaugrün
+- `kreuzung-hoch-01500_chase.jpg` — Kreuzung im Wald, Auslauf der Randstreifen
+- `asphalt-hoch-02500_chase.jpg` — Asphalt, Schärfe voraus
+- `wiese-hoch|quer-04000_chase.jpg` — Wiese, Mitfahrer, Gegenverkehr, Vögel
+- `abend-quer-03300_chase.jpg` — Abend, Böschung mit Detail, Mitfahrer, Vögel
+- `lenker-hoch-02500_handlebar.jpg`, `lenker-quer-04000_handlebar.jpg`,
+  `lenker-wald-hoch-00700_handlebar.jpg` — Lenkerkamera
+
+Kritisch gesehen: Das Gelände-Detail ist bewusst zurückhaltend (das Luftbild soll führen);
+ganz nah bestimmen weiterhin die Randtexturen des Weltbaus das Bild. Die Acker-Schollen
+wirken an steilen Böschungen noch etwas wie gesetzte Platten. Die Vögel sind in Wirklichkeit
+weiter weg und damit nur wenige Pixel groß.
+
+### Auf dem Gerät zu prüfen
+
+- [ ] Kacheln laden wie vorher (Logcat ohne `No material with the specified requirements`,
+      keine JNI-Abbrüche); **Release-Build** (R8) ebenso — sonst fehlt die Keep-Regel.
+- [ ] Gelände nah mit Struktur, keine sichtbaren Kachelnähte des Details, kein Flimmern in
+      10–50 m; Übergang bei 30–55 m nicht als Ring sichtbar.
+- [ ] Waldboden warm-braun, nicht orange; Wiesen bleiben grün; Felder nicht fleckig.
+- [ ] Belag voraus schärfer als vorher, ohne Glitzern/Flimmern (Software-Anisotropie);
+      Randstreifen ohne Säume am Auslauf.
+- [ ] Laub ohne eckige Karten (flipUV), Grasbüschel wiegen sichtbar, aber ruhig; Bäume
+      schwanken nicht wie Gummi.
+- [ ] Andere Radfahrer: Trikotfarben richtig, Beine treten, nie durch den eigenen Fahrer;
+      Ein- und Ausblenden in der Ferne unauffällig; Schalter wirkt sofort.
+- [ ] Ab und zu Vögel am Himmel, nicht zu oft.
+- [ ] **Bildrate MEDIUM 60 fps** auf Mittelklasse (Hoch- und Querformat, Verfolger und Lenker)
+      — vorher/nachher; LOW mit allem aus wie vorher.
+- [ ] Speicher bei HIGH mit 5 Mitfahrern (≈ 4 MB mehr).
+
 ## Abweichungen vom Vertrag
 
 1. **Fahrer ohne Datei möglich.** Vertrag 7.6 nennt „Modelle“ als Startstufe
@@ -678,7 +894,11 @@ Risiken, die nur das Gerät klärt (zusätzlich zur Liste oben):
   - Die Bodentextur unter Wald (Luftbild bzw. erzeugte Textur) ist dunkel
     blaugrün; mit dem neuen, warmen Licht bleibt der Waldboden das kühlste
     im Bild (`docs/indoor/bilder/licht-kamera/wald-*`). Etwas heller und
-    bräunlicher (Laub, Nadelstreu) würde viel bringen.
+    bräunlicher (Laub, Nadelstreu) würde viel bringen. *Teilweise im Material
+    ausgeglichen* (siehe „Boden aus der Nähe und Leben“); in der Textur bleibt es besser.
+  - Für das Boden-Detail kennt das Gelände-Material die Bodenart nur aus der Luftbildfarbe.
+    Eine Landnutzung je Gitterpunkt (z. B. als Vertexfarbe-Alpha von `mat_terrain`) würde
+    Acker, Wiese und Wald sicherer trennen — braucht eine Formatänderung, daher nicht hier.
   - Knotennamen bitte wie in `WorldNames` direkt an den Knoten mit Netz oder
     an einem Vorfahren — die Darstellung ordnet Renderables über die Kette der
     Vorfahren zu.
