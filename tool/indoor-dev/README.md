@@ -27,7 +27,8 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `--from-km a --to-km b` | nur dieser Ausschnitt (Laufmeter der GPX) — für kurze Läufe während der Entwicklung |
 | `--no-aerial` | ohne Luftbild (erzeugte Bodentextur aus der Landnutzung) |
 | `--offline` | kein Netz: nur, was im Cache liegt (auch Abgelaufenes) |
-| `--laser [--laser-radius m]` | Datenstufe „Laser" (NRW): Gelände aus DGM1, Bäume aus nDOM, Gebäude aus LoD2 im Korridor (Vorgabe 200 m); auch für `plan` und `catalog-build`. Am Ende eine Zeile `Laser:` mit Blöcken, Anfragen, Bytes, LoD2, Versatz DGM1 − Terrarium. Siehe `docs/indoor/lidar.md` |
+| `--laser [--laser-radius m]` | Datenstufe „Laser" (NRW und Baden-Württemberg, nach Lage der Strecke): Gelände aus DGM1, Bäume aus nDOM, Gebäude aus LoD2 im Korridor (Vorgabe 200 m); auch für `plan` und `catalog-build`. Am Ende eine Zeile `Laser:` mit Blöcken, Anfragen, Bytes, LoD2, Versatz DGM1 − Terrarium. Siehe `docs/indoor/lidar.md` |
+| `--catalog-aerial` | für `build`/`plan`: Luftbild wie beim Katalogbau, also auch die Dienste nur des Werkzeugs (`CatalogAerial.kt`, z. B. Baden-Württemberg) |
 | `--lod2-corridor <datei>` | mit `--laser`: LoD2 aus einer zugeschnittenen Korridordatei statt aus den 1-km-Kacheln |
 | `lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m]` | LoD2 auf den Streifen um die Strecke zuschneiden (Vorgabe 120 m), kompakt schreiben; gibt Kachel- und Korridorgröße je km aus |
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
@@ -76,6 +77,7 @@ Angefragte Hosts: `s3.amazonaws.com` (Höhen), `tiles.openfreemap.org`
 (Vektorkacheln), dazu der Luftbild-Dienst des Landes aus `aerialSources`
 (NRW: `www.wms.nrw.de`, Sachsen: `geodienste.sachsen.de`, …). Mit `--laser`
 zusätzlich `www.wcs.nrw.de` (DGM1/DOM1) und `www.opengeodata.nrw.de` (LoD2),
+in Baden-Württemberg `opengeodata.lgl-bw.de` (ZIP-Kacheln DGM1, DOM1, LoD2),
 Cache unter `cache/indoor/laser/` (365 Tage).
 
 ## Beispielstrecken (`samples/`)

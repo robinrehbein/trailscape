@@ -158,13 +158,11 @@ fun cutLod2Corridor(options: LaserOptions, routeLatLon: List<Pair<Double, Double
     var before = 0L
     val seen = HashSet<String>()
     val kept = ArrayList<Lod2UtmBuilding>()
-    for (k in kms) {
-        val url = source.lod2Url((k shr 32).toInt(), k.toInt()) ?: continue
-        val resp = options.fetcher.fetch(url)
-        if (resp.status != 200) continue
-        tiles++
-        tileBytes += resp.bytes.size
-        for (b in parseLod2Utm(resp.bytes)) {
+    for ((url, group) in lod2Downloads(source, kms)) {
+        val (size, gmls) = fetchLod2(source, options.fetcher, url, group) ?: continue
+        tiles += gmls.size
+        tileBytes += size
+        for (b in gmls.flatMap { parseLod2Utm(it) }) {
             before++
             if (!seen.add(b.id)) continue
             val near = b.surfaces.any { sf -> sf.rings.any { ring -> (0 until ring.size / 3).any { i -> line.distance(ring[3 * i], ring[3 * i + 1], r) <= r } } }

@@ -23,7 +23,7 @@ import kotlin.system.exitProcess
  *
  * ```
  * build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>]
- *       [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m]]
+ *       [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m]]
  * plan  --gpx <datei> [--quality …] [--from-km a --to-km b] [--no-aerial]
  * testworld --out <dir> [--quality …]
  * check <dir>
@@ -51,9 +51,9 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>]]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>]]
   lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
-  plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--laser]
+  plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
   check <dir>
   models --out <dir>
@@ -101,8 +101,8 @@ private fun run(all: List<String>): Int {
     val cmd = all.firstOrNull() ?: throw UsageError("Befehl fehlt")
     val rest = all.drop(1)
     return when (cmd) {
-        "build" -> build(Args(rest, setOf("no-aerial", "offline", "laser")))
-        "plan" -> plan(Args(rest, setOf("no-aerial", "offline", "laser")))
+        "build" -> build(Args(rest, setOf("no-aerial", "catalog-aerial", "offline", "laser")))
+        "plan" -> plan(Args(rest, setOf("no-aerial", "catalog-aerial", "offline", "laser")))
         "testworld" -> testworld(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "overlaps" -> Args(rest, emptySet()).let { a ->
@@ -162,11 +162,17 @@ private fun prepare(a: Args): Prepared {
     val label = if (fromM > 0 || cutTo < fullLen) "$name (km ${"%.1f".format(fromM / 1000)}–${"%.1f".format(cutTo / 1000)})" else name
     val (route, fromCore) = indoorRouteOf(label, cut, surfaces, fullLen, fromM, cutTo)
     var plan = builderFor(a).plan(route, a.quality())
+    // --catalog-aerial: Luftbild wie beim Katalogbau (auch die Dienste nur des Werkzeugs, z. B. Baden-Wuerttemberg).
+    if (a.flag("catalog-aerial")) plan = plan.copy(aerial = aerialFor(route, aerialRegister(a)))
     if (a.flag("no-aerial")) plan = plan.copy(aerial = emptyList())
     return Prepared(plan, fromCore, sfile)
 }
 
-/** Der Weltbau: mit `--laser` die Datenstufe „Laser" (DGM1, nDOM, LoD2 — NRW). */
+/** Luftbild-Register fuer `build`/`plan`: das der App, mit `--catalog-aerial` dazu [catalogAerialSources]. */
+private fun aerialRegister(a: Args): List<de.trailscape.core.indoor.world.AerialSource> =
+    if (a.flag("catalog-aerial")) de.trailscape.core.indoor.world.aerialSources + catalogAerialSources else de.trailscape.core.indoor.world.aerialSources
+
+/** Der Weltbau: mit `--laser` die Datenstufe „Laser" (DGM1, nDOM, LoD2 — NRW und Baden-Wuerttemberg, nach Lage der Strecke). */
 private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder =
     if (a.flag("laser")) {
         var opts = toolLaserOptions(File(CACHE_DIR), a.flag("offline"), a.double("laser-radius"))
@@ -243,7 +249,7 @@ private fun build(a: Args): Int {
     val prepared = prepare(a)
     printPlan(prepared)
     val raw = if (a.flag("offline")) OfflineFetcher() else JavaHttpFetcher()
-    val counting = CountingFetcher(createGeoPipeline(raw, File(CACHE_DIR)))
+    val counting = CountingFetcher(createGeoPipeline(raw, File(CACHE_DIR), aerialRegister(a)))
     val start = System.nanoTime()
     println("Baue nach ${out.path} …")
     val builder = builderFor(a)

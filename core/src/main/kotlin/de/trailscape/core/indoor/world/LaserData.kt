@@ -399,8 +399,14 @@ internal fun loadLaserData(
     val requests = java.util.concurrent.atomic.AtomicInteger()
     val cached = java.util.concurrent.atomic.AtomicInteger()
     val bytes = java.util.concurrent.atomic.AtomicLong()
-    val pool = Executors.newFixedThreadPool(max(1, options.threads)) { t -> Thread(t, "laser").apply { isDaemon = true } }
     val blocks = HashMap<Long, LaserBlock>()
+    if (source.tiles != null) {
+        // Kachel-Download (ZIP je Archiv): erst alle Bloecke anlegen, dann je Archiv fuellen.
+        val list = wanted.map { LaserBlock(it[0], it[1]) }
+        fillBlocksFromTiles(list, source, origin, options.fetcher, options.threads, requests, cached, bytes, isCancelled)
+        for (b in list) blocks[LaserData.key(b.bx, b.by)] = b
+    } else {
+    val pool = Executors.newFixedThreadPool(max(1, options.threads)) { t -> Thread(t, "laser").apply { isDaemon = true } }
     try {
         val futures = ArrayList<Future<LaserBlock>>()
         for (w in wanted) {
@@ -421,6 +427,7 @@ internal fun loadLaserData(
         }
     } finally {
         pool.shutdownNow()
+    }
     }
     // Versatz DGM1 − Terrarium im Korridor (Median), dann Ueberblendung.
     val diffs = ArrayList<Double>()
