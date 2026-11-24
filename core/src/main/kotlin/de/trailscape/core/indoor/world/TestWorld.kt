@@ -520,7 +520,16 @@ internal class TestWorldScene(
         val ri = RectIndex(roads, { boundsOf(listOf(it.line)) })
         val ai = RectIndex(areas, { boundsOf(it.rings) })
         val wi = RectIndex(waterways, { boundsOf(listOf(it.line)) })
+        // Ortsname in der Mitte des ersten Wohngebiets (fuer die Ortstafel)
+        val village = areas.firstOrNull { it.kind == LandClass.RESIDENTIAL }?.rings?.firstOrNull()
+        val places = if (village == null) emptyList() else {
+            var se = 0.0
+            var sn = 0.0
+            for (i in village.indices step 2) { se += village[i]; sn += village[i + 1] }
+            listOf(MapPlace(se / (village.size / 2), sn / (village.size / 2), "Testhausen", "village"))
+        }
         return object : MapData {
+            override fun places(minE: Double, minN: Double, maxE: Double, maxN: Double) = places.filter { it.e in minE..maxE && it.n in minN..maxN }
             override fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double) = bi.query(minE, minN, maxE, maxN)
             override fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double) = ri.query(minE, minN, maxE, maxN)
             override fun areas(minE: Double, minN: Double, maxE: Double, maxN: Double) = ai.query(minE, minN, maxE, maxN)

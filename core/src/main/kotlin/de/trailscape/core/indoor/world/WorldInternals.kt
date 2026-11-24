@@ -263,6 +263,9 @@ internal enum class LandClass {
     /** Gebuesch, Heide, Brache. */
     SCRUB,
 
+    /** Obstwiese (`orchard`): Gruenland mit Obstbaeumen in Reihen. */
+    ORCHARD,
+
     /** Wohngebiet (Gaerten, Hoefe). */
     RESIDENTIAL,
 
@@ -345,7 +348,13 @@ internal class MapArea(
 internal class MapWaterway(val line: DoubleArray, val cls: String, val brunnel: String? = null)
 
 /** Kartendaten eines Gebiets. Jede Abfrage liefert alles, was das Rechteck schneidet (unbeschnitten). */
+/** Ein benannter Ort der Karte (`place`: city, town, village, hamlet, suburb …). */
+internal class MapPlace(val e: Double, val n: Double, val name: String, val cls: String)
+
 internal interface MapData {
+    /** Benannte Orte im Rechteck (fuer Ortstafeln); ohne Daten leer. */
+    fun places(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPlace> = emptyList()
+
     fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapBuilding>
     fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapRoad>
     fun areas(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapArea>
