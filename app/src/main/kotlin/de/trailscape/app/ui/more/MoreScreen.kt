@@ -513,6 +513,7 @@ private fun SettingsPageContent(page: SettingsPage, appViewModel: AppViewModel) 
             SettingsPage.SYNC -> SettingsSection { SyncCardContent(appViewModel) }
             SettingsPage.LANGUAGE -> SettingsSection { LanguageCardContent() }
             SettingsPage.ABOUT -> {
+                SettingsSection { ScienceCardContent() }
                 SettingsSection { AboutCardContent(appViewModel) }
                 SettingsSection(label = stringResource(R.string.more_about_section_licenses)) {
                     OpenSourceLicensesContent()

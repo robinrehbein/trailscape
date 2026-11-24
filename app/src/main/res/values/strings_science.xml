@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texte der Karte „Wissenschaftliche Grundlage" (ui/more/ScienceCard.kt, Seite „Über").
+
+    Schluessel-Praefix: science_ · Gegenstueck in values-en/strings_science.xml — gleiche Schluessel, gleiche Reihenfolge.
+    Herleitung und Literaturverzeichnis: docs/trainingswissenschaft.md.
+-->
+<resources>
+    <string name="science_card_title">Wissenschaftliche Grundlage</string>
+    <string name="science_card_show_action">Anzeigen</string>
+    <string name="science_card_hide_action">Ausblenden</string>
+    <string name="science_intro">Worauf die Berechnungen beruhen – und wie gut das belegt ist.</string>
+    <!-- %1$s = Quellenangabe, z. B. „Banister 1991; Morton 1990" -->
+    <string name="science_source_format">Quelle: %1$s</string>
+    <string name="science_footer_hint">Die App gibt Trainingshinweise, keine medizinische Beratung. Die ausführliche Herleitung mit Literaturverzeichnis liegt dem Quellcode der App bei.</string>
+
+    <!-- Einstufungen (kleines Label neben der Quelle) -->
+    <string name="science_evidence_based">belegt</string>
+    <string name="science_evidence_common_practice">gängige Praxis</string>
+    <string name="science_evidence_rule_of_thumb">Faustregel</string>
+
+    <string name="science_hr_load_title">Trainingslast aus dem Puls</string>
+    <string name="science_hr_load_body">Je höher dein Puls im Verhältnis zu Ruhe- und Maximalpuls, desto stärker zählt jede Minute. Eine Stunde an deiner Schwelle ergibt 100 Punkte.</string>
+    <string name="science_hr_load_source">Banister 1991; Morton 1990</string>
+
+    <string name="science_power_load_title">Last aus Leistung</string>
+    <string name="science_power_load_body">Mit Leistungsmesser oder geschätzter Leistung wird die Fahrt mit deiner Schwellenleistung (FTP) verglichen. Harte Abschnitte zählen überproportional.</string>
+    <string name="science_power_load_source">Allen &amp; Coggan 2019</string>
+
+    <string name="science_rpe_title">Gefühlte Anstrengung</string>
+    <string name="science_rpe_body">Ohne Puls und Leistung zählt deine Einschätzung von 0 bis 10 mal die Fahrzeit. Die Methode ist in vielen Sportarten geprüft.</string>
+    <string name="science_rpe_source">Foster 2001</string>
+
+    <string name="science_fitness_fatigue_title">Fitness, Ermüdung, Form</string>
+    <string name="science_fitness_fatigue_body">Fitness ist dein Trainingsmittel der letzten etwa sechs Wochen, Ermüdung das der letzten Woche. Form ist die Differenz; die Zeiträume sind eine bewährte Konvention, keine persönliche Messung.</string>
+    <string name="science_fitness_fatigue_source">Morton 1990</string>
+
+    <string name="science_load_spike_title">Belastungssprung</string>
+    <string name="science_load_spike_body">Die App vergleicht deine letzte Woche mit dem, was du gewohnt bist. Das ist ein Hinweis auf einen Sprung, keine Vorhersage von Verletzungen.</string>
+    <string name="science_load_spike_source">Gabbett 2016; Impellizzeri 2020</string>
+
+    <string name="science_hrv_baseline_title">Herzfrequenzvariabilität</string>
+    <string name="science_hrv_baseline_body">Gewertet wird dein Wochenmittel gegen deinen eigenen Normalbereich, nicht ein einzelner Morgen. Einzelwerte schwanken zu stark.</string>
+    <string name="science_hrv_baseline_source">Plews 2013</string>
+
+    <string name="science_hrv_guided_title">Training nach HRV</string>
+    <string name="science_hrv_guided_body">Liegt deine HRV unter deinem Normalbereich, schlägt die App statt einer harten Einheit eine lockere vor. Studien zeigen ähnliche Fortschritte mit weniger harten Einheiten.</string>
+    <string name="science_hrv_guided_source">Vesterinen 2016; Javaloyes 2019</string>
+
+    <string name="science_polarized_title">Meist locker, selten hart</string>
+    <string name="science_polarized_body">Erfolgreiche Ausdauersportler fahren den Großteil ihrer Einheiten locker und nur wenige hart. Höchstens zwei harte Tage pro Woche schützen deine Erholung.</string>
+    <string name="science_polarized_source">Seiler 2010</string>
+
+    <string name="science_intervals_title">Intervalle</string>
+    <string name="science_intervals_body">Der Plan steigert die Belastungszeit schrittweise: erst Tempo und Sweet Spot, dann Schwelle, zuletzt kurze harte Intervalle wie 4 × 4 Minuten. Die Formen stammen aus Studien, die Abstufung dazwischen ist Erfahrungswissen.</string>
+    <string name="science_intervals_source">Seiler 2013; Helgerud 2007</string>
+
+    <string name="science_gradual_build_title">Langsam steigern</string>
+    <string name="science_gradual_build_body">Der Plan steigert das Wochenvolumen um höchstens 15 Prozent und die Wochenlast um höchstens 30 Prozent über das Gewohnte. Die bekannte 10-Prozent-Regel ist eine Faustregel; Studien zeigen eher, dass große Sprünge vermieden werden sollten.</string>
+    <string name="science_gradual_build_source">Buist 2008; Nielsen 2014</string>
+
+    <string name="science_recovery_week_title">Entlastungswoche</string>
+    <string name="science_recovery_week_body">Etwa jede vierte Woche fährst du rund 45 Prozent weniger, aber weiterhin regelmäßig und mit einem kurzen Reiz. Das ist bewährte Praxis, für Ausdauersport aber kaum direkt untersucht.</string>
+    <string name="science_recovery_week_source">Bell 2023; Mølmen 2019</string>
+
+    <string name="science_taper_title">Taper vor dem Ziel</string>
+    <string name="science_taper_body">In den zwei Wochen vor dem Event sinkt der Umfang schrittweise um etwa die Hälfte; bei Plänen unter acht Wochen ist es eine Woche. Intensität und Häufigkeit bleiben, damit du frisch und trotzdem in Form bist.</string>
+    <string name="science_taper_source">Bosquet 2007</string>
+</resources>

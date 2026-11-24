@@ -77,6 +77,8 @@ class CoreTextsCompletenessTest {
         checkLabels("DowngradeReason", DailyRecommendationKind.entries) { t, v -> t.today.downgradeReason(v) }
         checkLabels("FitnessLevel", FitnessLevel.entries) { t, v -> t.training.fitnessLevel(v) }
         checkLabels("WeekKind", WeekKind.entries) { t, v -> t.training.weekKind(v) }
+        checkLabels("TrainingPhase", de.trailscape.core.TrainingPhase.entries) { t, v -> t.training.trainingPhase(v) }
+        checkLabels("TargetZone", de.trailscape.core.TargetZone.entries) { t, v -> t.training.targetZone(v) }
         checkLabels("SessionIntensity", SessionIntensity.entries) { t, v -> t.training.sessionIntensity(v) }
         checkLabels("PlanSessionStatus", PlanSessionStatus.entries) { t, v -> t.training.planSessionStatus(v) }
         checkLabels("FitSport", FitSport.entries) { t, v -> t.files.fitActivityName(v, 0L) }
@@ -90,6 +92,9 @@ class CoreTextsCompletenessTest {
             SessionTextKey.LONG_RIDE -> listOf(1)
             SessionTextKey.INTERVALS -> listOf(20, 4, 8, 4, 10, 94, 0)
             SessionTextKey.GOAL_EVENT -> listOf(120, 1400)
+            SessionTextKey.WORKOUT -> listOf(2, 15, 4, 8, 3, 10, 66, 1)
+            SessionTextKey.FTP_TEST -> listOf(20, 20, 15, 55)
+            SessionTextKey.BENCHMARK_RIDE -> listOf(40)
             else -> emptyList()
         }
         checkLabels("SessionTextKey.title", SessionTextKey.entries) { t, v ->
@@ -98,6 +103,19 @@ class CoreTextsCompletenessTest {
         checkLabels("SessionTextKey.description", SessionTextKey.entries) { t, v ->
             t.training.sessionDescription(v, argsFor(v))
         }
+        // Jede Qualitaetsart und die Langfahrt mit Zieltempo haben eigene Texte.
+        for (kind in de.trailscape.core.WorkoutKind.entries) {
+            checkLabels("WORKOUT.${kind.name}", listOf(0, 1)) { t, hill ->
+                t.training.sessionTitle(SessionTextKey.WORKOUT, listOf(kind.code, 15, 3, 8, 3, 10, 55, hill), null) +
+                    t.training.sessionDescription(SessionTextKey.WORKOUT, listOf(kind.code, 15, 3, 8, 3, 10, 55, hill))
+            }
+        }
+        checkLabels("LONG_RIDE.racePace", listOf(-1, 245)) { t, speed ->
+            t.training.sessionDescription(SessionTextKey.LONG_RIDE, listOf(0, 2, 15, speed))
+        }
+        checkLabels("planBudgetLimited", listOf(5.0)) { t, h -> t.training.planBudgetLimited(h, 8.5) }
+        checkLabels("targetTimeAmbitious", listOf(300)) { t, m -> t.training.targetTimeAmbitious(m, 360, 24.0, 20.0) }
+        checkLabels("errorFitnessBlockLength", listOf(4)) { t, m -> t.training.errorFitnessBlockLength(m, 16) }
         // Die JSON-Namen sind eindeutig und stabil.
         assertEquals(SessionTextKey.entries.size, SessionTextKey.entries.map { it.jsonName }.toSet().size)
         for (key in SessionTextKey.entries) {

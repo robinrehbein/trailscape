@@ -70,6 +70,8 @@ import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
 import de.trailscape.app.ui.progress.WeeklyGoalBar
 import de.trailscape.app.ui.theme.CardPadding
+import de.trailscape.app.ui.training.SessionTargetLines
+import de.trailscape.core.SessionPersonalTargets
 import de.trailscape.app.ui.theme.LocalSignalColors
 import de.trailscape.core.ReadinessBand
 
@@ -135,6 +137,8 @@ enum class HealthHint {
  * waere eine Aussage ueber den Nutzer, die niemand getroffen hat. Die
  * Empfehlung kommt dann aus dem Plan, und [healthHint] sagt, warum der Ring
  * fehlt.
+ *
+ * [sessionTargets]: persoenliche Puls-/Wattbereiche der heutigen Planeinheit.
  */
 @Composable
 internal fun HeroCard(
@@ -147,6 +151,7 @@ internal fun HeroCard(
     onWhy: () -> Unit,
     healthHint: HealthHint,
     onOpenHealth: () -> Unit,
+    sessionTargets: SessionPersonalTargets? = null,
 ) {
     val theme = MaterialTheme.colorScheme
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -175,6 +180,9 @@ internal fun HeroCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = theme.onSurfaceVariant,
                     )
+                    // Persoenliche Zielbereiche der heutigen Planeinheit
+                    // (`planSessionTargets`); ohne Plan oder am Zieltag leer.
+                    SessionTargetLines(targets = sessionTargets, modifier = Modifier.padding(top = 4.dp))
                 }
             }
 

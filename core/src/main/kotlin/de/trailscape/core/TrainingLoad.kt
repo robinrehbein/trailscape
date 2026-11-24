@@ -137,7 +137,15 @@ val lambdaAtl: Double = 1 - exp(-1.0 / 7)
 /** Antwort der CTL-EWMA ueber 7 Tage: `1 − (1 − λ_ctl)^7` (§6.3). */
 val ctlWeeklyResponse: Double = 1 - (1 - lambdaCtl).pow(7)
 
-/** Optimalband des Belastungsverhaeltnisses (Garmin-Konvention, §4.4). */
+/**
+ * Band des Belastungsverhaeltnisses (§4.4): **eigene Konvention**, keine
+ * Uebernahme aus einer Studie. Gabbett (2016) nennt 0,8–1,3 als guenstigen
+ * Bereich und ab 1,5 als kritisch (Mannschaftssport); die App legt das Band
+ * bewusst bis 1,5 und nennt es nur einen beschreibenden Hinweis. Die fruehere
+ * Herkunftsangabe „Garmin-Konvention" liess sich nicht belegen. Das Verhaeltnis
+ * ist ausserdem umstritten (Impellizzeri et al. 2020: kein belegter Nutzen fuer
+ * Empfehlungen zur Verletzungspraevention), daher kein „Risiko"-Etikett.
+ */
 const val loadRatioBandLow: Double = 0.8
 const val loadRatioBandHigh: Double = 1.5
 
@@ -163,21 +171,31 @@ const val minChronicWeeklyLoad: Double = 20.0
 const val alphaMin: Double = 0.4
 const val alphaMax: Double = 2.0
 
-/** Default-Faktor der sRPE-Kalibrierung (§3.4). */
+/**
+ * Fester Umrechnungsfaktor der sRPE-Last (§3.4): `Last = Faktor × Minuten × RPE`
+ * (1/6 ≙ 60 min bei RPE 6 = 60 Punkte; Methode: Foster et al. 2001, der Faktor selbst ist eine Faustregel). Eine
+ * Kalibrierung gegen die Nutzerin gibt es **nicht** — der Wert ist eine
+ * Voreinstellung, die der Aufrufer ueberschreiben koennte, was derzeit niemand tut.
+ */
 const val defaultRpeFactor: Double = 1.0 / 6
 
 /**
  * HRV (rMSSD): Baselinefenster in Tagen und Breite des Normalbands als
- * Vielfaches der Streuung von `ln(rMSSD)` (Plews & Laursen / HRV4Training).
+ * Vielfaches der Streuung von `ln(rMSSD)` (Grundidee: Plews et al. 2013;
+ * die konkreten Werte sind eigene Festlegungen, s. u.).
  *
  * ## Warum 60 Tage und nicht 28
  * Die Baseline war frueher „letzte 28 Tage" und enthielt damit das
  * [hrvRollingDays]-Tage-Rollfenster, gegen das sie verglichen wird. Ein
  * anhaltender Einbruch zog seine eigene Referenz mit nach unten **und** blaehte
  * die Streuung auf — beides driftet den z-Wert gegen null, genau wenn etwas
- * los ist. Plews & Laursen (2013) benutzen deshalb ein deutlich laengeres
- * Referenzfenster; 60 Tage ist der Wert, mit dem auch HRV4Training arbeitet.
- * Das Rollfenster selbst wird zusaetzlich aus der Baseline ausgeschlossen
+ * los ist. Die HRV-gesteuerten Studien (Vesterinen et al. 2016, Javaloyes et al.
+ * 2019) vergleichen ein 7-Tage-Mittel mit einer 28-Tage-Baseline und einem Band
+ * von ± 0,5 SD. Die hier gewaehlten 60 Tage und 0,75 SD ([hrvBandFactor]) sind
+ * eine **eigene, bewusst konservativere Festlegung** ohne direkte Quelle: Die
+ * laengere Baseline ist stabiler, das breitere Band loest seltener aus. Der
+ * inhaltliche Grund fuer den Abstand zur Literatur ist, dass die Referenz dort
+ * kein vom Rollfenster getrenntes Fenster hat (siehe oben). Das Rollfenster selbst wird zusaetzlich aus der Baseline ausgeschlossen
  * (siehe [assessHrv]), damit Zaehler und Nenner wirklich unabhaengig sind.
  */
 const val hrvBaselineDays: Int = 60
@@ -696,7 +714,12 @@ data class TrainingZones(
         return 4
     }
 
-    /** Index 0…2 der Lucia-Domaene LIT/MIT/HIT (§1.4 B). */
+    /**
+     * Index 0…2 der Lucia-Domaene LIT/MIT/HIT (§1.4 B). Lucia et al. (2003)
+     * trennen die Domaenen an den ventilatorischen Schwellen VT1/VT2. Die
+     * Abbildung auf die Herzfrequenz hier (Grenze 0,85 × LTHR bzw. LTHR) ist
+     * eine **eigene Naeherung**, keine Uebernahme aus der Studie.
+     */
     fun luciaZoneIndex(hr: Double): Int {
         if (hr < 0.85 * lthr) {
             return 0
@@ -1573,7 +1596,15 @@ fun computePhysicsEstimate(
     )
 }
 
-/** Bruttowirkungsgrad Mensch → Pedal (§3.2). */
+/**
+ * Bruttowirkungsgrad Mensch → Pedal (§3.2).
+ *
+ * Gemessene Werte liegen typischerweise bei etwa 18–23 % (z. B. Moseley et al.
+ * 2004: 17,9–18,8 % bei 165 W; Ettema & Loras 2009). 0,24 entspricht der
+ * Faustregel „1 kJ Tretarbeit ≈ 1 kcal" und **unterschaetzt** den Umsatz damit
+ * eher. Der Wert bleibt aus Gruenden der Vergleichbarkeit bisheriger kcal-Werte
+ * unveraendert; ein Wechsel waere eine bewusste Verhaltensaenderung.
+ */
 const val grossEfficiency: Double = 0.24
 
 /** Umrechnung Kilojoule → Kilokalorien (thermochemische kcal). */

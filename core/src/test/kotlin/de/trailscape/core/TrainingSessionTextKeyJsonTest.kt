@@ -54,10 +54,10 @@ class TrainingSessionTextKeyJsonTest {
         val plan = planDe()
         val restored = TrainingPlan.fromJson(Json.parseToJsonElement(plan.toJson().toString()).jsonObject)
         assertEquals(plan, restored)
-        val intervals = restored.weeks.flatMap { it.sessions }.first { it.textKey == SessionTextKey.INTERVALS }
-        assertEquals(7, intervals.textArgs.size)
+        val intervals = restored.weeks.flatMap { it.sessions }.first { it.textKey == SessionTextKey.WORKOUT }
+        assertEquals(8, intervals.textArgs.size)
         val json = intervals.toJson()
-        assertEquals("intervals", (json["textKey"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("workout", (json["textKey"] as kotlinx.serialization.json.JsonPrimitive).content)
     }
 
     @Test
@@ -92,13 +92,25 @@ class TrainingSessionTextKeyJsonTest {
         val english = long.copy(title = sessionTitle(long, CoreTextsEn), description = sessionDescription(long, CoreTextsEn))
         assertEquals(AscentPreference.BERGIG, ascentPreferenceForSession(english))
 
-        val intervals = sessions.first { it.textKey == SessionTextKey.INTERVALS }
+        val intervals = sessions.first { it.textKey == SessionTextKey.WORKOUT }
         val args = intervals.textArgs
+        assertTrue(
+            sessionDescription(intervals, CoreTextsEn).startsWith(
+                "After ${args[1]} minutes of warm-up, ride ${args[2]}×${args[3]} minutes",
+            ),
+        )
+        assertTrue(sessionDescription(intervals, CoreTextsEn).contains("about ${args[6]} minutes in total."))
+
+        // Gespeicherte Plaene mit dem alten Intervall-Schluessel bleiben uebersetzbar.
+        val legacy = TrainingSession(
+            "Do", "Intervalle", "Alt", 30, SessionIntensity.HART, 94,
+            textKey = SessionTextKey.INTERVALS, textArgs = listOf(20, 4, 8, 4, 10, 94, 1),
+        )
         assertEquals(
-            "After ${args[0]} minutes of warming up, ${args[1]}×${args[2]} minutes hard at threshold " +
-                "with ${args[3]} easy minutes in between; finish with ${args[4]} minutes of cooling down – " +
-                "about ${args[5]} minutes in total.",
-            sessionDescription(intervals, CoreTextsEn),
+            "After 20 minutes of warming up, 4×8 minutes hard at threshold " +
+                "with 4 easy minutes in between; finish with 10 minutes of cooling down – " +
+                "about 94 minutes in total.",
+            sessionDescription(legacy, CoreTextsEn),
         )
         assertEquals(intervals.description, sessionDescription(intervals, CoreTextsDe))
     }

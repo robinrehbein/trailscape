@@ -240,8 +240,8 @@ fun dailyLoadsFrom(entries: Iterable<LoadEntry>): List<DailyLoad> {
  * 4 CTL/Woche liegt mitten im Band „Nachhaltiger Aufbau" von
  * [classifyRampRate] (3…6) — genau die Rate, die die eigene Auswertung
  * hinterher nicht anmahnt. Dieselbe Zahl benutzt sowohl das empfohlene
- * Wochenziel der Auswertung (`computeInsights`) als auch das Last-Budget des
- * Trainingsplans (`generatePlan`), damit Plan und Lastmodell nicht mit zwei
+ * Wochenziel der Auswertung (`computeInsights`) als auch die Vorschau
+ * [projectedEventCtl] fuer Altplaene ohne Last-Ziele, damit Plan und Lastmodell nicht mit zwei
  * verschiedenen Rampen rechnen.
  */
 const val defaultTargetRampPerWeek: Double = 4.0

@@ -3,6 +3,8 @@ package de.trailscape.core.i18n
 import de.trailscape.core.FitnessLevel
 import de.trailscape.core.PlanSessionStatus
 import de.trailscape.core.SessionIntensity
+import de.trailscape.core.TargetZone
+import de.trailscape.core.TrainingPhase
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.WeekKind
 
@@ -23,6 +25,15 @@ import de.trailscape.core.WeekKind
 interface TrainingTexts {
     fun errorTooSoon(): String
     fun errorTooFar(): String
+
+    /** Ein Fitnessblock muss [minWeeks] bis [maxWeeks] Wochen lang sein. */
+    fun errorFitnessBlockLength(minWeeks: Int, maxWeeks: Int): String
+
+    /** Phase einer Planwoche (Grundlage, Aufbau, …). */
+    fun trainingPhase(phase: TrainingPhase): String
+
+    /** Name eines Zielbereichs, z. B. „Grundlage (Z2)". */
+    fun targetZone(zone: TargetZone): String
 
     fun fitnessLevel(level: FitnessLevel): String
     fun weekKind(kind: WeekKind): String
@@ -63,6 +74,18 @@ interface TrainingTexts {
         suggestedWeeks: Int?,
         needsLongerPlan: Boolean,
     ): String
+
+    /**
+     * Zusatz zu [planNotFeasible]: Das Zeitbudget ([budgetHours] h/Woche) ist
+     * der Engpass; ohne Deckel braeuchte der Plan in der Spitze [neededHours].
+     */
+    fun planBudgetLimited(budgetHours: Double, neededHours: Double): String
+
+    /**
+     * Die Zielzeit ([targetMin]) ist deutlich schneller als die Prognose
+     * ([predictedMin]); dazu die Schnitte in km/h.
+     */
+    fun targetTimeAmbitious(targetMin: Int, predictedMin: Int, targetSpeedKmh: Double, predictedSpeedKmh: Double): String
 }
 
 /**
@@ -87,7 +110,12 @@ enum class SessionTextKey(val jsonName: String) {
     /** Einsteiger, „Lockere Ausfahrt GA1". Keine Argumente. */
     BASE_EASY_RIDE("baseEasyRide"),
 
-    /** Die lange Fahrt der Woche. Argumente: `[mitAnstiegen (0/1)]`. */
+    /**
+     * Die lange Fahrt der Woche. Argumente: `[mitAnstiegen (0/1)]`, seit dem
+     * Planumbau optional angehaengt `[…, zieltempoBloecke, blockMin,
+     * zielschnittZehntelKmh (−1 ohne Zielzeit)]`. Aeltere Versionen lesen nur
+     * das erste Argument und zeigen den Text ohne Zieltempo.
+     */
     LONG_RIDE("longRide"),
 
     /** Einsteiger, „Regeneration locker". Keine Argumente. */
@@ -114,6 +142,27 @@ enum class SessionTextKey(val jsonName: String) {
 
     /** Zielwoche, „Aktivierung locker". Keine Argumente. */
     ACTIVATION("activation"),
+
+    /**
+     * Strukturierte Qualitaetseinheit (Tempo, Sweet Spot, Schwelle, VO2max).
+     * Argumente:
+     * `[art, einfahrenMin, wiederholungen, belastungMin, pauseMin, ausfahrenMin, gesamtMin, amBerg (0/1)]`
+     * mit `art` = `WorkoutKind.code` (0 Tempo, 1 Sweet Spot, 2 Schwelle, 3 VO2max).
+     *
+     * Loest fuer neue Plaene [INTERVALS] ab; [INTERVALS] bleibt fuer
+     * gespeicherte Plaene lesbar. Aeltere App-Versionen kennen den Schluessel
+     * nicht und zeigen dann den gespeicherten Titel/Text.
+     */
+    WORKOUT("workout"),
+
+    /** Erholungswoche, die verkuerzte lange Tour. Keine Argumente. */
+    RECOVERY_LONG("recoveryLong"),
+
+    /** Testwoche, 20-min-Test. Argumente: `[einfahrenMin, testMin, ausfahrenMin, gesamtMin]`. */
+    FTP_TEST("ftpTest"),
+
+    /** Testwoche, Vergleichsrunde. Argumente: `[km]`. */
+    BENCHMARK_RIDE("benchmarkRide"),
     ;
 
     companion object {

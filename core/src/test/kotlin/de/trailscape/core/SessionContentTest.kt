@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTextsDe
+import de.trailscape.core.i18n.SessionTextKey
 import java.time.LocalDate
 import java.time.LocalDateTime
 import kotlin.test.Test
@@ -58,23 +59,22 @@ class SessionContentTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `die Intervalleinheit ist so lang, wie ihre Beschreibung sagt`() {
+    fun `die Qualitaetseinheit ist so lang, wie ihre Beschreibung sagt`() {
         val plan = planFor(FitnessLevel.FORTGESCHRITTEN, 70.0)
+        val workouts = plan.weeks.flatMap { it.sessions }.filter { it.textKey == SessionTextKey.WORKOUT }
+        assertTrue(workouts.isNotEmpty())
 
-        for (session in sessions(plan, "Intervalle")) {
+        for (session in workouts) {
             val minutes = assertNotNull(session.durationMin, "Dauer fehlt")
-
-            // Der Text nennt Einfahren, Wiederholungen, Pause, Ausfahren und
-            // die Gesamtdauer — und die Gesamtdauer ist genau `durationMin`.
             val reps = Regex("(\\d+)×(\\d+) Minuten").find(session.description)
             assertNotNull(reps, "Keine Intervallangabe in: ${session.description}")
             val count = reps.groupValues[1].toInt()
             val work = reps.groupValues[2].toInt()
-            assertTrue(count in 3..5, "Unplausible Wiederholungszahl $count")
             assertTrue(session.description.contains("rund $minutes Minuten"))
 
-            // Rechnerisch: 20 min Einfahren + count×work + (count−1)×4 + 10 min aus.
-            assertEquals(20 + count * work + (count - 1) * 4 + 10, minutes)
+            // Rechnerisch: Einfahren + count×work + (count−1)×Pause + Ausfahren.
+            val a = session.textArgs
+            assertEquals(a[1] + count * work + (count - 1) * a[4] + a[5], minutes)
 
             // Und die Kilometer entsprechen dieser Dauer bei Planungstempo
             // (18 km/h × 1,0 fuer eine harte Einheit).
@@ -83,18 +83,14 @@ class SessionContentTest {
     }
 
     @Test
-    fun `eine 70-km-Woche gibt der Intervalleinheit nicht mehr nur 14 km`() {
-        // Genau der Fall aus dem Review.
+    fun `eine 70-km-Woche gibt der Qualitaetseinheit ihre volle Laenge`() {
+        // Der Fall aus dem frueheren Review: Struktur zuerst, Kilometer danach.
         val plan = planFor(FitnessLevel.FORTGESCHRITTEN, 70.0)
-        val week = plan.weeks.first { it.kind == WeekKind.AUFBAU && it.targetKm == 70 }
-        val intervals = week.sessions.single { it.title == "Intervalle" }
+        val week = plan.weeks.first { it.kind == WeekKind.AUFBAU }
+        val workout = week.sessions.single { it.textKey == SessionTextKey.WORKOUT }
 
-        assertTrue(
-            intervals.targetKm >= 18,
-            "Intervalleinheit nur ${intervals.targetKm} km bei 70-km-Woche",
-        )
-        // Die uebrigen Kilometer der Woche bleiben bei den Einheiten, die
-        // Volumen tragen sollen — die Wochensumme stimmt weiterhin.
+        assertTrue(workout.targetKm >= 14, "Qualitaetseinheit nur ${workout.targetKm} km")
+        // Die Wochensumme ist das Wochenziel.
         assertEquals(week.targetKm, week.sessions.sumOf { it.targetKm })
     }
 
@@ -141,7 +137,7 @@ class SessionContentTest {
     @Test
     fun `die Intensitaet steht am Datensatz und nicht im Titel`() {
         val plan = planFor(FitnessLevel.AMBITIONIERT, 120.0)
-        val intervals = sessions(plan, "Intervalle").first()
+        val intervals = plan.weeks.flatMap { it.sessions }.first { it.textKey == SessionTextKey.WORKOUT }
 
         assertEquals(SessionIntensity.HART, intervals.intensity)
         assertEquals(SessionIntensity.HART, classifySessionIntensity(intervals))

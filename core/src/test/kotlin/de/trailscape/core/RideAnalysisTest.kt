@@ -185,6 +185,16 @@ class RideAnalysisTest {
     }
 
     @Test
+    fun `Uth-Formel nutzt fuer Frauen den Faktor 14,5`() {
+        val female = estimateVo2MaxFromHrRatio(refProfile.copy(sex = Sex.WEIBLICH), texts = CoreTextsDe)
+        val male = estimateVo2MaxFromHrRatio(refProfile.copy(sex = Sex.MAENNLICH), texts = CoreTextsDe)
+        val unknown = estimateVo2MaxFromHrRatio(refProfile.copy(sex = Sex.UNBEKANNT), texts = CoreTextsDe)
+        assertEquals(58.14 * 14.5 / 15.3, female.value!!, 1e-9)
+        assertEquals(58.14, male.value!!, 1e-9)
+        assertEquals(58.14, unknown.value!!, 1e-9)
+    }
+
+    @Test
     fun `ACSM-Regression bei perfektem Zusammenhang`() {
         // P = 2·(HF − 100) + 60, VO2 = 10,8·P/75 + 7 = 0,144·P + 7
         // -> Steigung 0,288 ml/kg/min pro bpm, Achsenabschnitt −13,16

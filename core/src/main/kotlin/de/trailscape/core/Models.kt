@@ -409,6 +409,12 @@ data class FitnessAssessment(
  * **hinten angehaengt** und **nur geschrieben, wenn es einen Wert gibt**. Ein
  * Ziel ohne Zielzeit ergibt damit byteidentisch dasselbe JSON wie vorher, und
  * ein altes Ziel ohne den Schluessel liest sich als „keine Zielzeit".
+ *
+ * [type] folgt derselben Regel: geschrieben wird `"type":"fitness"` **nur**
+ * fuer ein Fitnessziel; ein Eventziel bleibt byteidentisch. Ein unbekannter
+ * Wert (Ziel aus einer neueren Version) liest sich als [GoalType.EVENT] —
+ * `distanceKm` und `date` sind fuer jeden Typ Pflicht, damit auch eine
+ * aeltere App-Version, die das Feld nicht kennt, das Ziel lesen kann.
  */
 data class Goal(
     val name: String,
@@ -419,9 +425,21 @@ data class Goal(
     /**
      * Angestrebte Zielzeit in Minuten (z. B. 130 fuer „2:10 h"); `null`, wenn
      * keine eingetragen ist. Grundlage des Vergleichs mit der Prognose aus
-     * [predictGoalFinish] — auf den Plan selbst wirkt sie nicht.
+     * [predictGoalFinish] — und seit dem Planumbau auch des Plans selbst:
+     * Mit Zielzeit beginnen die Zieltempo-Abschnitte der langen Tour schon in
+     * der Aufbauphase, und ihr Text nennt den Zielschnitt (siehe
+     * [generatePlan]). [assessPlanFeasibility] sagt, wenn die Zielzeit
+     * deutlich schneller ist als die Prognose.
      */
     val targetDurationMin: Int? = null,
+    /**
+     * Art des Ziels — ein Event an einem Datum (Vorgabe) oder ein
+     * Fitnessblock ohne Event, der mit einer Testwoche endet (siehe
+     * [GoalType]). Bei [GoalType.FITNESS] ist [date] das Ende des Blocks
+     * (Tag der Vergleichsrunde) und [distanceKm] die Laenge der
+     * Vergleichsrunde; `0` heisst „keine feste Runde".
+     */
+    val type: GoalType = GoalType.EVENT,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("name", name)
@@ -430,6 +448,9 @@ data class Goal(
         put("date", date)
         // Angehaengt und nur mit Wert (siehe Klassen-KDoc).
         targetDurationMin?.let { put("targetDurationMin", it) }
+        if (type != GoalType.EVENT) {
+            put("type", type.jsonName)
+        }
     }
 
     companion object {
@@ -439,7 +460,38 @@ data class Goal(
             ascentM = json.optionalDouble("ascentM"),
             date = json.requiredLong("date"),
             targetDurationMin = json.optionalInt("targetDurationMin")?.takeIf { it > 0 },
+            type = GoalType.fromJsonNameOrDefault(json.optionalString("type")),
         )
+    }
+}
+
+/**
+ * Art eines Trainingsziels.
+ *
+ * Bewusst als eigenes, optionales Feld statt als neuer [WeekKind]-Wert: Ein
+ * unbekannter Wochentyp macht in aelteren App-Versionen den **ganzen Plan**
+ * unlesbar ([WeekKind.fromJsonName] wirft), ein unbekannter Zieltyp faellt
+ * dagegen hier lautlos auf [EVENT] zurueck.
+ */
+enum class GoalType(
+    /** Name im JSON; stabil unabhaengig vom Kotlin-Bezeichner. */
+    val jsonName: String,
+) {
+    /** „Distanz X am Datum Y" — der bisherige und einzige Zieltyp. */
+    EVENT("event"),
+
+    /**
+     * „Fitness/Tempo verbessern": ein Block ueber einige Wochen im
+     * 3:1-Rhythmus mit Intensitaetsprogression, der mit einer Testwoche
+     * (20-min-Test und Vergleichsrunde) statt eines Events endet.
+     */
+    FITNESS("fitness"),
+    ;
+
+    companion object {
+        /** Unbekannt oder fehlend → [EVENT] (siehe Klassen-KDoc). */
+        fun fromJsonNameOrDefault(name: String?): GoalType =
+            entries.firstOrNull { it.jsonName == name } ?: EVENT
     }
 }
 
@@ -516,8 +568,8 @@ data class TrainingSession(
      *
      * Die Bruecke zwischen Plan und Lastmodell: [targetKm] bleibt die Groesse
      * fuers Routing, [targetLoad] die fuer CTL/ATL/Wochenbudget. Erzeugt wird
-     * der Wert zusammen mit den Kilometern in `generatePlan` (siehe dort
-     * `attachSessionLoads`), sodass beide Zahlen nie unabhaengig voneinander
+     * der Wert aus der Struktur der Einheit (Dauer × IF² je Abschnitt, siehe
+     * `PlanWorkouts.kt`), sodass Last, Dauer und Kilometer nie unabhaengig voneinander
      * entstehen.
      *
      * `null` bei Plaenen aus der Zeit vor diesem Feld — ein fehlender
@@ -616,18 +668,40 @@ data class TrainingWeek(
     }
 }
 
-/** Ein vollstaendiger Trainingsplan auf ein [Goal] hin. */
+/**
+ * Ein vollstaendiger Trainingsplan auf ein [Goal] hin.
+ *
+ * ## Angehaengte Felder
+ * [preferences] und [planSpeedKmh] sind spaeter dazugekommen und folgen der
+ * Konvention von [TrainingSession]: hinten angehaengt, **nur mit Wert
+ * geschrieben**. Ein Plan, der ohne Praeferenzen und ohne persoenliches Tempo
+ * erzeugt wurde, hat damit exakt die bisherigen Schluessel; ein alter Plan
+ * liest sich als „keine Praeferenzen, Planungstempo 18 km/h". Gespeichert
+ * werden beide, damit [adaptPlan] und [assessPlanFeasibility] spaeter mit
+ * **denselben** Annahmen neu rechnen, mit denen der Plan entstand.
+ */
 data class TrainingPlan(
     val createdAt: Long,
     val goal: Goal,
     val level: FitnessLevel,
     val weeks: List<TrainingWeek>,
+    /** Plan-Praeferenzen (Trainingstage, Tag der langen Tour, Zeitbudget); `null` = keine. */
+    val preferences: PlanPreferences? = null,
+    /**
+     * Persoenliches Grundtempo in km/h, mit dem Dauer und Kilometer der
+     * Einheiten umgerechnet wurden (z. B. [typicalAvgSpeedKmh]); `null` =
+     * [fallbackGravelSpeedKmh].
+     */
+    val planSpeedKmh: Double? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("createdAt", createdAt)
         put("goal", goal.toJson())
         put("level", level.jsonName)
         put("weeks", buildJsonArray { weeks.forEach { add(it.toJson()) } })
+        // Ab hier ausschliesslich angehaengte Felder, nur mit Wert.
+        preferences?.takeUnless { it.isEmpty }?.let { put("preferences", it.toJson()) }
+        planSpeedKmh?.let { put("planSpeedKmh", it) }
     }
 
     companion object {
@@ -636,6 +710,12 @@ data class TrainingPlan(
             goal = Goal.fromJson(json.requiredObject("goal")),
             level = FitnessLevel.fromJsonName(json.requiredString("level")),
             weeks = json.requiredArray("weeks").map { TrainingWeek.fromJson(it.asRequiredObject()) },
+            preferences = (json.fieldOrNull("preferences") as? JsonObject)
+                ?.let { PlanPreferences.fromJson(it) }
+                ?.takeUnless { it.isEmpty },
+            planSpeedKmh = (json.fieldOrNull("planSpeedKmh") as? JsonPrimitive)
+                ?.content?.toDoubleOrNull()
+                ?.takeIf { it.isFinite() && it in minPlausibleAvgSpeedKmh..maxPlausibleAvgSpeedKmh },
         )
     }
 }

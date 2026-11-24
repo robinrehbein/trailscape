@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Eingaben des Zielblatts im Trainings-Tab: Zieltyp, Fitnessblock, Plan-Präferenzen
+    (ui/training/GoalCard.kt, ui/training/TrainingNotices.kt).
+
+    Schlüssel-Präfix: plan_inputs_
+    Regeln (Schlüsselnamen, Platzhalter, Plurals, Glossar): docs/i18n.md.
+    Gegenstück in values-en/strings_plan_inputs.xml — gleiche Schlüssel, gleiche Reihenfolge.
+-->
+<resources>
+    <!-- Zieltyp -->
+    <string name="plan_inputs_goal_editor_type_label">Art des Ziels</string>
+    <string name="plan_inputs_goal_editor_type_event">Event</string>
+    <string name="plan_inputs_goal_editor_type_fitness">Fitness</string>
+    <string name="plan_inputs_goal_editor_type_event_cd">Event (Distanz an einem Datum)</string>
+    <string name="plan_inputs_goal_editor_type_fitness_cd">Fitness verbessern</string>
+    <string name="plan_inputs_goal_editor_type_event_hint">Eine Distanz an einem Datum, zum Beispiel ein Rennen.</string>
+    <string name="plan_inputs_goal_editor_type_fitness_hint">Fitness verbessern: ein Block von 4 bis 16 Wochen, der mit einer Testwoche endet. Distanz und Datum brauchst du nicht.</string>
+
+    <!-- Höhenmeter -->
+    <string name="plan_inputs_goal_editor_ascent_error">Bitte die Höhenmeter als Zahl angeben, zum Beispiel 1200 oder 1.200, oder das Feld leer lassen.</string>
+
+    <!-- Fitnessblock -->
+    <string name="plan_inputs_goal_editor_weeks_label">Blocklänge (Wochen)</string>
+    <string name="plan_inputs_goal_editor_weeks_placeholder">4–16</string>
+    <string name="plan_inputs_goal_editor_benchmark_label">Vergleichsrunde (km)</string>
+    <string name="plan_inputs_goal_editor_benchmark_placeholder">optional</string>
+    <string name="plan_inputs_goal_editor_benchmark_error">Bitte eine Länge von %1$d bis %2$d km für die Vergleichsrunde angeben oder das Feld leer lassen.</string>
+
+    <!-- Plan-Präferenzen -->
+    <string name="plan_inputs_prefs_days_label">Verfügbare Trainingstage</string>
+    <string name="plan_inputs_prefs_days_hint">Der Plan legt die Einheiten nur auf diese Tage.</string>
+    <string name="plan_inputs_prefs_long_ride_label">Tag der langen Tour</string>
+    <string name="plan_inputs_prefs_long_ride_auto">Automatisch</string>
+    <string name="plan_inputs_prefs_long_ride_auto_cd">Tag der langen Tour automatisch wählen</string>
+    <string name="plan_inputs_prefs_hours_label">Zeitbudget pro Woche (Stunden)</string>
+    <string name="plan_inputs_prefs_hours_placeholder">optional</string>
+    <string name="plan_inputs_prefs_hours_hint">Leer lassen heißt: kein Budget. Reicht die Zeit nicht, kürzt der Plan den Umfang.</string>
+    <string name="plan_inputs_prefs_hours_error">Das Zeitbudget bitte in Stunden pro Woche angeben (mehr als 0, höchstens 40), zum Beispiel 6 oder 6,5.</string>
+    <string name="plan_inputs_goal_editor_rebuild_hint">Mit dieser Änderung wird der Plan neu erstellt.</string>
+    <!-- %1$s = Enddatum, z. B. „Sa, 19. Dezember"; %2$d = Restwochen -->
+    <string name="plan_inputs_goal_editor_keep_end_hint">Der Block endet weiterhin am %1$s. Die restlichen %2$d Wochen werden neu geplant.</string>
+    <!-- %1$d = Blocklänge in Wochen; %2$s = Beginn der Testwoche, z. B. „Mo, 14. Dezember" -->
+    <string name="plan_inputs_goal_editor_restart_hint">Der Block beginnt heute neu und läuft %1$d Wochen. Die Testwoche beginnt am %2$s.</string>
+    <!-- %1$s = Enddatum des laufenden Blocks; %2$d = kürzeste Blocklänge -->
+    <string name="plan_inputs_goal_editor_rest_too_short_error">Der laufende Block endet am %1$s. Bis dahin bleiben weniger als %2$d Wochen, zu kurz für einen neuen Plan. Ändere die Blocklänge, um heute einen neuen Block zu beginnen.</string>
+
+    <!-- Zielkarte eines Fitnessblocks -->
+    <string name="plan_inputs_goal_fitness_kind">Fitnessblock</string>
+    <string name="plan_inputs_goal_fitness_benchmark">Vergleichsrunde %1$s km</string>
+    <string name="plan_inputs_goal_fitness_ends">Test am %1$s</string>
+    <string name="plan_inputs_goal_fitness_ends_benchmark">Testwoche bis %1$s</string>
+    <string name="plan_inputs_goal_fitness_ends_benchmark_only">Vergleichsrunde am %1$s</string>
+    <string name="plan_inputs_goal_fitness_ends_plain">Block endet am %1$s</string>
+    <!-- Testwoche nur mit 20-Minuten-Test -->
+    <string name="plan_inputs_goal_fitness_body">Der Block endet mit einem 20-Minuten-Test.</string>
+    <string name="plan_inputs_goal_fitness_body_benchmark">Der Block endet mit einer Testwoche: 20-Minuten-Test und Vergleichsrunde.</string>
+    <string name="plan_inputs_goal_fitness_body_no_test">Der Block endet mit der Vergleichsrunde. Für den 20-Minuten-Test fehlt ein Trainingstag vor der Vergleichsrunde oder Zeit im Budget.</string>
+    <string name="plan_inputs_goal_fitness_body_none">Der Block endet am Zieltag; in der letzten Woche sind weder Test noch Vergleichsrunde eingeplant.</string>
+</resources>

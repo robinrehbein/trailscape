@@ -183,7 +183,17 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     }
     // Traegt der Plan sein eigenes Ziel? Bewertet wird der angepasste Stand;
     // quittiert wird ueber den Schluessel des gespeicherten Plans.
-    val feasibility = remember(displayPlan, coreTexts) { displayPlan?.let { assessPlanFeasibility(it, coreTexts) } }
+    // Mit der Prognose: nur so kennt das Urteil die Zielzeit-Luecke.
+    val feasibility = remember(displayPlan, prediction, coreTexts) {
+        displayPlan?.let { assessPlanFeasibility(it, prognosis = prediction?.prognosis, texts = coreTexts) }
+    }
+    val feasibilityNotes = remember(displayPlan, feasibility, coreTexts) {
+        if (displayPlan != null && feasibility != null) {
+            feasibilityNoteLines(displayPlan, feasibility, texts = coreTexts)
+        } else {
+            emptyList()
+        }
+    }
     val planKey = remember(plan) { plan?.let { planFeasibilityIdentityKey(it) } }
     val openFeasibility = feasibility?.takeIf { !it.feasible && planKey != planFeasibilityAckKey }
     val currentWeek = remember(displayPlan) {
@@ -363,6 +373,10 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             prediction = prediction,
                             onEdit = { showGoalEditor = true },
                             onExplain = { showPrognosis = true },
+                            testWeek = fitnessTestWeek(shownPlan),
+                            // Eine Zielzeit-Luecke nur einmal sagen: den konkreteren
+                            // Hinweis (mit Tempo) unter der Karte, nicht beide.
+                            targetTimeNoteShown = feasibility?.targetTimeMessage?.isNotBlank() == true,
                         )
                     }
                 } else {
@@ -388,6 +402,13 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                     }
                 }
 
+                // Leise Zeilen zu Zeitbudget und Zielzeit (kein zweites Warnfeld).
+                if (shownPlan != null) {
+                    feasibilityNotes.forEachIndexed { index, note ->
+                        item(key = "plan-hinweis-$index") { QuietNoteLine(text = note) }
+                    }
+                }
+
                 // ------------------------------------------ Diese Woche im Plan
                 if (shownPlan != null) {
                     currentWeek?.let { week ->
@@ -401,6 +422,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                                 rides = rides,
                                 onPlanRoute = onPlanRoute,
                                 rideLoads = rideLoadValues,
+                                insights = insights,
                                 headline = stringResource(
                                     R.string.training_screen_week_headline,
                                     week.index + 1,
@@ -438,6 +460,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                                 rides = rides,
                                 onPlanRoute = onPlanRoute,
                                 rideLoads = rideLoadValues,
+                                insights = insights,
                             )
                         }
                     }
@@ -497,6 +520,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
             onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
             onDismiss = { showGoalEditor = false },
             currentCtl = currentCtl,
+            profileWeeklyHours = insights.profile.weeklyHours,
         )
     }
     val sheetPlan = displayPlan
