@@ -85,7 +85,7 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/7` (vorher `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/8` (vorher `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
 Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
@@ -514,6 +514,42 @@ Balkantrasse 1 134 → 265, Altenberg kurz 638 → 336 (der Rest liegt überwieg
 zwischen Gelände und dem auslaufenden, dort fast durchsichtigen Übergangsstreifen,
 an Wasserufern und an Brücken). Bildpaare zeigen den Stand vor Punkt 5; die
 Fransen enden seitdem an der Fahrbahnkante (im Bild kaum zu unterscheiden).
+
+### Nachrunde (nach dem Merge mit der Vegetation, Welt-Version `indoor-world/6`)
+
+Vier Punkte aus dem Kombi-Render des Orchestrators. Bildpaare:
+`docs/indoor/bilder/junctions/runde2-<welt>-<laufmeter>_<kamera>-vorher.jpg` /
+`-nachher.jpg` (vorher = `e79c5bc`, Stand nach dem Merge; gleiche Blickpunkte).
+
+| # | Mangel | Ursache | Stand |
+|---|---|---|---|
+| 1a | Neben Schotter-/Waldweg beidseitig ein **dunkelbrauner, hart begrenzter Randstreifen** (Altenberg kurz mit Luftbild, km 1,5) | Der deckende Übergangsstreifen (Runde 1) behielt die Farbregel aus der Zeit, als er durchschien: Waldboden und Schotter wurden nur zum Rand hin (Stärke³) ans Luftbild angeglichen; deckend war er bis `tB` = 4 m (Wald) | **behoben:** Waldboden und Schotter werden wie Gras an die Farbe des Bodens daneben angeglichen (Luftbild bzw. erzeugte Bodentextur über die Abtönung); deckend nur noch bis `tA` (≤ 1,5 m hinter dem Randstreifen), dann läuft der Streifen über `tB` bis `tE` weich aus (Deckung weiter in der **Textur**, Auslauf jetzt ab Deckung 1). Ort/Acker laufen breiter aus (6,0/6,5 statt 4,4/5,0 m) |
+| 1b | Heller Belag endet im Vordergrund mit einer **geraden Querkante** (Rechteck-Stufe) | Altenberg kurz hat bei km 1,5 eine Wendeschleife: Die Rückfahrt (km 1,54–1,56) liegt wenige Meter neben der Hinfahrt. Deren Fahrbahn schnitt als Sperrfläche (Runde 1) die Fransen der Hinfahrt weg — wo sie begann, endeten die Fransen quer | **behoben:** Fahrbahnen anderer Streckenteile sperren nur noch den äußeren Rand (Gras, Gehweg, Bankett), nicht Fransen, Bordstein und Linien; ebenso Wege, die längs in der eigenen Fahrbahn liegen, ohne als „auf der Strecke“ zu gelten. Zusätzlich laufen die Fransen an Wechseln der Randgestaltung über rund zehn Stationen aus, und das Band des Belagswechsels hat wieder volle Breite (die Fransen liegen 1,3 cm darüber) mit fleckiger Kante (Rauschen je Eckpunkt) statt einer Querlinie |
+| 2 | **Graskeil an der Kreiseleinfahrt** (Kreisel, km 0,77) | Untersucht: Die Ecke zwischen Fahrbahnkante der Strecke und der Kante der einmündenden Ringfahrbahn liegt außerhalb aller Straßenbänder (OSM-Breite `secondary` 6,5 m; der Boden malt 8 m). In der engen Linkskurve lief der Übergangsstreifen der Innenseite dort hinein — vorher durchscheinend, seit Runde 1 deckend. Kein Fehler in `RoadNet` | **behoben** mit 3 (ausgerundete Ecke füllt die Ecke mit Asphalt) |
+| 3 | Bordsteinecken an Einmündungen eckig | Rand endete an der Kante der Nebenstraße; keine Ecke | **behoben:** neu `JunctionCorners.kt`. Wo eine Straße die Fahrbahn der Strecke verlässt (nicht fast gleichlaufend), entsteht auf beiden Seiten eine Ecke mit Radius 5 m im Ort / 4 m außerorts (Tangente ≤ 7 m, bei spitzen Winkeln kleinerer Radius), tangential an beide Kanten. `RoadsLayer` zeichnet die Fläche im Belag der Straße (8 Dreiecke) und im Ort einen **Bordstein entlang des Bogens** (`x_mat_road_kerb`, 12 cm); `RouteEnv` nimmt die Fläche bis hinter den Bordstein in die Sperrflächen auf — Gehweg und Gras laufen im Bogen um die Ecke. Budget: Ecken zuerst, aus dem Straßenbudget |
+| 4 | Sichtbare Mulde hinter dem Grasstreifen (bis 19 cm) | `CarvedGround`: Bankett (25 cm, √2·Zelle + 0,3 m, Pflicht gegen Durchstechen) und danach Böschung über 3–10 m | **weiter geglättet:** Böschung für kleine Unterschiede `2 + 8·Δ` m (bei 25 cm Mulde 4 m statt 6,6 m), Übergangsstreifen läuft im Ort/Acker 6,0/6,5 m statt 4,4/5,0 m aus und deckt damit den größten Teil der Mulde; seine Höhe läuft gleichmäßig vom Randstreifen auf den Boden am Ende. Das Bankett selbst bleibt (sonst sticht das 4-m-Netz durch die Fahrbahn) |
+
+**Weitere Vereinfachungsstufe:** Bei knappstem Routenbudget entfällt zuletzt der
+Auslauf des Übergangsstreifens (`Detail(1, true, false, 1)`), weil die
+geschnittenen Ränder mehr Dreiecke brauchen.
+
+**Messwerte Nachrunde** (`-Xmx256m`, vorher = `e79c5bc`):
+
+| Welt | Dreiecke | Platte | Heap nach GC (max) | Paare Streckenrand < 4 mm / < 1 cm |
+|---|---|---|---|---|
+| Altenberg kurz (Luftbild) | 466 669 → 467 081 | 18,3 → 18,3 MB/km | 207 → 209 MB | 28 → 16 / 83 → 63 |
+| Balkantrasse 7,7 km (`--no-aerial`) | 448 598 → 448 854 | 19,2 → 19,2 MB/km | 232 → 214 MB | 5 → 15 / 35 → 42 |
+
+Vertex-Deckung < 1 in durchsichtigen Flächen: weiter 0. Die zusätzlichen Treffer
+der Balkantrasse liegen an Ecken, wo zwei Wege dicht nebeneinander einmünden und
+sich zwei Eckflächen samt Bordstein überlagern (Bordstein bzw. Eckfläche gegen
+den Auslauf des Grases, 6 Paare unter 4 mm) — offen.
+
+**Offen nach der Nachrunde:** überlagerte Ecken dicht benachbarter Einmündungen
+(s. o.); der Gehweg läuft an der Ecke nicht in die Nebenstraße weiter (er endet
+im Bogen hinter dem Bordstein); an der Wendeschleife Altenberg kurz liegen die
+Fahrbahnen von Hin- und Rückfahrt mit sichtbarer Kante übereinander (dünne
+Linie); die Mulde ist hinter dem Grasstreifen über 2–4 m noch zu sehen.
 
 ## Abweichungen vom Vertrag
 

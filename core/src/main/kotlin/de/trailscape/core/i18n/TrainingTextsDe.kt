@@ -3,11 +3,35 @@ package de.trailscape.core.i18n
 import de.trailscape.core.FitnessLevel
 import de.trailscape.core.PlanSessionStatus
 import de.trailscape.core.SessionIntensity
+import de.trailscape.core.TargetZone
+import de.trailscape.core.TrainingPhase
 import de.trailscape.core.WeekKind
+import de.trailscape.core.formatGoalDuration
 
 internal object TrainingTextsDe : TrainingTexts {
     override fun errorTooSoon() = "Das Ziel liegt zu nah in der Zukunft – plane mindestens 3 Wochen ein."
     override fun errorTooFar() = "Das Ziel liegt mehr als ein Jahr entfernt."
+    override fun errorFitnessBlockLength(minWeeks: Int, maxWeeks: Int) =
+        "Ein Fitnessblock dauert $minWeeks bis $maxWeeks Wochen."
+
+    override fun trainingPhase(phase: TrainingPhase) = when (phase) {
+        TrainingPhase.GRUNDLAGE -> "Grundlage"
+        TrainingPhase.AUFBAU -> "Aufbau"
+        TrainingPhase.SPEZIFISCH -> "Spezifisch"
+        TrainingPhase.ERHOLUNG -> "Erholung"
+        TrainingPhase.TAPER -> "Taper"
+        TrainingPhase.EVENT -> "Zielwoche"
+        TrainingPhase.TEST -> "Testwoche"
+    }
+
+    override fun targetZone(zone: TargetZone) = when (zone) {
+        TargetZone.RECOVERY -> "Regeneration (Z1)"
+        TargetZone.ENDURANCE -> "Grundlage (Z2)"
+        TargetZone.TEMPO -> "Tempobereich (Z3)"
+        TargetZone.SWEET_SPOT -> "Sweet Spot"
+        TargetZone.THRESHOLD -> "Schwelle (Z4)"
+        TargetZone.VO2MAX -> "VO2max-Bereich (Z5)"
+    }
 
     override fun fitnessLevel(level: FitnessLevel) = when (level) {
         FitnessLevel.EINSTEIGER -> "Einsteiger"
@@ -48,6 +72,20 @@ internal object TrainingTextsDe : TrainingTexts {
         SessionTextKey.INTERVALS -> "Intervalle"
         SessionTextKey.GOAL_EVENT -> "Zielevent: ${eventName.orEmpty()}"
         SessionTextKey.ACTIVATION -> "Aktivierung locker"
+        SessionTextKey.WORKOUT -> workoutTitle(args)
+        SessionTextKey.RECOVERY_LONG -> "Verkürzte lange Tour"
+        SessionTextKey.FTP_TEST -> "20-Minuten-Test"
+        SessionTextKey.BENCHMARK_RIDE -> "Vergleichsrunde"
+    }
+
+    private fun workoutTitle(args: List<Int>): String {
+        val base = when (args.getOrNull(0)) {
+            0 -> "Tempo-Abschnitte"
+            1 -> "Sweet-Spot-Intervalle"
+            3 -> "VO2max-Intervalle"
+            else -> "Schwellenintervalle"
+        }
+        return if (args.getOrNull(7) == 1) "$base am Berg" else base
     }
 
     override fun sessionDescription(key: SessionTextKey, args: List<Int>) = when (key) {
@@ -69,10 +107,20 @@ internal object TrainingTextsDe : TrainingTexts {
         SessionTextKey.LONG_RIDE -> {
             val base = "Die Schlüsseleinheit der Woche: gleichmäßig im Grundlagentempo fahren und " +
                 "konsequent essen und trinken."
-            if (args.firstOrNull() == 1) {
+            val climbing = if (args.firstOrNull() == 1) {
                 "$base Baue dabei bewusst Anstiege ein, um dich an die Höhenmeter des Ziels zu gewöhnen."
             } else {
                 base
+            }
+            val blocks = args.getOrNull(1) ?: 0
+            if (blocks > 0) {
+                val speed = (args.getOrNull(3) ?: -1).takeIf { it > 0 }
+                    ?.let { " – dein Ziel entspricht rund ${formatDecimal(it / 10.0, 1, AppLanguage.DE)} km/h Schnitt" }
+                    .orEmpty()
+                "$climbing In der zweiten Hälfte ${blocks}×${args.getOrNull(2) ?: 0} Minuten im Zieltempo$speed, " +
+                    "dazwischen wieder ruhig."
+            } else {
+                climbing
             }
         }
         SessionTextKey.RECOVERY_SPIN ->
@@ -103,6 +151,29 @@ internal object TrainingTextsDe : TrainingTexts {
         SessionTextKey.ACTIVATION ->
             "Kurze lockere Runde mit ein paar Antritten, danach Rad und " +
                 "Verpflegung für den Zieltag vorbereiten."
+        SessionTextKey.WORKOUT -> {
+            val effort = when (args[0]) {
+                0 -> "zügig im Tempobereich – sprechen geht nur noch in kurzen Sätzen"
+                1 -> "im Sweet Spot, knapp unter der Schwelle"
+                3 -> "sehr hart im VO2max-Bereich – gegen Ende jeder Belastung 90–95 % deines Maximalpulses"
+                else -> "an der Schwelle, hart, aber gleichmäßig durchhaltbar"
+            }
+            val hill = if (args.getOrNull(7) == 1) " Fahre die Belastungen an einem gleichmäßigen Anstieg." else ""
+            "Nach ${args[1]} Minuten Einfahren ${args[2]}×${args[3]} Minuten $effort, dazwischen je " +
+                "${args[4]} Minuten locker rollen; zum Abschluss ${args[5]} Minuten ausfahren – " +
+                "zusammen rund ${args[6]} Minuten.$hill"
+        }
+        SessionTextKey.RECOVERY_LONG ->
+            "Die lange Fahrt dieser Woche bewusst kürzer und ruhig im Grundlagentempo – " +
+                "jetzt verarbeitet der Körper den Aufbau der letzten Wochen."
+        SessionTextKey.FTP_TEST ->
+            "${args[0]} Minuten einfahren mit zwei kurzen Steigerungen, dann ${args[1]} Minuten so " +
+                "gleichmäßig hart wie möglich und Durchschnittsleistung und -puls notieren – rund 95 % " +
+                "dieser Leistung entsprechen deiner FTP. ${args[2]} Minuten ausfahren, zusammen rund " +
+                "${args[3]} Minuten."
+        SessionTextKey.BENCHMARK_RIDE ->
+            "Deine Vergleichsrunde über ${args[0]} km: gleichmäßig zügig fahren und Zeit sowie " +
+                "Durchschnittspuls mit früheren Fahrten vergleichen – so siehst du, was der Block gebracht hat."
     }
 
     override fun plainTitleEvent(km: Int) = "Rennen $km km"
@@ -144,4 +215,20 @@ internal object TrainingTextsDe : TrainingTexts {
             "Zieldistanz von $goalKm km. Realistisch trägt dieser Plan ein Ziel um " +
             "$suggestedKm km. $outlook"
     }
+
+    override fun planBudgetLimited(budgetHours: Double, neededHours: Double) =
+        "Der Engpass ist dein Zeitbudget von ${formatCompactDecimal(budgetHours, AppLanguage.DE)} h pro " +
+            "Woche: Ohne diesen Deckel bräuchte der Plan in der Spitze rund " +
+            "${formatCompactDecimal(neededHours, AppLanguage.DE)} h pro Woche."
+
+    override fun targetTimeAmbitious(
+        targetMin: Int,
+        predictedMin: Int,
+        targetSpeedKmh: Double,
+        predictedSpeedKmh: Double,
+    ) = "Deine Zielzeit von ${formatGoalDuration(targetMin)} h verlangt rund " +
+        "${formatDecimal(targetSpeedKmh, 1, AppLanguage.DE)} km/h Schnitt – deutlich schneller als " +
+        "die Prognose von ${formatGoalDuration(predictedMin)} h " +
+        "(${formatDecimal(predictedSpeedKmh, 1, AppLanguage.DE)} km/h). Die Zieltempo-Abschnitte der " +
+        "langen Touren zeigen dir, ob das Tempo realistisch wird."
 }

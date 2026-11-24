@@ -1,6 +1,7 @@
 package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.i18n.SessionTextKey
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.exp
@@ -288,17 +289,76 @@ fun predictGoalFinish(
  * Fitness (CTL), die [plan] bis zum Renntag aufbaut, ausgehend von
  * [currentCtl].
  *
- * Dieselbe Annahme, mit der [generatePlan] die Last-Budgets rechnet
- * (`planWeekLoadBudgets`): Jede **Aufbauwoche** hebt die CTL um
- * [defaultTargetRampPerWeek], Erholung, Taper und Zielwoche halten sie. Gezaehlt
- * werden die Aufbauwochen ab der laufenden (eingeschlossen) — wer den Plan
- * faehrt, ist am Renntag so fit. `null` ohne gueltige CTL.
+ * ## Plaene des heutigen Generators
+ * Die CTL wird ueber die **geplanten Wochenlasten** fortgeschrieben — dieselbe
+ * Exponentialglaettung wie die Performance-Management-Kurve, wochenweise:
+ * `CTL ← CTL + (Wochenlast / 7 − CTL) × ctlWeeklyResponse`. Gezaehlt werden
+ * die Wochen ab der laufenden (eingeschlossen) bis vor die Zielwoche; die
+ * Zielwoche selbst traegt das Event, dessen Last am Renntag noch nicht in der
+ * Form steckt. Damit sinkt die Vorschau auch, wenn der Plan weniger Last
+ * vorsieht als die heutige CTL.
+ *
+ * ## Altplaene (vor dem Planumbau gespeichert)
+ * Auch der alte Generator schrieb [TrainingSession.targetLoad] — aber aus
+ * einem Wochenbudget, das die Last der Einheiten ohne Ruecksicht auf ihre
+ * Dauer hochskalierte. Diese Zahlen in die neue Rechnung zu geben, wuerde die
+ * Vorschau eines gespeicherten Plans still veraendern (z. B. Einsteiger bei
+ * CTL 40: 68 → 24). **Bewusst** behalten Altplaene deshalb die alte Rechnung:
+ * jede verbleibende **Aufbauwoche** hebt die CTL um
+ * [defaultTargetRampPerWeek]. Erkannt werden sie an [isLegacyGeneratorPlan];
+ * dieselbe Rechnung gilt fuer jeden Plan, dem Last-Ziele fehlen.
+ *
+ * `null` ohne gueltige CTL.
  */
 fun projectedEventCtl(plan: TrainingPlan, currentCtl: Double?, now: Long? = null): Double? {
     if (currentCtl == null || !currentCtl.isFinite() || currentCtl <= 0) return null
     val nowMs = now ?: System.currentTimeMillis()
-    val buildWeeksLeft = plan.weeks.count { it.kind == WeekKind.AUFBAU && it.end > nowMs }
-    return currentCtl + buildWeeksLeft * defaultTargetRampPerWeek
+    val remaining = plan.weeks.filter { it.end > nowMs }
+    val trainingWeeks = remaining.filter { it.kind != WeekKind.ZIELWOCHE }
+    val withLoads = trainingWeeks.isNotEmpty() &&
+        trainingWeeks.all { week -> week.sessions.all { it.targetLoad != null } } &&
+        trainingWeeks.any { it.sessions.isNotEmpty() }
+    if (!withLoads || isLegacyGeneratorPlan(plan)) {
+        val buildWeeksLeft = remaining.count { it.kind == WeekKind.AUFBAU }
+        return currentCtl + buildWeeksLeft * defaultTargetRampPerWeek
+    }
+    var ctl = currentCtl
+    for (week in trainingWeeks) {
+        val weekLoad = week.sessions.sumOf { it.targetLoad ?: 0.0 }
+        ctl += (weekLoad / 7 - ctl) * ctlWeeklyResponse
+    }
+    return ctl
+}
+
+/**
+ * Ob [plan] vom Generator **vor** dem Planumbau stammt (gespeicherter
+ * Altplan, auch aus der Web-App). Das JSON traegt keine Versionsnummer — und
+ * eine neue Pflichtangabe wuerde das abgestimmte Format brechen —, deshalb
+ * entscheiden Merkmale, die nur der alte Generator erzeugte:
+ *
+ *  * eine Intervalleinheit alten Formats ([SessionTextKey.INTERVALS]), oder
+ *  * ein Eventplan ohne gespeichertes Tempo und ohne Praeferenzen, dessen
+ *    Taperwochen nur lockere Fahrten enthalten (der heutige Taper behaelt
+ *    immer eine Grundlagenfahrt am Tag der langen Tour).
+ *
+ * Ein Plan mit [TrainingPlan.planSpeedKmh], [TrainingPlan.preferences],
+ * Fitnessziel oder einer Einheit, die es erst seit dem Umbau gibt
+ * ([SessionTextKey.WORKOUT], [SessionTextKey.RECOVERY_LONG], Tests), ist nie
+ * ein Altplan.
+ */
+fun isLegacyGeneratorPlan(plan: TrainingPlan): Boolean {
+    val sessions = plan.weeks.flatMap { it.sessions }
+    if (sessions.any { it.textKey == SessionTextKey.INTERVALS }) return true
+    if (plan.planSpeedKmh != null || plan.preferences != null || plan.goal.type == GoalType.FITNESS) return false
+    val newKeys = setOf(
+        SessionTextKey.WORKOUT,
+        SessionTextKey.RECOVERY_LONG,
+        SessionTextKey.FTP_TEST,
+        SessionTextKey.BENCHMARK_RIDE,
+    )
+    if (sessions.any { it.textKey in newKeys }) return false
+    val tapers = plan.weeks.filter { it.kind == WeekKind.TAPER }
+    return tapers.isNotEmpty() && tapers.all { w -> w.sessions.all { it.intensity == SessionIntensity.LOCKER } }
 }
 
 // ---------------------------------------------------------------------------

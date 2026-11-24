@@ -304,6 +304,17 @@ fun todayHeadline(
 }
 
 /**
+ * Zeigt die Heute-Karte die persönlichen Zielbereiche der Plan-Einheit?
+ *
+ * Nur, wenn heute tatsächlich gefahren wird **und** die Einheit so bleibt, wie
+ * geplant: Ist sie herabgestuft ([TodayRoute.downgraded]) oder gestrichen
+ * (kein Ziel, Ruhetag), stünden Schwellen-Bereiche unter einer Überschrift wie
+ * „locker" oder „Ruhetag".
+ */
+internal fun showSessionTargets(session: TrainingSession?, route: TodayRoute): Boolean =
+    session != null && route.target != null && !route.downgraded
+
+/**
  * Der eine Satz unter der Schlagzeile: was konkret zu fahren ist, in Worten
  * statt Zonen. „45 km ruhig fahren, so dass du dich noch unterhalten kannst."
  */

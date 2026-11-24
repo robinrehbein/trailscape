@@ -1,7 +1,10 @@
 package de.trailscape.core.indoor
 
+import de.trailscape.core.FtpTestArg
 import de.trailscape.core.SessionIntensity
 import de.trailscape.core.TrainingSession
+import de.trailscape.core.WorkoutArg
+import de.trailscape.core.parseWorkoutArgs
 import de.trailscape.core.i18n.SessionTextKey
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -13,6 +16,9 @@ import kotlin.math.roundToInt
  * Zielleistung (Anteil der FTP). Regeln:
  *
  *  * Das Zielevent ([TrainingSession.isEvent]) ist kein Rollentraining → `null`.
+ *  * **Qualitaetseinheiten** ([SessionTextKey.WORKOUT]) und der **20-min-Test**
+ *    ([SessionTextKey.FTP_TEST]): ihre Struktur aus den Argumenten, Belastung
+ *    in der Mitte des Zielbereichs (siehe `structuredSteps`).
  *  * **Intervalle** ([SessionTextKey.INTERVALS] mit plausiblen Argumenten
  *    `[einfahren, wdh, belastung, pause, ausfahren, gesamt, haerte]`): genau
  *    die Struktur aus dem Plantext — Einfahren in bis zu drei steigenden Stufen
@@ -83,8 +89,55 @@ internal fun sessionDurationMin(session: TrainingSession): Int {
     return raw.coerceIn(MIN_DURATION_MIN, MAX_DURATION_MIN)
 }
 
+/**
+ * Die Struktur einer neuen Qualitaetseinheit ([SessionTextKey.WORKOUT]) oder
+ * des 20-min-Tests ([SessionTextKey.FTP_TEST]) als ERG-Abschnitte. Die
+ * Zielleistung der Belastung ist die Mitte des Zielbereichs der Art
+ * (Tempo 0,82, Sweet Spot 0,91, Schwelle 1,00, VO2max 1,13; Test 1,00 — ein
+ * Test im ERG-Modus haelt die Leistung fest, er misst also nur, ob die FTP
+ * noch traegt).
+ */
+private fun structuredSteps(session: TrainingSession): List<ErgStep>? {
+    val a = session.textArgs
+    return when (session.textKey) {
+        SessionTextKey.WORKOUT -> {
+            val shape = parseWorkoutArgs(a) ?: return null
+            val zone = shape.kind.zone
+            val fraction = round2((zone.powerLowFtp + zone.powerHighFtp) / 2)
+            stepsFor(a[WorkoutArg.WARMUP], shape.reps, shape.workMin, shape.restMin, a[WorkoutArg.COOLDOWN], fraction)
+        }
+        SessionTextKey.FTP_TEST -> {
+            if (a.size < 3) return null
+            stepsFor(a[FtpTestArg.WARMUP], 1, a[FtpTestArg.TEST], 0, a[FtpTestArg.COOLDOWN], 1.00)
+        }
+        else -> null
+    }
+}
+
+private fun stepsFor(warm: Int, reps: Int, work: Int, rest: Int, cool: Int, workFraction: Double): List<ErgStep>? {
+    val plausible = warm in 0..120 && reps in 1..20 && work in 1..60 && rest in 0..30 && cool in 0..120
+    if (!plausible) return null
+    val totalMin = warm + reps * work + (reps - 1) * rest + cool
+    if (totalMin !in MIN_DURATION_MIN..MAX_DURATION_MIN) return null
+    val steps = mutableListOf<ErgStep>()
+    if (warm > 0) {
+        steps += warmup(warm * 60, 0.50, 0.70, stages = minOf(3, warm), single = 0.55)
+    }
+    for (i in 1..reps) {
+        steps += ErgStep(ErgStepKind.WORK, work * 60, workFraction)
+        if (i < reps && rest > 0) {
+            steps += ErgStep(ErgStepKind.RECOVER, rest * 60, 0.50)
+        }
+    }
+    if (cool > 0) {
+        steps += ErgStep(ErgStepKind.COOLDOWN, cool * 60, 0.45)
+    }
+    return steps
+}
+
 /** Die Intervallstruktur aus den Plan-Argumenten, `null` wenn sie fehlen oder unplausibel sind. */
 private fun intervalSteps(session: TrainingSession): List<ErgStep>? {
+    structuredSteps(session)?.let { return it }
     if (session.textKey != SessionTextKey.INTERVALS) {
         return null
     }

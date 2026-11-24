@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Target ranges and training phase in the plan (ui/training/SessionTargets.kt, PlanSection.kt, ui/today/TodayCards.kt).
+    Key prefix: plan_targets_
+    Rules: docs/i18n.md. Counterpart of values/strings_plan_targets.xml.
+-->
+<resources>
+    <string name="plan_targets_line">%1$s: %2$s</string>
+    <string name="plan_targets_hr">%1$s bpm</string>
+    <string name="plan_targets_power">%1$s W</string>
+    <string name="plan_targets_values">%1$s · %2$s</string>
+    <string name="plan_targets_estimated">%1$s (estimated)</string>
+</resources>

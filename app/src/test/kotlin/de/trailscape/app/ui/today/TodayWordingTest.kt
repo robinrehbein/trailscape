@@ -490,4 +490,19 @@ class TodayWordingTest {
 
         assertEquals(mapOf(monday.plusDays(1) to 30.0), byDate)
     }
+
+    @Test
+    fun `Zielbereiche der Plan-Einheit nur, wenn sie so gefahren wird`() {
+        val planned = session("Mi", 45, SessionIntensity.HART, title = "Schwelle")
+        val kept = route(target(45.0, SessionIntensity.HART), planned)
+        assertTrue(showSessionTargets(planned, kept))
+        // Herabgestuft: die Karte sagt „locker", Schwellen-Bereiche passen nicht dazu.
+        val downgraded = route(target(30.0, SessionIntensity.LOCKER), planned, downgraded = true)
+        assertFalse(showSessionTargets(planned, downgraded))
+        // Gestrichen (Ruhetag): kein Ziel, also auch keine Bereiche.
+        val rest = route(null, planned, note = "Ruhetag")
+        assertFalse(showSessionTargets(planned, rest))
+        // Ohne Plan-Einheit sowieso nicht.
+        assertFalse(showSessionTargets(null, route(target(26.0, SessionIntensity.GRUNDLAGE), null)))
+    }
 }

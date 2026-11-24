@@ -296,10 +296,10 @@ fun canGenerateRouteFor(session: TrainingSession): Boolean = !session.isEvent
  * Leitet die Hoehenpraeferenz aus der Einheit ab.
  *
  * 1. **Beschreibung schlaegt alles.** Erwaehnt der Text bewusst Anstiege oder
- *    Hoehenmeter, ist das ein direkter Auftrag: `Training.kt` haengt genau
+ *    Hoehenmeter, ist das ein direkter Auftrag: Der Plan haengt genau
  *    dann den Klettersatz an ("Baue dabei bewusst Anstiege ein …"), wenn das
  *    Ziel ≥ 1000 Hm hat — und die Zielevent-Beschreibung nennt die Anstiege
- *    ebenfalls. → [AscentPreference.BERGIG]
+ *    ebenfalls; Qualitaetseinheiten „am Berg" ebenso. → [AscentPreference.BERGIG]
  * 2. Intensive Einheiten (Intervalle, Zielevent ohne Hoehenbezug) vertragen
  *    welliges Terrain, brauchen aber lange gleichmaessige Abschnitte für die
  *    Intervalle. → [AscentPreference.MODERAT]
@@ -324,6 +324,8 @@ fun ascentPreferenceForSession(session: TrainingSession): AscentPreference {
  */
 private fun sessionAsksForClimbing(session: TrainingSession): Boolean = when (session.textKey) {
     SessionTextKey.LONG_RIDE -> session.textArgs.firstOrNull() == 1
+    // Qualitaetseinheit „am Berg" (spezifische Phase bei Hoehenmeter-Zielen).
+    SessionTextKey.WORKOUT -> session.textArgs.getOrNull(WorkoutArg.ON_HILL) == 1
     SessionTextKey.GOAL_EVENT -> (session.textArgs.getOrNull(1) ?: -1) >= 0
     null -> session.description.lowercase().let { text -> climbKeywords.any { text.contains(it) } }
     else -> false

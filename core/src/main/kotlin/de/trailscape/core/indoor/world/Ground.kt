@@ -495,9 +495,9 @@ internal class CarvedGround(
         fun slopeWidth(delta: Double): Double {
             val a = abs(delta)
             // Flache Unterschiede (Mulde neben der Fahrbahn im ebenen Ort: 19 cm nach dem Bankett) laufen
-            // auf 3–10 m aus statt immer auf mindestens 10 m — die Mulde neben der Strasse wird schmaler.
-            if (a < 0.5) return 3.0 + 14.5 * a
-            return max(10.0 + 0.5 * a, 2.25 * a).coerceIn(10.0, SLOPE_MAX_M)
+            // auf 2–10 m aus statt immer auf mindestens 10 m — die Mulde neben der Strasse wird schmaler.
+            // Stetig: bis 1 m Unterschied 2 + 8·Δ, darueber wie bisher (steilste Stelle bleibt ≤ 1 : 1,5).
+            return max(min(10.0 + 0.5 * a, 2.0 + 8.0 * a), 2.25 * a).coerceAtMost(SLOPE_MAX_M)
         }
 
         /** Halbe Breite, mit der eine Strasse der Klasse [cls] eingeebnet (und gezeichnet) wird; `null` = nicht eingeebnet. */

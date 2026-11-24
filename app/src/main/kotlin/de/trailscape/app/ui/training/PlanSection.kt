@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import de.trailscape.app.R
 import de.trailscape.app.i18n.LocalAppFormats
 import de.trailscape.app.i18n.LocalCoreTexts
+import de.trailscape.app.ui.TrainingInsights
 import de.trailscape.app.ui.components.Fact
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.TagPill
@@ -51,6 +52,7 @@ import de.trailscape.core.TrainingSession
 import de.trailscape.core.TrainingWeek
 import de.trailscape.core.canGenerateRouteFor
 import de.trailscape.core.currentWeekIndex
+import de.trailscape.core.planWeekPhases
 import de.trailscape.core.i18n.sessionDescription
 import de.trailscape.core.i18n.sessionTitle
 import de.trailscape.core.plainSessionHint
@@ -104,6 +106,8 @@ fun PlanAdaptionNote(reason: String) {
  *   eine heute berechnete Runde wertlos, und die Zeile bliebe ueberladen.
  * @param rideLoads Last je Tour-ID (aus `insights.rideLoads`) — verfeinert die
  *   Status-Zuordnung der Einheiten; ohne sie entscheidet die Distanz allein.
+ * @param insights liefert Profil und FTP fuer die persoenlichen Zielbereiche je
+ *   Einheit; ohne sie entfallen die Zielzeilen.
  */
 @Composable
 fun PlanWeekCard(
@@ -112,6 +116,7 @@ fun PlanWeekCard(
     rides: List<RideInfo>,
     onPlanRoute: ((TrainingSession) -> Unit)? = null,
     rideLoads: Map<String, Double> = emptyMap(),
+    insights: TrainingInsights? = null,
 ) {
     val coreTexts = LocalCoreTexts.current
     val formats = LocalAppFormats.current
@@ -122,6 +127,13 @@ fun PlanWeekCard(
     val ridden = if (isPastOrCurrent) weekKm(week, rides) else 0.0
     val progress = if (week.targetKm > 0) (ridden / week.targetKm).toFloat().coerceIn(0f, 1f) else 0f
     val kindColor = weekKindColor(week.kind)
+    val kindLabel = coreTexts.training.weekKind(week.kind)
+    // Die Phase kommt aus der Wochenfolge, nicht aus dem Plan-JSON. Traegt sie
+    // denselben Namen wie der Wochentyp (Erholung, Taper, Zielwoche), bleibt sie
+    // weg — zwei gleiche Pillen waeren Laerm.
+    val phaseLabel = planWeekPhases(plan).getOrNull(week.index)
+        ?.let { coreTexts.training.trainingPhase(it) }
+        ?.takeIf { it != kindLabel }
     // Erledigt-Status je Einheit — nur fuer Wochen, die schon laufen oder
     // vorbei sind; fuer kuenftige Wochen ist „offen" keine Auskunft.
     val sessionProgress: Map<TrainingSession, PlanSessionProgress> = if (isPastOrCurrent) {
@@ -159,8 +171,11 @@ fun PlanWeekCard(
                 )
                 // Wochentyp-Marke: dieselbe Pille wie der Fitnesslevel-Chip
                 // (`TagPill`) — getoente Flaeche, Text in der Vollfarbe.
+                if (phaseLabel != null) {
+                    TagPill(text = phaseLabel, modifier = Modifier.padding(end = 6.dp))
+                }
                 TagPill(
-                    text = coreTexts.training.weekKind(week.kind),
+                    text = kindLabel,
                     containerColor = kindColor.copy(alpha = 0.15f),
                     contentColor = kindColor,
                 )
@@ -257,6 +272,12 @@ fun PlanWeekCard(
                             style = MaterialTheme.typography.bodyMedium,
                             color = theme.onSurfaceVariant,
                         )
+                        if (insights != null) {
+                            SessionTargetLines(
+                                targets = planSessionTargets(session, insights),
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -313,6 +334,7 @@ fun CurrentWeekCard(
     onPlanRoute: (TrainingSession) -> Unit,
     rideLoads: Map<String, Double> = emptyMap(),
     headline: String? = null,
+    insights: TrainingInsights? = null,
 ) {
     val coreTexts = LocalCoreTexts.current
     val formats = LocalAppFormats.current
@@ -331,6 +353,19 @@ fun CurrentWeekCard(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(start = CardPadding, end = CardPadding, top = 14.dp, bottom = 10.dp),
                 )
+                // Phase der Woche (Grundlage/Aufbau/Spezifisch/Testwoche), sofern
+                // sie mehr sagt als der Wochentyp in der Ueberschrift.
+                val phaseLabel = planWeekPhases(plan).getOrNull(week.index)
+                    ?.let { coreTexts.training.trainingPhase(it) }
+                    ?.takeIf { it != coreTexts.training.weekKind(week.kind) }
+                if (phaseLabel != null) {
+                    Text(
+                        text = phaseLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = theme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = CardPadding, end = CardPadding, bottom = 8.dp),
+                    )
+                }
                 HorizontalDivider(color = theme.outlineVariant, modifier = Modifier.padding(horizontal = CardPadding))
             }
             week.sessions.forEachIndexed { i, session ->
@@ -372,6 +407,12 @@ fun CurrentWeekCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(plainSessionTitle(session, coreTexts), style = MaterialTheme.typography.titleSmall, color = textColor)
                         Text(subline, style = MaterialTheme.typography.bodySmall, color = mutedColor)
+                        if (insights != null && !done) {
+                            SessionTargetLines(
+                                targets = planSessionTargets(session, insights),
+                                color = mutedColor,
+                            )
+                        }
                     }
                     when {
                         done -> {

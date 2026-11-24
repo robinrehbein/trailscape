@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Texts of the "Scientific basis" card (ui/more/ScienceCard.kt, About page).
+
+    Key prefix: science_ · German counterpart in values/strings_science.xml — same keys, same order.
+    Derivation and bibliography: docs/trainingswissenschaft.md.
+-->
+<resources>
+    <string name="science_card_title">Scientific basis</string>
+    <string name="science_card_show_action">Show</string>
+    <string name="science_card_hide_action">Hide</string>
+    <string name="science_intro">What the calculations are based on – and how well it is backed by evidence.</string>
+    <!-- %1$s = source citation, e.g. "Banister 1991; Morton 1990" -->
+    <string name="science_source_format">Source: %1$s</string>
+    <string name="science_footer_hint">The app gives training guidance, not medical advice. The detailed derivation with bibliography is included with the app’s source code.</string>
+
+    <!-- Evidence levels (small label next to the source) -->
+    <string name="science_evidence_based">evidence-based</string>
+    <string name="science_evidence_common_practice">common practice</string>
+    <string name="science_evidence_rule_of_thumb">rule of thumb</string>
+
+    <string name="science_hr_load_title">Training load from heart rate</string>
+    <string name="science_hr_load_body">The higher your heart rate relative to resting and maximum, the more each minute counts. One hour at your threshold equals 100 points.</string>
+    <string name="science_hr_load_source">Banister 1991; Morton 1990</string>
+
+    <string name="science_power_load_title">Load from power</string>
+    <string name="science_power_load_body">With a power meter or estimated power, your ride is compared with your threshold power (FTP). Hard efforts count disproportionately.</string>
+    <string name="science_power_load_source">Allen &amp; Coggan 2019</string>
+
+    <string name="science_rpe_title">Perceived effort</string>
+    <string name="science_rpe_body">Without heart rate or power, your 0–10 rating times ride duration is used. The method has been tested in many sports.</string>
+    <string name="science_rpe_source">Foster 2001</string>
+
+    <string name="science_fitness_fatigue_title">Fitness, fatigue, form</string>
+    <string name="science_fitness_fatigue_body">Fitness is your training average over roughly six weeks, fatigue over the last week. Form is the difference; the time spans are a proven convention, not a personal measurement.</string>
+    <string name="science_fitness_fatigue_source">Morton 1990</string>
+
+    <string name="science_load_spike_title">Load spike</string>
+    <string name="science_load_spike_body">The app compares your last week with what you are used to. It flags a jump, not a prediction of injury.</string>
+    <string name="science_load_spike_source">Gabbett 2016; Impellizzeri 2020</string>
+
+    <string name="science_hrv_baseline_title">Heart rate variability</string>
+    <string name="science_hrv_baseline_body">Your weekly average is compared with your own normal range, not a single morning. Single values fluctuate too much.</string>
+    <string name="science_hrv_baseline_source">Plews 2013</string>
+
+    <string name="science_hrv_guided_title">HRV-guided training</string>
+    <string name="science_hrv_guided_body">If your HRV is below your normal range, the app suggests an easy ride instead of a hard one. Studies show similar progress with fewer hard sessions.</string>
+    <string name="science_hrv_guided_source">Vesterinen 2016; Javaloyes 2019</string>
+
+    <string name="science_polarized_title">Mostly easy, sometimes hard</string>
+    <string name="science_polarized_body">Successful endurance athletes ride most sessions easy and only a few hard. At most two hard days per week protect your recovery.</string>
+    <string name="science_polarized_source">Seiler 2010</string>
+
+    <string name="science_intervals_title">Intervals</string>
+    <string name="science_intervals_body">The plan increases work time step by step: first tempo and sweet spot, then threshold, finally short hard intervals such as 4 × 4 minutes. The formats come from studies; the steps in between are practical experience.</string>
+    <string name="science_intervals_source">Seiler 2013; Helgerud 2007</string>
+
+    <string name="science_gradual_build_title">Build up gradually</string>
+    <string name="science_gradual_build_body">The plan increases weekly volume by at most 15 percent and weekly load by at most 30 percent above what you are used to. The well-known 10 percent rule is a rule of thumb; studies rather suggest avoiding big jumps.</string>
+    <string name="science_gradual_build_source">Buist 2008; Nielsen 2014</string>
+
+    <string name="science_recovery_week_title">Recovery week</string>
+    <string name="science_recovery_week_body">About every fourth week you ride roughly 45 percent less, but still regularly and with one short effort. This is established practice, though rarely studied directly in endurance sports.</string>
+    <string name="science_recovery_week_source">Bell 2023; Mølmen 2019</string>
+
+    <string name="science_taper_title">Taper before your event</string>
+    <string name="science_taper_body">In the two weeks before your event, volume drops step by step by about half; plans shorter than eight weeks get one week. Intensity and frequency stay, so you arrive fresh but still fit.</string>
+    <string name="science_taper_source">Bosquet 2007</string>
+</resources>

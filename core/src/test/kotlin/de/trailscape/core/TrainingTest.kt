@@ -112,7 +112,9 @@ class TrainingTest {
     }
 
     @Test
-    fun `12 Wochen - Wochenfolge Aufbau x3, Erholung, Aufbau x3, Erholung, Aufbau x2, Taper, Zielwoche`() {
+    fun `12 Wochen - Wochenfolge mit zwei Taperwochen vor der Zielwoche`() {
+        // Ab 8 Wochen zwei Taperwochen (Bosquet 2007: ~2 Wochen Taper); die
+        // Erholungswoche faellt nie auf die letzte Aufbauwoche vor dem Taper.
         assertEquals(
             listOf(
                 WeekKind.AUFBAU,
@@ -124,7 +126,7 @@ class TrainingTest {
                 WeekKind.AUFBAU,
                 WeekKind.ERHOLUNG,
                 WeekKind.AUFBAU,
-                WeekKind.AUFBAU,
+                WeekKind.TAPER,
                 WeekKind.TAPER,
                 WeekKind.ZIELWOCHE,
             ),
@@ -133,64 +135,63 @@ class TrainingTest {
     }
 
     @Test
-    fun `12 Wochen - Progression von startKm zum Peak, gedeckelt auf plus 15 Prozent je Woche`() {
-        // startKm = max(95, 70) = 95; angestrebter Peak = 160 × 1,3 = 208.
-        // Die lineare Interpolation will schneller (95 → 111 → 127 → …), die
-        // Rampengrenze zieht sie auf hoechstens +15 % je Aufbauwoche zurueck.
+    fun `12 Wochen - Progression vom tatsaechlichen Umfang, gedeckelt auf plus 15 Prozent je Aufbauwoche`() {
         val builds = twelveWeekPlan.weeks
             .filter { it.kind == WeekKind.AUFBAU }
             .map { it.targetKm }
-        assertEquals(listOf(95, 105, 120, 135, 155, 175, 190, 210), builds)
-
-        // Keine Aufbauwoche springt gegen die vorige um mehr als 15 %
-        // (Rundung auf 5 km eingerechnet).
+        // Woche 0 startet beim tatsaechlichen Umfang (95 km), nicht hoeher.
+        assertTrue(builds.first() in 90..100, "Woche 0: ${builds.first()} km")
+        // Der Umfang waechst, aber nie um mehr als 15 % (mindestens 5 km) — gemessen
+        // an der tatsaechlichen Wochensumme, ohne Toleranz.
+        assertTrue(builds.last() > builds.first())
         for (i in 1 until builds.size) {
             assertTrue(
-                builds[i] <= builds[i - 1] * 1.15,
+                builds[i] <= rampCapKm(builds[i - 1].toDouble()),
                 "Sprung ${builds[i - 1]} → ${builds[i]} km ist zu gross",
             )
         }
-
+        // Das Wochenziel ist die Summe der Einheiten.
         for (week in twelveWeekPlan.weeks) {
-            assertTrue(
-                week.targetKm % 5 == 0 || week.kind == WeekKind.ZIELWOCHE,
-                "Woche ${week.index} nicht auf 5 km gerundet",
-            )
-            assertTrue(week.targetKm >= 5)
+            assertEquals(week.sessions.sumOf { it.targetKm }, week.targetKm, "Woche ${week.index}")
         }
     }
 
     @Test
-    fun `12 Wochen - Erholungswochen liegen bei 60 Prozent der Vorwoche`() {
+    fun `12 Wochen - Erholungswochen kuerzen den Umfang um 40 bis 50 Prozent und halten Haeufigkeit und Reiz`() {
         for (week in twelveWeekPlan.weeks) {
             if (week.kind != WeekKind.ERHOLUNG) continue
-            val previous = twelveWeekPlan.weeks[week.index - 1].targetKm
-            assertEquals(
-                dartRound(previous * 0.6 / 5).toInt() * 5,
-                week.targetKm,
-                "Erholungswoche ${week.index}",
-            )
+            val previous = twelveWeekPlan.weeks[week.index - 1]
+            val share = week.targetKm.toDouble() / previous.targetKm
+            assertTrue(share in 0.45..0.60, "Erholungswoche ${week.index}: ${(share * 100).toInt()} %")
+            // Genau eine Einheit weniger (mindestens zwei).
+            assertEquals(maxOf(2, previous.sessions.size - 1), week.sessions.size, "Haeufigkeit in Woche ${week.index}")
+            // Ein kurzer Intensitaetsreiz bleibt (assessDeload: „Intensitaet bleibt").
+            assertEquals(1, week.sessions.count { it.intensity == SessionIntensity.HART })
+            // Die lange Fahrt ist deutlich gekuerzt.
+            assertTrue(week.sessions.maxOf { it.targetKm } < previous.sessions.maxOf { it.targetKm } * 0.8)
         }
-        assertEquals(70, twelveWeekPlan.weeks[3].targetKm) // 60 % von 120
-        assertEquals(105, twelveWeekPlan.weeks[7].targetKm) // 60 % von 175
     }
 
     @Test
-    fun `12 Wochen - Taper liegt bei 50 Prozent des Peaks`() {
-        // Peak = 208 → 104 → auf 5 km gerundet 105
-        assertEquals(WeekKind.TAPER, twelveWeekPlan.weeks[10].kind)
-        assertEquals(105, twelveWeekPlan.weeks[10].targetKm)
+    fun `12 Wochen - Taper reduziert progressiv und haelt Haeufigkeit und Intensitaet`() {
+        val peakWeek = twelveWeekPlan.weeks.filter { it.kind == WeekKind.AUFBAU }.maxBy { it.targetKm }
+        val tapers = twelveWeekPlan.weeks.filter { it.kind == WeekKind.TAPER }
+        assertEquals(2, tapers.size)
+        val shares = tapers.map { it.targetKm.toDouble() / peakWeek.targetKm }
+        assertTrue(shares[0] in 0.55..0.75, "Taper 1: $shares")
+        assertTrue(shares[1] in 0.38..0.55, "Taper 2: $shares")
+        val lastBuild = twelveWeekPlan.weeks[tapers.first().index - 1]
+        for (taper in tapers) {
+            // Haeufigkeit bleibt im Taper gleich (Bosquet 2007, Mujika & Padilla 2003).
+            assertEquals(lastBuild.sessions.size, taper.sessions.size, "Haeufigkeit in Woche ${taper.index}")
+            assertTrue(taper.sessions.any { it.intensity == SessionIntensity.HART }, "Intensitaet in Woche ${taper.index}")
+        }
     }
 
     @Test
-    fun `12 Wochen - Zielwoche enthaelt Aktivierung und Zielevent`() {
+    fun `12 Wochen - Zielwoche enthaelt Vorbelastung, Aktivierung und Zielevent`() {
         val zielwoche = twelveWeekPlan.weeks.last()
         assertEquals(WeekKind.ZIELWOCHE, zielwoche.kind)
-        assertEquals(2, zielwoche.sessions.size)
-
-        val activation = zielwoche.sessions.first()
-        assertEquals("Di", activation.day) // Samstags-Event → Aktivierung Dienstag
-        assertEquals(15, activation.targetKm)
 
         val event = zielwoche.sessions.last()
         assertEquals("Sa", event.day)
@@ -199,6 +200,13 @@ class TrainingTest {
         assertEquals(160, event.targetKm)
         // 2200 Hm ≥ 1000 → Hoehenmeter-Hinweis in der Beschreibung.
         assertTrue(event.description.contains("2200 Hm"))
+
+        // Aktivierung am Vortag, kurze Vorbelastung 3–5 Tage vorher.
+        val activation = zielwoche.sessions.single { it.title == "Aktivierung locker" }
+        assertEquals("Fr", activation.day)
+        assertTrue(activation.durationMin!! <= 45)
+        val opener = zielwoche.sessions.single { !it.isEvent && it.intensity == SessionIntensity.HART }
+        assertTrue(opener.day in listOf("Mo", "Di", "Mi"), opener.day)
 
         assertEquals(zielwoche.sessions.sumOf { it.targetKm }, zielwoche.targetKm)
     }
@@ -223,7 +231,8 @@ class TrainingTest {
     fun `12 Wochen - Aufbauwochen Fortgeschritten haben drei Einheiten mit Hoehenmeter-Hinweis`() {
         val build = twelveWeekPlan.weeks.first()
         assertEquals(listOf("Di", "Do", "Sa"), build.sessions.map { it.day })
-        assertEquals(listOf("GA1", "Intervalle", "Lange Tour"), build.sessions.map { it.title })
+        // Grundlagenphase: Sweet Spot als Qualitaet, dazu GA1 und die lange Tour.
+        assertEquals(listOf("Sweet-Spot-Intervalle", "GA1", "Lange Tour"), build.sessions.map { it.title })
         assertTrue(build.sessions.last().description.contains("Baue dabei bewusst Anstiege ein"))
     }
 
@@ -264,11 +273,23 @@ class TrainingTest {
     }
 
     @Test
-    fun `3 Wochen - Basisvolumen Einsteiger ist 40 km`() {
-        // weeklyKm 12 < 40 → startKm = 40; peak = min(max(39, 40), 88) = 40
-        assertEquals(40, minimalPlan.weeks[0].targetKm)
-        assertEquals(20, minimalPlan.weeks[1].targetKm) // 50 % vom Peak
+    fun `3 Wochen - Start beim tatsaechlichen Umfang, Basisvolumen nur ohne Historie`() {
+        // Mit Historie (12 km/Woche) startet der Plan beim Umfang, mindestens 15 km —
+        // frueher sprang er auf das Basisvolumen von 40 km.
+        // Einzige Aufbauwoche: hoechstens +5 km gegen den Start.
+        assertTrue(minimalPlan.weeks[0].targetKm in 15..20, "Woche 0: ${minimalPlan.weeks[0].targetKm}")
         assertEquals(FitnessLevel.EINSTEIGER, minimalPlan.level)
+
+        // Ohne Historie gilt das Basisvolumen der Stufe.
+        val noHistory = generatePlan(
+            goalAt(dayAfterFirstMonday(2 * 7 + 5), distanceKm = 30.0, ascentM = null),
+            beginner.copy(weeklyKm = 0.0, rideCount = 0),
+            now = now,
+            texts = CoreTextsDe,
+        )
+        assertEquals(40, noHistory.weeks[0].targetKm)
+        // Der Taper rechnet mit dem erreichten Umfang (eine Taperwoche bei kurzen Plaenen).
+        assertTrue(noHistory.weeks[1].targetKm < 40)
     }
 
     @Test
@@ -276,8 +297,10 @@ class TrainingTest {
         val sessions = minimalPlan.weeks[0].sessions
         assertEquals(2, sessions.size)
         assertEquals(listOf("Di", "Sa"), sessions.map { it.day })
-        assertEquals(16, sessions[0].targetKm) // 40 % von 40
-        assertEquals(24, sessions[1].targetKm) // 60 % von 40
+        // Die lange Tour traegt den groesseren Teil (Gewicht 1,5 : 1).
+        assertTrue(sessions[1].targetKm > sessions[0].targetKm)
+        // Einsteiger fahren in den ersten Wochen keine Intensitaet.
+        assertTrue(sessions.none { it.intensity == SessionIntensity.HART })
     }
 
     @Test
@@ -288,39 +311,23 @@ class TrainingTest {
             now = now,
             texts = CoreTextsDe,
         )
-        // Frueher: peak = min(max(117, 40), 88) = 88 → Woche 1 sprang auf 90 km,
-        // also +125 % gegenueber dem Basisvolumen von 40 km. Jetzt begrenzt die
-        // Rampe auf +15 %: 40 → 45.
-        assertEquals(45, big.weeks[0].targetKm)
-        val sessions = big.weeks[0].sessions
-        assertEquals(2, sessions.size)
-        assertEquals(listOf("Di", "Sa"), sessions.map { it.day })
-        assertEquals(listOf(18, 27), sessions.map { it.targetKm })
+        // Eine einzige Aufbauwoche: hoechstens +15 % bzw. +5 km gegen den Start (15 km).
+        assertTrue(big.weeks[0].targetKm <= 20, "Woche 1: ${big.weeks[0].targetKm} km")
+        assertEquals(listOf("Di", "Sa"), big.weeks[0].sessions.map { it.day })
     }
 
     @Test
-    fun `Einsteiger-Aufbau ab 60 km bekommt zusaetzlich Regeneration`() {
-        // Ab 60 km Wochenvolumen kommt die dritte Einheit dazu (0,3 / 0,5 / 0,2).
-        // Erreicht wird das Volumen erst nach mehreren Aufbauwochen — die
-        // Rampengrenze laesst es nicht mehr in Woche 1 zu.
+    fun `Einsteiger-Aufbau ab 60 km bekommt eine dritte Einheit`() {
         val long = generatePlan(
-            goalAt(dayAfterFirstMonday(11 * 7 + 5), distanceKm = 200.0, ascentM = null),
-            beginner,
+            goalAt(dayAfterFirstMonday(23 * 7 + 5), distanceKm = 200.0, ascentM = null),
+            beginner.copy(weeklyKm = 45.0),
             now = now,
             texts = CoreTextsDe,
         )
         val week = long.weeks.first { it.kind == WeekKind.AUFBAU && it.targetKm >= 60 }
-        val sessions = week.sessions
-        assertEquals(3, sessions.size)
-        assertEquals(listOf("Di", "Sa", "So"), sessions.map { it.day })
-        assertEquals(
-            listOf(
-                dartRound(week.targetKm * 0.3).toInt(),
-                dartRound(week.targetKm * 0.5).toInt(),
-                dartRound(week.targetKm * 0.2).toInt(),
-            ),
-            sessions.map { it.targetKm },
-        )
+        assertEquals(listOf("Di", "Sa", "So"), week.sessions.map { it.day })
+        // Die lange Tour ist die laengste Einheit der Woche.
+        assertEquals(week.sessions.maxBy { it.targetKm }.title, "Lange Tour")
     }
 
     @Test
@@ -349,7 +356,7 @@ class TrainingTest {
         assertEquals(2, zielwoche.sessions.size)
         assertEquals("Mo", zielwoche.sessions.first().day)
         assertEquals("Di", zielwoche.sessions.last().day)
-        assertEquals(45, zielwoche.targetKm)
+        assertEquals(zielwoche.sessions.sumOf { it.targetKm }, zielwoche.targetKm)
     }
 
     // -----------------------------------------------------------------------
@@ -434,10 +441,10 @@ class TrainingTest {
 
     @Test
     fun `sessionsForDay - liefert die Einheit des laufenden Wochentags`() {
-        // Fortgeschritten, Aufbauwoche: Di GA1, Do Intervalle, Sa Lange Tour.
+        // Fortgeschritten, Aufbauwoche: Di Sweet Spot, Do GA1, Sa Lange Tour.
         val tuesday = sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(1))
         assertEquals(1, tuesday.size)
-        assertEquals("GA1", tuesday.first().title)
+        assertEquals("Sweet-Spot-Intervalle", tuesday.first().title)
         assertEquals("Di", tuesday.first().day)
 
         val saturday = sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(5))
@@ -453,11 +460,11 @@ class TrainingTest {
 
     @Test
     fun `sessionsForDay - beruecksichtigt die Art der laufenden Woche`() {
-        // Woche 3 ist Erholung (Di + Sa), also steht donnerstags nichts an.
+        // Woche 3 ist Erholung (eine Einheit weniger als im Aufbau): Di kurzer Reiz, Sa verkuerzte lange Tour.
         assertEquals(WeekKind.ERHOLUNG, twelveWeekPlan.weeks[3].kind)
         assertEquals(
-            listOf("Lockere Ausfahrt"),
-            sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(3 * 7 + 1)).map { it.title },
+            listOf("Verkürzte lange Tour"),
+            sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(3 * 7 + 5)).map { it.title },
         )
         assertTrue(sessionsForDay(twelveWeekPlan, now = dayAfterFirstMonday(3 * 7 + 3)).isEmpty())
     }
@@ -511,69 +518,59 @@ class TrainingTest {
         plan.weeks[index].sessions.sumOf { it.targetLoad ?: 0.0 }
 
     @Test
-    fun `ohne currentCtl tragen alle Einheiten km-abgeleitete Last-Ziele`() {
+    fun `alle Einheiten tragen Last-Ziele aus ihrer Struktur`() {
         for (week in twelveWeekPlan.weeks) {
             for (session in week.sessions) {
                 assertNotNull(session.targetLoad, "${week.index}/${session.title}")
                 assertTrue(session.targetLoad!! >= 1.0)
             }
         }
-        // Harte Einheit kostet pro Kilometer deutlich mehr als Grundlage (IF²).
-        val build = twelveWeekPlan.weeks.first()
+        // Eine Qualitaetseinheit kostet pro Stunde mehr als Grundlage (IF²) —
+        // im flachen Plan, ohne Hoehenmeter-Aufschlag auf die Grundlage.
+        val flat = generatePlan(goalAt(dayAfterFirstMonday(11 * 7 + 5), ascentM = null), advanced, now = now, texts = CoreTextsDe)
+        val build = flat.weeks.first()
         val ga = build.sessions.first { it.title == "GA1" }
-        val hart = build.sessions.first { it.title == "Intervalle" }
+        val hart = build.sessions.first { it.intensity == SessionIntensity.HART }
         assertTrue(
-            hart.targetLoad!! / hart.targetKm > 1.5 * (ga.targetLoad!! / ga.targetKm),
-            "harte Last/km ${hart.targetLoad!! / hart.targetKm} vs GA ${ga.targetLoad!! / ga.targetKm}",
+            hart.targetLoad!! / hart.durationMin!! > ga.targetLoad!! / ga.durationMin!!,
+            "harte Last/min vs GA",
         )
     }
 
     @Test
-    fun `mit currentCtl folgen die Wochenbudgets der Standardrampe`() {
-        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 50.0, texts = CoreTextsDe)
-
-        // Dieselbe Formel wie das empfohlene Wochenziel der Auswertung:
-        // Budget = 7 × (CTL + Rampe / ctlWeeklyResponse); die CTL waechst je
-        // Aufbauwoche um die Rampe. Toleranz: Rundung je Einheit (±0,5 × n).
-        fun budget(ctl: Double): Double =
-            7 * (ctl + defaultTargetRampPerWeek / ctlWeeklyResponse)
-
-        assertEquals(budget(50.0), weekLoad(plan, 0), 2.0)
-        assertEquals(budget(54.0), weekLoad(plan, 1), 2.0)
-        assertEquals(budget(58.0), weekLoad(plan, 2), 2.0)
-        // Erholungswoche 3: 60 % des Budgets der Vorwoche.
-        assertEquals(budget(58.0) * 0.6, weekLoad(plan, 3), 2.0)
-        // Taper (Index 10): 50 % des Budget-Peaks (letzte Aufbauwoche, CTL 78).
-        assertEquals(budget(78.0) * 0.5, weekLoad(plan, 10), 2.0)
-
-        // Die Kilometer bleiben die alten — das Budget aendert nur die Last.
-        assertEquals(
-            twelveWeekPlan.weeks.map { it.targetKm },
-            plan.weeks.map { it.targetKm },
-        )
-        // Das Zielevent bleibt km-abgeleitet, mit und ohne Budget identisch.
-        assertEquals(
-            twelveWeekPlan.weeks.last().sessions.last().targetLoad,
-            plan.weeks.last().sessions.last().targetLoad,
-        )
+    fun `mit currentCtl bleibt jede Aufbauwoche unter dem 1,3-fachen der Referenz`() {
+        val ctl = 30.0
+        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = ctl, texts = CoreTextsDe)
+        var reference = 7 * ctl
+        for (week in plan.weeks.filter { it.kind == WeekKind.AUFBAU }) {
+            val load = weekLoad(plan, week.index)
+            assertTrue(load <= 1.30 * reference + 1, "Woche ${week.index}: $load gegen ${1.3 * reference}")
+            reference = maxOf(reference, load)
+        }
+        // Woche 0 liegt nah an der gewohnten Wochenlast — kein Sprung um +74 % mehr.
+        assertTrue(weekLoad(plan, 0) <= 1.30 * 7 * ctl)
+        // Das Zielevent hat eine Last, wird aber nicht budgetiert.
+        assertNotNull(plan.weeks.last().sessions.last().targetLoad)
     }
 
     @Test
-    fun `Last-Budget waechst je Aufbauwoche nie ueber 15 Prozent`() {
-        // Bei winziger CTL will die Rampe prozentual mehr als +15 % — der
-        // Deckel MAX_WEEKLY_INCREASE greift dann auch auf der Lastskala.
-        val plan = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 0.2, texts = CoreTextsDe)
-        val builds = plan.weeks
-            .filter { it.kind == WeekKind.AUFBAU }
-            .map { w -> w.sessions.sumOf { it.targetLoad ?: 0.0 } }
-        for (i in 1 until builds.size) {
-            assertTrue(
-                // 1,16 statt 1,15: Die Last-Ziele je Einheit sind auf ganze
-                // Zahlen gerundet, die Wochensumme traegt also bis zu ±1,5
-                // Rundungsrauschen.
-                builds[i] <= builds[i - 1] * 1.16,
-                "Budgetsprung ${builds[i - 1]} → ${builds[i]}",
-            )
+    fun `eine sehr kleine CTL kuerzt den Umfang statt die Last hochzuskalieren`() {
+        // CTL 5 → Referenz 35 Lastpunkte; der Deckel (≤ 1,3 × Referenz bzw.
+        // letzte Aufbauwoche) muss den Umfang kuerzen.
+        val free = generatePlan(twelveWeekGoal, advanced, now = now, texts = CoreTextsDe)
+        val capped = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 5.0, texts = CoreTextsDe)
+        assertTrue(capped.weeks[0].targetKm < free.weeks[0].targetKm)
+        // Exakt unter dem Deckel — die Untergrenze (eine Mindesteinheit) greift bei CTL 5 noch nicht.
+        assertTrue(weekLoad(capped, 0) <= 1.30 * 35, "Woche 0: ${weekLoad(capped, 0)}")
+        var reference = 35.0
+        for (week in capped.weeks.filter { it.kind == WeekKind.AUFBAU }) {
+            assertTrue(weekLoad(capped, week.index) <= 1.30 * reference, "Woche ${week.index}: ${weekLoad(capped, week.index)}")
+            reference = maxOf(reference, weekLoad(capped, week.index))
+        }
+        // Last und Dauer passen weiterhin zusammen (keine Skalierung der Zahlen).
+        for (s in capped.weeks.flatMap { it.sessions }.filter { it.intensity == SessionIntensity.GRUNDLAGE }) {
+            val implied = impliedSessionIf(s) ?: continue
+            assertTrue(implied in 0.65..0.80, "${s.title}: IF $implied")
         }
     }
 

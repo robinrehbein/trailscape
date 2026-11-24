@@ -236,12 +236,13 @@ class RecoverySignalsTest {
     }
 
     @Test
-    fun `ueber dem Band ist ohne Ruhepuls-Auffaelligkeit ein gutes Zeichen`() {
+    fun `ueber dem Band ist ohne Ruhepuls-Auffaelligkeit neutral und kein sicheres Erholungszeichen`() {
         val h = assessHrv(daily(filled(21, 50.0) + filled(7, 62.0)), texts = CoreTextsDe)
         assertEquals(HrvStatus.UEBER_BAND, h.status)
         assertEquals(RecoveryFlag.GRUEN, h.flag)
         assertTrue(h.z!! > hrvBandFactor)
-        assertTrue(h.message.contains("gut erholt"))
+        assertTrue(h.message.contains("weder gut noch schlecht"))
+        assertFalse(h.message.contains("gut erholt"))
     }
 
     @Test

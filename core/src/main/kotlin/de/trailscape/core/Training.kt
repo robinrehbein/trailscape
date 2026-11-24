@@ -2,9 +2,8 @@ package de.trailscape.core
 
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.PLAN_WEEKDAY_CODES
-import de.trailscape.core.i18n.SessionTextKey
 import kotlin.math.max
-import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -12,10 +11,14 @@ import kotlinx.serialization.json.JsonObject
 /**
  * Trainingsplan-Generator und -Persistenz.
  *
- * 1:1-Portierung von `lib/training.dart` und damit semantisch identisch zur
- * Web-App-Referenz (training.ts): gleiches Wochenraster (Montag–Sonntag
- * lokaler Zeit), gleiche Progression und gleiches JSON-Format, damit Plaene
- * zwischen Web-App und dieser App austauschbar bleiben.
+ * Urspruenglich eine 1:1-Portierung von `lib/training.dart` (Web-App-Referenz
+ * training.ts). Das **JSON-Format** ist weiterhin mit Web-App und
+ * Sync-Server abgestimmt (Wochenraster Montag–Sonntag lokaler Zeit, nur
+ * angehaengte optionale Felder); die **Progression** ist seit dem Planumbau
+ * eine eigene: Wochenbau in `PlanWeeks.kt`, Qualitaetseinheiten, Last und
+ * Zielbereiche in `PlanWorkouts.kt`, Praeferenzen in `PlanPreferences.kt`.
+ * Ein Plan der Web-App bleibt lesbar; ein hier erzeugter Plan ist fuer die
+ * Web-App lesbar, rechnet dort aber nicht identisch neu.
  *
  * Der einzige IO-Rand des Dart-Originals ist `SharedPreferences`. Er wird hier
  * ueber [TrainingPlanStore] hereingereicht; die Android-Implementierung folgt
@@ -39,184 +42,33 @@ private val weekdays = PLAN_WEEKDAY_CODES
  */
 internal fun planWeekdayIndex(day: String): Int = weekdays.indexOf(day)
 
-private const val MIN_WEEKS = 3
-private const val MAX_WEEKS = 52
-
 /** Meldung, wenn das Ziel weniger als [MIN_WEEKS] Wochen entfernt liegt. */
 fun errorTooSoon(texts: CoreTexts): String = texts.training.errorTooSoon()
 
 /** Meldung, wenn das Ziel mehr als [MAX_WEEKS] Wochen entfernt liegt. */
 fun errorTooFar(texts: CoreTexts): String = texts.training.errorTooFar()
 
-/** Basisvolumen pro Woche in km, falls die bisherige Belastung darunter liegt. */
-private val levelBaseKm: Map<FitnessLevel, Double> = mapOf(
-    FitnessLevel.EINSTEIGER to 40.0,
-    FitnessLevel.FORTGESCHRITTEN to 70.0,
-    FitnessLevel.AMBITIONIERT to 110.0,
-)
-
-private const val RECOVERY_FACTOR = 0.6
-private const val TAPER_FACTOR = 0.5
-private const val PEAK_DISTANCE_FACTOR = 1.3
-private const val ACTIVATION_KM = 15
-private const val CLIMB_HINT_THRESHOLD_M = 1000.0
+/** Meldung, wenn ein Fitnessblock kuerzer als 4 oder laenger als 16 Wochen waere. */
+fun errorFitnessBlockLength(texts: CoreTexts): String =
+    texts.training.errorFitnessBlockLength(FITNESS_MIN_WEEKS, FITNESS_MAX_WEEKS)
 
 private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
-
-/**
- * Groesster zugelassener Sprung des Wochenvolumens von einer Aufbauwoche zur
- * naechsten (Anteil, 0,15 = +15 %).
- *
- * ## Warum es die Grenze ueberhaupt braucht
- * Ohne sie ergibt sich die Wochenvorgabe rein aus der linearen Interpolation
- * `startKm → peakKm` ueber die Zahl der Aufbauwochen. Bei wenigen Aufbauwochen
- * war der „Fortschritt" in Woche 1 bereits 1,0 — ein Ambitionierter mit 150
- * km/Woche und einem 200-km-Ziel in drei Wochen bekam sofort 260 km
- * vorgeschrieben, **+73 %**. Die App selbst meldet so etwas anschliessend als
- * Belastungssprung (`assessDeload`: akute Last deutlich ueber dem gewohnten
- * Niveau, Wochenlast > 1,3 × Vierwochenmittel) und ab einer Rampenrate von
- * 8 CTL/Woche als „zu schnell gestiegen". Ein Plan, der vorschreibt, was die
- * eigene Auswertung danach anmahnt, ist in sich widerspruechlich.
- *
- * ## Warum ausgerechnet 15 %
- * Die verbreitete Faustregel ist die „10-%-Regel"; sie ist das konservative
- * Ende und fuer Einsteiger gedacht. Die App zieht ihre eigene Warnschwelle bei
- * **+30 %** Wochenlast gegen das Vierwochenmittel. 15 % liegt sauber in der
- * Mitte: klar unter der Schwelle, ab der die Auswertung widerspricht, und
- * grosszuegig genug, dass ein Plan in acht Aufbauwochen das Volumen noch
- * verdreifachen kann (1,15⁸ ≈ 3,1). Die Grenze wirkt gegen die **letzte
- * Aufbauwoche**, nicht gegen die Vorwoche — nach einer Erholungswoche bei 60 %
- * ist die Rueckkehr auf das bereits vertragene Niveau kein neuer Reiz, und
- * gegen die Erholungswoche gerechnet waere jeder Wiederaufbau verboten.
- */
-private const val MAX_WEEKLY_INCREASE = 0.15
 
 /**
  * Mindestanteil der Zieldistanz, den die **laengste geplante Fahrt** erreichen
  * muss, damit der Plan das Ziel traegt (0,6 = 60 %).
  *
- * ## Warum es die Pruefung braucht
- * Vorher gab es sie gar nicht. Ein Einsteiger ohne Historie mit dem Ziel
- * „200 km in 12 Wochen" bekam einen Plan, dessen laengste Trainingsfahrt 45 km
- * war — und in Woche 12 stand ein 200-km-Event. Die App meldete „Plan mit 12
- * Wochen erstellt." und schwieg zum Rest.
- *
- * ## Warum 60 %
  * Fuer lange Ausdauerveranstaltungen ist es gaengige Praxis, die volle
  * Zieldistanz **nicht** im Training zu fahren; die laengste Vorbereitungsfahrt
  * liegt ueblicherweise bei rund zwei Dritteln bis drei Vierteln der
- * Zieldistanz, den Rest tragen Wochenvolumen, Taper und Renntag. 60 % ist die
- * untere Kante dieses Korridors: darunter ist der Zieltag kein „laenger als
- * gewohnt" mehr, sondern Neuland. Die Anteile der Schluesseleinheit am
- * Wochenvolumen (0,45…0,6, siehe [aufbauSessions]) sind so gewaehlt, dass ein
- * Plan, der seinen Peak von [PEAK_DISTANCE_FACTOR] × Zieldistanz **erreicht**,
- * diese Schwelle sicher nimmt — die Warnung erscheint also genau dann, wenn der
- * Aufbau die Zieldistanz tatsaechlich nicht einholt.
+ * Zieldistanz, den Rest tragen Wochenvolumen, Taper und Renntag (Faustregel).
+ * 60 % ist die untere Kante dieses Korridors: darunter ist der Zieltag kein
+ * „laenger als gewohnt" mehr, sondern Neuland. Die Gewichte der langen Tour
+ * (`longRideWeight` in `PlanWeeks.kt`) sind so gewaehlt, dass ein Plan, der
+ * seinen Peak von [PEAK_DISTANCE_FACTOR] × Zieldistanz **erreicht**, diese
+ * Schwelle sicher nimmt.
  */
 const val minLongestRideShare: Double = 0.6
-
-/**
- * Nominales Planungstempo in km/h — die Bruecke zwischen Beschreibungstext und
- * Kilometern einer Einheit.
- *
- * `generatePlan` kennt weder Historie noch Profil (es bekommt nur eine
- * [FitnessAssessment]), deshalb dieselbe Annahme wie im Rest der App:
- * [fallbackGravelSpeedKmh] fuer gemischtes Gravel-Terrain, moduliert mit
- * [intensitySpeedFactor]. Die tatsaechliche Routenlaenge rechnet spaeter
- * [routeTargetForSession] mit dem echten Historien-Median; hier geht es nur
- * darum, dass „4×8 Minuten" und „14 km" nicht mehr auseinanderlaufen.
- */
-private fun nominalSpeedKmh(intensity: SessionIntensity): Double =
-    fallbackGravelSpeedKmh * intensitySpeedFactor(intensity)
-
-/** Fahrzeit in Minuten, die [km] bei nominalem Tempo brauchen. */
-private fun minutesFor(km: Double, intensity: SessionIntensity): Int =
-    max(1L, dartRound(km / nominalSpeedKmh(intensity) * 60).toLong()).toInt()
-
-/** Umgekehrt: die Kilometer, die [minutes] bei nominalem Tempo ergeben. */
-private fun kmForMinutes(minutes: Int, intensity: SessionIntensity): Double =
-    minutes / 60.0 * nominalSpeedKmh(intensity)
-
-// ---------------------------------------------------------------------------
-// Last-Ziele: die Bruecke zwischen Plan-Kilometern und Lastmodell
-// ---------------------------------------------------------------------------
-
-/**
- * Angenommener Intensitaetsfaktor (IF) je Einheitstyp — derselbe Anker wie in
- * der Herleitung von [weeklyLoadPerHour] (`TrainingLoad.kt`): Last = Dauer_h ×
- * IF² × 100.
- *
- * LIT ≈ IF 0,70 (Grundlage), HIT ≈ IF 1,00 (harte Einheit); LOCKER liegt als
- * reine Regenerationsfahrt darunter. Die Quadrierung ist der Grund, warum eine
- * harte Einheit **pro Kilometer** rund das Doppelte einer Grundlagenfahrt
- * kostet — genau die Asymmetrie, die reine Kilometerziele nie abbilden
- * konnten.
- */
-internal fun sessionIntensityIf(intensity: SessionIntensity): Double = when (intensity) {
-    SessionIntensity.LOCKER -> 0.60
-    SessionIntensity.GRUNDLAGE -> 0.70
-    SessionIntensity.HART -> 1.00
-}
-
-/**
- * IF-Aufschlag fuer Plaene auf ein Ziel mit nennenswerten Hoehenmetern
- * (≥ [CLIMB_HINT_THRESHOLD_M]): Der Plan fordert dann ausdruecklich Anstiege
- * ([CLIMBING_HINT]), und Bergauffahren hebt die mittlere Intensitaet auch bei
- * gleichem gefuehltem Einsatz. +0,05 IF entspricht grob dem Unterschied
- * zwischen flacher und huegeliger Grundlagenfahrt; Regenerationsfahrten
- * bleiben ausgenommen — sie sollen auch am Berg-Ziel flach bleiben (siehe
- * `ascentPreferenceForSession`).
- */
-private const val HILLY_IF_BONUS = 0.05
-
-/**
- * Nominale Trainingslast einer Einheit aus Kilometern und Intensitaet:
- * `Dauer_h × IF² × 100` mit der Dauer aus [nominalSpeedKmh] — dieselbe
- * eTSS-Normierung wie `computeRideLoad` (§3.3), nur mit Planannahmen statt
- * Messwerten.
- */
-internal fun nominalSessionLoad(km: Double, intensity: SessionIntensity, hilly: Boolean): Double {
-    val hours = max(km, 0.0) / nominalSpeedKmh(intensity)
-    val bonus = if (hilly && intensity != SessionIntensity.LOCKER) HILLY_IF_BONUS else 0.0
-    val intensityFactor = sessionIntensityIf(intensity) + bonus
-    return hours * intensityFactor * intensityFactor * 100
-}
-
-/**
- * Haengt an jede Einheit einer Woche ihr Last-Ziel ([TrainingSession.targetLoad]).
- *
- * Ohne [weekBudget] (kein CTL-Startwert vorhanden) ist das Last-Ziel schlicht
- * die [nominalSessionLoad] der eigenen Kilometer — der alte, rein
- * km-getriebene Plan, nur ehrlich in Last uebersetzt. Mit [weekBudget] wird
- * das Wochen-Lastbudget **nach den nominalen Lasten gewichtet** auf die
- * Einheiten verteilt: Die Kilometer bleiben unveraendert (fuers Routing),
- * aber die Summe der Last-Ziele trifft das Budget, und eine harte Einheit
- * bekommt ueber ihr IF² automatisch mehr Last pro Kilometer.
- *
- * Das Zielevent selbst behaelt immer seine km-abgeleitete Last: Es ist die
- * Pruefung, kein budgetierter Trainingsreiz.
- */
-internal fun attachSessionLoads(
-    sessions: List<TrainingSession>,
-    weekBudget: Double?,
-    hilly: Boolean,
-): List<TrainingSession> {
-    val nominal = sessions.map {
-        nominalSessionLoad(it.targetKm.toDouble(), it.intensity, hilly)
-    }
-    val budgetedSum = sessions.indices
-        .filter { !sessions[it].isEvent }
-        .sumOf { nominal[it] }
-    val scale = if (weekBudget != null && weekBudget > 0 && budgetedSum > 0) {
-        weekBudget / budgetedSum
-    } else {
-        1.0
-    }
-    return sessions.mapIndexed { i, session ->
-        val factor = if (session.isEvent) 1.0 else scale
-        session.copy(targetLoad = max(1.0, dartRound(nominal[i] * factor)))
-    }
-}
 
 /**
  * Persistenz des Trainingsplans — in Dart `SharedPreferences` unter
@@ -265,488 +117,83 @@ private fun addWeeks(timestamp: Long, weeks: Int): Long {
 /** Index des Wochentags (0 = Mo … 6 = So). */
 private fun weekdayIndex(timestamp: Long): Int = dartLocalOf(timestamp).dayOfWeek.value - 1
 
-private fun round5(km: Double): Int = max(5, dartRound(km / 5).toInt() * 5)
-
 /**
- * Wie [round5], aber nie ueber [capKm] hinaus.
- *
- * Das Runden auf 5 km kann eine Obergrenze um bis zu 2,5 km ueberschiessen —
- * bei einer Rampengrenze ([MAX_WEEKLY_INCREASE]) waere das genau die Sorte
- * stiller Ueberschreitung, gegen die die Grenze gedacht ist. Deshalb notfalls
- * eine Stufe zurueck; unter 5 km geht es nie.
+ * Die Einheiten eines Plans mit [weekCount] Wochen — die eine Stelle, an der
+ * [generatePlan], [weeksForFeasibleGoal] und [assessPlanFeasibility] denselben
+ * Aufbau rechnen.
  */
-private fun round5AtMost(km: Double, capKm: Double): Int {
-    val rounded = round5(min(km, capKm))
-    return if (rounded > capKm && rounded > 5) rounded - 5 else rounded
-}
-
-/**
- * Verteilt [totalKm] nach [shares] auf ganze Kilometer (mindestens 1 je
- * Einheit). Die Anteile muessen nicht auf 1 summieren — sie werden auf ihre
- * Summe normiert, damit sich eine Einheit mit eigener Laengenlogik (siehe
- * [intervalSession]) sauber herausrechnen laesst.
- */
-private fun splitKm(totalKm: Int, shares: List<Double>): List<Int> {
-    val sum = shares.sum()
-    if (sum <= 0 || totalKm <= 0) {
-        return shares.map { 1 }
-    }
-    return shares.map { max(1, dartRound(totalKm * it / sum).toInt()) }
-}
-
-/**
- * Baut eine Einheit, deren Kilometer sich aus [km] und deren Dauer sich aus
- * dem nominalen Tempo der Intensitaet ergibt.
- */
-/**
- * Eine Einheit mit Plantext-Schluessel: Titel und Beschreibung werden in der
- * Sprache von [texts] gerendert und zusaetzlich als [SessionTextKey] +
- * Argumente festgehalten (siehe [TrainingSession.textKey]).
- */
-private fun session(
-    day: String,
-    key: SessionTextKey,
-    km: Int,
-    intensity: SessionIntensity,
-    texts: CoreTexts,
-    args: List<Int> = emptyList(),
-): TrainingSession = TrainingSession(
-    day = day,
-    title = texts.training.sessionTitle(key, args, null),
-    description = texts.training.sessionDescription(key, args),
-    targetKm = km,
-    intensity = intensity,
-    durationMin = minutesFor(km.toDouble(), intensity),
-    textKey = key,
-    textArgs = args,
-)
-
-// ---------------------------------------------------------------------------
-// Intervalleinheiten: Inhalt und Kilometer haengen zusammen
-// ---------------------------------------------------------------------------
-
-/**
- * Der Aufbau einer Intervalleinheit — die Groesse, aus der **sowohl** der Text
- * **als auch** die Kilometer entstehen.
- *
- * ## Warum das nicht mehr ueber einen Wochenanteil laeuft
- * Bisher bekam „Intervalle" 0,2 × Wochenvolumen. Bei einer 70-km-Woche waren
- * das 14 km — waehrend die Beschreibung 20 Minuten Einfahren, 4×8 Minuten
- * Belastung und 3×4 Minuten Pause verlangte, zusammen rund 70 Minuten bzw.
- * 30 km. Die daraus generierte Runde war dann halb so lang wie die Einheit,
- * die darauf stattfinden sollte.
- *
- * Jetzt ist die Reihenfolge umgedreht: Aus dem Wochenanteil wird eine
- * **Wunschdauer**, daraus die Zahl der Wiederholungen (geklemmt auf einen
- * sinnvollen Bereich), daraus die tatsaechliche Dauer und daraus erst die
- * Kilometer. Text und Zahl koennen damit nicht mehr auseinanderlaufen, und der
- * Rest des Wochenvolumens geht an die Einheiten, die Volumen tragen sollen.
- */
-private data class IntervalShape(
-    val warmupMin: Int,
-    val workMin: Int,
-    val restMin: Int,
-    val cooldownMin: Int,
-    val minReps: Int,
-    val maxReps: Int,
-    /**
-     * Wie die Belastung im Text benannt wird: 0 = „zuegig im
-     * Schwellenbereich", 1 = „hart an der Schwelle" (Argument
-     * `haerte` von [SessionTextKey.INTERVALS]).
-     */
-    val effort: Int,
-) {
-    fun minutesFor(reps: Int): Int =
-        warmupMin + reps * workMin + (reps - 1) * restMin + cooldownMin
-}
-
-/** 4×8-Raster fuer Fortgeschrittene (3…5 Wiederholungen je nach Wochenvolumen). */
-private val intervalShapeFortgeschritten = IntervalShape(
-    warmupMin = 20,
-    workMin = 8,
-    restMin = 4,
-    cooldownMin = 10,
-    minReps = 3,
-    maxReps = 5,
-    effort = 0,
-)
-
-/** 5×6-Raster fuer Ambitionierte (4…6 Wiederholungen). */
-private val intervalShapeAmbitioniert = IntervalShape(
-    warmupMin = 20,
-    workMin = 6,
-    restMin = 3,
-    cooldownMin = 10,
-    minReps = 4,
-    maxReps = 6,
-    effort = 1,
-)
-
-/**
- * Die Intervalleinheit zu einem gewuenschten Umfang [wantedKm]: Struktur
- * zuerst, Kilometer danach (Begruendung in [IntervalShape]).
- */
-private fun intervalSession(
-    day: String,
-    shape: IntervalShape,
-    wantedKm: Double,
-    texts: CoreTexts,
-): TrainingSession {
-    val wantedMin = minutesFor(max(wantedKm, 1.0), SessionIntensity.HART)
-    val room = wantedMin - shape.warmupMin - shape.cooldownMin
-    val fitting = if (room <= 0) 0 else room / (shape.workMin + shape.restMin)
-    val reps = fitting.coerceIn(shape.minReps, shape.maxReps)
-    val minutes = shape.minutesFor(reps)
-    val km = max(1, dartRound(kmForMinutes(minutes, SessionIntensity.HART)).toInt())
-
-    val args = listOf(shape.warmupMin, reps, shape.workMin, shape.restMin, shape.cooldownMin, minutes, shape.effort)
-    return TrainingSession(
-        day = day,
-        title = texts.training.sessionTitle(SessionTextKey.INTERVALS, args, null),
-        description = texts.training.sessionDescription(SessionTextKey.INTERVALS, args),
-        targetKm = km,
-        intensity = SessionIntensity.HART,
-        durationMin = minutes,
-        textKey = SessionTextKey.INTERVALS,
-        textArgs = args,
-    )
-}
-
-/**
- * Die lange Fahrt der Woche. Ab [CLIMB_HINT_THRESHOLD_M] Zielhoehenmetern
- * bekommt sie den Anstiegs-Hinweis (Argument 1 von [SessionTextKey.LONG_RIDE]).
- */
-private fun longRide(day: String, km: Int, goal: Goal, texts: CoreTexts): TrainingSession {
-    val ascentM = goal.ascentM
-    val climbing = if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) 1 else 0
-    return session(
-        day = day,
-        key = SessionTextKey.LONG_RIDE,
-        km = km,
-        intensity = SessionIntensity.GRUNDLAGE,
-        texts = texts,
-        args = listOf(climbing),
-    )
-}
-
-internal fun buildSessions(
-    kind: WeekKind,
-    level: FitnessLevel,
-    targetKm: Int,
+internal fun planSessions(
     goal: Goal,
-    texts: CoreTexts,
-): List<TrainingSession> {
-    if (kind == WeekKind.ZIELWOCHE) {
-        return zielwocheSessions(goal, texts)
-    }
-
-    if (kind == WeekKind.ERHOLUNG) {
-        val km = splitKm(targetKm, listOf(0.5, 0.5))
-        return listOf(
-            session("Di", SessionTextKey.RECOVERY_EASY_RIDE, km[0], SessionIntensity.LOCKER, texts),
-            session("Sa", SessionTextKey.RECOVERY_CALM_LOOP, km[1], SessionIntensity.LOCKER, texts),
-        )
-    }
-
-    if (kind == WeekKind.TAPER) {
-        val km = splitKm(targetKm, listOf(0.55, 0.45))
-        return listOf(
-            session("Di", SessionTextKey.TAPER_EASY_SURGES, km[0], SessionIntensity.LOCKER, texts),
-            session("Do", SessionTextKey.TAPER_SHORT_EASY, km[1], SessionIntensity.LOCKER, texts),
-        )
-    }
-
-    return aufbauSessions(level, targetKm, goal, texts)
-}
-
-/**
- * Die Einheiten einer Aufbauwoche.
- *
- * ## Wie die Kilometer verteilt werden
- * Zuerst bekommt die **Intervalleinheit** ihre Laenge aus ihrem eigenen Inhalt
- * (siehe [intervalSession]) — sie ist die einzige Einheit, deren Umfang nicht
- * verhandelbar ist, weil ihr Text eine feste Struktur beschreibt. Was danach
- * vom Wochenvolumen uebrig ist, geht nach Anteilen an die Einheiten, die
- * Volumen tragen sollen.
- *
- * Die Anteile der **Schluesseleinheit** („Lange Tour": 0,6 bzw. 0,5 beim
- * Einsteiger, 0,55 fortgeschritten, 0,45 ambitioniert von der Restmenge) sind
- * nicht frei gewaehlt: Sie sind der Grund, warum ein Plan, der seinen Peak von
- * [PEAK_DISTANCE_FACTOR] × Zieldistanz erreicht, die
- * [minLongestRideShare]-Schwelle auch nimmt. Wer sie senkt, macht die
- * Machbarkeitswarnung zum Fehlalarm — beides gehoert zusammen.
- */
-private fun aufbauSessions(
     level: FitnessLevel,
-    targetKm: Int,
-    goal: Goal,
-    texts: CoreTexts,
-): List<TrainingSession> {
-    if (level == FitnessLevel.EINSTEIGER) {
-        // Einsteiger fahren keine Schwellenintervalle: erst Umfang, dann Härte.
-        val withRecovery = targetKm >= 60
-        val shares = if (withRecovery) listOf(0.3, 0.5, 0.2) else listOf(0.4, 0.6)
-        val km = splitKm(targetKm, shares)
-        val sessions = mutableListOf(
-            session("Di", SessionTextKey.BASE_EASY_RIDE, km[0], SessionIntensity.GRUNDLAGE, texts),
-            longRide("Sa", km[1], goal, texts),
-        )
-        if (withRecovery) {
-            sessions.add(session("So", SessionTextKey.RECOVERY_SPIN, km[2], SessionIntensity.LOCKER, texts))
-        }
-        return sessions
-    }
-
-    if (level == FitnessLevel.FORTGESCHRITTEN) {
-        val intervals = intervalSession("Do", intervalShapeFortgeschritten, targetKm * 0.2, texts)
-        val rest = max(0, targetKm - intervals.targetKm)
-        val km = splitKm(rest, listOf(0.25, 0.55))
-        return listOf(
-            session("Di", SessionTextKey.ENDURANCE_FILL, km[0], SessionIntensity.GRUNDLAGE, texts),
-            intervals,
-            longRide("Sa", km[1], goal, texts),
-        )
-    }
-
-    val intervals = intervalSession("Mi", intervalShapeAmbitioniert, targetKm * 0.2, texts)
-    val rest = max(0, targetKm - intervals.targetKm)
-    val km = splitKm(rest, listOf(0.2, 0.45, 0.15))
-    return listOf(
-        session("Di", SessionTextKey.ENDURANCE_STEADY, km[0], SessionIntensity.GRUNDLAGE, texts),
-        intervals,
-        longRide("Sa", km[1], goal, texts),
-        session("So", SessionTextKey.ENDURANCE_COMPENSATION, km[2], SessionIntensity.LOCKER, texts),
-    )
-}
-
-internal fun zielwocheSessions(goal: Goal, texts: CoreTexts): List<TrainingSession> {
-    val eventIndex = weekdayIndex(goal.date)
-    val eventDay = weekdays[eventIndex]
-    val eventKm = max(1, dartRound(goal.distanceKm).toInt())
-    val ascentM = goal.ascentM
-
-    // Hoehenmeter nur als Argument, wenn der Anstiegshinweis greift; sonst −1.
-    val eventArgs = listOf(
-        eventKm,
-        if (ascentM != null && ascentM >= CLIMB_HINT_THRESHOLD_M) dartRound(ascentM).toInt() else -1,
-    )
-    val eventSession = TrainingSession(
-        day = eventDay,
-        title = texts.training.sessionTitle(SessionTextKey.GOAL_EVENT, eventArgs, goal.name),
-        description = texts.training.sessionDescription(SessionTextKey.GOAL_EVENT, eventArgs),
-        targetKm = eventKm,
-        intensity = SessionIntensity.HART,
-        // Keine Dauerangabe: Wie lange das Event dauert, entscheidet der
-        // Renntag, nicht unser Planungstempo.
-        durationMin = null,
-        // Das Event hat eine eigene Strecke — dafuer wird nie eine Runde
-        // generiert (siehe [canGenerateRouteFor]).
-        isEvent = true,
-        textKey = SessionTextKey.GOAL_EVENT,
-        textArgs = eventArgs,
-    )
-
-    val activationDay = if (eventIndex > 1) "Di" else if (eventIndex == 1) "Mo" else null
-    if (activationDay == null) {
-        return listOf(eventSession)
-    }
-
-    return listOf(
-        session(activationDay, SessionTextKey.ACTIVATION, ACTIVATION_KM, SessionIntensity.LOCKER, texts),
-        eventSession,
-    )
-}
-
-private fun planWeekKinds(weekCount: Int): List<WeekKind> {
-    val kinds = mutableListOf<WeekKind>()
-    val lastBuildIndex = weekCount - 3
-
-    for (i in 0 until weekCount) {
-        when {
-            i == weekCount - 1 -> kinds.add(WeekKind.ZIELWOCHE)
-            i == weekCount - 2 -> kinds.add(WeekKind.TAPER)
-            // Jede 4. Woche ist Erholung – ausser sie waere die letzte
-            // Aufbauwoche vor dem Taper.
-            i % 4 == 3 && i != lastBuildIndex -> kinds.add(WeekKind.ERHOLUNG)
-            else -> kinds.add(WeekKind.AUFBAU)
-        }
-    }
-
-    return kinds
-}
-
-/** Startvolumen eines Plans: die bisherige Wochenleistung, mindestens das Basisvolumen der Stufe. */
-private fun startKmFor(assessment: FitnessAssessment): Double =
-    max(assessment.weeklyKm, levelBaseKm.getValue(assessment.level))
-
-/** Angestrebtes Spitzenvolumen — die Absicht, nicht die Zusage (siehe [planWeekVolumes]). */
-internal fun peakKmFor(goal: Goal, startKm: Double): Double =
-    max(goal.distanceKm * PEAK_DISTANCE_FACTOR, startKm)
-
-/**
- * Die Wochenvolumina eines Plans — die Stelle, an der aus einer Absicht ein
- * tragfaehiger Aufbau wird.
- *
- * Frueher stand hier die reine Interpolation `startKm → peakKm` ueber die Zahl
- * der Aufbauwochen, gedeckelt durch `startKm × 2,2`. Dieser Deckel hat die
- * Logik lautlos abgeschaltet: Er begrenzte den **Peak**, nicht den **Weg**
- * dorthin. Bei einer einzigen Aufbauwoche war der Fortschritt sofort 1,0, und
- * die erste Woche sprang auf das Spitzenvolumen.
- *
- * Jetzt gilt beides:
- *
- *  * Der **Peak bleibt die Absicht** ([PEAK_DISTANCE_FACTOR] × Zieldistanz) —
- *    er wird nicht mehr kuenstlich gekappt, sondern schlicht nur erreicht, wenn
- *    die Zeit dafuer reicht.
- *  * Die **Rampe** begrenzt jede Aufbauwoche auf [MAX_WEEKLY_INCREASE] gegen
- *    die zuletzt erreichte Aufbauwoche. Damit gibt es keinen Sprung auf den
- *    Peak mehr, auch nicht bei sehr kurzen Zeitraeumen.
- *  * Der **Taper** rechnet mit dem *tatsaechlich erreichten* Peak, nicht mit
- *    dem angestrebten. Sonst haette die vorletzte Woche 50 % eines Volumens
- *    vorgeschrieben, das nie gefahren wurde.
- *
- * @param eventWeekKm Wochenvolumen der Zielwoche (Aktivierung + Event).
- */
-internal fun planWeekVolumes(
-    kinds: List<WeekKind>,
     startKm: Double,
-    peakKm: Double,
-    eventWeekKm: Int,
-): List<Int> {
-    val buildCount = kinds.count { it == WeekKind.AUFBAU }
-    val targets = ArrayList<Int>(kinds.size)
-
-    var buildSeen = 0
-    var previousKm = startKm
-    var lastBuildKm = startKm
-    var achievedPeakKm = startKm
-
-    for (kind in kinds) {
-        val targetKm = when (kind) {
-            WeekKind.AUFBAU -> {
-                val progress = if (buildCount > 1) buildSeen.toDouble() / (buildCount - 1) else 1.0
-                val wanted = startKm + (peakKm - startKm) * progress
-                val km = round5AtMost(wanted, lastBuildKm * (1 + MAX_WEEKLY_INCREASE))
-                buildSeen += 1
-                lastBuildKm = km.toDouble()
-                achievedPeakKm = max(achievedPeakKm, km.toDouble())
-                km
-            }
-
-            WeekKind.ERHOLUNG -> round5(previousKm * RECOVERY_FACTOR)
-            WeekKind.TAPER -> round5(achievedPeakKm * TAPER_FACTOR)
-            WeekKind.ZIELWOCHE -> eventWeekKm
-        }
-        previousKm = targetKm.toDouble()
-        targets.add(targetKm)
-    }
-
-    return targets
-}
-
-/** Ob der Plan bewusst Anstiege einbaut — dann gilt der IF-Aufschlag ([nominalSessionLoad]). */
-internal fun planIsHilly(goal: Goal): Boolean =
-    (goal.ascentM ?: 0.0) >= CLIMB_HINT_THRESHOLD_M
-
-/**
- * Die Wochen-Lastbudgets eines Plans — das Gegenstueck zu [planWeekVolumes]
- * auf der Lastskala.
- *
- * Ohne [currentCtl] (oder mit unbrauchbarem Wert) gibt es keine Budgets
- * (lauter `null`): Die Last-Ziele der Einheiten entstehen dann rein aus ihren
- * Kilometern ([attachSessionLoads]) — exakt das bisherige Verhalten, nur
- * sichtbar gemacht.
- *
- * Mit CTL-Startwert rechnet jede **Aufbauwoche** mit [weeklyLoadTarget] und
- * der Standardrampe [defaultTargetRampPerWeek]: Wochenbudget =
- * `7 × (CTL + Rampe / ctlWeeklyResponse)`, danach waechst die angenommene CTL
- * um die Rampe. Bewusst **dieselbe** Formel wie das empfohlene Wochenziel der
- * Auswertung — Plan und Auswertung duerfen nicht zwei verschiedene Zahlen
- * fuer dieselbe Woche nennen. Die Sicherheitsdeckel von [weeklyLoadTarget]
- * (Vierwochenmittel, Zeitbudget) bleiben hier aus: Der Plan kennt beides
- * nicht, und die Rampe selbst ist bereits die Begrenzung; zusaetzlich haelt
- * [MAX_WEEKLY_INCREASE] jede Aufbauwoche unter +15 % gegen die letzte — die
- * gleiche Grenze wie bei den Kilometern und nur bei sehr kleiner CTL
- * ueberhaupt bindend.
- *
- * **Erholungswochen** skalieren das Budget der Vorwoche mit [RECOVERY_FACTOR],
- * der **Taper** den erreichten Budget-Peak mit [TAPER_FACTOR] — dieselben
- * Faktoren wie bei den Kilometern, damit beide Skalen dieselbe Blockstruktur
- * erzaehlen. Die CTL waechst nur in Aufbauwochen: Erholung und Taper sollen
- * die Fitness halten, nicht steigern. Die **Zielwoche** bekommt kein Budget —
- * das Event ist die Pruefung, keine budgetierte Einheit.
- */
-internal fun planWeekLoadBudgets(
-    kinds: List<WeekKind>,
+    weekCount: Int,
     currentCtl: Double?,
-): List<Double?> {
-    if (currentCtl == null || !currentCtl.isFinite() || currentCtl <= 0) {
-        return kinds.map { null }
-    }
-
-    var ctl = currentCtl
-    var lastBuildBudget: Double? = null
-    var achievedPeakBudget = 0.0
-    var previousBudget: Double? = null
-    val budgets = ArrayList<Double?>(kinds.size)
-
-    for (kind in kinds) {
-        val budget: Double? = when (kind) {
-            WeekKind.AUFBAU -> {
-                var wanted = weeklyLoadTarget(ctl, defaultTargetRampPerWeek).weeklyLoad
-                lastBuildBudget?.let { wanted = min(wanted, it * (1 + MAX_WEEKLY_INCREASE)) }
-                ctl += defaultTargetRampPerWeek
-                lastBuildBudget = wanted
-                achievedPeakBudget = max(achievedPeakBudget, wanted)
-                wanted
-            }
-
-            WeekKind.ERHOLUNG ->
-                (previousBudget ?: weeklyLoadTarget(ctl, defaultTargetRampPerWeek).weeklyLoad) *
-                    RECOVERY_FACTOR
-
-            WeekKind.TAPER -> {
-                val peak = if (achievedPeakBudget > 0) {
-                    achievedPeakBudget
-                } else {
-                    weeklyLoadTarget(ctl, defaultTargetRampPerWeek).weeklyLoad
-                }
-                peak * TAPER_FACTOR
-            }
-
-            WeekKind.ZIELWOCHE -> null
-        }
-        previousBudget = budget ?: previousBudget
-        budgets.add(budget)
-    }
-
-    return budgets
+    preferences: PlanPreferences?,
+    speedKmh: Double?,
+    texts: CoreTexts,
+    applyTimeBudget: Boolean = true,
+): List<List<TrainingSession>> {
+    val input = PlanBuildInput(
+        goal = goal,
+        level = level,
+        texts = texts,
+        speedKmh = speedKmh,
+        preferences = preferences,
+        currentCtl = currentCtl,
+        kinds = planWeekKinds(weekCount, goal.type),
+        startKm = startKm,
+        peakKm = peakKmFor(goal, startKm),
+        applyTimeBudget = applyTimeBudget,
+    )
+    return buildPlanWeekSessions(input)
 }
 
 /**
  * Erzeugt einen Trainingsplan vom Montag der aktuellen Woche bis zur
  * Zielwoche.
  *
- * Wirft [IllegalArgumentException] (Darts `ArgumentError`), wenn das Ziel
- * weniger als 3 oder mehr als 52 Wochen entfernt liegt.
+ * Wirft [IllegalArgumentException] (Darts `ArgumentError`), wenn ein Eventziel
+ * weniger als 3 oder mehr als 52 Wochen entfernt liegt bzw. ein Fitnessblock
+ * ([GoalType.FITNESS]) nicht 4–16 Wochen lang ist.
  *
- * **Der Plan sagt nicht, ob er traegt.** Ob die laengste geplante Fahrt die
- * Zieldistanz ueberhaupt einholt, beantwortet [assessPlanFeasibility] — und die
- * Antwort gehoert vor die Augen der Nutzerin, bevor sie zwoelf Wochen darauf
- * baut.
+ * ## Was der Plan jetzt beruecksichtigt
+ *  * **Eine Wahrheit fuer Last, Dauer und Kilometer**: Jede Einheit bekommt
+ *    ihre Dauer aus Kilometern und persoenlichem Tempo ([speedKmh]) bzw. aus
+ *    ihrer Struktur, und ihre Last aus genau dieser Struktur
+ *    (`PlanWorkouts.kt`). Rampe und Zeitbudget sind Deckel, die notfalls
+ *    kuerzen (Wiederholungen, Grundlagenfahrten, Qualitaet, die lange Tour
+ *    zuletzt) — sie skalieren keine Zahlen. Jede Einheit dauert mindestens
+ *    30 min; eine einzige Einheit dieser Dauer bleibt als Untergrenze immer
+ *    stehen (`MIN_SESSION_MIN`).
+ *  * **Periodisierung**: Grundlage → Aufbau → spezifisch mit steigender
+ *    Belastungszeit, Erholungswochen mit kurzem Intensitaetsreiz, zwei
+ *    Taperwochen bei gleicher Intensitaet und Haeufigkeit (`PlanWeeks.kt`).
+ *  * **Persoenliches**: Trainingstage, Tag der langen Tour und Zeitbudget aus
+ *    [preferences]; sie werden im Plan gespeichert, damit [adaptPlan] mit
+ *    denselben Annahmen neu rechnet.
  *
- * @param currentCtl aktuelle chronische Last (CTL) aus der
- *   Performance-Management-Kurve, falls bekannt. Mit ihr bekommt jede Woche
- *   ein Last-Budget aus der Standardrampe ([planWeekLoadBudgets]) und jede
- *   Einheit ihr [TrainingSession.targetLoad]-Ziel daraus. Ohne sie (`null`,
- *   alter Aufrufweg) bleiben die Kilometer die einzige Steuergroesse und die
- *   Last-Ziele sind rein aus ihnen abgeleitet.
+ * **Der Plan sagt nicht, ob er traegt.** Das beantwortet
+ * [assessPlanFeasibility] — und die Antwort gehoert vor die Augen der
+ * Nutzerin, bevor sie zwoelf Wochen darauf baut.
+ *
+ * @param currentCtl aktuelle chronische Last (CTL), falls bekannt. Mit ihr ist
+ *   die Last jeder Aufbauwoche auf das 1,30-Fache der Referenz (7 × CTL bzw.
+ *   letzte Aufbauwoche) gedeckelt — bis auf die Untergrenze einer
+ *   Mindesteinheit; ohne sie gilt nur die km-Rampe.
+ * @param preferences Trainingstage, Tag der langen Tour, Zeitbudget; `null` =
+ *   Stufenraster ohne Zeitdeckel. Das Zeitbudget gilt fuer jede Woche, auch
+ *   Ziel- und Testwoche (ohne das Event und ohne eine vom Ziel festgelegte
+ *   Vergleichsrunde).
+ * @param speedKmh persoenliches Grundtempo in km/h (z. B.
+ *   [typicalAvgSpeedKmh]); `null` = [fallbackGravelSpeedKmh].
  */
 fun generatePlan(
     goal: Goal,
     assessment: FitnessAssessment,
     now: Long? = null,
     currentCtl: Double? = null,
+    preferences: PlanPreferences? = null,
+    speedKmh: Double? = null,
     texts: CoreTexts,
 ): TrainingPlan {
     val nowMs = now ?: System.currentTimeMillis()
@@ -754,24 +201,33 @@ fun generatePlan(
     val goalMonday = startOfWeek(goal.date)
     val weekCount = dartRound((goalMonday - firstMonday).toDouble() / WEEK_MS).toInt() + 1
 
-    if (weekCount < MIN_WEEKS) {
-        throw IllegalArgumentException(errorTooSoon(texts))
-    }
-    if (weekCount > MAX_WEEKS) {
-        throw IllegalArgumentException(errorTooFar(texts))
+    if (goal.type == GoalType.FITNESS) {
+        if (weekCount < FITNESS_MIN_WEEKS || weekCount > FITNESS_MAX_WEEKS) {
+            throw IllegalArgumentException(errorFitnessBlockLength(texts))
+        }
+    } else {
+        if (weekCount < MIN_WEEKS) {
+            throw IllegalArgumentException(errorTooSoon(texts))
+        }
+        if (weekCount > MAX_WEEKS) {
+            throw IllegalArgumentException(errorTooFar(texts))
+        }
     }
 
+    val speed = speedKmh?.takeIf { it.isFinite() && it in minPlausibleAvgSpeedKmh..maxPlausibleAvgSpeedKmh }
+    val prefs = preferences?.takeUnless { it.isEmpty }
     val level = assessment.level
-    val startKm = startKmFor(assessment)
-    val kinds = planWeekKinds(weekCount)
-    val volumes = planWeekVolumes(
-        kinds = kinds,
-        startKm = startKm,
-        peakKm = peakKmFor(goal, startKm),
-        eventWeekKm = zielwocheSessions(goal, texts).sumOf { it.targetKm },
+    val kinds = planWeekKinds(weekCount, goal.type)
+    val sessions = planSessions(
+        goal = goal,
+        level = level,
+        startKm = startKmFor(assessment),
+        weekCount = weekCount,
+        currentCtl = currentCtl,
+        preferences = prefs,
+        speedKmh = speed,
+        texts = texts,
     )
-    val budgets = planWeekLoadBudgets(kinds, currentCtl)
-    val hilly = planIsHilly(goal)
 
     val weeks = kinds.indices.map { i ->
         TrainingWeek(
@@ -779,12 +235,9 @@ fun generatePlan(
             start = addWeeks(firstMonday, i),
             end = addWeeks(firstMonday, i + 1),
             kind = kinds[i],
-            targetKm = volumes[i],
-            sessions = attachSessionLoads(
-                sessions = buildSessions(kinds[i], level, volumes[i], goal, texts),
-                weekBudget = budgets[i],
-                hilly = hilly,
-            ),
+            // Das Wochenziel ist die Summe der Einheiten — eine Wahrheit.
+            targetKm = sessions[i].sumOf { it.targetKm },
+            sessions = sessions[i],
         )
     }
 
@@ -793,6 +246,28 @@ fun generatePlan(
         goal = goal,
         level = level,
         weeks = weeks,
+        preferences = prefs,
+        planSpeedKmh = speed,
+    )
+}
+
+/**
+ * Ein Fitnessziel ([GoalType.FITNESS]) ueber [weeks] Wochen ab [now]: Der
+ * Block endet am [testDay] (0 = Mo … 6 = So, Vorgabe Samstag) der letzten
+ * Woche mit der Vergleichsrunde. [benchmarkKm] ist die Laenge der
+ * Vergleichsrunde; `0` heisst „keine feste Runde, der Plan schlaegt eine
+ * vor".
+ */
+fun fitnessGoal(name: String, weeks: Int, now: Long, benchmarkKm: Double = 0.0, testDay: Int = 5): Goal {
+    val monday = startOfWeek(now)
+    val lastMonday = addWeeks(monday, max(weeks, 1) - 1)
+    val day = dartLocalOf(lastMonday).toLocalDate().plusDays(testDay.coerceIn(0, 6).toLong()).atTime(9, 0)
+    return Goal(
+        name = name,
+        distanceKm = max(benchmarkKm, 0.0),
+        ascentM = null,
+        date = dartEpochMs(day),
+        type = GoalType.FITNESS,
     )
 }
 
@@ -828,6 +303,23 @@ data class PlanFeasibility(
     val suggestedWeeks: Int?,
     /** Fertiger Hinweistext in der Sprache der Texte; `null`, wenn es nichts zu sagen gibt. */
     val message: String?,
+    /**
+     * `true`, wenn das Zeitbudget aus [TrainingPlan.preferences] der Grund ist,
+     * warum der Plan nicht traegt: Ohne Budget truege derselbe Plan.
+     */
+    val budgetLimited: Boolean = false,
+    /**
+     * Wochenstunden, die der Plan ohne Budget in der Spitze braeuchte — nur
+     * bei [budgetLimited].
+     */
+    val hoursNeededForGoal: Double? = null,
+    /**
+     * Wie viele Minuten die Zielzeit schneller ist als die Prognose; `null`
+     * ohne Zielzeit oder Prognose, oder wenn die Zielzeit realistisch ist.
+     */
+    val targetTimeGapMin: Int? = null,
+    /** Hinweis zur Zielzeit (nur mit [targetTimeGapMin]). */
+    val targetTimeMessage: String? = null,
 )
 
 /**
@@ -835,48 +327,107 @@ data class PlanFeasibility(
  * Gegenvorschlag.
  *
  * ## Was geprueft wird
- * Die **laengste geplante Trainingsfahrt** gegen die Zieldistanz. Das Zielevent
- * selbst zaehlt nicht mit — es ist die Pruefung, nicht die Vorbereitung. Liegt
- * das Verhaeltnis unter [minLongestRideShare], ist der Zieltag kein „laenger
- * als gewohnt", sondern Neuland, und die App sagt das.
+ *  * Die **laengste geplante Trainingsfahrt** gegen die Zieldistanz (das
+ *    Zielevent zaehlt nicht mit). Liegt das Verhaeltnis unter
+ *    [minLongestRideShare], ist der Zieltag kein „laenger als gewohnt",
+ *    sondern Neuland. Fitnessbloecke ([GoalType.FITNESS]) haben keine
+ *    Zieldistanz und tragen immer.
+ *  * Das **Zeitbudget**: Traegt der Plan nicht, wird derselbe Plan ohne
+ *    Zeitdeckel gerechnet. Truege er dann, sagt der Hinweis, dass das Budget
+ *    der Engpass ist und wie viele Stunden es braeuchte.
+ *  * Die **Zielzeit** (mit [prognosis] aus [predictGoalFinish]): Ist sie um
+ *    mehr als die Unsicherheit der Prognose (mindestens 5 %) schneller,
+ *    entsteht [PlanFeasibility.targetTimeMessage].
  *
  * ## Woher der Gegenvorschlag kommt
  *  * **Machbare Distanz**: die Distanz, zu der die laengste geplante Fahrt
- *    genau [minLongestRideShare] waere — also das Ziel, das dieser Plan
- *    truege, auf 5 km gerundet.
- *  * **Noetige Wochen**: es wird derselbe Aufbau fuer wachsende Laufzeiten
- *    durchgerechnet (bis [MAX_WEEKS]) und die erste Laufzeit gemeldet, deren
- *    laengste Fahrt die Schwelle nimmt. Kein zweites Modell, sondern exakt das
- *    Verfahren, mit dem der Plan entsteht.
+ *    genau [minLongestRideShare] waere, auf 5 km **ab**gerundet.
+ *  * **Noetige Wochen**: derselbe Aufbau fuer wachsende Laufzeiten
+ *    durchgerechnet ([weeksForFeasibleGoal]).
  *
- * Das Startvolumen wird dabei aus dem Plan selbst zurueckgelesen (Woche 0 ist
- * immer eine Aufbauwoche mit Fortschritt 0, ihr Ziel ist das gerundete
- * Startvolumen). Damit braucht die Pruefung keine [FitnessAssessment] und
- * funktioniert auch fuer einen laengst gespeicherten Plan.
+ * Das Startvolumen wird aus Woche 0 des Plans zurueckgelesen. Hat das
+ * Zeitbudget schon Woche 0 gekuerzt, ist das eine Unterschaetzung des echten
+ * Umfangs — die Stundenzahl ohne Budget ist dann eher zu niedrig als zu hoch.
  */
-fun assessPlanFeasibility(plan: TrainingPlan, texts: CoreTexts): PlanFeasibility {
+fun assessPlanFeasibility(
+    plan: TrainingPlan,
+    prognosis: GoalPrognosis? = null,
+    texts: CoreTexts,
+): PlanFeasibility {
     val goalKm = plan.goal.distanceKm
-    val longest = plan.weeks
-        .flatMap { it.sessions }
-        .filterNot { it.isEvent }
-        .maxOfOrNull { it.targetKm }
-        ?: 0
+    val longest = longestTrainingRideKm(plan.weeks.map { it.sessions })
+    val timeHint = targetTimeHint(plan.goal, prognosis, texts)
 
-    if (!goalKm.isFinite() || goalKm <= 0) {
-        return PlanFeasibility(longest, goalKm, 0.0, true, null, null, null)
+    if (plan.goal.type == GoalType.FITNESS || !goalKm.isFinite() || goalKm <= 0) {
+        return PlanFeasibility(
+            longest, goalKm, 0.0, true, null, null, null,
+            targetTimeGapMin = timeHint?.first, targetTimeMessage = timeHint?.second,
+        )
     }
 
     val coverage = longest / goalKm
     if (coverage >= minLongestRideShare) {
-        return PlanFeasibility(longest, goalKm, coverage, true, null, null, null)
+        return PlanFeasibility(
+            longest, goalKm, coverage, true, null, null, null,
+            targetTimeGapMin = timeHint?.first, targetTimeMessage = timeHint?.second,
+        )
     }
 
     val startKm = plan.weeks.firstOrNull()?.targetKm?.toDouble() ?: 0.0
-    val suggestedDistance = max(5, round5(longest / minLongestRideShare))
-    val suggestedWeeks = weeksForFeasibleGoal(plan.goal, plan.level, startKm, texts)
+    // Abgerundet auf 5 km: aufgerundet truege der Vorschlag selbst knapp nicht.
+    val suggestedDistance = max(5, kotlin.math.floor(longest / minLongestRideShare / 5).toInt() * 5)
+    val suggestedWeeks = weeksForFeasibleGoal(
+        goal = plan.goal,
+        level = plan.level,
+        startKm = startKm,
+        preferences = plan.preferences,
+        speedKmh = plan.planSpeedKmh,
+        texts = texts,
+    )
+
+    // Ist das Zeitbudget der Engpass? Derselbe Plan ohne Zeitdeckel — in
+    // derselben Laufzeit oder, wenn mit Budget selbst ein Jahr nicht reicht,
+    // in der Laufzeit, die ohne Budget genuegen wuerde.
+    var budgetLimited = false
+    var hoursNeeded: Double? = null
+    val prefs = plan.preferences
+    val budget = prefs?.validWeeklyHours()
+    if (prefs != null && budget != null && startKm > 0) {
+        val noBudget = prefs.copy(weeklyHours = null).takeUnless { it.isEmpty }
+        val sameLength = planSessions(
+            plan.goal, plan.level, startKm, plan.weeks.size, null, plan.preferences, plan.planSpeedKmh, texts,
+            applyTimeBudget = false,
+        )
+        val unconstrained = if (longestTrainingRideKm(sameLength) / goalKm >= minLongestRideShare) {
+            sameLength
+        } else if (suggestedWeeks == null) {
+            weeksForFeasibleGoal(plan.goal, plan.level, startKm, noBudget, plan.planSpeedKmh, texts)
+                ?.let { weeks -> planSessions(plan.goal, plan.level, startKm, weeks, null, noBudget, plan.planSpeedKmh, texts) }
+        } else {
+            null
+        }
+        if (unconstrained != null) {
+            budgetLimited = true
+            val peakMinutes = unconstrained.maxOf { week -> week.filterNot { it.isEvent }.sumOf { it.durationMin ?: 0 } }
+            hoursNeeded = dartRound(peakMinutes / 60.0 * 2) / 2
+        }
+    }
 
     val percent = dartRound(coverage * 100).toInt()
     val goalText = dartRound(goalKm).toInt()
+    val distanceMessage = texts.training.planNotFeasible(
+        longestKm = longest,
+        percent = percent,
+        goalKm = goalText,
+        suggestedKm = suggestedDistance,
+        suggestedWeeks = suggestedWeeks,
+        needsLongerPlan = suggestedWeeks != null && suggestedWeeks > plan.weeks.size,
+    )
+    val message = if (budgetLimited && budget != null && hoursNeeded != null) {
+        distanceMessage + " " + texts.training.planBudgetLimited(budget, hoursNeeded)
+    } else {
+        distanceMessage
+    }
 
     return PlanFeasibility(
         longestRideKm = longest,
@@ -885,15 +436,38 @@ fun assessPlanFeasibility(plan: TrainingPlan, texts: CoreTexts): PlanFeasibility
         feasible = false,
         suggestedDistanceKm = suggestedDistance,
         suggestedWeeks = suggestedWeeks,
-        message = texts.training.planNotFeasible(
-            longestKm = longest,
-            percent = percent,
-            goalKm = goalText,
-            suggestedKm = suggestedDistance,
-            suggestedWeeks = suggestedWeeks,
-            needsLongerPlan = suggestedWeeks != null && suggestedWeeks > plan.weeks.size,
-        ),
+        message = message,
+        budgetLimited = budgetLimited,
+        hoursNeededForGoal = hoursNeeded,
+        targetTimeGapMin = timeHint?.first,
+        targetTimeMessage = timeHint?.second,
     )
+}
+
+/** Laengste Trainingsfahrt (ohne Event) ueber alle Wochen. */
+private fun longestTrainingRideKm(weeks: List<List<TrainingSession>>): Int =
+    weeks.flatten().filterNot { it.isEvent }.maxOfOrNull { it.targetKm } ?: 0
+
+/**
+ * Mindestabstand zwischen Zielzeit und Prognose, ab dem die Zielzeit als
+ * „deutlich schneller" gilt: die Unsicherheit der Prognose, mindestens 5 %
+ * der prognostizierten Zeit — darunter ist der Unterschied Rauschen.
+ */
+private const val TARGET_TIME_MIN_GAP_SHARE = 0.05
+
+/** `(Luecke in Minuten, Text)`, wenn die Zielzeit deutlich unter der Prognose liegt. */
+private fun targetTimeHint(goal: Goal, prognosis: GoalPrognosis?, texts: CoreTexts): Pair<Int, String>? {
+    val target = goal.targetDurationMin ?: return null
+    val p = prognosis ?: return null
+    if (goal.type != GoalType.EVENT || goal.distanceKm <= 0) return null
+    val predicted = p.atEventMin ?: p.currentMin
+    if (predicted <= 0) return null
+    val margin = max(p.uncertaintyMin, (predicted * TARGET_TIME_MIN_GAP_SHARE).roundToInt())
+    val gap = predicted - target
+    if (gap <= margin) return null
+    val targetSpeed = goal.distanceKm / (target / 60.0)
+    val predictedSpeed = goal.distanceKm / (predicted / 60.0)
+    return gap to texts.training.targetTimeAmbitious(target, predicted, targetSpeed, predictedSpeed)
 }
 
 /**
@@ -901,28 +475,26 @@ fun assessPlanFeasibility(plan: TrainingPlan, texts: CoreTexts): PlanFeasibility
  * [minLongestRideShare]-Schwelle nimmt — `null`, wenn selbst [MAX_WEEKS] nicht
  * reichen.
  *
- * Rechnet den echten Aufbau durch ([planWeekVolumes] + [buildSessions]) statt
- * eine Naeherungsformel: Rampengrenze, Erholungswochen und Anteile der
- * Schluesseleinheit greifen ineinander, und eine zweite, „ungefaehre" Formel
+ * Rechnet den echten Aufbau durch ([planSessions]) statt einer
+ * Naeherungsformel: Rampengrenze, Erholungswochen, Zeitbudget und Gewichte
+ * der langen Tour greifen ineinander, und eine zweite, „ungefaehre" Formel
  * daneben waere genau die Sorte Wahrheit, die irgendwann von der ersten
  * abweicht.
  */
-fun weeksForFeasibleGoal(goal: Goal, level: FitnessLevel, startKm: Double, texts: CoreTexts): Int? {
-    if (!goal.distanceKm.isFinite() || goal.distanceKm <= 0 || startKm <= 0) {
+fun weeksForFeasibleGoal(
+    goal: Goal,
+    level: FitnessLevel,
+    startKm: Double,
+    preferences: PlanPreferences? = null,
+    speedKmh: Double? = null,
+    texts: CoreTexts,
+): Int? {
+    if (goal.type == GoalType.FITNESS || !goal.distanceKm.isFinite() || goal.distanceKm <= 0 || startKm <= 0) {
         return null
     }
-    val peakKm = peakKmFor(goal, startKm)
-    val eventWeekKm = zielwocheSessions(goal, texts).sumOf { it.targetKm }
-
     for (weekCount in MIN_WEEKS..MAX_WEEKS) {
-        val kinds = planWeekKinds(weekCount)
-        val volumes = planWeekVolumes(kinds, startKm, peakKm, eventWeekKm)
-        val longest = kinds.indices
-            .flatMap { buildSessions(kinds[it], level, volumes[it], goal, texts) }
-            .filterNot { it.isEvent }
-            .maxOfOrNull { it.targetKm }
-            ?: 0
-        if (longest / goal.distanceKm >= minLongestRideShare) {
+        val sessions = planSessions(goal, level, startKm, weekCount, null, preferences, speedKmh, texts)
+        if (longestTrainingRideKm(sessions) / goal.distanceKm >= minLongestRideShare) {
             return weekCount
         }
     }

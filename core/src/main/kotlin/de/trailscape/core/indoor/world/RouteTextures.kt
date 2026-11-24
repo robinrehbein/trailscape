@@ -129,8 +129,8 @@ internal object RouteTextures {
     fun vergeFadeTexture(cache: TextureCache, verge: Verge): EncodedTexture =
         cache.get("${verge.key}_fade", alpha = true) { vergeFade(verge) }
 
-    /** Deckung des Auslaufs an seiner Innenkante (der deckende Streifen davor endet mit 0,92). */
-    const val VERGE_FADE_ALPHA0 = 0.92
+    /** Deckung des Auslaufs an seiner Innenkante (dort endet der deckende Streifen). */
+    const val VERGE_FADE_ALPHA0 = 1.0
 
     internal fun edgeStrip(src: RgbaImage): RgbaImage {
         val w = 512

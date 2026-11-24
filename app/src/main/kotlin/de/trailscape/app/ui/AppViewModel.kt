@@ -26,6 +26,7 @@ import de.trailscape.core.ActivityFileInput
 import de.trailscape.core.EXPLORER_TILES_CHEAP_REFRESH_MAX
 import de.trailscape.core.ExplorerTile
 import de.trailscape.core.ExplorerTilesStore
+import de.trailscape.core.GoalType
 import de.trailscape.core.HealthConnection
 import de.trailscape.core.HealthRoutePoint
 import de.trailscape.core.HealthSyncException
@@ -3017,17 +3018,40 @@ class AppViewModel(
 
 /**
  * Schluessel, der einen Trainingsplan fuer [AppViewModel.acknowledgePlanFeasibility]
- * identifiziert: Zieldistanz, Zieldatum und Wochenzahl. Genau die drei Groessen,
- * die [de.trailscape.core.assessPlanFeasibility] bewerten — aendert sich eine
- * davon, ist der Plan fuer diese Pruefung ein anderer, und eine alte
- * Quittierung darf ihn nicht mehr betreffen.
+ * identifiziert: Zieldistanz, Zieldatum und Wochenzahl — und, sobald es sie
+ * gibt, Zieltyp, Zielzeit und Praeferenzen (Trainingstage, Tag der langen
+ * Tour, Zeitbudget). Das sind die Groessen, aus denen der Plan entsteht und die
+ * [de.trailscape.core.assessPlanFeasibility] bewertet: Ein anderes Zeitbudget
+ * kann denselben Plan zum Tragen oder Nichttragen bringen, und eine alte
+ * Quittierung darf dann nicht mehr gelten.
  *
- * Bewusst keine kryptografische Pruefsumme: Die drei Werte sind schon
- * eindeutig genug fuer einen lokalen Vergleich, und ein simpler String bleibt
- * beim Nachlesen in `SharedPreferences` verstaendlich.
+ * **Rueckwaertsvertraeglich:** Die Zusaetze haengen nur an, was vom
+ * Auslieferungszustand abweicht. Ein Eventplan ohne Zielzeit und ohne
+ * Praeferenzen behaelt genau den frueheren Schluessel
+ * `distanz|datum|wochen` — eine vor dem Update gesetzte Quittierung gilt fuer
+ * ihn weiter. Nur Plaene mit Zielzeit (oder neuen Praeferenzen) zeigen die
+ * Karte einmal erneut, wenn sie schon quittiert war.
+ *
+ * Bewusst keine kryptografische Pruefsumme: Ein simpler String bleibt beim
+ * Nachlesen in `SharedPreferences` verstaendlich.
  */
-fun planFeasibilityIdentityKey(plan: TrainingPlan): String =
-    "${plan.goal.distanceKm}|${plan.goal.date}|${plan.weeks.size}"
+fun planFeasibilityIdentityKey(plan: TrainingPlan): String = buildString {
+    append(plan.goal.distanceKm).append('|').append(plan.goal.date).append('|').append(plan.weeks.size)
+    if (plan.goal.type != GoalType.EVENT) append("|type=").append(plan.goal.type.name)
+    plan.goal.targetDurationMin?.let { append("|target=").append(it) }
+    plan.preferences?.let { prefs ->
+        // Sieben Tage sind keine Einschraenkung — wie in `normalizedForCompare`.
+        val days = prefs.normalizedDays()?.takeIf { it.size < 7 }
+        val longDay = prefs.validLongRideDay()
+        val hours = prefs.validWeeklyHours()
+        if (days != null || longDay != null || hours != null) {
+            append("|prefs=")
+            append(days?.joinToString(",") ?: "-")
+            append(';').append(longDay ?: "-")
+            append(';').append(hours ?: "-")
+        }
+    }
+}
 
 /**
  * Schluessel im [KeyValueStore], unter dem steht, dass die Erststart-Einfuehrung

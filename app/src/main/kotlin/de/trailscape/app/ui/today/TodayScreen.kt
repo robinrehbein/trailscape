@@ -1,5 +1,8 @@
 package de.trailscape.app.ui.today
 
+import de.trailscape.app.ui.training.fitnessTestWeek
+import de.trailscape.app.ui.training.goalTitleParts
+import de.trailscape.app.ui.training.planSessionTargets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.trailscape.app.R
 import de.trailscape.app.data.AppServices
 import de.trailscape.app.i18n.LocalAppFormats
+import de.trailscape.app.i18n.LocalAppLanguage
 import de.trailscape.app.i18n.LocalCoreTexts
 import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.AppTab
@@ -147,6 +151,7 @@ import kotlin.math.roundToInt
 fun TodayScreen(appViewModel: AppViewModel) {
     val coreTexts = LocalCoreTexts.current
     val formats = LocalAppFormats.current
+    val language = LocalAppLanguage.current
     val insights by appViewModel.insights.collectAsStateWithLifecycle()
     val plan by appViewModel.plan.collectAsStateWithLifecycle()
     val rides by appViewModel.rides.collectAsStateWithLifecycle()
@@ -361,6 +366,9 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         band = band,
                         headline = todayHeadline(effort, todayRoute, band, planRestDay),
                         sentence = todaySentence(effort, todayRoute),
+                        sessionTargets = todaySession
+                            ?.takeIf { showSessionTargets(it, todayRoute) }
+                            ?.let { planSessionTargets(it, insights) },
                         offer = offer,
                         // Die erste Runde ohne Historie baut sofort („Runde bauen ·
                         // 26 km"), alle anderen Angebote oeffnen wie bisher nur
@@ -503,9 +511,11 @@ fun TodayScreen(appViewModel: AppViewModel) {
                                 texts = coreTexts,
                             )
                         }
-                        val goalKm = stringResource(R.string.common_value_km, formats.km(goal.distanceKm))
+                        // Fitnessziel: kein „0 km", sondern wie die Zielkarte im Training.
+                        val titleParts = goalTitleParts(goal, language, fitnessTestWeek(shownPlan), formats::km)
+                            .map { it.asString() }.joinToString(" · ")
                         GoalCard(
-                            title = "${goal.name} · $goalKm",
+                            title = "${goal.name} · $titleParts",
                             // Erst aufloesen, dann mit dem sprachneutralen „ · " verbinden.
                             line = lineParts.map { it.asString() }.joinToString(" · "),
                             progress = goalProgress(localOfEpochMs(planStart).toLocalDate(), goalDate, today),
