@@ -390,4 +390,68 @@
     <string name="indoor_app_start_earlier_cd">Start 100 m earlier</string>
     <string name="indoor_app_start_later_cd">Start 100 m later</string>
     <string name="indoor_app_start_profile_cd">Start point at kilometre %1$s of %2$s. Drag or tap along the profile to move it.</string>
+    <!-- IndoorDayCard.kt: Einheit des Tages -->
+    <string name="indoor_app_day_eyebrow">Today’s session</string>
+    <string name="indoor_app_day_loading">Looking for a matching route …</string>
+    <string name="indoor_app_day_rest_title">Rest day today</string>
+    <string name="indoor_app_day_rest_body">Your readiness suggests a break – there is nothing on the trainer today.</string>
+    <string name="indoor_app_day_rest_body_planned">The plan had “%1$s”. Your readiness suggests a break today, so there is no trainer session.</string>
+    <string name="indoor_app_day_open_free_action">Ride freely anyway</string>
+    <string name="indoor_app_day_event_title">Event day</string>
+    <string name="indoor_app_day_event_body">The event has its own course – there is no trainer session for it.</string>
+    <string name="indoor_app_day_meta">%1$d min · the trainer holds the target power</string>
+    <string name="indoor_app_day_reduced_meta">%1$d instead of %2$d min · adjusted to your readiness</string>
+    <string name="indoor_app_day_easy_meta">No session planned today – %1$d min easy and flat</string>
+    <string name="indoor_app_day_easy_title">Easy spin</string>
+    <string name="indoor_app_day_plan_name">New loop from your start point</string>
+    <string name="indoor_app_day_none_found">No route with an elevation profile found. Pick a route yourself below.</string>
+    <string name="indoor_app_day_reason_km">%1$s km</string>
+    <string name="indoor_app_day_reason_minutes">%1$d min</string>
+    <string name="indoor_app_day_reason_minutes_range">%1$d–%2$d min</string>
+    <plurals name="indoor_app_day_reason_climbs_count">
+        <item quantity="one">%1$d climb of %2$s for your %3$d × %4$d min</item>
+        <item quantity="other">%1$d climbs of %2$s for your %3$d × %4$d min</item>
+    </plurals>
+    <string name="indoor_app_day_reason_no_climbs">hardly any climbs – you ride the intervals on the flat</string>
+    <string name="indoor_app_day_reason_rolling">flat to rolling, no long steep sections</string>
+    <string name="indoor_app_day_reason_flat">flat</string>
+    <string name="indoor_app_day_reason_mostly_flat">mostly flat</string>
+    <plurals name="indoor_app_day_reason_laps_count">
+        <item quantity="one">%1$d lap</item>
+        <item quantity="other">%1$d laps</item>
+    </plurals>
+    <string name="indoor_app_day_reason_start">start at km %1$s</string>
+    <string name="indoor_app_day_reason_ends_early">route ends %1$d min before the session</string>
+    <string name="indoor_app_day_reason_estimated">profile estimated</string>
+    <string name="indoor_app_day_plan_climbs">new loop with climbs</string>
+    <string name="indoor_app_day_plan_rolling">new loop, flat to rolling</string>
+    <string name="indoor_app_day_plan_flat">new flat loop</string>
+    <string name="indoor_app_day_world_ready">World ready</string>
+    <string name="indoor_app_day_world_download">Download world: %1$s</string>
+    <string name="indoor_app_day_world_download_unknown">Download world</string>
+    <string name="indoor_app_day_world_build">Build world: about %1$d min</string>
+    <string name="indoor_app_day_world_plan">Plan a loop, then build the world: about %1$d min</string>
+    <string name="indoor_app_day_ride_action">Ride</string>
+    <string name="indoor_app_day_download_action">Download and ride</string>
+    <string name="indoor_app_day_build_action">Build world</string>
+    <string name="indoor_app_day_plan_action">Plan a loop</string>
+    <string name="indoor_app_day_next_action">Other route (%1$d/%2$d)</string>
+    <string name="indoor_app_day_path_real">Real route</string>
+    <string name="indoor_app_day_path_generated">Generated world</string>
+    <string name="indoor_app_day_generated_title">Made-up landscape shaped to the session</string>
+    <string name="indoor_app_day_generated_name">Generated world · %1$s</string>
+    <plurals name="indoor_app_day_generated_climbs_count">
+        <item quantity="one">%1$d climb right under your %2$d × %3$d min, gentle downhill in recoveries</item>
+        <item quantity="other">%1$d climbs right under your %2$d × %3$d min, gentle downhill in recoveries</item>
+    </plurals>
+    <string name="indoor_app_day_generated_ends">ends with the session</string>
+    <string name="indoor_app_day_generated_build">Build world without network: about %1$d min</string>
+
+    <!-- IndoorRideScreen.kt: Ende der Einheit -->
+    <string name="indoor_app_day_end_done_title">Session complete</string>
+    <string name="indoor_app_day_end_done_body">The trainer now holds cool-down power. Spin out easily or end the ride.</string>
+    <string name="indoor_app_day_end_cooldown_action">Cool down</string>
+    <string name="indoor_app_day_end_finish_action">End ride</string>
+    <string name="indoor_app_day_end_route_title">End of route</string>
+    <string name="indoor_app_day_end_route_body">The session still has %1$d min to go. This route is not a loop – end the ride here.</string>
 </resources>

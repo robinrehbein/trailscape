@@ -49,7 +49,7 @@ import de.trailscape.app.ui.components.ScreenHeader
 import de.trailscape.app.ui.components.SectionEyebrow
 import de.trailscape.app.ui.components.SettingsAction
 import de.trailscape.app.ui.components.screenContentPadding
-import de.trailscape.app.ui.indoor.IndoorEntryCard
+import de.trailscape.app.ui.indoor.IndoorTodayEntry
 import de.trailscape.app.ui.indoor.indoorErgTitleFor
 import de.trailscape.app.ui.localOfEpochMs
 import de.trailscape.app.ui.rememberNow
@@ -383,7 +383,18 @@ fun TodayScreen(appViewModel: AppViewModel) {
                 }
 
                 item(key = "indoor") {
-                    IndoorEntryCard(ergTitle = indoorErgTitle, onClick = { appViewModel.requestIndoor() })
+                    // Einheit des Tages fahren: passende Strecke zur Einheit
+                    // (docs/indoor/app.md), sonst der allgemeine Einstieg.
+                    IndoorTodayEntry(
+                        today = todayRoute,
+                        profile = insights.profile,
+                        rideCount = rides.size,
+                        coreTexts = coreTexts,
+                        fallbackErgTitle = indoorErgTitle,
+                        onOpen = { appViewModel.requestIndoor() },
+                        onRideDay = appViewModel::requestIndoorDay,
+                        onPlanRoute = { target -> appViewModel.requestRouteGeneration(target) },
+                    )
                 }
 
                 // Solange die Touren noch aus der Datenbank kommen, weder

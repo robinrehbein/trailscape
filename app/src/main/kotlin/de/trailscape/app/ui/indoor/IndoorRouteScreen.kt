@@ -68,6 +68,11 @@ fun IndoorRouteScreen(
     onCatalogCancel: (String) -> Unit = {},
     onCatalogDiscard: (String) -> Unit = {},
     onCatalogRefresh: () -> Unit = {},
+    day: IndoorDayUi? = null,
+    onDayRide: () -> Unit = {},
+    onDayNext: () -> Unit = {},
+    onDayGenerated: () -> Unit = {},
+    onDayPath: (IndoorDayPath) -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_route_title),
@@ -83,6 +88,13 @@ fun IndoorRouteScreen(
             }
         },
     ) {
+        // Einheit des Tages: eine passende Strecke ohne weitere Auswahl.
+        day?.let {
+            IndoorDayCard(
+                ui = it, onRide = { onDayRide() }, onNext = onDayNext,
+                onRideGenerated = onDayGenerated, onPathChange = onDayPath,
+            )
+        }
         MutedText(stringResource(R.string.indoor_app_route_intro))
 
         Eyebrow(stringResource(R.string.indoor_app_route_section_route))
@@ -186,6 +198,7 @@ private fun RouteOptionRow(option: IndoorRouteOption, selected: Boolean, onSelec
                     )
                 }
                 is IndoorRouteOption.Catalog -> Text(text = option.name, style = MaterialTheme.typography.titleSmall)
+                is IndoorRouteOption.Generated -> Text(text = option.name, style = MaterialTheme.typography.titleSmall)
                 is IndoorRouteOption.Saved -> {
                     Text(
                         text = option.name,

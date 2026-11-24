@@ -132,6 +132,8 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
     fun isOrphaned(info: WorldInfo, knownRideIds: Set<String>): Boolean {
         if (info.isTestWorld) return false
         val source = info.source ?: return false
+        // Generierte Welten (Einheit des Tages) haben keine Tour.
+        if (source.rideId.startsWith(de.trailscape.app.indoor.GENERATED_SOURCE_PREFIX)) return false
         return source.rideId !in knownRideIds
     }
 

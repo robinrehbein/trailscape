@@ -47,6 +47,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -74,6 +75,7 @@ import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.map.KeepScreenOn
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.core.indoor.DayRideEnd
 import de.trailscape.core.indoor.IndoorMode
 import de.trailscape.core.indoor.IndoorPhase
 import de.trailscape.core.indoor.IndoorSessionState
@@ -143,6 +145,7 @@ fun IndoorRideScreen(
     onMoveStart: (Double) -> Unit = {},
     onNudgeStart: (Double) -> Unit = {},
     onReleaseStart: () -> Unit = {},
+    onDismissDayEnd: () -> Unit = {},
 ) {
     val session = ui.session
     if (session == null) {
@@ -170,6 +173,7 @@ fun IndoorRideScreen(
         onMoveStart = onMoveStart,
         onNudgeStart = onNudgeStart,
         onReleaseStart = onReleaseStart,
+        onDismissDayEnd = onDismissDayEnd,
     )
 
     Box(
@@ -224,6 +228,7 @@ private class HudActions(
     val onMoveStart: (Double) -> Unit,
     val onNudgeStart: (Double) -> Unit,
     val onReleaseStart: () -> Unit,
+    val onDismissDayEnd: () -> Unit,
 )
 
 /** Die Startpunkt-Karte, wenn sie gerade gilt (sonst `false`, dann zeigt das HUD Gang und Profil). */
@@ -394,16 +399,20 @@ private fun PortraitHud(
                     }
                 }
             }
-            if (ui.start == null) PhaseCard(
-                session = session,
-                onTogglePause = actions.onTogglePause,
-                modifier = if (showWorld) {
+            if (ui.start == null) {
+                val cardModifier = if (showWorld) {
                     // Mit Welt oben in der Mitte: frei von der Knopfspalte unten rechts.
                     Modifier.align(Alignment.TopCenter).padding(top = 12.dp)
                 } else {
                     Modifier.align(Alignment.Center)
-                },
-            )
+                }
+                val dayEnd = ui.dayEnd
+                if (dayEnd != null) {
+                    DayEndCard(dayEnd = dayEnd, actions = actions, modifier = cardModifier)
+                } else {
+                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = cardModifier)
+                }
+            }
         }
 
         // Unten: Gang bzw. Zielleistung, darunter das schmale Hoehenprofil.
@@ -499,7 +508,12 @@ private fun LandscapeHud(
                 }
             }
             if (ui.start == null) {
-                PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
+                val dayEnd = ui.dayEnd
+                if (dayEnd != null) {
+                    DayEndCard(dayEnd = dayEnd, actions = actions, modifier = Modifier.align(Alignment.Center))
+                } else {
+                    PhaseCard(session = session, onTogglePause = actions.onTogglePause, modifier = Modifier.align(Alignment.Center))
+                }
             }
         }
 
@@ -756,6 +770,51 @@ private fun PhaseCard(session: IndoorSessionState, onTogglePause: () -> Unit, mo
                     Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(stringResource(R.string.indoor_app_ride_resume_action))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Einheit oder Strecke ist zu Ende, die andere nicht (docs/indoor/app.md,
+ * „Einheit des Tages"): Einheit geschafft → „Ausfahren" (der Trainer haelt die
+ * Ausfahrleistung, die Karte verschwindet) oder „Beenden"; Strecke ohne
+ * Rundschluss zu Ende → Hinweis mit der Restzeit und „Beenden".
+ */
+@Composable
+private fun DayEndCard(dayEnd: IndoorDayEndUi, actions: HudActions, modifier: Modifier = Modifier) {
+    val done = dayEnd.kind == DayRideEnd.WORKOUT_DONE
+    Surface(color = HudColors.panelStrong, shape = RoundedCornerShape(24.dp), modifier = modifier.widthIn(max = 340.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+        ) {
+            Text(
+                text = stringResource(if (done) R.string.indoor_app_day_end_done_title else R.string.indoor_app_day_end_route_title),
+                style = hudStyle(MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (done) {
+                    stringResource(R.string.indoor_app_day_end_done_body)
+                } else {
+                    stringResource(R.string.indoor_app_day_end_route_body, dayEnd.remainingMin)
+                },
+                style = hudStyle(MaterialTheme.typography.bodyMedium),
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (done) {
+                    Button(
+                        onClick = actions.onDismissDayEnd,
+                        colors = ButtonDefaults.buttonColors(containerColor = HudColors.ink, contentColor = Color.Black),
+                    ) { Text(stringResource(R.string.indoor_app_day_end_cooldown_action)) }
+                }
+                OutlinedButton(onClick = actions.onFinish) {
+                    Text(stringResource(R.string.indoor_app_day_end_finish_action), color = HudColors.ink)
                 }
             }
         }
