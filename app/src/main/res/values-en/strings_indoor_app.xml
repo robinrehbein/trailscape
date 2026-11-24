@@ -75,6 +75,15 @@
     <string name="indoor_app_pair_gears_even_body">24 gears in even steps from very easy to very hard.</string>
     <string name="indoor_app_pair_gears_bike_label">Like your bike (2 × 12)</string>
     <string name="indoor_app_pair_gears_bike_body">The ratios of a gravel bike with 48/31 chainrings and an 11–34 cassette, sorted from easy to hard.</string>
+    <string name="indoor_app_pair_time_title">Time of day</string>
+    <string name="indoor_app_pair_time_auto_label">Automatic</string>
+    <string name="indoor_app_pair_time_auto_body">Follows the time of day at the route – at night a bright dusk.</string>
+    <string name="indoor_app_pair_time_morning_label">Morning</string>
+    <string name="indoor_app_pair_time_morning_body">Low sun in the east, fresh light.</string>
+    <string name="indoor_app_pair_time_noon_label">Midday</string>
+    <string name="indoor_app_pair_time_noon_body">High sun, short shadows.</string>
+    <string name="indoor_app_pair_time_evening_label">Evening</string>
+    <string name="indoor_app_pair_time_evening_body">Warm, low light from the west.</string>
     <string name="indoor_app_pair_continue_hint">Pair a trainer or switch on the demo trainer to continue.</string>
     <string name="indoor_app_pair_diagnostics_action">Open diagnostics</string>
     <!-- IndoorRouteScreen.kt -->

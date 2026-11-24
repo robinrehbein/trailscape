@@ -41,7 +41,9 @@ class SkyModelTest {
         val clear = SkyModel.lighting(SkySetting(15.0, 160, 0.0), 51.0)
         val hazy = SkyModel.lighting(SkySetting(15.0, 160, 1.0), 51.0)
         assertTrue(hazy.fogDensity > clear.fogDensity * 5)
-        assertEquals(3.9 / 40_000.0, clear.fogDensity, 1e-9)
+        assertEquals(3.9 / 30_000.0, clear.fogDensity, 1e-9)
+        // Mit Sichtweite der Welt: dichter, damit der Rand im Dunst verschwindet.
+        assertTrue(SkyModel.lighting(SkySetting(15.0, 160, 0.0), 51.0, 6_000.0).fogDensity > clear.fogDensity * 2)
     }
 
     @Test
@@ -81,21 +83,28 @@ class SkyModelTest {
     }
 
     @Test
-    fun cubemapGroesseUndSymmetrie() {
+    fun cubemapHdrUndRueckfall() {
         val l = SkyModel.lighting(SkySetting.DEFAULT, 51.0)
         val size = 8
-        val px = SkyModel.cubemapPixels(l, size)
-        assertEquals(6 * size * size * 4, px.size)
+        val half = SkyModel.cubemapHalfRgb(l, size)
+        assertEquals(6 * size * size * 3, half.size)
         // +Y (Zenit) und −Y spiegelbildlich gleich: die Flaechen-Spiegelung eines Treibers aendert nichts.
-        val face = size * size * 4
-        val plusY = px.copyOfRange(2 * face, 3 * face).map { it.toInt() and 0xFF }
-        val minusY = px.copyOfRange(3 * face, 4 * face).map { it.toInt() and 0xFF }
-        assertEquals(plusY.sorted(), minusY.sorted())
-        // Mitte der Zenitflaeche ist blauer als der Rand der Seitenflaeche in Horizontnaehe.
-        val zenithB = plusY[((size / 2) * size + size / 2) * 4 + 2]
-        val horizonR = px[((size / 2) * size) * 4].toInt() and 0xFF
-        assertTrue(zenithB > horizonR - 60)
-        assertTrue(px.withIndex().filter { it.index % 4 == 3 }.all { it.value == 0xFF.toByte() })
+        val face = size * size * 3
+        assertEquals(half.copyOfRange(2 * face, 3 * face).sorted(), half.copyOfRange(3 * face, 4 * face).sorted())
+        // Horizont (Mitte der Seitenflaeche) heller als 1: deshalb Gleitkomma-Textur.
+        val mid = ((size / 2) * size + size / 2) * 3
+        assertTrue(SkyModel.halfToDouble(half[mid + 2]) > 1.0, "Horizont blau ${SkyModel.halfToDouble(half[mid + 2])}")
+        // Zenit blau: Blau deutlich ueber Rot.
+        val z = 2 * face + mid
+        assertTrue(SkyModel.halfToDouble(half[z + 2]) > 2.0 * SkyModel.halfToDouble(half[z]))
+        // Dunstfarbe = sichtbarer Horizont geteilt durch die Skala der Skybox.
+        assertEquals(l.look.horizon.b / l.skyScale, l.fogColor.b, 1e-9)
+        // Rueckfall RGBA8: gleiche Texelzahl, deckend.
+        val bytes = SkyModel.cubemapSrgbBytes(half)
+        assertEquals(6 * size * size * 4, bytes.size)
+        assertTrue(bytes.withIndex().filter { it.index % 4 == 3 }.all { it.value == 0xFF.toByte() })
+        assertEquals(0.5, SkyModel.halfToDouble(0x3800.toShort()), 1e-12)
+        assertEquals(1.0, SkyModel.halfToDouble(0x3C00.toShort()), 1e-12)
     }
 
     @Test

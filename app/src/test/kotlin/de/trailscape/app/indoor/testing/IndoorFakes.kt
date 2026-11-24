@@ -620,6 +620,9 @@ class FakeWorldRenderer(
     var destroyed = false
         private set
 
+    /** Alle gesetzten Himmel, in Reihenfolge. */
+    val skies = mutableListOf<SkySetting>()
+
     override fun setListener(listener: WorldRendererListener?) {
         this.listener = listener
     }
@@ -648,7 +651,9 @@ class FakeWorldRenderer(
         camera = mode
     }
 
-    override fun setSky(sky: SkySetting) = Unit
+    override fun setSky(sky: SkySetting) {
+        skies += sky
+    }
 
     override fun setSettings(settings: RenderSettings) = Unit
 

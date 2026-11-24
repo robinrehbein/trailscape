@@ -7,6 +7,7 @@ import de.trailscape.core.indoor.IndoorSessionState
 import de.trailscape.core.indoor.ShifterConnection
 import de.trailscape.core.indoor.TrainerConnection
 import de.trailscape.core.indoor.VirtualGearTable
+import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 import de.trailscape.core.indoor.world.CameraMode
 import de.trailscape.core.indoor.world.IndoorQuality
 import de.trailscape.core.indoor.world.RenderFailure
@@ -38,6 +39,7 @@ enum class IndoorStage { PAIR, ROUTE, WORLD, RIDE, SUMMARY }
  * @property chainringTeeth Kettenblatt am Trainer in Zaehnen (Ritzel: Zwift
  *   Cog, 14 Zaehne) — Bezug der virtuellen Gaenge.
  * @property gearTable Gangtabelle der virtuellen Gaenge (`RiderSetup.gearTable`).
+ * @property timeOfDay Tageszeit der 3D-Welt (Vorgabe: automatisch nach der Uhr).
  * @property canContinue Demo an oder ein Trainer gemerkt.
  */
 data class IndoorPairUi(
@@ -46,6 +48,7 @@ data class IndoorPairUi(
     val shifterName: String?,
     val chainringTeeth: Int = IndoorViewModel.CHAINRING_DEFAULT_TEETH,
     val gearTable: VirtualGearTable = VirtualGearTable.EVEN,
+    val timeOfDay: IndoorTimeOfDay = IndoorTimeOfDay.AUTO,
 ) {
     val canContinue: Boolean get() = demoTrainer || trainerName != null
 }
