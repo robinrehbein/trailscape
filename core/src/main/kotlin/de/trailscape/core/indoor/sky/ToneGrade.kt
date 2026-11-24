@@ -106,11 +106,24 @@ object ToneGrade {
      */
     fun invert(srgb: IntArray, look: ToneGradeLook): SkyRgb {
         val target = DoubleArray(3) { eotf(srgb[it].coerceIn(0, 250)) }
-        var x = target.copyOf()
-        repeat(80) {
-            val d = display(SkyRgb(x[0], x[1], x[2]), look)
-            val got = doubleArrayOf(d.r, d.g, d.b)
-            x = DoubleArray(3) { i -> (x[i] * (target[i] / max(got[i], 1e-6)).coerceIn(0.5, 2.0)).coerceIn(1e-5, 60.0) }
+        val x = target.copyOf()
+        // Kanalweise Bisektion (logarithmisch), mehrfach im Wechsel: die Kanaele haengen ueber
+        // Lebendigkeit und Rec.2020 voneinander ab, jeder fuer sich ist aber monoton. Ein
+        // multiplikatives Verfahren blieb bei fast schwarzen Kanaelen (Rot im tiefen Blau)
+        // haengen — der Zenit wurde lavendelfarben.
+        repeat(12) {
+            for (i in 0..2) {
+                var lo = Math.log(1e-5)
+                var hi = Math.log(60.0)
+                repeat(40) {
+                    val mid = (lo + hi) / 2
+                    x[i] = exp(mid)
+                    val d = display(SkyRgb(x[0], x[1], x[2]), look)
+                    val got = doubleArrayOf(d.r, d.g, d.b)[i]
+                    if (got < target[i]) lo = mid else hi = mid
+                }
+                x[i] = exp((lo + hi) / 2)
+            }
         }
         return SkyRgb(x[0], x[1], x[2])
     }

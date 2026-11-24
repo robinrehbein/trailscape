@@ -151,8 +151,8 @@ object DaylightModel {
     /** Helligkeit einer weissen Flaeche nach der Belichtung. */
     const val WHITE_TARGET = 1.05
 
-    /** Daemmerung so viel dunkler als gemessen (EV). */
-    const val DUSK_EV_BIAS = -0.25
+    /** Daemmerung so viel dunkler als gemessen (EV; positiv = dunkler). */
+    const val DUSK_EV_BIAS = 0.05
 
     private fun log2(x: Double) = Math.log(x) / Math.log(2.0)
 }

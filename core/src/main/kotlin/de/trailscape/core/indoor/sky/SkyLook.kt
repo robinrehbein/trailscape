@@ -50,10 +50,10 @@ object SkyLookModel {
     // Stuetzstellen bei 8°, 20° und 45° Sonnenhoehe; Zielfarben auf dem Bildschirm (sRGB).
     // Abends: tiefes Blau oben, pfirsichwarmer Horizont; mittags: kraeftiges Blau ueber hellem Dunst.
     private val ALT = doubleArrayOf(8.0, 20.0, 45.0)
-    private val ZENITH = arrayOf(intArrayOf(74, 108, 182), intArrayOf(62, 118, 206), intArrayOf(54, 120, 214))
+    private val ZENITH = arrayOf(intArrayOf(58, 102, 188), intArrayOf(56, 116, 208), intArrayOf(54, 120, 214))
     private val HORIZON = arrayOf(intArrayOf(242, 192, 150), intArrayOf(224, 218, 210), intArrayOf(194, 214, 236))
     private val CLOUD_LIT = arrayOf(intArrayOf(255, 222, 186), intArrayOf(250, 246, 238), intArrayOf(250, 251, 252))
-    private val CLOUD_SHADE = arrayOf(intArrayOf(132, 116, 136), intArrayOf(150, 154, 170), intArrayOf(172, 182, 200))
+    private val CLOUD_SHADE = arrayOf(intArrayOf(140, 124, 142), intArrayOf(168, 172, 186), intArrayOf(190, 198, 214))
 
     /**
      * Der Himmel bei der wirksamen Sonnenhoehe [sunAltitudeDeg] (die

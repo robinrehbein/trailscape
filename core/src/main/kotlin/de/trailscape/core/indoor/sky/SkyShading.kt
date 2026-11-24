@@ -10,7 +10,7 @@ package de.trailscape.core.indoor.sky
  */
 object SkyShading {
     /** Massstab der Wolkenebene (Texturwiederholungen je Einheit der Projektion). */
-    const val CLOUD_SCALE = 0.32
+    const val CLOUD_SCALE = 0.22
 
     /** Wolkenzug in Textureinheiten je Sekunde: ein Wolkenfeld quert den Himmel in einigen Minuten. */
     val WIND = doubleArrayOf(0.0022, 0.0009)

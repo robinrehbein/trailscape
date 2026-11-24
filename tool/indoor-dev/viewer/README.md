@@ -132,6 +132,11 @@ Vergleich).
 | ACES, sRGB, 4× MSAA (FXAA nur ohne MSAA) | ACES-Tonemapping, sRGB-Ausgabe, MSAA der Zeichenfläche |
 | Kameras `CHASE`, `HANDLEBAR`, `DRONE` | wie `CameraRig` (ohne Dämpfung): 6 m auf dem Band zurück, 2,5 m über dem höheren von Fahrer und Kamerapunkt, Blick 6 m voraus; Auge 1,45 m, Blick 25 m voraus; Drohne abweichend 85 m hoch, 125 m zurück, 55 m seitlich |
 
+**Maßstab für das Aussehen** ist seit dem 24.11.2026 der Filament-Referenzrenderer
+(`filashots.mjs`, siehe `../README.md`): echtes Filament mit Licht, Farbweg,
+Himmels- und Wassermaterial und Cockpit der App. Dieser Betrachter übernimmt
+davon nur die Lenkerkamera (`camerarig.mjs`, samt Verschiebung der Bildmitte).
+
 ## Wo er abweicht
 
 - **Kein Umgebungs-Spiegelanteil, aber auch kein Filament-BRDF.** three.js und
