@@ -14,3 +14,5 @@ Alle Dateien am **23.11.2026** per `curl` abgerufen, unverändert gespeichert
 | `aerial_nw_blank_256.jpg` | derselbe Dienst, `BBOX=50.0,10.0,50.01,10.01` (außerhalb NRW): rein weißes Leerbild | dl-de/zero-2-0 |
 | `wms_exception.xml` | derselbe Dienst mit `LAYERS=gibtsnicht`: `ServiceExceptionReport`, **Status 200**, `text/xml` | dl-de/zero-2-0 |
 | `aerial_be_progressive_256.jpg` | `https://gdi.berlin.de/services/wms/truedop_2024` GetMap 1.3.0, `LAYERS=truedop_2024`, `CRS=EPSG:4326`, `BBOX=52.51515,13.37583,52.51745,13.37957`, 256² — **progressives** JPEG (Marker `FF C2`) | dl-de/zero-2-0 (laut GetCapabilities des Geoportals Berlin) |
+| `aerial_bw_256.jpg` | am 24.11.2026: `https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C` GetMap 1.3.0, `LAYERS=IMAGES_DOP_20_RGB`, `CRS=EPSG:4326`, `BBOX=48.8380,9.0520,48.8403,9.0555`, 256², JPEG Baseline (Felder im Strohgäu bei Ditzingen) | dl-de/by-2-0 (https://www.govdata.de/dl-de/by-2-0) — Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (Datenbezug 2026) |
+| `aerial_bw_blank_256.jpg` | derselbe Dienst, `BBOX=48.570,7.740,48.5723,7.7435` (Straßburg, außerhalb BW): weißes Leerbild (dreikanalig) | wie oben |

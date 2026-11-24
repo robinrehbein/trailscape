@@ -10,7 +10,7 @@ Datenstufe „Laser" (DGM1, nDOM, LoD2 aus NRW; nur Entwicklerwerkzeug):
 
 | Teil | Stand |
 |---|---|
-| Einstieg `IndoorWorldEntry.kt` | **ohne Platzhalter.** `createWorldBuilder()` → `WorldBuilderImpl(FullWorldParts)`, `createGeoPipeline` → Positivliste, Plattencache, Drosselung; Register `aerialSources` mit NRW, Sachsen, Thüringen, Brandenburg/Berlin |
+| Einstieg `IndoorWorldEntry.kt` | **ohne Platzhalter.** `createWorldBuilder()` → `WorldBuilderImpl(FullWorldParts)`, `createGeoPipeline` → Positivliste, Plattencache, Drosselung; Register `aerialSources` mit NRW, Sachsen, Thüringen, Brandenburg/Berlin, Baden-Württemberg (seit 24.11.2026, Abschnitt „Luftbild Baden-Württemberg“) |
 | Voranschlag `plan` | ohne Netz: Kacheln, Anfragen je Art, Download, Platz, Hosts, Luftbild-Dienste |
 | Bau `build` | Höhen (Terrarium z13/z11) → Ursprung → Vektorkacheln (TileJSON, z14/z12) → Brücken, Belag aus Vektorkacheln, falls die Strecke keinen hat → Streckenband → endgültige Planung → Kacheln parallel (bis 4 Threads, nach `Runtime.maxMemory()` begrenzt: bei 256 MB Heap 2), atomar geschrieben, `manifest.json` zuletzt. Fortsetzen nach Abbruch (fertige Kacheln bleiben). `isCancelled()` wird mindestens alle 50 ms gefragt |
 | Testwelt `buildTestWorld` | ohne Netz, 3 km Runde mit allen Belagsklassen, Dorf, Laub- und Nadelwald, Felder, Teich, Bach mit Holzbrücke; deterministisch (Byte-gleich) |
@@ -565,6 +565,134 @@ Messwerte (`-Xmx256m`, vorher = `af62b95` bzw. Zahlen der Nachrunde): Altenberg 
 18,3 MB/km, Heap nach GC max 214 MB; Balkantrasse 448 861 Dreiecke, 19,3 MB/km (vorher 19,2), Heap 229 MB.
 Vertex-Deckung < 1 weiter 0.
 
+## Luftbild Baden-Württemberg (24.11.2026, Branch `claude/indoor-luftbild-bw`)
+
+Entscheidung des Gründers: Das DOP20 des LGL ist auch beim Bau **eigener
+Strecken auf dem Gerät** die Bodentextur, wie in NRW, Sachsen, Thüringen und
+Brandenburg/Berlin. Bisher stand es nur im Register des Werkzeugs
+(`CatalogAerial.kt`, Katalogbau Schauinsland); dort ist es jetzt entfernt,
+Katalogbau und App nehmen den Eintrag aus `aerialSources`.
+
+### Eintrag und Prüfung (echte Abrufe am 24.11.2026)
+
+| | |
+|---|---|
+| Dienst | `https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C` (GetCapabilities 11 kB, 1,3 s) |
+| Ebene / Stil | `IMAGES_DOP_20_RGB`, einziger Stil `default` („DOP farbig 20cm“) — es gibt keine zweite Farbebene, die man verwechseln könnte |
+| Format | JPEG Baseline, JFIF, 3 Kanäle, **ohne Farbprofil** (sRGB). PNG käme als 8-Bit-**Palettenbild** — wird nur bei progressivem JPEG angefragt, also nie |
+| Größe, Zeit | 512 px 1,2 s / 51 kB · 1024 px 1–3 s / 190–290 kB · 2048 px 3,2 s / 0,66 MB · 4096 px 6,5 s / 2,1 MB; `MaxWidth` 15 000 (16 000 × 100 liefert trotzdem ein Bild). `maxSizePx` bleibt bei der Vorgabe 2048 — der Weltbau fragt höchstens 1024 an |
+| Rechteck | 47,53–49,80° N, 7,50–10,50° O (Capabilities: 47,40–50,00 / 7,20–10,70). Überlappt keinen anderen Dienst der App (Test) |
+| Landesgrenze | **grenzscharf**: außerhalb BW ein weißes, dreikanaliges JPEG (21 kB) → als Leerbild erkannt, erzeugter Boden. Eine Kachel **über** der Grenze (Kehl/Rhein) ist zu 29 % weiß und wird so genommen — wie bei den anderen Ländern; der weiße Teil liegt jenseits der Grenze |
+| Quellenvermerk | `Luftbild: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (Datenbezug <Jahr>)` — Pflichtvermerk laut lgl-bw.de/Produkte/Open-Data, dazu das Jahr des Datenbezugs, das die Capabilities (`AccessConstraints`) verlangen. Jahr = Startjahr von App bzw. Werkzeug (`java.time.Year`, minSdk 26). Steht im Manifest jeder BW-Welt (HUD, Weltverwaltung) und unter *Mehr → Open-Source-Hinweise* |
+| Lizenz | dl-de/by-2-0 |
+
+Tests (`AerialTest`): Registereintrag samt Pflichtvermerk und Jahr,
+Abdeckung (Strohgäu, Schauinsland, Maulbronn, Konstanz ja; NRW, Dresden,
+München nein), keine Überlappung, Abruf und unveränderte Einbettung einer
+echten LGL-Kachel, Leerbild von jenseits der Grenze → `null`, Positivliste
+nur für genau diesen Pfad und nur `https`. Testdaten in
+`core/src/test/resources/indoor/world/` (README).
+
+### Messwerte: Strohgäu, 4 km, wie die App baut
+
+Strecke `tool/indoor-dev/samples/strohgaeu.gpx` (BRouter, Ditzingen →
+Hirschlanden, km 0–4), `JAVA_OPTS=-Xmx256m`, MEDIUM, ohne Laser.
+„Vorher“ = App-Register ohne BW (erzeugter Boden), „nachher“ = mit BW.
+Höhen und Vektorkacheln lagen bei beiden Läufen im Cache, der Luftbild-Cache
+war vor „nachher“ geleert.
+
+| | vorher | nachher |
+|---|---|---|
+| Kacheln mit Luftbild | 0 / 73 | 73 / 73 |
+| Luftbild-Download | — | 73 Anfragen, 7,3 MB (≈ 1,8 MB/km) |
+| Bauzeit | 26 s | 50 s |
+| Heap belegt am Ende (Grenze 256 MB) | 163 MB | 90 MB |
+| Texturen (Budget 256 MB) | 159,4 MB | 161,1 MB |
+| Dreiecke gesamt / gleichzeitig im Betrachter (Budget 700 000) | 251 097 / ≤ 229 000 | 411 344 / ≤ 326 000 |
+| Platte | 47,9 MB (12,0 MB/km) | 65,6 MB (16,4 MB/km) |
+| `checkWorld` | in Ordnung | in Ordnung |
+
+Mehr Dreiecke und Platte mit Luftbild: Bäume und Waldkörper kommen dann auch
+aus der Kronenerkennung im Luftbild (Feldgehölze, Streuobst). Zum Vergleich
+der Werkzeugbau mit `--catalog-aerial` (alter Stand): dieselbe Welt, aber
+146 Anfragen und 199 s — dort wurde vor dem LGL jedes Mal das IGN
+(Frankreich, Rechteck reicht bis 9,6° O) gefragt, das ein Leerbild lieferte.
+
+### Farbe: „blass bis weißlich“
+
+Untersucht an Maulbronn (`lidar-bw/kloster-maulbronn-*.jpg`) und am Strohgäu.
+**Ergebnis: kein Fehler in den BW-Daten und nichts BW-Eigenes in unserem
+Bau.**
+
+- Falscher Layer/Stil: ausgeschlossen (nur eine Ebene, ein Stil).
+- Farbraum/Gamma: JFIF ohne ICC-Profil, also sRGB; der Weltbau bettet die
+  Bytes unverändert ein, der Betrachter liest sie als sRGB wie bei allen
+  Ländern. Kein Palettenbild (PNG wird nicht angefragt).
+- Fehlende Angleichung: Kein Land bekommt eine (alle Luftbilder gehen
+  unverändert in die GLB).
+- Aufnahme: Wiesen im BW-Luftbild sind **nicht** blasser als in NRW —
+  grüne Pixel (Farbton 0,17–0,45) Strohgäu S 0,18 / V 0,44, NRW bei Soest
+  S 0,16 / V 0,45; Hessen V 0,58. Hell sind die **offenen Äcker** der
+  Befliegung (Saatbett/Stoppeln, sRGB um 185/170/155; Kraichgau-Mittel 161,
+  Strohgäu 135, NRW-Börde 92) — Jahreszeit der Befliegung, BW aktualisiert
+  jährlich rund 30 % der Fläche.
+- Darstellung: Gemessen im Betrachter (Sonne 40°, Belichtung 0,62, ACES).
+  Wiese km 0,5 im Bild RGB 106/127/102 (S 0,19) — fast genau die Farbe des
+  Luftbilds; das Luftbild **ist** so grau-grün, es wirkt nur neben dem
+  kräftigen erzeugten Gras (`feldweg-0500-vorher`) blass. Acker km 1,5:
+  Luftbild 184/171/155 (S 0,16) → im Bild 213/210/203 (S 0,05), also in der
+  Schulter der Tonabbildung fast weiß. Ohne Dunst (`fog=0`) dasselbe
+  (212/207/200): nicht der Dunst. Mit Belichtung 0,40 statt 0,62
+  191/186/178 (S 0,07, Bilder `*-belichtung-040.jpg`): heller Boden
+  wird über die Belichtung bzw. ACES-Schulter entsättigt. Das trifft jedes
+  Land mit hellen Äckern gleich; NRW-Bilder fallen weniger auf, weil die
+  geprüften NRW-Befliegungen dunkler sind.
+
+Behoben habe ich deshalb nichts: Ändern ließe es sich (a) in der Darstellung
+(Belichtung/Tonabbildung für den Boden — Slice indoor-render) oder (b) im
+Weltbau durch eine Angleichung der Luftbilder vor dem Einbetten (neu
+kodieren; widerspricht „unverändert“ und kostet Bauzeit und Qualität). Beides
+betrifft alle Länder und ist eine eigene Entscheidung — offen unten.
+
+### Bilder (Betrachter, nicht Gerät)
+
+Unter `docs/indoor/bilder/luftbild-bw/`, Strohgäu, mit Fahrer, Sonne
+235°/40°. `<name>-vorher.jpg` = erzeugter Boden, `<name>-nachher.jpg` = LGL-Luftbild.
+
+| Bild | Laufmeter, Kamera | Was man sieht |
+|---|---|---|
+| `feldweg-0500` | 500, Fahrer | Feldweg zwischen Wiesen und Obstbaumreihe; mit Luftbild Baumreihe aus der Kronenerkennung, Wiese grau-grün |
+| `acker-1500` | 1 500, Drohne | große Ackerschläge; der helle Acker wird fast weiß (siehe Farbe) |
+| `streuobst-3300` | 3 300, Drohne | Streuobst und Waldrand am Weg, Ackerflur bis zum Horizont |
+| `ortsrand-3300` | 3 300, Fahrer | Weg am Gehölz |
+| `acker-1500-belichtung-040`, `feldweg-0500-belichtung-040` | wie oben, nur Belichtung 0,40 | Belegbild zur Tonabbildung, keine Änderung im Code |
+| `rohbild-acker-1500` | LGL-GetMap um km 1,5 (verkleinert) | das Luftbild selbst zum Vergleich |
+
+### Auswirkung auf bestehende Welten
+
+- **Eigene Strecken in BW, schon gebaut:** bleiben, wie sie sind (fertige
+  Welten werden nicht neu gebaut). **Neu gebaut** bekommen sie das Luftbild
+  statt des erzeugten Bodens, dazu Bäume aus der Kronenerkennung — also eine
+  andere Welt. Damit die App bestehende BW-Welten als veraltet erkennt, wäre
+  `WORLD_BUILDER_ID` anzuheben (nicht hier gemacht, Sache des Orchestrators).
+  Welten außerhalb BW sind nicht betroffen.
+- **Katalog Schauinsland:** schon mit LGL-Luftbild vorgebaut; die
+  Luftbild-URLs und -Bytes bleiben gleich (gleicher Dienst, Ebene, Rechteck,
+  Größe). Ein Neubau änderte nur den Quellenvermerk im Manifest
+  („Datenquelle: LGL …“ statt „LGL-BW (2026) Datenlizenz …“, beide
+  lizenzgerecht) und spart die IGN-Anfragen. Eine neue Katalogversion ist
+  **nicht nötig**; wird ohnehin neu gebaut, erscheint der neue Wortlaut.
+
+### Offen
+
+- [ ] Heller Boden (Äcker) wird in der Darstellung fast weiß und entsättigt
+      — alle Länder; Entscheidung Darstellung (Belichtung/Tonabbildung) oder
+      Angleichung im Weltbau.
+- [ ] Kacheln über der Landesgrenze: weißer Teil jenseits der Grenze (alle
+      grenzscharfen Dienste); denkbar wäre, Weiß dort durch die erzeugte
+      Bodentextur zu ersetzen.
+- [ ] Nur im Betrachter gesehen, nicht auf dem Gerät.
+
 ## Abweichungen vom Vertrag
 
 1. ~~Laub `alphaMode = MASK` ohne Ausschnitte.~~ Seit „Vegetation" (oben)
@@ -621,6 +749,7 @@ Kartenausschnitte (Umgebungsrechtecke) entlang der gewählten Strecke.
 | `geodienste.sachsen.de` | Luftbild Sachsen | `/wms_geosn_dop-rgb/guest` |
 | `www.geoproxy.geoportal-th.de` | Luftbild Thüringen | `/geoproxy/services/DOP` |
 | `isk.geobasis-bb.de` | Luftbild Brandenburg und Berlin | `/mapproxy/dop20c/service/wms` |
+| `owsproxy.lgl-bw.de` | Luftbild Baden-Württemberg | `/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C` |
 
 Quellenangaben stehen je Welt in `WorldManifest.attribution` (Höhen, Vektor,
 je genutztem Luftbild-Dienst mit Lizenz).

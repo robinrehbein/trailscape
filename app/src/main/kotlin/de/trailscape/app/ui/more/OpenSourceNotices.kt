@@ -201,6 +201,11 @@ val dataNotices: List<LicenseNotice> = listOf(
         license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — © GeoBasis-DE/LGB; © Geoportal Berlin"),
         url = "https://www.govdata.de/dl-de/by-2-0",
     ),
+    LicenseNotice(
+        name = UiText.Plain("LGL Baden-Württemberg (Digitale Orthophotos)"),
+        license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0"),
+        url = "https://www.govdata.de/dl-de/by-2-0",
+    ),
     // Bekannte Strecken (docs/indoor/catalog.md): Streckenverlauf aus OSM,
     // Luftbilder der vorgebauten Welten (nur beim Vorbauen abgerufen; die
     // genaue Angabe mit Jahr steht im Manifest jeder Welt).
@@ -233,10 +238,5 @@ val dataNotices: List<LicenseNotice> = listOf(
         name = UiText.Plain("HVBG Hessen (Digitale Orthophotos, bekannte Strecken)"),
         license = UiText.Plain("Datenlizenz Deutschland Zero 2.0 (dl-de/zero-2-0)"),
         url = "https://www.govdata.de/dl-de/zero-2-0",
-    ),
-    LicenseNotice(
-        name = UiText.Plain("LGL Baden-Württemberg (Digitale Orthophotos, bekannte Strecken)"),
-        license = UiText.Plain("Datenlizenz Deutschland Namensnennung 2.0 (dl-de/by-2-0) — LGL-BW, www.lgl-bw.de"),
-        url = "https://www.govdata.de/dl-de/by-2-0",
     ),
 )

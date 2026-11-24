@@ -8,7 +8,7 @@ const val CACHE_DIR_TOOL = "tool/indoor-dev/cache"
 
 /**
  * Jahr des Datenbezugs fuer Quellenangaben, die eines verlangen (Etalab,
- * PNOA, LGL-BW). Das Werkzeug baut mit den Daten zum Bauzeitpunkt.
+ * PNOA). Das Werkzeug baut mit den Daten zum Bauzeitpunkt.
  */
 private val BUILD_YEAR: Int = Year.now().value
 
@@ -20,6 +20,9 @@ private val BUILD_YEAR: Int = Year.now().value
  * Strecken freigeschaltet werden, entscheidet der Gruender. Die
  * Quellenangabe jedes genutzten Dienstes landet ueber das Manifest in der
  * Welt und damit in der App (HUD, Weltverwaltung).
+ *
+ * Baden-Wuerttemberg stand bis 24.11.2026 hier und ist jetzt im Register der
+ * App (`aerialSources`); Katalogbau und App holen es von dort.
  *
  * Nicht aufgenommen: Italien/Toskana (keine sauber offene Quelle, siehe
  * LUFTBILD.md) — die toskanische Welt hat erzeugten Boden.
@@ -118,20 +121,5 @@ val catalogAerialSources: List<AerialSource> = listOf(
         attribution = "Luftbild: Geobasisdaten © Hessische Verwaltung für Bodenmanagement und Geoinformation, bearbeitet",
         license = "dl-de/zero-2-0",
         licenseUrl = "https://www.govdata.de/dl-de/zero-2-0",
-    ),
-    // Geprueft am 23.11.2026: GetMap 1.3.0, EPSG:4326 lat/lon (Schauinsland), nahtlos, Baseline, bis 15000 px,
-    // ausserhalb weisses GRAUSTUFEN-JPEG. dl-de/by-2-0, Jahr des Datenbezugs in Klammern ($BUILD_YEAR).
-    AerialSource(
-        id = "bw",
-        label = "Baden-Württemberg",
-        wmsUrl = "https://owsproxy.lgl-bw.de/owsproxy/ows/WMS_LGL-BW_ATKIS_DOP_20_C",
-        layer = "IMAGES_DOP_20_RGB",
-        minLat = 47.53,
-        minLon = 7.50,
-        maxLat = 49.80,
-        maxLon = 10.50,
-        attribution = "Luftbild: LGL-BW ($BUILD_YEAR) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de",
-        license = "dl-de/by-2-0",
-        licenseUrl = "https://www.govdata.de/dl-de/by-2-0",
     ),
 )
