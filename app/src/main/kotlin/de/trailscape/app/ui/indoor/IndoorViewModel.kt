@@ -10,7 +10,11 @@ import de.trailscape.app.data.RideStorage
 import de.trailscape.app.indoor.catalog.CatalogDownloader
 import de.trailscape.app.indoor.catalog.CatalogStore
 import de.trailscape.app.indoor.BleHeartRateSource
+import de.trailscape.app.indoor.IndoorDayPlan
+import de.trailscape.app.indoor.IndoorDayRouteFinder
 import de.trailscape.app.indoor.IndoorHeartRateSource
+import de.trailscape.app.indoor.indoorDayPlanOf
+import de.trailscape.app.indoor.rank
 import de.trailscape.app.indoor.IndoorPart
 import de.trailscape.app.indoor.IndoorParts
 import de.trailscape.app.indoor.IndoorProblem
@@ -31,11 +35,16 @@ import de.trailscape.app.sensors.indoor.IndoorDeviceRef
 import de.trailscape.app.sensors.indoor.IndoorDevices
 import de.trailscape.core.KeyValueStore
 import de.trailscape.core.Ride
+import de.trailscape.core.RouteTarget
+import de.trailscape.core.TodayRoute
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.TrainingProfile
 import de.trailscape.core.i18n.CoreTexts
 import de.trailscape.core.i18n.sessionTitle
 import de.trailscape.core.indoor.BleLink
+import de.trailscape.core.indoor.DayRideEnd
+import de.trailscape.core.indoor.DayRouteAvailability
+import de.trailscape.core.indoor.DayRouteMatch
 import de.trailscape.core.indoor.DemoTrainer
 import de.trailscape.core.indoor.ErgWorkout
 import de.trailscape.core.indoor.GhostSpec
@@ -69,6 +78,8 @@ import de.trailscape.core.indoor.world.WorldBuildPhase
 import de.trailscape.core.indoor.world.WorldManifest
 import de.trailscape.core.indoor.world.WorldPlan
 import de.trailscape.core.indoor.world.WorldRenderer
+import de.trailscape.core.indoor.dayRideEnd
+import de.trailscape.core.indoor.ergRemainingS
 import de.trailscape.core.indoor.moveStartTo
 import de.trailscape.core.sessionsForDay
 import java.io.File
@@ -125,6 +136,11 @@ import kotlinx.coroutines.withContext
  *
  * @param profile das aktuelle Trainingsprofil (Masse, CdA, Crr, FTP).
  * @param plan der aktuelle Trainingsplan fuer die Einheit des Tages, `null` = keiner.
+ * @param today die Tagesentscheidung (`decideTodayRoute` ueber `decideToday`);
+ *   `null` = unbekannt — dann gilt die Planeinheit ungedaempft wie bisher und es
+ *   gibt keine Karte „Einheit des Tages" (docs/indoor/app.md).
+ * @param dayFinder Kandidaten fuer die Einheit des Tages; `null` = keine Karte.
+ * @param onPlanRoute „Runde planen" der Karte: oeffnet die Routensuche mit dem Ziel.
  * @param devices die gemerkten Indoor-Geraete (`IndoorDevices.remembered`).
  * @param heartRate liefert je Fahrt eine Pulsquelle, `null` = ohne Puls.
  * @param io Dispatcher fuer Dateien, Weltbau und Routing.
@@ -144,6 +160,8 @@ class IndoorViewModel(
     private val profile: () -> TrainingProfile,
     private val plan: () -> TrainingPlan?,
     private val coreTexts: () -> CoreTexts,
+    private val today: () -> TodayRoute? = { null },
+    private val dayFinder: IndoorDayRouteFinder? = null,
     devices: Flow<Map<IndoorDeviceRole, IndoorDeviceRef>> = flowOf(emptyMap()),
     rematchRouter: IndoorRematchRouter? = null,
     private val heartRate: () -> IndoorHeartRateSource? = { null },
@@ -157,6 +175,7 @@ class IndoorViewModel(
     catalogStore: CatalogStore? = null,
     catalogDownloader: CatalogDownloader? = null,
     var onRideSaved: (String) -> Unit = {},
+    var onPlanRoute: (RouteTarget) -> Unit = {},
 ) : ViewModel() {
 
     private val scope: CoroutineScope = scope ?: viewModelScope
@@ -203,6 +222,14 @@ class IndoorViewModel(
     )
     val route: StateFlow<IndoorRouteUi> = _route.asStateFlow()
 
+    private val _day = MutableStateFlow<IndoorDayUi?>(null)
+
+    /**
+     * Die Karte „Einheit des Tages" im Schritt Strecke; `null` = keine (ohne
+     * Tagesentscheidung oder ohne Kandidatensuche).
+     */
+    val day: StateFlow<IndoorDayUi?> = _day.asStateFlow()
+
     private val _world = MutableStateFlow<IndoorWorldUi>(IndoorWorldUi.Preparing)
     val world: StateFlow<IndoorWorldUi> = _world.asStateFlow()
 
@@ -226,6 +253,22 @@ class IndoorViewModel(
     // -----------------------------------------------------------------------
 
     private var ergWorkout: ErgWorkout? = null
+
+    // Einheit des Tages (docs/indoor/app.md, „Einheit des Tages")
+    private var dayPlan: IndoorDayPlan? = null
+    private var dayMatches: List<DayRouteMatch> = emptyList()
+
+    /** Von „Heute" gewaehlter Vorschlag, der beim Anzeigen vorausgewaehlt wird. */
+    private var preferredDayKey: String? = null
+
+    /** Startpunkt des gewaehlten Vorschlags: Schluessel der Streckenwahl und Anteil der Laenge. */
+    private var dayStartPick: Pair<String, Double>? = null
+
+    /** Katalogstrecke, die fuer die Einheit gerade geladen wird — danach geht es von selbst weiter. */
+    private var dayAwaitingCatalog: String? = null
+
+    /** Das Ende-Angebot, das in dieser Fahrt schon weggetippt wurde. */
+    private var dismissedDayEnd: DayRideEnd? = null
     private var routeName: String = ""
     private var selectedRide: Ride? = null
 
@@ -280,6 +323,8 @@ class IndoorViewModel(
         val ergTitle: String?,
         val attribution: List<de.trailscape.core.indoor.world.WorldAttribution>,
         val mode: IndoorMode,
+        /** Die ERG-Einheit dieser Fahrt (fuer das Ende-Angebot), `null` in SIM. */
+        val dayWorkout: ErgWorkout? = null,
         /** Schluessel der gemerkten Stelle dieser Strecke, `null` = nicht merken. */
         val resumeKey: String? = null,
         /** Angebot „Weiter bei km …" (bis zum ersten Tritt). */
@@ -294,6 +339,27 @@ class IndoorViewModel(
             devices.collect { map ->
                 remembered = map
                 publishPair()
+            }
+        }
+        // Einheit des Tages: Ist die fuer sie geladene Katalogstrecke bereit,
+        // geht es ohne weitere Auswahl weiter.
+        this.scope.launch {
+            catalog.collect { c ->
+                val id = dayAwaitingCatalog ?: return@collect
+                val item = c.items.firstOrNull { it.id == id } ?: return@collect
+                when {
+                    item.ready -> {
+                        dayAwaitingCatalog = null
+                        if (_stage.value == IndoorStage.ROUTE) {
+                            rideDayOn(
+                                IndoorRouteOption.Catalog(id, item.name.pick(texts.languageTag()), item.distanceKm, item.ascentM),
+                                "catalog:$id",
+                            )
+                        }
+                    }
+                    item.state is IndoorCatalogState.Failed -> dayAwaitingCatalog = null
+                    else -> Unit
+                }
             }
         }
     }
@@ -408,6 +474,7 @@ class IndoorViewModel(
         scope.launch {
             val (saved, erg) = withContext(io) { savedOptions() to computeErg() }
             ergWorkout = erg
+            launchDaySearch()
             val ghostWatts = defaultGhostWatts()
             _route.update { current ->
                 val options = listOf<IndoorRouteOption>(IndoorRouteOption.TestWorld) + saved
@@ -450,13 +517,120 @@ class IndoorViewModel(
             }
     }
 
-    /** Die Einheit des Tages als ERG-Einheit — `null`, wenn es keine passende gibt. */
+    /**
+     * Die Einheit des Tages als ERG-Einheit — `null`, wenn es keine passende
+     * gibt. Mit Tagesentscheidung ([today]) die von der Tagesform gedaempfte
+     * Einheit ([indoorDayPlanOf]): dieselbe, die die Karte „Einheit des Tages"
+     * anbietet; am Ruhetag keine, an einem Tag ohne Planeinheit die lockere Runde.
+     */
     private fun computeErg(): ErgWorkout? {
+        val plan = computeDayPlan()
+        dayPlan = plan
+        if (plan != null) return plan.workout
         val p = runCatching { plan() }.getOrNull() ?: return null
         val session = runCatching { sessionsForDay(p, wallClock()) }.getOrNull()
             ?.firstOrNull { !it.isEvent } ?: return null
         val title = runCatching { sessionTitle(session, coreTexts()) }.getOrElse { session.title }
         return indoorCatching(IndoorPart.CORE) { parts.ergWorkout(session, title) }.getOrNull()
+    }
+
+    private fun computeDayPlan(): IndoorDayPlan? {
+        val t = runCatching { today() }.getOrNull() ?: return null
+        return runCatching {
+            indoorDayPlanOf(
+                today = t,
+                parts = parts,
+                profile = profile(),
+                plannedTitle = { d -> d.planned?.let { s -> runCatching { sessionTitle(s, coreTexts()) }.getOrElse { s.title } } },
+                easyTitle = texts.dayEasyTitle(),
+            )
+        }.getOrNull()
+    }
+
+    /** Sucht die Strecken zur Einheit des Tages (im Hintergrund) und zeigt die Karte. */
+    private fun launchDaySearch() {
+        val plan = dayPlan
+        val finder = dayFinder
+        if (plan == null || finder == null) {
+            _day.value = null
+            return
+        }
+        val first = indoorDayUiOf(plan, emptyList())
+        if (first !is IndoorDayUi.Offer) {
+            _day.value = first
+            return
+        }
+        if (_day.value !is IndoorDayUi.Offer) _day.value = IndoorDayUi.Loading
+        scope.launch {
+            val matches = withContext(io) {
+                runCatching { finder.rank(plan, texts.testWorldName(), texts.languageTag(), texts.dayPlanName()) }.getOrDefault(emptyList())
+            }
+            if (dayPlan !== plan) return@launch
+            dayMatches = matches
+            val bytes = catalog.value.items.associate { it.id to it.packageBytes }
+            val ui = indoorDayUiOf(plan, matches) { id -> bytes[id] }
+            val previous = (_day.value as? IndoorDayUi.Offer)?.current?.key
+            _day.value = (ui as? IndoorDayUi.Offer)?.showing(preferredDayKey ?: previous) ?: ui
+        }
+    }
+
+    /** Von „Heute": diesen Vorschlag vorauswaehlen, sobald die Karte steht. */
+    fun preferDaySuggestion(key: String?) {
+        preferredDayKey = key
+        (_day.value as? IndoorDayUi.Offer)?.let { _day.value = it.showing(key) }
+    }
+
+    /** „Andere Strecke": der naechste Vorschlag. */
+    fun nextDaySuggestion() {
+        (_day.value as? IndoorDayUi.Offer)?.let { _day.value = it.next() }
+    }
+
+    /**
+     * „Fahren" auf der Karte: waehlt die Strecke, den ERG-Modus und den
+     * Startpunkt des Vorschlags und geht weiter — ohne weitere Auswahl. Eine
+     * Katalogstrecke wird erst geladen (danach geht es von selbst weiter), eine
+     * neue Runde oeffnet die Routensuche ([onPlanRoute]).
+     */
+    fun rideDaySuggestion() {
+        val s = (_day.value as? IndoorDayUi.Offer)?.current ?: return
+        val match = dayMatches.firstOrNull { it.candidate.key == s.key }
+        dayStartPick = match?.start?.let { st ->
+            val len = match.candidate.profile?.lengthM ?: 0.0
+            if (st.startM > 0 && len > 0) s.key to st.startM / len else null
+        }
+        when (s.availability) {
+            DayRouteAvailability.PLAN -> dayPlan?.planTarget?.let { onPlanRoute(it) }
+            DayRouteAvailability.DOWNLOAD -> {
+                val id = s.key.removePrefix("catalog:")
+                dayAwaitingCatalog = id
+                setRouteTab(IndoorRouteTab.CATALOG)
+                downloadCatalog(id)
+            }
+            DayRouteAvailability.READY, DayRouteAvailability.BUILD -> {
+                val option = optionForDayKey(s.key, s.name, match) ?: return
+                rideDayOn(option, s.key)
+            }
+        }
+    }
+
+    private fun rideDayOn(option: IndoorRouteOption, key: String) {
+        if (ergWorkout == null) return
+        if (dayStartPick?.first != key) dayStartPick = null
+        selectRoute(option)
+        setMode(IndoorMode.ERG)
+        continueFromRoute()
+    }
+
+    private fun optionForDayKey(key: String, name: String, match: DayRouteMatch?): IndoorRouteOption? = when {
+        key == IndoorRouteOption.TestWorld.key -> IndoorRouteOption.TestWorld
+        key.startsWith("ride:") -> _route.value.options.firstOrNull { it.key == key }
+        key.startsWith("catalog:") -> IndoorRouteOption.Catalog(
+            catalogId = key.removePrefix("catalog:"),
+            name = name,
+            distanceKm = (match?.candidate?.profile?.lengthM ?: 0.0) / 1000.0,
+            ascentM = match?.candidate?.profile?.ascentM ?: 0.0,
+        )
+        else -> null
     }
 
     private fun defaultGhostWatts(): Int {
@@ -827,6 +1001,14 @@ class IndoorViewModel(
         val resumeM = resumeKey?.let { key ->
             runCatching { IndoorStartPoints.offer(readResume(key), route.lengthM, route.isLoop) }.getOrNull()
         }
+        // Einheit des Tages: der vorgeschlagene Startpunkt (anteilig auf die
+        // Strecke dieser Fahrt umgerechnet) geht vor der gemerkten Stelle;
+        // „Weiter bei …" bleibt als Angebot auf der Startpunkt-Karte.
+        val dayStartM = dayStartPick?.takeIf { mode == IndoorMode.ERG && it.first == routeUi.selected?.key }
+            ?.let { IndoorStartPoints.clamp(it.second * route.lengthM, route.lengthM, route.isLoop) }
+            ?.takeIf { it > 0 }
+        val initialM = dayStartM ?: resumeM
+        dismissedDayEnd = null
         rideStatic = RideStatic(
             routeName = routeName,
             trainerName = if (demo) texts.demoTrainerName() else (_pair.value.trainerName ?: ""),
@@ -838,6 +1020,7 @@ class IndoorViewModel(
             ergTitle = if (mode == IndoorMode.ERG) ergWorkout?.title else null,
             attribution = if (useWorld) manifest.attribution else emptyList(),
             mode = mode,
+            dayWorkout = if (mode == IndoorMode.ERG) ergWorkout else null,
             resumeKey = resumeKey,
             resumeM = resumeM,
             startMaxM = IndoorStartPoints.maxStartM(route.lengthM, route.isLoop),
@@ -923,7 +1106,7 @@ class IndoorViewModel(
             return
         }
         // Vor dem ersten Schritt versetzt: Darstellung, Kacheln und erste Vorgabe gelten schon der Startstelle.
-        resumeM?.let { d -> indoorCatching(IndoorPart.CORE) { session.moveStartTo(d) } }
+        initialM?.let { d -> indoorCatching(IndoorPart.CORE) { session.moveStartTo(d) } }
 
         // Darstellung (nur mit Welt)
         var renderer: WorldRenderer? = null
@@ -952,7 +1135,7 @@ class IndoorViewModel(
                 if (caps == config.capabilities) {
                     null
                 } else {
-                    parts.createSession(config.copy(capabilities = caps)).also { s -> resumeM?.let { s.moveStartTo(it) } }
+                    parts.createSession(config.copy(capabilities = caps)).also { s -> initialM?.let { s.moveStartTo(it) } }
                 }
             },
             // Vor jeder Fahrt steht die Startpunkt-Karte, bis „Losfahren" kommt. Mit
@@ -1032,7 +1215,24 @@ class IndoorViewModel(
             attribution = st.attribution,
             runtimeProblem = rs.problem,
             start = startUiOf(rs, st),
+            dayEnd = dayEndOf(rs, st),
         )
+    }
+
+    /** Einheit und Strecke enden nicht gleichzeitig ([dayRideEnd]); `null` = nichts anzubieten. */
+    private fun dayEndOf(rs: IndoorRuntimeState, st: RideStatic): IndoorDayEndUi? {
+        val s = rs.session ?: return null
+        val w = st.dayWorkout ?: return null
+        val kind = runCatching { dayRideEnd(s) }.getOrDefault(DayRideEnd.NONE)
+        if (kind == DayRideEnd.NONE || kind == dismissedDayEnd) return null
+        val remaining = s.erg?.let { e -> runCatching { ergRemainingS(w, e) }.getOrDefault(0) } ?: 0
+        return IndoorDayEndUi(kind, ((remaining + 59) / 60).coerceAtLeast(if (kind == DayRideEnd.ROUTE_DONE_EARLY) 1 else 0))
+    }
+
+    /** „Ausfahren" bzw. Hinweis weggetippt — fuer diese Fahrt nicht wieder anbieten. */
+    fun dismissDayEnd() {
+        dismissedDayEnd = _ride.value?.dayEnd?.kind ?: return
+        republishRide()
     }
 
     /** Startpunkt-Wahl fuer das HUD, solange sich der Fahrer versetzen laesst. */
@@ -1269,6 +1469,7 @@ class IndoorViewModel(
     /** Eine neue Fahrt: zurueck zur Streckenwahl. */
     fun startOver() {
         pendingRide = null
+        dayStartPick = null
         _summary.value = null
         _ride.value = null
         rideStatic = null
@@ -1420,6 +1621,7 @@ class IndoorViewModel(
             profile: () -> TrainingProfile,
             plan: () -> TrainingPlan?,
             onRideSaved: (String) -> Unit = {},
+            today: () -> TodayRoute? = { null },
         ): ViewModelProvider.Factory {
             val app = context.applicationContext
             return object : ViewModelProvider.Factory {
@@ -1436,6 +1638,12 @@ class IndoorViewModel(
                     profile = profile,
                     plan = plan,
                     coreTexts = { AppServices.coreTexts() },
+                    today = today,
+                    dayFinder = IndoorDayRouteFinder(
+                        AppServices.rideStorage,
+                        AppServices.indoorWorldLibrary,
+                        AppServices.indoorCatalogStore,
+                    ),
                     devices = IndoorDevices.remembered(app),
                     rematchRouter = OfflineFirstRematchRouter(app),
                     heartRate = { BleHeartRateSource(app) },

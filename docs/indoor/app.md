@@ -474,3 +474,189 @@ immer von vorn zu starten.
       Vorauswahl; nach dem Verschieben bewegt Treten nichts bis „Losfahren“
 - [ ] Gespeicherte Tour einer fortgesetzten Fahrt: Distanz und Höhenmeter nur
       des gefahrenen Teils in Liste, Detail und Wochenziel
+
+## Einheit des Tages (24.11.2026)
+
+Wunsch des Gründers: „Nicht nur basierend auf meinen Routen eine 3D-Welt
+generieren, sondern auch eine Welt für mein jeweiliges Training, wie der
+Trainer es empfiehlt – die Einheit des Tages.“ Bisher wählte man im
+Indoor-Ablauf eine Strecke und konnte als Modus „Einheit des Tages“ (ERG)
+dazunehmen — die Strecke hatte mit der Einheit nichts zu tun. Jetzt schlägt
+eine Karte **ohne weitere Auswahl** eine echte Strecke vor, die zur Einheit
+passt, und fährt sie im ERG-Modus.
+
+**Wo**
+
+- Auf *Heute* ersetzt die Karte „Einheit des Tages“ die Indoor-Einstiegskarte,
+  sobald es eine Einheit für die Rolle gibt (`IndoorTodayEntry`); „Fahren“
+  öffnet den Indoor-Ablauf mit diesem Vorschlag vorausgewählt
+  (`AppViewModel.requestIndoorDay`), „Runde planen“ die Routensuche.
+  Am Ruhetag steht dort ehrlich „Heute ist Ruhetag“ mit „Trotzdem frei
+  fahren“; am Zieltag, solange die Suche läuft oder wenn der Kern nichts
+  liefert, die bisherige Einstiegskarte.
+- Im Schritt *Strecke* steht dieselbe Karte oben (`IndoorRouteScreen`,
+  Parameter `day`). „Fahren“ wählt Strecke, ERG-Modus und Startpunkt und geht
+  direkt weiter (`IndoorViewModel.rideDaySuggestion`).
+
+**Die Karte** (`IndoorDayCard.kt`, Bilder unten): Titel der Einheit, Dauer
+(„81 statt 90 min · an deine Tagesform angepasst“ bzw. „Heute steht keine
+Einheit im Plan – 45 min locker und flach“), die vorgeschlagene Strecke, ein
+Satz Begründung („24,6 km · 3 Anstiege von 6–8 min für deine 3 × 8 min · Start
+bei km 12,4“; bei Runden „7 Runden“; „Strecke endet 9 min vor der Einheit“;
+„Profil geschätzt“ bei Katalogstrecken vor dem Laden), ob die Welt bereitliegt
+(„Welt liegt bereit“, „Welt laden: 114 MB“, „Welt bauen: etwa 14 min“,
+„Runde planen, dann Welt bauen: etwa 8 min“) und „Andere Strecke (1/4)“ zum
+Durchblättern der nächsten Kandidaten (höchstens sechs).
+
+**Welche Einheit** (`daySessionFor` in `core/…/indoor/DayRoute.kt`): aus der
+Tagesentscheidung `decideTodayRoute` — dieselbe, die „Heute“ und die Karte
+rechnen (`decideToday`), die Tagesform-Skalierung wird also wiederverwendet,
+nicht nachgebaut.
+
+| Tagesentscheidung | Einheit auf der Rolle |
+|---|---|
+| Zieltag | keine (`EVENT`) |
+| kein Routenziel (Ruhetag nach Tagesform), auch mit Planeinheit | keine (`REST`), Karte sagt es |
+| keine Planeinheit (kein Plan oder Ruhetag im Plan) | locker, höchstens 45 min, mindestens 20 (`EASY`) |
+| Planeinheit ungedämpft | die Planeinheit (`PLANNED`) |
+| Planeinheit gedämpft (`downgraded` oder Intensität gekappt) | Dauer × Faktor, Intensität des Routenziels; wird sie zurückgenommen, entfällt die Intervallstruktur (`PLANNED_REDUCED`) |
+
+Die ERG-Einheit entsteht wie bisher mit `ergWorkoutFor`. **Abweichung vom
+bisherigen Verhalten:** Auch der Modus „Einheit des Tages“ im Schritt Strecke
+fährt jetzt diese gedämpfte Einheit (vorher die rohe Planeinheit, auch am
+Ruhetag); an einem Tag ohne Planeinheit heißt er „Lockere Runde“. Ohne
+Tagesentscheidung (Tests, `today = null`) bleibt es beim alten Weg.
+
+**Passung** (`DayRoute.kt`, reines Kotlin, `DayRouteTest`):
+
+- *Ziel* (`dayRouteGoal`): Belastungsabschnitte ab 85 % FTP → Anstiege
+  (`CLIMBS`); sonst ein Abschnitt ab 62 % (Grundlage) → flach bis wellig
+  (`ROLLING`); sonst flach (`FLAT`).
+- *Nachrechnung* (`simulateDayRide`): Die Einheit wird auf dem Höhenprofil der
+  Strecke (50-m-Stücke, geglättet) nachgefahren — je Abschnitt das
+  Gleichgewichtstempo bei der Sollleistung aus der Indoor-Physik
+  (`steadySpeedMps`). Ergebnis: gefahrene Distanz, wo die Intervalle liegen,
+  ob eine Strecke ohne Rundschluss vor der Einheit endet; Runden laufen weiter
+  wie in der Sitzung. Im Test gegen die echte Sitzung im ERG-Modus: unter 3 %
+  Abweichung in der Distanz.
+- *Bewertung* 0..1 (`scoreDayRoute`): 45 % Distanz (Strecke endet zu früh:
+  Anteil^1,5; Rest einer langen Strecke bis −0,2; viele Runden bis −0,3),
+  55 % Gelände (Intervalle: Anteil der Intervallzeit am Anstieg ≥ 3 %;
+  Grundlage: Abzug für Stücke ≥ 6 %; locker: Abzug für Anstiege). Geschätztes
+  Profil × 0,92.
+- *Startpunkt* (`bestDayStart`): bis zu 48 Startstellen (Raster und
+  Begrenzung wie `IndoorStartPoints`); ein späterer Start nur, wenn er
+  mindestens 0,03 besser ist und die Einheit nicht kürzt. So fallen die
+  Intervalle einer langen Strecke in die Anstiege. Der Ablauf setzt den
+  Fahrer vor dem ersten Tritt dorthin (anteilig auf die Strecke der Fahrt
+  umgerechnet); „Weiter bei …“ einer gemerkten Stelle bleibt auf der
+  Startpunkt-Karte wählbar.
+- *Reihenfolge* (`rankDayRoutes`): sortiert nach Bewertung minus Aufschlag der
+  Verfügbarkeit — fertige Welt 0, Download 0,02, Welt bauen 0,04, neue Runde
+  0,06. Bei annähernd gleicher Passung gewinnt so die Strecke ohne Bauzeit.
+
+**Kandidaten** (`IndoorDayRouteFinder`, ohne Netz, auf `Dispatchers.IO`, Profile
+gemerkt): (a) Welten auf dem Gerät — Testwelt, gebaute Welten eigener
+Strecken, geladene Katalogwelten (Profil aus dem Streckenband); (b)
+Katalogstrecken zum Laden — **geschätztes Profil** aus Länge und Höhenmetern
+des mitgelieferten Katalogs (über 4 % im Mittel ein durchgehender Anstieg,
+sonst 1-km-Wellen); (c) die 30 jüngsten eigenen Planungen und Touren ohne
+Welt (Profil aus den Punkten; ohne Höhen kein Kandidat); (d) „Neue Runde ab
+deinem Startpunkt“: Bewertung fest 0,75, Ziel aus `dayPlanTarget` (Distanz der
+Einheit auf flacher Strecke, Höhenprofil nach Gelände, höchstens so bergig wie
+das Routenziel des Tages erlaubt). „Runde planen“ verlässt den Indoor-Ablauf
+und öffnet die vorhandene Routensuche (`requestRouteGeneration`) mit diesem
+Ziel ab dem dort üblichen Startpunkt; die gespeicherte Runde erscheint danach
+als Kandidat (c).
+
+**Ablauf nach „Fahren“**
+
+- fertige Welt (Katalog, Testwelt, gebaute Welt) → direkt in die Fahrt bzw.
+  „Welt laden“ zeigt „bereit“; eigene Strecke ohne Welt → Voranschlag „Welt
+  laden“ wie bisher (Netz erst nach dem Tipp dort).
+- Katalogstrecke nicht geladen → Bereich „Bekannte Strecken“, der Download
+  startet (Nutzeraktion „Laden und fahren“); ist die Welt bereit und der
+  Schritt Strecke noch offen, geht es von selbst weiter.
+- neue Runde → Routensuche auf der Karte.
+
+**Wenn Einheit und Strecke nicht gleichzeitig enden** (`dayRideEnd`, jede
+ERG-Fahrt):
+
+- *Einheit zu Ende, Strecke nicht:* Karte „Einheit geschafft“ in der Weltmitte
+  mit „Ausfahren“ (Karte weg, der Trainer hält die Ausfahrleistung des letzten
+  Abschnitts, man fährt weiter) und „Beenden“ (Auswertung).
+- *Strecke zu Ende, Einheit nicht:* Auf einer **Runde** passiert das nie — die
+  Sitzung beginnt die nächste Runde. Auf einer Strecke **ohne Rundschluss**
+  hält die Sitzung am Ziel an (FINISHED); die Karte „Strecke zu Ende“ nennt
+  die Restzeit der Einheit und bietet „Beenden“. Die Karte „Einheit des
+  Tages“ warnt schon vorher („Strecke endet 9 min vor der Einheit“), und die
+  Bewertung straft solche Strecken ab.
+
+**Modus „Gelände“ (nur Vorschlag, nicht umgesetzt)**
+
+Ein zweiter Fahrmodus wäre: Simulation wie bei freier Fahrt (die Steigung der
+Strecke ist der Widerstand), die Sollleistung der Einheit nur als Anzeige.
+Geprüft: Die Sitzung liefert im SIM-Modus keinen `ErgState` (`ergState()`
+gibt dort `null`), die Anzeige müsste die Abschnittsuhr also in der App aus der
+Fahrzeit nachrechnen, das HUD bräuchte im SIM-Modus unten Gang *und*
+Sollleistung, und die Auswertung müsste „Soll getroffen?“ beantworten. Das
+ist mehr als eine kleine Ergänzung und bleibt deshalb offen. Sinnvoll wird
+es mit der Passung: Wenn die Intervalle schon in den Anstiegen liegen, ist
+der Anstieg selbst der Widerstand — das wäre der natürliche nächste Schritt.
+
+**Entscheidungen und Grenzen**
+
+- Ruhetag: kein Angebot auf der Rolle (wie beim Routenangebot); „Trotzdem
+  frei fahren“ öffnet den Ablauf ohne Einheit.
+- Katalogstrecken werden alle als Strecken ohne Rundschluss bewertet (der
+  Katalog sagt es nicht); die zehn Katalogstrecken sind 10–16 km lang und
+  passen deshalb nur zu kurzen Einheiten oder als Abschnitt.
+- Die Bauzeit ist grob geschätzt: 20 s je km auf dem Handy
+  (`IndoorDayRouteFinder.BUILD_SECONDS_PER_KM`); gemessen sind nur 3–5 s/km auf
+  dem Entwicklerrechner mit warmem Cache.
+- Kein Netzverkehr durch die Suche; geladen oder gebaut wird erst nach dem
+  Tipp auf „Laden und fahren“ bzw. „Welt laden“.
+- Weltbau, `WORLD_BUILDER_ID` und Katalogversionen sind unberührt; keine
+  Vertragsdatei geändert.
+
+**Tests:** `DayRouteTest` (`:core`, 15 Tests: Einheit je Tagesentscheidung,
+Gelände, Profil aus Stichproben/Track/Schätzung, Nachrechnung gegen die echte
+Sitzung, Strecke zu kurz und Runde, Intervalle am Berg, Startpunkt, Grundlage
+und Erholung, Reihenfolge mit Bauzeit, neue Runde, beide Enden mit echter
+Sitzung), `IndoorDayFlowTest` (`:app`, ganzer Ablauf: Karte wählt die
+Strecke mit Anstiegen samt Startpunkt, blättern, „Fahren“ → ERG und
+Startstelle in der Sitzung; Ruhetag ohne ERG; Tag ohne Plan; Strecke endet
+vor der Einheit; Einheit endet vor der Strecke mit „Ausfahren“; ohne
+Tagesentscheidung keine Karte).
+
+**Bilder** (`docs/indoor/bilder/tageseinheit/`, aus `IndoorScreenshotTest.tageseinheit*`):
+01 Schritt Strecke mit der Karte (Intervalle, Welt bauen, Start bei km 12,4),
+02 die Karte mit fertiger Welt, Download (Profil geschätzt) und neuer Runde,
+03 gekürzt durch die Tagesform, lockere Runde ohne Plan, Ruhetag, Suche läuft,
+04 und 06 „Einheit geschafft“ hoch und quer, 05 „Strecke zu Ende“,
+07 Schritt Strecke englisch. Die Heute-Karte ist dieselbe Komponente.
+
+**Auf dem Gerät zu prüfen**
+
+- [ ] *Heute* mit Planeinheit: Karte erscheint nach kurzer Suche, Vorschlag
+      und Begründung stimmen mit der Strecke überein; „Fahren“ führt über
+      Koppeln zum Schritt Strecke mit demselben Vorschlag
+- [ ] Intervalle auf einer eigenen langen Strecke mit Anstiegen: Start an der
+      vorgeschlagenen Stelle, die Belastungen fallen tatsächlich in die
+      Anstiege (KICKR im ERG-Modus hält die Leistung, das Tempo folgt dem Berg)
+- [ ] Grundlage gekürzt durch die Tagesform: Dauer auf der Karte und im HUD
+      passt zur Ansage auf *Heute*
+- [ ] Katalogstrecke „Laden und fahren“: Download läuft, danach geht es ohne
+      weiteren Tipp in die Fahrt; Abbruch des Downloads lässt den Schritt
+      Strecke stehen
+- [ ] „Runde planen“: Routensuche öffnet mit sinnvoller Distanz und
+      Höhenprofil; gespeicherte Runde erscheint danach als Vorschlag
+- [ ] Einheit endet vor der Strecke: „Ausfahren“ lässt weiterfahren, der
+      Trainer hält die Ausfahrleistung; „Beenden“ führt zur Auswertung
+- [ ] Strecke ohne Rundschluss endet vor der Einheit: Karte „Strecke zu
+      Ende“ mit plausibler Restzeit; Runde: nächste Runde ohne Halt
+- [ ] Suchdauer auf dem Handy mit vielen gespeicherten Touren (30 Profile,
+      bis zu 48 Startpunkte je Strecke) — die Karte darf „Heute“ nicht
+      spürbar bremsen
+- [ ] Geschätzte Bauzeit gegen die echte Bauzeit (WLAN und Mobilfunk)
+- [ ] Englisch: Karte auf *Heute* und im Schritt Strecke

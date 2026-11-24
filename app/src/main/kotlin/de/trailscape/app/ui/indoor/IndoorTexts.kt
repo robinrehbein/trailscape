@@ -31,6 +31,15 @@ interface IndoorTexts {
 
     /** Geist mit fester Vergleichsleistung. */
     fun ghostConstantPowerLabel(watts: Int): String
+
+    /** Titel der lockeren Runde an einem Tag ohne Planeinheit (Einheit des Tages). */
+    fun dayEasyTitle(): String = "Lockere Runde"
+
+    /** Anzeigename der neu zu planenden Runde (Einheit des Tages). */
+    fun dayPlanName(): String = "Neue Runde"
+
+    /** Sprache der Oberflaeche (`de`/`en`), fuer die Namen der Katalogstrecken. */
+    fun languageTag(): String = "de"
 }
 
 /**
@@ -61,4 +70,10 @@ class ContextIndoorTexts(
 
     override fun ghostConstantPowerLabel(watts: Int): String =
         context().getString(R.string.indoor_app_ghost_power_label, watts)
+
+    override fun dayEasyTitle(): String = context().getString(R.string.indoor_app_day_easy_title)
+
+    override fun dayPlanName(): String = context().getString(R.string.indoor_app_day_plan_name)
+
+    override fun languageTag(): String = language().tag
 }

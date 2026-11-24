@@ -68,6 +68,9 @@ fun IndoorRouteScreen(
     onCatalogCancel: (String) -> Unit = {},
     onCatalogDiscard: (String) -> Unit = {},
     onCatalogRefresh: () -> Unit = {},
+    day: IndoorDayUi? = null,
+    onDayRide: () -> Unit = {},
+    onDayNext: () -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_route_title),
@@ -83,6 +86,8 @@ fun IndoorRouteScreen(
             }
         },
     ) {
+        // Einheit des Tages: eine passende Strecke ohne weitere Auswahl.
+        day?.let { IndoorDayCard(ui = it, onRide = { onDayRide() }, onNext = onDayNext) }
         MutedText(stringResource(R.string.indoor_app_route_intro))
 
         Eyebrow(stringResource(R.string.indoor_app_route_section_route))

@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
@@ -701,5 +702,128 @@ class IndoorScreenshotTest {
         shot("107-indoor-strecke-en") { IndoorRouteScreen(routeSim, {}, {}, {}, {}, {}) }
         val title = RuntimeEnvironment.getApplication().getString(R.string.indoor_app_route_title)
         compose.onNodeWithText(title).assertExists()
+    }
+
+    // ------------------------------------------------- Einheit des Tages
+
+    private val dayClimbs = de.trailscape.core.indoor.DayClimbs(count = 3, minMinutes = 6, maxMinutes = 8, reps = 3, workMinutes = 8)
+
+    private val dayOffer = IndoorDayUi.Offer(
+        kind = de.trailscape.core.indoor.DaySessionKind.PLANNED,
+        title = "Schwelle 3 x 8 Min",
+        minutes = 52,
+        plannedMinutes = null,
+        terrain = de.trailscape.core.indoor.DayTerrain.CLIMBS,
+        suggestions = listOf(
+            IndoorDaySuggestionUi(
+                key = "ride:allgaeu", name = "Wochenende Allgäu",
+                availability = de.trailscape.core.indoor.DayRouteAvailability.BUILD,
+                rideKm = 24.6, startKm = 12.4, climbs = dayClimbs, buildMinutes = 14,
+            ),
+            IndoorDaySuggestionUi(
+                key = "catalog:grosser-feldberg", name = "Großer Feldberg",
+                availability = de.trailscape.core.indoor.DayRouteAvailability.READY,
+                rideKm = 11.7, climbs = dayClimbs.copy(count = 1, minMinutes = 38, maxMinutes = 38), endsEarlyMin = 9,
+            ),
+            IndoorDaySuggestionUi(
+                key = "catalog:schauinsland", name = "Schauinsland",
+                availability = de.trailscape.core.indoor.DayRouteAvailability.DOWNLOAD,
+                rideKm = 15.7, climbs = dayClimbs.copy(count = 1, minMinutes = 52, maxMinutes = 52),
+                downloadBytes = 114L * 1024 * 1024, estimated = true,
+            ),
+            IndoorDaySuggestionUi(
+                key = "plan", name = "Neue Runde ab deinem Startpunkt",
+                availability = de.trailscape.core.indoor.DayRouteAvailability.PLAN,
+                rideKm = 24.0, buildMinutes = 8,
+            ),
+        ),
+    )
+
+    private val dayFile = "tageseinheit"
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
+    fun tageseinheitStrecke() = shot("$dayFile-01-strecke-intervalle") {
+        IndoorRouteScreen(routeSim.copy(ergTitle = "Schwelle 3 x 8 Min", ergMinutes = 52), {}, {}, {}, {}, {}, day = dayOffer)
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun tageseinheitKarten() = shot("$dayFile-02-karten-verfuegbarkeit") {
+        Column(modifier = Modifier.padding(16.dp)) {
+            for (i in 1..3) {
+                IndoorDayCard(ui = dayOffer.copy(index = i), onRide = {}, onNext = {})
+                Box(modifier = Modifier.padding(6.dp))
+            }
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun tageseinheitTagesform() = shot("$dayFile-03-tagesform-ruhetag") {
+        Column(modifier = Modifier.padding(16.dp)) {
+            IndoorDayCard(
+                ui = dayOffer.copy(
+                    kind = de.trailscape.core.indoor.DaySessionKind.PLANNED_REDUCED,
+                    title = "Grundlage", minutes = 81, plannedMinutes = 90,
+                    terrain = de.trailscape.core.indoor.DayTerrain.ROLLING,
+                    suggestions = listOf(
+                        dayOffer.suggestions[0].copy(name = "Hausrunde Ammersee", availability = de.trailscape.core.indoor.DayRouteAvailability.READY, rideKm = 38.2, startKm = null, climbs = null, buildMinutes = null),
+                    ),
+                ),
+                onRide = {}, onNext = {},
+            )
+            Box(modifier = Modifier.padding(6.dp))
+            IndoorDayCard(
+                ui = dayOffer.copy(
+                    kind = de.trailscape.core.indoor.DaySessionKind.EASY,
+                    title = "Lockere Runde", minutes = 45,
+                    terrain = de.trailscape.core.indoor.DayTerrain.FLAT,
+                    suggestions = listOf(
+                        IndoorDaySuggestionUi(
+                            key = "testwelt", name = "Testwelt",
+                            availability = de.trailscape.core.indoor.DayRouteAvailability.READY,
+                            rideKm = 19.3, laps = 7,
+                        ),
+                    ),
+                ),
+                onRide = {}, onNext = {},
+            )
+            Box(modifier = Modifier.padding(6.dp))
+            IndoorDayCard(ui = IndoorDayUi.Rest("Schwelle 3 x 8 Min"), onRide = {}, onNext = {}, onOpenIndoor = {})
+            Box(modifier = Modifier.padding(6.dp))
+            IndoorDayCard(ui = IndoorDayUi.Loading, onRide = {}, onNext = {})
+        }
+    }
+
+    private fun dayEndRide(end: IndoorDayEndUi, phase: IndoorPhase) = ride(
+        session = session(IndoorMode.ERG, ghost = null, erg = ErgState(6, 110, 0, end.kind == de.trailscape.core.indoor.DayRideEnd.WORKOUT_DONE), phase = phase),
+        ghostLabel = null, ergTitle = "Schwelle 3 x 8 Min",
+    ).copy(dayEnd = end)
+
+    @Test
+    fun tageseinheitGeschafft() = shot("$dayFile-04-fahren-einheit-geschafft") {
+        RideScreen(dayEndRide(IndoorDayEndUi(de.trailscape.core.indoor.DayRideEnd.WORKOUT_DONE), IndoorPhase.RUNNING))
+    }
+
+    @Test
+    fun tageseinheitStreckeZuEnde() = shot("$dayFile-05-fahren-strecke-zu-ende") {
+        RideScreen(dayEndRide(IndoorDayEndUi(de.trailscape.core.indoor.DayRideEnd.ROUTE_DONE_EARLY, 12), IndoorPhase.FINISHED))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w891dp-h411dp-xxhdpi")
+    fun tageseinheitGeschafftQuer() = shot("$dayFile-06-fahren-einheit-geschafft-quer") {
+        RideScreen(dayEndRide(IndoorDayEndUi(de.trailscape.core.indoor.DayRideEnd.WORKOUT_DONE), IndoorPhase.RUNNING))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.EN}-w411dp-h1100dp-xxhdpi")
+    fun tageseinheitEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("$dayFile-07-strecke-en") {
+            IndoorRouteScreen(routeSim.copy(ergTitle = "Threshold 3 x 8 min", ergMinutes = 52), {}, {}, {}, {}, {}, day = dayOffer.copy(title = "Threshold 3 x 8 min"))
+        }
+        compose.onAllNodesWithText("Today’s session").onFirst().assertExists()
     }
 }

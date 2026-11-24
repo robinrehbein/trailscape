@@ -403,6 +403,8 @@ data class IndoorRideUi(
     val runtimeProblem: IndoorProblem? = null,
     /** Startpunkt waehlen; `null` = gerade nicht moeglich (es wird gefahren). */
     val start: IndoorStartUi? = null,
+    /** Einheit oder Strecke ist zu Ende, die andere nicht ([IndoorDayEndUi]); `null` = nichts. */
+    val dayEnd: IndoorDayEndUi? = null,
 )
 
 // ---------------------------------------------------------------------------
