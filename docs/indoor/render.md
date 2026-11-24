@@ -593,7 +593,7 @@ Stufe 1). Die Uhr ist Filaments `getUserTime()` — kein Setzen je Bild. Schatte
   nach rechts aus (zu schmal: links). Untereinander überholt der Schnellere links.
   **Gegenverkehr** (35 %) fährt links mit umgekehrter Steigung. Seitenversatz weich (τ 0,8 s),
   nie über den Wegrand. Test: 20 min Fahrt langsam und schnell, nie eine Überlappung im
- Abstand < 1,8 m (sechs Startwerte, wellige Strecke). Gefundene und behobene Fehler: zu kleines
+  Abstand < 1,8 m (sechs Startwerte, wellige Strecke). Gefundene und behobene Fehler: zu kleines
   Überholfenster bei großem Tempounterschied; Seitenwechsel quer durch die Spur des Nutzers
   beim Überholen eines Dritten — neben dem Nutzer wird die Seite jetzt nie gewechselt, ohne
   Platz bleibt der Fahrer hinter dem Vordermann.
