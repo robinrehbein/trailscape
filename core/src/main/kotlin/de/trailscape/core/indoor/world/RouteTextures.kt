@@ -171,10 +171,11 @@ internal object RouteTextures {
             val coarse = PNoise.fbm(x.toDouble(), 0.0, w, h, 5, 1, 0x91, 2)
             val clump = PNoise.fbm(x.toDouble(), 0.0, w, h, 40, 1, 0x92, 2)
             val blade = PNoise.value(x * 256.0 / w, 0.5, 256, 1, 0x93) - 0.5
-            val edge = 0.56 + coarse * 0.36 + clump * 0.24 + blade * blade * blade * 1.3
+            val edge = 0.56 + coarse * 0.3 + clump * 0.12 + blade * blade * blade * 0.45
             for (y in 0 until h) {
                 val v = (y + 0.5) / h
-                val a = smoothstep(edge - 0.035, edge + 0.035, v)
+                // Weicher Uebergang (vorher ±0,035 — las sich aus Fahrerhoehe als Saegezahn).
+                val a = smoothstep(edge - 0.16, edge + 0.12, v)
                 // Ganz am Randstreifen voll, ganz zur Wegmitte leer — die Kanten der Geometrie bleiben unsichtbar.
                 alpha[y * w + x] = (max(a, smoothstep(0.80, 0.97, v)) * smoothstep(0.0, 0.10, v)).toFloat()
             }

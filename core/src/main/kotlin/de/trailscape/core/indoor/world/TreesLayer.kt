@@ -70,7 +70,8 @@ internal class TreesLayer : TileLayer {
             val count = forest.count { it }
             val tris = count * 2
             if (tris <= budget || cell >= s.cellM / 4) {
-                if (count == 0 || tris > budget) return 0
+                // In Stufe 0 lieber kein Waldkoerper als grobe Zellen (32–64 m lasen sich als flache Scherben).
+                if (count == 0 || tris > budget || (ctx.level == 0 && cell > 16.0)) return 0
                 emitVolume(ctx, out, leaves, forest, cells, cell)
                 return tris
             }
@@ -87,8 +88,22 @@ internal class TreesLayer : TileLayer {
         return out
     }
 
-    /** Ob eine Zelle (Mitte `e`, `n`) zum Waldkoerper gehoert. */
+    /**
+     * Ob eine Zelle (Mitte `e`, `n`) zum Waldkoerper gehoert: Waldzelle mit mindestens drei
+     * Waldnachbarn. Vereinzelte Zellen (Schatten im Luftbild, Baumgruppen) standen sonst als
+     * dunkle Rauten und Zelte in offenen Flaechen.
+     */
     private fun isVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double): Boolean {
+        if (!isRawVolumeCell(ctx, e, n, cell)) return false
+        var k = 0
+        for (dj in -1..1) for (di in -1..1) {
+            if (di == 0 && dj == 0) continue
+            if (isRawVolumeCell(ctx, e + di * cell, n + dj * cell, cell) && ++k >= 3) return true
+        }
+        return false
+    }
+
+    private fun isRawVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double): Boolean {
         val forest = if (ctx.level == 0) ctx.land.canopyAt(e, n) >= 0.55 else ctx.land.classAt(e, n) == LandClass.FOREST
         if (!forest) return false
         if (ctx.level != 0) {
@@ -111,21 +126,47 @@ internal class TreesLayer : TileLayer {
         }
         // Ein Gitterpunkt liegt am Waldrand, wenn eine der vier Zellen um ihn kein Wald ist: dort liegt er am Boden.
         fun edgeVertex(i: Int, j: Int): Boolean = !(isF(i - 1, j - 1) && isF(i, j - 1) && isF(i - 1, j) && isF(i, j))
+        // Abstand zum Waldrand in Gitterpunkten (0 = am Rand, 1, 2 = innen): das Kronendach steigt
+        // ueber zwei Zellen an statt ueber eine — kein Kasten mit Steilwand.
+        fun ringOf(i: Int, j: Int): Int {
+            if (edgeVertex(i, j)) return 0
+            for (dj in -1..1) for (di in -1..1) if (edgeVertex(i + di, j + dj)) return 1
+            if (cell < 16.0) for (dj in -2..2) for (di in -2..2) if (edgeVertex(i + di, j + dj)) return 2
+            return 3
+        }
+        val rings = HashMap<Long, Int>()
+        fun edgeRing(i: Int, j: Int): Int = rings.getOrPut((i.toLong() shl 32) xor (j.toLong() and 0xffffffffL)) { ringOf(i, j) }
+        // Gitterpunkte waagrecht verschoben (aus Welt-Gitterzahlen, also ueber Kachelgrenzen gleich):
+        // Der Waldrand folgt nicht mehr sichtbar dem Zellenraster.
+        fun jitter(i: Int, j: Int, north: Boolean): Double {
+            val wi = Math.round((s.minE + i * cell) / cell).toInt()
+            val wj = Math.round((s.minN + j * cell) / cell).toInt()
+            val amp = if (edgeRing(i, j) == 0) 0.32 else 0.2
+            return (Noise.hash01(wi, wj, if (north) SEED_JIT_N else SEED_JIT_E) - 0.5) * 2 * amp * cell
+        }
+        fun fill(i: Int, j: Int): Double = when (edgeRing(i, j)) {
+            0 -> 0.0
+            1 -> if (cell < 16.0) 0.5 else 0.62
+            2 -> 0.86
+            else -> 1.0
+        }
         val tops = HashMap<Long, Double>()
         fun top(i: Int, j: Int): Double {
             val key = (i.toLong() shl 32) xor (j.toLong() and 0xffffffffL)
             return tops.getOrPut(key) {
-                val e = s.minE + i * cell
-                val n = s.minN + j * cell
+                val e = s.minE + i * cell + jitter(i, j, false)
+                val n = s.minN + j * cell + jitter(i, j, true)
                 val g = ctx.ground.heightAt(e, n)
-                if (edgeVertex(i, j)) {
+                if (edgeRing(i, j) == 0) {
                     g - 0.4
                 } else {
-                    // Kronen ragen heraus: Gitterpunkte (Welt-Gitter) um bis zu ±2,5 m versetzt; am Rand niedriger.
-                    val bump = (Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_BUMP) - 0.5) * 5.0
-                    val nearEdge = edgeVertex(i - 1, j) || edgeVertex(i + 1, j) || edgeVertex(i, j - 1) || edgeVertex(i, j + 1)
+                    // Stetige Wellen im Kronendach (statt Zufall je Gitterpunkt, der Facetten zeigte).
+                    val bump = (Noise.value(e / 21.0, n / 21.0, SEED_BUMP) - 0.5) * 4.0
                     val h = canopyHeight(ctx, e, n) + bump
-                    g + if (nearEdge && cell < 16.0) h * 0.8 else h
+                    // Anteil der vollen Hoehe, mit den vier Nachbarn geglaettet: Kleine Waldflecken
+                    // werden flache Kuppen statt spitzer Zelte.
+                    val f = 0.5 * fill(i, j) + 0.125 * (fill(i - 1, j) + fill(i + 1, j) + fill(i, j - 1) + fill(i, j + 1))
+                    g + h * f
                 }
             }
         }
@@ -137,13 +178,19 @@ internal class TreesLayer : TileLayer {
             val corners = arrayOf(intArrayOf(i, j), intArrayOf(i + 1, j), intArrayOf(i + 1, j + 1), intArrayOf(i, j + 1))
             val idx = IntArray(4)
             for ((k, c) in corners.withIndex()) {
-                val e = s.minE + c[0] * cell
-                val n = s.minN + c[1] * cell
+                val e = s.minE + c[0] * cell + jitter(c[0], c[1], false)
+                val n = s.minN + c[1] * cell + jitter(c[0], c[1], true)
                 val y = top(c[0], c[1])
                 val de = (top(c[0] + 1, c[1]) - top(c[0] - 1, c[1])) / (2 * cell)
                 val dn = (top(c[0], c[1] + 1) - top(c[0], c[1] - 1)) / (2 * cell)
-                val nor = Vec3(-de, 1.0, dn).normalized()
-                val shade = if (edgeVertex(c[0], c[1])) 0.45 else 0.62 + 0.3 * Noise.hash01(Math.round(e / cell).toInt(), Math.round(n / cell).toInt(), SEED_TINT)
+                // Normalen flacher als die Geometrie: das Kronendach wirkt weich, Raender nicht wie Wande.
+                val nor = Vec3(-de * 0.55, 1.0, dn * 0.55).normalized()
+                val ring = edgeRing(c[0], c[1])
+                val shade = when (ring) {
+                    0 -> 0.5
+                    1 -> 0.62
+                    else -> 0.68 + 0.26 * Noise.value(e / 13.0, n / 13.0, SEED_TINT)
+                }
                 idx[k] = m.vertex(ctx.x(e), ctx.y(y), ctx.z(n), nor.x, nor.y, nor.z, e / UV_M, -n / UV_M, crownColor(ctx, e, n, shade))
             }
             // (i,j) → (i+1,j) → (i+1,j+1) → (i,j+1) laeuft in (e, n) gegen den Uhrzeigersinn: oben sichtbar.
@@ -200,7 +247,16 @@ internal class TreesLayer : TileLayer {
                 if (cls == LandClass.WATER || cls == LandClass.WETLAND) continue
                 if (net.clearance(e, n) < ROAD_CLEARANCE_M) continue
                 if (nearBuilding(buildings, e, n)) continue
-                cands += Candidate(e, n, hit.distance, specFor(ctx, cls, e, n, i, j, spacing))
+                var spec = specFor(ctx, cls, e, n, i, j, spacing)
+                // Fichten nah am Weg nicht ueber die Fahrbahn ragen lassen (Krone ~0,22 × Hoehe):
+                // sonst standen sie als dunkle Wand vor der Kamera.
+                if (spec.species == TreeModels.Species.CONIFER) {
+                    val room = hit.distance - ctx.track.halfWidthAt(hit.distM) + 0.5
+                    val maxH = room / (0.22 * spec.width)
+                    if (maxH < 6.0) continue
+                    if (spec.heightM > maxH) spec = TreeModels.Spec(spec.species, maxH, spec.width, spec.tint, spec.seed, spec.turn, spec.pale)
+                }
+                cands += Candidate(e, n, hit.distance, spec)
             }
         }
         cands.sortBy { it.dist }
@@ -340,6 +396,8 @@ internal class TreesLayer : TileLayer {
         private const val SEED_HEIGHT = 0x7ee3
         private const val SEED_TINT = 0x7ee4
         private const val SEED_BUMP = 0x7ee5
+        private const val SEED_JIT_E = 0x7ee6
+        private const val SEED_JIT_N = 0x7ee7
 
         /** Grundfarben des Waldkoerpers in sRGB. */
         val CONIFER = intArrayOf(50, 72, 46)

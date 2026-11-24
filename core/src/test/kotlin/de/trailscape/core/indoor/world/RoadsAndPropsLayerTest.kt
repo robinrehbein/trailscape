@@ -77,8 +77,10 @@ class RoadsAndPropsLayerTest {
                         assertTrue(u < surface - 0.015, "Strasse nicht unter der Fahrbahn: $u gegen $surface")
                         under++
                     } else if (hit == null || hit.distance > hw + 6.0) {
-                        val above = u - scene.ground.heightAt(e, n)
-                        assertTrue(above in 0.03..0.14, "Strasse $above m ueber dem Boden")
+                        // Ueber dem gezeichneten Gelaendenetz (zwischen den Gitterpunkten hoeher als der wahre
+                        // Boden), plus Rang- und Richtungsversatz gegen Flimmern an Knoten.
+                        val above = u - maxOf(scene.ground.heightAt(e, n), terrainMeshHeightAt(scene.ground, e, n, level0TerrainCellM(ctx.quality)))
+                        assertTrue(above in 0.03..0.22, "Strasse $above m ueber dem Boden")
                         free++
                     }
                 }

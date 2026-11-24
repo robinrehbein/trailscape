@@ -56,6 +56,8 @@ Welt), `/models/` (die Modelle).
 | `check` | `1` | Formatprüfung |
 | `shadows`, `fog`, `sky` | `1` | einzeln abschaltbar wie `RenderSettings` |
 | `shadowRange`, `shadowMap` | `300`, `4096` | Schattenreichweite in Metern, Kantenlänge je Kaskade |
+| `shadowRadius` | `2` | Weichheit der Schattenkanten (PCF-Radius), wie DPCF in Filament |
+| `aniso` | `1` | anisotrope Filterung; 1 wie Filament/gltfio |
 | `haze` | `0.3` | Dunst 0..1 wie `SkySetting.haze` |
 | `lookahead` | `60` | Vorlauf in Metern, für den zusätzlich geladen wird |
 | `exposure`, `near` | `0.62`, je Kamera | Belichtung, nahe Schnittebene |
@@ -113,17 +115,18 @@ Gezeichnet wird nur auf Anforderung, nicht in einer Schleife.
 
 Die Materialien der Kacheln bleiben, wie der `GLTFLoader` sie liefert
 (Metallic-Roughness, `alphaMode`, `doubleSided`, Sampler). Die Darstellung
-stellt daran nur ein, was Filament als Ganzes auch tut: anisotrope Filterung,
-Dithering.
+stellt daran nur ein, was Filament als Ganzes auch tut: Dithering. **Keine**
+anisotrope Filterung (gltfio 1.75.1 setzt sie nicht; `--param aniso=16` zum
+Vergleich).
 
 | Filament (7.6) | hier |
 |---|---|
-| Sonne als Richtungslicht mit Schattenkaskaden bis rund 300 m | `SunLight` (three-Addon) mit zwei Kaskaden am Sichtkegel, 4096 px je Kaskade, PCF |
+| Sonne als Richtungslicht, drei Kaskaden à 2048 px bis rund 300 m, weiche Kanten (DPCF) | `SunLight` (three-Addon) mit zwei Kaskaden am Sichtkegel, 4096 px je Kaskade, PCF mit Radius 2 (`shadowRadius`) |
 | `IndirectLight` aus Kugelflächenfunktionen | `HemisphereLight`: bläulich von oben, warm-grün von unten |
 | Himmel als erzeugte Cubemap, Verlauf Horizont → Zenit, Sonnenscheibe | Himmelskugel mit demselben Verlauf (eigener Shader, nur für den Himmel) |
 | Dunst über `fogOptions`, Horizontfarbe = Dunstfarbe | exponentieller Dunst mit Höhenabnahme, linear vor dem Tonemapping gemischt; Sichtweite aus `manifest.quality` (6/12/20 km), Farbe = Horizontfarbe |
-| ACES, sRGB, MSAA/FXAA | ACES-Tonemapping, sRGB-Ausgabe, MSAA der Zeichenfläche |
-| Kameras `CHASE`, `HANDLEBAR`, `DRONE` | 6 m hinter / 2,5 m über dem Fahrer, Blick 12 m voraus; Augenhöhe 1,55 m; 85 m hoch, 125 m zurück, 55 m seitlich |
+| ACES, sRGB, 4× MSAA (FXAA nur ohne MSAA) | ACES-Tonemapping, sRGB-Ausgabe, MSAA der Zeichenfläche |
+| Kameras `CHASE`, `HANDLEBAR`, `DRONE` | wie `CameraRig` (ohne Dämpfung): 6 m auf dem Band zurück, 2,5 m über dem höheren von Fahrer und Kamerapunkt, Blick 6 m voraus; Auge 1,45 m, Blick 25 m voraus; Drohne abweichend 85 m hoch, 125 m zurück, 55 m seitlich |
 
 ## Wo er abweicht
 

@@ -65,6 +65,97 @@ Was noch nicht stimmt (gesehen und bewusst offen gelassen):
 - Wo das Luftbild dunkle Flächen hat (Schatten, nasse Wiesen), setzt die
   Kronenschätzung gelegentlich Bäume in offene Flächen.
 
+## Sichtbare Qualität (24.11.2026, Branch `claude/indoor-quality`)
+
+Anlass: Rückmeldung des Gründers nach der ersten Fahrt — „an manchen Stellen
+ruppig und kantig“, Maßstab „wie Zwift, gern besser“. Vorgehen: drei echte
+Welten gebaut (Altenberg kurz, Tharandt km 2–6, Katalog `alpe-dhuez`), aus
+Verfolger-, Lenker- und Drohnenkamera an Kurven, Kuppen, Waldrand, Ort,
+Kreuzungen und Kachelgrenzen gerendert, jedes Bild angesehen, Ursache im
+Code gesucht, behoben, dieselben Stellen neu gerendert. Bildpaare:
+`docs/indoor/bilder/quality/` (`…-vorher.jpg` / `…-nachher.jpg`, gleicher
+Betrachter und Blickpunkt): `altenberg-pflaster-laubwald`,
+`altenberg-fichten-weide`, `altenberg-strasse-hang`, `altenberg-wegrand-lenker`,
+`altenberg-waldkoerper-drohne`, `tharandt-forststrasse`, `tharandt-kreuzung`,
+`alpe-dhuez-kehre-drohne`, `kreisverkehr-fahrer`, `kreisverkehr-drohne`.
+Ein unabhängiger Unter-Agent hat die Bilder gegen „Zwift oder besser“
+beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
+als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
+Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
+
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/2` (vorher `/1`). Sie geht
+in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
+gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
+Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
+
+### Mängel, Ursache, Stand
+
+| # | Mangel (gesehen) | Ursache im Code | Stand |
+|---|---|---|---|
+| 1 | Laubkronen facettiert, „Polyeder“ mit harten Licht/Schatten-Flächen | `TreeModels.blob`: 10×6 Segmente, starke Verbeulung (±0,32 hochfrequent), Normalen nur geglättet; Knick der Abflachung bei `uy = −0,2` | **behoben:** 14×8 + 6 Nebenkörper (nah), 11×6 + 1 (mittel), 8×5 (fern); Verbeulung ±0,26/0,06; Normalen zu 60 % vom Kronenmittelpunkt aus (`fluffNormals`) — die Krone wird wie ein weicher Körper beleuchtet; Abflachung stetig |
+| 2 | Fichten aus gestapelten Kegeln mit Sägezahnrand: helle Streifen, schwarze Bodenscheiben | `TreeModels.cone`: abwechselnde Randradien, flache Unterseite je Kegel | **behoben:** `spruce` — ein Drehkörper, Astetagen als Profil (Unterseite dunkel, Rand hängend, eingezogen), Rand stetig verbeult, Normalen nach außen gemischt; heller Grundton |
+| 3 | Waldkörper als Kästen mit Steilwand, Rand im Zellenraster, spitze „Zelte“ und dunkle Rauten in offenen Flächen | `TreesLayer.emitVolume`: Abfall über eine Zelle, Zufall je Gitterpunkt (±2,5 m), Einzelzellen aus der Kronenschätzung | **behoben:** Anstieg über zwei Zellen (Anteil mit Nachbarn geglättet), Gitterpunkte aus Welt-Gitterzahlen verschoben (kein Rasterrand), stetige Wellen, flachere Normalen; Waldzellen brauchen ≥ 3 Waldnachbarn |
+| 4 | Wegrand als gezackter Sägezahn (Fransenkante) | `RouteTextures.fringe`: Deckung springt über ±0,035 der Breite, Halmspitzen mit Amplitude 1,3 | **behoben:** Übergang −0,16…+0,12, Halmspitzen 0,45 |
+| 5 | Heller, harter Saum neben der Fahrbahn (Straßenpixel des Luftbilds, Versatz OSM ↔ Luftbild) | Randstreifen deckt in Siedlung/Acker nur 1,0/1,2 m | **behoben:** 1,8/2,0 m deckend, Auslauf 4,4/5,0 m |
+| 6 | Eckige Löcher im Rand an Einmündungen und wo die Strecke sich selbst nahe kommt | Rand wird je Eckpunkt ausgeblendet, Stationen dort nur dreifach geteilt (bzw. zusammengelegt) | **teilweise:** dort jetzt mit der feinsten Teilung (`maxSub`), nie zusammengelegt. An spitzen Einmündungen (Altenberg km 1,875) liegt weiterhin ein Stück Luftbild zwischen Strecke und Nebenstraße |
+| 7 | Gelände fern (Stufe 2: 146-m-Zellen) mit Facetten | Budget `TileBudget.terrain` | **offen, bewusst:** Mehr Gelände in Stufe 1/2 (8 000/6 000 Dreiecke) verkleinerte über die Planung den Korridor der Stufe 0 (21 → 16 Kacheln) — schlechter Tausch. Die meisten „kantigen Hügel“ waren Waldkörper (Punkt 3) |
+| 8 | Böschungen am Steilhang (Alpe d'Huez, Kehren): gestrecktes Luftbild, graue Flächen | Planare Projektion des Luftbilds; ohne eigenen Shader (Vertrag 7.7) kein Triplanar/Detail | **offen** |
+| 9 | Wald dunkel | Luftbild unter Kronen dunkel, Umgebungslicht | **offen** (Darstellung, siehe render.md); Fichten heller getönt |
+| 10 | Weißes Dreieck neben dem Weg (Altenberg km 0,1, Tharandt-Kreuzung) | Luftbild-Pixel (weiße Fläche) unter einer Randlücke | **offen** (mit Punkt 5 kleiner, an der Tharandter Kreuzung laut Review eher größer) |
+| 11 | Nahe Fichten als dunkle Wand vor der Kamera (Review) | Fichten bis 21 m direkt am Weg, Krone ragt über die Fahrbahn; Etagen durch weiche Normalen verwischt | **teilweise:** Fichten am Weg so klein, dass die Krone nicht über die Fahrbahn ragt (sonst weg), Etagen mit eigener Schattierung, helle Spitzen. Im Tharandter Wald steht weiterhin eine dunkle Fichtenreihe rechts |
+| 12 | Flache dunkle Scherben in lichtem Wald (Alpe d'Huez, Drohne) | Waldkörper der Stufe 0 mit 32–64-m-Zellen, wenn das Budget knapp ist | **teilweise:** in Stufe 0 nur noch bis 16-m-Zellen, sonst kein Waldkörper; in Stufe 1 bleiben einzelne flache Flächen |
+| 13 | **Kreisverkehr „komisch“ (Gerät)**: Mittelinsel = Luftbild mit weißem Grasauslauf, darauf ein Weidezaun | Kein Kreisverkehr-Wissen: Ring nur als Straße, Insel nicht gezeichnet, Zäune nach Landnutzung „Wiese“ | **behoben:** `Roundabouts` erkennt geschlossene, runde bis ovale Ringe (1 : 2,5) aus den Vektorkacheln, auch aus mehreren Stücken; `RoadsLayer` zeichnet die Insel als Grasfläche 14 cm über dem Boden (bzw. 10 cm über der Fahrbahn), leicht gewölbt, mit Bordstein bis unter das Gelände; keine Zäune auf der Insel. Mini-Kreisel (nur Punkt in OSM) fehlen in den Vektorkacheln |
+| 14 | **Flackern (Gerät)** | (a) Straßen 4 cm über dem *wahren* Boden — das 4-m-Geländenetz spannt über schmale Wege und sticht durch; (b) gleichrangige Straßen an Knoten in derselben Ebene; (c) weiche Kantenstreifen koplanar auf der Nachbarfahrbahn; (d) einmündende/querende Wege nur 1,4–3,5 cm über/unter der Strecke; (e) Kamera `near` 0,3 m | **behoben (weitgehend):** Straßen und Wegränder über dem *gezeichneten* Netz (`terrainMeshHeightAt`, inkl. Wölbung zwischen Stationen), Grundabstand 5 cm; Versatz nach Richtung (0–8 mm) unter dem Rangschritt (12 mm); Kantenstreifen 2 cm unter der Fahrbahn; über/unter der Strecke 3/5 cm; `near` 0,5 m. Gemessen mit `indoor-dev overlaps` (s. u.) |
+
+**Flackern messbar machen:** `coplanarOverlaps` (`GlbOverlap.kt`) sucht in einer
+Kachel-GLB flache Dreiecke verschiedener Primitive, die sich im Grundriss
+überdecken und in derselben Höhe (< 4 mm) liegen; `indoor-dev overlaps <welt>`
+listet sie je Materialpaar für alle Kacheln der Stufe 0. Der Test
+`QualityTest` verlangt für die Testwelt **null** deckende Treffer (weiche
+Ränder mit Deckung null am Außenrand, Ufer und Belagsübergänge ausgenommen).
+
+| Welt | koplanar gesamt vorher → nachher | davon deckend vorher → nachher |
+|---|---|---|
+| Altenberg kurz | 1 441 → 638 | 330 → 40 |
+| Tharandt km 2–6 | 761 → 234 | 119 → 13 |
+| Alpe d'Huez | – | 469 → 98 |
+| Kreisel Bergisch Gladbach (2,1 km, BRouter) | 495 → 401 | 71 → 60 |
+| Testwelt | – | 0 |
+
+Rest an der Kreisel-Strecke: Gelände unter der Fahrbahn an einer Brücke
+(dort wird nicht eingeebnet) und Ränder, deren Deckung dort null ist. Nicht in
+Filament geprüft — der Nachweis ist geometrisch und im Betrachter.
+
+Nicht geändert: Gebäude (kantige Grundrisse sind richtig; Dachkanten und
+Fassaden waren auf den Bildern unauffällig), Höhenmodell (bereits bikubisch
+und gedämpft, keine Treppen gesehen), Fahrbahn-Mittellinie (Catmull-Rom,
+Kehren rund — auf den Drohnenbildern der Alpe d'Huez sauber).
+
+### Messwerte
+
+Schauinsland (Katalog, 15,7 km, 157 Kacheln), `-Xmx256m`, 2 Threads, Geodaten
+aus dem Cache (ein Aufwärmlauf vorher):
+
+| | Bauzeit | Heap nach GC (max) | Dreiecke gleichzeitig | Texturen | Platte |
+|---|---|---|---|---|---|
+| vorher | 55 s | 227 MB | 555 981 | 160 MB | 12,7 MB/km |
+| nachher | 38 s | 230 MB | 559 775 | 160 MB | 12,2 MB/km |
+
+Kein Full-GC, kein OOM; die kürzere Zeit ist eher Plattencache als Gewinn.
+Altenberg kurz: 460 k Dreiecke (vorher 448 k), 15,7 MB/km (vorher 16,0);
+Tharandt km 2–6: 490 k (vorher 452 k), 12,5 MB/km. Budgets eingehalten.
+(Die Messung lief vor den letzten Änderungen an Fichten und Straßenhöhen; die
+wirken auf Dreiecke und Speicher nur am Rand.)
+
+### Auf dem Gerät zu beurteilen
+
+- Kronen und Fichten unter Filaments Licht (Umgebungslicht aus SH, ACES): sind
+  die weichen Normalen dort genauso ruhig?
+- 4× MSAA und DPCF-Schatten: Bildrate auf dem Handy des Gründers (MEDIUM),
+  Speicher der Schattenkarten (3 × 2048²).
+- Fernsicht ohne anisotrope Filterung (gltfio setzt sie nicht): Fahrbahn in
+  20–50 m Entfernung unscharf? Der Betrachter rendert jetzt ebenfalls ohne.
+
 ## Abweichungen vom Vertrag
 
 1. **Laub `alphaMode = MASK` ohne Ausschnitte.** Kronen sind geschlossene

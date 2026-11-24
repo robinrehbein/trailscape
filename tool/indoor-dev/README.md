@@ -29,6 +29,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
+| `overlaps <dir>` | koplanare, überlappende Flächen (Ursache für Flimmern) in den Kacheln der Stufe 0 je Materialpaar zählen |
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
 | `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
@@ -77,6 +78,7 @@ Angefragte Hosts: `s3.amazonaws.com` (Höhen), `tiles.openfreemap.org`
 | `altenberg-kurz.gpx` | 3 km um den Altenberger Dom (NRW) — der schnelle Probelauf | NRW |
 | `altenberg.gpx` | 14 km Runde Altenberg – Dhünntal (NRW) | NRW |
 | `tharandt.gpx` | 13 km durch den Tharandter Wald (Sachsen) | Sachsen |
+| `kreisel-bergisch-gladbach.gpx` | 2,1 km durch einen ovalen Kreisverkehr (Bergisch Gladbach, BRouter `fastbike`, ohne Belagsdatei) — Prüfstrecke für Kreisel und Knoten | NRW |
 
 Je Strecke liegt die Belagsdatei `<name>.surfaces.json` daneben (aus
 BRouters Wegmerkmalen).

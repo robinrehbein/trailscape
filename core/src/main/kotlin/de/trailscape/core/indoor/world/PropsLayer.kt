@@ -49,6 +49,7 @@ internal class PropsLayer : TileLayer {
         private val track = ctx.track
         private val step = track.stepM
         private val net = RoadNet(ctx, marginM = 12.0)
+        private val islands = Roundabouts.islands(ctx.map, ctx.spec.minE - 60, ctx.spec.minN - 60, ctx.spec.maxE + 60, ctx.spec.maxN + 60)
         private val buildings = ctx.spec.let { s -> ctx.map.buildings(s.minE - 12.0, s.minN - 12.0, s.maxE + 12.0, s.maxN + 12.0) }
         private val mesh by lazy { out.mesh(WorldNames.NODE_PROPS, TileMaterial(MATERIAL, roughness = 0.85f)) }
         private val scratch = MeshBuilder(64, 64)
@@ -252,6 +253,11 @@ internal class PropsLayer : TileLayer {
                         val off = p.hw + (if (style == EdgeStyle.BANKETT) 0.6 else 0.5) + 1.7 + (Noise.hash01(b * 64 + j, side, 0xfe3) - 0.5) * 0.2
                         val e = sideE(p, side, off)
                         val n = sideN(p, side, off)
+                        // Kein Weidezaun auf einer Kreisel-Mittelinsel.
+                        if (islands.any { it.contains(e, n, 3.0) }) {
+                            prev = null
+                            continue
+                        }
                         if (!free(e, n, 0.3) && !(net.clearance(e, n) > 0.7 && freeOutside(e, n))) {
                             prev = null
                             continue
