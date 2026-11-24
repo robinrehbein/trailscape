@@ -109,7 +109,8 @@ const val DAY_EASY_MIN_MIN: Int = 20
  *    Intensitaet aus dem Routenziel. Wird die Intensitaet zurueckgenommen,
  *    entfaellt die Intervallstruktur des Plantexts (aus „4 × 8 min" wird eine
  *    gleichmaessige Einheit) — sonst stuende auf der Rolle, was die Tagesform
- *    gerade ausgeschlossen hat.
+ *    gerade ausgeschlossen hat. Dasselbe gilt fuer jeden strukturierten
+ *    Plantext (Intervalle, Qualitaetseinheit, Test), wenn sich die Dauer aendert.
  */
 fun daySessionFor(today: TodayRoute): DaySession {
     val planned = today.session
@@ -144,8 +145,12 @@ fun daySessionFor(today: TodayRoute): DaySession {
         textKey = if (intensityCut) null else planned.textKey,
         textArgs = if (intensityCut) emptyList() else planned.textArgs,
     )
-    // Ein Intervall-Plantext mit gekuerzter Dauer passt nicht mehr zu seinen Argumenten.
-    val consistent = if (reduced.textKey == SessionTextKey.INTERVALS && minutes != sessionDurationMin(planned)) {
+    // Ein strukturierter Plantext (Intervalle, Qualitaetseinheit, Test) mit
+    // gekuerzter Dauer passt nicht mehr zu seinen Argumenten — die ERG-Einheit
+    // lese sonst die volle Struktur und ignoriere die Kuerzung.
+    val structured = reduced.textKey == SessionTextKey.INTERVALS || reduced.textKey == SessionTextKey.WORKOUT ||
+        reduced.textKey == SessionTextKey.FTP_TEST
+    val consistent = if (structured && minutes != sessionDurationMin(planned)) {
         reduced.copy(textKey = null, textArgs = emptyList())
     } else {
         reduced

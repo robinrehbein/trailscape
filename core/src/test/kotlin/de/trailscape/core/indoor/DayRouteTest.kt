@@ -400,4 +400,16 @@ class DayRouteTest {
         val flat = dayPlanTarget(dayRouteGoal(workout(easy), rider), easy, target(SessionIntensity.LOCKER).copy(ascentPreference = AscentPreference.BERGIG))
         assertEquals(AscentPreference.FLACH, flat.ascentPreference)
     }
+
+    @Test
+    fun `strukturierte Plantexte aus main – Test als Anstieg, gekuerzt ohne Struktur`() {
+        // 20-min-Test: [einfahren, test, ausfahren, gesamt] (PlanWorkouts.FtpTestArg).
+        val test = session(SessionIntensity.HART, 50, SessionTextKey.FTP_TEST, listOf(15, 20, 15, 50))
+        val goal = dayRouteGoal(workout(test), rider)
+        assertEquals(DayTerrain.CLIMBS, goal.terrain)
+        assertEquals(listOf(1200), goal.intervals.map { it.durationS })
+        val cut = daySessionFor(today(target(SessionIntensity.HART), test, factor = 0.9, downgraded = true)).session!!
+        assertNull(cut.textKey, "gekuerzt passt die Struktur nicht mehr")
+        assertEquals(45 * 60, workout(cut).totalS)
+    }
 }
