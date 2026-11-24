@@ -1,0 +1,104 @@
+// Himmel der Indoor-Darstellung (FilamentCore): Verlauf Horizont → Zenit, Hof um die
+// Sonne, Sonnenscheibe, langsam ziehende Wolken aus einer kachelbaren Rauschtextur.
+// Gezeichnet als Vollbild-Dreieck in Geraetekoordinaten auf der fernen Ebene, wie
+// Filaments eigene Skybox (skybox.mat, v1.75.1) — daher kein Dunst (Abstand ∞).
+//
+// Alle Farben sind schon belichtet (wie Filaments Skybox nach `iblLuminance`):
+// `horizon` ist genau die Dunstfarbe × iblLuminance, damit Gelaende und Himmel am
+// Horizont nahtlos ineinander uebergehen. Der Hof um die Sonne nahe am Horizont
+// rechnet wie Filaments Dunst-Einstreuung (surface_fog.fs), mit Sonnenfarbe und
+// -staerke aus frameUniforms.
+//
+// Kompilieren: tool/indoor-dev/filament/materials.sh (matc 1.75.1).
+material {
+    name : TrailscapeSky,
+    parameters : [
+        { type : float3, name : zenith },
+        { type : float3, name : horizon },
+        { type : float3, name : cloudLit },
+        { type : float3, name : cloudShade },
+        { type : float, name : cloudCover },
+        { type : float, name : cloudScale },
+        { type : float2, name : wind },
+        { type : float, name : time },
+        { type : float, name : horizonBand },
+        { type : float, name : glow },
+        { type : float, name : glowSize },
+        { type : float, name : inScatteringSize },
+        { type : float, name : inScatteringStrength },
+        { type : float, name : sunDisk },
+        { type : sampler2d, name : clouds, precision : medium }
+    ],
+    variables : [
+        eyeDirection
+    ],
+    vertexDomain : device,
+    depthWrite : false,
+    shadingModel : unlit,
+    variantFilter : [ skinning, shadowReceiver, vsm, stereo ],
+    culling : none,
+    featureLevel : 1
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        highp vec3 d = normalize(variable_eyeDirection.xyz);
+        float ay = max(d.y, 0.0);
+
+        // Verlauf: heller Horizontstreifen, nach oben ins Blau
+        float tg = 1.0 - exp(-ay / materialParams.horizonBand);
+        vec3 sky = mix(materialParams.horizon, materialParams.zenith, tg);
+        // wie SkyLookModel.gradient: Uebergang entsaettigen (kein Lila zwischen Orange und Blau)
+        sky = mix(sky, vec3(dot(sky, vec3(0.2126, 0.7152, 0.0722))), 0.55 * 4.0 * tg * (1.0 - tg));
+
+        // Sonne: Farbe und Staerke (belichtet) wie Filaments Licht
+        vec3 sunC = frameUniforms.lightColorIntensity.rgb * frameUniforms.lightColorIntensity.w;
+        float mu = max(dot(d, frameUniforms.lightDirection), 0.0);
+        float nearHorizon = exp(-ay / 0.14);
+        // breiter, weicher Hof (Mie) und schmale Einstreuung wie im Dunst
+        sky += sunC * (materialParams.glow * pow(mu, materialParams.glowSize));
+        sky += sunC * (materialParams.inScatteringStrength * nearHorizon * pow(mu, materialParams.inScatteringSize));
+
+        // Wolken auf einer gedachten Ebene, zum Horizont maessig gestaucht
+        float cloudAlpha = 0.0;
+        if (d.y > 0.0) {
+            highp vec2 uv = d.xz / (d.y + 0.18) * materialParams.cloudScale + materialParams.wind * materialParams.time;
+            float n1 = texture(materialParams_clouds, uv).r;
+            float n2 = texture(materialParams_clouds, uv * 2.71 + vec2(0.37, 0.11) + materialParams.wind * (materialParams.time * 0.6)).r;
+            float raw = n1 * 0.7 + n2 * 0.3;
+            float cover = materialParams.cloudCover;
+            float dens = smoothstep(1.0 - cover - 0.10, 1.0 - cover + 0.22, raw);
+            dens *= smoothstep(0.02, 0.16, d.y);
+            // Selbstschatten: Dichte ein Stueck zur Sonne hin
+            vec2 toSun = frameUniforms.lightDirection.xz;
+            toSun = toSun / max(length(toSun), 1e-3) * 0.035;
+            float ns = texture(materialParams_clouds, uv + toSun).r * 0.7 + n2 * 0.3;
+            float shade = clamp((ns - raw) * 6.0 + 0.5 * smoothstep(0.3, 1.0, dens), 0.0, 1.0);
+            vec3 cloud = mix(materialParams.cloudLit, materialParams.cloudShade, shade);
+            // Silberrand nahe der Sonne
+            cloud += sunC * (0.06 * pow(mu, 8.0) * (1.0 - dens));
+            cloudAlpha = dens * 0.92;
+            sky = mix(sky, cloud, cloudAlpha);
+        }
+
+        // Sonnenscheibe samt Hof wie skybox.mat, hinter Wolken abgeschwaecht
+        if (materialParams.sunDisk > 0.0 && frameUniforms.sun.w >= 0.0) {
+            vec3 sun = sunC * (4.0 * PI);
+            float x = (dot(d, frameUniforms.lightDirection) - frameUniforms.sun.x) * frameUniforms.sun.z;
+            float gradient = pow(1.0 - saturate(x), frameUniforms.sun.w);
+            sky += gradient * sun * (1.0 - 0.85 * cloudAlpha);
+        }
+        material.baseColor = vec4(sky, 1.0);
+    }
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        // wie skybox.mat: Richtung aus der fernen Ebene, ohne Teilen durch w
+        vec4 p = getPosition();
+        p.z = p.z * -0.5 + 0.5;
+        vec4 worldPosition = getWorldFromClipMatrix() * p;
+        material.eyeDirection.xyz = worldPosition.xyz;
+    }
+}

@@ -1,0 +1,77 @@
+// Wasser der Indoor-Darstellung: ersetzt das Material der Knoten `water` aus den
+// Kacheln (die Flaechen selbst kommen aus dem Weltbau). Glatte, dunkle Oberflaeche mit
+// leichtem, ziehendem Wellengang (Normale aus derselben kachelbaren Rauschtextur wie
+// die Wolken), Sonnenglanz ueber das normale Filament-Licht (GGX) und eine Spiegelung
+// des Himmels nach Fresnel als belichtete Eigenleuchtfarbe (Verlauf wie sky.mat).
+// Dunst, Schatten und Belichtung wirken wie bei jedem anderen Material.
+//
+// Kompilieren: tool/indoor-dev/filament/materials.sh (matc 1.75.1).
+material {
+    name : TrailscapeWater,
+    parameters : [
+        { type : float3, name : deepColor },
+        { type : float3, name : zenith },
+        { type : float3, name : horizon },
+        { type : float, name : horizonBand },
+        { type : float, name : time },
+        { type : float, name : waveScale },
+        { type : float, name : waveStrength },
+        { type : float, name : reflectivity },
+        { type : sampler2d, name : waves, precision : medium }
+    ],
+    shadingModel : lit,
+    blending : opaque,
+    culling : none,
+    featureLevel : 1
+}
+
+fragment {
+    float waveHeight(highp vec2 p) {
+        highp vec2 w = vec2(0.021, 0.013) * materialParams.time;
+        return texture(materialParams_waves, p + w).r * 0.6
+             + texture(materialParams_waves, p * 2.3 - w * 1.7 + vec2(0.5, 0.2)).r * 0.4;
+    }
+
+    void material(inout MaterialInputs material) {
+        highp vec3 wp = getWorldPosition();
+        highp vec2 p = wp.xz * materialParams.waveScale;
+        float e = 0.004;
+        float h0 = waveHeight(p);
+        float hx = waveHeight(p + vec2(e, 0.0));
+        float hz = waveHeight(p + vec2(0.0, e));
+        // Wellen in der Ferne glaetten (sonst flimmert die Flaeche wie Kies)
+        float dist = length(getWorldPosition() - getWorldCameraPosition());
+        float fade = 1.0 / (1.0 + dist / 25.0);
+        vec2 slope = vec2(hx - h0, hz - h0) * (materialParams.waveStrength * fade / e) * 0.01;
+        // In Tangentenraum; die Tangente der Wasserflaeche ist beliebig gedreht, das Rauschen
+        // ist richtungslos — die Drehung sieht man nicht.
+        material.normal = normalize(vec3(-slope.x, -slope.y, 1.0));
+        prepareMaterial(material);
+
+        material.baseColor = vec4(materialParams.deepColor, 1.0);
+        material.metallic = 0.0;
+        material.roughness = 0.06;
+        material.reflectance = 0.5;
+
+        // Spiegelung des Himmels: Verlauf in Richtung des gespiegelten Blicks
+        vec3 n = material.normal.x * getWorldTangentFrame()[0]
+               + material.normal.y * getWorldTangentFrame()[1]
+               + material.normal.z * getWorldTangentFrame()[2];
+        n = normalize(n);
+        if (dot(n, vec3(0.0, 1.0, 0.0)) < 0.0) n = -n;
+        vec3 v = normalize(getWorldViewVector());
+        vec3 r = reflect(-v, n);
+        float ay = max(r.y, 0.0);
+        float tg = 1.0 - exp(-ay / materialParams.horizonBand);
+        vec3 sky = mix(materialParams.horizon, materialParams.zenith, tg);
+        // wie SkyLookModel.gradient: Uebergang entsaettigen (kein Lila zwischen Orange und Blau)
+        sky = mix(sky, vec3(dot(sky, vec3(0.2126, 0.7152, 0.0722))), 0.55 * 4.0 * tg * (1.0 - tg));
+        // Flach gespiegelte Strahlen treffen das Ufer (Baeume, Gelaende), nicht den hellen
+        // Horizont: dort eine dunkle, gruenliche Uferfarbe aus dem Dunst.
+        vec3 shore = materialParams.horizon * vec3(0.20, 0.26, 0.22);
+        sky = mix(shore, sky, smoothstep(0.02, 0.30, r.y));
+        float cosT = clamp(dot(n, v), 0.0, 1.0);
+        float fresnel = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
+        material.emissive = vec4(sky * (fresnel * materialParams.reflectivity), 0.0);
+    }
+}

@@ -1,8 +1,10 @@
 package de.trailscape.app.indoor.render
 
+import de.trailscape.core.indoor.sky.DaylightLighting
 import de.trailscape.core.indoor.sky.DaylightModel
 import de.trailscape.core.indoor.sky.IndoorDaylight
 import de.trailscape.core.indoor.sky.SkyClouds
+import de.trailscape.core.indoor.sky.SkyIrradiance
 import de.trailscape.core.indoor.sky.SkyLook
 import de.trailscape.core.indoor.sky.SkyRgb
 import de.trailscape.core.indoor.world.SkySetting
@@ -41,6 +43,8 @@ data class Rgb(val r: Double, val g: Double, val b: Double) {
  * @property look der sichtbare Himmel (szenenlinear, vor der Tonwertabbildung).
  * @property skyScale `ambientLux × Belichtung`.
  * @property fogColor Dunstfarbe fuer `fogOptions.color` (sichtbarer Horizont / [skyScale]).
+ * @property daylight alles aus `core/…/indoor/sky` (Belichtung, Farbweg, Dunst-Einstreuung,
+ *   Parameter der Materialien ueber `SkyShading`).
  */
 data class SkyLighting(
     val sunDirection: V3,
@@ -55,7 +59,14 @@ data class SkyLighting(
     val look: SkyLook,
     val skyScale: Double,
     val fogColor: Rgb,
-)
+    val daylight: DaylightLighting,
+) {
+    /** Belichtung als EV100 (Blende [SkyModel.APERTURE], ISO [SkyModel.ISO]). */
+    val ev100: Double get() = daylight.ev100
+
+    /** Verschlusszeit zu [ev100] bei Blende 16 und ISO 100. */
+    val shutterS: Float get() = (SkyModel.APERTURE * SkyModel.APERTURE / Math.pow(2.0, ev100)).toFloat()
+}
 
 object SkyModel {
     /** Unter dieser Sonnenhoehe bleibt das Licht auf dem Stand der tiefen Sonne (Vertrag `SkySetting`). */
@@ -92,6 +103,7 @@ object SkyModel {
             look = d.look,
             skyScale = d.skyScale,
             fogColor = d.fogColor.toRgb(),
+            daylight = d,
         )
     }
 
@@ -101,63 +113,21 @@ object SkyModel {
      * Strahldichte des Himmelsmodells in Richtung [d] (glTF, Einheitsvektor):
      * Verlauf Horizont → Zenit, darunter der Boden. Fuer das Umgebungslicht.
      */
-    fun radiance(l: SkyLighting, d: V3): Rgb = if (d.y >= 0.0) {
-        l.horizon.lerp(l.zenith, d.y.pow(0.5))
-    } else {
-        l.horizon.lerp(l.ground, (-d.y * 4.0).coerceIn(0.0, 1.0))
-    }
+    fun radiance(l: SkyLighting, d: V3): Rgb =
+        SkyIrradiance.radiance(l.zenith.toSky(), l.horizon.toSky(), l.ground.toSky(), d.y).toRgb()
 
     /**
      * Die neun SH-Koeffizienten (drei Baender, je RGB) der Strahldichte fuer
-     * `IndirectLight.Builder.radiance(3, sh)`.
-     *
-     * Basis genau wie Filament sie erwartet (`IndirectLight.cpp`, Faktoren `A`
-     * ohne den Kosinus-Anteil): `Y0 = 0,282095`, `Y1 = −0,488603·y`,
-     * `Y2 = 0,488603·z`, `Y3 = −0,488603·x`, `Y4 = 1,092548·y·x`,
-     * `Y5 = −1,092548·y·z`, `Y6 = 0,315392·(3z² − 1)`, `Y7 = −1,092548·z·x`,
-     * `Y8 = 0,546274·(x² − y²)`. Numerische Integration ueber die Kugel.
+     * `IndirectLight.Builder.radiance(3, sh)` — gerechnet in
+     * `core/…/indoor/sky/SkyIrradiance` (Basis wie Filaments `IndirectLight.cpp`).
      */
-    fun radianceSh(l: SkyLighting, steps: Int = 48): FloatArray {
-        val sh = DoubleArray(27)
-        val dTheta = PI / steps
-        val dPhi = 2 * PI / (2 * steps)
-        for (i in 0 until steps) {
-            val theta = (i + 0.5) * dTheta
-            val st = sin(theta)
-            val ct = cos(theta)
-            for (j in 0 until 2 * steps) {
-                val phi = (j + 0.5) * dPhi
-                val d = V3(st * cos(phi), ct, st * sin(phi))
-                val c = radiance(l, d)
-                val w = st * dTheta * dPhi
-                val basis = shBasis(d)
-                for (k in 0 until 9) {
-                    sh[k * 3] += c.r * basis[k] * w
-                    sh[k * 3 + 1] += c.g * basis[k] * w
-                    sh[k * 3 + 2] += c.b * basis[k] * w
-                }
-            }
-        }
-        return FloatArray(27) { sh[it].toFloat() }
-    }
+    fun radianceSh(l: SkyLighting, steps: Int = 48): FloatArray =
+        SkyIrradiance.sh(l.zenith.toSky(), l.horizon.toSky(), l.ground.toSky(), steps)
+
+    private fun Rgb.toSky() = SkyRgb(r, g, b)
 
     /** Filaments SH-Basis (siehe [radianceSh]). */
-    fun shBasis(d: V3): DoubleArray {
-        val x = d.x
-        val y = d.y
-        val z = d.z
-        return doubleArrayOf(
-            0.282095,
-            -0.488603 * y,
-            0.488603 * z,
-            -0.488603 * x,
-            1.092548 * y * x,
-            -1.092548 * y * z,
-            0.315392 * (3 * z * z - 1),
-            -1.092548 * z * x,
-            0.546274 * (x * x - y * y),
-        )
-    }
+    fun shBasis(d: V3): DoubleArray = SkyIrradiance.basis(d.x, d.y, d.z)
 
     /**
      * Was Filament aus [sh] fuer die Normale [n] als diffuse Beleuchtung

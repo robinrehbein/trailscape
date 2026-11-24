@@ -169,6 +169,60 @@ object SkyClouds {
         return out
     }
 
+    /** Kantenlaenge der kachelbaren Wolken-/Wellentextur. */
+    const val CLOUD_TEX_SIZE = 256
+
+    /**
+     * Kachelbares Wolkenrauschen fuer das Himmelsmaterial (und die Wellen des
+     * Wassers): [size]² Werte 0..255 (R8), Zeile fuer Zeile. Wertrauschen mit
+     * 5 Lagen, je Lage periodisch auf dem Gitter — die Textur wiederholt sich
+     * nahtlos (`REPEAT`). Auf etwa 0..1 gedehnt, damit die Bedeckung im Shader
+     * mit einer Schwelle einstellbar ist. Kein Bild aus fremder Quelle.
+     */
+    fun cloudTexture(size: Int = CLOUD_TEX_SIZE): ByteArray {
+        val raw = DoubleArray(size * size)
+        var lo = Double.MAX_VALUE
+        var hi = -Double.MAX_VALUE
+        for (y in 0 until size) for (x in 0 until size) {
+            var sum = 0.0
+            var amp = 0.5
+            var norm = 0.0
+            var period = 4
+            for (k in 0 until 5) {
+                val fx = x.toDouble() / size * period
+                val fy = y.toDouble() / size * period
+                sum += amp * periodicNoise(fx, fy, period, k)
+                norm += amp
+                amp *= 0.5
+                period *= 2
+            }
+            val v = sum / norm
+            raw[y * size + x] = v
+            if (v < lo) lo = v
+            if (v > hi) hi = v
+        }
+        val span = (hi - lo).takeIf { it > 1e-9 } ?: 1.0
+        return ByteArray(size * size) { ((raw[it] - lo) / span * 255.0 + 0.5).toInt().coerceIn(0, 255).toByte() }
+    }
+
+    private fun periodicNoise(x: Double, y: Double, period: Int, seed: Int): Double {
+        val ix = floor(x)
+        val iy = floor(y)
+        val fx = x - ix
+        val fy = y - iy
+        val ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10)
+        val uy = fy * fy * fy * (fy * (fy * 6 - 15) + 10)
+        val x0 = Math.floorMod(ix.toInt(), period)
+        val y0 = Math.floorMod(iy.toInt(), period)
+        val x1 = (x0 + 1) % period
+        val y1 = (y0 + 1) % period
+        val a = hash(x0, y0, seed + 7)
+        val b = hash(x1, y0, seed + 7)
+        val c = hash(x0, y1, seed + 7)
+        val d = hash(x1, y1, seed + 7)
+        return a + (b - a) * ux + (c - a) * uy + (a - b - c + d) * ux * uy
+    }
+
     // -----------------------------------------------------------------------
     // Rauschen
     // -----------------------------------------------------------------------
