@@ -252,7 +252,7 @@ Bild nur bis rund 25° über den Horizont.
 die Welt rendert dort three.js, der Himmel geht durch die nachgebaute
 `ACES_LEGACY`): `docs/indoor/bilder/himmel/01-morgen.jpg`,
 `02-mittag.jpg`, `03-abend.jpg`, `04-mittag-wolken.jpg`,
-`05-abend-wald.jpg`; das Rundumbild je Tageszeit `rundum-*.jpg`.
+`05-abend-wald.jpg`; das Rundumbild je Tageszeit `rundum-*.jpg`; die Auswahl im Schritt Koppeln `06-auswahl-tageszeit.jpg`.
 
 **Leistung (geschätzt, nicht gemessen):** Je Bild nichts Neues — die
 Skybox war schon da (ein Texturzugriff je Himmelspixel; jetzt aus einer
