@@ -61,7 +61,8 @@ const LEVEL_FACTOR = 4;
 const NODE_NAMES = ['terrain', 'route', 'roads', 'buildings', 'trees', 'water', 'props'];
 const MATERIAL_NAMES = ['mat_terrain', 'mat_building_wall', 'mat_building_roof', 'mat_tree_trunk', 'mat_tree_leaves', 'mat_water'];
 const SUB_RE = /^terrain_sub_(\d+)_(\d+)$/;
-const ALLOWED_EXTENSIONS = ['KHR_materials_unlit'];
+// KHR_materials_specular: nur specularFactor 0 fuer Vegetation (Abweichung, docs/indoor/world.md; gltfio 1.75.1: Ubershader specular_*)
+const ALLOWED_EXTENSIONS = ['KHR_materials_unlit', 'KHR_materials_specular'];
 const ALLOWED_ATTRIBUTES = ['POSITION', 'NORMAL', 'TEXCOORD_0', 'COLOR_0'];
 const MODEL_ATTRIBUTES = [...ALLOWED_ATTRIBUTES, 'JOINTS_0', 'WEIGHTS_0'];
 const VISIBILITY_M = { LOW: 6000, MEDIUM: 12000, HIGH: 20000 };

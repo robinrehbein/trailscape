@@ -613,8 +613,10 @@ internal object FoliageAtlas {
             val furrow = Noise.value(x / 4.0, y / 22.0, 0xba01, w / 4).let { 1 - kotlin.math.abs(it - 0.5) * 2 }
             val plates = Noise.value(x / 8.0, y / 10.0, 0xba02, w / 8)
             val fine = Noise.value(x / 2.0, y / 4.0, 0xba03, w / 2)
-            var v = 0.42 + 0.36 * plates + 0.12 * fine
-            v *= 0.55 + 0.45 * smoothstep(0.15, 0.6, furrow)
+            // Helligkeit 0,45–0,95 (sRGB): mit der Vertexfarbe linear rund 0,1–0,2 wie echte Rinde
+            // (vorher ~0,035 — Staemme wirkten auch in der Sonne fast schwarz).
+            var v = 0.58 + 0.28 * plates + 0.1 * fine
+            v *= 0.68 + 0.32 * smoothstep(0.15, 0.6, furrow)
             val c = (v.coerceIn(0.0, 1.0) * 255).toInt()
             img.argb[y * w + x] = Argb.of(255, c, c, (c * 0.94).toInt())
         }

@@ -62,12 +62,12 @@ internal object TreeModels {
 
     /** Grundfarben der Kronen in sRGB (mit der hellen Atlas-Textur multipliziert). */
     private val LEAF = mapOf(
-        Species.BROAD to intArrayOf(76, 124, 34),
-        Species.TALL to intArrayOf(92, 138, 40),
-        Species.CONIFER to intArrayOf(40, 88, 44),
-        Species.SMALL to intArrayOf(84, 130, 36),
-        Species.PINE to intArrayOf(58, 102, 44),
-        Species.BUSH to intArrayOf(74, 122, 32),
+        Species.BROAD to intArrayOf(88, 118, 50),
+        Species.TALL to intArrayOf(100, 128, 56),
+        Species.CONIFER to intArrayOf(52, 80, 52),
+        Species.SMALL to intArrayOf(94, 122, 50),
+        Species.PINE to intArrayOf(68, 92, 54),
+        Species.BUSH to intArrayOf(86, 114, 46),
     )
 
     /** Grundfarbe (sRGB) der Krone einer Art — fuer Kreuzbilder der Waldkoerper. */
@@ -172,7 +172,7 @@ internal object TreeModels {
             // Verschattung: innen und unten dunkler, oben und aussen heller (geringe Spanne).
             val depth = rl.coerceIn(0.0, 1.15)
             val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
-            var shade = tint * (0.66 + 0.22 * depth.pow(1.3) + 0.18 * ht)
+            var shade = tint * (0.58 + 0.2 * depth.pow(1.3) + 0.16 * ht)
             if (f == 0.0) shade *= darkBase
             val s = (if (alongIsS) f else (g + 1) / 2).coerceIn(0.0, 1.0)
             val t = (if (alongIsS) (g + 1) / 2 else f).coerceIn(0.0, 1.0)
@@ -235,7 +235,7 @@ internal object TreeModels {
     private fun trunkRadius(h: Double, perM: Double, max: Double): Double = (0.05 + perM * h).coerceAtMost(max)
 
     private fun barkColor(s: Spec): Int =
-        if (s.pale) lin(Argb.rgb(168, 164, 154)) else lin(Argb.rgb(116, 102, 88))
+        if (s.pale) lin(Argb.rgb(214, 210, 200)) else lin(Argb.rgb(170, 152, 132))
 
     /** Stamm bis [top] mit Radius [r], in der feinsten Stufe mit Wurzelanlauf. */
     private fun stem(m: MeshBuilder, lod: Lod, r: Double, top: Double, color: Int) {
@@ -416,7 +416,7 @@ internal object TreeModels {
         val rnd = Rnd(s.seed, 0x7a21)
         val h = s.heightM
         val leaf = LEAF.getValue(Species.CONIFER)
-        val bark = lin(Argb.rgb(108, 92, 78))
+        val bark = lin(Argb.rgb(158, 138, 118))
         val b0 = s.bare.coerceIn(0.04, 0.4) * h
         val span = h - b0
         val r0 = 0.21 * h * s.width
@@ -483,7 +483,7 @@ internal object TreeModels {
                 val out = Vec3(cos(a0), 0.0, -sin(a0))
                 val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
                 val nUp = (out * 0.6 + crown.toward * 0.5 + Vec3(0.0, 0.35, 0.0)).normalized()
-                val shade = tint * (0.72 + 0.22 * ht) * (1.0 - 0.25 * t)
+                val shade = tint * (0.62 + 0.2 * ht) * (1.0 - 0.25 * t)
                 val u = reg.u(ci.toDouble())
                 val v = reg.v(t)
                 top[ri * 2 + ci] = m.vertex(p.x, p.y, p.z, nUp.x, nUp.y, nUp.z, u, v, leafColor(leaf, shade, hue))
@@ -521,8 +521,8 @@ internal object TreeModels {
         val h = s.heightM
         val leaf = LEAF.getValue(Species.PINE)
         val r = trunkRadius(h, 0.01, 0.34)
-        val lower = lin(Argb.rgb(112, 96, 84))
-        val upper = lin(Argb.rgb(150, 110, 82))
+        val lower = lin(Argb.rgb(162, 142, 126))
+        val upper = lin(Argb.rgb(196, 148, 110))
         val seg = if (lod == Lod.NEAR) 6 else if (lod == Lod.MID) 4 else 3
         if (lod == Lod.NEAR) trunk.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.6, 0.0), r * 1.8, r * 1.05, seg, false, false, lower)
         trunk.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.5 * h, 0.0), r * 1.1, r * 0.85, seg, false, false, lower)

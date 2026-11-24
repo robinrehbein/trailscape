@@ -374,7 +374,7 @@ internal class TreesLayer : TileLayer {
             }
         }
         val bark = ctx.textures.get("x_bark", jpegQuality = 84) { FoliageAtlas.barkImage() }
-        val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, texture = bark, repeat = true, roughness = 0.95f)
+        val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, texture = bark, repeat = true, roughness = 0.95f, noSpecular = true)
         val trunks = out.mesh(WorldNames.NODE_TREES, trunkMat)
         val crowns = out.mesh(WorldNames.NODE_TREES, leaves)
         val scratchTrunk = MeshBuilder(64, 64)
@@ -594,6 +594,7 @@ internal class TreesLayer : TileLayer {
             alphaMode = GlbAlphaMode.MASK,
             alphaCutoff = 0.5f,
             doubleSided = false,
+            noSpecular = true,
         )
     }
 
@@ -608,6 +609,7 @@ internal class TreesLayer : TileLayer {
             alphaMode = GlbAlphaMode.MASK,
             alphaCutoff = 0.5f,
             doubleSided = false,
+            noSpecular = true,
         )
     }
 
@@ -616,7 +618,7 @@ internal class TreesLayer : TileLayer {
         val tex = ctx.textures.get("x_canopy", jpegQuality = 86) { FoliageAtlas.canopyImage() }
         return TileMaterial(
             WorldNames.MAT_TREE_LEAVES, texture = tex, repeat = true, roughness = 0.95f,
-            alphaMode = GlbAlphaMode.MASK, alphaCutoff = 0.5f, doubleSided = true,
+            alphaMode = GlbAlphaMode.MASK, alphaCutoff = 0.5f, doubleSided = true, noSpecular = true,
         )
     }
 

@@ -353,6 +353,54 @@ nicht ganz vermeiden).
 Die Balkantrasse mit `--laser` scheitert bei `-Xmx256m` weiterhin beim Laden
 (`OutOfMemoryError`, Laser-Stufe, unabhängig von der Vegetation).
 
+### Runde 3b: Spiegelanteil abgeschaltet, Rinde hell
+
+Rückmeldung zu Runde 3: Sonnige Kronen weiterhin grau verschleiert, Stämme
+fast schwarz.
+
+- **`KHR_materials_specular` mit `specularFactor` 0** auf allen
+  Vegetationsmaterialien (`x_mat_tree_cards` samt Bodenbewuchs und
+  Kreuzbildern, `mat_tree_leaves`, `mat_tree_trunk`). In `Glb.kt` als
+  optionale Material-Erweiterung (`GlbMaterial.noSpecular`, nur in
+  `extensionsUsed`, nicht `extensionsRequired`), über
+  `TileMaterial.noSpecular` gesetzt. **Beleg, dass gltfio 1.75.1 sie im
+  Ubershader auswertet** (Tag `v1.75.1`):
+  - `libs/gltfio/include/gltfio/MaterialProvider.h:98` `bool hasSpecular : 1;`
+  - `libs/gltfio/src/AssetLoader.cpp:1462` `.hasSpecular = !!inputMat->has_specular,`;
+    `:1760–1763` setzt `specularColorFactor` und
+    `specularStrength = spConfig.specular_factor`
+  - `libs/gltfio/src/UbershaderProvider.cpp:194`
+    `requirements.features["Specular"] = config.hasSpecular;`; `:74–78`
+    (Unlit und Specular schließen sich aus — hier nicht gebraucht)
+  - `libs/gltfio/CMakeLists.txt:152–154` baut `specular_opaque`,
+    `specular_fade`, **`specular_masked`** ins Archiv;
+    `materials/specular.spec.in`: `VertexColors`, `BaseColorTexture` optional,
+    `Specular = optional`
+  - `materials/specular.mat.in:128`
+    `material.specularFactor = materialParams.specularStrength;` — laut
+    Materials-Doku skaliert `specularFactor` F0 und setzt F90, mit 0 also kein
+    Spiegelanteil, auch nicht bei streifendem Blick.
+
+  Der Betrachter lädt die Erweiterung als `MeshPhysicalMaterial`
+  (`specularIntensity` 0) und erlaubt sie in der Formatprüfung, ebenso
+  `GlbCheck` in `:core`. Auf dem Gerät nicht gesehen: Ob `specular_masked` mit
+  `doubleSided` (Kronendach) und MSAA genauso wie `lit_masked` läuft, sagen die
+  Quellen (gleiche Vorlage `${BLENDING}`/`${DOUBLESIDED}`), geprüft ist es nicht.
+- **Rinde:** Die Albedo war linear rund 0,035 (Textur ~0,2 × Vertexfarbe ~0,15);
+  echte Rinde liegt bei 0,1–0,2. Rindentextur heller (0,45–0,95 sRGB),
+  Rindenfarben angehoben (Laubbaum sRGB 170/152/132, Fichte 158/138/118,
+  Kiefer unten 162/142/126, oben 196/148/110, Birke 214/210/200). Die
+  Stammnormalen sind radial (Loft), Stämme empfangen keine Schatten — der
+  Rest war Albedo und Glanz.
+- **Laub:** Ohne Glanz wurde das Grün zu kräftig; Grundfarben olivgrüner,
+  Helligkeit 0,58–0,94.
+- Die Normalen zur Strecke (Runde 3) bleiben: Sie halten die Schattenseite
+  der Kronen hell genug.
+
+Messwerte unverändert gegenüber Runde 3 (Schauinsland 560 553 Dreiecke,
+13,2 MB/km; Altenberg 17,8; Tharandt 13,9; Balkantrasse 18,5 MB/km). Neu im
+Bildsatz: `balkantrasse-laser-chase-km26`.
+
 ### Bildrate: Overdraw und Stellschrauben
 
 Alpha-getestete Karten überlagern sich (Overdraw), und `discard` hebt Early-Z
@@ -398,6 +446,13 @@ Fällt auf dem Gerät die Bildrate, in dieser Reihenfolge drehen:
    Blattkarten mit echtem Alpha-Ausschnitt in `x_mat_tree_cards` (MASK,
    **einseitig**, beide Wicklungen im Netz); `mat_tree_leaves` (MASK,
    doppelseitig, wie im Vertrag) trägt das deckende Kronendach der Waldkörper.
+   **Erweiterung `KHR_materials_specular`** (Vertrag 7.3: „keine weiteren
+   Erweiterungen“): nur `specularFactor` 0 auf Vegetationsmaterialien, nur in
+   `extensionsUsed`. Ohne sie überdeckt der Spiegelanteil der Sonne bei
+   streifendem Blick das Grün (Runde 3/3b). gltfio 1.75.1 unterstützt sie im
+   Ubershader (`specular_masked`, Belege oben). `GlbCheck` und Betrachter
+   lassen genau diese Erweiterung zu. **Bitte an den Vertragsbesitzer:**
+   7.3 entsprechend ergänzen.
 2. **Wasser nur als Flächen.** Schmale Wasserläufe (Linien `waterway`)
    bekommen keinen eigenen Spiegel; sie erscheinen nur im Luftbild bzw. in der
    erzeugten Bodentextur. Wasser liegt als Gitterzellen (4 m in Stufe 0) knapp
