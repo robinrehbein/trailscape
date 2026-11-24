@@ -522,6 +522,71 @@ internal object FoliageAtlas {
     }
 
     // -----------------------------------------------------------------------
+    // Kodierung: Grau + Alpha
+    // -----------------------------------------------------------------------
+
+    /** Der Atlas als fertige Textur (PNG Grau+Alpha), einmal je Prozess gerechnet. */
+    val atlasTexture: EncodedTexture by lazy { EncodedTexture(encodeGreyAlpha(image()), "image/png", SIZE, SIZE) }
+
+    /** Der Fern-Atlas als fertige Textur (PNG Grau+Alpha). */
+    val farTexture: EncodedTexture by lazy { EncodedTexture(encodeGreyAlpha(farImage()), "image/png", FAR_SIZE, FAR_SIZE) }
+
+    /**
+     * PNG mit Farbtyp 4 (Grau + Alpha, 8 Bit): halb so viele Bytes wie RGBA und
+     * dichter zu packen — die Farbe der Vegetation kommt aus den Eckpunkten, das Bild
+     * traegt nur Helligkeit (Gruenkanal) und Ausschnitt. gltfio (stb_image, auf
+     * RGBA erweitert) und Browser lesen das wie jedes PNG.
+     */
+    fun encodeGreyAlpha(img: RgbaImage): ByteArray {
+        val w = img.width
+        val h = img.height
+        val stride = w * 2
+        val raw = ByteArray((stride + 1) * h)
+        val prev = ByteArray(stride)
+        val cur = ByteArray(stride)
+        var rp = 0
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val c = img.argb[y * w + x]
+                cur[x * 2] = Argb.green(c).toByte()
+                cur[x * 2 + 1] = Argb.alpha(c).toByte()
+            }
+            // Filter "Up" (2): Zeilen aehneln einander stark
+            raw[rp++] = 2
+            for (i in 0 until stride) raw[rp++] = (cur[i] - prev[i]).toByte()
+            System.arraycopy(cur, 0, prev, 0, stride)
+        }
+        val deflater = java.util.zip.Deflater(9)
+        val packed = try {
+            deflater.setInput(raw)
+            deflater.finish()
+            val bos = java.io.ByteArrayOutputStream(raw.size / 4 + 64)
+            val buf = ByteArray(64 * 1024)
+            while (!deflater.finished()) bos.write(buf, 0, deflater.deflate(buf))
+            bos.toByteArray()
+        } finally {
+            deflater.end()
+        }
+        val out = java.io.ByteArrayOutputStream(packed.size + 64)
+        out.write(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+        fun be(v: Int) = byteArrayOf((v ushr 24).toByte(), (v ushr 16).toByte(), (v ushr 8).toByte(), v.toByte())
+        fun chunk(type: String, data: ByteArray) {
+            out.write(be(data.size))
+            val t = type.toByteArray(Charsets.US_ASCII)
+            out.write(t)
+            out.write(data)
+            val crc = java.util.zip.CRC32()
+            crc.update(t)
+            crc.update(data)
+            out.write(be(crc.value.toInt()))
+        }
+        chunk("IHDR", be(w) + be(h) + byteArrayOf(8, 4, 0, 0, 0))
+        chunk("IDAT", packed)
+        chunk("IEND", ByteArray(0))
+        return out.toByteArray()
+    }
+
+    // -----------------------------------------------------------------------
     // Kronendach der Waldkoerper (kachelnd)
     // -----------------------------------------------------------------------
 

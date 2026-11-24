@@ -175,11 +175,15 @@ internal object TreeModels {
         return (u * cos(angle) + w * sin(angle)).normalized()
     }
 
+    /**
+     * Vertexfarbe einer Karte: Grundfarbe × Helligkeit [factor], Farbton [hue]. Der Atlas ist grau
+     * (nur Helligkeit), deshalb steckt hier auch dessen frueherer Gelbgruen-Stich (0,86 / 1 / 0,72).
+     */
     private fun leafColor(srgb: IntArray, factor: Double, hue: Double = 0.0): Int {
         val f = factor.coerceIn(0.0, 1.5)
-        val r = srgb[0] * f * (1 + 0.14 * hue)
+        val r = srgb[0] * f * 0.86 * (1 + 0.14 * hue)
         val g = srgb[1] * f * (1 + 0.04 * hue)
-        val b = srgb[2] * f * (1 - 0.16 * hue)
+        val b = srgb[2] * f * 0.72 * (1 - 0.16 * hue)
         return lin(Argb.rgb(min(255, r.toInt()), min(255, g.toInt()), min(255, b.toInt())))
     }
 
@@ -208,9 +212,9 @@ internal object TreeModels {
     /** Kartenzahlen je Form und Stufe: (Zweigkarten, Massekarten innen, Massekarten aussen). */
     private fun counts(shape: Shape, lod: Lod): IntArray = when (lod) {
         Lod.NEAR -> when (shape) {
-            Shape.BROAD -> intArrayOf(104, 10, 0)
-            Shape.TALL -> intArrayOf(76, 8, 0)
-            Shape.SMALL -> intArrayOf(66, 7, 0)
+            Shape.BROAD -> intArrayOf(104, 16, 0)
+            Shape.TALL -> intArrayOf(76, 12, 0)
+            Shape.SMALL -> intArrayOf(66, 11, 0)
             Shape.BUSH -> intArrayOf(20, 4, 0)
         }
         Lod.MID -> when (shape) {
@@ -329,11 +333,11 @@ internal object TreeModels {
             // nicht durch die Kronenmitte (sonst zeigen die gebogenen Normalen einer Karte in
             // entgegengesetzte Richtungen), eher oben: von unten verdecken die Zweigkarten sie
             val dd = Vec3(d.x, abs(d.y) * 0.8 + 0.1, d.z).normalized()
-            val p = cr.c + Vec3(dd.x * rx, dd.y * ry, dd.z * rx) * rnd.range(0.4, 0.65)
-            val len = rx * rnd.range(0.5, 0.65)
+            val p = cr.c + Vec3(dd.x * rx, dd.y * ry, dd.z * rx) * rnd.range(0.35, 0.58)
+            val len = rx * rnd.range(0.6, 0.78)
             val along = (Vec3(0.0, 1.0, 0.0) + rnd.unit() * 0.6).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
-            card(crown, clampY(p, len) - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * 0.72, s.hue, bend = 0.9)
+            card(crown, clampY(p, len) - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * 0.84, s.hue, bend = 0.9)
         }
         // Laubmasse aussen (mittel/fern): grosse Karten auf der Kronenschale
         for (i in 0 until nMass) {
@@ -552,7 +556,7 @@ internal object TreeModels {
      * Kreuzbild eines ganzen Baums fuer Waldraender und Kronendach: [count]
      * senkrechte Karten um (x, y, z), Vorderseiten zur Strecke ([toward]).
      */
-    fun billboardTree(m: MeshBuilder, x: Double, y: Double, z: Double, height: Double, width: Double, reg: FoliageAtlas.Region, turn: Double, toward: Vec3, color: IntArray, tint: Double, hue: Double, count: Int = 2) {
+    fun billboardTree(m: MeshBuilder, x: Double, y: Double, z: Double, height: Double, width: Double, reg: FoliageAtlas.Region, turn: Double, toward: Vec3, color: IntArray, tint: Double, hue: Double, count: Int = 2, up: Double = 0.35) {
         val cy = y + height * 0.6
         for (k in 0 until count) {
             val a = turn + k * PI / count
@@ -564,7 +568,7 @@ internal object TreeModels {
                 val pz = z + az * width * 0.5 * c[0]
                 val py = y - 0.3 + (height + 0.3) * c[1]
                 // gebogene Normale: vom Kronenmittelpunkt weg, zur Strecke hin
-                val n = Vec3(ax * c[0] * 0.5 + toward.x * 0.6, (py - cy) / height * 1.2 + 0.35, az * c[0] * 0.5 + toward.z * 0.6).normalized()
+                val n = Vec3(ax * c[0] * 0.5 + toward.x * 0.6, (py - cy) / height * 1.2 + up, az * c[0] * 0.5 + toward.z * 0.6).normalized()
                 val shade = tint * (0.62 + 0.4 * c[1])
                 m.vertex(px, py, pz, n.x, n.y, n.z, reg.u((c[0] + 1) / 2), reg.v(c[1]), leafColor(color, shade, hue))
             }

@@ -229,10 +229,10 @@ internal class TreesLayer : TileLayer {
             if (!isF(i, j + 1)) on += 1.0
             val edge = oe != 0.0 || on != 0.0
             val coarse = cell > 16.0
-            val topShare = if (coarse) 0.4 else 0.3
+            val topShare = if (coarse) 0.0 else 0.3
             val top = Noise.hash01(wi, wj, SEED_TOP)
             val per = when {
-                edge -> if (coarse) 2 else 1
+                edge -> 1
                 top < topShare -> 1
                 else -> 0
             }
@@ -267,6 +267,7 @@ internal class TreesLayer : TileLayer {
                 TreeModels.billboardTree(
                     m, ctx.x(e), ctx.y(base), ctx.z(n), height, width, region(ctx.level, conifer), r1 * 6.283, toward,
                     if (conifer) conColor else broadColor, 0.8 + 0.25 * r2, (r3 - 0.5) * 0.6,
+                    up = if (edge) 0.35 else 1.1,
                 )
                 used += TreeModels.TUFT_TRIANGLES
             }
@@ -395,7 +396,7 @@ internal class TreesLayer : TileLayer {
             }
         } else {
             val x = r(1)
-            val bush = if (canopy < 0.6) 0.34 else 0.16
+            val bush = if (canopy < 0.5) 0.2 else 0.1
             when {
                 x < bush -> TreeModels.Species.BUSH
                 x < bush + 0.06 -> if (r(9) < pineShare) TreeModels.Species.PINE else TreeModels.Species.CONIFER
@@ -457,7 +458,7 @@ internal class TreesLayer : TileLayer {
         val net = RoadNet(ctx, marginM = 4.0)
         val buildings = ctx.map.buildings(s.minE - 4, s.minN - 4, s.maxE + 4, s.maxN + 4)
         val m = out.mesh(WorldNames.NODE_TREES, leaves)
-        val grassColor = intArrayOf(104, 128, 62)
+        val grassColor = intArrayOf(126, 150, 70)
         val fernColor = intArrayOf(96, 140, 56)
         var used = 0
         for (r in ranges) {
@@ -545,7 +546,7 @@ internal class TreesLayer : TileLayer {
 
     /** Blattkarten: Atlas mit Alpha-Ausschnitt, `MASK` (Schwelle 0,5), doppelseitig. */
     private fun leavesMaterial(ctx: TileContext): TileMaterial {
-        val tex = ctx.textures.get("x_foliage", alpha = true) { FoliageAtlas.image() }
+        val tex = FoliageAtlas.atlasTexture
         return TileMaterial(
             WorldNames.MAT_TREE_LEAVES,
             texture = tex,
@@ -559,7 +560,7 @@ internal class TreesLayer : TileLayer {
 
     /** Stufe 1: nur Kreuzbilder ganzer Baeume, kleiner Fern-Atlas (gleiche Einstellungen). */
     private fun farLeavesMaterial(ctx: TileContext): TileMaterial {
-        val tex = ctx.textures.get("x_foliage_far", alpha = true) { FoliageAtlas.farImage() }
+        val tex = FoliageAtlas.farTexture
         return TileMaterial(
             WorldNames.MAT_TREE_LEAVES,
             texture = tex,
@@ -605,8 +606,8 @@ internal class TreesLayer : TileLayer {
         /** Hoechster Abstand fuer die mittlere bzw. feinste Stufe (falls das Budget reicht). */
         const val MID_M = 40.0
         const val DETAIL_M = 16.0
-        const val DENSE_SPACING_M = 7.0
-        const val OPEN_SPACING_M = 9.0
+        const val DENSE_SPACING_M = 6.5
+        const val OPEN_SPACING_M = 8.0
 
         /** Mindestabstand des Stamms vom Fahrbahnrand. */
         const val TRACK_CLEARANCE_M = 2.8
