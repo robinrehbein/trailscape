@@ -335,17 +335,17 @@ internal object TreeModels {
             Form.SPRUCE -> Plan(0, 0, 0, 0)
         }
         Lod.MID -> when (form) {
-            Form.BEECH, Form.OAK -> Plan(5, 14, 5, 3)
-            Form.ASH, Form.BIRCH, Form.POPLAR, Form.FRUIT -> Plan(4, 12, 5, 3)
-            Form.FIELD -> Plan(4, 9, 4, 3)
+            Form.BEECH, Form.OAK -> Plan(5, 16, 5, 3)
+            Form.ASH, Form.BIRCH, Form.POPLAR, Form.FRUIT -> Plan(4, 14, 5, 3)
+            Form.FIELD -> Plan(4, 11, 4, 3)
             Form.BUSH -> Plan(2, 7, 4, 3)
             Form.PINE -> Plan(3, 8, 4, 3)
             Form.SPRUCE -> Plan(0, 0, 0, 0)
         }
         Lod.FAR -> when (form) {
-            Form.BEECH, Form.OAK -> Plan(4, 5, 4, 3)
-            Form.ASH, Form.BIRCH, Form.POPLAR, Form.FRUIT -> Plan(3, 5, 4, 3)
-            Form.FIELD, Form.PINE -> Plan(3, 4, 4, 3)
+            Form.BEECH, Form.OAK -> Plan(4, 8, 4, 3)
+            Form.ASH, Form.BIRCH, Form.POPLAR, Form.FRUIT -> Plan(3, 8, 4, 3)
+            Form.FIELD, Form.PINE -> Plan(3, 6, 4, 3)
             Form.BUSH -> Plan(2, 4, 4, 3)
             Form.SPRUCE -> Plan(0, 0, 0, 0)
         }
@@ -354,8 +354,8 @@ internal object TreeModels {
     /** Groesste Kantenlaenge einer Laubkarte je Stufe (Meter). */
     private fun cardMax(lod: Lod): Double = when (lod) {
         Lod.NEAR -> 4.4
-        Lod.MID -> 3.2
-        Lod.FAR -> 6.5
+        Lod.MID -> 2.7
+        Lod.FAR -> 4.8
     }
 
     /**

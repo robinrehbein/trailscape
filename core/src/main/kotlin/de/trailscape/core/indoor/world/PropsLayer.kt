@@ -3,9 +3,11 @@ package de.trailscape.core.indoor.world
 import de.trailscape.core.indoor.SurfaceKind
 import de.trailscape.core.indoor.SurfaceSection
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -103,6 +105,7 @@ internal class PropsLayer : TileLayer {
         }
 
         fun run() {
+            bridgeRailings()
             guidePosts()
             streetLamps()
             townSigns()
@@ -110,6 +113,7 @@ internal class PropsLayer : TileLayer {
             logPiles()
             benches()
             signposts()
+            prioritySigns()
         }
 
         private inline fun eachGrid(period: Double, f: (Int, Double) -> Unit) {
@@ -117,6 +121,59 @@ internal class PropsLayer : TileLayer {
             while (k * period <= track.lengthM) {
                 f(k, k * period)
                 k++
+            }
+        }
+
+        // --- Brueckengelaender ---------------------------------------------------
+
+        /**
+         * Gelaender beidseits, wo die Strecke ueber eine Bruecke der Karte fuehrt (Wegstueck „auf der
+         * Strecke" mit `brunnel = bridge`): Pfosten alle 1,8 m, Handlauf in 1,05 m und Knieleiste in
+         * 0,5 m Hoehe ueber dem Belag; Holz bei Holzbelag, sonst Stahl (verzinkt grau).
+         */
+        private fun bridgeRailings() {
+            val spans = ArrayList<DoubleArray>()
+            for (r in net.roads) {
+                if (r.source.brunnel != "bridge") continue
+                for (i in 0 until r.size - 1) {
+                    if (!r.segOnTrack(i)) continue
+                    val a = track.nearest(r.e[i], r.n[i], 30.0) ?: continue
+                    val b = track.nearest(r.e[i + 1], r.n[i + 1], 30.0) ?: continue
+                    if (abs(a.distM - b.distM) > 400.0) continue
+                    spans += doubleArrayOf(min(a.distM, b.distM), max(a.distM, b.distM))
+                }
+            }
+            spans.sortBy { it[0] }
+            val merged = ArrayList<DoubleArray>()
+            for (sp in spans) {
+                val last = merged.lastOrNull()
+                if (last != null && sp[0] <= last[1] + 3.0) last[1] = max(last[1], sp[1]) else merged += sp.copyOf()
+            }
+            for (sp in merged) {
+                if (sp[1] - sp[0] < 3.0) continue
+                val wood = track.surfaceAt((sp[0] + sp[1]) / 2).kind.visual == SurfaceKind.WOOD
+                val color = if (wood) RouteGeometry.linColor(0.24, 0.18, 0.12) else RouteGeometry.linColor(0.42, 0.43, 0.44)
+                val count = max(2, Math.round((sp[1] - sp[0]) / 1.8).toInt() + 1)
+                for (side in intArrayOf(-1, 1)) {
+                    var prev: DoubleArray? = null
+                    for (j in 0 until count) {
+                        val d = sp[0] + (sp[1] - sp[0]) * j / (count - 1)
+                        val p = poseAt(d) ?: run { prev = null; null } ?: continue
+                        val off = p.hw + 0.22
+                        val e = sideE(p, side, off)
+                        val n = sideN(p, side, off)
+                        val y = p.u
+                        box(e, n, p.te, p.tn, if (wood) 0.05 else 0.03, if (wood) 0.05 else 0.03, y - 0.05, y + 1.08, color)
+                        val q = prev
+                        if (q != null) {
+                            beam(q[0], q[1], q[2] + 1.03, e, n, y + 1.03, if (wood) 0.045 else 0.025, if (wood) 0.03 else 0.025, color)
+                            beam(q[0], q[1], q[2] + 0.5, e, n, y + 0.5, 0.02, 0.015, color)
+                        }
+                        prev = doubleArrayOf(e, n, y)
+                        if (j % 6 == 5 && !commit()) return
+                    }
+                    if (!commit()) return
+                }
             }
         }
 
@@ -223,11 +280,64 @@ internal class PropsLayer : TileLayer {
                 val fn = -p.tn
                 val ce = e + fe * 0.035
                 val cn = n + fn * 0.035
-                plate(ce, cn, ue, un, fe, fn, 0.53, g + 1.52, g + 2.22, RouteGeometry.linColor(0.03, 0.03, 0.03))
-                plate(ce + fe * 0.004, cn + fn * 0.004, ue, un, fe, fn, 0.50, g + 1.55, g + 2.19, RouteGeometry.linColor(0.78, 0.60, 0.03))
-                plate(e - fe * 0.035, n - fn * 0.035, ue, un, -fe, -fn, 0.53, g + 1.52, g + 2.22, RouteGeometry.linColor(0.36, 0.37, 0.38))
-                commit()
+                // Name aus der Karte (naechster Ort); die Tafel waechst mit dem Namen (wie echte Ortstafeln).
+                val name = placeName(e, n)
+                val half = if (name == null) 0.5 else (0.3 + 0.022 * SignText.width(SignText.normalize(name))).coerceIn(0.45, 0.85)
+                val y0 = g + 1.52
+                val y1 = g + 2.17
+                for (s in intArrayOf(-1, 1)) {
+                    if (half > 0.55) scratch.addCylinder(v(e + ue * (half - 0.12) * s, g, n + un * (half - 0.12) * s), v(e + ue * (half - 0.12) * s, g + 2.2, n + un * (half - 0.12) * s), 0.03, 0.03, 6, capStart = false, color = steel)
+                }
+                plate(e - fe * 0.035, n - fn * 0.035, ue, un, -fe, -fn, half, y0, y1, RouteGeometry.linColor(0.36, 0.37, 0.38))
+                if (name == null) {
+                    plate(ce, cn, ue, un, fe, fn, half, y0, y1, RouteGeometry.linColor(0.03, 0.03, 0.03))
+                    plate(ce + fe * 0.004, cn + fn * 0.004, ue, un, fe, fn, half - 0.03, y0 + 0.03, y1 - 0.03, RouteGeometry.linColor(0.78, 0.60, 0.03))
+                    commit()
+                } else if (commit()) {
+                    signFace(name, ce, cn, ue, un, fe, fn, half, y0, y1)
+                }
             }
+        }
+
+        /** Name des naechsten Orts (Dorf, Stadt, Weiler; Ortsteile nur, wenn sie deutlich naeher sind). */
+        private fun placeName(e: Double, n: Double): String? {
+            var best: MapPlace? = null
+            var bestD = Double.MAX_VALUE
+            for (p in ctx.map.places(e - 3000, n - 3000, e + 3000, n + 3000)) {
+                val f = when (p.cls) {
+                    "city", "town", "village", "hamlet" -> 1.0
+                    "suburb", "quarter", "neighbourhood", "isolated_dwelling" -> 1.8
+                    else -> continue
+                }
+                val d = kotlin.math.hypot(p.e - e, p.n - n) * f
+                if (d < bestD) { bestD = d; best = p }
+            }
+            return best?.name?.takeIf { bestD < 3000.0 }
+        }
+
+        /**
+         * Vorderseite der Ortstafel mit dem Namen als Textur (eigenes Material je Name, PNG 512 × 256,
+         * [SignText.townSign]); 2 Dreiecke ausserhalb des Kleinteil-Budgets der Vertexfarben.
+         */
+        private fun signFace(name: String, e: Double, n: Double, ue: Double, un: Double, fe: Double, fn: Double, half: Double, y0: Double, y1: Double) {
+            val aspect = 2 * half / (y1 - y0)
+            val key = "x_sign_" + Integer.toHexString((name + "|" + Math.round(aspect * 20)).hashCode())
+            val tex = ctx.textures.get(key, png = true) { SignText.townSign(name, aspect) }
+            val m = out.mesh(WorldNames.NODE_PROPS, TileMaterial("x_mat_sign_" + key.substring(7), texture = tex, repeat = false, roughness = 0.6f))
+            val front = Vec3(fe, 0.0, -fn)
+            val a = v(e - ue * half, y0, n - un * half)
+            val b = v(e + ue * half, y0, n + un * half)
+            val c = v(e + ue * half, y1, n + un * half)
+            val d = v(e - ue * half, y1, n - un * half)
+            // Von vorn gesehen laeuft der Text von links nach rechts: links ist −(u) wenn u × oben zur Vorderseite zeigt.
+            val leftToRight = (b - a).cross(d - a).dot(front) >= 0
+            val (l0, r0, r1, l1) = if (leftToRight) listOf(a, b, c, d) else listOf(b, a, d, c)
+            val i0 = m.vertex(l0.x, l0.y, l0.z, front.x, front.y, front.z, 0.0, 1.0)
+            val i1 = m.vertex(r0.x, r0.y, r0.z, front.x, front.y, front.z, 1.0, 1.0)
+            val i2 = m.vertex(r1.x, r1.y, r1.z, front.x, front.y, front.z, 1.0, 0.0)
+            val i3 = m.vertex(l1.x, l1.y, l1.z, front.x, front.y, front.z, 0.0, 0.0)
+            m.quad(i0, i1, i2, i3)
+            used += 2
         }
 
         // --- Weidezaun -----------------------------------------------------------
@@ -262,6 +372,14 @@ internal class PropsLayer : TileLayer {
                             prev = null
                             continue
                         }
+                        // Nicht im Wald, den die Karte als Wiese fuehrt (Laser: Bestand im nDOM; Solitude, lidar.md 9.1),
+                        // und nicht quer ueber einen Weg: Feld zum vorigen Pfosten nur, wenn dessen Mitte frei ist.
+                        if (ctx.land.canopyAt(e, n) >= 0.45 || ctx.land.canopyAt(sideE(p, side, off + 3.0), sideN(p, side, off + 3.0)) >= 0.6) {
+                            prev = null
+                            continue
+                        }
+                        val pm = prev
+                        if (pm != null && net.clearance((pm[0] + e) / 2, (pm[1] + n) / 2) < 1.0) prev = null
                         val g = ctx.ground.heightAt(e, n)
                         val top = 1.12 + (Noise.hash01(b * 64 + j, side, 0xfe4) - 0.5) * 0.14
                         val tone = 0.8 + 0.4 * Noise.hash01(b * 64 + j, side, 0xfe5)
@@ -423,6 +541,53 @@ internal class PropsLayer : TileLayer {
                     commit()
                 }
             }
+        }
+
+        /**
+         * Vorfahrtstrasse (Zeichen 306, gelbe Raute mit weissem Rand) dezent vor Einmuendungen: auf
+         * Kraftverkehrsstrassen ausserorts, rechts der Fahrtrichtung 30 m vor der Stelle, an der ein
+         * nachrangiger Weg auf die Strecke trifft; hoechstens eines je 150 m Strecke.
+         */
+        private fun prioritySigns() {
+            val done = HashSet<Int>()
+            for (r in net.roads) {
+                if (r.spec.rail) continue
+                for (i in 1 until r.size) {
+                    if (r.onTrack[i] || r.onTrack[i - 1]) continue
+                    val hit = track.nearest(r.e[i], r.n[i], 20.0) ?: continue
+                    if (hit.distance > track.halfWidthAt(hit.distM) + 2.4) continue
+                    val d = hit.distM - 30.0
+                    if (!done.add(Math.floorDiv(d.toInt(), 150))) continue
+                    val p = poseAt(d) ?: continue
+                    if (!RouteLayer.isMotorRoad(p.sec) || landAt(p, 1) == LandClass.RESIDENTIAL) continue
+                    val off = p.hw + 1.1
+                    val e = sideE(p, 1, off)
+                    val n = sideN(p, 1, off)
+                    if (!free(e, n, 0.3)) continue
+                    val g = ctx.ground.heightAt(e, n)
+                    scratch.addCylinder(v(e, g - 0.05, n), v(e, g + 2.05, n), 0.03, 0.03, 6, capStart = false, color = RouteGeometry.linColor(0.34, 0.35, 0.36))
+                    // Raute, Vorderseite dem Ankommenden entgegen
+                    val fe = -p.te
+                    val fn = -p.tn
+                    val ue = p.tn
+                    val un = -p.te
+                    val cy = g + 1.85
+                    diamond(e + fe * 0.03, n + fn * 0.03, ue, un, fe, fn, cy, 0.3, RouteGeometry.linColor(0.80, 0.80, 0.78))
+                    diamond(e + fe * 0.036, n + fn * 0.036, ue, un, fe, fn, cy, 0.2, RouteGeometry.linColor(0.80, 0.58, 0.02))
+                    diamond(e - fe * 0.005, n - fn * 0.005, -ue, -un, -fe, -fn, cy, 0.3, RouteGeometry.linColor(0.36, 0.37, 0.38))
+                    commit()
+                }
+            }
+        }
+
+        /** Senkrechte Raute um ([e], [n], Mitte [cy]) mit halber Diagonale [r], Vorderseite nach ([fe], [fn]). */
+        private fun diamond(e: Double, n: Double, ue: Double, un: Double, fe: Double, fn: Double, cy: Double, r: Double, color: Int) {
+            val top = v(e, cy + r, n)
+            val right = v(e + ue * r, cy, n + un * r)
+            val bottom = v(e, cy - r, n)
+            val left = v(e - ue * r, cy, n - un * r)
+            val front = Vec3(fe, 0.0, -fn)
+            if ((right - bottom).cross(top - bottom).dot(front) >= 0) quad(bottom, right, top, left, color) else quad(bottom, left, top, right, color)
         }
 
         /** Wegweiser-Schild: 55 × 14 cm, zeigt in Richtung ([de], [dn]); beidseitig, gruener Kopfstreifen. */

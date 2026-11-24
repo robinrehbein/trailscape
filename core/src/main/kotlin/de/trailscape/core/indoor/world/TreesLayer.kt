@@ -323,6 +323,7 @@ internal class TreesLayer : TileLayer {
             orchardTrees(ctx, net, buildings, cands)
             alleeTrees(ctx, net, buildings, cands, allee)
         }
+        forestEdgeShrubs(ctx, net, buildings, cands)
         if (laserTrees == null) for ((spacing, from, to) in listOf(Triple(DENSE_SPACING_M, 0.0, DENSE_M), Triple(OPEN_SPACING_M, DENSE_M, NEAR_M + 4.0))) {
             val i0 = floor(s.minE / spacing).toInt()
             val i1 = floor(s.maxE / spacing).toInt()
@@ -512,6 +513,68 @@ internal class TreesLayer : TileLayer {
                 )
                 cands += Candidate(e, n, hit.distance, spec)
                 allee += alleeKey(side, k)
+            }
+        }
+    }
+
+    /**
+     * Waldsaum: Wo die Strecke an einem Waldrand vorbeifuehrt (Kronenbedeckung springt quer zur
+     * Strecke ueber 0,6), stehen vor dem Rand Straeucher und junge Baeume (Mantel) statt einer harten
+     * Kante aus Staemmen. Plaetze alle [EDGE_STEP_M] je Seite, aus dem Laufmeter gewuerfelt (ueber
+     * Kachelgrenzen gleich); nur wo der Rand mindestens 4 m neben der Fahrbahn liegt.
+     */
+    private fun forestEdgeShrubs(ctx: TileContext, net: RoadNet, buildings: List<MapBuilding>, cands: MutableList<Candidate>) {
+        val s = ctx.spec
+        val t = ctx.track.track
+        var k0 = Int.MAX_VALUE
+        var k1 = Int.MIN_VALUE
+        for (i in 0 until t.sampleCount) {
+            val e = t.e[i].toDouble()
+            val n = t.n[i].toDouble()
+            if (e < s.minE - 50 || e > s.maxE + 50 || n < s.minN - 50 || n > s.maxN + 50) continue
+            val k = Math.round(t.distAt(i) / EDGE_STEP_M).toInt()
+            k0 = min(k0, k); k1 = max(k1, k)
+        }
+        if (k0 > k1) return
+        for (k in k0..k1) for (side in intArrayOf(-1, 1)) {
+            val d = k * EDGE_STEP_M + (Noise.hash01(k, side, SEED_EDGE) - 0.5) * EDGE_STEP_M * 0.6
+            if (d < 0 || d > t.lengthM) continue
+            val p = ctx.track.poseAt(d)
+            val hw = ctx.track.halfWidthAt(d)
+            val th = Math.toRadians(p.headingDeg)
+            val fe = kotlin.math.sin(th)
+            val fn = kotlin.math.cos(th)
+            // erster Sprung in den Bestand quer zur Strecke
+            var edge = -1.0
+            var off = hw + 3.0
+            if (ctx.land.canopyAt(p.e + fn * side * off, p.n - fe * side * off) >= 0.6) continue // Strecke im Wald
+            while (off < 40.0) {
+                off += 2.0
+                if (ctx.land.canopyAt(p.e + fn * side * off, p.n - fe * side * off) >= 0.6) { edge = off; break }
+            }
+            if (edge < hw + 4.0) continue
+            val count = 1 + (Noise.hash01(k, side, SEED_EDGE + 1) * 2.6).toInt()
+            for (q in 0 until count) {
+                val r1 = Noise.hash01(k * 4 + q, side, SEED_EDGE + 2)
+                val r2 = Noise.hash01(k * 4 + q, side, SEED_EDGE + 3)
+                val o = edge - 0.8 - 2.6 * r1
+                val along = (r2 - 0.5) * EDGE_STEP_M * 0.8
+                val e = p.e + fn * side * o + fe * along
+                val n = p.n - fe * side * o + fn * along
+                if (!s.contains(e, n)) continue
+                val cls = ctx.land.classAt(e, n)
+                if (cls == LandClass.WATER || cls == LandClass.WETLAND) continue
+                val hit = ctx.track.nearest(e, n, NEAR_M) ?: continue
+                if (hit.distance < ctx.track.halfWidthAt(hit.distM) + 2.5) continue
+                if (net.clearance(e, n) < 1.5 || nearBuilding(buildings, e, n, 1.5)) continue
+                val young = Noise.hash01(k * 4 + q, side, SEED_EDGE + 4) < 0.3
+                val spec = TreeModels.Spec(
+                    if (young) TreeModels.Species.SMALL else TreeModels.Species.BUSH,
+                    if (young) 4.5 + 3.0 * r2 else 1.6 + 2.4 * r1,
+                    0.85 + 0.35 * r2, 0.86 + 0.24 * r1, Noise.hash(k * 4 + q, side, SEED_EDGE + 5), r2 * 6.283, false, 0.05,
+                    (Noise.value(e / 160.0, n / 160.0, SEED_HUE) - 0.5) * 0.9 + (r1 - 0.5) * 0.4, variant = 0,
+                )
+                cands += Candidate(e, n, hit.distance, spec)
             }
         }
     }
@@ -791,7 +854,7 @@ internal class TreesLayer : TileLayer {
 
         /** Hoechster Abstand fuer die mittlere bzw. feinste Stufe (falls das Budget reicht). */
         const val MID_M = 40.0
-        const val DETAIL_M = 16.0
+        const val DETAIL_M = 22.0
         const val DENSE_SPACING_M = 6.5
         const val OPEN_SPACING_M = 8.0
 
@@ -830,6 +893,10 @@ internal class TreesLayer : TileLayer {
         private const val SEED_OAK = 0x7eed
         private const val SEED_ORCH = 0x7eee
         private const val SEED_ALLEE = 0x7eef
+        private const val SEED_EDGE = 0x7ef0
+
+        /** Abstand der Saum-Plaetze vor Waldraendern entlang der Strecke (je Seite). */
+        const val EDGE_STEP_M = 7.0
 
         /** Flaechen, auf denen kleine Baeume meist Obstbaeume sind. */
         private val FRUIT_LAND = setOf(LandClass.RESIDENTIAL, LandClass.MEADOW, LandClass.ORCHARD, LandClass.PARK)

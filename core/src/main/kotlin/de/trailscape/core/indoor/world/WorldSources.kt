@@ -173,9 +173,9 @@ internal fun landClassOf(layer: String, cls: String?, subclass: String?): LandCl
  */
 internal class VectorMapData(
     private val origin: GeoOrigin,
-    fine: VectorIndex?,
+    private val fine: VectorIndex?,
     private val fineTiles: Set<TileId>,
-    coarse: VectorIndex?,
+    private val coarse: VectorIndex?,
 ) : MapData {
     private class Layered(val buildings: RectIndex<MapBuilding>, val roads: RectIndex<MapRoad>, val areas: RectIndex<MapArea>, val waterways: RectIndex<MapWaterway>)
 
@@ -184,6 +184,23 @@ internal class VectorMapData(
 
     override fun buildings(minE: Double, minN: Double, maxE: Double, maxN: Double) =
         query(minE, minN, maxE, maxN, { it.buildings }) { boundsOf(it.rings) }
+
+    /** Orte aus der Ebene `place` (fein, sonst grob); Punkte, wenige je Welt. */
+    private val allPlaces: List<MapPlace> by lazy {
+        val src = fine ?: coarse ?: return@lazy emptyList()
+        src.all(LAYER_PLACE).mapNotNull { f ->
+            val p = VecPlace(f)
+            val name = p.name ?: return@mapNotNull null
+            MapPlace(p.e, p.n, name, p.cls ?: "")
+        } + (if (fine != null && coarse != null) coarse.all(LAYER_PLACE).mapNotNull { f ->
+            val p = VecPlace(f)
+            val name = p.name ?: return@mapNotNull null
+            if (isFine(p.e, p.n)) null else MapPlace(p.e, p.n, name, p.cls ?: "")
+        } else emptyList())
+    }
+
+    override fun places(minE: Double, minN: Double, maxE: Double, maxN: Double): List<MapPlace> =
+        allPlaces.filter { it.e in minE..maxE && it.n in minN..maxN }
 
     override fun roads(minE: Double, minN: Double, maxE: Double, maxN: Double) =
         query(minE, minN, maxE, maxN, { it.roads }) { boundsOf(listOf(it.line)) }

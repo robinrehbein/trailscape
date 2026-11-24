@@ -398,6 +398,7 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         val roof = MeshBuilder(64, 64)
         val wallTint = wallColor(b)
         val roofTint = roofColor(b)
+        val flatTint = flatRoofColor(b)
         for ((k, sf) in b.surfaces.withIndex()) {
             if (sf.kind == Lod2SurfaceKind.GROUND || sf.kind == Lod2SurfaceKind.CLOSURE) continue
             if (sf.kind == Lod2SurfaceKind.WALL && "${b.id}#$k" in hidden) continue
@@ -410,7 +411,7 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
                 sf.kind == Lod2SurfaceKind.WALL -> emitWall(wall, rings, n, b, wallTint)
                 // Dachflaechen bleiben Dach, auch steile (Mansarde) — nach unten zeigende (Untersicht) schlicht.
                 n.z < 0.05 -> emitBanded(roof, rings, n, Vec3(-n.y, n.x, 0.0).normalized(Vec3(1.0, 0.0, 0.0)), n.cross(Vec3(-n.y, n.x, 0.0).normalized(Vec3(1.0, 0.0, 0.0))).normalized(), roofTint, Band.BITUMEN, b.groundU) { p -> p.x + p.y }
-                else -> emitRoof(roof, rings, n, roofTint)
+                else -> emitRoof(roof, rings, n, roofTint, flatTint)
             }
         }
         if (wall.triangleCount + roof.triangleCount == 0) return null
@@ -531,8 +532,9 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         }
     }
 
-    private fun emitRoof(m: MeshBuilder, rings: List<DoubleArray>, n: Vec3, tint: Int) {
+    private fun emitRoof(m: MeshBuilder, rings: List<DoubleArray>, n: Vec3, slopeTint: Int, flatTint: Int) {
         val flat = n.z > 0.97
+        val tint = if (flat) flatTint else slopeTint
         if (flat) {
             val band = Band.BITUMEN
             val ua = Vec3(1.0, 0.0, 0.0)
@@ -603,38 +605,77 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         for (i in idx.indices step 3) m.tri(base + idx[i], base + idx[i + 1], base + idx[i + 2])
     }
 
+    /**
+     * Wandfarbe (Vertexfarbe ueber den Baendern, die ihre Farbe selbst tragen): gebrochene Putztoene wie
+     * im Ort — Altweiss, Sand, Hellgelb, Lachs, Hellgrau, selten Ocker oder Blassgruen; je Gebaeude fest,
+     * Helligkeit gestreut. Vorher fast alles Weiss: Reihen von LoD2-Haeusern wirkten wie Gipsmodelle.
+     */
     private fun wallColor(b: LaserBuilding): Int {
         val r = Noise.hash01(b.id.hashCode(), 0x1a5e, 7)
         val q = Noise.hash01(b.id.hashCode(), 0x1a5f, 9)
-        // Die Baender tragen ihre Farbe selbst; die Vertexfarbe toent gebrochen (Altweiss, Sand, Hellgrau, selten Ocker).
-        val c = 0.68 + 0.2 * r
+        val c = 0.62 + 0.22 * r
         return when {
-            q < 0.2 -> BuildingDesign.lin(c * 0.9, c * 0.9, c * 0.92)
-            q < 0.3 -> BuildingDesign.lin(c, c * 0.86, c * 0.62)
-            else -> BuildingDesign.lin(c, c * (0.95 + 0.04 * q), c * (0.84 + 0.1 * q))
+            q < 0.22 -> BuildingDesign.lin(c, c * 0.97, c * 0.9) // Altweiss
+            q < 0.42 -> BuildingDesign.lin(c, c * 0.9, c * 0.72) // Sand
+            q < 0.56 -> BuildingDesign.lin(c, c * 0.93, c * 0.62) // Hellgelb
+            q < 0.68 -> BuildingDesign.lin(c, c * 0.8, c * 0.7) // Lachs
+            q < 0.82 -> BuildingDesign.lin(c * 0.88, c * 0.88, c * 0.9) // Hellgrau
+            q < 0.92 -> BuildingDesign.lin(c * 0.95, c * 0.78, c * 0.5) // Ocker
+            else -> BuildingDesign.lin(c * 0.84, c * 0.9, c * 0.78) // Blassgruen
         }
     }
 
+    /**
+     * Dachfarbe eines LoD2-Gebaeudes (linear, auf [Band.PANTILE] bezogen). Das Luftbild entscheidet nur,
+     * wenn es eindeutig ist (rot/braun, sehr dunkel); grau ist es in Baden-Wuerttemberg fast immer
+     * (Winterbefliegung, Dunst) — dann eine regionale Mischung aus Ziegelrot, Rotbraun, Braun,
+     * Anthrazit und wenig Grau, je Gebaeude fest. Tuerme (hoch, kleiner Grundriss) tragen Schiefer
+     * oder Kupfer (gruen), hohe grosse Bauten (Kirche, Kloster) Schiefer bzw. dunkle Ziegel.
+     */
     private fun roofColor(b: LaserBuilding): Int {
         val mean = BuildingTextures.meanLinear(Band.PANTILE)
+        val r = Noise.hash01(b.id.hashCode(), 0x2f0f, 11)
+        val height = b.topU - b.groundU
+        val area = footprintArea(b)
         val px = ctx.aerialMeanAt(b.ce, b.cn, 2.0)
-        val target = if (px != null) {
-            doubleArrayOf(
-                Argb.SRGB_TO_LINEAR[Argb.red(px)].toDouble(),
-                Argb.SRGB_TO_LINEAR[Argb.green(px)].toDouble(),
-                Argb.SRGB_TO_LINEAR[Argb.blue(px)].toDouble(),
-            )
-        } else {
-            doubleArrayOf(0.20, 0.07, 0.05)
+        val seen = px?.let { BuildingDesign.roofToneFromAerial(it) }
+        val reddish = seen != null && seen[0] > seen[1] * 1.15
+        val dark = seen != null && !reddish && seen[0] + seen[1] + seen[2] < 0.16
+        // Regionaler Anteil: in manchen Orten mehr Anthrazit (Neubaugebiete), sonst Tonziegel.
+        val modern = Noise.value(b.ce / 700.0, b.cn / 700.0, 0x2f10)
+        val t = when {
+            height > 18.0 && area < 140.0 -> if (r < 0.3) VERDIGRIS else SLATE
+            height > 15.0 && area > 280.0 -> if (r < 0.6) SLATE else RED_BROWN
+            reddish -> if (r < 0.5) seen!! else if (r < 0.8) CLAY_RED else RED_BROWN
+            dark && r < 0.7 -> ANTHRACITE
+            r < 0.40 - 0.15 * modern -> CLAY_RED
+            r < 0.62 - 0.15 * modern -> RED_BROWN
+            r < 0.74 - 0.1 * modern -> BROWN
+            r < 0.94 -> ANTHRACITE
+            else -> GREY
         }
-        // Luftbildpixel ueber Gauben, Solarflaechen und Oberlichtern sind oft zu hell, und die Sonne hellt
-        // die Dachhaut im Bild noch auf: hoechstens 0,12 linear hell (Schiefer/Betonstein dunkelgrau).
-        val lum = 0.2126 * target[0] + 0.7152 * target[1] + 0.0722 * target[2]
-        val k = if (lum > 0.12) 0.12 / lum else 1.0
-        return BuildingDesign.lin(target[0] * k / mean[0], target[1] * k / mean[1], target[2] * k / mean[2])
+        val gain = 0.85 + 0.3 * Noise.hash01(b.id.hashCode(), 0x2f11, 13)
+        return BuildingDesign.lin(t[0] * gain / mean[0], t[1] * gain / mean[1], t[2] * gain / mean[2])
+    }
+
+    /** Flachdach (Bitumen, Kies): dunkel oder hellgrau, je Gebaeude fest. */
+    private fun flatRoofColor(b: LaserBuilding): Int {
+        val mean = BuildingTextures.meanLinear(Band.BITUMEN)
+        val r = Noise.hash01(b.id.hashCode(), 0x2f12, 17)
+        val t = if (r < 0.55) doubleArrayOf(0.060, 0.062, 0.066) else doubleArrayOf(0.25, 0.24, 0.225)
+        return BuildingDesign.lin(t[0] / mean[0], t[1] / mean[1], t[2] / mean[2])
     }
 
     companion object {
+        /** Dachtoene (linear), wie in [BuildingDesign]; dazu Schiefer und Kupfer fuer Tuerme. */
+        private val CLAY_RED = doubleArrayOf(0.225, 0.076, 0.047)
+        private val RED_BROWN = doubleArrayOf(0.190, 0.074, 0.050)
+        private val BROWN = doubleArrayOf(0.120, 0.086, 0.066)
+        private val ANTHRACITE = doubleArrayOf(0.042, 0.044, 0.050)
+        private val GREY = doubleArrayOf(0.150, 0.146, 0.140)
+        private val SLATE = doubleArrayOf(0.050, 0.056, 0.066)
+        private val VERDIGRIS = doubleArrayOf(0.090, 0.200, 0.150)
+
         fun newell(r: DoubleArray): Vec3 {
             var x = 0.0; var y = 0.0; var z = 0.0
             val k = r.size / 3
