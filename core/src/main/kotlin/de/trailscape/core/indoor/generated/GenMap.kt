@@ -121,7 +121,7 @@ internal class GenMap(private val plan: GenRoutePlan, private val terrain: GenTe
         val v = villageNear(e, n)
         val base = when (landscape) {
             GenLandscape.MITTELGEBIRGE -> -0.1 + 0.5 * Noise.fbm(e / 1_100.0, n / 1_100.0, sA, 3) - 3.5 * (slope - 0.07)
-            GenLandscape.HUEGELLAND -> 0.3 + 0.5 * Noise.fbm(e / 1_300.0, n / 1_300.0, sA, 3) - 3.0 * (slope - 0.12)
+            GenLandscape.HUEGELLAND -> 0.08 + 0.6 * Noise.fbm(e / 1_300.0, n / 1_300.0, sA, 3) - 3.0 * (slope - 0.12)
         }
         val nearVillage = 0.25 * (1 - smoothstep(200.0, 900.0, v)) - 1.0 * (1 - smoothstep(60.0, 120.0, v))
         val lake = 1.0 * (1 - smoothstep(10.0, 60.0, lakeNear(e, n)))

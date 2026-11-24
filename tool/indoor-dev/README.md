@@ -32,6 +32,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m]` | LoD2 auf den Streifen um die Strecke zuschneiden (Vorgabe 120 m), kompakt schreiben; gibt Kachel- und Korridorgröße je km aus |
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
+| `generated --profile <vorlage\|datei.json\|kurz> [--seed n] --out <dir>` | generierte Welt zu einem Zielprofil (Einheit des Tages), ohne Netz; siehe `docs/indoor/generiert.md` |
 | `check <dir>` | eine fertige Welt prüfen |
 | `overlaps <dir> [--tol-cm c]` | koplanare, überlappende Flächen (Ursache für Flimmern; Höhenabstand unter `c` cm, Vorgabe 0,4) in den Kacheln der Stufe 0 je Materialpaar zählen; dazu je Material die durchsichtigen (BLEND) Eckpunkte mit Vertex-Deckung < 1 — auf dem Gerät helle Nahtlinien, soll 0 sein (`docs/indoor/world.md`, Abschnitt „Kreuzungen und Ortsdurchfahrten“) |
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |

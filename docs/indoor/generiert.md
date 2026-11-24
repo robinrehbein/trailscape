@@ -209,11 +209,42 @@ Landschaft.
 
 ## Messwerte
 
-MESSWERTE
+Gebaut mit `indoor-dev generated --profile <vorlage>` (MEDIUM, `-Xmx256m`,
+damit 2 Bau-Threads), Entwicklungscontainer; Heap = höchster Wert nach GC
+aus `-Xlog:gc`. Kein Full-GC, kein OOM, `checkWorld` ohne Befund.
+
+| Vorlage | Landschaft | Länge | Kacheln | Bauzeit | Heap max. | Dreiecke gleichz. (≤ 700 k) | Texturen (≤ 256 MB) | Platte |
+|---|---|---|---|---|---|---|---|---|
+| `grundlage60` (60 min flach-wellig) | Hügelland | 30,0 km | 392 | 85 s | 182 MB | 215 672 | 145 MB | 7,1 MB/km |
+| `intervalle4x8` (4 × 8 min 6 %) | Mittelgebirge | 24,5 km | 324 | 71 s | 153 MB | 450 865 | 141 MB | 9,9 MB/km |
+| `erholung30` (30 min flach) | Hügelland | 12,5 km | 176 | 36 s | 161 MB | 202 890 | 140 MB | 7,4 MB/km |
+| `berg` (5 km 7 % hoch, 5 km 7 % runter) | Mittelgebirge | 19,0 km | 224 | 55 s | 122 MB | 367 844 | 147 MB | 9,7 MB/km |
+
+Davon Strecke, Gelände und Karte: 1–2 s; der Rest ist der unveränderte
+Kachelbau. Zum Vergleich echte Welt Schauinsland (world.md): 15,7 km, 38 s,
+230 MB, 560 k Dreiecke, 12,2 MB/km — die generierten Welten sind leichter
+(keine Luftbilder, weniger Gebäude).
 
 ## Belegbilder (`docs/indoor/bilder/generiert/`)
 
-BILDER
+Betrachter (`shots.mjs`, three.js, SwiftShader), 1280 px JPEG. Paare
+`…-fahrer.jpg` (Verfolgerkamera) / `…-drohne.jpg` an derselben Stelle,
+dazu `…-uebersicht.jpg` (Kamera `overview`).
+
+| Vorlage | Bilder | Was zu sehen ist |
+|---|---|---|
+| `grundlage60` | `grundlage-uebersicht`, `grundlage-ort-*`, `grundlage-wellig-*` | Hügelland mit Waldinseln und Feldern, Straßendorf, gestreckte wellige Landstraße |
+| `intervalle4x8` | `intervalle-uebersicht`, `intervalle-anstieg1-*`, `intervalle-ort-*`, `intervalle-anstieg3-*` | Mittelgebirge: Talwiesen, bewaldete Rücken, Anstiege im Tal, Ort mit Kopfsteinpflaster und Querstraße |
+| `erholung30` | `erholung-uebersicht`, `erholung-ort-*`, `erholung-flach-*` | flaches Hügelland, Ort mit zwei Querstraßen, ebene Landstraße |
+| `berg` | `berg-uebersicht`, `berg-serpentine-*`, `berg-ort-*`, `berg-abfahrt-*` | Serpentinen (Kehren mit Hang dazwischen), Ort auf der Höhe, Abfahrt zwischen Nadelwald |
+
+Gesehen und bewusst offen gelassen:
+
+* Das Feldmosaik (Schläge) zeichnet die bestehende Bodentextur auch in
+  Wiesen — aus der Höhe wirkt Hügelland dadurch fast ganz als Acker.
+* Im Mittelgebirge liegen Talwiesen oft beidseits der Straße; Wald reicht
+  nur stellenweise bis an die Fahrbahn.
+* Feldwege im Wald sind aus der Höhe als gerade dünne Linien sichtbar.
 
 ## Grenzen und offene Punkte
 
