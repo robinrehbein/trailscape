@@ -26,6 +26,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `--from-km a --to-km b` | nur dieser Ausschnitt (Laufmeter der GPX) — für kurze Läufe während der Entwicklung |
 | `--no-aerial` | ohne Luftbild (erzeugte Bodentextur aus der Landnutzung) |
 | `--offline` | kein Netz: nur, was im Cache liegt (auch Abgelaufenes) |
+| `--laser [--laser-radius m]` | Datenstufe „Laser" (NRW): Gelände aus DGM1, Bäume aus nDOM, Gebäude aus LoD2 im Korridor (Vorgabe 200 m); auch für `plan` und `catalog-build`. Am Ende eine Zeile `Laser:` mit Blöcken, Anfragen, Bytes, LoD2, Versatz DGM1 − Terrarium. Siehe `docs/indoor/lidar.md` |
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
@@ -69,7 +70,9 @@ Kachel angefragt — eine andere Strecke (anderer Ursprung) trifft sie nicht.
 
 Angefragte Hosts: `s3.amazonaws.com` (Höhen), `tiles.openfreemap.org`
 (Vektorkacheln), dazu der Luftbild-Dienst des Landes aus `aerialSources`
-(NRW: `www.wms.nrw.de`, Sachsen: `geodienste.sachsen.de`, …).
+(NRW: `www.wms.nrw.de`, Sachsen: `geodienste.sachsen.de`, …). Mit `--laser`
+zusätzlich `www.wcs.nrw.de` (DGM1/DOM1) und `www.opengeodata.nrw.de` (LoD2),
+Cache unter `cache/indoor/laser/` (365 Tage).
 
 ## Beispielstrecken (`samples/`)
 
@@ -79,6 +82,7 @@ Angefragte Hosts: `s3.amazonaws.com` (Höhen), `tiles.openfreemap.org`
 | `altenberg.gpx` | 14 km Runde Altenberg – Dhünntal (NRW) | NRW |
 | `tharandt.gpx` | 13 km durch den Tharandter Wald (Sachsen) | Sachsen |
 | `kreisel-bergisch-gladbach.gpx` | 2,1 km durch einen ovalen Kreisverkehr (Bergisch Gladbach, BRouter `fastbike`, ohne Belagsdatei) — Prüfstrecke für Kreisel und Knoten | NRW |
+| `balkantrasse.gpx` | 7,7 km Balkantrasse Wermelskirchen – Hilgen (alte Bahntrasse, BRouter `trekking`, ohne Belagsdatei): Ortsdurchfahrt, Einschnitte und Dämme — Prüfstrecke für `--laser` | NRW |
 
 Je Strecke liegt die Belagsdatei `<name>.surfaces.json` daneben (aus
 BRouters Wegmerkmalen).
