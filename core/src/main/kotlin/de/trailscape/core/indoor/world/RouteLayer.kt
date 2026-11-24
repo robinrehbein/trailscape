@@ -184,6 +184,14 @@ internal class RouteEnv(val ctx: TileContext) {
      * Fahrbahn der anderen (nicht doppelten) Streckenteile mit ihrem Laufmeter-Bereich.
      */
     val mask: PlanMask by lazy { buildMask() }
+
+    /**
+     * Nur die Fahrbahnen der Streckenteile (mit Laufmeter-Bereich): Wo sich zwei Teile ueberlagern
+     * (Wendeschleife, Hin- und Rueckweg dicht nebeneinander), gewinnt der fruehere — Fahrbahn, Fransen
+     * und Linien des spaeteren werden an ihm abgeschnitten ([RouteEmitter.flush]).
+     */
+    val trackMask: PlanMask by lazy { mask; trackParts }
+    private val trackParts = PlanMask()
     private val profiles = HashMap<Int, RouteProfile>()
     private val rawLand = HashMap<Int, LandClass>()
     private val tmp = DoubleArray(5)
@@ -345,11 +353,18 @@ internal class RouteEnv(val ctx: TileContext) {
             if (pe < s.minE - margin || pe > s.maxE + margin || pn < s.minN - margin || pn > s.maxN + margin) continue
             if (isDuplicate(i / 2)) continue
             run {
-                for (h in 0 until 2) {
-                    RouteGeometry.centerAt(track, i, h * 0.5, c0)
-                    RouteGeometry.centerAt(track, i, h * 0.5 + 0.5, c1)
+                // Fein unterteilt (8 je Probe): In engen Kehren (Radius um 5 m bei 5 m Probenabstand) traf die Sehne
+                // sonst das gezeichnete Band nicht genau genug, Reste blieben uebereinander liegen.
+                for (h in 0 until 8) {
+                    RouteGeometry.centerAt(track, i, h / 8.0, c0)
+                    RouteGeometry.centerAt(track, i, (h + 1) / 8.0, c1)
                     val d0 = t.distAt(i)
                     val hw0 = track.halfWidthAt(d0)
+                    trackParts.addQuad(
+                        c0[0] - c0[4] * hw0, c0[1] + c0[3] * hw0, c0[0] + c0[4] * hw0, c0[1] - c0[3] * hw0,
+                        c1[0] - c1[4] * hw0, c1[1] + c1[3] * hw0, c1[0] + c1[4] * hw0, c1[1] - c1[3] * hw0,
+                        fromM = d0, toM = t.distAt(i + 1),
+                    )
                     m.addQuad(
                         c0[0] - c0[4] * hw0, c0[1] + c0[3] * hw0, c0[0] + c0[4] * hw0, c0[1] - c0[3] * hw0,
                         c1[0] - c1[4] * hw0, c1[1] + c1[3] * hw0, c1[0] + c1[4] * hw0, c1[1] - c1[3] * hw0,
@@ -484,24 +499,40 @@ private class RouteEmitter(
 
     private fun edgeMesh(material: TileMaterial): MeshBuilder = temp.getOrPut(material.name) { material to MeshBuilder() }.second
 
+    private val temp2 = MeshBuilder()
+
     private fun flush(fromM: Double, toM: Double, lanes: Array<Lane>?) {
         val mask = env.mask
+        val parts = env.trackMask
+        val toE: (Double) -> Double = { x -> x + ctx.spec.anchorE }
+        val toN: (Double) -> Double = { z -> ctx.spec.anchorN - z }
         for ((mat, mb) in temp.values) {
             if (mb.isEmpty) continue
+            // Fahrbahn und Belagswechsel: nur an frueheren Streckenteilen abschneiden (der fruehere gewinnt).
+            val road = mat.name.startsWith(WorldNames.MAT_ROUTE_PREFIX) || (mat.name.endsWith("_fade") && !mat.name.contains("verge"))
             // Was in die eigene Fahrbahn hineinreicht (Fransen, Bordstein, Linien), schneidet die eigene
             // Fahrbahn weiter vor und hinter dem Stueck nicht; was draussen liegt, schon ab wenigen Metern.
             val inner = mat.name == RouteLayer.MAT_FRINGE || mat.name == RouteLayer.MAT_PLAIN
             val own = if (inner) MASK_OWN_M else MASK_OWN_OUTER_M
-            clipInto(
-                mb, out.mesh(node, mat), mask, { x -> x + ctx.spec.anchorE }, { z -> ctx.spec.anchorN - z },
-                skipFrom = fromM - own, skipTo = toM + own, inner = inner,
-            )
+            val dst = out.mesh(node, mat)
+            if (road || inner) {
+                val src = if (inner) {
+                    temp2.clear()
+                    clipInto(mb, temp2, mask, toE, toN, skipFrom = fromM - own, skipTo = toM + own, inner = true)
+                    temp2
+                } else {
+                    mb
+                }
+                clipInto(src, dst, parts, toE, toN, skipFrom = fromM - MASK_OWN_ROAD_M, skipTo = Double.MAX_VALUE, inner = true)
+            } else {
+                clipInto(mb, dst, mask, toE, toN, skipFrom = fromM - own, skipTo = toM + own)
+            }
             mb.clear()
         }
-        if (lanes != null) for (k in 3 until lanes.size) lanes[k].station = -1
+        if (lanes != null) for (k in lanes.indices) lanes[k].station = -1
     }
 
-    private fun roadMesh(kind: SurfaceKind): MeshBuilder = mesh(
+    private fun roadMesh(kind: SurfaceKind): MeshBuilder = edgeMesh(
         materials.getOrPut(RouteLayer.routeMaterialName(kind)) {
             TileMaterial(
                 RouteLayer.routeMaterialName(kind), RouteTextures.surfaceTexture(ctx.textures, kind, ctx.quality == IndoorQuality.LOW),
@@ -510,7 +541,7 @@ private class RouteEmitter(
         },
     )
 
-    private fun fadeMesh(kind: SurfaceKind): MeshBuilder = mesh(
+    private fun fadeMesh(kind: SurfaceKind): MeshBuilder = edgeMesh(
         materials.getOrPut(RouteLayer.fadeMaterialName(kind)) {
             TileMaterial(
                 RouteLayer.fadeMaterialName(kind), RouteTextures.surfaceTexture(ctx.textures, kind, ctx.quality == IndoorQuality.LOW),
@@ -928,6 +959,12 @@ private class RouteEmitter(
         // durchsichtig ueber das Bankett ein — mit deckendem Streifen wuerde er es verdecken).
         val skipFirst = urban || a.a0[side] < 0.5 || b.a0[side] < 0.5 ||
             (abs(a.tV0[side] - a.t2[side]) < 1e-3 && abs(b.tV0[side] - b.t2[side]) < 1e-3)
+        // Auf der Innenseite enger Kurven drueckt limitOffset die Ringe zusammen; Gras, Auslauf und Gehweg fielen
+        // dort uebereinander (Flimmern). Dort entfaellt der Streifen fuer dieses Stueck.
+        for (st in arrayOf(a, b)) {
+            val tA = st.tA[side] * (if (side == 0) -1.0 else 1.0)
+            if (abs(RouteGeometry.limitOffset(tA, st.kappa) - tA) > 0.02) return
+        }
         val m = vergeMesh(kind)
         val size = kind.sizeM
         val e0 = floor(ctx.spec.minE / size) * size
@@ -1117,6 +1154,13 @@ private class RouteEmitter(
          * nicht; weiter entfernte Streckenteile schon (enge Kurven, Kreisel, Hin- und Rueckweg nebeneinander).
          */
         const val MASK_OWN_M = 15.0
+
+        /**
+         * Fahrbahn und was auf ihr liegt wird an frueheren Streckenteilen ab so vielen Laufmetern Abstand
+         * abgeschnitten — auch in engen Wendeschleifen (Radius 2–5 m), wo sich Stuecke 5–18 m auseinander
+         * mit 2–5 mm Hoehenabstand ueberlagerten.
+         */
+        const val MASK_OWN_ROAD_M = 3.0
 
         /** Dasselbe fuer Rand ausserhalb der Fahrbahn (Gehweg, Bankett, Uebergangsstreifen). */
         const val MASK_OWN_OUTER_M = 4.0

@@ -31,8 +31,9 @@ class RoadsAndPropsLayerTest {
         val total = withCross.tiles().sumOf { build(withCross, it, RoadsLayer()).second.triangles(WorldNames.NODE_ROADS) }
         // Zweimal 70 m Querstrasse in je 18 Schritten, je Segment 2 Dreiecke Band + 4 Dreiecke Kanten — ausser in den
         // 16 m neben der Streckenmitte (EDGE_FREE_TRACK_M: dort stoesst der Rand der Strecke an die Fahrbahn), je Seite 5 Segmente.
-        // Dazu je Austritt aus der Fahrbahn zwei ausgerundete Ecken (JunctionCorners) zu je 8 Dreiecken (Wiese: kein Bordstein).
-        assertEquals(36 * 2 + 26 * 4 + 4 * 8, total)
+        // Dazu je Austritt aus der Fahrbahn zwei ausgerundete Ecken (JunctionCorners) zu 8 Dreiecken (Wiese: kein Bordstein),
+        // an der Fahrbahn der Strecke abgeschnitten (dabei hoechstens vierfach geteilt).
+        assertTrue(total in (36 * 2 + 26 * 4 + 4 * 8)..(36 * 2 + 26 * 4 + 4 * 32), "Dreiecke $total")
     }
 
     @Test

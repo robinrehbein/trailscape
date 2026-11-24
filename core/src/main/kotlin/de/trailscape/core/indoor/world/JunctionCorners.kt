@@ -44,11 +44,21 @@ internal object JunctionCorners {
         val minN: Double get() = minOf(pn, arc.filterIndexed { i, _ -> i % 2 == 1 }.min())
         val maxN: Double get() = maxOf(pn, arc.filterIndexed { i, _ -> i % 2 == 1 }.max())
 
-        /** Die Flaeche bis zum Bogen (bzw. im Ort bis hinter den Bordstein) als Faecher-Dreiecke in [mask]. */
+        /**
+         * Die Flaeche bis zum Bogen als Faecher-Dreiecke in [mask], im Ort dazu der Bordsteinstreifen als
+         * Vierecke zwischen Bogen und Hinterkante. (Ein Faecher bis zur Hinterkante deckte den Bordstein am
+         * Bogenende nicht: Die Hinterkante ist dort senkrecht zur Strassenkante versetzt, der Strahl vom
+         * Eckpunkt laeuft am Bordstein vorbei — dort blieb Gras 1–4 mm unter dem Bordstein liegen.)
+         */
         fun addTo(mask: PlanMask) {
-            val a = if (urban) arcBack else arc
+            val a = arc
             for (k in 0 until a.size / 2 - 1) {
                 mask.add(doubleArrayOf(pe, pn, a[2 * k], a[2 * k + 1], a[2 * k + 2], a[2 * k + 3]))
+            }
+            if (!urban) return
+            val b = arcBack
+            for (k in 0 until a.size / 2 - 1) {
+                mask.add(doubleArrayOf(a[2 * k], a[2 * k + 1], a[2 * k + 2], a[2 * k + 3], b[2 * k + 2], b[2 * k + 3], b[2 * k], b[2 * k + 1]))
             }
         }
     }
