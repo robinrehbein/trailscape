@@ -44,8 +44,8 @@ internal class TreesLayer : TileLayer {
     override fun build(ctx: TileContext, out: TileOutput) {
         if (ctx.budget.vegetation <= 0) return
         val land = ctx.land
-        if (ctx.level == 0 && ctx.aerial != null && land is LandRaster) {
-            land.setCanopy(ctx.spec, canopyFromAerial(ctx.aerial))
+        if (ctx.level == 0 && ctx.aerialRaw != null && land is LandRaster) {
+            land.setCanopy(ctx.spec, canopyFromAerial(ctx.aerialRaw))
         }
         val b = ctx.budget
         fun spare(budget: Int, node: String) = max(0, budget - out.triangles(node))
@@ -354,7 +354,7 @@ internal class TreesLayer : TileLayer {
         var used = 0
         val placed = ArrayList<Candidate>()
         for (c in cands) {
-            val cost = TreeModels.cost(c.spec.species, TreeModels.Lod.FAR)
+            val cost = TreeModels.cost(c.spec, TreeModels.Lod.FAR)
             if (used + cost > budget) break
             used += cost
             placed += c
@@ -365,7 +365,7 @@ internal class TreesLayer : TileLayer {
             if (c.dist > MID_M) break
             val targets = if (c.dist <= DETAIL_M) listOf(TreeModels.Lod.NEAR, TreeModels.Lod.MID) else listOf(TreeModels.Lod.MID)
             for (target in targets) {
-                val delta = TreeModels.cost(c.spec.species, target) - TreeModels.cost(c.spec.species, c.lod)
+                val delta = TreeModels.cost(c.spec, target) - TreeModels.cost(c.spec, c.lod)
                 if (used + delta <= budget) {
                     used += delta
                     c.lod = target

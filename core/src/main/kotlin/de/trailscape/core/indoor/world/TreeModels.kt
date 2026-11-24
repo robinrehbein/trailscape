@@ -88,6 +88,23 @@ internal object TreeModels {
     private val costs = HashMap<Pair<Species, Lod>, Int>()
 
     /** Dreiecke eines Baums dieser Art und Stufe (haengt nicht von Groesse oder Zufall ab). */
+    /** Dreiecke des Baums [s] in Stufe [lod] (grosse ferne Laubkronen haben [farExtra] Karten mehr). */
+    fun cost(s: Spec, lod: Lod): Int = cost(s.species, lod) + 4 * farExtra(s, lod)
+
+    /**
+     * Zusaetzliche Massekarten einer fernen Laubkrone mit grossem Radius (> 5 m, meist Laserbaeume ueber 18 m):
+     * Mit der Groessengrenze der Karten reichten acht nicht mehr fuer eine geschlossene Krone.
+     */
+    private fun farExtra(s: Spec, lod: Lod): Int {
+        if (lod != Lod.FAR || s.species == Species.BUSH || s.species == Species.CONIFER || s.species == Species.PINE) return 0
+        val k = when (s.species) {
+            Species.BROAD -> 0.48 * (1 - (if (s.bare > 0.1) s.bare else 0.3))
+            Species.TALL -> 0.21 * 0.78
+            else -> 0.62 * 0.68
+        }
+        return if (k * s.heightM * s.width > 5.0) 4 else 0
+    }
+
     fun cost(species: Species, lod: Lod): Int = synchronized(costs) {
         costs.getOrPut(species to lod) {
             val t = MeshBuilder(64, 64)
@@ -234,6 +251,11 @@ internal object TreeModels {
      */
     private fun trunkRadius(h: Double, perM: Double, max: Double): Double = (0.05 + perM * h).coerceAtMost(max)
 
+    /** Laengste Zweigkarte (nah; mittel × 1,35) und Massekarte in Metern. */
+    private const val TWIG_MAX_M = 3.0
+    private const val MASS_MAX_M = 4.5
+    private const val FAR_MASS_MAX_M = 6.5
+
     private fun barkColor(s: Spec): Int =
         if (s.pale) lin(Argb.rgb(214, 210, 200)) else lin(Argb.rgb(170, 152, 132))
 
@@ -325,7 +347,11 @@ internal object TreeModels {
                     } else {
                         val a = s.turn + k * 2 * PI / (clumpCount - 1) + rnd.range(-0.4, 0.4)
                         val o = rx * rnd.range(0.4, 0.55)
-                        Vec3(cos(a) * o, cy + ry * rnd.range(-0.22, 0.12), -sin(a) * o)
+                        // Abwechselnd obere und untere Lage: Die Laubmasse fuellt die Krone vom Ansatz bis zum
+                        // Wipfel (vorher ein schmales Band um die Mitte — hohe Baeume wirkten wie ein langer Stamm
+                        // mit kleiner Krone oben).
+                        val dy = if (shape == Shape.BUSH) rnd.range(-0.22, 0.12) else if (k % 2 == 0) rnd.range(-0.02, 0.22) else rnd.range(-0.5, -0.26)
+                        Vec3(cos(a) * o, cy + ry * dy, -sin(a) * o)
                     }
                 }
             }
@@ -345,7 +371,8 @@ internal object TreeModels {
                 trunk.bark(from, to, trunkR * 0.5, trunkR * 0.18, 4, false, false, barkColor(s))
             }
         }
-        val (nTwig, nInner, nMass) = counts(shape, lod).let { Triple(it[0], it[1], it[2]) }
+        val (nTwig, nInner, nMass0) = counts(shape, lod).let { Triple(it[0], it[1], it[2]) }
+        val nMass = nMass0 + farExtra(s, lod)
         val baseLen = when (shape) {
             Shape.BROAD -> rx * 0.58
             Shape.TALL -> rx * 0.85
@@ -366,7 +393,9 @@ internal object TreeModels {
             val yScale = ry / rx
             var p = Vec3(c.x + d.x * clumpR * f, c.y + d.y * clumpR * f * yScale, c.z + d.z * clumpR * f)
             p = envelope(p, 1.04)
-            val len = baseLen * rnd.range(0.8, 1.2) * (if (lod == Lod.MID) 1.35 else 1.0)
+            // Groesse der Zweigkarte absolut begrenzt: Bei grossen Kronen (Laserbaeume bis 8 m Radius) wurden
+            // einzelne Karten 5–7 m lang und standen als „Federn“ aus der Krone.
+            val len = min(baseLen * rnd.range(0.8, 1.2), TWIG_MAX_M) * (if (lod == Lod.MID) 1.35 else 1.0)
             p = clampY(p, len)
             val along = (d + rnd.unit() * 0.55 + Vec3(0.0, 0.35, 0.0)).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
@@ -381,7 +410,7 @@ internal object TreeModels {
             // entgegengesetzte Richtungen), eher oben: von unten verdecken die Zweigkarten sie
             val dd = Vec3(d.x, abs(d.y) * 0.8 + 0.1, d.z).normalized()
             val p = cr.c + Vec3(dd.x * rx, dd.y * ry, dd.z * rx) * rnd.range(0.35, 0.58)
-            val len = rx * rnd.range(0.6, 0.78)
+            val len = min(rx * rnd.range(0.6, 0.78), MASS_MAX_M)
             val along = (Vec3(0.0, 1.0, 0.0) + rnd.unit() * 0.6).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
             card(crown, clampY(p, len) - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * 0.84, s.hue, bend = 0.9)
@@ -395,10 +424,17 @@ internal object TreeModels {
             val f = 0.5 + 0.45 * sqrt(rnd.next())
             var p = Vec3(c.x + d.x * rr * f, c.y + d.y * rr * f * (ry / rx), c.z + d.z * rr * f)
             p = envelope(p, 1.0)
-            val len = rx * (if (lod == Lod.FAR) rnd.range(0.95, 1.15) else rnd.range(0.62, 0.8)) * (if (shape == Shape.TALL) 1.4 else 1.0)
-            p = clampY(p, len)
+            val len = min(rx * (if (lod == Lod.FAR) rnd.range(0.95, 1.15) else rnd.range(0.62, 0.8)) * (if (shape == Shape.TALL) 1.4 else 1.0), if (lod == Lod.FAR) FAR_MASS_MAX_M else MASS_MAX_M)
             val along = (d * 0.6 + rnd.unit() * 0.4 + Vec3(0.0, 0.5, 0.0)).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
+            if (lod == Lod.FAR && shape != Shape.BUSH) {
+                // Ferne Krone: Karten abwechselnd in oberer und unterer Lage ueber die ganze Kronenhoehe. Vorher lagen
+                // die acht Karten um den Mittelpunkt — von der Strecke aus sah man einen langen Stamm mit kleinem
+                // Schopf oben; zusammen mit der Groessengrenze (keine 9-m-Karten mehr) auch keine „Federn“.
+                val yy = cy + ry * (if (i % 2 == 0) rnd.range(0.0, 0.5) else rnd.range(-0.55, -0.05))
+                p = Vec3(p.x, yy, p.z)
+            }
+            p = clampY(p, len)
             card(crown, p - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * rnd.range(0.92, 1.06), s.hue + rnd.range(-0.25, 0.25), bend = 0.85, darkBase = 0.95)
         }
     }
@@ -557,12 +593,12 @@ internal object TreeModels {
             d = Vec3(d.x, d.y * 0.55, d.z).normalized()
             val p = c + Vec3(d.x * cR, d.y * cR * 0.7, d.z * cR) * (0.4 + 0.6 * sqrt(rnd.next()))
             if (lod == Lod.NEAR) {
-                val len = cR * rnd.range(1.0, 1.4)
+                val len = min(cR * rnd.range(1.0, 1.4), TWIG_MAX_M * 1.2)
                 val along = (d + Vec3(0.0, 0.45, 0.0) + rnd.unit() * 0.4).normalized()
                 val across = perp(along, rnd.range(0.0, 2 * PI))
                 card(crown, p - along * (len * 0.45), along, across, len, len * 0.8, FoliageAtlas.NEEDLE, true, cr, leaf, s.tint * rnd.range(0.92, 1.1), s.hue, bend = 0.75, darkBase = 0.75)
             } else {
-                val len = cR * (if (lod == Lod.FAR) 2.4 else 1.8)
+                val len = min(cR * (if (lod == Lod.FAR) 2.4 else 1.8), if (lod == Lod.FAR) FAR_MASS_MAX_M else MASS_MAX_M * 1.3)
                 val along = (d * 0.5 + Vec3(0.0, 0.6, 0.0) + rnd.unit() * 0.3).normalized()
                 val across = perp(along, rnd.range(0.0, 2 * PI))
                 card(crown, p - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * 0.95, s.hue, bend = 0.85, darkBase = 0.95)
