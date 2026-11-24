@@ -238,6 +238,12 @@ internal interface LandMap {
      * dem Luftbild geschaetzt, wo es eines gibt; sonst 1 in Wald und 0 ausserhalb.
      */
     fun canopyAt(e: Double, n: Double): Double = if (classAt(e, n) == LandClass.FOREST) 1.0 else 0.0
+
+    /** Gemessene Kronenhoehe ueber Grund (Laserdaten), `NaN` ohne Messung. */
+    fun canopyHeightAt(e: Double, n: Double): Double = Double.NaN
+
+    /** Gemessene Einzelbaeume einer Kachel der Stufe 0 (Laserdaten), `null` ohne Messung. */
+    fun laserTrees(spec: TileSpec): List<LaserTree>? = null
 }
 
 // ---------------------------------------------------------------------------
@@ -425,6 +431,16 @@ internal class TileContext(
     val seed: Int = Noise.seedOf(spec.id),
 ) {
     val level: Int get() = spec.level
+
+    /**
+     * Hoehe des gezeichneten Gelaendenetzes dieser Kachel, wenn es kein
+     * regelmaessiges Gitter ist (Laserdaten: [LaserTerrainMesh]); sonst `null`.
+     */
+    var meshHeight: ((Double, Double) -> Double)? = null
+
+    /** Hoehe des gezeichneten Gelaendenetzes: [meshHeight] oder das Gitter der Stufe 0 ([terrainMeshHeightAt]). */
+    fun meshHeightAt(e: Double, n: Double, cellM: Double): Double =
+        meshHeight?.invoke(e, n) ?: terrainMeshHeightAt(ground, e, n, cellM)
 
     fun x(e: Double): Double = e - spec.anchorE
     fun y(u: Double): Double = u - anchorU
