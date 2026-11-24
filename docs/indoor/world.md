@@ -17,7 +17,7 @@ Stand: 23.11.2026, Branch `claude/indoor-world`. Vertrag: `docs/indoor.md`
 | Fahrbahn `route` | je Belag kachelnde Textur, weicher Belagswechsel, Ränder nach Belag und Umgebung (Bankett, Bordstein mit Gehweg, Graskante), Böschungsstreifen, Markierung auf Landstraßen |
 | Straßen `roads` | übrige Straßen und Wege der Karte, flach auf dem Gelände |
 | Gebäude `buildings` | Grundriss × Höhe, Satteldächer/Walmdächer, Anbauten, Fassadenatlas, Stufe 1 grob. Dachfarbe je Gebäude (deterministisch): Ziegelrot, Rotbraun, Braun, Anthrazit, Grau, wo möglich aus der Luftbildfarbe; Grau aus dem Luftbild wird bei Ziegeldächern teils als Rotbraun/Braun gedeutet. Die Vektorkacheln nennen keine Gebäudeart (kein church/warehouse); große Grundrisse (> 800 m²) werden nur in Gewerbe- und Landwirtschaftsflächen zur Wellblechhalle, sonst zu Putz-/Ziegelbauten mit Fenstern und Ziegeldach (Traufe 6,6–9,6 m, wenn die Daten keine Höhe nennen) |
-| Bäume `trees` | **neu:** Einzelbäume in vier Arten (runder Laubbaum, schlanke Pappel/Birke, gestufte Fichte, kleiner Feld-/Obstbaum) bis 70 m neben der Strecke: verbeulte, überlappende Kronenkörper mit geglätteten Normalen, Größen- und Farbvariation, Wurzelanlauf. Drei Detailstufen, budgetabhängig vom Weg nach außen vergeben. Standorte aus der Kronenbedeckung des Luftbilds bzw. der Landnutzung; dahinter und in Stufe 1 Waldkörper (hügeliges Kronendach, das am Waldrand bis zum Boden abfällt, ohne Wände) |
+| Bäume `trees` | **Blattkarten** (seit Abschnitt „Vegetation“): sechs Arten (breiter/schlanker Laubbaum, Feldbaum, Fichte aus Astquirl-Schürzen, Kiefer, Busch) bis 70 m neben der Strecke, Kronen aus verdrehten Alpha-Karten (prozeduraler Atlas) mit gebogenen Normalen, drei Stufen vom Weg aus vergeben; Gras-/Farnbüschel am Wegrand; dahinter und in Stufe 1 Waldkörper mit Kronenmosaik und Randbäumen als Kreuzbild |
 | Wasser `water` | **neu:** Wasserspiegel auf Uferhöhe über den Wasserflächen der Karte |
 | Kleinteile `props` | Leitpfosten, Laternen, Ortstafel, Weidezäune, Holzpolter, Bänke, Wegweiser |
 | Detailstufen | 3 Stufen (256 m / 1 km / 4 km), `show` nach Laufmetern, Budget je Qualität nachgerechnet (steht im Manifest, `checkWorld` meldet Überschreitungen; der Bau bricht deswegen nicht mehr ab) |
@@ -57,9 +57,8 @@ Was noch nicht stimmt (gesehen und bewusst offen gelassen):
 - **Wald dunkel:** Unter geschlossenem Kronendach ist der Weg im Betrachter
   sehr dunkel (dort gibt es nur ein schwaches Umgebungslicht); in Filament
   hängt das am `IndirectLight` von indoor-render.
-- **Bäume:** vier Arten mit runden Kronen, aber weiterhin Körper ohne
-  Laubkarten; keine Sträucher, kein Unterholz. In dichtem Wald reicht das
-  Budget nur für die nächsten Reihen in feiner Stufe.
+- **Bäume:** (überholt, siehe Abschnitt „Vegetation“) vier Arten mit runden
+  Kronen, Körper ohne Laubkarten; keine Sträucher, kein Unterholz.
 - **Dächer:** Große Gebäude mit grauem Luftbild (z. B. Schieferdächer des
   Klosters Altenberg) bleiben grau — das ist dort echt.
 - Wo das Luftbild dunkle Flächen hat (Schatten, nasse Wiesen), setzt die
