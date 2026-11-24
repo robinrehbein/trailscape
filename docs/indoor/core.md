@@ -165,6 +165,14 @@ Geschaltet wird mit `ShifterEvent.UP/DOWN` durch die sortierte Liste.
   an der Stelle des Fahrers; sonst Abstand durch das Tempo des Hinteren bzw.,
   steht der vor `finish()`, durch dessen Durchschnittstempo.
 
+- Startpunkt (24.11.2026, `IndoorStartPoint.kt`, Einzelheiten in
+  `docs/indoor/app.md` „Startpunkt und Fortsetzen“): Die Sitzung erfüllt
+  zusätzlich `MovableIndoorSession` — `moveTo` in READY und PAUSED, innerhalb
+  der laufenden Runde. Summen und `stats` zählen nur gefahrene Meter
+  (`riddenM`); der Geist wird an der neuen Stelle neu angesetzt (frühere Fahrt
+  zeitlich verschoben, `PastRideGhost.startingAt`). Die Vertragsdateien sind
+  unverändert.
+
 ### FTMS-Trainer (Abschnitt 5.2)
 
 - Einrichtung nach jedem `READY` des Rohrs: Feature und Power Range lesen,

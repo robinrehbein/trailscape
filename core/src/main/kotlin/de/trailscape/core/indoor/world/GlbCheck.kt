@@ -405,7 +405,12 @@ private val MATERIAL_NAMES: Set<String> = setOf(
 ) + SurfaceKind.entries.map { WorldNames.MAT_ROUTE_PREFIX + it.textureKey }
 
 private val ALLOWED_ATTRIBUTES = setOf("POSITION", "NORMAL", "TEXCOORD_0", "COLOR_0")
-private val ALLOWED_EXTENSIONS = setOf(KHR_MATERIALS_UNLIT)
+/**
+ * Erlaubte Erweiterungen: `KHR_materials_unlit` (Vertrag 7.3) und — Abweichung, siehe
+ * docs/indoor/world.md — `KHR_materials_specular` (nur `specularFactor` 0 fuer Vegetation;
+ * gltfio 1.75.1 hat dafuer die Ubershader-Variante `specular_*`).
+ */
+private val ALLOWED_EXTENSIONS = setOf(KHR_MATERIALS_UNLIT, KHR_MATERIALS_SPECULAR)
 
 private class GlbChecker(private val p: ParsedGlb, private val model: Boolean) {
     private val out = ArrayList<String>()

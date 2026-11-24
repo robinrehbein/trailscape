@@ -10,6 +10,7 @@
 <resources>
     <!-- IndoorViewModel: name of the saved ride and display names -->
     <string name="indoor_app_ride_name">Indoor · %1$s</string>
+    <string name="indoor_app_ride_name_from">Indoor · %1$s (from km %2$s)</string>
     <string name="indoor_app_route_testworld">Test world</string>
     <string name="indoor_app_trainer_demo_name">Demo trainer</string>
     <string name="indoor_app_ghost_past_label">Ride on %1$s</string>
@@ -75,6 +76,15 @@
     <string name="indoor_app_pair_gears_even_body">24 gears in even steps from very easy to very hard.</string>
     <string name="indoor_app_pair_gears_bike_label">Like your bike (2 × 12)</string>
     <string name="indoor_app_pair_gears_bike_body">The ratios of a gravel bike with 48/31 chainrings and an 11–34 cassette, sorted from easy to hard.</string>
+    <string name="indoor_app_pair_time_title">Time of day</string>
+    <string name="indoor_app_pair_time_auto_label">Automatic</string>
+    <string name="indoor_app_pair_time_auto_body">Follows the time of day at the route – at night a bright dusk.</string>
+    <string name="indoor_app_pair_time_morning_label">Morning</string>
+    <string name="indoor_app_pair_time_morning_body">Low sun in the east, fresh light.</string>
+    <string name="indoor_app_pair_time_noon_label">Midday</string>
+    <string name="indoor_app_pair_time_noon_body">High sun, short shadows.</string>
+    <string name="indoor_app_pair_time_evening_label">Evening</string>
+    <string name="indoor_app_pair_time_evening_body">Warm, low light from the west.</string>
     <string name="indoor_app_pair_continue_hint">Pair a trainer or switch on the demo trainer to continue.</string>
     <string name="indoor_app_pair_diagnostics_action">Open diagnostics</string>
     <!-- IndoorRouteScreen.kt -->
@@ -367,4 +377,17 @@
     <string name="indoor_app_catalog_failed_other">Couldn’t download the package.</string>
     <string name="indoor_app_catalog_failed_keeps_old">The previously downloaded version stays rideable.</string>
     <string name="indoor_app_worlds_tag_catalog">Known route</string>
+    <!-- Start point and resume (docs/indoor/app.md) -->
+    <string name="indoor_app_start_title_choose">Where do you start?</string>
+    <string name="indoor_app_start_hint_drag">Drag along the profile to start somewhere else.</string>
+    <string name="indoor_app_start_hint_drag_pedal">Drag along the profile to start somewhere else – or just start pedalling.</string>
+    <string name="indoor_app_summary_start_tag">from km %1$s</string>
+    <string name="indoor_app_start_hint_drag_pause">Drag along the profile to carry on somewhere else.</string>
+    <string name="indoor_app_start_position">km %1$s · %2$s m</string>
+    <string name="indoor_app_start_resume_chip">Continue at km %1$s</string>
+    <string name="indoor_app_start_from_beginning_chip">From the start</string>
+    <string name="indoor_app_start_go_action">Start riding</string>
+    <string name="indoor_app_start_earlier_cd">Start 100 m earlier</string>
+    <string name="indoor_app_start_later_cd">Start 100 m later</string>
+    <string name="indoor_app_start_profile_cd">Start point at kilometre %1$s of %2$s. Drag or tap along the profile to move it.</string>
 </resources>

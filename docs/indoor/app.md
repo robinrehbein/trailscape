@@ -261,7 +261,11 @@ ohne Welt, 101 Hinweis bei Trainerverlust (Auto-Pause), 102 Querformat,
 103 Auswertung gespeichert, 104 Auswertung unter 60 s,
 105 Weltverwaltung, 106 und 107 Englisch, 108 kleines Gerät (360 × 640 dp) mit
 Demo-Reglern, 109 Koppeln mit Demo-Trainer, 112 Nebenanzeigen ausgeblendet,
-113 Schrift 130 %, 114 harte Pause, 115 Querformat ERG mit Schrift 130 %. Nur in
+113 Schrift 130 %, 114 harte Pause, 115 Querformat ERG mit Schrift 130 %,
+118 Startpunkt mit „Weiter bei km 7,4“ vor dem Losfahren, 119 Startpunkt in der
+Pause ohne Welt, 120 und 122 dasselbe quer (vor dem Losfahren bzw. in der
+Pause), 121 englisch, 123 Startpunkt ohne gemerkte Stelle (km 0, echter
+Trainer), 124 Auswertung „ab km 7,4“. Nur in
 `app/build/outputs/roborazzi/` (nicht unter `docs/`): 110 und 111 Koppeln mit
 dem echten Abschnitt von indoor-ble (ohne Berechtigung bzw. gekoppelt mit
 laufender Suche), als hohes Bild der ganzen Seite.
@@ -307,9 +311,15 @@ steht jetzt in einer Karte wie die übrigen.
 - `PRIVACY.md` nennt alle sechs Hosts der Positivliste; `OpenSourceNotices`
   die Luftbild-Lizenzen aller vier Länder.
 - `filament-utils-android` ist entfallen (die Darstellung braucht es nicht).
-- Offen: Tageszeit und Qualität der Darstellung sind nicht einstellbar
-  (`setSky`/`setSettings` werden nicht gerufen; es gilt `SkySetting.DEFAULT`
-  und die Qualität der Welt).
+- Tageszeit (seit 24.11.2026, Branch `claude/indoor-himmel`): Karte
+  „Tageszeit“ im Schritt Koppeln (Automatisch / Morgen / Mittag / Abend,
+  Vorgabe Automatisch, gemerkt unter `trailscape.indoor.time_of_day`). Beim
+  Start der Fahrt und bei jeder Änderung `setSky(IndoorDaylight.skySetting(…))`
+  mit dem Ursprung der Welt; „Automatisch“ wird während der Fahrt alle
+  10 Minuten der Uhr nachgeführt. Nachts helle Dämmerung. Rechnung und
+  Bilder: `docs/indoor/render.md`, „Himmel, Wolken, Tageszeit“.
+- Offen: Die Qualität der Darstellung ist nicht einstellbar (`setSettings`
+  wird nicht gerufen; es gilt die Qualität der Welt).
 
 ## Bekannte Strecken (23.11.2026)
 
@@ -325,3 +335,142 @@ Zustände) und 117 (englisch).
       fahren und in der Weltverwaltung löschen
 - [ ] Vor dem ersten Workflow-Lauf: „Laden“ zeigt „Paket ist noch nicht
       verfügbar“
+
+## Startpunkt und Fortsetzen (24.11.2026)
+
+Wunsch des Gründers: auf dem Höhenprofil unten auswählen können, wo die Fahrt
+beginnt — etwa in der Mitte, wenn der Anfang schon gefahren ist —, statt
+immer von vorn zu starten.
+
+**Bedienung**
+
+- Solange sich der Fahrer versetzen lässt — vor dem ersten Tritt und in der
+  Pause —, steht unten statt Gang und schmalem Profil die
+  **Startpunkt-Karte** (`IndoorStartPanel.kt`): ein großes Höhenprofil zum
+  Ziehen oder Antippen, der Punkt ist die Startstelle, links davon (der
+  übersprungene Teil) blass; darüber „km 7,4 · 588 m“ (Stelle und Höhe),
+  daneben runde −/+-Knöpfe für 100 m genau (gleiche Größe wie die übrigen
+  HUD-Knöpfe, mit dem Daumen ohne Umgreifen). Für die Bedienungshilfe ist das
+  Profil ein Regler (`setProgress`). Hochformat: Karte über die volle Breite,
+  darunter der Knopf; Querformat: flacheres Profil, Auswahl und Knopf in einer
+  Reihe. Die mittige Phasenkarte entfällt, solange die Startpunkt-Karte steht.
+- **Vor jeder Fahrt** steht die Karte, bis **„Losfahren“** getippt wird —
+  auch ohne gemerkte Stelle (Vorauswahl dann km 0) und auch mit dem
+  Demo-Trainer. So lässt sich jederzeit „erst in der Mitte“ starten.
+- **Echter Trainer:** Der erste Tritt gilt ebenfalls als „Losfahren“, solange
+  der Startpunkt nicht angefasst wurde (Hinweis „… oder tritt einfach los“).
+  Wer einfach lostritt, will an der Vorauswahl starten — eine normale Fahrt
+  braucht so keinen zusätzlichen Tipp. Sobald jemand zieht, tippt, −/+ oder
+  eine Auswahl drückt, startet nur noch „Losfahren“; sonst rollte man beim
+  Wählen schon los. Der Demo-Trainer „tritt“ sofort und wartet deshalb immer
+  auf den Knopf.
+- **Fortsetzen:** Wird eine Fahrt mittendrin beendet, merkt sich die App die
+  Stelle je Strecke. Beim nächsten Start derselben Strecke steht der Fahrer
+  schon dort („Weiter bei km x“ ist vorausgewählt), daneben „Von vorn“.
+- In der Pause trägt die Karte „Weiter“.
+- **Auswertung und Tour:** Begann die Fahrt nicht am Anfang (ab 50 m), zeigt
+  die Auswertung ein Kennzeichen „ab km 7,4“, und die gespeicherte Tour heißt
+  „Indoor · <Strecke> (ab km 7,4)“ — so steht es in Liste und Detail, ohne
+  neues Feld im Tour-JSON. Gemeint ist die Stelle des ersten Tritts; ein
+  späterer Versatz in der Pause ändert sie nicht.
+- Nach dem Beenden wird die Stelle neu gemerkt; nach dem Ziel gelöscht.
+
+**Umsetzung**
+
+- `:core` (`IndoorStartPoint.kt`): Die Sitzung erfüllt zusätzlich
+  `MovableIndoorSession` (`canMove`, `moveTo`). Der Vertrag
+  `IndoorSession.kt` bleibt unverändert — das Versetzen ist eine eigene
+  Schnittstelle, `IndoorSession.moveStartTo(d)` liefert für jede andere
+  Sitzung (Attrappe) `false`. `createIndoorSessionAt(config, d)` baut eine
+  Sitzung, die schon an `d` steht. `IndoorStartPoints` hält die Regeln
+  (Begrenzung, 10-m-Raster, 100-m-Schritt, Merken, Angebot),
+  `IndoorResumePoint` die gemerkte Stelle samt JSON.
+- Die Laufzeit versetzt mit `moveStart(d)` im nächsten Takt (wird beim Tausch
+  der Sitzung gegen die echten Trainer-Fähigkeiten nachgespielt) und hält mit
+  `holdStart` (jetzt immer) die Messwerte zurück, bis `releaseStart()` kommt
+  oder — mit echtem Trainer (`releaseOnFirstStroke`) und unberührtem
+  Startpunkt — der erste Tritt. Versetzt wird
+  vor dem ersten Schritt: Darstellung (erster `setState`), Kacheln um die
+  Stelle, Kamera, die erste SIM-Vorgabe an den Trainer und „x von y km“ gelten
+  ab dem ersten Bild der Startstelle (Test
+  `gemerkteStelleIstVorauswahlUndWartetAufLosfahren`).
+- Gemerkt wird im `KeyValueStore` unter
+  `trailscape.indoor.resume.<Schlüssel der Streckenwahl>` (`testwelt`,
+  `ride:<id>`, `catalog:<id>`) — also je gewählter Strecke, gleich ob mit oder
+  ohne Welt gefahren. Inhalt: Stelle in der Runde, Länge der Strecke, Zeit.
+
+**Entscheidungen**
+
+- **Statistik:** `IndoorTotals.distanceM`, die Höhenmeter (auf und ab), die
+  Fahrzeit und der Schnitt zählen nur wirklich gefahrene Meter
+  (`riddenM` in der Sitzung), nie den übersprungenen Anfang und nie einen
+  Versatz in der Pause. Gespeicherte Tour, Auswertung, Belastung, Wochenziel
+  und Statistik lesen diese Zahlen (`stats` des Records). Die Punkte der Tour
+  beginnen an der Startstelle; ein Versatz in der Pause ist in der Spur ein
+  Sprung (wie der Rundenwechsel; Indoor-Touren zählen ohnehin nicht für
+  Wege, Kacheln und Segmente).
+- **Runden:** `distM` bleibt der Laufmeter auf der Strecke. Wer auf einer
+  Runde in der Mitte startet, ist in Runde 1, bis er die Ziellinie quert;
+  `laps` = angefangene Runden wie bisher. Versetzt wird immer innerhalb der
+  laufenden Runde. Auf einer Strecke ohne Rundschluss bleiben bis zum Ziel
+  mindestens 100 m (`GOAL_RESERVE_M`).
+- **Geist: mitnehmen statt ausblenden.** Er startet an derselben Stelle wie
+  der Fahrer: die Vergleichsleistung aus dem Stand (wie am Anfang), die
+  frühere Fahrt zeitlich so verschoben, dass sie die Stelle zur selben
+  Fahrzeit erreicht — verglichen wird genau der gefahrene Abschnitt, und das
+  ist auch die Frage, die man sich bei „Weiter bei km 12“ stellt („bin ich
+  heute auf der zweiten Hälfte schneller?“). Hat die frühere Fahrt die Stelle
+  nie erreicht, fährt kein Geist mit (Anzeige und Endabstand leer). Wird in der
+  Pause versetzt, beginnt der Vergleich an der neuen Stelle neu; der
+  Endabstand in der Auswertung gilt für den Abschnitt seit dem letzten
+  Versetzen. Ausblenden wäre einfacher gewesen, nähme aber gerade beim
+  Fortsetzen den Vergleich weg.
+- **Merken:** nach jedem Beenden (auch wenn die Fahrt unter 60 s bleibt oder
+  verworfen wird — es geht um die Stelle auf der Strecke, nicht um die Tour).
+  Gelöscht wird am Ziel einer Strecke ohne Rundschluss, wenn die Stelle
+  weniger als 200 m hinter dem Start liegt (das wäre „Von vorn“) oder weniger
+  als 100 m vor dem Ziel; auf einer Runde, wenn sie weniger als 200 m vor der
+  Ziellinie liegt. Wer eine Runde ganz fährt und in der nächsten aufhört,
+  setzt dort fort — eine Runde hat kein endgültiges Ziel.
+- **Angebot:** nur, wenn die Strecke heute höchstens 5 % anders lang ist als
+  beim Merken (Streckenband der Welt gegen die ursprüngliche Tour: Stelle
+  anteilig umgerechnet); sonst ist es eine andere Strecke und es gibt kein
+  Angebot. Kaputter Inhalt im Speicher wird ignoriert.
+- „Weiter bei …“ / „Von vorn“ gibt es nur vor dem ersten Tritt; in der Pause
+  wird frei auf dem Profil versetzt.
+
+**Tests**
+
+- `IndoorStartPointTest` (`:core`): Stelle, Steigung und erste Vorgabe ab dem
+  ersten Schritt; nur Gefahrenes zählt (Strecke, Höhe, Schnitt, Record);
+  Ziel nach dem Rest; Runde 1 bis zur Ziellinie; Begrenzung und Raster;
+  Versetzen nur in READY/PAUSED, zählt nicht; Versetzen auf der Runde;
+  Geist (beide Arten) an der Startstelle, neu nach dem Versetzen, kein Geist
+  ohne Abdeckung; Merk- und Angebotsregeln; JSON.
+- `IndoorStartFlowTest` (`:app`, ganzer Ablauf mit echter Sitzung): ohne
+  gemerkte Stelle am Anfang, Versetzen in der Pause samt −/+ und Merken;
+  Vorauswahl der gemerkten Stelle, Warten auf „Losfahren“, „Von vorn“ und
+  zurück, erster Zustand der Darstellung an der Startstelle, gespeicherte
+  Tour zählt nur das Gefahrene; über die Ziellinie gefahren löscht;
+  kaputter Speicherinhalt.
+- `IndoorStartHoldTest` (Laufzeit): Demo wartet trotz Treten auf
+  „Losfahren“; echter Trainer startet mit dem ersten Tritt, nach dem
+  Verschieben nur mit „Losfahren“. Im Ablauftest: „ab km 1,2“ in Auswertung
+  und Tourname.
+- Bilder 118–124 (siehe „Bilder“).
+
+**Auf dem Gerät zu prüfen**
+
+- [ ] Profil mit dem Daumen ziehen und antippen (hoch und quer): Punkt folgt
+      dem Finger ohne Ruckeln, −/+ treffen, nichts löst „Welt ausblenden“ aus
+- [ ] Mit Welt: nach dem Versetzen springt der Fahrer an die Stelle, die
+      Kamera folgt sofort (bei mehr als 80 m springt sie, darunter gleitet sie
+      0,35 s), fehlende Kacheln laden nach, keine Löcher beim Losfahren
+- [ ] Echter Trainer: der Widerstand passt vom ersten Tritt an zur Steigung
+      der Startstelle
+- [ ] Fahrt mittendrin beenden, dieselbe Strecke neu wählen: „Weiter bei km x“
+      steht; mit Demo-Trainer bewegt sich vor „Losfahren“ nichts
+- [ ] Echter Trainer: ohne Anfassen startet der erste Tritt an der
+      Vorauswahl; nach dem Verschieben bewegt Treten nichts bis „Losfahren“
+- [ ] Gespeicherte Tour einer fortgesetzten Fahrt: Distanz und Höhenmeter nur
+      des gefahrenen Teils in Liste, Detail und Wochenziel

@@ -29,7 +29,7 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
 | `TilePlanner.kt` | welche Kacheln laden/entladen (nach `WorldTile.show`, Hysterese, Runden), Teilflächen-Regel | nein, getestet |
 | `MotionSmoother.kt` | Fortschreiben zwischen `setState`, Ausgleich, Sprung, Kurbel- und Radphase | nein, getestet |
 | `CameraRig.kt` | CHASE / HANDLEBAR / DRONE, Dämpfung, nie unter der Fahrbahn | nein, getestet |
-| `SkyModel.kt` | Sonnenstand, Licht, Himmelsfarben, SH-Koeffizienten, Himmels-Cubemap, Dunst | nein, getestet |
+| `SkyModel.kt` | Anbindung von `core/…/indoor/sky` (Licht, Himmel, Dunst): Richtung im glTF-Raum, SH-Koeffizienten, HDR-Cubemap | nein, getestet |
 | `GlbWriter.kt`, `MeshBuilder.kt` | kleiner GLB-Schreiber und Grundkörper | nein, getestet |
 | `AvatarModel.kt` | eingebauter Fahrer (Rad + Fahrer, Animationen `pedal`/`roll`, Beine per Zwei-Gelenk-Rechnung) | nein, getestet |
 | `TestSceneModel.kt` | Testszene ohne Dateien (geneigte Wiese, Ringstraße, Bäume, Häuser) und ihr `WorldTrack` | nein, getestet |
@@ -86,13 +86,16 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   `IndirectLight.cpp`, geprüft per „weißer Ofen“-Test), Stärke 26 000 lx bei
   tiefer bis 34 000 lx bei hoher Sonne. Belichtung f/16,
   1/125 s, ISO 100.
-- **Himmel:** Cubemap 64² × 6 (`SRGB8_A8`, `setImage(…, depth = 6, …)`),
-  Verlauf Horizont → Zenit, **symmetrisch zur Waagrechten** (siehe Annahmen);
-  die Sonnenscheibe zeichnet Filament (`Skybox.showSun(true)`). Mit
-  `sky = false` eine einfarbige Skybox in Horizontfarbe.
-- **Dunst:** `View.fogOptions` mit Dichte aus `haze` (Sichtweite 40 km … 4 km,
-  Koschmieder), Farbe = Horizontfarbe, `cutOffDistance` 100 km (Skybox ohne
-  Dunst), Höhe relativ zum Fahrer, `heightFalloff` 0,0012/m.
+- **Himmel:** Cubemap 256² × 6 als `R11F_G11F_B10F` (HDR, Rückfall
+  `SRGB8_A8`), Verlauf und weiche Wolken, **symmetrisch zur Waagrechten**
+  (siehe Annahmen); die Sonnenscheibe zeichnet Filament
+  (`Skybox.showSun(true)`). Mit `sky = false` eine einfarbige Skybox in
+  Horizontfarbe. Einzelheiten unten unter „Himmel, Wolken, Tageszeit“.
+- **Dunst:** `View.fogOptions` mit Dichte aus `haze` (Sichtweite 30 km … 3 km,
+  Koschmieder), mindestens aber so dicht, dass am Rand der Welt
+  (`IndoorQuality.viewDistanceM`) rund 90 % Dunst liegen; Farbe = sichtbarer
+  Horizont, `cutOffDistance` 100 km (Skybox ohne Dunst), Höhe relativ zum
+  Fahrer, `heightFalloff` 0,0012/m.
 - **Kameras:** CHASE 6 m hinter (auf dem Band zurück, folgt Kurven) und 2,5 m
   über dem höheren von Fahrer und Kamerapunkt, τ = 0,35 s; HANDLEBAR auf
   1,45 m Augenhöhe, Blick 25 m voraus; DRONE 28 m hoch, 22 m seitlich, 18 m
@@ -176,6 +179,104 @@ Auf dem Gerät zu prüfen: Bildrate MEDIUM mit MSAA + DPCF; Speicher der
 Schattenkarten; ob DPCF auf dem Treiber des Gründers sauber aussieht (sonst
 PCF zurück, eine Zeile).
 
+## Himmel, Wolken, Tageszeit (24.11.2026, Branch `claude/indoor-himmel`)
+
+**Befund auf dem Gerät** (Bilder auf `claude/trusting-heisenberg-mbokzx`,
+`docs/indoor/bilder/geraet/`): ein fast einheitliches, flaches Grau. Die
+Cubemap kam an (der Verlauf ist da), aber ihre Farben waren zu blass:
+Zenit ≈ (0,2/0,38/0,76), Horizont ≈ (0,66/0,76/0,88), dazu 30 % Dunst zum
+Grau hin. Filaments Standard-Abbildung der `View` ist `ACES_LEGACY` (ACES
+mit Helligkeit 1/0,6, `ColorGrading.cpp`/`ToneMapper.cpp` v1.75.1) — sie
+bleicht helle, wenig gesättigte Farben fast weiß. Nachgerechnet: Horizont
+→ sRGB (208, 213, 218), gemessen auf dem Foto (182, 195, 210); in 25° Höhe
+(175, 193, 214), gemessen unter dem HUD-Schleier umgerechnet (166, 184, 205).
+Das Dunklere oben auf dem Foto ist der Schleier des HUD (`HudColors.topScrim`,
+62 % Schwarz), nicht der Himmel. Eine Sonnenscheibe war nicht zu sehen,
+weil die Sonne um 15:30 im Juni 45° hoch steht — im Hochformat reicht das
+Bild nur bis rund 25° über den Horizont.
+
+**Gebaut:**
+
+- **Reine Logik in `core/…/indoor/sky`** (getestet): `IndoorDaylight`
+  (Sonnenstand, wahre Sonnenzeit aus Weltzeit + Länge + Zeitgleichung, feste
+  Tageszeiten, helle Dämmerung), `DaylightModel` (Sonne, Umgebungslicht,
+  Dunst, sichtbarer Himmel je Sonnenhöhe), `SkyLookModel` (Farben),
+  `SkyClouds` (Wolkenrauschen, Cubemap als Halbfloats, Rundumbild für den
+  Betrachter). `SkyModel` in `:app` reicht nur noch weiter.
+- **Farben gegen `ACES_LEGACY` ausgesucht:** Zielwerte nach der Abbildung
+  (sRGB) Zenit 52/112/204 (hohe Sonne) bis 78/118/190 (8°), Horizont
+  187/208/234 bis 222/205/189 (warm bei tiefer Sonne); daraus die
+  szenenlinearen Werte per Umkehrung einer Nachbildung der Abbildung
+  (`FilamentAces` in `tool/indoor-dev/…/Sky.kt`, gleiche Formeln wie
+  `ToneMapper.cpp`). Der helle Horizontstreifen geht in den ersten rund 10°
+  ins Blau über (`1 − exp(−y / 0,16)`), weil man im Hochformat nur 0–25°
+  sieht.
+- **HDR-Cubemap:** Der Horizont braucht Blau ≈ 1,6 (nach Teilen durch
+  `ambientLux × Belichtung`), Wolkenränder bis rund 2 — in `SRGB8_A8` würde
+  das bei 1 abgeschnitten. Deshalb `R11F_G11F_B10F` (in OpenGL ES 3.0
+  filterbar), hochgeladen als `RGB`/`HALF`; vorher
+  `Texture.isTextureFormatSupported`, sonst dieselben Farben abgeschnitten in
+  `SRGB8_A8`. 256² je Fläche ≈ 1,5 MB Grafikspeicher (vorher 64², 96 kB).
+- **Weiche Wolken, prozedural:** Wertrauschen (5 Lagen, leicht verwirbelt)
+  auf einer gedachten Wolkenebene, Richtung `d` trifft sie bei
+  `(d.x, d.z) / (|d.y| + 0,18)` — zum Horizont nur mäßig gestaucht, damit
+  die Wolken dort, wo man hinsieht, nicht in Streifen zerfallen. Unter 1°
+  keine Wolken, ab 7° volle (reiner Horizont = Dunstfarbe). Bedeckung
+  30 % + 15 % × Dunst. Dicke Kerne grau, Ränder in der Sonnenfarbe. Weil
+  alles nur von `|y|` abhängt, bleibt es richtig, falls ein Treiber die
+  Seitenflächen spiegelt (dann ist nur das Muster gespiegelt). Kein Bild aus
+  fremder Quelle. Das Rauschen (≈ 230 000 Texel, untere Hälften gespiegelt)
+  rechnet ein Hintergrund-Thread beim `loadWorld` vor (Desktop-JVM rund
+  0,1 s, auf dem Handy geschätzt 0,3–0,5 s); das Einfärben je Tageszeit ist
+  billig.
+- **Dunst:** Farbe = sichtbarer Horizont (geteilt durch dieselbe Skala wie
+  die Skybox), mindestens 90 % am Rand der Sichtweite der Welt (LOW 6 km,
+  MEDIUM 12 km, HIGH 20 km) — die Welt hört nicht mehr sichtbar auf.
+  Skybox und Sonnenscheibe bekommen keinen Dunst (`cutOffDistance`, die
+  Skybox liegt bei Filaments unendlich fernem Rendern auf Abstand ∞);
+  Bäume mit `MASK` werden wie jede Fläche gedunstet, die Maske bleibt.
+- **Umgebungslicht getrennt vom sichtbaren Himmel:** Die SH-Koeffizienten
+  kommen weiter aus dem alten, ruhigen Verlauf — die Welt ist damit
+  abgestimmt, und der kräftig blaue Himmel soll sie nicht blau färben. Die
+  Sonnenfarbe bei tiefer Sonne ist etwas wärmer (1/0,76/0,52 statt
+  1/0,80/0,58).
+- **Tageszeit:** `IndoorTimeOfDay` AUTO / MORNING / NOON / EVENING.
+  Automatisch: wahre Sonnenzeit am Ursprung der Welt; steht die Sonne
+  tiefer als 8°, der nächste Zeitpunkt, an dem sie 8° hoch steht (abends
+  die Abend-, nach Mitternacht die Morgendämmerung) — nie dunkel; im
+  Polarwinter Mittag. Fest: Tag 165, Morgen 16° steigend (Osten), Mittag
+  12:45 Sonnenzeit, Abend 11° fallend (Westen). Auswahl in den
+  Indoor-Einstellungen (siehe `docs/indoor/app.md`).
+
+**Bilder** (Betrachter mit dem Himmel der Darstellung, `shots.mjs --sky`;
+die Welt rendert dort three.js, der Himmel geht durch die nachgebaute
+`ACES_LEGACY`): `docs/indoor/bilder/himmel/01-morgen.jpg`,
+`02-mittag.jpg`, `03-abend.jpg`, `04-mittag-wolken.jpg`,
+`05-abend-wald.jpg`; das Rundumbild je Tageszeit `rundum-*.jpg`; die Auswahl im Schritt Koppeln `06-auswahl-tageszeit.jpg`.
+
+**Leistung (geschätzt, nicht gemessen):** Je Bild nichts Neues — die
+Skybox war schon da (ein Texturzugriff je Himmelspixel; jetzt aus einer
+größeren, 4 Byte je Texel großen Textur), der Dunst auch. Keine weiteren
+Durchgänge, keine volumetrischen Wolken. Einmalig: Rauschen im Hintergrund,
+Einfärben und Hochladen von 1,5 MB bei jedem `setSky` (beim Start und bei
+„Automatisch“ alle 10 Minuten).
+
+**Nur auf dem Gerät zu sehen / prüfen:**
+
+- [ ] Himmel blau mit hellem Horizont und Wolken (nicht grau), oben
+      unter dem HUD-Schleier dunkler — das ist der Schleier.
+- [ ] Abend/Morgen: Sonnenscheibe mit Hof sichtbar, wenn die Strecke zur
+      Sonne führt; warmes, flaches Licht, lange Schatten.
+- [ ] Horizont ohne harte Kante: entfernte Hügel und Wald gehen in den
+      Dunst über; kein heller oder dunkler Streifen zwischen Gelände und
+      Himmel.
+- [ ] Bäume (Alpha-Maske) im Dunst ohne Säume; Sonnenscheibe nicht gedunstet.
+- [ ] Bildrate wie vorher (MEDIUM, Hochformat und quer).
+- [ ] Logcat: kein GL-Fehler beim Hochladen der Cubemap (sonst greift der
+      Rückfall `SRGB8_A8` — Himmel blasser, aber da).
+- [ ] Spiegelt der Treiber die Cubemap-Flächen, ändert sich nur das
+      Wolkenmuster (oben/unten bleibt richtig).
+
 ## Abweichungen vom Vertrag
 
 1. **Fahrer ohne Datei möglich.** Vertrag 7.6 nennt „Modelle“ als Startstufe
@@ -236,8 +337,9 @@ Geprüft durch Lesen der Java-Quellen und Shader im Tag `v1.75.1` und
   spiegelt, ließ sich ohne Gerät nicht klären. Der Verlauf hängt deshalb nur
   von `|y|` ab — unter dem Horizont liegt ohnehin Gelände.
 - Die einfarbige Skybox (`sky = false`) wird in Filament **nicht** mit der
-  Stärke des Umgebungslichts multipliziert (Cubemap und Dunst schon); die
-  Farbe wird deshalb selbst mit `ambientLux × Belichtung` skaliert.
+  Stärke des Umgebungslichts multipliziert (Cubemap und Dunst schon); sie
+  bekommt deshalb den sichtbaren Horizont direkt (szenenlinear), Cubemap und
+  Dunst denselben Wert geteilt durch `ambientLux × Belichtung`.
 - `RenderSettings.SAFE` (Vertragsdatei) schaltet auch die Nachbearbeitung ab;
   dann fehlen Tonwertabbildung und Gamma — das SAFE-Bild ist dunkler und
   härter. Das ist gewollt (Rettungsanker), kein Fehler der Darstellung.
@@ -274,7 +376,7 @@ SH-Konvention, Cubemap, API-Namen, Abbau-Reihenfolge, Threads, R8.
       blau mit Verlauf, Sonnenscheibe, Dunst am Horizont passt zur
       Himmelsfarbe (kein harter Rand).
 - [ ] Ist der Himmel oben blau und am Horizont hell (nicht umgekehrt)? Falls
-      verkehrt: Cubemap-Ausrichtung in `SkyModel.cubemapPixels` prüfen.
+      verkehrt: Cubemap-Ausrichtung in `SkyClouds.cubeDirection` prüfen.
 - [ ] Probefahrt: Fahrer fährt die Runde, Beine treten, Räder drehen sich
       vorwärts, Kurbel und Pedale passen zu den Füßen; Geist durchscheinend
       links daneben.
@@ -298,6 +400,11 @@ SH-Konvention, Cubemap, API-Namen, Abbau-Reihenfolge, Threads, R8.
 - [ ] Ausfall: In der Diagnose nach einem erzwungenen Ausfall (z. B. Welt
       löschen während der Fahrt) erscheint die 2D-Ersatzansicht mit Profil.
 - [ ] Release-Build (R8) startet die Darstellung genauso wie Debug.
+- [ ] Startpunkt versetzen (docs/indoor/app.md, „Startpunkt und Fortsetzen“;
+      an der Darstellung nichts geändert): Der Fahrer springt ab 30 m
+      (`MotionSmoother.JUMP_M`), die Kamera ab 80 m (`CameraRig.SNAP_DISTANCE_M`);
+      die Kacheln um die neue Stelle laden nach — prüfen, dass dabei keine
+      Löcher bleiben und der erste Zustand schon an der Startstelle steht.
 
 ## Integration (23.11.2026)
 

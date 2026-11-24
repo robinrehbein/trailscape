@@ -31,6 +31,7 @@ import de.trailscape.app.ui.components.Eyebrow
 import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.more.SettingsSwitchRow
 import de.trailscape.core.indoor.VirtualGearTable
+import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 
 /**
  * # Schritt 1: Koppeln
@@ -44,7 +45,8 @@ import de.trailscape.core.indoor.VirtualGearTable
  * (Kettenblatt / Zwift Cog mit 14 Zaehnen), auf die sich die virtuellen Gaenge
  * beziehen; [onChainringChange] bekommt den neuen Wert, das ViewModel begrenzt
  * und merkt ihn. Darunter waehlt [onGearTableChange] die Gangtabelle
- * (gleichmaessig oder wie am Rad).
+ * (gleichmaessig oder wie am Rad) und [onTimeOfDayChange] die Tageszeit der
+ * 3D-Welt (automatisch nach der Uhr, Morgen, Mittag, Abend).
  */
 @Composable
 fun IndoorPairScreen(
@@ -56,6 +58,7 @@ fun IndoorPairScreen(
     onContinue: () -> Unit,
     onBack: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onTimeOfDayChange: (IndoorTimeOfDay) -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_pair_title),
@@ -98,6 +101,7 @@ fun IndoorPairScreen(
 
         ChainringCard(teeth = ui.chainringTeeth, onChange = onChainringChange)
         GearTableCard(selected = ui.gearTable, onChange = onGearTableChange)
+        TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
 
         // Koppeln, Status, Vergessen: Der Abschnitt bringt Ueberschrift,
         // Einleitung, Berechtigungsabfrage, die gemerkten Geraete je Rolle und
@@ -167,8 +171,56 @@ private fun GearTableCard(selected: VirtualGearTable, onChange: (VirtualGearTabl
     }
 }
 
+/** Wahl der Tageszeit der 3D-Welt (Sonnenstand, Licht, Himmel). */
+@Composable
+private fun TimeOfDayCard(selected: IndoorTimeOfDay, onChange: (IndoorTimeOfDay) -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(vertical = 12.dp)) {
+            Eyebrow(
+                stringResource(R.string.indoor_app_pair_time_title),
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Column(modifier = Modifier.selectableGroup()) {
+                for (choice in IndoorTimeOfDay.entries) {
+                    ChoiceRow(
+                        label = stringResource(timeOfDayLabel(choice)),
+                        body = stringResource(timeOfDayBody(choice)),
+                        selected = choice == selected,
+                        onSelect = { onChange(choice) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun timeOfDayLabel(choice: IndoorTimeOfDay): Int = when (choice) {
+    IndoorTimeOfDay.AUTO -> R.string.indoor_app_pair_time_auto_label
+    IndoorTimeOfDay.MORNING -> R.string.indoor_app_pair_time_morning_label
+    IndoorTimeOfDay.NOON -> R.string.indoor_app_pair_time_noon_label
+    IndoorTimeOfDay.EVENING -> R.string.indoor_app_pair_time_evening_label
+}
+
+private fun timeOfDayBody(choice: IndoorTimeOfDay): Int = when (choice) {
+    IndoorTimeOfDay.AUTO -> R.string.indoor_app_pair_time_auto_body
+    IndoorTimeOfDay.MORNING -> R.string.indoor_app_pair_time_morning_body
+    IndoorTimeOfDay.NOON -> R.string.indoor_app_pair_time_noon_body
+    IndoorTimeOfDay.EVENING -> R.string.indoor_app_pair_time_evening_body
+}
+
 @Composable
 private fun GearTableRow(table: VirtualGearTable, selected: Boolean, onSelect: () -> Unit) {
+    ChoiceRow(
+        label = stringResource(gearTableLabel(table)),
+        body = stringResource(gearTableBody(table)),
+        selected = selected,
+        onSelect = onSelect,
+    )
+}
+
+/** Eine Zeile mit Auswahlknopf, Titel und kurzer Erklaerung. */
+@Composable
+private fun ChoiceRow(label: String, body: String, selected: Boolean, onSelect: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -178,9 +230,9 @@ private fun GearTableRow(table: VirtualGearTable, selected: Boolean, onSelect: (
     ) {
         RadioButton(selected = selected, onClick = null)
         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(text = stringResource(gearTableLabel(table)), style = MaterialTheme.typography.titleSmall)
+            Text(text = label, style = MaterialTheme.typography.titleSmall)
             Text(
-                text = stringResource(gearTableBody(table)),
+                text = body,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

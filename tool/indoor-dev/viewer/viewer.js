@@ -44,6 +44,9 @@ const CONFIG = {
   haze: pNum('haze', 0.3),
   exposure: pNum('exposure', 0.62),
   near: pNum('near', 0),
+  // Verzeichnis mit dem Himmel der Darstellung (`indoor-dev sky --out …`: sky.json + sky.f32);
+  // leer = eigener Verlauf des Betrachters.
+  skyDir: pStr('skyDir', '').replace(/\/+$/, ''),
   // Wie Filament: Szene in einen Float-Puffer (RGBA16F) mit 4× MSAA, Tonemapping danach. Dort wird die
   // Ausgabe vor dem Mischen NICHT auf 0..1 geklemmt — negative Deckung (Vertexfarben, die MSAA ueber die
   // Dreieckskante hinaus fortschreibt) hellt den Hintergrund auf, wie auf dem Geraet.
@@ -68,7 +71,8 @@ const LEVEL_FACTOR = 4;
 const NODE_NAMES = ['terrain', 'route', 'roads', 'buildings', 'trees', 'water', 'props'];
 const MATERIAL_NAMES = ['mat_terrain', 'mat_building_wall', 'mat_building_roof', 'mat_tree_trunk', 'mat_tree_leaves', 'mat_water'];
 const SUB_RE = /^terrain_sub_(\d+)_(\d+)$/;
-const ALLOWED_EXTENSIONS = ['KHR_materials_unlit'];
+// KHR_materials_specular: nur specularFactor 0 fuer Vegetation (Abweichung, docs/indoor/world.md; gltfio 1.75.1: Ubershader specular_*)
+const ALLOWED_EXTENSIONS = ['KHR_materials_unlit', 'KHR_materials_specular'];
 const ALLOWED_ATTRIBUTES = ['POSITION', 'NORMAL', 'TEXCOORD_0', 'COLOR_0'];
 const MODEL_ATTRIBUTES = [...ALLOWED_ATTRIBUTES, 'JOINTS_0', 'WEIGHTS_0'];
 const VISIBILITY_M = { LOW: 6000, MEDIUM: 12000, HIGH: 20000 };
@@ -228,6 +232,109 @@ scene.add(sun);
 const hemi = new THREE.HemisphereLight(0xb4ceff, 0x7d7f58, 2.1);
 scene.add(hemi);
 
+// Filaments Standard-Tonwertabbildung ACES_LEGACY (ToneMapper.cpp v1.75.1, Helligkeit 1/0,6) —
+// nur fuer den Himmel der Darstellung (skyDir), damit er aussieht wie auf dem Geraet.
+// Gleiche Rechnung wie FilamentAces in tool/indoor-dev (Sky.kt).
+const FILAMENT_ACES_GLSL = /* glsl */ `
+  vec3 filamentAces( vec3 c ) {
+    const mat3 sRGB_to_AP0 = mat3( 0.4397010, 0.0897923, 0.0175440, 0.3829780, 0.8134230, 0.1115440, 0.1773350, 0.0967616, 0.8707040 );
+    const mat3 AP0_to_AP1 = mat3( 1.4514393161, -0.0765537734, 0.0083161484, -0.2365107469, 1.1762296998, -0.0060324498, -0.2149285693, -0.0996759264, 0.9977163014 );
+    const mat3 AP1_to_sRGB = mat3( 1.70505, -0.13026, -0.02400, -0.62179, 1.14080, -0.12897, -0.08326, -0.01055, 1.15297 );
+    const mat3 AP1_to_XYZ = mat3( 0.6624541811, 0.2722287168, -0.0055746495, 0.1340042065, 0.6740817658, 0.0040607335, 0.1561876870, 0.0536895174, 1.0103391003 );
+    const mat3 XYZ_to_AP1 = mat3( 1.6410233797, -0.6636628587, 0.0117218943, -0.3248032942, 1.6153315917, -0.0082844420, -0.2364246952, 0.0167563477, 0.9883948585 );
+    const vec3 LUM = vec3( 0.272229, 0.674082, 0.0536895 );
+    vec3 ap0 = sRGB_to_AP0 * max( c, vec3( 0.0 ) );
+    float mi = min( ap0.r, min( ap0.g, ap0.b ) );
+    float ma = max( ap0.r, max( ap0.g, ap0.b ) );
+    float sat = ( max( ma, 1e-5 ) - max( mi, 1e-5 ) ) / max( ma, 1e-2 );
+    float chroma = sqrt( max( 0.0, ap0.b * ( ap0.b - ap0.g ) + ap0.g * ( ap0.g - ap0.r ) + ap0.r * ( ap0.r - ap0.b ) ) );
+    float yc = ( ap0.r + ap0.g + ap0.b + 1.75 * chroma ) / 3.0;
+    float xs = ( sat - 0.4 ) / 0.2;
+    float t = max( 1.0 - abs( xs / 2.0 ), 0.0 );
+    float s = ( 1.0 + sign( xs ) * ( 1.0 - t * t ) ) / 2.0;
+    float gain = 0.05 * s;
+    float glow = yc <= 2.0 / 3.0 * 0.08 ? gain : ( yc >= 0.16 ? 0.0 : gain * ( 0.08 / yc - 0.5 ) );
+    ap0 *= 1.0 + glow;
+    float hue = ( ap0.r == ap0.g && ap0.g == ap0.b ) ? 0.0 : degrees( atan( sqrt( 3.0 ) * ( ap0.g - ap0.b ), 2.0 * ap0.r - ap0.g - ap0.b ) );
+    float hw = smoothstep( 0.0, 1.0, 1.0 - abs( 2.0 * hue / 135.0 ) );
+    hw *= hw;
+    ap0.r += hw * sat * ( 0.03 - ap0.r ) * ( 1.0 - 0.82 );
+    vec3 ap1 = clamp( AP0_to_AP1 * ap0, 0.0, 65504.0 );
+    ap1 = mix( vec3( dot( ap1, LUM ) ), ap1, 0.96 ) / 0.6;
+    vec3 post = ( ap1 * ( 2.785085 * ap1 + 0.107772 ) ) / ( ap1 * ( 2.936045 * ap1 + 0.887122 ) + 0.806889 );
+    vec3 xyz = AP1_to_XYZ * post;
+    float sum = xyz.x + xyz.y + xyz.z;
+    if ( sum > 0.0 && xyz.y > 0.0 ) {
+      vec2 cxy = xyz.xy / sum;
+      float yy = pow( xyz.y, 0.9811 );
+      xyz = vec3( cxy.x * yy / cxy.y, yy, ( 1.0 - cxy.x - cxy.y ) * yy / cxy.y );
+    }
+    vec3 lin = XYZ_to_AP1 * xyz;
+    lin = mix( vec3( dot( lin, LUM ) ), lin, 0.93 );
+    return clamp( AP1_to_sRGB * lin, 0.0, 1.0 );
+  }`;
+
+/** Dieselbe Abbildung in JS (fuer die Dunstfarbe). */
+function filamentAcesJs([r, g, b]) {
+  const m = (a, v) => [0, 1, 2].map((i) => a[i] * v[0] + a[3 + i] * v[1] + a[6 + i] * v[2]);
+  const sRGB_to_AP0 = [0.4397010, 0.0897923, 0.0175440, 0.3829780, 0.8134230, 0.1115440, 0.1773350, 0.0967616, 0.8707040];
+  const AP0_to_AP1 = [1.4514393161, -0.0765537734, 0.0083161484, -0.2365107469, 1.1762296998, -0.0060324498, -0.2149285693, -0.0996759264, 0.9977163014];
+  const AP1_to_sRGB = [1.70505, -0.13026, -0.02400, -0.62179, 1.14080, -0.12897, -0.08326, -0.01055, 1.15297];
+  const AP1_to_XYZ = [0.6624541811, 0.2722287168, -0.0055746495, 0.1340042065, 0.6740817658, 0.0040607335, 0.1561876870, 0.0536895174, 1.0103391003];
+  const XYZ_to_AP1 = [1.6410233797, -0.6636628587, 0.0117218943, -0.3248032942, 1.6153315917, -0.0082844420, -0.2364246952, 0.0167563477, 0.9883948585];
+  const LUM = [0.272229, 0.674082, 0.0536895];
+  const dot = (a, v) => a[0] * v[0] + a[1] * v[1] + a[2] * v[2];
+  let ap0 = m(sRGB_to_AP0, [Math.max(r, 0), Math.max(g, 0), Math.max(b, 0)]);
+  const mi = Math.min(...ap0); const ma = Math.max(...ap0);
+  const sat = (Math.max(ma, 1e-5) - Math.max(mi, 1e-5)) / Math.max(ma, 1e-2);
+  const chroma = Math.sqrt(Math.max(0, ap0[2] * (ap0[2] - ap0[1]) + ap0[1] * (ap0[1] - ap0[0]) + ap0[0] * (ap0[0] - ap0[2])));
+  const yc = (ap0[0] + ap0[1] + ap0[2] + 1.75 * chroma) / 3;
+  const xs = (sat - 0.4) / 0.2; const t = Math.max(1 - Math.abs(xs / 2), 0);
+  const gain = 0.05 * (1 + Math.sign(xs) * (1 - t * t)) / 2;
+  const glow = yc <= (2 / 3) * 0.08 ? gain : yc >= 0.16 ? 0 : gain * (0.08 / yc - 0.5);
+  ap0 = ap0.map((v) => v * (1 + glow));
+  let hue = ap0[0] === ap0[1] && ap0[1] === ap0[2] ? 0 : (Math.atan2(Math.sqrt(3) * (ap0[1] - ap0[2]), 2 * ap0[0] - ap0[1] - ap0[2]) * 180) / Math.PI;
+  const h0 = Math.min(Math.max(1 - Math.abs((2 * hue) / 135), 0), 1);
+  let hw = h0 * h0 * (3 - 2 * h0); hw *= hw;
+  ap0[0] += hw * sat * (0.03 - ap0[0]) * (1 - 0.82);
+  let ap1 = m(AP0_to_AP1, ap0).map((v) => Math.min(Math.max(v, 0), 65504));
+  let y = dot(ap1, LUM);
+  ap1 = ap1.map((v) => (y + (v - y) * 0.96) / 0.6);
+  const post = ap1.map((v) => (v * (2.785085 * v + 0.107772)) / (v * (2.936045 * v + 0.887122) + 0.806889));
+  let xyz = m(AP1_to_XYZ, post);
+  const sum = xyz[0] + xyz[1] + xyz[2];
+  if (sum > 0 && xyz[1] > 0) {
+    const cx = xyz[0] / sum; const cy = xyz[1] / sum; const yy = Math.pow(xyz[1], 0.9811);
+    xyz = [(cx * yy) / cy, yy, ((1 - cx - cy) * yy) / cy];
+  }
+  let lin = m(XYZ_to_AP1, xyz);
+  y = dot(lin, LUM);
+  lin = lin.map((v) => y + (v - y) * 0.93);
+  return m(AP1_to_sRGB, lin).map((v) => Math.min(Math.max(v, 0), 1));
+}
+
+/** three.js ACESFilmicToneMapping (r16x) mit Belichtung — die Abbildung der Welt im Betrachter. */
+function threeAcesJs([r, g, b], exposure) {
+  const m = (a, v) => [0, 1, 2].map((i) => a[i] * v[0] + a[3 + i] * v[1] + a[6 + i] * v[2]);
+  const IN = [0.59719, 0.07600, 0.02840, 0.35458, 0.90834, 0.13383, 0.04823, 0.01566, 0.83777];
+  const OUT = [1.60475, -0.10208, -0.00327, -0.53108, 1.10813, -0.07276, -0.07367, -0.00605, 1.07602];
+  let c = m(IN, [r, g, b].map((v) => (v * exposure) / 0.6));
+  c = c.map((v) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.4329510) + 0.238081));
+  return m(OUT, c).map((v) => Math.min(Math.max(v, 0), 1));
+}
+
+/** Szenenfarbe, die nach der Abbildung der Welt [target] (Anzeige linear) ergibt (Newton). */
+function invertThreeAces(target, exposure) {
+  let x = target.map((v) => v * 0.8 + 0.01);
+  for (let it = 0; it < 60; it++) {
+    const y = threeAcesJs(x, exposure);
+    const J = [0, 1, 2].map((j) => { const xp = x.slice(); xp[j] += 1e-4; const yp = threeAcesJs(xp, exposure); return yp.map((v, i) => (v - y[i]) / 1e-4); });
+    // J[j][i] = d y_i / d x_j; nur die Diagonale (Kanaele kaum gekoppelt) reicht hier.
+    x = x.map((v, i) => Math.max(0, v + (0.8 * (target[i] - y[i])) / Math.max(J[i][i], 1e-4)));
+  }
+  return x;
+}
+
 // Himmel: grosse Kugel um die Kamera, Verlauf Horizont → Zenit mit Sonnenscheibe.
 // (Filament: zur Laufzeit erzeugte Cubemap mit demselben Verlauf.)
 const SKY_ZENITH = new THREE.Vector3(0.055, 0.17, 0.56);
@@ -238,6 +345,13 @@ const skyMaterial = new THREE.ShaderMaterial({
     horizon: { value: SKY_HORIZON.clone() },
     sunDir: { value: new THREE.Vector3(0, 1, 0) },
     sunColor: { value: new THREE.Vector3(1.0, 0.93, 0.82) },
+    // Himmel der Darstellung (skyDir): Rundumbild szenenlinear, Sonne wie Filaments Skybox.
+    useTex: { value: 0 },
+    skyTex: { value: null },
+    sunPreExposed: { value: 0 },
+    sunCos: { value: Math.cos((1.2 * Math.PI) / 180) },
+    sunHaloInv: { value: 1 / (Math.cos((1.2 * 8 * Math.PI) / 180) - Math.cos((1.2 * Math.PI) / 180)) },
+    sunHaloFalloff: { value: 80 },
   },
   vertexShader: /* glsl */ `
     varying vec3 vDir;
@@ -251,10 +365,29 @@ const skyMaterial = new THREE.ShaderMaterial({
     uniform vec3 horizon;
     uniform vec3 sunDir;
     uniform vec3 sunColor;
+    uniform int useTex;
+    uniform sampler2D skyTex;
+    uniform float sunPreExposed;
+    uniform float sunCos;
+    uniform float sunHaloInv;
+    uniform float sunHaloFalloff;
     varying vec3 vDir;
     float hash( vec2 p ) { return fract( sin( dot( p, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ); }
+    ${FILAMENT_ACES_GLSL}
     void main() {
       vec3 d = normalize( vDir );
+      if ( useTex == 1 ) {
+        // Rundumbild aus core/…/indoor/sky (Spalte 0 blickt nach −Z), szenenlinear wie in Filament;
+        // Sonnenscheibe und Hof wie Filaments Skybox-Material (showSun), dann Filaments ACES_LEGACY.
+        vec2 uv = vec2( fract( atan( d.x, -d.z ) / 6.28318530718 + 1.0 ), 0.5 - asin( clamp( d.y, -1.0, 1.0 ) ) / 3.14159265359 );
+        vec3 col = texture2D( skyTex, uv ).rgb;
+        float x = ( dot( d, sunDir ) - sunCos ) * sunHaloInv;
+        col += pow( 1.0 - clamp( x, 0.0, 1.0 ), sunHaloFalloff ) * sunColor * sunPreExposed * 12.566370614;
+        gl_FragColor = vec4( filamentAces( col ), 1.0 );
+        #include <colorspace_fragment>
+        gl_FragColor.rgb += ( hash( gl_FragCoord.xy ) - 0.5 ) / 255.0;
+        return;
+      }
       float h = max( d.y, 0.0 );
       // Der helle Horizontsaum faellt in den ersten 10–15 Grad ab.
       vec3 col = mix( horizon, zenith, pow( h, 0.55 ) );
@@ -897,6 +1030,13 @@ function updateSun() {
   const k = Math.min(1, Math.sin(el) / Math.sin((40 * Math.PI) / 180));
   sun.color.setRGB(1.0, 0.86 + 0.09 * k, 0.68 + 0.18 * k);
   sun.intensity = 10.0 * (0.55 + 0.45 * k);
+  if (skyInfo) {
+    // Himmel der Darstellung: Sonnenfarbe und Verhaeltnisse der Staerken wie in Filament
+    // (bezogen auf Mittag 110 000 lx Sonne, 34 000 lx Umgebung).
+    sun.color.setRGB(...skyInfo.sunColor);
+    sun.intensity = 10.0 * (skyInfo.sunLux / 110000);
+    hemi.intensity = 2.1 * (skyInfo.ambientLux / 34000);
+  }
 
   // Das Licht scheint von seiner Position zum Ursprung; die Schattenkaskaden folgen der Kamera von selbst.
   sun.position.copy(sunDir);
@@ -908,7 +1048,7 @@ function updateFog() {
   // Sichtweite = Entfernung, in der vom Kontrast noch 2 % uebrig sind (Koschmieder).
   const visibility = VISIBILITY_M[manifest.quality];
   const density = (3.912 / visibility) * (0.25 + 1.5 * Math.min(Math.max(CONFIG.haze, 0), 1));
-  fog.density = density; // gilt auf Kamerahoehe, siehe Shader oben
+  fog.density = skyInfo ? skyInfo.fogDensity : density; // gilt auf Kamerahoehe, siehe Shader oben
   camera.far = visibility * 1.6;
 }
 
@@ -1206,7 +1346,40 @@ window.addEventListener('keydown', (ev) => {
   setView(o).catch((e) => reportError(String(e.message ?? e)));
 });
 
+/** Himmel der Darstellung laden (skyDir): Rundumbild, Sonne, Licht und Dunst wie in Filament. */
+let skyInfo = null;
+async function loadSky() {
+  const info = await (await fetch(`${CONFIG.skyDir}/sky.json`)).json();
+  const buf = await (await fetch(`${CONFIG.skyDir}/sky.f32`)).arrayBuffer();
+  const rgb = new Float32Array(buf);
+  const w = info.skyWidth; const h = info.skyHeight;
+  if (rgb.length !== w * h * 3) throw new Error(`sky.f32: ${rgb.length} Werte statt ${w * h * 3}`);
+  const rgba = new Float32Array(w * h * 4);
+  for (let i = 0; i < w * h; i++) { rgba[i * 4] = rgb[i * 3]; rgba[i * 4 + 1] = rgb[i * 3 + 1]; rgba[i * 4 + 2] = rgb[i * 3 + 2]; rgba[i * 4 + 3] = 1; }
+  const tex = new THREE.DataTexture(rgba, w, h, THREE.RGBAFormat, THREE.FloatType);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  const u = skyMaterial.uniforms;
+  u.skyTex.value = tex;
+  u.useTex.value = 1;
+  u.sunColor.value.set(...info.sunColor);
+  u.sunPreExposed.value = info.sunLux * info.exposure;
+  skyMaterial.toneMapped = false;
+  // Sonne aus der Darstellung, ausser die Seite bekam sie ausdruecklich.
+  if (!params.has('sunAz')) view.sunAzimuthDeg = info.sunAzimuthDeg;
+  if (!params.has('sunEl')) view.sunElevationDeg = info.sunElevationDeg;
+  // Dunst: Farbe so, dass sie nach der Abbildung der Welt wie der Horizont der Darstellung aussieht.
+  const target = filamentAcesJs(info.skyHorizon);
+  const f = invertThreeAces(target, CONFIG.exposure);
+  fog.color.setRGB(f[0], f[1], f[2], THREE.LinearSRGBColorSpace);
+  scene.background = new THREE.Color().setRGB(target[0], target[1], target[2], THREE.LinearSRGBColorSpace);
+  skyInfo = info;
+}
+
 const ready = (async () => {
+  if (CONFIG.skyDir) await loadSky();
   const url = `${CONFIG.world}/manifest.json`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Manifest nicht ladbar: HTTP ${res.status} fuer ${url}`);

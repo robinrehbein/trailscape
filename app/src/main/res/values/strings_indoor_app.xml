@@ -10,6 +10,7 @@
 <resources>
     <!-- IndoorViewModel: Name der gespeicherten Tour und Anzeigenamen -->
     <string name="indoor_app_ride_name">Indoor · %1$s</string>
+    <string name="indoor_app_ride_name_from">Indoor · %1$s (ab km %2$s)</string>
     <string name="indoor_app_route_testworld">Testwelt</string>
     <string name="indoor_app_trainer_demo_name">Demo-Trainer</string>
     <string name="indoor_app_ghost_past_label">Fahrt vom %1$s</string>
@@ -75,6 +76,15 @@
     <string name="indoor_app_pair_gears_even_body">24 Gänge in gleichmäßigen Schritten von ganz leicht bis ganz schwer.</string>
     <string name="indoor_app_pair_gears_bike_label">Wie am Rad (2 × 12)</string>
     <string name="indoor_app_pair_gears_bike_body">Die Übersetzungen eines Gravelrads mit 48/31 vorn und 11–34 hinten, von leicht nach schwer sortiert.</string>
+    <string name="indoor_app_pair_time_title">Tageszeit</string>
+    <string name="indoor_app_pair_time_auto_label">Automatisch</string>
+    <string name="indoor_app_pair_time_auto_body">Wie die Uhrzeit am Ort der Strecke – nachts als helle Dämmerung.</string>
+    <string name="indoor_app_pair_time_morning_label">Morgen</string>
+    <string name="indoor_app_pair_time_morning_body">Tiefe Sonne im Osten, frisches Licht.</string>
+    <string name="indoor_app_pair_time_noon_label">Mittag</string>
+    <string name="indoor_app_pair_time_noon_body">Hohe Sonne, kurze Schatten.</string>
+    <string name="indoor_app_pair_time_evening_label">Abend</string>
+    <string name="indoor_app_pair_time_evening_body">Warmes, flaches Licht aus dem Westen.</string>
     <string name="indoor_app_pair_continue_hint">Koppele einen Trainer oder schalte den Demo-Trainer ein, um weiterzumachen.</string>
     <string name="indoor_app_pair_diagnostics_action">Diagnose öffnen</string>
     <!-- IndoorRouteScreen.kt -->
@@ -367,4 +377,17 @@
     <string name="indoor_app_catalog_failed_other">Das Paket konnte nicht geladen werden.</string>
     <string name="indoor_app_catalog_failed_keeps_old">Die vorher geladene Fassung bleibt fahrbar.</string>
     <string name="indoor_app_worlds_tag_catalog">Bekannte Strecke</string>
+    <!-- Startpunkt und Fortsetzen (docs/indoor/app.md) -->
+    <string name="indoor_app_start_title_choose">Wo startest du?</string>
+    <string name="indoor_app_start_hint_drag">Zieh auf dem Profil, um woanders zu starten.</string>
+    <string name="indoor_app_start_hint_drag_pedal">Zieh auf dem Profil, um woanders zu starten – oder tritt einfach los.</string>
+    <string name="indoor_app_summary_start_tag">ab km %1$s</string>
+    <string name="indoor_app_start_hint_drag_pause">Zieh auf dem Profil, um woanders weiterzufahren.</string>
+    <string name="indoor_app_start_position">km %1$s · %2$s m</string>
+    <string name="indoor_app_start_resume_chip">Weiter bei km %1$s</string>
+    <string name="indoor_app_start_from_beginning_chip">Von vorn</string>
+    <string name="indoor_app_start_go_action">Losfahren</string>
+    <string name="indoor_app_start_earlier_cd">100 m früher starten</string>
+    <string name="indoor_app_start_later_cd">100 m später starten</string>
+    <string name="indoor_app_start_profile_cd">Startpunkt bei Kilometer %1$s von %2$s. Zum Verschieben auf dem Profil ziehen oder tippen.</string>
 </resources>

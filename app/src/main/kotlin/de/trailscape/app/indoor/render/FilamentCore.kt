@@ -233,8 +233,8 @@ internal class FilamentCore {
 
     /**
      * Sonne, Umgebungslicht und Himmel fuer [l]. Mit [skyGradient] eine zur
-     * Laufzeit gefuellte Cubemap (Verlauf, Sonnenscheibe zeichnet Filament),
-     * sonst eine einfarbige Skybox in der Horizontfarbe.
+     * Laufzeit gefuellte Cubemap (Verlauf und Wolken; die Sonnenscheibe samt
+     * Hof zeichnet Filament), sonst eine einfarbige Skybox in der Horizontfarbe.
      */
     fun applySky(l: SkyLighting, skyGradient: Boolean) {
         val lm = engine.lightManager
@@ -262,9 +262,10 @@ internal class FilamentCore {
             Skybox.Builder().environment(tex).showSun(true).build(engine)
         } else {
             // Die einfarbige Skybox wird (anders als Cubemap und Dunst) nicht mit der
-            // Staerke des Umgebungslichts multipliziert: selbst skalieren, damit Himmel und Dunst gleich hell sind.
-            val k = (l.ambientLux * exposure()).toFloat()
-            Skybox.Builder().color(l.horizon.r.toFloat() * k, l.horizon.g.toFloat() * k, l.horizon.b.toFloat() * k, 1f).build(engine)
+            // Staerke des Umgebungslichts multipliziert: den sichtbaren Horizont (schon
+            // szenenlinear, nach der Belichtung) direkt nehmen, dann passt er zum Dunst.
+            val h = l.look.horizon
+            Skybox.Builder().color(h.r.toFloat(), h.g.toFloat(), h.b.toFloat(), 1f).build(engine)
         }
         scene.skybox = newSky
         skybox = newSky
@@ -273,33 +274,45 @@ internal class FilamentCore {
         oldTex?.let { runCatching { engine.destroyTexture(it) } }
     }
 
-    /** Belichtung der Kamera: `1 / (1,2 · 2^EV100)` mit EV100 = log2(N² / t · 100 / ISO). */
-    private fun exposure(): Double {
-        val n = SkyModel.APERTURE.toDouble()
-        val t = SkyModel.SHUTTER_S.toDouble()
-        val ev100 = Math.log(n * n / t * 100.0 / SkyModel.ISO) / Math.log(2.0)
-        return 1.0 / (1.2 * Math.pow(2.0, ev100))
-    }
-
+    /**
+     * Himmels-Cubemap mit Verlauf und weichen Wolken. Zuerst als HDR-Textur
+     * (`R11F_G11F_B10F`, in OpenGL ES 3.0 filterbar, 4 Byte je Texel): Horizont
+     * und Wolken sind heller als 1 und wuerden in RGBA8 abgeschnitten. Geht
+     * das nicht, dieselben Farben als `SRGB8_A8` (abgeschnitten, aber sichtbar).
+     */
     private fun buildSkyTexture(l: SkyLighting): Texture {
         val size = SKY_CUBE_PX
+        val half = SkyModel.cubemapHalfRgb(l, size)
+        val hdr = runCatching { Texture.isTextureFormatSupported(engine, Texture.InternalFormat.R11F_G11F_B10F) }.getOrDefault(false)
+        return runCatching {
+            check(hdr) { "R11F_G11F_B10F nicht unterstuetzt" }
+            uploadCube(size, Texture.InternalFormat.R11F_G11F_B10F) {
+                val b = ByteBuffer.allocateDirect(half.size * 2).order(ByteOrder.nativeOrder())
+                b.asShortBuffer().put(half) // Position des ByteBuffers bleibt 0
+                Texture.PixelBufferDescriptor(b, Texture.Format.RGB, Texture.Type.HALF)
+            }
+        }.getOrElse {
+            uploadCube(size, Texture.InternalFormat.SRGB8_A8) {
+                val px = SkyModel.cubemapSrgbBytes(half)
+                val b = ByteBuffer.allocateDirect(px.size).order(ByteOrder.nativeOrder())
+                b.put(px)
+                b.flip()
+                Texture.PixelBufferDescriptor(b, Texture.Format.RGBA, Texture.Type.UBYTE)
+            }
+        }
+    }
+
+    private fun uploadCube(size: Int, format: Texture.InternalFormat, pixels: () -> Texture.PixelBufferDescriptor): Texture {
         val tex = Texture.Builder()
             .width(size)
             .height(size)
             .levels(1)
             .sampler(Texture.Sampler.SAMPLER_CUBEMAP)
-            .format(Texture.InternalFormat.SRGB8_A8)
+            .format(format)
             .build(engine)
         try {
-            val pixels = SkyModel.cubemapPixels(l, size)
-            val buf = ByteBuffer.allocateDirect(pixels.size).order(ByteOrder.nativeOrder())
-            buf.put(pixels)
-            buf.flip()
             // Cubemaps gelten als 2D-Feld mit sechs Ebenen (+X, −X, +Y, −Y, +Z, −Z).
-            tex.setImage(
-                engine, 0, 0, 0, 0, size, size, 6,
-                Texture.PixelBufferDescriptor(buf, Texture.Format.RGBA, Texture.Type.UBYTE),
-            )
+            tex.setImage(engine, 0, 0, 0, 0, size, size, 6, pixels())
         } catch (t: Throwable) {
             runCatching { engine.destroyTexture(tex) }
             throw t
@@ -393,7 +406,7 @@ internal class FilamentCore {
         const val SHADOW_MAP_PX = 2048
         const val MSAA_SAMPLES = 4
         const val FOG_HEIGHT_FALLOFF = 0.0012f
-        const val SKY_CUBE_PX = 64
+        const val SKY_CUBE_PX = de.trailscape.core.indoor.sky.SkyClouds.CUBE_SIZE
 
         /** Stand der Filament-Bibliotheken (app/build.gradle.kts). */
         const val FILAMENT_VERSION = "1.75.1"

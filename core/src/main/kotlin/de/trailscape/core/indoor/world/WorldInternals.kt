@@ -419,6 +419,8 @@ internal class TileMaterial(
     val alphaMode: GlbAlphaMode = GlbAlphaMode.OPAQUE,
     val alphaCutoff: Float = 0.5f,
     val doubleSided: Boolean = false,
+    /** Ohne Spiegelanteil (`KHR_materials_specular`, `specularFactor` 0) — Vegetation. */
+    val noSpecular: Boolean = false,
     /** Mit [repeat]: nur `u` kachelt, `v` wird geklemmt (Deckung quer in der Textur, siehe [GlbScene.addTexture]). */
     val clampV: Boolean = false,
 )
@@ -602,6 +604,7 @@ internal class TileOutput(val spec: TileSpec) {
                     alphaMode = m.alphaMode,
                     alphaCutoff = m.alphaCutoff,
                     doubleSided = m.doubleSided,
+                    noSpecular = m.noSpecular,
                 ),
             )
         }

@@ -39,6 +39,12 @@ internal class GlbMaterial(
     val doubleSided: Boolean = false,
     val unlit: Boolean = false,
     val emissive: FloatArray? = null,
+    /**
+     * Ohne Spiegelanteil: `KHR_materials_specular` mit `specularFactor` 0 (nur in `extensionsUsed`,
+     * nicht `extensionsRequired` — wer die Erweiterung nicht kennt, zeigt das Kernmaterial). gltfio
+     * 1.75.1 waehlt dafuer die Ubershader-Variante `specular_*` und setzt `specularStrength`.
+     */
+    val noSpecular: Boolean = false,
 )
 
 internal enum class GlbPath(val key: String, val width: Int) {
@@ -74,6 +80,7 @@ private const val GL_CLAMP_TO_EDGE = 33071
 
 internal const val GLB_GENERATOR = "Trailscape indoor-world"
 internal const val KHR_MATERIALS_UNLIT = "KHR_materials_unlit"
+internal const val KHR_MATERIALS_SPECULAR = "KHR_materials_specular"
 
 /** Wachsender Little-Endian-Binaerpuffer. */
 private class BinWriter {
@@ -160,6 +167,7 @@ internal class GlbScene(
     private val materials = ArrayList<JsonObject>()
     private val materialNames = ArrayList<String>()
     private var anyUnlit = false
+    private var anySpecular = false
     private val nodes = ArrayList<NodeEntry>()
     private val animations = ArrayList<JsonObject>()
     private val timeAccessors = HashMap<ContentKey, Int>()
@@ -228,9 +236,20 @@ internal class GlbScene(
             if (m.alphaMode != GlbAlphaMode.OPAQUE) put("alphaMode", m.alphaMode.name)
             if (m.alphaMode == GlbAlphaMode.MASK) put("alphaCutoff", m.alphaCutoff)
             if (m.doubleSided) put("doubleSided", true)
-            if (m.unlit) put("extensions", buildJsonObject { put(KHR_MATERIALS_UNLIT, JsonObject(emptyMap())) })
+            if (m.unlit || m.noSpecular) {
+                put(
+                    "extensions",
+                    buildJsonObject {
+                        if (m.unlit) put(KHR_MATERIALS_UNLIT, JsonObject(emptyMap()))
+                        if (m.noSpecular && !m.unlit) {
+                            put(KHR_MATERIALS_SPECULAR, buildJsonObject { put("specularFactor", 0) })
+                        }
+                    },
+                )
+            }
         }
         if (m.unlit) anyUnlit = true
+        if (m.noSpecular && !m.unlit) anySpecular = true
         materials.add(obj)
         materialNames.add(m.name)
         return materials.size - 1
@@ -436,7 +455,15 @@ internal class GlbScene(
         val roots = nodes.indices.filter { nodes[it].parent == null }
         val json = buildJsonObject {
             put("asset", buildJsonObject { put("version", "2.0"); put("generator", GLB_GENERATOR) })
-            if (anyUnlit) put("extensionsUsed", buildJsonArray { add(JsonPrimitive(KHR_MATERIALS_UNLIT)) })
+            if (anyUnlit || anySpecular) {
+                put(
+                    "extensionsUsed",
+                    buildJsonArray {
+                        if (anyUnlit) add(JsonPrimitive(KHR_MATERIALS_UNLIT))
+                        if (anySpecular) add(JsonPrimitive(KHR_MATERIALS_SPECULAR))
+                    },
+                )
+            }
             put("scene", 0)
             put(
                 "scenes",
