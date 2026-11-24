@@ -525,7 +525,7 @@ class RecordingService : Service() {
         meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.clearHeartRate()
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
-        ladeZielSnapshot(now)
+        ladeZielSnapshot(id, now)
         // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
         // beim Losfahren typischerweise schon in der Tasche. Den Hauptschalter
         // „Sprachansagen" prueft der Announcer selbst.
@@ -625,9 +625,10 @@ class RecordingService : Service() {
             paused = snapshot.pausedSinceMs != null,
             autoPaused = autoPausiert,
         )
-        // Nach einem Dienst-Neustart neu geladen: Die laufende Tour ist noch
-        // nicht gespeichert, der Snapshot also derselbe wie beim Start.
-        ladeZielSnapshot(snapshot.startedAtMs)
+        // Nach einem Dienst-Neustart neu geladen — zum Startzeitpunkt und ohne
+        // die laufende Tour, falls die Wiederherstellung sie schon gespeichert
+        // hat (siehe zielSnapshotZumStart): derselbe Snapshot wie beim Start.
+        ladeZielSnapshot(snapshot.id, snapshot.startedAtMs)
         updateNotification(now, force = true)
         // Waehrend einer manuellen Pause schlaeft der Wachhund (siehe
         // [setPaused]); eine Auto-Pause behaelt ihn, denn sie soll die
@@ -1469,10 +1470,10 @@ class RecordingService : Service() {
      * den Dateizugriff wartet. Bis er da ist, gibt es keine Zeile; der
      * naechste Takt von [sendeZustandAnUhr] nimmt ihn mit.
      */
-    private fun ladeZielSnapshot(fuerStartMs: Long) {
+    private fun ladeZielSnapshot(tourId: String, fuerStartMs: Long) {
         val app = applicationContext
         AppServices.appScope.launch(Dispatchers.IO) {
-            val snapshot = runCatching { loadZielSnapshot(app) }.getOrNull()
+            val snapshot = runCatching { loadZielSnapshot(app, tourId, fuerStartMs) }.getOrNull()
             RecordingRepository.publishZielSnapshot(fuerStartMs, snapshot)
         }
     }

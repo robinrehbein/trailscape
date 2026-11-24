@@ -3,6 +3,7 @@ package de.trailscape.core
 import de.trailscape.core.i18n.AppLanguage
 import de.trailscape.core.i18n.formatDecimal
 import kotlin.math.ceil
+import kotlin.math.round
 
 /**
  * # Zielzeile waehrend der Fahrt
@@ -79,9 +80,28 @@ private fun gueltigeKm(km: Double?): Double? = km?.takeIf { it.isFinite() && it 
 private fun gueltigeLaengste(km: Double?): Double? = gueltigeKm(km)?.takeIf { it >= BESTWEITE_MIN_KM }
 
 /**
+ * Ein Snapshot-Wert, wie er gespeichert und an die Uhr geschickt wird:
+ * plausibel (endlich, > 0, hoechstens [ZIEL_MAX_KM]) und auf 0,01 km
+ * gerundet, sonst `null`. Handy ([zielSnapshot]) und Telegramm
+ * (`AufzeichnungsZustand`) runden gleich — sonst zeigte das Handy an jeder
+ * ganzen Kilometergrenze fuer ein paar Meter einen Kilometer mehr als die Uhr.
+ */
+fun zielSnapshotKm(km: Double?): Double? = gueltigeKm(km)?.let { round(it * 100.0) / 100.0 }?.let(::gueltigeKm)
+
+/**
+ * Die gespeicherten Touren ohne die laufende ([laufendeTourId]): Wurde sie
+ * schon einmal gespeichert — die Wiederherstellung hat sie gesichert, das
+ * Journal aber nicht loeschen koennen, und der Dienst setzt sie danach fort —,
+ * zaehlte sie sonst in ihren eigenen Wochenrest und ihre eigene Bestweite
+ * („Neue Bestweite" nie erreichbar, Wochenziel doppelt gezaehlt).
+ */
+fun <T : RideInfo> ohneLaufendeTour(rides: List<T>, laufendeTourId: String?): List<T> =
+    if (laufendeTourId == null) rides else rides.filter { it.id != laufendeTourId }
+
+/**
  * Der Snapshot zum Start einer Tour.
  *
- * @param facts die gespeicherten Touren (ohne die gerade beginnende).
+ * @param facts die gespeicherten Touren ohne die laufende (siehe [ohneLaufendeTour]).
  * @param wochenZielKm das Wochenziel, wie es Widget und Uhr-Kachel zeigen
  *   (mit aktivem Trainingsplan dessen Wochenziel), `null` ohne Ziel.
  * @param wochenGefahrenKm die dazu passenden Kilometer dieser Woche.
@@ -92,8 +112,8 @@ fun zielSnapshot(facts: List<RideFact>, wochenZielKm: Int?, wochenGefahrenKm: Do
     val rest = wochenZielKm?.takeIf { it > 0 }?.let { it - gefahren }
     val laengste = personalRecords(facts).firstOrNull { it.kind == RecordKind.DISTANCE }?.value
     val snapshot = ZielSnapshot(
-        wochenRestKm = gueltigeKm(rest),
-        laengsteKm = gueltigeLaengste(laengste),
+        wochenRestKm = zielSnapshotKm(rest),
+        laengsteKm = gueltigeLaengste(zielSnapshotKm(laengste)),
     )
     return snapshot.takeUnless { it.leer }
 }

@@ -273,8 +273,8 @@ data class AufzeichnungsZustand(
         put("dauerMs", dauerMs)
         put("distanzKm", distanzKm)
         hf?.let { put("hf", it) }
-        ziel?.wochenRestKm?.let { km -> zielFeldKm(km)?.let { put(FELD_ZIEL_REST, it) } }
-        ziel?.laengsteKm?.let { km -> zielFeldKm(km)?.let { put(FELD_LAENGSTE, it) } }
+        zielSnapshotKm(ziel?.wochenRestKm)?.let { put(FELD_ZIEL_REST, it) }
+        zielSnapshotKm(ziel?.laengsteKm)?.let { put(FELD_LAENGSTE, it) }
     }
 
     companion object {
@@ -294,14 +294,10 @@ data class AufzeichnungsZustand(
         )
 
         private fun zielAusJson(json: JsonObject): ZielSnapshot? {
-            val rest = runCatching { json.optionalDouble(FELD_ZIEL_REST) }.getOrNull()?.let(::zielFeldKm)
-            val laengste = runCatching { json.optionalDouble(FELD_LAENGSTE) }.getOrNull()?.let(::zielFeldKm)
+            val rest = zielSnapshotKm(runCatching { json.optionalDouble(FELD_ZIEL_REST) }.getOrNull())
+            val laengste = zielSnapshotKm(runCatching { json.optionalDouble(FELD_LAENGSTE) }.getOrNull())
             return ZielSnapshot(rest, laengste).takeUnless { it.leer }
         }
-
-        /** Plausibel (endlich, > 0, hoechstens [ZIEL_MAX_KM]) und auf 0,01 km gerundet, sonst `null`. */
-        private fun zielFeldKm(km: Double): Double? =
-            km.takeIf { it.isFinite() && it > 0.0 && it <= ZIEL_MAX_KM }?.let { kotlin.math.round(it * 100.0) / 100.0 }
     }
 }
 

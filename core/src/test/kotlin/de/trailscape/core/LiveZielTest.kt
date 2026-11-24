@@ -183,4 +183,43 @@ class LiveZielTest {
         assertNull(zielZeileZahl(ZielZeile.WochenzielGeschafft, AppLanguage.DE))
         assertNull(zielZeileZahl(ZielZeile.NeueBestweite, AppLanguage.EN))
     }
+
+    // --- Rundung wie im Telegramm, laufende Tour ---
+
+    @Test
+    fun `Snapshot rundet wie das Telegramm, Handy und Uhr zeigen dasselbe`() {
+        // 60 - 47.996 = 12.004: ungerundet zeigte das Handy bei 3 m „Noch 13 km",
+        // die Uhr (Telegramm auf 0,01 km) „Noch 12 km".
+        val s = zielSnapshot(listOf(fact("a", 30.123456)), wochenZielKm = 60, wochenGefahrenKm = 47.996)!!
+        assertEquals(ZielSnapshot(wochenRestKm = 12.0, laengsteKm = 30.12), s)
+        val uhr = AufzeichnungsZustand.fromJson(
+            AufzeichnungsZustand(laeuft = true, pausiert = false, dauerMs = 0, distanzKm = 0.0, ziel = s).toJson(),
+        ).ziel
+        assertEquals(s, uhr)
+        assertEquals(zielZeile(s, 0.003), zielZeile(uhr, 0.003))
+    }
+
+    @Test
+    fun `winziger Rest unter 0,005 km zaehlt als erreicht`() {
+        assertNull(zielSnapshot(emptyList(), wochenZielKm = 60, wochenGefahrenKm = 59.996))
+        assertNull(zielSnapshotKm(0.004))
+        assertNull(zielSnapshotKm(Double.NaN))
+        assertNull(zielSnapshotKm(null))
+    }
+
+    private fun summary(id: String, km: Double) = RideSummary(
+        id = id,
+        name = "Tour",
+        createdAt = 0L,
+        updatedAt = 0L,
+        stats = RideStats(distanceKm = km, ascentM = 0.0, descentM = 0.0),
+    )
+
+    @Test
+    fun `laufende Tour wird aus den gespeicherten Touren genommen`() {
+        val rides = listOf(summary("alt", 40.0), summary("laufend", 55.0))
+        assertEquals(listOf("alt"), ohneLaufendeTour(rides, "laufend").map { it.id })
+        assertEquals(rides, ohneLaufendeTour(rides, null))
+        assertEquals(rides, ohneLaufendeTour(rides, "unbekannt"))
+    }
 }

@@ -164,9 +164,16 @@ Stand: umgesetzt. Während einer laufenden Aufzeichnung zeigen Handy und Uhr ein
 - **Wochenziel**: dasselbe wie Widget und Kachel (`loadZielSnapshot` in
   `app/.../widget/WidgetStateLoader.kt`, gleiche Rechnung wie `loadWidgetState`; mit aktivem
   Trainingsplan dessen Wochenziel, sonst das zuletzt auf „Heute" gezeigte bzw. `suggestWeeklyGoal`).
+  Gerechnet wird in `zielSnapshotZumStart` **zum Startzeitpunkt** (ein Neuladen nach einem
+  Dienst-Neustart nach Mitternacht Sonntag/Montag nimmt nicht die neue Woche) und **ohne die
+  laufende Tour** (`ohneLaufendeTour`, per Tour-ID): Hat die Wiederherstellung sie schon
+  gespeichert, das Journal aber liegen gelassen, zählte sie sonst in ihren eigenen Wochenrest und
+  ihre eigene Bestweite. Beide Werte werden schon hier auf 0,01 km gerundet (`zielSnapshotKm`),
+  wie im Telegramm — sonst zeigte das Handy an Kilometergrenzen kurz einen Kilometer mehr als die Uhr.
 - **Handy**: `RecordingService` lädt den Snapshot beim Start (und nach einem Dienst-Neustart) auf
   IO und legt ihn in `RecordingRepository.zielSnapshot` ab (nur, wenn noch dieselbe Aufzeichnung
-  läuft). Live-Leiste (`LiveRecordingCard`) und Fahrmodus (`RideModeScreen`) zeigen die Zeile klein
+  läuft; Prüfen und Setzen unter derselben Sperre wie Start und Stopp, damit ein später
+  Snapshot nach dem Stopp nicht stehen bleibt). Live-Leiste (`LiveRecordingCard`) und Fahrmodus (`RideModeScreen`) zeigen die Zeile klein
   in der Akzentfarbe (`ui/map/LiveZielZeile.kt`, Strings `map_live_goal_*`). Keine Benachrichtigung.
 - **Protokoll**: zwei optionale Zahlen im `AufzeichnungsZustand` (`PFAD_ZUSTAND`), `zielRest` und
   `laengste` in km (auf 0,01 gerundet), nur geschrieben, wenn vorhanden. **Kein Text** — die Uhr
@@ -179,7 +186,8 @@ Stand: umgesetzt. Während einer laufenden Aufzeichnung zeigen Handy und Uhr ein
 - **Uhr**: `RecordingStatus.zielSnapshot` übernimmt den Snapshot aus jedem Zustand (der letzte
   gilt), `LiveScreen` (`ui/RecordingScreen.kt`) rechnet mit der eigenen Distanzanzeige und zeigt
   die Zeile unter Zeit/Distanz/Tempo: 12 sp, Akzentfarbe, höchstens zwei Zeilen, 24 dp Rand; mit
-  Zeile wird der Puls 60 statt 72 sp groß. Strings `wear_live_goal_*` (Deutsch/Englisch).
+  Snapshot wird der Puls 60 statt 72 sp groß (am Snapshot, nicht an der Zeile, damit der Puls
+  nicht springt, wenn die Bestweite mitten in der Fahrt in Reichweite kommt). Strings `wear_live_goal_*` (Deutsch/Englisch).
   `WearZielTexteTest` (in `:app`, liest die Uhr-Ressourcen) prüft, dass jeder Satz mit
   dreistelligem Rest in zwei Zeilen à 20 Zeichen passt.
 - **Keine Vibration**: Die Uhr-App nutzt bisher keine Vibrations-API; deshalb bewusst weggelassen.

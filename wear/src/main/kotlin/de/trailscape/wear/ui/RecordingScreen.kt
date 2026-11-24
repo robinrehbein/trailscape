@@ -253,9 +253,12 @@ private fun LiveScreen(context: Context, phase: RecordingStatus.Phase) {
             Text(
                 text = hf?.toString() ?: "–",
                 color = AccentGreen,
-                // Mit Zielzeile eine Stufe kleiner, damit sie auf kleinen
-                // runden Displays ueber den Knoepfen noch zweizeilig Platz hat.
-                fontSize = if (ziel != null) 60.sp else 72.sp,
+                // Mit Ziel-Snapshot eine Stufe kleiner, damit die Zielzeile auf
+                // kleinen runden Displays ueber den Knoepfen noch zweizeilig
+                // Platz hat. Am Snapshot (fest fuer die Tour) und nicht an der
+                // Zeile: Die erscheint mitten in der Fahrt (Bestweite in
+                // Reichweite), und der Puls soll dabei nicht springen.
+                fontSize = if (zielSnapshot != null) 60.sp else 72.sp,
                 fontWeight = FontWeight.Bold,
                 // Tabellen-/Versalziffern: der Herzschlag darf beim Wechseln
                 // von "9" auf "10" nicht seitlich wandern.

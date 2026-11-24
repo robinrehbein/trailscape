@@ -64,6 +64,9 @@ object RecordingRepository {
     private val _watchConnected = MutableStateFlow(false)
     private val _zielSnapshot = MutableStateFlow<ZielSnapshot?>(null)
 
+    /** Schuetzt [isRecording], [startedAtMs] und [zielSnapshot] gemeinsam (siehe [publishZielSnapshot]). */
+    private val zielLock = Any()
+
     /**
      * Sammelstelle fuer Positionsproben einer gekoppelten Uhr, waehrend eine
      * Aufzeichnung laeuft — gesetzt vom [RecordingService] bei Beginn, wieder
@@ -275,11 +278,13 @@ object RecordingRepository {
         paused: Boolean,
         autoPaused: Boolean = false,
     ) {
-        _isRecording.value = true
+        synchronized(zielLock) {
+            _isRecording.value = true
+            if (_startedAtMs.value != startedAtMs) _zielSnapshot.value = null
+            _startedAtMs.value = startedAtMs
+        }
         _isPaused.value = paused
         _isAutoPaused.value = paused && autoPaused
-        if (_startedAtMs.value != startedAtMs) _zielSnapshot.value = null
-        _startedAtMs.value = startedAtMs
         _points.value = points
         _lastPoint.value = points.lastOrNull()
         _pointCount.value = points.size
@@ -292,7 +297,13 @@ object RecordingRepository {
      * geladen, und ein spaetes Ergebnis darf nicht in eine neue Tour rutschen.
      */
     internal fun publishZielSnapshot(fuerStartMs: Long, snapshot: ZielSnapshot?) {
-        if (_isRecording.value && _startedAtMs.value == fuerStartMs) _zielSnapshot.value = snapshot
+        // Unter [zielLock]: Pruefen und Setzen laufen auf IO, Start und Stopp
+        // auf dem Hauptthread. Ohne Sperre koennte ein Stopp genau zwischen
+        // Pruefung und Setzen fallen, und der Snapshot bliebe nach der Tour
+        // stehen.
+        synchronized(zielLock) {
+            if (_isRecording.value && _startedAtMs.value == fuerStartMs) _zielSnapshot.value = snapshot
+        }
     }
 
     /**
@@ -324,17 +335,19 @@ object RecordingRepository {
     }
 
     internal fun publishStopped(finishedRideId: String?) {
-        _isRecording.value = false
+        synchronized(zielLock) {
+            _isRecording.value = false
+            _startedAtMs.value = null
+            _zielSnapshot.value = null
+        }
         _isPaused.value = false
         _isAutoPaused.value = false
-        _startedAtMs.value = null
         _elapsedMs.value = 0L
         _distanceKm.value = 0.0
         _points.value = emptyList()
         _lastPoint.value = null
         _pointCount.value = 0
         _speedKmh.value = null
-        _zielSnapshot.value = null
         if (finishedRideId != null) {
             _lastFinishedRideId.value = finishedRideId
             _finishedRides.tryEmit(finishedRideId)

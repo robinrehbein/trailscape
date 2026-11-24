@@ -210,4 +210,29 @@ class WidgetStateTest {
             assertNull(ShownWeekTarget.decode(broken), "Eingabe $broken")
         }
     }
+
+    // --- Ziel-Snapshot zum Start einer Aufzeichnung ---
+
+    private fun startMs(at: LocalDateTime): Long = at.toInstant(zone).toEpochMilli()
+
+    @Test
+    fun `Ziel-Snapshot zaehlt die laufende Tour nicht mit, auch wenn sie schon gespeichert ist`() {
+        val laufend = ride(monday.plusDays(2), 50.0)
+        val rides = steadyHistory() + ride(monday.plusDays(1), 18.0) + laufend
+        val s = zielSnapshotZumStart(rides, null, startMs(now), laufend.id, zone, null)
+        // Adaptives Ziel 45 km, 18 km gefahren; weiteste Tour 40 km, nicht die
+        // laufende mit 50 km.
+        assertEquals(27.0, s?.wochenRestKm)
+        assertEquals(40.0, s?.laengsteKm)
+    }
+
+    @Test
+    fun `Ziel-Snapshot rechnet die Woche zum Start, nicht zum Neuladen`() {
+        // Sonntagabend gestartet; ein Neuladen nach Mitternacht nimmt weiter
+        // die Woche des Starts.
+        val sonntag = monday.plusDays(6).atTime(22, 0)
+        val rides = steadyHistory() + ride(monday.plusDays(1), 18.0)
+        val s = zielSnapshotZumStart(rides, null, startMs(sonntag), "laufend", zone, null)
+        assertEquals(27.0, s?.wochenRestKm)
+    }
 }
