@@ -317,6 +317,12 @@ internal class TreesLayer : TileLayer {
             val spec = laserTreeSpec(specFor(ctx, cls, t.e, t.n, floor(t.e).toInt(), floor(t.n).toInt(), 1.0, hit.distance), t, hit.distance - ctx.track.halfWidthAt(hit.distM), ctx.land.coniferShare(t.e, t.n), ctx.ground.heightAt(t.e, t.n) - ctx.track.poseAt(hit.distM).u) ?: return@forEach
             cands += Candidate(t.e, t.n, hit.distance, spec)
         }
+        // Ohne Laserdaten: Obstwiesen in Reihen, Alleen dort, wo das Luftbild eine Baumreihe am Strassenrand zeigt.
+        val allee = HashSet<Long>()
+        if (laserTrees == null) {
+            orchardTrees(ctx, net, buildings, cands)
+            alleeTrees(ctx, net, buildings, cands, allee)
+        }
         if (laserTrees == null) for ((spacing, from, to) in listOf(Triple(DENSE_SPACING_M, 0.0, DENSE_M), Triple(OPEN_SPACING_M, DENSE_M, NEAR_M + 4.0))) {
             val i0 = floor(s.minE / spacing).toInt()
             val i1 = floor(s.maxE / spacing).toInt()
@@ -334,7 +340,8 @@ internal class TreesLayer : TileLayer {
                 val p = ctx.land.canopyAt(e, n) * 0.85
                 if ((h and 0xFF) / 256.0 >= p) continue
                 val cls = ctx.land.classAt(e, n)
-                if (cls == LandClass.WATER || cls == LandClass.WETLAND) continue
+                if (cls == LandClass.WATER || cls == LandClass.WETLAND || cls == LandClass.ORCHARD) continue
+                if (allee.isNotEmpty() && hit.distance - ctx.track.halfWidthAt(hit.distM) < 12.0 && inAllee(ctx, allee, e, n, hit.distM)) continue
                 if (net.clearance(e, n) < ROAD_CLEARANCE_M) continue
                 if (nearBuilding(buildings, e, n)) continue
                 var spec = specFor(ctx, cls, e, n, i, j, spacing, hit.distance)
@@ -396,6 +403,130 @@ internal class TreesLayer : TileLayer {
         return used
     }
 
+    /**
+     * Obstwiese ([LandClass.ORCHARD]): Obstbaeume in Reihen (10 × 8,5 m, Richtung regional gewuerfelt,
+     * wenige Meter Versatz, einzelne Luecken), dazwischen gelegentlich ein alter, grosser Birnbaum.
+     * Aus Welt-Koordinaten gewuerfelt — Nachbarkacheln setzen dieselben Baeume.
+     */
+    private fun orchardTrees(ctx: TileContext, net: RoadNet, buildings: List<MapBuilding>, cands: MutableList<Candidate>) {
+        val s = ctx.spec
+        val ang = Noise.value(s.anchorE / 900.0, s.anchorN / 900.0, SEED_ORCH) * Math.PI
+        val ca = kotlin.math.cos(ang)
+        val sa = kotlin.math.sin(ang)
+        // Kachelrechteck im gedrehten Gitter (Zeilen u entlang, Reihen v quer)
+        val corners = listOf(s.minE to s.minN, s.maxE to s.minN, s.maxE to s.maxN, s.minE to s.maxN)
+        val us = corners.map { (e, n) -> e * ca + n * sa }
+        val vs = corners.map { (e, n) -> -e * sa + n * ca }
+        val i0 = floor(us.min() / ORCHARD_STEP_M).toInt()
+        val i1 = floor(us.max() / ORCHARD_STEP_M).toInt()
+        val j0 = floor(vs.min() / ORCHARD_ROW_M).toInt()
+        val j1 = floor(vs.max() / ORCHARD_ROW_M).toInt()
+        for (j in j0..j1) for (i in i0..i1) {
+            val h = Noise.hash(i, j, SEED_ORCH)
+            if ((h and 0xFF) < 28) continue // Luecke
+            val u = (i + 0.5 + ((h ushr 8 and 0xFF) / 255.0 - 0.5) * 0.18) * ORCHARD_STEP_M
+            val v = (j + 0.5 + ((h ushr 16 and 0xFF) / 255.0 - 0.5) * 0.12) * ORCHARD_ROW_M
+            val e = u * ca - v * sa
+            val n = u * sa + v * ca
+            if (!s.contains(e, n)) continue
+            if (ctx.land.classAt(e, n) != LandClass.ORCHARD) continue
+            val hit = ctx.track.nearest(e, n, NEAR_M + 4.0) ?: continue
+            if (hit.distance < ctx.track.halfWidthAt(hit.distM) + TRACK_CLEARANCE_M) continue
+            if (net.clearance(e, n) < ROAD_CLEARANCE_M || nearBuilding(buildings, e, n)) continue
+            val base = specFor(ctx, LandClass.ORCHARD, e, n, i, j, ORCHARD_STEP_M, hit.distance)
+            val old = Noise.hash01(i, j, SEED_ORCH + 1) < 0.1
+            val spec = TreeModels.Spec(
+                TreeModels.Species.SMALL,
+                if (old) 9.0 + 3.0 * Noise.hash01(i, j, SEED_ORCH + 2) else 5.0 + 3.2 * Noise.hash01(i, j, SEED_ORCH + 2),
+                0.9 + 0.25 * Noise.hash01(i, j, SEED_ORCH + 3), base.tint, base.seed, base.turn, false, 0.05, base.hue, variant = 1,
+            )
+            cands += Candidate(e, n, hit.distance, spec)
+        }
+    }
+
+    /**
+     * Allee (ohne Laserdaten): Wo das Luftbild ueber mindestens vier Plaetze hintereinander
+     * (≈ 38 m) eine Baumreihe am Fahrbahnrand zeigt (Kronenbedeckung ≥ 0,45 in 3–6 m Abstand) und
+     * die Strecke eine Strasse ausserhalb des Walds ist, stehen dort Baeume derselben Art und
+     * Groesse in festem Abstand ([ALLEE_STEP_M]) statt gewuerfelter Einzelbaeume. Die belegten
+     * Plaetze kommen nach [allee] (Seite, Platz), damit das Wuerfelgitter dort nichts dazusetzt.
+     */
+    private fun alleeTrees(ctx: TileContext, net: RoadNet, buildings: List<MapBuilding>, cands: MutableList<Candidate>, allee: MutableSet<Long>) {
+        val s = ctx.spec
+        val t = ctx.track.track
+        var k0 = Int.MAX_VALUE
+        var k1 = Int.MIN_VALUE
+        for (i in 0 until t.sampleCount) {
+            val e = t.e[i].toDouble()
+            val n = t.n[i].toDouble()
+            if (e < s.minE - 20 || e > s.maxE + 20 || n < s.minN - 20 || n > s.maxN + 20) continue
+            val k = Math.round(t.distAt(i) / ALLEE_STEP_M).toInt()
+            k0 = min(k0, k); k1 = max(k1, k)
+        }
+        if (k0 > k1) return
+        fun spot(k: Int, side: Int): DoubleArray? {
+            val d = k * ALLEE_STEP_M
+            if (d < 0 || d > t.lengthM) return null
+            val sec = ctx.track.surfaceAt(d)
+            if (sec.highway !in ALLEE_ROADS) return null
+            val p = ctx.track.poseAt(d)
+            val hw = ctx.track.halfWidthAt(d)
+            val th = Math.toRadians(p.headingDeg)
+            val fe = kotlin.math.sin(th)
+            val fn = kotlin.math.cos(th)
+            val off = hw + 3.4
+            val e = p.e + fn * side * off
+            val n = p.n - fe * side * off
+            val cls = ctx.land.classAt(e, n)
+            if (cls == LandClass.FOREST || cls == LandClass.WATER || cls == LandClass.WETLAND) return null
+            // Krone in 3–6 m Abstand vom Rand (zwei Proben)
+            val c1 = ctx.land.canopyAt(p.e + fn * side * (hw + 3.0), p.n - fe * side * (hw + 3.0))
+            val c2 = ctx.land.canopyAt(p.e + fn * side * (hw + 6.0), p.n - fe * side * (hw + 6.0))
+            return if (max(c1, c2) >= 0.45) doubleArrayOf(e, n) else null
+        }
+        for (side in intArrayOf(-1, 1)) {
+            val ok = HashMap<Int, DoubleArray?>()
+            fun at(k: Int) = ok.getOrPut(k) { spot(k, side) }
+            for (k in k0..k1) {
+                val here = at(k) ?: continue
+                // Lauf von mindestens vier belegten Plaetzen, in dem k liegt
+                var a = k
+                while (a > k - 4 && at(a - 1) != null) a--
+                var b = k
+                while (b < k + 4 && at(b + 1) != null) b++
+                if (b - a + 1 < 4) continue
+                val e = here[0]
+                val n = here[1]
+                if (!s.contains(e, n)) { allee += alleeKey(side, k); continue }
+                if (net.clearance(e, n) < 1.5 || nearBuilding(buildings, e, n)) continue
+                val hit = ctx.track.nearest(e, n, NEAR_M) ?: continue
+                if (hit.distance < ctx.track.halfWidthAt(hit.distM) + 2.0) continue
+                // gleiche Art und Groesse je Abschnitt von 200 m und Seite
+                val run = Math.floorDiv(k, 21)
+                val rH = Noise.hash01(run, side, SEED_ALLEE)
+                val species = if (Noise.hash01(run, side, SEED_ALLEE + 1) < 0.25) TreeModels.Species.TALL else TreeModels.Species.BROAD
+                val spec = TreeModels.Spec(
+                    species, (13.0 + 6.0 * rH) * (0.94 + 0.12 * Noise.hash01(k, side, SEED_ALLEE + 2)),
+                    0.78, 0.92 + 0.12 * Noise.hash01(k, side, SEED_ALLEE + 3), Noise.hash(k, side, SEED_ALLEE + 4),
+                    Noise.hash01(k, side, SEED_ALLEE + 5) * 6.283, false, 0.3, (rH - 0.5) * 0.4, variant = 0,
+                )
+                cands += Candidate(e, n, hit.distance, spec)
+                allee += alleeKey(side, k)
+            }
+        }
+    }
+
+    private fun alleeKey(side: Int, k: Int): Long = (k.toLong() shl 1) or (if (side > 0) 1L else 0L)
+
+    /** Ob (e, n) neben einem Alleeplatz liegt (Laufmeter [distM] der naechsten Stelle der Strecke). */
+    private fun inAllee(ctx: TileContext, allee: Set<Long>, e: Double, n: Double, distM: Double): Boolean {
+        val p = ctx.track.poseAt(distM)
+        val th = Math.toRadians(p.headingDeg)
+        val side = if ((e - p.e) * kotlin.math.cos(th) - (n - p.n) * kotlin.math.sin(th) >= 0) 1 else -1
+        val k = Math.round(distM / ALLEE_STEP_M).toInt()
+        return (k - 1..k + 1).any { alleeKey(side, it) in allee }
+    }
+
     /** Art, Groesse und Farbe eines Baums — aus Landnutzung, Kronenbedeckung und Zufall des Gitterpunkts. */
     private fun specFor(ctx: TileContext, cls: LandClass, e: Double, n: Double, i: Int, j: Int, spacing: Double, trackDist: Double): TreeModels.Spec {
         val seed = Noise.hash(i, j, (spacing * 10).toInt() + 0x5eed)
@@ -433,6 +564,16 @@ internal class TreesLayer : TileLayer {
             TreeModels.Species.BUSH -> 1.2 + 2.0 * r(3)
         }
         val regional = (Noise.value(e / 160.0, n / 160.0, SEED_HUE) - 0.5) * 0.9
+        // Wuchsform: Eichen frei im Offenland und regional gehaeuft im Wald, Saeulenpappeln nur im
+        // Offenland, Obstbaeume an Siedlung, Wiese, Obstwiese, Park; Birken im Wald seltener.
+        val pale = species == TreeModels.Species.TALL && r(7) < (if (inForest) 0.32 else 0.5)
+        val oakShare = if (inForest) 0.12 + 0.36 * Noise.value(e / 520.0, n / 520.0, SEED_OAK) else 0.45
+        val variant = when (species) {
+            TreeModels.Species.BROAD -> if (r(13) < oakShare) 1 else 0
+            TreeModels.Species.TALL -> if (!inForest && !pale && r(14) < 0.35) 1 else 0
+            TreeModels.Species.SMALL -> if (cls in FRUIT_LAND && r(15) < 0.7) 1 else 0
+            else -> 0
+        }
         return TreeModels.Spec(
             species = species,
             heightM = h,
@@ -440,7 +581,7 @@ internal class TreesLayer : TileLayer {
             tint = 0.84 + 0.3 * r(5),
             seed = seed,
             turn = r(6) * 6.283,
-            pale = species == TreeModels.Species.TALL && r(7) < 0.5,
+            pale = pale,
             // Fichte: kahler Stammanteil; Laubbaum im Bestand: Kronenansatz (tiefer und damit breiter als frei, Kronendach schliesst)
             bare = when {
                 species == TreeModels.Species.CONIFER && inForest -> (if (trackDist < DENSE_M) 0.26 else 0.14) + 0.2 * r(10)
@@ -448,6 +589,7 @@ internal class TreesLayer : TileLayer {
                 else -> 0.05
             },
             hue = regional + (r(11) - 0.5) * 0.5,
+            variant = variant,
         )
     }
 
@@ -685,6 +827,22 @@ internal class TreesLayer : TileLayer {
         private const val SEED_PINE = 0x7eea
         private const val SEED_HUE = 0x7eeb
         private const val SEED_UG = 0x7eec
+        private const val SEED_OAK = 0x7eed
+        private const val SEED_ORCH = 0x7eee
+        private const val SEED_ALLEE = 0x7eef
+
+        /** Flaechen, auf denen kleine Baeume meist Obstbaeume sind. */
+        private val FRUIT_LAND = setOf(LandClass.RESIDENTIAL, LandClass.MEADOW, LandClass.ORCHARD, LandClass.PARK)
+
+        /** Strassenarten, an denen Alleen erkannt werden. */
+        private val ALLEE_ROADS = setOf("primary", "secondary", "tertiary", "unclassified", "residential", "primary_link", "secondary_link", "tertiary_link")
+
+        /** Abstand der Alleebaeume entlang der Strecke. */
+        const val ALLEE_STEP_M = 9.5
+
+        /** Obstwiese: Abstand der Reihen und in der Reihe. */
+        const val ORCHARD_ROW_M = 10.0
+        const val ORCHARD_STEP_M = 8.5
 
         /** Grundfarben des Waldkoerpers in sRGB. */
         val CONIFER = intArrayOf(50, 72, 46)

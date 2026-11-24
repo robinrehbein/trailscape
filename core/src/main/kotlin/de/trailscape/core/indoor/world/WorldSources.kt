@@ -126,8 +126,9 @@ internal fun boundsOf(parts: List<DoubleArray>): DoubleArray {
 /**
  * Klasse einer Flaeche aus den Vektorkacheln, `null` = nicht verwendet.
  *
- * Begruendete Zuordnungen: Obstwiese (`orchard`) und Baumschule
- * (`plant_nursery`) sind niedriger, unregelmaessiger Gehoelzbewuchs auf
+ * Begruendete Zuordnungen: Obstwiese (`orchard`) ist eine eigene Klasse
+ * ([LandClass.ORCHARD]: Wiese mit Obstbaeumen in Reihen). Baumschule
+ * (`plant_nursery`) und Weinberg sind niedriger, unregelmaessiger Gehoelzbewuchs auf
  * Gruenland — naeher an [LandClass.SCRUB] als an gepflegtem Parkrasen.
  * Steinbruch (`quarry`) ist offener Fels ([LandClass.BARE]). Die
  * Schutzgebiete der Ebene `park` (`nature_reserve`, `protected_area` …)
@@ -140,7 +141,8 @@ internal fun landClassOf(layer: String, cls: String?, subclass: String?): LandCl
     LAYER_LANDCOVER -> when (cls) {
         "wood", "forest" -> LandClass.FOREST
         "farmland" -> when (subclass) {
-            "orchard", "plant_nursery", "vineyard" -> LandClass.SCRUB
+            "orchard" -> LandClass.ORCHARD
+            "plant_nursery", "vineyard" -> LandClass.SCRUB
             else -> LandClass.FARMLAND
         }
         "grass" -> when (subclass) {

@@ -269,7 +269,7 @@ internal class RouteEnv(val ctx: TileContext) {
                 LandClass.FOREST -> {
                     p.inner[side] = 4.0; p.end[side] = 10.0
                 }
-                LandClass.MEADOW, LandClass.PARK, LandClass.SCRUB, LandClass.WETLAND -> {
+                LandClass.MEADOW, LandClass.ORCHARD, LandClass.PARK, LandClass.SCRUB, LandClass.WETLAND -> {
                     p.inner[side] = 3.5; p.end[side] = 9.0
                 }
                 // Breiter deckend als frueher (1,2/1,0 m): Das Luftbild zeigt die echte Strasse oft
@@ -408,6 +408,7 @@ internal class RouteEnv(val ctx: TileContext) {
             LandClass.PARK to floatArrayOf(0.52f, 0.63f, 0.50f),
             LandClass.FARMLAND to floatArrayOf(0.64f, 0.62f, 0.52f),
             LandClass.SCRUB to floatArrayOf(0.50f, 0.54f, 0.47f),
+            LandClass.ORCHARD to floatArrayOf(0.60f, 0.62f, 0.58f),
             LandClass.RESIDENTIAL to floatArrayOf(0.55f, 0.62f, 0.52f),
             LandClass.WETLAND to floatArrayOf(0.50f, 0.56f, 0.47f),
             LandClass.WATER to floatArrayOf(0.50f, 0.56f, 0.47f),

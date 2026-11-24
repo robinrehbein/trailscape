@@ -220,15 +220,18 @@ internal fun laserTreeSpec(
         else -> TreeModels.Species.BROAD
     }
     if (h < 7.0 && species != TreeModels.Species.CONIFER) species = TreeModels.Species.SMALL
-    // Kronenradius ≈ k · Hoehe · Breite, Kronenansatz ≈ c · Hoehe (aus TreeModels).
-    val (k, c) = when (species) {
-        TreeModels.Species.BROAD -> 0.32 to 0.30
-        TreeModels.Species.TALL -> 0.165 to 0.22
-        TreeModels.Species.CONIFER -> 0.22 to 0.06
-        TreeModels.Species.SMALL -> 0.37 to 0.32
-        TreeModels.Species.PINE -> 0.2 to 0.5
-        TreeModels.Species.BUSH -> 0.62 to 0.05
+    // Obstwiese: auch groessere Baeume sind dort Obstbaeume (alte Birnen, Kirschen)
+    if (base.species == TreeModels.Species.SMALL && base.variant == 1 && h < 12.0 && species != TreeModels.Species.CONIFER) species = TreeModels.Species.SMALL
+    // Wuchsform: sehr schmale Laubbaeume sind Saeulenpappeln, sonst bleibt die Variante der Umgebung
+    val variant = when {
+        species == TreeModels.Species.TALL && t.crownRadiusM / h < 0.085 -> 1
+        species == base.species -> base.variant
+        species == TreeModels.Species.TALL -> 0
+        else -> -1
     }
+    // Kronenradius ≈ k · Hoehe · Breite, Kronenansatz ≈ c · Hoehe (aus TreeModels, je Wuchsform).
+    val probe = TreeModels.Spec(species, h, 1.0, base.tint, base.seed, base.turn, base.pale && variant != 1, base.bare, base.hue, variant)
+    val (k, c) = TreeModels.crownFactors(TreeModels.formOf(probe))
     var width = (t.crownRadiusM / (k * h)).coerceIn(0.6, 1.5)
     val free = roomM - CLEAR_STRIP_M
     // Hoch ansetzende Kronen duerfen ueberhaengen, aber hoechstens [MAX_OVERHANG_M] — sonst schliesst sich
@@ -238,7 +241,7 @@ internal fun laserTreeSpec(
         width = limit / (k * h)
         if (width < 0.5) return null
     }
-    return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale, base.bare, base.hue)
+    return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale && variant != 1, base.bare, base.hue, variant)
 }
 
 /** Lichtraum ueber der Fahrbahn: darunter ragt keine Krone in den Streifen der Strecke. */

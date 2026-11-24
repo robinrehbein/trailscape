@@ -131,7 +131,7 @@ private class GroundPainter(val spec: TileSpec, val land: LandMap, val size: Int
                 val p1 = lattice(patch, x, y)
                 val p2 = lattice(patch2, x, y)
                 val c = when (land.classAt(we, wn)) {
-                    LandClass.MEADOW -> if (raster != null && raster.cellAt(we, wn) and LandRaster.CLASS_MASK == 0) {
+                    LandClass.MEADOW, LandClass.ORCHARD -> if (raster != null && raster.cellAt(we, wn) and LandRaster.CLASS_MASK == 0) {
                         openLand(e, n, p1, p2)
                     } else {
                         meadow(e, n, p1, p2)

@@ -263,6 +263,9 @@ internal enum class LandClass {
     /** Gebuesch, Heide, Brache. */
     SCRUB,
 
+    /** Obstwiese (`orchard`): Gruenland mit Obstbaeumen in Reihen. */
+    ORCHARD,
+
     /** Wohngebiet (Gaerten, Hoefe). */
     RESIDENTIAL,
 

@@ -517,7 +517,7 @@ internal class SimpleLandMap(private val map: MapData) : LandMap {
         /** Genauere Klassen zuerst: Landbedeckung schlaegt allgemeine Landnutzung. */
         val PRIORITY = listOf(
             LandClass.WATER, LandClass.WETLAND, LandClass.FOREST, LandClass.PARK, LandClass.BARE,
-            LandClass.SCRUB, LandClass.FARMLAND, LandClass.MEADOW, LandClass.INDUSTRIAL, LandClass.RESIDENTIAL,
+            LandClass.SCRUB, LandClass.ORCHARD, LandClass.FARMLAND, LandClass.MEADOW, LandClass.INDUSTRIAL, LandClass.RESIDENTIAL,
         )
     }
 }
@@ -619,6 +619,7 @@ internal object SimpleTerrainLayer : TileLayer {
         LandClass.FARMLAND to Argb.rgb(138, 124, 84),
         LandClass.FOREST to Argb.rgb(54, 66, 40),
         LandClass.SCRUB to Argb.rgb(86, 96, 58),
+        LandClass.ORCHARD to Argb.rgb(98, 114, 62),
         LandClass.RESIDENTIAL to Argb.rgb(118, 116, 102),
         LandClass.INDUSTRIAL to Argb.rgb(126, 124, 120),
         LandClass.PARK to Argb.rgb(90, 116, 62),
