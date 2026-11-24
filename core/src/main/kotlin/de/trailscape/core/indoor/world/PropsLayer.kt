@@ -105,6 +105,7 @@ internal class PropsLayer : TileLayer {
         }
 
         fun run() {
+            bridgeStructures()
             bridgeRailings()
             guidePosts()
             streetLamps()
@@ -124,6 +125,129 @@ internal class PropsLayer : TileLayer {
             }
         }
 
+        // --- Brueckenbauwerk ------------------------------------------------------
+
+        /**
+         * Unterbau jeder Bruecke der Karte (`brunnel = bridge`, 6–400 m), die mehr als 0,8 m ueber dem
+         * Gelaende liegt: Ueberbau als Betonplatte (0,8 m dick, 0,35 m ueber die Fahrbahn hinaus),
+         * Pfeiler etwa alle 22 m, wo der Boden mehr als 2,5 m tiefer liegt, und bei Strassenbruecken
+         * neben der Strecke eine Bruestung (0,85 m). Auf der Strecke selbst stehen die Gelaender aus
+         * [bridgeRailings] und eine niedrige Randkappe. Vorher lag dort nur das flache Fahrbahnband
+         * (enztal km 5,3, schoenbuch km 7,0). Deckhoehe wie im Weltbau: auf der Strecke deren Hoehe,
+         * sonst geradlinig zwischen dem Gelaende an den Enden der Linie.
+         */
+        private fun bridgeStructures() {
+            val concrete = RouteGeometry.linColor(0.40, 0.39, 0.37)
+            val concreteDark = RouteGeometry.linColor(0.27, 0.27, 0.26)
+            for (r in net.roads) {
+                if (r.source.brunnel != "bridge" || r.size < 2) continue
+                val line = r.source.line
+                val k = line.size / 2
+                var total = 0.0
+                for (i in 1 until k) total += hypot(line[2 * i] - line[2 * i - 2], line[2 * i + 1] - line[2 * i - 1])
+                if (total < 6.0 || total > 400.0) continue
+                val onTrack = (0 until r.size - 1).count { alongTrack(r, it) } * 2 > r.size - 1
+                val h0 = ctx.ground.heightAt(line[0], line[1])
+                val h1 = ctx.ground.heightAt(line[2 * k - 2], line[2 * k - 1])
+                val top = DoubleArray(r.size)
+                val hws = DoubleArray(r.size)
+                for (i in 0 until r.size) {
+                    val hit = if (onTrack) track.nearest(r.e[i], r.n[i], 20.0) else null
+                    top[i] = if (hit != null) hit.u else max(ctx.ground.heightAt(r.e[i], r.n[i]), h0 + (h1 - h0) * (r.s[i] / total).coerceIn(0.0, 1.0)) + 0.05
+                    hws[i] = if (hit != null) track.halfWidthAt(hit.distM) else r.halfWidth
+                }
+                var lastPier = Double.NEGATIVE_INFINITY
+                for (i in 0 until r.size - 1) {
+                    val me = (r.e[i] + r.e[i + 1]) / 2
+                    val mn = (r.n[i] + r.n[i + 1]) / 2
+                    if (!ctx.spec.contains(me, mn)) continue
+                    val gap = (top[i] + top[i + 1]) / 2 - ctx.ground.heightAt(me, mn)
+                    if (gap < 0.8) continue
+                    for (side in intArrayOf(-1, 1)) {
+                        val o0 = hws[i] + 0.35
+                        val o1 = hws[i + 1] + 0.35
+                        val ae = r.e[i] + r.re[i] * o0 * side
+                        val an = r.n[i] + r.rn[i] * o0 * side
+                        val be = r.e[i + 1] + r.re[i + 1] * o1 * side
+                        val bn = r.n[i + 1] + r.rn[i + 1] * o1 * side
+                        // Seitenflaeche des Ueberbaus (nach aussen)
+                        val fe = r.re[i] * side
+                        val fn = r.rn[i] * side
+                        quad4(v(ae, top[i] - 0.85, an), v(be, top[i + 1] - 0.85, bn), v(be, top[i + 1] - 0.04, bn), v(ae, top[i] - 0.04, an), fe, fn, concrete)
+                        if (onTrack) {
+                            // Randkappe (0,25 m) aussen neben der Fahrbahn
+                            val ie = r.e[i] + r.re[i] * (o0 - 0.3) * side
+                            val inn = r.n[i] + r.rn[i] * (o0 - 0.3) * side
+                            val je = r.e[i + 1] + r.re[i + 1] * (o1 - 0.3) * side
+                            val jn = r.n[i + 1] + r.rn[i + 1] * (o1 - 0.3) * side
+                            quad4(v(ae, top[i] - 0.04, an), v(be, top[i + 1] - 0.04, bn), v(be, top[i + 1] + 0.22, bn), v(ae, top[i] + 0.22, an), fe, fn, concrete)
+                            quad4(v(ie, top[i] + 0.22, inn), v(je, top[i + 1] + 0.22, jn), v(be, top[i + 1] + 0.22, bn), v(ae, top[i] + 0.22, an), 0.0, 0.0, concrete, up = true)
+                            quad4(v(ie, top[i] - 0.02, inn), v(je, top[i + 1] - 0.02, jn), v(je, top[i + 1] + 0.22, jn), v(ie, top[i] + 0.22, inn), -fe, -fn, concreteDark)
+                        } else {
+                            // Bruestung: Wand 0,85 m ueber dem Deck, 0,25 m dick
+                            val ie = r.e[i] + r.re[i] * (o0 - 0.25) * side
+                            val inn = r.n[i] + r.rn[i] * (o0 - 0.25) * side
+                            val je = r.e[i + 1] + r.re[i + 1] * (o1 - 0.25) * side
+                            val jn = r.n[i + 1] + r.rn[i + 1] * (o1 - 0.25) * side
+                            quad4(v(ae, top[i] - 0.04, an), v(be, top[i + 1] - 0.04, bn), v(be, top[i + 1] + 0.85, bn), v(ae, top[i] + 0.85, an), fe, fn, concrete)
+                            quad4(v(ie, top[i] + 0.85, inn), v(je, top[i + 1] + 0.85, jn), v(be, top[i + 1] + 0.85, bn), v(ae, top[i] + 0.85, an), 0.0, 0.0, concrete, up = true)
+                            quad4(v(ie, top[i], inn), v(je, top[i + 1], jn), v(je, top[i + 1] + 0.85, jn), v(ie, top[i] + 0.85, inn), -fe, -fn, concreteDark)
+                        }
+                    }
+                    // Unterseite
+                    val l0e = r.e[i] - r.re[i] * (hws[i] + 0.35)
+                    val l0n = r.n[i] - r.rn[i] * (hws[i] + 0.35)
+                    val r0e = r.e[i] + r.re[i] * (hws[i] + 0.35)
+                    val r0n = r.n[i] + r.rn[i] * (hws[i] + 0.35)
+                    val l1e = r.e[i + 1] - r.re[i + 1] * (hws[i + 1] + 0.35)
+                    val l1n = r.n[i + 1] - r.rn[i + 1] * (hws[i + 1] + 0.35)
+                    val r1e = r.e[i + 1] + r.re[i + 1] * (hws[i + 1] + 0.35)
+                    val r1n = r.n[i + 1] + r.rn[i + 1] * (hws[i + 1] + 0.35)
+                    quad4(v(l0e, top[i] - 0.85, l0n), v(r0e, top[i] - 0.85, r0n), v(r1e, top[i + 1] - 0.85, r1n), v(l1e, top[i + 1] - 0.85, l1n), 0.0, 0.0, concreteDark, down = true)
+                    // Pfeiler etwa alle 22 m (nicht an den Enden)
+                    val s = r.s[i]
+                    if (gap > 2.5 && s > 6.0 && s < total - 6.0 && s - lastPier >= 22.0) {
+                        lastPier = s
+                        val g = ctx.ground.heightAt(r.e[i], r.n[i])
+                        val te = r.rn[i]
+                        val tn = -r.re[i]
+                        box(r.e[i], r.n[i], r.re[i], r.rn[i], hws[i] * 0.7, 0.45, g - 0.6, top[i] - 0.84, concrete)
+                        // Pfeilerkopf
+                        box(r.e[i] + te * 0.0, r.n[i] + tn * 0.0, r.re[i], r.rn[i], hws[i] + 0.1, 0.55, top[i] - 1.25, top[i] - 0.84, concreteDark)
+                    }
+                    if (!commit()) return
+                }
+            }
+        }
+
+        /**
+         * Segment `i → i+1` gehoert zur Strecke: als „auf der Strecke" erkannt oder (Bruecken, deren Linie
+         * die geglaettete Strecke nur knapp begleitet — schoenbuch km 7) beide Enden hoechstens 2 m neben
+         * dem Fahrbahnrand und gleich gerichtet.
+         */
+        private fun alongTrack(r: RoadNet.Road, i: Int): Boolean {
+            if (r.segOnTrack(i)) return true
+            val a = track.nearest(r.e[i], r.n[i], 30.0) ?: return false
+            val b = track.nearest(r.e[i + 1], r.n[i + 1], 30.0) ?: return false
+            if (a.distance > track.halfWidthAt(a.distM) + 2.0 || b.distance > track.halfWidthAt(b.distM) + 2.0) return false
+            val p = track.poseAt(a.distM)
+            val h = Math.toRadians(p.headingDeg)
+            val dx = r.e[i + 1] - r.e[i]
+            val dy = r.n[i + 1] - r.n[i]
+            val l = hypot(dx, dy)
+            return l > 1e-6 && abs((dx * sin(h) + dy * cos(h)) / l) > 0.85
+        }
+
+        /** Viereck a b c d; Vorderseite nach ([fe], [fn]) waagrecht, bzw. nach oben/unten. */
+        private fun quad4(a: Vec3, b: Vec3, c: Vec3, d: Vec3, fe: Double, fn: Double, color: Int, up: Boolean = false, down: Boolean = false) {
+            val front = when {
+                up -> Vec3(0.0, 1.0, 0.0)
+                down -> Vec3(0.0, -1.0, 0.0)
+                else -> Vec3(fe, 0.0, -fn)
+            }
+            if ((b - a).cross(d - a).dot(front) >= 0) quad(a, b, c, d, color) else quad(b, a, d, c, color)
+        }
+
         // --- Brueckengelaender ---------------------------------------------------
 
         /**
@@ -136,7 +260,7 @@ internal class PropsLayer : TileLayer {
             for (r in net.roads) {
                 if (r.source.brunnel != "bridge") continue
                 for (i in 0 until r.size - 1) {
-                    if (!r.segOnTrack(i)) continue
+                    if (!alongTrack(r, i)) continue
                     val a = track.nearest(r.e[i], r.n[i], 30.0) ?: continue
                     val b = track.nearest(r.e[i + 1], r.n[i + 1], 30.0) ?: continue
                     if (abs(a.distM - b.distM) > 400.0) continue

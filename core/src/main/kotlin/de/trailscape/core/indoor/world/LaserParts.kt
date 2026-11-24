@@ -291,6 +291,25 @@ private class FootprintIndex(list: List<LaserBuilding>) {
  *
  * **Stufe 1:** [base] mit den Hoehen aus LoD2.
  */
+/** Ob der Grundriss von [b] die Mittellinie der Strecke (Proben alle `stepM`) ueberdeckt. */
+private fun coversTrack(ctx: TileContext, b: LaserBuilding): Boolean {
+    val t = ctx.track.track
+    var minE = Double.MAX_VALUE; var minN = Double.MAX_VALUE; var maxE = -Double.MAX_VALUE; var maxN = -Double.MAX_VALUE
+    for (r in b.footprint) for (i in r.indices step 2) {
+        minE = min(minE, r[i]); maxE = max(maxE, r[i]); minN = min(minN, r[i + 1]); maxN = max(maxN, r[i + 1])
+    }
+    if (minE > maxE) return false
+    for (i in 0 until t.sampleCount) {
+        val e = t.e[i].toDouble()
+        val n = t.n[i].toDouble()
+        if (e < minE - 0.5 || e > maxE + 0.5 || n < minN - 0.5 || n > maxN + 0.5) continue
+        if (pointInRings(b.footprint, e, n)) return true
+        // auch zwischen zwei Proben (Proben alle 5 m, schmale Stege)
+        if (i + 1 < t.sampleCount && pointInRings(b.footprint, (e + t.e[i + 1]) / 2, (n + t.n[i + 1]) / 2)) return true
+    }
+    return false
+}
+
 internal class LaserBuildingsLayer(
     private val parts: LaserWorldParts,
     private val base: BuildingsLayer,
@@ -309,7 +328,10 @@ internal class LaserBuildingsLayer(
                 val wallMat = TileMaterial(WorldNames.MAT_BUILDING_WALL, atlas, repeat = true, roughness = 0.92f)
                 val roofMat = TileMaterial(WorldNames.MAT_BUILDING_ROOF, atlas, repeat = true, roughness = 0.85f)
                 val mesher = Lod2Mesher(ctx, list.map { it.first })
-                for ((b, _) in list) {
+                for ((b, dist) in list) {
+                    // Kein LoD2-Koerper auf der Fahrbahn: Bruecken und Stege fuehrt das LoD2 teils als
+                    // flache „Gebaeude“; quer auf der Strecke lagen sie als graue Platte (schoenbuch km 7).
+                    if (dist < 40.0 && coversTrack(ctx, b)) continue
                     val m = mesher.mesh(b) ?: continue
                     if (m.triangles > budget) continue
                     budget -= m.triangles

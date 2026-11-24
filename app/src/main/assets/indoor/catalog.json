@@ -26,7 +26,7 @@
                 "de": "Die D211 von Bourg-d'Oisans hinauf nach L'Alpe d'Huez: 21 nummerierte Kehren, gleichmäßig um 8 % steil. Einer der bekanntesten Anstiege der großen Landesrundfahrten.",
                 "en": "The D211 from Bourg-d'Oisans up to L'Alpe d'Huez: 21 numbered hairpins at a steady 8 % or so. One of the best-known climbs of the grand tours."
             },
-            "packageFile": "alpe-dhuez-v10.zip",
+            "packageFile": "alpe-dhuez-v11.zip",
             "packageBytes": 106107168,
             "aerial": true,
             "aerialSource": "Luftbild: © IGN – BD ORTHO®, Licence Ouverte Etalab (2026)",
@@ -58,7 +58,7 @@
                 "de": "Drei kurze, steile Pflasteranstiege der Flämischen Ardennen hintereinander: der lange Oude Kwaremont, der kurze Paterberg und der Koppenberg mit über 20 % auf grobem Kopfsteinpflaster. Bekannt aus den flämischen Frühjahrsklassikern.",
                 "en": "Three short, steep cobbled climbs of the Flemish Ardennes in a row: the long Oude Kwaremont, the short Paterberg and the Koppenberg at over 20 % on rough cobbles. Known from the Flemish spring classics."
             },
-            "packageFile": "vlaamse-ardennen-v10.zip",
+            "packageFile": "vlaamse-ardennen-v11.zip",
             "packageBytes": 99327281,
             "aerial": true,
             "aerialSource": "Luftbild: Bron: Luchtopnamen Digitaal Vlaanderen",
@@ -91,7 +91,7 @@
                 "de": "Die Trouée d'Arenberg: 2,3 km schnurgerades, grobes Kopfsteinpflaster durch den Wald von Raismes-Saint-Amand-Wallers, mit Anfahrt von Haveluy. Der bekannteste Pflastersektor der Klassiker im Norden Frankreichs.",
                 "en": "The Trouée d'Arenberg: 2.3 km of dead-straight, rough cobbles through the Raismes-Saint-Amand-Wallers forest, approached from Haveluy. The best-known cobbled sector of the northern French classics."
             },
-            "packageFile": "arenberg-v10.zip",
+            "packageFile": "arenberg-v11.zip",
             "packageBytes": 113145866,
             "aerial": true,
             "aerialSource": "Luftbild: © IGN – BD ORTHO®, Licence Ouverte Etalab (2026)",
@@ -123,7 +123,7 @@
                 "de": "Weiße Schotterstraßen über die Hügel der Crete Senesi südöstlich von Siena, vorbei am Weiler Monte Sante Marie. Der Abschnitt gehört zu den längsten Schottersektoren der toskanischen Frühjahrsrennen.",
                 "en": "White gravel roads over the hills of the Crete Senesi south-east of Siena, past the hamlet of Monte Sante Marie. One of the longest gravel sectors of the Tuscan spring races."
             },
-            "packageFile": "monte-sante-marie-v10.zip",
+            "packageFile": "monte-sante-marie-v11.zip",
             "packageBytes": 82838731,
             "aerial": false,
             "quality": "MEDIUM",
@@ -152,7 +152,7 @@
                 "de": "Die Ma-2141 vom Hafen Sa Calobra hinauf zum Coll dels Reis: rund 10 km mit 7 %, Kehren und der berühmten Krawattenknoten-Schleife. Ein Klassiker der Trainingslager im Frühjahr.",
                 "en": "The Ma-2141 from the port of Sa Calobra up to the Coll dels Reis: about 10 km at 7 %, hairpins and the famous tie-knot loop. A classic of spring training camps."
             },
-            "packageFile": "sa-calobra-v10.zip",
+            "packageFile": "sa-calobra-v11.zip",
             "packageBytes": 68776562,
             "aerial": true,
             "aerialSource": "Luftbild: PNOA CC-BY 4.0 scne.es 2026",
@@ -183,7 +183,7 @@
                 "de": "Breite Schotterstraßen durch die offene Hochgrasprärie der Flint Hills südwestlich von Cottonwood Falls. Die Gegend um Emporia gilt als Wiege der langen Gravel-Rennen.",
                 "en": "Wide gravel roads through the open tallgrass prairie of the Flint Hills south-west of Cottonwood Falls. The area around Emporia is known as the cradle of long gravel races."
             },
-            "packageFile": "flint-hills-v10.zip",
+            "packageFile": "flint-hills-v11.zip",
             "packageBytes": 88547376,
             "aerial": true,
             "aerialSource": "Luftbild: USGS, USDA, The National Map: Orthoimagery",
@@ -213,7 +213,7 @@
                 "de": "Von der Hohemark in Oberursel über den Sandplacken hinauf zum Großen Feldberg, dem höchsten Gipfel des Taunus. Bekannt als Anstieg des Frühjahrsrennens rund um Frankfurt.",
                 "en": "From Hohemark in Oberursel via the Sandplacken pass up to the Großer Feldberg, the highest summit of the Taunus. Known as the climb of the spring race around Frankfurt."
             },
-            "packageFile": "grosser-feldberg-v10.zip",
+            "packageFile": "grosser-feldberg-v11.zip",
             "packageBytes": 134870049,
             "aerial": true,
             "aerialSource": "Luftbild: Geobasisdaten © Hessische Verwaltung für Bodenmanagement und Geoinformation, bearbeitet",
@@ -245,7 +245,7 @@
                 "de": "Von Freiburg-Günterstal die alte Bergrennstrecke hinauf zum Schauinsland: lange Kurven durch den Bergwald, oben weite Blicke über den Schwarzwald. Ein Hausberg der Freiburger Rennradszene.",
                 "en": "From Freiburg-Günterstal up the old hill-climb road to the Schauinsland: long bends through mountain forest and wide views over the Black Forest at the top. A local favourite of Freiburg road cyclists."
             },
-            "packageFile": "schauinsland-v10.zip",
+            "packageFile": "schauinsland-v11.zip",
             "packageBytes": 154953706,
             "aerial": true,
             "aerialSource": "Luftbild: LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de",
@@ -277,7 +277,7 @@
                 "de": "Vom Kahlen Asten, dem höchsten Berg des Sauerlands, auf festen Forstwegen durch den Fichten- und Buchenwald des Rothaargebirges nach Norden. Typisches Gravel-Gelände im Hochsauerland.",
                 "en": "From Kahler Asten, the highest hill of the Sauerland, along firm forest roads through the spruce and beech woods of the Rothaar mountains to the north. Typical gravel terrain of the Hochsauerland."
             },
-            "packageFile": "kahler-asten-v10.zip",
+            "packageFile": "kahler-asten-v11.zip",
             "packageBytes": 110983979,
             "aerial": true,
             "aerialSource": "Luftbild: © Geobasis NRW",
@@ -308,7 +308,7 @@
                 "de": "Der Bahntrassenradweg auf der ehemaligen Balkanbahn von Wermelskirchen nach Hilgen: gleichmäßig sanft fallend, durch Einschnitte und über Dämme, vorbei an Feldern, Wald und den Ortsrändern des Bergischen Landes.",
                 "en": "The rail trail on the former Balkan railway from Wermelskirchen to Hilgen: a steady gentle descent through cuttings and along embankments, past fields, woods and the edges of the towns of the Bergisches Land."
             },
-            "packageFile": "balkantrasse-v7.zip",
+            "packageFile": "balkantrasse-v8.zip",
             "packageBytes": 98723973,
             "aerial": true,
             "aerialSource": "Luftbild: © Geobasis NRW",
@@ -342,7 +342,7 @@
                 "de": "Eine Runde vom Altenberger Dom durch das Tal der Dhünn und über die Höhen des Bergischen Landes zurück zum Dom: Waldränder, Weiden, kurze steile Anstiege und kleine Orte mit Schieferhäusern.",
                 "en": "A loop from Altenberg Cathedral through the Dhünn valley and over the hills of the Bergisches Land back to the cathedral: forest edges, pastures, short steep climbs and small villages with slate-clad houses."
             },
-            "packageFile": "altenberg-v7.zip",
+            "packageFile": "altenberg-v8.zip",
             "packageBytes": 127887519,
             "aerial": true,
             "aerialSource": "Luftbild: © Geobasis NRW",
@@ -375,7 +375,7 @@
                 "de": "Ein Abschnitt des Rennsteigs vom Grenzadler bei Oberhof zur Schmücke: Schotterwege auf dem Kamm des Thüringer Waldes, auf denen auch der Rennsteig-Radwanderweg verläuft.",
                 "en": "A section of the Rennsteig from the Grenzadler near Oberhof to the Schmücke: gravel roads along the crest of the Thuringian Forest, shared with the Rennsteig cycle route."
             },
-            "packageFile": "rennsteig-v10.zip",
+            "packageFile": "rennsteig-v11.zip",
             "packageBytes": 149812454,
             "aerial": true,
             "aerialSource": "Luftbild: © GDI-Th",
@@ -407,7 +407,7 @@
                 "de": "Vom Parkplatz am Schloss Solitude durch den Glemswald hinab zum Glemseck, dann durch das obere Glemstal und das Mahdental und zum Schluss wieder hinauf zum Schloss: alte Alleen, Buchenwald, Wiesentäler und ein Stück der historischen Solitude-Rennstrecke.",
                 "en": "From the car park at Solitude Palace down through the Glemswald forest to Glemseck, then along the upper Glems valley and the Mahdental and finally back up to the palace: old avenues, beech forest, meadow valleys and part of the historic Solitude race circuit."
             },
-            "packageFile": "solitude-v2.zip",
+            "packageFile": "solitude-v3.zip",
             "packageBytes": 122162122,
             "aerial": true,
             "aerialSource": "Luftbild: LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de",
@@ -438,7 +438,7 @@
                 "de": "Eine hügelige Runde vom Kloster Maulbronn (UNESCO-Welterbe) über die Waldhöhen des Strombergs nach Freudenstein, durch Weinberge und Felder nach Zaisersweiher und über die Höhe zurück zum Kloster.",
                 "en": "A hilly loop from Maulbronn Abbey (UNESCO World Heritage) over the wooded heights of the Stromberg to Freudenstein, through vineyards and fields to Zaisersweiher and back over the ridge to the abbey."
             },
-            "packageFile": "maulbronn-v2.zip",
+            "packageFile": "maulbronn-v3.zip",
             "packageBytes": 130695543,
             "aerial": true,
             "aerialSource": "Luftbild: LGL-BW (2026) Datenlizenz Deutschland - Namensnennung - Version 2.0, www.lgl-bw.de",
