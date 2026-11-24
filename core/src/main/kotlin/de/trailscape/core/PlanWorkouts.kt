@@ -380,7 +380,9 @@ fun impliedSessionIf(session: TrainingSession): Double? {
  * @property main Bereich der Einheit insgesamt bzw. zwischen den Belastungen
  *   (bei Intervallen: Grundlage).
  * @property work Bereich der Belastungsabschnitte; `null` bei gleichmaessigen
- *   Einheiten.
+ *   Einheiten und beim 20-min-Test ([SessionTextKey.FTP_TEST]) — dort ist die
+ *   Belastung „so hart wie gleichmaessig moeglich", ein Bereich waere ein
+ *   Deckel. [main] ist dann der Bereich fuer Ein- und Ausfahren.
  * @property reps Zahl der Belastungen (0 ohne Struktur).
  * @property workMin Dauer einer Belastung in Minuten (0 ohne Struktur).
  */
@@ -408,9 +410,11 @@ fun sessionTargetZones(session: TrainingSession): SessionTargetZones? {
             args.getOrElse(1) { 0 },
             args.getOrElse(2) { 0 },
         )
+        // Der 20-min-Test ist ein Maximaltest: Ein Zielbereich waere ein Deckel.
+        // Nur Ein-/Ausfahren hat einen Bereich; die Belastung hat keinen (work = null).
         SessionTextKey.FTP_TEST -> SessionTargetZones(
             TargetZone.ENDURANCE,
-            TargetZone.THRESHOLD,
+            null,
             1,
             args.getOrElse(FtpTestArg.TEST) { FTP_TEST_MIN },
         )
@@ -503,7 +507,10 @@ data class SessionPersonalTargets(
 
 /**
  * Persoenliche Zielbereiche einer Planeinheit in einem Aufruf (siehe
- * [sessionTargetZones] und [personalTargetRange]); `null` fuer das Zielevent.
+ * [sessionTargetZones] und [personalTargetRange]); `null` fuer das Zielevent
+ * und fuer den 20-min-Test: Ein Maximaltest hat keinen Zielbereich, und die
+ * Oberflaeche zeigt sonst nur den Bereich des Einfahrens, als waere er das
+ * Ziel der Einheit (die Beschreibung des Tests erklaert die Belastung).
  */
 fun sessionPersonalTargets(
     session: TrainingSession,
@@ -511,6 +518,7 @@ fun sessionPersonalTargets(
     eftp: EftpEstimate? = null,
     zones: TrainingZones? = null,
 ): SessionPersonalTargets? {
+    if (session.textKey == SessionTextKey.FTP_TEST) return null
     val target = sessionTargetZones(session) ?: return null
     return SessionPersonalTargets(
         zones = target,

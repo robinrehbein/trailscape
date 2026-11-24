@@ -189,7 +189,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     }
     val feasibilityNotes = remember(displayPlan, feasibility, coreTexts) {
         if (displayPlan != null && feasibility != null) {
-            feasibilityNoteLines(displayPlan, feasibility, feasibilityOpen = !feasibility.feasible, texts = coreTexts)
+            feasibilityNoteLines(displayPlan, feasibility, texts = coreTexts)
         } else {
             emptyList()
         }
@@ -373,6 +373,10 @@ fun TrainingScreen(appViewModel: AppViewModel) {
                             prediction = prediction,
                             onEdit = { showGoalEditor = true },
                             onExplain = { showPrognosis = true },
+                            testWeek = fitnessTestWeek(shownPlan),
+                            // Eine Zielzeit-Luecke nur einmal sagen: den konkreteren
+                            // Hinweis (mit Tempo) unter der Karte, nicht beide.
+                            targetTimeNoteShown = feasibility?.targetTimeMessage?.isNotBlank() == true,
                         )
                     }
                 } else {

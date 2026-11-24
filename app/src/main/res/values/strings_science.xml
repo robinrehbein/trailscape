@@ -12,7 +12,7 @@
     <string name="science_intro">Worauf die Berechnungen beruhen – und wie gut das belegt ist.</string>
     <!-- %1$s = Quellenangabe, z. B. „Banister 1991; Morton 1990" -->
     <string name="science_source_format">Quelle: %1$s</string>
-    <string name="science_footer_hint">Die App gibt Trainingshinweise, keine medizinische Beratung. Ausführliche Herleitung mit Literaturverzeichnis: docs/trainingswissenschaft.md im Projekt.</string>
+    <string name="science_footer_hint">Die App gibt Trainingshinweise, keine medizinische Beratung. Die ausführliche Herleitung mit Literaturverzeichnis liegt dem Quellcode der App bei.</string>
 
     <!-- Einstufungen (kleines Label neben der Quelle) -->
     <string name="science_evidence_based">belegt</string>
@@ -64,6 +64,6 @@
     <string name="science_recovery_week_source">Bell 2023; Mølmen 2019</string>
 
     <string name="science_taper_title">Taper vor dem Ziel</string>
-    <string name="science_taper_body">In den zwei Wochen vor dem Event sinkt der Umfang schrittweise um etwa die Hälfte. Intensität und Häufigkeit bleiben, damit du frisch und trotzdem in Form bist.</string>
+    <string name="science_taper_body">In den zwei Wochen vor dem Event sinkt der Umfang schrittweise um etwa die Hälfte; bei Plänen unter acht Wochen ist es eine Woche. Intensität und Häufigkeit bleiben, damit du frisch und trotzdem in Form bist.</string>
     <string name="science_taper_source">Bosquet 2007</string>
 </resources>

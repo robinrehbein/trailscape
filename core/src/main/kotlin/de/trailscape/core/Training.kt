@@ -160,8 +160,11 @@ internal fun planSessions(
  *  * **Eine Wahrheit fuer Last, Dauer und Kilometer**: Jede Einheit bekommt
  *    ihre Dauer aus Kilometern und persoenlichem Tempo ([speedKmh]) bzw. aus
  *    ihrer Struktur, und ihre Last aus genau dieser Struktur
- *    (`PlanWorkouts.kt`). Die Rampe ist ein Deckel, der notfalls Umfang
- *    kuerzt — sie skaliert keine Zahlen.
+ *    (`PlanWorkouts.kt`). Rampe und Zeitbudget sind Deckel, die notfalls
+ *    kuerzen (Wiederholungen, Grundlagenfahrten, Qualitaet, die lange Tour
+ *    zuletzt) — sie skalieren keine Zahlen. Jede Einheit dauert mindestens
+ *    30 min; eine einzige Einheit dieser Dauer bleibt als Untergrenze immer
+ *    stehen (`MIN_SESSION_MIN`).
  *  * **Periodisierung**: Grundlage → Aufbau → spezifisch mit steigender
  *    Belastungszeit, Erholungswochen mit kurzem Intensitaetsreiz, zwei
  *    Taperwochen bei gleicher Intensitaet und Haeufigkeit (`PlanWeeks.kt`).
@@ -175,9 +178,12 @@ internal fun planSessions(
  *
  * @param currentCtl aktuelle chronische Last (CTL), falls bekannt. Mit ihr ist
  *   die Last jeder Aufbauwoche auf das 1,30-Fache der Referenz (7 × CTL bzw.
- *   letzte Aufbauwoche) gedeckelt; ohne sie gilt nur die km-Rampe.
+ *   letzte Aufbauwoche) gedeckelt — bis auf die Untergrenze einer
+ *   Mindesteinheit; ohne sie gilt nur die km-Rampe.
  * @param preferences Trainingstage, Tag der langen Tour, Zeitbudget; `null` =
- *   Stufenraster ohne Zeitdeckel.
+ *   Stufenraster ohne Zeitdeckel. Das Zeitbudget gilt fuer jede Woche, auch
+ *   Ziel- und Testwoche (ohne das Event und ohne eine vom Ziel festgelegte
+ *   Vergleichsrunde).
  * @param speedKmh persoenliches Grundtempo in km/h (z. B.
  *   [typicalAvgSpeedKmh]); `null` = [fallbackGravelSpeedKmh].
  */

@@ -141,11 +141,12 @@ class TrainingTest {
             .map { it.targetKm }
         // Woche 0 startet beim tatsaechlichen Umfang (95 km), nicht hoeher.
         assertTrue(builds.first() in 90..100, "Woche 0: ${builds.first()} km")
-        // Der Umfang waechst, aber nie um mehr als 15 % (plus Rundung der Einheiten).
+        // Der Umfang waechst, aber nie um mehr als 15 % (mindestens 5 km) — gemessen
+        // an der tatsaechlichen Wochensumme, ohne Toleranz.
         assertTrue(builds.last() > builds.first())
         for (i in 1 until builds.size) {
             assertTrue(
-                builds[i] <= builds[i - 1] * 1.15 + 3,
+                builds[i] <= rampCapKm(builds[i - 1].toDouble()),
                 "Sprung ${builds[i - 1]} → ${builds[i]} km ist zu gross",
             )
         }
@@ -161,8 +162,9 @@ class TrainingTest {
             if (week.kind != WeekKind.ERHOLUNG) continue
             val previous = twelveWeekPlan.weeks[week.index - 1]
             val share = week.targetKm.toDouble() / previous.targetKm
-            assertTrue(share in 0.45..0.65, "Erholungswoche ${week.index}: ${(share * 100).toInt()} %")
-            assertTrue(week.sessions.size >= previous.sessions.size - 1, "Haeufigkeit in Woche ${week.index}")
+            assertTrue(share in 0.45..0.60, "Erholungswoche ${week.index}: ${(share * 100).toInt()} %")
+            // Genau eine Einheit weniger (mindestens zwei).
+            assertEquals(maxOf(2, previous.sessions.size - 1), week.sessions.size, "Haeufigkeit in Woche ${week.index}")
             // Ein kurzer Intensitaetsreiz bleibt (assessDeload: „Intensitaet bleibt").
             assertEquals(1, week.sessions.count { it.intensity == SessionIntensity.HART })
             // Die lange Fahrt ist deutlich gekuerzt.
@@ -180,7 +182,8 @@ class TrainingTest {
         assertTrue(shares[1] in 0.38..0.55, "Taper 2: $shares")
         val lastBuild = twelveWeekPlan.weeks[tapers.first().index - 1]
         for (taper in tapers) {
-            assertTrue(taper.sessions.size >= lastBuild.sessions.size - 1, "Haeufigkeit in Woche ${taper.index}")
+            // Haeufigkeit bleibt im Taper gleich (Bosquet 2007, Mujika & Padilla 2003).
+            assertEquals(lastBuild.sessions.size, taper.sessions.size, "Haeufigkeit in Woche ${taper.index}")
             assertTrue(taper.sessions.any { it.intensity == SessionIntensity.HART }, "Intensitaet in Woche ${taper.index}")
         }
     }
@@ -557,7 +560,13 @@ class TrainingTest {
         val free = generatePlan(twelveWeekGoal, advanced, now = now, texts = CoreTextsDe)
         val capped = generatePlan(twelveWeekGoal, advanced, now = now, currentCtl = 5.0, texts = CoreTextsDe)
         assertTrue(capped.weeks[0].targetKm < free.weeks[0].targetKm)
-        assertTrue(weekLoad(capped, 0) <= 1.30 * 35 + 60, "Woche 0: ${weekLoad(capped, 0)}")
+        // Exakt unter dem Deckel — die Untergrenze (eine Mindesteinheit) greift bei CTL 5 noch nicht.
+        assertTrue(weekLoad(capped, 0) <= 1.30 * 35, "Woche 0: ${weekLoad(capped, 0)}")
+        var reference = 35.0
+        for (week in capped.weeks.filter { it.kind == WeekKind.AUFBAU }) {
+            assertTrue(weekLoad(capped, week.index) <= 1.30 * reference, "Woche ${week.index}: ${weekLoad(capped, week.index)}")
+            reference = maxOf(reference, weekLoad(capped, week.index))
+        }
         // Last und Dauer passen weiterhin zusammen (keine Skalierung der Zahlen).
         for (s in capped.weeks.flatMap { it.sessions }.filter { it.intensity == SessionIntensity.GRUNDLAGE }) {
             val implied = impliedSessionIf(s) ?: continue

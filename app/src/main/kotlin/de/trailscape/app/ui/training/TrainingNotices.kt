@@ -189,21 +189,26 @@ internal fun UnconfirmedProfileNotice(asCard: Boolean, onOpenProfile: () -> Unit
 
 /**
  * Die ruhigen Zeilen unter der Zielkarte, die [PlanFeasibility] zusaetzlich
- * zur Tragfaehigkeitskarte hat: der Zeitbudget-Satz (nur wenn die Karte
- * ansteht und das Budget der Engpass ist) und der Hinweis zur Zielzeit.
- * Beide sind Information, keine Warnflaeche.
+ * zur Tragfaehigkeitskarte hat: der Zeitbudget-Satz (wenn das Budget der
+ * Engpass ist) und der Hinweis zur Zielzeit. Beide sind Information, keine
+ * Warnflaeche.
  *
- * @param feasibilityOpen die Tragfaehigkeitskarte steht an (nicht quittiert).
+ * Der Zeitbudget-Satz haengt **nicht** an der Quittierung der Karte: Die Karte
+ * nennt nur Zahlen zur Distanz, der Satz ist die einzige Stelle, die sagt,
+ * dass das eigene Zeitbudget den Plan kuerzt und wie viele Stunden es braeuchte.
+ * „Verstanden" quittiert die Warnung, nicht diese Erklaerung — sonst
+ * verschwaende sie fuer immer, obwohl der Plan weiter gekuerzt bleibt. Laut ist
+ * sie trotzdem nicht: eine Zeile in `bodySmall`, die mit dem Budget oder dem
+ * Plan von selbst verschwindet.
  */
 internal fun feasibilityNoteLines(
     plan: TrainingPlan,
     feasibility: PlanFeasibility,
-    feasibilityOpen: Boolean,
     texts: CoreTexts,
 ): List<String> = buildList {
     val budget = plan.preferences?.validWeeklyHours()
     val needed = feasibility.hoursNeededForGoal
-    if (feasibilityOpen && feasibility.budgetLimited && budget != null && needed != null) {
+    if (feasibility.budgetLimited && budget != null && needed != null) {
         add(texts.training.planBudgetLimited(budget, needed))
     }
     feasibility.targetTimeMessage?.takeIf { it.isNotBlank() }?.let { add(it) }

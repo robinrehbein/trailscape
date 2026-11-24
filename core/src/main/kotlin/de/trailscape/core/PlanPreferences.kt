@@ -20,10 +20,15 @@ import kotlinx.serialization.json.put
  *
  *  * **auf welche Tage** die Einheiten fallen ([trainingDays]): die Zahl der
  *    Einheiten ist `min(Stufenraster, Zahl der Tage)`, und die Tage werden so
- *    gewaehlt, dass sie moeglichst gleichmaessig ueber die Woche verteilt sind;
+ *    gewaehlt, dass die Qualitaet nie am Tag nach der langen Tour liegen muss
+ *    und sie moeglichst gleichmaessig ueber die Woche verteilt sind;
  *  * **wann die lange Tour** liegt ([longRideDay]);
- *  * **wie viel Zeit** eine Woche hoechstens kostet ([weeklyHours]) — wird das
- *    Budget knapp, kuerzt der Plan Umfang (nie Struktur), und
+ *  * **wie viel Zeit** eine Woche hoechstens kostet ([weeklyHours]) — in jeder
+ *    Woche, auch in Ziel- und Testwoche (ohne das Event). Wird das Budget
+ *    knapp, sinkt zuerst die Zahl der Einheiten (je Einheit mindestens
+ *    30 min), dann kuerzt der Plan: im Aufbau eines Eventplans zuerst die
+ *    Wiederholungen der Qualitaet, dann die Grundlagenfahrten, dann die
+ *    Qualitaet, die lange Tour zuletzt — nie durch Skalieren der Zahlen. Und
  *    [assessPlanFeasibility] sagt, wenn das Budget das Ziel gefaehrdet.
  *
  * Alle Felder sind optional; ein leeres Objekt verhaelt sich exakt wie „keine

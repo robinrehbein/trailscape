@@ -251,9 +251,12 @@ data class AdaptedPlan(
  * [adaptLookbackWeeks] abgeschlossenen Wochen, der +15-%-Deckel
  * ([MAX_WEEKLY_INCREASE]) gilt unveraendert. Phasen und Progressionsstufen
  * der Qualitaetseinheiten laufen ueber den ganzen Plan weiter (gezaehlt an den
- * bereits geplanten Wochen). Blockstruktur (Aufbau/Erholung/Taper/Zielwoche),
- * Wochengrenzen und das Zieldatum bleiben stehen; die Zielwoche bleibt
- * woertlich unveraendert.
+ * bereits geplanten Wochen, bei Altplaenen auch an deren Intervallen alten
+ * Formats). Der Taper rechnet mit dem Spitzenumfang der **neu gebauten**
+ * Aufbauwochen (ohne solche: mit dem tatsaechlich erreichten Umfang).
+ * Blockstruktur (Aufbau/Erholung/Taper/Zielwoche), Wochengrenzen und das
+ * Zieldatum bleiben stehen; die Zielwoche bleibt woertlich unveraendert und
+ * zaehlt fest in die Pruefung der harten Tage.
  *
  * ## Was NICHT
  * Der gespeicherte Plan wird **nicht ueberschrieben** — das Ergebnis ist ein
@@ -328,12 +331,16 @@ fun adaptPlan(
         startKm = newStartKm,
         peakKm = peakKmFor(plan.goal, newStartKm),
     )
+    // Die Zielwoche bleibt woertlich — sie wird deshalb gar nicht erst neu
+    // gebaut, sondern zaehlt mit ihren harten Einheiten fest in die Pruefung
+    // der harten Tage, damit der neu gebaute Taper zu ihr passt.
     val sessions = buildPlanWeekSessions(
         input = input,
         state = planBuildStateBefore(plan.weeks.filter { it.index < fromIndex }, newStartKm)
             .apply { holdNextBuild = true },
         fromIndex = fromIndex,
         priorWeeks = plan.weeks.map { it.sessions },
+        frozen = plan.weeks.filter { it.kind == WeekKind.ZIELWOCHE }.map { it.index }.toSet(),
     )
 
     val rebuilt = remaining.map { week ->

@@ -12,7 +12,7 @@
     <string name="science_intro">What the calculations are based on – and how well it is backed by evidence.</string>
     <!-- %1$s = source citation, e.g. "Banister 1991; Morton 1990" -->
     <string name="science_source_format">Source: %1$s</string>
-    <string name="science_footer_hint">The app gives training guidance, not medical advice. A detailed derivation with bibliography: docs/trainingswissenschaft.md in the project.</string>
+    <string name="science_footer_hint">The app gives training guidance, not medical advice. The detailed derivation with bibliography is included with the app’s source code.</string>
 
     <!-- Evidence levels (small label next to the source) -->
     <string name="science_evidence_based">evidence-based</string>
@@ -64,6 +64,6 @@
     <string name="science_recovery_week_source">Bell 2023; Mølmen 2019</string>
 
     <string name="science_taper_title">Taper before your event</string>
-    <string name="science_taper_body">In the two weeks before your event, volume drops step by step by about half. Intensity and frequency stay, so you arrive fresh but still fit.</string>
+    <string name="science_taper_body">In the two weeks before your event, volume drops step by step by about half; plans shorter than eight weeks get one week. Intensity and frequency stay, so you arrive fresh but still fit.</string>
     <string name="science_taper_source">Bosquet 2007</string>
 </resources>

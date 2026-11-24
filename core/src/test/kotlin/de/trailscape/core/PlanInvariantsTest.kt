@@ -177,7 +177,7 @@ class PlanInvariantsTest {
             assertTrue(tapers[1].targetKm <= peak * 0.55, "Taper 2 ${tapers[1].targetKm}/$peak")
             for (taper in tapers) {
                 // Mujika & Padilla 2003: Haeufigkeit hoechstens um ~20 % senken → Zahl halten.
-                assertTrue(taper.sessions.size >= lastBuild.sessions.size - 1)
+                assertEquals(lastBuild.sessions.size, taper.sessions.size, "Haeufigkeit in Woche ${taper.index}")
                 assertEquals(
                     lastBuild.sessions.count { it.intensity == SessionIntensity.HART },
                     taper.sessions.count { it.intensity == SessionIntensity.HART },
@@ -224,8 +224,8 @@ class PlanInvariantsTest {
             for (week in plan.weeks.filter { it.kind == WeekKind.ERHOLUNG }) {
                 val previous = plan.weeks.subList(0, week.index).last { it.kind == WeekKind.AUFBAU }
                 val share = week.targetKm.toDouble() / previous.targetKm
-                assertTrue(share in 0.45..0.62, "Woche ${week.index}: $share")
-                assertTrue(week.sessions.size >= previous.sessions.size - 1)
+                assertTrue(share in 0.45..0.60, "Woche ${week.index}: $share")
+                assertEquals(maxOf(2, previous.sessions.size - 1), week.sessions.size, "Woche ${week.index}")
                 val reiz = week.sessions.filter { it.textKey == SessionTextKey.WORKOUT }.map { parseWorkoutArgs(it.textArgs)!! }
                 assertEquals(1, reiz.size)
                 val buildMax = previous.sessions.filter { it.textKey == SessionTextKey.WORKOUT }

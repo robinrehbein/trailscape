@@ -243,6 +243,15 @@ Diese Rampenformel gilt für das **empfohlene Wochenziel** (und die Zielprognose
 mehr für den Trainingsplan: Dort entsteht die Last jeder Einheit aus ihrer Struktur
 (siehe 7 und 8), und die Rampe wirkt nur als Deckel.
 
+**CTL-Vorschau zum Renntag** (`projectedEventCtl`, `GoalPrognosis.kt`): Für Pläne des
+heutigen Generators wird die CTL über die geplanten Wochenlasten fortgeschrieben
+(`CTL ← CTL + (Wochenlast/7 − CTL) × ctlWeeklyResponse`). **Gespeicherte Altpläne**
+(vor dem Planumbau; erkannt an Intervallen alten Formats bzw. einem rein lockeren
+Taper ohne gespeichertes Tempo und ohne Präferenzen, `isLegacyGeneratorPlan`) tragen
+zwar auch Last-Ziele, aber aus einem hochskalierten Wochenbudget; sie behalten bewusst
+die alte Rechnung „+4 CTL je verbleibender Aufbauwoche" — sonst änderte sich ihre
+Vorschau still (Beispiel CTL 40, Einsteiger: 68 → 24).
+
 ---
 
 ## 4 Belastungsverhältnis akut/chronisch (§4.4)
@@ -428,8 +437,11 @@ bzw. 75 : 15 : 10 (pyramidal) (`intensityDistributionTarget`,
 `PerformanceManagement.kt`; nur in der Herleitung von `weeklyLoadPerHour` und in
 Kommentaren benutzt). Höchstens 2 harte Tage pro 7 Tage
 (`MAX_HARD_DAYS_PER_7D`, `app/…/TrainingInsights.kt`; im Plan `PLAN_MAX_HARD_DAYS_PER_7D`,
-`PlanWeeks.kt`), nie zwei harte Tage nebeneinander, nie ein harter Tag vor der langen
-Tour (`enforceHardDayRules`). Im Plan gibt es je Woche höchstens eine Qualitätseinheit
+`PlanWeeks.kt`), nie zwei harte Tage nebeneinander, nie ein harter Tag direkt vor oder
+direkt nach der langen Tour (`chooseQualityDays`, `enforceHardDayRules`). Trainingstage
+und Qualitätstage werden gemeinsam gewählt (`chooseTrainingDays`); lässt sich der Tag
+nach der langen Tour nicht vermeiden (z. B. nur Sa/So verfügbar), entfällt die
+Qualität, statt hart am Folgetag zu liegen. Im Plan gibt es je Woche höchstens eine Qualitätseinheit
 bei bis zu vier Einheiten, ab fünf Einheiten zwei (`maxQualityFor`, grob 80/20 nach
 Einheiten, Seiler 2010). Einsteiger fahren die ersten 3 Aufbauwochen und die
 Grundlagenphase reine Grundlage (`BEGINNER_BASE_WEEKS`), danach einen sanften
@@ -545,13 +557,44 @@ gestützt.
   stehen bleiben (`MAX_WEEKLY_INCREASE`, `MIN_WEEKLY_STEP_KM`, `rampCapKm`,
   `PlanWeeks.kt`). Nach einer deutlich verfehlten Woche bleibt die nächste Aufbauwoche
   auf dem Erreichten (`holdNextBuild`).
+  Der Deckel gilt für die **tatsächliche Wochensumme** der Einheiten (Qualität und
+  Mindestdauern eingerechnet), nicht nur für den Wunschumfang.
 - Plan, Last: Mit bekanntem CTL ist die Last einer Aufbauwoche auf das **1,30-Fache** der
   Referenz gedeckelt (`LOAD_RAMP_CAP`; Referenz = das Größere aus 7 × CTL und der
-  Last der letzten Aufbauwoche). Greift der Deckel oder das Zeitbudget, wird der
-  **Umfang** gekürzt und neu gebaut (`fitWeek`) — Zahlen werden nie skaliert. Die Last
-  jeder Einheit kommt aus ihrer Struktur: `Σ Dauer_h × IF² × 100` (`PlanWorkouts.kt`).
-  Die frühere Rechnung mit einem Wochen-Lastbudget aus der Zielrampe gibt es im Plan
-  nicht mehr.
+  Last der letzten Aufbauwoche). Die Last jeder Einheit kommt aus ihrer Struktur:
+  `Σ Dauer_h × IF² × 100` (`PlanWorkouts.kt`). Die frühere Rechnung mit einem
+  Wochen-Lastbudget aus der Zielrampe gibt es im Plan nicht mehr.
+- Plan, Zeitbudget: gilt in **jeder** Woche, auch in Ziel- und Testwoche (ohne das Event
+  und ohne eine vom Ziel festgelegte Vergleichsrunde). Die Zahl der Einheiten ist
+  höchstens Budget / 30 min.
+- Greift ein Deckel, wird **gekürzt und neu gebaut** (`fitWeek`), nie skaliert. Im
+  Aufbau eines Eventplans in dieser Reihenfolge: Wiederholungen der Qualität (× 0,75,
+  bis 2), Grundlagen-/Regenerationsfahrten (unter 30 min gestrichen), eine
+  Qualitätseinheit, zuletzt die lange Tour — sie trägt das Ziel und bekommt am Ende,
+  was vom Wunschumfang unverplant blieb (`refillLong`, höchstens bis zu ihrer
+  Untergrenze aus 11). In Fitnessblock, Erholung und Taper zuerst der Umfang, die
+  Intensität zuletzt. Im Aufbau eines Eventplans ist die lange Tour immer die längste
+  Einheit (notfalls werden dafür Wiederholungen gekürzt oder die Qualität gestrichen).
+- **Untergrenze einer Woche:** Ist nichts mehr zu kürzen, bleibt genau **eine**
+  Grundlagenfahrt mit der kürzesten Strecke, die 30 min dauert, stehen — auch wenn sie
+  über dem Lastdeckel liegt (bei CTL 1 liegt der Deckel bei 9 Punkten, 30 min Grundlage
+  kosten ~25). Eine Woche „ganz ohne" wäre kein Plan (**Faustregel**, bewusste Ausnahme).
+
+**Dauer der Einheiten** (`PlanWeeks.kt`, alles **Faustregeln** der Trainingspraxis):
+
+| Größe | Wert | Konstante |
+|---|---|---|
+| Mindestdauer jeder Einheit | 30 min (darunter lohnt das Umziehen nicht; Ein-/Ausfahren einer Qualitätseinheit allein sind 25 min) | `MIN_SESSION_MIN` |
+| „Lange Tour" heißt sie erst ab | 60 min (sonst Titel der Grundlagenfahrt) | `LONG_RIDE_MIN_MIN` |
+| Regeneration/Kompensation am Tag nach der langen Tour | ≤ 75 min | `RECOVERY_RIDE_MAX_MIN` |
+| lockere Fahrt (Erholung, Taper) | ≤ 90 min; „Kurze lockere Ausfahrt" nur bis 60 min | `EASY_RIDE_MAX_MIN`, `TAPER_SHORT_MAX_MIN` |
+| Grundlagenfahrt (GA1) neben der langen Tour | ≤ 4 h und nie länger als die lange Tour | `ENDURANCE_RIDE_MAX_MIN` |
+| lange Tour eines Eventplans | ≤ 80 % der Zieldistanz, nie länger als das Event | `LONG_RIDE_MAX_GOAL_SHARE` |
+| lange Tour eines Fitnessblocks | ≤ 4 h | `FITNESS_LONG_RIDE_MAX_MIN` |
+| lange Tour in Taper- und Erholungswoche | ≤ 4 h (zusätzlich zum Anteil an der Aufbau-Tour) | `TAPER_LONG_RIDE_MAX_MIN` |
+
+Was keine Fahrt im Rahmen dieser Grenzen trägt, plant der Plan **nicht** ein, statt es
+auf eine Einheit zu kippen; die Machbarkeitsprüfung (11) sagt dann, was fehlt.
 - Wochenziel ohne Plan: **+8 %**, höchstens +25 km (`aufbauFactor`, `aufbauMaxJumpKm`,
   `WeeklyGoal.kt`).
 - Warnung, wenn eine Woche **> 130 %** des Vierwochenmittels liegt (`assessDeload`),
@@ -585,11 +628,12 @@ vermutlich toleranter; Daten dazu fehlen.
 
 - Plan: jede **4. Woche Erholung** (3:1), außer sie wäre die letzte Aufbauwoche vor
   dem Taper (`planWeekKinds`, `PlanWeeks.kt`). Umfang **55 %** der letzten Aufbauwoche
-  (−45 %, `RECOVERY_FACTOR`; Mitte des −40-bis-50-%-Korridors von `assessDeload`).
-  Die Zahl der Einheiten sinkt um höchstens eine (mindestens zwei); die letzte
-  Qualitätseinheit bleibt mit halber Wiederholungszahl erhalten („Intensität bleibt"),
-  die lange Tour ist verkürzt. Vor dem Test eines Fitnessblocks ist eine Erholungswoche
-  erwünscht.
+  (−45 %, `RECOVERY_FACTOR`; Mitte des −40-bis-50-%-Korridors von `assessDeload`) —
+  als Deckel auf die tatsächliche Wochensumme. Die Zahl der Einheiten sinkt um genau
+  eine (mindestens zwei); die letzte Qualitätseinheit bleibt mit halber Wiederholungszahl
+  erhalten („Intensität bleibt"), die lange Tour ist auf 70 % der letzten Aufbau-Tour und
+  höchstens 4 h verkürzt (`RECOVERY_LONG_SHARE`). Vor dem Test eines Fitnessblocks ist
+  eine Erholungswoche erwünscht.
 - Deload-Empfehlung (`assessDeload`, `Readiness.kt`, §6.2/§8.2): ausgelöst durch
   TSB < −30 an 3 Tagen in Folge, Rampe > 8 an drei Wochenpunkten oder Readiness < 40
   an ≥ 3 von 7 Tagen. Empfehlung: **Volumen −40 bis −50 %, Intensität halten**
@@ -627,15 +671,24 @@ vermutlich toleranter; Daten dazu fehlen.
 
 - Ab **8 Wochen** Laufzeit zwei Taperwochen mit **65 %** und **45 %** des tatsächlich
   erreichten Spitzenumfangs (−35 % / −55 %), kürzere Pläne eine Taperwoche mit 55 %
-  (Faustregel, keine Studienempfehlung).
+  (Faustregel, keine Studienempfehlung). „Erreicht" heißt: der größte Umfang einer
+  tatsächlich gebauten Aufbauwoche — drücken Zeitbudget oder Lastdeckel den Aufbau unter
+  den Startumfang, gilt dieser niedrigere Wert (ohne Aufbauwoche der Startumfang; in
+  `adaptPlan` nur die neu gebauten Aufbauwochen).
 - **Intensität gehalten:** Die letzte Qualitätseinheit bleibt mit gekürzter
   Wiederholungszahl (60 % bzw. 50 %, mindestens 2) erhalten.
 - **Häufigkeit gehalten:** Die Zahl der Einheiten bleibt wie in der letzten
-  Aufbauwoche; gekürzt wird jede Einheit, nicht ihre Zahl. Die lange Tour ist auf 60 %
-  bzw. 45 % (eine Taperwoche: 50 %) der längsten Aufbau-Tour begrenzt.
+  Aufbauwoche; gekürzt wird jede Einheit, nicht ihre Zahl (Ausnahmen: Zeitbudget und
+  die Tage direkt vor einem Montags-/Dienstagsevent). Die lange Tour ist auf 60 %
+  bzw. 45 % (eine Taperwoche: 50 %) der längsten Aufbau-Tour, auf 80 % der
+  Zieldistanz und auf 4 h begrenzt; lockere Fahrten auf 90 min.
 - **Zielwoche:** eine kurze Qualitätseinheit mit höchstens 2 Wiederholungen 3–5 Tage
-  vorher, bei großem Raster eine lockere Ausfahrt (50 min), 1–2 Tage vorher eine
-  Aktivierung (40 min), dann das Event.
+  vorher (nie am Montag nach einer langen oder harten Sonntagsfahrt der Vorwoche), bei
+  großem Raster eine lockere Ausfahrt (50 min), 1–2 Tage vorher eine Aktivierung
+  (40 min), dann das Event. Das Zeitbudget gilt auch hier: zuerst fällt die lockere
+  Ausfahrt, dann die Vorbelastung. Vor einem **Montagsevent** liegt die Aktivierung am
+  Sonntag der letzten Taperwoche; die beiden Tage davor tragen weder lange Tour noch
+  Qualität (vor einem Dienstagsevent der Sonntag).
 
 **Verifizierte Kernzahlen:**
 
@@ -668,7 +721,11 @@ nur eine Taperwoche und weichen damit von den zwei Wochen ab.
 Tour wird in jeder Aufbauwoche auf mindestens `(0,6 + 0,05) × Zieldistanz` gezogen,
 aber höchstens auf die Hälfte des Wochenumfangs und 70 % des nach den Qualitäts-
 einheiten verteilbaren Umfangs (`LONG_RIDE_FLOOR_MARGIN`, `LONG_RIDE_MAX_WEEK_SHARE`,
-`LONG_RIDE_MAX_SHARE`). Reicht der Umfang nicht, sagt `assessPlanFeasibility` das ehrlich
+`LONG_RIDE_MAX_SHARE`); was die Untergrenze braucht, wird anteilig von den übrigen
+Grundlagenfahrten genommen, und eine Fahrt, die dadurch unter 30 min fiele, wird
+gestrichen. Nach oben ist die lange Tour auf **80 %** der Zieldistanz begrenzt
+(`LONG_RIDE_MAX_GOAL_SHARE`, Faustregel: Oberkante des Praxis-Korridors plus Luft) und
+damit nie länger als das Event. Reicht der Umfang nicht, sagt `assessPlanFeasibility` das ehrlich
 und schlägt eine machbare Distanz (auf 5 km abgerundet) bzw. Wochenzahl vor; ein
 Zeitbudget als Engpass wird getrennt benannt.
 
@@ -689,10 +746,15 @@ Mindestanteil wurde nicht gefunden. Der Wert ist als Erfahrungswert gekennzeichn
   spezifischen Abschnitt immer (`racePaceSteps`, `RACE_PACE_IF`; Faustregel).
 - **Fitnessblock** (`GoalType.FITNESS`, „schneller werden"): 4–16 Wochen
   (`FITNESS_MIN_WEEKS`, `FITNESS_MAX_WEEKS`), Umfang wächst höchstens auf das 1,2-Fache
-  (`FITNESS_PEAK_FACTOR`, Faustregel), 3:1 bis zur **Testwoche**: 20-min-Test
-  (FTP ≈ 95 % des 20-min-Mittels, Allen & Coggan 2019, siehe 12) und eine
-  Vergleichsrunde, beide ohne Event-Markierung. Der Plan hat keine Zieldistanz und
-  trägt immer.
+  (`FITNESS_PEAK_FACTOR`, Faustregel), 3:1 bis zur **Testwoche**. Der Block endet am
+  Zieltag mit der **Vergleichsrunde** (immer an diesem Tag, wie ein Event); der
+  **20-min-Test** (FTP ≈ 95 % des 20-min-Mittels, Allen & Coggan 2019, siehe 12) liegt an
+  einem Trainingstag mindestens zwei, bevorzugt drei Tage davor. Nichts liegt nach dem
+  Zieltag. Gibt es dafür keinen Trainingstag (z. B. nur Sa/So erlaubt) oder passt der
+  Test nicht ins Zeitbudget, entfällt er — `fitnessTestWeekContents` sagt, was die
+  Testwoche enthält. Beide sind ohne Event-Markierung. Für den Test selbst gibt der Plan
+  **keinen** Zielbereich vor (ein Bereich wäre bei einem Maximaltest ein Deckel; nur das
+  Ein-/Ausfahren hat Z2). Der Plan hat keine Zieldistanz und trägt immer.
 
 ---
 
