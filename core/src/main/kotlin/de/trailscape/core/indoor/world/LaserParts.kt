@@ -187,8 +187,9 @@ internal class LaserVegetation(
 /**
  * Ein Baum aus dem nDOM als [TreeModels.Spec]: Farbe und Zufall wie bisher
  * ([base]), Hoehe und Kronenbreite gemessen, die Art aus Hoehe und
- * Kronenform: schmale Krone (Radius unter 13 % der Hoehe) wird in Nadel- und
- * Mischwald ([conifer] ≥ 0,5) zur Fichte, sonst zur schlanken Pappelform.
+ * Kronenform: sehr schmale Krone (Radius unter 11 % der Hoehe) wird im
+ * Nadelwald ([conifer] ≥ 0,6) zur Fichte, schmale (unter 13 %) sonst zur
+ * schlanken Pappelform.
  * Die Kronenradien der Modelle sind etwa `k · Hoehe · width` (k je Art aus
  * [TreeModels]); daraus der Breitenfaktor.
  *
@@ -198,7 +199,7 @@ internal class LaserVegetation(
  * [CLEARANCE_M] ueber der Fahrbahn an (Fichte fast am Boden, Laubbaum bei
  * 0,3 · Hoehe; 6 m: Kamera 2,5 m hoch, darueber wirkte ein tiefes Kronendach
  * im Einschnitt wie ein Tunnel), darf sie nicht in den Streifen Fahrbahn + [CLEAR_STRIP_M]
- * ragen: Die Breite wird darauf begrenzt; wuerde der Baum dabei schmaler als
+ * ragen, hoeher ansetzende hoechstens [MAX_OVERHANG_M] weit: Die Breite wird darauf begrenzt; wuerde der Baum dabei schmaler als
  * halb so breit wie sein Modell, entfaellt er. `null` auch unter 3 m Hoehe.
  */
 internal fun laserTreeSpec(
@@ -212,7 +213,7 @@ internal fun laserTreeSpec(
     if (h < LaserData.TREE_MIN_HEIGHT_M) return null
     val slim = t.crownRadiusM / h < 0.13
     var species = when {
-        slim && conifer >= 0.5 -> TreeModels.Species.CONIFER
+        t.crownRadiusM / h < 0.11 && conifer >= 0.6 -> TreeModels.Species.CONIFER
         slim -> TreeModels.Species.TALL
         base.species == TreeModels.Species.CONIFER && conifer >= 0.5 -> TreeModels.Species.CONIFER
         else -> TreeModels.Species.BROAD
@@ -227,8 +228,11 @@ internal fun laserTreeSpec(
     }
     var width = (t.crownRadiusM / (k * h)).coerceIn(0.6, 1.5)
     val free = roomM - CLEAR_STRIP_M
-    if (c * h + baseAboveRoadM < CLEARANCE_M && k * h * width > free) {
-        width = free / (k * h)
+    // Hoch ansetzende Kronen duerfen ueberhaengen, aber hoechstens [MAX_OVERHANG_M] — sonst schliesst sich
+    // im Einschnitt ein Kronendach ueber dem Weg, und die Fahrt wird ein dunkler Tunnel.
+    val limit = if (c * h + baseAboveRoadM < CLEARANCE_M) free else free + MAX_OVERHANG_M
+    if (k * h * width > limit) {
+        width = limit / (k * h)
         if (width < 0.5) return null
     }
     return TreeModels.Spec(species, h, width, base.tint, base.seed, base.turn, base.pale)
@@ -236,6 +240,9 @@ internal fun laserTreeSpec(
 
 /** Lichtraum ueber der Fahrbahn: darunter ragt keine Krone in den Streifen der Strecke. */
 internal const val CLEARANCE_M = 6.0
+
+/** So weit darf eine hoch ansetzende Krone ueber den Streifen der Strecke ragen. */
+internal const val MAX_OVERHANG_M = 1.0
 
 /** Zur Fahrbahn zaehlt fuer den Lichtraum noch dieser Streifen neben der Kante. */
 internal const val CLEAR_STRIP_M = 0.5

@@ -297,3 +297,16 @@ AerialSource(
   bezeichnen.“ Dass genau dieser WMS (`…_OpenData/guest`) gemeint ist, schließe
   ich aus dem Dienstnamen; die Seite selbst nennt als WMS nur den
   INSPIRE-Dienst `INSPIRE_LVermGeo_ATKIS_OI`.
+
+## NRW-Katalogstrecken mit Laserdaten (24.11.2026)
+
+`kahler-asten`, `balkantrasse` (neu) und `altenberg` (neu) liegen im
+Register-Rechteck von NRW und nehmen das Luftbild `nw` (`www.wms.nrw.de`,
+dl-de/zero-2-0, „Luftbild: © Geobasis NRW“) — kein neuer Luftbild-Dienst.
+Mit `"laser": true` kommt im Manifest eine zweite Quellenangabe dazu
+(Art `ELEVATION`): „Gelände, Bewuchs und Gebäude: © Geobasis NRW (DGM1,
+DOM1, 3D-Gebäudemodell LoD2)“, dl-de/zero-2-0. Neue Hosts beim Bau (nicht in
+der App): `www.wcs.nrw.de`, `www.opengeodata.nrw.de`. Hinweis: Die
+Kandidatenliste von `catalog-build` nennt bei NRW-Strecken auch
+„Frankreich“, weil dessen grobes Rechteck bis 51,15° N und 9,6° O reicht;
+gebaut und genannt wird nur, was Bild liefert (Leerbild-Erkennung).
