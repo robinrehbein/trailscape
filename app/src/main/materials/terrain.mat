@@ -74,6 +74,10 @@ fragment {
         // von oben in den groben Stufen) bleibt unveraendert.
         float warm = materialParams.forestWarmth * wts.z * (1.0 - smoothstep(materialParams.warmRange * 0.6, materialParams.warmRange, dist));
         base = mix(base, vec3(lum) * vec3(1.42, 1.0, 0.62) * 1.08, warm);
+        // Dunkles Blaugruen (Winter-Luftbild, Schatten im Luftbild) nah am Fahrer zu Gruenbraun
+        float cool = smoothstep(0.0, 0.22, (aerial.b - aerial.r) * inv) * (1.0 - smoothstep(0.06, 0.16, lum));
+        base = mix(base, vec3(lum) * vec3(1.12, 1.06, 0.66) * 1.05,
+                   0.65 * cool * (1.0 - smoothstep(materialParams.warmRange * 0.6, materialParams.warmRange, dist)));
 
         vec3 nTs = vec3(0.0, 0.0, 1.0);
         float range = materialParams.detailRange;

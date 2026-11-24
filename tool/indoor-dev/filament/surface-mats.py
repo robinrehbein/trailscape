@@ -82,6 +82,10 @@ fragment {{
         float wf = cls0.z / max(cls0.x + cls0.y + cls0.z + cls0.w, 1e-3);
         float lumc = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
         c.rgb = mix(c.rgb, vec3(lumc) * vec3(1.42, 1.0, 0.62) * 1.08, materialParams.forestWarmth * wf);
+        // Dunkles Blaugruen (an das Winter-Luftbild angeglichene Raender) zu Gruenbraun
+        float mxc = max(c.r, max(c.g, c.b));
+        float cool = smoothstep(0.0, 0.22, (c.b - c.r) / max(mxc, 0.004)) * (1.0 - smoothstep(0.06, 0.16, lumc));
+        c.rgb = mix(c.rgb, vec3(lumc) * vec3(1.12, 1.06, 0.66) * 1.05, 0.65 * cool * step(0.001, materialParams.forestWarmth));
 
         vec3 nTs = vec3(0.0, 0.0, 1.0);
         vec4 cls = materialParams.detailClass;
