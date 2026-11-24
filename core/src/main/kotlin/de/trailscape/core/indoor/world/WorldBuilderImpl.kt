@@ -217,13 +217,45 @@ internal class WorldBuilderImpl(
 
     override fun buildTestWorld(outDir: File, quality: IndoorQuality): WorldManifest {
         val scene = TestWorld.create()
-        val route = scene.route
-        val origin = parts.origin(route, scene::heightAtLatLon)
-        val raw = { e: Double, n: Double -> scene.heightAtLatLon(origin.toLat(n), origin.toLon(e)) - origin.eleM }
-        val track = parts.fitTrack(route, origin, raw, scene::isBridge)
+        return buildSynthetic(
+            route = scene.route,
+            heightAtLatLon = scene::heightAtLatLon,
+            isBridge = scene::isBridge,
+            mapOf = scene::mapData,
+            attribution = listOf(TestWorld.ATTRIBUTION),
+            worldId = parts.worldId(scene.route, quality),
+            quality = quality,
+            outDir = outDir,
+            listener = object : WorldBuildListener {
+                override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) = Unit
+            },
+            createdAtMs = 0L,
+        )
+    }
+
+    /**
+     * Bau aus einer erfundenen Landschaft ohne Netz (Testwelt, generierte
+     * Welten): Gelaende als Funktion, Kartendaten in den Strukturen der
+     * Vektorkacheln. Danach derselbe Kachelbau wie mit echten Geodaten.
+     */
+    internal fun buildSynthetic(
+        route: IndoorRoute,
+        heightAtLatLon: (Double, Double) -> Double,
+        isBridge: (Double) -> Boolean,
+        mapOf: (GeoOrigin) -> MapData,
+        attribution: List<WorldAttribution>,
+        worldId: String,
+        quality: IndoorQuality,
+        outDir: File,
+        listener: WorldBuildListener,
+        createdAtMs: Long,
+    ): WorldManifest {
+        val origin = parts.origin(route, heightAtLatLon)
+        val raw = { e: Double, n: Double -> heightAtLatLon(origin.toLat(n), origin.toLon(e)) - origin.eleM }
+        val track = parts.fitTrack(route, origin, raw, isBridge)
         val planned = parts.planTiles(TrackLine(track), track.loop, quality)
         val inputs = WorldInputs(
-            worldId = parts.worldId(route, quality),
+            worldId = worldId,
             quality = quality,
             routeId = route.id,
             routeName = route.name,
@@ -231,17 +263,15 @@ internal class WorldBuilderImpl(
             track = track,
             planned = planned,
             rawHeightAt = raw,
-            map = scene.mapData(origin),
+            map = mapOf(origin),
             degradedOf = { false },
             aerial = null,
             aerialSources = emptyList(),
-            baseAttribution = listOf(TestWorld.ATTRIBUTION),
-            createdAtMs = 0L,
+            baseAttribution = attribution,
+            createdAtMs = createdAtMs,
         )
         outDir.mkdirs()
-        return assemble(inputs, outDir, object : WorldBuildListener {
-            override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) = Unit
-        })
+        return assemble(inputs, outDir, listener)
     }
 
     // -----------------------------------------------------------------------

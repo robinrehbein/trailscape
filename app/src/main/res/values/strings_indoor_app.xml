@@ -390,4 +390,68 @@
     <string name="indoor_app_start_earlier_cd">100 m früher starten</string>
     <string name="indoor_app_start_later_cd">100 m später starten</string>
     <string name="indoor_app_start_profile_cd">Startpunkt bei Kilometer %1$s von %2$s. Zum Verschieben auf dem Profil ziehen oder tippen.</string>
+    <!-- IndoorDayCard.kt: Einheit des Tages -->
+    <string name="indoor_app_day_eyebrow">Einheit des Tages</string>
+    <string name="indoor_app_day_loading">Suche eine passende Strecke …</string>
+    <string name="indoor_app_day_rest_title">Heute ist Ruhetag</string>
+    <string name="indoor_app_day_rest_body">Deine Tagesform rät zur Pause – auf der Rolle steht heute nichts an.</string>
+    <string name="indoor_app_day_rest_body_planned">Im Plan stand „%1$s“. Deine Tagesform rät heute zur Pause, deshalb gibt es keine Einheit auf der Rolle.</string>
+    <string name="indoor_app_day_open_free_action">Trotzdem frei fahren</string>
+    <string name="indoor_app_day_event_title">Heute ist dein Event</string>
+    <string name="indoor_app_day_event_body">Das Event hat eine eigene Strecke – dafür gibt es keine Einheit auf der Rolle.</string>
+    <string name="indoor_app_day_meta">%1$d min · der Trainer hält die Zielleistung</string>
+    <string name="indoor_app_day_reduced_meta">%1$d statt %2$d min · an deine Tagesform angepasst</string>
+    <string name="indoor_app_day_easy_meta">Heute steht keine Einheit im Plan – %1$d min locker und flach</string>
+    <string name="indoor_app_day_easy_title">Lockere Runde</string>
+    <string name="indoor_app_day_plan_name">Neue Runde ab deinem Startpunkt</string>
+    <string name="indoor_app_day_none_found">Keine Strecke mit Höhenprofil gefunden. Wähle unten selbst eine Strecke.</string>
+    <string name="indoor_app_day_reason_km">%1$s km</string>
+    <string name="indoor_app_day_reason_minutes">%1$d min</string>
+    <string name="indoor_app_day_reason_minutes_range">%1$d–%2$d min</string>
+    <plurals name="indoor_app_day_reason_climbs_count">
+        <item quantity="one">%1$d Anstieg von %2$s für deine %3$d × %4$d min</item>
+        <item quantity="other">%1$d Anstiege von %2$s für deine %3$d × %4$d min</item>
+    </plurals>
+    <string name="indoor_app_day_reason_no_climbs">kaum Anstiege – die Intervalle fährst du im Flachen</string>
+    <string name="indoor_app_day_reason_rolling">flach bis wellig, keine langen steilen Stücke</string>
+    <string name="indoor_app_day_reason_flat">flach</string>
+    <string name="indoor_app_day_reason_mostly_flat">überwiegend flach</string>
+    <plurals name="indoor_app_day_reason_laps_count">
+        <item quantity="one">%1$d Runde</item>
+        <item quantity="other">%1$d Runden</item>
+    </plurals>
+    <string name="indoor_app_day_reason_start">Start bei km %1$s</string>
+    <string name="indoor_app_day_reason_ends_early">Strecke endet %1$d min vor der Einheit</string>
+    <string name="indoor_app_day_reason_estimated">Profil geschätzt</string>
+    <string name="indoor_app_day_plan_climbs">neue Runde mit Anstiegen</string>
+    <string name="indoor_app_day_plan_rolling">neue Runde, flach bis wellig</string>
+    <string name="indoor_app_day_plan_flat">neue flache Runde</string>
+    <string name="indoor_app_day_world_ready">Welt liegt bereit</string>
+    <string name="indoor_app_day_world_download">Welt laden: %1$s</string>
+    <string name="indoor_app_day_world_download_unknown">Welt laden</string>
+    <string name="indoor_app_day_world_build">Welt bauen: etwa %1$d min</string>
+    <string name="indoor_app_day_world_plan">Runde planen, dann Welt bauen: etwa %1$d min</string>
+    <string name="indoor_app_day_ride_action">Fahren</string>
+    <string name="indoor_app_day_download_action">Laden und fahren</string>
+    <string name="indoor_app_day_build_action">Welt bauen</string>
+    <string name="indoor_app_day_plan_action">Runde planen</string>
+    <string name="indoor_app_day_next_action">Andere Strecke (%1$d/%2$d)</string>
+    <string name="indoor_app_day_path_real">Echte Strecke</string>
+    <string name="indoor_app_day_path_generated">Generierte Welt</string>
+    <string name="indoor_app_day_generated_title">Erfundene Landschaft genau zur Einheit</string>
+    <string name="indoor_app_day_generated_name">Generierte Welt · %1$s</string>
+    <plurals name="indoor_app_day_generated_climbs_count">
+        <item quantity="one">%1$d Anstieg genau unter deinen %2$d × %3$d min, Pausen leicht bergab</item>
+        <item quantity="other">%1$d Anstiege genau unter deinen %2$d × %3$d min, Pausen leicht bergab</item>
+    </plurals>
+    <string name="indoor_app_day_generated_ends">endet mit der Einheit</string>
+    <string name="indoor_app_day_generated_build">Welt bauen ohne Netz: etwa %1$d min</string>
+
+    <!-- IndoorRideScreen.kt: Ende der Einheit -->
+    <string name="indoor_app_day_end_done_title">Einheit geschafft</string>
+    <string name="indoor_app_day_end_done_body">Der Trainer hält jetzt die Ausfahrleistung. Fahr locker aus oder beende die Fahrt.</string>
+    <string name="indoor_app_day_end_cooldown_action">Ausfahren</string>
+    <string name="indoor_app_day_end_finish_action">Beenden</string>
+    <string name="indoor_app_day_end_route_title">Strecke zu Ende</string>
+    <string name="indoor_app_day_end_route_body">Von der Einheit fehlen noch %1$d min. Diese Strecke ist keine Runde – beende die Fahrt hier.</string>
 </resources>

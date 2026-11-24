@@ -99,6 +99,19 @@ sealed interface IndoorRouteOption {
     ) : IndoorRouteOption {
         override val key: String get() = "catalog:$catalogId"
     }
+
+    /**
+     * Die generierte Welt zur Einheit des Tages (docs/indoor/app.md): eine
+     * erfundene Landschaft aus dem Zielprofil [profile], gebaut auf dem Geraet
+     * ohne Netz. Nicht in der Liste, nur ueber die Karte „Einheit des Tages".
+     */
+    data class Generated(
+        val profile: de.trailscape.core.indoor.generated.GeneratedProfile,
+        val name: String,
+    ) : IndoorRouteOption {
+        override val key: String get() = "generated:${java.lang.Long.toHexString(profile.seed)}"
+        val distanceKm: Double get() = profile.lengthM / 1000.0
+    }
 }
 
 /** Die beiden Bereiche der Streckenwahl. */
@@ -403,6 +416,8 @@ data class IndoorRideUi(
     val runtimeProblem: IndoorProblem? = null,
     /** Startpunkt waehlen; `null` = gerade nicht moeglich (es wird gefahren). */
     val start: IndoorStartUi? = null,
+    /** Einheit oder Strecke ist zu Ende, die andere nicht ([IndoorDayEndUi]); `null` = nichts. */
+    val dayEnd: IndoorDayEndUi? = null,
 )
 
 // ---------------------------------------------------------------------------

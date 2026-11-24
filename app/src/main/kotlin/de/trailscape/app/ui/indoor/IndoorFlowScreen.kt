@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,7 +32,9 @@ import de.trailscape.app.indoor.IndoorParts
 import de.trailscape.app.indoor.indoorCatching
 import de.trailscape.app.indoor.render.WorldSurface
 import de.trailscape.app.sensors.indoor.IndoorDevicesSection
+import de.trailscape.app.data.AppServices
 import de.trailscape.app.ui.AppViewModel
+import de.trailscape.app.ui.decideToday
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.core.TrainingSession
 import de.trailscape.core.i18n.CoreTexts
@@ -78,12 +81,34 @@ fun IndoorFlowScreen(
                 profile = { appViewModel.profile.value },
                 plan = { appViewModel.plan.value },
                 onRideSaved = appViewModel::onIndoorRideSaved,
+                // Dieselbe Tagesentscheidung wie auf „Heute" (decideToday).
+                today = {
+                    runCatching {
+                        decideToday(
+                            insights = appViewModel.insights.value,
+                            plan = appViewModel.plan.value,
+                            rides = appViewModel.rides.value,
+                            nowMs = System.currentTimeMillis(),
+                            texts = AppServices.coreTexts(),
+                        ).route
+                    }.getOrNull()
+                },
             )
         },
     )
     // Nach einer Drehung ist es dieselbe AppViewModel-Instanz; trotzdem immer
     // auf die aktuelle zeigen, damit nie eine alte Huelle benachrichtigt wird.
-    SideEffect { vm.onRideSaved = appViewModel::onIndoorRideSaved }
+    SideEffect {
+        vm.onRideSaved = appViewModel::onIndoorRideSaved
+        // „Runde planen" der Einheit des Tages: Routensuche auf der Karte mit
+        // dem Ziel der Einheit; der Indoor-Ablauf wird dafuer verlassen.
+        vm.onPlanRoute = { target ->
+            onExit()
+            appViewModel.requestRouteGeneration(target)
+        }
+    }
+    // Von „Heute" gewaehlter Vorschlag der Einheit des Tages.
+    LaunchedEffect(vm) { appViewModel.consumeIndoorDayPick()?.let(vm::preferDaySuggestion) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, vm) {
@@ -128,9 +153,15 @@ private fun PairStage(vm: IndoorViewModel, onExit: () -> Unit, onOpenDiagnostics
 private fun RouteStage(vm: IndoorViewModel) {
     val ui by vm.route.collectAsStateWithLifecycle()
     val catalog by vm.catalog.collectAsStateWithLifecycle()
+    val day by vm.day.collectAsStateWithLifecycle()
     BackHandler { vm.back() }
     IndoorRouteScreen(
         ui = ui,
+        day = day,
+        onDayRide = { vm.rideDaySuggestion() },
+        onDayNext = vm::nextDaySuggestion,
+        onDayGenerated = vm::rideDayGenerated,
+        onDayPath = vm::setDayPath,
         onSelect = vm::selectRoute,
         onModeChange = vm::setMode,
         onGhostChange = vm::setGhost,
@@ -219,6 +250,7 @@ private fun RideStage(vm: IndoorViewModel) {
         onMoveStart = vm::moveStart,
         onNudgeStart = vm::nudgeStart,
         onReleaseStart = vm::releaseStart,
+        onDismissDayEnd = vm::dismissDayEnd,
     )
 
     if (askLeave) {

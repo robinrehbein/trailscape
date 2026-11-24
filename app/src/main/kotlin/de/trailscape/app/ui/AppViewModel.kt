@@ -370,6 +370,22 @@ class AppViewModel(
         _indoorRequest.value = null
     }
 
+    /** Auf „Heute" gewaehlter Vorschlag der Einheit des Tages (Schluessel der Streckenwahl). */
+    private var indoorDayPick: String? = null
+
+    /**
+     * „Einheit des Tages fahren" auf „Heute": oeffnet den Indoor-Ablauf, und
+     * der Schritt Strecke zeigt den gewaehlten Vorschlag [key] vorausgewaehlt
+     * (docs/indoor/app.md, „Einheit des Tages").
+     */
+    fun requestIndoorDay(key: String?) {
+        indoorDayPick = key
+        requestIndoor(IndoorDestination.FLOW)
+    }
+
+    /** Holt den Vorschlag ab (einmal; der Indoor-Ablauf ruft es beim Anlegen). */
+    fun consumeIndoorDayPick(): String? = indoorDayPick.also { indoorDayPick = null }
+
     // -------------------------------------------------------------------------
     // Trainingsempfehlung → Routenziel
     // -------------------------------------------------------------------------

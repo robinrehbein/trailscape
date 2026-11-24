@@ -1052,7 +1052,7 @@ function updateFog() {
   camera.far = visibility * 1.6;
 }
 
-const CAMERAS = ['chase', 'handlebar', 'drone'];
+const CAMERAS = ['chase', 'handlebar', 'drone', 'overview'];
 
 /** Stellt die Kamera fuer die aktuelle Stelle; liefert den Punkt, auf den sie blickt. */
 function updateCamera(placement) {
@@ -1083,6 +1083,13 @@ function updateCamera(placement) {
     pos.y = Math.max(pos.y, placement.u + 1.0);
     fov = 62;
     near = 0.3;
+  } else if (view.camera === 'overview') {
+    // Uebersicht von hoch oben (fuer Belegbilder ganzer Landschaften)
+    pos.copy(rider).addScaledVector(dir, -700).addScaledVector(left, 300).setY(rider.y + 650);
+    const ahead = fwd(d + 500);
+    toScene(ahead.e, ahead.n, ahead.u, look);
+    fov = 55;
+    near = 10;
   } else if (view.camera === 'drone') {
     pos.copy(rider).addScaledVector(dir, -125).addScaledVector(left, 55).setY(rider.y + 85);
     const ahead = fwd(d + 70);

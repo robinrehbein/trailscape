@@ -85,7 +85,7 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/8` (vorher `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/9` (vorher `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
 Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
@@ -550,6 +550,20 @@ den Auslauf des Grases, 6 Paare unter 4 mm) — offen.
 im Bogen hinter dem Bordstein); an der Wendeschleife Altenberg kurz liegen die
 Fahrbahnen von Hin- und Rückfahrt mit sichtbarer Kante übereinander (dünne
 Linie); die Mulde ist hinter dem Grasstreifen über 2–4 m noch zu sehen.
+
+### Letzte Runde: Flimmern an dicht benachbarten Einmündungen, Wendeschleife
+
+Bildpaare: `docs/indoor/bilder/junctions/runde3-*` (vorher = `af62b95`).
+
+| # | Mangel | Ursache (gefunden mit `overlaps --tol-cm` und Einzelstellen-Ausgabe) | Stand |
+|---|---|---|---|
+| 1 | Balkantrasse: Paare am Streckenrand unter 4 mm 5 → 15 nach den Ecken | (a) Die Sperrfläche einer Ecke war ein Fächer vom Eckpunkt zur **Hinterkante** des Bordsteins. Am Bogenende ist die Hinterkante senkrecht zur Straßenkante versetzt; der Strahl vom Eckpunkt lief am Bordstein vorbei, dort blieb der Grasauslauf 1–4 mm unter dem Bordstein (Stelle z. B. Balkantrasse e 1591,4 / n 1345,1, Kachel `L0_6_5`). (b) Eckflächen zweier dicht benachbarter Einmündungen überlagerten sich und ragten in Kurven Zentimeter über die gekrümmte Fahrbahnkante. (c) Auf der Innenseite enger Kurven drückt `limitOffset` die Querschnitte zusammen, Gras, Auslauf und Gehweg fielen übereinander | **behoben durch Aneinanderstoßen:** (a) Sperrfläche = Fächer bis zum Bogen **plus** Bordsteinstreifen als Vierecke zwischen Bogen und Hinterkante. (b) Jede Ecke wird an der Fahrbahn der Strecke, an den Bändern anderer Straßen und an bereits gezeichneten Ecken abgeschnitten (Budget zählt die entstehenden Dreiecke). (c) Wo die Innenseite zusammengedrückt ist, entfällt der Grasstreifen für dieses Stück. Balkantrasse **15 → 3** Paare unter 4 mm (unter 1 cm 42 → 18), Altenberg kurz **16 → 7** (63 → 27) |
+| 2 | Dünne Linie an der Wendeschleife (Altenberg kurz, km 1,5) | Fahrbahnstücke derselben Strecke, 5–18 Laufmeter auseinander, überlagerten sich in der engen Kehre (Radius 2–5 m) mit 2–5 mm Abstand — das Fenster „eigene Fahrbahn sperrt nicht" war 15 m, die Sperrflächen nur aus Sehnen je halber Probe | **behoben:** Fahrbahn, Belagswechsel, Fransen und Linien werden an **früheren** Streckenteilen abgeschnitten (der frühere gewinnt), ab 3 Laufmetern Abstand (`MASK_OWN_ROAD_M`), mit 8 Sehnen je Probe. Selbstüberlagerung der Fahrbahn in Kachel `L0_0_0` 39 → 18 Dreieckspaare; die Linie ist im Bild weg. **Übrig:** Faltungen genau im Scheitel der Kehre (Radius 2–3 m), wo `limitOffset` die Innenkante innerhalb **eines** Stücks zusammenfaltet — Abschneiden hilft dort nicht |
+| 3 | Gehweg läuft an der Ecke nicht in die Nebenstraße weiter | — | **nicht umgesetzt** (aus Zeitgründen; der Gehweg endet im Bogen hinter dem Bordstein) |
+
+Messwerte (`-Xmx256m`, vorher = `af62b95` bzw. Zahlen der Nachrunde): Altenberg kurz 467 137 Dreiecke,
+18,3 MB/km, Heap nach GC max 214 MB; Balkantrasse 448 861 Dreiecke, 19,3 MB/km (vorher 19,2), Heap 229 MB.
+Vertex-Deckung < 1 weiter 0.
 
 ## Abweichungen vom Vertrag
 
