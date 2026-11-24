@@ -129,7 +129,13 @@ private class ContentKey(val bytes: ByteArray) {
     override fun equals(other: Any?): Boolean = other is ContentKey && other.hash == hash && other.bytes.contentEquals(bytes)
 }
 
-internal class GlbScene {
+internal class GlbScene(
+    /**
+     * `TEXCOORD_0` als normierte `UNSIGNED_SHORT`, wo alle UV in [0, 1] liegen (Kacheln). Die
+     * eingecheckten Modelle (Fahrer, Geist) bleiben bei float, damit sie sich nicht aendern.
+     */
+    private val compactUv: Boolean = false,
+) {
     private class ImageEntry(val bufferView: Int, val mime: String, val width: Int, val height: Int)
     private class NodeEntry(
         val name: String,
@@ -291,7 +297,7 @@ internal class GlbScene {
         // "TEXCOORD_n: float | unsigned byte normalized | unsigned short normalized"): 4 statt 8 Byte je
         // Eckpunkt. gltfio uebernimmt das Flag (AssetLoader: vbb.normalized(semantic, accessor->normalized);
         // GltfEnums getElementType kennt r_16u). Kachelnde UV (> 1) bleiben float.
-        var unit = true
+        var unit = compactUv
         for (i in 0 until n * 2) if (uv[i] < 0f || uv[i] > 1f) { unit = false; break }
         val uvAcc = if (unit) {
             val q = ShortArray(n * 2) { Math.round(uv[it] * 65535f).toShort() }

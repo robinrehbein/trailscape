@@ -232,7 +232,7 @@ internal class TreesLayer : TileLayer {
             val topShare = if (coarse) 0.0 else 0.3
             val top = Noise.hash01(wi, wj, SEED_TOP)
             val per = when {
-                edge -> 1
+                edge -> if (coarse) 1 else 2 // nah zwei Randbaeume je Zelle: die Rampe des Kronendachs bleibt am Hang verdeckt
                 top < topShare -> 1
                 else -> 0
             }
@@ -246,8 +246,8 @@ internal class TreesLayer : TileLayer {
                 val ol = kotlin.math.hypot(oe, on)
                 if (edge) {
                     // nach aussen geschoben: deckt die Rampe des Kronendachs
-                    e += oe / ol * cell * 0.35
-                    n += on / ol * cell * 0.35
+                    e += oe / ol * cell * 0.45
+                    n += on / ol * cell * 0.45
                 }
                 val conifer = Noise.hash01(wi, wj, SEED_BB + 47 + k) < ctx.land.coniferShare(e, n)
                 val ch = canopyHeight(ctx, e, n) * (0.85 + 0.3 * r3)
