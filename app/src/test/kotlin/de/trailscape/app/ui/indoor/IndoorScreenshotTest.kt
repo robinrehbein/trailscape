@@ -386,6 +386,104 @@ class IndoorScreenshotTest {
         compose.onNodeWithText("Known routes").assertExists()
     }
 
+    // -----------------------------------------------------------------------
+    // Katalog-Vorschau (docs/indoor/catalog.md, „Vorschau je Strecke")
+    // -----------------------------------------------------------------------
+
+    /** Echtes Hoehenprofil aus der Strecke im Repo (GPX mit Hoehen), ausgeduennt wie im Katalogbau. */
+    private fun gpxProfile(id: String): de.trailscape.core.indoor.catalog.CatalogProfile {
+        val text = java.io.File("../tool/indoor-dev/catalog/routes/$id.gpx").readText()
+        val pts = Regex("""<trkpt lat="([-0-9.]+)" lon="([-0-9.]+)"><ele>([-0-9.]+)</ele>""").findAll(text)
+            .map { Triple(it.groupValues[1].toDouble(), it.groupValues[2].toDouble(), it.groupValues[3].toDouble()) }.toList()
+        val dist = DoubleArray(pts.size)
+        for (i in 1 until pts.size) {
+            val (la1, lo1) = pts[i - 1]
+            val (la2, lo2) = pts[i]
+            val dLat = Math.toRadians(la2 - la1)
+            val dLon = Math.toRadians(lo2 - lo1)
+            val a = sin(dLat / 2) * sin(dLat / 2) + kotlin.math.cos(Math.toRadians(la1)) * kotlin.math.cos(Math.toRadians(la2)) * sin(dLon / 2) * sin(dLon / 2)
+            dist[i] = dist[i - 1] + 2 * 6_371_000.0 * kotlin.math.asin(kotlin.math.sqrt(a))
+        }
+        return requireNotNull(
+            de.trailscape.core.indoor.catalog.CatalogProfile.thinned(dist.last(), pts.size, { dist[it] }, { pts[it].third }),
+        )
+    }
+
+    private fun previewFile(name: String): String =
+        requireNotNull(javaClass.getResource("/indoor/catalog-preview/$name")) { "Testbild $name fehlt" }.path
+
+    /** Die vier Formen der Vorschau: Bild + Laser + Profil, Bild + „Neu", nur Profil, Platzhalter. */
+    private val previewUi get() = IndoorCatalogUi(
+        items = listOf(
+            catalogItem(
+                "kahler-asten", "Waldwege am Kahlen Asten", "Forest roads at Kahler Asten", "Winterberg, Sauerland", "Winterberg, Sauerland", "DE",
+                CatalogRideKind.GRAVEL, 13.2, 248.0, listOf(SurfaceKind.COMPACTED to 0.6, SurfaceKind.ASPHALT to 0.21, SurfaceKind.GRAVEL to 0.19), 106, true,
+                "Feste Forstwege durch das Rothaargebirge rund um den Kahlen Asten.", "Firm forest roads through the Rothaar mountains around Kahler Asten.",
+                IndoorCatalogState.NotLoaded,
+            ).copy(laser = true, profile = gpxProfile("kahler-asten"), previewPath = previewFile("kahler-asten-v9.jpg")),
+            catalogItem(
+                "alpe-dhuez", "Alpe d'Huez", "Alpe d'Huez", "Bourg-d'Oisans, Französische Alpen", "Bourg-d'Oisans, French Alps", "FR",
+                CatalogRideKind.ROAD, 15.1, 1253.0, listOf(SurfaceKind.ASPHALT to 1.0), 101, true,
+                "Die D211 hinauf nach L'Alpe d'Huez: 21 nummerierte Kehren.", "The D211 up to L'Alpe d'Huez: 21 numbered hairpins.",
+                IndoorCatalogState.Ready,
+            ).copy(isNew = true, profile = gpxProfile("alpe-dhuez"), previewPath = previewFile("alpe-dhuez-v9.jpg")),
+            catalogItem(
+                "arenberg", "Wald von Arenberg", "Arenberg Forest", "Wallers bei Valenciennes", "Wallers near Valenciennes", "FR",
+                CatalogRideKind.COBBLES, 10.0, 20.0, listOf(SurfaceKind.ASPHALT to 0.68, SurfaceKind.COBBLESTONE to 0.23), 108, true,
+                "2,3 km grobes Kopfsteinpflaster durch den Wald.", "2.3 km of rough cobbles through the forest.",
+                IndoorCatalogState.NotLoaded,
+            ).copy(profile = gpxProfile("arenberg")),
+            catalogItem(
+                "monte-sante-marie", "Schotter von Monte Sante Marie", "Monte Sante Marie gravel", "Crete Senesi bei Asciano, Toskana",
+                "Crete Senesi near Asciano, Tuscany", "IT", CatalogRideKind.GRAVEL, 12.0, 284.0,
+                listOf(SurfaceKind.COMPACTED to 0.85, SurfaceKind.GRAVEL to 0.14), 79, false,
+                "Weiße Schotterstraßen über die Hügel südöstlich von Siena.", "White gravel roads over the hills south-east of Siena.",
+                IndoorCatalogState.NotLoaded,
+            ),
+        ),
+    )
+
+    private fun previewShot(name: String, waitFor: String) {
+        compose.setContent {
+            TrailscapeTheme {
+                ProvideTestLanguage {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(16.dp),
+                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                        ) {
+                            IndoorCatalogSection(previewUi, "catalog:alpe-dhuez", {}, {}, {}, {}, {})
+                        }
+                    }
+                }
+            }
+        }
+        // Auf den Text warten statt einmal zu pruefen (stabil auch bei langsamem Bilddecodieren).
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(waitFor).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        captureScreenRoboImage("build/outputs/roborazzi/$name.png")
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h2400dp-xxhdpi")
+    fun katalogVorschau() {
+        previewShot("katalog-vorschau-01-karten", "Noch keine Vorschau")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Laser").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Neu").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Paket 106,0 MB · Mit Luftbild").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithContentDescription("Vorschaubild der 3D-Welt von Alpe d'Huez").fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    @Config(qualifiers = "en-rGB-w411dp-h2400dp-xxhdpi")
+    fun katalogVorschauEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        previewShot("katalog-vorschau-02-karten-en", "No preview yet")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("New").fetchSemanticsNodes().isNotEmpty() }
+    }
+
     private val plan = IndoorWorldUi.Plan(
         routeName = "Hausrunde Ammersee", distanceKm = 42.3, quality = IndoorQuality.MEDIUM,
         downloadBytes = 186L * 1024 * 1024, diskBytes = 240L * 1024 * 1024,

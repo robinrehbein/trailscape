@@ -16,8 +16,8 @@ tool/indoor-dev/catalog/catalog-src.json   (Einträge: Name, Text, Wegpunkte, BR
 tool/indoor-dev/catalog/routes/<id>.gpx + <id>.surfaces.json   (im Repo, ODbL)
         │ indoor-dev catalog-build   (Workflow indoor-worlds.yml, nur manuell)
         ▼
-GitHub-Release indoor-worlds-v1:  <id>-v<version>.zip  …  catalog.json
-        │ App: „Laden“ (nur nach Antippen)
+GitHub-Release indoor-worlds-v1:  <id>-v<version>.zip  <id>-v<version>.jpg  …  catalog.json
+        │ App: catalog.json + Vorschaubilder von selbst (höchstens täglich), Pakete nur nach „Laden“
         ▼
 <filesDir>/indoor/worlds/<worldId>/  (+ app-catalog.json)  → fahrbar wie jede Welt
 ```
@@ -107,8 +107,23 @@ tiles/*.glb      alle Kacheln, sortiert
       "country": "FR", "kind": "ROAD|GRAVEL|COBBLES",
       "lengthM": 15115, "ascentM": 1105, "surfaces": {"ASPHALT": 1.0},
       "packageFile": "alpe-dhuez-v1.zip", "packageBytes": 81079532, "sha256": "…",
-      "aerial": true, "aerialSource": "Luftbild: © IGN …", "quality": "MEDIUM", "diskBytes": … } ] }
+      "aerial": true, "aerialSource": "Luftbild: © IGN …", "quality": "MEDIUM", "diskBytes": …,
+      "laser": true,
+      "profile": {"stepM": 125.96, "elevM": [719.2, 721.0, …]},
+      "preview": {"file": "alpe-dhuez-v9.jpg", "bytes": 87654, "sha256": "…", "width": 640, "height": 360} } ] }
 ```
+
+- **Seit 24.11.2026 optional:** `laser` (Welt in der Datenstufe „Laser“,
+  erkannt an der Quellenangabe einer Laser-Quelle im Manifest),
+  `profile` (Höhenprofil der gezeichneten Fahrbahn, 121 gleichmäßige
+  Proben, 0,1 m), `preview` (Vorschaubild im selben Release). Das **Format
+  bleibt 1**: Ältere Apps lesen nur bekannte Felder und überspringen den
+  Rest — geprüft mit `CatalogPreviewFormatTest.aelterLeserUeberspringtNeueFelder`
+  (Fixture `core/src/test/resources/indoor/catalog/catalog-neue-felder.json`)
+  und einmal von Hand gegen den Leser vor der Änderung. Ein kaputtes Profil
+  oder ein unzulässiger Bildname kostet nur die Vorschau, nie den Eintrag.
+  Ein höheres `format` dürfte es nicht geben: Ältere Apps lehnen dann den
+  ganzen Katalog ab.
 
 - Unlesbare Einträge werden übersprungen (ein neuerer Katalog leert die
   Liste nicht), Kennungen und Paketnamen sind klein und ohne Trenner.
@@ -117,10 +132,98 @@ tiles/*.glb      alle Kacheln, sortiert
   nimmt Version, Größe und SHA-256 von dort. Ein Release-Katalog kann die
   Adresse der Pakete nicht umlenken (die beigelegte `baseUrl` gilt).
 
+## Vorschau je Strecke (24.11.2026)
+
+Wunsch des Gründers: vor dem Laden sehen, wie die Strecke aussieht.
+
+- **Was der Katalog heute (Release `indoor-worlds-v1`, geprüft am
+  24.11.2026, 14 Einträge) schon hat:** Name, Region, Land, Art, Länge,
+  Höhenmeter, Belagsanteile, Text, Paketgröße, Platzbedarf, Luftbild ja/nein
+  mit Quelle, Qualität. **Was fehlte:** Vorschaubild, Höhenprofil,
+  Laser-Kennzeichen (alle Einträge stehen auf `MEDIUM`; ob Laser
+  verwendet wurde, stand nirgends).
+- **Karte:** oben das Vorschaubild (16 : 9), ohne Bild das Höhenprofil
+  mit Spanne („17–31 m“), ohne beides ein ruhiger Platzhalter „Noch keine
+  Vorschau“; Kennzeichen „Laser“ und „Neu“ (kam mit dem letzten Abruf
+  dazu) oben links. Darunter Name, Region · Land, Art, km · Hm · Belag, mit
+  Bild das Profil klein, Text, „Paket 106,0 MB · Mit Luftbild“, bei Laser
+  ein Satz dazu, Zustand/Knopf. Bilder:
+  `bilder/katalog-vorschau/01-karten.jpg` (deutsch, alle vier Formen),
+  `02-karten-en.jpg` (englisch); Test `IndoorScreenshotTest.katalogVorschau*`
+  (Vorschaubilder dort aus `bilder/catalog/`, verkleinert; Profile aus den
+  GPX-Dateien unter `catalog/routes/`).
+- **Profil ohne Katalogprofil:** Ist die Welt geladen, rechnet die App es
+  aus dem Manifest (`CatalogProfile.thinned`).
+- **Bilder in der App:** nur `baseUrl` des beigelegten Katalogs +
+  Dateiname (wie die Pakete, `isAllowedCatalogUrl` je Station), höchstens
+  400 kB, Größe, JPEG-Kopf und SHA-256 müssen zum Katalog passen. Cache
+  `<cacheDir>/indoor/catalog-previews/<id>-v<version>.jpg`; Bilder alter
+  Versionen löscht die App. Je Bild ein Versuch je Sitzung; „Katalog
+  aktualisieren“ versucht fehlende erneut.
+
+### Automatisch aktualisieren
+
+Der Gründer fand neue Strecken nicht, weil die App den Release-Katalog nur
+auf „Katalog aktualisieren“ holte. Jetzt (`IndoorCatalogController.load`):
+
+1. Liste sofort aus der Platte (beigelegt + zuletzt geholter Katalog).
+2. Danach still `catalog.json` aus dem Release, wenn das Gerät ein Netz hat
+   (`AppServices.isNetworkAvailable`, `ACCESS_NETWORK_STATE`; im Flugmodus
+   kein Versuch) und `CatalogAutoRefresh.isDue` gilt: **höchstens einmal am
+   Tag** — anderer Kalendertag und mindestens 6 h seit dem letzten Versuch,
+   spätestens nach 24 h, oder die Uhr wurde um mehr als 1 h zurückgestellt.
+   Gemerkt in `<filesDir>/indoor/catalog/auto-refresh.txt`; ein
+   Verbindungsfehler zählt nicht als Versuch, ein Serverfehler (z. B. 503)
+   schon. Keine Meldung, die vorhandene Liste bleibt. Während des Abrufs
+   dreht der Kreis am Knopf.
+3. Dann die Vorschaubilder.
+
+„Katalog aktualisieren“ holt weiterhin sofort (und zählt als Abruf des
+Tages). Tests: `CatalogPreviewFormatTest.abrufHoechstensEinmalAmTag`,
+`IndoorCatalogFlowTest.automatischerAbruf…`, `ohneNetzKeinAbruf…`,
+`vorschaubildWirdGeprueftGecachtUndProfilGezeigt`.
+
+### Katalogbau
+
+- `catalog-build` schreibt `laser` und `profile` je gebautem Eintrag.
+- `catalog-preview --out <dir> --prepare [--only …]` legt je Eintrag die
+  Welt bereit (gebaut oder aus `<dir>/packages/<paket>` entpackt) und
+  schreibt `<dir>/previews/plan.tsv` (Kennung, Version, Welt, Laufmeter).
+  Die Stelle steht in `tool/indoor-dev/catalog/previews.json` (km, wie die
+  Bilder in `bilder/catalog/`), sonst 45 % der Strecke.
+- Der Betrachter rendert: `node shots.mjs <welt> --dists <m> --cameras chase
+  --size 960x540 --jpeg-width 640 --jpeg-max-kb 150` (neue Optionen
+  `--jpeg-width`, `--jpeg-max-kb`). Probe mit der Testwelt: 640 × 360,
+  43 kB.
+- `catalog-preview --out <dir>` trägt Bild (Größe, Maße, SHA-256), Profil
+  und Laser ein und kopiert die Bilder nach `<dir>/packages/`.
+- Workflow `indoor-worlds.yml`: nach dem Bau Node 22, `npm ci`, Playwright
+  1.49.1 mit Chromium, dann die drei Schritte; Fehler dort kosten nur Bilder
+  (`continue-on-error`). Neue Eingabe **`preview_only`**: kein Neubau, die
+  Pakete kommen aus dem Release, hochgeladen werden nur Bilder und
+  `catalog.json`.
+
+**Was beim nächsten Katalogbau neu entsteht** (Workflow nach dem Merge):
+je gebauter Strecke ein Release-Asset `<id>-v<version>.jpg` (640 × 360,
+Ziel ≤ 150 kB) und in `catalog.json` die Felder `profile`, `laser`
+(für Laser-Strecken) und `preview`. Strecken, die ein Lauf mit `only` nicht
+baut, behalten ihren Stand; für sie (oder um Bilder ohne den stundenlangen
+Neubau nachzuziehen) den Workflow mit `preview_only: true` starten. Die App
+zeigt die Vorschau beim nächsten Öffnen der Liste (spätestens am nächsten
+Tag, sofort mit „Katalog aktualisieren“). Der beigelegte Katalog der App
+bleibt in diesem Branch unverändert (kein Profil, kein Bild); wer ihn mit
+`--app-catalog` erneuert, bekommt die Profile mit hinein.
+
+**Nicht geprüft:** echte Katalogwelten im Betrachter auf dem CI-Rechner
+(Laufzeit, Bildgröße mit Luftbild, dunkle Waldbilder — `shots.mjs` meldet
+sie, das Bild wird trotzdem genommen); die Karten auf einem echten Gerät
+(Decodieren, Scrollen mit 14 Bildern, Flugmodus-Erkennung, Abruf über
+Mobilfunk).
+
 ## App
 
 - **Streckenwahl** (Schritt 2): zwei Bereiche „Eigene Strecken“ / „Bekannte
-  Strecken“. Karten mit Name, Region und Land, km, Hm, Belagsanteilen, Art
+  Strecken“. Karten mit Vorschau (siehe oben), Name, Region und Land, km, Hm, Belagsanteilen, Art
   (Rennrad/Schotter/Pflaster), Text, Luftbild ja/nein und Zustand:
   nicht geladen („Laden (77 MB)“) · lädt x % mit „Abbrechen“ · angefangen
   („Fortsetzen“/„Verwerfen“) · wird geprüft und entpackt · bereit (wählbar) ·
@@ -150,8 +253,10 @@ tiles/*.glb      alle Kacheln, sortiert
 
 ### Netz (PRIVACY.md, Abschnitt 4)
 
-Nur nach „Laden“, „Fortsetzen“, „Aktualisieren“ oder „Katalog
-aktualisieren“: `github.com/robinrehbein/trailscape/releases/download/…`,
+Von selbst nur `catalog.json` (höchstens täglich) und die Vorschaubilder
+(je Bild einmal), beides nur mit Netz; Pakete nur nach „Laden“,
+„Fortsetzen“ oder „Aktualisieren“; alles von
+`github.com/robinrehbein/trailscape/releases/download/…`,
 das mit `302` auf `release-assets.githubusercontent.com` weiterleitet
 (geprüft am 23.11.2026; früher `objects.githubusercontent.com`, ebenfalls
 erlaubt). `Range`-Anfragen gehen dort (`206`). Jede Station wird gegen
