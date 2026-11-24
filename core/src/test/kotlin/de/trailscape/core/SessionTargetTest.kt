@@ -182,9 +182,10 @@ class SessionTargetTest {
             SessionIntensity.LOCKER,
             classifySessionIntensity(sessionFromPlan(p, "Lockere Ausfahrt")),
         )
+        // Erholungswoche: die verkuerzte lange Tour bleibt Grundlage.
         assertEquals(
-            SessionIntensity.LOCKER,
-            classifySessionIntensity(sessionFromPlan(p, "Ruhige Runde")),
+            SessionIntensity.GRUNDLAGE,
+            classifySessionIntensity(sessionFromPlan(p, "Verkürzte lange Tour")),
         )
         // Taper: "Locker mit Antritten" traegt Antritte, bleibt aber locker.
         assertEquals(

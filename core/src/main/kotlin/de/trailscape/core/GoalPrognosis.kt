@@ -288,17 +288,39 @@ fun predictGoalFinish(
  * Fitness (CTL), die [plan] bis zum Renntag aufbaut, ausgehend von
  * [currentCtl].
  *
- * Dieselbe Annahme, mit der [generatePlan] die Last-Budgets rechnet
- * (`planWeekLoadBudgets`): Jede **Aufbauwoche** hebt die CTL um
- * [defaultTargetRampPerWeek], Erholung, Taper und Zielwoche halten sie. Gezaehlt
- * werden die Aufbauwochen ab der laufenden (eingeschlossen) — wer den Plan
- * faehrt, ist am Renntag so fit. `null` ohne gueltige CTL.
+ * ## Mit Last-Zielen (Plaene seit dem Planumbau)
+ * Die CTL wird ueber die **geplanten Wochenlasten** fortgeschrieben — dieselbe
+ * Exponentialglaettung wie die Performance-Management-Kurve, wochenweise:
+ * `CTL ← CTL + (Wochenlast / 7 − CTL) × ctlWeeklyResponse`. Gezaehlt werden
+ * die Wochen ab der laufenden (eingeschlossen) bis vor die Zielwoche; die
+ * Zielwoche selbst traegt das Event, dessen Last am Renntag noch nicht in der
+ * Form steckt. Damit sinkt die Vorschau auch, wenn der Plan weniger Last
+ * vorsieht als die heutige CTL — frueher stieg sie je Aufbauwoche pauschal um
+ * [defaultTargetRampPerWeek], egal was der Plan tatsaechlich vorschrieb.
+ *
+ * ## Ohne Last-Ziele (Altplaene)
+ * Wie bisher: jede verbleibende **Aufbauwoche** hebt die CTL um
+ * [defaultTargetRampPerWeek].
+ *
+ * `null` ohne gueltige CTL.
  */
 fun projectedEventCtl(plan: TrainingPlan, currentCtl: Double?, now: Long? = null): Double? {
     if (currentCtl == null || !currentCtl.isFinite() || currentCtl <= 0) return null
     val nowMs = now ?: System.currentTimeMillis()
-    val buildWeeksLeft = plan.weeks.count { it.kind == WeekKind.AUFBAU && it.end > nowMs }
-    return currentCtl + buildWeeksLeft * defaultTargetRampPerWeek
+    val remaining = plan.weeks.filter { it.end > nowMs }
+    val trainingWeeks = remaining.filter { it.kind != WeekKind.ZIELWOCHE }
+    val withLoads = trainingWeeks.isNotEmpty() &&
+        trainingWeeks.all { week -> week.sessions.isNotEmpty() && week.sessions.all { it.targetLoad != null } }
+    if (!withLoads) {
+        val buildWeeksLeft = remaining.count { it.kind == WeekKind.AUFBAU }
+        return currentCtl + buildWeeksLeft * defaultTargetRampPerWeek
+    }
+    var ctl = currentCtl
+    for (week in trainingWeeks) {
+        val weekLoad = week.sessions.sumOf { it.targetLoad ?: 0.0 }
+        ctl += (weekLoad / 7 - ctl) * ctlWeeklyResponse
+    }
+    return ctl
 }
 
 // ---------------------------------------------------------------------------

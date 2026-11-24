@@ -183,7 +183,7 @@ fun TrainingScreen(appViewModel: AppViewModel) {
     }
     // Traegt der Plan sein eigenes Ziel? Bewertet wird der angepasste Stand;
     // quittiert wird ueber den Schluessel des gespeicherten Plans.
-    val feasibility = remember(displayPlan, coreTexts) { displayPlan?.let { assessPlanFeasibility(it, coreTexts) } }
+    val feasibility = remember(displayPlan, coreTexts) { displayPlan?.let { assessPlanFeasibility(it, texts = coreTexts) } }
     val planKey = remember(plan) { plan?.let { planFeasibilityIdentityKey(it) } }
     val openFeasibility = feasibility?.takeIf { !it.feasible && planKey != planFeasibilityAckKey }
     val currentWeek = remember(displayPlan) {

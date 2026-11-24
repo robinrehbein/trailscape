@@ -245,12 +245,15 @@ data class AdaptedPlan(
  * ## Was
  * Die Wochen, die noch nicht abgeschlossen sind (die laufende eingeschlossen),
  * werden mit derselben Maschinerie neu gerechnet, mit der der Plan entstand
- * ([planWeekVolumes] + [buildSessions] + [attachSessionLoads]) — Startvolumen
+ * (`buildPlanWeekSessions` in `PlanWeeks.kt`, mit den gespeicherten
+ * [TrainingPlan.preferences] und [TrainingPlan.planSpeedKmh]) — Startvolumen
  * ist das **tatsaechlich erreichte** Maximum der letzten
  * [adaptLookbackWeeks] abgeschlossenen Wochen, der +15-%-Deckel
- * ([MAX_WEEKLY_INCREASE]) gilt unveraendert. Blockstruktur
- * (Aufbau/Erholung/Taper/Zielwoche), Wochengrenzen und das Zieldatum bleiben
- * stehen; die Zielwoche bleibt woertlich unveraendert.
+ * ([MAX_WEEKLY_INCREASE]) gilt unveraendert. Phasen und Progressionsstufen
+ * der Qualitaetseinheiten laufen ueber den ganzen Plan weiter (gezaehlt an den
+ * bereits geplanten Wochen). Blockstruktur (Aufbau/Erholung/Taper/Zielwoche),
+ * Wochengrenzen und das Zieldatum bleiben stehen; die Zielwoche bleibt
+ * woertlich unveraendert.
  *
  * ## Was NICHT
  * Der gespeicherte Plan wird **nicht ueberschrieben** — das Ergebnis ist ein
@@ -260,9 +263,8 @@ data class AdaptedPlan(
  * `adaptPlan(...).plan` an (und bewerten ihn mit [assessPlanFeasibility]),
  * persistieren aber weiterhin das Original.
  *
- * @param currentCtl aktuelle CTL fuer die Last-Budgets der neu gerechneten
- *   Wochen ([planWeekLoadBudgets]); `null` laesst die Budgets aus den
- *   Kilometern entstehen.
+ * @param currentCtl aktuelle CTL fuer den Lastdeckel der neu gerechneten
+ *   Aufbauwochen (≤ 1,30 × 7 × CTL); `null` = nur die km-Rampe.
  * @param rideLoads Last je Tour-ID (aus `TrainingInsights.rideLoads`).
  */
 fun adaptPlan(
@@ -310,29 +312,36 @@ fun adaptPlan(
     val achievedKm = recentCompleted.maxOfOrNull { weekKm(it, rides) } ?: 0.0
     val newStartKm = max(achievedKm, 5.0)
 
-    val remainingKinds = remaining.map { it.kind }
-    val eventWeekKm = zielwocheSessions(plan.goal, texts).sumOf { it.targetKm }
-    val volumes = planWeekVolumes(
-        kinds = remainingKinds,
+    // Neu gerechnet wird mit derselben Maschinerie und denselben Annahmen
+    // (Praeferenzen, Tempo), mit denen der Plan entstand; Phasen und
+    // Progressionsstufen laufen ueber den ganzen Plan weiter.
+    val fromIndex = remaining.minOf { it.index }
+    val kinds = plan.weeks.map { it.kind }
+    val input = PlanBuildInput(
+        goal = plan.goal,
+        level = plan.level,
+        texts = texts,
+        speedKmh = plan.planSpeedKmh,
+        preferences = plan.preferences,
+        currentCtl = currentCtl,
+        kinds = kinds,
         startKm = newStartKm,
         peakKm = peakKmFor(plan.goal, newStartKm),
-        eventWeekKm = eventWeekKm,
     )
-    val budgets = planWeekLoadBudgets(remainingKinds, currentCtl)
-    val hilly = planIsHilly(plan.goal)
+    val sessions = buildPlanWeekSessions(
+        input = input,
+        state = planBuildStateBefore(plan.weeks.filter { it.index < fromIndex }, newStartKm)
+            .apply { holdNextBuild = true },
+        fromIndex = fromIndex,
+        priorWeeks = plan.weeks.map { it.sessions },
+    )
 
-    val rebuilt = remaining.mapIndexed { j, week ->
+    val rebuilt = remaining.map { week ->
         if (week.kind == WeekKind.ZIELWOCHE) {
             week
         } else {
-            week.copy(
-                targetKm = volumes[j],
-                sessions = attachSessionLoads(
-                    sessions = buildSessions(week.kind, plan.level, volumes[j], plan.goal, texts),
-                    weekBudget = budgets[j],
-                    hilly = hilly,
-                ),
-            )
+            val weekSessions = sessions[week.index]
+            week.copy(targetKm = weekSessions.sumOf { it.targetKm }, sessions = weekSessions)
         }
     }.associateBy { it.index }
 
