@@ -187,8 +187,8 @@ sun.shadow.camera.near = 1;
 sun.shadow.camera.far = CONFIG.shadowRangeM;
 sun.shadow.bias = -0.0001;
 sun.shadow.normalBias = 0.06; // Meter; nur Gebaeude und Fahrer beschatten sich selbst
-// Radius 1: Die fuenf Abtastungen des PCF-Filters ueberlappen sich dann und es bleibt kein Rauschmuster.
-sun.shadow.radius = 1.0;
+// Weiche Kanten wie Filaments DPCF (FilamentCore: ShadowType.DPCF, penumbraScale 1,5).
+sun.shadow.radius = pNum('shadowRadius', 2.0);
 scene.add(sun);
 
 // Umgebungslicht: blaeulicher Himmel von oben, warm-gruener Widerschein vom Boden
@@ -901,9 +901,11 @@ function updateCamera(placement) {
   let near = 0.5;
 
   if (view.camera === 'handlebar') {
-    pos.copy(rider).addScaledVector(dir, 0.35).setY(rider.y + 1.55);
-    const ahead = fwd(d + 30);
-    toScene(ahead.e, ahead.n, ahead.u + 1.0, look);
+    // wie CameraRig HANDLEBAR: Auge 1,45 m, 0,25 m voraus, Blick 25 m voraus auf 0,8 × Augenhoehe
+    pos.copy(rider).addScaledVector(dir, 0.25).setY(rider.y + 1.45);
+    const ahead = fwd(d + 25);
+    toScene(ahead.e, ahead.n, ahead.u + 1.16, look);
+    pos.y = Math.max(pos.y, placement.u + 1.0);
     fov = 62;
     near = 0.3;
   } else if (view.camera === 'drone') {
@@ -913,11 +915,13 @@ function updateCamera(placement) {
     fov = 42;
     near = 5;
   } else {
-    pos.copy(rider).addScaledVector(dir, -6.0).setY(rider.y + 2.5);
-    // nie unter Gelaende: mindestens 1,6 m ueber der Fahrbahn an der Stelle der Kamera
-    pos.y = Math.max(pos.y, a.u + 1.6);
-    const ahead = fwd(d + 12);
-    toScene(ahead.e, ahead.n, ahead.u + 0.9, look);
+    // wie CameraRig CHASE: 6 m auf dem Band zurueck (folgt Kurven und Kehren), 2,5 m ueber dem
+    // hoeheren von Fahrer und Kamerapunkt, Blick 6 m voraus auf 1,1 m ueber der mittleren Hoehe
+    const back = fwd(d - 6);
+    toScene(back.e, back.n, Math.max(back.u, placement.u) + 2.5, pos);
+    pos.y = Math.max(pos.y, Math.max(back.u, placement.u) + 1.2);
+    const ahead = fwd(d + 6);
+    toScene(ahead.e, ahead.n, (placement.u + ahead.u) / 2 + 1.1, look);
     fov = 52;
     near = 0.5;
   }
