@@ -298,6 +298,11 @@ SH-Konvention, Cubemap, API-Namen, Abbau-Reihenfolge, Threads, R8.
 - [ ] Ausfall: In der Diagnose nach einem erzwungenen Ausfall (z. B. Welt
       löschen während der Fahrt) erscheint die 2D-Ersatzansicht mit Profil.
 - [ ] Release-Build (R8) startet die Darstellung genauso wie Debug.
+- [ ] Startpunkt versetzen (docs/indoor/app.md, „Startpunkt und Fortsetzen“;
+      an der Darstellung nichts geändert): Der Fahrer springt ab 30 m
+      (`MotionSmoother.JUMP_M`), die Kamera ab 80 m (`CameraRig.SNAP_DISTANCE_M`);
+      die Kacheln um die neue Stelle laden nach — prüfen, dass dabei keine
+      Löcher bleiben und der erste Zustand schon an der Startstelle steht.
 
 ## Integration (23.11.2026)
 

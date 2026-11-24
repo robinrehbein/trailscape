@@ -351,6 +351,20 @@ enum class IndoorNotice {
 }
 
 /**
+ * Startpunkt waehlen (docs/indoor/app.md, „Startpunkt und Fortsetzen") — nur
+ * gesetzt, solange sich der Fahrer versetzen laesst: vor dem ersten Tritt und
+ * in der Pause.
+ *
+ * @property selectedM Stelle des Fahrers in Metern innerhalb der Runde.
+ * @property maxM spaeteste waehlbare Stelle (auf einer Strecke ohne
+ *   Rundschluss bleibt bis zum Ziel ein Rest).
+ * @property resumeM die gemerkte Stelle der letzten Fahrt auf dieser Strecke —
+ *   angeboten als „Weiter bei km …" neben „Von vorn"; `null` = kein Angebot.
+ * @property held die Fahrt wartet auf „Losfahren" (Treten bewegt noch nichts).
+ */
+data class IndoorStartUi(val selectedM: Double, val maxM: Double, val resumeM: Double?, val held: Boolean)
+
+/**
  * Alles, was das HUD zeigt.
  *
  * @property session der letzte Zustand der Sitzung; `null`, solange sie nicht
@@ -376,6 +390,8 @@ data class IndoorRideUi(
     val attribution: List<WorldAttribution>,
     val startProblem: IndoorProblem? = null,
     val runtimeProblem: IndoorProblem? = null,
+    /** Startpunkt waehlen; `null` = gerade nicht moeglich (es wird gefahren). */
+    val start: IndoorStartUi? = null,
 )
 
 // ---------------------------------------------------------------------------

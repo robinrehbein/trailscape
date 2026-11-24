@@ -367,4 +367,15 @@
     <string name="indoor_app_catalog_failed_other">Couldn’t download the package.</string>
     <string name="indoor_app_catalog_failed_keeps_old">The previously downloaded version stays rideable.</string>
     <string name="indoor_app_worlds_tag_catalog">Known route</string>
+    <!-- Start point and resume (docs/indoor/app.md) -->
+    <string name="indoor_app_start_title_choose">Where do you start?</string>
+    <string name="indoor_app_start_hint_drag">Drag along the profile to start somewhere else.</string>
+    <string name="indoor_app_start_hint_drag_pause">Drag along the profile to carry on somewhere else.</string>
+    <string name="indoor_app_start_position">km %1$s · %2$s m</string>
+    <string name="indoor_app_start_resume_chip">Continue at km %1$s</string>
+    <string name="indoor_app_start_from_beginning_chip">From the start</string>
+    <string name="indoor_app_start_go_action">Start riding</string>
+    <string name="indoor_app_start_earlier_cd">Start 100 m earlier</string>
+    <string name="indoor_app_start_later_cd">Start 100 m later</string>
+    <string name="indoor_app_start_profile_cd">Start point at kilometre %1$s of %2$s. Drag or tap along the profile to move it.</string>
 </resources>

@@ -8,6 +8,7 @@ import de.trailscape.core.indoor.IndoorPhase
 import de.trailscape.core.indoor.IndoorRideRecord
 import de.trailscape.core.indoor.IndoorSession
 import de.trailscape.core.indoor.IndoorSessionState
+import de.trailscape.core.indoor.MovableIndoorSession
 import de.trailscape.core.indoor.IndoorShifter
 import de.trailscape.core.indoor.IndoorTrainer
 import de.trailscape.core.indoor.SessionInput
@@ -26,6 +27,7 @@ import de.trailscape.core.indoor.world.RenderStats
 import de.trailscape.core.indoor.world.WorldRenderer
 import de.trailscape.core.indoor.world.WorldRendererListener
 import de.trailscape.core.indoor.world.WorldState
+import de.trailscape.core.indoor.moveStartTo
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineDispatcher
@@ -97,6 +99,10 @@ import kotlinx.coroutines.launch
  * @param rebuildSession baut zu den vom Trainer gemeldeten Faehigkeiten eine
  *   neue Sitzung, oder liefert `null`, wenn die vorhandene schon passt;
  *   `null` = nie tauschen. Wird nur auf dem Takt-Thread gerufen.
+ * @param holdStart die Fahrt wartet auf [releaseStart] („Losfahren"): Bis
+ *   dahin bekommt die Sitzung keine Messwerte und bleibt in READY, auch wenn
+ *   schon jemand tritt — so laesst sich der Startpunkt in Ruhe waehlen
+ *   (docs/indoor/app.md, „Startpunkt und Fortsetzen").
  */
 class IndoorRideRuntime(
     session: IndoorSession,
@@ -110,6 +116,7 @@ class IndoorRideRuntime(
     private val autoLoop: Boolean = true,
     private val noticeDurationMs: Long = NOTICE_DURATION_MS,
     private val rebuildSession: ((TrainerCapabilities) -> IndoorSession?)? = null,
+    holdStart: Boolean = false,
 ) {
     /** Die aktuelle Sitzung; nur vom Takt-Thread (bzw. nach dem Anhalten der Schleife). */
     private var session: IndoorSession = session
@@ -152,6 +159,9 @@ class IndoorRideRuntime(
 
     @Volatile private var renderEnabled = renderer != null
 
+    /** Siehe `holdStart`; nur [releaseStart] hebt es auf. */
+    @Volatile private var startHeld = holdStart
+
     @Volatile private var finished = false
     private var record: IndoorRideRecord? = null
     private var pausedByBackground = false
@@ -170,6 +180,7 @@ class IndoorRideRuntime(
             notice = null,
             problem = null,
             finished = false,
+            startHeld = holdStart,
         ),
     )
 
@@ -308,6 +319,18 @@ class IndoorRideRuntime(
     /** Weiter nach einer Pause. */
     fun resume() = enqueue { it.resume() }
 
+    /**
+     * Versetzt den Fahrer an [routeDistM] (Meter innerhalb der Runde) — nur vor
+     * dem ersten Tritt und in der Pause, sonst ohne Wirkung. Wird beim Tausch
+     * der Sitzung (echte Faehigkeiten) nachgespielt.
+     */
+    fun moveStart(routeDistM: Double) = enqueue(replayBeforeStart = true) { it.moveStartTo(routeDistM) }
+
+    /** „Losfahren": ab jetzt zaehlen die Messwerte des Trainers. */
+    fun releaseStart() {
+        startHeld = false
+    }
+
     /** Schaltknopf auf dem Bildschirm. */
     fun shift(event: ShifterEvent) {
         shiftEvents.add(event)
@@ -382,7 +405,8 @@ class IndoorRideRuntime(
         lastStepNow = now
         val hr = heartRate?.let { source -> guard(IndoorPart.BLE) { source.currentBpm() } }
         val input = SessionInput(
-            telemetry = lastTelemetry,
+            // Solange „Losfahren" aussteht, sieht die Sitzung keine Leistung und bleibt in READY.
+            telemetry = if (startHeld) null else lastTelemetry,
             hrBpm = hr,
             trainerReady = trainerConnection == TrainerConnection.READY,
         )
@@ -394,7 +418,8 @@ class IndoorRideRuntime(
                 guard(IndoorPart.CORE) { trainer.send(command) }
             }
             pushToRenderer(now, step.state)
-            _state.update { it.copy(session = step.state) }
+            val movable = (session as? MovableIndoorSession)?.let { s -> guard(IndoorPart.CORE) { s.canMove } } ?: false
+            _state.update { it.copy(session = step.state, canMoveStart = movable, startHeld = startHeld) }
         }
         expireNotice(now)
     }
@@ -578,6 +603,8 @@ class IndoorRideRuntime(
  *
  * @property session letzter Zustand der Sitzung; `null` vor dem ersten Takt.
  * @property problem der letzte abgefangene Fehler eines Teils (Diagnose).
+ * @property canMoveStart der Fahrer laesst sich gerade versetzen (vor dem ersten Tritt, in der Pause).
+ * @property startHeld die Fahrt wartet auf „Losfahren".
  */
 data class IndoorRuntimeState(
     val session: IndoorSessionState?,
@@ -589,6 +616,8 @@ data class IndoorRuntimeState(
     val notice: IndoorNotice?,
     val problem: IndoorProblem?,
     val finished: Boolean,
+    val canMoveStart: Boolean = false,
+    val startHeld: Boolean = false,
 )
 
 /**
