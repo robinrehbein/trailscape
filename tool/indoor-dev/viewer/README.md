@@ -25,6 +25,7 @@ node shots.mjs ../out/mock --serve --port 8123   # nur Server, Seite im Browser 
 | `--cameras chase,handlebar,drone,overview` | Kameras je Stelle (`overview`: Übersicht aus ~650 m Höhe) |
 | `--size 1600x900` | Bildgröße (deviceScaleFactor 1) |
 | `--jpeg` | zusätzlich JPEG, 1280 px breit, unter 300 kB |
+| `--jpeg-width N`, `--jpeg-max-kb K` | Breite und Obergrenze des JPEG (Vorgabe 1280 px, 300 kB; schaltet `--jpeg` ein). Vorschaubilder des Katalogs: `--size 960x540 --jpeg-width 640 --jpeg-max-kb 150` |
 | `--out <dir>` | Zielverzeichnis, sonst `<welt>/shots/` |
 | `--sun-az`, `--sun-el` | Sonnenazimut (0 = Nord, 90 = Ost) und -höhe in Grad; Vorgabe 235/40 |
 | `--sky <dir>` | Himmel der Darstellung aus `indoor-dev sky --out <dir>` (Seite: `skyDir`): Rundumbild mit Wolken, Sonnenstand, Sonnenfarbe, Lichtstärken und Dunst wie auf dem Gerät; `--sun-*` gehen vor |

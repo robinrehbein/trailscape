@@ -8,9 +8,12 @@ import de.trailscape.core.indoor.SurfaceKind
 import de.trailscape.core.indoor.SurfaceSection
 import de.trailscape.core.indoor.buildIndoorRoute
 import de.trailscape.core.indoor.catalog.CatalogEntry
+import de.trailscape.core.indoor.catalog.CatalogPreview
+import de.trailscape.core.indoor.catalog.CatalogProfile
 import de.trailscape.core.indoor.catalog.CatalogRideKind
 import de.trailscape.core.indoor.catalog.CatalogText
 import de.trailscape.core.indoor.catalog.IndoorCatalog
+import de.trailscape.core.indoor.catalog.extractCatalogPackage
 import de.trailscape.core.indoor.catalog.isSafeCatalogId
 import de.trailscape.core.indoor.catalog.sha256Hex
 import de.trailscape.core.indoor.catalog.writeCatalogPackage
@@ -384,6 +387,8 @@ private fun buildOne(
         aerialSource = aerialText.takeIf { aerialTiles > 0 && it.isNotBlank() },
         quality = quality,
         diskBytes = manifest.budget.diskBytes,
+        laser = isLaserWorld(manifest),
+        profile = catalogProfileOf(manifest),
     )
     println(
         "  fertig in ${"%.0f".format((System.nanoTime() - start) / 1e9)} s: ${manifest.tiles.size} Kacheln " +
@@ -403,4 +408,136 @@ private class ConsoleProgress : de.trailscape.core.indoor.world.WorldBuildListen
             last[phase] = now
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// catalog-preview (Vorschau je Strecke: Profil, Laser, Bild)
+// ---------------------------------------------------------------------------
+
+/** Die Welt ist in der Datenstufe „Laser" gebaut: Ihre Quellenangaben nennen eine Laser-Quelle. */
+fun isLaserWorld(m: WorldManifest): Boolean {
+    val texts = de.trailscape.core.indoor.world.laserSources.map { it.attribution }.toSet()
+    return m.attribution.any { it.text in texts }
+}
+
+/** Ausgeduenntes Hoehenprofil der gezeichneten Fahrbahn (Streckenband des Manifests). */
+fun catalogProfileOf(m: WorldManifest, points: Int = CatalogProfile.DEFAULT_POINTS): CatalogProfile? =
+    CatalogProfile.thinned(m.track.lengthM, m.track.sampleCount, m.track::distAt, { m.track.u[it].toDouble() }, points)
+
+/** Zielgroesse der Vorschaubilder (Release-Asset, die App laedt sie ohne Nachfrage). */
+const val PREVIEW_TARGET_BYTES: Long = 150L * 1024
+
+/** Dateiname des Vorschaubilds im Release. */
+fun previewFileOf(id: String, version: Int): String = "$id-v$version.jpg"
+
+/** Gemerkte Stellen fuer das Vorschaubild (km je Kennung), sonst [DEFAULT_PREVIEW_FRACTION] der Strecke. */
+const val CATALOG_PREVIEWS = "$CATALOG_DIR/previews.json"
+const val DEFAULT_PREVIEW_FRACTION = 0.45
+
+fun previewDistM(id: String, lengthM: Double, spots: Map<String, Double>): Double {
+    val km = spots[id]
+    val d = if (km != null) km * 1000 else lengthM * DEFAULT_PREVIEW_FRACTION
+    return d.coerceIn(0.0, maxOf(0.0, lengthM - 50.0))
+}
+
+fun readPreviewSpots(file: File = File(CATALOG_PREVIEWS)): Map<String, Double> {
+    if (!file.isFile) return emptyMap()
+    val o = Json.parseToJsonElement(file.readText()) as JsonObject
+    val spots = o["km"] as? JsonObject ?: return emptyMap()
+    return spots.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.doubleOrNull?.let { k to it } }.toMap()
+}
+
+/** Breite und Hoehe eines JPEG (SOF-Marker), `null` = kein JPEG. */
+fun jpegSize(bytes: ByteArray): Pair<Int, Int>? {
+    if (bytes.size < 4 || bytes[0] != 0xFF.toByte() || bytes[1] != 0xD8.toByte()) return null
+    var i = 2
+    while (i + 9 < bytes.size) {
+        if (bytes[i] != 0xFF.toByte()) return null
+        val marker = bytes[i + 1].toInt() and 0xFF
+        val len = ((bytes[i + 2].toInt() and 0xFF) shl 8) or (bytes[i + 3].toInt() and 0xFF)
+        if (marker in 0xC0..0xCF && marker != 0xC4 && marker != 0xC8 && marker != 0xCC) {
+            val h = ((bytes[i + 5].toInt() and 0xFF) shl 8) or (bytes[i + 6].toInt() and 0xFF)
+            val w = ((bytes[i + 7].toInt() and 0xFF) shl 8) or (bytes[i + 8].toInt() and 0xFF)
+            return w to h
+        }
+        i += 2 + len
+    }
+    return null
+}
+
+/**
+ * Vorschau fuer den Katalog in `<out>` (docs/indoor/catalog.md, „Vorschau"):
+ *
+ * * **`--prepare`:** sorgt je Eintrag von `<out>/catalog.json` fuer eine Welt
+ *   unter `<out>/worlds/<id>` — gebaut in diesem Lauf oder aus dem Paket
+ *   `<out>/packages/<paket>` entpackt (Lauf nur fuer die Vorschau) — und
+ *   schreibt `<out>/previews/plan.tsv` (Kennung, Version, Weltverzeichnis,
+ *   Laufmeter des Bildes) fuer den Betrachter (`viewer/shots.mjs`).
+ * * **ohne `--prepare`:** traegt Profil, Laser-Kennzeichen und — falls
+ *   `<out>/previews/<id>-v<version>.jpg` vorliegt — das Bild in den Katalog
+ *   ein und kopiert die Bilder nach `<out>/packages/` (zum Hochladen).
+ *
+ * Eintraege ohne Welt und ohne Paket bleiben unveraendert (ein Bild eines
+ * frueheren Laufs bleibt im Katalog, solange die Version gleich ist).
+ */
+fun catalogPreview(out: File, only: String?, prepare: Boolean, spots: Map<String, Double> = readPreviewSpots()): Int {
+    val file = File(out, IndoorCatalog.CATALOG_FILE)
+    check(file.isFile) { "${file.path} fehlt — erst catalog-build oder den Katalog des Release holen" }
+    val catalog = IndoorCatalog.parse(file.readText())
+    val ids = only?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+    val previews = File(out, "previews").apply { mkdirs() }
+    if (prepare) {
+        val plan = StringBuilder()
+        for (e in catalog.entries) {
+            if (ids != null && e.id !in ids) continue
+            val dir = worldFor(out, e) ?: run { println("${e.id}: keine Welt und kein Paket — Vorschau bleibt, wie sie ist"); null } ?: continue
+            val m = WorldManifest.parse(File(dir, WorldManifest.FILE_NAME).readText())
+            val d = previewDistM(e.id, m.track.lengthM, spots)
+            plan.append("${e.id}\t${e.version}\t${dir.path}\t${Math.round(d)}\n")
+            println("${e.id}: Bild bei km ${"%.1f".format(d / 1000)} aus ${dir.path}")
+        }
+        File(previews, "plan.tsv").writeText(plan.toString())
+        return 0
+    }
+    var problems = 0
+    val updated = catalog.entries.map { e ->
+        if (ids != null && e.id !in ids) return@map e
+        var next = e
+        File(out, "worlds/${e.id}/${WorldManifest.FILE_NAME}").takeIf { it.isFile }?.let { mf ->
+            val m = WorldManifest.parse(mf.readText())
+            if (m.worldId == e.worldId) next = next.copy(laser = isLaserWorld(m), profile = catalogProfileOf(m) ?: e.profile)
+        }
+        val img = File(previews, previewFileOf(e.id, e.version))
+        if (img.isFile) {
+            val bytes = img.readBytes()
+            val size = jpegSize(bytes)
+            when {
+                size == null -> { System.err.println("${e.id}: ${img.name} ist kein JPEG"); problems++ }
+                bytes.size > CatalogPreview.MAX_BYTES -> { System.err.println("${e.id}: ${img.name} zu gross (${bytes.size / 1024} kB)"); problems++ }
+                else -> {
+                    if (bytes.size > PREVIEW_TARGET_BYTES) println("${e.id}: Warnung: ${img.name} hat ${bytes.size / 1024} kB (Ziel ${PREVIEW_TARGET_BYTES / 1024} kB)")
+                    next = next.copy(preview = CatalogPreview(img.name, bytes.size.toLong(), sha256Hex(img), size.first, size.second))
+                    File(out, "packages").mkdirs()
+                    img.copyTo(File(out, "packages/${img.name}"), overwrite = true)
+                }
+            }
+        } else if (next.preview?.file != previewFileOf(e.id, e.version)) {
+            // Ein Bild einer anderen Version zeigt eine andere Welt.
+            next = next.copy(preview = null)
+        }
+        println("${e.id}: Profil ${next.profile?.elevM?.size ?: 0} Proben, Laser ${if (next.laser) "ja" else "nein"}, Bild ${next.preview?.let { "${it.file} (${it.bytes / 1024} kB, ${it.width}×${it.height})" } ?: "keins"}")
+        next
+    }
+    file.writeText(catalog.copy(entries = updated).toJson() + "\n")
+    return if (problems == 0) 0 else 1
+}
+
+/** Weltverzeichnis von [e] in [out]: gebaut (passende `worldId`) oder aus dem Paket entpackt. */
+private fun worldFor(out: File, e: CatalogEntry): File? {
+    val dir = File(out, "worlds/${e.id}")
+    val mf = File(dir, WorldManifest.FILE_NAME)
+    if (mf.isFile && runCatching { WorldManifest.parse(mf.readText()).worldId }.getOrNull() == e.worldId) return dir
+    val pkg = File(out, "packages/${e.packageFile}").takeIf { it.isFile } ?: return null
+    extractCatalogPackage(pkg, dir, e.id, e.version, e.worldId)
+    return dir
 }
