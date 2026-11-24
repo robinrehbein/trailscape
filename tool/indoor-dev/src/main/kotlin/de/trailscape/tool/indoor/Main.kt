@@ -102,6 +102,7 @@ private fun run(all: List<String>): Int {
         "plan" -> plan(Args(rest, setOf("no-aerial", "offline")))
         "testworld" -> testworld(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
+        "overlaps" -> overlaps(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "models" -> models(Args(rest, emptySet()))
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
         "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline")).let { a ->
@@ -248,6 +249,19 @@ private fun testworld(a: Args): Int {
     val m = createWorldBuilder().buildTestWorld(out, a.quality())
     summary(m, out, (System.nanoTime() - start) / 1e9)
     return checkAndReport(out)
+}
+
+/** Koplanare, ueberlappende Flaechen (Ursache fuer Flimmern) in den Kacheln der Stufe 0 auflisten. */
+private fun overlaps(dir: File): Int {
+    if (!dir.isDirectory) throw UsageError("Weltverzeichnis nicht gefunden: $dir")
+    val m = WorldManifest.parse(File(dir, WorldManifest.FILE_NAME).readText())
+    val total = HashMap<String, Int>()
+    for (t in m.tiles.filter { it.level == 0 }) {
+        for ((k, v) in de.trailscape.core.indoor.world.coplanarOverlaps(File(dir, t.file).readBytes())) total[k] = (total[k] ?: 0) + v
+    }
+    println("Koplanare Ueberlappungen (Stufe 0, ${m.tiles.count { it.level == 0 }} Kacheln): ${total.values.sum()}")
+    for ((k, v) in total.entries.sortedByDescending { it.value }) println("  $v  $k")
+    return 0
 }
 
 private fun check(dir: File): Int {

@@ -251,11 +251,13 @@ internal class RouteEnv(val ctx: TileContext) {
                 LandClass.MEADOW, LandClass.PARK, LandClass.SCRUB, LandClass.WETLAND -> {
                     p.inner[side] = 3.5; p.end[side] = 9.0
                 }
+                // Breiter deckend als frueher (1,2/1,0 m): Das Luftbild zeigt die echte Strasse oft
+                // etwas versetzt — sonst stand neben dem Rand ein heller, harter Saum aus Strassenpixeln.
                 LandClass.FARMLAND -> {
-                    p.inner[side] = 1.2; p.end[side] = 3.6
+                    p.inner[side] = 2.0; p.end[side] = 5.0
                 }
                 else -> {
-                    p.inner[side] = 1.0; p.end[side] = 3.0
+                    p.inner[side] = 1.8; p.end[side] = 4.4
                 }
             }
             val t = DEFAULT_TINT.getValue(land)
@@ -445,11 +447,14 @@ private class RouteEmitter(
                 val pm = env.profile(i + 1)
                 val pb = env.profile(i + 2)
                 val same = pa.sectionIndex == pm.sectionIndex && RouteGeometry.segSection(track, i + 1) == pa.sectionIndex
-                if (same && !pa.nearRoad && !pm.nearRoad && !pb.nearRoad) span = 2
+                if (same && !pa.nearRoad && !pm.nearRoad && !pb.nearRoad && !pa.nearOther && !pb.nearOther) span = 2
             }
             var sub = 1
             for (q in 0 until span) sub = max(sub, RouteGeometry.subdivisions(track, i + q, detail.maxSub))
-            if (span == 1 && (pa.nearRoad || env.profile(i + 1).nearRoad)) sub = max(sub, min(detail.maxSub, 3))
+            // An Einmuendungen und wo die Strecke sich selbst nahe kommt, werden die Raender per Eckpunkt
+            // ausgeblendet — fein teilen, sonst zeigen sich die Dreiecke als eckige Loecher im Rand.
+            val pn = env.profile(i + 1)
+            if (span == 1 && (pa.nearRoad || pn.nearRoad || pa.nearOther || pn.nearOther)) sub = max(sub, detail.maxSub)
             for (p in 0 until sub) xs.add(i + span.toDouble() * p / sub)
             i += span
         }
@@ -530,7 +535,14 @@ private class RouteEmitter(
 
     private fun pointE(st: Station, t: Double): Double = st.e + st.tn * RouteGeometry.limitOffset(t, st.kappa)
     private fun pointN(st: Station, t: Double): Double = st.n - st.te * RouteGeometry.limitOffset(t, st.kappa)
-    private fun groundAt(st: Station, t: Double): Double = ctx.ground.heightAt(pointE(st, t), pointN(st, t))
+    private val meshCell = level0TerrainCellM(ctx.quality)
+
+    /** Boden fuer die Raender: das Maximum aus wahrem Boden und gezeichnetem Netz ([terrainMeshHeightAt]). */
+    private fun groundAt(st: Station, t: Double): Double {
+        val e = pointE(st, t)
+        val n = pointN(st, t)
+        return max(ctx.ground.heightAt(e, n), terrainMeshHeightAt(ctx.ground, e, n, meshCell))
+    }
 
     private fun roadFactor(st: Station, t: Double): Double =
         smoothstep(0.2, 1.8, env.roads.clearance(pointE(st, t), pointN(st, t), withRail = false))

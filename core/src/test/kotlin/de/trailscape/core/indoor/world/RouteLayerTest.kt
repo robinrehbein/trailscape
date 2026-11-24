@@ -101,7 +101,9 @@ class RouteLayerTest {
                     val n = spec.anchorN - m.z(i)
                     val hit = scene.line.nearest(e, n, 40.0)!!
                     if (Argb.alpha(m.colors[i]) != 0 || hit.distance < scene.line.halfWidthAt(hit.distM) + 2.2) continue
-                    val above = m.y(i) + ctx.anchorU - scene.ground.heightAt(e, n)
+                    // Boden = was gezeichnet wird: das Maximum aus wahrem Boden und 4-m-Gelaendenetz.
+                    val floor = maxOf(scene.ground.heightAt(e, n), terrainMeshHeightAt(scene.ground, e, n, level0TerrainCellM(ctx.quality)))
+                    val above = m.y(i) + ctx.anchorU - floor
                     assertTrue(above in 0.015..0.065, "Aussenkante $above m ueber dem Boden bei ${hit.distM}")
                     outer++
                 }

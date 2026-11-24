@@ -79,8 +79,11 @@ internal class FilamentCore {
                 .castShadows(true)
                 .shadowOptions(
                     LightManager.ShadowOptions().apply {
-                        mapSize = 1024
+                        // 2048² je Kaskade, Grenzen bei rund 15 m und 60 m: scharfe, ruhige
+                        // Schatten nah am Fahrer statt Treppenkanten (vorher 1024², Filament-Standardgrenzen).
+                        mapSize = SHADOW_MAP_PX
                         shadowCascades = 3
+                        cascadeSplitPositions = floatArrayOf(0.05f, 0.2f)
                         // Vertrag 7.6: Schattenreichweite hoechstens rund 300 m.
                         shadowFar = SHADOW_FAR_M
                         shadowFarHint = SHADOW_FAR_M
@@ -161,7 +164,15 @@ internal class FilamentCore {
             engine.lightManager.setShadowCaster(it, s.shadows)
         }
         view.isPostProcessingEnabled = s.postProcessing
-        view.antiAliasing = if (s.antiAliasing) View.AntiAliasing.FXAA else View.AntiAliasing.NONE
+        applyAntiAliasing(s.antiAliasing)
+        // Weiche Schattenkanten (DPCF) statt hartem PCF; faellt einzeln auf PCF zurueck.
+        runCatching {
+            view.setShadowType(if (s.shadows) View.ShadowType.DPCF else View.ShadowType.PCF)
+            view.softShadowOptions = view.softShadowOptions.apply {
+                penumbraScale = 1.5f
+                penumbraRatioScale = 1.0f
+            }
+        }.onFailure { runCatching { view.setShadowType(View.ShadowType.PCF) } }
         view.dithering = if (s.postProcessing) View.Dithering.TEMPORAL else View.Dithering.NONE
         view.ambientOcclusionOptions = view.ambientOcclusionOptions.apply {
             enabled = s.ambientOcclusion
@@ -183,6 +194,26 @@ internal class FilamentCore {
             // In Einheiten der Anzeigerate: bei 60 Hz und 30 Bildern ist das 2 (fuer die dynamische Aufloesung).
             interval = (hz / s.maxFps.toFloat()).coerceAtLeast(1f)
         }
+    }
+
+    /**
+     * Kantenglaettung: 4× MSAA (auf Kachel-GPUs guenstig, glaettet Geometriekanten von
+     * Baeumen, Daechern, Fahrbahnraendern), dazu FXAA nur, wenn MSAA nicht geht.
+     * Jeder Schritt einzeln abgesichert — ein Fehler hier kostet nur die Glaettung.
+     */
+    private fun applyAntiAliasing(enabled: Boolean) {
+        val msaa = enabled && runCatching {
+            view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply {
+                this.enabled = true
+                sampleCount = MSAA_SAMPLES
+            }
+        }.isSuccess
+        if (!enabled) {
+            runCatching {
+                view.multiSampleAntiAliasingOptions = view.multiSampleAntiAliasingOptions.apply { this.enabled = false }
+            }
+        }
+        view.antiAliasing = if (enabled && !msaa) View.AntiAliasing.FXAA else View.AntiAliasing.NONE
     }
 
     fun applyFog(enabled: Boolean, density: Double, color: Rgb, height: Double) {
@@ -352,11 +383,15 @@ internal class FilamentCore {
     }
 
     companion object {
-        const val NEAR_M = 0.3
+        // 0,5 statt 0,3 m: Tiefenauflösung in der Ferne fast doppelt so gut (weniger Flimmern von
+        // Strasse auf Gelände); die Lenkerkamera sitzt 1,45 m hoch, nichts kommt näher.
+        const val NEAR_M = 0.5
         const val FAR_M = 25_000.0
         const val FOV_LANDSCAPE_DEG = 50.0
         const val FOV_PORTRAIT_DEG = 72.0
         const val SHADOW_FAR_M = 300f
+        const val SHADOW_MAP_PX = 2048
+        const val MSAA_SAMPLES = 4
         const val FOG_HEIGHT_FALLOFF = 0.0012f
         const val SKY_CUBE_PX = 64
 
