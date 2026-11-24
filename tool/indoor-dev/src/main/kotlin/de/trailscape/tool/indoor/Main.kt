@@ -23,7 +23,7 @@ import kotlin.system.exitProcess
  *
  * ```
  * build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>]
- *       [--from-km a --to-km b] [--no-aerial] [--offline]
+ *       [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m]]
  * plan  --gpx <datei> [--quality …] [--from-km a --to-km b] [--no-aerial]
  * testworld --out <dir> [--quality …]
  * check <dir>
@@ -50,13 +50,13 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--offline]
-  plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--offline] [--laser [--laser-radius m]]
+  plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
   check <dir>
   models --out <dir>
   catalog-routes [--only a,b]
-  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]"""
+  catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]"""
 
 /** Cache der Geodaten (git-ignoriert). */
 private const val CACHE_DIR = CACHE_DIR_TOOL
@@ -98,14 +98,14 @@ private fun run(all: List<String>): Int {
     val cmd = all.firstOrNull() ?: throw UsageError("Befehl fehlt")
     val rest = all.drop(1)
     return when (cmd) {
-        "build" -> build(Args(rest, setOf("no-aerial", "offline")))
-        "plan" -> plan(Args(rest, setOf("no-aerial", "offline")))
+        "build" -> build(Args(rest, setOf("no-aerial", "offline", "laser")))
+        "plan" -> plan(Args(rest, setOf("no-aerial", "offline", "laser")))
         "testworld" -> testworld(Args(rest, emptySet()))
         "check" -> check(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "overlaps" -> overlaps(File(Args(rest, emptySet()).positional.firstOrNull() ?: throw UsageError("Weltverzeichnis fehlt")))
         "models" -> models(Args(rest, emptySet()))
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
-        "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline")).let { a ->
+        "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline", "laser")).let { a ->
             catalogBuild(
                 out = File(a.req("out")),
                 only = a.opt("only"),
@@ -114,6 +114,7 @@ private fun run(all: List<String>): Int {
                 keepGoing = a.flag("keep-going"),
                 noAerial = a.flag("no-aerial"),
                 offline = a.flag("offline"),
+                laser = a.flag("laser"),
             )
         }
         else -> throw UsageError("unbekannter Befehl: $cmd")
@@ -141,10 +142,18 @@ private fun prepare(a: Args): Prepared {
     val surfaces = sfile?.let(::readSurfaceFile)
     val label = if (fromM > 0 || cutTo < fullLen) "$name (km ${"%.1f".format(fromM / 1000)}–${"%.1f".format(cutTo / 1000)})" else name
     val (route, fromCore) = indoorRouteOf(label, cut, surfaces, fullLen, fromM, cutTo)
-    var plan = createWorldBuilder().plan(route, a.quality())
+    var plan = builderFor(a).plan(route, a.quality())
     if (a.flag("no-aerial")) plan = plan.copy(aerial = emptyList())
     return Prepared(plan, fromCore, sfile)
 }
+
+/** Der Weltbau: mit `--laser` die Datenstufe „Laser" (DGM1, nDOM, LoD2 — NRW). */
+private fun builderFor(a: Args): de.trailscape.core.indoor.world.WorldBuilder =
+    if (a.flag("laser")) {
+        de.trailscape.core.indoor.world.createLaserWorldBuilder(toolLaserOptions(File(CACHE_DIR), a.flag("offline"), a.double("laser-radius")))
+    } else {
+        createWorldBuilder()
+    }
 
 private fun printPlan(p: Prepared) {
     val plan = p.plan
@@ -193,8 +202,9 @@ private fun build(a: Args): Int {
     val counting = CountingFetcher(createGeoPipeline(raw, File(CACHE_DIR)))
     val start = System.nanoTime()
     println("Baue nach ${out.path} …")
+    val builder = builderFor(a)
     val manifest = try {
-        createWorldBuilder().build(prepared.plan, WorldBuildDeps(counting, ImageIoDecoder), out, ConsoleListener())
+        builder.build(prepared.plan, WorldBuildDeps(counting, ImageIoDecoder), out, ConsoleListener())
     } catch (e: WorldBuildFailed) {
         System.err.println("Bau gescheitert: ${e.message}")
         e.cause?.let { c ->
@@ -209,6 +219,11 @@ private fun build(a: Args): Int {
     val seconds = (System.nanoTime() - start) / 1e9
     summary(manifest, out, seconds)
     println("Anfragen: ${counting.summary()}")
+    de.trailscape.core.indoor.world.laserBuildStats(builder).takeIf { it.isNotEmpty() }?.let { s ->
+        println("Laser: " + s.entries.joinToString(", ") { "${it.key}=${it.value}" })
+    }
+    val rt = Runtime.getRuntime()
+    println("Heap: belegt ${mb(rt.totalMemory() - rt.freeMemory())}, reserviert ${mb(rt.totalMemory())}, Grenze ${mb(rt.maxMemory())}")
     return checkAndReport(out)
 }
 
