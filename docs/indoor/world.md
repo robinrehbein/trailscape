@@ -325,6 +325,82 @@ Gegenüber `main` vor der Vegetation (6cd9387): Schauinsland 11,8 → 13,2 MB/km
 `OutOfMemoryError` ab (vor den Kacheln, beim Laden; mit 2 GB Heap nach GC bis
 343 MB). Das liegt in der Laser-Stufe, nicht in der Vegetation.
 
+### Dritte Runde (Kombi-Render Balkantrasse, `--laser`)
+
+Nach dem Zusammenführen mit `main` a80395a (Welt-Version 5). Vorher = dieser
+Stand nach dem Merge, nachher = jetzt; alle Bildpaare ersetzt, neu
+`balkantrasse-laser-chase` (km 4,5, Verfolger).
+
+| Befund | Ursache | Lösung |
+|---|---|---|
+| Stämme fast schwarz und sehr dick | Radius 2,4 % der Höhe (Laserbäume bis 42 m → Durchmesser um 2 m, Wurzelanlauf ×1,9), dunkle Rindenfarbe × Textur, Fuß auf 55 % | Radius aus der Höhe mit Deckel (`trunkRadius`: Laubbaum 0,05 m + 1,2 % · h, höchstens 0,42 m; Fichte 0,9 %, höchstens 0,32 m; Kiefer 1 %, 0,34 m), Wurzelanlauf ×1,45, Rinde heller, Fuß 78 % |
+| Kronen „ausgebleicht“ (weißlich-hellgrün), Schatten fast schwarz | **Spiegelanteil der Sonne bei streifendem Blick:** Die nach oben/außen gebogenen Normalen zeigen für die tief stehende Kamera oft vom Betrachter weg (N·V ≈ 0); dann wird der GGX-/Fresnel-Term groß, und er hängt nicht von der Albedo ab. Die Albedo der Karten war mit linear 0,02–0,05 zudem viel dunkler als echtes Laub, deshalb überdeckte der graue Glanz das Grün. Nachgewiesen im Betrachter: Mit `MeshLambertMaterial` (ohne Spiegelanteil) sind dieselben Kronen satt grün; Materialfarbe, Rauheit 1,0 und Dunst ändern nichts. Filament nutzt dieselbe BRDF-Familie (GGX, Smith, Schlick) und hat keinen Schalter dafür im Kern-glTF | Normalen zusätzlich **zur Strecke hin** gebogen (die Kamera ist immer dort; Richtung je Baum aus der nächsten Stelle der Strecke), weniger nach oben; Albedo der Karten auf ein realistisches Niveau (Helligkeit 0,66–1,06 statt 0,36–0,68), satteres Grün; Laubzweig-Motiv mit geschlossener, dunklerer Laubschicht unter den Blättern (weniger Himmel durch kleine Lücken) |
+| lange schmale Kartenstreifen aus der Krone | Karten nahe der Hülle mit großer Länge | Kartenspitze höchstens 12 % über der Kronenhülle (sonst gekürzt), MID-Karten kürzer |
+| Fichtenäste wie gestapelte Platten | flache, gleich große Trapezkarten | gewölbte Schürzen (drei Eckpunktzeilen, Mitte nach außen), schmalere Karten (7 je Quirl, 10 Quirle), je Karte eigene Weite, Breite, Höhe und Durchhang |
+
+Bildrate: Dreiecksdeckel unverändert, Kartenzahl praktisch gleich (Fichte nah
+280 statt 288 Dreiecke). Fast kantenparallele Karten direkt vor der Kamera
+zeigen weiterhin einen hellen Streifen (N·V ≈ 0 lässt sich ohne eigenen Shader
+nicht ganz vermeiden).
+
+| Welt (`-Xmx256m`) | Dreiecke gleichzeitig | Platte |
+|---|---|---|
+| Schauinsland | 560 017 → 560 553 | 13,2 → 13,2 MB/km |
+| Altenberg kurz | 467 902 → 468 080 | 17,8 → 17,8 MB/km |
+| Tharandt km 2–6 | 466 472 → 473 746 | 13,8 → 13,9 MB/km |
+| Balkantrasse `--laser` (`-Xmx2g`) | 438 434 → 441 606 | 18,4 → 18,5 MB/km |
+
+Die Balkantrasse mit `--laser` scheitert bei `-Xmx256m` weiterhin beim Laden
+(`OutOfMemoryError`, Laser-Stufe, unabhängig von der Vegetation).
+
+### Runde 3b: Spiegelanteil abgeschaltet, Rinde hell
+
+Rückmeldung zu Runde 3: Sonnige Kronen weiterhin grau verschleiert, Stämme
+fast schwarz.
+
+- **`KHR_materials_specular` mit `specularFactor` 0** auf allen
+  Vegetationsmaterialien (`x_mat_tree_cards` samt Bodenbewuchs und
+  Kreuzbildern, `mat_tree_leaves`, `mat_tree_trunk`). In `Glb.kt` als
+  optionale Material-Erweiterung (`GlbMaterial.noSpecular`, nur in
+  `extensionsUsed`, nicht `extensionsRequired`), über
+  `TileMaterial.noSpecular` gesetzt. **Beleg, dass gltfio 1.75.1 sie im
+  Ubershader auswertet** (Tag `v1.75.1`):
+  - `libs/gltfio/include/gltfio/MaterialProvider.h:98` `bool hasSpecular : 1;`
+  - `libs/gltfio/src/AssetLoader.cpp:1462` `.hasSpecular = !!inputMat->has_specular,`;
+    `:1760–1763` setzt `specularColorFactor` und
+    `specularStrength = spConfig.specular_factor`
+  - `libs/gltfio/src/UbershaderProvider.cpp:194`
+    `requirements.features["Specular"] = config.hasSpecular;`; `:74–78`
+    (Unlit und Specular schließen sich aus — hier nicht gebraucht)
+  - `libs/gltfio/CMakeLists.txt:152–154` baut `specular_opaque`,
+    `specular_fade`, **`specular_masked`** ins Archiv;
+    `materials/specular.spec.in`: `VertexColors`, `BaseColorTexture` optional,
+    `Specular = optional`
+  - `materials/specular.mat.in:128`
+    `material.specularFactor = materialParams.specularStrength;` — laut
+    Materials-Doku skaliert `specularFactor` F0 und setzt F90, mit 0 also kein
+    Spiegelanteil, auch nicht bei streifendem Blick.
+
+  Der Betrachter lädt die Erweiterung als `MeshPhysicalMaterial`
+  (`specularIntensity` 0) und erlaubt sie in der Formatprüfung, ebenso
+  `GlbCheck` in `:core`. Auf dem Gerät nicht gesehen: Ob `specular_masked` mit
+  `doubleSided` (Kronendach) und MSAA genauso wie `lit_masked` läuft, sagen die
+  Quellen (gleiche Vorlage `${BLENDING}`/`${DOUBLESIDED}`), geprüft ist es nicht.
+- **Rinde:** Die Albedo war linear rund 0,035 (Textur ~0,2 × Vertexfarbe ~0,15);
+  echte Rinde liegt bei 0,1–0,2. Rindentextur heller (0,45–0,95 sRGB),
+  Rindenfarben angehoben (Laubbaum sRGB 170/152/132, Fichte 158/138/118,
+  Kiefer unten 162/142/126, oben 196/148/110, Birke 214/210/200). Die
+  Stammnormalen sind radial (Loft), Stämme empfangen keine Schatten — der
+  Rest war Albedo und Glanz.
+- **Laub:** Ohne Glanz wurde das Grün zu kräftig; Grundfarben olivgrüner,
+  Helligkeit 0,58–0,94.
+- Die Normalen zur Strecke (Runde 3) bleiben: Sie halten die Schattenseite
+  der Kronen hell genug.
+
+Messwerte unverändert gegenüber Runde 3 (Schauinsland 560 553 Dreiecke,
+13,2 MB/km; Altenberg 17,8; Tharandt 13,9; Balkantrasse 18,5 MB/km). Neu im
+Bildsatz: `balkantrasse-laser-chase-km26`.
+
 ### Bildrate: Overdraw und Stellschrauben
 
 Alpha-getestete Karten überlagern sich (Overdraw), und `discard` hebt Early-Z
@@ -370,6 +446,13 @@ Fällt auf dem Gerät die Bildrate, in dieser Reihenfolge drehen:
    Blattkarten mit echtem Alpha-Ausschnitt in `x_mat_tree_cards` (MASK,
    **einseitig**, beide Wicklungen im Netz); `mat_tree_leaves` (MASK,
    doppelseitig, wie im Vertrag) trägt das deckende Kronendach der Waldkörper.
+   **Erweiterung `KHR_materials_specular`** (Vertrag 7.3: „keine weiteren
+   Erweiterungen“): nur `specularFactor` 0 auf Vegetationsmaterialien, nur in
+   `extensionsUsed`. Ohne sie überdeckt der Spiegelanteil der Sonne bei
+   streifendem Blick das Grün (Runde 3/3b). gltfio 1.75.1 unterstützt sie im
+   Ubershader (`specular_masked`, Belege oben). `GlbCheck` und Betrachter
+   lassen genau diese Erweiterung zu. **Bitte an den Vertragsbesitzer:**
+   7.3 entsprechend ergänzen.
 2. **Wasser nur als Flächen.** Schmale Wasserläufe (Linien `waterway`)
    bekommen keinen eigenen Spiegel; sie erscheinen nur im Luftbild bzw. in der
    erzeugten Bodentextur. Wasser liegt als Gitterzellen (4 m in Stufe 0) knapp

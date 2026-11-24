@@ -101,7 +101,7 @@ Gezeichnet wird nur auf Anforderung, nicht in einer Schleife.
 - Schatten nach Knotennamen: `buildings` wirft und empfängt, `trees` wirft,
   `terrain`/`route`/`roads`/`water` empfangen, `props` und `x_…` nichts.
 - Formatprüfung je GLB (**Fehler**): andere Erweiterungen als
-  `KHR_materials_unlit`; Knoten, die weder in `WorldNames` stehen noch
+  `KHR_materials_unlit` und `KHR_materials_specular` (Vegetation ohne Glanz); Knoten, die weder in `WorldNames` stehen noch
   `terrain_sub_i_j` oder `x_…` heißen; doppelte Knoten; Kameras, Lichter,
   Animationen, Skins in Kacheln; ab Stufe 1 nicht genau 16 Teilflächen oder ein
   Netz direkt an `terrain`; `metallicFactor ≠ 0`, `roughnessFactor < 0,6`;

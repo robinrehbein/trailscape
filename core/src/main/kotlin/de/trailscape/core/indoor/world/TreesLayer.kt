@@ -374,7 +374,7 @@ internal class TreesLayer : TileLayer {
             }
         }
         val bark = ctx.textures.get("x_bark", jpegQuality = 84) { FoliageAtlas.barkImage() }
-        val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, texture = bark, repeat = true, roughness = 0.95f)
+        val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, texture = bark, repeat = true, roughness = 0.95f, noSpecular = true)
         val trunks = out.mesh(WorldNames.NODE_TREES, trunkMat)
         val crowns = out.mesh(WorldNames.NODE_TREES, leaves)
         val scratchTrunk = MeshBuilder(64, 64)
@@ -382,7 +382,12 @@ internal class TreesLayer : TileLayer {
         for (c in placed) {
             scratchTrunk.clear()
             scratchCrown.clear()
-            TreeModels.build(c.spec, c.lod, scratchTrunk, scratchCrown)
+            val hit = ctx.track.nearest(c.e, c.n, NEAR_M + 10.0)
+            val toward = if (hit == null) Vec3(0.0, 0.0, 0.0) else {
+                val p = ctx.track.poseAt(hit.distM)
+                Vec3(p.e - c.e, 0.0, -(p.n - c.n)).normalized(Vec3(0.0, 0.0, 0.0))
+            }
+            TreeModels.build(c.spec, c.lod, scratchTrunk, scratchCrown, toward)
             val g = ctx.ground.heightAt(c.e, c.n)
             val m = Mat4.translation(ctx.x(c.e), ctx.y(g), ctx.z(c.n))
             trunks.append(scratchTrunk, m)
@@ -589,6 +594,7 @@ internal class TreesLayer : TileLayer {
             alphaMode = GlbAlphaMode.MASK,
             alphaCutoff = 0.5f,
             doubleSided = false,
+            noSpecular = true,
         )
     }
 
@@ -603,6 +609,7 @@ internal class TreesLayer : TileLayer {
             alphaMode = GlbAlphaMode.MASK,
             alphaCutoff = 0.5f,
             doubleSided = false,
+            noSpecular = true,
         )
     }
 
@@ -611,7 +618,7 @@ internal class TreesLayer : TileLayer {
         val tex = ctx.textures.get("x_canopy", jpegQuality = 86) { FoliageAtlas.canopyImage() }
         return TileMaterial(
             WorldNames.MAT_TREE_LEAVES, texture = tex, repeat = true, roughness = 0.95f,
-            alphaMode = GlbAlphaMode.MASK, alphaCutoff = 0.5f, doubleSided = true,
+            alphaMode = GlbAlphaMode.MASK, alphaCutoff = 0.5f, doubleSided = true, noSpecular = true,
         )
     }
 
