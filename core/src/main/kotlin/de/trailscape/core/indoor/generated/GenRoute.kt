@@ -293,7 +293,9 @@ private fun chooseSerpentines(seed: Long, landscape: GenLandscape, legs: List<Ge
     for ((i, leg) in legs.withIndex()) {
         val len = leg.toM - leg.fromM
         if (abs(leg.gradePct) < minGrade || len < 900) continue
-        if (Noise.hash01(sd, i, 1) > (if (landscape == GenLandscape.MITTELGEBIRGE) 0.8 else 0.5)) continue
+        // je steiler, desto eher Kehren (Mittelgebirge: 6 % → 0,31, 8 % → 0,55, ab 10 % → 0,8)
+        val chance = if (landscape == GenLandscape.MITTELGEBIRGE) (0.25 + 0.12 * (abs(leg.gradePct) - 5.5)).coerceAtMost(0.8) else 0.5
+        if (Noise.hash01(sd, i, 1) > chance) continue
         val frac = 0.45 + 0.3 * Noise.hash01(sd, i, 2)
         val span = min(len * frac, 2_600.0)
         val start = leg.fromM + (len - span) * (0.3 + 0.4 * Noise.hash01(sd, i, 3))

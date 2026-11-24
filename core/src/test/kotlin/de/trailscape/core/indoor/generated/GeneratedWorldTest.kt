@@ -164,7 +164,7 @@ class GeneratedWorldTest {
                 override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) = Unit
             }
             val m = buildGeneratedImpl(plan, p, a, quiet, createdAtMs = 0L, threads = 2)
-            buildGeneratedImpl(plan, p, b, quiet, createdAtMs = 0L, threads = 1)
+            buildGeneratedImpl(plan, p, b, quiet, createdAtMs = 0L, threads = 1, fresh = true)
             assertEquals(emptyList(), checkWorld(a))
             assertEquals(File(a, WorldManifest.FILE_NAME).readText(), File(b, WorldManifest.FILE_NAME).readText())
             for (t in m.tiles) assertContentEquals(File(a, t.file).readBytes(), File(b, t.file).readBytes(), t.id)

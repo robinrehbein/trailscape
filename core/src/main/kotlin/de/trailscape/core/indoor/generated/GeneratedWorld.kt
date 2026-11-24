@@ -65,7 +65,21 @@ internal class GeneratedScene(val profile: GeneratedProfile) {
     }
 }
 
-internal fun generatedRouteImpl(profile: GeneratedProfile, name: String): IndoorRoute = GeneratedScene(profile).route(name)
+/**
+ * Die zuletzt erzeugte Szene (weich gehalten): Voranschlag und Bau desselben
+ * Profils rechnen Linie, Gelaende und Karte nur einmal. Das Ergebnis haengt
+ * nicht davon ab — alles ist eine reine Funktion des Profils.
+ */
+private object SceneCache {
+    @Volatile private var ref: java.lang.ref.SoftReference<GeneratedScene>? = null
+
+    fun of(profile: GeneratedProfile): GeneratedScene {
+        ref?.get()?.let { if (it.profile == profile) return it }
+        return GeneratedScene(profile).also { ref = java.lang.ref.SoftReference(it) }
+    }
+}
+
+internal fun generatedRouteImpl(profile: GeneratedProfile, name: String): IndoorRoute = SceneCache.of(profile).route(name)
 
 internal fun generatedPlanImpl(profile: GeneratedProfile, quality: IndoorQuality, name: String): WorldPlan {
     val route = generatedRouteImpl(profile, name)
@@ -84,10 +98,12 @@ internal fun buildGeneratedImpl(
     listener: WorldBuildListener,
     createdAtMs: Long = System.currentTimeMillis(),
     threads: Int? = null,
+    /** Szene neu rechnen statt aus dem Zwischenspeicher (Tests der Bytegleichheit). */
+    fresh: Boolean = false,
 ): WorldManifest {
     try {
         if (listener.isCancelled()) throw WorldBuildCancelled()
-        val scene = GeneratedScene(profile)
+        val scene = if (fresh) GeneratedScene(profile) else SceneCache.of(profile)
         if (scene.routeId != plan.route.id) {
             throw WorldBuildFailed(WorldBuildFailed.Reason.INTERNAL, "Plan gehoert nicht zu diesem Profil (${plan.route.id} ≠ ${scene.routeId})")
         }
@@ -115,7 +131,7 @@ internal fun buildGeneratedImpl(
 }
 
 internal fun describeGeneratedImpl(profile: GeneratedProfile): List<String> {
-    val scene = GeneratedScene(profile)
+    val scene = SceneCache.of(profile)
     val p = scene.plan
     val out = ArrayList<String>()
     fun km(m: Double) = "%.2f".format(java.util.Locale.ROOT, m / 1000)
