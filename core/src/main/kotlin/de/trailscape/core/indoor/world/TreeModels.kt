@@ -62,26 +62,26 @@ internal object TreeModels {
 
     /** Grundfarben der Kronen in sRGB (mit der hellen Atlas-Textur multipliziert). */
     private val LEAF = mapOf(
-        Species.BROAD to intArrayOf(80, 118, 42),
-        Species.TALL to intArrayOf(96, 132, 48),
-        Species.CONIFER to intArrayOf(50, 86, 50),
-        Species.SMALL to intArrayOf(88, 124, 44),
-        Species.PINE to intArrayOf(66, 98, 50),
-        Species.BUSH to intArrayOf(78, 116, 40),
+        Species.BROAD to intArrayOf(76, 124, 34),
+        Species.TALL to intArrayOf(92, 138, 40),
+        Species.CONIFER to intArrayOf(40, 88, 44),
+        Species.SMALL to intArrayOf(84, 130, 36),
+        Species.PINE to intArrayOf(58, 102, 44),
+        Species.BUSH to intArrayOf(74, 122, 32),
     )
 
     /** Grundfarbe (sRGB) der Krone einer Art — fuer Kreuzbilder der Waldkoerper. */
     fun leafBase(species: Species): IntArray = LEAF.getValue(species)
 
     /** Baut den Baum [s] in Stufe [lod] in die Netze [trunk] (Rinde) und [crown] (Blattkarten). */
-    fun build(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder) {
+    fun build(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder, toward: Vec3 = Vec3(0.0, 0.0, 0.0)) {
         when (s.species) {
-            Species.BROAD -> broadLike(s, lod, trunk, crown, Shape.BROAD)
-            Species.TALL -> broadLike(s, lod, trunk, crown, Shape.TALL)
-            Species.SMALL -> broadLike(s, lod, trunk, crown, Shape.SMALL)
-            Species.BUSH -> broadLike(s, lod, trunk, crown, Shape.BUSH)
-            Species.CONIFER -> spruce(s, lod, trunk, crown)
-            Species.PINE -> pine(s, lod, trunk, crown)
+            Species.BROAD -> broadLike(s, lod, trunk, crown, Shape.BROAD, toward)
+            Species.TALL -> broadLike(s, lod, trunk, crown, Shape.TALL, toward)
+            Species.SMALL -> broadLike(s, lod, trunk, crown, Shape.SMALL, toward)
+            Species.BUSH -> broadLike(s, lod, trunk, crown, Shape.BUSH, toward)
+            Species.CONIFER -> spruce(s, lod, trunk, crown, toward)
+            Species.PINE -> pine(s, lod, trunk, crown, toward)
         }
     }
 
@@ -115,7 +115,13 @@ internal object TreeModels {
     }
 
     /** Krone als Ellipsoid (Mitte, Radien) — Bezug fuer Normalen und Verschattung. */
-    private class Crown(val c: Vec3, val rx: Double, val ry: Double, val bottom: Double, val top: Double) {
+    /**
+     * [toward]: waagrechte Richtung zur Strecke (glTF-Achsen) oder null-Vektor. Die Kamera ist
+     * immer auf der Strecke und tief; Normalen, die von ihr weg zeigen (N·V ≈ 0), bekommen in
+     * Filament wie im Betrachter einen ueberhoehten, grauen Spiegelanteil (Fresnel/GGX bei
+     * streifendem Blick) — die Krone wirkte "ausgebleicht".
+     */
+    private class Crown(val c: Vec3, val rx: Double, val ry: Double, val bottom: Double, val top: Double, val toward: Vec3 = Vec3(0.0, 0.0, 0.0)) {
         /** Normierte Lage (0 = Mitte, 1 = Rand). */
         fun rel(p: Vec3): Vec3 = Vec3((p.x - c.x) / rx, (p.y - c.y) / ry, (p.z - c.z) / rx)
     }
@@ -127,10 +133,16 @@ internal object TreeModels {
      * sonst von unten nach oben. Vorderseite zeigt von der Kronenmitte weg.
      */
     private fun card(
-        m: MeshBuilder, base: Vec3, along: Vec3, across: Vec3, len: Double, wid: Double,
+        m: MeshBuilder, base: Vec3, along: Vec3, across: Vec3, length: Double, wid: Double,
         reg: FoliageAtlas.Region, alongIsS: Boolean, crown: Crown, leaf: IntArray, tint: Double, hue: Double,
-        bend: Double = 0.8, inset: Double = 0.0, darkBase: Double = 0.88,
+        bend: Double = 0.8, inset: Double = 0.0, darkBase: Double = 0.88, clampTip: Boolean = true,
     ) {
+        // Keine langen Kartenzungen aus der Krone: Spitze hoechstens knapp ueber der Kronenhuelle.
+        var len = length
+        if (clampTip) {
+            var guard = 0
+            while (crown.rel(base + along * len).length() > 1.12 && guard++ < 4) len *= 0.8
+        }
         val plane = (across cross along).normalized()
         val fs = doubleArrayOf(0.0, 0.0, 1.0, 1.0)
         val gs = doubleArrayOf(-1.0, 1.0, 1.0, -1.0)
@@ -153,11 +165,14 @@ internal object TreeModels {
             val g = gs[k]
             val p = ps[k]
             val rl = crown.rel(p).length()
-            val n = (pn * (1 - bend) + radials[k] * bend + Vec3(0.0, 0.1, 0.0)).normalized()
-            // Verschattung: innen und unten dunkler, oben und aussen heller.
+            // Weicher Verlauf: kraeftiger Anteil nach oben (Himmelslicht auch auf der Schattenseite),
+            // radial nur noch zur Haelfte — vorher zerfiel die Krone in ausgebleichte Sonnen- und
+            // fast schwarze Schattenfetzen.
+            val n = (pn * ((1 - bend) * 0.5) + radials[k] * (bend * 0.6) + crown.toward * 0.55 + Vec3(0.0, 0.25, 0.0)).normalized()
+            // Verschattung: innen und unten dunkler, oben und aussen heller (geringe Spanne).
             val depth = rl.coerceIn(0.0, 1.15)
             val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
-            var shade = tint * (0.4 + 0.28 * depth.pow(1.3) + 0.28 * ht)
+            var shade = tint * (0.66 + 0.22 * depth.pow(1.3) + 0.18 * ht)
             if (f == 0.0) shade *= darkBase
             val s = (if (alongIsS) f else (g + 1) / 2).coerceIn(0.0, 1.0)
             val t = (if (alongIsS) (g + 1) / 2 else f).coerceIn(0.0, 1.0)
@@ -205,15 +220,22 @@ internal object TreeModels {
      * Rindentextur) und am Fuss dunklerer Farbe (Bodennaehe, Schatten des Bestands).
      */
     private fun MeshBuilder.bark(p0: Vec3, p1: Vec3, r0: Double, r1: Double, seg: Int, cap0: Boolean, cap1: Boolean, color: Int) {
-        val foot = if (p0.y < 1.0) scaleColor(color, 0.55) else color
+        val foot = if (p0.y < 1.0) scaleColor(color, 0.78) else color
         addLoft(listOf(p0, p1), doubleArrayOf(r0, r1), seg, cap0, cap1, color, intArrayOf(foot, color), 1.0, 0.5)
     }
 
     private fun scaleColor(c: Int, f: Double): Int =
         Argb.of(Argb.alpha(c), (Argb.red(c) * f).toInt(), (Argb.green(c) * f).toInt(), (Argb.blue(c) * f).toInt())
 
+    /**
+     * Stammradius (Brusthoehe) aus der Hoehe: [perM] je Meter plus Grundmass, hoechstens [max].
+     * Vorher 2,4 % der Hoehe — bei Laserbaeumen bis 42 m wurden das Stammdurchmesser um 2 m.
+     * Richtwerte: Buche 30 m ≈ 0,8 m Durchmesser, Fichte 30 m ≈ 0,6 m.
+     */
+    private fun trunkRadius(h: Double, perM: Double, max: Double): Double = (0.05 + perM * h).coerceAtMost(max)
+
     private fun barkColor(s: Spec): Int =
-        if (s.pale) lin(Argb.rgb(142, 138, 130)) else lin(Argb.rgb(78, 66, 54))
+        if (s.pale) lin(Argb.rgb(168, 164, 154)) else lin(Argb.rgb(116, 102, 88))
 
     /** Stamm bis [top] mit Radius [r], in der feinsten Stufe mit Wurzelanlauf. */
     private fun stem(m: MeshBuilder, lod: Lod, r: Double, top: Double, color: Int) {
@@ -223,7 +245,7 @@ internal object TreeModels {
             Lod.FAR -> 3
         }
         if (lod == Lod.NEAR) {
-            m.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.7, 0.0), r * 1.9, r * 1.05, seg, false, false, color)
+            m.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.7, 0.0), r * 1.45, r * 1.05, seg, false, false, color)
         }
         m.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, top, 0.0), r * 1.1, r * 0.55, seg, false, false, color)
     }
@@ -256,7 +278,7 @@ internal object TreeModels {
         }
     }
 
-    private fun broadLike(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder, shape: Shape) {
+    private fun broadLike(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder, shape: Shape, toward: Vec3) {
         val rnd = Rnd(s.seed, 0x7a11 + shape.ordinal)
         val h = s.heightM
         val w = s.width
@@ -271,7 +293,7 @@ internal object TreeModels {
             Shape.SMALL -> { cb = 0.32 * h; val ch = h - cb; rx = ch * 0.62 * w; ry = ch * 0.48; cy = cb + ch * 0.5 }
             Shape.BUSH -> { cb = 0.0; rx = h * 0.62 * w; ry = h * 0.5; cy = h * 0.5 }
         }
-        val cr = Crown(Vec3(0.0, cy, 0.0), rx, ry, cb, h)
+        val cr = Crown(Vec3(0.0, cy, 0.0), rx, ry, cb, h, toward)
         val leaf = LEAF.getValue(when (shape) {
             Shape.BROAD -> Species.BROAD
             Shape.TALL -> Species.TALL
@@ -279,9 +301,9 @@ internal object TreeModels {
             Shape.BUSH -> Species.BUSH
         })
         val trunkR = when (shape) {
-            Shape.BROAD -> 0.024 * h
-            Shape.TALL -> 0.018 * h
-            Shape.SMALL -> 0.034 * h
+            Shape.BROAD -> trunkRadius(h, 0.012, 0.42)
+            Shape.TALL -> trunkRadius(h, 0.009, 0.3)
+            Shape.SMALL -> trunkRadius(h, 0.02, 0.22)
             Shape.BUSH -> 0.0
         }
         if (shape != Shape.BUSH) stem(trunk, lod, trunkR, cy + (if (shape == Shape.TALL) ry * 0.5 else 0.0), barkColor(s))
@@ -344,7 +366,7 @@ internal object TreeModels {
             val yScale = ry / rx
             var p = Vec3(c.x + d.x * clumpR * f, c.y + d.y * clumpR * f * yScale, c.z + d.z * clumpR * f)
             p = envelope(p, 1.04)
-            val len = baseLen * rnd.range(0.8, 1.2) * (if (lod == Lod.MID) 1.55 else 1.0)
+            val len = baseLen * rnd.range(0.8, 1.2) * (if (lod == Lod.MID) 1.35 else 1.0)
             p = clampY(p, len)
             val along = (d + rnd.unit() * 0.55 + Vec3(0.0, 0.35, 0.0)).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
@@ -390,11 +412,11 @@ internal object TreeModels {
      * um die Astachse verkippt, damit sie von der Seite nicht als Strich
      * erscheinen) um einen dunklen, schlanken Kern gegen Durchblick.
      */
-    private fun spruce(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder) {
+    private fun spruce(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder, toward: Vec3) {
         val rnd = Rnd(s.seed, 0x7a21)
         val h = s.heightM
         val leaf = LEAF.getValue(Species.CONIFER)
-        val bark = lin(Argb.rgb(70, 54, 44))
+        val bark = lin(Argb.rgb(108, 92, 78))
         val b0 = s.bare.coerceIn(0.04, 0.4) * h
         val span = h - b0
         val r0 = 0.21 * h * s.width
@@ -402,7 +424,7 @@ internal object TreeModels {
             val t = ((y - b0) / span).coerceIn(0.0, 1.0)
             return r0 * (1 - t).pow(0.92) * (0.82 + 0.18 * (1 - t))
         }
-        val cr = Crown(Vec3(0.0, b0 + span * 0.38, 0.0), r0 * 0.8, span * 0.6, b0, h)
+        val cr = Crown(Vec3(0.0, b0 + span * 0.38, 0.0), r0 * 0.8, span * 0.6, b0, h, toward)
         if (lod == Lod.FAR) {
             // Kreuzbild aus drei senkrechten Karten (60° versetzt) mit dem ganzen Baum
             for (k in 0 until 3) {
@@ -415,87 +437,92 @@ internal object TreeModels {
             return
         }
         val (tiers, perTier) = when (lod) {
-            Lod.NEAR -> 12 to 6
+            Lod.NEAR -> 10 to 7
             else -> 6 to 5
         }
-        stem(trunk, lod, 0.015 * h, 0.9 * h, bark)
-        // Astquirle als Schuerzen: je Quirl ein Kranz schraeger Trapezkarten (oben am Stamm,
-        // unten weit und haengend), Quirle ueberlappen um die Haelfte.
+        stem(trunk, lod, trunkRadius(h, 0.009, 0.32), 0.9 * h, bark)
+        // Astquirle als gewoelbte Schuerzen: je Quirl ein Kranz schmaler Karten (oben am Stamm,
+        // unten weit und haengend), in der Mitte nach aussen gewoelbt, je Karte eigene Neigung,
+        // Weite und Hoehe — sonst wirkten die Quirle wie gestapelte Platten.
         val drop = 2.1 * span / tiers
         for (k in 0..tiers) {
             val apex = k == tiers
-            val yb = if (apex) h - drop * 0.9 else b0 + (span - drop * 0.6) * k / tiers + rnd.range(-0.08, 0.08) * drop
+            val yb = if (apex) h - drop * 0.9 else b0 + (span - drop * 0.6) * k / tiers + rnd.range(-0.12, 0.12) * drop
             val yt = if (apex) h else yb + drop * 0.8
             val rb = if (apex) r0 * 0.12 + 0.15 else env(yb) * 1.04 + 0.15
             val rt = if (apex) 0.02 else rb * 0.3 + 0.08
             val n = if (apex) 4 else perTier
-            val half = PI / n * 1.32
+            val half = PI / n * 1.25
             for (j in 0 until n) {
-                val a0 = s.turn + j * 2 * PI / n + k * 0.47 + rnd.range(-0.12, 0.12)
-                val rr = rb * rnd.range(0.9, 1.08)
-                val sag = rnd.range(-0.1, 0.12) * drop
-                val pts = arrayOf(
-                    Vec3(cos(a0 - half) * rr, yb - sag, -sin(a0 - half) * rr),
-                    Vec3(cos(a0 + half) * rr, yb - sag, -sin(a0 + half) * rr),
-                    Vec3(cos(a0 + half) * rt, yt, -sin(a0 + half) * rt),
-                    Vec3(cos(a0 - half) * rt, yt, -sin(a0 - half) * rt),
-                )
+                val a0 = s.turn + j * 2 * PI / n + k * 0.47 + rnd.range(-0.2, 0.2)
+                val rr = rb * rnd.range(0.82, 1.12)
+                val sag = rnd.range(-0.15, 0.2) * drop
                 val tint = s.tint * rnd.range(0.92, 1.08) * (0.9 + 0.2 * k / tiers)
-                quadCard(crown, pts, FoliageAtlas.SKIRT, cr, leaf, tint, s.hue + rnd.range(-0.15, 0.15), topShade = 0.62)
+                skirt(crown, a0, half * rnd.range(0.85, 1.1), rt, rr, yt, yb - sag, rr * rnd.range(0.08, 0.16), cr, leaf, tint, s.hue + rnd.range(-0.15, 0.15))
             }
         }
     }
 
     /**
-     * Allgemeines Viereck [pts] (unten links, unten rechts, oben rechts, oben links) mit dem
-     * ganzen Motiv [reg]; Vorderseite von der Kronenmitte weg, gebogene Normalen, oben
-     * (am Stamm) um [topShade] dunkler.
+     * Eine gewoelbte Schuerzen-Karte um die Stammachse: Azimut [a0] ± [half], oben Radius [rt] in
+     * Hoehe [yt], unten [rb] in [yb], in der Mitte um [bulge] nach aussen. Drei Zeilen Eckpunkte;
+     * Oberseite hell (Normale nach aussen-oben), Unterseite mit eigenen, dunklen Eckpunkten
+     * (Normale nach aussen-unten). Einseitiges Material, also je Seite eigene Wicklung.
      */
-    private fun quadCard(m: MeshBuilder, pts: Array<Vec3>, reg: FoliageAtlas.Region, crown: Crown, leaf: IntArray, tint: Double, hue: Double, topShade: Double, bend: Double = 0.72) {
-        val plane = ((pts[1] - pts[0]) cross (pts[3] - pts[0])).normalized()
-        val avg = pts.fold(Vec3(0.0, 0.0, 0.0)) { acc, p -> acc + crown.rel(p).normalized() }
-        val front = (plane dot avg) >= 0
-        val pn = if (front) plane else -plane
-        val st = arrayOf(doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 0.0), doubleArrayOf(1.0, 1.0), doubleArrayOf(0.0, 1.0))
-        val idx = IntArray(4)
-        for (k in 0 until 4) {
-            val p = pts[k]
-            val r = crown.rel(p)
-            val rl = r.length()
-            val radial = if (rl < 1e-4) Vec3(0.0, 1.0, 0.0) else Vec3(r.x / rl, r.y / rl, r.z / rl)
-            val n = (pn * (1 - bend) + radial * bend + Vec3(0.0, 0.2, 0.0)).normalized()
-            val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
-            val shade = tint * (0.62 + 0.3 * ht) * (if (st[k][1] > 0.5) topShade else 1.0)
-            idx[k] = m.vertex(p.x, p.y, p.z, n.x, n.y, n.z, reg.u(st[k][0]), reg.v(st[k][1]), leafColor(leaf, shade, hue))
+    private fun skirt(m: MeshBuilder, a0: Double, half: Double, rt: Double, rb: Double, yt: Double, yb: Double, bulge: Double, crown: Crown, leaf: IntArray, tint: Double, hue: Double) {
+        val reg = FoliageAtlas.SKIRT
+        val rows = doubleArrayOf(0.0, 0.5, 1.0) // 0 = unten (Rand), 1 = oben (Stamm)
+        val top = IntArray(6)
+        val bot = IntArray(6)
+        for ((ri, t) in rows.withIndex()) {
+            val r = rb + (rt - rb) * t + bulge * sin(PI * t)
+            val y = yb + (yt - yb) * t + bulge * 0.4 * sin(PI * t)
+            for (ci in 0..1) {
+                val a = a0 + (if (ci == 0) -half else half)
+                val p = Vec3(cos(a) * r, y, -sin(a) * r)
+                val out = Vec3(cos(a0), 0.0, -sin(a0))
+                val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
+                val nUp = (out * 0.6 + crown.toward * 0.5 + Vec3(0.0, 0.35, 0.0)).normalized()
+                val shade = tint * (0.72 + 0.22 * ht) * (1.0 - 0.25 * t)
+                val u = reg.u(ci.toDouble())
+                val v = reg.v(t)
+                top[ri * 2 + ci] = m.vertex(p.x, p.y, p.z, nUp.x, nUp.y, nUp.z, u, v, leafColor(leaf, shade, hue))
+                val nDown = (out * 0.6 + crown.toward * 0.5 + Vec3(0.0, -0.2, 0.0)).normalized()
+                bot[ri * 2 + ci] = m.vertex(p.x, p.y, p.z, nDown.x, nDown.y, nDown.z, u, v, leafColor(leaf, tint * 0.55 * (1.0 - 0.2 * t), hue - 0.2))
+            }
         }
-        if (front) m.quad(idx[0], idx[1], idx[2], idx[3]) else m.quad(idx[0], idx[3], idx[2], idx[1])
-        // Unterseite der Schuerze: eigene Eckpunkte, dunkler, Normale nach aussen-unten (von unten
-        // gesehen sonst als helles "Segel").
-        val back = IntArray(4)
-        for (k in 0 until 4) {
-            val p = pts[k]
-            val r = crown.rel(p)
-            val n = Vec3(r.x, 0.0, r.z).normalized(Vec3(1.0, 0.0, 0.0)) * 0.7 + Vec3(0.0, -0.35, 0.0)
-            val nn = n.normalized()
-            val shade = tint * 0.42 * (if (st[k][1] > 0.5) 0.8 else 1.0)
-            back[k] = m.vertex(p.x, p.y, p.z, nn.x, nn.y, nn.z, reg.u(st[k][0]), reg.v(st[k][1]), leafColor(leaf, shade, hue - 0.2))
+        // Reihenfolge (aussen gesehen gegen den Uhrzeigersinn): unten links, unten rechts, oben rechts, oben links
+        for (r in 0..1) {
+            val a = r * 2
+            val b = r * 2 + 1
+            val c = r * 2 + 3
+            val d = r * 2 + 2
+            // Flaechennormale pruefen: soll nach aussen-oben zeigen
+            val p0 = Vec3(m.x(top[a]).toDouble(), m.y(top[a]).toDouble(), m.z(top[a]).toDouble())
+            val p1 = Vec3(m.x(top[b]).toDouble(), m.y(top[b]).toDouble(), m.z(top[b]).toDouble())
+            val p3 = Vec3(m.x(top[d]).toDouble(), m.y(top[d]).toDouble(), m.z(top[d]).toDouble())
+            val outward = ((p1 - p0) cross (p3 - p0)) dot Vec3(cos(a0), 0.4, -sin(a0)) >= 0
+            if (outward) {
+                m.quad(top[a], top[b], top[c], top[d]); m.quad(bot[a], bot[d], bot[c], bot[b])
+            } else {
+                m.quad(top[a], top[d], top[c], top[b]); m.quad(bot[a], bot[b], bot[c], bot[d])
+            }
         }
-        if (front) m.quad(back[0], back[3], back[2], back[1]) else m.quad(back[0], back[1], back[2], back[3])
     }
 
     /** Senkrechte Karte mit einem ganzen Baum ([reg] von unten nach oben), [inset] Rand im Motiv. */
     private fun crossCard(m: MeshBuilder, base: Vec3, across: Vec3, height: Double, wid: Double, reg: FoliageAtlas.Region, inset: Double, cr: Crown, leaf: IntArray, tint: Double, hue: Double) {
-        card(m, base, Vec3(0.0, 1.0, 0.0), across, height, wid, reg, false, cr, leaf, tint, hue, bend = 0.75, inset = 0.0, darkBase = 0.75)
+        card(m, base, Vec3(0.0, 1.0, 0.0), across, height, wid, reg, false, cr, leaf, tint, hue, bend = 0.75, inset = 0.0, darkBase = 0.75, clampTip = false)
     }
 
     /** Kiefer: hoher kahler Stamm (oben roetlich), Schirmkrone aus Nadelbueschel-Klumpen. */
-    private fun pine(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder) {
+    private fun pine(s: Spec, lod: Lod, trunk: MeshBuilder, crown: MeshBuilder, toward: Vec3) {
         val rnd = Rnd(s.seed, 0x7a31)
         val h = s.heightM
         val leaf = LEAF.getValue(Species.PINE)
-        val r = 0.017 * h
-        val lower = lin(Argb.rgb(84, 70, 60))
-        val upper = lin(Argb.rgb(124, 86, 62))
+        val r = trunkRadius(h, 0.01, 0.34)
+        val lower = lin(Argb.rgb(112, 96, 84))
+        val upper = lin(Argb.rgb(150, 110, 82))
         val seg = if (lod == Lod.NEAR) 6 else if (lod == Lod.MID) 4 else 3
         if (lod == Lod.NEAR) trunk.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.6, 0.0), r * 1.8, r * 1.05, seg, false, false, lower)
         trunk.bark(Vec3(0.0, -0.3, 0.0), Vec3(0.0, 0.5 * h, 0.0), r * 1.1, r * 0.85, seg, false, false, lower)
@@ -503,7 +530,7 @@ internal object TreeModels {
         val cy = 0.82 * h
         val rx = 0.2 * h * s.width
         val ry = 0.12 * h
-        val cr = Crown(Vec3(0.0, cy, 0.0), rx, ry, 0.64 * h, h)
+        val cr = Crown(Vec3(0.0, cy, 0.0), rx, ry, 0.64 * h, h, toward)
         val clumps = ArrayList<Vec3>()
         val nClump = 5
         for (k in 0 until nClump) {

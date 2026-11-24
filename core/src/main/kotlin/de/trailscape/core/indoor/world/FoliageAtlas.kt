@@ -242,6 +242,16 @@ internal object FoliageAtlas {
             twigs += doubleArrayOf(sx, sy, sx + cos(ang) * ln, sy + sin(ang) * ln)
         }
         for ((k, tw) in twigs.withIndex()) stroke(c, tw[0], tw[1], tw[2], tw[3], if (k == 0) 3.6 else 2.0, 1.0, 0.34, 1.6)
+        // Geschlossene, dunklere Laubschicht unter den Blaettern: Nur der Rand ist durchbrochen. Sonst
+        // mischte die Kantenglaettung (Alpha-to-Coverage) durch die vielen kleinen Luecken den hellen
+        // Himmel ein, und Kronen wirkten aus 10–30 m blass.
+        val under = ArrayList<DoubleArray>()
+        under += doubleArrayOf(cx, cy, rad * 0.62)
+        for (k in 0 until 6) {
+            val a = k * PI / 3 + 0.4
+            under += doubleArrayOf(cx + cos(a) * rad * 0.34, cy + sin(a) * rad * 0.32, rad * 0.4)
+        }
+        fillMass(c, r.x + 4, r.y + 4, r.x + r.w - 4, r.y + r.h - 4, under, 12.0, 0x5b41, lumScale = 0.62)
         // Blaetter: hinten (dunkel) zuerst, dann nach vorne heller.
         class L(val x: Double, val y: Double, val a: Double, val len: Double, val w: Double, val lum: Double, val hue: Double)
         val leaves = ArrayList<L>()

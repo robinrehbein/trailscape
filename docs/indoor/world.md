@@ -325,6 +325,34 @@ Gegenüber `main` vor der Vegetation (6cd9387): Schauinsland 11,8 → 13,2 MB/km
 `OutOfMemoryError` ab (vor den Kacheln, beim Laden; mit 2 GB Heap nach GC bis
 343 MB). Das liegt in der Laser-Stufe, nicht in der Vegetation.
 
+### Dritte Runde (Kombi-Render Balkantrasse, `--laser`)
+
+Nach dem Zusammenführen mit `main` a80395a (Welt-Version 5). Vorher = dieser
+Stand nach dem Merge, nachher = jetzt; alle Bildpaare ersetzt, neu
+`balkantrasse-laser-chase` (km 4,5, Verfolger).
+
+| Befund | Ursache | Lösung |
+|---|---|---|
+| Stämme fast schwarz und sehr dick | Radius 2,4 % der Höhe (Laserbäume bis 42 m → Durchmesser um 2 m, Wurzelanlauf ×1,9), dunkle Rindenfarbe × Textur, Fuß auf 55 % | Radius aus der Höhe mit Deckel (`trunkRadius`: Laubbaum 0,05 m + 1,2 % · h, höchstens 0,42 m; Fichte 0,9 %, höchstens 0,32 m; Kiefer 1 %, 0,34 m), Wurzelanlauf ×1,45, Rinde heller, Fuß 78 % |
+| Kronen „ausgebleicht“ (weißlich-hellgrün), Schatten fast schwarz | **Spiegelanteil der Sonne bei streifendem Blick:** Die nach oben/außen gebogenen Normalen zeigen für die tief stehende Kamera oft vom Betrachter weg (N·V ≈ 0); dann wird der GGX-/Fresnel-Term groß, und er hängt nicht von der Albedo ab. Die Albedo der Karten war mit linear 0,02–0,05 zudem viel dunkler als echtes Laub, deshalb überdeckte der graue Glanz das Grün. Nachgewiesen im Betrachter: Mit `MeshLambertMaterial` (ohne Spiegelanteil) sind dieselben Kronen satt grün; Materialfarbe, Rauheit 1,0 und Dunst ändern nichts. Filament nutzt dieselbe BRDF-Familie (GGX, Smith, Schlick) und hat keinen Schalter dafür im Kern-glTF | Normalen zusätzlich **zur Strecke hin** gebogen (die Kamera ist immer dort; Richtung je Baum aus der nächsten Stelle der Strecke), weniger nach oben; Albedo der Karten auf ein realistisches Niveau (Helligkeit 0,66–1,06 statt 0,36–0,68), satteres Grün; Laubzweig-Motiv mit geschlossener, dunklerer Laubschicht unter den Blättern (weniger Himmel durch kleine Lücken) |
+| lange schmale Kartenstreifen aus der Krone | Karten nahe der Hülle mit großer Länge | Kartenspitze höchstens 12 % über der Kronenhülle (sonst gekürzt), MID-Karten kürzer |
+| Fichtenäste wie gestapelte Platten | flache, gleich große Trapezkarten | gewölbte Schürzen (drei Eckpunktzeilen, Mitte nach außen), schmalere Karten (7 je Quirl, 10 Quirle), je Karte eigene Weite, Breite, Höhe und Durchhang |
+
+Bildrate: Dreiecksdeckel unverändert, Kartenzahl praktisch gleich (Fichte nah
+280 statt 288 Dreiecke). Fast kantenparallele Karten direkt vor der Kamera
+zeigen weiterhin einen hellen Streifen (N·V ≈ 0 lässt sich ohne eigenen Shader
+nicht ganz vermeiden).
+
+| Welt (`-Xmx256m`) | Dreiecke gleichzeitig | Platte |
+|---|---|---|
+| Schauinsland | 560 017 → 560 553 | 13,2 → 13,2 MB/km |
+| Altenberg kurz | 467 902 → 468 080 | 17,8 → 17,8 MB/km |
+| Tharandt km 2–6 | 466 472 → 473 746 | 13,8 → 13,9 MB/km |
+| Balkantrasse `--laser` (`-Xmx2g`) | 438 434 → 441 606 | 18,4 → 18,5 MB/km |
+
+Die Balkantrasse mit `--laser` scheitert bei `-Xmx256m` weiterhin beim Laden
+(`OutOfMemoryError`, Laser-Stufe, unabhängig von der Vegetation).
+
 ### Bildrate: Overdraw und Stellschrauben
 
 Alpha-getestete Karten überlagern sich (Overdraw), und `discard` hebt Early-Z
