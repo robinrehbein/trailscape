@@ -131,7 +131,7 @@ git submodule update --init third_party/brouter   # im Wurzelverzeichnis des Rep
 cd server
 echo "SYNC_TOKEN=$(openssl rand -hex 32)" > .env
 docker compose up -d --build
-docker compose logs -f worlds    # „Trailscape-Bau-Dienst auf Port 8081 – Welt-Version indoor-world/10 …“
+docker compose logs -f worlds    # „Trailscape-Bau-Dienst auf Port 8081 – Welt-Version indoor-world/11 …“
 ```
 
 `compose.yaml` baut den Sync-Server aus `server/` und den Bau-Dienst aus dem

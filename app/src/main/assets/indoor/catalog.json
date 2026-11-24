@@ -5,7 +5,7 @@
     "entries": [
         {
             "id": "alpe-dhuez",
-            "version": 10,
+            "version": 11,
             "worldId": "wbea1fd6922b9c0bec6385345",
             "name": {
                 "de": "Alpe d'Huez",
@@ -35,7 +35,7 @@
         },
         {
             "id": "vlaamse-ardennen",
-            "version": 10,
+            "version": 11,
             "worldId": "w152c21fd6ebe9b1c664ebc33",
             "name": {
                 "de": "Oude Kwaremont, Paterberg und Koppenberg",
@@ -67,7 +67,7 @@
         },
         {
             "id": "arenberg",
-            "version": 10,
+            "version": 11,
             "worldId": "w38925313fdc114bdb97a85cb",
             "name": {
                 "de": "Wald von Arenberg",
@@ -100,7 +100,7 @@
         },
         {
             "id": "monte-sante-marie",
-            "version": 10,
+            "version": 11,
             "worldId": "w562b079a4b9b30e886c2f921",
             "name": {
                 "de": "Schotter von Monte Sante Marie",
@@ -131,7 +131,7 @@
         },
         {
             "id": "sa-calobra",
-            "version": 10,
+            "version": 11,
             "worldId": "w44785a47f1400a461f956d8d",
             "name": {
                 "de": "Sa Calobra",
@@ -161,7 +161,7 @@
         },
         {
             "id": "flint-hills",
-            "version": 10,
+            "version": 11,
             "worldId": "w69236ccb0d2e9288fb6d4dda",
             "name": {
                 "de": "Schotter der Flint Hills",
@@ -192,7 +192,7 @@
         },
         {
             "id": "grosser-feldberg",
-            "version": 10,
+            "version": 11,
             "worldId": "w52712034cd9ba1731958b159",
             "name": {
                 "de": "Großer Feldberg",
@@ -222,7 +222,7 @@
         },
         {
             "id": "schauinsland",
-            "version": 10,
+            "version": 11,
             "worldId": "w57d46df4213213777dfb5761",
             "name": {
                 "de": "Schauinsland",
@@ -254,7 +254,7 @@
         },
         {
             "id": "kahler-asten",
-            "version": 10,
+            "version": 11,
             "worldId": "wd6c051b95af79e28ae455aa9",
             "name": {
                 "de": "Waldwege am Kahlen Asten",
@@ -286,7 +286,7 @@
         },
         {
             "id": "balkantrasse",
-            "version": 7,
+            "version": 8,
             "worldId": "w6d0ac2514e046ea1dec3ff1f",
             "name": {
                 "de": "Balkantrasse",
@@ -317,7 +317,7 @@
         },
         {
             "id": "altenberg",
-            "version": 7,
+            "version": 8,
             "worldId": "wd6956f5856ff9b1385647ae8",
             "name": {
                 "de": "Altenberger Dom und Dhünntal",
@@ -351,7 +351,7 @@
         },
         {
             "id": "rennsteig",
-            "version": 10,
+            "version": 11,
             "worldId": "w35640087c3c0407f497bccda",
             "name": {
                 "de": "Rennsteig bei Oberhof",
@@ -384,7 +384,7 @@
         },
         {
             "id": "solitude",
-            "version": 2,
+            "version": 3,
             "worldId": "wa6f250c17e4cc88491c03d80",
             "name": {
                 "de": "Schloss Solitude und Glemseck",
@@ -416,7 +416,7 @@
         },
         {
             "id": "maulbronn",
-            "version": 2,
+            "version": 3,
             "worldId": "w081a9c9c4ddb3fa93f85825e",
             "name": {
                 "de": "Kloster Maulbronn und Stromberg",
