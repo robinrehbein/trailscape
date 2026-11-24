@@ -556,17 +556,19 @@ Luftbilder unter Wald), Texturen 182,4 MB (gleich), Bau 38 → 42 s. Maulbronn
 
 - [ ] Alles nur im Betrachter (SwiftShader) gesehen, **nicht auf dem Gerät**.
 - [ ] Die Grasstreifen neben Wegen über blassen Winterfeldern (Maulbronn km 7
-      und 13) sind satter grün als das Feld. Sie folgen der Farbe des
+      und 13) sind satter grün als das Feld. (25.11.2026: neben Feldern zur
+      Hälfte Feldfarbe, Wirkung gering — `world.md`, „Vegetation und Objekte“.) Sie folgen der Farbe des
       Luftbilds direkt am Weg (dort echter Grasrain); eine weitere
       Farbspanne brachte im Bild nichts und ist nicht eingebaut.
 - [ ] Waldboden-Abtönung kostet je Kachel unter Wald eine JPEG-Neukodierung
       (rund 2 % mehr Platte, wenige 100 ms Bauzeit je Kachel); auf dem Handy
       (ohne Laser, nur im Wald der Karte) nicht gemessen.
-- [ ] Ferne Kronen (8–12 Karten) wirken aus der hohen Betrachter-Drohne
+- [ ] (25.11.2026: neue Kronen aus Lappen, `world.md` „Vegetation und Objekte“.) Ferne Kronen (8–12 Karten) wirkten aus der hohen Betrachter-Drohne
       (85 m) weiter kartig; aus der App-Drohne (28 m) und vom Rad aus nicht
       geprüft auf dem Gerät.
 - [ ] Am Knoten mit drei Ästen rechnet `JunctionCorners` die Kante der Strecke
       als Gerade in Richtung der Strecke am Scheitel (45°); die Bögen passen
       dort nur ungefähr an die gekrümmte Fahrbahnkante.
-- [ ] Weidezäune stehen an der Solitude teils im Wald (Landnutzung der Karte),
-      nicht untersucht.
+- [x] Weidezäune stehen an der Solitude teils im Wald (Landnutzung der Karte):
+      jetzt nicht unter Bäumen (nDOM) und nicht quer über Wege (`world.md`,
+      „Vegetation und Objekte“).
