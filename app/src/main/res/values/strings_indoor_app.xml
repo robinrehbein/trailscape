@@ -367,4 +367,15 @@
     <string name="indoor_app_catalog_failed_other">Das Paket konnte nicht geladen werden.</string>
     <string name="indoor_app_catalog_failed_keeps_old">Die vorher geladene Fassung bleibt fahrbar.</string>
     <string name="indoor_app_worlds_tag_catalog">Bekannte Strecke</string>
+    <!-- Startpunkt und Fortsetzen (docs/indoor/app.md) -->
+    <string name="indoor_app_start_title_choose">Wo startest du?</string>
+    <string name="indoor_app_start_hint_drag">Zieh auf dem Profil, um woanders zu starten.</string>
+    <string name="indoor_app_start_hint_drag_pause">Zieh auf dem Profil, um woanders weiterzufahren.</string>
+    <string name="indoor_app_start_position">km %1$s · %2$s m</string>
+    <string name="indoor_app_start_resume_chip">Weiter bei km %1$s</string>
+    <string name="indoor_app_start_from_beginning_chip">Von vorn</string>
+    <string name="indoor_app_start_go_action">Losfahren</string>
+    <string name="indoor_app_start_earlier_cd">100 m früher starten</string>
+    <string name="indoor_app_start_later_cd">100 m später starten</string>
+    <string name="indoor_app_start_profile_cd">Startpunkt bei Kilometer %1$s von %2$s. Zum Verschieben auf dem Profil ziehen oder tippen.</string>
 </resources>

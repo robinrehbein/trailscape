@@ -41,10 +41,14 @@ import de.trailscape.core.indoor.ErgWorkout
 import de.trailscape.core.indoor.GhostSpec
 import de.trailscape.core.indoor.IndoorDeviceRole
 import de.trailscape.core.indoor.IndoorMode
+import de.trailscape.core.indoor.IndoorPhase
+import de.trailscape.core.indoor.IndoorResumePoint
 import de.trailscape.core.indoor.IndoorRideRecord
 import de.trailscape.core.indoor.IndoorRoute
 import de.trailscape.core.indoor.IndoorSessionConfig
+import de.trailscape.core.indoor.IndoorSessionState
 import de.trailscape.core.indoor.IndoorShifter
+import de.trailscape.core.indoor.IndoorStartPoints
 import de.trailscape.core.indoor.IndoorTrainer
 import de.trailscape.core.indoor.RiderSetup
 import de.trailscape.core.indoor.ShifterEvent
@@ -62,6 +66,7 @@ import de.trailscape.core.indoor.world.WorldBuildPhase
 import de.trailscape.core.indoor.world.WorldManifest
 import de.trailscape.core.indoor.world.WorldPlan
 import de.trailscape.core.indoor.world.WorldRenderer
+import de.trailscape.core.indoor.moveStartTo
 import de.trailscape.core.sessionsForDay
 import java.io.File
 import kotlin.math.roundToInt
@@ -267,6 +272,13 @@ class IndoorViewModel(
         val ergTitle: String?,
         val attribution: List<de.trailscape.core.indoor.world.WorldAttribution>,
         val mode: IndoorMode,
+        /** Schluessel der gemerkten Stelle dieser Strecke, `null` = nicht merken. */
+        val resumeKey: String? = null,
+        /** Angebot „Weiter bei km …" (bis zum ersten Tritt). */
+        val resumeM: Double? = null,
+        val startMaxM: Double = 0.0,
+        val routeLengthM: Double = 0.0,
+        val routeIsLoop: Boolean = false,
     )
 
     init {
@@ -766,6 +778,11 @@ class IndoorViewModel(
         pendingRide = null
         _summary.value = null
         val ghostLabel = ghostLabelOf(routeUi.ghost)
+        // Fortsetzen: die gemerkte Stelle dieser Strecke ist die Vorauswahl.
+        val resumeKey = routeUi.selected?.let { resumeKeyOf(it) }
+        val resumeM = resumeKey?.let { key ->
+            runCatching { IndoorStartPoints.offer(readResume(key), route.lengthM, route.isLoop) }.getOrNull()
+        }
         rideStatic = RideStatic(
             routeName = routeName,
             trainerName = if (demo) texts.demoTrainerName() else (_pair.value.trainerName ?: ""),
@@ -777,6 +794,11 @@ class IndoorViewModel(
             ergTitle = if (mode == IndoorMode.ERG) ergWorkout?.title else null,
             attribution = if (useWorld) manifest.attribution else emptyList(),
             mode = mode,
+            resumeKey = resumeKey,
+            resumeM = resumeM,
+            startMaxM = IndoorStartPoints.maxStartM(route.lengthM, route.isLoop),
+            routeLengthM = route.lengthM,
+            routeIsLoop = route.isLoop,
         )
         _stage.value = IndoorStage.RIDE
 
@@ -856,6 +878,8 @@ class IndoorViewModel(
             showStartProblem(problemOf(IndoorPart.CORE, it))
             return
         }
+        // Vor dem ersten Schritt versetzt: Darstellung, Kacheln und erste Vorgabe gelten schon der Startstelle.
+        resumeM?.let { d -> indoorCatching(IndoorPart.CORE) { session.moveStartTo(d) } }
 
         // Darstellung (nur mit Welt)
         var renderer: WorldRenderer? = null
@@ -881,8 +905,13 @@ class IndoorViewModel(
             clock = clock,
             autoLoop = autoLoop,
             rebuildSession = { caps ->
-                if (caps == config.capabilities) null else parts.createSession(config.copy(capabilities = caps))
+                if (caps == config.capabilities) {
+                    null
+                } else {
+                    parts.createSession(config.copy(capabilities = caps)).also { s -> resumeM?.let { s.moveStartTo(it) } }
+                }
             },
+            holdStart = resumeM != null,
         )
         activeRuntime = runtime
         renderer?.let { r ->
@@ -942,6 +971,21 @@ class IndoorViewModel(
             ergTitle = st.ergTitle,
             attribution = st.attribution,
             runtimeProblem = rs.problem,
+            start = startUiOf(rs, st),
+        )
+    }
+
+    /** Startpunkt-Wahl fuer das HUD, solange sich der Fahrer versetzen laesst. */
+    private fun startUiOf(rs: IndoorRuntimeState, st: RideStatic): IndoorStartUi? {
+        val s = rs.session ?: return null
+        if (!rs.canMoveStart || rs.finished || st.profile == null) return null
+        if (s.phase != IndoorPhase.READY && s.phase != IndoorPhase.PAUSED) return null
+        return IndoorStartUi(
+            selectedM = s.routeDistM,
+            maxM = st.startMaxM,
+            // „Weiter bei …" gilt nur vor dem ersten Tritt; in der Pause wird frei versetzt.
+            resumeM = if (s.phase == IndoorPhase.READY) st.resumeM else null,
+            held = rs.startHeld,
         )
     }
 
@@ -992,6 +1036,47 @@ class IndoorViewModel(
 
     fun dismissNotice() {
         activeRuntime?.dismissNotice()
+    }
+
+    // -----------------------------------------------------------------------
+    // Startpunkt und Fortsetzen
+    // -----------------------------------------------------------------------
+
+    /** Setzt den Fahrer an [routeDistM] (Meter auf der Strecke) — vor dem ersten Tritt und in der Pause. */
+    fun moveStart(routeDistM: Double) {
+        val st = rideStatic ?: return
+        if (_ride.value?.start == null) return
+        activeRuntime?.moveStart(IndoorStartPoints.clamp(routeDistM, st.routeLengthM, st.routeIsLoop))
+    }
+
+    /** Feinknoepfe −/+: um [deltaM] Meter verschieben. */
+    fun nudgeStart(deltaM: Double) {
+        val st = rideStatic ?: return
+        val current = _ride.value?.start ?: return
+        activeRuntime?.moveStart(IndoorStartPoints.nudge(current.selectedM, deltaM, st.routeLengthM, st.routeIsLoop))
+    }
+
+    /** „Losfahren": Die Fahrt beginnt mit dem ersten Tritt an der gewaehlten Stelle. */
+    fun releaseStart() {
+        activeRuntime?.releaseStart()
+    }
+
+    private fun resumeKeyOf(option: IndoorRouteOption): String = KEY_RESUME_PREFIX + option.key
+
+    private fun readResume(key: String): IndoorResumePoint? =
+        runCatching { IndoorResumePoint.fromJson(store.getString(key)) }.getOrNull()
+
+    /**
+     * Merkt die Stelle, an der die Fahrt endete, bzw. loescht sie am Ziel
+     * (Regeln: [IndoorStartPoints.afterStop]).
+     */
+    private fun rememberPosition(st: RideStatic?, last: IndoorSessionState?) {
+        val key = st?.resumeKey ?: return
+        last ?: return
+        val point = IndoorStartPoints.afterStop(last.routeDistM, st.routeLengthM, st.routeIsLoop, wallClock())
+        runCatching {
+            if (point == null) store.remove(key) else store.setString(key, point.toJson())
+        }
     }
 
     /** Regler „Leistung" des Demo-Trainers (0..600 W). */
@@ -1047,6 +1132,7 @@ class IndoorViewModel(
         finishing = true
         scope.launch {
             val record = runtime.finish()
+            rememberPosition(rideStatic, runtime.state.value.session)
             rideCollectJob?.cancel()
             rideCollectJob = null
             publishRide(runtime.state.value)
@@ -1204,6 +1290,12 @@ class IndoorViewModel(
 
         /** Schluessel des Kettenblatts am Trainer (Zaehne) im [KeyValueStore]. */
         const val KEY_CHAINRING_TEETH = "trailscape.indoor.chainring_teeth"
+
+        /**
+         * Vorsilbe der gemerkten Stelle je Strecke im [KeyValueStore]; dahinter
+         * der Schluessel der Streckenwahl ([IndoorRouteOption.key]).
+         */
+        const val KEY_RESUME_PREFIX = "trailscape.indoor.resume."
 
         /** Schluessel der Gangtabelle (Enum-Name von [VirtualGearTable]) im [KeyValueStore]. */
         const val KEY_GEAR_TABLE = "trailscape.indoor.gear_table"
