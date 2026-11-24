@@ -34,7 +34,7 @@ import kotlinx.serialization.json.put
  *
  * JSON (Format 1):
  * ```
- * {"format":1, "builderId":"indoor-world/10", "quality":"MEDIUM", "laser":true,
+ * {"format":1, "builderId":"indoor-world/11", "quality":"MEDIUM", "laser":true,
  *  "expectedWorldId":"w…",
  *  "route":{"name":"…", "isLoop":false, "source":"BROUTER_REMATCH",
  *           "points":[[distM, lat, lon, eleM], …],

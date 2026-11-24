@@ -57,7 +57,7 @@ Werkzeug indoor-dev (JVM): createLaserWorldBuilder + Katalog-Luftbild → checkW
   prüft nach dem Planen, dass seine Welt-ID der erwarteten entspricht
   (`WORLD_ID_MISMATCH`).
 - **Welt-Version**: `GET /api/worlds/info` meldet `builderId`
-  (`indoor-world/10`); weicht sie von der App ab, zeigt die App statt des
+  (`indoor-world/11`); weicht sie von der App ab, zeigt die App statt des
   Angebots „Welt-Version passt nicht“ und sagt anhand der Nummer, ob der
   Server oder die App zu aktualisieren ist. Ein Auftrag mit anderer Version
   bekommt `409 BUILDER_MISMATCH`.
