@@ -134,6 +134,21 @@ THREE.ShaderChunk.tonemapping_fragment = /* glsl */ `
 // … und entfaellt an der alten Stelle.
 THREE.ShaderChunk.fog_fragment = '';
 
+// glTF alphaMode MASK wie in Filament (gltfio-Ubershader, `blending: masked`): Filament schaltet bei
+// MASKED automatisch Alpha-to-Coverage ein (wirkt mit MSAA) und schaerft das Alpha vorher ueber die
+// Ableitung: a' = (a − Schwelle) / max(fwidth(a), 1e-3) + 0,5; verworfen wird bei a' ≤ 0
+// (shaders/src/common_material.fs `computeMaskedAlpha`, `applyAlphaMask`). three.js nimmt sonst
+// smoothstep(Schwelle, Schwelle + fwidth) — um eine halbe Ableitung duenner.
+THREE.ShaderChunk.alphatest_fragment = /* glsl */ `
+#ifdef USE_ALPHATEST
+  #ifdef ALPHA_TO_COVERAGE
+  diffuseColor.a = clamp( ( diffuseColor.a - alphaTest ) / max( fwidth( diffuseColor.a ), 1e-3 ) + 0.5, 0.0, 1.0 );
+  if ( diffuseColor.a <= 0.0 ) discard;
+  #else
+  if ( diffuseColor.a < alphaTest ) discard;
+  #endif
+#endif`;
+
 // ---------------------------------------------------------------------------
 // Renderer, Szene, Licht
 // ---------------------------------------------------------------------------
@@ -613,6 +628,9 @@ function prepareMaterials(root) {
   const textures = new Set();
   forEachMaterial(root, (m) => {
     m.dithering = true; // Filament dithert im Nachbearbeitungsschritt
+    // MASK: Filament schaltet fuer `masked` Alpha-to-Coverage ein (MaterialDefinition.cpp:
+    // rasterState.alphaToCoverage = blendingMode == MASKED); hier dasselbe (MSAA ist an).
+    if (m.alphaTest > 0 && !m.transparent) m.alphaToCoverage = true;
     for (const key of ['map', 'emissiveMap']) {
       const t = m[key];
       if (t && !textures.has(t)) {
