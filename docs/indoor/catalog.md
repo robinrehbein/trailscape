@@ -16,8 +16,8 @@ tool/indoor-dev/catalog/catalog-src.json   (Einträge: Name, Text, Wegpunkte, BR
 tool/indoor-dev/catalog/routes/<id>.gpx + <id>.surfaces.json   (im Repo, ODbL)
         │ indoor-dev catalog-build   (Workflow indoor-worlds.yml, nur manuell)
         ▼
-GitHub-Release indoor-worlds-v1:  <id>-v<version>.zip  …  catalog.json
-        │ App: „Laden“ (nur nach Antippen)
+GitHub-Release indoor-worlds-v1:  <id>-v<version>.zip  <id>-v<version>.jpg  …  catalog.json
+        │ App: catalog.json + Vorschaubilder von selbst (höchstens täglich), Pakete nur nach „Laden“
         ▼
 <filesDir>/indoor/worlds/<worldId>/  (+ app-catalog.json)  → fahrbar wie jede Welt
 ```
@@ -73,6 +73,73 @@ Chromium, Kamera `chase`), 1280 × 720.
 | `schauinsland.jpg` | km 5,2: Kurve durch Bergwald, Luftbild LGL-BW | Unter dem Kronendach dunkel |
 | `flint-hills.jpg` | km 3,8: breiter Schotterweg durch offenes Grasland mit Weidezaun, Luftbild NAIP | Die Prärie ist zu grün und hat zu viele Bäume (Landnutzung/Kronenschätzung aus dem Luftbild) |
 
+## Strecken im Großraum Stuttgart (24.11.2026)
+
+Wunsch des Gründers: mehr Strecken dort, wo er fährt (nordwestlich bis
+nördlich von Stuttgart). Sechs neue Einträge, alle `"laser": true`,
+Version 1, vollständig in Baden-Württemberg (Laser und Luftbild LGL auf der
+ganzen Länge). Start und Ziel an Bahnhöfen bzw. Marktplätzen. Routen mit
+`catalog-routes` (BRouter, `brouter.de`) zwischen Wegpunkten aus Nominatim;
+vorher je Strecke auf Stichwege (dieselben Meter hin und zurück) geprüft und
+die Wegpunkte so gesetzt, dass keine bleiben — außer dem gemeinsamen An- und
+Abfahrtsweg in Rudersberg (2 km, im Text genannt).
+
+| Kennung | Art | Strecke | km | Hm | Belag | Paket | Platte | Bau |
+|---|---|---|---|---|---|---|---|---|
+| `strohgaeu` | kurz, wellig | Bahnhof Ditzingen – Hirschlanden – Schöckingen – Heimerdingen – Höfingen – Ditzingen (Runde) | 17,8 | 240 | Asphalt 98 % | 155 MB | 222 MB | 266 s |
+| `marbach-lemberg` | kurz, wellig | Bahnhof Marbach – Rielingshausen – Kirchberg/Murr – Lemberg – Poppenweiler – Neckartal (Runde) | 24,1 | 390 | Asphalt 96 %, Schotter 2 % | 217 MB | 313 MB | 360 s |
+| `bottwartal` | mittel, Anstieg Oberstenfeld → Prevorst (≈ 250 Hm) | Marktplatz Großbottwar – Oberstenfeld – Prevorst – Etzlenswenden – Beilstein – Winzerhausen (Runde) | 33,3 | 490 | Asphalt 100 % | 308 MB | 438 MB | 536 s |
+| `welzheimer-wald` | mittel, Anstieg Laufenmühle → Welzheim (≈ 250 Hm) | Bahnhof Rudersberg – Wieslauftal – Welzheim – Kaisersbach – Ebnisee – Althütte – Lutzenberg (Runde) | 30,3 | 481 | Asphalt 100 % | 269 MB | 387 MB | 483 s |
+| `enztal` | flach | Bahnhof Besigheim – Enztal-Radweg – Bietigheim – Unterriexingen – Enzweihingen – Marktplatz Vaihingen/Enz (einfach) | 24,0 | 95 | Asphalt 90 %, Beton 7 % | 255 MB | 369 MB | 430 s |
+| `schoenbuch` | Gravel/Wald | Bahnhof Dettenhausen – Kälberstelle – Teufelsbrücke – Birkensee – Schaichhof (Runde) | 19,9 | 287 | fester Weg 44 %, Schotter 34 %, Asphalt 22 % | 190 MB | 274 MB | 290 s |
+
+- Gebaut lokal mit `catalog-build --only <id>` (MEDIUM, `JAVA_OPTS=-Xmx6g`
+  wie im Workflow, 4 Kerne), jede Strecke einzeln, Laser-Cache **kalt** —
+  die Bauzeit enthält also den Download der LGL-Archive (165–346 s). Während
+  der letzten Minute der Läufe 2–6 rendert parallel der Betrachter die
+  vorige Strecke; die Zeiten sind dadurch eher etwas zu hoch. Alle sechs
+  bestehen `checkWorld`; Luftbild auf allen Kacheln.
+- Hm aus dem Streckenband der Welt (4-m-Schwelle); BRouter nannte 199 /
+  354 / 450 / 467 / 56 / 269.
+- Zusammen 149,5 km, Pakete 1,39 GB, entpackt 2,0 GB. Je km **9,3 MB Paket**
+  und 13,4 MB Platte — mehr als die bisherigen Strecken (5–8 MB/km), vor
+  allem wegen der LoD2-Gebäude und der nDOM-Bäume. Das größte Paket
+  (`bottwartal`, 308 MB) ist doppelt so groß wie das bisher größte
+  (`schauinsland`, 155 MB); über Mobilfunk gibt es weiterhin nur die Größe
+  auf dem Knopf (offene Entscheidung 6).
+- Laser-Kennzahlen je Strecke: `docs/indoor/lidar.md`, Abschnitt 7.3.
+- Nicht im beigelegten Katalog der App: Die Strecken erscheinen über den
+  veröffentlichten Katalog, sobald der Workflow gelaufen ist (nach dem Merge).
+  Stellen der Vorschaubilder stehen in `catalog/previews.json`.
+
+### Was die Bilder zeigen (`docs/indoor/bilder/strecken-stuttgart/`)
+
+Betrachter (`viewer/shots.mjs`, three.js/SwiftShader, **nicht das Gerät**),
+Kamera `chase`, Hochformat 900 × 1200. Je Strecke sechs (Strohgäu,
+Marbach: fünf) Stellen angesehen, hier ein bis zwei davon und die Befunde.
+
+| Bild | Zu sehen | Was nicht stimmt |
+|---|---|---|
+| `strohgaeu-km7-5.jpg` | Feldweg über die offene Strohgäu-Hochfläche, Ortsrand mit LoD2-Häusern am Horizont | Winterfelder im Luftbild blass |
+| `strohgaeu-km15-5.jpg` | Fester Weg am Hang Richtung Glemstal | — |
+| `marbach-lemberg-km10-5.jpg` | Weg im Murrtal bei Kirchberg, bewaldeter Hang mit LoD2-Haus | — |
+| `marbach-lemberg-km15-5.jpg` | Waldweg am Lemberg, nDOM-Bäume | Unter dem Kronendach eher dunkel (bekannt) |
+| `bottwartal-km8-5-anstieg-prevorst.jpg` | Anstieg nach Prevorst durch den Wald, Böschung bergseits | Bäume mit langen kahlen Stämmen (bekannt, Laubbestand im Winter-DOM) |
+| `bottwartal-km27-befund-querstrasse.jpg` | **Befund (km 27,0, bei Winzerhausen):** Der Wirtschaftsweg der Strecke mündet in eine Querstraße, die nur als verwaschenes Luftbild erscheint, ohne gezeichnete Fahrbahn; links ein unscharfer Fleck | Fehler im Weltbau (Wege/Luftbild an der Einmündung), hier nicht behoben |
+| `welzheimer-wald-km8-5-anstieg-welzheim.jpg` | Oberes Ende des Anstiegs, 1 km vor Welzheim, Straße zwischen Bäumen | — |
+| `welzheimer-wald-km18.jpg` | Radweg durch den Wald zwischen Kaisersbach und Ebnisee | — |
+| `welzheimer-wald-km25-befund-flaeche.jpg` | **Befund (km 25,0, bei Lutzenberg):** graue, flache Rechteckfläche mit harten Kanten auf der Wiese neben der Straße; bei km 6,5 endet ein Gehweg mit harter Querkante | Kleinere Flächenfehler im Weltbau, hier nicht behoben |
+| `enztal-km13-5.jpg` | Betonweg am Fluss mit Weidezaun, flach | — |
+| `enztal-km5-3-befund-bruecke.jpg` | **Befund (km 5,3, Bietigheim):** Eine Straßenbrücke über das Tal ist ein flacher grauer Balken **ohne Pfeiler**, die Rampe steigt als Band an | Brücken über der Strecke ohne Stützen (Weltbau), hier nicht behoben |
+| `schoenbuch-km11.jpg` | Schotterweg durch Mischwald beim Birkensee | Unter dem Kronendach dunkel (bekannt) |
+| `schoenbuch-km18-5.jpg` | Forstweg kurz vor Dettenhausen, Laubbäume mit langen Stämmen | — |
+| `schoenbuch-km7-befund-teufelsbruecke.jpg` | **Befund (km 7,0):** Die Teufelsbrücke ist eine flache graue Platte ohne Geländer; dahinter echte Hangböschung (DGM1) | Brücken der Strecke als schlichte Platte (Weltbau), hier nicht behoben |
+
+Keine Wände oder Sprünge im Gelände, keine Strecke durch Gebäude, keine
+Tunnel gefunden. An den angesehenen Stellen keine kaputten Kreuzungen außer
+dem Befund bei Bottwartal km 27. **Nicht angesehen:** die übrigen
+Kilometer (je Strecke 5–6 Stellen von 18–33 km), Drohnenansicht, das Gerät.
+
 ## Paketformat
 
 `core/…/indoor/catalog/CatalogPackage.kt`. Ein ZIP mit genau:
@@ -107,8 +174,23 @@ tiles/*.glb      alle Kacheln, sortiert
       "country": "FR", "kind": "ROAD|GRAVEL|COBBLES",
       "lengthM": 15115, "ascentM": 1105, "surfaces": {"ASPHALT": 1.0},
       "packageFile": "alpe-dhuez-v1.zip", "packageBytes": 81079532, "sha256": "…",
-      "aerial": true, "aerialSource": "Luftbild: © IGN …", "quality": "MEDIUM", "diskBytes": … } ] }
+      "aerial": true, "aerialSource": "Luftbild: © IGN …", "quality": "MEDIUM", "diskBytes": …,
+      "laser": true,
+      "profile": {"stepM": 125.96, "elevM": [719.2, 721.0, …]},
+      "preview": {"file": "alpe-dhuez-v9.jpg", "bytes": 87654, "sha256": "…", "width": 640, "height": 360} } ] }
 ```
+
+- **Seit 24.11.2026 optional:** `laser` (Welt in der Datenstufe „Laser“,
+  erkannt an der Quellenangabe einer Laser-Quelle im Manifest),
+  `profile` (Höhenprofil der gezeichneten Fahrbahn, 121 gleichmäßige
+  Proben, 0,1 m), `preview` (Vorschaubild im selben Release). Das **Format
+  bleibt 1**: Ältere Apps lesen nur bekannte Felder und überspringen den
+  Rest — geprüft mit `CatalogPreviewFormatTest.aelterLeserUeberspringtNeueFelder`
+  (Fixture `core/src/test/resources/indoor/catalog/catalog-neue-felder.json`)
+  und einmal von Hand gegen den Leser vor der Änderung. Ein kaputtes Profil
+  oder ein unzulässiger Bildname kostet nur die Vorschau, nie den Eintrag.
+  Ein höheres `format` dürfte es nicht geben: Ältere Apps lehnen dann den
+  ganzen Katalog ab.
 
 - Unlesbare Einträge werden übersprungen (ein neuerer Katalog leert die
   Liste nicht), Kennungen und Paketnamen sind klein und ohne Trenner.
@@ -116,11 +198,119 @@ tiles/*.glb      alle Kacheln, sortiert
   weg): Vor jedem „Laden“ holt die App `catalog.json` aus dem Release und
   nimmt Version, Größe und SHA-256 von dort. Ein Release-Katalog kann die
   Adresse der Pakete nicht umlenken (die beigelegte `baseUrl` gilt).
+- Stand 24.11.2026 (Welt-Version 10): Der beigelegte Katalog
+  (`app/src/main/assets/indoor/catalog.json`) führt alle **14** Einträge des
+  veröffentlichten Katalogs (Texte, Größen, Welt-IDs aus dem Release), mit den
+  Versionen **nach** dem Anheben (`catalog-src.json`, z. B. `solitude` 2,
+  `alpe-dhuez` 10). Bis der Katalog-Workflow die neuen Pakete hochlädt, liegen im
+  Release noch die alten; das ist unschädlich: Geladen wird immer der Eintrag
+  aus dem frisch geholten Release-Katalog (`IndoorCatalogController`:
+  `fresh.entry(id)`, ohne `sha256` → „nicht verfügbar"), ein beigelegter Eintrag
+  ohne Paket bietet also keinen kaputten Download an. Höchstens zeigt die App
+  vor dem ersten Abruf „Aktualisierung" für eine installierte ältere Version
+  und lädt dann dieselbe Version wie bisher.
+
+## Vorschau je Strecke (24.11.2026)
+
+Wunsch des Gründers: vor dem Laden sehen, wie die Strecke aussieht.
+
+- **Was der Katalog heute (Release `indoor-worlds-v1`, geprüft am
+  24.11.2026, 14 Einträge) schon hat:** Name, Region, Land, Art, Länge,
+  Höhenmeter, Belagsanteile, Text, Paketgröße, Platzbedarf, Luftbild ja/nein
+  mit Quelle, Qualität. **Was fehlte:** Vorschaubild, Höhenprofil,
+  Laser-Kennzeichen (alle Einträge stehen auf `MEDIUM`; ob Laser
+  verwendet wurde, stand nirgends).
+- **Karte:** oben das Vorschaubild (16 : 9), ohne Bild das Höhenprofil
+  mit Spanne („17–31 m“), ohne beides ein ruhiger Platzhalter „Noch keine
+  Vorschau“; Kennzeichen „Laser“ und „Neu“ (kam mit dem letzten Abruf
+  dazu) oben links. Darunter Name, Region · Land, Art, km · Hm · Belag, mit
+  Bild das Profil klein, Text, „Paket 106,0 MB · Mit Luftbild“, bei Laser
+  ein Satz dazu, Zustand/Knopf. Bilder:
+  `bilder/katalog-vorschau/01-karten.jpg` (deutsch, alle vier Formen),
+  `02-karten-en.jpg` (englisch); Test `IndoorScreenshotTest.katalogVorschau*`
+  (Vorschaubilder dort aus `bilder/catalog/`, verkleinert; Profile aus den
+  GPX-Dateien unter `catalog/routes/`).
+- **Profil ohne Katalogprofil:** Ist die Welt geladen, rechnet die App es
+  aus dem Manifest (`CatalogProfile.thinned`).
+- **Bilder in der App:** nur `baseUrl` des beigelegten Katalogs +
+  Dateiname (wie die Pakete, `isAllowedCatalogUrl` je Station), höchstens
+  400 kB, Größe, JPEG-Kopf und SHA-256 müssen zum Katalog passen. Cache
+  `<cacheDir>/indoor/catalog-previews/<id>-v<version>.jpg`; Bilder alter
+  Versionen löscht die App. Je Bild ein Versuch je Sitzung; „Katalog
+  aktualisieren“ versucht fehlende erneut.
+
+### Automatisch aktualisieren
+
+Der Gründer fand neue Strecken nicht, weil die App den Release-Katalog nur
+auf „Katalog aktualisieren“ holte. Jetzt (`IndoorCatalogController.load`):
+
+1. Liste sofort aus der Platte (beigelegt + zuletzt geholter Katalog).
+2. Danach still `catalog.json` aus dem Release, wenn das Gerät ein Netz hat
+   (`AppServices.isNetworkAvailable`, `ACCESS_NETWORK_STATE`; im Flugmodus
+   kein Versuch) und `CatalogAutoRefresh.isDue` gilt: **höchstens einmal am
+   Tag** — anderer Kalendertag und mindestens 6 h seit dem letzten Versuch,
+   spätestens nach 24 h, oder die Uhr wurde um mehr als 1 h zurückgestellt.
+   Gemerkt in `<filesDir>/indoor/catalog/auto-refresh.txt`; ein
+   Verbindungsfehler zählt nicht als Versuch, ein Serverfehler (z. B. 503)
+   schon. Keine Meldung, die vorhandene Liste bleibt. Während des Abrufs
+   dreht der Kreis am Knopf.
+3. Dann die Vorschaubilder.
+
+„Katalog aktualisieren“ holt weiterhin sofort (und zählt als Abruf des
+Tages). Tests: `CatalogPreviewFormatTest.abrufHoechstensEinmalAmTag`,
+`IndoorCatalogFlowTest.automatischerAbruf…`, `ohneNetzKeinAbruf…`,
+`vorschaubildWirdGeprueftGecachtUndProfilGezeigt`.
+
+### Katalogbau
+
+- `catalog-build` schreibt `laser` und `profile` je gebautem Eintrag.
+- `catalog-preview --out <dir> --prepare [--only …]` legt je Eintrag die
+  Welt bereit (gebaut oder aus `<dir>/packages/<paket>` entpackt) und
+  schreibt `<dir>/previews/plan.tsv` (Kennung, Version, Welt, Laufmeter).
+  Die Stelle steht in `tool/indoor-dev/catalog/previews.json` (km, wie die
+  Bilder in `bilder/catalog/`), sonst 45 % der Strecke.
+- Der Betrachter rendert: `node shots.mjs <welt> --dists <m> --cameras chase
+  --size 960x540 --jpeg-width 640 --jpeg-max-kb 150` (neue Optionen
+  `--jpeg-width`, `--jpeg-max-kb`). Probe mit der Testwelt: 640 × 360,
+  43 kB.
+- `catalog-preview --out <dir>` trägt Bild (Größe, Maße, SHA-256), Profil
+  und Laser ein und kopiert die Bilder nach `<dir>/packages/`.
+- Workflow `indoor-worlds.yml`: nach dem Bau Node 22, `npm ci`, Playwright
+  1.49.1 mit Chromium, dann die drei Schritte; Fehler dort kosten nur Bilder
+  (`continue-on-error`). Neue Eingabe **`preview_only`**: kein Neubau, die
+  Pakete kommen aus dem Release, hochgeladen werden nur Bilder und
+  `catalog.json`.
+- **Seit 24.11.2026 aufgeteilt** (20 Strecken): `plan` verteilt die Strecken
+  (alle oder `only`) reihum auf höchstens drei Gruppen und legt das Release
+  an; `worlds` läuft als Matrix, je Gruppe ein Runner parallel (Platz
+  schaffen, Bau `--only <Gruppe>`, Vorschau, Pakete und Bilder der Gruppe
+  hochladen, Gruppenkatalog als Artefakt); `publish` holt den aktuellen
+  `catalog.json` des Release, übernimmt je Gruppe die Einträge ihrer Strecken
+  und lädt ihn hoch. Eine gescheiterte Gruppe lässt ihre Einträge, wie sie im
+  Release stehen. Begründung und Abschätzung: Abschnitt „Workflow-Grenzen“
+  unten.
+
+**Was beim nächsten Katalogbau neu entsteht** (Workflow nach dem Merge):
+je gebauter Strecke ein Release-Asset `<id>-v<version>.jpg` (640 × 360,
+Ziel ≤ 150 kB) und in `catalog.json` die Felder `profile`, `laser`
+(für Laser-Strecken) und `preview`. Strecken, die ein Lauf mit `only` nicht
+baut, behalten ihren Stand; für sie (oder um Bilder ohne den stundenlangen
+Neubau nachzuziehen) den Workflow mit `preview_only: true` starten. Die App
+zeigt die Vorschau beim nächsten Öffnen der Liste (spätestens am nächsten
+Tag, sofort mit „Katalog aktualisieren“). Der beigelegte Katalog der App
+bleibt in diesem Branch unverändert (kein Profil, kein Bild); wer ihn mit
+`--app-catalog` erneuert, bekommt die Profile mit hinein.
+
+**Nicht geprüft:** echte Katalogwelten im Betrachter auf dem CI-Rechner
+(Laufzeit, Bildgröße mit Luftbild, dunkle Waldbilder — `shots.mjs` meldet
+sie, das Bild wird trotzdem genommen); die Karten auf einem echten Gerät
+(Decodieren, Scrollen mit 14 Bildern, Flugmodus-Erkennung, Abruf über
+Mobilfunk).
 
 ## App
 
 - **Streckenwahl** (Schritt 2): zwei Bereiche „Eigene Strecken“ / „Bekannte
-  Strecken“. Karten mit Name, Region und Land, km, Hm, Belagsanteilen, Art
+  Strecken“. Karten mit Vorschau (siehe oben), Name, Region und Land, km, Hm, Belagsanteilen, Art
   (Rennrad/Schotter/Pflaster), Text, Luftbild ja/nein und Zustand:
   nicht geladen („Laden (77 MB)“) · lädt x % mit „Abbrechen“ · angefangen
   („Fortsetzen“/„Verwerfen“) · wird geprüft und entpackt · bereit (wählbar) ·
@@ -150,8 +340,10 @@ tiles/*.glb      alle Kacheln, sortiert
 
 ### Netz (PRIVACY.md, Abschnitt 4)
 
-Nur nach „Laden“, „Fortsetzen“, „Aktualisieren“ oder „Katalog
-aktualisieren“: `github.com/robinrehbein/trailscape/releases/download/…`,
+Von selbst nur `catalog.json` (höchstens täglich) und die Vorschaubilder
+(je Bild einmal), beides nur mit Netz; Pakete nur nach „Laden“,
+„Fortsetzen“ oder „Aktualisieren“; alles von
+`github.com/robinrehbein/trailscape/releases/download/…`,
 das mit `302` auf `release-assets.githubusercontent.com` weiterleitet
 (geprüft am 23.11.2026; früher `objects.githubusercontent.com`, ebenfalls
 erlaubt). `Range`-Anfragen gehen dort (`206`). Jede Station wird gegen
@@ -172,7 +364,9 @@ erlaubt). `Range`-Anfragen gehen dort (`206`). Jede Station wird gegen
    mit der Datenstufe „Laser“ (DGM1, nDOM, LoD2; `docs/indoor/lidar.md`),
    ohne weitere Eingabe — auch im Workflow. Eingetragen für `kahler-asten`,
    `balkantrasse` und `altenberg` (Stand 24.11.2026), in Baden-Württemberg
-   für `solitude` und `maulbronn` (neu, Version 1). Außerhalb der
+   für `solitude` und `maulbronn` sowie (24.11.2026, Version 1) `strohgaeu`,
+   `marbach-lemberg`, `bottwartal`, `welzheimer-wald`, `enztal` und
+   `schoenbuch` (Abschnitt „Strecken im Großraum Stuttgart“). Außerhalb der
    Laser-Quellen hat das Feld keine Wirkung.
 2. `./gradlew :indoor-dev:run --args="catalog-routes --only <id>"` — schreibt
    GPX und Beläge unter `catalog/routes/`, gibt km/Hm aus. Belagsanteile
@@ -237,6 +431,38 @@ alle Quellen.
    dem Knopf.
 7. **Auswahl der Strecken:** zehn Vorschläge, beliebig ersetzbar. Ein Eintrag
    Brocken (Sachsen-Anhalt, Luftbild jetzt belegbar) läge nahe.
+
+## Workflow-Grenzen (24.11.2026)
+
+Mit den sechs Stuttgarter Strecken baut der Katalog 20 Welten (rund 330 km,
+8 davon mit Laser). Abschätzung aus dem letzten Lauf und den lokalen Bauten:
+
+| | Lauf 9 (24.11.2026, 14 Strecken, ≈ 182 km, 2 mit Laser) | neu (6 Strecken, 149,5 km, alle Laser, lokal) |
+|---|---|---|
+| Bau | 73 min (Schritt „Welten bauen“), Job 76 min | 39 min Summe (4 Kerne, Laser-Cache kalt) |
+| Pakete | ≈ 1,7 GB | 1,39 GB |
+| Welten entpackt | ≈ 2,6 GB | 2,0 GB |
+| Laser-Cache | ≈ 0,45 GB (Solitude, Maulbronn) | 2,8 GB (ganze 2-km-Archive, 16–23 MB/km) |
+| Heap/RSS | — | RSS höchstens 2,05–2,93 GB mit `-Xmx6g` |
+
+- **Laufzeit:** in einem Job etwa 2 h Bau plus 20 Vorschaubilder — unter der
+  Frist von 300 min, aber ohne viel Luft, und jede weitere Strecke verlängert
+  ihn.
+- **Platte (der Engpass):** Welten, Pakete, Laser- und Geo-Cache zusammen
+  rund 12–13 GB, dazu Gradle, JDK und Chromium — ungefähr so viel, wie ein
+  `ubuntu-latest` frei hat (Faustwert 14 GB, nicht gemessen).
+- **Heap:** 6 GB reichen (gemessen höchstens 2,9 GB RSS), keine Änderung.
+
+Darum ist der Workflow jetzt dreigeteilt (Abschnitt „Katalogbau“): je Gruppe
+etwa 7 Strecken / 110 km, rund 5 GB Platte und 40–60 min, die drei Gruppen
+parallel; zusätzlich räumt jeder Runner vorinstallierte SDKs weg (.NET,
+Android, GHC, CodeQL). Mit `only` entstehen so viele Gruppen wie Strecken,
+höchstens drei.
+
+**Nicht geprüft:** Der Workflow ist nicht gelaufen (bewusst nicht
+ausgelöst). Gruppenbildung und Zusammenführen sind lokal mit `jq` und
+Beispielkatalogen geprüft, das YAML ist gelesen; Matrix, Artefakte und
+parallele Uploads ins Release nur am Text geprüft.
 
 ## Abweichungen und Annahmen
 

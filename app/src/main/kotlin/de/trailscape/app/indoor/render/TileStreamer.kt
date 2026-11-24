@@ -227,6 +227,8 @@ internal class TileStreamer(
             if (s !is Slot.Ready) continue
             val tile = planner.tile(id) ?: continue
             val hidden = TilePlanner.hiddenSubs(tile, shown)
+            // Wasser: eigenes Material (Spiegelung, Wellen), abschaltbar mit dem Schalter „Himmel"
+            s.loaded.applyWater(if (settings.sky) core.ensureWaterInstance() else null)
             s.loaded.applyVisibility { cat ->
                 when {
                     cat != null && cat in hidden -> false

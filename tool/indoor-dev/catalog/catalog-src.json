@@ -5,7 +5,7 @@
   "entries": [
     {
       "id": "alpe-dhuez",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Alpe d'Huez", "en": "Alpe d'Huez" },
       "region": { "de": "Bourg-d'Oisans, Französische Alpen", "en": "Bourg-d'Oisans, French Alps" },
       "country": "FR",
@@ -19,7 +19,7 @@
     },
     {
       "id": "vlaamse-ardennen",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Oude Kwaremont, Paterberg und Koppenberg", "en": "Oude Kwaremont, Paterberg and Koppenberg" },
       "region": { "de": "Flämische Ardennen bei Oudenaarde", "en": "Flemish Ardennes near Oudenaarde" },
       "country": "BE",
@@ -36,7 +36,7 @@
     },
     {
       "id": "arenberg",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Wald von Arenberg", "en": "Arenberg Forest" },
       "region": { "de": "Wallers bei Valenciennes, Nordfrankreich", "en": "Wallers near Valenciennes, northern France" },
       "country": "FR",
@@ -50,7 +50,7 @@
     },
     {
       "id": "monte-sante-marie",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Schotter von Monte Sante Marie", "en": "Monte Sante Marie gravel" },
       "region": { "de": "Crete Senesi bei Asciano, Toskana", "en": "Crete Senesi near Asciano, Tuscany" },
       "country": "IT",
@@ -64,7 +64,7 @@
     },
     {
       "id": "sa-calobra",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Sa Calobra", "en": "Sa Calobra" },
       "region": { "de": "Serra de Tramuntana, Mallorca", "en": "Serra de Tramuntana, Majorca" },
       "country": "ES",
@@ -78,7 +78,7 @@
     },
     {
       "id": "flint-hills",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Schotter der Flint Hills", "en": "Flint Hills gravel" },
       "region": { "de": "Cottonwood Falls, Kansas", "en": "Cottonwood Falls, Kansas" },
       "country": "US",
@@ -92,7 +92,7 @@
     },
     {
       "id": "grosser-feldberg",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Großer Feldberg", "en": "Großer Feldberg" },
       "region": { "de": "Taunus bei Oberursel, Hessen", "en": "Taunus near Oberursel, Hesse" },
       "country": "DE",
@@ -106,7 +106,7 @@
     },
     {
       "id": "schauinsland",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Schauinsland", "en": "Schauinsland" },
       "region": { "de": "Freiburg im Breisgau, Schwarzwald", "en": "Freiburg im Breisgau, Black Forest" },
       "country": "DE",
@@ -120,7 +120,7 @@
     },
     {
       "id": "kahler-asten",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Waldwege am Kahlen Asten", "en": "Forest roads at Kahler Asten" },
       "region": { "de": "Winterberg, Sauerland", "en": "Winterberg, Sauerland" },
       "country": "DE",
@@ -135,7 +135,7 @@
     },
     {
       "id": "balkantrasse",
-      "version": 6,
+      "version": 7,
       "name": { "de": "Balkantrasse", "en": "Balkantrasse rail trail" },
       "region": { "de": "Wermelskirchen, Bergisches Land", "en": "Wermelskirchen, Bergisches Land" },
       "country": "DE",
@@ -150,7 +150,7 @@
     },
     {
       "id": "altenberg",
-      "version": 6,
+      "version": 7,
       "name": { "de": "Altenberger Dom und Dhünntal", "en": "Altenberg Cathedral and Dhünn valley" },
       "region": { "de": "Odenthal, Bergisches Land", "en": "Odenthal, Bergisches Land" },
       "country": "DE",
@@ -165,7 +165,7 @@
     },
     {
       "id": "rennsteig",
-      "version": 9,
+      "version": 10,
       "name": { "de": "Rennsteig bei Oberhof", "en": "Rennsteig near Oberhof" },
       "region": { "de": "Thüringer Wald", "en": "Thuringian Forest" },
       "country": "DE",
@@ -179,7 +179,7 @@
     },
     {
       "id": "solitude",
-      "version": 1,
+      "version": 2,
       "name": { "de": "Schloss Solitude und Glemseck", "en": "Solitude Palace and Glemseck" },
       "region": { "de": "Glemswald zwischen Stuttgart-West und Leonberg", "en": "Glemswald forest between Stuttgart-West and Leonberg" },
       "country": "DE",
@@ -194,7 +194,7 @@
     },
     {
       "id": "maulbronn",
-      "version": 1,
+      "version": 2,
       "name": { "de": "Kloster Maulbronn und Stromberg", "en": "Maulbronn Abbey and the Stromberg hills" },
       "region": { "de": "Maulbronn, Naturpark Stromberg-Heuchelberg", "en": "Maulbronn, Stromberg-Heuchelberg nature park" },
       "country": "DE",
@@ -205,6 +205,96 @@
       },
       "profile": "trekking",
       "waypoints": [[49.00094, 8.80975], [49.0309, 8.8223], [49.0068, 8.8586], [49.00094, 8.80975]],
+      "laser": true
+    },
+    {
+      "id": "strohgaeu",
+      "version": 1,
+      "name": { "de": "Strohgäu bei Ditzingen", "en": "Strohgäu near Ditzingen" },
+      "region": { "de": "Strohgäu und Glemstal, nordwestlich von Stuttgart", "en": "Strohgäu and Glems valley, north-west of Stuttgart" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Eine kurze, wellige Feierabendrunde vom Bahnhof Ditzingen über die offenen Felder des Strohgäus: Hirschlanden, Schöckingen und Heimerdingen, zurück über Höfingen und das Glemstal. Fast durchgehend Asphalt, meist auf Feldwegen und ruhigen Ortsstraßen.",
+        "en": "A short, rolling after-work loop from Ditzingen station across the open fields of the Strohgäu: Hirschlanden, Schöckingen and Heimerdingen, back via Höfingen and the Glems valley. Almost entirely asphalt, mostly on farm tracks and quiet village roads."
+      },
+      "profile": "trekking",
+      "waypoints": [[48.8236, 9.0674], [48.83722, 9.03835], [48.8445, 9.0301], [48.85148, 8.9864], [48.8151, 9.0263], [48.8236, 9.0674]],
+      "laser": true
+    },
+    {
+      "id": "marbach-lemberg",
+      "version": 1,
+      "name": { "de": "Marbach und Lemberg", "en": "Marbach and the Lemberg hill" },
+      "region": { "de": "Marbach am Neckar, Backnanger Bucht", "en": "Marbach am Neckar, Backnang basin" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Vom Bahnhof der Schillerstadt Marbach hinauf nach Rielingshausen, über Kirchberg an der Murr und die Höhe zum Lemberg bei Affalterbach, hinab nach Poppenweiler und zurück ins Neckartal: eine wellige Runde zwischen Streuobstwiesen, Feldern und Weinbergen.",
+        "en": "From the station of Marbach, Schiller's birthplace, up to Rielingshausen, via Kirchberg an der Murr and across the plateau to the Lemberg hill near Affalterbach, down to Poppenweiler and back into the Neckar valley: a rolling loop through orchards, fields and vineyards."
+      },
+      "profile": "trekking",
+      "waypoints": [[48.9436, 9.2656], [48.96165, 9.32852], [48.94265, 9.34037], [48.91718, 9.30825], [48.9093, 9.2652], [48.9436, 9.2656]],
+      "laser": true
+    },
+    {
+      "id": "bottwartal",
+      "version": 1,
+      "name": { "de": "Bottwartal und Prevorst", "en": "Bottwar valley and Prevorst" },
+      "region": { "de": "Bottwartal und Löwensteiner Berge", "en": "Bottwar valley and Löwenstein hills" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Vom Marktplatz Großbottwar durch das Weintal der Bottwar nach Oberstenfeld, dann der lange Anstieg durch den Wald hinauf nach Prevorst in den Löwensteiner Bergen (rund 250 Höhenmeter am Stück). Über die Höhe nach Etzlenswenden, hinab nach Beilstein unterhalb der Burg Hohenbeilstein und über Winzerhausen am Wunnenstein zurück.",
+        "en": "From the market square of Großbottwar through the wine valley of the Bottwar to Oberstenfeld, then the long climb through the forest up to Prevorst in the Löwenstein hills (about 250 m in one go). Across the heights to Etzlenswenden, down to Beilstein below Hohenbeilstein castle and back via Winzerhausen below the Wunnenstein."
+      },
+      "profile": "fastbike",
+      "waypoints": [[49.00125, 9.29292], [49.0243, 9.3193], [49.04992, 9.39993], [49.0744, 9.3727], [49.0404, 9.3138], [49.0237, 9.2652], [49.00125, 9.29292]],
+      "laser": true
+    },
+    {
+      "id": "welzheimer-wald",
+      "version": 1,
+      "name": { "de": "Welzheimer Wald und Ebnisee", "en": "Welzheim Forest and Lake Ebnisee" },
+      "region": { "de": "Schwäbischer Wald, Rems-Murr-Kreis", "en": "Swabian Forest, Rems-Murr district" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Vom Bahnhof Rudersberg das Wieslauftal hinauf und der markante Anstieg über die Laufenmühle nach Welzheim (rund 250 Höhenmeter), dann über die Höhen des Schwäbischen Walds nach Kaisersbach, am Ebnisee vorbei nach Althütte und über Lutzenberg zurück ins Tal. Die ersten und letzten 2 km sind derselbe Weg.",
+        "en": "From Rudersberg station up the Wieslauf valley and the distinctive climb past the Laufenmühle to Welzheim (about 250 m), then across the heights of the Swabian Forest to Kaisersbach, past Lake Ebnisee to Althütte and via Lutzenberg back down into the valley. The first and last 2 km share the same road."
+      },
+      "profile": "fastbike",
+      "waypoints": [[48.88164, 9.53041], [48.88209, 9.60586], [48.87745, 9.6237], [48.90974, 9.65059], [48.92981, 9.63894], [48.9231, 9.6166], [48.9245, 9.5938], [48.91661, 9.55075], [48.88164, 9.53041]],
+      "laser": true
+    },
+    {
+      "id": "enztal",
+      "version": 1,
+      "name": { "de": "Enztal von Besigheim nach Vaihingen", "en": "Enz valley from Besigheim to Vaihingen" },
+      "region": { "de": "Enztal zwischen Neckar und Stromberg", "en": "Enz valley between the Neckar and the Stromberg hills" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Flach am Fluss entlang: vom Bahnhof Besigheim, wo die Enz in den Neckar mündet, auf dem Enztal-Radweg durch Bietigheim, Bissingen, Unterriexingen und Enzweihingen zum Marktplatz von Vaihingen an der Enz. Kaum Steigung — gut für Grundlagen und Intervalle.",
+        "en": "Flat along the river: from Besigheim station, where the Enz flows into the Neckar, on the Enz valley cycle path through Bietigheim, Bissingen, Unterriexingen and Enzweihingen to the market square of Vaihingen an der Enz. Hardly any climbing — good for endurance and intervals."
+      },
+      "profile": "trekking",
+      "waypoints": [[48.99754, 9.13716], [48.93837, 9.05729], [48.91743, 8.98381], [48.93215, 8.95617]],
+      "laser": true
+    },
+    {
+      "id": "schoenbuch",
+      "version": 1,
+      "name": { "de": "Schönbuch: Teufelsbrücke und Birkensee", "en": "Schönbuch forest: Teufelsbrücke and Birkensee" },
+      "region": { "de": "Naturpark Schönbuch zwischen Böblingen und Tübingen", "en": "Schönbuch nature park between Böblingen and Tübingen" },
+      "country": "DE",
+      "kind": "GRAVEL",
+      "description": {
+        "de": "Eine Waldrunde auf den Schotter- und Forstwegen des Schönbuchs: vom Bahnhof Dettenhausen zur Kälberstelle, hinab zur Teufelsbrücke, hinauf zum Birkensee und über die Höhe beim Schaichhof zurück. Vier Fünftel Forstwege durch Laub- und Mischwald.",
+        "en": "A forest loop on the gravel and forest roads of the Schönbuch: from Dettenhausen station to the Kälberstelle, down to the Teufelsbrücke bridge, up to the Birkensee and back across the heights near the Schaichhof. Four fifths forest roads through broadleaf and mixed woodland."
+      },
+      "profile": "gravel",
+      "waypoints": [[48.60674, 9.09315], [48.59343, 9.07362], [48.57641, 9.0341], [48.59027, 9.01589], [48.61266, 9.03937], [48.60674, 9.09315]],
       "laser": true
     }
   ]

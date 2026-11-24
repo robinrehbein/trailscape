@@ -57,21 +57,44 @@ class CatalogDownloader(
         .build()
 
     /** Holt den (kleinen) Katalog aus dem Release. */
-    fun fetchText(url: String, maxBytes: Long = MAX_CATALOG_BYTES): CatalogFetchResult = try {
-        execute(url, rangeFrom = 0L) { response ->
+    fun fetchText(url: String, maxBytes: Long = MAX_CATALOG_BYTES): CatalogFetchResult = when (val r = fetchSmall(url, maxBytes)) {
+        is BytesResult.Ok -> CatalogFetchResult.Done(text = r.bytes.toString(Charsets.UTF_8))
+        is BytesResult.Other -> r.result
+    }
+
+    /**
+     * Holt eine kleine Datei (Vorschaubild) aus dem Release: `null` bei
+     * jedem Fehler, Weiterleitungen wie beim Katalog nur auf erlaubte Ziele.
+     */
+    fun fetchBytes(url: String, maxBytes: Long): ByteArray? = (fetchSmall(url, maxBytes) as? BytesResult.Ok)?.bytes
+
+    private sealed interface BytesResult {
+        class Ok(val bytes: ByteArray) : BytesResult
+        class Other(val result: CatalogFetchResult) : BytesResult
+    }
+
+    private fun fetchSmall(url: String, maxBytes: Long): BytesResult = try {
+        var out: BytesResult? = null
+        val r = execute(url, rangeFrom = 0L) { response ->
             when (response.code) {
                 200 -> {
                     val body = response.body ?: return@execute CatalogFetchResult.Failed("leere Antwort")
-                    if (body.contentLength() > maxBytes) return@execute CatalogFetchResult.Failed("Katalog zu gross")
+                    if (body.contentLength() > maxBytes) return@execute CatalogFetchResult.Failed("Datei zu gross")
                     val bytes = body.byteStream().use { it.readNBytesCompat(maxBytes + 1) }
-                    if (bytes.size > maxBytes) CatalogFetchResult.Failed("Katalog zu gross") else CatalogFetchResult.Done(text = bytes.toString(Charsets.UTF_8))
+                    if (bytes.size > maxBytes) {
+                        CatalogFetchResult.Failed("Datei zu gross")
+                    } else {
+                        out = BytesResult.Ok(bytes)
+                        CatalogFetchResult.Done()
+                    }
                 }
                 404, 410 -> CatalogFetchResult.NotAvailable
                 else -> CatalogFetchResult.Failed("HTTP ${response.code}")
             }
         }
+        out ?: BytesResult.Other(r)
     } catch (e: IOException) {
-        CatalogFetchResult.Failed(e.toString(), offline = true)
+        BytesResult.Other(CatalogFetchResult.Failed(e.toString(), offline = true))
     }
 
     /**

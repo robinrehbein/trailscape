@@ -31,6 +31,7 @@ import kotlin.system.exitProcess
  * models --out <dir>
  * catalog-routes [--only a,b]
  * catalog-build --out <dir> [--only a,b] [--quality …] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]
+ * catalog-preview --out <dir> [--only a,b] [--prepare]
  * sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms …] [--quality …] --out <dir>
  * ```
  * Katalog bekannter Strecken: `Catalog.kt`, docs/indoor/catalog.md.
@@ -52,7 +53,7 @@ fun main(args: Array<String>) {
 }
 
 private const val USAGE = """Aufruf:
-  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>]]
+  build --gpx <datei> [--quality LOW|MEDIUM|HIGH] --out <dir> [--surfaces <json>] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--offline] [--laser [--laser-radius m] [--lod2-corridor <datei>] [--laser-profile e0,n0,e1,n1[,schritt]]]
   lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m] [--offline]
   plan --gpx <datei> [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b] [--no-aerial] [--catalog-aerial] [--laser]
   testworld --out <dir> [--quality LOW|MEDIUM|HIGH]
@@ -61,6 +62,7 @@ private const val USAGE = """Aufruf:
   models --out <dir>
   catalog-routes [--only a,b]
   catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
+  catalog-preview --out <dir> [--only a,b] [--prepare]   (Vorschau: --prepare = Welten bereitlegen + plan.tsv, sonst Profil/Laser/Bild in catalog.json)
   sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>
   server-info
   server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]
@@ -143,6 +145,9 @@ private fun run(all: List<String>): Int {
                 offline = a.flag("offline"),
                 laser = a.flag("laser"),
             )
+        }
+        "catalog-preview" -> Args(rest, setOf("prepare")).let { a ->
+            catalogPreview(File(a.req("out")), a.opt("only"), a.flag("prepare"))
         }
         "sky" -> Args(rest, emptySet()).let { a ->
             skyExport(
@@ -292,6 +297,23 @@ private fun build(a: Args): Int {
     println("Anfragen: ${counting.summary()}")
     de.trailscape.core.indoor.world.laserBuildStats(builder).takeIf { it.isNotEmpty() }?.let { s ->
         println("Laser: " + s.entries.joinToString(", ") { "${it.key}=${it.value}" })
+    }
+    // --laser-profile e0,n0,e1,n1[,schritt]: Hoehenprofil quer durch eine Stelle (DGM1, DOM1, Terrarium, Netz).
+    // Mehrere Profile mit `;` getrennt.
+    a.opt("laser-profile")?.split(';')?.filter { it.isNotBlank() }?.forEach { p ->
+        val v = p.split(',').map { it.trim().toDoubleOrNull() ?: throw UsageError("--laser-profile: e0,n0,e1,n1[,schritt]") }
+        if (v.size < 4) throw UsageError("--laser-profile: e0,n0,e1,n1[,schritt]")
+        println("Profil $p")
+        de.trailscape.core.indoor.world.laserProfile(builder, v[0], v[1], v[2], v[3], v.getOrElse(4) { 1.0 }).forEach(::println)
+    }
+    // --roads-near e,n[,r]: Wege der Karte und Ecken an Einmuendungen um eine Stelle (Fehlersuche).
+    a.opt("roads-near")?.let { p ->
+        val v = p.split(',').map { it.trim().toDoubleOrNull() ?: throw UsageError("--roads-near: e,n[,r]") }
+        de.trailscape.core.indoor.world.roadsNear(builder, v[0], v[1], v.getOrElse(2) { 30.0 }).forEach(::println)
+    }
+    a.opt("trees-near")?.let { p ->
+        val v = p.split(',').map { it.trim().toDoubleOrNull() ?: throw UsageError("--trees-near: e,n[,r]") }
+        de.trailscape.core.indoor.world.laserTreesNear(builder, v[0], v[1], v.getOrElse(2) { 40.0 }).forEach(::println)
     }
     val rt = Runtime.getRuntime()
     println("Heap: belegt ${mb(rt.totalMemory() - rt.freeMemory())}, reserviert ${mb(rt.totalMemory())}, Grenze ${mb(rt.maxMemory())}")

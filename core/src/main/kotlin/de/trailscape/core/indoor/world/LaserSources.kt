@@ -366,3 +366,83 @@ fun laserBuildStats(builder: WorldBuilder): Map<String, String> {
         "versatzP95" to "%.2f".format(java.util.Locale.ROOT, s.offsetP95),
     )
 }
+
+/**
+ * Hoehenprofil des letzten Baus von [builder] entlang der Linie (`e0`,`n0`) → (`e1`,`n1`) (ENU der Welt) alle
+ * [stepM] Meter: je Zeile Abstand, e, n, DGM1, DOM1, Terrarium + Versatz, ueberblendet, Gewicht DGM1 und das
+ * eingeebnete Gelaende (Meter ueber dem Ursprung, wie in den Kacheln). Leer ohne Laserdaten. Nur fuer Messungen.
+ */
+fun laserProfile(builder: WorldBuilder, e0: Double, n0: Double, e1: Double, n1: Double, stepM: Double = 1.0): List<String> {
+    val impl = builder as? WorldBuilderImpl ?: return emptyList()
+    val l = impl.lastLaser ?: return emptyList()
+    val g = impl.lastGround
+    val eleM = l.origin.eleM
+    val len = kotlin.math.hypot(e1 - e0, n1 - n0)
+    val steps = kotlin.math.max(1, kotlin.math.ceil(len / stepM).toInt())
+    val out = ArrayList<String>()
+    out += "s\te\tn\tdgm1\tdom1\tterrarium+versatz\tueberblendet\tgewicht\teingeebnet   (Meter ueber dem Ursprung ${"%.2f".format(java.util.Locale.ROOT, eleM)} m)"
+    for (i in 0..steps) {
+        val t = i.toDouble() / steps
+        val e = e0 + (e1 - e0) * t
+        val n = n0 + (n1 - n0) * t
+        val p = l.probe(e, n)
+        val carved = g?.heightAt(e, n) ?: Double.NaN
+        out += listOf(len * t, e, n, p[0] - eleM, p[1] - eleM, p[2] - eleM, p[3] - eleM, p[4], carved)
+            .joinToString("\t") { "%.2f".format(java.util.Locale.ROOT, it) }
+    }
+    return out
+}
+
+/**
+ * Auskunft ueber die Wege der Karte im Umkreis [r] um (`e`, `n`) nach dem letzten Bau von [builder]: Klasse,
+ * Belag, gezeichnete Breite, Punkte (ENU) und je Punkt der Abstand zur Strecke; dazu die Ecken an
+ * Einmuendungen ([JunctionCorners]). Nur fuer die Fehlersuche im Werkzeug.
+ */
+fun roadsNear(builder: WorldBuilder, e: Double, n: Double, r: Double): List<String> {
+    val impl = builder as? WorldBuilderImpl ?: return emptyList()
+    val (line, map, land) = impl.lastDebug ?: return emptyList()
+    val f = { v: Double -> "%.1f".format(java.util.Locale.ROOT, v) }
+    val out = ArrayList<String>()
+    for (road in map.roads(e - r, n - r, e + r, n + r)) {
+        val spec = roadSpec(road)
+        val pts = (0 until road.line.size / 2).joinToString(" ") { i ->
+            val pe = road.line[2 * i]; val pn = road.line[2 * i + 1]
+            val hit = line.nearest(pe, pn, 60.0)
+            "(${f(pe)},${f(pn)}|${hit?.let { f(it.distance) } ?: "-"})"
+        }
+        out += "Weg ${road.cls}/${road.subclass}/${road.surface}/${road.service} breite=${spec?.widthM} rang=${spec?.rank}: $pts"
+    }
+    val spec = TileSpec(0, kotlin.math.floor(e / 256.0).toInt(), kotlin.math.floor(n / 256.0).toInt())
+    val ctx = TileContext(spec = spec, origin = GeoOrigin(0.0, 0.0, 0.0), quality = IndoorQuality.MEDIUM, anchorU = 0.0,
+        ground = impl.lastGround ?: return out, track = line, map = map, land = land, textures = TextureCache(),
+        budget = TileBudget.of(IndoorQuality.MEDIUM, 0))
+    val net = RoadNet(ctx, marginM = 30.0, maxStepM = RoadsLayer.STEP_M)
+    for (c in JunctionCorners.find(line, land, net)) {
+        if (kotlin.math.hypot(c.pe - e, c.pn - n) > r) continue
+        out += "Ecke ${c.road.source.cls} P=(${f(c.pe)},${f(c.pn)}) r=${f(c.radius)} bogen=" +
+            (0 until c.arc.size / 2).joinToString(" ") { "(${f(c.arc[2 * it])},${f(c.arc[2 * it + 1])})" }
+    }
+    for (rd in net.roads) {
+        if (rd.e.indices.none { kotlin.math.hypot(rd.e[it] - e, rd.n[it] - n) < r }) continue
+        out += "Netz ${rd.source.cls} hw=${f(rd.halfWidth)}: " + rd.e.indices.filter { kotlin.math.hypot(rd.e[it] - e, rd.n[it] - n) < r }
+            .joinToString(" ") { "(${f(rd.e[it])},${f(rd.n[it])}${if (rd.onTrack[it]) "*" else ""}|${f(rd.trackDist[it])})" }
+    }
+    return out
+}
+
+/**
+ * Die gemessenen Einzelbaeume (nDOM) im Umkreis [r] um (`e`, `n`) nach dem letzten Bau: Lage, Hoehe,
+ * Kronenradius, Verhaeltnis Radius/Hoehe und die Art, die [laserTreeSpec] daraus waehlt. Nur fuer die Fehlersuche.
+ */
+fun laserTreesNear(builder: WorldBuilder, e: Double, n: Double, r: Double): List<String> {
+    val impl = builder as? WorldBuilderImpl ?: return emptyList()
+    val l = impl.lastLaser ?: return emptyList()
+    val land = impl.lastDebug?.third
+    val f = { v: Double -> "%.1f".format(java.util.Locale.ROOT, v) }
+    val base = TreeModels.Spec(TreeModels.Species.BROAD, 10.0, 1.0, 1.0, 1, 0.0, false)
+    return l.detectTrees(e - r, n - r, e + r, n + r).filter { kotlin.math.hypot(it.e - e, it.n - n) <= r }.map { t ->
+        val spec = laserTreeSpec(base, t, conifer = land?.coniferShare(t.e, t.n) ?: 0.3)
+        "Baum (${f(t.e)},${f(t.n)}) h=${f(t.heightM)} krone=${f(t.crownRadiusM)} r/h=${"%.3f".format(java.util.Locale.ROOT, t.crownRadiusM / t.heightM)} " +
+            "art=${spec?.species} breite=${spec?.let { "%.2f".format(java.util.Locale.ROOT, it.width) }}"
+    }
+}

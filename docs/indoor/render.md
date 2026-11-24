@@ -277,6 +277,198 @@ Einfärben und Hochladen von 1,5 MB bei jedem `setSky` (beim Start und bei
 - [ ] Spiegelt der Treiber die Cubemap-Flächen, ändert sich nur das
       Wolkenmuster (oben/unten bleibt richtig).
 
+## Licht, Himmel, Wasser, Lenkerperspektive (24.11.2026, Branch `claude/indoor-licht-kamera`)
+
+**Befund des Gründers** (Handy, Katalogstrecke „solitude“, abends 18:19 Uhr):
+trüb, dunkel, blaustichig, Wiese und Weg grau-grün, Himmel flach violett;
+tagsüber helle Felder blass/weiß; die Lenkerkamera „sieht noch komisch aus“.
+
+### Neues Werkzeug: Filament-Referenzrenderer
+
+Bisher hat niemand die Darstellung gesehen außer auf dem Gerät; der
+three.js-Betrachter ist nur eine Näherung (anderes Licht, andere Abbildung).
+Deshalb rendert jetzt **echtes Filament 1.75.1** (dieselbe Version wie die
+App, Desktop-Bibliotheken des Releases) ohne GPU auf Mesa llvmpipe unter Xvfb:
+
+- `tool/indoor-dev/filament/filarender.cpp` (+ `build.sh`): Engine, Sonne
+  mit 3 Kaskaden/DPCF, Umgebungslicht aus SH, Cubemap bzw. Himmelsmaterial,
+  Dunst, Farbweg, MSAA, Wasser, Fahrer, Cockpit — Einstellungen wie
+  `FilamentCore`.
+- `tool/indoor-dev/viewer/filashots.mjs`: rechnet die Szene wie die App
+  (`TilePlanner`-Kacheln samt Teilflächen-Regel, `CameraRig`, `modelMatrix`;
+  Kameras in `camerarig.mjs`) und ruft den Renderer.
+- `indoor-dev sky` schreibt dafür zusätzlich die exakte Cubemap
+  (`cube.bin`), die SH-Koeffizienten, die Wolkentextur (`clouds.bin`) und die
+  Stimmung (`look`: EV, Farbweg, Dunst-Einstreuung, Parameter der Materialien
+  aus `SkyShading`).
+- `licht-kamera.sh` rendert den Bildsatz, `vergleich.py` setzt Vorher/Nachher
+  nebeneinander, `materials.sh` kompiliert die Materialien mit matc 1.75.1.
+
+Der Renderer bestätigt den Befund genau (Vorher-Bilder unten). Er ist
+Desktop-GL statt OpenGL ES; Shader, Abbildung, Licht und Dunst sind dieselben,
+Genauigkeit (mediump) und Leistung nicht. **Alles unten ist im
+Referenzrenderer gesehen, nicht auf dem Gerät.**
+
+### Licht und Farbe (`core/…/indoor/sky`)
+
+Ursachen des trüben, blauen Bilds (nachgerechnet):
+
+1. **Feste Belichtung EV 15** (Sonnige-16-Regel) auch in der Dämmerung. Bei
+   8° Sonne trifft auf eine waagrechte Fläche nur ein Siebtel des Sonnenlichts;
+   das Bild war rund **zwei Blenden** unterbelichtet.
+2. **Blaues Umgebungslicht:** Der Himmelsverlauf für die SH-Koeffizienten
+   hatte oben 0,16/0,34/0,78 und einen dunklen Boden — bei tiefer Sonne
+   beleuchtete fast nur noch er die Welt: Wiese und Weg graublau, Schatten
+   schwarzblau.
+3. **`ACES_LEGACY`** (Filaments Standard) bleicht helle, wenig gesättigte
+   Flächen weiß und entsättigt — die blassen Felder am Mittag.
+
+Neu (`DaylightModel`, `ToneGrade`, `SkyLook`, `SkyShading`):
+
+| | vorher | jetzt |
+|---|---|---|
+| Belichtung | immer EV 15 | gemessen wie ein Handbelichtungsmesser: Leuchtdichte einer weißen, waagrechten Fläche aus Sonne und Umgebungslicht → 1,05 nach der Belichtung; Dämmerung (8°) EV ≈ 13,8, Morgen (16°) ≈ 14,1, Mittag ≈ 15,2. `FilamentCore` setzt die Verschlusszeit (Blende 16, ISO 100) bei jedem `setSky` |
+| Abbildung | `ACES_LEGACY` | `PBR_NEUTRAL` (Khronos) über `ColorGrading`: Farben bis ≈ 0,76 bleiben, darüber weich zu Weiß; Kontrast 1,06, Lebendigkeit 1,17 |
+| Umgebungslicht | Zenit 0,16/0,34/0,78, Boden 0,20/0,22/0,14 | tief: Zenit 0,50/0,48/0,56, Horizont 1,00/0,80/0,62, Boden 0,36/0,30/0,20; hoch: Zenit 0,40/0,49/0,68. Stärke unverändert 26 000–34 000 lx (Waldweg-Bitte) |
+| Sonnenfarbe tief | 1/0,76/0,52 | 1/0,70/0,44 (goldene Stunde) |
+| Himmelsfarben | gegen `ACES_LEGACY` ausgesucht | als **Zielfarben auf dem Bildschirm** (sRGB) angegeben und über eine Nachbildung von Filaments Farbweg (`ToneGrade`: Rec.2020, LogC-Kontrast, Lebendigkeit, PBR Neutral) zurückgerechnet — bleiben richtig, wenn die Abbildung sich ändert |
+
+Die Rückrechnung ist eine kanalweise Bisektion (ein multiplikatives
+Verfahren blieb bei fast schwarzem Rot hängen — der Zenit wurde lavendel);
+geprüft in `LightAndShadingTest`. Nachts gibt es weiterhin kein Dunkel:
+„Automatisch“ springt unter 8° Sonne in die nächste Dämmerung (unverändert);
+mit der gemessenen Belichtung ist diese jetzt hell genug zum Fahren.
+
+### Dunst / Luftperspektive
+
+Dichte wie bisher (Sichtweite aus `haze`, mindestens 90 % am Rand der Welt —
+deckt Kachelgrenzen und das Einblenden der groben Stufen). Neu: **Einstreuung
+der Sonne** (`FogOptions.inScatteringStart` 300 m, `inScatteringSize` 18 bei
+tiefer bis 48 bei hoher Sonne): gegen die tiefe Sonne ein warmer Schein in der
+Ferne, nicht auf dem Weg. Das Himmelsmaterial rechnet am Horizont denselben
+Schein (gleiche Formel wie `surface_fog.fs`, Sonnenfarbe aus `frameUniforms`),
+die Horizontfarbe ist exakt Dunstfarbe × `iblLuminance` — Gelände und Himmel
+stoßen ohne Kante aneinander (Test).
+
+### Himmel (`app/src/main/materials/sky.mat`)
+
+Eigenes Material statt Filaments Skybox: Vollbild-Dreieck auf der fernen
+Ebene (wie `skybox.mat`), Verlauf Horizont → Zenit mit **entsättigtem
+Übergang** (lineares Mischen von Orange und Blau ergab das Lila), breiter Hof
+und Einstreuung um die Sonne, Sonnenscheibe wie bisher, **ziehende Wolken**:
+kachelbares Wertrauschen 256² R8 (`SkyClouds.cloudTexture`, mit Mipmaps), zwei
+Lagen mit verschiedenem Zug, auf eine gedachte Wolkenebene projiziert,
+Selbstschatten durch eine dritte Probe zur Sonne hin, Silberrand nahe der
+Sonne. Wolkenzug 0,0022/0,0009 Textureinheiten je Sekunde (ein Feld quert den
+Himmel in einigen Minuten); die Uhr springt alle 2 h zurück
+(Float-Genauigkeit). Kosten: drei Texturzugriffe, ein `exp`, drei `pow` je
+Himmelspixel; keine Cubemap mehr im Normalfall. Fehlt das Material oder
+scheitert es, nimmt `FilamentCore` wie bisher die Cubemap (deren Farben aus
+denselben Zielwerten kommen); `sky = false` bleibt einfarbig.
+
+### Wasser (`app/src/main/materials/water.mat`)
+
+Ersetzt das Material der Knoten `water` (`LoadedAsset.applyWater`; die
+Flächen kommen unverändert aus der Welt): dunkler, gering rauer Wasserkörper
+(Filament-Licht, also Sonnenglanz nach GGX, Schatten, Dunst), Wellen aus
+derselben Rauschtextur (zwei ziehende Lagen, Normale aus Differenzen, in der
+Ferne geglättet — sonst flimmert die Fläche wie Kies), Spiegelung des
+Himmelsverlaufs nach Fresnel als belichtete Eigenleuchtfarbe; flach
+gespiegelte Strahlen bekommen eine dunkle Uferfarbe statt des hellen
+Horizonts (Bäume und Gelände spiegeln sich, ohne dass wir sie zeichnen).
+Wasser wirft keinen Schatten. Abschaltbar mit dem Schalter „Himmel“
+(`RenderSettings.sky`), dann wieder das Material der Kachel.
+
+### Lenkerperspektive (`CameraRig`, `CockpitModel`, `FilamentCore.projectionFor`)
+
+Befund (Vorher-Bilder): Die Kamera saß 1,45 m hoch 0,25 m vor dem
+Ursprung — im Kinn des Fahrers; die nahe Ebene (0,5 m) schnitt Arme und
+Lenker weg, man sah **kein Cockpit**. Der Horizont lag in der Bildmitte, die
+untere Hälfte (unter dem HUD) zeigte nur Asphalt. Das Ziel 25 m voraus auf
+der Strecke ließ die Kamera in Kehren auf Zäune und Wände starren.
+
+Neu:
+
+- **Cockpit** im Code gebaut (wie der eingebaute Fahrer): Rennlenker mit
+  Bremsgriffen, Vorbau, Steuerrohr samt Ansatz von Ober- und Unterrohr,
+  Radcomputer, Hände in Handschuhen auf den Griffen, kurze Unterarme mit
+  Trikotsaum (Farben wie `rider.glb`). Rund 2 700 Dreiecke, 11 Teile. Der
+  Lenker schlägt in Kurven um die Lenkachse ein. Am Lenker wird der Fahrer
+  ausgeblendet, das Cockpit eingeblendet.
+- **Kamera fest im Rahmen des Rads** (Auge 1,46 m hoch, 0,36 m hinter der
+  Radmitte — über und hinter dem Lenker, damit Hände und Griffe im Bild
+  liegen). Der Rahmen folgt dem Kurs (über ±3 m gemittelt), der Steigung
+  (±4 m) und legt sich in Kurven (halbe physikalische Schräglage
+  `atan(v²κ/g)`, höchstens 9°). Der Blick kippt nur mit 60 % der Steigung
+  mit (der Kopf gleicht aus), liegt 3° unter der Waagrechten und schaut in
+  die Kurve (60 % des Winkels zum Punkt 20 m voraus, höchstens 22°).
+  Gedämpft werden die Winkel (τ 0,25–0,4 s), nicht die Lage — das Cockpit
+  wackelt nie gegen die Kamera.
+- **Bildwinkel und Verschiebung:** hoch 74°, quer 64° (senkrecht), nahe
+  Ebene 0,2 m. Die Bildmitte wird mit `Camera.setShift` nach oben verschoben
+  statt die Kamera zu kippen (Senkrechte bleiben senkrecht): Horizont im
+  Hochformat bei rund 35 % der Höhe, quer bei rund 43 %; Hände und Griffe im
+  Hochformat bei 70–80 %, quer am unteren Rand. **Gemessen:** Filament 1.75.1
+  verschiebt die Bildmitte um das *Doppelte* des Werts in
+  Gerätekoordinaten — die Werte sind entsprechend halb so groß.
+
+### Leistung
+
+Im Referenzrenderer nicht messbar (llvmpipe). Abschätzung je Bild:
+
+- Draw Calls: Himmel 1 (ersetzt die Skybox); Wasser keine zusätzlichen
+  (nur anderes Material); Cockpit 11 Teile (+ Schattendurchgang) statt der
+  rund 30 Teile des Fahrers, der am Lenker ausgeblendet ist. Solitude
+  MEDIUM: 380–420 Renderables, 930–1080 Primitive je Stelle (unverändert).
+- Shader: Himmel 3 Texturzugriffe + wenige transzendente Funktionen auf
+  ≈ 30–50 % der Pixel (vorher 1 Cubemap-Zugriff); Wasser ein beleuchtetes
+  Material mit 6 Texturzugriffen auf kleiner Fläche; Farbweg unverändert
+  (Filament wendet immer eine 3D-LUT an). Belichtung kostet nichts.
+- Einmalig: Wolkentextur 64 KB (statt 1,5 MB Cubemap im Normalfall),
+  Umkehrung der Himmelsfarben je `setSky` einige zehn Millisekunden.
+- `water.filamat` 206 KB, `sky.filamat` 13 KB im APK.
+- Abschaltbar über die vorhandenen Schalter: `sky` (Himmelsmaterial,
+  Wolken, Wassermaterial), `fog` (Dunst samt Einstreuung),
+  `postProcessing` (Farbweg; SAFE wie bisher ohne).
+
+### Bilder (`docs/indoor/bilder/licht-kamera/`, Referenzrenderer, Solitude MEDIUM)
+
+Je Bild links/oben vorher, rechts/unten nachher; Hochformat 900×1200,
+Querformat 1600×900 (auf 1280 verkleinert). „AUTO“ ist der Testabend des
+Gründers (24.11., 18:19 Uhr → Dämmerung bei 8° Sonne).
+
+- `licht-<Zeit>-hoch|quer-05500_chase.jpg` — offene Felder, AUTO, MORNING,
+  NOON, EVENING
+- `wald-<Zeit>-hoch-02200_chase.jpg` — Waldweg, AUTO und NOON
+- `dunst-<Zeit>-quer-06600_chase.jpg` — Fernsicht, AUTO und NOON
+- `wasser-<Zeit>-quer-06230_blick.jpg` — Teich bei Solitude, NOON und EVENING
+- `lenker-hoch|quer-<Laufmeter>_handlebar.jpg` — 02200 eben, 02650 bergab
+  (−8 %), 06070 Kehre, 09560 bergauf (15 %)
+
+### Offen / auf dem Gerät zu prüfen
+
+- [ ] Alles oben auf dem Gerät ansehen (Abend, Mittag, Hoch- und Querformat,
+      Lenker), vor allem Farbe und Helligkeit mit PBR Neutral.
+- [ ] Himmelsmaterial: Logcat ohne Fehler; Wolken ziehen sichtbar, aber
+      ruhig; kein Banding im Verlauf (mediump auf dem Gerät).
+- [ ] Wasser: Wellen ruhig, kein Flimmern in der Ferne.
+- [ ] Lenker: Cockpit nicht abgeschnitten (nahe Ebene 0,2 m), kein Flimmern
+      der Straße in der Ferne durch die nähere Ebene; Kurvenlage angenehm,
+      nicht übel erregend (sonst `HANDLEBAR_LEAN_FACTOR` senken).
+- [ ] Bildrate MEDIUM wie vorher (Himmel und Wasser sind die einzigen
+      teureren Shader).
+- [ ] `ColorGrading` wird bei jedem `setSky` neu gebaut (alle 10 min bei
+      „Automatisch“) — auf Ruckler achten.
+- Der **Waldboden** (Bodentextur unter Bäumen) ist dunkel blaugrün und wirkt
+  auch mit dem neuen Licht kühl — das ist die Textur der Welt, nicht das
+  Licht (Bitte an indoor-world, siehe unten).
+- Kehren mit Gebäude direkt voraus (Solitude 6070) zeigen am Lenker kurz die
+  Wand — der Blick in die Kurve ist auf 22° begrenzt, damit das Cockpit nicht
+  aus dem Bild wandert.
+- Der three.js-Betrachter übernimmt nur die Lenkerkamera (`camerarig.mjs`),
+  nicht Cockpit, Himmelsmaterial, Wasser und Farbweg — maßgeblich für das
+  Aussehen ist jetzt `filashots.mjs`.
+
 ## Abweichungen vom Vertrag
 
 1. **Fahrer ohne Datei möglich.** Vertrag 7.6 nennt „Modelle“ als Startstufe
@@ -483,6 +675,10 @@ Risiken, die nur das Gerät klärt (zusätzlich zur Liste oben):
     wenn länger als 500 ms nichts kommt. *Geprüft:* `IndoorRideRuntime`
     nimmt `SystemClock.elapsedRealtime()`.
 - **indoor-world:**
+  - Die Bodentextur unter Wald (Luftbild bzw. erzeugte Textur) ist dunkel
+    blaugrün; mit dem neuen, warmen Licht bleibt der Waldboden das kühlste
+    im Bild (`docs/indoor/bilder/licht-kamera/wald-*`). Etwas heller und
+    bräunlicher (Laub, Nadelstreu) würde viel bringen.
   - Knotennamen bitte wie in `WorldNames` direkt an den Knoten mit Netz oder
     an einem Vorfahren — die Darstellung ordnet Renderables über die Kette der
     Vorfahren zu.

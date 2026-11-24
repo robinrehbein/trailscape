@@ -22,9 +22,10 @@ node shots.mjs ../out/mock --serve --port 8123   # nur Server, Seite im Browser 
 | Option | Bedeutung |
 |---|---|
 | `--dists 0,500,…` | Laufmeter der Bilder; sonst `--count N` (Vorgabe 6) gleichmäßig über die Strecke |
-| `--cameras chase,handlebar,drone,overview` | Kameras je Stelle (`overview`: Übersicht aus ~650 m Höhe) |
+| `--cameras chase,handlebar,drone,overview,free` | Kameras je Stelle (`overview`: Übersicht aus ~650 m Höhe; `free`: feste Kamera aus `--param eye=e,n,u --param at=e,n,u`, Weltkoordinaten, optional `--param fov=50`) |
 | `--size 1600x900` | Bildgröße (deviceScaleFactor 1) |
 | `--jpeg` | zusätzlich JPEG, 1280 px breit, unter 300 kB |
+| `--jpeg-width N`, `--jpeg-max-kb K` | Breite und Obergrenze des JPEG (Vorgabe 1280 px, 300 kB; schaltet `--jpeg` ein). Vorschaubilder des Katalogs: `--size 960x540 --jpeg-width 640 --jpeg-max-kb 150` |
 | `--out <dir>` | Zielverzeichnis, sonst `<welt>/shots/` |
 | `--sun-az`, `--sun-el` | Sonnenazimut (0 = Nord, 90 = Ost) und -höhe in Grad; Vorgabe 235/40 |
 | `--sky <dir>` | Himmel der Darstellung aus `indoor-dev sky --out <dir>` (Seite: `skyDir`): Rundumbild mit Wolken, Sonnenstand, Sonnenfarbe, Lichtstärken und Dunst wie auf dem Gerät; `--sun-*` gehen vor |
@@ -131,6 +132,11 @@ Vergleich).
 | Dunst über `fogOptions`, Horizontfarbe = Dunstfarbe | exponentieller Dunst mit Höhenabnahme, linear vor dem Tonemapping gemischt; Sichtweite aus `manifest.quality` (6/12/20 km), Farbe = Horizontfarbe |
 | ACES, sRGB, 4× MSAA (FXAA nur ohne MSAA) | ACES-Tonemapping, sRGB-Ausgabe, MSAA der Zeichenfläche |
 | Kameras `CHASE`, `HANDLEBAR`, `DRONE` | wie `CameraRig` (ohne Dämpfung): 6 m auf dem Band zurück, 2,5 m über dem höheren von Fahrer und Kamerapunkt, Blick 6 m voraus; Auge 1,45 m, Blick 25 m voraus; Drohne abweichend 85 m hoch, 125 m zurück, 55 m seitlich |
+
+**Maßstab für das Aussehen** ist seit dem 24.11.2026 der Filament-Referenzrenderer
+(`filashots.mjs`, siehe `../README.md`): echtes Filament mit Licht, Farbweg,
+Himmels- und Wassermaterial und Cockpit der App. Dieser Betrachter übernimmt
+davon nur die Lenkerkamera (`camerarig.mjs`, samt Verschiebung der Bildmitte).
 
 ## Wo er abweicht
 

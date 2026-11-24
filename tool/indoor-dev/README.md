@@ -28,6 +28,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `--no-aerial` | ohne Luftbild (erzeugte Bodentextur aus der Landnutzung) |
 | `--offline` | kein Netz: nur, was im Cache liegt (auch Abgelaufenes) |
 | `--laser [--laser-radius m]` | Datenstufe „Laser" (NRW und Baden-Württemberg, nach Lage der Strecke): Gelände aus DGM1, Bäume aus nDOM, Gebäude aus LoD2 im Korridor (Vorgabe 200 m); auch für `plan` und `catalog-build`. Am Ende eine Zeile `Laser:` mit Blöcken, Anfragen, Bytes, LoD2, Versatz DGM1 − Terrarium. Siehe `docs/indoor/lidar.md` |
+| `--laser-profile e0,n0,e1,n1[,schritt][;…]`, `--roads-near e,n[,r]`, `--trees-near e,n[,r]` | für `build --laser`: nach dem Bau Höhenprofil (DGM1, DOM1, Terrarium + Versatz, überblendet, eingeebnet), Wege und Ecken an Einmündungen bzw. nDOM-Bäume um eine Stelle ausgeben (ENU der Welt, Fehlersuche; `docs/indoor/lidar.md`, Abschnitt 9). Ein fortgesetzter Bau rechnet nur die Kacheln neu, die fehlen |
 | `--catalog-aerial` | für `build`/`plan`: Luftbild wie beim Katalogbau, also auch die Dienste nur des Werkzeugs (`CatalogAerial.kt`, z. B. Hessen, Frankreich) |
 | `--lod2-corridor <datei>` | mit `--laser`: LoD2 aus einer zugeschnittenen Korridordatei statt aus den 1-km-Kacheln |
 | `lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m]` | LoD2 auf den Streifen um die Strecke zuschneiden (Vorgabe 120 m), kompakt schreiben; gibt Kachel- und Korridorgröße je km aus |
@@ -110,6 +111,25 @@ node shots.mjs ../out/testwelt --count 8 --cameras chase --sky ../out/himmel/abe
 
 Bilder landen unter `<welt>/shots/`. Optionen und Abweichungen von Filament
 stehen in `viewer/README.md`.
+
+**Wie auf dem Gerät** (echtes Filament 1.75.1 ohne GPU, Mesa llvmpipe unter
+Xvfb; braucht clang mit libc++, siehe `filament/build.sh`):
+
+```
+tool/indoor-dev/filament/build.sh                 # einmal: Filament-Release laden, filarender bauen
+./gradlew :indoor-dev:run --args="sky --time EVENING --lat 48.77 --lon 9.06 --out tool/indoor-dev/out/himmel/abend"
+./gradlew :app:testDebugUnitTest --tests '*CockpitAndHandlebarTest'   # schreibt app/build/indoor/cockpit.glb
+cd tool/indoor-dev/viewer
+node filashots.mjs ../out/<welt> --sky ../out/himmel/abend --dists 2200,5500 --cameras "chase;handlebar" --size 900x1200
+```
+
+`filashots.mjs` rechnet Kacheln, Teilflächen, Fahrer und Kameras wie die App
+(`camerarig.mjs`) und ruft `filament/build/filarender`; Materialien kommen aus
+`app/src/main/assets/indoor/materials` (neu bauen mit
+`filament/materials.sh`). Der Bildsatz „Licht und Kamera“:
+`filament/licht-kamera.sh`, Gegenüberstellungen `filament/vergleich.py`.
+Einzelheiten in `docs/indoor/render.md`, „Licht, Himmel, Wasser,
+Lenkerperspektive“.
 
 ## Hinweis zum Stand
 

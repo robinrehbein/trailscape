@@ -4,6 +4,7 @@ import de.trailscape.core.indoor.sky.DaylightModel
 import de.trailscape.core.indoor.sky.IndoorDaylight
 import de.trailscape.core.indoor.sky.IndoorTimeOfDay
 import de.trailscape.core.indoor.sky.SkyClouds
+import de.trailscape.core.indoor.sky.SkyIrradiance
 import de.trailscape.core.indoor.sky.SkyRgb
 import de.trailscape.core.indoor.world.IndoorQuality
 import java.awt.image.BufferedImage
@@ -57,6 +58,14 @@ internal fun skyExport(
     val buf = ByteBuffer.allocate(px.size * 4).order(ByteOrder.LITTLE_ENDIAN)
     for (v in px) buf.putFloat(v)
     File(out, "sky.f32").writeBytes(buf.array())
+    // Fuer den Filament-Referenzrenderer: genau die Cubemap und die SH-Koeffizienten des Geraets.
+    val cubeSize = SkyClouds.CUBE_SIZE
+    val half = SkyClouds.cubemapHalfRgb(l.look, cubeSize, l.skyScale)
+    val cb = ByteBuffer.allocate(half.size * 2).order(ByteOrder.LITTLE_ENDIAN)
+    for (v in half) cb.putShort(v)
+    File(out, "cube.bin").writeBytes(cb.array())
+    val sh = SkyIrradiance.sh(l.iblZenith, l.iblHorizon, l.iblGround)
+    File(out, "clouds.bin").writeBytes(SkyClouds.cloudTexture())
 
     val img = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
     for (y in 0 until h) for (x in 0 until w) {
@@ -73,10 +82,15 @@ internal fun skyExport(
         appendLine(String.format(Locale.ROOT, "  \"hourOfDay\": %.4f, \"dayOfYear\": %d, \"haze\": %.3f,", setting.hourOfDay, setting.dayOfYear, setting.haze))
         appendLine(String.format(Locale.ROOT, "  \"sunAzimuthDeg\": %.3f, \"sunElevationDeg\": %.3f,", l.sunAzimuthDeg, l.sunAltitudeDeg))
         appendLine("  \"sunColor\": ${rgb(l.sunColor)},")
-        appendLine(String.format(Locale.ROOT, "  \"sunLux\": %.1f, \"ambientLux\": %.1f, \"exposure\": %.8g,", l.sunLux, l.ambientLux, de.trailscape.core.indoor.sky.SkyLookModel.EXPOSURE))
+        appendLine(String.format(Locale.ROOT, "  \"sunLux\": %.1f, \"ambientLux\": %.1f, \"exposure\": %.8g,", l.sunLux, l.ambientLux, l.exposure))
         appendLine("  \"iblZenith\": ${rgb(l.iblZenith)}, \"iblHorizon\": ${rgb(l.iblHorizon)}, \"iblGround\": ${rgb(l.iblGround)},")
         appendLine("  \"skyZenith\": ${rgb(l.look.zenith)}, \"skyHorizon\": ${rgb(l.look.horizon)},")
         appendLine(String.format(Locale.ROOT, "  \"fogDensity\": %.8g,", l.fogDensity))
+        appendLine("  \"fogColor\": ${rgb(l.fogColor)}, \"skyScale\": ${String.format(Locale.ROOT, "%.8g", l.skyScale)},")
+        appendLine("  \"sunDirEnu\": [${String.format(Locale.ROOT, "%.6f, %.6f, %.6f", l.sunEast, l.sunNorth, l.sunUp)}],")
+        appendLine("  \"sh\": [${sh.joinToString(", ") { String.format(Locale.ROOT, "%.7g", it) }}],")
+        appendLine("  \"cubeSize\": $cubeSize,")
+        appendLine("  \"look\": ${lookJson(l)},")
         appendLine("  \"skyWidth\": $w, \"skyHeight\": $h")
         appendLine("}")
     }
@@ -89,6 +103,28 @@ internal fun skyExport(
         ),
     )
     return 0
+}
+
+/** Stimmung fuer den Referenzrenderer: dieselben Werte, die `FilamentCore` setzt. */
+private fun lookJson(l: de.trailscape.core.indoor.sky.DaylightLighting): String {
+    fun v(x: Any): String = when (x) {
+        is DoubleArray -> x.joinToString(", ", "[", "]") { String.format(Locale.ROOT, "%.6g", it) }
+        is Double -> String.format(Locale.ROOT, "%.6g", x)
+        else -> "\"$x\""
+    }
+    fun obj(m: Map<String, Any>) = m.entries.joinToString(", ", "{", "}") { "\"${it.key}\": ${v(it.value)}" }
+    val look = linkedMapOf<String, Any>(
+        "ev100" to l.ev100,
+        "toneMapper" to l.grade.toneMapper,
+        "contrast" to l.grade.contrast,
+        "vibrance" to l.grade.vibrance,
+        "saturation" to l.grade.saturation,
+        "fogInScatteringStart" to l.fogInScatteringStart,
+        "fogInScatteringSize" to l.fogInScatteringSize,
+    )
+    return obj(look).dropLast(1) +
+        ", \"skyMaterial\": ${obj(de.trailscape.core.indoor.sky.SkyShading.sky(l))}" +
+        ", \"water\": ${obj(de.trailscape.core.indoor.sky.SkyShading.water(l))}}"
 }
 
 /**

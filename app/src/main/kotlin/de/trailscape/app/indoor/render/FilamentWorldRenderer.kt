@@ -81,6 +81,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private var uiHelper: UiHelper? = null
     private var surfaceView: SurfaceView? = null
     private var rider: AvatarActor? = null
+    private var cockpit: CockpitActor? = null
     private var ghost: AvatarActor? = null
     private var staticScene: LoadedAsset? = null
     private var streamer: TileStreamer? = null
@@ -381,6 +382,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             return false
         }
         core = c
+        c.materialPackages = loadMaterialPackages()
         deviceInfo = deviceInfo?.copy(backend = c.backendName)
         info = deviceInfo
         if (io == null) {
@@ -397,6 +399,16 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         return true
     }
 
+    /** Eigene Materialien aus `assets/indoor/materials` (fehlen sie, bleibt es bei Filaments Skybox und dem Wasser der Kachel). */
+    private fun loadMaterialPackages(): Map<String, ByteArray> {
+        val out = HashMap<String, ByteArray>()
+        for (name in listOf(FilamentCore.SKY_MATERIAL, FilamentCore.WATER_MATERIAL)) {
+            runCatching { appContext.assets.open("$MATERIAL_DIR/$name.filamat").use { it.readBytes() } }
+                .onSuccess { out[name] = it }
+        }
+        return out
+    }
+
     private fun applySettings(c: FilamentCore) {
         val l = skyLighting ?: SkyModel.lighting(sky, originLatDeg, viewDistanceM).also { skyLighting = it }
         // Die Schalter fuer Baeume, Gebaeude, Kleinteile prueft der Streamer in jedem Bild selbst.
@@ -406,6 +418,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private fun applySky(c: FilamentCore) {
         val l = SkyModel.lighting(sky, originLatDeg, viewDistanceM)
         skyLighting = l
+        c.setFogInScattering(l.daylight.fogInScatteringStart, l.daylight.fogInScatteringSize)
         c.applySky(l, settings.sky)
         c.applyFog(settings.fog, l.fogDensity, l.fogColor, fogHeight())
     }
@@ -528,6 +541,13 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             ghost = loadModel(c, WorldModels.GHOST, AvatarModel.GHOST)
             ghost?.setVisible(false)
         }
+        if (cockpit == null) {
+            // Cockpit der Lenkerperspektive (im Code gebaut); fehlt es, bleibt nur die Kamera.
+            cockpit = runCatching { CockpitActor(LoadedAsset.loadSync(c, CockpitModel.buildGlb())) }
+                .onFailure { Log.w(TAG, "Cockpit nicht ladbar", it) }
+                .getOrNull()
+            cockpit?.setVisible(false)
+        }
         return Unit
     }
 
@@ -570,6 +590,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         detach()
         clearScene()
         rider?.let { runCatching { it.destroy() } }
+        cockpit?.let { runCatching { it.destroy() } }
+        cockpit = null
         ghost?.let { runCatching { it.destroy() } }
         rider = null
         ghost = null
@@ -680,9 +702,23 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
                 }
             }
 
-            // Kamera
-            val pose = rig.update(t, riderMotion.distM, laneR, dt)
+            // Kamera; am Lenker statt des Fahrers das Cockpit (die Kamera saesse sonst in seinem Kopf)
+            val pose = rig.update(t, riderMotion.distM, laneR, dt, riderMotion.speedMps)
+            c.handlebarView = cameraMode == CameraMode.HANDLEBAR
             c.lookAt(CameraPose(pose.eye - offset, pose.target - offset, pose.up))
+            val cp = rig.cockpit
+            rider?.setVisible(cp == null)
+            cockpit?.let { k ->
+                if (cp != null) {
+                    val m = cp.matrix.copyOf()
+                    m[12] -= offset.x.toFloat()
+                    m[13] -= offset.y.toFloat()
+                    m[14] -= offset.z.toFloat()
+                    k.place(m)
+                    k.steer(cp.steerRad)
+                }
+                k.setVisible(cp != null)
+            }
 
             // Kacheln
             streamer?.let { s ->
@@ -696,6 +732,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         if (failure != null || core !== c) return
 
         stage = RenderStage.FRAME
+        c.setMaterialTime(nowMs / 1000.0)
         val drawn = c.render(frameTimeNanos)
         if (drawn) {
             lastRenderedNs = frameTimeNanos
@@ -825,6 +862,9 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     }
 
     companion object {
+        /** Verzeichnis der eigenen Filament-Materialien in den Assets. */
+        const val MATERIAL_DIR = "indoor/materials"
+
         private const val TAG = "IndoorRender"
         const val RECENTER_M = 2_000.0
         const val NO_FRAME_TIMEOUT_MS = 8_000L

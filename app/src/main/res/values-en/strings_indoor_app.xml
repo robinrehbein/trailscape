@@ -348,7 +348,15 @@
     <string name="indoor_app_catalog_refresh_done">The catalogue is up to date.</string>
     <string name="indoor_app_catalog_refresh_not_available">The catalogue has not been published yet. The list above comes with the app.</string>
     <string name="indoor_app_catalog_refresh_failed">Couldn’t load the catalogue. Check your connection and try again.</string>
-    <string name="indoor_app_catalog_privacy">Downloading and refreshing fetch files from Trailscape’s public GitHub release (github.com). Only the file you download is requested – no account, no identifier.</string>
+    <string name="indoor_app_catalog_privacy">The app fetches the list by itself at most once a day and each preview image once, worlds only after “Download” – all from Trailscape’s public GitHub release (github.com). Only the requested file is transferred – no account, no identifier.</string>
+    <string name="indoor_app_catalog_package">Package %1$s</string>
+    <string name="indoor_app_catalog_laser">Laser</string>
+    <string name="indoor_app_catalog_laser_hint">Laser quality: terrain, vegetation and buildings from official laser scans.</string>
+    <string name="indoor_app_catalog_new">New</string>
+    <string name="indoor_app_catalog_preview_missing">No preview yet</string>
+    <string name="indoor_app_catalog_preview_image">Preview image of the 3D world of %1$s</string>
+    <string name="indoor_app_catalog_profile_range">%1$d–%2$d m</string>
+    <string name="indoor_app_catalog_profile_description">Elevation profile of %1$s: %2$d to %3$d m over %4$s km</string>
     <string name="indoor_app_catalog_meta">%1$s km · %2$s m · %3$s</string>
     <string name="indoor_app_catalog_surface_share">%1$s %2$d %%</string>
     <string name="indoor_app_catalog_aerial_yes">With aerial imagery</string>

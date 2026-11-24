@@ -1,7 +1,7 @@
 // Screenshots einer Indoor-Welt in headless Chromium.
 //
 //   node shots.mjs <weltverzeichnis> [--dists 0,500,…|--count N] [--cameras chase,handlebar,drone]
-//                  [--size 1600x900] [--jpeg] [--out <dir>] [--sun-az 235] [--sun-el 40]
+//                  [--size 1600x900] [--jpeg [--jpeg-width 1280] [--jpeg-max-kb 300]] [--out <dir>] [--sun-az 235] [--sun-el 40]
 //                  [--no-rider] [--no-attribution] [--models <dir>] [--sky <dir>] [--param k=v …] [--serve [--port 8123]]
 //
 // Startet einen kleinen HTTP-Server (nur 127.0.0.1), oeffnet den Betrachter und
@@ -25,7 +25,7 @@ const REPO = resolve(HERE, '..', '..', '..');
 function parseArgs(argv) {
   const a = {
     world: null, dists: null, count: 6, cameras: ['chase', 'handlebar', 'drone'], width: 1600, height: 900,
-    jpeg: false, out: null, serve: false, port: 0, rider: true, attribution: true, sunAz: null, sunEl: null, sky: null,
+    jpeg: false, jpegWidth: 1280, jpegMaxKb: 300, out: null, serve: false, port: 0, rider: true, attribution: true, sunAz: null, sunEl: null, sky: null,
     models: join(REPO, 'app', 'src', 'main', 'assets', 'indoor', 'models'), extra: [],
   };
   const need = (i, name) => {
@@ -40,6 +40,8 @@ function parseArgs(argv) {
       case '--cameras': a.cameras = need(++i, k).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean); break;
       case '--size': { const m = /^(\d+)x(\d+)$/.exec(need(++i, k)); if (!m) throw new Error('--size erwartet BREITExHOEHE'); a.width = +m[1]; a.height = +m[2]; break; }
       case '--jpeg': a.jpeg = true; break;
+      case '--jpeg-width': a.jpegWidth = Math.max(64, parseInt(need(++i, k), 10)); a.jpeg = true; break;
+      case '--jpeg-max-kb': a.jpegMaxKb = Math.max(10, parseInt(need(++i, k), 10)); a.jpeg = true; break;
       case '--out': a.out = resolve(need(++i, k)); break;
       case '--serve': a.serve = true; break;
       case '--port': a.port = parseInt(need(++i, k), 10); break;
@@ -185,14 +187,15 @@ try {
       const pngBuf = await page.screenshot({ path: file, type: 'png' });
       let jpegNote = '';
       if (args.jpeg) {
-        // Verkleinert auf 1280 px Breite, Qualitaet so weit senken, bis die Datei unter 300 kB bleibt.
+        // Verkleinert auf --jpeg-width (1280 px), Qualitaet so weit senken, bis die Datei unter --jpeg-max-kb (300 kB) bleibt.
         const b64 = pngBuf.toString('base64');
+        const maxW = args.jpegWidth;
         for (const q of [0.86, 0.8, 0.72, 0.64, 0.55, 0.45, 0.35]) {
-          const data = await page.evaluate(async ({ b64, q }) => {
+          const data = await page.evaluate(async ({ b64, q, maxW }) => {
             const img = new Image();
             img.src = `data:image/png;base64,${b64}`;
             await img.decode();
-            const w = Math.min(1280, img.width);
+            const w = Math.min(maxW, img.width);
             const c = document.createElement('canvas');
             c.width = w;
             c.height = Math.round((img.height * w) / img.width);
@@ -200,9 +203,9 @@ try {
             ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, c.width, c.height);
             return c.toDataURL('image/jpeg', q).split(',')[1];
-          }, { b64, q });
+          }, { b64, q, maxW });
           const buf = Buffer.from(data, 'base64');
-          if (buf.length < 300 * 1024 || q === 0.35) {
+          if (buf.length < args.jpegMaxKb * 1024 || q === 0.35) {
             writeFileSync(join(outDir, `${name}.jpg`), buf);
             jpegNote = `, JPEG ${(buf.length / 1024).toFixed(0)} kB`;
             break;

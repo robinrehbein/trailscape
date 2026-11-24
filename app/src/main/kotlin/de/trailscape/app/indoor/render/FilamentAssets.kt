@@ -1,7 +1,9 @@
 package de.trailscape.app.indoor.render
 
+import com.google.android.filament.MaterialInstance
 import com.google.android.filament.gltfio.FilamentAsset
 import de.trailscape.core.indoor.world.WorldModels
+import de.trailscape.core.indoor.world.WorldNames
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -65,6 +67,47 @@ internal class LoadedAsset(private val core: FilamentCore, val asset: FilamentAs
 
     fun setAllVisible(v: Boolean) = applyVisibility { v }
 
+    /** Urspruengliche Materialien der Wasser-Renderables, solange [applyWater] ein eigenes gesetzt hat. */
+    private var waterOriginals: Map<Int, List<MaterialInstance>>? = null
+    private var waterApplied: MaterialInstance? = null
+
+    /**
+     * Setzt [mi] auf alle Teile der Knotenart `water` (oder stellt mit `null` das Material
+     * der Kachel wieder her). Wasser wirft dann keinen Schatten.
+     */
+    fun applyWater(mi: MaterialInstance?) {
+        if (mi === waterApplied) return
+        val rm = core.engine.renderableManager
+        val waterEntities = categories.filterValues { it == WorldNames.NODE_WATER }.keys
+        if (waterEntities.isEmpty()) {
+            waterApplied = mi
+            return
+        }
+        if (mi != null) {
+            val originals = waterOriginals ?: HashMap<Int, List<MaterialInstance>>().also { map ->
+                for (e in waterEntities) {
+                    val ri = rm.getInstance(e)
+                    if (ri == 0) continue
+                    map[e] = (0 until rm.getPrimitiveCount(ri)).map { rm.getMaterialInstanceAt(ri, it) }
+                }
+                waterOriginals = map
+            }
+            for (e in originals.keys) {
+                val ri = rm.getInstance(e)
+                if (ri == 0) continue
+                for (p in 0 until rm.getPrimitiveCount(ri)) rm.setMaterialInstanceAt(ri, p, mi)
+                rm.setCastShadows(ri, false)
+            }
+        } else {
+            waterOriginals?.forEach { (e, list) ->
+                val ri = rm.getInstance(e)
+                if (ri != 0) list.forEachIndexed { p, orig -> rm.setMaterialInstanceAt(ri, p, orig) }
+            }
+            waterOriginals = null
+        }
+        waterApplied = mi
+    }
+
     fun addToScene() {
         if (inScene) return
         core.show(asset)
@@ -74,6 +117,12 @@ internal class LoadedAsset(private val core: FilamentCore, val asset: FilamentAs
     fun setRootTransform(m: FloatArray) {
         val tm = core.engine.transformManager
         val i = tm.getInstance(asset.root)
+        if (i != 0) tm.setTransform(i, m)
+    }
+
+    fun setEntityTransform(entity: Int, m: FloatArray) {
+        val tm = core.engine.transformManager
+        val i = tm.getInstance(entity)
         if (i != 0) tm.setTransform(i, m)
     }
 
@@ -161,6 +210,35 @@ internal class AvatarActor(val loaded: LoadedAsset) {
         if (pedalIndex >= 0) a.applyAnimation(pedalIndex, (crankPhase * pedalDuration).toFloat().coerceIn(0f, pedalDuration))
         if (rollIndex >= 0) a.applyAnimation(rollIndex, (wheelPhase * rollDuration).toFloat().coerceIn(0f, rollDuration))
         if (pedalIndex >= 0 || rollIndex >= 0) a.updateBoneMatrices()
+    }
+
+    fun setVisible(v: Boolean) {
+        if (v == visible) return
+        visible = v
+        loaded.setAllVisible(v)
+    }
+
+    fun destroy() = loaded.destroy()
+}
+
+/** Cockpit der Lenkerperspektive ([CockpitModel]): Rahmen fest, Lenker schlaegt ein. */
+internal class CockpitActor(val loaded: LoadedAsset) {
+    private val barsEntity: Int = runCatching { loaded.asset.getFirstEntityByName(CockpitModel.NODE_BARS) }.getOrDefault(0)
+    private var lastSteer = Double.NaN
+    var visible = true
+        private set
+
+    init {
+        loaded.applyShadows(true to true)
+        loaded.addToScene()
+    }
+
+    fun place(matrix: FloatArray) = loaded.setRootTransform(matrix)
+
+    fun steer(angleRad: Double) {
+        if (barsEntity == 0 || kotlin.math.abs(angleRad - lastSteer) < 1e-4) return
+        lastSteer = angleRad
+        loaded.setEntityTransform(barsEntity, CockpitModel.steerMatrix(angleRad))
     }
 
     fun setVisible(v: Boolean) {

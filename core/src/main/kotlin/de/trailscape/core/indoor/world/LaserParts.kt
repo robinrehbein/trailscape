@@ -333,7 +333,7 @@ internal class LaserBuildingsLayer(
         val sub = TileContext(
             spec = ctx.spec, origin = ctx.origin, quality = ctx.quality, anchorU = ctx.anchorU, ground = ctx.ground,
             track = ctx.track, map = map, land = ctx.land, textures = ctx.textures,
-            budget = ctx.budget.copy(buildings = max(0, budget)), aerial = ctx.aerial, aerialTexture = ctx.aerialTexture, seed = ctx.seed,
+            budget = ctx.budget.copy(buildings = max(0, budget)), aerial = ctx.aerial, aerialTexture = ctx.aerialTexture, seed = ctx.seed, aerialRaw = ctx.aerialRaw,
         )
         sub.meshHeight = ctx.meshHeight
         base.build(sub, out)

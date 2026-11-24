@@ -94,6 +94,16 @@ enum class CatalogRideKind {
  * @property aerial die Welt hat (zumindest teilweise) ein Luftbild; sonst
  *   erzeugter Boden aus der Landnutzung.
  * @property aerialSource Name der Luftbild-Quelle, falls [aerial].
+ * @property laser die Welt ist in der Datenstufe „Laser" gebaut (DGM1, nDOM,
+ *   LoD2; `docs/indoor/lidar.md`) — Kennzeichen „Laser" in der App.
+ * @property profile ausgeduenntes Hoehenprofil der gezeichneten Fahrbahn,
+ *   `null` = keins im Katalog (aeltere Kataloge, beigelegter Katalog).
+ * @property preview kleines Vorschaubild der Welt als Release-Asset,
+ *   `null` = keins.
+ *
+ * Seit dem 24.11.2026 neu und **optional**: [laser], [profile], [preview].
+ * Das Format bleibt 1 — aeltere App-Versionen lesen nur die Felder, die sie
+ * kennen, und ueberspringen den Rest (Test `aelterLeserUeberspringtNeueFelder`).
  */
 data class CatalogEntry(
     val id: String,
@@ -114,6 +124,9 @@ data class CatalogEntry(
     val aerialSource: String? = null,
     val quality: IndoorQuality = IndoorQuality.MEDIUM,
     val diskBytes: Long = 0L,
+    val laser: Boolean = false,
+    val profile: CatalogProfile? = null,
+    val preview: CatalogPreview? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("id", id)
@@ -139,6 +152,9 @@ data class CatalogEntry(
         aerialSource?.let { put("aerialSource", it) }
         put("quality", quality.name)
         if (diskBytes > 0) put("diskBytes", diskBytes)
+        if (laser) put("laser", true)
+        profile?.let { put("profile", it.toJson()) }
+        preview?.let { put("preview", it.toJson()) }
     }
 
     companion object {
@@ -175,6 +191,10 @@ data class CatalogEntry(
                 aerialSource = o.optionalString("aerialSource"),
                 quality = IndoorQuality.fromNameOrNull(o.optionalString("quality")) ?: IndoorQuality.MEDIUM,
                 diskBytes = o.optionalLong("diskBytes") ?: 0L,
+                laser = o.optionalBoolean("laser") ?: false,
+                // Ein kaputtes Profil oder Bild kostet nur die Vorschau, nie den Eintrag.
+                profile = runCatching { (o["profile"] as? JsonObject)?.let(CatalogProfile::fromJson) }.getOrNull(),
+                preview = runCatching { (o["preview"] as? JsonObject)?.let(CatalogPreview::fromJson) }.getOrNull(),
             )
         }
     }
@@ -196,6 +216,12 @@ data class IndoorCatalog(
 
     /** Adresse des Pakets von [entry]. */
     fun packageUrl(entry: CatalogEntry): String = baseUrl + entry.packageFile
+
+    /**
+     * Adresse des Vorschaubilds von [entry], `null` = keins. Wie bei den
+     * Paketen gilt die [baseUrl] dieses (beigelegten) Katalogs.
+     */
+    fun previewUrl(entry: CatalogEntry): String? = entry.preview?.let { baseUrl + it.file }
 
     /** Adresse des Katalogs im Release. */
     fun catalogUrl(): String = baseUrl + CATALOG_FILE
@@ -261,6 +287,117 @@ data class IndoorCatalog(
     }
 }
 
+
+/**
+ * Ausgeduenntes Hoehenprofil einer Katalogstrecke fuer die Vorschau.
+ *
+ * Probe `i` liegt bei Laufmeter `min(i · stepM, lengthM)` (wie
+ * `WorldTrack`), die letzte genau am Ende; [elevM] in Metern auf 0,1 m.
+ * JSON: `{"stepM": 125.94, "elevM": [719.2, 721.0, …]}`.
+ */
+data class CatalogProfile(val stepM: Double, val elevM: List<Double>) {
+    init {
+        require(stepM > 0 && stepM.isFinite()) { "Profil: Schrittweite $stepM" }
+        require(elevM.size in 2..MAX_POINTS) { "Profil: ${elevM.size} Proben" }
+        require(elevM.all { it.isFinite() && it > -1000 && it < 9000 }) { "Profil: unplausible Hoehe" }
+    }
+
+    /** Laenge, die das Profil abdeckt. */
+    val lengthM: Double get() = stepM * (elevM.size - 1)
+
+    fun toJson(): JsonObject = buildJsonObject {
+        put("stepM", Math.round(stepM * 100) / 100.0)
+        put("elevM", buildJsonArray { elevM.forEach { add(kotlinx.serialization.json.JsonPrimitive(Math.round(it * 10) / 10.0)) } })
+    }
+
+    companion object {
+        /** Obergrenze der Proben beim Lesen (Schutz vor riesigen Katalogen). */
+        const val MAX_POINTS: Int = 2000
+
+        /** Vorgabe fuer den Katalogbau: gut 120 Proben, auf einer Karte mehr als genug. */
+        const val DEFAULT_POINTS: Int = 121
+
+        fun fromJson(o: JsonObject): CatalogProfile {
+            val step = o.requiredDouble("stepM")
+            val arr = o["elevM"] as? JsonArray ?: throw IllegalArgumentException("Profil: elevM fehlt")
+            require(arr.size <= MAX_POINTS) { "Profil: zu viele Proben" }
+            val ele = arr.map { (it as kotlinx.serialization.json.JsonPrimitive).content.toDouble() }
+            return CatalogProfile(step, ele)
+        }
+
+        /**
+         * Duennt ein Profil aus [count] Proben ([distAt], [eleAt]; Laufmeter
+         * aufsteigend, die letzte bei [lengthM]) auf hoechstens [points]
+         * gleichmaessig verteilte Proben aus (lineare Interpolation).
+         * `null` bei weniger als zwei Proben oder Laenge 0.
+         */
+        fun thinned(
+            lengthM: Double,
+            count: Int,
+            distAt: (Int) -> Double,
+            eleAt: (Int) -> Double,
+            points: Int = DEFAULT_POINTS,
+        ): CatalogProfile? {
+            if (count < 2 || lengthM <= 0.0 || !lengthM.isFinite()) return null
+            val n = points.coerceIn(2, MAX_POINTS).coerceAtMost(maxOf(2, count))
+            val step = lengthM / (n - 1)
+            var j = 1
+            val out = ArrayList<Double>(n)
+            for (i in 0 until n) {
+                val d = if (i == n - 1) lengthM else i * step
+                while (j < count - 1 && distAt(j) < d) j++
+                val d0 = distAt(j - 1)
+                val d1 = distAt(j)
+                val t = if (d1 > d0) ((d - d0) / (d1 - d0)).coerceIn(0.0, 1.0) else 0.0
+                out += eleAt(j - 1) + (eleAt(j) - eleAt(j - 1)) * t
+            }
+            return CatalogProfile(step, out)
+        }
+    }
+}
+
+/**
+ * Vorschaubild einer Katalogstrecke: ein kleines JPEG im selben Release wie
+ * die Pakete (`<id>-v<version>.jpg`, Ziel ≤ 150 kB), gerendert vom
+ * Betrachter (`tool/indoor-dev/viewer/shots.mjs`).
+ *
+ * @property sha256 Pruefsumme des Bildes; die App verwirft ein Bild, das nicht passt.
+ */
+data class CatalogPreview(
+    val file: String,
+    val bytes: Long,
+    val sha256: String?,
+    val width: Int = 0,
+    val height: Int = 0,
+) {
+    init {
+        require(file.endsWith(".jpg") && isSafeCatalogId(file.removeSuffix(".jpg"))) { "Vorschau: unzulaessiger Dateiname $file" }
+        require(bytes in 1..MAX_BYTES) { "Vorschau: Groesse $bytes" }
+        require(sha256 == null || SHA256_HEX.matches(sha256)) { "Vorschau: Pruefsumme" }
+    }
+
+    fun toJson(): JsonObject = buildJsonObject {
+        put("file", file)
+        put("bytes", bytes)
+        sha256?.let { put("sha256", it) }
+        if (width > 0) put("width", width)
+        if (height > 0) put("height", height)
+    }
+
+    companion object {
+        /** Obergrenze, die die App laedt (das Werkzeug zielt auf 150 kB). */
+        const val MAX_BYTES: Long = 400L * 1024
+
+        fun fromJson(o: JsonObject) = CatalogPreview(
+            file = o.requiredString("file"),
+            bytes = o.optionalLong("bytes") ?: 0L,
+            sha256 = o.optionalString("sha256")?.lowercase(),
+            width = o.optionalInt("width") ?: 0,
+            height = o.optionalInt("height") ?: 0,
+        )
+    }
+}
+
 private val SHA256_HEX = Regex("^[0-9a-f]{64}$")
 private val SAFE_ID = Regex("^[a-z0-9][a-z0-9._-]{0,79}$")
 
@@ -293,4 +430,37 @@ fun isAllowedCatalogUrl(url: String): Boolean {
     if (host !in CATALOG_HOSTS) return false
     if (host == "github.com") return uri.path?.startsWith("/robinrehbein/trailscape/releases/download/") == true
     return true
+}
+
+/**
+ * Wann die App den Katalog des Release von selbst abruft (beim Oeffnen der
+ * Liste „Bekannte Strecken", docs/indoor/catalog.md): **hoechstens einmal am
+ * Tag**. Faellig ist der Abruf, wenn
+ *
+ * * noch nie einer versucht wurde,
+ * * der letzte Versuch an einem anderen Kalendertag ([zone]) lag **und**
+ *   mindestens [MIN_GAP_MS] her ist (wer abends und morgens nach Mitternacht
+ *   schaut, loest keinen zweiten Abruf aus) — spaetestens nach [INTERVAL_MS],
+ * * oder die Uhr deutlich zurueckgestellt wurde (letzter Versuch mehr als
+ *   [CLOCK_SKEW_MS] „in der Zukunft") — sonst gaebe es tagelang keinen Abruf.
+ *
+ * Gemerkt wird jeder Versuch, der den Server erreicht oder es ernsthaft
+ * versucht hat, auch ein gescheiterter: Ein kaputtes Release wird nicht bei
+ * jedem Oeffnen erneut gefragt. Ohne Netz (Flugmodus) gibt es keinen Versuch
+ * und keinen Zeitstempel.
+ */
+object CatalogAutoRefresh {
+    const val INTERVAL_MS: Long = 24L * 60 * 60 * 1000
+    const val MIN_GAP_MS: Long = 6L * 60 * 60 * 1000
+    const val CLOCK_SKEW_MS: Long = 60L * 60 * 1000
+
+    fun isDue(lastAttemptMs: Long?, nowMs: Long, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): Boolean {
+        if (lastAttemptMs == null || lastAttemptMs <= 0L) return true
+        val gap = nowMs - lastAttemptMs
+        if (gap < -CLOCK_SKEW_MS) return true
+        if (gap >= INTERVAL_MS) return true
+        if (gap < MIN_GAP_MS) return false
+        fun day(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+        return day(nowMs) != day(lastAttemptMs)
+    }
 }

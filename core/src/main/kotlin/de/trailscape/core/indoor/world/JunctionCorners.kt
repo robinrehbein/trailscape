@@ -78,12 +78,15 @@ internal object JunctionCorners {
         for (r in net.roads) {
             if (r.spec.rail) continue
             for (i in 0 until r.size - 1) {
+                // Stuecke, die mit der Strecke laufen, verlassen sie nicht.
+                if (r.segOnTrack(i)) continue
                 val ha = track.nearest(r.e[i], r.n[i], 40.0) ?: continue
                 val hb = track.nearest(r.e[i + 1], r.n[i + 1], 40.0) ?: continue
                 val wa = track.halfWidthAt(ha.distM)
                 val wb = track.halfWidthAt(hb.distM)
-                val inA = ha.distance < wa
-                val inB = hb.distance < wb
+                // Eine Station auf der Strecke zaehlt als innen, auch wenn sie im Kurvenscheitel neben der Fahrbahn liegt.
+                val inA = ha.distance < wa || r.onTrack[i]
+                val inB = hb.distance < wb || r.onTrack[i + 1]
                 if (inA == inB) continue
                 // Richtung von innen nach aussen, Einmuendungspunkt J auf der Fahrbahnkante.
                 val (ii, oo) = if (inA) i to i + 1 else i + 1 to i

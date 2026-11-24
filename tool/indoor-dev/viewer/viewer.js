@@ -15,6 +15,7 @@ import { SunLight } from 'three/addons/lights/SunLight.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { handlebarPose, handlebarProjection } from './camerarig.mjs';
 
 // ---------------------------------------------------------------------------
 // Parameter
@@ -1052,7 +1053,7 @@ function updateFog() {
   camera.far = visibility * 1.6;
 }
 
-const CAMERAS = ['chase', 'handlebar', 'drone', 'overview'];
+const CAMERAS = ['chase', 'handlebar', 'drone', 'overview', 'free'];
 
 /** Stellt die Kamera fuer die aktuelle Stelle; liefert den Punkt, auf den sie blickt. */
 function updateCamera(placement) {
@@ -1075,14 +1076,28 @@ function updateCamera(placement) {
   let fov = 50;
   let near = 0.5;
 
-  if (view.camera === 'handlebar') {
-    // wie CameraRig HANDLEBAR: Auge 1,45 m, 0,25 m voraus, Blick 25 m voraus auf 0,8 × Augenhoehe
-    pos.copy(rider).addScaledVector(dir, 0.25).setY(rider.y + 1.45);
-    const ahead = fwd(d + 25);
-    toScene(ahead.e, ahead.n, ahead.u + 1.16, look);
-    pos.y = Math.max(pos.y, placement.u + 1.0);
-    fov = 62;
+  let shiftY = 0;
+  if (view.camera === 'free' && params.has('eye') && params.has('at')) {
+    // Freie Kamera fuer Belegbilder: eye=e,n,u und at=e,n,u in Weltkoordinaten (ENU, Meter ueber dem Ursprung)
+    const [ee, en, eu] = params.get('eye').split(',').map(Number);
+    const [ae, an, au] = params.get('at').split(',').map(Number);
+    toScene(ee, en, eu, pos);
+    toScene(ae, an, au, look);
+    fov = pNum('fov', 50);
     near = 0.3;
+  } else if (view.camera === 'handlebar') {
+    // wie CameraRig HANDLEBAR (camerarig.mjs, gemeinsam mit filashots.mjs): Auge fest im Rahmen
+    // des Rads, Steigung, Kurvenlage, Blick in die Kurve; Bildmitte nach oben verschoben.
+    // Das Cockpit zeichnet nur der Filament-Referenzrenderer (filashots.mjs).
+    const toRel = (e, n, u) => { const v = toScene(e, n, u); return [v.x, v.y, v.z]; };
+    const hp = handlebarPose(d, { poseAt: poseAtExtended, lat: placement.offset, speed: 8, rel: toRel });
+    pos.set(...hp.eye);
+    look.set(...hp.target);
+    const proj = handlebarProjection(canvas.clientHeight > canvas.clientWidth);
+    fov = proj.fovV;
+    near = proj.near;
+    shiftY = proj.shiftY;
+    camera.up.set(...hp.up);
   } else if (view.camera === 'overview') {
     // Uebersicht von hoch oben (fuer Belegbilder ganzer Landschaften)
     pos.copy(rider).addScaledVector(dir, -700).addScaledVector(left, 300).setY(rider.y + 650);
@@ -1110,8 +1125,13 @@ function updateCamera(placement) {
   camera.fov = fov;
   camera.near = CONFIG.near > 0 ? CONFIG.near : near;
   camera.position.copy(pos);
-  camera.up.set(0, 1, 0);
+  if (view.camera !== 'handlebar') camera.up.set(0, 1, 0);
   camera.lookAt(look);
+  // Verschiebung wie Camera.setShift in Filament (Bildmitte wandert um 2 × shift in Geraetekoordinaten)
+  const w = canvas.clientWidth || window.innerWidth;
+  const h = canvas.clientHeight || window.innerHeight;
+  if (shiftY !== 0) camera.setViewOffset(w, h, 0, shiftY * h, w, h);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
   controls.target.copy(look);
   controls.update();

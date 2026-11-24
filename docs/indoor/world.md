@@ -85,10 +85,13 @@ beurteilt; seine Hauptpunkte (dunkle Fichtenwände, flache Waldscherben) sind
 als Nr. 11/12 eingearbeitet, die übrigen (Detailtextur über dem Luftbild,
 Laubkarten) brauchten eigene Shader bzw. eine Vertragsänderung.
 
-**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/9` (vorher `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/10` (vorher `/9`, `/8`, `/7`, `/6`, `/5`, `/4`, `/3`, `/2`, `/1`). Sie geht
 in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
 gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
-Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
+Katalog: `version` aller Strecken in `catalog-src.json` auf 2. Version 10
+(24.11.2026, Branch `claude/indoor-laser-fixes`): Einmündungen im Kurvenscheitel,
+Baumkronen, Waldboden unter dem Kronendach, Grasstreifen an offenen Streckenenden
+(`docs/indoor/lidar.md`, Abschnitt 9); alle 14 Katalogeinträge um eins angehoben.
 
 ### Mängel, Ursache, Stand
 
