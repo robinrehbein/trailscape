@@ -295,12 +295,19 @@ internal class RouteEnv(val ctx: TileContext) {
             if (r.spec.rail) continue
             val hw = r.halfWidth
             for (i in 0 until r.size - 1) {
-                if (r.segOnTrack(i)) continue
-                val oa = hw * min(r.miter[i], 2.0)
-                val ob = hw * min(r.miter[i + 1], 2.0)
+                // Stuecke „auf der Strecke" zeichnet niemand als Strasse. Laufen sie schon neben der Fahrbahn
+                // auseinander (Kreiseleinfahrt, Gabelung: Mitte > 1,5 m von der Strecke — mehr, als die
+                // Glaettung der Strecke versetzt), liegt dort im Boden gemalter Asphalt: Sie sperren dann
+                // Gras und Gehweg, nicht aber Fransen, Bordstein und Linien.
+                val on = r.segOnTrack(i)
+                if (on && min(r.trackDist[i], r.trackDist[i + 1]) <= 1.5) continue
+                val w = hw
+                val oa = w * min(r.miter[i], 2.0)
+                val ob = w * min(r.miter[i + 1], 2.0)
                 m.addQuad(
                     r.e[i] - r.re[i] * oa, r.n[i] - r.rn[i] * oa, r.e[i] + r.re[i] * oa, r.n[i] + r.rn[i] * oa,
                     r.e[i + 1] - r.re[i + 1] * ob, r.n[i + 1] - r.rn[i + 1] * ob, r.e[i + 1] + r.re[i + 1] * ob, r.n[i + 1] + r.rn[i + 1] * ob,
+                    outerOnly = on,
                 )
             }
         }
@@ -453,10 +460,11 @@ private class RouteEmitter(
             if (mb.isEmpty) continue
             // Was in die eigene Fahrbahn hineinreicht (Fransen, Bordstein, Linien), schneidet die eigene
             // Fahrbahn weiter vor und hinter dem Stueck nicht; was draussen liegt, schon ab wenigen Metern.
-            val own = if (mat.name == RouteLayer.MAT_FRINGE || mat.name == RouteLayer.MAT_PLAIN) MASK_OWN_M else MASK_OWN_OUTER_M
+            val inner = mat.name == RouteLayer.MAT_FRINGE || mat.name == RouteLayer.MAT_PLAIN
+            val own = if (inner) MASK_OWN_M else MASK_OWN_OUTER_M
             clipInto(
                 mb, out.mesh(node, mat), mask, { x -> x + ctx.spec.anchorE }, { z -> ctx.spec.anchorN - z },
-                skipFrom = fromM - own, skipTo = toM + own,
+                skipFrom = fromM - own, skipTo = toM + own, inner = inner,
             )
             mb.clear()
         }

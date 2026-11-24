@@ -23,7 +23,7 @@ import kotlin.math.sqrt
  * die Sperrflaechen anderer Streckenteile). Strassen haben einen leeren Bereich.
  */
 internal class PlanMask {
-    class Poly(val pts: DoubleArray, val fromM: Double, val toM: Double) {
+    class Poly(val pts: DoubleArray, val fromM: Double, val toM: Double, val outerOnly: Boolean) {
         var minE = Double.MAX_VALUE
         var minN = Double.MAX_VALUE
         var maxE = -Double.MAX_VALUE
@@ -47,7 +47,7 @@ internal class PlanMask {
      * Fuegt ein konvexes Vieleck hinzu (Eckpunkte in beliebigem Umlaufsinn, werden gegen den
      * Uhrzeigersinn gelegt). Entartete Vielecke (Flaeche < 1 cm²) entfallen.
      */
-    fun add(pts: DoubleArray, fromM: Double = 0.0, toM: Double = -1.0) {
+    fun add(pts: DoubleArray, fromM: Double = 0.0, toM: Double = -1.0, outerOnly: Boolean = false) {
         val k = pts.size / 2
         if (k < 3) return
         var area2 = 0.0
@@ -59,7 +59,7 @@ internal class PlanMask {
         val ccw = if (area2 > 0) pts else DoubleArray(pts.size).also { r ->
             for (i in 0 until k) { r[2 * i] = pts[2 * (k - 1 - i)]; r[2 * i + 1] = pts[2 * (k - 1 - i) + 1] }
         }
-        val p = Poly(ccw, fromM, toM)
+        val p = Poly(ccw, fromM, toM, outerOnly)
         polys.add(p)
         val i0 = floor(p.minE / CELL_M).toInt()
         val i1 = floor(p.maxE / CELL_M).toInt()
@@ -69,12 +69,15 @@ internal class PlanMask {
     }
 
     /** Ein Viereck aus zwei Querschnitten (links/rechts je Station), z. B. ein Strassensegment. */
-    fun addQuad(aLe: Double, aLn: Double, aRe: Double, aRn: Double, bLe: Double, bLn: Double, bRe: Double, bRn: Double, fromM: Double = 0.0, toM: Double = -1.0) {
-        add(doubleArrayOf(aLe, aLn, bLe, bLn, bRe, bRn, aRe, aRn), fromM, toM)
+    fun addQuad(aLe: Double, aLn: Double, aRe: Double, aRn: Double, bLe: Double, bLn: Double, bRe: Double, bRn: Double, fromM: Double = 0.0, toM: Double = -1.0, outerOnly: Boolean = false) {
+        add(doubleArrayOf(aLe, aLn, bLe, bLn, bRe, bRn, aRe, aRn), fromM, toM, outerOnly)
     }
 
-    /** Vielecke, deren Huelle das Rechteck beruehrt; [skipFrom]..[skipTo] = Laufmeter, die nicht sperren. */
-    fun candidates(minE: Double, minN: Double, maxE: Double, maxN: Double, skipFrom: Double = 1.0, skipTo: Double = -1.0, out: ArrayList<Poly>) {
+    /**
+     * Vielecke, deren Huelle das Rechteck beruehrt; [skipFrom]..[skipTo] = Laufmeter, die nicht sperren;
+     * [inner] = fuer Rand innerhalb der Fahrbahn (dann zaehlen Vielecke mit `outerOnly` nicht).
+     */
+    fun candidates(minE: Double, minN: Double, maxE: Double, maxN: Double, skipFrom: Double = 1.0, skipTo: Double = -1.0, out: ArrayList<Poly>, inner: Boolean = false) {
         out.clear()
         if (polys.isEmpty()) return
         val i0 = floor(minE / CELL_M).toInt()
@@ -86,6 +89,7 @@ internal class PlanMask {
             for (p in list) {
                 if (p.maxE < minE || p.minE > maxE || p.maxN < minN || p.minN > maxN) continue
                 if (p.toM >= p.fromM && p.toM >= skipFrom && p.fromM <= skipTo) continue
+                if (inner && p.outerOnly) continue
                 if (p !in out) out.add(p)
             }
         }
@@ -112,6 +116,7 @@ internal fun clipInto(
     toN: (Double) -> Double,
     skipFrom: Double = 1.0,
     skipTo: Double = -1.0,
+    inner: Boolean = false,
 ) {
     if (src.isEmpty) return
     val cand = ArrayList<PlanMask.Poly>()
@@ -136,7 +141,7 @@ internal fun clipInto(
         val ae = toE(src.x(a).toDouble()); val an = toN(src.z(a).toDouble())
         val be = toE(src.x(b).toDouble()); val bn = toN(src.z(b).toDouble())
         val ce = toE(src.x(c).toDouble()); val cn = toN(src.z(c).toDouble())
-        mask.candidates(min(ae, min(be, ce)), min(an, min(bn, cn)), max(ae, max(be, ce)), max(an, max(bn, cn)), skipFrom, skipTo, cand)
+        mask.candidates(min(ae, min(be, ce)), min(an, min(bn, cn)), max(ae, max(be, ce)), max(an, max(bn, cn)), skipFrom, skipTo, cand, inner)
         if (cand.isEmpty()) {
             dst.tri(copy(a), copy(b), copy(c))
             continue
