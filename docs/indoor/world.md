@@ -65,6 +65,54 @@ Was noch nicht stimmt (gesehen und bewusst offen gelassen):
 - Wo das Luftbild dunkle Flächen hat (Schatten, nasse Wiesen), setzt die
   Kronenschätzung gelegentlich Bäume in offene Flächen.
 
+## Sichtbare Qualität (24.11.2026, Branch `claude/indoor-quality`)
+
+Anlass: Rückmeldung des Gründers nach der ersten Fahrt — „an manchen Stellen
+ruppig und kantig“, Maßstab „wie Zwift, gern besser“. Vorgehen: drei echte
+Welten gebaut (Altenberg kurz, Tharandt km 2–6, Katalog `alpe-dhuez`), aus
+Verfolger-, Lenker- und Drohnenkamera an Kurven, Kuppen, Waldrand, Ort,
+Kreuzungen und Kachelgrenzen gerendert, jedes Bild angesehen, Ursache im
+Code gesucht, behoben, dieselben Stellen neu gerendert. Bildpaare:
+`docs/indoor/bilder/quality/` (`…-vorher.jpg` / `…-nachher.jpg`).
+
+**Welt-Version:** `WORLD_BUILDER_ID` = `indoor-world/2` (vorher `/1`). Sie geht
+in die Welt-ID ein — selbst gebaute Welten der alten Fassung werden nicht mehr
+gefunden und neu gebaut (die alten bleiben in der Weltverwaltung löschbar).
+Katalog: `version` aller Strecken in `catalog-src.json` auf 2.
+
+### Mängel, Ursache, Stand
+
+| # | Mangel (gesehen) | Ursache im Code | Stand |
+|---|---|---|---|
+| 1 | Laubkronen facettiert, „Polyeder“ mit harten Licht/Schatten-Flächen | `TreeModels.blob`: 10×6 Segmente, starke Verbeulung (±0,32 hochfrequent), Normalen nur geglättet; Knick der Abflachung bei `uy = −0,2` | **behoben:** 14×8 + 6 Nebenkörper (nah), 11×6 + 1 (mittel), 8×5 (fern); Verbeulung ±0,26/0,06; Normalen zu 60 % vom Kronenmittelpunkt aus (`fluffNormals`) — die Krone wird wie ein weicher Körper beleuchtet; Abflachung stetig |
+| 2 | Fichten aus gestapelten Kegeln mit Sägezahnrand: helle Streifen, schwarze Bodenscheiben | `TreeModels.cone`: abwechselnde Randradien, flache Unterseite je Kegel | **behoben:** `spruce` — ein Drehkörper, Astetagen als Profil (Unterseite dunkel, Rand hängend, eingezogen), Rand stetig verbeult, Normalen nach außen gemischt; heller Grundton |
+| 3 | Waldkörper als Kästen mit Steilwand, Rand im Zellenraster, spitze „Zelte“ und dunkle Rauten in offenen Flächen | `TreesLayer.emitVolume`: Abfall über eine Zelle, Zufall je Gitterpunkt (±2,5 m), Einzelzellen aus der Kronenschätzung | **behoben:** Anstieg über zwei Zellen (Anteil mit Nachbarn geglättet), Gitterpunkte aus Welt-Gitterzahlen verschoben (kein Rasterrand), stetige Wellen, flachere Normalen; Waldzellen brauchen ≥ 3 Waldnachbarn |
+| 4 | Wegrand als gezackter Sägezahn (Fransenkante) | `RouteTextures.fringe`: Deckung springt über ±0,035 der Breite, Halmspitzen mit Amplitude 1,3 | **behoben:** Übergang −0,16…+0,12, Halmspitzen 0,45 |
+| 5 | Heller, harter Saum neben der Fahrbahn (Straßenpixel des Luftbilds, Versatz OSM ↔ Luftbild) | Randstreifen deckt in Siedlung/Acker nur 1,0/1,2 m | **behoben:** 1,8/2,0 m deckend, Auslauf 4,4/5,0 m |
+| 6 | Eckige Löcher im Rand an Einmündungen und wo die Strecke sich selbst nahe kommt | Rand wird je Eckpunkt ausgeblendet, Stationen dort nur dreifach geteilt (bzw. zusammengelegt) | **teilweise:** dort jetzt mit der feinsten Teilung (`maxSub`), nie zusammengelegt. An spitzen Einmündungen (Altenberg km 1,875) liegt weiterhin ein Stück Luftbild zwischen Strecke und Nebenstraße |
+| 7 | Gelände fern (Stufe 2: 146-m-Zellen) mit Facetten | Budget `TileBudget.terrain` | **offen, bewusst:** Mehr Gelände in Stufe 1/2 (8 000/6 000 Dreiecke) verkleinerte über die Planung den Korridor der Stufe 0 (21 → 16 Kacheln) — schlechter Tausch. Die meisten „kantigen Hügel“ waren Waldkörper (Punkt 3) |
+| 8 | Böschungen am Steilhang (Alpe d'Huez, Kehren): gestrecktes Luftbild, graue Flächen | Planare Projektion des Luftbilds; ohne eigenen Shader (Vertrag 7.7) kein Triplanar/Detail | **offen** |
+| 9 | Wald dunkel | Luftbild unter Kronen dunkel, Umgebungslicht | **offen** (Darstellung, siehe render.md); Fichten heller getönt |
+| 10 | Weißes Dreieck neben dem Weg (Altenberg km 0,1) | Luftbild-Pixel (weiße Fläche) unter einer Randlücke | mit Punkt 5 kleiner, nicht ganz weg |
+
+Nicht geändert: Gebäude (kantige Grundrisse sind richtig; Dachkanten und
+Fassaden waren auf den Bildern unauffällig), Höhenmodell (bereits bikubisch
+und gedämpft, keine Treppen gesehen), Fahrbahn-Mittellinie (Catmull-Rom,
+Kehren rund — auf den Drohnenbildern der Alpe d'Huez sauber).
+
+### Messwerte
+
+MESSWERTE
+
+### Auf dem Gerät zu beurteilen
+
+- Kronen und Fichten unter Filaments Licht (Umgebungslicht aus SH, ACES): sind
+  die weichen Normalen dort genauso ruhig?
+- 4× MSAA und DPCF-Schatten: Bildrate auf dem Handy des Gründers (MEDIUM),
+  Speicher der Schattenkarten (3 × 2048²).
+- Fernsicht ohne anisotrope Filterung (gltfio setzt sie nicht): Fahrbahn in
+  20–50 m Entfernung unscharf? Der Betrachter rendert jetzt ebenfalls ohne.
+
 ## Abweichungen vom Vertrag
 
 1. **Laub `alphaMode = MASK` ohne Ausschnitte.** Kronen sind geschlossene

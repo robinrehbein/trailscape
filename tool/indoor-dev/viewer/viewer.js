@@ -161,7 +161,9 @@ renderer.shadowMap.enabled = CONFIG.shadows;
 renderer.shadowMap.type = THREE.PCFShadowMap; // Hardware-PCF, fuenf Abtastungen
 renderer.shadowMap.autoUpdate = false; // nur neu rechnen, wenn sich etwas aendert
 renderer.info.autoReset = false;
-const MAX_ANISOTROPY = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+// gltfio 1.75.1 setzt keine anisotrope Filterung (Sampler nur aus glTF: Wrap, Min/Mag), und die
+// Java-Schnittstelle reicht die Texturen nicht heraus — deshalb hier wie in Filament ohne (`aniso=16` zum Vergleich).
+const MAX_ANISOTROPY = Math.min(pNum('aniso', 1), renderer.capabilities.getMaxAnisotropy());
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.5, 30000);

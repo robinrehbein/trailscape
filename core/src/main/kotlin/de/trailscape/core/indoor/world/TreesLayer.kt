@@ -87,8 +87,22 @@ internal class TreesLayer : TileLayer {
         return out
     }
 
-    /** Ob eine Zelle (Mitte `e`, `n`) zum Waldkoerper gehoert. */
+    /**
+     * Ob eine Zelle (Mitte `e`, `n`) zum Waldkoerper gehoert: Waldzelle mit mindestens drei
+     * Waldnachbarn. Vereinzelte Zellen (Schatten im Luftbild, Baumgruppen) standen sonst als
+     * dunkle Rauten und Zelte in offenen Flaechen.
+     */
     private fun isVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double): Boolean {
+        if (!isRawVolumeCell(ctx, e, n, cell)) return false
+        var k = 0
+        for (dj in -1..1) for (di in -1..1) {
+            if (di == 0 && dj == 0) continue
+            if (isRawVolumeCell(ctx, e + di * cell, n + dj * cell, cell) && ++k >= 3) return true
+        }
+        return false
+    }
+
+    private fun isRawVolumeCell(ctx: TileContext, e: Double, n: Double, cell: Double): Boolean {
         val forest = if (ctx.level == 0) ctx.land.canopyAt(e, n) >= 0.55 else ctx.land.classAt(e, n) == LandClass.FOREST
         if (!forest) return false
         if (ctx.level != 0) {

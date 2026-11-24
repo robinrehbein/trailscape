@@ -80,10 +80,10 @@ internal object TreeModels {
             Lod.NEAR -> {
                 val first = crown.triangleCount
                 blob(crown, 0.0, cy, 0.0, rx * 0.92, ry * 0.92, rx * 0.92, 14, 8, s, leaf, cb, h)
-                for (k in 0 until 4) {
-                    val a = s.turn + k * 1.63
-                    val o = rx * (0.42 + 0.08 * (k and 1))
-                    val up = ch * (if (k == 3) 0.2 else -0.06 + 0.05 * k)
+                for (k in 0 until 6) {
+                    val a = s.turn + k * 1.07
+                    val o = rx * (0.42 + 0.1 * (k and 1))
+                    val up = ch * (if (k >= 4) 0.16 + 0.04 * (k - 4) else -0.1 + 0.06 * k)
                     blob(crown, cos(a) * o, cy + up, -sin(a) * o, rx * 0.6, ry * 0.56, rx * 0.6, 10, 6, s, leaf, cb, h)
                 }
                 fluffNormals(crown, first, 0.0, cy, 0.0, rx, ry)
@@ -295,7 +295,8 @@ internal object TreeModels {
             val n2 = Noise.value(uz * 3.1 - 1.7, ux * 3.1 - uy * 1.3, s.seed + 11)
             var k = 0.84 + 0.26 * n1 + 0.06 * n2
             var yScale = k
-            if (uy < -0.2) yScale = k * (0.72 + 0.28 * (1 + uy) / 0.8) // unten abgeflacht
+            // unten sanft abgeflacht (vorher ein Knick bei uy = −0,2, der als harte Unterkante zu sehen war)
+            if (uy < 0.0) yScale = k * (1.0 - 0.3 * smoothstep(0.0, 1.0, -uy))
             if (uy > 0.85) k *= 0.96
             m.positions[v * 3] = (cx + px * k).toFloat()
             m.positions[v * 3 + 1] = (cy + py * yScale).toFloat()

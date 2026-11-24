@@ -80,7 +80,7 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   Fahrer (im Code erzeugte GLB nach derselben Vereinbarung). Animationen per
   Name (`pedal`, `roll`) über `Animator.applyAnimation(i, Phase × Dauer)`.
 - **Licht:** Sonne (`LightManager.Type.SUN`) aus Tageszeit, Tag und Breite des
-  Ursprungs, unter 8° auf 8° angehoben; Schatten mit 3 Kaskaden, 1024², bis
+  Ursprungs, unter 8° auf 8° angehoben; Schatten mit 3 Kaskaden, 2048², DPCF, bis
   300 m. Umgebungslicht über `IndirectLight.Builder().radiance(3, sh)` mit
   selbst integrierten SH-Koeffizienten (Basis exakt wie in Filaments
   `IndirectLight.cpp`, geprüft per „weißer Ofen“-Test), Stärke 26 000 lx bei
@@ -99,7 +99,7 @@ Alles unter `app/src/main/kotlin/de/trailscape/app/indoor/render/`:
   zurück, τ = 0,9 s. Mindesthöhe über dem Band; Moduswechsel springt.
   Bildwinkel senkrecht 50° (quer) bzw. 72° (hoch), nah 0,3 m, fern 25 km.
 - **Qualitätsstufen:** `RenderSettings` wirkt sofort: Schatten (View +
-  Sonne), Umgebungsverdeckung, Überstrahlen, Dunst, FXAA, dynamische
+  Sonne), Umgebungsverdeckung, Überstrahlen, Dunst, Kantenglättung (4× MSAA, sonst FXAA), dynamische
   Auflösung (0,6–1,0), Nachbearbeitung, Himmelsverlauf, Bäume/Gebäude/
   Kleinteile (Ebenenmaske je Renderable), `resolutionScale` (feste kleinere
   Puffergröße der `SurfaceView`), `maxFps` 30 (Bilder auslassen +
@@ -133,6 +133,38 @@ Trainer (8 m/s, 85 U/min, mit Geist), Kamera, Tageszeit, Messwerte, Gerät und
 Treiber, Voreinstellungen LOW/MEDIUM/HIGH/SAFE, jeder Schalter einzeln,
 30 fps, Auflösung, Ausfalldetails für Fehlerberichte, „Neu starten“ nach
 einem Ausfall.
+
+## Bildqualität (24.11.2026, Branch `claude/indoor-quality`)
+
+Nach der Rückmeldung „ruppig und kantig“ (siehe `docs/indoor/world.md`,
+„Sichtbare Qualität“). Geändert in `FilamentCore.kt`, alles gegen
+`javap` der AARs 1.75.1 geprüft und einzeln abgesichert:
+
+| Was | vorher | jetzt | Rückfall |
+|---|---|---|---|
+| Kantenglättung | FXAA | **4× MSAA** (`multiSampleAntiAliasingOptions`, `sampleCount = 4`); FXAA nur, wenn MSAA nicht gesetzt werden kann | FXAA |
+| Schattenart | PCF (Filament-Standard, harte Treppen) | **DPCF** (`setShadowType`), `softShadowOptions.penumbraScale = 1,5` | PCF |
+| Schattenkarten | 1024², Standard-Kaskadengrenzen | **2048²**, `cascadeSplitPositions = [0,05, 0,2]` (≈ 15 m / 60 m bei 300 m Reichweite) | – (Builder-Werte) |
+
+`RenderSettings.antiAliasing = false` schaltet MSAA und FXAA ab; ohne
+Schatten wird die Schattenart auf PCF zurückgesetzt. Ein Fehler in diesen
+Aufrufen kostet nur die jeweilige Glättung — nie die Darstellung.
+
+**Anisotrope Filterung geht nicht:** gltfio 1.75.1 übernimmt nur Wrap- und
+Min/Mag-Filter aus dem glTF-Sampler (`GltfEnums.h`), und die Java-Schnittstelle
+gibt die Texturen eines Assets nicht heraus (`FilamentAsset`/`FilamentInstance`
+nur `MaterialInstance[]`, `MaterialInstance.setParameter` braucht die
+`Texture`). Dafür bräuchte es eigenes Texturladen. Der Betrachter rendert
+deshalb jetzt ebenfalls ohne (`aniso=1`), damit seine Bilder nicht schöner
+sind als das Gerät.
+
+Der Betrachter (`tool/indoor-dev/viewer`) bildet nach: Kameras wie
+`CameraRig` (Verfolger 6 m auf dem Band zurück), weiche Schatten (PCF-Radius 2),
+MSAA, ohne Anisotropie.
+
+Auf dem Gerät zu prüfen: Bildrate MEDIUM mit MSAA + DPCF; Speicher der
+Schattenkarten; ob DPCF auf dem Treiber des Gründers sauber aussieht (sonst
+PCF zurück, eine Zeile).
 
 ## Abweichungen vom Vertrag
 
