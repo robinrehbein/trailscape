@@ -60,8 +60,8 @@ class LifeAndMaterialsTest {
 
     // ------------------------------------------------------------------ andere Radfahrer
 
-    private fun traffic(grade: (Double) -> Double = { 0.0 }, width: Double = 4.0, loop: Boolean = true, length: Double = 20_000.0) =
-        OtherRiders(seed = 42, lengthM = length, loop = loop, gradePctAt = grade, widthAt = { width })
+    private fun traffic(grade: (Double) -> Double = { 0.0 }, width: Double = 4.0, loop: Boolean = true, length: Double = 20_000.0, seed: Long = 42) =
+        OtherRiders(seed = seed, lengthM = length, loop = loop, gradePctAt = grade, widthAt = { width })
 
     @Test
     fun `Tempo je Steigung plausibel`() {
@@ -103,8 +103,9 @@ class LifeAndMaterialsTest {
     @Test
     fun `beim Ueberholen seitlich versetzt, nie durch den Nutzer`() {
         val lane = laneOffsetM(4.0)
-        for (playerSpeed in listOf(4.0, 13.0)) { // langsam: wird ueberholt; schnell: ueberholt selbst
-            val t = traffic()
+        for (seed in 1L..6L) for (playerSpeed in listOf(4.0, 13.0)) { // langsam: wird ueberholt; schnell: ueberholt selbst
+            // Wellige Strecke: Tempounterschiede wechseln, die Fahrer holen sich gegenseitig ein
+            val t = traffic(grade = { d -> 5.0 * kotlin.math.sin(d / 400.0) }, seed = seed)
             t.maxCount = 6
             var player = 500.0
             var close = 0
@@ -118,7 +119,7 @@ class LifeAndMaterialsTest {
                     val gap = r.distM - player
                     if (abs(gap) < 1.8) {
                         close++
-                        assertTrue(abs(r.lateralM - lane) > 0.6, "Ueberlappung bei Abstand $gap: ${r.lateralM} gegen $lane")
+                        assertTrue(abs(r.lateralM - lane) > 0.6, "Ueberlappung bei Abstand $gap: ${r.lateralM} gegen $lane, Tempo ${r.speedMps} gegen $playerSpeed, Id ${r.id}, Schritt $it")
                     }
                     assertTrue(abs(r.lateralM) <= 2.0 - OtherRiders.EDGE_MARGIN_M + 1e-6)
                 }

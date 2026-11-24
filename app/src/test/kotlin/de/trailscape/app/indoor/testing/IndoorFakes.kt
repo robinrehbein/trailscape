@@ -623,6 +623,13 @@ class FakeWorldRenderer(
     /** Alle gesetzten Himmel, in Reihenfolge. */
     val skies = mutableListOf<SkySetting>()
 
+    /** Alle Aufrufe von [setOtherRidersEnabled], in Reihenfolge. */
+    val otherRiders = mutableListOf<Boolean>()
+
+    override fun setOtherRidersEnabled(enabled: Boolean) {
+        otherRiders += enabled
+    }
+
     override fun setListener(listener: WorldRendererListener?) {
         this.listener = listener
     }

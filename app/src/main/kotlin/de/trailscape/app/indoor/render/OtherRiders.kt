@@ -22,7 +22,8 @@ import kotlin.math.sin
  *  * **Ueberholen statt Durchfahren:** Gleichgerichtete Fahrer fahren in der Spur des
  *    Nutzers. Kommt einer von hinten schneller heran, schert er nach links aus; holt der
  *    Nutzer einen ein, weicht dieser nach rechts aus (zu schmal: nach links). Untereinander
- *    ueberholt der Schnellere links. Der Seitenversatz folgt weich (τ 0,8 s).
+ *    ueberholt der Schnellere links. Das Fenster waechst mit der Annaeherung (2,5 s vorher
+ *    ausscheren), der Seitenversatz folgt weich (τ 0,8 s).
  *  * **Kommen und Gehen:** Fahrer leben in einem Fenster von [BEHIND_M] hinter bis [AHEAD_M]
  *    vor dem Nutzer; wer es verlaesst, taucht nach einer Pause am passenden Rand wieder auf
  *    (schnellere hinten, langsamere und Gegenverkehr vorn) — ausserhalb des Blicks bzw. im Dunst.
@@ -126,18 +127,40 @@ internal class OtherRiders(
             var lat = if (r.oncoming) -min(edge, laneOffsetM(w) + 0.25) else playerLateralM
             if (!r.oncoming) {
                 val gap = gapTo(r.distM, playerDistM)
-                if (abs(gap) < PASS_WINDOW_M) {
+                // Fenster nach Annaeherung: rund 2,5 s vorher ausscheren (τ 0,8 s braucht die Zeit)
+                val window = max(PASS_WINDOW_M, abs(r.speed - playerSpeedMps) * PASS_LEAD_S + 3.0)
+                if (abs(gap) < window) {
                     val faster = r.speed > playerSpeedMps + 0.1
                     val room = edge - playerLateralM
-                    lat = if (faster || room < PASS_SEPARATION_M * 0.8) playerLateralM - PASS_SEPARATION_M else playerLateralM + PASS_SEPARATION_M
+                    val side = r.lateral - playerLateralM
+                    lat = when {
+                        // Schon seitlich daneben: Seite halten (nie quer durch die Spur des Nutzers)
+                        side < -0.3 -> playerLateralM - PASS_SEPARATION_M
+                        side > 0.3 && room >= PASS_SEPARATION_M * 0.6 -> playerLateralM + PASS_SEPARATION_M
+                        faster || room < PASS_SEPARATION_M * 0.8 -> playerLateralM - PASS_SEPARATION_M
+                        else -> playerLateralM + PASS_SEPARATION_M
+                    }
                 }
-                // Gegen den Vordermann: der Schnellere schert links aus
+                // Gegen den Vordermann: der Schnellere schert links aus — ausser das fuehrte in die
+                // Spur des Nutzers, wenn der nah ist; dann rechts am Vordermann vorbei.
+                val gapP = gapTo(r.distM, playerDistM)
+                val nearPlayer = abs(gapP) < max(PASS_WINDOW_M, abs(r.speed - playerSpeedMps) * PASS_LEAD_S + 3.0)
                 for (o in sorted) {
                     if (o === r || o.oncoming) continue
                     val d = gapTo(o.distM, r.distM)
-                    if (d > -1.5 && d < PASS_WINDOW_M && r.speed > o.speed + 0.1) {
+                    if (d > -1.5 && d < max(PASS_WINDOW_M, (r.speed - o.speed) * PASS_LEAD_S + 3.0) && r.speed > o.speed + 0.1) {
                         val ol = targets[o.id] ?: playerLateralM
-                        lat = min(lat, ol - PASS_SEPARATION_M)
+                        val left = min(lat, ol - PASS_SEPARATION_M)
+                        val right = max(lat, ol + PASS_SEPARATION_M)
+                        // Neben dem Nutzer nie die Seite wechseln (sonst quer durch seine Spur).
+                        val onRight = r.lateral > playerLateralM
+                        when {
+                            !nearPlayer -> lat = left
+                            !onRight && abs(left - playerLateralM) >= PASS_SEPARATION_M * 0.8 && left >= -edge -> lat = left
+                            onRight && right <= edge -> lat = right
+                            // Kein Platz neben Nutzer und Vordermann: dahinter bleiben (Tempo des Vordermanns)
+                            else -> r.speed = min(r.speed, o.speed)
+                        }
                     }
                 }
             }
@@ -198,6 +221,7 @@ internal class OtherRiders(
         const val AHEAD_M = 340.0
         const val BEHIND_M = 150.0
         const val PASS_WINDOW_M = 8.0
+        const val PASS_LEAD_S = 2.5
         const val PASS_SEPARATION_M = 0.95
         const val EDGE_MARGIN_M = 0.3
         const val SPEED_TAU_S = 3.0

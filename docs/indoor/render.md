@@ -593,7 +593,10 @@ Stufe 1). Die Uhr ist Filaments `getUserTime()` — kein Setzen je Bild. Schatte
   nach rechts aus (zu schmal: links). Untereinander überholt der Schnellere links.
   **Gegenverkehr** (35 %) fährt links mit umgekehrter Steigung. Seitenversatz weich (τ 0,8 s),
   nie über den Wegrand. Test: 20 min Fahrt langsam und schnell, nie eine Überlappung im
-  Abstand < 1,8 m.
+ Abstand < 1,8 m (sechs Startwerte, wellige Strecke). Gefundene und behobene Fehler: zu kleines
+  Überholfenster bei großem Tempounterschied; Seitenwechsel quer durch die Spur des Nutzers
+  beim Überholen eines Dritten — neben dem Nutzer wird die Seite jetzt nie gewechselt, ohne
+  Platz bleibt der Fahrer hinter dem Vordermann.
 - **Kommen und Gehen:** Fenster 150 m hinter bis 340 m vor dem Nutzer; wer es verlässt,
   taucht nach 6–30 s am passenden Rand wieder auf (schnellere hinten, langsamere und
   Gegenverkehr vorn, im Dunst). Ohne Runde nie jenseits der Enden.
@@ -640,7 +643,7 @@ Ubershader.
 | Texturspeicher | – | +350 kB (Detail 256² RGBA8 mit Mip-Stufen); Wolkenrauschen geteilt |
 | Puffer | – | je anderem Fahrer ≈ 0,8 MB Vertexdaten (MEDIUM ≈ 2,4 MB, HIGH ≈ 4 MB), Vögel ≈ 3 kB |
 | Materialpakete im APK | sky 13 kB, water 206 kB | + terrain 215 kB, foliage 204 kB, surface 220 kB, surface_blend 199 kB (im APK komprimiert zusammen ≈ 164 kB) |
-| APK (Release, unsigniert gebaut) | 79 052 648 B (75,4 MB) | 79 234 146 B (+181 kB, fast nur die vier Materialpakete) |
+| APK (Release, lokal gebaut) | 79 052 648 B (75,4 MB) | 79 234 146 B (+181 kB, fast nur die vier Materialpakete) |
 
 Teuerster neuer Teil ist die Software-Anisotropie: Der Belag deckt in der Verfolgerkamera im
 Hochformat rund ein Drittel des Bildes, nah also vier statt einem Zugriff. Auf einem
