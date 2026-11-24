@@ -180,8 +180,8 @@ internal class LaserVegetation(
 /**
  * Ein Baum aus dem nDOM als [TreeModels.Spec]: Farbe und Zufall wie bisher
  * ([base]), Hoehe und Kronenbreite gemessen, die Art aus Hoehe und
- * Kronenform: schmale Krone (Radius unter 16 % der Hoehe) wird in Nadel- und
- * Mischwald ([conifer] ≥ 0,3) zur Fichte, sonst zur schlanken Pappelform.
+ * Kronenform: schmale Krone (Radius unter 13 % der Hoehe) wird in Nadel- und
+ * Mischwald ([conifer] ≥ 0,5) zur Fichte, sonst zur schlanken Pappelform.
  * Die Kronenradien der Modelle sind etwa `k · Hoehe · width` (k je Art aus
  * [TreeModels]); daraus der Breitenfaktor.
  *
@@ -193,9 +193,9 @@ internal class LaserVegetation(
 internal fun laserTreeSpec(base: TreeModels.Spec, t: LaserTree, roomM: Double = Double.MAX_VALUE, conifer: Double = 0.3): TreeModels.Spec? {
     val h = t.heightM.coerceAtMost(42.0)
     if (h < LaserData.TREE_MIN_HEIGHT_M) return null
-    val slim = t.crownRadiusM / h < 0.16
+    val slim = t.crownRadiusM / h < 0.13
     var species = when {
-        slim && conifer >= 0.3 -> TreeModels.Species.CONIFER
+        slim && conifer >= 0.5 -> TreeModels.Species.CONIFER
         slim -> TreeModels.Species.TALL
         base.species == TreeModels.Species.CONIFER && conifer >= 0.5 -> TreeModels.Species.CONIFER
         else -> TreeModels.Species.BROAD
@@ -381,8 +381,6 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         // Horizontale Achse in der Wand, senkrecht dazu die Hochachse der Ebene.
         val ua = Vec3(-n.y, n.x, 0.0).let { if (it.length() < 1e-6) Vec3(1.0, 0.0, 0.0) else it.normalized() }
         val va = n.cross(ua).normalized()
-        val band = Band.PLASTER
-        val v = band.v(band.heightM * 0.5)
         val lowest = b.groundU + 0.1
         val pts = rings.map { r ->
             DoubleArray(r.size).also { c ->
@@ -392,7 +390,101 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
                 }
             }
         }
-        emitPolygon(m, pts, n, ua, va, tint) { p -> doubleArrayOf((p.x * ua.x + p.y * ua.y) / band.widthM, v) }
+        val style = styleOf(b)
+        val plain = style.plain ?: Band.PLASTER
+        fun u(p: Vec3) = (p.x * ua.x + p.y * ua.y)
+        val outer = pts[0]
+        var wMin = Double.MAX_VALUE
+        var wMax = -Double.MAX_VALUE
+        var zMin = Double.MAX_VALUE
+        var zMax = -Double.MAX_VALUE
+        for (i in 0 until outer.size / 3) {
+            val p = Vec3(outer[3 * i], outer[3 * i + 1], outer[3 * i + 2])
+            wMin = min(wMin, u(p)); wMax = max(wMax, u(p)); zMin = min(zMin, p.z); zMax = max(zMax, p.z)
+        }
+        val windows = if (isSmall(b)) null else style.windows
+        val eave = eaveOf(b)
+        if (windows == null || pts.size > 1 || wMax - wMin < 2.2 || eave - b.groundU < 2.2) {
+            emitBanded(m, pts, n, ua, va, tint, plain, b.groundU, u = ::u)
+            return
+        }
+        // Geschosse mit Fenstern bis zur Traufe, darueber (Giebel) die schlichte Flaeche.
+        val up = Vec3(0.0, 0.0, 1.0)
+        val storeys = max(1, ((eave - b.groundU) / BuildingTextures.STOREY_M + 0.35).toInt())
+        val storeyH = (eave - b.groundU) / storeys
+        for (k in -1 until storeys) {
+            val lo = if (k < 0) zMin - 1.0 else b.groundU + k * storeyH
+            val hi = if (k < 0) b.groundU else b.groundU + (k + 1) * storeyH
+            val piece = clipSlab(outer, up, lo, hi)
+            if (piece.size < 9) continue
+            val band = if (k < 0) Band.SOCLE else windows
+            emitPolygon(m, listOf(piece), n, ua, va, tint) { p ->
+                doubleArrayOf(u(p) / band.widthM, if (k < 0) band.v(band.heightM * 0.5) else band.v(((p.z - lo) / storeyH * band.heightM).coerceIn(0.0, band.heightM)))
+            }
+        }
+        if (zMax > eave + 0.05) {
+            val gable = clipSlab(outer, up, eave, zMax + 1.0)
+            if (gable.size >= 9) emitBanded(m, listOf(gable), n, ua, va, tint, plain, eave, u = ::u)
+        }
+    }
+
+    /** Flaeche mit einem schlichten Band: gestreckt in einem Stueck, sonst in Streifen der Bandhoehe ab [z0]. */
+    private fun emitBanded(m: MeshBuilder, rings: List<DoubleArray>, n: Vec3, ua: Vec3, va: Vec3, tint: Int, band: Band, z0: Double, u: (Vec3) -> Double) {
+        if (band.stretch || rings.size > 1) {
+            val v = band.v(band.heightM * 0.5)
+            emitPolygon(m, rings, n, ua, va, tint) { p -> doubleArrayOf(u(p) / band.widthM, v) }
+            return
+        }
+        val outer = rings[0]
+        var zMin = Double.MAX_VALUE
+        var zMax = -Double.MAX_VALUE
+        for (i in 0 until outer.size / 3) { zMin = min(zMin, outer[3 * i + 2]); zMax = max(zMax, outer[3 * i + 2]) }
+        val up = Vec3(0.0, 0.0, 1.0)
+        val h = band.heightM
+        val k0 = floor((zMin - z0) / h).toInt()
+        val k1 = floor((zMax - z0 - 1e-6) / h).toInt()
+        for (k in k0..k1) {
+            val lo = z0 + k * h
+            val piece = clipSlab(outer, up, lo, lo + h)
+            if (piece.size < 9) continue
+            emitPolygon(m, listOf(piece), n, ua, va, tint) { p -> doubleArrayOf(u(p) / band.widthM, band.v((p.z - lo).coerceIn(0.0, h))) }
+        }
+    }
+
+    /** Traufhoehe: tiefster Punkt der Dachflaechen (ohne Dach: Oberkante). */
+    private fun eaveOf(b: LaserBuilding): Double = eaves.getOrPut(b.id) {
+        var e = Double.MAX_VALUE
+        for (sf in b.surfaces) if (sf.kind == Lod2SurfaceKind.ROOF) for (r in sf.rings) for (i in 2 until r.size step 3) e = min(e, r[i])
+        if (e == Double.MAX_VALUE) b.topU else e
+    }
+
+    private val eaves = HashMap<String, Double>()
+
+    /** Garage, Schuppen, Carport: keine Fenster. */
+    private fun isSmall(b: LaserBuilding): Boolean = footprintArea(b) < 35 || b.topU - b.groundU < 3.2
+
+    private fun footprintArea(b: LaserBuilding): Double = b.footprint.sumOf { r ->
+        var a = 0.0
+        val k = r.size / 2
+        for (i in 0 until k) {
+            val j = (i + 1) % k
+            a += r[2 * i] * r[2 * j + 1] - r[2 * j] * r[2 * i + 1]
+        }
+        abs(a) / 2
+    }
+
+    /** Fassade je Gebaeude fest aus der ID: meist Putz, im Bergischen auch Schiefer, dazu Klinker und Fachwerk; Kleinbauten ohne Fenster. */
+    private fun styleOf(b: LaserBuilding): FacadeStyle {
+        val r = Noise.hash01(b.id.hashCode(), 0x57e1, 3)
+        val area = footprintArea(b)
+        if (isSmall(b)) return if (r < 0.3) FacadeStyle.WOOD else FacadeStyle.PLASTER
+        if (area > 600) return if (r < 0.5) FacadeStyle.SHEET else FacadeStyle.PLASTER
+        return when {
+            r < 0.55 -> FacadeStyle.PLASTER
+            r < 0.75 -> FacadeStyle.SLATE
+            r < 0.9 -> FacadeStyle.BRICK
+            else -> FacadeStyle.TIMBER
+        }
     }
 
     private fun emitRoof(m: MeshBuilder, rings: List<DoubleArray>, n: Vec3, tint: Int) {
@@ -470,9 +562,9 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
     private fun wallColor(b: LaserBuilding): Int {
         val r = Noise.hash01(b.id.hashCode(), 0x1a5e, 7)
         val q = Noise.hash01(b.id.hashCode(), 0x1a5f, 9)
-        // Gebrochene Putztoene (Weiss bis Sand, selten Grau), wie im Bergischen und Sauerland.
-        val c = 0.64 + 0.16 * r
-        return if (q < 0.15) BuildingDesign.lin(c * 0.82, c * 0.82, c * 0.84) else BuildingDesign.lin(c, c * (0.95 + 0.03 * q), c * (0.84 + 0.08 * q))
+        // Die Baender tragen ihre Farbe selbst; die Vertexfarbe toent nur leicht (Weiss bis Sand).
+        val c = 0.86 + 0.14 * r
+        return BuildingDesign.lin(c, c * (0.96 + 0.04 * q), c * (0.88 + 0.1 * q))
     }
 
     private fun roofColor(b: LaserBuilding): Int {
@@ -487,7 +579,10 @@ internal class Lod2Mesher(private val ctx: TileContext, all: List<LaserBuilding>
         } else {
             doubleArrayOf(0.20, 0.07, 0.05)
         }
-        return BuildingDesign.lin(target[0] / mean[0], target[1] / mean[1], target[2] / mean[2])
+        // Luftbildpixel ueber Gauben, Solarflaechen und Oberlichtern sind oft zu hell: Dachhaut hoechstens 0,22 linear hell.
+        val lum = 0.2126 * target[0] + 0.7152 * target[1] + 0.0722 * target[2]
+        val k = if (lum > 0.22) 0.22 / lum else 1.0
+        return BuildingDesign.lin(target[0] * k / mean[0], target[1] * k / mean[1], target[2] * k / mean[2])
     }
 
     companion object {
