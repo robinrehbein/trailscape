@@ -352,12 +352,25 @@ object AppServices {
                     appContext.assets.open("indoor/${IndoorCatalog.CATALOG_FILE}").use { it.readBytes().toString(Charsets.UTF_8) }
                 }.getOrNull()
             },
+            previewDir = File(appContext.cacheDir, "indoor/catalog-previews"),
         )
     }
 
     /**
-     * Abruf der Katalogpakete aus dem GitHub-Release — nur nach „Laden" bzw.
-     * „Katalog aktualisieren"; Hosts in PRIVACY.md. Weiterleitungen prueft
+     * Ob gerade ein Netz mit Internet da ist (kein Flugmodus, kein
+     * abgeschaltetes Netz). Nur fuer Abrufe ohne Nutzeraktion (taeglicher
+     * Katalogabruf, Vorschaubilder): ohne Netz wird gar nicht erst gefragt.
+     */
+    fun isNetworkAvailable(): Boolean = runCatching {
+        val cm = appContext.getSystemService(android.net.ConnectivityManager::class.java) ?: return false
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }.getOrDefault(false)
+
+    /**
+     * Abruf aus dem GitHub-Release: Pakete nur nach „Laden", der kleine
+     * Katalog und die Vorschaubilder auch von selbst (hoechstens taeglich bzw.
+     * einmal je Bild); Hosts in PRIVACY.md. Weiterleitungen prueft
      * der Downloader selbst gegen `isAllowedCatalogUrl`.
      */
     val indoorCatalogDownloader: CatalogDownloader by lazy {

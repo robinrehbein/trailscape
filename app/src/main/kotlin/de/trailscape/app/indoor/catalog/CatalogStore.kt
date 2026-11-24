@@ -17,6 +17,10 @@ import java.io.IOException
  * * der zuletzt mit „Katalog aktualisieren" geholte Katalog des Release
  *   (`<filesDir>/indoor/catalog/catalog-remote.json`),
  * * angefangene Downloads (`<filesDir>/indoor/catalog/downloads/<paket>.part`),
+ * * der Zeitpunkt des letzten automatischen Abrufs (`auto-refresh.txt`,
+ *   [CatalogAutoRefresh]),
+ * * die Vorschaubilder ([previewDir], Vorgabe `<cacheDir>/indoor/catalog-previews`;
+ *   Cache — Android darf ihn leeren, die App laedt dann nach),
  * * das Entpacken (`<filesDir>/indoor/catalog/tmp/<id>`) und Einsortieren in
  *   die Weltverwaltung (`<filesDir>/indoor/worlds/<worldId>/`, mit
  *   [WorldLibrary.CATALOG_FILE]) — danach ist die Welt eine Welt wie jede
@@ -26,6 +30,7 @@ import java.io.IOException
  *
  * @param bundled liefert den Text des beigelegten Katalogs, `null` = keiner.
  * @param allowUrl Positivliste fuer die Paketadresse eines Katalogs (Tests: lokaler Server).
+ * @param previewDir Verzeichnis der Vorschaubilder.
  */
 class CatalogStore(
     private val baseDir: File,
@@ -33,6 +38,7 @@ class CatalogStore(
     private val worldsDir: File,
     private val bundled: () -> String?,
     private val allowUrl: (String) -> Boolean = ::isAllowedCatalogUrl,
+    private val previewDir: File = File(baseDir, "previews"),
 ) {
     private val remoteFile get() = File(baseDir, "catalog-remote.json")
     private val downloadsDir get() = File(baseDir, "downloads")
@@ -67,6 +73,58 @@ class CatalogStore(
             tmp.delete()
         }
         return parsed
+    }
+
+    private val autoRefreshFile get() = File(baseDir, "auto-refresh.txt")
+
+    /** Zeitpunkt des letzten automatischen (oder von Hand ausgeloesten) Abrufs, `null` = keiner. */
+    fun lastRefreshAttemptMs(): Long? = runCatching { autoRefreshFile.readText().trim().toLong() }.getOrNull()
+
+    /** Merkt [ms] als letzten Abruf des Release-Katalogs. */
+    fun markRefreshAttempt(ms: Long) {
+        baseDir.mkdirs()
+        autoRefreshFile.writeText(ms.toString())
+    }
+
+    /**
+     * Das zwischengespeicherte Vorschaubild von [entry], `null` = keins (oder
+     * eins mit falscher Groesse — dann gilt es als nicht vorhanden).
+     */
+    fun cachedPreview(entry: CatalogEntry): File? {
+        val p = entry.preview ?: return null
+        val f = File(previewDir, p.file)
+        return f.takeIf { it.isFile && it.length() == p.bytes }
+    }
+
+    /**
+     * Speichert das geladene Vorschaubild von [entry]: nur ein JPEG mit der
+     * Groesse und Pruefsumme aus dem Katalog. Wirft [IOException] sonst.
+     */
+    fun savePreview(entry: CatalogEntry, bytes: ByteArray): File {
+        val p = entry.preview ?: throw IOException("kein Vorschaubild im Katalog")
+        if (bytes.size.toLong() != p.bytes) throw IOException("Vorschaubild: ${bytes.size} statt ${p.bytes} Bytes")
+        if (bytes.size < 3 || bytes[0] != 0xFF.toByte() || bytes[1] != 0xD8.toByte() || bytes[2] != 0xFF.toByte()) {
+            throw IOException("Vorschaubild ist kein JPEG")
+        }
+        p.sha256?.let { want ->
+            val got = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            if (got != want) throw IOException("Vorschaubild: Pruefsumme passt nicht")
+        }
+        previewDir.mkdirs()
+        val target = File(previewDir, p.file)
+        val tmp = File(previewDir, p.file + ".tmp")
+        tmp.writeBytes(bytes)
+        if (!tmp.renameTo(target)) {
+            target.writeBytes(bytes)
+            tmp.delete()
+        }
+        return target
+    }
+
+    /** Loescht Vorschaubilder, die kein Eintrag von [catalog] mehr nennt (alte Versionen). */
+    fun prunePreviews(catalog: IndoorCatalog) {
+        val keep = catalog.entries.mapNotNull { it.preview?.file }.toSet()
+        previewDir.listFiles()?.forEach { f -> if (f.name !in keep) f.delete() }
     }
 
     /** Installierte Katalogwelten je Kennung (bei mehreren die hoechste Version). */

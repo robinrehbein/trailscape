@@ -348,7 +348,15 @@
     <string name="indoor_app_catalog_refresh_done">Katalog ist auf dem neuesten Stand.</string>
     <string name="indoor_app_catalog_refresh_not_available">Der Katalog ist noch nicht veröffentlicht. Die Liste oben stammt aus der App.</string>
     <string name="indoor_app_catalog_refresh_failed">Katalog konnte nicht geladen werden. Prüfe die Verbindung und versuche es noch einmal.</string>
-    <string name="indoor_app_catalog_privacy">Laden und Aktualisieren holen Dateien aus dem öffentlichen GitHub-Release von Trailscape (github.com). Dabei wird nur übertragen, welche Datei du lädst – kein Konto, keine Kennung.</string>
+    <string name="indoor_app_catalog_privacy">Die Liste holt die App höchstens einmal am Tag von selbst, jedes Vorschaubild einmal, Welten nur nach „Laden“ – alles aus dem öffentlichen GitHub-Release von Trailscape (github.com). Dabei wird nur übertragen, welche Datei abgerufen wird – kein Konto, keine Kennung.</string>
+    <string name="indoor_app_catalog_package">Paket %1$s</string>
+    <string name="indoor_app_catalog_laser">Laser</string>
+    <string name="indoor_app_catalog_laser_hint">In Laserqualität: Gelände, Bewuchs und Gebäude aus amtlichen Laserscans.</string>
+    <string name="indoor_app_catalog_new">Neu</string>
+    <string name="indoor_app_catalog_preview_missing">Noch keine Vorschau</string>
+    <string name="indoor_app_catalog_preview_image">Vorschaubild der 3D-Welt von %1$s</string>
+    <string name="indoor_app_catalog_profile_range">%1$d–%2$d m</string>
+    <string name="indoor_app_catalog_profile_description">Höhenprofil von %1$s: %2$d bis %3$d m über %4$s km</string>
     <string name="indoor_app_catalog_meta">%1$s km · %2$s Hm · %3$s</string>
     <string name="indoor_app_catalog_surface_share">%1$s %2$d %%</string>
     <string name="indoor_app_catalog_aerial_yes">Mit Luftbild</string>

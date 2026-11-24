@@ -178,6 +178,7 @@ class IndoorViewModel(
     private val quality: IndoorQuality = IndoorQuality.MEDIUM,
     catalogStore: CatalogStore? = null,
     catalogDownloader: CatalogDownloader? = null,
+    catalogOnline: () -> Boolean = { false },
     serverDeps: IndoorServerDeps? = null,
     var onRideSaved: (String) -> Unit = {},
     var onPlanRoute: (RouteTarget) -> Unit = {},
@@ -186,7 +187,7 @@ class IndoorViewModel(
     private val scope: CoroutineScope = scope ?: viewModelScope
 
     /** Bereich „Bekannte Strecken" (docs/indoor/catalog.md). */
-    private val catalogController = IndoorCatalogController(catalogStore, catalogDownloader, this.scope, io)
+    private val catalogController = IndoorCatalogController(catalogStore, catalogDownloader, this.scope, io, catalogOnline, wallClock)
 
     /** Zustand der Katalogkarten im Schritt Streckenwahl. */
     val catalog: StateFlow<IndoorCatalogUi> = catalogController.ui
@@ -1849,6 +1850,7 @@ class IndoorViewModel(
                     heartRate = { BleHeartRateSource(app) },
                     catalogStore = AppServices.indoorCatalogStore,
                     catalogDownloader = AppServices.indoorCatalogDownloader,
+                    catalogOnline = { AppServices.isNetworkAvailable() },
                     serverDeps = AppServices.indoorServerDeps,
                     onRideSaved = onRideSaved,
                 ) as T
