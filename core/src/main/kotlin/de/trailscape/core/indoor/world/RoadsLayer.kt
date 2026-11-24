@@ -31,7 +31,8 @@ internal class RoadsLayer : TileLayer {
 
     override fun build(ctx: TileContext, out: TileOutput) {
         if (ctx.level != 0 || ctx.budget.roads <= 0) return
-        val net = RoadNet(ctx, marginM = 10.0, maxStepM = STEP_M)
+        // 30 m Rand wie die Sperrflaechen des Streckenrands (RouteEnv): dieselben Ecken an Einmuendungen.
+        val net = RoadNet(ctx, marginM = 30.0, maxStepM = STEP_M)
         val segs = ArrayList<Seg>()
         for (r in net.roads) {
             for (i in 0 until r.size - 1) {
@@ -43,13 +44,22 @@ internal class RoadsLayer : TileLayer {
             }
         }
         islands(ctx, out)
-        if (segs.isEmpty()) return
+        val corners = JunctionCorners.find(ctx.track, ctx.land, net).filter { ctx.spec.contains(it.pe, it.pn) }
+        if (segs.isEmpty() && corners.isEmpty()) return
         segs.sortBy { it.dist }
         // Budget: nah mit Kanten (und Schienen), fern ohne; was dann noch nicht passt, entfaellt von aussen her.
+        // Ecken an Einmuendungen zuerst (sie liegen an der Strecke): 8 Dreiecke, im Ort 32 fuer den Bordstein dazu.
         var used = 0
+        val drawCorners = ArrayList<JunctionCorners.Corner>()
+        for (c in corners) {
+            val cost = 8 + (if (c.urban) 32 else 0)
+            if (used + cost > ctx.budget.roads) break
+            used += cost
+            drawCorners.add(c)
+        }
         var edgeLimit = Double.MAX_VALUE
         fun cost(s: Seg, edges: Boolean) = 2 + (if (edges) 4 else 0) + (if (s.road.spec.rail) 4 else 0)
-        if (segs.sumOf { cost(it, true) } > ctx.budget.roads) edgeLimit = EDGE_NEAR_M
+        if (used + segs.sumOf { cost(it, true) } > ctx.budget.roads) edgeLimit = EDGE_NEAR_M
         // Sperrflaechen fuer die weichen Kanten: die Baender aller Strassen, je Strasse eine Nummer — eine Kante
         // laeuft nicht ueber eine andere Strasse (dort lag sie Millimeter ueber deren Fahrbahn: Flimmern).
         val mask = PlanMask()
@@ -79,6 +89,7 @@ internal class RoadsLayer : TileLayer {
             used += c
             emitter.segment(s.road, s.i, edges, index.getValue(s.road))
         }
+        for (c in drawCorners) emitter.corner(c)
     }
 
     /**
@@ -271,6 +282,69 @@ internal class RoadsLayer : TileLayer {
         }
 
         /**
+         * Ausgerundete Ecke an einer Einmuendung ([JunctionCorners]): Faecher vom Eckpunkt zum Bogen im Belag der
+         * Strasse, Hoehe wie die Strasse dort; im Ort ein Bordstein entlang des Bogens.
+         */
+        fun corner(c: JunctionCorners.Corner) {
+            val r = c.road
+            val kind = r.spec.kind
+            val tex = RouteTextures.spec(kind)
+            val m = mesh(kind, false)
+            val k = c.station.coerceIn(0, r.size - 1)
+            fun h(e: Double, n: Double) = heightAt(e, n, r, true, k)
+            fun col(e: Double, n: Double): Int {
+                val cc = 0.80 + 0.14 * RouteGeometry.tone(e, n, 0x70e)
+                return RouteGeometry.linColor(cc, cc, cc)
+            }
+            val a = c.arc
+            val cnt = a.size / 2
+            // Umlaufsinn: von oben gegen den Uhrzeigersinn in (e, n).
+            val area = (a[0] - c.pe) * (a[2 * cnt - 1] - c.pn) - (a[1] - c.pn) * (a[2 * cnt - 2] - c.pe)
+            val p = m.vertex(ctx.x(c.pe), ctx.y(h(c.pe, c.pn)), ctx.z(c.pn), 0.0, 1.0, 0.0, c.pe / tex.widthM, c.pn / tex.lengthM, col(c.pe, c.pn))
+            val first = m.vertexCount
+            for (q in 0 until cnt) {
+                val e = a[2 * q]
+                val n = a[2 * q + 1]
+                m.vertex(ctx.x(e), ctx.y(h(e, n)), ctx.z(n), 0.0, 1.0, 0.0, e / tex.widthM, n / tex.lengthM, col(e, n))
+            }
+            for (q in 0 until cnt - 1) if (area > 0) m.tri(p, first + q, first + q + 1) else m.tri(p, first + q + 1, first + q)
+            if (!c.urban) return
+            // Bordstein: Ansicht vom Bogen bis 2 cm dahinter auf 12 cm, Oberseite bis zur Hinterkante.
+            val kerb = out.mesh(WorldNames.NODE_ROADS, materials.getOrPut(MAT_KERB) { TileMaterial(MAT_KERB, roughness = 0.85f) })
+            val b = c.arcBack
+            val g = 0.30
+            val top = RouteGeometry.linColor(g, g, g * 0.97)
+            val face = RouteGeometry.linColor(g * 0.8, g * 0.8, g * 0.78)
+            val base = kerb.vertexCount
+            for (q in 0 until cnt) {
+                val e = a[2 * q]; val n = a[2 * q + 1]
+                val be = b[2 * q]; val bn = b[2 * q + 1]
+                val fe = e + (be - e) * (0.02 / JunctionCorners.KERB_WIDTH_M)
+                val fn = n + (bn - n) * (0.02 / JunctionCorners.KERB_WIDTH_M)
+                val hh = h(e, n)
+                val ox = e - be
+                val oy = n - bn
+                val ol = kotlin.math.max(1e-6, kotlin.math.hypot(ox, oy))
+                // Normale der Ansicht: vom Bogen weg zum Eckpunkt hin (glTF: x = e, z = -n).
+                kerb.vertex(ctx.x(e), ctx.y(hh - 0.01), ctx.z(n), ox / ol, 0.3, -oy / ol, 0.0, 0.0, face)
+                kerb.vertex(ctx.x(fe), ctx.y(hh + RouteLayer.KERB_HEIGHT_M), ctx.z(fn), ox / ol, 0.3, -oy / ol, 0.0, 0.0, face)
+                kerb.vertex(ctx.x(fe), ctx.y(hh + RouteLayer.KERB_HEIGHT_M), ctx.z(fn), 0.0, 1.0, 0.0, 0.0, 0.0, top)
+                kerb.vertex(ctx.x(be), ctx.y(hh + RouteLayer.KERB_HEIGHT_M), ctx.z(bn), 0.0, 1.0, 0.0, 0.0, 0.0, top)
+            }
+            for (q in 0 until cnt - 1) {
+                val i0 = base + 4 * q
+                val i1 = base + 4 * (q + 1)
+                if (area > 0) {
+                    kerb.quad(i0, i1, i1 + 1, i0 + 1)
+                    kerb.quad(i0 + 2, i1 + 2, i1 + 3, i0 + 3)
+                } else {
+                    kerb.quad(i1, i0, i0 + 1, i1 + 1)
+                    kerb.quad(i1 + 2, i0 + 2, i0 + 3, i1 + 3)
+                }
+            }
+        }
+
+        /**
          * Weiche Kanten: je Seite ein Streifen, dessen Deckung nach aussen auf null faellt — die Deckung
          * kommt aus der Textur ([RouteTextures.roadEdgeTexture], `v` quer), die Vertexfarben sind deckend.
          */
@@ -327,6 +401,9 @@ internal class RoadsLayer : TileLayer {
     companion object {
         const val MAT_ISLAND = "x_mat_road_island"
         const val MAT_ISLAND_KERB = "x_mat_road_island_kerb"
+
+        /** Bordstein entlang ausgerundeter Ecken an Einmuendungen. */
+        const val MAT_KERB = "x_mat_road_kerb"
 
         /** So hoch liegt eine Kreisel-Mittelinsel ueber dem Boden. */
         const val ISLAND_RISE_M = 0.14
