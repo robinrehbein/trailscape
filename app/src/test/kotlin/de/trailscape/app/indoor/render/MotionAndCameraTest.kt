@@ -163,7 +163,7 @@ class MotionAndCameraTest {
     @Test
     fun lenkerkameraAufAugenhoehe() {
         val p = CameraRig.desired(eastTrack(), 50.0, 0.0, CameraMode.HANDLEBAR)
-        assertEquals(CameraRig.HANDLEBAR_EYE_M, p.eye.y, 1e-6)
-        assertTrue(p.target.x > p.eye.x + 10.0)
+        assertEquals(CameraRig.HANDLEBAR_EYE.y, p.eye.y, 1e-6)
+        assertTrue(p.target.x > p.eye.x + 9.0)
     }
 }

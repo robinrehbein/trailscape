@@ -1,0 +1,509 @@
+// filarender — Filament-Referenzrenderer fuer Indoor-Welten (Entwicklerwerkzeug).
+//
+// Rendert eine Szene mit **derselben Filament-Version wie die App (1.75.1)** und
+// denselben Einstellungen wie `app/.../indoor/render/FilamentCore.kt`: Sonne mit
+// DPCF-Schatten, Umgebungslicht aus SH-Koeffizienten, Himmels-Cubemap bzw.
+// Himmelsmaterial, Dunst, Tonwertabbildung/Farbgebung, Wassermaterial, Cockpit.
+// Die Szene (Kacheln, Kamera, Fahrer) beschreibt der Betrachter
+// (`viewer/shots.mjs --filament`), Licht und Himmel `indoor-dev sky`.
+//
+// Ohne GPU laeuft das auf Mesa llvmpipe (OpenGL 4.5) unter Xvfb: gleiche Shader,
+// gleiche Abbildung, aber Desktop-GL statt OpenGL ES — Genauigkeit und Leistung
+// sagen nichts ueber ein Handy.
+//
+// Aufruf: filarender <scene.json> <out.png>
+
+#include "json.hpp"  // vor Filament: deren Makro assert_invariant stoert sonst
+
+#include <filament/Camera.h>
+#include <filament/ColorGrading.h>
+#include <filament/Engine.h>
+#include <filament/IndexBuffer.h>
+#include <filament/IndirectLight.h>
+#include <filament/LightManager.h>
+#include <filament/Material.h>
+#include <filament/MaterialInstance.h>
+#include <filament/RenderableManager.h>
+#include <filament/Renderer.h>
+#include <filament/Scene.h>
+#include <filament/Skybox.h>
+#include <filament/SwapChain.h>
+#include <filament/Texture.h>
+#include <filament/TextureSampler.h>
+#include <filament/ToneMapper.h>
+#include <filament/TransformManager.h>
+#include <filament/VertexBuffer.h>
+#include <filament/View.h>
+#include <filament/Viewport.h>
+#include <gltfio/Animator.h>
+#include <gltfio/AssetLoader.h>
+#include <gltfio/FilamentAsset.h>
+#include <gltfio/FilamentInstance.h>
+#include <gltfio/MaterialProvider.h>
+#include <gltfio/ResourceLoader.h>
+#include <gltfio/TextureProvider.h>
+#include <gltfio/materials/uberarchive.h>
+#include <utils/EntityManager.h>
+#include <utils/NameComponentManager.h>
+
+#include <chrono>
+#include <cmath>
+#include <cstring>
+#include <unistd.h>
+#include <cstdio>
+#include <fstream>
+#include <map>
+#include <set>
+#include <string>
+#include <thread>
+#include <vector>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+using namespace filament;
+using namespace filament::math;
+using json = nlohmann::json;
+using utils::Entity;
+
+static std::vector<uint8_t> readFile(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) {
+        fprintf(stderr, "filarender: kann %s nicht lesen\n", path.c_str());
+        exit(2);
+    }
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+}
+
+static json readJson(const std::string& path) {
+    auto b = readFile(path);
+    return json::parse(b.begin(), b.end());
+}
+
+static float3 f3(const json& j) { return { j[0].get<float>(), j[1].get<float>(), j[2].get<float>() }; }
+static double3 d3(const json& j) { return { j[0].get<double>(), j[1].get<double>(), j[2].get<double>() }; }
+
+template <typename T>
+static T opt(const json& j, const char* key, T def) {
+    return j.contains(key) && !j[key].is_null() ? j[key].get<T>() : def;
+}
+
+// Knotenart wie RenderSupport.nodeCategory (erster bekannter Name von unten nach oben).
+static const std::set<std::string> KNOWN = { "terrain", "route", "roads", "buildings", "trees", "water", "props" };
+
+struct Loaded {
+    gltfio::FilamentAsset* asset = nullptr;
+    std::map<Entity, std::string> category;  // Renderable → Knotenart (leer = unbekannt)
+};
+
+static Loaded loadAsset(Engine* engine, gltfio::AssetLoader* loader, gltfio::ResourceLoader* res, const std::string& path) {
+    auto bytes = readFile(path);
+    Loaded l;
+    l.asset = loader->createAsset(bytes.data(), (uint32_t)bytes.size());
+    if (!l.asset) {
+        fprintf(stderr, "filarender: gltfio kann %s nicht lesen\n", path.c_str());
+        exit(3);
+    }
+    res->loadResources(l.asset);
+    l.asset->releaseSourceData();
+    auto& tm = engine->getTransformManager();
+    const Entity root = l.asset->getRoot();
+    const Entity* rs = l.asset->getRenderableEntities();
+    for (size_t i = 0; i < l.asset->getRenderableEntityCount(); i++) {
+        Entity cur = rs[i];
+        std::string cat;
+        for (int guard = 0; guard < 32 && !cur.isNull(); guard++) {
+            const char* n = l.asset->getName(cur);
+            if (n) {
+                std::string s(n);
+                if (s.rfind("terrain_sub_", 0) == 0 || KNOWN.count(s)) {
+                    cat = s;
+                    break;
+                }
+            }
+            if (cur == root) break;
+            auto ti = tm.getInstance(cur);
+            if (!ti) break;
+            cur = tm.getParent(ti);
+        }
+        l.category[rs[i]] = cat;
+    }
+    return l;
+}
+
+static mat4f translation(float3 p) { return mat4f::translation(p); }
+
+static mat4f matFromJson(const json& j) {
+    mat4f m;
+    for (int c = 0; c < 4; c++)
+        for (int r = 0; r < 4; r++) m[c][r] = j[c * 4 + r].get<float>();
+    return m;
+}
+
+// Halbfloat → float (wie SkyModel.halfToDouble, ohne Subnormale)
+static float halfToFloat(uint16_t h) {
+    int e = (h >> 10) & 0x1F;
+    if (e == 0) return 0.f;
+    int m = h & 0x3FF;
+    float s = (h & 0x8000) ? -1.f : 1.f;
+    return s * (1.f + m / 1024.f) * std::ldexp(1.f, e - 15);
+}
+
+static Material* loadMaterial(Engine* engine, const std::string& path) {
+    auto b = readFile(path);
+    return Material::Builder().package(b.data(), b.size()).build(*engine);
+}
+
+int main(int argc, char** argv) {
+    if (argc < 3) {
+        fprintf(stderr, "Aufruf: filarender <scene.json> <out.png>\n");
+        return 2;
+    }
+    const json S = readJson(argv[1]);
+    const std::string skyDir = S["sky"].get<std::string>();
+    const json K = readJson(skyDir + "/sky.json");
+    const json L = K.contains("look") ? K["look"] : json::object();  // neue Stimmung (fehlt = alter Stand)
+    const json settings = S.contains("settings") ? S["settings"] : json::object();
+    const bool shadows = opt(settings, "shadows", true);
+    const bool fogOn = opt(settings, "fog", true);
+    const bool skyOn = opt(settings, "sky", true);
+    const bool post = opt(settings, "postProcessing", true);
+    const bool ao = opt(settings, "ambientOcclusion", false);
+    const bool bloom = opt(settings, "bloom", false);
+    const int W = S["width"], H = S["height"];
+    const double timeS = opt(S, "timeS", 0.0);
+
+    auto t0 = std::chrono::steady_clock::now();
+    Engine* engine = Engine::create(Engine::Backend::OPENGL);
+    if (!engine) return 4;
+    SwapChain* sc = engine->createSwapChain(W, H, SwapChain::CONFIG_READABLE);
+    Renderer* renderer = engine->createRenderer();
+    Scene* scene = engine->createScene();
+    View* view = engine->createView();
+    Entity camE = utils::EntityManager::get().create();
+    Camera* cam = engine->createCamera(camE);
+    view->setScene(scene);
+    view->setCamera(cam);
+    view->setViewport({ 0, 0, (uint32_t)W, (uint32_t)H });
+
+    // ---- Kamera (FilamentCore.updateProjection / lookAt) ----
+    const json C = S["camera"];
+    cam->setProjection(C["fovV"].get<double>(), double(W) / H, opt(C, "near", 0.5), opt(C, "far", 25000.0), Camera::Fov::VERTICAL);
+    cam->setShift({ opt(C, "shiftX", 0.0), opt(C, "shiftY", 0.0) });
+    cam->lookAt(d3(C["eye"]), d3(C["target"]), C.contains("up") ? d3(C["up"]) : double3{ 0, 1, 0 });
+    // Belichtung: Blende 16, ISO 100; Verschlusszeit aus EV100 der Stimmung (Vorgabe 1/125 s = EV 15).
+    const double ev100 = opt(L, "ev100", std::log2(16.0 * 16.0 * 125.0));
+    cam->setExposure(16.f, float(16.0 * 16.0 / std::pow(2.0, ev100)), 100.f);
+
+    // ---- Sonne ----
+    Entity sunE = utils::EntityManager::get().create();
+    {
+        LightManager::ShadowOptions so;
+        so.mapSize = 2048;
+        so.shadowCascades = 3;
+        so.cascadeSplitPositions[0] = 0.05f;
+        so.cascadeSplitPositions[1] = 0.2f;
+        so.shadowFar = 300.f;
+        so.shadowFarHint = 300.f;
+        so.shadowNearHint = 1.f;
+        so.stable = false;
+        const double3 enu = d3(K["sunDirEnu"]);
+        const float3 toSun = normalize(float3{ float(enu.x), float(enu.z), float(-enu.y) });
+        LightManager::Builder(LightManager::Type::SUN)
+            .color(f3(K["sunColor"]))
+            .intensity(K["sunLux"].get<float>())
+            .direction(-toSun)
+            .castShadows(shadows)
+            .shadowOptions(so)
+            .sunAngularRadius(opt(L, "sunAngularRadius", 1.2f))
+            .sunHaloSize(opt(L, "sunHaloSize", 8.f))
+            .sunHaloFalloff(opt(L, "sunHaloFalloff", 80.f))
+            .build(*engine, sunE);
+        scene->addEntity(sunE);
+    }
+
+    // ---- Umgebungslicht ----
+    float3 sh[9];
+    for (int i = 0; i < 9; i++) sh[i] = { K["sh"][i * 3].get<float>(), K["sh"][i * 3 + 1].get<float>(), K["sh"][i * 3 + 2].get<float>() };
+    IndirectLight* ibl = IndirectLight::Builder().irradiance(3, sh).intensity(K["ambientLux"].get<float>()).build(*engine);
+    // FilamentCore nutzt radiance(3, sh); in C++ heisst das irradiance(bands, sh) mit Strahldichte-SH
+    // (Filament multipliziert intern mit A[i], siehe IndirectLight.cpp).
+    {
+        IndirectLight* r = IndirectLight::Builder().radiance(3, sh).intensity(K["ambientLux"].get<float>()).build(*engine);
+        engine->destroy(ibl);
+        ibl = r;
+    }
+    scene->setIndirectLight(ibl);
+
+    // ---- Himmel ----
+    const int cube = K["cubeSize"];
+    Texture* skyTex = nullptr;
+    Material* skyMat = nullptr;
+    MaterialInstance* skyMi = nullptr;
+    Entity skyE;
+    const std::string matDir = opt<std::string>(S, "materials", "");
+    const bool skyMaterial = skyOn && L.contains("skyMaterial") && !matDir.empty();
+    if (skyOn && !skyMaterial) {
+        auto raw = readFile(skyDir + "/cube.bin");
+        auto* buf = new uint16_t[raw.size() / 2];
+        memcpy(buf, raw.data(), raw.size());
+        skyTex = Texture::Builder().width(cube).height(cube).levels(1).sampler(Texture::Sampler::SAMPLER_CUBEMAP)
+                     .format(Texture::InternalFormat::R11F_G11F_B10F).build(*engine);
+        skyTex->setImage(*engine, 0, 0, 0, 0, cube, cube, 6,
+            Texture::PixelBufferDescriptor(buf, raw.size(), Texture::Format::RGB, Texture::Type::HALF,
+                [](void* b, size_t, void*) { delete[] (uint16_t*)b; }));
+        scene->setSkybox(Skybox::Builder().environment(skyTex).showSun(true).build(*engine));
+    } else if (!skyOn) {
+        const float3 h = f3(K["skyHorizon"]);
+        scene->setSkybox(Skybox::Builder().color({ h.x, h.y, h.z, 1.f }).build(*engine));
+    }
+    // Wolken-/Wellentextur: Rauschen aus SkyClouds.cloudTexture (clouds.bin, R8, kachelbar)
+    Texture* cloudTex = nullptr;
+    TextureSampler cloudSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR, TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
+    if (!matDir.empty() && (skyMaterial || L.contains("water"))) {
+        auto raw = readFile(skyDir + "/clouds.bin");
+        int n = (int)std::lround(std::sqrt((double)raw.size()));
+        auto* buf = new uint8_t[raw.size()];
+        memcpy(buf, raw.data(), raw.size());
+        cloudTex = Texture::Builder().width(n).height(n).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                       .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                       .format(Texture::InternalFormat::R8).build(*engine);
+        cloudTex->setImage(*engine, 0, Texture::PixelBufferDescriptor(buf, raw.size(), Texture::Format::R, Texture::Type::UBYTE,
+                                           [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+        cloudTex->generateMipmaps(*engine);
+    }
+    if (skyMaterial) {
+        // Eigenes Himmelsmaterial (app/src/main/materials/sky.mat): Verlauf, Sonne, ziehende Wolken.
+        skyMat = loadMaterial(engine, matDir + "/sky.filamat");
+        skyMi = skyMat->createInstance();
+        const json& M = L["skyMaterial"];
+        for (auto it = M.begin(); it != M.end(); ++it) {
+            if (it.value().is_array() && it.value().size() == 3) skyMi->setParameter(it.key().c_str(), f3(it.value()));
+            else if (it.value().is_array() && it.value().size() == 2) skyMi->setParameter(it.key().c_str(), float2{ it.value()[0].get<float>(), it.value()[1].get<float>() });
+            else if (it.value().is_array() && it.value().size() == 4)
+                skyMi->setParameter(it.key().c_str(), float4{ it.value()[0].get<float>(), it.value()[1].get<float>(), it.value()[2].get<float>(), it.value()[3].get<float>() });
+            else if (it.value().is_number()) skyMi->setParameter(it.key().c_str(), it.value().get<float>());
+        }
+        skyMi->setParameter("time", float(timeS));
+        skyMi->setParameter("clouds", cloudTex, cloudSampler);
+        // Vollbild-Dreieck in Geraetekoordinaten (wie Filaments Skybox)
+        static const float verts[] = { -1, -1, 1, 1, 3, -1, 1, 1, -1, 3, 1, 1 };
+        static const uint16_t idx[] = { 0, 1, 2 };
+        auto* vb = VertexBuffer::Builder().vertexCount(3).bufferCount(1)
+                       .attribute(VertexAttribute::POSITION, 0, VertexBuffer::AttributeType::FLOAT4, 0, 16).build(*engine);
+        vb->setBufferAt(*engine, 0, VertexBuffer::BufferDescriptor(verts, sizeof(verts)));
+        auto* ib = IndexBuffer::Builder().indexCount(3).bufferType(IndexBuffer::IndexType::USHORT).build(*engine);
+        ib->setBuffer(*engine, IndexBuffer::BufferDescriptor(idx, sizeof(idx)));
+        skyE = utils::EntityManager::get().create();
+        RenderableManager::Builder(1)
+            .geometry(0, RenderableManager::PrimitiveType::TRIANGLES, vb, ib)
+            .material(0, skyMi)
+            .culling(false)
+            .castShadows(false)
+            .receiveShadows(false)
+            .priority(7)
+            .build(*engine, skyE);
+        scene->addEntity(skyE);
+    }
+
+    // ---- Dunst (FilamentCore.applyFog) ----
+    {
+        View::FogOptions fo;
+        fo.enabled = fogOn;
+        fo.density = K["fogDensity"].get<float>();
+        fo.color = f3(K["fogColor"]);
+        fo.height = opt(S, "fogHeight", 0.f);
+        fo.heightFalloff = opt(L, "fogHeightFalloff", 0.0012f);
+        fo.distance = opt(L, "fogDistance", 30.f);
+        fo.maximumOpacity = opt(L, "fogMaxOpacity", 0.92f);
+        fo.cutOffDistance = 25000.f * 4.f;
+        fo.fogColorFromIbl = false;
+        fo.inScatteringStart = opt(L, "fogInScatteringStart", 0.f);
+        fo.inScatteringSize = opt(L, "fogInScatteringSize", -1.f);
+        view->setFogOptions(fo);
+    }
+
+    // ---- View-Einstellungen (FilamentCore.applySettings) ----
+    view->setShadowingEnabled(shadows);
+    view->setPostProcessingEnabled(post);
+    {
+        View::MultiSampleAntiAliasingOptions m;
+        m.enabled = true;
+        m.sampleCount = 4;
+        view->setMultiSampleAntiAliasingOptions(m);
+        view->setAntiAliasing(View::AntiAliasing::NONE);
+    }
+    view->setShadowType(shadows ? View::ShadowType::DPCF : View::ShadowType::PCF);
+    {
+        View::SoftShadowOptions s;
+        s.penumbraScale = 1.5f;
+        s.penumbraRatioScale = 1.f;
+        view->setSoftShadowOptions(s);
+    }
+    view->setDithering(post ? View::Dithering::TEMPORAL : View::Dithering::NONE);
+    {
+        View::AmbientOcclusionOptions a;
+        a.enabled = ao;
+        a.radius = 0.4f;
+        a.intensity = 1.f;
+        view->setAmbientOcclusionOptions(a);
+        View::BloomOptions b;
+        b.enabled = bloom;
+        b.strength = opt(L, "bloomStrength", 0.08f);
+        view->setBloomOptions(b);
+    }
+    // Tonwertabbildung und Farbgebung der Stimmung (fehlt: Filaments Standard ACES_LEGACY)
+    ColorGrading* grading = nullptr;
+    ToneMapper* tm = nullptr;
+    if (L.contains("toneMapper")) {
+        const std::string t = L["toneMapper"];
+        if (t == "AGX") tm = new AgxToneMapper(AgxToneMapper::AgxLook::NONE);
+        else if (t == "AGX_PUNCHY") tm = new AgxToneMapper(AgxToneMapper::AgxLook::PUNCHY);
+        else if (t == "PBR_NEUTRAL") tm = new PBRNeutralToneMapper();
+        else if (t == "ACES") tm = new ACESToneMapper();
+        else if (t == "FILMIC") tm = new FilmicToneMapper();
+        else if (t == "GT7") tm = new GT7ToneMapper();
+        else tm = new ACESLegacyToneMapper();
+        ColorGrading::Builder gb;
+        gb.toneMapper(tm)
+            .exposure(opt(L, "gradeExposure", 0.f))
+            .contrast(opt(L, "contrast", 1.f))
+            .vibrance(opt(L, "vibrance", 1.f))
+            .saturation(opt(L, "saturation", 1.f))
+            .whiteBalance(opt(L, "temperature", 0.f), opt(L, "tint", 0.f));
+        if (L.contains("shadowsTint")) {
+            gb.shadowsMidtonesHighlights(float4{ f3(L["shadowsTint"]), 0.f }, float4{ 1, 1, 1, 0 }, float4{ 1, 1, 1, 0 }, float4{ 0.f, 0.333f, 0.55f, 1.f });
+        }
+        grading = gb.build(*engine);
+        view->setColorGrading(grading);
+    }
+
+    // ---- Welt ----
+    gltfio::MaterialProvider* mp = gltfio::createUbershaderProvider(engine, UBERARCHIVE_DEFAULT_DATA, UBERARCHIVE_DEFAULT_SIZE);
+    utils::NameComponentManager names(utils::EntityManager::get());
+    gltfio::AssetLoader* loader = gltfio::AssetLoader::create({ engine, mp, &names });
+    gltfio::ResourceLoader* res = new gltfio::ResourceLoader({ engine, ".", true });
+    gltfio::TextureProvider* stb = gltfio::createStbProvider(engine);
+    res->addTextureProvider("image/png", stb);
+    res->addTextureProvider("image/jpeg", stb);
+
+    // Wassermaterial (app/src/main/materials/water.mat), wenn die Stimmung es nennt
+    Material* waterMat = nullptr;
+    MaterialInstance* waterMi = nullptr;
+    if (L.contains("water") && !matDir.empty() && opt(settings, "water", true)) {
+        waterMat = loadMaterial(engine, matDir + "/water.filamat");
+        waterMi = waterMat->createInstance();
+        const json& M = L["water"];
+        for (auto it = M.begin(); it != M.end(); ++it) {
+            if (it.value().is_array() && it.value().size() == 3) waterMi->setParameter(it.key().c_str(), f3(it.value()));
+            else if (it.value().is_array() && it.value().size() == 2) waterMi->setParameter(it.key().c_str(), float2{ it.value()[0].get<float>(), it.value()[1].get<float>() });
+            else if (it.value().is_number()) waterMi->setParameter(it.key().c_str(), it.value().get<float>());
+        }
+        waterMi->setParameter("time", float(timeS));
+        waterMi->setParameter("waves", cloudTex, cloudSampler);
+    }
+
+    const std::string world = S["world"];
+    auto& rm = engine->getRenderableManager();
+    auto& tmgr = engine->getTransformManager();
+    size_t renderables = 0, primitives = 0, waterPrims = 0;
+    std::vector<Loaded> tiles;
+    for (const auto& t : S["tiles"]) {
+        Loaded l = loadAsset(engine, loader, res, world + "/" + t["file"].get<std::string>());
+        std::set<std::string> hidden;
+        for (const auto& h : t["hidden"]) hidden.insert(h.get<std::string>());
+        auto ri = tmgr.getInstance(l.asset->getRoot());
+        tmgr.setTransform(ri, translation(f3(t["pos"])));
+        for (auto& [e, cat] : l.category) {
+            auto r = rm.getInstance(e);
+            std::string base = cat.rfind("terrain_sub_", 0) == 0 ? "terrain" : cat;
+            bool cast = base == "buildings" || base == "trees";
+            bool recv = !(base == "trees" || base == "props");
+            rm.setCastShadows(r, cast && shadows);
+            rm.setReceiveShadows(r, recv);
+            bool vis = !hidden.count(cat);
+            if (base == "trees" && !opt(settings, "trees", true)) vis = false;
+            if (base == "props" && !opt(settings, "props", true)) vis = false;
+            rm.setLayerMask(r, 0xFF, vis ? 1 : 0);
+            if (vis) {
+                renderables++;
+                primitives += rm.getPrimitiveCount(r);
+            }
+            if (waterMi && base == "water") {
+                for (size_t p = 0; p < rm.getPrimitiveCount(r); p++) rm.setMaterialInstanceAt(r, p, waterMi);
+                rm.setCastShadows(r, false);
+                waterPrims += rm.getPrimitiveCount(r);
+            }
+        }
+        scene->addEntities(l.asset->getEntities(), l.asset->getEntityCount());
+        tiles.push_back(l);
+    }
+
+    // ---- Fahrer / Cockpit ----
+    auto placeModel = [&](const json& R) {
+        Loaded l = loadAsset(engine, loader, res, R["file"].get<std::string>());
+        tmgr.setTransform(tmgr.getInstance(l.asset->getRoot()), matFromJson(R["matrix"]));
+        for (auto& [e, cat] : l.category) {
+            auto r = rm.getInstance(e);
+            rm.setCastShadows(r, shadows);
+            rm.setReceiveShadows(r, true);
+            renderables++;
+            primitives += rm.getPrimitiveCount(r);
+        }
+        if (R.contains("nodes")) {
+            for (auto it = R["nodes"].begin(); it != R["nodes"].end(); ++it) {
+                Entity e = l.asset->getFirstEntityByName(it.key().c_str());
+                if (!e.isNull()) tmgr.setTransform(tmgr.getInstance(e), matFromJson(it.value()));
+            }
+        }
+        gltfio::Animator* an = l.asset->getInstance()->getAnimator();
+        if (an) {
+            for (size_t i = 0; i < an->getAnimationCount(); i++) {
+                std::string n = an->getAnimationName(i);
+                float d = an->getAnimationDuration(i);
+                if (n == "pedal") an->applyAnimation(i, float(opt(R, "pedal", 0.15)) * d);
+                if (n == "roll") an->applyAnimation(i, float(opt(R, "roll", 0.0)) * d);
+            }
+            an->updateBoneMatrices();
+        }
+        scene->addEntities(l.asset->getEntities(), l.asset->getEntityCount());
+    };
+    if (S.contains("rider") && !S["rider"].is_null()) placeModel(S["rider"]);
+    if (S.contains("cockpit") && !S["cockpit"].is_null()) placeModel(S["cockpit"]);
+
+    auto tLoad = std::chrono::steady_clock::now();
+
+    // ---- Zeichnen ----
+    std::vector<uint8_t> px(size_t(W) * H * 4);
+    bool done = false;
+    const int frames = opt(S, "frames", 3);
+    for (int i = 0; i < frames; i++) {
+        engine->flushAndWait();
+        if (!renderer->beginFrame(sc)) continue;
+        renderer->render(view);
+        if (i == frames - 1) {
+            renderer->readPixels(0, 0, W, H,
+                backend::PixelBufferDescriptor(px.data(), px.size(), backend::PixelDataFormat::RGBA, backend::PixelDataType::UBYTE,
+                    [](void*, size_t, void* u) { *(bool*)u = true; }, &done));
+        }
+        renderer->endFrame();
+    }
+    for (int k = 0; k < 200 && !done; k++) {
+        engine->flushAndWait();
+        engine->pumpMessageQueues();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (!done) {
+        fprintf(stderr, "filarender: kein Bild gelesen\n");
+        return 5;
+    }
+    // Kopfstehend? Der Kopflose Swapchain von PlatformGLX liefert die oberste Zeile zuerst.
+    stbi_write_png(argv[2], W, H, 4, px.data(), W * 4);
+    auto tEnd = std::chrono::steady_clock::now();
+    auto ms = [](auto a, auto b) { return (long)std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
+    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
+        renderables, primitives, waterPrims, ms(t0, tLoad), ms(tLoad, tEnd));
+    fflush(stdout);
+    // Aufraeumen ueberlassen wir dem Prozessende (Werkzeug, kein Dauerlauf).
+    _exit(0);
+}
