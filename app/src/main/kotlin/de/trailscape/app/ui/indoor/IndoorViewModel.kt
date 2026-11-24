@@ -178,6 +178,7 @@ class IndoorViewModel(
     private val quality: IndoorQuality = IndoorQuality.MEDIUM,
     catalogStore: CatalogStore? = null,
     catalogDownloader: CatalogDownloader? = null,
+    serverDeps: IndoorServerDeps? = null,
     var onRideSaved: (String) -> Unit = {},
     var onPlanRoute: (RouteTarget) -> Unit = {},
 ) : ViewModel() {
@@ -189,6 +190,14 @@ class IndoorViewModel(
 
     /** Zustand der Katalogkarten im Schritt Streckenwahl. */
     val catalog: StateFlow<IndoorCatalogUi> = catalogController.ui
+
+    /** Bau auf dem eigenen Server (docs/indoor/serverbau.md). */
+    private val serverController = IndoorServerBuildController(serverDeps, this.scope, io) { rideId, dir, manifest, laser, replaced ->
+        onServerWorldInstalled(rideId, dir, manifest, laser, replaced)
+    }
+
+    /** Die zweite Wahl im Schritt „Welt laden": Server-Bau in Laserqualitaet. */
+    val server: StateFlow<IndoorServerUi> = serverController.ui
     private val sourcing = IndoorRouteSourcing(parts, rematchRouter)
 
     // -----------------------------------------------------------------------
@@ -762,6 +771,7 @@ class IndoorViewModel(
         val option = _route.value.selected ?: return
         val previous = cancelRunningWorldJob()
         resetWorld()
+        serverController.close()
         _world.value = IndoorWorldUi.Preparing
         val token = WorldJobToken().also {
             it.autoStart = autoStart
@@ -781,7 +791,73 @@ class IndoorViewModel(
                 }
             }
             commitWorld(token, ui)
+            if (token === worldToken) openServerFor(option, ui)
         }
+    }
+
+    /**
+     * Bietet fuer eine eigene Tour den Server-Bau an (fragt den eigenen Server
+     * nach dem Bau-Dienst, ohne Streckendaten) — auch, wenn schon eine auf dem
+     * Geraet gebaute Welt bereitliegt (dann ersetzt die Server-Welt sie).
+     */
+    private fun openServerFor(option: IndoorRouteOption, ui: IndoorWorldUi) {
+        val ride = selectedRide
+        if (option !is IndoorRouteOption.Saved || ride == null) {
+            serverController.close()
+            return
+        }
+        val track = ride.points.map { it.lat to it.lon }
+        when (ui) {
+            is IndoorWorldUi.Plan -> serverController.open(ride.id, track, hasDeviceWorld = false)
+            is IndoorWorldUi.Ready -> if (ui.fromServer) serverController.close() else serverController.open(ride.id, track, hasDeviceWorld = true)
+            else -> serverController.close()
+        }
+    }
+
+    /**
+     * Nutzeraktion „Auf dem Server in Laserqualitaet bauen": Strecke wie fuer
+     * den Bau auf dem Geraet aufbereiten (Belagsabgleich), Welt-ID planen, an
+     * den eigenen Server schicken.
+     */
+    fun buildOnServer() {
+        val ride = selectedRide ?: return
+        if (serverController.busy) return
+        val name = routeName
+        serverController.showSending()
+        scope.launch {
+            val prepared = withContext(io) {
+                try {
+                    val sourced = sourcing.fromRide(ride, name, rematch = true).getOrThrow()
+                    val plan = indoorCatching(IndoorPart.WORLD) { parts.worldBuilder().plan(sourced.route, quality) }.getOrThrow()
+                    Result.success(sourced.route to plan.worldId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    Result.failure(e)
+                }
+            }
+            prepared.fold(
+                onSuccess = { (route, worldId) -> serverController.start(ride.id, name, route, quality, worldId) },
+                onFailure = { serverController.showFailure(technicalDetailOf(it)) },
+            )
+        }
+    }
+
+    /** „Abbrechen" des Server-Baus: Auftrag auf dem Server loeschen. */
+    fun cancelServerBuild() = serverController.cancel()
+
+    /** „Erneut versuchen" nach einem Fehler des Server-Baus. */
+    fun retryServerBuild() {
+        val ui = serverController.ui.value
+        if (ui is IndoorServerUi.Failed && ui.canResume) serverController.resume() else buildOnServer()
+    }
+
+    private fun onServerWorldInstalled(rideId: String, dir: File, manifest: WorldManifest, laser: String?, replaced: Boolean) {
+        if (_stage.value != IndoorStage.WORLD || selectedRide?.id != rideId) return
+        cancelRunningWorldJob()
+        worldManifest = manifest
+        worldDir = dir
+        _world.value = IndoorWorldUi.Ready(routeName, manifest.attribution, fromServer = true, serverLaser = laser, replacedDeviceWorld = replaced)
     }
 
     /** Uebernimmt das Ergebnis eines Welt-Auftrags — nur, wenn er noch der aktuelle ist. */
@@ -912,7 +988,12 @@ class IndoorViewModel(
         if (existing != null && existingManifest != null) {
             token.manifest = existingManifest
             token.dir = existing.dir
-            return IndoorWorldUi.Ready(routeName, existingManifest.attribution)
+            return IndoorWorldUi.Ready(
+                routeName,
+                existingManifest.attribution,
+                fromServer = existing.server != null,
+                serverLaser = existing.server?.laserSource,
+            )
         }
 
         val sourced = sourcing.fromRide(ride, routeName, rematch = false)
@@ -945,6 +1026,8 @@ class IndoorViewModel(
     fun loadWorld() {
         val current = _world.value
         if (current !is IndoorWorldUi.Plan && current !is IndoorWorldUi.Failed) return
+        // Nie zugleich auf dem Server und auf dem Geraet bauen.
+        if (serverController.busy) return
         (_route.value.selected as? IndoorRouteOption.Generated)?.let { generated ->
             val previous = cancelRunningWorldJob()
             _world.value = IndoorWorldUi.Building(WorldBuildPhase.ELEVATION, 0, 0, 0f)
@@ -1605,6 +1688,7 @@ class IndoorViewModel(
         }
         IndoorStage.WORLD -> {
             cancelRunningWorldJob()
+            serverController.close()
             _stage.value = IndoorStage.ROUTE
             true
         }
@@ -1653,6 +1737,7 @@ class IndoorViewModel(
     /** Gibt alles frei; eine laufende Fahrt wird ohne Aufzeichnung verworfen. */
     fun release() {
         cancelRunningWorldJob()
+        serverController.close()
         catalogController.release()
         rideCollectJob?.cancel()
         activeRuntime?.close()
@@ -1764,6 +1849,7 @@ class IndoorViewModel(
                     heartRate = { BleHeartRateSource(app) },
                     catalogStore = AppServices.indoorCatalogStore,
                     catalogDownloader = AppServices.indoorCatalogDownloader,
+                    serverDeps = AppServices.indoorServerDeps,
                     onRideSaved = onRideSaved,
                 ) as T
             }

@@ -74,4 +74,34 @@ class ToolTest {
         assertEquals(IndoorRouteSource.BROUTER_WAY_TAGS, sample.source)
         assertEquals(3_011.0, sample.lengthM)
     }
+
+    /** server-build weist unzulaessige Auftraege ab und schreibt den Code in result.json (ohne Netz). */
+    @Test
+    fun serverBuildWeistAuftraegeAb() {
+        val job = kotlin.io.path.createTempDirectory("server-job").toFile()
+        val cache = File(job, "cache")
+        try {
+            File(job, "request.json").writeText("{\"format\":1}")
+            assertEquals(1, serverBuild(job, cache, de.trailscape.core.indoor.server.ServerRouteLimits()))
+            assertTrue(File(job, "result.json").readText().contains("\"INVALID\""))
+            val points = (0..100).map { de.trailscape.core.indoor.IndoorRoutePoint(it * 10.0, 51.05, 7.13 + it * 1.4e-4, 100.0) }
+            val route = de.trailscape.core.indoor.IndoorRoute("x", "Probe", points, listOf(SurfaceSection(0.0, 1000.0, SurfaceKind.ASPHALT)), false, IndoorRouteSource.NONE)
+            File(job, "request.json").writeText(
+                de.trailscape.core.indoor.server.ServerWorldRequest("indoor-world/1", de.trailscape.core.indoor.world.IndoorQuality.LOW, true, route).toJson(),
+            )
+            assertEquals(1, serverBuild(job, cache, de.trailscape.core.indoor.server.ServerRouteLimits()))
+            assertTrue(File(job, "result.json").readText().contains("BUILDER_MISMATCH"))
+            File(job, "request.json").writeText(
+                de.trailscape.core.indoor.server.ServerWorldRequest(
+                    de.trailscape.core.indoor.world.worldBuilderVersion, de.trailscape.core.indoor.world.IndoorQuality.LOW, true, route,
+                    expectedWorldId = "w" + "0".repeat(24),
+                ).toJson(),
+            )
+            assertEquals(1, serverBuild(job, cache, de.trailscape.core.indoor.server.ServerRouteLimits()))
+            assertTrue(File(job, "result.json").readText().contains("WORLD_ID_MISMATCH"))
+            assertEquals(false, File(job, "package.zip").exists())
+        } finally {
+            job.deleteRecursively()
+        }
+    }
 }

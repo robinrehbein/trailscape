@@ -175,6 +175,12 @@ private fun WorldCard(world: IndoorWorldEntryUi, onDelete: () -> Unit) {
                     TagPill(text = stringResource(R.string.indoor_app_worlds_tag_incomplete))
                 } else if (world.fromCatalog) {
                     TagPill(text = stringResource(R.string.indoor_app_worlds_tag_catalog))
+                } else if (world.fromServer) {
+                    TagPill(
+                        text = stringResource(
+                            if (world.serverLaser != null) R.string.indoor_app_worlds_tag_server_laser else R.string.indoor_app_worlds_tag_server,
+                        ),
+                    )
                 }
             }
             LabelValueRow(

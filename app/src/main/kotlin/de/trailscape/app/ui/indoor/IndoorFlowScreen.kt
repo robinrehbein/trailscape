@@ -179,6 +179,7 @@ private fun RouteStage(vm: IndoorViewModel) {
 @Composable
 private fun WorldStage(vm: IndoorViewModel) {
     val ui by vm.world.collectAsStateWithLifecycle()
+    val server by vm.server.collectAsStateWithLifecycle()
     // Waehrend des Baus bricht Zurueck ihn ab (wie „Abbrechen"), sonst ein
     // Schritt zurueck zur Streckenwahl.
     BackHandler {
@@ -192,6 +193,10 @@ private fun WorldStage(vm: IndoorViewModel) {
         onRetry = vm::retryWorld,
         onBack = { vm.back() },
         onContinue = { vm.startRide(withWorld = true) },
+        server = server,
+        onServerBuild = vm::buildOnServer,
+        onServerCancel = vm::cancelServerBuild,
+        onServerRetry = vm::retryServerBuild,
     )
 }
 

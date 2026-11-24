@@ -850,4 +850,110 @@ class IndoorScreenshotTest {
         }
         compose.onAllNodesWithText("Generated world").onFirst().assertExists()
     }
+
+    // ------------------------------------------------------------------ Server-Bau (docs/indoor/serverbau.md)
+
+    private val serverPlan = plan.copy(
+        routeName = "Balkantrasse", distanceKm = 7.7, downloadBytes = 19L * 1024 * 1024, diskBytes = 130L * 1024 * 1024,
+        hosts = listOf("elevation-tiles-prod.s3.amazonaws.com", "tiles.openfreemap.org", "www.wms.nrw.de"),
+        aerialLabels = listOf("Nordrhein-Westfalen"),
+    )
+    private val nrwLaser = IndoorServerLaserUi(de.trailscape.core.indoor.server.LaserExpectation.FULL, "nw", 100)
+    private val serverFile = "serverbau"
+
+    @Composable
+    private fun ServerWorld(ui: IndoorWorldUi, server: IndoorServerUi) =
+        IndoorWorldScreen(ui, {}, {}, {}, {}, {}, {}, server = server)
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun serverAngebot() = shot("$serverFile-01-angebot") {
+        ServerWorld(serverPlan, IndoorServerUi.Offer(nrwLaser, queueLength = 0))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun serverGrenze() = shot("$serverFile-02-grenze-teilweise") {
+        ServerWorld(
+            serverPlan.copy(routeName = "Grenzrunde Kraichgau", distanceKm = 24.0, aerialLabels = emptyList()),
+            IndoorServerUi.Offer(IndoorServerLaserUi(de.trailscape.core.indoor.server.LaserExpectation.PARTIAL, "bw", 72), 0),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
+    fun serverOhneLaser() = shot("$serverFile-03-ohne-laser") {
+        ServerWorld(plan, IndoorServerUi.Offer(IndoorServerLaserUi(de.trailscape.core.indoor.server.LaserExpectation.NONE, null, 0), 0))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
+    fun serverWarteschlange() = shot("$serverFile-04-warteschlange") {
+        ServerWorld(serverPlan, IndoorServerUi.Working(IndoorServerStep.QUEUED, nrwLaser, queuePosition = 2))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
+    fun serverBau() = shot("$serverFile-05-bau") {
+        ServerWorld(serverPlan, IndoorServerUi.Working(IndoorServerStep.BUILDING, nrwLaser, fraction = 0.43f))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
+    fun serverDownload() = shot("$serverFile-06-download") {
+        ServerWorld(
+            serverPlan,
+            IndoorServerUi.Working(IndoorServerStep.DOWNLOADING, nrwLaser, downloadedBytes = 31L * 1024 * 1024, totalBytes = 78L * 1024 * 1024),
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1100dp-xxhdpi")
+    fun serverFertig() = shot("$serverFile-07-fertig") {
+        ServerWorld(
+            IndoorWorldUi.Ready("Balkantrasse", attribution, fromServer = true, serverLaser = "nw", replacedDeviceWorld = true),
+            IndoorServerUi.Hidden,
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun serverVorhandeneGeraetewelt() = shot("$serverFile-08-geraetewelt-ersetzen") {
+        ServerWorld(IndoorWorldUi.Ready("Balkantrasse", attribution), IndoorServerUi.Offer(nrwLaser, 0, replacesDeviceWorld = true))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun serverVersion() = shot("$serverFile-09-version") {
+        ServerWorld(serverPlan, IndoorServerUi.Incompatible(de.trailscape.core.indoor.server.BuilderMismatch.UPDATE_SERVER, "indoor-world/8"))
+    }
+
+    @Test
+    @Config(qualifiers = "${TestLocales.DE}-w411dp-h1500dp-xxhdpi")
+    fun serverFehler() = shot("$serverFile-10-fehler-offline") {
+        ServerWorld(serverPlan, IndoorServerUi.Failed(IndoorServerFailure.OFFLINE, "java.net.ConnectException: Failed to connect", canResume = true))
+    }
+
+    @Test
+    fun serverWeltverwaltung() = shot("$serverFile-11-weltverwaltung") {
+        IndoorWorldsScreen(
+            IndoorWorldsUi(
+                worlds = listOf(
+                    IndoorWorldEntryUi("w1", "Balkantrasse", IndoorQuality.MEDIUM, 131L * 1024 * 1024, 1_795_500_000_000, attribution, false, true, fromServer = true, serverLaser = "nw"),
+                    IndoorWorldEntryUi("w2", "Hausrunde Ammersee", IndoorQuality.MEDIUM, 238L * 1024 * 1024, 1_760_000_000_000, attribution, false, true),
+                ),
+                totalBytes = 369L * 1024 * 1024,
+                cacheBytes = 85L * 1024 * 1024,
+            ),
+            {}, {}, {},
+        )
+    }
+
+    @Test
+    @Config(qualifiers = "en-rGB-w411dp-h1500dp-xxhdpi")
+    fun serverAngebotEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        shot("$serverFile-12-angebot-en") { ServerWorld(serverPlan, IndoorServerUi.Offer(nrwLaser, 0)) }
+        compose.onAllNodesWithText("Build on server in laser quality").onFirst().assertExists()
+    }
 }

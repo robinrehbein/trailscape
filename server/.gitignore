@@ -1,0 +1,4 @@
+# Geheimnisse und Daten des Selfhost-Betriebs nie einchecken
+.env
+data/
+data-worlds/

@@ -1,0 +1,14 @@
+# Nur, was der Bau des Werkzeugs braucht.
+**/build
+**/.gradle
+app
+wear
+docs
+assets
+server
+!server/worlds/worlds.mjs
+tool/indoor-dev/cache
+tool/indoor-dev/out
+tool/indoor-dev/viewer/node_modules
+local.properties
+.git

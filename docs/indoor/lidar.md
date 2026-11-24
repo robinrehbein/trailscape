@@ -503,3 +503,10 @@ Eine unabhängige Bewertung wie in NRW (5) habe ich für BW nicht gemacht.
 - [ ] Dachfarbe der LoD2-Gebäude in BW grau statt ziegelrot (7.4) prüfen.
 - [ ] Keine unabhängige Bewertung der BW-Bilder gegen Luftbild/Schummerung.
 - [ ] Nur im Betrachter gesehen, nicht auf dem Gerät.
+
+## 8 Server-Bau für eigene Strecken (24.11.2026)
+
+Die Laser-Stufe ist jetzt auch für eigene Strecken nutzbar — nicht auf dem
+Handy, sondern auf dem eigenen Selfhost-Server (`indoor-dev server-build`,
+Bau-Dienst `server/worlds`). Weltbau und Positivlisten unverändert; siehe
+[`serverbau.md`](serverbau.md).

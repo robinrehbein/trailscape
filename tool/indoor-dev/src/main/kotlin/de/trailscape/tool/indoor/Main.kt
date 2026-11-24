@@ -61,7 +61,10 @@ private const val USAGE = """Aufruf:
   models --out <dir>
   catalog-routes [--only a,b]
   catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
-  sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>"""
+  sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>
+  server-info
+  server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]
+  server-request --gpx <datei> --out <request.json> [--laser] [--quality LOW|MEDIUM|HIGH] [--from-km a --to-km b]"""
 
 /** Cache der Geodaten (git-ignoriert). */
 private const val CACHE_DIR = CACHE_DIR_TOOL
@@ -114,6 +117,21 @@ private fun run(all: List<String>): Int {
         "models" -> models(Args(rest, emptySet()))
         "catalog-routes" -> catalogRoutes(Args(rest, emptySet()).opt("only"))
         "lod2-cut" -> lod2Cut(Args(rest, setOf("offline")))
+        "server-info" -> serverInfo()
+        "server-build" -> Args(rest, emptySet()).let { a ->
+            val base = de.trailscape.core.indoor.server.ServerRouteLimits()
+            serverBuild(
+                jobDir = File(a.req("job")),
+                cacheDir = File(a.req("cache")),
+                limits = base.copy(
+                    maxLengthM = a.double("max-km")?.let { it * 1000 } ?: base.maxLengthM,
+                    maxPoints = a.opt("max-points")?.toIntOrNull() ?: base.maxPoints,
+                ),
+            )
+        }
+        "server-request" -> Args(rest, setOf("laser")).let { a ->
+            serverRequest(File(a.req("gpx")), File(a.req("out")), a.flag("laser"), a.quality(), a.double("from-km"), a.double("to-km"))
+        }
         "catalog-build" -> Args(rest, setOf("keep-going", "no-aerial", "offline", "laser")).let { a ->
             catalogBuild(
                 out = File(a.req("out")),

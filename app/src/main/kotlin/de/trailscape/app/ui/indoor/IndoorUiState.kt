@@ -291,8 +291,20 @@ sealed interface IndoorWorldUi {
         val cancelling: Boolean = false,
     ) : IndoorWorldUi
 
-    /** Die Welt ist fertig (gerade gebaut oder schon vorhanden). */
-    data class Ready(val routeName: String, val attribution: List<WorldAttribution>) : IndoorWorldUi
+    /**
+     * Die Welt ist fertig (gerade gebaut oder schon vorhanden).
+     *
+     * @property fromServer die Welt kommt vom Server-Bau (docs/indoor/serverbau.md).
+     * @property serverLaser Laser-Quelle des Server-Baus, `null` = ohne Laser.
+     * @property replacedDeviceWorld sie hat gerade eine auf dem Geraet gebaute Welt derselben Strecke ersetzt.
+     */
+    data class Ready(
+        val routeName: String,
+        val attribution: List<WorldAttribution>,
+        val fromServer: Boolean = false,
+        val serverLaser: String? = null,
+        val replacedDeviceWorld: Boolean = false,
+    ) : IndoorWorldUi
 
     /**
      * Kein Weltbau moeglich oder gescheitert — „Ohne Welt fahren" bleibt.
@@ -478,6 +490,10 @@ data class IndoorWorldEntryUi(
     val complete: Boolean,
     /** aus dem Katalog bekannter Strecken geladen (docs/indoor/catalog.md). */
     val fromCatalog: Boolean = false,
+    /** auf dem eigenen Server gebaut (docs/indoor/serverbau.md). */
+    val fromServer: Boolean = false,
+    /** Laser-Quelle des Server-Baus (`nw`, `bw`), `null` = ohne Laser. */
+    val serverLaser: String? = null,
 )
 
 data class IndoorWorldsUi(

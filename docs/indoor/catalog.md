@@ -247,3 +247,9 @@ alle Quellen.
   bricht ab, der Teil bleibt für „Fortsetzen“.
 - Hm im Katalog stammen aus dem Streckenband der Welt mit 4-m-Schwelle;
   BRouter nennt etwas andere Werte.
+
+## Eigene Strecken in Laserqualität
+
+Katalogwelten baut die CI vor; eigene Strecken kann der eigene Server mit
+derselben Laser-Stufe bauen. Das Paketformat und der Installationsweg sind
+dieselben (`CatalogStore.installPackage`). Siehe [`serverbau.md`](serverbau.md).

@@ -41,6 +41,9 @@ class CatalogStore(
     /** Eine installierte Katalogwelt. */
     data class Installed(val catalogId: String, val version: Int, val worldId: String, val dir: File, val manifest: WorldManifest)
 
+    /** Die Weltverwaltung, in die dieser Speicher installiert. */
+    fun worldLibrary(): WorldLibrary = worlds
+
     fun bundledCatalog(): IndoorCatalog? = runCatching { bundled()?.let { IndoorCatalog.parse(it, allowUrl) } }.getOrNull()
 
     fun remoteCatalog(): IndoorCatalog? = runCatching {
@@ -98,12 +101,35 @@ class CatalogStore(
      * [IOException]; dann bleibt die vorherige Version unberuehrt.
      */
     fun install(entry: CatalogEntry, zip: File, isCancelled: () -> Boolean = { false }): Installed {
-        val staging = File(tmpDir, entry.id)
-        extractCatalogPackage(zip, staging, entry.id, entry.version, entry.worldId, isCancelled)
-        WorldLibrary.writeCatalogMarker(staging, entry.id, entry.version)
-        val manifest = WorldManifest.parse(File(staging, WorldManifest.FILE_NAME).readText(Charsets.UTF_8))
         val previous = installed()[entry.id]
-        // Gleiche worldId (Neubau mit unveraenderter Strecke): alte Fassung erst weg.
+        val (target, manifest) = installPackage(entry.id, entry.version, entry.worldId, zip, isCancelled) { staging ->
+            WorldLibrary.writeCatalogMarker(staging, entry.id, entry.version)
+        }
+        if (previous != null && previous.worldId != manifest.worldId) worlds.delete(previous.worldId)
+        return Installed(entry.id, entry.version, manifest.worldId, target, manifest)
+    }
+
+    /**
+     * Der gemeinsame Installationsweg fuer Katalog- und Server-Pakete
+     * (docs/indoor/serverbau.md): pruefen und entpacken nach `tmp/<id>`,
+     * [mark] schreibt die Herkunftsdateien in das entpackte Verzeichnis, dann
+     * ersetzt es eine vorhandene Welt derselben `worldId` (z. B. die auf dem
+     * Geraet gebaute Welt derselben Strecke). Die Paketdatei wird danach
+     * geloescht. Bei einem Fehler bleibt die vorhandene Welt unberuehrt.
+     */
+    fun installPackage(
+        id: String,
+        version: Int,
+        worldId: String?,
+        zip: File,
+        isCancelled: () -> Boolean = { false },
+        mark: (File) -> Unit,
+    ): Pair<File, WorldManifest> {
+        val staging = File(tmpDir, id)
+        extractCatalogPackage(zip, staging, id, version, worldId, isCancelled)
+        mark(staging)
+        val manifest = WorldManifest.parse(File(staging, WorldManifest.FILE_NAME).readText(Charsets.UTF_8))
+        // Gleiche worldId (Neubau mit unveraenderter Strecke, Geraetewelt derselben Strecke): alte Fassung erst weg.
         worlds.get(manifest.worldId)?.let { if (!worlds.delete(it.dirName)) throw IOException("Alte Welt ${it.dirName} nicht loeschbar") }
         worldsDir.mkdirs()
         val target = worlds.worldDirFor(manifest.worldId)
@@ -111,9 +137,8 @@ class CatalogStore(
             staging.copyRecursively(target, overwrite = true)
             staging.deleteRecursively()
         }
-        if (previous != null && previous.worldId != manifest.worldId) worlds.delete(previous.worldId)
         zip.delete()
-        return Installed(entry.id, entry.version, manifest.worldId, target, manifest)
+        return target to manifest
     }
 
     /** Raeumt Reste abgebrochener Entpack-Vorgaenge weg. */

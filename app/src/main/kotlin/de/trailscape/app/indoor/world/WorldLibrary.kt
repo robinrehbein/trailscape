@@ -47,6 +47,7 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
         val source: WorldSource?,
         val bytes: Long,
         val catalog: CatalogMarker? = null,
+        val server: ServerMarker? = null,
     ) {
         /** `manifest.json` liegt vor und ist lesbar. */
         val complete: Boolean get() = manifest != null
@@ -59,6 +60,14 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
      * haben keine Tour und sind deshalb nie verwaist.
      */
     data class CatalogMarker(val catalogId: String, val version: Int)
+
+    /**
+     * Herkunft einer Welt aus dem Server-Bau (docs/indoor/serverbau.md):
+     * [laserSource] ist die Laser-Quelle des Baus (`nw`, `bw`), `null` = auf dem
+     * Server ohne Laserdaten gebaut. Die Tour steht wie bei jeder Welt in
+     * [SOURCE_FILE].
+     */
+    data class ServerMarker(val laserSource: String?, val builtAtMs: Long)
 
     /** Zuordnung einer Welt zur Tour, aus der sie gebaut wurde. */
     data class WorldSource(val rideId: String, val routeName: String)
@@ -159,6 +168,8 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
         orphaned = isOrphaned(info, knownRideIds),
         complete = info.complete,
         fromCatalog = info.catalog != null,
+        fromServer = info.server != null,
+        serverLaser = info.server?.laserSource,
     )
 
     private fun describe(dir: File): WorldInfo {
@@ -173,6 +184,7 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
             source = readSource(dir),
             bytes = dirSize(dir),
             catalog = readCatalogMarker(dir),
+            server = readServerMarker(dir),
         )
     }
 
@@ -185,6 +197,29 @@ class WorldLibrary(private val worldsDir: File, private val geoCacheDir: File) {
 
         /** Herkunftsdatei einer Katalogwelt neben dem Manifest. */
         const val CATALOG_FILE = "app-catalog.json"
+
+        /** Herkunftsdatei einer Welt vom Server-Bau neben dem Manifest. */
+        const val SERVER_FILE = "app-server.json"
+
+        /** Schreibt die Herkunft einer Welt vom Server-Bau. */
+        fun writeServerMarker(worldDir: File, laserSource: String?, builtAtMs: Long) {
+            worldDir.mkdirs()
+            val text = buildJsonObject {
+                laserSource?.let { put("laserSource", it) }
+                put("builtAtMs", builtAtMs)
+            }.toString()
+            File(worldDir, SERVER_FILE).writeText(text, Charsets.UTF_8)
+        }
+
+        /** Liest die Herkunft einer Welt vom Server-Bau; `null` wenn sie fehlt oder unlesbar ist. */
+        fun readServerMarker(worldDir: File): ServerMarker? = runCatching {
+            val file = File(worldDir, SERVER_FILE)
+            if (!file.isFile) return@runCatching null
+            val obj = Json.parseToJsonElement(file.readText(Charsets.UTF_8)) as? JsonObject ?: return@runCatching null
+            val laser = (obj["laserSource"] as? JsonPrimitive)?.contentOrNull?.takeIf { Regex("^[a-z]{2,8}$").matches(it) }
+            val at = (obj["builtAtMs"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
+            ServerMarker(laser, at)
+        }.getOrNull()
 
         /** Schreibt die Herkunft einer Katalogwelt. */
         fun writeCatalogMarker(worldDir: File, catalogId: String, version: Int) {

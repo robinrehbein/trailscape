@@ -24,6 +24,11 @@ const MIN_TOKEN_LENGTH = 16;
 // haengt der Proxy selbst an, ein Client kann ihn nicht vorgeben. Nur setzen,
 // wenn Port 8080 ausschliesslich ueber den Proxy erreichbar ist.
 const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
+// Optionaler Bau-Dienst (server/worlds, docs/indoor/serverbau.md): Ist WORLDS_URL
+// gesetzt (z. B. http://worlds:8081 im selben Compose-Netz), reicht der
+// Sync-Server alles unter /api/worlds/ nach erfolgreicher Anmeldung dorthin
+// durch. Die App braucht so nur eine Adresse und einen Token.
+const WORLDS_URL = (process.env.WORLDS_URL || '').trim().replace(/\/+$/, '');
 
 if (!SYNC_TOKEN || SYNC_TOKEN.trim() === '') {
   console.error(
@@ -39,6 +44,11 @@ if (SYNC_TOKEN.trim().length < MIN_TOKEN_LENGTH) {
       'Der Token schützt sämtliche GPS-Spuren – bitte einen langen, zufälligen Wert verwenden, ' +
       'z. B.: SYNC_TOKEN=$(openssl rand -hex 32) node server.mjs'
   );
+  process.exit(1);
+}
+
+if (WORLDS_URL && !/^http:\/\/[^/]+$/.test(WORLDS_URL)) {
+  console.error('FEHLER: WORLDS_URL muss eine interne http-Adresse ohne Pfad sein, z. B. http://worlds:8081');
   process.exit(1);
 }
 
@@ -451,6 +461,15 @@ async function handleRequest(req, res) {
   }
   authFailures.delete(ip);
 
+  if (pathname === '/api/worlds' || pathname.startsWith('/api/worlds/')) {
+    if (!WORLDS_URL) {
+      sendJson(res, 404, { error: 'Kein Bau-Dienst eingerichtet' });
+      return;
+    }
+    forwardToWorlds(req, res);
+    return;
+  }
+
   if (pathname === '/api/rides' && method === 'GET') {
     await handleListRides(res);
     return;
@@ -480,6 +499,36 @@ async function handleRequest(req, res) {
   }
 
   sendJson(res, 404, { error: 'Nicht gefunden' });
+}
+
+/**
+ * Reicht eine Anfrage an den Bau-Dienst durch (Datenstrom in beide Richtungen,
+ * Range fuer den fortsetzbaren Paket-Download). Nur ausgewaehlte Kopfzeilen.
+ */
+function forwardToWorlds(req, res) {
+  const target = new URL(req.url, WORLDS_URL + '/');
+  const headers = {};
+  for (const h of ['authorization', 'content-type', 'content-length', 'range', 'if-range']) {
+    if (req.headers[h] !== undefined) headers[h] = req.headers[h];
+  }
+  const upstream = http.request(
+    { hostname: target.hostname, port: target.port || 80, path: target.pathname + target.search, method: req.method, headers },
+    (up) => {
+      const out = {};
+      for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'cache-control', 'retry-after']) {
+        if (up.headers[h] !== undefined) out[h] = up.headers[h];
+      }
+      res.writeHead(up.statusCode || 502, out);
+      up.pipe(res);
+    },
+  );
+  upstream.setTimeout(60_000, () => upstream.destroy(new Error('Zeitueberschreitung')));
+  upstream.on('error', (err) => {
+    console.error('Bau-Dienst nicht erreichbar:', err.message);
+    if (!res.headersSent) sendJson(res, 502, { error: 'Bau-Dienst nicht erreichbar' });
+    else res.destroy();
+  });
+  req.pipe(upstream);
 }
 
 // ---------------------------------------------------------------------------

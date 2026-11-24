@@ -39,6 +39,9 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
 | `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going] [--laser]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `sky --time AUTO\|MORNING\|NOON\|EVENING --out <dir> [--lat --lon --epoch-ms --quality]` | Himmel der Darstellung für den Betrachter (`shots.mjs --sky <dir>`): `sky.json` (Sonne, Licht, Dunst), `sky.f32` (Rundumbild 1024 × 512, szenenlinear) und `preview.png` (durch eine Nachbildung von Filaments `ACES_LEGACY`). Rechnet mit `core/…/indoor/sky`, also genau wie das Gerät; siehe `docs/indoor/render.md`, „Himmel“ |
+| `server-info` | JSON mit Welt-Version, Laser-Quellen und Belagsklassen (für den Bau-Dienst) |
+| `server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]` | Bau für den Bau-Dienst (`server/worlds`, `docs/indoor/serverbau.md`): liest `<job>/request.json`, baut mit Laser (wo vorhanden) und Katalog-Luftbild, prüft, packt nach `<job>/package.zip`, schreibt `<job>/result.json`; Fortschritt als `@progress {…}` |
+| `server-request --gpx <datei> --out <request.json> [--laser] [--from-km a --to-km b]` | Auftrag für den Bau-Dienst aus einer GPX-Datei (Proben) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
 
 Exit-Codes: 0 in Ordnung, 1 Bau gescheitert / Verstöße, 2 falscher Aufruf.
