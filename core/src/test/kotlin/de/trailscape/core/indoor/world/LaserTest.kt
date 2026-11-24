@@ -97,6 +97,34 @@ class LaserTest {
     }
 
     @Test
+    fun lod2KorridorRundreise() {
+        val utm = parseLod2Utm(res("lod2-nw-ein-haus.gml"))
+        val bytes = encodeLod2Corridor(32, utm)
+        val (zone, back) = decodeLod2Corridor(bytes)
+        assertEquals(32, zone)
+        assertEquals(1, back.size)
+        assertEquals(utm[0].id, back[0].id)
+        assertEquals(utm[0].roofType, back[0].roofType)
+        assertEquals(utm[0].measuredHeightM, back[0].measuredHeightM, 1e-4)
+        // Gleiche Flaechen (ohne kollineare Zwischenpunkte), Punkte auf 1 cm.
+        assertEquals(utm[0].surfaces.size, back[0].surfaces.size)
+        for ((a, b) in utm[0].surfaces.zip(back[0].surfaces)) {
+            assertEquals(a.kind, b.kind)
+            val sa = Lod2Mesher.simplify(a.rings[0])
+            assertEquals(sa.size, b.rings[0].size)
+            for (i in sa.indices) assertEquals(sa[i], b.rings[0][i], 0.006)
+        }
+        // Umgerechnet wie direkt aus CityGML.
+        val origin = GeoOrigin(51.17, 8.49, 770.0)
+        val direct = parseLod2(res("lod2-nw-ein-haus.gml"), origin, 32)[0]
+        val viaCorridor = back[0].toEnu(origin, zone)!!
+        assertEquals(direct.groundU, viaCorridor.groundU, 0.01)
+        assertEquals(direct.topU, viaCorridor.topU, 0.01)
+        assertEquals(direct.ce, viaCorridor.ce, 0.05)
+        assertTrue(bytes.size < res("lod2-nw-ein-haus.gml").size / 10, "Korridor ${bytes.size} Bytes")
+    }
+
+    @Test
     fun positivliste() {
         val nw = laserSources.first { it.id == "nw" }
         assertTrue(isAllowedLaserUrl(nw.coverageUrl(false, 464000, 5669000, 464256, 5669256)))

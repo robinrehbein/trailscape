@@ -315,15 +315,21 @@ internal class PropsLayer : TileLayer {
                 val off = p.hw + 1.4 + rows[0] * radius
                 val e = sideE(p, side, off)
                 val n = sideN(p, side, off)
-                // Der ganze Stapel (4 m lang, gut 2 m tief) muss frei liegen.
+                // Der ganze Stapel (4 m lang, gut 2 m tief) muss frei und eben liegen
+                // (am Hang steckte er sonst halb in der Boeschung oder schwebte).
                 var ok = true
+                var gMin = Double.MAX_VALUE
+                var gMax = -Double.MAX_VALUE
                 for (a in doubleArrayOf(-2.0, 0.0, 2.0)) for (c in doubleArrayOf(-1.0, 1.0)) {
                     val qe = e + p.te * a - p.tn * side * c
                     val qn = n + p.tn * a + p.te * side * c
                     if (!freeAnywhere(qe, qn, 0.3)) ok = false
+                    val gq = ctx.ground.heightAt(qe, qn)
+                    gMin = minOf(gMin, gq)
+                    gMax = maxOf(gMax, gq)
                 }
-                if (!ok || !ctx.spec.contains(e, n)) continue
-                val g = ctx.ground.heightAt(e, n)
+                if (!ok || gMax - gMin > 0.5 || !ctx.spec.contains(e, n)) continue
+                val g = (gMin + gMax) / 2
                 for ((row, cnt) in rows.withIndex()) {
                     for (q in 0 until cnt) {
                         val id = b * 100 + row * 10 + q

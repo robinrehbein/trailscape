@@ -215,9 +215,10 @@ ersten Lauf (WCS-Raster + LoD2). Heap = größter Wohnsatz des Prozesses (RSS).
 
 | Strecke | km | Bauzeit ohne → mit (s) | Download bisher (geschätzt) | Download Laser | davon LoD2 | Dreiecke gleichzeitig ohne → mit | Texturen | MB/km fertige Welt ohne → mit | RSS ohne → mit |
 |---|---|---|---|---|---|---|---|---|---|
-| Altenberg kurz | 3,0 | 13,0 → 15,6 | 9,3 MB | 26,9 MB (8,9 MB/km) | 13,0 MB (4 Kacheln, 119 Geb.) | 462 930 → 435 062 | 153 → 159 MB | 15,7 → 15,4 | 1,39 → 1,31 GB |
-| Kahler Asten | 13,2 | 19,7 → 30,3 | 20,3 MB | 51,5 MB (3,9 MB/km) | 8,1 MB (12 Kacheln, 301 Geb.) | 517 544 → 517 447 | 141 → 143 MB | 10,1 → 9,9 | 1,29 → 1,30 GB |
-| Balkantrasse | 7,7 | 21,5 → 30,4 | 19,1 MB | 239 MB (31 MB/km) | 198,8 MB (13 Kacheln, 6 764 Geb.) | 477 520 → 466 939 | 155 → 155 MB | 17,9 → 17,2 | 1,34 → 1,52 GB |
+| Altenberg kurz | 3,0 | 13,0 → 16,1 | 9,3 MB | 26,9 MB (8,9 MB/km) | 13,0 MB (4 Kacheln, 119 Geb.) | 462 930 → 424 928 | 153 → 159 MB | 15,7 → 15,3 | 1,39 → 1,34 GB |
+| Kahler Asten | 13,2 | 19,7 → 31,2 | 20,3 MB | 51,5 MB (3,9 MB/km) | 8,1 MB (12 Kacheln, 301 Geb.) | 517 544 → 515 545 | 141 → 143 MB | 10,1 → 9,9 | 1,29 → 1,26 GB |
+| Balkantrasse | 7,7 | 21,5 → 31,3 | 19,1 MB | 239 MB (31 MB/km) | 198,8 MB (13 Kacheln, 6 764 Geb.) | 477 520 → 457 644 | 155 → 155 MB | 17,9 → 17,1 | 1,34 → 1,61 GB |
+| Balkantrasse, LoD2-Korridor (4.1) | 7,7 | 21,5 → 30,2 | 19,1 MB | 41,2 MB (5,3 MB/km) | 0,6 MB (Korridordatei, 2 738 Geb.) | 477 520 → 449 176 | 155 → 155 MB | 17,9 → 16,7 | 1,34 → 1,37 GB |
 
 Bauzeiten mit warmem Cache (auch für die Laserdaten). Beim ersten Lauf
 kommen für das Laden der Laserdaten 17 s (Altenberg), 44 s (Kahler Asten)
@@ -241,6 +242,40 @@ auslaufende Ränder, wie in `QualityTest`): Altenberg 40 → 21, Kahler Asten
 49 → 29; weich auslaufende Ränder (verge/water) steigen leicht (638 → 672,
 1556 → 1694), weil das adaptive Netz große ebene Dreiecke unter die Ränder
 legt. Im Test ohne Netz (`LaserWorldTest`) 7 statt 10.
+
+### 4.1 LoD2 auf den Korridor zugeschnitten
+
+LoD2 kommt nur in ganzen Quadratkilometern; in der Stadt ist das der größte
+Posten. `LaserLod2Corridor.kt` hält nur die Gebäude, von denen ein Punkt
+näher als `lod2RadiusM` (120 m) an der Strecke liegt, als kompaktes Format
+`TSL2` (gzip; Zentimeter-Differenzen als Varints, kollineare Zwischenpunkte
+und Abschlussflächen weg). Das Werkzeug schneidet es (`indoor-dev lod2-cut
+--gpx … --out ….tsl2`), der Weltbau liest es statt der Kacheln (`build
+--laser --lod2-corridor ….tsl2`, `LaserOptions.lod2Corridor`). Gedacht als
+Vorarbeit für einen Handy-Abruf: Ein Server (oder ein Release-Asset je
+Katalogstrecke) liefert die Datei, die App lädt nur sie.
+
+| Strecke | Kacheln | Gebäude Kacheln → Korridor | Bytes Kacheln → Korridor |
+|---|---|---|---|
+| Altenberg kurz | 4 | 671 → 44 | 12,4 MB → 21 kB |
+| Kahler Asten | 13 | 561 → 99 | 10,4 MB → 24 kB |
+| Balkantrasse | 13 | 10 741 → 2 738 | 189,6 MB → 0,6 MB (0,08 MB/km) |
+
+Ein Bau mit Korridordatei liefert in der Nähe dieselben Gebäude (Test
+`lod2KorridorRundreise`: Punkte auf 1 cm, Boden-/Firsthöhe gleich);
+außerhalb von 120 m nimmt er OSM-Gebäude mit der Höhe aus dem nDOM.
+
+### 4.2 Katalog
+
+`catalog-src.json` hat je Eintrag `"laser": true|false` (Vorgabe `false`);
+`catalog-build` baut solche Einträge mit der Laser-Stufe, auch im Workflow
+`indoor-worlds.yml` ohne neue Eingabe. Gesetzt für `kahler-asten` und die
+neuen NRW-Strecken `balkantrasse` (7,7 km) und `altenberg` (12,7 km, 175 Hm,
+Runde ab dem Dom). Probelauf `catalog-build --only kahler-asten,balkantrasse,altenberg`:
+alle geprüft und gepackt (84,2 / 78,8 / 98,6 MB), 162 s, RSS 2,8 GB bei
+`-Xmx6g`. Versionen nicht angehoben; der beigelegte App-Katalog
+(`app/src/main/assets/indoor/catalog.json`) ist unverändert, bis Pakete im
+Release liegen.
 
 ## 5 Bilder (Betrachter, nicht Gerät)
 
@@ -269,20 +304,31 @@ Gebäude. Neu gefundene Fehler stehen unten in 6.
 - [ ] Nur im Betrachter gesehen (three.js); Filament auf dem Gerät nicht.
 - [ ] Handy-Bau mit Laser: Schnittstelle steht, App-Abruf, Schalter,
       PRIVACY.md und Positivliste in der App fehlen (bewusst nicht gebaut).
-- [ ] LoD2 in Städten groß (bis 30 MB je km²): für den Handy-Bau besser ein
-      Server, der LoD2 auf den Korridor zuschneidet, oder der I3S-SceneServer.
+- [ ] LoD2 in Städten groß (bis 30 MB je km²): Zuschnitt auf den Korridor
+      gibt es (4.1, 0,08 MB/km statt 25 MB/km); es fehlt der Server bzw.
+      das Release-Asset, das die Datei für den Handy-Abruf ausliefert.
 - [ ] DOM1-Alter: Kahlschläge erkennt nur das Luftbild; neu gepflanzte oder
       gewachsene Bäume nach der Befliegung fehlen.
 - [ ] Fensterbänder auf Kirchen und Hallen (Dom) passen nicht zur Bauart;
       LoD2 kennt keine Öffnungen.
 - [ ] RTIN-Fehler ist eine Heuristik (an den Hypotenusen-Mittelpunkten
       gemessen): im Test höchstens das 1,6-Fache der Schwelle.
-- [ ] Gefunden in der Bewertung, nicht behoben: ein schwebendes
-      Straßenband beim Dom (vermutlich Brücke/Rampe aus OSM auf DGM-Höhe
-      ohne Damm), eine lose graue Platte an der Balkantrasse, Holzpolter
-      (Kleinteile) halb im Hang, Fichtenkronen im Einschnitt tief über dem Weg,
-      einzelne steile LoD2-Dachflächen weiß (als Wand behandelt, |n·z| < 0,17),
-      Gras wellt am Sockel hoch (Geländenetz gegen Wandfuß), Laub statt Fichte
-      im Hochwald (Baumart bleibt eine Schätzung).
+- [x] Aus der Bewertung behoben (24.11.2026, zweiter Durchgang):
+      Lichtraum über der Fahrbahn (Kronen, die unter 6 m über der Fahrbahn
+      ansetzen, ragen nicht in Fahrbahn + 0,5 m; höhere höchstens 1 m —
+      Einschnitt so hell wie vorher), steile LoD2-Dachflächen bleiben Dach,
+      Dachhaut dunkler, Wände gebrochen getönt, Wellblech nur in Gewerbe und
+      Landwirtschaft (Dom/Kloster Putz), Innenwand-Regel nur zwischen
+      verschiedenen Gebäuden, Gelände unter LoD2-Grundrissen unter dem
+      Gebäudeboden (gerade Fußlinie), Holzpolter nur auf ebenem Grund (alle
+      Welten), Brücken anderer Straßen geradlinig zwischen ihren Enden (alle
+      Welten), nDOM-Gebäudehöhe nur außerhalb von LoD2 und als Median.
+- [ ] Offen: Das graue Band links oben im Dom-Bild ist geblieben. Weder
+      Brücke noch Gebäude ohne Wände noch steile Wegfläche; Vermutung: eine
+      Schürze an der Naht Stufe 0 / Stufe 1, auf die das Luftbild einer
+      querenden Straße gestreckt ist (die feinere Stufe 0 macht die Sprünge
+      an der Naht größer). Die lose Platte an der Trasse ist vermutlich ein
+      echtes Flachdach aus LoD2. Baumart bleibt eine Schätzung (Laub statt
+      Fichte im Hochwald am Kahlen Asten).
 - [ ] Übergang Korridor → außen: Terrarium bleibt ein Oberflächenmodell; der
       Median-Versatz gleicht die Höhe aus, nicht die Form (Waldkuppen außen).
