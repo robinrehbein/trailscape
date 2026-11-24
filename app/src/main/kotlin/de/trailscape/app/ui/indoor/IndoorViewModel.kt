@@ -640,10 +640,11 @@ class IndoorViewModel(
         runCatching { WorldLibrary.writeSource(dir, ride.id, routeName) }
         val deps = indoorCatching(IndoorPart.WORLD) { WorldBuildDeps(parts.geoPipeline(), parts.rasterDecoder()) }
             .getOrElse { return failedOf(it, canRetry = true) }
+        val progress = BuildProgress()
         val listener = object : WorldBuildListener {
             override fun onProgress(phase: WorldBuildPhase, done: Int, total: Int) {
                 if (token.stopRequested || token !== worldToken) return
-                _world.value = IndoorWorldUi.Building(phase, done, total, buildFraction(phase, done, total))
+                _world.value = progress.report(phase, done, total)
                 // „Abbrechen" kam genau dazwischen: den Hinweis nicht ueberschreiben.
                 if (token.stopRequested) markCancelling()
             }
@@ -1231,13 +1232,6 @@ class IndoorViewModel(
         /** Vergleichsleistung des Geists als Anteil der FTP (lockere Grundlage). */
         private const val GHOST_FTP_FRACTION = 0.75
 
-        /** Fortschritt 0..1 ueber alle Phasen, jede gleich gewichtet. */
-        internal fun buildFraction(phase: WorldBuildPhase, done: Int, total: Int): Float {
-            val phases = WorldBuildPhase.entries.size
-            val inPhase = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f
-            return ((phase.ordinal + inPhase) / phases).coerceIn(0f, 1f)
-        }
-
         private inline fun <reified T : Throwable> causeOf(e: Throwable): T? {
             var current: Throwable? = e
             var depth = 0
@@ -1285,5 +1279,45 @@ class IndoorViewModel(
                 ) as T
             }
         }
+    }
+}
+
+/**
+ * Fasst die Fortschrittsmeldungen eines Weltbaus zu **einem** Balken zusammen.
+ *
+ * Der Weltbau meldet Luftbilder, Geometrie und Speichern verschraenkt (die
+ * Kacheln laufen als Fliessband durch alle drei). Wer jede Meldung einzeln
+ * anzeigt, laesst Balken und Text zwischen „Luftbilder laden 43 %" und „Welt
+ * speichern 84 %" springen. Hier zaehlt deshalb der Stand jeder Phase in eine
+ * gewichtete Summe, die nie zurueckgeht; angezeigt wird die frueheste Phase,
+ * die noch nicht fertig ist.
+ */
+internal class BuildProgress {
+    private val done = IntArray(WorldBuildPhase.entries.size)
+    private val total = IntArray(WorldBuildPhase.entries.size)
+    private var shown = 0f
+
+    @Synchronized
+    fun report(phase: WorldBuildPhase, phaseDone: Int, phaseTotal: Int): IndoorWorldUi.Building {
+        val i = phase.ordinal
+        total[i] = phaseTotal.coerceAtLeast(0)
+        done[i] = maxOf(done[i], phaseDone).coerceIn(0, total[i])
+        // Wer eine spaetere Phase meldet, hat die Ladephasen davor hinter sich.
+        for (earlier in 0 until minOf(i, WorldBuildPhase.AERIAL.ordinal)) {
+            if (total[earlier] == 0) total[earlier] = 1
+            done[earlier] = total[earlier]
+        }
+        var sum = 0f
+        for (p in WorldBuildPhase.entries) sum += WEIGHTS[p.ordinal] * part(p.ordinal)
+        shown = maxOf(shown, sum.coerceIn(0f, 1f))
+        val current = WorldBuildPhase.entries.firstOrNull { total[it.ordinal] > 0 && done[it.ordinal] < total[it.ordinal] } ?: phase
+        return IndoorWorldUi.Building(current, done[current.ordinal], total[current.ordinal], shown)
+    }
+
+    private fun part(i: Int): Float = if (total[i] > 0) done[i].toFloat() / total[i] else 0f
+
+    private companion object {
+        /** Anteil je Phase in der Reihenfolge von [WorldBuildPhase]; Summe 1. */
+        val WEIGHTS = floatArrayOf(0.08f, 0.12f, 0.30f, 0.25f, 0.25f)
     }
 }
