@@ -29,8 +29,9 @@ class RoadsAndPropsLayerTest {
         }
         val withCross = sceneWith(listOf(RouteTestScene.trackAsRoad(scene.track, "secondary"), RouteTestScene.crossRoad(scene.track, 250.0, "tertiary", "paved")))
         val total = withCross.tiles().sumOf { build(withCross, it, RoadsLayer()).second.triangles(WorldNames.NODE_ROADS) }
-        // Zweimal 70 m Querstrasse in je 18 Schritten, je Segment 2 Dreiecke Band + 4 Dreiecke Kanten.
-        assertEquals(36 * 6, total)
+        // Zweimal 70 m Querstrasse in je 18 Schritten, je Segment 2 Dreiecke Band + 4 Dreiecke Kanten — ausser in den
+        // 16 m neben der Streckenmitte (EDGE_FREE_TRACK_M: dort stoesst der Rand der Strecke an die Fahrbahn), je Seite 5 Segmente.
+        assertEquals(36 * 2 + 26 * 4, total)
     }
 
     @Test

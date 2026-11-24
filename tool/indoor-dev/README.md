@@ -32,7 +32,7 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
-| `overlaps <dir>` | koplanare, überlappende Flächen (Ursache für Flimmern) in den Kacheln der Stufe 0 je Materialpaar zählen; dazu je Material die durchsichtigen (BLEND) Eckpunkte mit Vertex-Deckung < 1 — auf dem Gerät helle Nahtlinien, soll 0 sein (`docs/indoor/world.md`, Abschnitt „Kreuzungen und Ortsdurchfahrten“) |
+| `overlaps <dir> [--tol-cm c]` | koplanare, überlappende Flächen (Ursache für Flimmern; Höhenabstand unter `c` cm, Vorgabe 0,4) in den Kacheln der Stufe 0 je Materialpaar zählen; dazu je Material die durchsichtigen (BLEND) Eckpunkte mit Vertex-Deckung < 1 — auf dem Gerät helle Nahtlinien, soll 0 sein (`docs/indoor/world.md`, Abschnitt „Kreuzungen und Ortsdurchfahrten“) |
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
 | `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going] [--laser]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |

@@ -50,13 +50,34 @@ internal class RoadsLayer : TileLayer {
         var edgeLimit = Double.MAX_VALUE
         fun cost(s: Seg, edges: Boolean) = 2 + (if (edges) 4 else 0) + (if (s.road.spec.rail) 4 else 0)
         if (segs.sumOf { cost(it, true) } > ctx.budget.roads) edgeLimit = EDGE_NEAR_M
-        val emitter = Emitter(ctx, out)
+        // Sperrflaechen fuer die weichen Kanten: die Baender aller Strassen, je Strasse eine Nummer — eine Kante
+        // laeuft nicht ueber eine andere Strasse (dort lag sie Millimeter ueber deren Fahrbahn: Flimmern).
+        val mask = PlanMask()
+        for ((ri, r) in net.roads.withIndex()) {
+            val hw = r.halfWidth
+            for (i in 0 until r.size - 1) {
+                if (r.segOnTrack(i)) continue
+                val oa = hw * min(r.miter[i], 2.0)
+                val ob = hw * min(r.miter[i + 1], 2.0)
+                mask.addQuad(
+                    r.e[i] - r.re[i] * oa, r.n[i] - r.rn[i] * oa, r.e[i] + r.re[i] * oa, r.n[i] + r.rn[i] * oa,
+                    r.e[i + 1] - r.re[i + 1] * ob, r.n[i + 1] - r.rn[i + 1] * ob, r.e[i + 1] + r.re[i + 1] * ob, r.n[i + 1] + r.rn[i + 1] * ob,
+                    fromM = ri.toDouble(), toM = ri.toDouble(),
+                )
+            }
+        }
+        val index = HashMap<RoadNet.Road, Int>()
+        for ((ri, r) in net.roads.withIndex()) index[r] = ri
+        val emitter = Emitter(ctx, out, mask)
         for (s in segs) {
-            val edges = s.dist <= edgeLimit
+            // Im Randbereich der Strecke (Gras, Gehweg, Bankett) keine weichen Kanten: Der Rand der Strecke stoesst
+            // dort genau an die Fahrbahn der Strasse (RouteLayer schneidet ihn an deren Band), eine Kante darueber
+            // laege Millimeter ueber dem Gras.
+            val edges = s.dist <= edgeLimit && s.dist > EDGE_FREE_TRACK_M
             val c = cost(s, edges)
             if (used + c > ctx.budget.roads) break
             used += c
-            emitter.segment(s.road, s.i, edges)
+            emitter.segment(s.road, s.i, edges, index.getValue(s.road))
         }
     }
 
@@ -121,7 +142,8 @@ internal class RoadsLayer : TileLayer {
         }
     }
 
-    private class Emitter(private val ctx: TileContext, private val out: TileOutput) {
+    private class Emitter(private val ctx: TileContext, private val out: TileOutput, private val mask: PlanMask) {
+        private val temp = MeshBuilder()
         private val materials = HashMap<String, TileMaterial>()
         private val meshCell = level0TerrainCellM(ctx.quality)
 
@@ -211,7 +233,7 @@ internal class RoadsLayer : TileLayer {
             return DIR_LIFT_M * 0.5 * (1.0 + cos(2.0 * a))
         }
 
-        fun segment(r: RoadNet.Road, i: Int, edges: Boolean) {
+        fun segment(r: RoadNet.Road, i: Int, edges: Boolean, roadIndex: Int = -1) {
             val spec = r.spec
             val kind = spec.kind
             val tex = RouteTextures.spec(kind)
@@ -240,7 +262,11 @@ internal class RoadsLayer : TileLayer {
                 }
             }
             m.quad(idx[0], idx[1], idx[3], idx[2])
-            if (edges) edgeStrips(r, i, kind, tex, shift, vBase, he)
+            if (edges) {
+                edgeStrips(r, i, kind, temp, tex, vBase, he)
+                clipInto(temp, mesh(kind, true), mask, { x -> x + ctx.spec.anchorE }, { z -> ctx.spec.anchorN - z }, roadIndex.toDouble(), roadIndex.toDouble())
+                temp.clear()
+            }
             if (spec.rail) rails(r, i)
         }
 
@@ -248,8 +274,7 @@ internal class RoadsLayer : TileLayer {
          * Weiche Kanten: je Seite ein Streifen, dessen Deckung nach aussen auf null faellt — die Deckung
          * kommt aus der Textur ([RouteTextures.roadEdgeTexture], `v` quer), die Vertexfarben sind deckend.
          */
-        private fun edgeStrips(r: RoadNet.Road, i: Int, kind: SurfaceKind, tex: RouteTextures.Spec, shift: Double, vBase: Double, he: DoubleArray) {
-            val m = mesh(kind, true)
+        private fun edgeStrips(r: RoadNet.Road, i: Int, kind: SurfaceKind, m: MeshBuilder, tex: RouteTextures.Spec, vBase: Double, he: DoubleArray) {
             val hw = r.halfWidth
             for (side in 0..1) {
                 val sgn = if (side == 0) -1.0 else 1.0
@@ -343,6 +368,9 @@ internal class RoadsLayer : TileLayer {
 
         /** Ist das Budget knapp, bekommen nur Strassen bis zu diesem Abstand zur Strecke weiche Kanten. */
         const val EDGE_NEAR_M = 60.0
+
+        /** Naeher an der Strecke (Mitte) bekommen Strassen keine weichen Kanten — dort liegt der Rand der Strecke. */
+        const val EDGE_FREE_TRACK_M = 16.0
         const val RAIL_GAUGE_M = 1.435
 
         fun roadMaterialName(kind: SurfaceKind): String = "x_mat_road_${kind.visual.textureKey}"
