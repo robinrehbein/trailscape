@@ -47,6 +47,7 @@
 #include <utils/NameComponentManager.h>
 
 #include <chrono>
+#include <functional>
 #include <cmath>
 #include <cstring>
 #include <unistd.h>
@@ -153,6 +154,83 @@ static Material* loadMaterial(Engine* engine, const std::string& path) {
     auto b = readFile(path);
     return Material::Builder().package(b.data(), b.size()).build(*engine);
 }
+
+// Wie WorldMaterialProvider/WorldMaterialRules der App: `mat_terrain` → terrain.mat, Laub
+// (`x_mat_tree_cards`, `mat_tree_leaves`) → foliage.mat, Belaege und Randstreifen →
+// surface.mat, ihre Auslaeufe → surface_blend.mat; alles andere der Ubershader. gltfio setzt
+// danach dieselben Parameter (baseColorFactor …) und bindet die Textur an `baseColorMap`.
+enum Kind { UBER = 0, TERRAIN = 1, FOLIAGE = 2, SURFACE = 3, SURFACE_BLEND = 4 };
+
+static bool startsWith(const std::string& s, const char* p) { return s.rfind(p, 0) == 0; }
+static bool endsWith(const std::string& s, const char* p) {
+    size_t n = strlen(p);
+    return s.size() >= n && s.compare(s.size() - n, n, p) == 0;
+}
+
+// Spiegel von WorldMaterialRules.kindFor (Kotlin, getestet).
+static Kind kindFor(const std::string& l, gltfio::AlphaMode a, bool tex, bool unlit) {
+    if (!tex || unlit) return UBER;
+    using gltfio::AlphaMode;
+    if (l == "mat_terrain") return a == AlphaMode::OPAQUE ? TERRAIN : UBER;
+    if (l == "x_mat_tree_cards" || l == "mat_tree_leaves") return a == AlphaMode::MASK ? FOLIAGE : UBER;
+    if (a == AlphaMode::OPAQUE && (startsWith(l, "mat_route_") || (startsWith(l, "x_mat_road_") && !endsWith(l, "_edge")) ||
+            (startsWith(l, "x_mat_route_verge_") && !endsWith(l, "_fade")) || l == "x_mat_route_shoulder" || l == "x_mat_route_sidewalk"))
+        return SURFACE;
+    if (a == AlphaMode::BLEND && ((startsWith(l, "x_mat_route_") && endsWith(l, "_fade")) || l == "x_mat_route_fringe"))
+        return SURFACE_BLEND;
+    return UBER;
+}
+
+// Spiegel von WorldMaterialRules.detailClass: Gewichte Wiese, Erde, Waldboden, Schotter.
+static float4 detailClass(const std::string& l) {
+    if (l.find("verge_grass") != std::string::npos) return { 1, 0, 0, 0 };
+    if (l.find("verge_forest") != std::string::npos) return { 0, 0, 1, 0 };
+    if (l.find("verge_shoulder") != std::string::npos || l == "x_mat_route_shoulder") return { 0, 0.4f, 0, 0.6f };
+    if (l == "x_mat_route_fringe") return { 0.7f, 0, 0, 0 };
+    return { 0, 0, 0, 0 };
+}
+
+struct WorldProvider : public gltfio::MaterialProvider {
+    gltfio::MaterialProvider* uber;
+    Material* mats[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+    std::function<void(MaterialInstance*, int, const std::string&)> setup;
+    mutable std::vector<const Material*> all;
+    size_t counts[5] = { 0, 0, 0, 0, 0 };
+
+    explicit WorldProvider(gltfio::MaterialProvider* u) : uber(u) {}
+
+    MaterialInstance* createMaterialInstance(gltfio::MaterialKey* config, gltfio::UvMap* uvmap,
+            const char* label, const char* extras) override {
+        const std::string l = label ? label : "";
+        Kind kind = kindFor(l, config->alphaMode, config->hasBaseColorTexture, config->unlit);
+        if (kind == UBER || !mats[kind]) {
+            counts[0]++;
+            return uber->createMaterialInstance(config, uvmap, label, extras);
+        }
+        gltfio::constrainMaterial(config, uvmap);
+        MaterialInstance* mi = mats[kind]->createInstance(label);
+        if (kind == FOLIAGE && !config->doubleSided) mi->setDoubleSided(false);
+        counts[kind]++;
+        if (setup) setup(mi, kind, l);
+        return mi;
+    }
+    Material* getMaterial(gltfio::MaterialKey* config, gltfio::UvMap* uvmap, const char* label) override {
+        return uber->getMaterial(config, uvmap, label);
+    }
+    const Material* const* getMaterials() const noexcept override {
+        all.clear();
+        for (size_t i = 0; i < uber->getMaterialsCount(); i++) all.push_back(uber->getMaterials()[i]);
+        for (int k = 1; k < 5; k++) if (mats[k]) all.push_back(mats[k]);
+        return all.data();
+    }
+    size_t getMaterialsCount() const noexcept override {
+        size_t n = uber->getMaterialsCount();
+        for (int k = 1; k < 5; k++) if (mats[k]) n++;
+        return n;
+    }
+    void destroyMaterials() override { uber->destroyMaterials(); }
+    bool needsDummyData(VertexAttribute a) const noexcept override { return uber->needsDummyData(a); }
+};
 
 int main(int argc, char** argv) {
     if (argc < 3) {
@@ -379,7 +457,74 @@ int main(int argc, char** argv) {
     }
 
     // ---- Welt ----
-    gltfio::MaterialProvider* mp = gltfio::createUbershaderProvider(engine, UBERARCHIVE_DEFAULT_DATA, UBERARCHIVE_DEFAULT_SIZE);
+    auto* wp = new WorldProvider(gltfio::createUbershaderProvider(engine, UBERARCHIVE_DEFAULT_DATA, UBERARCHIVE_DEFAULT_SIZE));
+    gltfio::MaterialProvider* mp = wp;
+    // Boden-Detail und Wind (terrain.mat, foliage.mat), wenn die Stimmung sie nennt und die
+    // Materialien da sind; `settings.groundDetail` / `settings.wind` = false schaltet sie ab
+    // wie die Qualitaetsstufe auf dem Geraet (Material bleibt, Parameter auf 0).
+    Texture* detailTex = nullptr;
+    TextureSampler detailSampler(TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR, TextureSampler::MagFilter::LINEAR, TextureSampler::WrapMode::REPEAT);
+    detailSampler.setAnisotropy(8.f);  // wie FilamentCore: eigene Textur, also geht hier Anisotropie
+    const bool groundDetail = opt(settings, "groundDetail", true);
+    const bool wind = opt(settings, "wind", true);
+    auto setParams = [&](MaterialInstance* mi, const json& M) {
+        for (auto it = M.begin(); it != M.end(); ++it) {
+            if (it.value().is_array() && it.value().size() == 3) mi->setParameter(it.key().c_str(), f3(it.value()));
+            else if (it.value().is_array() && it.value().size() == 2) mi->setParameter(it.key().c_str(), float2{ it.value()[0].get<float>(), it.value()[1].get<float>() });
+            else if (it.value().is_number()) mi->setParameter(it.key().c_str(), it.value().get<float>());
+        }
+    };
+    if (!matDir.empty() && L.contains("terrain") && opt(settings, "terrainMaterial", true) && std::ifstream(matDir + "/terrain.filamat")) {
+        wp->mats[TERRAIN] = loadMaterial(engine, matDir + "/terrain.filamat");
+        auto raw = readFile(skyDir + "/detail.bin");
+        int n = (int)std::lround(std::sqrt((double)raw.size() / 4));
+        auto* buf = new uint8_t[raw.size()];
+        memcpy(buf, raw.data(), raw.size());
+        detailTex = Texture::Builder().width(n).height(n).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                        .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                        .format(Texture::InternalFormat::RGBA8).build(*engine);
+        detailTex->setImage(*engine, 0, Texture::PixelBufferDescriptor(buf, raw.size(), Texture::Format::RGBA, Texture::Type::UBYTE,
+                                            [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+        detailTex->generateMipmaps(*engine);
+        if (!cloudTex) {
+            auto rc = readFile(skyDir + "/clouds.bin");
+            int m = (int)std::lround(std::sqrt((double)rc.size()));
+            auto* cb = new uint8_t[rc.size()];
+            memcpy(cb, rc.data(), rc.size());
+            cloudTex = Texture::Builder().width(m).height(m).levels(0xff).sampler(Texture::Sampler::SAMPLER_2D)
+                           .usage(Texture::Usage::DEFAULT | Texture::Usage::GEN_MIPMAPPABLE)
+                           .format(Texture::InternalFormat::R8).build(*engine);
+            cloudTex->setImage(*engine, 0, Texture::PixelBufferDescriptor(cb, rc.size(), Texture::Format::R, Texture::Type::UBYTE,
+                                               [](void* b, size_t, void*) { delete[] (uint8_t*)b; }));
+            cloudTex->generateMipmaps(*engine);
+        }
+    }
+    if (!matDir.empty() && L.contains("foliage") && opt(settings, "foliageMaterial", true) && std::ifstream(matDir + "/foliage.filamat")) {
+        wp->mats[FOLIAGE] = loadMaterial(engine, matDir + "/foliage.filamat");
+    }
+    if (detailTex && L.contains("surface") && opt(settings, "surfaceMaterial", true) && std::ifstream(matDir + "/surface.filamat")) {
+        wp->mats[SURFACE] = loadMaterial(engine, matDir + "/surface.filamat");
+        wp->mats[SURFACE_BLEND] = loadMaterial(engine, matDir + "/surface_blend.filamat");
+    }
+    wp->setup = [&](MaterialInstance* mi, int kind, const std::string& label) {
+        if (kind == 1) {
+            setParams(mi, L["terrain"]);
+            if (!groundDetail) mi->setParameter("detailRange", 0.f);
+            mi->setParameter("detailMap", detailTex, detailSampler);
+            mi->setParameter("macroMap", cloudTex, cloudSampler);
+        } else if (kind == SURFACE || kind == SURFACE_BLEND) {
+            setParams(mi, L["surface"]);
+            if (!groundDetail) mi->setParameter("detailRange", 0.f);
+            if (!opt(settings, "aniso", true)) mi->setParameter("anisoRange", 0.f);
+            mi->setParameter("detailMap", detailTex, detailSampler);
+            mi->setParameter("detailClass", detailClass(label));
+        } else {
+            setParams(mi, L["foliage"]);
+            if (!wind) mi->setParameter("windStrength", 0.f);
+            mi->setParameter("time", float(timeS));
+            mi->setParameter("atlasMode", label == "x_mat_tree_cards" ? 1.f : 0.f);
+        }
+    };
     utils::NameComponentManager names(utils::EntityManager::get());
     gltfio::AssetLoader* loader = gltfio::AssetLoader::create({ engine, mp, &names });
     gltfio::ResourceLoader* res = new gltfio::ResourceLoader({ engine, ".", true });
@@ -469,6 +614,8 @@ int main(int argc, char** argv) {
         scene->addEntities(l.asset->getEntities(), l.asset->getEntityCount());
     };
     if (S.contains("rider") && !S["rider"].is_null()) placeModel(S["rider"]);
+    // Weitere Modelle: andere Radfahrer (umgefaerbte rider.glb), Voegel (birds.glb)
+    if (S.contains("models")) for (const auto& M : S["models"]) placeModel(M);
     if (S.contains("cockpit") && !S["cockpit"].is_null()) placeModel(S["cockpit"]);
 
     auto tLoad = std::chrono::steady_clock::now();
@@ -501,8 +648,8 @@ int main(int argc, char** argv) {
     stbi_write_png(argv[2], W, H, 4, px.data(), W * 4);
     auto tEnd = std::chrono::steady_clock::now();
     auto ms = [](auto a, auto b) { return (long)std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count(); };
-    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
-        renderables, primitives, waterPrims, ms(t0, tLoad), ms(tLoad, tEnd));
+    printf("{\"renderables\": %zu, \"primitives\": %zu, \"waterPrimitives\": %zu, \"terrainMi\": %zu, \"foliageMi\": %zu, \"surfaceMi\": %zu, \"uberMi\": %zu, \"loadMs\": %ld, \"renderMs\": %ld}\n",
+        renderables, primitives, waterPrims, wp->counts[TERRAIN], wp->counts[FOLIAGE], wp->counts[SURFACE] + wp->counts[SURFACE_BLEND], wp->counts[UBER], ms(t0, tLoad), ms(tLoad, tEnd));
     fflush(stdout);
     // Aufraeumen ueberlassen wir dem Prozessende (Werkzeug, kein Dauerlauf).
     _exit(0);

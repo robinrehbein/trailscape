@@ -126,8 +126,14 @@ node filashots.mjs ../out/<welt> --sky ../out/himmel/abend --dists 2200,5500 --c
 `filashots.mjs` rechnet Kacheln, Teilflächen, Fahrer und Kameras wie die App
 (`camerarig.mjs`) und ruft `filament/build/filarender`; Materialien kommen aus
 `app/src/main/assets/indoor/materials` (neu bauen mit
-`filament/materials.sh`). Der Bildsatz „Licht und Kamera“:
-`filament/licht-kamera.sh`, Gegenüberstellungen `filament/vergleich.py`.
+`filament/materials.sh`; `surface.mat`/`surface_blend.mat` erzeugt vorher
+`filament/surface-mats.py` aus einer Vorlage). Der Bildsatz „Licht und Kamera“:
+`filament/licht-kamera.sh`, „Boden aus der Nähe und Leben“: `filament/boden-leben.sh`,
+Gegenüberstellungen `filament/vergleich.py`. Andere Radfahrer und Vögel im Bild:
+`--riders "16:-0.95:0,130:-1.3:2:o"` (Abstand voraus, Seitenversatz, Trikot, `o` =
+Gegenverkehr) und `--birds 5`; die Modelle schreibt `LifeAndMaterialsTest` nach
+`app/build/indoor/`. `--set terrainMaterial=0 --set foliageMaterial=0` rendert mit dem
+Ubershader wie vor den eigenen Materialien.
 Einzelheiten in `docs/indoor/render.md`, „Licht, Himmel, Wasser,
 Lenkerperspektive“.
 

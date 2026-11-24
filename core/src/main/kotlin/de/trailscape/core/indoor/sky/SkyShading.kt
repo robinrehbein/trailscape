@@ -50,5 +50,55 @@ object SkyShading {
         "reflectivity" to 0.85,
     )
 
+    /**
+     * Gelaende-Material (`terrain.mat`): Boden-Detail nah am Fahrer ([GroundDetail]), weich aus
+     * bei [TERRAIN_DETAIL_RANGE_M]; Waldboden waermer bis [TERRAIN_WARM_RANGE_M]. Unabhaengig
+     * von der Tageszeit; `detailRange` 0 schaltet das Detail ab (Qualitaet, Einstellungen).
+     */
+    fun terrain(detail: Boolean = true): Map<String, Any> = linkedMapOf(
+        "detailRange" to if (detail) TERRAIN_DETAIL_RANGE_M else 0.0,
+        "detailRepeat" to GroundDetail.TILE_REPEATS,
+        "macroRepeat" to GroundDetail.MACRO_REPEATS,
+        "detailStrength" to 0.42,
+        "bumpStrength" to 3.5,
+        "macroStrength" to 0.16,
+        "forestWarmth" to 0.55,
+        "warmRange" to TERRAIN_WARM_RANGE_M,
+    )
+
+    const val TERRAIN_DETAIL_RANGE_M = 55.0
+    const val TERRAIN_WARM_RANGE_M = 260.0
+
+    /**
+     * Laub mit Wind (`foliage.mat`). [windToward]: waagrechte Windrichtung im glTF-Raum (x Osten,
+     * z Sueden), wird normiert. `windStrength` 0 = Stillstand (Qualitaet, Einstellungen).
+     */
+    fun foliage(wind: Boolean = true, windToward: DoubleArray = doubleArrayOf(0.8, 0.6)): Map<String, Any> {
+        val len = kotlin.math.hypot(windToward[0], windToward[1]).takeIf { it > 1e-6 } ?: 1.0
+        return linkedMapOf(
+            "windDir" to doubleArrayOf(windToward[0] / len, windToward[1] / len),
+            "windStrength" to if (wind) 1.0 else 0.0,
+            "windRange" to FOLIAGE_WIND_RANGE_M,
+        )
+    }
+
+    const val FOLIAGE_WIND_RANGE_M = 110.0
+
+    /**
+     * Belaege und Randstreifen (`surface.mat`, `surface_blend.mat`): Software-Anisotropie bis
+     * [SURFACE_ANISO_RANGE_M], Boden-Detail auf den Randstreifen bis [SURFACE_DETAIL_RANGE_M].
+     * `anisoRange` bzw. `detailRange` 0 = aus (ein Texturzugriff wie der Ubershader).
+     */
+    fun surface(detail: Boolean = true, aniso: Boolean = true): Map<String, Any> = linkedMapOf(
+        "detailRange" to if (detail) SURFACE_DETAIL_RANGE_M else 0.0,
+        "detailStrength" to 0.30,
+        "bumpStrength" to 2.5,
+        "anisoRange" to if (aniso) SURFACE_ANISO_RANGE_M else 0.0,
+        "forestWarmth" to 0.5,
+    )
+
+    const val SURFACE_DETAIL_RANGE_M = 35.0
+    const val SURFACE_ANISO_RANGE_M = 45.0
+
     private fun SkyRgb.arr() = doubleArrayOf(r, g, b)
 }

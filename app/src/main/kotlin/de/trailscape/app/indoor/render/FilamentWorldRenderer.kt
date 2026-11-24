@@ -83,6 +83,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     private var rider: AvatarActor? = null
     private var cockpit: CockpitActor? = null
     private var ghost: AvatarActor? = null
+    private var life: LifeLayer? = null
+    private var otherRidersEnabled = true
     private var staticScene: LoadedAsset? = null
     private var streamer: TileStreamer? = null
     private var track: WorldTrack? = null
@@ -213,6 +215,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     override fun setSky(sky: SkySetting) = guardApi("setSky") {
         this.sky = sky
         core?.let { c -> runStage(RenderStage.SCENE) { applySky(c) } }
+    }
+
+    override fun setOtherRidersEnabled(enabled: Boolean) = guardApi("setOtherRidersEnabled") {
+        otherRidersEnabled = enabled
     }
 
     override fun setSettings(settings: RenderSettings) = guardApi("setSettings") {
@@ -383,6 +389,10 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         }
         core = c
         c.materialPackages = loadMaterialPackages()
+        life = LifeLayer(c) {
+            runCatching { appContext.assets.open("${WorldModels.ASSET_DIR}/${WorldModels.RIDER}").use { it.readBytes() } }.getOrNull()
+                ?: runCatching { AvatarModel.buildGlb(AvatarModel.RIDER) }.getOrNull()
+        }
         deviceInfo = deviceInfo?.copy(backend = c.backendName)
         info = deviceInfo
         if (io == null) {
@@ -402,7 +412,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
     /** Eigene Materialien aus `assets/indoor/materials` (fehlen sie, bleibt es bei Filaments Skybox und dem Wasser der Kachel). */
     private fun loadMaterialPackages(): Map<String, ByteArray> {
         val out = HashMap<String, ByteArray>()
-        for (name in listOf(FilamentCore.SKY_MATERIAL, FilamentCore.WATER_MATERIAL)) {
+        for (name in FilamentCore.MATERIALS) {
             runCatching { appContext.assets.open("$MATERIAL_DIR/$name.filamat").use { it.readBytes() } }
                 .onSuccess { out[name] = it }
         }
@@ -413,6 +423,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         val l = skyLighting ?: SkyModel.lighting(sky, originLatDeg, viewDistanceM).also { skyLighting = it }
         // Die Schalter fuer Baeume, Gebaeude, Kleinteile prueft der Streamer in jedem Bild selbst.
         c.applySettings(settings, l.fogDensity, l.fogColor, fogHeight())
+        // Boden-Detail, Software-Anisotropie und Wind der eigenen Materialien (Qualitaet)
+        c.worldMaterials.apply(groundDetail = settings.groundDetail, wind = settings.wind, aniso = settings.groundDetail)
     }
 
     private fun applySky(c: FilamentCore) {
@@ -489,6 +501,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
             is Request.World -> req.manifest.quality.viewDistanceM
         }
         track = newTrack
+        life?.setTrack(newTrack)
         offset = startOffset(newTrack)
         c.setWorldOffset(offset)
         runStage(RenderStage.SCENE) { applySky(c) }
@@ -583,6 +596,7 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         staticScene?.let { s -> runCatching { s.destroy() } }
         staticScene = null
         track = null
+        life?.setTrack(null)
     }
 
     private fun teardownFilament() {
@@ -590,6 +604,8 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
         detach()
         clearScene()
         rider?.let { runCatching { it.destroy() } }
+        life?.let { runCatching { it.destroy() } }
+        life = null
         cockpit?.let { runCatching { it.destroy() } }
         cockpit = null
         ghost?.let { runCatching { it.destroy() } }
@@ -700,6 +716,12 @@ internal class FilamentWorldRenderer(context: Context) : WorldRenderer {
                 } else {
                     g.setVisible(false)
                 }
+            }
+
+            // Andere Radfahrer und Voegel (rein dekorativ)
+            life?.let { l ->
+                stage = RenderStage.FRAME
+                l.update(dt, riderMotion.distM, riderMotion.speedMps, laneR, riderWorld, headingForward(here.headingDeg), offset, settings, otherRidersEnabled)
             }
 
             // Kamera; am Lenker statt des Fahrers das Cockpit (die Kamera saesse sonst in seinem Kopf)

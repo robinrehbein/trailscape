@@ -318,6 +318,13 @@ steht jetzt in einer Karte wie die übrigen.
   mit dem Ursprung der Welt; „Automatisch“ wird während der Fahrt alle
   10 Minuten der Uhr nachgeführt. Nachts helle Dämmerung. Rechnung und
   Bilder: `docs/indoor/render.md`, „Himmel, Wolken, Tageszeit“.
+- Andere Radfahrer (seit 24.11.2026, Branch `claude/indoor-boden-leben`): Schalter
+  „Andere Radfahrer anzeigen“ / „Show other riders“ im Schritt Koppeln unter der
+  Tageszeit (Vorgabe an, gemerkt unter `trailscape.indoor.other_riders`). Beim Start der
+  Fahrt und bei jeder Änderung `WorldRenderer.setOtherRidersEnabled(…)`; die Zahl begrenzt
+  die Qualitätsstufe (`RenderSettings.otherRiders`). Rein dekorativ, kein Einfluss auf
+  Physik oder Windschatten. Darstellung: `docs/indoor/render.md`, „Boden aus der Nähe und
+  Leben“.
 - Offen: Die Qualität der Darstellung ist nicht einstellbar (`setSettings`
   wird nicht gerufen; es gilt die Qualität der Welt).
 

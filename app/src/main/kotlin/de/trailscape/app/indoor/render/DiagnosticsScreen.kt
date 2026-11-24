@@ -433,4 +433,8 @@ private fun settingSwitches(s: RenderSettings): List<Triple<Int, Boolean, (Boole
     Triple(R.string.indoor_render_diag_switch_trees, s.trees) { v -> s.copy(trees = v) },
     Triple(R.string.indoor_render_diag_switch_buildings, s.buildings) { v -> s.copy(buildings = v) },
     Triple(R.string.indoor_render_diag_switch_props, s.props) { v -> s.copy(props = v) },
+    Triple(R.string.indoor_render_diag_switch_ground, s.groundDetail) { v -> s.copy(groundDetail = v) },
+    Triple(R.string.indoor_render_diag_switch_wind, s.wind) { v -> s.copy(wind = v) },
+    Triple(R.string.indoor_render_diag_switch_birds, s.birds) { v -> s.copy(birds = v) },
+    Triple(R.string.indoor_render_diag_switch_riders, s.otherRiders > 0) { v -> s.copy(otherRiders = if (v) 3 else 0) },
 )

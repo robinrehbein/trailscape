@@ -461,6 +461,27 @@ class IndoorViewModelDemoFlowTest {
     }
 
     @Test
+    fun andereRadfahrerWerdenGemerktUndGehenAnDieDarstellung() {
+        val store = MemoryKeyValueStore()
+        val first = viewModel(FakeIndoorParts(), store = store)
+        assertTrue(first.pair.value.otherRiders, "Vorgabe an")
+        first.setOtherRiders(false)
+        assertEquals("false", store.getString(IndoorViewModel.KEY_OTHER_RIDERS))
+
+        val parts = FakeIndoorParts()
+        val vm = viewModel(parts, store = store)
+        assertEquals(false, vm.pair.value.otherRiders)
+        vm.pairWithDemo()
+        vm.selectRoute(IndoorRouteOption.TestWorld)
+        vm.continueFromRoute()
+        vm.startRide(withWorld = true)
+        val renderer = parts.renderers.single() as FakeWorldRenderer
+        assertEquals(listOf(false), renderer.otherRiders, "beim Start der Fahrt gesetzt")
+        vm.setOtherRiders(true)
+        assertEquals(listOf(false, true), renderer.otherRiders, "waehrend der Fahrt sofort")
+    }
+
+    @Test
     fun gangtabelleGiltAuchWennRiderSetupDesKernsWirft() {
         val parts = FakeIndoorParts(riderSetupFactory = { throw NotImplementedError("Kern fehlt") })
         val vm = viewModel(parts)

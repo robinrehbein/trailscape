@@ -66,6 +66,7 @@ internal fun skyExport(
     File(out, "cube.bin").writeBytes(cb.array())
     val sh = SkyIrradiance.sh(l.iblZenith, l.iblHorizon, l.iblGround)
     File(out, "clouds.bin").writeBytes(SkyClouds.cloudTexture())
+    File(out, "detail.bin").writeBytes(de.trailscape.core.indoor.sky.GroundDetail.texture())
 
     val img = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
     for (y in 0 until h) for (x in 0 until w) {
@@ -124,7 +125,10 @@ private fun lookJson(l: de.trailscape.core.indoor.sky.DaylightLighting): String 
     )
     return obj(look).dropLast(1) +
         ", \"skyMaterial\": ${obj(de.trailscape.core.indoor.sky.SkyShading.sky(l))}" +
-        ", \"water\": ${obj(de.trailscape.core.indoor.sky.SkyShading.water(l))}}"
+        ", \"water\": ${obj(de.trailscape.core.indoor.sky.SkyShading.water(l))}" +
+        ", \"terrain\": ${obj(de.trailscape.core.indoor.sky.SkyShading.terrain())}" +
+        ", \"foliage\": ${obj(de.trailscape.core.indoor.sky.SkyShading.foliage())}" +
+        ", \"surface\": ${obj(de.trailscape.core.indoor.sky.SkyShading.surface())}}"
 }
 
 /**

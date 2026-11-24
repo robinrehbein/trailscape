@@ -46,7 +46,8 @@ import de.trailscape.core.indoor.sky.IndoorTimeOfDay
  * beziehen; [onChainringChange] bekommt den neuen Wert, das ViewModel begrenzt
  * und merkt ihn. Darunter waehlt [onGearTableChange] die Gangtabelle
  * (gleichmaessig oder wie am Rad) und [onTimeOfDayChange] die Tageszeit der
- * 3D-Welt (automatisch nach der Uhr, Morgen, Mittag, Abend).
+ * 3D-Welt (automatisch nach der Uhr, Morgen, Mittag, Abend); [onOtherRidersChange] schaltet
+ * die anderen Radfahrer in der 3D-Welt.
  */
 @Composable
 fun IndoorPairScreen(
@@ -59,6 +60,7 @@ fun IndoorPairScreen(
     onBack: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onTimeOfDayChange: (IndoorTimeOfDay) -> Unit = {},
+    onOtherRidersChange: (Boolean) -> Unit = {},
 ) {
     IndoorPage(
         title = stringResource(R.string.indoor_app_pair_title),
@@ -102,6 +104,17 @@ fun IndoorPairScreen(
         ChainringCard(teeth = ui.chainringTeeth, onChange = onChainringChange)
         GearTableCard(selected = ui.gearTable, onChange = onGearTableChange)
         TimeOfDayCard(selected = ui.timeOfDay, onChange = onTimeOfDayChange)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.indoor_app_pair_other_riders_title),
+                    subtitle = stringResource(R.string.indoor_app_pair_other_riders_body),
+                    checked = ui.otherRiders,
+                    onCheckedChange = onOtherRidersChange,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+        }
 
         // Koppeln, Status, Vergessen: Der Abschnitt bringt Ueberschrift,
         // Einleitung, Berechtigungsabfrage, die gemerkten Geraete je Rolle und
