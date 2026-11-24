@@ -70,7 +70,8 @@ internal class TreesLayer : TileLayer {
             val count = forest.count { it }
             val tris = count * 2
             if (tris <= budget || cell >= s.cellM / 4) {
-                if (count == 0 || tris > budget) return 0
+                // In Stufe 0 lieber kein Waldkoerper als grobe Zellen (32–64 m lasen sich als flache Scherben).
+                if (count == 0 || tris > budget || (ctx.level == 0 && cell > 16.0)) return 0
                 emitVolume(ctx, out, leaves, forest, cells, cell)
                 return tris
             }
@@ -246,7 +247,16 @@ internal class TreesLayer : TileLayer {
                 if (cls == LandClass.WATER || cls == LandClass.WETLAND) continue
                 if (net.clearance(e, n) < ROAD_CLEARANCE_M) continue
                 if (nearBuilding(buildings, e, n)) continue
-                cands += Candidate(e, n, hit.distance, specFor(ctx, cls, e, n, i, j, spacing))
+                var spec = specFor(ctx, cls, e, n, i, j, spacing)
+                // Fichten nah am Weg nicht ueber die Fahrbahn ragen lassen (Krone ~0,22 × Hoehe):
+                // sonst standen sie als dunkle Wand vor der Kamera.
+                if (spec.species == TreeModels.Species.CONIFER) {
+                    val room = hit.distance - ctx.track.halfWidthAt(hit.distM) + 0.5
+                    val maxH = room / (0.22 * spec.width)
+                    if (maxH < 6.0) continue
+                    if (spec.heightM > maxH) spec = TreeModels.Spec(spec.species, maxH, spec.width, spec.tint, spec.seed, spec.turn, spec.pale)
+                }
+                cands += Candidate(e, n, hit.distance, spec)
             }
         }
         cands.sortBy { it.dist }

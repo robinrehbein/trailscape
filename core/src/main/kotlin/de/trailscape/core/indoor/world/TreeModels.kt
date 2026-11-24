@@ -196,9 +196,9 @@ internal object TreeModels {
             // Unterseite (dunkel), Rand (breit, etwas haengend), dann eingezogen zur naechsten Etage.
             val rim = maxOf(env, envN * 1.25, r0 * 0.12)
             val f = t.toDouble() / tiers
-            if (t > 0) { ys += yb - 0.12 * tierH; rs += rim * 0.8; sh += 0.5 + 0.2 * f; outerRing += false }
-            ys += yb - 0.04 * tierH; rs += rim; sh += 0.74 + 0.3 * f; outerRing += true
-            ys += yb + 0.6 * tierH; rs += rim * 0.48; sh += 0.86 + 0.3 * f; outerRing += false
+            if (t > 0) { ys += yb - 0.12 * tierH; rs += rim * 0.8; sh += 0.42 + 0.2 * f; outerRing += false }
+            ys += yb - 0.04 * tierH; rs += rim; sh += 0.95 + 0.3 * f; outerRing += true
+            ys += yb + 0.6 * tierH; rs += rim * 0.42; sh += 0.72 + 0.3 * f; outerRing += false
         }
         if (tiers == 1) { ys[1] = b0 + span * 0.55; rs[1] = r0 * 0.42 }
         val rings = ys.size
@@ -228,7 +228,7 @@ internal object TreeModels {
         val c = m.vertex(0.0, b0 + 0.25 * tierH, 0.0, 0.0, -1.0, 0.0, 0.5, 0.5, leafColor(leaf, s.tint * 0.4))
         for (j in 0 until seg) m.tri(base + j + 1, base + j, c)
         m.computeSmoothNormals(first, m.triangleCount, byPosition = true)
-        fluffNormals(m, first, 0.0, b0 + span * 0.35, 0.0, r0, span * 0.6, up = 0.12)
+        fluffNormals(m, first, 0.0, b0 + span * 0.35, 0.0, r0, span * 0.6, up = 0.18, radial = 0.35)
     }
 
     /**
@@ -236,7 +236,7 @@ internal object TreeModels {
      * Kronenmittelpunkt aus: Die Krone wird wie ein weicher Koerper beleuchtet,
      * Dellen und Einzelkoerper bilden keine harten Licht-Schatten-Kanten.
      */
-    private fun fluffNormals(m: MeshBuilder, firstTri: Int, cx: Double, cy: Double, cz: Double, rx: Double, ry: Double, up: Double = 0.25) {
+    private fun fluffNormals(m: MeshBuilder, firstTri: Int, cx: Double, cy: Double, cz: Double, rx: Double, ry: Double, up: Double = 0.25, radial: Double = 0.6) {
         val seen = HashSet<Int>()
         for (k in firstTri * 3 until m.triangleCount * 3) {
             val v = m.indices[k]
@@ -245,9 +245,10 @@ internal object TreeModels {
             val py = (m.positions[v * 3 + 1] - cy) / ry
             val pz = (m.positions[v * 3 + 2] - cz) / rx
             val l = sqrt(px * px + py * py + pz * pz).coerceAtLeast(1e-6)
-            var nx = 0.4 * m.normals[v * 3] + 0.6 * px / l
-            var ny = 0.4 * m.normals[v * 3 + 1] + 0.6 * py / l + up
-            var nz = 0.4 * m.normals[v * 3 + 2] + 0.6 * pz / l
+            val g = 1.0 - radial
+            var nx = g * m.normals[v * 3] + radial * px / l
+            var ny = g * m.normals[v * 3 + 1] + radial * py / l + up
+            var nz = g * m.normals[v * 3 + 2] + radial * pz / l
             val n = sqrt(nx * nx + ny * ny + nz * nz).coerceAtLeast(1e-6)
             nx /= n; ny /= n; nz /= n
             m.setNormal(v, nx, ny, nz)
