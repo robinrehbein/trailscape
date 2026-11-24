@@ -79,15 +79,12 @@ internal fun loadLod2(
     var bytes = 0L
     var tiles = 0
     try {
-        val futures = kms.map { k ->
-            val kx = (k shr 32).toInt()
-            val ky = k.toInt()
+        // Je Download einmal (NRW: je Kilometer eine GML; BW: ein ZIP fuer 2 × 2 km).
+        val futures = lod2Downloads(source, kms).map { (url, group) ->
             pool.submit(Callable {
                 if (isCancelled()) throw WorldBuildCancelled()
-                val url = source.lod2Url(kx, ky) ?: return@Callable null
-                val resp = fetcher.fetch(url)
-                if (resp.status != 200) return@Callable null
-                resp.bytes.size.toLong() to parseLod2(resp.bytes, origin, source.utmZone)
+                val got = fetchLod2(source, fetcher, url, group) ?: return@Callable null
+                Triple(got.first, got.second.size, got.second.flatMap { parseLod2(it, origin, source.utmZone) })
             })
         }
         for (f in futures) {
@@ -96,9 +93,9 @@ internal fun loadLod2(
             } catch (e: ExecutionException) {
                 throw e.cause ?: e
             } ?: continue
-            tiles++
+            tiles += r.second
             bytes += r.first
-            for (b in r.second) {
+            for (b in r.third) {
                 val key = LaserData.key(floor(b.ce / LaserData.LASER_BLOCK_M).toInt(), floor(b.cn / LaserData.LASER_BLOCK_M).toInt())
                 if (key in blockKeys) out += b
             }
@@ -109,6 +106,34 @@ internal fun loadLod2(
     // Gleiche ID aus zwei Kacheln (Gebaeude auf der Kachelgrenze): einmal.
     val seen = HashSet<String>()
     return Lod2Result(out.filter { seen.add(it.id) }.sortedWith(compareBy({ it.ce }, { it.cn }, { it.id })), tiles, bytes)
+}
+
+/** Die Kilometer [kms] nach ihrem Download gruppiert (Reihenfolge des ersten Auftretens). */
+internal fun lod2Downloads(source: LaserSource, kms: Collection<Long>): List<Pair<String, List<Long>>> {
+    val out = LinkedHashMap<String, MutableList<Long>>()
+    for (k in kms) {
+        val url = source.lod2Url((k shr 32).toInt(), k.toInt()) ?: continue
+        out.getOrPut(url) { ArrayList() } += k
+    }
+    return out.map { it.key to it.value }
+}
+
+/**
+ * Holt [url] und liefert die CityGML der Kilometer [kms] daraus: die Antwort
+ * selbst (eine GML je Kilometer) oder, bei [LaserSource.lod2Entry], die
+ * passenden Dateien im ZIP. `null`, wenn der Download fehlt (404).
+ *
+ * @return Bytes des Downloads und die gefundenen GMLs (fehlende Kilometer fehlen)
+ */
+internal fun fetchLod2(source: LaserSource, fetcher: LaserFetcher, url: String, kms: List<Long>): Pair<Long, List<ByteArray>>? {
+    val resp = fetcher.fetch(url)
+    if (resp.status != 200) return null
+    if (source.lod2Entry == null) return resp.bytes.size.toLong() to listOf(resp.bytes)
+    val gmls = kms.mapNotNull { k ->
+        val name = source.lod2EntryName((k shr 32).toInt(), k.toInt()) ?: return@mapNotNull null
+        zipEntry(resp.bytes) { it.equals(name, ignoreCase = true) }
+    }
+    return resp.bytes.size.toLong() to gmls
 }
 
 /** Liest eine CityGML-Kachel; Koordinaten werden von UTM [zone] nach ENU um [origin] umgerechnet. */

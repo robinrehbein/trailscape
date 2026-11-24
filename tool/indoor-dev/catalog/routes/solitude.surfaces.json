@@ -1,0 +1,144 @@
+{
+    "source": "BROUTER_WAY_TAGS",
+    "lengthM": 13933.0,
+    "sections": [
+        {
+            "fromM": 0.0,
+            "toM": 284.6,
+            "kind": "COMPACTED",
+            "highway": "service"
+        },
+        {
+            "fromM": 284.6,
+            "toM": 1035.4,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 1035.4,
+            "toM": 1303.0,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 1303.0,
+            "toM": 1654.4,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 1654.4,
+            "toM": 1938.0,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 1938.0,
+            "toM": 3134.2,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 3134.2,
+            "toM": 4709.7,
+            "kind": "ASPHALT",
+            "highway": "unclassified"
+        },
+        {
+            "fromM": 4709.7,
+            "toM": 5791.1,
+            "kind": "ASPHALT",
+            "highway": "path"
+        },
+        {
+            "fromM": 5791.1,
+            "toM": 5983.8,
+            "kind": "ASPHALT",
+            "highway": "service"
+        },
+        {
+            "fromM": 5983.8,
+            "toM": 6059.7,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 6059.7,
+            "toM": 6150.5,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 6150.5,
+            "toM": 6165.5,
+            "kind": "ASPHALT",
+            "highway": "service"
+        },
+        {
+            "fromM": 6165.5,
+            "toM": 7350.7,
+            "kind": "ASPHALT",
+            "highway": "path"
+        },
+        {
+            "fromM": 7350.7,
+            "toM": 9478.4,
+            "kind": "ASPHALT",
+            "highway": "secondary"
+        },
+        {
+            "fromM": 9478.4,
+            "toM": 10022.6,
+            "kind": "GRAVEL",
+            "highway": "track"
+        },
+        {
+            "fromM": 10022.6,
+            "toM": 10913.2,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 10913.2,
+            "toM": 11585.1,
+            "kind": "GRAVEL",
+            "highway": "track"
+        },
+        {
+            "fromM": 11585.1,
+            "toM": 12100.3,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 12100.3,
+            "toM": 12440.8,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 12440.8,
+            "toM": 12629.5,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 12629.5,
+            "toM": 12897.1,
+            "kind": "ASPHALT",
+            "highway": "track"
+        },
+        {
+            "fromM": 12897.1,
+            "toM": 13648.0,
+            "kind": "COMPACTED",
+            "highway": "track"
+        },
+        {
+            "fromM": 13648.0,
+            "toM": 13932.5,
+            "kind": "COMPACTED",
+            "highway": "service"
+        }
+    ]
+}

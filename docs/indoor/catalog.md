@@ -168,10 +168,11 @@ erlaubt). `Range`-Anfragen gehen dort (`206`). Jede Station wird gegen
    entlang der bekannten Strecke (Anfang, markante Punkte, Ende; Punkte am
    besten aus Nominatim/OSM). Wo OSM den Belag nicht kennt:
    `surfaceOverrides` (`fromM`/`toM` in Laufmetern, `kind`, `onlyUnknown`).
-   Strecken in NRW bekommen `"laser": true`: `catalog-build` baut sie dann
+   Strecken in NRW und Baden-Württemberg bekommen `"laser": true`: `catalog-build` baut sie dann
    mit der Datenstufe „Laser“ (DGM1, nDOM, LoD2; `docs/indoor/lidar.md`),
    ohne weitere Eingabe — auch im Workflow. Eingetragen für `kahler-asten`,
-   `balkantrasse` und `altenberg` (Stand 24.11.2026). Außerhalb der
+   `balkantrasse` und `altenberg` (Stand 24.11.2026), in Baden-Württemberg
+   für `solitude` und `maulbronn` (neu, Version 1). Außerhalb der
    Laser-Quellen hat das Feld keine Wirkung.
 2. `./gradlew :indoor-dev:run --args="catalog-routes --only <id>"` — schreibt
    GPX und Beläge unter `catalog/routes/`, gibt km/Hm aus. Belagsanteile

@@ -30,12 +30,21 @@ import java.util.concurrent.Semaphore
  * (`indoor-dev build --laser`); die App ruft diese Hosts nicht ab. Wer sie in
  * der App einschaltet, traegt die Hosts in PRIVACY.md ein.
  *
- * @property id stabiler Kurzname („nw").
+ * Zwei Abrufwege fuer die Raster: **WCS** (NRW: beliebiges Rechteck je
+ * 256-m-Block, [dgmWcsUrl]/[domWcsUrl]) oder **Kachel-Download** ([tiles]:
+ * ZIP-Archive fester Kacheln mit je einer Datei pro Kilometer, Baden-Wuerttemberg).
+ * Genau einer der beiden ist gesetzt. Welche Quelle gilt, entscheidet die Lage
+ * der Strecke ([covers], mindestens die Haelfte der Punkte).
+ *
+ * @property id stabiler Kurzname („nw", „bw").
  * @property utmZone UTM-Zone der Daten (ETRS89).
- * @property dgmWcsUrl WCS-2.0.1-Dienst des DGM (ohne Abfrageteil), [dgmCoverage] die Coverage-ID.
- * @property domWcsUrl WCS-Dienst des DOM (Oberflaeche mit Bewuchs und Gebaeuden), [domCoverage].
- * @property lod2UrlTemplate Kachel-Download LoD2 mit `{e}`/`{n}` = Kilometer-Index des Rechts-/Hochwerts.
+ * @property dgmWcsUrl WCS-2.0.1-Dienst des DGM (ohne Abfrageteil), [dgmCoverage] die Coverage-ID; `null` bei [tiles].
+ * @property domWcsUrl WCS-Dienst des DOM (Oberflaeche mit Bewuchs und Gebaeuden), [domCoverage]; `null` bei [tiles].
+ * @property lod2UrlTemplate Kachel-Download LoD2 mit `{e}`/`{n}` = Kilometer-Index des Rechts-/Hochwerts
+ *   (bei [lod2Entry]: der Suedwestecke der ZIP-Kachel aus [tiles]).
+ * @property lod2Entry Name der CityGML-Datei je Kilometer im ZIP (`{e}`/`{n}`), `null` = [lod2UrlTemplate] ist die GML selbst.
  * @property maxPx groesste Kante je WCS-Anfrage, die geprueft ist.
+ * @property tiles Kachel-Download statt WCS (siehe [LaserTiles]).
  */
 data class LaserSource(
     val id: String,
@@ -45,32 +54,102 @@ data class LaserSource(
     val maxLat: Double,
     val maxLon: Double,
     val utmZone: Int,
-    val dgmWcsUrl: String,
-    val dgmCoverage: String,
-    val domWcsUrl: String,
-    val domCoverage: String,
+    val dgmWcsUrl: String?,
+    val dgmCoverage: String?,
+    val domWcsUrl: String?,
+    val domCoverage: String?,
     val lod2UrlTemplate: String?,
     val attribution: String,
     val license: String,
     val licenseUrl: String,
     val maxPx: Int = 1024,
+    val tiles: LaserTiles? = null,
+    val lod2Entry: String? = null,
 ) {
+    init {
+        require((tiles == null) == (dgmWcsUrl != null && dgmCoverage != null)) { "Laser-Quelle $id: entweder WCS oder Kacheln" }
+        require(lod2Entry == null || tiles != null) { "Laser-Quelle $id: LoD2 im ZIP nur mit Kachelschema" }
+    }
+
     fun covers(lat: Double, lon: Double): Boolean = lat in minLat..maxLat && lon in minLon..maxLon
 
-    /** GetCoverage fuer das UTM-Rechteck [x0]..[x1] × [y0]..[y1] (ganze Meter), GeoTIFF Float32. */
+    /** GetCoverage fuer das UTM-Rechteck [x0]..[x1] × [y0]..[y1] (ganze Meter), GeoTIFF Float32 (nur WCS-Quellen). */
     fun coverageUrl(dom: Boolean, x0: Int, y0: Int, x1: Int, y1: Int): String {
-        val base = if (dom) domWcsUrl else dgmWcsUrl
+        val base = checkNotNull(if (dom) domWcsUrl else dgmWcsUrl) { "Laser-Quelle $id hat keinen WCS" }
         val cov = if (dom) domCoverage else dgmCoverage
         return "$base?SERVICE=WCS&VERSION=2.0.1&REQUEST=GetCoverage&COVERAGEID=$cov&FORMAT=image/tiff" +
             "&SUBSET=x($x0,$x1)&SUBSET=y($y0,$y1)"
     }
 
-    /** LoD2-Kachel (1 km × 1 km) mit der Suedwestecke bei Kilometer ([kmE], [kmN]); `null`, wenn das Land keine anbietet. */
-    fun lod2Url(kmE: Int, kmN: Int): String? = lod2UrlTemplate?.replace("{e}", kmE.toString())?.replace("{n}", kmN.toString())
+    /**
+     * Download der LoD2-Daten fuer den Kilometer ([kmE], [kmN]) (Suedwestecke);
+     * `null`, wenn das Land keine anbietet. Bei [lod2Entry] ist es das ZIP der
+     * Kachel aus [tiles], in dem dieser Kilometer liegt ([lod2EntryName] nennt die Datei darin).
+     */
+    fun lod2Url(kmE: Int, kmN: Int): String? {
+        val t = lod2UrlTemplate ?: return null
+        val tl = tiles
+        return if (lod2Entry != null && tl != null) fill(t, tl.tileE(kmE), tl.tileN(kmN)) else fill(t, kmE, kmN)
+    }
+
+    /** Dateiname der LoD2-GML des Kilometers im ZIP ([lod2Entry]); `null` = die Antwort ist die GML selbst. */
+    fun lod2EntryName(kmE: Int, kmN: Int): String? = lod2Entry?.let { fill(it, kmE, kmN) }
 
     /** Alle Hosts dieser Quelle. */
     val hosts: List<String>
-        get() = listOfNotNull(dgmWcsUrl, domWcsUrl, lod2UrlTemplate).mapNotNull { runCatching { URI(it.replace("{e}", "0").replace("{n}", "0")).host?.lowercase() }.getOrNull() }.distinct()
+        get() = listOfNotNull(dgmWcsUrl, domWcsUrl, lod2UrlTemplate, tiles?.dgmUrl, tiles?.domUrl)
+            .mapNotNull { runCatching { URI(fill(it, 0, 0)).host?.lowercase() }.getOrNull() }.distinct()
+
+    /** Alle URL-Vorlagen mit `{e}`/`{n}` (Kacheln und LoD2). */
+    internal val templates: List<String>
+        get() = listOfNotNull(lod2UrlTemplate, tiles?.dgmUrl, tiles?.domUrl)
+}
+
+private fun fill(t: String, e: Int, n: Int): String = t.replace("{e}", e.toString()).replace("{n}", n.toString())
+
+/** Format einer Rasterdatei im Kachel-ZIP. */
+enum class LaserRasterFormat {
+    /** Text, je Zeile `Rechtswert Hochwert Hoehe` der Pixelmitte (Leerzeichen), 1-m-Raster. */
+    XYZ,
+
+    /** GeoTIFF Float32 ([decodeFloatTiff]). */
+    TIFF,
+}
+
+/**
+ * Kachel-Download der Raster: ZIP-Archive von [sizeKm] × [sizeKm] Kilometern,
+ * darin je Kilometer eine Datei. Die Suedwestecken der Archive liegen auf
+ * Kilometern mit `(e − originE) mod sizeKm = 0` und `(n − originN) mod sizeKm = 0`.
+ *
+ * @property dgmUrl ZIP des DGM mit `{e}`/`{n}` = Kilometer der Suedwestecke.
+ * @property dgmEntry Anfang des Dateinamens je Kilometer im ZIP (`{e}`/`{n}`); dahinter darf
+ *   ein Zusatz wie das Erfassungsjahr folgen, das Ende ist [dgmFormat] (`.xyz`/`.tif`).
+ */
+data class LaserTiles(
+    val dgmUrl: String,
+    val dgmEntry: String,
+    val dgmFormat: LaserRasterFormat,
+    val domUrl: String,
+    val domEntry: String,
+    val domFormat: LaserRasterFormat,
+    val sizeKm: Int = 2,
+    val originE: Int = 0,
+    val originN: Int = 0,
+    /** Erfahrungswert je Archiv (DGM + DOM), fuer den Voranschlag. */
+    val bytesPerTile: Long = 0L,
+    /** Erfahrungswert je LoD2-Archiv, fuer den Voranschlag. */
+    val lod2BytesPerTile: Long = 0L,
+) {
+    /** Kilometer der Suedwestecke des Archivs, in dem der Kilometer [kmE] liegt. */
+    fun tileE(kmE: Int): Int = originE + Math.floorDiv(kmE - originE, sizeKm) * sizeKm
+    fun tileN(kmN: Int): Int = originN + Math.floorDiv(kmN - originN, sizeKm) * sizeKm
+
+    fun url(dom: Boolean, tileE: Int, tileN: Int): String = fill(if (dom) domUrl else dgmUrl, tileE, tileN)
+
+    /** Anfang des Dateinamens des Kilometers ([kmE], [kmN]) im Archiv. */
+    fun entryPrefix(dom: Boolean, kmE: Int, kmN: Int): String = fill(if (dom) domEntry else dgmEntry, kmE, kmN)
+
+    fun format(dom: Boolean): LaserRasterFormat = if (dom) domFormat else dgmFormat
 }
 
 /**
@@ -100,12 +179,51 @@ val laserSources: List<LaserSource> = listOf(
         license = "dl-de/zero-2-0",
         licenseUrl = "https://www.govdata.de/dl-de/zero-2-0",
     ),
+    // Geprueft am 24.11.2026 (docs/indoor/lidar.md, Abschnitt 7): Open GeoData Portal des LGL, kein WCS
+    // fuer Hoehen. Kachel-Download als ZIP je 2 km × 2 km (Suedwestecke: Rechtswert-km ungerade,
+    // Hochwert-km gerade; fehlende Kachel → 404), darin je Kilometer eine Datei mit Erfassungsjahr im
+    // Namen: DGM1 als XYZ-Text (Pixelmitten auf ,5 m, NHN/DHHN2016), DOM1 als GeoTIFF Float32
+    // (LZW, Praediktor 3, 512er-Kacheln), LoD2 als CityGML 1.0 (AdV-Profil wie NRW). EPSG:25832.
+    // Lizenz laut lgl-bw.de/Produkte/Open-Data: dl-de/by-2-0 mit Namensnennung
+    // „Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0".
+    LaserSource(
+        id = "bw",
+        label = "Baden-Württemberg",
+        minLat = 47.53,
+        minLon = 7.50,
+        maxLat = 49.80,
+        maxLon = 10.50,
+        utmZone = 32,
+        dgmWcsUrl = null,
+        dgmCoverage = null,
+        domWcsUrl = null,
+        domCoverage = null,
+        lod2UrlTemplate = "https://opengeodata.lgl-bw.de/data/lod2/LoD2_32_{e}_{n}_2_bw.zip",
+        lod2Entry = "LoD2_32_{e}_{n}_1_BW.gml",
+        tiles = LaserTiles(
+            dgmUrl = "https://opengeodata.lgl-bw.de/data/dgm/dgm1_32_{e}_{n}_2_bw.zip",
+            dgmEntry = "dgm1_32_{e}_{n}_1_bw",
+            dgmFormat = LaserRasterFormat.XYZ,
+            domUrl = "https://opengeodata.lgl-bw.de/data/dom1/dom1_32_{e}_{n}_2_bw.zip",
+            domEntry = "dom1_32_{e}_{n}_1_bw",
+            domFormat = LaserRasterFormat.TIFF,
+            sizeKm = 2,
+            originE = 1,
+            originN = 0,
+            bytesPerTile = 27_000_000L,
+            lod2BytesPerTile = 8_000_000L,
+        ),
+        attribution = "Gelände, Bewuchs und Gebäude: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (DGM1, DOM1, 3D-Gebäudemodell LoD2)",
+        license = "dl-de/by-2-0",
+        licenseUrl = "https://www.govdata.de/dl-de/by-2-0",
+    ),
 )
 
 /**
  * Positivliste der Laser-Stufe: `https`, kein Benutzer, Port 443, Host **und**
- * Pfad gleich einem Dienst aus [sources] (WCS: genau der Dienstpfad; LoD2:
- * genau das Muster der Vorlage, nur Ziffern fuer `{e}`/`{n}`).
+ * Pfad gleich einem Dienst aus [sources] (WCS: genau der Dienstpfad; LoD2 und
+ * Kachel-Downloads: genau das Muster der Vorlage, nur Ziffern fuer `{e}`/`{n}`,
+ * kein Abfrageteil).
  */
 fun isAllowedLaserUrl(url: String, sources: List<LaserSource> = laserSources): Boolean {
     val uri = runCatching { URI(url) }.getOrNull() ?: return false
@@ -113,16 +231,17 @@ fun isAllowedLaserUrl(url: String, sources: List<LaserSource> = laserSources): B
     val host = uri.host?.lowercase() ?: return false
     val path = uri.path ?: return false
     for (s in sources) {
-        for (wcs in listOf(s.dgmWcsUrl, s.domWcsUrl)) {
+        for (wcs in listOfNotNull(s.dgmWcsUrl, s.domWcsUrl)) {
             val b = URI(wcs)
             if (b.host.lowercase() == host && b.path == path && uri.rawQuery?.startsWith("SERVICE=WCS&") == true) return true
         }
-        val t = s.lod2UrlTemplate ?: continue
-        val b = URI(t.replace("{e}", "0").replace("{n}", "0"))
-        if (b.host.lowercase() != host || uri.rawQuery != null) continue
-        val pattern = Regex.escape(URI(t.replace("{e}", "EEE").replace("{n}", "NNN")).path)
-            .replace("EEE", "\\E[0-9]{3,4}\\Q").replace("NNN", "\\E[0-9]{4}\\Q")
-        if (Regex(pattern).matches(path)) return true
+        for (t in s.templates) {
+            val b = URI(t.replace("{e}", "0").replace("{n}", "0"))
+            if (b.host.lowercase() != host || uri.rawQuery != null) continue
+            val pattern = Regex.escape(URI(t.replace("{e}", "EEE").replace("{n}", "NNN")).path)
+                .replace("EEE", "\\E[0-9]{3,4}\\Q").replace("NNN", "\\E[0-9]{4}\\Q")
+            if (Regex(pattern).matches(path)) return true
+        }
     }
     return false
 }
@@ -209,7 +328,8 @@ private class LaserPipeline(
         if (b.size < 8) return false
         val tiff = (b[0] == 'I'.code.toByte() && b[1] == 'I'.code.toByte()) || (b[0] == 'M'.code.toByte() && b[1] == 'M'.code.toByte())
         val xml = b[0] == '<'.code.toByte() || (b[0] == 0xEF.toByte() && b[3] == '<'.code.toByte())
-        return tiff || (xml && String(b, 0, minOf(b.size, 2000), Charsets.UTF_8).contains("CityModel"))
+        val zip = b[0] == 'P'.code.toByte() && b[1] == 'K'.code.toByte() && b[2] == 3.toByte() && b[3] == 4.toByte()
+        return tiff || zip || (xml && String(b, 0, minOf(b.size, 2000), Charsets.UTF_8).contains("CityModel"))
     }
 
     companion object {

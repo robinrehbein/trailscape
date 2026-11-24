@@ -121,13 +121,13 @@ class RidesScreenshotTest {
         TestLocales.assertTestLocale(AppLanguage.EN)
         startInHistory()
         assertEquals("All rides on the map", string(R.string.rides_screen_show_map_action))
-        compose.onAllNodesWithText(string(R.string.rides_screen_show_map_action)).onFirst().assertExists()
-        compose.onAllNodesWithText(string(R.string.rides_list_planned_pill)).onFirst().assertExists()
+        awaitText(string(R.string.rides_screen_show_map_action))
+        awaitText(string(R.string.rides_list_planned_pill))
         shot("70-verlauf-en")
 
         compose.onAllNodesWithContentDescription(string(R.string.rides_screen_import_cd))[0].performClick()
         settle()
-        compose.onAllNodesWithText(string(R.string.rides_import_menu_archive_action)).onFirst().assertExists()
+        awaitText(string(R.string.rides_import_menu_archive_action))
         shot("71-verlauf-import-en")
     }
 
@@ -138,10 +138,10 @@ class RidesScreenshotTest {
         startInHistory()
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
-        compose.onAllNodesWithText(string(R.string.rides_detail_ride_again_action)).onFirst().assertExists()
+        awaitText(string(R.string.rides_detail_ride_again_action))
         compose.onAllNodesWithText(string(R.string.rides_detail_all_values_action))[0].performClick()
         settle()
-        compose.onAllNodesWithText(string(R.string.rides_detail_moving_time_label)).onFirst().assertExists()
+        awaitText(string(R.string.rides_detail_moving_time_label))
         shot("72-tour-lang-en")
     }
 
@@ -151,7 +151,7 @@ class RidesScreenshotTest {
         startInHistory()
         compose.onAllNodesWithText("Feierabendrunde")[0].performClick()
         settle()
-        compose.onAllNodesWithText(string(R.string.rides_detail_show_map_action)).onFirst().assertExists()
+        awaitText(string(R.string.rides_detail_show_map_action))
         shot("73-tour-en")
     }
 
@@ -161,7 +161,7 @@ class RidesScreenshotTest {
         startInHistory()
         compose.onAllNodesWithText("Alb-Runde über Hayingen")[0].performClick()
         settle()
-        compose.onAllNodesWithText(string(R.string.rides_detail_planned_notice)).onFirst().assertExists()
+        awaitText(string(R.string.rides_detail_planned_notice))
         shot("74-planung-en")
     }
 
@@ -173,7 +173,7 @@ class RidesScreenshotTest {
         settle()
         compose.onAllNodesWithContentDescription(string(R.string.rides_detail_share_cd))[0].performClick()
         settle()
-        compose.onAllNodesWithText(string(R.string.rides_share_square_option)).onFirst().assertExists()
+        awaitText(string(R.string.rides_share_square_option))
         // Inhalt und Vorschau entstehen abseits des Hauptthreads (produceState);
         // ohne Warten zeigte das Bild nur die leere Flaeche und keinen Hinweis.
         // Start und Ziel sind ab Werk ausgeblendet — deshalb dieser Hinweis.
@@ -189,7 +189,7 @@ class RidesScreenshotTest {
                     .fetchSemanticsNodes().isNotEmpty()
         }
         settle()
-        compose.onAllNodesWithText(hint).onFirst().assertExists()
+        awaitText(hint)
         compose.onNode(isDialog()).captureRoboImage("build/outputs/roborazzi/75-teilen-en.png")
 
         val ride = sampleRides().first()
@@ -277,7 +277,7 @@ class RidesScreenshotTest {
         // Fremde Touren hat seed() schon beiseitegelegt; hier auch die eigenen weg.
         AppServices.rideStorage.listSummaries().summaries.forEach { AppServices.rideStorage.deleteRide(it.id) }
         startInHistory()
-        compose.onAllNodesWithText(string(R.string.rides_list_empty_title)).onFirst().assertExists()
+        awaitText(string(R.string.rides_list_empty_title))
         shot("78-verlauf-leer-en")
     }
 
@@ -358,6 +358,21 @@ class RidesScreenshotTest {
         settle()
         ViewModelProvider(compose.activity)[AppViewModel::class.java].requestTab(AppTab.RIDES)
         settle()
+    }
+
+    /**
+     * Wartet, bis der Text da ist, statt ihn nach [settle] nur einmal zu
+     * pruefen: Tourdetail und Teilen-Dialog laden ihre Daten abseits des
+     * Haupt-Threads, und `waitForIdle` kennt diese Arbeit nicht. Unter Last
+     * (voller Pruefbefehl) war die Ansicht nach `settle` gelegentlich noch
+     * nicht da — tourEnglisch, tourKopfEnglisch und teilenEnglisch fielen
+     * dann zufaellig. Laeuft die Frist ab, schlaegt der Test wie zuvor fehl.
+     */
+    private fun awaitText(text: String) {
+        compose.waitUntil(timeoutMillis = 15_000) {
+            compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.waitForIdle()
     }
 
     private fun settle() {
