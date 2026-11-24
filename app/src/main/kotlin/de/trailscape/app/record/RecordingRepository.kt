@@ -7,6 +7,7 @@ import de.trailscape.app.R
 import de.trailscape.app.i18n.localized
 import de.trailscape.core.SensorSample
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.ZielSnapshot
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -61,6 +62,7 @@ object RecordingRepository {
     private val _lastFinishedRideId = MutableStateFlow<String?>(null)
     private val _heartRateBpm = MutableStateFlow<Int?>(null)
     private val _watchConnected = MutableStateFlow(false)
+    private val _zielSnapshot = MutableStateFlow<ZielSnapshot?>(null)
 
     /**
      * Sammelstelle fuer Positionsproben einer gekoppelten Uhr, waehrend eine
@@ -176,6 +178,15 @@ object RecordingRepository {
      */
     val watchConnected: StateFlow<Boolean> = _watchConnected.asStateFlow()
 
+    /**
+     * Wochenziel-Rest und weiteste Tour zum Start der laufenden Aufzeichnung
+     * (`zielSnapshot` in `:core`) — daraus und aus [distanceKm] entsteht die
+     * Zielzeile („Noch 12 km bis zum Wochenziel") in der Live-Ansicht und auf
+     * der Uhr. `null` ohne Aufzeichnung, solange er noch geladen wird, oder
+     * wenn es nichts zu zeigen gibt. Geschrieben nur vom [RecordingService].
+     */
+    val zielSnapshot: StateFlow<ZielSnapshot?> = _zielSnapshot.asStateFlow()
+
     // ----------------------------------------------------------- Kommandos
 
     /**
@@ -267,11 +278,21 @@ object RecordingRepository {
         _isRecording.value = true
         _isPaused.value = paused
         _isAutoPaused.value = paused && autoPaused
+        if (_startedAtMs.value != startedAtMs) _zielSnapshot.value = null
         _startedAtMs.value = startedAtMs
         _points.value = points
         _lastPoint.value = points.lastOrNull()
         _pointCount.value = points.size
         _lastError.value = null
+    }
+
+    /**
+     * Setzt den [zielSnapshot] — aber nur, wenn noch dieselbe Aufzeichnung
+     * laeuft, fuer die er berechnet wurde ([fuerStartMs]): Er wird auf IO
+     * geladen, und ein spaetes Ergebnis darf nicht in eine neue Tour rutschen.
+     */
+    internal fun publishZielSnapshot(fuerStartMs: Long, snapshot: ZielSnapshot?) {
+        if (_isRecording.value && _startedAtMs.value == fuerStartMs) _zielSnapshot.value = snapshot
     }
 
     /**
@@ -313,6 +334,7 @@ object RecordingRepository {
         _lastPoint.value = null
         _pointCount.value = 0
         _speedKmh.value = null
+        _zielSnapshot.value = null
         if (finishedRideId != null) {
             _lastFinishedRideId.value = finishedRideId
             _finishedRides.tryEmit(finishedRideId)

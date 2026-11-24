@@ -22,6 +22,7 @@ import de.trailscape.core.LiveKachel
 import de.trailscape.core.LiveSensorAnzeige
 import de.trailscape.core.PulsQuelle
 import de.trailscape.core.TurnRichtung
+import de.trailscape.core.ZielZeile
 import de.trailscape.core.i18n.AppLanguage
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
@@ -65,6 +66,7 @@ class RideModeScreenshotTest {
         nav: RideModeNavigation?,
         name: String,
         sensoren: LiveSensorAnzeige = LiveSensorAnzeige.LEER,
+        zielZeile: ZielZeile? = null,
     ) {
         compose.setContent {
             TrailscapeTheme {
@@ -82,6 +84,7 @@ class RideModeScreenshotTest {
                         onShowMap = {},
                         autoPaused = paused,
                         sensoren = sensoren,
+                        zielZeile = zielZeile,
                     )
                 }
             }
@@ -168,6 +171,90 @@ class RideModeScreenshotTest {
         }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("build/outputs/roborazzi/76-kartenseite-sensoren.png")
+    }
+
+    /**
+     * Zielzeile im Fahrmodus — im vollsten Fall (Navigation und drei
+     * Sensoren), damit sie auch dann noch Platz hat.
+     */
+    @Test
+    fun fahrmodusZielzeile() {
+        fahrmodus(
+            paused = false,
+            nav = navigation,
+            name = "77-fahrmodus-zielzeile",
+            sensoren = dreiSensoren,
+            zielZeile = ZielZeile.BestweiteRest(7.6),
+        )
+        compose.onNodeWithText("Noch 8\u00A0km bis zur neuen Bestweite", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun fahrmodusZielzeileEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        fahrmodus(
+            paused = true,
+            nav = null,
+            name = "77-fahrmodus-zielzeile-en",
+            zielZeile = ZielZeile.WochenzielRest(0.34),
+        )
+        compose.onNodeWithText("0.4\u00A0km to your weekly goal", useUnmergedTree = true).assertExists()
+    }
+
+    /** Die Live-Leiste auf der Karte mit [zeilen] untereinander (je eine Leiste). */
+    private fun liveLeisteZielzeilen(name: String, zeilen: List<ZielZeile>) {
+        compose.setContent {
+            TrailscapeTheme {
+                ProvideTestLanguage {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            zeilen.forEach { zeile ->
+                                LiveRecordingCard(
+                                    speedKmh = 23.4,
+                                    distanceKm = 48.7,
+                                    elapsedS = 7_310,
+                                    ascentM = 412.0,
+                                    pointCount = 1_812,
+                                    paused = false,
+                                    onTogglePause = {},
+                                    onStop = {},
+                                    onOpenRideMode = {},
+                                    zielZeile = zeile,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.onRoot().captureRoboImage("build/outputs/roborazzi/$name.png")
+    }
+
+    @Test
+    fun liveLeisteZielzeilen() {
+        liveLeisteZielzeilen(
+            "78-live-leiste-zielzeilen",
+            listOf(ZielZeile.WochenzielRest(11.3), ZielZeile.WochenzielGeschafft, ZielZeile.NeueBestweite),
+        )
+        compose.onNodeWithText("Noch 12\u00A0km bis zum Wochenziel", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Wochenziel geschafft ✓", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "+en-rGB")
+    fun liveLeisteZielzeilenEnglisch() {
+        TestLocales.assertTestLocale(AppLanguage.EN)
+        liveLeisteZielzeilen(
+            "78-live-leiste-zielzeilen-en",
+            listOf(ZielZeile.BestweiteRest(7.6), ZielZeile.WochenzielGeschafft, ZielZeile.NeueBestweite),
+        )
+        compose.onNodeWithText("8\u00A0km to a new longest ride", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Weekly goal reached ✓", useUnmergedTree = true).assertExists()
     }
 
     @Test

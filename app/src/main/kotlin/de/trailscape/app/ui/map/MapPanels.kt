@@ -62,6 +62,7 @@ import de.trailscape.app.ui.theme.OverlayGap
 import de.trailscape.core.Ride
 import de.trailscape.core.RideHighlight
 import de.trailscape.core.TrackPoint
+import de.trailscape.core.ZielZeile
 import de.trailscape.core.formatDuration
 import kotlin.math.roundToInt
 
@@ -150,6 +151,9 @@ internal fun LiveRecordingCard(
     // Ob die laufende Pause eine Auto-Pause ist — nur fuer die Statuszeile,
     // Bedienung wie bei einer manuellen Pause.
     autoPaused: Boolean = false,
+    // Die Zielzeile („Noch 12 km bis zum Wochenziel", `LiveZielZeile.kt`),
+    // `null` = keine.
+    zielZeile: ZielZeile? = null,
 ) {
     val formats = LocalAppFormats.current
     Card(
@@ -207,6 +211,10 @@ internal fun LiveRecordingCard(
                     value = "${ascentM.roundToInt()}",
                     label = stringResource(R.string.map_live_ascent_label),
                 )
+            }
+            if (zielZeile != null) {
+                Spacer(Modifier.height(6.dp))
+                LiveZielZeile(zielZeile)
             }
             Spacer(Modifier.height(8.dp))
             PrimaryButton(

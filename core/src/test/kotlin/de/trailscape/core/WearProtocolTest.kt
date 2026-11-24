@@ -221,6 +221,101 @@ class WearProtocolTest {
         }
     }
 
+    // --- AufzeichnungsZustand: Zielzeile, alt gegen neu ---
+
+    /**
+     * Woertliche Kopie des Dekoders, wie ihn eine heutige (alte) Uhr ohne
+     * Zielzeile hat — eingefroren, damit der Test auch dann noch alt gegen
+     * neu prueft, wenn [AufzeichnungsZustand.fromJson] weiterwaechst.
+     */
+    private fun alterDekoder(bytes: ByteArray): AufzeichnungsZustand {
+        val json = kotlinx.serialization.json.Json.parseToJsonElement(bytes.decodeToString()).asRequiredObject()
+        return AufzeichnungsZustand(
+            laeuft = json.optionalBoolean("laeuft") ?: false,
+            pausiert = json.optionalBoolean("pausiert") ?: false,
+            dauerMs = json.requiredLong("dauerMs"),
+            distanzKm = json.requiredDouble("distanzKm"),
+            hf = json.optionalInt("hf"),
+        )
+    }
+
+    /** Woertlich das Telegramm eines heutigen (alten) Telefons ohne Zielzeile. */
+    private val altesTelegramm =
+        """{"laeuft":true,"pausiert":false,"dauerMs":1234000,"distanzKm":12.5,"hf":138}""".toByteArray()
+
+    private val mitZiel = AufzeichnungsZustand(
+        laeuft = true,
+        pausiert = false,
+        dauerMs = 1_234_000L,
+        distanzKm = 12.5,
+        hf = 138,
+        ziel = ZielSnapshot(wochenRestKm = 24.3, laengsteKm = 61.0),
+    )
+
+    @Test
+    fun `AufzeichnungsZustand Roundtrip mit Zielsnapshot`() {
+        assertEquals(mitZiel, dekodiereAufzeichnungsZustand(kodiereAufzeichnungsZustand(mitZiel)))
+        val nurLaengste = mitZiel.copy(ziel = ZielSnapshot(wochenRestKm = null, laengsteKm = 61.0))
+        assertEquals(nurLaengste, dekodiereAufzeichnungsZustand(kodiereAufzeichnungsZustand(nurLaengste)))
+        assertFalse(nurLaengste.toJson().containsKey("zielRest"))
+    }
+
+    @Test
+    fun `Zielfelder haben die vereinbarten Namen und sind Zahlen, kein Text`() {
+        val json = mitZiel.toJson()
+        assertEquals("24.3", (json["zielRest"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertEquals("61.0", (json["laengste"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertFalse((json["zielRest"] as kotlinx.serialization.json.JsonPrimitive).isString)
+    }
+
+    @Test
+    fun `ohne Snapshot schreibt das neue Telefon genau das alte Telegramm`() {
+        val ohne = mitZiel.copy(ziel = null)
+        assertEquals(String(altesTelegramm), String(kodiereAufzeichnungsZustand(ohne)))
+    }
+
+    @Test
+    fun `alte Uhr liest das neue Telegramm und uebergeht die Zielfelder`() {
+        val alt = alterDekoder(kodiereAufzeichnungsZustand(mitZiel))
+        assertEquals(mitZiel.copy(ziel = null), alt)
+    }
+
+    @Test
+    fun `neue Uhr liest das alte Telegramm ohne Zielzeile`() {
+        val neu = dekodiereAufzeichnungsZustand(altesTelegramm)
+        assertEquals(alterDekoder(altesTelegramm), neu)
+        assertNull(neu.ziel)
+        assertNull(zielZeile(neu.ziel, neu.distanzKm))
+    }
+
+    @Test
+    fun `Zielfelder auch in der Pause`() {
+        val pausiert = mitZiel.copy(pausiert = true)
+        val zurueck = dekodiereAufzeichnungsZustand(kodiereAufzeichnungsZustand(pausiert))
+        assertTrue(zurueck.pausiert)
+        assertEquals(pausiert.ziel, zurueck.ziel)
+    }
+
+    @Test
+    fun `kaputte Zielfelder fallen einzeln weg, der Zustand bleibt`() {
+        val basis = """"laeuft":true,"pausiert":false,"dauerMs":1000,"distanzKm":3.0"""
+        for (wert in listOf("\"zwoelf\"", "-5", "0", "1e9", "\"NaN\"", "\"Infinity\"", "null", "{}", "[1]", "true")) {
+            val zustand = dekodiereAufzeichnungsZustand("""{$basis,"zielRest":$wert,"laengste":40}""".toByteArray())
+            assertEquals(3.0, zustand.distanzKm, "Wert $wert")
+            assertEquals(ZielSnapshot(wochenRestKm = null, laengsteKm = 40.0), zustand.ziel, "Wert $wert")
+        }
+        val beideKaputt = dekodiereAufzeichnungsZustand("""{$basis,"zielRest":-1,"laengste":"x"}""".toByteArray())
+        assertNull(beideKaputt.ziel)
+    }
+
+    @Test
+    fun `Zielfelder werden auf 0,01 km gerundet und unplausible nicht geschrieben`() {
+        val roh = mitZiel.copy(ziel = ZielSnapshot(wochenRestKm = 12.345678, laengsteKm = Double.NaN))
+        val json = roh.toJson()
+        assertEquals("12.35", (json["zielRest"] as kotlinx.serialization.json.JsonPrimitive).content)
+        assertFalse(json.containsKey("laengste"))
+    }
+
     // --- AbschlussInfo (tolerant) ---
 
     @Test

@@ -172,6 +172,24 @@ gelten.
       lassen): Zeigt die Uhr nicht mehr „Diese Woche geschafft", 0 km, die Serie als „in Gefahr"
       (war die Vorwoche geschafft) bzw. 0 Wochen (war sie es nicht)? Nach dem nächsten Öffnen der
       Handy-App stehen neues Ziel und Kilometer da.
+- [ ] **Zielzeile während der Fahrt** (Wochenziel offen, z. B. 48 von 60 km): Tour starten. Nach
+      wenigen Sekunden steht im Fahrmodus und in der Live-Leiste am Handy „Noch 12 km bis zum
+      Wochenziel", auf der Uhr unter Zeit/Distanz/Tempo dieselbe Zeile; die Zahl sinkt mit der
+      Fahrt (aufgerundet, nie „Noch 0 km").
+- [ ] Ziel erreicht: „Wochenziel geschafft ✓" auf Handy und Uhr; der Haken wird auf der Uhr
+      dargestellt (kein Kästchen). Danach, wenn die Tour 70 % der weitesten Tour erreicht, „Noch
+      X km bis zur neuen Bestweite", weiter als je zuvor „Neue Bestweite ✓".
+- [ ] Wochenziel schon vor der Tour erreicht bzw. kein Ziel: keine Zeile, bis die Bestweite nah ist.
+- [ ] Mit aktivem Trainingsplan: Der Rest passt zum Wochenziel auf Kachel und Widget.
+- [ ] **Runde Anzeige**: Die Zeile passt auf der Uhr in höchstens zwei Zeilen, nichts abgeschnitten,
+      Puls und Knöpfe überlappen nicht — Deutsch und Englisch (Uhrsprache umstellen), kleine
+      (40 mm) und große Uhr. Die Uhr zeigt die Zeile in **ihrer** Sprache, auch wenn das Handy
+      eine andere hat.
+- [ ] **Pause**: Die Zeile bleibt in der Pause stehen (Handy und Uhr).
+- [ ] **Alt/neu**: Neue Uhr mit altem Handy → keine Zeile, sonst alles wie bisher. Altes Uhr-APK
+      mit neuem Handy → Live-Bild wie bisher, keine Abstürze.
+- [ ] Dienst-Neustart mitten in der Fahrt (Prozess beenden): Die Zeile kommt mit demselben Stand
+      zurück.
 
 ## Indoor
 

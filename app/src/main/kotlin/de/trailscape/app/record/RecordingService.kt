@@ -37,6 +37,7 @@ import de.trailscape.app.sensors.BleNutzer
 import de.trailscape.app.sensors.BleSensors
 import de.trailscape.app.voice.VoiceAnnouncer
 import de.trailscape.app.wear.WearBridge
+import de.trailscape.app.widget.loadZielSnapshot
 import de.trailscape.core.AufzeichnungsZustand
 import de.trailscape.core.DiagEvent
 import de.trailscape.core.DiagLog
@@ -54,6 +55,8 @@ import de.trailscape.core.haversineM
 import de.trailscape.core.i18n.formatDateFull
 import de.trailscape.core.i18n.formatDistanceKm
 import de.trailscape.core.toLocationSample
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -522,6 +525,7 @@ class RecordingService : Service() {
         meldeLebenszeichen(journal.touchHeartbeat(now))
         RecordingRepository.clearHeartRate()
         RecordingRepository.publishStarted(now, emptyList(), paused = false)
+        ladeZielSnapshot(now)
         // Bestaetigung, dass wirklich aufgezeichnet wird — das Telefon steckt
         // beim Losfahren typischerweise schon in der Tasche. Den Hauptschalter
         // „Sprachansagen" prueft der Announcer selbst.
@@ -621,6 +625,9 @@ class RecordingService : Service() {
             paused = snapshot.pausedSinceMs != null,
             autoPaused = autoPausiert,
         )
+        // Nach einem Dienst-Neustart neu geladen: Die laufende Tour ist noch
+        // nicht gespeichert, der Snapshot also derselbe wie beim Start.
+        ladeZielSnapshot(snapshot.startedAtMs)
         updateNotification(now, force = true)
         // Waehrend einer manuellen Pause schlaeft der Wachhund (siehe
         // [setPaused]); eine Auto-Pause behaelt ihn, denn sie soll die
@@ -1456,6 +1463,20 @@ class RecordingService : Service() {
             uhrVerbunden = RecordingRepository.watchConnected.value,
         )
 
+    /**
+     * Laedt den Ziel-Snapshot (Wochenziel-Rest, weiteste Tour) fuer die
+     * Zielzeile in Live-Ansicht und Uhr — auf IO, damit der Start nicht auf
+     * den Dateizugriff wartet. Bis er da ist, gibt es keine Zeile; der
+     * naechste Takt von [sendeZustandAnUhr] nimmt ihn mit.
+     */
+    private fun ladeZielSnapshot(fuerStartMs: Long) {
+        val app = applicationContext
+        AppServices.appScope.launch(Dispatchers.IO) {
+            val snapshot = runCatching { loadZielSnapshot(app) }.getOrNull()
+            RecordingRepository.publishZielSnapshot(fuerStartMs, snapshot)
+        }
+    }
+
     /** Baut den aktuellen Aufzeichnungszustand und schickt ihn an eine erreichbare Uhr. */
     private fun sendeZustandAnUhr() {
         WearBridge.sendZustand(
@@ -1471,6 +1492,9 @@ class RecordingService : Service() {
                     RecordingRepository.heartRateBpm.value,
                     RecordingRepository.watchConnected.value,
                 ),
+                // Nur die Zahlen des Snapshots, kein Text: Die Uhr bildet die
+                // Zielzeile in ihrer eigenen Sprache (siehe WearProtocol.kt).
+                ziel = RecordingRepository.zielSnapshot.value.takeIf { active },
             ),
         )
     }

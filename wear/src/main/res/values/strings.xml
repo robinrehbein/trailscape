@@ -18,6 +18,11 @@
     <string name="wear_value_km">%1$s km</string>
     <!-- %1$s = Tempo mit einer Nachkommastelle, „–“ ohne Wert -->
     <string name="wear_value_kmh">%1$s km/h</string>
+    <!-- Zielzeile im Live-Bild (zwei Zeilen auf rundem Display, siehe WearZielTexteTest). %1$s = Rest in km, aufgerundet -->
+    <string name="wear_live_goal_week_rest">Noch %1$s&#160;km bis zum Wochenziel</string>
+    <string name="wear_live_goal_week_done">Wochenziel geschafft ✓</string>
+    <string name="wear_live_goal_best_rest">Noch %1$s&#160;km bis zur neuen Bestweite</string>
+    <string name="wear_live_goal_best_done">Neue Bestweite ✓</string>
 
     <!-- record/RecordingService.kt, record/RecordingStatus.kt -->
     <!-- %1$s = Dauer H:MM:SS, %2$s = Kilometer -->

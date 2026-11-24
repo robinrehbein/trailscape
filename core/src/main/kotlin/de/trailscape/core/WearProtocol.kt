@@ -245,6 +245,19 @@ fun dekodiereBefehl(bytes: ByteArray): Befehl = Befehl.fromJson(dekodiere(bytes)
  * Aktueller Aufzeichnungszustand, wie ihn das Telefon periodisch an die Uhr
  * schickt, damit deren Anzeige (Dauer, Distanz, ggf. Herzfrequenz) auch dann
  * stimmt, wenn die Aufzeichnung selbst auf dem Telefon laeuft.
+ *
+ * ## Zielzeile ([ziel], seit der Zielzeile waehrend der Fahrt)
+ * Optional und additiv: Die beiden Zahlen des [ZielSnapshot] (`zielRest`,
+ * `laengste`, km) stehen nur im Telegramm, wenn es sie gibt. Daraus bildet die
+ * Uhr mit [zielZeile] und der Distanz ihre Zeile selbst — in ihrer eigenen
+ * Sprache, denn es reist kein Text.
+ *  * **Alte Uhr, neues Telefon**: Ihr Dekoder liest nur die bekannten Felder
+ *    per Namen und uebergeht die neuen.
+ *  * **Neue Uhr, altes Telefon**: Die Felder fehlen, [ziel] ist `null`, die
+ *    Uhr zeigt keine Zeile — wie bisher.
+ *  * Die Zusatzfelder dekodieren **tolerant**: Ein kaputter oder
+ *    unplausibler Wert (Text, negativ, unendlich, ueber [ZIEL_MAX_KM]) laesst
+ *    nur dieses Feld entfallen, nie den ganzen Zustand.
  */
 data class AufzeichnungsZustand(
     val laeuft: Boolean,
@@ -252,6 +265,7 @@ data class AufzeichnungsZustand(
     val dauerMs: Long,
     val distanzKm: Double,
     val hf: Int? = null,
+    val ziel: ZielSnapshot? = null,
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("laeuft", laeuft)
@@ -259,16 +273,35 @@ data class AufzeichnungsZustand(
         put("dauerMs", dauerMs)
         put("distanzKm", distanzKm)
         hf?.let { put("hf", it) }
+        ziel?.wochenRestKm?.let { km -> zielFeldKm(km)?.let { put(FELD_ZIEL_REST, it) } }
+        ziel?.laengsteKm?.let { km -> zielFeldKm(km)?.let { put(FELD_LAENGSTE, it) } }
     }
 
     companion object {
+        /** Rest zum Wochenziel beim Start der Tour, km. */
+        const val FELD_ZIEL_REST = "zielRest"
+
+        /** Bisher weiteste Tour, km. */
+        const val FELD_LAENGSTE = "laengste"
+
         fun fromJson(json: JsonObject): AufzeichnungsZustand = AufzeichnungsZustand(
             laeuft = json.optionalBoolean("laeuft") ?: false,
             pausiert = json.optionalBoolean("pausiert") ?: false,
             dauerMs = json.requiredLong("dauerMs"),
             distanzKm = json.requiredDouble("distanzKm"),
             hf = json.optionalInt("hf"),
+            ziel = zielAusJson(json),
         )
+
+        private fun zielAusJson(json: JsonObject): ZielSnapshot? {
+            val rest = runCatching { json.optionalDouble(FELD_ZIEL_REST) }.getOrNull()?.let(::zielFeldKm)
+            val laengste = runCatching { json.optionalDouble(FELD_LAENGSTE) }.getOrNull()?.let(::zielFeldKm)
+            return ZielSnapshot(rest, laengste).takeUnless { it.leer }
+        }
+
+        /** Plausibel (endlich, > 0, hoechstens [ZIEL_MAX_KM]) und auf 0,01 km gerundet, sonst `null`. */
+        private fun zielFeldKm(km: Double): Double? =
+            km.takeIf { it.isFinite() && it > 0.0 && it <= ZIEL_MAX_KM }?.let { kotlin.math.round(it * 100.0) / 100.0 }
     }
 }
 

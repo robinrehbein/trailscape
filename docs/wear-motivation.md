@@ -1,7 +1,8 @@
 # Motivation auf der Uhr: Machbarkeit
 
 Frage: (a) ein bis zwei Highlight-Zeilen nach der Fahrt, (b) Wochenserie plus Wochenziel auf einen Blick.
-Ursprünglich nur gelesen; (a) und (b) sind inzwischen gebaut (siehe dort).
+Ursprünglich nur gelesen; (a) und (b) sind inzwischen gebaut (siehe dort), dazu (c) die Zielzeile
+während der Fahrt.
 
 ## Was die Uhr-App heute ist
 
@@ -21,6 +22,7 @@ Ursprünglich nur gelesen; (a) und (b) sind inzwischen gebaut (siehe dort).
     Distanz, HF), gesendet aus `app/.../record/RecordingService.kt` (`sendeZustandAnUhr`) über
     `app/.../wear/WearBridge.kt`, Empfang `app/.../wear/WearListenerService.kt`.
   - Neu seit (a): Handy → Uhr `PFAD_ABSCHLUSS` (bis zu zwei Highlight-Zeilen nach der gespeicherten Tour).
+  - Neu seit (c): optionale Zielfelder `zielRest`/`laengste` im `AufzeichnungsZustand`.
   - Nachrichten sind flüchtig: ohne erreichbare Uhr gehen sie verloren.
 
 ## (a) Highlights nach der Fahrt — gebaut (Minimalform)
@@ -139,6 +141,57 @@ Bekannte Grenzen:
 - Ungeprüft ohne Gerätepaar: Zustellzeit des DataItems, Rendering der Kachel auf runder Anzeige,
   Komplikationsfelder verschiedener Zifferblätter, Verhalten über den Datumswechsel. `:wear` hat keine
   Tests, die Uhrseite ist nur kompiliert (Prüfpunkte: `docs/geraete-pruefliste.md`).
+
+## (c) Zielzeile während der Fahrt — gebaut
+
+Stand: umgesetzt. Während einer laufenden Aufzeichnung zeigen Handy und Uhr eine Zeile wie „Noch
+12 km bis zum Wochenziel", „Wochenziel geschafft ✓", „Noch 8 km bis zur neuen Bestweite",
+„Neue Bestweite ✓" — für den Moment, in dem man überlegt umzukehren.
+- **Logik** (`core/.../LiveZiel.kt`, Tests `LiveZielTest`): `ZielSnapshot(wochenRestKm,
+  laengsteKm)` zum Start der Tour (`zielSnapshot(facts, wochenZielKm, wochenGefahrenKm)`), daraus
+  mit der aktuellen Tour-Distanz rein `zielZeile(snapshot, tourKm)`:
+  1. Wochenziel war zum Start offen und ist noch nicht erreicht → `WochenzielRest(rest − tourKm)`.
+  2. Mit dieser Tour erreicht (≥, auch genau) → `WochenzielGeschafft` — die ersten
+     `GESCHAFFT_FENSTER_KM` (1 km) in jedem Fall, danach nur, solange keine Bestweite nah ist.
+  3. Bestweite nah: Tour ≥ 70 % (`BESTWEITE_NAEHE_ANTEIL`) der weitesten Tour (ab 5 km, wie
+     `personalRecords`) → `BestweiteRest(laengste − tourKm)`; weiter als je zuvor (>) →
+     `NeueBestweite` (bleibt stehen).
+  4. Sonst keine Zeile. Wochenziel schon vor der Tour erreicht oder kein Ziel → nur 3./4.
+  Die Zeile hängt nur an der Distanz, steht also in der Pause still. Reste werden aufgerundet
+  (`zielRestAnzeige`): ab 1 km ganz, darunter in Zehnteln, mindestens 0,1 — nie „Noch 0 km".
+  Die Zahl formatiert `zielZeileZahl(zeile, sprache)`, den Satz baut jede Seite aus eigenen
+  Ressourcen.
+- **Wochenziel**: dasselbe wie Widget und Kachel (`loadZielSnapshot` in
+  `app/.../widget/WidgetStateLoader.kt`, gleiche Rechnung wie `loadWidgetState`; mit aktivem
+  Trainingsplan dessen Wochenziel, sonst das zuletzt auf „Heute" gezeigte bzw. `suggestWeeklyGoal`).
+- **Handy**: `RecordingService` lädt den Snapshot beim Start (und nach einem Dienst-Neustart) auf
+  IO und legt ihn in `RecordingRepository.zielSnapshot` ab (nur, wenn noch dieselbe Aufzeichnung
+  läuft). Live-Leiste (`LiveRecordingCard`) und Fahrmodus (`RideModeScreen`) zeigen die Zeile klein
+  in der Akzentfarbe (`ui/map/LiveZielZeile.kt`, Strings `map_live_goal_*`). Keine Benachrichtigung.
+- **Protokoll**: zwei optionale Zahlen im `AufzeichnungsZustand` (`PFAD_ZUSTAND`), `zielRest` und
+  `laengste` in km (auf 0,01 gerundet), nur geschrieben, wenn vorhanden. **Kein Text** — die Uhr
+  bildet die Zeile selbst, in ihrer Sprache (anders als die Abschlusszeilen aus (a)).
+  - Alte Uhr + neues Handy: Der alte Dekoder liest Felder per Namen und übergeht die neuen.
+  - Neue Uhr + altes Handy: Felder fehlen → `ziel = null` → keine Zeile.
+  - Ohne Snapshot ist das Telegramm byte-gleich zum alten. Kaputte Zielfelder (Text, negativ,
+    NaN, über 10 000 km) fallen einzeln weg, der Zustand bleibt. Tests in `WearProtocolTest`
+    (mit eingefrorener Kopie des alten Dekoders).
+- **Uhr**: `RecordingStatus.zielSnapshot` übernimmt den Snapshot aus jedem Zustand (der letzte
+  gilt), `LiveScreen` (`ui/RecordingScreen.kt`) rechnet mit der eigenen Distanzanzeige und zeigt
+  die Zeile unter Zeit/Distanz/Tempo: 12 sp, Akzentfarbe, höchstens zwei Zeilen, 24 dp Rand; mit
+  Zeile wird der Puls 60 statt 72 sp groß. Strings `wear_live_goal_*` (Deutsch/Englisch).
+  `WearZielTexteTest` (in `:app`, liest die Uhr-Ressourcen) prüft, dass jeder Satz mit
+  dreistelligem Rest in zwei Zeilen à 20 Zeichen passt.
+- **Keine Vibration**: Die Uhr-App nutzt bisher keine Vibrations-API; deshalb bewusst weggelassen.
+
+Bekannte Grenzen:
+- **Snapshot zum Start**: Über den Wochenwechsel (Sonntag → Montag) zählt weiter die Woche des
+  Starts. Eine während der Fahrt importierte Tour ändert den Snapshot nicht.
+- Ohne verbundenes Handy (Uhr zeichnet allein) keine Zeile — die Uhr kennt die Touren nicht.
+- Der erste Zustand kann den Snapshot noch nicht enthalten (Laden auf IO); die Zeile kommt mit
+  dem nächsten Takt (≤ 5 s).
+- Ungeprüft ohne Gerätepaar: Darstellung auf runden Displays, Haken-Glyphe in der Uhrschrift
+  (Prüfpunkte: `docs/geraete-pruefliste.md`).
 
 ## Testbarkeit
 
