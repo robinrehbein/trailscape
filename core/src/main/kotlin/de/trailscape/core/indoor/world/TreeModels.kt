@@ -62,12 +62,12 @@ internal object TreeModels {
 
     /** Grundfarben der Kronen in sRGB (mit der hellen Atlas-Textur multipliziert). */
     private val LEAF = mapOf(
-        Species.BROAD to intArrayOf(84, 116, 50),
-        Species.TALL to intArrayOf(100, 130, 56),
-        Species.CONIFER to intArrayOf(54, 86, 52),
-        Species.SMALL to intArrayOf(92, 122, 52),
-        Species.PINE to intArrayOf(70, 98, 54),
-        Species.BUSH to intArrayOf(82, 114, 48),
+        Species.BROAD to intArrayOf(80, 118, 42),
+        Species.TALL to intArrayOf(96, 132, 48),
+        Species.CONIFER to intArrayOf(50, 86, 50),
+        Species.SMALL to intArrayOf(88, 124, 44),
+        Species.PINE to intArrayOf(66, 98, 50),
+        Species.BUSH to intArrayOf(78, 116, 40),
     )
 
     /** Grundfarbe (sRGB) der Krone einer Art — fuer Kreuzbilder der Waldkoerper. */
@@ -132,25 +132,31 @@ internal object TreeModels {
         bend: Double = 0.8, inset: Double = 0.0, darkBase: Double = 0.88,
     ) {
         val plane = (across cross along).normalized()
-        val mid = base + along * (len * 0.5)
-        val outDir = crown.rel(mid).let { if (it.length() < 1e-4) Vec3(0.0, 1.0, 0.0) else it }
-        val front = (plane dot outDir) >= 0
-        val pn = if (front) plane else -plane
-        val idx = IntArray(4)
         val fs = doubleArrayOf(0.0, 0.0, 1.0, 1.0)
         val gs = doubleArrayOf(-1.0, 1.0, 1.0, -1.0)
+        val ps = Array(4) { base + along * (len * fs[it]) + across * (wid * 0.5 * gs[it]) }
+        val radials = Array(4) {
+            val r = crown.rel(ps[it])
+            val rl = r.length()
+            if (rl < 1e-4) Vec3(0.0, 1.0, 0.0) else Vec3(r.x / rl, r.y / rl, r.z / rl)
+        }
+        // Vorderseite dorthin, wohin die gebogenen Normalen im Mittel zeigen: Von hinten gesehen
+        // dreht Filament die Normale um — sie zeigt dann vom Licht der Kronenoberseite weg (dunkel)
+        // statt, wie bei einer falsch herum liegenden Karte, als helle Flaeche zur Sonne.
+        val avg = radials[0] + radials[1] + radials[2] + radials[3]
+        val front = (plane dot avg) >= 0
+        val pn = if (front) plane else -plane
+        val idx = IntArray(4)
         for (k in 0 until 4) {
             val f = fs[k]
             val g = gs[k]
-            val p = base + along * (len * f) + across * (wid * 0.5 * g)
-            val r = crown.rel(p)
-            val rl = r.length()
-            val radial = if (rl < 1e-4) Vec3(0.0, 1.0, 0.0) else Vec3(r.x / rl, r.y / rl, r.z / rl)
-            val n = (pn * (1 - bend) + radial * bend + Vec3(0.0, 0.18, 0.0)).normalized()
+            val p = ps[k]
+            val rl = crown.rel(p).length()
+            val n = (pn * (1 - bend) + radials[k] * bend + Vec3(0.0, 0.18, 0.0)).normalized()
             // Verschattung: innen und unten dunkler, oben und aussen heller.
             val depth = rl.coerceIn(0.0, 1.15)
             val ht = ((p.y - crown.bottom) / max(0.5, crown.top - crown.bottom)).coerceIn(0.0, 1.0)
-            var shade = tint * (0.46 + 0.36 * depth.pow(1.3) + 0.26 * ht)
+            var shade = tint * (0.4 + 0.28 * depth.pow(1.3) + 0.28 * ht)
             if (f == 0.0) shade *= darkBase
             val s = (if (alongIsS) f else (g + 1) / 2).coerceIn(0.0, 1.0)
             val t = (if (alongIsS) (g + 1) / 2 else f).coerceIn(0.0, 1.0)
@@ -202,22 +208,22 @@ internal object TreeModels {
     /** Kartenzahlen je Form und Stufe: (Zweigkarten, Massekarten innen, Massekarten aussen). */
     private fun counts(shape: Shape, lod: Lod): IntArray = when (lod) {
         Lod.NEAR -> when (shape) {
-            Shape.BROAD -> intArrayOf(104, 12, 0)
-            Shape.TALL -> intArrayOf(76, 9, 0)
-            Shape.SMALL -> intArrayOf(66, 8, 0)
+            Shape.BROAD -> intArrayOf(104, 10, 0)
+            Shape.TALL -> intArrayOf(76, 8, 0)
+            Shape.SMALL -> intArrayOf(66, 7, 0)
             Shape.BUSH -> intArrayOf(20, 4, 0)
         }
         Lod.MID -> when (shape) {
-            Shape.BROAD -> intArrayOf(0, 4, 32)
-            Shape.TALL -> intArrayOf(0, 3, 24)
-            Shape.SMALL -> intArrayOf(0, 3, 20)
+            Shape.BROAD -> intArrayOf(44, 4, 0)
+            Shape.TALL -> intArrayOf(32, 3, 0)
+            Shape.SMALL -> intArrayOf(28, 3, 0)
             Shape.BUSH -> intArrayOf(0, 2, 9)
         }
         Lod.FAR -> when (shape) {
-            Shape.BROAD -> intArrayOf(0, 0, 13)
-            Shape.TALL -> intArrayOf(0, 0, 10)
-            Shape.SMALL -> intArrayOf(0, 0, 9)
-            Shape.BUSH -> intArrayOf(0, 0, 5)
+            Shape.BROAD -> intArrayOf(0, 0, 8)
+            Shape.TALL -> intArrayOf(0, 0, 7)
+            Shape.SMALL -> intArrayOf(0, 0, 6)
+            Shape.BUSH -> intArrayOf(0, 0, 4)
         }
     }
 
@@ -290,9 +296,9 @@ internal object TreeModels {
         }
         val (nTwig, nInner, nMass) = counts(shape, lod).let { Triple(it[0], it[1], it[2]) }
         val baseLen = when (shape) {
-            Shape.BROAD -> rx * 0.64
-            Shape.TALL -> rx * 0.9
-            Shape.SMALL -> rx * 0.6
+            Shape.BROAD -> rx * 0.58
+            Shape.TALL -> rx * 0.85
+            Shape.SMALL -> rx * 0.55
             Shape.BUSH -> rx * 0.78
         }
         fun clampY(p: Vec3, len: Double): Vec3 = if (shape == Shape.BUSH) Vec3(p.x, max(p.y, len * 0.35), p.z) else p
@@ -309,7 +315,7 @@ internal object TreeModels {
             val yScale = ry / rx
             var p = Vec3(c.x + d.x * clumpR * f, c.y + d.y * clumpR * f * yScale, c.z + d.z * clumpR * f)
             p = envelope(p, 1.04)
-            val len = baseLen * rnd.range(0.8, 1.2)
+            val len = baseLen * rnd.range(0.8, 1.2) * (if (lod == Lod.MID) 1.55 else 1.0)
             p = clampY(p, len)
             val along = (d + rnd.unit() * 0.55 + Vec3(0.0, 0.35, 0.0)).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
@@ -320,11 +326,14 @@ internal object TreeModels {
         // Laubmasse innen (dunkel, gegen Durchblick)
         for (i in 0 until nInner) {
             val d = rnd.unit()
-            val p = cr.c + Vec3(d.x * rx, d.y * ry, d.z * rx) * rnd.range(0.15, 0.6)
-            val len = rx * rnd.range(0.8, 1.05)
+            // nicht durch die Kronenmitte (sonst zeigen die gebogenen Normalen einer Karte in
+            // entgegengesetzte Richtungen), eher oben: von unten verdecken die Zweigkarten sie
+            val dd = Vec3(d.x, abs(d.y) * 0.8 + 0.1, d.z).normalized()
+            val p = cr.c + Vec3(dd.x * rx, dd.y * ry, dd.z * rx) * rnd.range(0.4, 0.65)
+            val len = rx * rnd.range(0.5, 0.65)
             val along = (Vec3(0.0, 1.0, 0.0) + rnd.unit() * 0.6).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
-            card(crown, clampY(p, len) - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * 0.9, s.hue, bend = 0.9)
+            card(crown, clampY(p, len) - along * (len * 0.5), along, across, len, len, FoliageAtlas.MASS, false, cr, leaf, s.tint * 0.72, s.hue, bend = 0.9)
         }
         // Laubmasse aussen (mittel/fern): grosse Karten auf der Kronenschale
         for (i in 0 until nMass) {
@@ -335,7 +344,7 @@ internal object TreeModels {
             val f = 0.5 + 0.45 * sqrt(rnd.next())
             var p = Vec3(c.x + d.x * rr * f, c.y + d.y * rr * f * (ry / rx), c.z + d.z * rr * f)
             p = envelope(p, 1.0)
-            val len = rx * (if (lod == Lod.FAR) rnd.range(0.85, 1.05) else rnd.range(0.62, 0.8)) * (if (shape == Shape.TALL) 1.4 else 1.0)
+            val len = rx * (if (lod == Lod.FAR) rnd.range(0.95, 1.15) else rnd.range(0.62, 0.8)) * (if (shape == Shape.TALL) 1.4 else 1.0)
             p = clampY(p, len)
             val along = (d * 0.6 + rnd.unit() * 0.4 + Vec3(0.0, 0.5, 0.0)).normalized()
             val across = perp(along, rnd.range(0.0, 2 * PI))
@@ -366,7 +375,6 @@ internal object TreeModels {
         }
         val cr = Crown(Vec3(0.0, b0 + span * 0.38, 0.0), r0 * 0.8, span * 0.6, b0, h)
         if (lod == Lod.FAR) {
-            stem(trunk, lod, 0.014 * h, max(b0, 0.1 * h) + 0.3, bark)
             // Kreuzbild aus drei senkrechten Karten (60° versetzt) mit dem ganzen Baum
             for (k in 0 until 3) {
                 val a = s.turn + k * PI / 3
@@ -384,13 +392,13 @@ internal object TreeModels {
         stem(trunk, lod, 0.015 * h, 0.9 * h, bark)
         // Astquirle als Schuerzen: je Quirl ein Kranz schraeger Trapezkarten (oben am Stamm,
         // unten weit und haengend), Quirle ueberlappen um die Haelfte.
-        val drop = 1.6 * span / tiers
+        val drop = 2.1 * span / tiers
         for (k in 0..tiers) {
             val apex = k == tiers
             val yb = if (apex) h - drop * 0.9 else b0 + (span - drop * 0.6) * k / tiers + rnd.range(-0.08, 0.08) * drop
-            val yt = if (apex) h else yb + drop * 0.62
+            val yt = if (apex) h else yb + drop * 0.8
             val rb = if (apex) r0 * 0.12 + 0.15 else env(yb) * 1.04 + 0.15
-            val rt = if (apex) 0.02 else rb * 0.12 + 0.08
+            val rt = if (apex) 0.02 else rb * 0.3 + 0.08
             val n = if (apex) 4 else perTier
             val half = PI / n * 1.32
             for (j in 0 until n) {
@@ -416,8 +424,8 @@ internal object TreeModels {
      */
     private fun quadCard(m: MeshBuilder, pts: Array<Vec3>, reg: FoliageAtlas.Region, crown: Crown, leaf: IntArray, tint: Double, hue: Double, topShade: Double, bend: Double = 0.72) {
         val plane = ((pts[1] - pts[0]) cross (pts[3] - pts[0])).normalized()
-        val mid = (pts[0] + pts[1] + pts[2] + pts[3]) * 0.25
-        val front = (plane dot crown.rel(mid)) >= 0
+        val avg = pts.fold(Vec3(0.0, 0.0, 0.0)) { acc, p -> acc + crown.rel(p).normalized() }
+        val front = (plane dot avg) >= 0
         val pn = if (front) plane else -plane
         val st = arrayOf(doubleArrayOf(0.0, 0.0), doubleArrayOf(1.0, 0.0), doubleArrayOf(1.0, 1.0), doubleArrayOf(0.0, 1.0))
         val idx = IntArray(4)

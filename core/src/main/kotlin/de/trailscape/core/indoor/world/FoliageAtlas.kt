@@ -121,9 +121,9 @@ internal object FoliageAtlas {
         fun toImage(regions: List<Region>): RgbaImage {
             val img = RgbaImage(w, h)
             fun rgb(lum: Double, hue: Double): IntArray {
-                val r = lum * (0.9 + 0.12 * hue)
+                val r = lum * (0.86 + 0.12 * hue)
                 val g = lum * (1.0 + 0.02 * hue)
-                val b = lum * (0.8 - 0.14 * hue)
+                val b = lum * (0.72 - 0.14 * hue)
                 return intArrayOf(q(r), q(g), q(b))
             }
             // Mittlere Farbe je Motiv fuer die durchsichtigen Pixel.
@@ -361,9 +361,9 @@ internal object FoliageAtlas {
     private fun broadTree(c: Canvas, r: Region) {
         val rnd = Rnd(0x5b03)
         val cx = r.x + r.w * 0.5
-        stroke(c, cx, r.y + r.h - 2.0, cx, r.y + r.h * 0.42, 9.0, 5.0, 0.36, 1.6, shadeSide = true)
-        stroke(c, cx, r.y + r.h * 0.6, cx - 22, r.y + r.h * 0.38, 4.0, 2.0, 0.34, 1.6)
-        stroke(c, cx, r.y + r.h * 0.58, cx + 20, r.y + r.h * 0.34, 4.0, 2.0, 0.34, 1.6)
+        stroke(c, cx, r.y + r.h - 2.0, cx, r.y + r.h * 0.42, 5.0, 3.0, 0.26, 1.6, shadeSide = true)
+        stroke(c, cx, r.y + r.h * 0.6, cx - 22, r.y + r.h * 0.38, 2.6, 1.4, 0.26, 1.6)
+        stroke(c, cx, r.y + r.h * 0.58, cx + 20, r.y + r.h * 0.34, 2.6, 1.4, 0.26, 1.6)
         val blobs = ArrayList<DoubleArray>()
         val ccy = r.y + r.h * 0.36
         for (k in 0 until 11) {
@@ -379,7 +379,7 @@ internal object FoliageAtlas {
         val cx = r.x + r.w * 0.5
         val top = r.y + 5.0
         val bottom = r.y + r.h - 34.0
-        stroke(c, cx, r.y + r.h - 2.0, cx, bottom - 20, 7.0, 4.0, 0.32, 1.4)
+        stroke(c, cx, r.y + r.h - 2.0, cx, bottom - 20, 4.5, 3.0, 0.26, 1.4)
         val maxHalf = r.w * 0.4
         val tiers = 9.0
         for (y in r.y + 4 until r.y + r.h - 18) for (x in r.x + 4 until r.x + r.w - 4) {

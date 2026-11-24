@@ -347,13 +347,18 @@ internal class TreesLayer : TileLayer {
             used += cost
             placed += c
         }
-        for ((target, maxDist) in listOf(TreeModels.Lod.MID to MID_M, TreeModels.Lod.NEAR to DETAIL_M)) {
-            for (c in placed) {
-                if (c.dist > maxDist) break
+        // Vom Weg nach aussen: die naechsten Baeume bekommen zuerst die volle Stufe (sonst verbrauchte
+        // im dichten Wald schon die mittlere Stufe das Budget, und neben dem Weg stuende keine Blattkrone).
+        for (c in placed) {
+            if (c.dist > MID_M) break
+            val targets = if (c.dist <= DETAIL_M) listOf(TreeModels.Lod.NEAR, TreeModels.Lod.MID) else listOf(TreeModels.Lod.MID)
+            for (target in targets) {
                 val delta = TreeModels.cost(c.spec.species, target) - TreeModels.cost(c.spec.species, c.lod)
-                if (used + delta > budget) break
-                used += delta
-                c.lod = target
+                if (used + delta <= budget) {
+                    used += delta
+                    c.lod = target
+                    break
+                }
             }
         }
         val trunkMat = TileMaterial(WorldNames.MAT_TREE_TRUNK, roughness = 0.95f)
@@ -416,7 +421,7 @@ internal class TreesLayer : TileLayer {
             seed = seed,
             turn = r(6) * 6.283,
             pale = species == TreeModels.Species.TALL && r(7) < 0.5,
-            bare = if (species == TreeModels.Species.CONIFER && inForest) 0.14 + 0.22 * r(10) else 0.05,
+            bare = if (species == TreeModels.Species.CONIFER && inForest) (if (trackDist < DENSE_M) 0.26 else 0.14) + 0.2 * r(10) else 0.05,
             hue = regional + (r(11) - 0.5) * 0.5,
         )
     }
@@ -598,10 +603,10 @@ internal class TreesLayer : TileLayer {
         const val DENSE_M = 28.0
 
         /** Hoechster Abstand fuer die mittlere bzw. feinste Stufe (falls das Budget reicht). */
-        const val MID_M = 45.0
-        const val DETAIL_M = 24.0
-        const val DENSE_SPACING_M = 6.0
-        const val OPEN_SPACING_M = 8.0
+        const val MID_M = 40.0
+        const val DETAIL_M = 16.0
+        const val DENSE_SPACING_M = 7.0
+        const val OPEN_SPACING_M = 9.0
 
         /** Mindestabstand des Stamms vom Fahrbahnrand. */
         const val TRACK_CLEARANCE_M = 2.8
@@ -615,7 +620,7 @@ internal class TreesLayer : TileLayer {
         const val UG_STEP_M = 1.4
 
         /** Hoechstens so viele Dreiecke Einzelbaeume je Kachel (Stufe 0). */
-        const val SINGLE_TREE_MAX = 11_000
+        const val SINGLE_TREE_MAX = 13_000
 
         /** Hoechstens so viele Dreiecke Bodenbewuchs je Kachel. */
         const val UNDERGROWTH_MAX = 1_600
