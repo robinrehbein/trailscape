@@ -28,6 +28,9 @@ import de.trailscape.app.ui.components.NoticeBox
 import de.trailscape.app.ui.defaultTrainingProfile
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.app.ui.theme.LocalSignalColors
+import de.trailscape.core.PlanFeasibility
+import de.trailscape.core.TrainingPlan
+import de.trailscape.core.i18n.CoreTexts
 
 /**
  * # Hinweise im Trainings-Tab — leise, und hoechstens eine Warnflaeche
@@ -182,4 +185,26 @@ internal fun UnconfirmedProfileNotice(asCard: Boolean, onOpenProfile: () -> Unit
             onAction = onOpenProfile,
         )
     }
+}
+
+/**
+ * Die ruhigen Zeilen unter der Zielkarte, die [PlanFeasibility] zusaetzlich
+ * zur Tragfaehigkeitskarte hat: der Zeitbudget-Satz (nur wenn die Karte
+ * ansteht und das Budget der Engpass ist) und der Hinweis zur Zielzeit.
+ * Beide sind Information, keine Warnflaeche.
+ *
+ * @param feasibilityOpen die Tragfaehigkeitskarte steht an (nicht quittiert).
+ */
+internal fun feasibilityNoteLines(
+    plan: TrainingPlan,
+    feasibility: PlanFeasibility,
+    feasibilityOpen: Boolean,
+    texts: CoreTexts,
+): List<String> = buildList {
+    val budget = plan.preferences?.validWeeklyHours()
+    val needed = feasibility.hoursNeededForGoal
+    if (feasibilityOpen && feasibility.budgetLimited && budget != null && needed != null) {
+        add(texts.training.planBudgetLimited(budget, needed))
+    }
+    feasibility.targetTimeMessage?.takeIf { it.isNotBlank() }?.let { add(it) }
 }

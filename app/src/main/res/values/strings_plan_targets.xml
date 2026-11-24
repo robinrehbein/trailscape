@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Zielbereiche und Trainingsphase im Plan (ui/training/SessionTargets.kt, PlanSection.kt, ui/today/TodayCards.kt).
+    Schluessel-Praefix: plan_targets_
+    Regeln: docs/i18n.md. Gegenstueck in values-en/strings_plan_targets.xml.
+-->
+<resources>
+    <!-- %1$s Zonenname, %2$s fertiger Wertetext -->
+    <string name="plan_targets_line">%1$s: %2$s</string>
+    <string name="plan_targets_hr">%1$s bpm</string>
+    <string name="plan_targets_power">%1$s W</string>
+    <!-- %1$s Puls, %2$s Leistung -->
+    <string name="plan_targets_values">%1$s · %2$s</string>
+    <!-- %1$s Wert(e), die nur geschätzt sind -->
+    <string name="plan_targets_estimated">%1$s (geschätzt)</string>
+</resources>

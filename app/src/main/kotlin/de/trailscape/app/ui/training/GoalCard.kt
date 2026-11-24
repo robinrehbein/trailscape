@@ -31,6 +31,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SelectableDates
@@ -58,7 +59,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -74,14 +77,22 @@ import de.trailscape.app.i18n.asString
 import de.trailscape.app.ui.components.NeutralButton
 import de.trailscape.app.ui.components.OneUiDialog
 import de.trailscape.app.ui.components.OneUiTextField
+import de.trailscape.app.ui.components.PillSegments
+import de.trailscape.app.ui.today.PLAN_DAY_CODES
 import de.trailscape.app.ui.theme.CardGap
 import de.trailscape.app.ui.theme.CardPadding
 import de.trailscape.core.Goal
 import de.trailscape.core.GoalFinishPrediction
+import de.trailscape.core.GoalType
+import de.trailscape.core.PlanPreferences
 import de.trailscape.core.PROGNOSIS_LOOKBACK_DAYS
 import de.trailscape.core.RideInfo
 import de.trailscape.core.TrainingPlan
 import de.trailscape.core.assessFitness
+import de.trailscape.core.errorFitnessBlockLength
+import de.trailscape.core.fitnessGoal
+import de.trailscape.core.i18n.CoreTexts
+import de.trailscape.core.typicalAvgSpeedKmh
 import de.trailscape.core.formatGoalDuration
 import de.trailscape.core.generatePlan
 import de.trailscape.core.i18n.AppLanguage
@@ -166,6 +177,16 @@ internal fun goalSummaryParts(
         days == 1L -> UiText.Res(R.string.training_goal_date_tomorrow)
         days < 14 -> UiText.Plural(R.plurals.training_goal_days_left_count, days.toInt())
         else -> UiText.Plural(R.plurals.training_goal_weeks_left_count, (days / 7.0).roundToInt())
+    }
+    if (goal.type == GoalType.FITNESS) {
+        // Fitnessblock: keine Zieldistanz; die Vergleichsrunde ist optional.
+        val parts = mutableListOf<UiText>(UiText.Res(R.string.plan_inputs_goal_fitness_kind))
+        if (goal.distanceKm > 0) {
+            parts.add(UiText.Res(R.string.plan_inputs_goal_fitness_benchmark, listOf(formatGoalKm(goal.distanceKm, language))))
+        }
+        parts.add(UiText.Res(R.string.plan_inputs_goal_fitness_ends, listOf(formatGoalDate(date, language))))
+        parts.add(remaining)
+        return parts
     }
     val parts = mutableListOf<UiText>(
         UiText.Res(R.string.common_value_km, listOf(formatGoalKm(goal.distanceKm, language))),
@@ -273,77 +294,94 @@ fun GoalOverviewCard(
                 )
             }
 
-            // Die beiden Zeiten nebeneinander; IntrinsicSize.Min haelt die
-            // Kacheln gleich hoch, auch wenn eine davon zweizeilig wird.
-            Row(
-                modifier = Modifier.height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                TimeTile(
-                    label = stringResource(R.string.training_goal_current_label),
-                    value = p?.let { formatHoursMinutes(it.currentMin) } ?: "–",
-                    accent = false,
-                )
-                val target = goal.targetDurationMin
-                if (target != null) {
-                    TimeTile(
-                        label = stringResource(R.string.training_goal_target_label),
-                        value = formatHoursMinutes(target),
-                        accent = true,
-                    )
-                } else {
-                    TimeTile(
-                        label = stringResource(R.string.training_goal_target_label),
-                        value = stringResource(R.string.training_goal_target_add_action),
-                        accent = true,
-                        small = true,
-                        onClick = onEdit,
+            if (goal.type == GoalType.FITNESS) {
+                // Ein Fitnessblock hat weder Zieldistanz noch Zielzeit: keine
+                // Prognose, nur ein Satz, wie der Block endet.
+                Surface(
+                    color = theme.primaryContainer,
+                    contentColor = theme.onPrimaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = stringResource(R.string.plan_inputs_goal_fitness_body),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp),
                     )
                 }
-            }
-
-            if (p != null) {
-                PrognosisTrack(
-                    currentMin = p.currentMin,
-                    targetMin = goal.targetDurationMin,
-                    atEventMin = p.atEventMin,
-                    uncertaintyMin = p.uncertaintyMin,
-                )
-            }
-
-            Surface(
-                color = theme.primaryContainer,
-                contentColor = theme.onPrimaryContainer,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = buildAnnotatedString {
-                            append(sentence)
-                            // Die fette Zeit steht als Argument im Satz; hier
-                            // wird sie nur wiedergefunden und hervorgehoben.
-                            val start = bold?.let { sentence.indexOf(it) } ?: -1
-                            if (bold != null && start >= 0) {
-                                addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, start + bold.length)
-                            }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
+            } else {
+                // Die beiden Zeiten nebeneinander; IntrinsicSize.Min haelt die
+                // Kacheln gleich hoch, auch wenn eine davon zweizeilig wird.
+                Row(
+                    modifier = Modifier.height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    TimeTile(
+                        label = stringResource(R.string.training_goal_current_label),
+                        value = p?.let { formatHoursMinutes(it.currentMin) } ?: "–",
+                        accent = false,
                     )
-                    note.hint?.let {
-                        Text(
-                            text = it.asString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp),
+                    val target = goal.targetDurationMin
+                    if (target != null) {
+                        TimeTile(
+                            label = stringResource(R.string.training_goal_target_label),
+                            value = formatHoursMinutes(target),
+                            accent = true,
+                        )
+                    } else {
+                        TimeTile(
+                            label = stringResource(R.string.training_goal_target_label),
+                            value = stringResource(R.string.training_goal_target_add_action),
+                            accent = true,
+                            small = true,
+                            onClick = onEdit,
                         )
                     }
                 }
-            }
 
-            TextButton(
-                onClick = onExplain,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) { Text(stringResource(R.string.training_goal_explain_action)) }
+                if (p != null) {
+                    PrognosisTrack(
+                        currentMin = p.currentMin,
+                        targetMin = goal.targetDurationMin,
+                        atEventMin = p.atEventMin,
+                        uncertaintyMin = p.uncertaintyMin,
+                    )
+                }
+
+                Surface(
+                    color = theme.primaryContainer,
+                    contentColor = theme.onPrimaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = buildAnnotatedString {
+                                append(sentence)
+                                // Die fette Zeit steht als Argument im Satz; hier
+                                // wird sie nur wiedergefunden und hervorgehoben.
+                                val start = bold?.let { sentence.indexOf(it) } ?: -1
+                                if (bold != null && start >= 0) {
+                                    addStyle(SpanStyle(fontWeight = FontWeight.Bold), start, start + bold.length)
+                                }
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        note.hint?.let {
+                            Text(
+                                text = it.asString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                }
+
+                TextButton(
+                    onClick = onExplain,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) { Text(stringResource(R.string.training_goal_explain_action)) }
+            }
         }
     }
 }
@@ -698,26 +736,173 @@ internal fun ExplainRow(
     }
 }
 
+/** Kürzeste und längste Blocklänge eines Fitnessziels (Spiegel der Grenzen in `:core`). */
+internal const val FITNESS_BLOCK_MIN_WEEKS = 4
+internal const val FITNESS_BLOCK_MAX_WEEKS = 16
+
+/** Vorgabe für die Blocklänge, wenn noch kein Fitnessplan besteht. */
+internal const val FITNESS_BLOCK_DEFAULT_WEEKS = 8
+
+/** Obergrenze des Zeitbudgets (Spiegel von `PlanPreferences.MAX_PLAUSIBLE_WEEKLY_HOURS`). */
+private const val MAX_WEEKLY_HOURS = 40.0
+
+/** Alle sieben Wochentage als Bitmaske (Bit 0 = Mo … Bit 6 = So). */
+internal const val ALL_DAYS_MASK = 0b1111111
+
+internal fun daysOfMask(mask: Int): List<Int> = (0..6).filter { mask and (1 shl it) != 0 }
+
+internal fun maskOfDays(days: Collection<Int>): Int = days.filter { it in 0..6 }.fold(0) { m, d -> m or (1 shl d) }
+
+/** Was am Formular falsch ist; die Anzeige macht daraus den Satz. */
+internal enum class GoalFormError { NAME, DISTANCE, DATE, TARGET, FITNESS_WEEKS, BENCHMARK, HOURS }
+
+/** Die Eingaben des Zielblatts als Rohtexte, so wie sie im Formular stehen. */
+internal data class GoalFormInput(
+    val name: String,
+    val fitness: Boolean,
+    val distanceText: String = "",
+    val ascentText: String = "",
+    val date: LocalDate? = null,
+    val targetText: String = "",
+    val weeksText: String = "",
+    val benchmarkText: String = "",
+    /** Gewählte Trainingstage als Bitmaske; alle sieben = keine Einschränkung. */
+    val daysMask: Int = ALL_DAYS_MASK,
+    /** Tag der langen Tour (0 = Mo … 6 = So), `-1` = automatisch. */
+    val longRideDay: Int = -1,
+    val hoursText: String = "",
+)
+
+internal sealed interface GoalFormResult {
+    /** [fitnessWeeks] ist nur bei einem Fitnessziel gesetzt. */
+    data class Ok(val goal: Goal, val preferences: PlanPreferences?, val fitnessWeeks: Int?) : GoalFormResult
+
+    data class Invalid(val error: GoalFormError) : GoalFormResult
+}
+
+/** Zeitbudget aus dem Textfeld: leer = `null`; ungültig = `Result.failure`. */
+internal fun parseWeeklyHours(text: String): Result<Double?> {
+    val raw = text.trim().replace(',', '.')
+    if (raw.isEmpty()) return Result.success(null)
+    val value = raw.toDoubleOrNull()
+    return if (value != null && value.isFinite() && value > 0 && value <= MAX_WEEKLY_HOURS) {
+        Result.success(value)
+    } else {
+        Result.failure(IllegalArgumentException(raw))
+    }
+}
+
 /**
- * Das Zielformular als Blatt: Name, Distanz, Hoehenmeter (optional),
- * Zieldatum und — neu — Zielzeit (optional, „h:mm").
+ * Die Präferenzen aus den Eingaben; `null`, wenn sie nichts festlegen. Sieben
+ * gewählte Tage sind keine Einschränkung; die lange Tour muss auf einen
+ * gewählten Tag fallen.
+ */
+internal fun buildPlanPreferences(daysMask: Int, longRideDay: Int, weeklyHours: Double?): PlanPreferences? {
+    val days = daysOfMask(daysMask)
+    val restricted = days.takeIf { it.isNotEmpty() && it.size < 7 }
+    val longDay = longRideDay.takeIf { it in 0..6 && (days.isEmpty() || it in days) }
+    return PlanPreferences(trainingDays = restricted, longRideDay = longDay, weeklyHours = weeklyHours)
+        .takeUnless { it.isEmpty }
+}
+
+/** Vergleichbare Form von Präferenzen: bereinigt, leer = `null`, sieben Tage = keine Einschränkung. */
+internal fun PlanPreferences?.normalizedForCompare(): PlanPreferences? = this
+    ?.let {
+        PlanPreferences(
+            trainingDays = it.normalizedDays()?.takeIf { d -> d.size < 7 },
+            longRideDay = it.validLongRideDay(),
+            weeklyHours = it.validWeeklyHours(),
+        )
+    }
+    ?.takeUnless { it.isEmpty }
+
+/** Liest das Formular. Reihenfolge der Fehler wie im Blatt von oben nach unten. */
+internal fun parseGoalForm(input: GoalFormInput, now: Long): GoalFormResult {
+    val name = input.name.trim()
+    if (name.isEmpty()) return GoalFormResult.Invalid(GoalFormError.NAME)
+    val goal: Goal
+    var fitnessWeeks: Int? = null
+    if (input.fitness) {
+        val weeks = input.weeksText.trim().toIntOrNull()
+        if (weeks == null || weeks !in FITNESS_BLOCK_MIN_WEEKS..FITNESS_BLOCK_MAX_WEEKS) {
+            return GoalFormResult.Invalid(GoalFormError.FITNESS_WEEKS)
+        }
+        val benchmarkRaw = input.benchmarkText.trim().replace(',', '.')
+        val benchmark = if (benchmarkRaw.isEmpty()) 0.0 else benchmarkRaw.toDoubleOrNull()
+        if (benchmark == null || !benchmark.isFinite() || benchmark < 0) {
+            return GoalFormResult.Invalid(GoalFormError.BENCHMARK)
+        }
+        fitnessWeeks = weeks
+        goal = fitnessGoal(name, weeks, now, benchmarkKm = benchmark)
+    } else {
+        val distance = input.distanceText.trim().replace(',', '.').toDoubleOrNull()
+        val ascentRaw = input.ascentText.trim().replace(',', '.')
+        val ascent = if (ascentRaw.isEmpty()) null else ascentRaw.toDoubleOrNull()
+        val target = if (input.targetText.isBlank()) null else parseGoalDuration(input.targetText)
+        val date = input.date
+        when {
+            distance == null || distance <= 0 -> return GoalFormResult.Invalid(GoalFormError.DISTANCE)
+            date == null -> return GoalFormResult.Invalid(GoalFormError.DATE)
+            input.targetText.isNotBlank() && target == null -> return GoalFormResult.Invalid(GoalFormError.TARGET)
+        }
+        val dateMs = date.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        goal = Goal(name = name, distanceKm = distance, ascentM = ascent, date = dateMs, targetDurationMin = target)
+    }
+    val hours = parseWeeklyHours(input.hoursText).getOrElse { return GoalFormResult.Invalid(GoalFormError.HOURS) }
+    return GoalFormResult.Ok(goal, buildPlanPreferences(input.daysMask, input.longRideDay, hours), fitnessWeeks)
+}
+
+/**
+ * Muss der Plan neu gerechnet werden? Ja, sobald sich etwas ändert, woraus er
+ * entsteht: Zieltyp, Strecke und Datum (Fitness: Blocklänge und Vergleichsrunde),
+ * **Zielzeit** (sie bestimmt die Zieltempo-Abschnitte) und die Präferenzen.
+ * Nur der Name ändert den Plan nicht.
+ */
+internal fun planNeedsRebuild(
+    plan: TrainingPlan?,
+    goal: Goal,
+    preferences: PlanPreferences?,
+    fitnessWeeks: Int?,
+): Boolean {
+    if (plan == null) return true
+    val old = plan.goal
+    if (old.type != goal.type) return true
+    if (old.targetDurationMin != goal.targetDurationMin) return true
+    if (old.distanceKm != goal.distanceKm) return true
+    if (preferences.normalizedForCompare() != plan.preferences.normalizedForCompare()) return true
+    return when (goal.type) {
+        GoalType.FITNESS -> fitnessWeeks != plan.weeks.size
+        GoalType.EVENT -> {
+            val zone = ZoneId.systemDefault()
+            old.ascentM != goal.ascentM ||
+                Instant.ofEpochMilli(old.date).atZone(zone).toLocalDate() !=
+                Instant.ofEpochMilli(goal.date).atZone(zone).toLocalDate()
+        }
+    }
+}
+
+/**
+ * Das Zielformular als Blatt: Zieltyp (Event oder Fitness), Name, je nach Typ
+ * Distanz/Höhenmeter/Datum/Zielzeit oder Blocklänge/Vergleichsrunde, dazu die
+ * Plan-Präferenzen (Trainingstage, Tag der langen Tour, Wochenstunden).
  *
  * Port von `_buildGoalCard` (`lib/screens/training_screen.dart`), frueher die
  * Karte „Dein Ziel" am Ende des Plan-Kapitels. Die Felder werden beim Oeffnen
- * aus dem vorhandenen Plan vorbefuellt.
+ * aus dem vorhandenen Plan (samt [TrainingPlan.preferences]) vorbefuellt; ohne
+ * Plan kommt das Zeitbudget aus [profileWeeklyHours].
  *
  * ## Zwei Wege zum Speichern
- *  * **„Plan erstellen"** — ohne Plan oder wenn sich Distanz, Hoehenmeter oder
- *    Datum geaendert haben: Dann passt der alte Plan nicht mehr und wird mit
- *    `generatePlan` neu gerechnet.
- *  * **„Speichern"** — wenn nur Name oder Zielzeit anders sind: Der Plan
- *    bleibt, nur das Ziel darin wird aktualisiert. Eine Zielzeit einzutragen
- *    soll nicht zwoelf Wochen Planung verwerfen.
+ *  * **„Plan erstellen"** — ohne Plan oder wenn sich etwas geaendert hat,
+ *    woraus der Plan entsteht ([planNeedsRebuild]: Strecke, Datum, Zielzeit,
+ *    Zieltyp, Praeferenzen): Der Plan wird mit `generatePlan` neu gerechnet.
+ *  * **„Speichern"** — wenn nur der Name anders ist: Der Plan bleibt.
  *
  * „Plan löschen" bleibt die zerstoererische Aktion mit Rueckfrage.
  *
  * @param onMessage meldet das Ergebnis („Plan mit 12 Wochen erstellt.") an die
  *   Snackbar des Screens — das Blatt schliesst sich danach.
+ * @param profileWeeklyHours Wochenstunden aus dem Profil; Vorgabe des
+ *   Zeitbudgets bei einem neuen Plan.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -728,6 +913,7 @@ fun GoalEditorSheet(
     onMessage: (String) -> Unit,
     onDismiss: () -> Unit,
     currentCtl: Double? = null,
+    profileWeeklyHours: Double? = null,
 ) {
     val coreTexts = LocalCoreTexts.current
     val formats = LocalAppFormats.current
@@ -736,74 +922,110 @@ fun GoalEditorSheet(
     val resources = LocalContext.current.resources
     val theme = MaterialTheme.colorScheme
     val existing = plan?.goal
+    val existingPrefs = plan?.preferences
 
+    var fitness by rememberSaveable { mutableStateOf(existing?.type == GoalType.FITNESS) }
     var name by rememberSaveable { mutableStateOf(existing?.name ?: "") }
     var distanceText by rememberSaveable {
-        mutableStateOf(existing?.let { formatGoalNumber(it.distanceKm) } ?: "")
+        mutableStateOf(existing?.takeIf { it.type == GoalType.EVENT }?.let { formatGoalNumber(it.distanceKm) } ?: "")
     }
     var ascentText by rememberSaveable {
         mutableStateOf(existing?.ascentM?.let { formatGoalNumber(it) } ?: "")
     }
     var goalDate by rememberSaveable {
         mutableStateOf(
-            existing?.let { Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate() },
+            existing?.takeIf { it.type == GoalType.EVENT }
+                ?.let { Instant.ofEpochMilli(it.date).atZone(ZoneId.systemDefault()).toLocalDate() },
         )
     }
     var targetText by rememberSaveable {
         mutableStateOf(existing?.targetDurationMin?.let { formatGoalDuration(it) } ?: "")
     }
+    var weeksText by rememberSaveable {
+        mutableStateOf(
+            (
+                if (existing?.type == GoalType.FITNESS) {
+                    plan.weeks.size.coerceIn(FITNESS_BLOCK_MIN_WEEKS, FITNESS_BLOCK_MAX_WEEKS)
+                } else {
+                    FITNESS_BLOCK_DEFAULT_WEEKS
+                }
+                ).toString(),
+        )
+    }
+    var benchmarkText by rememberSaveable {
+        mutableStateOf(existing?.takeIf { it.type == GoalType.FITNESS && it.distanceKm > 0 }?.let { formatGoalNumber(it.distanceKm) } ?: "")
+    }
+    var daysMask by rememberSaveable {
+        mutableStateOf(existingPrefs?.normalizedDays()?.let(::maskOfDays) ?: ALL_DAYS_MASK)
+    }
+    var longRideDay by rememberSaveable { mutableStateOf(existingPrefs?.validLongRideDay() ?: -1) }
+    var hoursText by rememberSaveable {
+        mutableStateOf(
+            (if (plan == null) profileWeeklyHours else existingPrefs?.weeklyHours)
+                ?.takeIf { it > 0 }?.let { formatGoalNumber(it) } ?: "",
+        )
+    }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
 
-    /** Liest das Formular; `null` bei Fehler (dann steht er in [error]). */
-    fun readGoal(): Goal? {
-        val trimmedName = name.trim()
-        val distance = distanceText.trim().replace(',', '.').toDoubleOrNull()
-        val ascentRaw = ascentText.trim().replace(',', '.')
-        val ascent = if (ascentRaw.isEmpty()) null else ascentRaw.toDoubleOrNull()
-        val target = if (targetText.isBlank()) null else parseGoalDuration(targetText)
-        when {
-            trimmedName.isEmpty() -> error = resources.getString(R.string.training_goal_editor_name_error)
-            distance == null || distance <= 0 ->
-                error = resources.getString(R.string.training_goal_editor_distance_error)
-            goalDate == null -> error = resources.getString(R.string.training_goal_editor_date_error)
-            targetText.isNotBlank() && target == null ->
-                error = resources.getString(R.string.training_goal_editor_target_error)
-            else -> {
-                val dateMs = goalDate!!.atTime(12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                return Goal(
-                    name = trimmedName,
-                    distanceKm = distance,
-                    ascentM = ascent,
-                    date = dateMs,
-                    targetDurationMin = target,
-                )
-            }
-        }
-        return null
+    fun input() = GoalFormInput(
+        name = name,
+        fitness = fitness,
+        distanceText = distanceText,
+        ascentText = ascentText,
+        date = goalDate,
+        targetText = targetText,
+        weeksText = weeksText,
+        benchmarkText = benchmarkText,
+        daysMask = daysMask,
+        longRideDay = longRideDay,
+        hoursText = hoursText,
+    )
+
+    fun errorText(e: GoalFormError): String = when (e) {
+        GoalFormError.NAME -> resources.getString(R.string.training_goal_editor_name_error)
+        GoalFormError.DISTANCE -> resources.getString(R.string.training_goal_editor_distance_error)
+        GoalFormError.DATE -> resources.getString(R.string.training_goal_editor_date_error)
+        GoalFormError.TARGET -> resources.getString(R.string.training_goal_editor_target_error)
+        GoalFormError.FITNESS_WEEKS -> errorFitnessBlockLength(coreTexts)
+        GoalFormError.BENCHMARK -> resources.getString(R.string.plan_inputs_goal_editor_benchmark_error)
+        GoalFormError.HOURS -> resources.getString(R.string.plan_inputs_prefs_hours_error)
     }
 
     // Muss der Plan neu gerechnet werden? Nur, wenn sich etwas geaendert hat,
-    // woraus er entsteht — Name und Zielzeit gehoeren nicht dazu.
-    val sameDate = existing != null && goalDate ==
-        Instant.ofEpochMilli(existing.date).atZone(ZoneId.systemDefault()).toLocalDate()
-    val sameShape = existing != null &&
-        distanceText.trim().replace(',', '.').toDoubleOrNull() == existing.distanceKm &&
-        ascentText.trim().replace(',', '.').let { if (it.isEmpty()) null else it.toDoubleOrNull() } == existing.ascentM &&
-        sameDate
-    val onlyMeta = plan != null && sameShape
+    // woraus er entsteht — der Name gehoert nicht dazu, die Zielzeit schon.
+    val parsedNow = parseGoalForm(input(), System.currentTimeMillis())
+    val rebuild = when (parsedNow) {
+        is GoalFormResult.Ok -> planNeedsRebuild(plan, parsedNow.goal, parsedNow.preferences, parsedNow.fitnessWeeks)
+        is GoalFormResult.Invalid -> true
+    }
+    val onlyMeta = plan != null && !rebuild
 
     fun save() {
-        val goal = readGoal() ?: return
-        if (onlyMeta) {
-            onSetPlan(plan.copy(goal = goal))
+        val now = System.currentTimeMillis()
+        val parsed = parseGoalForm(input(), now)
+        if (parsed is GoalFormResult.Invalid) {
+            error = errorText(parsed.error)
+            return
+        }
+        parsed as GoalFormResult.Ok
+        if (plan != null && !planNeedsRebuild(plan, parsed.goal, parsed.preferences, parsed.fitnessWeeks)) {
+            onSetPlan(plan.copy(goal = plan.goal.copy(name = parsed.goal.name)))
             onMessage(resources.getString(R.string.training_goal_editor_saved_status))
             onDismiss()
             return
         }
         try {
-            val newPlan = generatePlan(goal, assessFitness(rides), currentCtl = currentCtl, texts = coreTexts)
+            val newPlan = generatePlan(
+                goal = parsed.goal,
+                assessment = assessFitness(rides),
+                now = now,
+                currentCtl = currentCtl,
+                preferences = parsed.preferences,
+                speedKmh = typicalAvgSpeedKmh(rides),
+                texts = coreTexts,
+            )
             onSetPlan(newPlan)
             onMessage(
                 resources.getQuantityString(
@@ -830,6 +1052,30 @@ fun GoalEditorSheet(
                 style = MaterialTheme.typography.titleLarge,
             )
 
+            Text(stringResource(R.string.plan_inputs_goal_editor_type_label), style = MaterialTheme.typography.titleSmall)
+            PillSegments(
+                options = listOf(
+                    stringResource(R.string.plan_inputs_goal_editor_type_event),
+                    stringResource(R.string.plan_inputs_goal_editor_type_fitness),
+                ),
+                selectedIndex = if (fitness) 1 else 0,
+                onSelect = {
+                    fitness = it == 1
+                    error = null
+                },
+                optionDescriptions = listOf(
+                    stringResource(R.string.plan_inputs_goal_editor_type_event_cd),
+                    stringResource(R.string.plan_inputs_goal_editor_type_fitness_cd),
+                ),
+            )
+            Text(
+                stringResource(
+                    if (fitness) R.string.plan_inputs_goal_editor_type_fitness_hint else R.string.plan_inputs_goal_editor_type_event_hint,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = theme.onSurfaceVariant,
+            )
+
             OneUiTextField(
                 label = stringResource(R.string.training_goal_editor_name_label),
                 value = name,
@@ -837,60 +1083,160 @@ fun GoalEditorSheet(
                 placeholder = stringResource(R.string.training_goal_editor_name_placeholder),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Row(modifier = Modifier.fillMaxWidth()) {
-                OneUiTextField(
-                    label = stringResource(R.string.training_goal_editor_distance_label),
-                    value = distanceText,
-                    onValueChange = { distanceText = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                OneUiTextField(
-                    label = stringResource(R.string.training_goal_editor_ascent_label),
-                    value = ascentText,
-                    onValueChange = { ascentText = it },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Box(modifier = Modifier.weight(1f)) {
-                    val dateText = goalDate?.let { formats.dateFull(it) }
-                    val dateCd = dateText
-                        ?.let { stringResource(R.string.training_goal_editor_date_cd, it) }
-                        ?: stringResource(R.string.training_goal_editor_date_choose_cd)
+            if (fitness) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     OneUiTextField(
-                        label = stringResource(R.string.training_goal_editor_date_label),
-                        value = dateText ?: "",
-                        onValueChange = {},
-                        readOnly = true,
-                        // Aufforderung als `placeholder`, nicht als Wert — sonst
-                        // saehe sie aus wie ein gesetztes Datum.
-                        placeholder = stringResource(R.string.training_goal_editor_date_placeholder),
-                        modifier = Modifier.fillMaxWidth(),
+                        label = stringResource(R.string.plan_inputs_goal_editor_weeks_label),
+                        value = weeksText,
+                        onValueChange = { weeksText = it },
+                        placeholder = stringResource(R.string.plan_inputs_goal_editor_weeks_placeholder),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
                     )
-                    // Ueberlagerung mit gebuendelter Semantik: ein einziger,
-                    // benannter Halt statt eines stummen Felds unter einer
-                    // namenlosen Flaeche.
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clickable { showDatePicker = true }
-                            .clearAndSetSemantics {
-                                role = Role.Button
-                                contentDescription = dateCd
-                            },
+                    Spacer(modifier = Modifier.width(12.dp))
+                    OneUiTextField(
+                        label = stringResource(R.string.plan_inputs_goal_editor_benchmark_label),
+                        value = benchmarkText,
+                        onValueChange = { benchmarkText = it },
+                        placeholder = stringResource(R.string.plan_inputs_goal_editor_benchmark_placeholder),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
                     )
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                OneUiTextField(
-                    label = stringResource(R.string.training_goal_editor_target_label),
-                    value = targetText,
-                    onValueChange = { targetText = it },
-                    placeholder = stringResource(R.string.training_goal_editor_target_placeholder),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                    modifier = Modifier.weight(1f),
+            } else {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    OneUiTextField(
+                        label = stringResource(R.string.training_goal_editor_distance_label),
+                        value = distanceText,
+                        onValueChange = { distanceText = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    OneUiTextField(
+                        label = stringResource(R.string.training_goal_editor_ascent_label),
+                        value = ascentText,
+                        onValueChange = { ascentText = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        val dateText = goalDate?.let { formats.dateFull(it) }
+                        val dateCd = dateText
+                            ?.let { stringResource(R.string.training_goal_editor_date_cd, it) }
+                            ?: stringResource(R.string.training_goal_editor_date_choose_cd)
+                        OneUiTextField(
+                            label = stringResource(R.string.training_goal_editor_date_label),
+                            value = dateText ?: "",
+                            onValueChange = {},
+                            readOnly = true,
+                            // Aufforderung als `placeholder`, nicht als Wert — sonst
+                            // saehe sie aus wie ein gesetztes Datum.
+                            placeholder = stringResource(R.string.training_goal_editor_date_placeholder),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        // Ueberlagerung mit gebuendelter Semantik: ein einziger,
+                        // benannter Halt statt eines stummen Felds unter einer
+                        // namenlosen Flaeche.
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { showDatePicker = true }
+                                .clearAndSetSemantics {
+                                    role = Role.Button
+                                    contentDescription = dateCd
+                                },
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    OneUiTextField(
+                        label = stringResource(R.string.training_goal_editor_target_label),
+                        value = targetText,
+                        onValueChange = { targetText = it },
+                        placeholder = stringResource(R.string.training_goal_editor_target_placeholder),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            // ------------------------------------------------ Plan-Praeferenzen
+            val selectedDays = daysOfMask(daysMask)
+            Text(stringResource(R.string.plan_inputs_prefs_days_label), style = MaterialTheme.typography.titleSmall)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for (day in 0..6) {
+                    val code = PLAN_DAY_CODES[day]
+                    val on = day in selectedDays
+                    PlanDayChip(
+                        label = coreTexts.format.weekdayShort(code),
+                        description = coreTexts.format.weekdayLong(code),
+                        selected = on,
+                        role = Role.Checkbox,
+                        onToggle = {
+                            // Mindestens ein Tag bleibt gewaehlt.
+                            if (!on || selectedDays.size > 1) {
+                                daysMask = daysMask xor (1 shl day)
+                                if (on && longRideDay == day) longRideDay = -1
+                            }
+                        },
+                    )
+                }
+            }
+            Text(
+                stringResource(R.string.plan_inputs_prefs_days_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = theme.onSurfaceVariant,
+            )
+
+            Text(stringResource(R.string.plan_inputs_prefs_long_ride_label), style = MaterialTheme.typography.titleSmall)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                PlanDayChip(
+                    label = stringResource(R.string.plan_inputs_prefs_long_ride_auto),
+                    description = stringResource(R.string.plan_inputs_prefs_long_ride_auto_cd),
+                    selected = longRideDay !in selectedDays,
+                    role = Role.RadioButton,
+                    onToggle = { longRideDay = -1 },
+                )
+                // Nur Tage, die der Plan ueberhaupt nutzt.
+                for (day in selectedDays) {
+                    val code = PLAN_DAY_CODES[day]
+                    PlanDayChip(
+                        label = coreTexts.format.weekdayShort(code),
+                        description = coreTexts.format.weekdayLong(code),
+                        selected = longRideDay == day,
+                        role = Role.RadioButton,
+                        onToggle = { longRideDay = day },
+                    )
+                }
+            }
+
+            OneUiTextField(
+                label = stringResource(R.string.plan_inputs_prefs_hours_label),
+                value = hoursText,
+                onValueChange = { hoursText = it },
+                placeholder = stringResource(R.string.plan_inputs_prefs_hours_placeholder),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                stringResource(R.string.plan_inputs_prefs_hours_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = theme.onSurfaceVariant,
+            )
+
+            if (plan != null && rebuild && parsedNow is GoalFormResult.Ok) {
+                Text(
+                    stringResource(R.string.plan_inputs_goal_editor_rebuild_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = theme.onSurfaceVariant,
                 )
             }
 
@@ -976,4 +1322,31 @@ fun GoalEditorSheet(
 private fun formatGoalNumber(value: Double): String {
     val rounded = Math.round(value)
     return if (rounded.toDouble() == value) rounded.toString() else value.toString()
+}
+
+/**
+ * Ein Tag-Chip des Zielblatts. Die Semantik ist gebuendelt: Rolle
+ * (Mehrfachauswahl = Checkbox, Einzelwahl = Radio), Zustand und der
+ * ausgeschriebene Wochentag statt des Kuerzels.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlanDayChip(
+    label: String,
+    description: String,
+    selected: Boolean,
+    role: Role,
+    onToggle: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onToggle,
+        label = { Text(label) },
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription = description
+            this.role = role
+            this.selected = selected
+            onClick { onToggle(); true }
+        },
+    )
 }

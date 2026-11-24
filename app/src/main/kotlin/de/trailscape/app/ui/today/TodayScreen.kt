@@ -1,5 +1,6 @@
 package de.trailscape.app.ui.today
 
+import de.trailscape.app.ui.training.planSessionTargets
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -361,6 +362,7 @@ fun TodayScreen(appViewModel: AppViewModel) {
                         band = band,
                         headline = todayHeadline(effort, todayRoute, band, planRestDay),
                         sentence = todaySentence(effort, todayRoute),
+                        sessionTargets = todaySession?.let { planSessionTargets(it, insights) },
                         offer = offer,
                         // Die erste Runde ohne Historie baut sofort („Runde bauen ·
                         // 26 km"), alle anderen Angebote oeffnen wie bisher nur

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Inputs of the goal sheet in the Training tab: goal type, fitness block, plan preferences
+    (ui/training/GoalCard.kt, ui/training/TrainingNotices.kt).
+
+    Key prefix: plan_inputs_
+    Rules (key names, placeholders, plurals, glossary): docs/i18n.md.
+    Counterpart of values/strings_plan_inputs.xml — same keys, same order.
+-->
+<resources>
+    <!-- Goal type -->
+    <string name="plan_inputs_goal_editor_type_label">Goal type</string>
+    <string name="plan_inputs_goal_editor_type_event">Event</string>
+    <string name="plan_inputs_goal_editor_type_fitness">Fitness</string>
+    <string name="plan_inputs_goal_editor_type_event_cd">Event (distance on a date)</string>
+    <string name="plan_inputs_goal_editor_type_fitness_cd">Improve fitness</string>
+    <string name="plan_inputs_goal_editor_type_event_hint">A distance on a date, for example a race.</string>
+    <string name="plan_inputs_goal_editor_type_fitness_hint">Improve fitness: a block of 4 to 16 weeks that ends with a test week. You don’t need a distance or a date.</string>
+
+    <!-- Fitness block -->
+    <string name="plan_inputs_goal_editor_weeks_label">Block length (weeks)</string>
+    <string name="plan_inputs_goal_editor_weeks_placeholder">4–16</string>
+    <string name="plan_inputs_goal_editor_benchmark_label">Benchmark ride (km)</string>
+    <string name="plan_inputs_goal_editor_benchmark_placeholder">optional</string>
+    <string name="plan_inputs_goal_editor_benchmark_error">Please enter a valid length for the benchmark ride or leave the field empty.</string>
+
+    <!-- Plan preferences -->
+    <string name="plan_inputs_prefs_days_label">Available training days</string>
+    <string name="plan_inputs_prefs_days_hint">The plan only puts sessions on these days.</string>
+    <string name="plan_inputs_prefs_long_ride_label">Long ride day</string>
+    <string name="plan_inputs_prefs_long_ride_auto">Automatic</string>
+    <string name="plan_inputs_prefs_long_ride_auto_cd">Choose the long ride day automatically</string>
+    <string name="plan_inputs_prefs_hours_label">Weekly time budget (hours)</string>
+    <string name="plan_inputs_prefs_hours_placeholder">optional</string>
+    <string name="plan_inputs_prefs_hours_hint">Leave empty for no budget. If time runs short, the plan trims the volume.</string>
+    <string name="plan_inputs_prefs_hours_error">Please enter the time budget in hours per week (more than 0, at most 40), for example 6 or 6.5.</string>
+    <string name="plan_inputs_goal_editor_rebuild_hint">This change rebuilds the plan.</string>
+
+    <!-- Goal card of a fitness block -->
+    <string name="plan_inputs_goal_fitness_kind">Fitness block</string>
+    <string name="plan_inputs_goal_fitness_benchmark">Benchmark ride %1$s km</string>
+    <string name="plan_inputs_goal_fitness_ends">Test on %1$s</string>
+    <string name="plan_inputs_goal_fitness_body">The block ends with a test week: a 20-minute test and a benchmark ride.</string>
+</resources>
