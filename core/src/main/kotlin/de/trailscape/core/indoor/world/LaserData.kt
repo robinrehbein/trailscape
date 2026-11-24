@@ -52,6 +52,8 @@ internal class LaserData(
     val buildings: List<LaserBuilding>,
     /** Kennzahlen des Ladens. */
     val stats: LaserStats,
+    /** Ob an (`e`, `n`) eine LoD2-Kachel geladen ist (dort ist jedes echte Gebaeude in [buildings]). */
+    val lod2Covered: (Double, Double) -> Boolean = { _, _ -> false },
     private val terrarium: (e: Double, n: Double) -> Double,
 ) {
     val blockCount: Int get() = blocks.size
@@ -361,6 +363,11 @@ class LaserOptions(
      * ueber dem OSM-Grundriss.
      */
     val lod2RadiusM: Double = 120.0,
+    /**
+     * LoD2 schon auf den Korridor zugeschnitten ([cutLod2Corridor], Format in
+     * `LaserLod2Corridor.kt`): dann werden keine LoD2-Kacheln geladen.
+     */
+    val lod2Corridor: ByteArray? = null,
     val threads: Int = 4,
 )
 
@@ -449,11 +456,23 @@ internal fun loadLaserData(
             b.blended[k] = if (wgt <= 0) outer.toFloat() else (outer + (v - outer) * wgt).toFloat()
         }
     }
-    val lod2 = if (options.buildings && source.lod2UrlTemplate != null) {
-        loadLod2(source, origin, options.fetcher, blocks.values, lod2Tiles(source, origin, lineE, lineN, options.lod2RadiusM), options.threads, isCancelled)
-    } else {
-        Lod2Result(emptyList(), 0, 0L)
+    val corridor = options.lod2Corridor?.takeIf { options.buildings }
+    val lod2Keys = if (corridor == null && options.buildings && source.lod2UrlTemplate != null) lod2Tiles(source, origin, lineE, lineN, options.lod2RadiusM) else emptySet()
+    val lod2 = when {
+        corridor != null -> {
+            val (zone, list) = decodeLod2Corridor(corridor)
+            val keys = blocks.keys
+            val enu = list.mapNotNull { it.toEnu(origin, zone) }.filter { b ->
+                LaserData.key(floor(b.ce / LaserData.LASER_BLOCK_M).toInt(), floor(b.cn / LaserData.LASER_BLOCK_M).toInt()) in keys
+            }
+            Lod2Result(enu.sortedWith(compareBy({ it.ce }, { it.cn }, { it.id })), 0, corridor.size.toLong())
+        }
+        lod2Keys.isNotEmpty() -> loadLod2(source, origin, options.fetcher, blocks.values, lod2Keys, options.threads, isCancelled)
+        else -> Lod2Result(emptyList(), 0, 0L)
     }
+    // Unter LoD2-Grundrissen liegt das Gelaende knapp unter dem Gebaeudeboden: Das adaptive Netz bekommt
+    // dort eine gerade Kante an der Wand (sonst wellte sich das gemittelte DGM unter dem Haus an der Wand hoch).
+    for (bld in lod2.buildings) flattenFootprint(blocks, bld)
     val stats = LaserStats(
         blocks = blocks.size,
         requests = requests.get(),
@@ -465,7 +484,38 @@ internal fun loadLaserData(
         offsetP05 = pct(0.05) - offset,
         offsetP95 = pct(0.95) - offset,
     )
-    return LaserData(source, origin, blocks, offset, lod2.buildings, stats) { e, n -> terrariumAboveSea(e, n) }
+    val frame = EnuUtmFrame(origin, source.utmZone, (lineE.min() + lineE.max()) / 2, (lineN.min() + lineN.max()) / 2)
+    val covered = if (corridor != null) {
+        { e: Double, n: Double -> line.distance(e, n, options.lod2RadiusM) <= options.lod2RadiusM }
+    } else {
+        { e: Double, n: Double -> LaserData.key(floor(frame.utmX(e, n) / 1000).toInt(), floor(frame.utmY(e, n) / 1000).toInt()) in lod2Keys }
+    }
+    return LaserData(source, origin, blocks, offset, lod2.buildings, stats, covered) { e, n -> terrariumAboveSea(e, n) }
+}
+
+/** Setzt die ueberblendeten Hoehen im Grundriss von [b] auf hoechstens dessen Bodenhoehe − 0,3 m (nur bei vollem DGM-Gewicht). */
+private fun flattenFootprint(blocks: Map<Long, LaserBlock>, b: LaserBuilding) {
+    val floor = (b.groundU - 0.3).toFloat()
+    for (r in b.footprint) {
+        if (r.size < 6) continue
+        var minE = Double.MAX_VALUE; var minN = Double.MAX_VALUE; var maxE = -Double.MAX_VALUE; var maxN = -Double.MAX_VALUE
+        for (i in r.indices step 2) { minE = min(minE, r[i]); maxE = max(maxE, r[i]); minN = min(minN, r[i + 1]); maxN = max(maxN, r[i + 1]) }
+        for (y in ceil(minN).toInt()..floor(maxN).toInt()) for (x in ceil(minE).toInt()..floor(maxE).toInt()) {
+            if (!pointInRings(listOf(r), x.toDouble(), y.toDouble())) continue
+            // Eine Probe auf dem Blockrand steht in zwei (an der Ecke vier) Bloecken: alle gleich setzen.
+            val bx0 = Math.floorDiv(x, LaserData.LASER_BLOCK)
+            val by0 = Math.floorDiv(y, LaserData.LASER_BLOCK)
+            for (bx in listOf(bx0, bx0 - 1)) for (by in listOf(by0, by0 - 1)) {
+                val blk = blocks[LaserData.key(bx, by)] ?: continue
+                val lx = x - bx * LaserData.LASER_BLOCK
+                val ly = y - by * LaserData.LASER_BLOCK
+                if (lx !in 0 until LaserBlock.N || ly !in 0 until LaserBlock.N) continue
+                val k = ly * LaserBlock.N + lx
+                if ((blk.weight[k].toInt() and 0xFF) < 255) continue
+                if (blk.blended[k] > floor) blk.blended[k] = floor
+            }
+        }
+    }
 }
 
 /** Die LoD2-Kacheln (Kilometer-Index Ost, Nord), die der Streifen [r] um den Polygonzug beruehrt. */

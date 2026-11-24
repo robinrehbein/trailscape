@@ -5,7 +5,7 @@
   "entries": [
     {
       "id": "alpe-dhuez",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Alpe d'Huez", "en": "Alpe d'Huez" },
       "region": { "de": "Bourg-d'Oisans, Französische Alpen", "en": "Bourg-d'Oisans, French Alps" },
       "country": "FR",
@@ -19,7 +19,7 @@
     },
     {
       "id": "vlaamse-ardennen",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Oude Kwaremont, Paterberg und Koppenberg", "en": "Oude Kwaremont, Paterberg and Koppenberg" },
       "region": { "de": "Flämische Ardennen bei Oudenaarde", "en": "Flemish Ardennes near Oudenaarde" },
       "country": "BE",
@@ -36,7 +36,7 @@
     },
     {
       "id": "arenberg",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Wald von Arenberg", "en": "Arenberg Forest" },
       "region": { "de": "Wallers bei Valenciennes, Nordfrankreich", "en": "Wallers near Valenciennes, northern France" },
       "country": "FR",
@@ -50,7 +50,7 @@
     },
     {
       "id": "monte-sante-marie",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Schotter von Monte Sante Marie", "en": "Monte Sante Marie gravel" },
       "region": { "de": "Crete Senesi bei Asciano, Toskana", "en": "Crete Senesi near Asciano, Tuscany" },
       "country": "IT",
@@ -64,7 +64,7 @@
     },
     {
       "id": "sa-calobra",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Sa Calobra", "en": "Sa Calobra" },
       "region": { "de": "Serra de Tramuntana, Mallorca", "en": "Serra de Tramuntana, Majorca" },
       "country": "ES",
@@ -78,7 +78,7 @@
     },
     {
       "id": "flint-hills",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Schotter der Flint Hills", "en": "Flint Hills gravel" },
       "region": { "de": "Cottonwood Falls, Kansas", "en": "Cottonwood Falls, Kansas" },
       "country": "US",
@@ -92,7 +92,7 @@
     },
     {
       "id": "grosser-feldberg",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Großer Feldberg", "en": "Großer Feldberg" },
       "region": { "de": "Taunus bei Oberursel, Hessen", "en": "Taunus near Oberursel, Hesse" },
       "country": "DE",
@@ -106,7 +106,7 @@
     },
     {
       "id": "schauinsland",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Schauinsland", "en": "Schauinsland" },
       "region": { "de": "Freiburg im Breisgau, Schwarzwald", "en": "Freiburg im Breisgau, Black Forest" },
       "country": "DE",
@@ -120,7 +120,7 @@
     },
     {
       "id": "kahler-asten",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Waldwege am Kahlen Asten", "en": "Forest roads at Kahler Asten" },
       "region": { "de": "Winterberg, Sauerland", "en": "Winterberg, Sauerland" },
       "country": "DE",
@@ -130,11 +130,42 @@
         "en": "From Kahler Asten, the highest hill of the Sauerland, along firm forest roads through the spruce and beech woods of the Rothaar mountains to the north. Typical gravel terrain of the Hochsauerland."
       },
       "profile": "gravel",
-      "waypoints": [[51.1793, 8.4893], [51.2000, 8.4500], [51.2150, 8.4800]]
+      "waypoints": [[51.1793, 8.4893], [51.2000, 8.4500], [51.2150, 8.4800]],
+      "laser": true
+    },
+    {
+      "id": "balkantrasse",
+      "version": 1,
+      "name": { "de": "Balkantrasse", "en": "Balkantrasse rail trail" },
+      "region": { "de": "Wermelskirchen, Bergisches Land", "en": "Wermelskirchen, Bergisches Land" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Der Bahntrassenradweg auf der ehemaligen Balkanbahn von Wermelskirchen nach Hilgen: gleichmäßig sanft fallend, durch Einschnitte und über Dämme, vorbei an Feldern, Wald und den Ortsrändern des Bergischen Landes.",
+        "en": "The rail trail on the former Balkan railway from Wermelskirchen to Hilgen: a steady gentle descent through cuttings and along embankments, past fields, woods and the edges of the towns of the Bergisches Land."
+      },
+      "profile": "trekking",
+      "waypoints": [[51.1395, 7.2160], [51.0985, 7.1420]],
+      "laser": true
+    },
+    {
+      "id": "altenberg",
+      "version": 1,
+      "name": { "de": "Altenberger Dom und Dhünntal", "en": "Altenberg Cathedral and Dhünn valley" },
+      "region": { "de": "Odenthal, Bergisches Land", "en": "Odenthal, Bergisches Land" },
+      "country": "DE",
+      "kind": "ROAD",
+      "description": {
+        "de": "Eine Runde vom Altenberger Dom durch das Tal der Dhünn und über die Höhen des Bergischen Landes zurück zum Dom: Waldränder, Weiden, kurze steile Anstiege und kleine Orte mit Schieferhäusern.",
+        "en": "A loop from Altenberg Cathedral through the Dhünn valley and over the hills of the Bergisches Land back to the cathedral: forest edges, pastures, short steep climbs and small villages with slate-clad houses."
+      },
+      "profile": "trekking",
+      "waypoints": [[51.05494, 7.13288], [51.06531, 7.14735], [51.06764, 7.15901], [51.05798, 7.16798], [51.04534, 7.16871], [51.04861, 7.15116], [51.05427, 7.14605], [51.05494, 7.13288]],
+      "laser": true
     },
     {
       "id": "rennsteig",
-      "version": 3,
+      "version": 4,
       "name": { "de": "Rennsteig bei Oberhof", "en": "Rennsteig near Oberhof" },
       "region": { "de": "Thüringer Wald", "en": "Thuringian Forest" },
       "country": "DE",

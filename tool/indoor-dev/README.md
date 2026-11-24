@@ -27,12 +27,14 @@ Immer aus dem Projektverzeichnis; relative Pfade gelten ab dort.
 | `--no-aerial` | ohne Luftbild (erzeugte Bodentextur aus der Landnutzung) |
 | `--offline` | kein Netz: nur, was im Cache liegt (auch Abgelaufenes) |
 | `--laser [--laser-radius m]` | Datenstufe „Laser" (NRW): Gelände aus DGM1, Bäume aus nDOM, Gebäude aus LoD2 im Korridor (Vorgabe 200 m); auch für `plan` und `catalog-build`. Am Ende eine Zeile `Laser:` mit Blöcken, Anfragen, Bytes, LoD2, Versatz DGM1 − Terrarium. Siehe `docs/indoor/lidar.md` |
+| `--lod2-corridor <datei>` | mit `--laser`: LoD2 aus einer zugeschnittenen Korridordatei statt aus den 1-km-Kacheln |
+| `lod2-cut --gpx <datei> --out <datei.tsl2> [--lod2-radius m]` | LoD2 auf den Streifen um die Strecke zuschneiden (Vorgabe 120 m), kompakt schreiben; gibt Kachel- und Korridorgröße je km aus |
 | `plan --gpx …` | nur den Voranschlag zeigen (Kacheln, Anfragen, Datenmenge, Hosts, Luftbild-Dienste) — ohne Netz |
 | `testworld --out <dir>` | die erfundene Testwelt (Runde 3 km, alle Belagsklassen, ohne Netz, deterministisch) |
 | `check <dir>` | eine fertige Welt prüfen |
 | `overlaps <dir>` | koplanare, überlappende Flächen (Ursache für Flimmern) in den Kacheln der Stufe 0 je Materialpaar zählen |
 | `catalog-routes [--only a,b]` | Strecken des Katalogs bekannter Strecken über BRouter neu herleiten (`catalog/routes/<id>.gpx` + Belag), siehe `docs/indoor/catalog.md` |
-| `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
+| `catalog-build --out <dir> [--only a,b] [--app-catalog <datei>] [--keep-going] [--laser]` | Katalogwelten bauen, prüfen, packen (`<dir>/packages/*.zip`) und `<dir>/catalog.json` schreiben; `--app-catalog` schreibt den beigelegten Katalog der App (ohne Prüfsummen) |
 | `models --out <dir>` | Fahrer und Geist schreiben (`writeIndoorModels` aus `RiderModel.kt` in `:core`; meldet sauber, wenn es die Funktion noch nicht gibt) |
 
 Exit-Codes: 0 in Ordnung, 1 Bau gescheitert / Verstöße, 2 falscher Aufruf.

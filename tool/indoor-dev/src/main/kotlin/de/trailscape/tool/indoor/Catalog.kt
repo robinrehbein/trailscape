@@ -77,6 +77,8 @@ data class CatalogSource(
     val waypoints: List<Pair<Double, Double>>,
     val overrides: List<SurfaceOverride>,
     val quality: IndoorQuality,
+    /** Datenstufe „Laser" (DGM1, nDOM, LoD2; `docs/indoor/lidar.md`) fuer diese Strecke — nur wirksam, wo `laserSources` sie abdeckt. */
+    val laser: Boolean = false,
 ) {
     val gpx: File get() = File(CATALOG_ROUTES, "$id.gpx")
     val surfaces: File get() = File(CATALOG_ROUTES, "$id.surfaces.json")
@@ -116,6 +118,7 @@ fun readCatalogSource(file: File = File(CATALOG_SRC)): CatalogSourceFile {
                 )
             },
             quality = IndoorQuality.fromNameOrNull(s(x, "quality")) ?: IndoorQuality.MEDIUM,
+            laser = (x["laser"] as? JsonPrimitive)?.booleanOrNull ?: false,
         )
     }
     require(entries.map { it.id }.toSet().size == entries.size) { "Kennungen doppelt" }
@@ -297,7 +300,8 @@ fun catalogBuild(
     for (e in selected(src.entries, only)) {
         println("== ${e.id} (v${e.version})")
         try {
-            built += buildOne(e, out, qualityOverride ?: e.quality, register, pipeline, noAerial, if (laser) toolLaserOptions(File(CACHE_DIR_TOOL), offline, null) else null)
+            val useLaser = laser || e.laser
+            built += buildOne(e, out, qualityOverride ?: e.quality, register, pipeline, noAerial, if (useLaser) toolLaserOptions(File(CACHE_DIR_TOOL), offline, null) else null)
         } catch (x: Exception) {
             System.err.println("${e.id}: gescheitert: ${x.message}")
             x.cause?.let { System.err.println("  Ursache: $it") }
@@ -344,7 +348,7 @@ private fun buildOne(
         val old = runCatching { WorldManifest.parse(f.readText()) }.getOrNull()
         if (old == null || old.worldId != plan.worldId) worldDir.deleteRecursively()
     }
-    println("  ${"%.2f".format(route.lengthM / 1000)} km, ${plan.tileCount} Kacheln, Luftbild: ${plan.aerial.joinToString { it.label }.ifEmpty { "keines" }}")
+    println("  ${"%.2f".format(route.lengthM / 1000)} km, ${plan.tileCount} Kacheln, Luftbild: ${plan.aerial.joinToString { it.label }.ifEmpty { "keines" }}, Laser: ${if (laser != null) "ja" else "nein"}")
     val start = System.nanoTime()
     val manifest = try {
         builder.build(plan, WorldBuildDeps(pipeline, ImageIoDecoder), worldDir, ConsoleProgress())
