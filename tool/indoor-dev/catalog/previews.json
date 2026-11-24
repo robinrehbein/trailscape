@@ -1,0 +1,15 @@
+{
+  "_hinweis": "Stelle des Vorschaubilds je Katalogstrecke in km (catalog-preview, docs/indoor/catalog.md). Fehlt eine Kennung, nimmt das Werkzeug 45 % der Strecke. Werte wie die Bilder in docs/indoor/bilder/catalog/.",
+  "km": {
+    "alpe-dhuez": 7.6,
+    "vlaamse-ardennen": 8.5,
+    "arenberg": 7.0,
+    "monte-sante-marie": 3.0,
+    "sa-calobra": 3.4,
+    "flint-hills": 3.8,
+    "grosser-feldberg": 7.8,
+    "schauinsland": 5.2,
+    "kahler-asten": 4.4,
+    "rennsteig": 4.4
+  }
+}

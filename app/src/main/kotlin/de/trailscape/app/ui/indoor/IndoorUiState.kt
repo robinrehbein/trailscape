@@ -217,6 +217,10 @@ sealed interface IndoorCatalogState {
  * Oberflaeche waehlt nach der App-Sprache.
  *
  * @property surfaces Anteile der Belagsklassen, groesste zuerst.
+ * @property laser Welt in Laserqualitaet (Kennzeichen „Laser").
+ * @property profile ausgeduenntes Hoehenprofil (Katalog, sonst die geladene Welt), `null` = keins.
+ * @property previewPath zwischengespeichertes Vorschaubild (JPEG), `null` = keins (noch nicht).
+ * @property isNew kam mit dem letzten Abruf des Release-Katalogs neu dazu (Kennzeichen „Neu").
  */
 data class IndoorCatalogItemUi(
     val id: String,
@@ -231,6 +235,10 @@ data class IndoorCatalogItemUi(
     val packageBytes: Long,
     val aerial: Boolean,
     val state: IndoorCatalogState,
+    val laser: Boolean = false,
+    val profile: de.trailscape.core.indoor.catalog.CatalogProfile? = null,
+    val previewPath: String? = null,
+    val isNew: Boolean = false,
 ) {
     /** Eine Welt liegt bereit (auch wenn es eine neuere gibt). */
     val ready: Boolean

@@ -335,6 +335,12 @@ Zustände) und 117 (englisch).
       fahren und in der Weltverwaltung löschen
 - [ ] Vor dem ersten Workflow-Lauf: „Laden“ zeigt „Paket ist noch nicht
       verfügbar“
+- [ ] Liste öffnen mit Netz: Katalog kommt von selbst (neue Strecken mit
+      „Neu“), am selben Tag kein zweiter Abruf; im Flugmodus kein Abruf und
+      keine Meldung (`catalog.md`, „Automatisch aktualisieren“)
+- [ ] Nach dem nächsten Katalogbau: Vorschaubilder und Profile erscheinen,
+      Scrollen durch 14 Karten mit Bild bleibt flüssig, Laser-Kennzeichen
+      bei den Laser-Strecken
 
 ## Startpunkt und Fortsetzen (24.11.2026)
 

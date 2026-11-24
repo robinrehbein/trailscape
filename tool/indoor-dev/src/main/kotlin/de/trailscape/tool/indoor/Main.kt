@@ -31,6 +31,7 @@ import kotlin.system.exitProcess
  * models --out <dir>
  * catalog-routes [--only a,b]
  * catalog-build --out <dir> [--only a,b] [--quality …] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline]
+ * catalog-preview --out <dir> [--only a,b] [--prepare]
  * sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms …] [--quality …] --out <dir>
  * ```
  * Katalog bekannter Strecken: `Catalog.kt`, docs/indoor/catalog.md.
@@ -61,6 +62,7 @@ private const val USAGE = """Aufruf:
   models --out <dir>
   catalog-routes [--only a,b]
   catalog-build --out <dir> [--only a,b] [--quality LOW|MEDIUM|HIGH] [--app-catalog <datei>] [--keep-going] [--no-aerial] [--offline] [--laser]
+  catalog-preview --out <dir> [--only a,b] [--prepare]   (Vorschau: --prepare = Welten bereitlegen + plan.tsv, sonst Profil/Laser/Bild in catalog.json)
   sky --time AUTO|MORNING|NOON|EVENING [--lat 51.3] [--lon 9.5] [--epoch-ms ms] [--quality LOW|MEDIUM|HIGH] --out <dir>
   server-info
   server-build --job <dir> --cache <dir> [--max-km n] [--max-points n]
@@ -143,6 +145,9 @@ private fun run(all: List<String>): Int {
                 offline = a.flag("offline"),
                 laser = a.flag("laser"),
             )
+        }
+        "catalog-preview" -> Args(rest, setOf("prepare")).let { a ->
+            catalogPreview(File(a.req("out")), a.opt("only"), a.flag("prepare"))
         }
         "sky" -> Args(rest, emptySet()).let { a ->
             skyExport(

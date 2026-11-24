@@ -1,0 +1,53 @@
+{
+    "format": 1,
+    "baseUrl": "https://github.com/robinrehbein/trailscape/releases/download/indoor-worlds-v1/",
+    "generatedAtMs": 1795533371985,
+    "kuenftigesFeldOben": {"irgendwas": [1, 2, 3]},
+    "entries": [
+        {
+            "id": "kahler-asten",
+            "version": 10,
+            "worldId": "w7f00a1b2c3d4e5f6a7b8c9d0",
+            "name": {"de": "Waldwege am Kahlen Asten", "en": "Forest roads at Kahler Asten"},
+            "region": {"de": "Winterberg, Sauerland", "en": "Winterberg, Sauerland"},
+            "country": "DE",
+            "kind": "GRAVEL",
+            "lengthM": 13200.0,
+            "ascentM": 248.0,
+            "surfaces": {"ASPHALT": 0.21, "GRAVEL": 0.19, "COMPACTED": 0.6, "KUENFTIGER_BELAG": 0.0},
+            "description": {"de": "Feste Forstwege durch das Rothaargebirge.", "en": "Firm forest roads through the Rothaar mountains."},
+            "packageFile": "kahler-asten-v10.zip",
+            "packageBytes": 110983979,
+            "sha256": "9a2b96f0864c10141710eba93675e425109c550a1e8125de553e6076bac28902",
+            "aerial": true,
+            "aerialSource": "Luftbild: © Geobasis NRW",
+            "quality": "MEDIUM",
+            "diskBytes": 159894020,
+            "laser": true,
+            "profile": {"stepM": 2640.0, "elevM": [612.4, 655.0, 701.3, 742.8, 780.1, 811.9]},
+            "preview": {"file": "kahler-asten-v10.jpg", "bytes": 98304, "sha256": "1b2c96f0864c10141710eba93675e425109c550a1e8125de553e6076bac28902", "width": 640, "height": 360},
+            "kuenftigesFeld": {"verschachtelt": {"tief": [true, null, "x"]}},
+            "kuenftigeListe": [{"a": 1}, 2, "drei"]
+        },
+        {
+            "id": "monte-sante-marie",
+            "version": 10,
+            "worldId": "w1234567890abcdef12345678",
+            "name": {"de": "Schotter von Monte Sante Marie", "en": "Monte Sante Marie gravel"},
+            "region": {"de": "Crete Senesi", "en": "Crete Senesi"},
+            "country": "IT",
+            "kind": "GRAVEL",
+            "lengthM": 12000.0,
+            "ascentM": 284.0,
+            "surfaces": {"COMPACTED": 0.85, "GRAVEL": 0.14},
+            "description": {"de": "Weiße Schotterstraßen.", "en": "White gravel roads."},
+            "packageFile": "monte-sante-marie-v10.zip",
+            "packageBytes": 82838731,
+            "sha256": "a00239f8ad8ed402fbf9fa78c36c77485ac243933c7a3ca96f9a0ac839740ab7",
+            "aerial": false,
+            "quality": "MEDIUM",
+            "profile": {"stepM": "kaputt", "elevM": "auch kaputt"},
+            "preview": {"file": "../../etc/passwd", "bytes": 10}
+        }
+    ]
+}

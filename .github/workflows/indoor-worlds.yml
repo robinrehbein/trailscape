@@ -13,8 +13,16 @@ name: Indoor-Welten (Katalog)
 #  1. `catalog.json` des Release holen (falls vorhanden), damit ein Lauf mit
 #     `only` die uebrigen Eintraege behaelt.
 #  2. `:indoor-dev:installDist`, dann `catalog-build` (Bau, checkWorld, Paket).
-#  3. Release anlegen, falls es fehlt, und Pakete + catalog.json hochladen
-#     (`--clobber` ersetzt gleichnamige Assets).
+#     Mit `preview_only` statt dessen die vorhandenen Pakete aus dem Release
+#     holen (kein Neubau, keine Geodaten).
+#  3. Vorschau je Strecke: `catalog-preview --prepare` legt die Welten bereit,
+#     der Betrachter (`viewer/shots.mjs`, headless Chromium) rendert je Welt
+#     ein JPEG (640 × 360, Ziel ≤ 150 kB), `catalog-preview` traegt Bild,
+#     ausgeduenntes Hoehenprofil und Laser-Kennzeichen in catalog.json ein.
+#     Scheitert ein Bild, bleibt die Strecke ohne Bild (die App zeigt dann
+#     das Profil); der Lauf geht weiter.
+#  4. Release anlegen, falls es fehlt, und Pakete, Vorschaubilder und
+#     catalog.json hochladen (`--clobber` ersetzt gleichnamige Assets).
 #
 # Wer eine Strecke neu veroeffentlicht, erhoeht vorher ihre `version` in
 # tool/indoor-dev/catalog/catalog-src.json (neuer Paketname, „Update
@@ -30,6 +38,11 @@ on:
         description: "Qualitaet (leer = je Eintrag, sonst LOW, MEDIUM, HIGH)"
         required: false
         default: ""
+      preview_only:
+        description: "Nur Vorschau erneuern (Bild, Profil, Laser) aus den Paketen des Release, ohne Neubau"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -69,6 +82,7 @@ jobs:
           gh release download "$TAG" --pattern catalog.json --dir out --clobber || echo "noch kein Release-Katalog"
 
       - name: Welten bauen, pruefen, packen
+        if: ${{ !inputs.preview_only }}
         env:
           ONLY: ${{ inputs.only }}
           QUALITY: ${{ inputs.quality }}
@@ -77,6 +91,70 @@ jobs:
           if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
           if [ -n "$QUALITY" ]; then args+=(--quality "$QUALITY"); fi
           JAVA_OPTS="-Xmx6g" tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
+
+      - name: Pakete des Release fuer die Vorschau holen
+        if: ${{ inputs.preview_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          test -f out/catalog.json || { echo "kein Katalog im Release"; exit 1; }
+          mkdir -p out/packages
+          jq -r --arg only "$ONLY" '.entries[] | select($only == "" or (.id as $i | $only | split(",") | map(gsub("^ +| +$"; "")) | any(.[]; . == $i))) | .packageFile' out/catalog.json |
+            while read -r pkg; do
+              gh release download "$TAG" --pattern "$pkg" --dir out/packages --clobber || echo "::warning::$pkg fehlt im Release"
+            done
+
+      # Vorschau: Fehler hier kosten nur Bilder, nie die Pakete (continue-on-error).
+      - uses: actions/setup-node@v6
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        with:
+          node-version: "22"
+
+      - name: Vorschau vorbereiten
+        id: preview_prepare
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          args=(catalog-preview --out out --prepare)
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
+          cd tool/indoor-dev/viewer
+          npm ci
+          # shots.mjs findet Playwright ueber require() vom Betrachter aus.
+          npm install --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+
+      - name: Vorschaubilder rendern
+        if: ${{ !cancelled() && steps.preview_prepare.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          out="$PWD/out"
+          while IFS=$'\t' read -r id ver dir dist; do
+            [ -n "$id" ] || continue
+            tmp="$out/previews/tmp-$id"
+            rm -rf "$tmp"
+            # Exit-Code ≠ 0 auch bei Warnungen (z. B. dunkler Wald): ein Bild gibt es trotzdem.
+            node tool/indoor-dev/viewer/shots.mjs "$dir" --dists "$dist" --cameras chase \
+              --size 960x540 --jpeg-width 640 --jpeg-max-kb 150 --out "$tmp" || echo "::warning::$id: Betrachter meldet Probleme"
+            jpg=$(ls "$tmp"/*_chase.jpg 2>/dev/null | head -1)
+            if [ -n "$jpg" ]; then mv "$jpg" "$out/previews/$id-v$ver.jpg"; else echo "::warning::$id: kein Vorschaubild"; fi
+            rm -rf "$tmp"
+          done < "$out/previews/plan.tsv"
+          ls -l "$out/previews"
+
+      - name: Vorschau in den Katalog eintragen
+        if: ${{ !cancelled() && steps.preview_prepare.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          args=(catalog-preview --out out)
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          tool/indoor-dev/build/install/indoor-dev/bin/indoor-dev "${args[@]}"
 
       - name: Uebersicht
         if: always()
@@ -89,10 +167,20 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           GH_TOKEN: ${{ github.token }}
+          PREVIEW_ONLY: ${{ inputs.preview_only }}
         run: |
+          files=(out/catalog.json)
+          if [ "$PREVIEW_ONLY" = "true" ]; then
+            # Die Pakete liegen schon im Release; nur Bilder und Katalog.
+            if ls out/packages/*.jpg > /dev/null 2>&1; then files+=(out/packages/*.jpg); fi
+            gh release upload "$TAG" "${files[@]}" --clobber
+            exit 0
+          fi
           if ! ls out/packages/*.zip > /dev/null 2>&1; then echo "keine Pakete gebaut"; exit 1; fi
+          files+=(out/packages/*.zip)
+          if ls out/packages/*.jpg > /dev/null 2>&1; then files+=(out/packages/*.jpg); fi
           if ! gh release view "$TAG" > /dev/null 2>&1; then
             gh release create "$TAG" --prerelease --title "Indoor-Welten: bekannte Strecken" \
               --notes "Vorgebaute 3D-Welten fuer das Indoor-Training (Katalog bekannter Strecken). Die App laedt sie nur nach „Laden“. Quellenangaben stehen im manifest.json jeder Welt; Streckenverlauf © OpenStreetMap-Mitwirkende (ODbL). Siehe docs/indoor/catalog.md."
           fi
-          gh release upload "$TAG" out/packages/*.zip out/catalog.json --clobber
+          gh release upload "$TAG" "${files[@]}" --clobber

@@ -60,6 +60,8 @@ import org.robolectric.annotation.Config
 class IndoorCatalogFlowTest {
 
     companion object {
+        /** Wanduhr der Tests (24.11.2026 9:00 MEZ). */
+        private const val NOW = 1_795_507_200_000L
         private lateinit var shared: File
         private lateinit var packageV1: File
         private lateinit var packageV2: File
@@ -149,7 +151,7 @@ class IndoorCatalogFlowTest {
 
     private fun store() = CatalogStore(File(tmp, "files/indoor/catalog"), worlds, worldsDir, { bundledText() }, local)
 
-    private fun viewModel(store: CatalogStore = store()) = IndoorViewModel(
+    private fun viewModel(store: CatalogStore = store(), online: Boolean = false, nowMs: Long = NOW) = IndoorViewModel(
         parts = FakeIndoorParts(),
         rideStorage = RideStorage(File(tmp, "rides")),
         worlds = worlds,
@@ -163,12 +165,13 @@ class IndoorCatalogFlowTest {
         coreTexts = { CoreTextsDe },
         io = Dispatchers.Unconfined,
         clock = FakeClock(),
-        wallClock = { 1_765_000_000_000L },
+        wallClock = { nowMs },
         runtimeDispatcher = Dispatchers.Unconfined,
         autoLoop = false,
         scope = scope,
         catalogStore = store,
         catalogDownloader = CatalogDownloader(CatalogDownloader.createClient(), "Trailscape/test", local),
+        catalogOnline = { online },
     )
 
     private fun IndoorViewModel.toRoute() {
@@ -179,6 +182,18 @@ class IndoorCatalogFlowTest {
     }
 
     private fun IndoorViewModel.item(): IndoorCatalogItemUi = catalog.value.items.single { it.id == "testrunde" }
+
+    private fun requests(): List<String> = generateSequence { server.takeRequest(0, java.util.concurrent.TimeUnit.SECONDS) }
+        .map { it.path.orEmpty() }.toList()
+
+    /** Ein kleines, echtes JPEG (wie es `shots.mjs` erzeugt, nur winzig). */
+    private fun jpegBytes(): ByteArray {
+        val img = java.awt.image.BufferedImage(64, 36, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        for (x in 0 until 64) for (y in 0 until 36) img.setRGB(x, y, (x * 4 shl 16) or (y * 7 shl 8) or 0x30)
+        val out = java.io.ByteArrayOutputStream()
+        check(javax.imageio.ImageIO.write(img, "jpg", out))
+        return out.toByteArray()
+    }
 
     @Test
     fun listeOhneNetzUnd404WirdZuNochNichtVerfuegbar() {
@@ -296,4 +311,120 @@ class IndoorCatalogFlowTest {
         assertEquals(IndoorCatalogRefresh.NOT_AVAILABLE, vm.catalog.value.refreshResult)
         assertEquals(1, vm.catalog.value.items.size, "beigelegte Liste bleibt")
     }
+
+    @Test
+    fun automatischerAbrufHoechstensEinmalAmTagMitNeuerStrecke() {
+        val zweite = entry().copy(id = "zweite", packageFile = "zweite-v1.zip", name = CatalogText("Zweite Runde", "Second loop"))
+        releaseCatalog(entry(sha = sha256Hex(packageV1), bytes = packageV1.length()), zweite)
+        val s = store()
+        val vm = viewModel(s, online = true)
+        vm.toRoute()
+        assertEquals(listOf("/release/catalog.json"), requests(), "beim Oeffnen der Liste von selbst geholt")
+        val items = vm.catalog.value.items
+        assertEquals(listOf("testrunde", "zweite"), items.map { it.id })
+        assertTrue(items.single { it.id == "zweite" }.isNew, "neue Strecke ist gekennzeichnet")
+        assertTrue(!items.single { it.id == "testrunde" }.isNew)
+        assertEquals(packageV1.length(), vm.item().packageBytes, "Groesse aus dem Release-Katalog")
+        assertEquals(null, vm.catalog.value.refreshResult, "keine Meldung beim stillen Abruf")
+        assertTrue(!vm.catalog.value.refreshing)
+        assertEquals(NOW, s.lastRefreshAttemptMs())
+        vm.release()
+
+        // Am selben Tag (neuer Ablauf, eine Stunde spaeter): kein zweiter Abruf, Liste aus der Platte.
+        val vm2 = viewModel(s, online = true, nowMs = NOW + 3_600_000L)
+        vm2.toRoute()
+        assertEquals(emptyList(), requests())
+        assertEquals(2, vm2.catalog.value.items.size)
+        vm2.release()
+
+        // Am naechsten Tag wieder.
+        val vm3 = viewModel(s, online = true, nowMs = NOW + 25 * 3_600_000L)
+        vm3.toRoute()
+        assertEquals(listOf("/release/catalog.json"), requests())
+        vm3.release()
+
+        // „Katalog aktualisieren" geht jederzeit sofort.
+        vm3.refreshCatalog()
+        assertEquals(listOf("/release/catalog.json"), requests())
+        assertEquals(IndoorCatalogRefresh.UPDATED, vm3.catalog.value.refreshResult)
+    }
+
+    @Test
+    fun ohneNetzKeinAbrufUndFehlerBleibenStill() {
+        // Flugmodus: kein Versuch, kein Zeitstempel, keine Meldung.
+        val s = store()
+        val vm = viewModel(s, online = false)
+        vm.toRoute()
+        assertEquals(0, server.requestCount)
+        assertEquals(null, s.lastRefreshAttemptMs())
+        assertEquals(null, vm.catalog.value.refreshResult)
+        vm.release()
+
+        // Server kaputt: still, die beigelegte Liste bleibt, der Versuch zaehlt fuer heute.
+        routes["/release/catalog.json"] = { MockResponse().setResponseCode(503) }
+        val vm2 = viewModel(s, online = true)
+        vm2.toRoute()
+        assertEquals(1, server.requestCount)
+        assertEquals(null, vm2.catalog.value.refreshResult)
+        assertTrue(!vm2.catalog.value.refreshing)
+        assertEquals(listOf("testrunde"), vm2.catalog.value.items.map { it.id })
+        assertEquals(IndoorCatalogState.NotLoaded, vm2.item().state)
+        assertEquals(NOW, s.lastRefreshAttemptMs())
+
+        // Netz da, aber Verbindung bricht ab (offline-Fehler): zaehlt nicht als Versuch.
+        val s2 = CatalogStore(File(tmp, "files2/indoor/catalog"), worlds, worldsDir, { bundledText() }, local)
+        server.shutdown()
+        val vm3 = viewModel(s2, online = true)
+        vm3.toRoute()
+        assertEquals(null, s2.lastRefreshAttemptMs())
+        assertEquals(null, vm3.catalog.value.refreshResult)
+        assertEquals(1, vm3.catalog.value.items.size)
+    }
+
+    @Test
+    fun vorschaubildWirdGeprueftGecachtUndProfilGezeigt() {
+        val jpeg = jpegBytes()
+        val profile = de.trailscape.core.indoor.catalog.CatalogProfile(1500.0, listOf(500.0, 520.0, 515.0))
+        val withPreview = entry(sha = sha256Hex(packageV1), bytes = packageV1.length()).copy(
+            laser = true,
+            profile = profile,
+            preview = de.trailscape.core.indoor.catalog.CatalogPreview("testrunde-v1.jpg", jpeg.size.toLong(), sha256(jpeg), 64, 36),
+        )
+        releaseCatalog(withPreview)
+        routes["/release/testrunde-v1.jpg"] = { MockResponse().setHeader("Content-Type", "image/jpeg").setBody(Buffer().write(jpeg)) }
+        val s = store()
+        val vm = viewModel(s, online = true)
+        vm.toRoute()
+        assertEquals(listOf("/release/catalog.json", "/release/testrunde-v1.jpg"), requests())
+        val item = vm.item()
+        assertTrue(item.laser)
+        assertEquals(profile, item.profile)
+        val path = assertNotNull(item.previewPath, "Bild geladen")
+        assertTrue(File(path).readBytes().contentEquals(jpeg))
+        vm.release()
+
+        // Naechstes Oeffnen, sogar ohne Netz: aus dem Cache, keine Anfrage.
+        val vm2 = viewModel(s, online = false, nowMs = NOW + 60_000L)
+        vm2.toRoute()
+        assertEquals(emptyList(), requests())
+        assertEquals(path, vm2.item().previewPath)
+        vm2.release()
+
+        // Neue Version mit anderem (falschem) Bild: altes Bild weg, falsches verworfen.
+        val bad = withPreview.copy(
+            version = 2, packageFile = "testrunde-v2.zip",
+            preview = de.trailscape.core.indoor.catalog.CatalogPreview("testrunde-v2.jpg", jpeg.size.toLong(), "0".repeat(64)),
+        )
+        releaseCatalog(bad)
+        routes["/release/testrunde-v2.jpg"] = { MockResponse().setBody(Buffer().write(jpeg)) }
+        val vm3 = viewModel(s, online = true, nowMs = NOW + 25 * 3_600_000L)
+        vm3.toRoute()
+        assertEquals(listOf("/release/catalog.json", "/release/testrunde-v2.jpg"), requests())
+        assertEquals(null, vm3.item().previewPath, "Pruefsumme passt nicht → kein Bild, die Karte zeigt das Profil")
+        assertEquals(profile, vm3.item().profile)
+        assertTrue(!File(path).exists(), "Bild der alten Version aufgeraeumt")
+    }
+
+    private fun sha256(b: ByteArray): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
 }
